@@ -262,7 +262,7 @@ Character Name: ${characterName}`;
 
 Focus on gathering authentic information that would help create an accurate character representation.
 
-IMPORTANT: In any dialogue examples, use "{user}" as a placeholder when referring to other people or the conversation partner.`;
+IMPORTANT: In any dialogue examples, use "{user}" as a placeholder when referring to other people or the conversation partner, and {bot} if referring to the self.`;
 
 		// 7. Prepare user prompt content
 		const userPromptContent: Content = {
@@ -493,18 +493,18 @@ export async function generatePresetFromPrompt(
 				attribute_list: {
 					type: "array" as const,
 					description:
-						"Array containing a single item: a 2-3 paragraph detailed description of the character's personality, appearance, background, and distinctive traits. Maximum 2000 characters.",
+						"Array containing exactly 6 items describing different facets of the character, in this exact order: 1) {bot}'s Description (core identity and essence), 2) {bot}'s Appearance (physical traits and style), 3) {bot}'s Personality (personality traits, comma-separated), 4) {bot}'s Likes (interests and preferences), 5) {bot}'s Dislikes (aversions and pet peeves), 6) {bot}'s Behavioral Quirks (unique mannerisms and patterns). Each item maximum 2000 characters, in this specific format per array item: \"{bot}'s Description: ---\"",
 					items: {
 						type: "string" as const,
 						maxLength: 2000, // Match validation schema MAX_STRING_LENGTH
 					},
-					minItems: 1,
-					maxItems: 1,
+					minItems: 6,
+					maxItems: 6,
 				},
 				sample_dialogues_in: {
 					type: "array" as const,
 					description:
-						"Array of exactly 5 example user messages/actions. Each should be realistic and showcase different conversation scenarios. Enclose actions in asterisks. Do NOT prepend with speaker names. Each message maximum 2000 characters.",
+						"Array of exactly 5 example user messages. MUST include these 3 guided scenarios in order: 1) Self-introduction request, 2) Emotional/personal scenario, 3) Practical/functional scenario. Then add 2 free dialogue scenarios that showcase unique character traits. Do NOT prepend with speaker names. Each message maximum 2000 characters.",
 					items: {
 						type: "string" as const,
 						maxLength: 2000, // Match validation schema MAX_STRING_LENGTH
@@ -515,7 +515,7 @@ export async function generatePresetFromPrompt(
 				sample_dialogues_out: {
 					type: "array" as const,
 					description:
-						"Array of exactly 5 character responses paired with sample_dialogues_in. Should reflect the character's speaking style and personality. Enclose actions in asterisks. Do NOT prepend with speaker names. Each response maximum 2000 characters.",
+						"Array of exactly 5 character responses paired with sample_dialogues_in. Should reflect the character's speaking style, personality, and demonstrate their full range across the 3 guided scenarios and 2 free scenarios. Do NOT prepend with speaker names. Each response maximum 2000 characters.",
 					items: {
 						type: "string" as const,
 						maxLength: 2000, // Match validation schema MAX_STRING_LENGTH
@@ -555,16 +555,54 @@ ${params.speechExamples}
 Instructions:
 - Create a rich, detailed character profile in the structured JSON format
 - The character should be interesting and engaging for conversation
-- Include personality traits, background, physical appearance, and distinctive quirks/characteristics
-- Make the sample dialogues natural and reflect the character's personality
 - Do NOT prepend the sample dialogues with character names or "User:"/"Character:" prefixes - the chat application will handle that
 - Use "{user}" as a placeholder when referring to other people or the conversation partner in dialogues
+- Use "{bot}" as a placeholder when referring to the character themselves
 - Ensure exactly 5 sample dialogue pairs (sample_dialogues_in paired with sample_dialogues_out)
-- The attribute_list should contain exactly 1 item: a comprehensive 2-3 paragraph description of the character`;
+
+The attribute_list MUST contain exactly 6 items in this exact order:
+
+1. {bot}'s Description: A comprehensive 2-4 sentence description capturing the character's core identity, essence, and overall vibe. What makes them unique? What's their deal?
+
+2. {bot}'s Appearance: Physical description including hair, eyes, clothing, accessories, and any distinctive features. Be specific and vivid.
+
+3. {bot}'s Personality: A comma-separated list of personality traits that define how they think, act, and interact. Focus on specific, actionable traits (e.g., "selective passion, authentic advisor, music obsessive, practical pessimist").
+
+4. {bot}'s Likes: Things, activities, topics, or concepts the character genuinely enjoys or gravitates toward. Can include brief explanations in parentheses.
+
+5. {bot}'s Dislikes: Things, activities, topics, or concepts the character dislikes, avoids, or finds irritating. Can include brief explanations in parentheses or quotes.
+
+6. {bot}'s Behavioral Quirks: Specific mannerisms, speech patterns, habits, or behaviors that make the character distinctive. How do they express themselves? What are their tells?
+
+The sample_dialogues_in and sample_dialogues_out MUST follow this structure (exactly 5 dialogue pairs):
+
+**3 GUIDED SCENARIOS (Required, in this exact order):**
+
+1. **Self-Introduction Request**: User asks {bot} to introduce themselves (e.g., "Can you introduce yourself, {bot}?" or "Who are you?" or "Tell me about yourself")
+   - Response should establish identity, tone, core personality, and set expectations
+   - This is the character's "first impression" - make it memorable and authentic
+
+2. **Emotional/Personal Scenario**: User shares feelings, asks for advice, or engages emotionally (e.g., "I'm feeling really down today..." or "I'm having relationship problems..." or "Thanks for helping me, {bot}!")
+   - Response should demonstrate empathy, emotional intelligence, and how they handle vulnerability
+   - Show their relational depth and caring capacity (or lack thereof, if fitting)
+
+3. **Practical/Functional Scenario**: User asks for help, explanation, or practical advice (e.g., "Can you help me understand taxes?" or "How do I fix this problem?" or "What should I do about...")
+   - Response should demonstrate competence, knowledge, and helpfulness
+   - Show they can actually be useful beyond just personality
+
+**2 FREE SCENARIOS (Your creative choice):**
+
+4. **Free Dialogue #1**: Choose a scenario that showcases a unique character trait, interest, or quirk
+   - Examples: Questions about their specific interests/hobbies, unexpected situations, character-specific topics
+   - Make it distinctive and memorable - something that reveals depth
+
+5. **Free Dialogue #2**: Choose another scenario that demonstrates different aspects of the character
+   - Avoid repeating patterns from previous dialogues
+   - Could be humor, vulnerability, expertise, philosophical musings, or anything that adds dimension`;
 
 		// 7. Add web search information if available
 		if (params.searchInfo && !params.searchInfo.includes("None found")) {
-			prompt += `\n\nWeb Search Results (use this information to create an authentic character profile):
+			prompt += `\n\nWeb Search Results from subagent (feel free to use this information to create an authentic character profile):
 ${params.searchInfo}
 
 Use the web search information to accurately represent the character's personality, background, and speaking style from their source material.`;
@@ -580,12 +618,14 @@ Use the web search information to accurately represent the character's personali
 		prompt += `\n\nIMPORTANT:
 - Respond with COMPLETE valid JSON only
 - Follow the exact schema provided with strict length limits
-- Exactly 1 item in attribute_list (a 2-3 paragraph description, MAX 2000 characters)
-- Exactly 5 items in sample_dialogues_in (each MAX 2000 characters, but keep concise 1-3 sentences)
-- Exactly 5 items in sample_dialogues_out (each MAX 2000 characters, but keep concise 1-3 sentences)
-- No speaker name prefixes in any dialogue (no "User:", "Character:", etc.)
-- Use "{user}" as a placeholder when referring to other people in dialogues
-- All string lengths must not exceed 2000 characters`;
+- Exactly 6 items in attribute_list in the exact order specified above (each MAX 2000 characters)
+- Exactly 5 dialogue pairs following the 3 GUIDED + 2 FREE structure in the exact order specified
+- sample_dialogues_in: Keep user messages concise (1-3 sentences, MAX 2000 characters each)
+- sample_dialogues_out: Character responses can be longer and more detailed to showcase personality (MAX 2000 characters each)
+- No speaker name prefixes in any dialogue (no "User:", "Character:", "{user}:", "{bot}:", etc.)
+- Use "{user}" placeholder when character refers to other people in their responses
+- Use "{bot}" placeholder when character refers to themselves in their responses
+- All string lengths must not exceed 2000 characters per item`;
 
 		// 9. Prepare prompt parts (text + optional image)
 		const promptParts: Array<{
@@ -704,13 +744,13 @@ Use the web search information to accurately represent the character's personali
 			// 18. Validate arrays have correct lengths
 			if (
 				!Array.isArray(parsedResponse.attribute_list) ||
-				parsedResponse.attribute_list.length !== 1
+				parsedResponse.attribute_list.length !== 6
 			) {
 				return {
 					error: createGoogleErrorMessage(
 						"VALIDATION_ERROR",
 						undefined,
-						"Generated attribute list must contain exactly 1 item. Please try again.",
+						`Generated attribute list must contain exactly 6 items (Description, Appearance, Personality, Likes, Dislikes, Behavioral Quirks). Received ${parsedResponse.attribute_list?.length || 0} items. Please try again.`,
 						locale,
 					),
 					errorType: "VALIDATION_ERROR",
