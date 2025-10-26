@@ -506,7 +506,7 @@ Discord API Latency: \`{discord_response}ms\``,
 				image_download_failed_description: `Failed to download the attached image. Please try again.`,
 				// Processing
 				processing_title: `🤖 Generating Personality...`,
-				processing_description: `This may take 1-2 minutes. Please wait while I generate the character using AI.\n\n**Note:** This uses advanced AI and may occasionally produce unexpected results. You can regenerate if needed.`,
+				processing_description: `This may take 1-2 minutes. Please wait while I generate the character...\n\n**Note:** This may produce unexpected results. You can regenerate if needed.`,
 				// Generation errors
 				generation_failed_title: `❌ Generation Failed`,
 				generation_failed_description: `Failed to generate personality: {error}\n\nPlease try again with different inputs or check your API key.`,
@@ -520,9 +520,9 @@ Discord API Latency: \`{discord_response}ms\``,
 				metadata_embed_failed_description: `Failed to embed personality data in the image. Please try again.`,
 				// Success
 				success_title: `✨ {character_name} Generated Successfully!`,
-				success_description: `I've generated a personality for **{character_name}** using AI!\n\n**Attribute Preview:**\n{attribute_preview}\n\n**Sample Dialogues:**\n{dialogue_preview}`,
+				success_description: `I've generated a personality for **{character_name}**!\n\n**Attribute Preview:**\n{attribute_preview}\n\n**Sample Dialogues:**\n{dialogue_preview}`,
 				success_next_steps_title: `📥 Next Steps`,
-				success_next_steps_description: `1. Download the attached PNG file\n2. Use \`/preset import\` to import this character\n3. (Optional) Use \`/serverconfig avatar\` to change the avatar if desired`,
+				success_next_steps_description: `1. Download the attached PNG file\n2. Use \`/preset import\` with the PNG to import this character\n3. (Optional) Use \`/serverconfig avatar\` to change the avatar if desired`,
 			},
 		},
 

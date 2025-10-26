@@ -5,7 +5,7 @@ import {
 	type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { loadTomoriState, loadPresetRowsByLocale } from "../../utils/db/dbRead";
-import { localizer } from "../../utils/text/localizer";
+import { localizer, getBaseTriggerWords, getDefaultBotName } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import {
 	replyInfoEmbed,
@@ -35,7 +35,8 @@ export const configureSubcommand = (
 
 /**
  * Applies a preset personality configuration to Tomori.
- * Overwrites the current Attribute List and Sample Dialogues with preset values.
+ * Overwrites the current Attribute List, Sample Dialogues, Trigger Words, and Nickname with preset and default values.
+ * Resets trigger words to default locale-specific values and nickname to default bot name.
  * @param _client - Discord client instance
  * @param interaction - Command interaction
  * @param userData - User data from database
@@ -155,10 +156,21 @@ export async function execute(
 			.map((item: string) => `"${item.replace(/(["\\])/g, "\\$1")}"`)
 			.join(",")}}`;
 
-		// 13. Update Tomori in the database
+		// 13. Get default trigger words and bot name for the locale
+		const defaultTriggerWords = getBaseTriggerWords(locale);
+		const defaultBotName = getDefaultBotName(locale);
+
+		// 14. Format trigger words for PostgreSQL update
+		const triggerWordsArrayLiteral = `{${defaultTriggerWords
+			.map((word: string) => `"${word.replace(/(["\\])/g, "\\$1")}"`)
+			.join(",")}}`;
+
+		// 15. Update Tomori and TomoriConfig in the database
+		// First, update the Tomori table (nickname and attribute/dialogue data)
 		const [updatedTomoriResult] = await sql`
 			UPDATE tomoris
 			SET
+				tomori_nickname = ${defaultBotName},
 				attribute_list = ${attributeArrayLiteral}::text[],
 				sample_dialogues_in = ${inArrayLiteral}::text[],
 				sample_dialogues_out = ${outArrayLiteral}::text[]
@@ -166,7 +178,14 @@ export async function execute(
 			RETURNING *
 		`;
 
-		// 14. Validate the result
+		// 16. Update the TomoriConfig table (trigger words)
+		await sql`
+			UPDATE tomori_configs
+			SET trigger_words = ${triggerWordsArrayLiteral}::text[]
+			WHERE tomori_id = ${tomoriState.tomori_id}
+		`;
+
+		// 17. Validate the result
 		const validationResult = tomoriSchema.safeParse(updatedTomoriResult);
 
 		if (!validationResult.success || !updatedTomoriResult) {
@@ -200,7 +219,7 @@ export async function execute(
 			return;
 		}
 
-		// 15. Reset guild avatar and server nickname to none
+		// 18. Reset guild avatar and server nickname to none
 		try {
 			// Reset server nickname if in a guild
 			if (interaction.guild?.members.me) {
@@ -239,7 +258,7 @@ export async function execute(
 			);
 		}
 
-		// 16. Log success and show success message
+		// 19. Log success and show success message
 		log.success(
 			`Applied preset "${selectedPreset.tomori_preset_name}" to server ${tomoriState.server_id} by user ${userData.user_disc_id}`,
 		);
@@ -253,7 +272,7 @@ export async function execute(
 			color: ColorCode.SUCCESS,
 		});
 	} catch (error) {
-		// 17. Log error with context
+		// 20. Log error with context
 		let serverIdForError: number | null = null;
 		let tomoriIdForError: number | null = null;
 		if (interaction.guild?.id) {
@@ -279,7 +298,7 @@ export async function execute(
 			context,
 		);
 
-		// 18. Inform user of unknown error
+		// 21. Inform user of unknown error
 		if (!interaction.replied && !interaction.deferred) {
 			await interaction.reply({
 				content: localizer(locale, "general.errors.unknown_error_description"),

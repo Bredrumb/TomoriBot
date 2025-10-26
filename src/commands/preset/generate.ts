@@ -336,6 +336,7 @@ export async function execute(
 			const searchResult = await searchCharacterInfo(
 				decryptedApiKey,
 				characterName,
+				locale,
 				{
 					description: characterDesc,
 					speechExamples: speechExamples,
@@ -365,7 +366,11 @@ export async function execute(
 
 		// 12. Generate preset data
 		log.info("Generating preset data with Gemini...");
-		const genResult = await generatePresetFromPrompt(decryptedApiKey, genParams);
+		const genResult = await generatePresetFromPrompt(
+			decryptedApiKey,
+			genParams,
+			locale,
+		);
 
 		if (genResult.error || !genResult.preset) {
 			// Show error embed

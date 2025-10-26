@@ -507,7 +507,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 				image_download_failed_description: `添付画像のダウンロードに失敗しました。もう一度お試しください。`,
 				// Processing
 				processing_title: `🤖 人格を生成しています...`,
-				processing_description: `これには1～2分かかる場合があります。AIを使用してキャラクターを生成していますので、お待ちください。\n\n**注意：** これは高度なAIを使用しており、時々予期しない結果が生成される場合があります。必要に応じて再生成できます。`,
+				processing_description: `これには1～2分かかる場合があります。キャラクターを生成していますので、お待ちください...\n\n**注意：** これは予期しない結果が生成される場合があります。必要に応じて再生成できます。`,
 				// Generation errors
 				generation_failed_title: `❌ 生成に失敗しました`,
 				generation_failed_description: `人格の生成に失敗しました：{error}\n\n異なる入力で再度お試しいただくか、APIキーを確認してください。`,
@@ -521,9 +521,9 @@ Discord API 遅延: \`{discord_response}ms\``,
 				metadata_embed_failed_description: `画像に人格データを埋め込むことができませんでした。もう一度お試しください。`,
 				// Success
 				success_title: `✨ {character_name} の生成に成功しました！`,
-				success_description: `AIを使用して **{character_name}** の人格を生成しました！\n\n**属性プレビュー:**\n{attribute_preview}\n\n**サンプル対話:**\n{dialogue_preview}`,
+				success_description: `**{character_name}** の人格を生成しました！\n\n**属性プレビュー:**\n{attribute_preview}\n\n**サンプル対話:**\n{dialogue_preview}`,
 				success_next_steps_title: `📥 次のステップ`,
-				success_next_steps_description: `1. 添付されたPNGファイルをダウンロード\n2. \`/preset import\`を使用してこのキャラクターをインポート\n3. (任意) 必要に応じて\`/serverconfig avatar\`でアバターを変更`,
+				success_next_steps_description: `1. 添付されたPNGファイルをダウンロード\n2. PNGファイルと共に\`/preset import\`を使用してこのキャラクターをインポート\n3. (任意) 必要に応じて\`/serverconfig avatar\`でアバターを変更`,
 			},
 		},
 

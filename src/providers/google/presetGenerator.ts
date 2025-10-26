@@ -7,9 +7,14 @@
  * 2. Generation stage: Gemini 2.5 Pro with structured output
  */
 
-import { GoogleGenAI, type Content, type GenerateContentConfig } from "@google/genai";
+import {
+	GoogleGenAI,
+	type Content,
+	type GenerateContentConfig,
+} from "@google/genai";
 import type { PresetExportData } from "../../types/preset/presetExport";
 import { log } from "../../utils/misc/logger";
+import { localizer } from "../../utils/text/localizer";
 
 /**
  * Parameters for preset generation
@@ -76,6 +81,109 @@ function getErrorMessage(error: unknown): string {
 }
 
 /**
+ * Create localized error message based on error type and Google error code
+ * Similar to GoogleStreamAdapter.createErrorDescription
+ * @param errorType - The type of error
+ * @param errorCode - The Google API error code (e.g., "400", "429")
+ * @param rawMessage - Raw error message from Google API
+ * @param locale - User's locale for localization
+ * @returns Formatted error message with code
+ */
+function createGoogleErrorMessage(
+	errorType: string,
+	errorCode: string | number | undefined,
+	rawMessage: string,
+	locale: string,
+): string {
+	// Try to extract Google's actual error message from nested JSON
+	let googleMessage: string | undefined;
+
+	// Check if rawMessage contains nested JSON error structure
+	try {
+		if (rawMessage.includes('{"error":')) {
+			const jsonMatch = rawMessage.match(/\{.*\}/s);
+			if (jsonMatch) {
+				const parsedError = JSON.parse(jsonMatch[0]);
+				const errorObj = parsedError.error || parsedError;
+
+				// Check for double-nested JSON
+				if (errorObj?.message && typeof errorObj.message === "string") {
+					try {
+						const nestedError = JSON.parse(errorObj.message);
+						if (nestedError.error?.message) {
+							googleMessage = nestedError.error.message;
+						}
+					} catch {
+						// Not nested JSON, use direct message
+						googleMessage = errorObj.message;
+					}
+				}
+			}
+		}
+	} catch {
+		// Ignore parsing errors
+	}
+
+	// If we couldn't extract a Google message, use locale-based defaults
+	if (!googleMessage) {
+		let messageKey: string;
+
+		// Map error types to locale keys
+		switch (errorType) {
+			case "CONTENT_BLOCKED":
+				messageKey = "content_blocked_default_message";
+				break;
+			case "RATE_LIMIT":
+				messageKey = "429_default_message";
+				break;
+			case "TIMEOUT":
+				messageKey = "504_default_message";
+				break;
+			case "API_KEY":
+				messageKey = "403_default_message";
+				break;
+			case "MODEL_ERROR":
+				messageKey = "404_default_message";
+				break;
+			case "CONNECTION":
+				messageKey = "503_default_message";
+				break;
+			case "EMPTY_RESPONSE":
+			case "INVALID_JSON":
+			case "VALIDATION_ERROR":
+				// These are client-side validation errors, use unknown
+				messageKey = "unknown_default_message";
+				break;
+			default:
+				// Check if we have a specific error code
+				if (errorCode === 400 || errorCode === "400") {
+					if (rawMessage.includes("billing")) {
+						messageKey = "400_billing_default_message";
+					} else {
+						messageKey = "400_default_message";
+					}
+				} else if (errorCode) {
+					messageKey = `${errorCode}_default_message`;
+				} else {
+					messageKey = "unknown_default_message";
+				}
+				break;
+		}
+
+		try {
+			googleMessage = localizer(locale, `genai.google.${messageKey}`);
+		} catch {
+			// If locale key doesn't exist, use generic fallback
+			googleMessage = localizer(locale, "genai.google.unknown_default_message");
+		}
+	}
+
+	// Format as "Error Code {code}: {Google message}"
+	const displayCode = errorCode || "unknown";
+	return `Error Code ${displayCode}: ${googleMessage}`;
+}
+
+/**
  * Additional context for character search
  */
 export interface CharacterSearchContext {
@@ -90,18 +198,20 @@ export interface CharacterSearchContext {
  *
  * @param apiKey - Decrypted Google API key
  * @param characterName - Name of the character to search for
+ * @param locale - User's locale for error messages
  * @param context - Optional additional context for search
  * @returns Promise<CharacterSearchResult> - Search results or error
  */
 export async function searchCharacterInfo(
 	apiKey: string,
 	characterName: string,
+	locale: string,
 	context?: CharacterSearchContext,
 ): Promise<CharacterSearchResult> {
 	// 1. Validate API key
 	if (!apiKey || apiKey.trim().length < 10) {
 		return {
-			error: "Invalid API key",
+			error: createGoogleErrorMessage("API_KEY", 403, "Invalid API key", locale),
 			errorType: "API_KEY",
 		};
 	}
@@ -160,15 +270,15 @@ IMPORTANT: In any dialogue examples, use "{user}" as a placeholder when referrin
 			parts: [{ text: prompt }],
 		};
 
-		log.info(`🔍 Searching for character: ${characterName}`);
+		log.info(`Searching for character: ${characterName}`);
 
 		try {
-			// 8. Create timeout promise (45 seconds for search)
+			// 8. Create timeout promise (60 seconds for search)
 			const timeoutPromise = new Promise<never>((_, reject) => {
 				setTimeout(
 					() =>
 						reject(new Error("Character search timed out after 45 seconds")),
-					45000,
+					60000,
 				);
 			});
 
@@ -182,12 +292,17 @@ IMPORTANT: In any dialogue examples, use "{user}" as a placeholder when referrin
 				timeoutPromise,
 			]);
 
-			log.info("✅ Character search completed");
+			log.info("Character search completed");
 
 			// 10. Check for blocked content
 			if (result.promptFeedback?.blockReason) {
 				return {
-					error: `Character search was blocked: ${result.promptFeedback.blockReason}`,
+					error: createGoogleErrorMessage(
+						"BLOCKED_CONTENT",
+						"BLOCKED",
+						`Character search was blocked: ${result.promptFeedback.blockReason}`,
+						locale,
+					),
 					errorType: "BLOCKED_CONTENT",
 				};
 			}
@@ -197,7 +312,12 @@ IMPORTANT: In any dialogue examples, use "{user}" as a placeholder when referrin
 			// 11. Check if response is empty
 			if (!responseText || responseText.trim() === "") {
 				return {
-					error: "Character search returned an empty response",
+					error: createGoogleErrorMessage(
+						"EMPTY_RESPONSE",
+						undefined,
+						"Character search returned an empty response",
+						locale,
+					),
 					errorType: "EMPTY_RESPONSE",
 				};
 			}
@@ -207,10 +327,24 @@ IMPORTANT: In any dialogue examples, use "{user}" as a placeholder when referrin
 		} catch (apiError: unknown) {
 			const errorMessage = getErrorMessage(apiError);
 
+			// Try to extract error code from Google API error
+			let errorCode: number | undefined;
+			try {
+				if (errorMessage.includes('{"error":')) {
+					const jsonMatch = errorMessage.match(/\{.*\}/s);
+					if (jsonMatch) {
+						const parsedError = JSON.parse(jsonMatch[0]);
+						errorCode = parsedError.error?.code || parsedError.code;
+					}
+				}
+			} catch {
+				// Ignore parsing errors
+			}
+
 			// 12. Handle specific API errors
 			if (errorMessage.includes("timed out")) {
 				return {
-					error: "Character search timed out",
+					error: createGoogleErrorMessage("TIMEOUT", 504, errorMessage, locale),
 					errorType: "TIMEOUT",
 				};
 			}
@@ -220,7 +354,12 @@ IMPORTANT: In any dialogue examples, use "{user}" as a placeholder when referrin
 				errorMessage.includes("rate limit")
 			) {
 				return {
-					error: "Rate limit exceeded for character search",
+					error: createGoogleErrorMessage(
+						"RATE_LIMIT",
+						errorCode || 429,
+						errorMessage,
+						locale,
+					),
 					errorType: "RATE_LIMIT",
 				};
 			}
@@ -230,7 +369,12 @@ IMPORTANT: In any dialogue examples, use "{user}" as a placeholder when referrin
 				errorMessage.includes("blocked")
 			) {
 				return {
-					error: "Character search content was blocked",
+					error: createGoogleErrorMessage(
+						"BLOCKED_CONTENT",
+						errorCode || 400,
+						errorMessage,
+						locale,
+					),
 					errorType: "BLOCKED_CONTENT",
 				};
 			}
@@ -240,7 +384,12 @@ IMPORTANT: In any dialogue examples, use "{user}" as a placeholder when referrin
 				errorMessage.includes("API key")
 			) {
 				return {
-					error: "Invalid API key for character search",
+					error: createGoogleErrorMessage(
+						"API_KEY",
+						errorCode || 403,
+						errorMessage,
+						locale,
+					),
 					errorType: "API_KEY",
 				};
 			}
@@ -250,7 +399,12 @@ IMPORTANT: In any dialogue examples, use "{user}" as a placeholder when referrin
 				errorMessage.includes("MODEL_NOT_FOUND")
 			) {
 				return {
-					error: `Character search model "${MODEL_NAME}" not available`,
+					error: createGoogleErrorMessage(
+						"MODEL_ERROR",
+						errorCode || 404,
+						errorMessage,
+						locale,
+					),
 					errorType: "MODEL_ERROR",
 				};
 			}
@@ -265,13 +419,18 @@ IMPORTANT: In any dialogue examples, use "{user}" as a placeholder when referrin
 		// 13. Check for network errors
 		if (error instanceof TypeError && errorMessage.includes("network")) {
 			return {
-				error: "Network error during character search",
+				error: createGoogleErrorMessage(
+					"CONNECTION",
+					503,
+					errorMessage,
+					locale,
+				),
 				errorType: "CONNECTION",
 			};
 		}
 
 		return {
-			error: `Character search failed: ${errorMessage}`,
+			error: createGoogleErrorMessage("UNKNOWN", undefined, errorMessage, locale),
 			errorType: "UNKNOWN",
 		};
 	}
@@ -304,16 +463,18 @@ export function sanitizeSampleDialogueText(dialogue: string): string {
  *
  * @param apiKey - Decrypted Google API key
  * @param params - Generation parameters
+ * @param locale - User's locale for error messages
  * @returns Promise<PresetGenerationResult> - Generated preset or error
  */
 export async function generatePresetFromPrompt(
 	apiKey: string,
 	params: GeneratePresetParams,
+	locale: string,
 ): Promise<PresetGenerationResult> {
 	// 1. Validate API key
 	if (!apiKey || apiKey.trim().length < 10) {
 		return {
-			error: "Invalid API key",
+			error: createGoogleErrorMessage("API_KEY", 403, "Invalid API key", locale),
 			errorType: "API_KEY",
 		};
 	}
@@ -363,7 +524,11 @@ export async function generatePresetFromPrompt(
 					maxItems: 5,
 				},
 			},
-			required: ["attribute_list", "sample_dialogues_in", "sample_dialogues_out"],
+			required: [
+				"attribute_list",
+				"sample_dialogues_in",
+				"sample_dialogues_out",
+			],
 		};
 
 		// 5. Configure generation with structured output (no search tool here)
@@ -423,9 +588,10 @@ Use the web search information to accurately represent the character's personali
 - All string lengths must not exceed 2000 characters`;
 
 		// 9. Prepare prompt parts (text + optional image)
-		const promptParts: Array<{ text?: string; inlineData?: { data: string; mimeType: string } }> = [
-			{ text: prompt },
-		];
+		const promptParts: Array<{
+			text?: string;
+			inlineData?: { data: string; mimeType: string };
+		}> = [{ text: prompt }];
 
 		// 10. Add image if provided
 		if (params.imageBase64 && params.imageMimeType) {
@@ -435,7 +601,7 @@ Use the web search information to accurately represent the character's personali
 					mimeType: params.imageMimeType,
 				},
 			});
-			log.info("📷 Image included in generation");
+			log.info("Image included in generation");
 		}
 
 		// 11. Prepare user prompt content
@@ -444,14 +610,14 @@ Use the web search information to accurately represent the character's personali
 			parts: promptParts,
 		};
 
-		log.info(`🤖 Generating preset for: ${params.characterName}`);
+		log.info(`Generating preset for: ${params.characterName}`);
 
 		try {
-			// 12. Create timeout promise (60 seconds for generation)
+			// 12. Create timeout promise (90 seconds for generation)
 			const timeoutPromise = new Promise<never>((_, reject) => {
 				setTimeout(
 					() => reject(new Error("Request timed out after 60 seconds")),
-					60000,
+					90000,
 				);
 			});
 
@@ -465,12 +631,17 @@ Use the web search information to accurately represent the character's personali
 				timeoutPromise,
 			]);
 
-			log.info("✅ Preset generation completed");
+			log.info("Preset generation completed");
 
 			// 14. Check for blocked content
 			if (result.promptFeedback?.blockReason) {
 				return {
-					error: `Content was blocked by Gemini API safety filters: ${result.promptFeedback.blockReason}`,
+					error: createGoogleErrorMessage(
+						"BLOCKED_CONTENT",
+						"BLOCKED",
+						`Content was blocked by Gemini API safety filters: ${result.promptFeedback.blockReason}`,
+						locale,
+					),
 					errorType: "BLOCKED_CONTENT",
 				};
 			}
@@ -480,8 +651,12 @@ Use the web search information to accurately represent the character's personali
 			// 15. Check if response is empty
 			if (!responseText || responseText.trim() === "") {
 				return {
-					error:
+					error: createGoogleErrorMessage(
+						"EMPTY_RESPONSE",
+						undefined,
 						"Gemini API returned an empty response. Try using different inputs or a different image.",
+						locale,
+					),
 					errorType: "EMPTY_RESPONSE",
 				};
 			}
@@ -497,8 +672,14 @@ Use the web search information to accurately represent the character's personali
 				parsedResponse = JSON.parse(responseText);
 			} catch (parseError) {
 				log.error("Failed to parse generation JSON:", parseError);
+				const parseErrorMsg = `Failed to parse character data: ${parseError instanceof Error ? parseError.message : "Invalid JSON format"}`;
 				return {
-					error: `Failed to parse character data: ${parseError instanceof Error ? parseError.message : "Invalid JSON format"}`,
+					error: createGoogleErrorMessage(
+						"INVALID_JSON",
+						undefined,
+						parseErrorMsg,
+						locale,
+					),
 					errorType: "INVALID_JSON",
 				};
 			}
@@ -510,8 +691,12 @@ Use the web search information to accurately represent the character's personali
 				!parsedResponse.sample_dialogues_out
 			) {
 				return {
-					error:
+					error: createGoogleErrorMessage(
+						"INVALID_JSON",
+						undefined,
 						"Generated character data is incomplete. Please try again with different inputs.",
+						locale,
+					),
 					errorType: "INVALID_JSON",
 				};
 			}
@@ -522,8 +707,12 @@ Use the web search information to accurately represent the character's personali
 				parsedResponse.attribute_list.length !== 1
 			) {
 				return {
-					error:
+					error: createGoogleErrorMessage(
+						"VALIDATION_ERROR",
+						undefined,
 						"Generated attribute list must contain exactly 1 item. Please try again.",
+						locale,
+					),
 					errorType: "VALIDATION_ERROR",
 				};
 			}
@@ -533,8 +722,12 @@ Use the web search information to accurately represent the character's personali
 				parsedResponse.sample_dialogues_in.length !== 5
 			) {
 				return {
-					error:
+					error: createGoogleErrorMessage(
+						"VALIDATION_ERROR",
+						undefined,
 						"Generated sample dialogues must contain exactly 5 user inputs. Please try again.",
+						locale,
+					),
 					errorType: "VALIDATION_ERROR",
 				};
 			}
@@ -544,8 +737,12 @@ Use the web search information to accurately represent the character's personali
 				parsedResponse.sample_dialogues_out.length !== 5
 			) {
 				return {
-					error:
+					error: createGoogleErrorMessage(
+						"VALIDATION_ERROR",
+						undefined,
 						"Generated sample dialogues must contain exactly 5 character responses. Please try again.",
+						locale,
+					),
 					errorType: "VALIDATION_ERROR",
 				};
 			}
@@ -572,11 +769,24 @@ Use the web search information to accurately represent the character's personali
 		} catch (apiError: unknown) {
 			const errorMessage = getErrorMessage(apiError);
 
+			// Try to extract error code from Google API error
+			let errorCode: number | undefined;
+			try {
+				if (errorMessage.includes('{"error":')) {
+					const jsonMatch = errorMessage.match(/\{.*\}/s);
+					if (jsonMatch) {
+						const parsedError = JSON.parse(jsonMatch[0]);
+						errorCode = parsedError.error?.code || parsedError.code;
+					}
+				}
+			} catch {
+				// Ignore parsing errors
+			}
+
 			// 21. Handle specific API errors
 			if (errorMessage.includes("timed out")) {
 				return {
-					error:
-						"Request timed out after 60 seconds. Character generation requires more time. Please try again.",
+					error: createGoogleErrorMessage("TIMEOUT", 504, errorMessage, locale),
 					errorType: "TIMEOUT",
 				};
 			}
@@ -586,7 +796,12 @@ Use the web search information to accurately represent the character's personali
 				errorMessage.includes("rate limit")
 			) {
 				return {
-					error: `Rate limit exceeded. Please wait a moment before generating another character. API Error: ${errorMessage}`,
+					error: createGoogleErrorMessage(
+						"RATE_LIMIT",
+						errorCode || 429,
+						errorMessage,
+						locale,
+					),
 					errorType: "RATE_LIMIT",
 				};
 			}
@@ -596,7 +811,12 @@ Use the web search information to accurately represent the character's personali
 				errorMessage.includes("blocked")
 			) {
 				return {
-					error: `Content was blocked by Gemini API safety filters. Try using different inputs or adjusting your descriptions. API Error: ${errorMessage}`,
+					error: createGoogleErrorMessage(
+						"BLOCKED_CONTENT",
+						errorCode || 400,
+						errorMessage,
+						locale,
+					),
 					errorType: "BLOCKED_CONTENT",
 				};
 			}
@@ -606,7 +826,12 @@ Use the web search information to accurately represent the character's personali
 				errorMessage.includes("API key")
 			) {
 				return {
-					error: `Invalid or expired API key. Please check your API key configuration. API Error: ${errorMessage}`,
+					error: createGoogleErrorMessage(
+						"API_KEY",
+						errorCode || 403,
+						errorMessage,
+						locale,
+					),
 					errorType: "API_KEY",
 				};
 			}
@@ -616,7 +841,12 @@ Use the web search information to accurately represent the character's personali
 				errorMessage.includes("MODEL_NOT_FOUND")
 			) {
 				return {
-					error: `Model "${MODEL_NAME}" is not available. Please check your API access. API Error: ${errorMessage}`,
+					error: createGoogleErrorMessage(
+						"MODEL_ERROR",
+						errorCode || 404,
+						errorMessage,
+						locale,
+					),
 					errorType: "MODEL_ERROR",
 				};
 			}
@@ -631,13 +861,18 @@ Use the web search information to accurately represent the character's personali
 		// 22. Check for network errors
 		if (error instanceof TypeError && errorMessage.includes("network")) {
 			return {
-				error: `Network error during preset generation. Please check your internet connection. Error: ${errorMessage}`,
+				error: createGoogleErrorMessage(
+					"CONNECTION",
+					503,
+					errorMessage,
+					locale,
+				),
 				errorType: "CONNECTION",
 			};
 		}
 
 		return {
-			error: `Preset generation failed: ${errorMessage}`,
+			error: createGoogleErrorMessage("UNKNOWN", undefined, errorMessage, locale),
 			errorType: "UNKNOWN",
 		};
 	}
