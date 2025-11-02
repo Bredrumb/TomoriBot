@@ -13,10 +13,7 @@ import {
 } from "../../types/misc/context";
 import { registerUser } from "../db/dbWrite";
 import { log } from "../misc/logger";
-import {
-	replaceTemplateVariables,
-	humanizeString,
-} from "./stringHelper";
+import { replaceTemplateVariables, humanizeString } from "./stringHelper";
 import {
 	getCurrentTimeWithOffset,
 	formatUTCOffset,
@@ -277,7 +274,7 @@ export async function buildContext({
 		botName,
 		tomoriConfig.personal_memories_enabled,
 	);
-	personalityInstructionText += `\nWhen ${botName} wants to mention and ping a specific user in their response, they MUST use the format <@USER_DISCORD_ID> (e.g., <@123456789012345678>). The USER_DISCORD_ID can be found in the user's status block in this context (e.g., "Nickname (User ID: 123...)"). This ensures the user gets a notification.`;
+	personalityInstructionText += `\nWhen ${botName} wants to mention and ping a specific user in their response, they MUST use the format <@ > with the user's ID (e.g., <@123456789012345678>). The user's ID can be found in the user's status block in this context (e.g., "Nickname (User ID: 123...)"). This ensures the user gets a notification.`;
 
 	contextItems.push({
 		role: "system",
@@ -448,7 +445,8 @@ export async function buildContext({
 				);
 
 				// Add bot's status - always "Online" since if we're processing messages, the bot is online
-				const botStatus = "Online - Currently active and responding to messages";
+				const botStatus =
+					"Online - Currently active and responding to messages";
 				const botContextText = `### ${botName} (User ID: ${userIdToProcess})'s current status\n${botStatus}\n\n`;
 
 				// Add to combined context
@@ -597,7 +595,6 @@ export async function buildContext({
 
 			if (pendingReminders && pendingReminders.length > 0) {
 				userSpecificContent += `### ${botName}'s pending reminders for ${nickname} (User ID: ${userDiscordId})\n`;
-				userSpecificContent += `${botName} has set ${pendingReminders.length} reminder${pendingReminders.length > 1 ? "s" : ""} for ${nickname}:\n`;
 
 				for (const reminder of pendingReminders) {
 					// Format the reminder time in a human-readable way
@@ -703,13 +700,25 @@ export async function buildContext({
 			tomoriState.sample_dialogues_out.length
 	) {
 		// 8. Sample Dialogues (Request 3: Changed to alternating user/model turns)
+		// 8.0. Add introductory system message for sample dialogues
+		contextItems.push({
+			role: "user",
+			parts: [
+				{
+					type: "text",
+					text: `[System: The following are example dialogues on how ${botName} should speak]`,
+				},
+			],
+			metadataTag: ContextItemTag.DIALOGUE_SAMPLE,
+		});
+
 		// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
 		for (let i = 0; i < tomoriState!.sample_dialogues_in.length; i++) {
 			// 8.a. User's part of the sample dialogue
 			// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
 			let userSampleText = tomoriState!.sample_dialogues_in[i];
-			// Prepend a generic "User:" for sample dialogues, or use triggererName if preferred.
-			userSampleText = `${triggererName}: ${userSampleText}`; // Or `${triggererName}: ${userSampleText}`
+			// Prepend a generic "User:" for sample dialogues to avoid associating examples with the triggerer
+			userSampleText = `User: ${userSampleText}`;
 			if (tomoriConfig.humanizer_degree >= HumanizerDegree.HEAVY) {
 				userSampleText = humanizeString(userSampleText);
 			}
@@ -756,6 +765,18 @@ export async function buildContext({
 				metadataTag: ContextItemTag.DIALOGUE_SAMPLE, // Tagging
 			});
 		}
+
+		// 8.c. Add closing system message for sample dialogues
+		contextItems.push({
+			role: "user",
+			parts: [
+				{
+					type: "text",
+					text: `[System: That ends the example dialogues, the following is an actual ongoing conversation ${botName} is currently participating in]`,
+				},
+			],
+			metadataTag: ContextItemTag.DIALOGUE_SAMPLE,
+		});
 	}
 
 	// 9. Conversation History (Main Dialogue)
