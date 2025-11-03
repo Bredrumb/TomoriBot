@@ -20,6 +20,7 @@ import {
 } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
 import { sql } from "bun";
+import { getCachedPresetAvatar } from "../../utils/image/avatarHelper";
 
 // Modal configuration constants
 const MODAL_CUSTOM_ID = "preset_default_modal";
@@ -219,7 +220,8 @@ export async function execute(
 			return;
 		}
 
-		// 18. Reset guild avatar and server nickname to none
+		// 18. Set guild avatar from preset (or reset to none) and reset server nickname
+		let avatarUpdateFailed = false;
 		try {
 			// Reset server nickname if in a guild
 			if (interaction.guild?.members.me) {
@@ -229,8 +231,17 @@ export async function execute(
 				);
 			}
 
-			// Reset guild-specific avatar to none using Discord API
+			// Set guild-specific avatar from preset cache or reset to none using Discord API
 			if (interaction.guild) {
+				// 1. Try to get cached preset avatar
+				const cachedAvatar = getCachedPresetAvatar(
+					selectedPreset.tomori_preset_id,
+				);
+
+				// 2. Prepare avatar value (base64 data URI or null)
+				const avatarValue = cachedAvatar || null;
+
+				// 3. Update guild avatar via Discord API
 				const endpoint = `https://discord.com/api/v10/guilds/${interaction.guild.id}/members/@me`;
 				const response = await fetch(endpoint, {
 					method: "PATCH",
@@ -238,23 +249,28 @@ export async function execute(
 						Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
 						"Content-Type": "application/json",
 					},
-					body: JSON.stringify({ avatar: null }),
+					body: JSON.stringify({ avatar: avatarValue }),
 				});
 
 				if (response.ok) {
+					const actionDescription = cachedAvatar
+						? `Set preset avatar for "${selectedPreset.tomori_preset_name}"`
+						: "Reset guild avatar to bot default";
 					log.info(
-						`Reset guild avatar for guild ${interaction.guild.id} after applying preset`,
+						`${actionDescription} for guild ${interaction.guild.id} after applying preset`,
 					);
 				} else {
+					avatarUpdateFailed = true;
 					log.warn(
-						`Failed to reset guild avatar: ${response.status} ${response.statusText}`,
+						`Failed to update guild avatar: ${response.status} ${response.statusText}`,
 					);
 				}
 			}
 		} catch (avatarError) {
-			// Log avatar/nickname reset errors but don't fail the command
+			// Log avatar/nickname errors but don't fail the command
+			avatarUpdateFailed = true;
 			log.warn(
-				`Failed to reset avatar or nickname after applying preset: ${avatarError}`,
+				`Failed to update avatar or nickname after applying preset: ${avatarError}`,
 			);
 		}
 
@@ -269,7 +285,10 @@ export async function execute(
 			descriptionVars: {
 				preset_name: selectedPreset.tomori_preset_name,
 			},
-			color: ColorCode.SUCCESS,
+			color: avatarUpdateFailed ? ColorCode.WARN : ColorCode.SUCCESS,
+			footerKey: avatarUpdateFailed
+				? "commands.preset.default.avatar_update_failed"
+				: undefined,
 		});
 	} catch (error) {
 		// 20. Log error with context

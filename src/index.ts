@@ -235,6 +235,39 @@ try {
 log.section("Initializing Locales...");
 await initializeLocalizer();
 
+// Initialize LLM configuration cache
+log.section("Initializing LLM Configuration Cache...");
+try {
+	const { initializeLLMCache } = await import("./utils/cache/llmCache");
+	await initializeLLMCache();
+	log.success("LLM configuration cache initialized successfully");
+} catch (error) {
+	log.warn("Failed to initialize LLM cache (non-critical)", error);
+	// Non-critical error - bot will fall back to database queries
+}
+
+// Initialize preset avatar cache
+log.section("Initializing Preset Avatar Cache...");
+try {
+	const { loadAllPresets } = await import("./utils/db/dbRead");
+	const { initializePresetAvatarCache } = await import(
+		"./utils/image/avatarHelper"
+	);
+
+	const presets = await loadAllPresets();
+	if (presets && presets.length > 0) {
+		await initializePresetAvatarCache(presets);
+		log.success("Preset avatar cache initialized successfully");
+	} else {
+		log.warn(
+			"No presets found to cache - avatar cache will be empty (non-critical)",
+		);
+	}
+} catch (error) {
+	log.warn("Failed to initialize preset avatar cache (non-critical)", error);
+	// Non-critical error - bot can still function without cached avatars
+}
+
 // Starts the event handler, which also runs important 'ready' functions
 // such as registering or updating of commands upon startup
 eventHandler(client);

@@ -4,6 +4,9 @@
  */
 
 import type { Client, Guild } from "discord.js";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import type { TomoriPresetRow } from "../../types/db/schema";
 import { log } from "../misc/logger";
 
 /**
@@ -188,4 +191,89 @@ export function validatePNGBuffer(
 	return {
 		isValid: true,
 	};
+}
+
+/**
+ * In-memory cache for preset avatars as base64 data URIs
+ * Key: preset_id, Value: base64 data URI string (or null if no avatar)
+ */
+const presetAvatarCache = new Map<number, string | null>();
+
+/**
+ * Initializes the preset avatar cache by loading all preset avatars into memory
+ * This should be called once at bot startup for optimal performance
+ * @param presets - Array of preset rows from the database
+ */
+export async function initializePresetAvatarCache(
+	presets: TomoriPresetRow[],
+): Promise<void> {
+	try {
+		log.info("Initializing preset avatar cache...");
+
+		// 1. Clear existing cache
+		presetAvatarCache.clear();
+
+		// 2. Load each preset's avatar (if it has one)
+		for (const preset of presets) {
+			// Skip if no avatar path is set
+			if (!preset.preset_avatar_path) {
+				presetAvatarCache.set(preset.tomori_preset_id, null);
+				continue;
+			}
+
+			// 3. Construct absolute path from relative path
+			const absolutePath = path.join(
+				process.cwd(),
+				preset.preset_avatar_path,
+			);
+
+			try {
+				// 4. Read the image file
+				const imageBuffer = await readFile(absolutePath);
+
+				// 5. Validate it's a PNG
+				const validation = validatePNGBuffer(imageBuffer);
+				if (!validation.isValid) {
+					log.warn(
+						`Invalid PNG for preset "${preset.tomori_preset_name}": ${validation.error}`,
+					);
+					presetAvatarCache.set(preset.tomori_preset_id, null);
+					continue;
+				}
+
+				// 6. Convert to base64 data URI
+				const base64 = imageBuffer.toString("base64");
+				const dataUri = `data:image/png;base64,${base64}`;
+
+				// 7. Cache it
+				presetAvatarCache.set(preset.tomori_preset_id, dataUri);
+				log.success(
+					`Cached avatar for preset "${preset.tomori_preset_name}" (${(imageBuffer.length / 1024).toFixed(2)} KB)`,
+				);
+			} catch (error) {
+				// File doesn't exist or can't be read - cache as null
+				log.warn(
+					`Could not load avatar for preset "${preset.tomori_preset_name}": ${error instanceof Error ? error.message : "Unknown error"}`,
+				);
+				presetAvatarCache.set(preset.tomori_preset_id, null);
+			}
+		}
+
+		log.success(
+			`Preset avatar cache initialized with ${presetAvatarCache.size} presets`,
+		);
+	} catch (error) {
+		log.error("Failed to initialize preset avatar cache:", error as Error);
+		// Don't throw - bot should still work without cached avatars
+	}
+}
+
+/**
+ * Gets a cached preset avatar as a base64 data URI
+ * Returns null if preset has no avatar or if avatar failed to load
+ * @param presetId - ID of the preset to get avatar for
+ * @returns Base64 data URI string or null
+ */
+export function getCachedPresetAvatar(presetId: number): string | null {
+	return presetAvatarCache.get(presetId) ?? null;
 }

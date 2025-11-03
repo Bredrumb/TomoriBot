@@ -207,6 +207,9 @@ BEFORE UPDATE ON tomori_presets
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 
+-- Add preset avatar path column for profile pictures (January 2025)
+SELECT add_column_if_not_exists('tomori_presets', 'preset_avatar_path', 'TEXT');
+
 CREATE TABLE IF NOT EXISTS server_emojis (
   server_emoji_id SERIAL PRIMARY KEY,
   server_id INT NOT NULL,

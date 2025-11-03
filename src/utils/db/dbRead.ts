@@ -15,6 +15,7 @@ import {
 	type TomoriPresetRow,
 } from "../../types/db/schema"; // Import base schemas and types
 import { log } from "../misc/logger";
+import { getCachedLLM } from "../cache/llmCache";
 
 /**
  * Loads the complete Tomori state (base row + config + server memories) for a given server.
@@ -58,20 +59,28 @@ export async function loadTomoriState(
 		}
 		const configData = configRows[0];
 
-		// 3. Load LLM data using the llm_id from the config
-		const llmRows = await sql`
-            SELECT * FROM llms
-            WHERE llm_id = ${configData.llm_id}
-            LIMIT 1
-        `;
+		// 3. Load LLM data using the llm_id from the config (with cache fallback)
+		let llmData = getCachedLLM(configData.llm_id);
 
-		if (!llmRows.length) {
-			log.error(
-				`Found Tomori config but no LLM data for server ${serverDiscId}, llm_id: ${configData.llm_id}`,
+		// Fallback to database if cache miss (cache not initialized or LLM not found)
+		if (!llmData) {
+			log.info(
+				`Cache miss for LLM ID ${configData.llm_id}, querying database`,
 			);
-			return null;
+			const llmRows = await sql`
+				SELECT * FROM llms
+				WHERE llm_id = ${configData.llm_id}
+				LIMIT 1
+			`;
+
+			if (!llmRows.length) {
+				log.error(
+					`Found Tomori config but no LLM data for server ${serverDiscId}, llm_id: ${configData.llm_id}`,
+				);
+				return null;
+			}
+			llmData = llmRows[0] as LlmRow;
 		}
-		const llmData = llmRows[0];
 
 		// 4. Load server memories for this server
 		const serverMemoriesRows = await sql`
@@ -758,6 +767,31 @@ export async function loadPresetRowsByLocale(
 	} catch (error) {
 		// 5. Log any unexpected errors during the database query
 		log.error(`Error loading preset rows for locale '${locale}' from database:`, error);
+		return null;
+	}
+}
+
+/**
+ * Loads all preset rows from the database (all locales)
+ * Used for initializing preset avatar cache at startup
+ * @returns Promise that resolves to array of all preset rows or null on error
+ */
+export async function loadAllPresets(): Promise<TomoriPresetRow[] | null> {
+	try {
+		const presets = await sql`
+			SELECT * FROM tomori_presets
+			ORDER BY tomori_preset_name ASC
+		`;
+
+		if (!presets || presets.length === 0) {
+			log.warn("No personality presets found in database.");
+			return null;
+		}
+
+		log.info(`Loaded ${presets.length} personality presets from database.`);
+		return presets as TomoriPresetRow[];
+	} catch (error) {
+		log.error("Error loading all presets from database:", error);
 		return null;
 	}
 }

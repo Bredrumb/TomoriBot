@@ -473,6 +473,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 				preset_not_found: `選択されたプリセットが見つかりませんでした。`,
 				success_title: `プリセットが適用されました`,
 				success_description: `'{preset_name}'プリセットが正常に適用されました。`,
+				avatar_update_failed: `⚠️ 注意: サーバーアバターを更新できませんでした (Discord APIエラー)。人格設定は正常に適用されました。`,
 			},
 			generate: {
 				description: `Google GeminiのAIを使用した人格生成`,

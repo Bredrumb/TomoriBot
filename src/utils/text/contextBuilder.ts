@@ -329,7 +329,7 @@ export async function buildContext({
 		);
 
 		const emojiContent = `## ${serverName}'s Emojis\n- ${selectedEmojis.join("\n- ")}.`;
-		const emojiUsage = `\nIn order to use ${serverName}'s Emojis, input the name and the code like such: <:name:numbercode>\nAnimated emojis require an 'a' flag in the beginning like such: <a:name:numbercode>\n`;
+		const emojiUsage = `\nIn order to use ${serverName}'s Emojis, input the name and the code like such: <:name:numbercode>\nAnimated emojis require an 'a' flag in the beginning like such: <a:name:numbercode>. {bot} only uses server emojis when it matches their actual mood. If {bot} is unsure of any available emoji, they can ask {user} for context or description if needed\n`;
 		contextItems.push({
 			role: "system",
 			parts: [
@@ -701,6 +701,7 @@ export async function buildContext({
 	) {
 		// 8. Sample Dialogues (Request 3: Changed to alternating user/model turns)
 		// 8.0. Add introductory system message for sample dialogues
+		/*
 		contextItems.push({
 			role: "user",
 			parts: [
@@ -710,7 +711,7 @@ export async function buildContext({
 				},
 			],
 			metadataTag: ContextItemTag.DIALOGUE_SAMPLE,
-		});
+		});*/
 
 		// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
 		for (let i = 0; i < tomoriState!.sample_dialogues_in.length; i++) {
@@ -718,7 +719,7 @@ export async function buildContext({
 			// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
 			let userSampleText = tomoriState!.sample_dialogues_in[i];
 			// Prepend a generic "User:" for sample dialogues to avoid associating examples with the triggerer
-			userSampleText = `User: ${userSampleText}`;
+			userSampleText = `${triggererName}: ${userSampleText}`;
 			if (tomoriConfig.humanizer_degree >= HumanizerDegree.HEAVY) {
 				userSampleText = humanizeString(userSampleText);
 			}
@@ -767,6 +768,7 @@ export async function buildContext({
 		}
 
 		// 8.c. Add closing system message for sample dialogues
+		/*
 		contextItems.push({
 			role: "user",
 			parts: [
@@ -776,7 +778,7 @@ export async function buildContext({
 				},
 			],
 			metadataTag: ContextItemTag.DIALOGUE_SAMPLE,
-		});
+		});*/
 	}
 
 	// 9. Conversation History (Main Dialogue)

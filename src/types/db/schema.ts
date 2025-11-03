@@ -89,6 +89,7 @@ export const tomoriPresetSchema = z.object({
 	preset_sample_dialogues_in: z.array(z.string()).default([]),
 	preset_sample_dialogues_out: z.array(z.string()).default([]),
 	preset_language: z.string(),
+	preset_avatar_path: z.string().nullable().optional(), // Added January 2025 - Path to preset profile picture
 	created_at: z.date().optional(),
 	updated_at: z.date().optional(),
 });

@@ -472,6 +472,7 @@ Discord API Latency: \`{discord_response}ms\``,
 				preset_not_found: `The selected preset could not be found.`,
 				success_title: `Preset Applied`,
 				success_description: `Successfully applied the '{preset_name}' preset.`,
+				avatar_update_failed: `⚠️ Note: Server avatar could not be updated (Discord API error). Personality was applied successfully.`,
 			},
 			generate: {
 				description: `AI-powered personality generation using Google Gemini`,
