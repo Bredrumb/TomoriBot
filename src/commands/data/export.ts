@@ -64,31 +64,22 @@ export async function execute(
 	const exportType = interaction.options.getString("type", true);
 
 	try {
-		// 2. Check permissions for server and personality exports
+		// 2. Check permissions for server and personality exports (only in guilds)
 		if (exportType === "server" || exportType === "personality") {
-			// Server and personality exports require Manage Server permission
-			const hasPermission =
-				interaction.memberPermissions?.has("ManageGuild") ?? false;
+			// In guilds, require Manage Server permission
+			if (interaction.guild) {
+				const hasPermission =
+					interaction.memberPermissions?.has("ManageGuild") ?? false;
 
-			if (!hasPermission) {
-				await replyInfoEmbed(interaction, locale, {
-					titleKey: "commands.data.export.no_permission_title",
-					descriptionKey: "commands.data.export.no_permission_description",
-					color: ColorCode.ERROR,
-					flags: MessageFlags.Ephemeral,
-				});
-				return;
-			}
-
-			// Server and personality exports require a guild context
-			if (!interaction.guild) {
-				await replyInfoEmbed(interaction, locale, {
-					titleKey: "general.errors.guild_only_title",
-					descriptionKey: "general.errors.guild_only_description",
-					color: ColorCode.ERROR,
-					flags: MessageFlags.Ephemeral,
-				});
-				return;
+				if (!hasPermission) {
+					await replyInfoEmbed(interaction, locale, {
+						titleKey: "commands.data.export.no_permission_title",
+						descriptionKey: "commands.data.export.no_permission_description",
+						color: ColorCode.ERROR,
+						flags: MessageFlags.Ephemeral,
+					});
+					return;
+				}
 			}
 		}
 
@@ -96,10 +87,9 @@ export async function execute(
 		await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
 		// 4. Handle personality export separately (returns text instead of JSON)
-		if (exportType === "personality" && interaction.guild) {
-			const personalityResult = await exportPersonalityData(
-				interaction.guild.id,
-			);
+		if (exportType === "personality") {
+			const serverDiscId = interaction.guild?.id ?? interaction.user.id;
+			const personalityResult = await exportPersonalityData(serverDiscId);
 
 			if (!personalityResult.success || !personalityResult.text) {
 				await interaction.editReply({
@@ -118,7 +108,7 @@ export async function execute(
 			}
 
 			// Create text file attachment
-			const filename = `tomori-personality-${interaction.guild.id}-${Date.now()}.txt`;
+			const filename = `tomori-personality-${serverDiscId}-${Date.now()}.txt`;
 			const attachment = new AttachmentBuilder(
 				Buffer.from(personalityResult.text, "utf-8"),
 				{
@@ -126,11 +116,16 @@ export async function execute(
 				},
 			);
 
-			// Get bot's guild avatar for the thumbnail
-			const botMember = await interaction.guild.members.fetch(
-				interaction.client.user.id,
-			);
-			const botAvatarUrl = botMember.displayAvatarURL({ size: 256 });
+			// Get bot's avatar for the thumbnail (guild avatar if in guild, default otherwise)
+			let botAvatarUrl: string;
+			if (interaction.guild) {
+				const botMember = await interaction.guild.members.fetch(
+					interaction.client.user.id,
+				);
+				botAvatarUrl = botMember.displayAvatarURL({ size: 256 });
+			} else {
+				botAvatarUrl = interaction.client.user.displayAvatarURL({ size: 256 });
+			}
 
 			// Send to user's DM with bot avatar thumbnail
 			try {
@@ -190,9 +185,10 @@ export async function execute(
 		if (exportType === "personal") {
 			exportResult = await exportPersonalData(interaction.user.id);
 			filename = `tomori-personal-${interaction.user.id}-${Date.now()}.json`;
-		} else if (exportType === "server" && interaction.guild) {
-			exportResult = await exportServerData(interaction.guild.id);
-			filename = `tomori-server-${interaction.guild.id}-${Date.now()}.json`;
+		} else if (exportType === "server") {
+			const serverDiscId = interaction.guild?.id ?? interaction.user.id;
+			exportResult = await exportServerData(serverDiscId);
+			filename = `tomori-server-${serverDiscId}-${Date.now()}.json`;
 		} else {
 			await interaction.editReply({
 				embeds: [

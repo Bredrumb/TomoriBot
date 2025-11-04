@@ -192,40 +192,28 @@ export async function execute(
 			return;
 		}
 
-		// 7. Check permissions for server imports
+		// 7. Check permissions for server imports (only in guilds)
 		if (validation.type === "server") {
-			const hasPermission =
-				interaction.memberPermissions?.has("ManageGuild") ?? false;
+			// In guilds, require Manage Server permission
+			if (interaction.guild) {
+				const hasPermission =
+					interaction.memberPermissions?.has("ManageGuild") ?? false;
 
-			if (!hasPermission) {
-				await interaction.editReply({
-					embeds: [
-						new EmbedBuilder()
-							.setTitle(
-								localizer(locale, "commands.data.import.no_permission_title"),
-							)
-							.setDescription(
-								localizer(locale, "commands.data.import.no_permission_description"),
-							)
-							.setColor(ColorCode.ERROR),
-					],
-				});
-				return;
-			}
-
-			// Server imports require a guild context
-			if (!interaction.guild) {
-				await interaction.editReply({
-					embeds: [
-						new EmbedBuilder()
-							.setTitle(localizer(locale, "general.errors.guild_only_title"))
-							.setDescription(
-								localizer(locale, "general.errors.guild_only_description"),
-							)
-							.setColor(ColorCode.ERROR),
-					],
-				});
-				return;
+				if (!hasPermission) {
+					await interaction.editReply({
+						embeds: [
+							new EmbedBuilder()
+								.setTitle(
+									localizer(locale, "commands.data.import.no_permission_title"),
+								)
+								.setDescription(
+									localizer(locale, "commands.data.import.no_permission_description"),
+								)
+								.setColor(ColorCode.ERROR),
+						],
+					});
+					return;
+				}
 			}
 		}
 
@@ -237,9 +225,10 @@ export async function execute(
 				interaction.user.id,
 				validation.data as PersonalExportData,
 			);
-		} else if (validation.type === "server" && interaction.guild) {
+		} else if (validation.type === "server") {
+			const serverDiscId = interaction.guild?.id ?? interaction.user.id;
 			importResult = await importServerData(
-				interaction.guild.id,
+				serverDiscId,
 				validation.data as ServerExportData,
 			);
 		} else {

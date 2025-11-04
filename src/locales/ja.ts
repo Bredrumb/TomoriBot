@@ -534,7 +534,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 				image_description: `エクスポート用のキャラクター画像(任意)`,
 				// Modal fields
 				modal: {
-					title: `シンプルプリセット作成 (ヒント: AI生成には /preset generate を使用！)`,
+					title: `プリセット作成 (ヒント: AI生成には /preset generate を使用！)`,
 					character_name_label: `キャラクター名`,
 					character_name_placeholder: `キャラクター名を入力`,
 					character_desc_label: `キャラクター説明`,

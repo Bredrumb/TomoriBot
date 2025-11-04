@@ -81,32 +81,22 @@ export async function execute(
 			return;
 		}
 
-		// 3. Check permissions and context for server deletions
+		// 3. Check permissions for server deletions (only in guilds)
 		if (deleteType === "server") {
-			// 3a. Server deletions require guild context
-			if (!interaction.guild) {
-				await replyInfoEmbed(interaction, locale, {
-					titleKey: "general.errors.guild_only_title",
-					descriptionKey: "general.errors.guild_only_description",
-					color: ColorCode.ERROR,
-					flags: MessageFlags.Ephemeral,
-				});
-				return;
-			}
+			// In guilds, require Manage Server permission
+			if (interaction.guild) {
+				const hasPermission =
+					interaction.memberPermissions?.has("ManageGuild") ?? false;
 
-			// 3b. Server deletions require Manage Server permission
-			// In DMs, there's no guild/permissions, so we skip this check
-			const hasPermission =
-				interaction.memberPermissions?.has("ManageGuild") ?? false;
-
-			if (!hasPermission) {
-				await replyInfoEmbed(interaction, locale, {
-					titleKey: "commands.data.delete.no_permission_title",
-					descriptionKey: "commands.data.delete.no_permission_description",
-					color: ColorCode.ERROR,
-					flags: MessageFlags.Ephemeral,
-				});
-				return;
+				if (!hasPermission) {
+					await replyInfoEmbed(interaction, locale, {
+						titleKey: "commands.data.delete.no_permission_title",
+						descriptionKey: "commands.data.delete.no_permission_description",
+						color: ColorCode.ERROR,
+						flags: MessageFlags.Ephemeral,
+					});
+					return;
+				}
 			}
 		}
 
@@ -149,8 +139,7 @@ export async function execute(
 			});
 		} else if (deleteType === "server") {
 			// 5b. Delete server data (server row - CASCADE handles all related data)
-			// biome-ignore lint/style/noNonNullAssertion: Already validated guild exists above
-			const serverDiscId = interaction.guild!.id;
+			const serverDiscId = interaction.guild?.id ?? interaction.user.id;
 
 			const deletedRows = await sql`
 				DELETE FROM servers
