@@ -136,32 +136,23 @@ export async function execute(
 			return;
 		}
 
-		// 2. Check if command is run in a guild (server-only command)
-		if (!interaction.guild) {
-			await replyInfoEmbed(interaction, locale, {
-				titleKey: "general.errors.guild_only_title",
-				descriptionKey: "general.errors.guild_only_description",
-				color: ColorCode.ERROR,
-				flags: MessageFlags.Ephemeral,
-			});
-			return;
+		// 2. Check permissions (ManageGuild required for import in guilds only)
+		if (interaction.guild) {
+			const hasPermission =
+				interaction.memberPermissions?.has("ManageGuild") ?? false;
+
+			if (!hasPermission) {
+				await replyInfoEmbed(interaction, locale, {
+					titleKey: "commands.preset.import.no_permission_title",
+					descriptionKey: "commands.preset.import.no_permission_description",
+					color: ColorCode.ERROR,
+					flags: MessageFlags.Ephemeral,
+				});
+				return;
+			}
 		}
 
-		// 3. Check permissions (ManageGuild required for import)
-		const hasPermission =
-			interaction.memberPermissions?.has("ManageGuild") ?? false;
-
-		if (!hasPermission) {
-			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.preset.import.no_permission_title",
-				descriptionKey: "commands.preset.import.no_permission_description",
-				color: ColorCode.ERROR,
-				flags: MessageFlags.Ephemeral,
-			});
-			return;
-		}
-
-		// 4. Get uploaded file attachment
+		// 3. Get uploaded file attachment
 		const attachment = interaction.options.getAttachment("file", true);
 
 		// 5. Validate file type and size
@@ -286,9 +277,10 @@ export async function execute(
 			return;
 		}
 
-		// 11. Import preset data
+		// 11. Import preset data (works for both guilds and DMs)
+		const serverDiscId = interaction.guild?.id ?? interaction.user.id;
 		const importResult = await importPresetData(
-			interaction.guild.id,
+			serverDiscId,
 			validation.data as PresetExportData,
 		);
 
@@ -308,44 +300,48 @@ export async function execute(
 			return;
 		}
 
-		// 12. Try to set TomoriBot's server-specific avatar and nickname (non-fatal if fails)
-		try {
-			// Convert PNG buffer to base64 data URI
-			const base64 = pngBuffer.toString("base64");
-			const avatarDataUri = `data:image/png;base64,${base64}`;
+		// 12. Try to set TomoriBot's server-specific avatar and nickname (guild-only, non-fatal if fails)
+		const isDM = !interaction.guild;
 
-			// Get the imported nickname for the bot
-			const importedNickname = importResult.itemsImported?.nickname;
+		if (!isDM) {
+			try {
+				// Convert PNG buffer to base64 data URI
+				const base64 = pngBuffer.toString("base64");
+				const avatarDataUri = `data:image/png;base64,${base64}`;
 
-			// Use Discord API to set bot's guild avatar and nickname
-			const endpoint = `https://discord.com/api/v10/guilds/${interaction.guild.id}/members/@me`;
-			const response = await fetch(endpoint, {
-				method: "PATCH",
-				headers: {
-					Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({
-					avatar: avatarDataUri,
-					nick: importedNickname, // Set bot's server nickname to match personality
-				}),
-			});
+				// Get the imported nickname for the bot
+				const importedNickname = importResult.itemsImported?.nickname;
 
-			if (response.ok) {
-				log.success(
-					`Successfully updated TomoriBot's server avatar and nickname to "${importedNickname}" for ${interaction.guild.id} during preset import`,
-				);
-			} else {
-				const errorText = await response.text();
+				// Use Discord API to set bot's guild avatar and nickname
+				const endpoint = `https://discord.com/api/v10/guilds/${interaction.guild.id}/members/@me`;
+				const response = await fetch(endpoint, {
+					method: "PATCH",
+					headers: {
+						Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						avatar: avatarDataUri,
+						nick: importedNickname, // Set bot's server nickname to match personality
+					}),
+				});
+
+				if (response.ok) {
+					log.success(
+						`Successfully updated TomoriBot's server avatar and nickname to "${importedNickname}" for ${serverDiscId} during preset import`,
+					);
+				} else {
+					const errorText = await response.text();
+					log.warn(
+						`Failed to update bot's server avatar/nickname (non-fatal): ${response.status} ${response.statusText} - ${errorText}`,
+					);
+				}
+			} catch (avatarError) {
+				// Non-fatal error - personality was imported successfully
 				log.warn(
-					`Failed to update bot's server avatar/nickname (non-fatal): ${response.status} ${response.statusText} - ${errorText}`,
+					`Failed to update bot's server avatar/nickname during preset import (non-fatal): ${avatarError instanceof Error ? avatarError.message : "Unknown error"}`,
 				);
 			}
-		} catch (avatarError) {
-			// Non-fatal error - personality was imported successfully
-			log.warn(
-				`Failed to update bot's server avatar/nickname during preset import (non-fatal): ${avatarError instanceof Error ? avatarError.message : "Unknown error"}`,
-			);
 		}
 
 		// 13. Send success message with import summary
@@ -366,24 +362,32 @@ export async function execute(
 			return;
 		}
 
+		// Build success embed with DM-aware messaging
+		const successEmbed = new EmbedBuilder()
+			.setTitle(localizer(locale, "commands.preset.import.success_title"))
+			.setDescription(
+				localizer(locale, "commands.preset.import.success_description", {
+					nickname: itemsImported.nickname,
+					attribute_count: itemsImported.attributeCount,
+					dialogue_count: itemsImported.dialogueCount,
+					trigger_word_count: itemsImported.triggerWordCount,
+				}),
+			)
+			.setColor(isDM ? ColorCode.WARN : ColorCode.SUCCESS);
+
+		// Add DM-specific footer if in DM
+		if (isDM) {
+			successEmbed.setFooter({
+				text: localizer(locale, "commands.preset.import.avatar_update_skipped_dm"),
+			});
+		}
+
 		await interaction.editReply({
-			embeds: [
-				new EmbedBuilder()
-					.setTitle(localizer(locale, "commands.preset.import.success_title"))
-					.setDescription(
-						localizer(locale, "commands.preset.import.success_description", {
-							nickname: itemsImported.nickname,
-							attribute_count: itemsImported.attributeCount,
-							dialogue_count: itemsImported.dialogueCount,
-							trigger_word_count: itemsImported.triggerWordCount,
-						}),
-					)
-					.setColor(ColorCode.SUCCESS),
-			],
+			embeds: [successEmbed],
 		});
 
 		log.success(
-			`Successfully imported preset for guild ${interaction.guild.id}: ${itemsImported.nickname}`,
+			`Successfully imported preset for ${isDM ? "DM" : "guild"} ${serverDiscId}: ${itemsImported.nickname}`,
 		);
 	} catch (error) {
 		log.error("Error executing preset import command:", error, {

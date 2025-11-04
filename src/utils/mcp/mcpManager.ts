@@ -77,6 +77,7 @@ export class MCPManager {
 
 		// Intercept stdout globally to filter MCP server advertisements
 		const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+		// biome-ignore lint/suspicious/noExplicitAny: /** biome-ignore-all lint/suspicious/noExplicitAny: Monkey-patch to catch all stdout  */
 		process.stdout.write = ((chunk: any, ...args: any[]): boolean => {
 			const output = chunk.toString();
 			// Filter out advertisement boxes from MCP servers

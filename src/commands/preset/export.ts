@@ -42,22 +42,12 @@ export async function execute(
 	locale: string,
 ): Promise<void> {
 	try {
-		// 1. Check if command is run in a guild (server-only command)
-		if (!interaction.guild) {
-			await replyInfoEmbed(interaction, locale, {
-				titleKey: "general.errors.guild_only_title",
-				descriptionKey: "general.errors.guild_only_description",
-				color: ColorCode.ERROR,
-				flags: MessageFlags.Ephemeral,
-			});
-			return;
-		}
-
-		// 2. Defer reply while we process (not ephemeral for transparency)
+		// 1. Defer reply while we process (not ephemeral for transparency)
 		await interaction.deferReply();
 
-		// 3. Export preset data from database
-		const exportResult = await exportPresetData(interaction.guild.id);
+		// 2. Export preset data from database (works for both guilds and DMs)
+		const serverDiscId = interaction.guild?.id ?? interaction.user.id;
+		const exportResult = await exportPresetData(serverDiscId);
 
 		if (!exportResult.success) {
 			await interaction.editReply({
@@ -76,13 +66,14 @@ export async function execute(
 		// Type is now narrowed to success variant
 		const presetData = exportResult.data;
 
-		// 4. Get server avatar (or bot default avatar)
+		// 3. Get server avatar (or bot default avatar for DMs)
 		let avatarBuffer: Buffer;
 		try {
+			// In DMs, getServerAvatar will return bot's default avatar when guild is null
 			avatarBuffer = await getServerAvatar(interaction.guild, client);
 		} catch (error) {
 			log.error(
-				`Failed to get server avatar for guild ${interaction.guild.id}:`,
+				`Failed to get avatar for ${interaction.guild ? "guild" : "DM"} ${serverDiscId}:`,
 				error as Error,
 			);
 			await interaction.editReply({
@@ -103,13 +94,13 @@ export async function execute(
 			return;
 		}
 
-		// 5. Embed metadata into PNG
+		// 4. Embed metadata into PNG
 		let pngWithMetadata: Buffer;
 		try {
 			pngWithMetadata = embedMetadataInPNG(avatarBuffer, presetData);
 		} catch (error) {
 			log.error(
-				`Failed to embed metadata into PNG for guild ${interaction.guild.id}:`,
+				`Failed to embed metadata into PNG for ${interaction.guild ? "guild" : "DM"} ${serverDiscId}:`,
 				error as Error,
 			);
 			await interaction.editReply({
@@ -160,7 +151,7 @@ export async function execute(
 		});
 
 		log.success(
-			`Successfully exported preset for guild ${interaction.guild.id}: ${nickname}`,
+			`Successfully exported preset for ${interaction.guild ? "guild" : "DM"} ${serverDiscId}: ${nickname}`,
 		);
 	} catch (error) {
 		log.error("Error executing preset export command:", error, {

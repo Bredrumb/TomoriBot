@@ -1,8 +1,8 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.2.3/schema.json",
 	"vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
-	"files": { 
-		"ignoreUnknown": false, 
+	"files": {
+		"ignoreUnknown": false,
 		"includes": ["**/*"],
 		"experimentalScannerIgnores": ["node_modules/**", "dist/**"]
 	},
@@ -11,7 +11,8 @@
 		"actions": {
 			"source": {
 				"organizeImports": {
-					"level": "on"
+					"level": "off",
+					"options": {}
 				}
 			}
 		}
@@ -25,7 +26,7 @@
 			}
 		}
 	},
-	"javascript": { 
+	"javascript": {
 		"formatter": { "quoteStyle": "double" }
 	},
 	"json": { "formatter": { "enabled": true, "indentStyle": "tab" } },

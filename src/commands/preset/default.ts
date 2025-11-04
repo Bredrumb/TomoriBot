@@ -220,58 +220,63 @@ export async function execute(
 			return;
 		}
 
-		// 18. Set guild avatar from preset (or reset to none) and reset server nickname
+		// 18. Detect DM context and set guild avatar/nickname (guild-only operations)
+		const isDM = !interaction.guild;
 		let avatarUpdateFailed = false;
-		try {
-			// Reset server nickname if in a guild
-			if (interaction.guild?.members.me) {
-				await interaction.guild.members.me.setNickname(null);
-				log.info(
-					`Reset server nickname for guild ${interaction.guild.id} after applying preset`,
-				);
-			}
 
-			// Set guild-specific avatar from preset cache or reset to none using Discord API
-			if (interaction.guild) {
-				// 1. Try to get cached preset avatar
-				const cachedAvatar = getCachedPresetAvatar(
-					selectedPreset.tomori_preset_id,
-				);
-
-				// 2. Prepare avatar value (base64 data URI or null)
-				const avatarValue = cachedAvatar || null;
-
-				// 3. Update guild avatar via Discord API
-				const endpoint = `https://discord.com/api/v10/guilds/${interaction.guild.id}/members/@me`;
-				const response = await fetch(endpoint, {
-					method: "PATCH",
-					headers: {
-						Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({ avatar: avatarValue }),
-				});
-
-				if (response.ok) {
-					const actionDescription = cachedAvatar
-						? `Set preset avatar for "${selectedPreset.tomori_preset_name}"`
-						: "Reset guild avatar to bot default";
+		// Only attempt avatar/nickname updates in guilds (not available in DMs)
+		if (!isDM) {
+			try {
+				// Reset server nickname if in a guild
+				if (interaction.guild?.members.me) {
+					await interaction.guild.members.me.setNickname(null);
 					log.info(
-						`${actionDescription} for guild ${interaction.guild.id} after applying preset`,
-					);
-				} else {
-					avatarUpdateFailed = true;
-					log.warn(
-						`Failed to update guild avatar: ${response.status} ${response.statusText}`,
+						`Reset server nickname for guild ${interaction.guild.id} after applying preset`,
 					);
 				}
+
+				// Set guild-specific avatar from preset cache or reset to none using Discord API
+				if (interaction.guild) {
+					// 1. Try to get cached preset avatar
+					const cachedAvatar = getCachedPresetAvatar(
+						selectedPreset.tomori_preset_id,
+					);
+
+					// 2. Prepare avatar value (base64 data URI or null)
+					const avatarValue = cachedAvatar || null;
+
+					// 3. Update guild avatar via Discord API
+					const endpoint = `https://discord.com/api/v10/guilds/${interaction.guild.id}/members/@me`;
+					const response = await fetch(endpoint, {
+						method: "PATCH",
+						headers: {
+							Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify({ avatar: avatarValue }),
+					});
+
+					if (response.ok) {
+						const actionDescription = cachedAvatar
+							? `Set preset avatar for "${selectedPreset.tomori_preset_name}"`
+							: "Reset guild avatar to bot default";
+						log.info(
+							`${actionDescription} for guild ${interaction.guild.id} after applying preset`,
+						);
+					} else {
+						avatarUpdateFailed = true;
+						log.warn(
+							`Failed to update guild avatar: ${response.status} ${response.statusText}`,
+						);
+					}
+				}
+			} catch (avatarError) {
+				// Log avatar/nickname errors but don't fail the command
+				avatarUpdateFailed = true;
+				log.warn(
+					`Failed to update avatar or nickname after applying preset: ${avatarError}`,
+				);
 			}
-		} catch (avatarError) {
-			// Log avatar/nickname errors but don't fail the command
-			avatarUpdateFailed = true;
-			log.warn(
-				`Failed to update avatar or nickname after applying preset: ${avatarError}`,
-			);
 		}
 
 		// 19. Log success and show success message
@@ -285,10 +290,12 @@ export async function execute(
 			descriptionVars: {
 				preset_name: selectedPreset.tomori_preset_name,
 			},
-			color: avatarUpdateFailed ? ColorCode.WARN : ColorCode.SUCCESS,
-			footerKey: avatarUpdateFailed
-				? "commands.preset.default.avatar_update_failed"
-				: undefined,
+			color: avatarUpdateFailed || isDM ? ColorCode.WARN : ColorCode.SUCCESS,
+			footerKey: isDM
+				? "commands.preset.default.avatar_update_skipped_dm"
+				: avatarUpdateFailed
+					? "commands.preset.default.avatar_update_failed"
+					: undefined,
 		});
 	} catch (error) {
 		// 20. Log error with context

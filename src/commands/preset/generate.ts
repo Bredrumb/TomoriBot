@@ -132,19 +132,9 @@ export async function execute(
 	locale: string,
 ): Promise<void> {
 	try {
-		// 1. Check if command is run in a guild (server-only command)
-		if (!interaction.guild) {
-			await replyInfoEmbed(interaction, locale, {
-				titleKey: "general.errors.guild_only_title",
-				descriptionKey: "general.errors.guild_only_description",
-				color: ColorCode.ERROR,
-				flags: MessageFlags.Ephemeral,
-			});
-			return;
-		}
-
-		// 2. Load Tomori state to check provider
-		const tomoriState = await loadTomoriState(interaction.guild.id);
+		// 1. Load Tomori state to check provider (works for both guilds and DMs)
+		const serverDiscId = interaction.guild?.id ?? interaction.user.id;
+		const tomoriState = await loadTomoriState(serverDiscId);
 		if (!tomoriState) {
 			await replyInfoEmbed(interaction, locale, {
 				titleKey: "general.errors.tomori_not_setup_title",
@@ -539,7 +529,9 @@ export async function execute(
 			name: filename,
 		});
 
-		// 18. Create success embed with main image
+		// 18. Detect DM context and create success embed with main image
+		const isDM = !interaction.guild;
+
 		// Format attribute preview (first attribute, truncated to 200 chars)
 		const attributePreview = genResult.preset.attribute_list[0]
 			? `${genResult.preset.attribute_list[0].substring(0, 200)}...`
@@ -566,7 +558,7 @@ export async function execute(
 					dialogue_preview: dialoguePreview,
 				}),
 			)
-			.setColor(ColorCode.SUCCESS)
+			.setColor(isDM ? ColorCode.WARN : ColorCode.SUCCESS)
 			.setImage(`attachment://${filename}`)
 			.addFields([
 				{
@@ -578,6 +570,13 @@ export async function execute(
 					inline: false,
 				},
 			]);
+
+		// Add DM-specific footer if in DM
+		if (isDM) {
+			successEmbed.setFooter({
+				text: localizer(locale, "commands.preset.generate.avatar_update_skipped_dm"),
+			});
+		}
 
 		// 19. Send success embed with attachment
 		await modalSubmitInteraction.editReply({

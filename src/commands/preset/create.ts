@@ -329,7 +329,9 @@ export async function execute(
 			name: filename,
 		});
 
-		// 12. Create success embed with all created content
+		// 12. Detect DM context and create success embed with all created content
+		const isDM = !interaction.guild;
+
 		// Truncate description if too long for embed
 		const descriptionPreview = characterDesc.length > 200
 			? `${characterDesc.substring(0, 200)}...`
@@ -355,7 +357,7 @@ export async function execute(
 					character_description: descriptionPreview,
 				}),
 			)
-			.setColor(ColorCode.SUCCESS)
+			.setColor(isDM ? ColorCode.WARN : ColorCode.SUCCESS)
 			.setImage(`attachment://${filename}`)
 			.addFields([
 				{
@@ -372,6 +374,13 @@ export async function execute(
 					inline: false,
 				},
 			]);
+
+		// Add DM-specific footer if in DM
+		if (isDM) {
+			successEmbed.setFooter({
+				text: localizer(locale, "commands.preset.create.avatar_update_skipped_dm"),
+			});
+		}
 
 		// 13. Send success embed with attachment
 		await modalSubmitInteraction.editReply({
