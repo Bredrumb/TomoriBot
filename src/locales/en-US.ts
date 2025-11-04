@@ -245,6 +245,8 @@ export default {
 			no: "No",
 			true: "True",
 			false: "False",
+			opt_out: "Block Memory Storage",
+			opt_in: "Allow Memory Storage",
 		},
 
 		// General utility commands
@@ -920,6 +922,40 @@ Discord API Latency: \`{discord_response}ms\``,
 			},
 		},
 
+		// Personal user configuration commands
+		personalconfig: {
+			description: `Manage your personal settings`,
+			privacy: {
+				description: `Control personal memory storage and privacy settings`,
+				setting_description: `Choose your privacy preference`,
+				opted_out_title: `🔒 Privacy Protection Enabled`,
+				opted_out_description: `You have successfully opted out of personal memory storage.
+
+**What this means:**
+• I will not save any new personal memories about you
+• You cannot use \`/teach personalmemory\` while opted out
+• Existing personal memories remain in the database but won't be used
+• This setting applies across all servers where I'm present
+• Server-wide memories are not affected
+
+To opt back in and allow personal memories again, use \`/personalconfig privacy\` and select "Opt In".`,
+				opted_in_title: `✅ Personalization Enabled`,
+				opted_in_description: `You have successfully opted into personal memory storage.
+
+**What this means:**
+• I can now save personal memories about you across servers
+• You can use \`/teach personalmemory\` to add your own memories
+• Any previously saved memories will be available again
+• I can learn new things about you through conversations
+
+To protect your privacy again, use \`/personalconfig privacy\` and select "Opt Out".`,
+				already_opted_out_title: `Already Opted Out`,
+				already_opted_out_description: `You have already opted out of personal memory storage. Your privacy settings remain unchanged.`,
+				already_opted_in_title: `Already Opted In`,
+				already_opted_in_description: `You are already opted into personal memory storage. Your settings remain unchanged.`,
+			},
+		},
+
 		// Commands for teaching Tomori
 		teach: {
 			sampledialogue: {
@@ -996,6 +1032,8 @@ Discord API Latency: \`{discord_response}ms\``,
 				success_but_blacklisted_description: `Successfully added '{memory}' to your personal memories.
 
 **Warning:** You are currently blacklisted from personalization features on this server, so this memory won't be used here. It will still be available on other servers where you are not blacklisted.`, // Natural line break
+				opted_out_error_title: `Privacy Protection Active`,
+				opted_out_error_description: `You have opted out of personal memory storage for privacy reasons. If you'd like to allow personal memories again, use \`/personalconfig privacy\` to opt back in.`,
 			},
 			nickname: {
 				description: `Change the name I use to refer to you.`,

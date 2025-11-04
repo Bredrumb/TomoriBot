@@ -246,6 +246,8 @@ export default {
 			no: "いいえ",
 			true: "真",
 			false: "偽",
+			opt_out: "記憶の保存をブロック",
+			opt_in: "記憶の保存を許可",
 		},
 
 		// 一般的なユーティリティコマンド
@@ -729,7 +731,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 			setup: {
 				description: `初期設定プロセスを開始します。`,
 				no_presets_found: `エラー: あなたの言語用の人格プリセットが見つかりません。設定を続行できません。`,
-				modal_title: `初期設定`,
+				modal_title: `初期の設定`,
 				api_provider_label: `APIプロバイダー`,
 				api_provider_description: `お好みのLLMのプロバイダーを選択してください`,
 				api_provider_placeholder: `選択してください...`,
@@ -917,6 +919,40 @@ Discord API 遅延: \`{discord_response}ms\``,
 			},
 		},
 
+		// 個人的なユーザー設定コマンド
+		personalconfig: {
+			description: `あなたの個人的な設定を管理します`,
+			privacy: {
+				description: `個人記憶の保存とプライバシー設定を管理します`,
+				setting_description: `プライバシー設定を選択してください`,
+				opted_out_title: `🔒 プライバシー保護が有効になりました`,
+				opted_out_description: `個人記憶の保存をオプトアウトしました。
+
+**これが意味すること：**
+• 私はあなたに関する新しい個人的な記憶を保存しません
+• オプトアウト中は\`/teach personalmemory\`を使用できません
+• 既存の個人的な記憶はデータベースに残りますが、使用されません
+• この設定は私がいるすべてのサーバーに適用されます
+• サーバー全体の記憶は影響を受けません
+
+個人記憶を再び許可するには、\`/personalconfig privacy\`を使用して「オプトイン」を選択してください。`,
+				opted_in_title: `✅ パーソナライズが有効になりました`,
+				opted_in_description: `個人記憶の保存をオプトインしました。
+
+**これが意味すること：**
+• サーバー間であなたに関する個人的な記憶を保存できるようになりました
+• \`/teach personalmemory\`を使用して自分の記憶を追加できます
+• 以前に保存された記憶が再び利用可能になります
+• 会話を通じてあなたに関する新しいことを学習できます
+
+プライバシーを再度保護するには、\`/personalconfig privacy\`を使用して「オプトアウト」を選択してください。`,
+				already_opted_out_title: `既にオプトアウトしています`,
+				already_opted_out_description: `あなたは既に個人記憶の保存をオプトアウトしています。プライバシー設定は変更されていません。`,
+				already_opted_in_title: `既にオプトインしています`,
+				already_opted_in_description: `あなたは既に個人記憶の保存をオプトインしています。設定は変更されていません。`,
+			},
+		},
+
 		// Tomoriに教えるためのコマンド
 		teach: {
 			sampledialogue: {
@@ -993,6 +1029,8 @@ Discord API 遅延: \`{discord_response}ms\``,
 				success_but_blacklisted_description: `'{memory}' をあなたの個人的な記憶に正常に追加しました。
 
 **警告:** あなたは現在、このサーバーのパーソナライズ機能のブラックリストに登録されているため、この記憶はここでは使用されません。ブラックリストに登録されていない他のサーバーでは引き続き利用可能です。`,
+				opted_out_error_title: `プライバシー保護が有効`,
+				opted_out_error_description: `あなたはプライバシー上の理由から個人記憶の保存をオプトアウトしています。再び個人記憶を許可したい場合は、\`/personalconfig privacy\`を使用してオプトインしてください。`,
 			},
 			nickname: {
 				description: `私があなたを呼ぶ名前を変更します。`,

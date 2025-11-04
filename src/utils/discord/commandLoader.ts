@@ -43,7 +43,7 @@ export type CommandExecutionMap = Map<
 export type CommandCooldownMap = Map<string, number>;
 // Categories that are completely restricted to guilds only
 const GUILD_ONLY_CATEGORIES: string[] = ["serverconfig"];
-// Categories that require manage permissions in guild context 
+// Categories that require manage permissions in guild context
 const MANAGER_ONLY_CATEGORIES = ["config", "serverconfig"];
 
 // Note: Individual subcommand restrictions are no longer needed.
@@ -91,8 +91,14 @@ export async function loadCommandData(): Promise<{
 				const categoryLocalizationsMap: { [key: string]: string } = {};
 				// Check all available locales for category description
 				for (const locale of availableLocales) {
-					const localizedDesc = localizer(locale, `commands.${categoryName}.description`);
-					if (localizedDesc && localizedDesc !== `commands.${categoryName}.description`) {
+					const localizedDesc = localizer(
+						locale,
+						`commands.${categoryName}.description`,
+					);
+					if (
+						localizedDesc &&
+						localizedDesc !== `commands.${categoryName}.description`
+					) {
 						categoryLocalizationsMap[locale] = localizedDesc;
 					}
 				}
@@ -152,13 +158,14 @@ export async function loadCommandData(): Promise<{
 								commandModule.configureSubcommand(subcommand);
 							// Get the name that was set
 							subcommandName = configuredSubcommand.name;
-							
+
 							// 7. Automatically apply description localizations for subcommand
 							if (subcommandName) {
 								const localizationKey = `commands.${categoryName}.${subcommandName}.description`;
 
 								// Build localizations map for available locales
-								const subcommandLocalizationsMap: { [key: string]: string } = {};
+								const subcommandLocalizationsMap: { [key: string]: string } =
+									{};
 
 								// Check all available locales
 								for (const locale of availableLocales) {
@@ -170,7 +177,9 @@ export async function loadCommandData(): Promise<{
 
 								// Apply localizations if we have any
 								if (Object.keys(subcommandLocalizationsMap).length > 0) {
-									configuredSubcommand.setDescriptionLocalizations(subcommandLocalizationsMap);
+									configuredSubcommand.setDescriptionLocalizations(
+										subcommandLocalizationsMap,
+									);
 								}
 
 								// 8. Automatically apply description localizations for options
@@ -179,15 +188,22 @@ export async function loadCommandData(): Promise<{
 										if (option.name) {
 											// Build localization key for option description
 											const optionLocalizationKey = `commands.${categoryName}.${subcommandName}.${option.name}_description`;
-											const optionLocalizationsMap: { [key: string]: string } = {};
+											const optionLocalizationsMap: { [key: string]: string } =
+												{};
 
 											// Check all available locales
 											for (const locale of availableLocales) {
-												let localizedDesc = localizer(locale, optionLocalizationKey);
+												let localizedDesc = localizer(
+													locale,
+													optionLocalizationKey,
+												);
 												const fallbackKey = `commands.${categoryName}.${subcommandName}.option_description`;
 
 												// Fallback to generic 'option_description' for backwards compatibility
-												if (!localizedDesc || localizedDesc === optionLocalizationKey) {
+												if (
+													!localizedDesc ||
+													localizedDesc === optionLocalizationKey
+												) {
 													localizedDesc = localizer(locale, fallbackKey);
 												}
 
@@ -203,25 +219,42 @@ export async function loadCommandData(): Promise<{
 
 											// Apply option description localizations if we have any
 											if (Object.keys(optionLocalizationsMap).length > 0) {
-												option.setDescriptionLocalizations(optionLocalizationsMap);
+												option.setDescriptionLocalizations(
+													optionLocalizationsMap,
+												);
 											}
 
 											// 9. Automatically apply name localizations for choices
-											if ("choices" in option && Array.isArray(option.choices) && option.choices.length > 0) {
+											if (
+												"choices" in option &&
+												Array.isArray(option.choices) &&
+												option.choices.length > 0
+											) {
 												for (const choice of option.choices) {
 													if (choice.value) {
 														// Build localization key for choice name
 														const choiceLocalizationKey = `commands.${categoryName}.${subcommandName}.${option.name}_choice_${choice.value}`;
-														const choiceLocalizationsMap: { [key: string]: string } = {};
+														const choiceLocalizationsMap: {
+															[key: string]: string;
+														} = {};
 
 														// Check all available locales
 														for (const locale of availableLocales) {
-															let localizedChoice = localizer(locale, choiceLocalizationKey);
+															let localizedChoice = localizer(
+																locale,
+																choiceLocalizationKey,
+															);
 															const commonChoiceKey = `commands.choices.${choice.value}`;
 
 															// Fallback to common choice localization for reusable choices
-															if (!localizedChoice || localizedChoice === choiceLocalizationKey) {
-																localizedChoice = localizer(locale, commonChoiceKey);
+															if (
+																!localizedChoice ||
+																localizedChoice === choiceLocalizationKey
+															) {
+																localizedChoice = localizer(
+																	locale,
+																	commonChoiceKey,
+																);
 															}
 
 															// Apply if valid translation found (not the key itself)
@@ -230,13 +263,17 @@ export async function loadCommandData(): Promise<{
 																localizedChoice !== choiceLocalizationKey &&
 																localizedChoice !== commonChoiceKey
 															) {
-																choiceLocalizationsMap[locale] = localizedChoice;
+																choiceLocalizationsMap[locale] =
+																	localizedChoice;
 															}
 														}
 
 														// Apply choice name localizations if we have any
-														if (Object.keys(choiceLocalizationsMap).length > 0) {
-															choice.name_localizations = choiceLocalizationsMap;
+														if (
+															Object.keys(choiceLocalizationsMap).length > 0
+														) {
+															choice.name_localizations =
+																choiceLocalizationsMap;
 														}
 													}
 												}

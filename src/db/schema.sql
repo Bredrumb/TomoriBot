@@ -262,6 +262,7 @@ CREATE TABLE IF NOT EXISTS users (
   user_nickname TEXT NOT NULL,
   language_pref TEXT DEFAULT 'en',
   personal_memories TEXT[] DEFAULT '{}',
+  privacy_opt_out BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -275,6 +276,17 @@ CREATE TRIGGER update_users_timestamp
 BEFORE UPDATE ON users
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
+
+-- Migration: Add privacy_opt_out column if it doesn't exist (for existing databases)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'users' AND column_name = 'privacy_opt_out'
+    ) THEN
+        ALTER TABLE users ADD COLUMN privacy_opt_out BOOLEAN DEFAULT FALSE;
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS server_memories (
   server_memory_id SERIAL PRIMARY KEY,

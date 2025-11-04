@@ -157,10 +157,28 @@ export async function execute(
 			return;
 		}
 
-		// 10. Prepare updated array using data from userData
+		// 10. Check if user has opted out of personalization (privacy setting)
+		const { isPrivacyOptedOut } = await import("../../utils/db/dbRead");
+		const userOptedOut = await isPrivacyOptedOut(interaction.user.id);
+
+		if (userOptedOut) {
+			await replyInfoEmbed(modalSubmitInteraction, locale, {
+				titleKey: "commands.teach.personalmemory.opted_out_error_title",
+				descriptionKey:
+					"commands.teach.personalmemory.opted_out_error_description",
+				color: ColorCode.ERROR,
+				flags: MessageFlags.Ephemeral,
+			});
+			log.info(
+				`User ${interaction.user.id} (${userData.user_nickname}) attempted to use /teach personalmemory while opted out`,
+			);
+			return;
+		}
+
+		// 11. Prepare updated array using data from userData
 		const currentMemories = userData.personal_memories ?? [];
 
-		// 11. Check for duplicates within the user's memories
+		// 12. Check for duplicates within the user's memories
 		if (currentMemories.includes(newMemory)) {
 			await replyInfoEmbed(modalSubmitInteraction, locale, {
 				titleKey: "commands.teach.personalmemory.duplicate_title",
@@ -171,7 +189,7 @@ export async function execute(
 			return;
 		}
 
-		// 12. Update the user's row in the database using array_append (Rule 4)
+		// 13. Update the user's row in the database using array_append (Rule 4)
 		// This directly appends the new memory to the existing array in the database.
 		// This is a test to see if this approach is more robust for appends than
 		// constructing the full array literal as per original Rule 23.
@@ -182,7 +200,7 @@ export async function execute(
             RETURNING *
         `;
 
-		// 13. Validate the result from the database using userSchema (Rule 3, 5, 6)
+		// 14. Validate the result from the database using userSchema (Rule 3, 5, 6)
 		const validationResult = userSchema.safeParse(updatedUserResult);
 
 		if (!validationResult.success) {
@@ -216,7 +234,7 @@ export async function execute(
 			return;
 		}
 
-		// 14. Check personalization settings and user blacklisting status to prepare appropriate message
+		// 15. Check personalization settings and user blacklisting status to prepare appropriate message
 		let descriptionKey = "commands.teach.personalmemory.success_description";
 		let embedColor = ColorCode.SUCCESS;
 

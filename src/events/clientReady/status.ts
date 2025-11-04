@@ -53,21 +53,21 @@ const handler = async (client: Client): Promise<void> => {
 
 	const normalStatus: ActivityOptions[] = [
 		{
-			name: `v${pkg.version}`,
+			name: `Running on version ${pkg.version}`,
 			type: ActivityType.Playing,
 		},
 		{
-			name: "/help",
+			name: "Listening for /help",
 			type: ActivityType.Listening,
 		},
 		{
-			name: `over ${client.guilds.cache.size} servers`,
+			name: `Watching over ${client.guilds.cache.size} servers`,
 			type: ActivityType.Watching,
 		},
 	];
 
 	const birthdayStatus: ActivityOptions = {
-		name: "my birthday today!",
+		name: "Celebrating my birthday!",
 		type: ActivityType.Streaming,
 		url: "https://www.youtube.com/shorts/eS9g6cnF7Z8", // Required for Streaming type
 	};

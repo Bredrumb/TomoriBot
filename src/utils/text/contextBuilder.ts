@@ -2,6 +2,7 @@ import type { Client, PresenceStatus } from "discord.js";
 import { GatewayIntentBits } from "discord.js";
 import {
 	isBlacklisted, // Import blacklist checker
+	isPrivacyOptedOut, // Import privacy opt-out checker
 	loadTomoriState,
 	loadUserRow,
 	getPendingRemindersForUser,
@@ -552,12 +553,13 @@ export async function buildContext({
 				guildId,
 				userRow.user_disc_id,
 			);
+			const userOptedOut = await isPrivacyOptedOut(userRow.user_disc_id);
 
 			log.info(
-				`User ${userDiscordId}: Server Personalization Enabled: ${serverPersonalizationEnabled}, User Blacklisted: ${userIsBlacklisted}`,
+				`User ${userDiscordId}: Server Personalization Enabled: ${serverPersonalizationEnabled}, User Blacklisted: ${userIsBlacklisted}, Privacy Opted Out: ${userOptedOut}`,
 			);
 
-			if (serverPersonalizationEnabled && !userIsBlacklisted) {
+			if (serverPersonalizationEnabled && !userIsBlacklisted && !userOptedOut) {
 				if (userRow.personal_memories && userRow.personal_memories.length > 0) {
 					// Process personal memories with the memory owner's name for {user} token replacement
 					const processedMemories = await Promise.all(
@@ -583,6 +585,11 @@ export async function buildContext({
 				if (userIsBlacklisted) {
 					log.info(
 						`Personal memories omitted for ${userDiscordId}: User is blacklisted.`,
+					);
+				}
+				if (userOptedOut) {
+					log.info(
+						`Personal memories omitted for ${userDiscordId}: User has opted out of personalization.`,
 					);
 				}
 			}

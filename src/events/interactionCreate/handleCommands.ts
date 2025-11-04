@@ -37,10 +37,13 @@ const MODAL_COMMANDS = new Set([
 /**
  * Determines if a command uses modals and needs longer timeout
  * @param commandName - The command category
- * @param subcommandName - The subcommand name 
+ * @param subcommandName - The subcommand name
  * @returns boolean indicating if command uses modals
  */
-function isModalCommand(commandName: string, subcommandName: string | null): boolean {
+function isModalCommand(
+	commandName: string,
+	subcommandName: string | null,
+): boolean {
 	if (!subcommandName) return false;
 	return MODAL_COMMANDS.has(`${commandName}.${subcommandName}`);
 }
@@ -309,34 +312,26 @@ const handler = async (
 		let timeoutId: NodeJS.Timeout | null = null;
 
 		const timeoutPromise = new Promise<never>((_, reject) => {
-			timeoutId = setTimeout(
-				() => {
-					// Log timeout context before rejecting
-					const timeoutContext = {
-						commandName,
-						subcommandName,
-						isModalCommand: isModal,
-						timeoutDuration: `${timeoutDuration / 1000}s`,
-						userId: interaction.user.id,
-						guildId: interaction.guild?.id ?? "DM",
-					};
-					log.warn(`Command execution timeout fired:`, timeoutContext);
+			timeoutId = setTimeout(() => {
+				// Log timeout context before rejecting
+				const timeoutContext = {
+					commandName,
+					subcommandName,
+					isModalCommand: isModal,
+					timeoutDuration: `${timeoutDuration / 1000}s`,
+					userId: interaction.user.id,
+					guildId: interaction.guild?.id ?? "DM",
+				};
+				log.warn(`Command execution timeout fired:`, timeoutContext);
 
-					reject(
-						new Error(
-							localizer(initialLocale, "general.errors.command_timeout"),
-						),
-					);
-				},
-				timeoutDuration,
-			);
+				reject(
+					new Error(localizer(initialLocale, "general.errors.command_timeout")),
+				);
+			}, timeoutDuration);
 		});
-		
+
 		try {
-			await Promise.race([
-				mainLogicPromise(),
-				timeoutPromise,
-			]);
+			await Promise.race([mainLogicPromise(), timeoutPromise]);
 		} finally {
 			// Always clear the timeout when Promise.race completes (success or failure)
 			if (timeoutId) {
@@ -371,17 +366,21 @@ const handler = async (
 			});
 		} catch (replyError) {
 			// If helper function completely fails, log comprehensive error information
-			log.error("Command handler error reply failed completely:", {
-				originalError: error,
-				replyError: replyError,
-				interactionState: {
-					id: interaction.id,
-					commandName: interaction.commandName,
-					deferred: interaction.deferred,
-					replied: interaction.replied,
-					user: interaction.user.id,
+			log.error(
+				"Command handler error reply failed completely:",
+				{
+					originalError: error,
+					replyError: replyError,
+					interactionState: {
+						id: interaction.id,
+						commandName: interaction.commandName,
+						deferred: interaction.deferred,
+						replied: interaction.replied,
+						user: interaction.user.id,
+					},
 				},
-			}, context);
+				context,
+			);
 		}
 	}
 };

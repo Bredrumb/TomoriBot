@@ -423,6 +423,31 @@ export class MemoryTool extends BaseTool {
 					};
 				}
 
+				// Check if user has opted out of personalization (privacy setting)
+				const { isPrivacyOptedOut } = await import(
+					"../../utils/db/dbRead"
+				);
+				const userOptedOut = await isPrivacyOptedOut(
+					targetUserDiscordIdArg,
+				);
+
+				if (userOptedOut) {
+					log.info(
+						`Self-teach blocked: User ${targetUserDiscordIdArg} (${targetUserNicknameArg}) has opted out of personalization`,
+					);
+					return {
+						success: false,
+						error: `Cannot save personal memory: User ${targetUserNicknameArg} has opted out of personalization.`,
+						data: {
+							status: "memory_save_failed_privacy_opted_out",
+							scope: "target_user",
+							target_user_discord_id: targetUserDiscordIdArg,
+							target_user_nickname: targetUserNicknameArg,
+							reason: `The user ${targetUserNicknameArg} has chosen to opt out of personal memory storage for privacy reasons. I cannot save personal memories about them unless they opt back in using '/personalconfig privacy'.`,
+						},
+					};
+				}
+
 				// Check personal memory limit before adding
 				const personalLimitCheck = await checkPersonalMemoryLimit(
 					targetUserRow.user_id,

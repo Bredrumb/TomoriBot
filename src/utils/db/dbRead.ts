@@ -193,6 +193,39 @@ export async function isBlacklisted(
 }
 
 /**
+ * Checks if a user has opted out of personal memory storage globally.
+ * This is a user-level privacy setting that applies across all servers.
+ * @param userDiscId - The Discord ID of the user to check
+ * @returns True if the user has opted out, false otherwise
+ */
+export async function isPrivacyOptedOut(
+	userDiscId: string,
+): Promise<boolean> {
+	try {
+		// Check the privacy_opt_out column in the users table
+		const result = await sql`
+			SELECT privacy_opt_out
+			FROM users
+			WHERE user_disc_id = ${userDiscId}
+		`;
+
+		// If user doesn't exist in database yet, they haven't opted out
+		if (result.length === 0) {
+			return false;
+		}
+
+		// biome-ignore lint/style/noNonNullAssertion: Query guarantees result[0] exists when length > 0
+		return result[0]!.privacy_opt_out ?? false;
+	} catch (error) {
+		log.error(
+			`Error checking privacy opt-out status for user ${userDiscId}:`,
+			error,
+		);
+		return false; // Default to false on error to avoid blocking functionality unintentionally
+	}
+}
+
+/**
  * Loads all custom emojis for a given server.
  * @param internalServerId - The internal database ID of the server.
  * @returns An array of validated ServerEmojiRow objects, or null if none found or error.

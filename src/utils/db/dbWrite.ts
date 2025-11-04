@@ -13,7 +13,11 @@ import {
 	type ReminderRow,
 } from "../../types/db/schema"; // Import base schemas and types
 import { log } from "../misc/logger";
-import { validateTomoriConfigFields, validateTomoriFields, validateUserFields } from "./sqlSecurity";
+import {
+	validateTomoriConfigFields,
+	validateTomoriFields,
+	validateUserFields,
+} from "./sqlSecurity";
 import { getBaseTriggerWords } from "../text/localizer";
 import type { Guild } from "discord.js";
 import {
@@ -75,6 +79,58 @@ export async function registerUser(
 		return validatedUser.data;
 	} catch (error) {
 		log.error(`Error registering user ${userDiscId}:`, error);
+		return null;
+	}
+}
+
+/**
+ * Sets the privacy opt-out status for a user globally across all servers.
+ * This function ensures the user exists in the database before updating their privacy setting.
+ *
+ * @param userDiscId - Discord user ID of the user
+ * @param optedOut - True to opt out of personalization, false to opt in
+ * @returns The updated UserRow object, or null if the operation failed
+ */
+export async function setPrivacyOptOut(
+	userDiscId: string,
+	optedOut: boolean,
+): Promise<UserRow | null> {
+	try {
+		log.info(`Setting privacy opt-out to ${optedOut} for user ${userDiscId}`);
+
+		// Use UPSERT pattern to ensure user exists, then update privacy setting
+		const [userData] = await sql`
+			UPDATE users
+			SET privacy_opt_out = ${optedOut}
+			WHERE user_disc_id = ${userDiscId}
+			RETURNING *
+		`;
+
+		// Check if user was found and updated
+		if (!userData) {
+			log.warn(
+				`Cannot set privacy opt-out: User ${userDiscId} not found in database`,
+			);
+			return null;
+		}
+
+		// Validate with Zod schema
+		const validatedUser = userSchema.safeParse(userData);
+
+		if (!validatedUser.success) {
+			log.error(
+				`Failed to validate user data after privacy update for ${userDiscId}:`,
+				validatedUser.error,
+			);
+			return null;
+		}
+
+		log.success(
+			`Privacy opt-out successfully set to ${optedOut} for user ${userDiscId}`,
+		);
+		return validatedUser.data;
+	} catch (error) {
+		log.error(`Error setting privacy opt-out for user ${userDiscId}:`, error);
 		return null;
 	}
 }
@@ -198,39 +254,51 @@ export async function setupServer(
 
 	// Detect if this is a DM context (no guild)
 	const isDMChannel = guild === null;
-	log.section(`Starting server setup transaction (${isDMChannel ? 'DM' : 'Guild'} context)`);
+	log.section(
+		`Starting server setup transaction (${isDMChannel ? "DM" : "Guild"} context)`,
+	);
 
 	try {
 		// Start transaction for atomicity (Rule 15)
 		const result = await sql.transaction(async (tx) => {
 			// Find the default model for the selected provider within the transaction to avoid race conditions
 			// First try to get the default model (is_default = true) for this provider, excluding deprecated
-			let selectedLlm = (await tx`
+			let selectedLlm = (
+				await tx`
                 SELECT * FROM llms
                 WHERE llm_provider = ${validConfig.provider} 
                   AND is_default = true 
                   AND is_deprecated = false
                 ORDER BY llm_id ASC
                 LIMIT 1
-            `)[0];
+            `
+			)[0];
 
 			// Fallback: if no default model found, get the first available non-deprecated model for this provider
 			if (!selectedLlm) {
-				selectedLlm = (await tx`
+				selectedLlm = (
+					await tx`
 					SELECT * FROM llms
 					WHERE llm_provider = ${validConfig.provider} 
 					  AND is_deprecated = false
 					ORDER BY llm_id ASC
 					LIMIT 1
-				`)[0];
-				
+				`
+				)[0];
+
 				if (!selectedLlm) {
-					throw new Error(`No available models found for provider: ${validConfig.provider}`);
+					throw new Error(
+						`No available models found for provider: ${validConfig.provider}`,
+					);
 				}
-				
-				log.warn(`No default model found for provider ${validConfig.provider}, using fallback: ${selectedLlm.llm_codename}`);
+
+				log.warn(
+					`No default model found for provider ${validConfig.provider}, using fallback: ${selectedLlm.llm_codename}`,
+				);
 			} else {
-				log.info(`Using default model for ${validConfig.provider}: ${selectedLlm.llm_codename}`);
+				log.info(
+					`Using default model for ${validConfig.provider}: ${selectedLlm.llm_codename}`,
+				);
 			}
 
 			const defaultTriggers = getBaseTriggerWords(validConfig.locale);
@@ -301,12 +369,14 @@ export async function setupServer(
 			// 4. Register guild emojis in bulk insert (only for guild contexts, Rule 16)
 			const emojis = [];
 			if (!isDMChannel && guild) {
-				const emojiValues = Array.from(guild.emojis.cache.values()).map((e) => ({
-					emoji_disc_id: e.id,
-					emoji_name: e.name ?? "",
-					emotion_key: "unset", // Add the emotion_key field
-					is_animated: e.animated || false, // Track if emoji is animated
-				}));
+				const emojiValues = Array.from(guild.emojis.cache.values()).map(
+					(e) => ({
+						emoji_disc_id: e.id,
+						emoji_name: e.name ?? "",
+						emotion_key: "unset", // Add the emotion_key field
+						is_animated: e.animated || false, // Track if emoji is animated
+					}),
+				);
 
 				for (const {
 					emoji_disc_id,
@@ -403,10 +473,12 @@ export async function setupServer(
 		setupResultSchema.parse(result);
 
 		log.success(
-			`${isDMChannel ? 'DM pseudo-server' : 'Server'} setup completed successfully for Server ID (${validConfig.serverId})`,
+			`${isDMChannel ? "DM pseudo-server" : "Server"} setup completed successfully for Server ID (${validConfig.serverId})`,
 		);
 		if (!isDMChannel) {
-			log.info(`Registered ${result.emojis.length} emojis and ${result.stickers.length} stickers`);
+			log.info(
+				`Registered ${result.emojis.length} emojis and ${result.stickers.length} stickers`,
+			);
 		} else {
 			log.info("DM setup completed - emoji/sticker registration skipped");
 		}
@@ -959,7 +1031,7 @@ export async function addReminder(reminderData: {
 	try {
 		log.info(
 			`Creating reminder for user ${reminderData.user_nickname} (${reminderData.user_discord_id}) ` +
-			`in server ${reminderData.server_id} at ${reminderData.reminder_time.toISOString()}`
+				`in server ${reminderData.server_id} at ${reminderData.reminder_time.toISOString()}`,
 		);
 
 		// Insert the new reminder into the database
@@ -1016,10 +1088,9 @@ export async function addReminder(reminderData: {
 		// Log success and return the validated reminder
 		log.success(
 			`Reminder successfully created (ID: ${validatedReminder.data.reminder_id}) ` +
-			`for ${reminderData.user_nickname} at ${reminderData.reminder_time.toISOString()}`
+				`for ${reminderData.user_nickname} at ${reminderData.reminder_time.toISOString()}`,
 		);
 		return validatedReminder.data;
-
 	} catch (error) {
 		const context: ErrorContext = {
 			serverId: reminderData.server_id,

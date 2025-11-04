@@ -31,6 +31,16 @@ interface LocaleParityIssue {
 }
 
 /**
+ * Interface for modal title length violations
+ */
+interface ModalTitleViolation {
+	key: string;
+	value: string;
+	length: number;
+	locale: string;
+}
+
+/**
  * Interface for analysis results
  */
 interface AnalysisResult {
@@ -40,6 +50,7 @@ interface AnalysisResult {
 	availableKeys: Set<string>;
 	localeKeys: Map<string, Set<string>>;
 	parityIssues: LocaleParityIssue[];
+	modalTitleViolations: ModalTitleViolation[];
 }
 
 /**
@@ -209,6 +220,100 @@ function isValidLocalizationKey(key: string): boolean {
 }
 
 /**
+ * Checks if a localization key is used for a modal title
+ * @param key - The localization key to check
+ * @returns True if the key is used for a modal title
+ */
+function isModalTitleKey(key: string): boolean {
+	return key.endsWith(".modal_title") || key.endsWith(".modal.title");
+}
+
+/**
+ * Recursively extracts string values from a nested locale object
+ * @param obj - The locale object or nested object
+ * @param prefix - Current key path prefix
+ * @returns Map of key paths to their string values
+ */
+function extractStringValues(obj: unknown, prefix = ""): Map<string, string> {
+	const values = new Map<string, string>();
+
+	if (typeof obj === "string") {
+		// This is a leaf node with a string value
+		if (prefix) {
+			values.set(prefix, obj);
+		}
+		return values;
+	}
+
+	if (typeof obj === "object" && obj !== null) {
+		for (const [key, value] of Object.entries(obj)) {
+			const currentPath = prefix ? `${prefix}.${key}` : key;
+			const nestedValues = extractStringValues(value, currentPath);
+			for (const [nestedKey, nestedValue] of nestedValues) {
+				values.set(nestedKey, nestedValue);
+			}
+		}
+	}
+
+	return values;
+}
+
+/**
+ * Checks modal title lengths across all locales
+ * @param localeKeys - Map of locale names to their key sets
+ * @returns Array of modal title length violations
+ */
+async function checkModalTitleLengths(
+	localeKeys: Map<string, Set<string>>,
+): Promise<ModalTitleViolation[]> {
+	const violations: ModalTitleViolation[] = [];
+	const localesPath = join(process.cwd(), "src", "locales");
+
+	// Discord modal title constraints
+	const MIN_LENGTH = 5;
+	const MAX_LENGTH = 45;
+
+	for (const [localeName, keys] of localeKeys) {
+		// Filter to only modal title keys
+		const modalTitleKeys = Array.from(keys).filter(isModalTitleKey);
+
+		if (modalTitleKeys.length === 0) continue;
+
+		try {
+			// Load the locale file
+			const filePath = join(localesPath, `${localeName}.ts`);
+			const module = await import(filePath);
+			const localeObject = module.default;
+
+			// Extract all string values from the locale object
+			const stringValues = extractStringValues(localeObject);
+
+			// Check each modal title key
+			for (const key of modalTitleKeys) {
+				const value = stringValues.get(key);
+				if (!value) continue;
+
+				const length = value.length;
+
+				// Check if length violates Discord constraints
+				if (length < MIN_LENGTH || length > MAX_LENGTH) {
+					violations.push({
+						key,
+						value,
+						length,
+						locale: localeName,
+					});
+				}
+			}
+		} catch (error) {
+			log.error(`Failed to check modal titles in locale: ${localeName}`, error);
+		}
+	}
+
+	return violations;
+}
+
+/**
  * Extracts localization keys referenced in TypeScript source files
  * @returns Map of referenced keys to files that reference them
  */
@@ -326,6 +431,10 @@ async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
 	log.info("🌐 Checking key parity across locales...");
 	const parityIssues = checkLocaleParity(localeKeys);
 
+	// Check modal title lengths
+	log.info("📏 Checking modal title lengths...");
+	const modalTitleViolations = await checkModalTitleLengths(localeKeys);
+
 	// Extract referenced keys from source code
 	log.info("🔎 Scanning source code for referenced keys...");
 	const referencedKeysMap = await extractReferencedKeys();
@@ -354,6 +463,7 @@ async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
 		availableKeys,
 		localeKeys,
 		parityIssues,
+		modalTitleViolations,
 	};
 }
 
@@ -379,6 +489,30 @@ function displayResults(results: AnalysisResult): void {
 		}
 	} else {
 		console.log("\n✅ All locales have matching keys!");
+	}
+
+	// Modal title length violations section
+	if (results.modalTitleViolations.length > 0) {
+		console.log(
+			"\n📏 MODAL TITLE LENGTH VIOLATIONS (Must be 5-45 characters for Discord):",
+		);
+		console.log("-".repeat(60));
+
+		for (const {
+			key,
+			value,
+			length,
+			locale,
+		} of results.modalTitleViolations.sort((a, b) =>
+			a.key.localeCompare(b.key),
+		)) {
+			const status = length < 5 ? "Too short" : "Too long";
+			console.log(`  ⚠️  ${key} [${locale}]`);
+			console.log(`     ❌ ${status}: "${value}" (${length} characters)`);
+			console.log(`     ℹ️  Discord requires 5-45 characters`);
+		}
+	} else {
+		console.log("\n✅ All modal titles meet Discord length requirements!");
 	}
 
 	// Missing keys section
@@ -412,7 +546,6 @@ function displayResults(results: AnalysisResult): void {
 		console.log("\n✅ No unused localization keys found!");
 	}
 
-
 	// Summary
 	console.log("\n📊 SUMMARY:");
 	console.log("-".repeat(60));
@@ -428,6 +561,9 @@ function displayResults(results: AnalysisResult): void {
 		`  • ${results.parityIssues.length} parity issues (keys missing in some locales)`,
 	);
 	console.log(
+		`  • ${results.modalTitleViolations.length} modal title length violations (must be 5-45 chars)`,
+	);
+	console.log(
 		`  • ${results.missingKeys.length} missing keys (referenced but don't exist)`,
 	);
 	console.log(
@@ -437,7 +573,8 @@ function displayResults(results: AnalysisResult): void {
 	if (
 		results.missingKeys.length === 0 &&
 		results.unusedKeys.length === 0 &&
-		results.parityIssues.length === 0
+		results.parityIssues.length === 0 &&
+		results.modalTitleViolations.length === 0
 	) {
 		console.log("\n🎉 Perfect! Your localization is fully synchronized!");
 	}
@@ -453,8 +590,12 @@ async function main(): Promise<void> {
 		const results = await analyzeLocalizationKeys();
 		displayResults(results);
 
-		// Exit with error code for critical issues (missing keys or parity issues)
-		if (results.missingKeys.length > 0 || results.parityIssues.length > 0) {
+		// Exit with error code for critical issues (missing keys, parity issues, or modal title violations)
+		if (
+			results.missingKeys.length > 0 ||
+			results.parityIssues.length > 0 ||
+			results.modalTitleViolations.length > 0
+		) {
 			process.exit(1);
 		}
 	} catch (error) {
