@@ -31,6 +31,7 @@ const MODAL_COMMANDS = new Set([
 	"config.model",
 	"config.apikeyset",
 	"preset.generate", // AI-powered preset generation with modal
+	"preset.create", // Manual preset creation with modal
 ]);
 
 /**

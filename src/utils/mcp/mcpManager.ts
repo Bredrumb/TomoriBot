@@ -75,14 +75,31 @@ export class MCPManager {
 			return;
 		}
 
+		// Intercept stdout globally to filter MCP server advertisements
+		const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+		process.stdout.write = ((chunk: any, ...args: any[]): boolean => {
+			const output = chunk.toString();
+			// Filter out advertisement boxes from MCP servers
+			const isAdvertisement =
+				output.includes("╔") || output.includes("║") || output.includes("╚");
+
+			// Pass through non-advertisement output
+			if (!isAdvertisement) {
+				return originalStdoutWrite(chunk, ...args);
+			}
+
+			// Silently discard advertisement lines
+			return true;
+		}) as typeof process.stdout.write;
+
 		log.info("Starting MCP server initialization...");
 		const startTime = Date.now();
-		
+
 		// Log initialization summary
 		const configManager = getMCPConfigManager();
 		const summary = configManager.getInitializationSummary();
 		log.info(
-			`MCP Configuration Summary: ${summary.readyToInitialize}/${summary.totalServers} servers ready to initialize${summary.missingApiKeys.length > 0 ? ` (missing API keys: ${summary.missingApiKeys.join(", ")})` : ""}${summary.disabledServers.length > 0 ? ` (disabled: ${summary.disabledServers.join(", ")})` : ""}`
+			`MCP Configuration Summary: ${summary.readyToInitialize}/${summary.totalServers} servers ready to initialize${summary.missingApiKeys.length > 0 ? ` (missing API keys: ${summary.missingApiKeys.join(", ")})` : ""}${summary.disabledServers.length > 0 ? ` (disabled: ${summary.disabledServers.join(", ")})` : ""}`,
 		);
 
 		// Define available MCP server configurations
@@ -100,6 +117,9 @@ export class MCPManager {
 		);
 
 		await Promise.all(initPromises);
+
+		// Restore original stdout after all servers initialized
+		process.stdout.write = originalStdoutWrite;
 
 		const duration = Date.now() - startTime;
 		const successCount = this.mcpClients.size;
@@ -123,14 +143,16 @@ export class MCPManager {
 	private getServerConfigurations(): MCPServerConfig[] {
 		const configManager = getMCPConfigManager();
 		const enhancedConfigs = configManager.getConfigurationsByPriority(false); // Get all configs
-		
+
 		// Filter configs that should be initialized
-		const readyConfigs = enhancedConfigs.filter(config => 
-			configManager.shouldInitializeServer(config)
+		const readyConfigs = enhancedConfigs.filter((config) =>
+			configManager.shouldInitializeServer(config),
 		);
-		
+
 		// Convert enhanced configs to manager format
-		return readyConfigs.map(config => configManager.toManagerConfiguration(config));
+		return readyConfigs.map((config) =>
+			configManager.toManagerConfiguration(config),
+		);
 	}
 
 	/**
@@ -149,6 +171,7 @@ export class MCPManager {
 			});
 
 			// Create transport with environment variables
+			// Set NO_COLOR to suppress ANSI color codes which can interfere with filtering
 			const transport = new StdioClientTransport({
 				command,
 				args,
@@ -156,8 +179,11 @@ export class MCPManager {
 					Object.entries({
 						...process.env,
 						...env,
+						NO_COLOR: "1", // Disable color output
+						FORCE_COLOR: "0", // Explicitly disable color
 					}).filter(([, value]) => value !== undefined),
 				) as Record<string, string>,
+				stderr: "ignore", // Ignore stderr to suppress advertisement output
 			});
 
 			// Connect with timeout
@@ -187,9 +213,7 @@ export class MCPManager {
 			try {
 				const tool = await callableTool.tool();
 				if (tool.functionDeclarations) {
-					const functionNames = tool.functionDeclarations.map(
-						(f) => f.name,
-					);
+					const functionNames = tool.functionDeclarations.map((f) => f.name);
 					log.info(
 						`${displayName} provides functions: ${functionNames.join(", ")}`,
 					);

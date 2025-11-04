@@ -331,6 +331,10 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
 				let addedMCPToolsCount = 0;
 				let excludedDDGFunctionsCount = 0;
 
+				// Disabled DuckDuckGo functions (always filtered out)
+				const disabledDDGFunctions = ["felo-search", "fetch-url"];
+				let disabledFunctionsCount = 0;
+
 				if (allowedMCPFunctions) {
 					// Use pre-filtered list from centralized filtering (preferred path)
 					const mcpTools = mcpManager.getMCPTools();
@@ -340,10 +344,17 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
 						try {
 							const geminiTool = await mcpTool.tool();
 							if (geminiTool.functionDeclarations) {
-								// Filter declarations to only include allowed functions
+								// Filter declarations to only include allowed functions and exclude disabled DDG functions
 								const declarations = (geminiTool.functionDeclarations as Record<string, unknown>[])
 									.filter((declaration) => {
 										const functionName = declaration.name as string;
+
+										// Exclude disabled DuckDuckGo functions
+										if (disabledDDGFunctions.includes(functionName)) {
+											disabledFunctionsCount++;
+											return false;
+										}
+
 										return allowedFunctionSet.has(functionName);
 									});
 
@@ -363,15 +374,18 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
 					log.info(
 						`Added ${addedMCPToolsCount} MCP tools using centralized filtering (${allowedMCPFunctions.length} functions allowed)`,
 					);
+					if (disabledFunctionsCount > 0) {
+						log.info(
+							`Excluded ${disabledFunctionsCount} disabled DuckDuckGo functions (${disabledDDGFunctions.join(", ")})`,
+						);
+					}
 				} else {
 					// Legacy path with Brave API key filtering (for backward compatibility)
 					const mcpTools = mcpManager.getMCPTools();
 
-					// DuckDuckGo search function names for filtering
+					// DuckDuckGo search function names for filtering when Brave is available
 					const duckduckgoSearchFunctions = [
 						"web-search",
-						"felo-search",
-						"fetch-url",
 						"url-metadata",
 					];
 
@@ -382,15 +396,26 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
 								// Cast FunctionDeclaration to Record<string, unknown> for type compatibility
 								let declarations = geminiTool.functionDeclarations as Record<string, unknown>[];
 
-								// Filter out DuckDuckGo search functions if Brave API key is available
-								if (hasBraveApiKey) {
-									const originalCount = declarations.length;
-									declarations = declarations.filter((declaration: Record<string, unknown>) => {
-										const functionName = declaration.name as string;
-										return !duckduckgoSearchFunctions.includes(functionName);
-									});
-									excludedDDGFunctionsCount += originalCount - declarations.length;
-								}
+								// Filter out disabled DuckDuckGo functions (always)
+								const originalCount = declarations.length;
+								declarations = declarations.filter((declaration: Record<string, unknown>) => {
+									const functionName = declaration.name as string;
+
+									// Always exclude disabled functions
+									if (disabledDDGFunctions.includes(functionName)) {
+										disabledFunctionsCount++;
+										return false;
+									}
+
+									// Filter out DuckDuckGo search functions if Brave API key is available
+									if (hasBraveApiKey && duckduckgoSearchFunctions.includes(functionName)) {
+										return false;
+									}
+
+									return true;
+								});
+
+								excludedDDGFunctionsCount += originalCount - declarations.length - disabledFunctionsCount;
 
 								// Add remaining declarations
 								if (declarations.length > 0) {
@@ -408,6 +433,11 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
 
 					if (addedMCPToolsCount > 0) {
 						log.info(`Added ${addedMCPToolsCount} MCP tools to Google format`);
+					}
+					if (disabledFunctionsCount > 0) {
+						log.info(
+							`Excluded ${disabledFunctionsCount} disabled DuckDuckGo functions (${disabledDDGFunctions.join(", ")})`,
+						);
 					}
 					if (excludedDDGFunctionsCount > 0) {
 						log.info(

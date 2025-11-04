@@ -113,14 +113,6 @@ npm start
 
 ## 🤖 Integration with MCP Clients
 
-### TomoriBot Configuration
-This server is pre-configured in TomoriBot and ready to use! The configuration includes:
-
-- **Package**: `@oevortex/ddg_search@latest`
-- **Transport**: NPX with auto-installation
-- **Status**: Enabled by default
-- **Category**: Search tools
-
 ### Manual MCP Client Setup
 
 Add to your MCP client configuration:
@@ -191,14 +183,6 @@ url-metadata({
 
 ## 🔧 Advanced Configuration
 
-### Parameter Optimization
-The TomoriBot integration includes optimized defaults:
-
-- **Web Search**: 12 results per query (balanced performance)
-- **Felo AI**: Streaming disabled for Discord compatibility
-- **URL Fetch**: 15KB content limit with smart truncation
-- **Metadata**: No overrides (URL is the only parameter)
-
 ### Cross-Tool Integration
 Tools work together seamlessly:
 
@@ -229,13 +213,6 @@ Tools work together seamlessly:
 1. **NPX Download Delays**: First run may take longer due to package download
 2. **Rate Limiting**: Excessive requests may be temporarily blocked
 3. **Content Truncation**: Adjust `maxLength` parameter for longer content
-
-### Debug Mode
-Enable debug logging in TomoriBot for detailed MCP communication:
-```bash
-# View MCP server logs
-bun run dev
-```
 
 ### MCP Inspector (Advanced)
 For deep debugging, use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector):

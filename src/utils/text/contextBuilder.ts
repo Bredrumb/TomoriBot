@@ -945,7 +945,7 @@ async function getUserPresenceDetails(
 						}
 
 						if (activity.details && activity.state) {
-							return `Listening to ${activity.state} by ${activity.details} on ${activity.name}${getTimeSpent(activity.timestamps?.start, activity.timestamps?.end)}`;
+							return `Listening to ${activity.state} - ${activity.details} on ${activity.name}${getTimeSpent(activity.timestamps?.start, activity.timestamps?.end)}`;
 						}
 						return `Listening to ${activity.name}${getTimeSpent(activity.timestamps?.start, activity.timestamps?.end)}`;
 					case 3: // Watching

@@ -22,15 +22,13 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
 	public readonly serverName = "duckduckgo-search";
 
 	/**
-	 * Supported DuckDuckGo & Felo AI Search functions
+	 * Supported DuckDuckGo Search functions
+	 * Note: felo-search and fetch-url are disabled at the adapter level
 	 */
 	private readonly SUPPORTED_FUNCTIONS = [
 		"web-search", // DuckDuckGo web search with HTML scraping
-		"felo-search", // Felo AI-powered search and responses
-		"fetch-url", // URL content extraction with smart filtering
 		"url-metadata", // URL metadata extraction (title, description, images)
 	];
-
 
 	/**
 	 * Check if this handler supports a specific function
@@ -40,7 +38,6 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
 	public supportsFunction(functionName: string): boolean {
 		return this.SUPPORTED_FUNCTIONS.includes(functionName);
 	}
-
 
 	/**
 	 * Process MCP function result before returning to LLM
@@ -60,16 +57,6 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
 			// Handle DuckDuckGo web search with fetch capability reminder
 			if (functionName === "web-search") {
 				return await this.processWebSearch(mcpResult, args, context);
-			}
-
-			// Handle Felo AI search with enhanced AI response processing
-			if (functionName === "felo-search") {
-				return await this.processFeloSearch(mcpResult, args, context);
-			}
-
-			// Handle URL content fetch with content optimization
-			if (functionName === "fetch-url") {
-				return await this.processFetchUrl(mcpResult, args);
 			}
 
 			// Handle URL metadata extraction
@@ -156,25 +143,17 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
 				originalText = JSON.stringify(mcpResult, null, 2);
 			}
 
-			// Extract URLs from the search results to count them
+			// Extract URLs from the search results for logging
 			const urlPattern = /https?:\/\/[^\s)]+/g;
 			const foundUrls = originalText.match(urlPattern) || [];
 			const urlCount = foundUrls.length;
 
-			// Create an enhanced response that includes fetch capability reminder
-			const fetchReminder =
-				urlCount > 0
-					? `\n\n[AGENT REMINDER] You have access to the "fetch-url" function to retrieve and analyze the full content of any of these ${urlCount} web URLs from the DuckDuckGo search. Use fetch-url(url="[URL]") when more detailed webpage content is needed for analysis.`
-					: `\n\n[AGENT REMINDER] You have access to the "fetch-url" function to retrieve and analyze the full content of any web URL the user needs. Use fetch-url(url="[URL]") when more detailed webpage content is needed.`;
+			// Add a note that this is from DuckDuckGo search
+			const prefixMessage = `[DuckDuckGo Web Search Results]\n\n${originalText}`;
 
-			const enhancedMessage = originalText;
-
-			// Add a note that this is from the enhanced DuckDuckGo search
-			const prefixMessage = `[DuckDuckGo Web Search Results]\n\n${enhancedMessage}`;
-
-			// Log the enhanced message
+			// Log the search response
 			log.info(
-				`Enhanced DuckDuckGo search response: ${prefixMessage.substring(0, 200)}...`,
+				`DuckDuckGo search response: ${prefixMessage.substring(0, 200)}...`,
 			);
 			log.info(`DuckDuckGo search - Found ${urlCount} URLs`);
 
@@ -188,8 +167,6 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
 					rawResult: mcpResult,
 					executionTime: 0, // Will be set by caller
 					urlsFound: urlCount,
-					fetchCapabilityReminder: true,
-					agentInstructions: fetchReminder.trim(),
 					status: "completed",
 					// DuckDuckGo specific metadata
 					searchProvider: "DuckDuckGo (Enhanced HTML Scraping)",
@@ -219,177 +196,6 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
 	}
 
 	/**
-	 * Process Felo AI search results with enhanced AI response processing
-	 * Felo AI provides intelligent, contextual answers to user queries
-	 * @param mcpResult - The raw MCP result from Felo AI search
-	 * @param args - The modified arguments used for the search (contains query)
-	 * @returns Promise<TypedMCPToolResult> - Enhanced AI response result
-	 */
-	private async processFeloSearch(
-		mcpResult: MCPServerResponse,
-		args: Record<string, unknown>,
-		context: MCPExecutionContext,
-	): Promise<TypedMCPToolResult> {
-		try {
-			// Send search status embed to Discord (consistent with Brave Search UX)
-			// Use web_search_title for AI-powered search abstraction
-			await sendStandardEmbed(context.channel, context.locale, {
-				titleKey: "genai.search.web_search_title",
-				titleVars: { query: String(args.query || args.q || "your search") },
-				descriptionKey: "genai.search.disclaimer_description",
-			});
-
-			// Check for errors or rate limits before processing
-			if (mcpResult.isError || this.isRateLimitError(mcpResult)) {
-				await sendStandardEmbed(context.channel, context.locale, {
-					titleKey: "general.errors.duckduckgo_rate_limit.title",
-					descriptionKey: "general.errors.duckduckgo_rate_limit.description",
-					footerKey: "general.errors.duckduckgo_rate_limit.footer",
-				});
-				return {
-					success: false,
-					message:
-						"Felo AI search failed due to rate limiting. Consider using Brave Search for more reliable results.",
-					error: mcpResult.text || "Rate limit error",
-					data: {
-						source: "mcp",
-						functionName: "felo-search",
-						serverName: this.serverName,
-						rawResult: mcpResult,
-						executionTime: Date.now() - context.executionStartTime,
-						status: "failed",
-						errorType: "duckduckgo_rate_limit",
-					},
-				};
-			}
-			// Extract the AI response text
-			let aiResponse = "";
-			if (mcpResult.text) {
-				aiResponse = mcpResult.text;
-			} else if (mcpResult.functionResponse?.response?.text) {
-				aiResponse = mcpResult.functionResponse.response.text;
-			} else {
-				aiResponse = JSON.stringify(mcpResult, null, 2);
-			}
-
-			// Add AI-powered branding
-			const prefixMessage = `[Felo AI Search Results]\n\n${aiResponse}`;
-
-			// Log the AI response
-			log.info(
-				`Felo AI search response: ${prefixMessage.substring(0, 200)}...`,
-			);
-
-			return {
-				success: true,
-				message: prefixMessage,
-				data: {
-					source: "mcp",
-					functionName: "felo-search",
-					serverName: this.serverName,
-					rawResult: mcpResult,
-					executionTime: 0, // Will be set by caller
-					status: "completed",
-					searchProvider: "Felo AI (AI-Powered Responses)",
-				},
-			};
-		} catch (error) {
-			log.error("Error processing Felo AI search result:", error as Error);
-			return {
-				success: true,
-				message: mcpResult.text || "Felo AI search completed successfully",
-				data: {
-					source: "mcp",
-					functionName: "felo-search",
-					serverName: this.serverName,
-					rawResult: mcpResult,
-					executionTime: 0, // Will be set by caller
-					status: "completed",
-					searchProvider: "Felo AI (AI-Powered Responses)",
-				},
-			};
-		}
-	}
-
-	/**
-	 * Process URL content fetch results with content optimization
-	 * Extracts and filters web page content for analysis
-	 * @param mcpResult - The raw MCP result from URL fetch
-	 * @param args - The modified arguments used (contains url and settings)
-	 * @returns Promise<TypedMCPToolResult> - Enhanced URL content result
-	 */
-	private async processFetchUrl(
-		mcpResult: MCPServerResponse,
-		args: Record<string, unknown>,
-	): Promise<TypedMCPToolResult> {
-		try {
-			// Extract the fetched content
-			let fetchedContent = "";
-			if (mcpResult.text) {
-				fetchedContent = mcpResult.text;
-			} else if (mcpResult.functionResponse?.response?.text) {
-				fetchedContent = mcpResult.functionResponse.response.text;
-			} else {
-				fetchedContent = JSON.stringify(mcpResult, null, 2);
-			}
-
-			const url = (args.url as string) || "unknown URL";
-			const maxLength = (args.maxLength as number) || 15000;
-
-			// Truncate if content is too long and add note
-			let processedContent = fetchedContent;
-			let truncated = false;
-			if (fetchedContent.length > maxLength) {
-				processedContent = `${fetchedContent.substring(0, maxLength)}...\n\n[CONTENT TRUNCATED - Use url-metadata for summary or adjust maxLength parameter]`;
-				truncated = true;
-			}
-
-			// Add URL fetch branding with metadata suggestion
-			const metadataReminder = `\n\n[AGENT REMINDER] You can use "url-metadata" function to get structured metadata (title, description, images) for this URL: ${url}`;
-			const prefixMessage = `[URL Content Fetch Results for: ${url}]\n\n${processedContent}${metadataReminder}`;
-
-			// Log the fetch result
-			log.info(
-				`URL fetch result for ${url}: ${processedContent.substring(0, 150)}... (truncated: ${truncated})`,
-			);
-
-			return {
-				success: true,
-				message: prefixMessage,
-				data: {
-					source: "mcp",
-					functionName: "fetch-url",
-					serverName: this.serverName,
-					rawResult: mcpResult,
-					executionTime: 0, // Will be set by caller
-					status: "completed",
-					url: url,
-					contentLength: fetchedContent.length,
-					truncated: truncated,
-					maxLengthUsed: maxLength,
-					metadataCapabilityReminder: true,
-					searchProvider: "DuckDuckGo MCP (URL Content Extraction)",
-				},
-			};
-		} catch (error) {
-			log.error("Error processing fetch URL result:", error as Error);
-			return {
-				success: true,
-				message: mcpResult.text || "URL fetch completed successfully",
-				data: {
-					source: "mcp",
-					functionName: "fetch-url",
-					serverName: this.serverName,
-					rawResult: mcpResult,
-					executionTime: 0, // Will be set by caller
-					status: "completed",
-					searchProvider: "DuckDuckGo MCP (URL Content Extraction)",
-				},
-			};
-		}
-	}
-
-	/**
 	 * Process URL metadata extraction results
 	 * Provides structured metadata including title, description, and images
 	 * @param mcpResult - The raw MCP result from URL metadata extraction
@@ -413,9 +219,8 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
 
 			const url = (args.url as string) || "unknown URL";
 
-			// Add fetch content suggestion
-			const fetchReminder = `\n\n[AGENT REMINDER] You can use "fetch-url" function to retrieve the full webpage content for detailed analysis: fetch-url(url="${url}")`;
-			const prefixMessage = `[URL Metadata for: ${url}]\n\n${metadataContent}${fetchReminder}`;
+			// Format the result message
+			const prefixMessage = `[URL Metadata for: ${url}]\n\n${metadataContent}`;
 
 			// Log the metadata result
 			log.info(
@@ -433,7 +238,6 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
 					executionTime: 0, // Will be set by caller
 					status: "completed",
 					url: url,
-					fetchCapabilityReminder: true,
 					searchProvider: "DuckDuckGo MCP (URL Metadata Extraction)",
 				},
 			};
