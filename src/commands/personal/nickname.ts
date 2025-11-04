@@ -26,12 +26,14 @@ export const configureSubcommand = (
 ) =>
 	subcommand
 		.setName("nickname") // Keep name simple as per refactor
-		.setDescription(localizer("en-US", "commands.teach.nickname.description"))
+		.setDescription(
+			localizer("en-US", "commands.personal.nickname.description"),
+		)
 		.addStringOption((option) =>
 			option
 				.setName("name")
 				.setDescription(
-					localizer("en-US", "commands.teach.nickname.option_description"),
+					localizer("en-US", "commands.personal.nickname.option_description"),
 				)
 				.setRequired(true)
 				.setMinLength(NICKNAME_MIN_LENGTH)
@@ -76,8 +78,8 @@ export async function execute(
 			newNickname.length > NICKNAME_MAX_LENGTH
 		) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.teach.nickname.invalid_length_title",
-				descriptionKey: "commands.teach.nickname.invalid_length",
+				titleKey: "commands.personal.nickname.invalid_length_title",
+				descriptionKey: "commands.personal.nickname.invalid_length",
 				descriptionVars: {
 					min: NICKNAME_MIN_LENGTH.toString(),
 					max: NICKNAME_MAX_LENGTH.toString(),
@@ -147,20 +149,20 @@ export async function execute(
 		}
 
 		// 9. Check if personalization is disabled on this server and prepare message
-		let descriptionKey = "commands.teach.nickname.success_description";
+		let descriptionKey = "commands.personal.nickname.success_description";
 		let embedColor = ColorCode.SUCCESS;
 
 		// Assuming 'personalization_enabled' is the single config key
 		// biome-ignore lint/style/noNonNullAssertion: tomoriState checked earlier
 		if (!tomoriState!.config.personal_memories_enabled) {
 			descriptionKey =
-				"commands.teach.nickname.success_but_disabled_description"; // Use the warning description
+				"commands.personal.nickname.success_but_disabled_description"; // Use the warning description
 			embedColor = ColorCode.WARN; // Use warning color
 		}
 
 		// 10. Success! Show the nickname change (with potential warning)
 		await replyInfoEmbed(interaction, locale, {
-			titleKey: "commands.teach.nickname.success_title",
+			titleKey: "commands.personal.nickname.success_title",
 			descriptionKey: descriptionKey, // Use the determined description key
 			descriptionVars: {
 				old_nickname: oldNickname,

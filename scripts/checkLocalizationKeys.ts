@@ -209,7 +209,7 @@ function isValidLocalizationKey(key: string): boolean {
 		"tool",
 		"config",
 		"teach",
-		"unlearn",
+		"forget",
 	];
 
 	const firstSegment = segments[0];

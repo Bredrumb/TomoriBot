@@ -24,23 +24,28 @@ export const configureSubcommand = (
 ) =>
 	subcommand
 		.setName("language")
-		.setDescription(localizer("en-US", "commands.config.language.description"))
+		.setDescription(
+			localizer("en-US", "commands.personal.language.description"),
+		)
 		.addStringOption((option) =>
 			option
 				.setName("value")
 				.setDescription(
-					localizer("en-US", "commands.config.language.value_description"),
+					localizer("en-US", "commands.personal.language.value_description"),
 				)
 				.setRequired(true)
 				.addChoices(
 					{
-						name: localizer("en-US", "commands.config.language.choice_english"),
+						name: localizer(
+							"en-US",
+							"commands.personal.language.choice_english",
+						),
 						value: "en-US",
 					},
 					{
 						name: localizer(
 							"en-US",
-							"commands.config.language.choice_japanese",
+							"commands.personal.language.choice_japanese",
 						),
 						value: "ja",
 					},
@@ -79,8 +84,8 @@ export async function execute(
 		// 3. Additional validation (Discord already handles choices, but just in case)
 		if (!(SUPPORTED_LANGUAGES as readonly string[]).includes(languageValue)) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.config.language.invalid_value_title",
-				descriptionKey: "commands.config.language.invalid_value_description",
+				titleKey: "commands.personal.language.invalid_value_title",
+				descriptionKey: "commands.personal.language.invalid_value_description",
 				descriptionVars: {
 					supported: SUPPORTED_LANGUAGES.join(", "),
 				},
@@ -93,8 +98,8 @@ export async function execute(
 		const currentLanguage = userData.language_pref ?? DEFAULT_LANGUAGE;
 		if (languageValue === currentLanguage) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.config.language.already_set_title",
-				descriptionKey: "commands.config.language.already_set_description",
+				titleKey: "commands.personal.language.already_set_title",
+				descriptionKey: "commands.personal.language.already_set_description",
 				descriptionVars: {
 					value: getLanguageLabel(locale, languageValue),
 				},
@@ -146,8 +151,8 @@ export async function execute(
 
 		// 8. Success message with explanation of the language change
 		await replyInfoEmbed(interaction, languageValue, {
-			titleKey: "commands.config.language.success_title",
-			descriptionKey: "commands.config.language.success_description",
+			titleKey: "commands.personal.language.success_title",
+			descriptionKey: "commands.personal.language.success_description",
 			descriptionVars: {
 				value: getLanguageLabel(languageValue, languageValue),
 				previous_value: getLanguageLabel(languageValue, currentLanguage),
@@ -197,14 +202,14 @@ export async function execute(
 function getLanguageLabel(locale: string, value: string): string {
 	switch (value) {
 		case "en-US":
-			return localizer(locale, "commands.config.language.choice_english");
+			return localizer(locale, "commands.personal.language.choice_english");
 		case "ja":
-			return localizer(locale, "commands.config.language.choice_japanese");
+			return localizer(locale, "commands.personal.language.choice_japanese");
 		default:
 			// Default to English if value is somehow unexpected, though validation should prevent this
 			log.warn(
 				`Unexpected language value encountered in getLanguageLabel: ${value}`,
 			);
-			return localizer(locale, "commands.config.language.choice_english");
+			return localizer(locale, "commands.personal.language.choice_english");
 	}
 }

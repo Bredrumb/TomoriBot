@@ -19,7 +19,7 @@ export const configureSubcommand = (
 	subcommand
 		.setName("autochchannels")
 		.setDescription(
-			localizer("en-US", "commands.serverconfig.autochchannels.description"),
+			localizer("en-US", "commands.server.autochchannels.description"),
 		)
 		.addChannelOption((option) =>
 			option
@@ -27,7 +27,7 @@ export const configureSubcommand = (
 				.setDescription(
 					localizer(
 						"en-US",
-						"commands.serverconfig.autochchannels.channel_description",
+						"commands.server.autochchannels.channel_description",
 					),
 				)
 				.addChannelTypes(ChannelType.GuildText)
@@ -39,7 +39,7 @@ export const configureSubcommand = (
 				.setDescription(
 					localizer(
 						"en-US",
-						"commands.serverconfig.autochchannels.action_description",
+						"commands.server.autochchannels.action_description",
 					),
 				)
 				.setRequired(true)
@@ -86,9 +86,9 @@ export async function execute(
 		// Validate channel type (should be a text channel) - let helper functions manage interaction state
 		if (channel.type !== ChannelType.GuildText) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.serverconfig.autochchannels.invalid_channel_title",
+				titleKey: "commands.server.autochchannels.invalid_channel_title",
 				descriptionKey:
-					"commands.serverconfig.autochchannels.invalid_channel_description",
+					"commands.server.autochchannels.invalid_channel_description",
 				color: ColorCode.ERROR,
 			});
 			return;
@@ -111,9 +111,9 @@ export async function execute(
 		// Check if the channel is already in the list (when adding)
 		if (action === "add" && currentChannels.includes(channel.id)) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.serverconfig.autochchannels.already_added_title",
+				titleKey: "commands.server.autochchannels.already_added_title",
 				descriptionKey:
-					"commands.serverconfig.autochchannels.already_added_description",
+					"commands.server.autochchannels.already_added_description",
 				descriptionVars: {
 					channel_name: channel.name ?? "UNDEFINED_CH",
 				},
@@ -125,9 +125,9 @@ export async function execute(
 		// Check if the channel is not in the list (when removing)
 		if (action === "remove" && !currentChannels.includes(channel.id)) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.serverconfig.autochchannels.not_in_list_title",
+				titleKey: "commands.server.autochchannels.not_in_list_title",
 				descriptionKey:
-					"commands.serverconfig.autochchannels.not_in_list_description",
+					"commands.server.autochchannels.not_in_list_description",
 				descriptionVars: {
 					channel_name: channel.name ?? "UNDEFINED_CH",
 				},
@@ -209,12 +209,12 @@ export async function execute(
 		await replyInfoEmbed(interaction, locale, {
 			titleKey:
 				action === "add"
-					? "commands.serverconfig.autochchannels.added_title"
-					: "commands.serverconfig.autochchannels.removed_title",
+					? "commands.server.autochchannels.added_title"
+					: "commands.server.autochchannels.removed_title",
 			descriptionKey:
 				action === "add"
-					? "commands.serverconfig.autochchannels.added_description"
-					: "commands.serverconfig.autochchannels.removed_description",
+					? "commands.server.autochchannels.added_description"
+					: "commands.server.autochchannels.removed_description",
 			descriptionVars: {
 				channel_name: channel.name ?? "UNDEFINED_CH",
 			},

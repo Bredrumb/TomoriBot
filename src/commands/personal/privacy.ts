@@ -17,17 +17,12 @@ export const configureSubcommand = (
 ) =>
 	subcommand
 		.setName("privacy")
-		.setDescription(
-			localizer("en-US", "commands.personalconfig.privacy.description"),
-		)
+		.setDescription(localizer("en-US", "commands.personal.privacy.description"))
 		.addStringOption((option) =>
 			option
 				.setName("setting")
 				.setDescription(
-					localizer(
-						"en-US",
-						"commands.personalconfig.privacy.setting_description",
-					),
+					localizer("en-US", "commands.personal.privacy.setting_description"),
 				)
 				.setRequired(true)
 				.addChoices(
@@ -63,17 +58,14 @@ export async function execute(
 		const requestedOptOut = setting === "opt_out";
 
 		// 2. Check current privacy status
-		const currentlyOptedOut = await isPrivacyOptedOut(
-			interaction.user.id,
-		);
+		const currentlyOptedOut = await isPrivacyOptedOut(interaction.user.id);
 
 		// 3. Prevent setting the same state twice
 		if (requestedOptOut && currentlyOptedOut) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey:
-					"commands.personalconfig.privacy.already_opted_out_title",
+				titleKey: "commands.personal.privacy.already_opted_out_title",
 				descriptionKey:
-					"commands.personalconfig.privacy.already_opted_out_description",
+					"commands.personal.privacy.already_opted_out_description",
 				color: ColorCode.WARN,
 				flags: MessageFlags.Ephemeral,
 			});
@@ -82,9 +74,9 @@ export async function execute(
 
 		if (!requestedOptOut && !currentlyOptedOut) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.personalconfig.privacy.already_opted_in_title",
+				titleKey: "commands.personal.privacy.already_opted_in_title",
 				descriptionKey:
-					"commands.personalconfig.privacy.already_opted_in_description",
+					"commands.personal.privacy.already_opted_in_description",
 				color: ColorCode.WARN,
 				flags: MessageFlags.Ephemeral,
 			});
@@ -111,9 +103,8 @@ export async function execute(
 		// 5. Send success confirmation message
 		if (requestedOptOut) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.personalconfig.privacy.opted_out_title",
-				descriptionKey:
-					"commands.personalconfig.privacy.opted_out_description",
+				titleKey: "commands.personal.privacy.opted_out_title",
+				descriptionKey: "commands.personal.privacy.opted_out_description",
 				color: ColorCode.SUCCESS,
 				flags: MessageFlags.Ephemeral,
 			});
@@ -122,9 +113,8 @@ export async function execute(
 			);
 		} else {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.personalconfig.privacy.opted_in_title",
-				descriptionKey:
-					"commands.personalconfig.privacy.opted_in_description",
+				titleKey: "commands.personal.privacy.opted_in_title",
+				descriptionKey: "commands.personal.privacy.opted_in_description",
 				color: ColorCode.SUCCESS,
 				flags: MessageFlags.Ephemeral,
 			});
@@ -138,14 +128,14 @@ export async function execute(
 			userId: userData.user_id,
 			errorType: "CommandExecutionError",
 			metadata: {
-				command: "personalconfig privacy",
+				command: "personal privacy",
 				guildId: interaction.guild?.id,
 				executorDiscordId: interaction.user.id,
 				setting: interaction.options.getString("setting", true),
 			},
 		};
 		await log.error(
-			`Error executing /personalconfig privacy for user ${userData.user_disc_id}`,
+			`Error executing /personal privacy for user ${userData.user_disc_id}`,
 			error as Error,
 			context,
 		);

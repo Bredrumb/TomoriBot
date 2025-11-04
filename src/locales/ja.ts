@@ -216,9 +216,9 @@ export default {
 			personal_memory_learned_description:
 				'{user_nickname}さんについて、次のことを学びました: "{memory_content}"',
 			server_memory_footer:
-				"サーバー管理者は`/teach`と`/unlearn`コマンドでこの記憶を管理できます。",
+				"サーバー管理者は`/teach`と`/forget`コマンドでこの記憶を管理できます。",
 			personal_memory_footer_manage:
-				"あなたの個人的な記憶は`/teach`と`/unlearn`コマンドで管理できます。",
+				"あなたの個人的な記憶は`/teach`と`/forget`コマンドで管理できます。",
 			personal_memory_footer_personalization_disabled:
 				"この記憶は保存されましたが、現在このサーバーではパーソナライズ機能が無効になっているため、すぐには効果がありません。",
 			personal_memory_footer_user_blacklisted:
@@ -528,7 +528,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 				success_title: `✨ {character_name} の生成に成功しました！`,
 				success_description: `**{character_name}** の人格を生成しました！\n\n**属性プレビュー:**\n{attribute_preview}\n\n**サンプル対話:**\n{dialogue_preview}`,
 				success_next_steps_title: `📥 次のステップ`,
-				success_next_steps_description: `1. 添付されたPNGファイルをダウンロード\n2. PNGファイルと共に\`/preset import\`を使用してこのキャラクターをインポート\n3. (任意) 必要に応じて\`/serverconfig avatar\`でアバターを変更`,
+				success_next_steps_description: `1. 添付されたPNGファイルをダウンロード\n2. PNGファイルと共に\`/preset import\`を使用してこのキャラクターをインポート\n3. (任意) 必要に応じて\`/server avatar\`でアバターを変更`,
 				avatar_update_skipped_dm: `ℹ️ 注意: アバターとニックネームの更新はダイレクトメッセージでは利用できません。人格が正常に生成されました。`,
 			},
 			create: {
@@ -626,20 +626,6 @@ Discord API 遅延: \`{discord_response}ms\``,
 				already_set_description: `ヒューマナイザーレベルは既に \`{value}\` に設定されています。`,
 				success_title: `ヒューマナイザーレベルが更新されました`,
 				success_description: `ヒューマナイザーレベルが \`{previous_value}\` から \`{value}\` に変更されました。`,
-			},
-			language: {
-				description: `インターフェースの優先言語を設定します。`,
-				value_description: `インターフェースの優先言語を選択してください。`,
-				choice_english: `英語`,
-				choice_japanese: `日本語`,
-				"value_choice_en-US": `英語`,
-				value_choice_ja: `日本語`,
-				invalid_value_title: `無効な言語`,
-				invalid_value_description: `言語は次のいずれかでなければなりません: {supported}。`,
-				already_set_title: `言語は既に設定済みです`,
-				already_set_description: `あなたの言語設定は既に \`{value}\` に設定されています。`,
-				success_title: `言語が更新されました`,
-				success_description: `あなたのインターフェース言語が \`{previous_value}\` から \`{value}\` に変更されました。`,
 			},
 			model: {
 				description: `私が使用する基盤となるAIモデルを変更します。`,
@@ -755,7 +741,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 				provider_invalid: `エラー: 無効なAPIプロバイダーが選択されました。利用可能なオプションから選択してください。`,
 				preset_not_found: `エラー: 選択されたプリセットがデータベースに見つかりませんでした。もう一度お試しください。`,
 				success_title: `🎉 設定完了！`,
-				success_desc: `このサーバー用に設定が完了しました。私の設定を変更するには、\`/config\`と\`/serverconfig\`コマンドを使用してください。データの管理や削除は\`/data\`でいつでも可能です。概要は以下の通りです:`,
+				success_desc: `このサーバー用に設定が完了しました。私の設定を変更するには、\`/config\`と\`/server\`コマンドを使用してください。データの管理や削除は\`/data\`でいつでも可能です。概要は以下の通りです:`,
 				success_desc_dm: `このダイレクトメッセージ用に設定が完了しました。データの管理や削除は\`/data\`でいつでも可能です。概要は以下の通りです:`,
 				preset_field: `人格プリセット`,
 				name_field: `私の名前`,
@@ -810,7 +796,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 		},
 
 		// サーバー設定コマンド（管理者専用）
-		serverconfig: {
+		server: {
 			triggeradd: {
 				description: `言及されたときに私が応答する単語を追加します。`,
 				word_description: `トリガーとして追加する単語。`,
@@ -821,7 +807,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 				already_exists_title: `トリガーワードが存在します`,
 				already_exists_description: `単語 \`{word}\` は既にトリガーリストにあります。`,
 				limit_exceeded_title: `トリガーワード上限に達しました`,
-				limit_exceeded_description: `このサーバーはトリガーワードの上限 {max_allowed} 個に達しました（現在 {current_count} 個）。新しいものを追加する前に、\`/serverconfig triggerdelete\`でいくつかのトリガーワードを削除してください。`,
+				limit_exceeded_description: `このサーバーはトリガーワードの上限 {max_allowed} 個に達しました（現在 {current_count} 個）。新しいものを追加する前に、\`/server triggerdelete\`でいくつかのトリガーワードを削除してください。`,
 				success_title: `トリガーワードが追加されました`,
 				success_description: `\`{word}\` をトリガーワードとして正常に追加しました。現在 {word_count} 個のトリガーワードがあります。`,
 			},
@@ -889,7 +875,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 			triggerdelete: {
 				description: `言及されたときに私が応答する単語を削除します。`,
 				no_triggers_title: `トリガーワードがありません`,
-				no_triggers_description: `削除するカスタムトリガーワードが設定されていません。\`/serverconfig triggeradd\`で追加してください。`,
+				no_triggers_description: `削除するカスタムトリガーワードが設定されていません。\`/server triggeradd\`で追加してください。`,
 				select_title: `トリガーワードの削除`,
 				select_description: `削除したいトリガーワードを選択してください`,
 				trigger_words_label: `トリガーワード`,
@@ -920,7 +906,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 		},
 
 		// 個人的なユーザー設定コマンド
-		personalconfig: {
+		personal: {
 			description: `あなたの個人的な設定を管理します`,
 			privacy: {
 				description: `個人記憶の保存とプライバシー設定を管理します`,
@@ -935,7 +921,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 • この設定は私がいるすべてのサーバーに適用されます
 • サーバー全体の記憶は影響を受けません
 
-個人記憶を再び許可するには、\`/personalconfig privacy\`を使用して「オプトイン」を選択してください。`,
+個人記憶を再び許可するには、\`/personal privacy\`を使用して「オプトイン」を選択してください。`,
 				opted_in_title: `✅ パーソナライズが有効になりました`,
 				opted_in_description: `個人記憶の保存をオプトインしました。
 
@@ -945,11 +931,38 @@ Discord API 遅延: \`{discord_response}ms\``,
 • 以前に保存された記憶が再び利用可能になります
 • 会話を通じてあなたに関する新しいことを学習できます
 
-プライバシーを再度保護するには、\`/personalconfig privacy\`を使用して「オプトアウト」を選択してください。`,
+プライバシーを再度保護するには、\`/personal privacy\`を使用して「オプトアウト」を選択してください。`,
 				already_opted_out_title: `既にオプトアウトしています`,
 				already_opted_out_description: `あなたは既に個人記憶の保存をオプトアウトしています。プライバシー設定は変更されていません。`,
 				already_opted_in_title: `既にオプトインしています`,
 				already_opted_in_description: `あなたは既に個人記憶の保存をオプトインしています。設定は変更されていません。`,
+			},
+
+			language: {
+				description: `インターフェースの優先言語を設定します。`,
+				value_description: `インターフェースの優先言語を選択してください。`,
+				choice_english: `英語`,
+				choice_japanese: `日本語`,
+				"value_choice_en-US": `英語`,
+				value_choice_ja: `日本語`,
+				invalid_value_title: `無効な言語`,
+				invalid_value_description: `言語は次のいずれかでなければなりません: {supported}。`,
+				already_set_title: `言語は既に設定済みです`,
+				already_set_description: `あなたの言語設定は既に \`{value}\` に設定されています。`,
+				success_title: `言語が更新されました`,
+				success_description: `あなたのインターフェース言語が \`{previous_value}\` から \`{value}\` に変更されました。`,
+			},
+
+			nickname: {
+				description: `私があなたを呼ぶ名前を変更します。`,
+				option_description: `私があなたに使用すべきニックネーム（2〜32文字）。`,
+				invalid_length_title: `無効なニックネームの長さ`,
+				invalid_length: `ニックネームは {min}〜{max} 文字でなければなりません。`,
+				success_title: `個人的なニックネームが更新されました`,
+				success_description: `わかりました、これからはあなたのことを '{new_nickname}' と呼びます（以前は '{old_nickname}' でした）。`,
+				success_but_disabled_description: `わかりました、あなたのことを '{new_nickname}' と呼ぶことを覚えておきます（以前は '{old_nickname}' でした）。
+
+**警告:** 現在、このサーバーではパーソナライズが無効になっているため、このニックネームはここでは使用しません。パーソナライズが有効になっている他のサーバーでは使用します。`,
 			},
 		},
 
@@ -967,7 +980,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 				bot_input_description: `ボットがどのように応答すべきか`,
 				bot_input_placeholder: `わ、わたしはマンゴーが好きです…`,
 				limit_exceeded_title: `サンプル対話上限に達しました`,
-				limit_exceeded_description: `このサーバーはサンプル対話の上限 {max_allowed} 個に達しました（現在 {current_count} 個）。新しいものを追加する前に、\`/unlearn sampledialogue\`でいくつかのサンプル対話を削除してください。`,
+				limit_exceeded_description: `このサーバーはサンプル対話の上限 {max_allowed} 個に達しました（現在 {current_count} 個）。新しいものを追加する前に、\`/forget sampledialogue\`でいくつかのサンプル対話を削除してください。`,
 				success_title: `サンプル対話が追加されました`,
 				success_description: `新しいサンプル対話ペアを正常に追加しました:
 
@@ -988,7 +1001,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 				duplicate_title: `重複した属性`,
 				duplicate_description: `この属性 '{attribute}' は既に私の属性リストにあります。`,
 				limit_exceeded_title: `属性上限に達しました`,
-				limit_exceeded_description: `このサーバーは属性の上限 {max_allowed} 個に達しました（現在 {current_count} 個）。新しいものを追加する前に、\`/unlearn attribute\`でいくつかの属性を削除してください。`,
+				limit_exceeded_description: `このサーバーは属性の上限 {max_allowed} 個に達しました（現在 {current_count} 個）。新しいものを追加する前に、\`/forget attribute\`でいくつかの属性を削除してください。`,
 				success_title: `属性が追加されました`,
 				success_description: `'{attribute}' を私の人格属性に正常に追加しました。`,
 			},
@@ -1003,7 +1016,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 				duplicate_title: `重複した記憶`,
 				duplicate_description: `この記憶 '{memory}' は既にこのサーバーの私の記憶にあります。`,
 				limit_exceeded_title: `サーバーの記憶の上限に達しました`,
-				limit_exceeded_description: `このサーバーは記憶の上限 {max_allowed} 件に達しました（現在 {current_count} 件）。新しい記憶を追加する前に、\`/unlearn servermemory\`でいくつかの記憶を削除してください。`,
+				limit_exceeded_description: `このサーバーは記憶の上限 {max_allowed} 件に達しました（現在 {current_count} 件）。新しい記憶を追加する前に、\`/forget servermemory\`でいくつかの記憶を削除してください。`,
 				content_too_long_title: `記憶の内容が長すぎます`,
 				content_too_long_description: `記憶の内容が長すぎます。最大許容長は {max_length} 文字です。`,
 				success_title: `サーバーの記憶が追加されました`,
@@ -1018,7 +1031,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 				duplicate_title: `重複した個人的な記憶`,
 				duplicate_description: `この記憶 '{memory}' は既にあなたの個人的な記憶にあります。`,
 				limit_exceeded_title: `個人的な記憶の上限に達しました`,
-				limit_exceeded_description: `あなたは個人的な記憶の上限 {max_allowed} 件に達しました（現在 {current_count} 件）。新しい記憶を追加する前に、\`/unlearn personalmemory\`でいくつかの記憶を削除してください。`,
+				limit_exceeded_description: `あなたは個人的な記憶の上限 {max_allowed} 件に達しました（現在 {current_count} 件）。新しい記憶を追加する前に、\`/forget personalmemory\`でいくつかの記憶を削除してください。`,
 				content_too_long_title: `記憶の内容が長すぎます`,
 				content_too_long_description: `記憶の内容が長すぎます。最大許容長は {max_length} 文字です。`,
 				success_title: `個人的な記憶が追加されました`,
@@ -1030,23 +1043,12 @@ Discord API 遅延: \`{discord_response}ms\``,
 
 **警告:** あなたは現在、このサーバーのパーソナライズ機能のブラックリストに登録されているため、この記憶はここでは使用されません。ブラックリストに登録されていない他のサーバーでは引き続き利用可能です。`,
 				opted_out_error_title: `プライバシー保護が有効`,
-				opted_out_error_description: `あなたはプライバシー上の理由から個人記憶の保存をオプトアウトしています。再び個人記憶を許可したい場合は、\`/personalconfig privacy\`を使用してオプトインしてください。`,
-			},
-			nickname: {
-				description: `私があなたを呼ぶ名前を変更します。`,
-				option_description: `私があなたに使用すべきニックネーム（2〜32文字）。`,
-				invalid_length_title: `無効なニックネームの長さ`,
-				invalid_length: `ニックネームは {min}〜{max} 文字でなければなりません。`,
-				success_title: `個人的なニックネームが更新されました`,
-				success_description: `わかりました、これからはあなたのことを '{new_nickname}' と呼びます（以前は '{old_nickname}' でした）。`,
-				success_but_disabled_description: `わかりました、あなたのことを '{new_nickname}' と呼ぶことを覚えておきます（以前は '{old_nickname}' でした）。
-
-**警告:** 現在、このサーバーではパーソナライズが無効になっているため、このニックネームはここでは使用しません。パーソナライズが有効になっている他のサーバーでは使用します。`,
+				opted_out_error_description: `あなたはプライバシー上の理由から個人記憶の保存をオプトアウトしています。再び個人記憶を許可したい場合は、\`/personal privacy\`を使用してオプトインしてください。`,
 			},
 		},
 
 		// Tomoriに物事を忘れさせるためのコマンド
-		unlearn: {
+		forget: {
 			sampledialogue: {
 				description: `私の記憶からサンプルユーザー/ボットの対話ペアを削除します。`,
 				modal_title: `サンプル対話の削除`,
@@ -1112,7 +1114,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 		// ボットがサーバーに追加されたときのメッセージ
 		addBot: {
 			rejoin_title: `TomoriBotが戻ってきました！`,
-			rejoin_description: `このサーバーに再追加されたようです。以前の設定と人格はそのままです！\`/config\`、\`/teach\`、\`unlearn\`コマンドで私を管理できます。
+			rejoin_description: `このサーバーに再追加されたようです。以前の設定と人格はそのままです！\`/config\`、\`/teach\`、\`forget\`コマンドで私を管理できます。
 
 			プロバイダーを変更したい場合は、\`/config apikeyset\`コマンドを使用してください。
 

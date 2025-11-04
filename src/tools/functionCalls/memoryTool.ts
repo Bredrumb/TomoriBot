@@ -228,7 +228,7 @@ export class MemoryTool extends BaseTool {
 							scope: "server_wide",
 							current_count: serverLimitCheck.currentCount,
 							max_allowed: serverLimitCheck.maxAllowed,
-							reason: `Server memory limit of ${serverLimitCheck.maxAllowed} memories has been reached. Please inform the user that they need to use '/unlearn servermemory' to remove some memories before I can learn new ones.`,
+							reason: `Server memory limit of ${serverLimitCheck.maxAllowed} memories has been reached. Please inform the user that they need to use '/forget servermemory' to remove some memories before I can learn new ones.`,
 						},
 					};
 				}
@@ -424,12 +424,8 @@ export class MemoryTool extends BaseTool {
 				}
 
 				// Check if user has opted out of personalization (privacy setting)
-				const { isPrivacyOptedOut } = await import(
-					"../../utils/db/dbRead"
-				);
-				const userOptedOut = await isPrivacyOptedOut(
-					targetUserDiscordIdArg,
-				);
+				const { isPrivacyOptedOut } = await import("../../utils/db/dbRead");
+				const userOptedOut = await isPrivacyOptedOut(targetUserDiscordIdArg);
 
 				if (userOptedOut) {
 					log.info(
@@ -443,7 +439,7 @@ export class MemoryTool extends BaseTool {
 							scope: "target_user",
 							target_user_discord_id: targetUserDiscordIdArg,
 							target_user_nickname: targetUserNicknameArg,
-							reason: `The user ${targetUserNicknameArg} has chosen to opt out of personal memory storage for privacy reasons. I cannot save personal memories about them unless they opt back in using '/personalconfig privacy'.`,
+							reason: `The user ${targetUserNicknameArg} has chosen to opt out of personal memory storage for privacy reasons. I cannot save personal memories about them unless they opt back in using '/personal privacy'.`,
 						},
 					};
 				}
@@ -462,7 +458,7 @@ export class MemoryTool extends BaseTool {
 							target_user_discord_id: targetUserDiscordIdArg,
 							current_count: personalLimitCheck.currentCount,
 							max_allowed: personalLimitCheck.maxAllowed,
-							reason: `Personal memory limit of ${personalLimitCheck.maxAllowed} memories has been reached for this user. Please inform the user that they need to use '/unlearn personalmemory' to remove some of their memories before I can learn new ones about them.`,
+							reason: `Personal memory limit of ${personalLimitCheck.maxAllowed} memories has been reached for this user. Please inform the user that they need to use '/forget personalmemory' to remove some of their memories before I can learn new ones about them.`,
 						},
 					};
 				}

@@ -24,7 +24,7 @@ import { sql } from "bun";
 import type { SelectOption } from "../../types/discord/modal";
 
 // Rule 20: Constants for static values at the top
-const MODAL_CUSTOM_ID = "unlearn_sampledialogue_modal";
+const MODAL_CUSTOM_ID = "forget_sampledialogue_modal";
 const DIALOGUE_SELECT_ID = "dialogue_select";
 
 /**
@@ -74,7 +74,7 @@ async function performSampleDialogueRemoval(
 			userId: userData.user_id,
 			errorType: "DatabaseUpdateError",
 			metadata: {
-				command: "unlearn sampledialogue",
+				command: "forget sampledialogue",
 				selectedIndex,
 				validationErrors: validatedTomori.success
 					? null
@@ -104,8 +104,8 @@ async function performSampleDialogueRemoval(
 	);
 
 	await replyInfoEmbed(replyInteraction, locale, {
-		titleKey: "commands.unlearn.sampledialogue.success_title",
-		descriptionKey: "commands.unlearn.sampledialogue.success_description",
+		titleKey: "commands.forget.sampledialogue.success_title",
+		descriptionKey: "commands.forget.sampledialogue.success_description",
 		descriptionVars: {
 			input:
 				itemToRemoveIn.length > 50
@@ -127,7 +127,7 @@ export const configureSubcommand = (
 	subcommand
 		.setName("sampledialogue")
 		.setDescription(
-			localizer("en-US", "commands.unlearn.sampledialogue.description"),
+			localizer("en-US", "commands.forget.sampledialogue.description"),
 		);
 
 /**
@@ -204,8 +204,8 @@ export async function execute(
 				);
 			}
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.unlearn.sampledialogue.no_dialogues_title",
-				descriptionKey: "commands.unlearn.sampledialogue.no_dialogues",
+				titleKey: "commands.forget.sampledialogue.no_dialogues_title",
+				descriptionKey: "commands.forget.sampledialogue.no_dialogues",
 				color: ColorCode.WARN,
 				flags: MessageFlags.Ephemeral,
 			});
@@ -231,13 +231,13 @@ export async function execute(
 		// 8. Show the paginated modal with dialogue selection
 		const modalResult = await promptWithPaginatedModal(interaction, locale, {
 			modalCustomId: MODAL_CUSTOM_ID,
-			modalTitleKey: "commands.unlearn.sampledialogue.modal_title",
+			modalTitleKey: "commands.forget.sampledialogue.modal_title",
 			components: [
 				{
 					customId: DIALOGUE_SELECT_ID,
-					labelKey: "commands.unlearn.sampledialogue.select_label",
-					descriptionKey: "commands.unlearn.sampledialogue.select_description",
-					placeholder: "commands.unlearn.sampledialogue.select_placeholder",
+					labelKey: "commands.forget.sampledialogue.select_label",
+					descriptionKey: "commands.forget.sampledialogue.select_description",
+					placeholder: "commands.forget.sampledialogue.select_placeholder",
 					required: true,
 					options: dialogueSelectOptions,
 				},

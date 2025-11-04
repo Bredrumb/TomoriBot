@@ -20,14 +20,12 @@ export const configureSubcommand = (
 ) =>
 	subcommand
 		.setName("avatar")
-		.setDescription(
-			localizer("en-US", "commands.serverconfig.avatar.description"),
-		)
+		.setDescription(localizer("en-US", "commands.server.avatar.description"))
 		.addAttachmentOption((option) =>
 			option
 				.setName("image")
 				.setDescription(
-					localizer("en-US", "commands.serverconfig.avatar.image_description"),
+					localizer("en-US", "commands.server.avatar.image_description"),
 				)
 				.setRequired(false),
 		);
@@ -185,14 +183,14 @@ export async function execute(
 
 			if (success) {
 				await replyInfoEmbed(interaction, locale, {
-					titleKey: "commands.serverconfig.avatar.removed_title",
-					descriptionKey: "commands.serverconfig.avatar.removed_description",
+					titleKey: "commands.server.avatar.removed_title",
+					descriptionKey: "commands.server.avatar.removed_description",
 					color: ColorCode.SUCCESS,
 				});
 			} else {
 				await replyInfoEmbed(interaction, locale, {
-					titleKey: "commands.serverconfig.avatar.api_error_title",
-					descriptionKey: "commands.serverconfig.avatar.api_error_description",
+					titleKey: "commands.server.avatar.api_error_title",
+					descriptionKey: "commands.server.avatar.api_error_description",
 					color: ColorCode.ERROR,
 				});
 			}
@@ -214,8 +212,8 @@ export async function execute(
 			}
 
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.serverconfig.avatar.invalid_image_title",
-				descriptionKey: `commands.serverconfig.avatar.${errorKey}`,
+				titleKey: "commands.server.avatar.invalid_image_title",
+				descriptionKey: `commands.server.avatar.${errorKey}`,
 				color: ColorCode.ERROR,
 			});
 			return;
@@ -238,9 +236,8 @@ export async function execute(
 			await log.error("Failed to convert image to base64", error, context);
 
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.serverconfig.avatar.conversion_error_title",
-				descriptionKey:
-					"commands.serverconfig.avatar.conversion_error_description",
+				titleKey: "commands.server.avatar.conversion_error_title",
+				descriptionKey: "commands.server.avatar.conversion_error_description",
 				color: ColorCode.ERROR,
 			});
 			return;
@@ -254,14 +251,14 @@ export async function execute(
 
 		if (success) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.serverconfig.avatar.success_title",
-				descriptionKey: "commands.serverconfig.avatar.success_description",
+				titleKey: "commands.server.avatar.success_title",
+				descriptionKey: "commands.server.avatar.success_description",
 				color: ColorCode.SUCCESS,
 			});
 		} else {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.serverconfig.avatar.api_error_title",
-				descriptionKey: "commands.serverconfig.avatar.api_error_description",
+				titleKey: "commands.server.avatar.api_error_title",
+				descriptionKey: "commands.server.avatar.api_error_description",
 				color: ColorCode.ERROR,
 			});
 		}

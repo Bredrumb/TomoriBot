@@ -25,7 +25,7 @@ src/commands/
 ├── help/             ← Help commands
 ├── teach/            ← Teaching/memory commands
 ├── tool/             ← Utility commands
-└── unlearn/          ← Memory removal commands
+└── forget/          ← Memory removal commands
 ```
 
 ### Command Pattern
@@ -615,7 +615,7 @@ Commands are automatically registered through TomoriBot's discovery system, but 
 // Command registration happens automatically by scanning the commands directory
 // Each subcommand file is dynamically imported and registered
 
-const commandCategories = ['config', 'help', 'teach', 'tool', 'unlearn'];
+const commandCategories = ['config', 'help', 'teach', 'tool', 'forget'];
 
 for (const category of commandCategories) {
   const categoryPath = path.join(__dirname, '../commands', category);

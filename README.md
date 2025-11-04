@@ -185,8 +185,8 @@ docker compose up
 - `/config setup` - Initial bot setup for your server
 - `/config` - Multiple ways to tweak TomoriBot
 - `/teach` - Add memories for TomoriBot
-- `/unlearn` - Remove memories from TomoriBot
-- `/serverconfig` - Add / Remove permissions from TomoriBot
+- `/forget` - Remove memories from TomoriBot
+- `/server` - Add / Remove permissions from TomoriBot
 
 ### Chat Interaction
 

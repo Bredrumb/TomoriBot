@@ -215,9 +215,9 @@ export default {
 			personal_memory_learned_description:
 				'I\'ve just learned this about {user_nickname}: "{memory_content}"',
 			server_memory_footer:
-				"Server managers can manage this memory using `/teach` and `/unlearn` commands.",
+				"Server managers can manage this memory using `/teach` and `/forget` commands.",
 			personal_memory_footer_manage:
-				"You can manage your personal memories using `/teach` and `/unlearn` commands.",
+				"You can manage your personal memories using `/teach` and `/forget` commands.",
 			personal_memory_footer_personalization_disabled:
 				"This memory was saved, but personalization features are currently disabled on this server, so it will not have an immediate effect here.",
 			personal_memory_footer_user_blacklisted:
@@ -527,7 +527,7 @@ Discord API Latency: \`{discord_response}ms\``,
 				success_title: `✨ {character_name} Generated Successfully!`,
 				success_description: `I've generated a personality for **{character_name}**!\n\n**Attribute Preview:**\n{attribute_preview}\n\n**Sample Dialogues:**\n{dialogue_preview}`,
 				success_next_steps_title: `📥 Next Steps`,
-				success_next_steps_description: `1. Download the attached PNG file\n2. Use \`/preset import\` with the PNG to import this character\n3. (Optional) Use \`/serverconfig avatar\` to change the avatar if desired`,
+				success_next_steps_description: `1. Download the attached PNG file\n2. Use \`/preset import\` with the PNG to import this character\n3. (Optional) Use \`/server avatar\` to change the avatar if desired`,
 				avatar_update_skipped_dm: `ℹ️ Note: Avatar and nickname updates are not available in Direct Messages. Personality was generated successfully.`,
 			},
 			create: {
@@ -628,20 +628,6 @@ Discord API Latency: \`{discord_response}ms\``,
 				already_set_description: `The humanizer degree is already set to \`{value}\`.`,
 				success_title: `Humanizer Degree Updated`,
 				success_description: `Humanizer degree changed from \`{previous_value}\` to \`{value}\`.`,
-			},
-			language: {
-				description: `Set your preferred language for my interface.`,
-				value_description: `Choose your preferred language for interfaces.`,
-				choice_english: `English`,
-				choice_japanese: `Japanese`,
-				"value_choice_en-US": `English`,
-				value_choice_ja: `Japanese`,
-				invalid_value_title: `Invalid Language`,
-				invalid_value_description: `Language must be one of: {supported}.`,
-				already_set_title: `Language Already Set`,
-				already_set_description: `Your language preference is already set to \`{value}\`.`,
-				success_title: `Language Updated`,
-				success_description: `Your interface language changed from \`{previous_value}\` to \`{value}\`.`,
 			},
 			model: {
 				description: `Change the underlying AI model that I use.`,
@@ -758,7 +744,7 @@ Discord API Latency: \`{discord_response}ms\``,
 				provider_invalid: `Error: Invalid API provider selected. Please choose from the available options.`,
 				preset_not_found: `Error: The selected preset was not found in the database. Please try again.`,
 				success_title: `🎉 Setup Complete!`,
-				success_desc: `I am now configured for this server! To modify my configuration, use my \`/config\` and \`/serverconfig\` commands. You can also manage or delete your data anytime with \`/data\`. Here's a summary:`,
+				success_desc: `I am now configured for this server! To modify my configuration, use my \`/config\` and \`/server\` commands. You can also manage or delete your data anytime with \`/data\`. Here's a summary:`,
 				success_desc_dm: `I am now configured for this Direct Message. You can manage or delete your data anytime with \`/data\`. Here's a summary:`,
 				preset_field: `Personality Preset`,
 				name_field: `My Name`,
@@ -813,7 +799,7 @@ Discord API Latency: \`{discord_response}ms\``,
 		},
 
 		// Server configuration commands (admin-only)
-		serverconfig: {
+		server: {
 			triggeradd: {
 				description: `Add a word that makes me respond when mentioned.`,
 				word_description: `The word to add as a trigger.`,
@@ -824,7 +810,7 @@ Discord API Latency: \`{discord_response}ms\``,
 				already_exists_title: `Trigger Word Exists`,
 				already_exists_description: `The word \`{word}\` is already in the trigger list.`,
 				limit_exceeded_title: `Trigger Word Limit Exceeded`,
-				limit_exceeded_description: `This server has reached its trigger word limit of {max_allowed} words (currently has {current_count}). Please remove some trigger words with \`/serverconfig triggerdelete\` before adding new ones.`,
+				limit_exceeded_description: `This server has reached its trigger word limit of {max_allowed} words (currently has {current_count}). Please remove some trigger words with \`/server triggerdelete\` before adding new ones.`,
 				success_title: `Trigger Word Added`,
 				success_description: `Successfully added \`{word}\` as a trigger word. There are now {word_count} trigger words.`,
 			},
@@ -892,7 +878,7 @@ Discord API Latency: \`{discord_response}ms\``,
 			triggerdelete: {
 				description: `Remove a word that makes me respond when mentioned.`,
 				no_triggers_title: `No Trigger Words`,
-				no_triggers_description: `There are no custom trigger words set to remove. Add some with \`/serverconfig triggeradd\`.`,
+				no_triggers_description: `There are no custom trigger words set to remove. Add some with \`/server triggeradd\`.`,
 				select_title: `Remove Trigger Word`,
 				select_description: `Select the trigger word you want to remove`,
 				trigger_words_label: `Trigger Words`,
@@ -923,7 +909,7 @@ Discord API Latency: \`{discord_response}ms\``,
 		},
 
 		// Personal user configuration commands
-		personalconfig: {
+		personal: {
 			description: `Manage your personal settings`,
 			privacy: {
 				description: `Control personal memory storage and privacy settings`,
@@ -938,7 +924,7 @@ Discord API Latency: \`{discord_response}ms\``,
 • This setting applies across all servers where I'm present
 • Server-wide memories are not affected
 
-To opt back in and allow personal memories again, use \`/personalconfig privacy\` and select "Opt In".`,
+To opt back in and allow personal memories again, use \`/personal privacy\` and select "Opt In".`,
 				opted_in_title: `✅ Personalization Enabled`,
 				opted_in_description: `You have successfully opted into personal memory storage.
 
@@ -948,11 +934,38 @@ To opt back in and allow personal memories again, use \`/personalconfig privacy\
 • Any previously saved memories will be available again
 • I can learn new things about you through conversations
 
-To protect your privacy again, use \`/personalconfig privacy\` and select "Opt Out".`,
+To protect your privacy again, use \`/personal privacy\` and select "Opt Out".`,
 				already_opted_out_title: `Already Opted Out`,
 				already_opted_out_description: `You have already opted out of personal memory storage. Your privacy settings remain unchanged.`,
 				already_opted_in_title: `Already Opted In`,
 				already_opted_in_description: `You are already opted into personal memory storage. Your settings remain unchanged.`,
+			},
+
+			language: {
+				description: `Set your preferred language for my interface.`,
+				value_description: `Choose your preferred language for interfaces.`,
+				choice_english: `English`,
+				choice_japanese: `Japanese`,
+				"value_choice_en-US": `English`,
+				value_choice_ja: `Japanese`,
+				invalid_value_title: `Invalid Language`,
+				invalid_value_description: `Language must be one of: {supported}.`,
+				already_set_title: `Language Already Set`,
+				already_set_description: `Your language preference is already set to \`{value}\`.`,
+				success_title: `Language Updated`,
+				success_description: `Your interface language changed from \`{previous_value}\` to \`{value}\`.`,
+			},
+
+			nickname: {
+				description: `Change the name I use to refer to you.`,
+				option_description: `The nickname I should use for you (2-32 characters).`,
+				invalid_length_title: `Invalid Nickname Length`,
+				invalid_length: `Nickname must be between {min} and {max} characters.`,
+				success_title: `Personal Nickname Updated`,
+				success_description: `Okay, I'll call you '{new_nickname}' from now on (previously '{old_nickname}').`,
+				success_but_disabled_description: `Okay, I'll remember to call you '{new_nickname}' (previously '{old_nickname}').
+
+**Warning:** Personalization is currently disabled on this server, so I won't use this nickname here. I'll still use it on other servers where personalization is enabled.`, // Natural line break
 			},
 		},
 
@@ -961,7 +974,7 @@ To protect your privacy again, use \`/personalconfig privacy\` and select "Opt O
 			sampledialogue: {
 				description: `Add a sample user/bot dialogue pair to as an example for how I should respond.`,
 				teaching_disabled_title: `Sample Dialogue Teaching Disabled`,
-				teaching_disabled_description: `Members are not currently allowed to teach/unlearn sample dialogues on this server. A server member with \`Manage Server\` permissions can enable this using \`/config memberpermissions\`.`,
+				teaching_disabled_description: `Members are not currently allowed to teach/forget sample dialogues on this server. A server member with \`Manage Server\` permissions can enable this using \`/config memberpermissions\`.`,
 				modal_title: `Add Sample Dialogue`,
 				user_input_label: `User's Line`,
 				user_input_description: `A sample question for the bot. Use \`{user}\` instead as a placeholder for the user's name, if used.`,
@@ -970,7 +983,7 @@ To protect your privacy again, use \`/personalconfig privacy\` and select "Opt O
 				bot_input_description: `How the bot should respond. Use \`{bot}\` instead as a placeholder for the bot's name, if used.`,
 				bot_input_placeholder: `I-I like mangoes...`,
 				limit_exceeded_title: `Sample Dialogue Limit Exceeded`,
-				limit_exceeded_description: `This server has reached its sample dialogue limit of {max_allowed} dialogues (currently has {current_count}). Please remove some sample dialogues with \`/unlearn sampledialogue\` before adding new ones.`,
+				limit_exceeded_description: `This server has reached its sample dialogue limit of {max_allowed} dialogues (currently has {current_count}). Please remove some sample dialogues with \`/forget sampledialogue\` before adding new ones.`,
 				success_title: `Sample Dialogue Added`,
 				success_description: `Successfully added a new sample dialogue pair:
 
@@ -983,7 +996,7 @@ To protect your privacy again, use \`/personalconfig privacy\` and select "Opt O
 			attribute: {
 				description: `Add a personality attribute describing me for this server.`,
 				teaching_disabled_title: `Attribute Teaching Disabled`,
-				teaching_disabled_description: `Members are not currently allowed to teach/unlearn personality attributes on this server. A server member with \`Manage Server\` permissions can enable this using \`/config memberpermissions\`.`,
+				teaching_disabled_description: `Members are not currently allowed to teach/forget personality attributes on this server. A server member with \`Manage Server\` permissions can enable this using \`/config memberpermissions\`.`,
 				modal_title: `Add Personality Attribute`,
 				modal_description: `A personality trait that I have for this server. Use \`{bot}\` as a placeholder for my name, if used.`,
 				attribute_input_label: `New Attribute`,
@@ -991,7 +1004,7 @@ To protect your privacy again, use \`/personalconfig privacy\` and select "Opt O
 				duplicate_title: `Duplicate Attribute`,
 				duplicate_description: `This attribute '{attribute}' is already in my attribute list.`,
 				limit_exceeded_title: `Attribute Limit Exceeded`,
-				limit_exceeded_description: `This server has reached its attribute limit of {max_allowed} attributes (currently has {current_count}). Please remove some attributes with \`/unlearn attribute\` before adding new ones.`,
+				limit_exceeded_description: `This server has reached its attribute limit of {max_allowed} attributes (currently has {current_count}). Please remove some attributes with \`/forget attribute\` before adding new ones.`,
 				success_title: `Attribute Added`,
 				success_description: `Successfully added '{attribute}' to my personality attributes.`,
 			},
@@ -1006,7 +1019,7 @@ To protect your privacy again, use \`/personalconfig privacy\` and select "Opt O
 				duplicate_title: `Duplicate Memory`,
 				duplicate_description: `This memory '{memory}' is already in my memories for this server.`,
 				limit_exceeded_title: `Server Memory Limit Reached`,
-				limit_exceeded_description: `This server has reached its memory limit of {max_allowed} memories (currently has {current_count}). Please remove some memories with \`/unlearn servermemory\` before adding new ones.`,
+				limit_exceeded_description: `This server has reached its memory limit of {max_allowed} memories (currently has {current_count}). Please remove some memories with \`/forget servermemory\` before adding new ones.`,
 				content_too_long_title: `Memory Content Too Long`,
 				content_too_long_description: `The memory content is too long. Maximum allowed length is {max_length} characters.`,
 				success_title: `Server Memory Added`,
@@ -1021,7 +1034,7 @@ To protect your privacy again, use \`/personalconfig privacy\` and select "Opt O
 				duplicate_title: `Duplicate Personal Memory`,
 				duplicate_description: `This memory '{memory}' is already in your personal memories.`,
 				limit_exceeded_title: `Personal Memory Limit Reached`,
-				limit_exceeded_description: `You have reached your personal memory limit of {max_allowed} memories (currently have {current_count}). Please remove some memories with \`/unlearn personalmemory\` before adding new ones.`,
+				limit_exceeded_description: `You have reached your personal memory limit of {max_allowed} memories (currently have {current_count}). Please remove some memories with \`/forget personalmemory\` before adding new ones.`,
 				content_too_long_title: `Memory Content Too Long`,
 				content_too_long_description: `The memory content is too long. Maximum allowed length is {max_length} characters.`,
 				success_title: `Personal Memory Added`,
@@ -1033,23 +1046,12 @@ To protect your privacy again, use \`/personalconfig privacy\` and select "Opt O
 
 **Warning:** You are currently blacklisted from personalization features on this server, so this memory won't be used here. It will still be available on other servers where you are not blacklisted.`, // Natural line break
 				opted_out_error_title: `Privacy Protection Active`,
-				opted_out_error_description: `You have opted out of personal memory storage for privacy reasons. If you'd like to allow personal memories again, use \`/personalconfig privacy\` to opt back in.`,
-			},
-			nickname: {
-				description: `Change the name I use to refer to you.`,
-				option_description: `The nickname I should use for you (2-32 characters).`,
-				invalid_length_title: `Invalid Nickname Length`,
-				invalid_length: `Nickname must be between {min} and {max} characters.`,
-				success_title: `Personal Nickname Updated`,
-				success_description: `Okay, I'll call you '{new_nickname}' from now on (previously '{old_nickname}').`,
-				success_but_disabled_description: `Okay, I'll remember to call you '{new_nickname}' (previously '{old_nickname}').
-
-**Warning:** Personalization is currently disabled on this server, so I won't use this nickname here. I'll still use it on other servers where personalization is enabled.`, // Natural line break
+				opted_out_error_description: `You have opted out of personal memory storage for privacy reasons. If you'd like to allow personal memories again, use \`/personal privacy\` to opt back in.`,
 			},
 		},
 
-		// Commands for making Tomori unlearn things
-		unlearn: {
+		// Commands for making Tomori forget things
+		forget: {
 			sampledialogue: {
 				description: `Remove a sample user/bot dialogue pair from my memory.`,
 				modal_title: `Remove Sample Dialogue`,
@@ -1115,7 +1117,7 @@ To protect your privacy again, use \`/personalconfig privacy\` and select "Opt O
 		// Messages for when the bot is added to a server
 		addBot: {
 			rejoin_title: `TomoriBot is Back!`,
-			rejoin_description: `Looks like I was re-added to this server. My previous settings and personality are still intact! You can manage me using the \`/config\`, \`/teach\`, and \`unlearn\` commands. You can also manage or delete your data anytime with \`/data\`.
+			rejoin_description: `Looks like I was re-added to this server. My previous settings and personality are still intact! You can manage me using the \`/config\`, \`/teach\`, and \`forget\` commands. You can also manage or delete your data anytime with \`/data\`.
 
 			If you wish to swap my provider, use the \`/config apikeyset\` command.
 

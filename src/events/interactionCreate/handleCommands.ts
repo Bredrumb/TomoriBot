@@ -160,7 +160,7 @@ const handler = async (
 		const subcommandName = interaction.options.getSubcommand(false); // The specific subcommand (may be null)
 
 		// Guild-only subcommand restrictions are now handled at the Discord registration level
-		// Commands in guild-only categories (like "serverconfig") are automatically restricted to guilds
+		// Commands in guild-only categories (like "server") are automatically restricted to guilds
 
 		// 3. Find the execute function
 		const subcommandMap = executionMap.get(commandName);

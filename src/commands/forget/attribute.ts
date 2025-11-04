@@ -24,7 +24,7 @@ import type { SelectOption } from "../../types/discord/modal";
 import { sql } from "bun";
 
 // Rule 20: Constants for static values at the top
-const MODAL_CUSTOM_ID = "unlearn_attribute_modal";
+const MODAL_CUSTOM_ID = "forget_attribute_modal";
 const ATTRIBUTE_SELECT_ID = "attribute_select";
 
 /**
@@ -64,7 +64,7 @@ async function performAttributeRemoval(
 			userId: userData.user_id,
 			errorType: "DatabaseUpdateError",
 			metadata: {
-				command: "unlearn attribute",
+				command: "forget attribute",
 				attributeToRemove,
 				validationErrors: validatedTomori.success
 					? null
@@ -94,8 +94,8 @@ async function performAttributeRemoval(
 	);
 
 	await replyInfoEmbed(replyInteraction, locale, {
-		titleKey: "commands.unlearn.attribute.success_title",
-		descriptionKey: "commands.unlearn.attribute.success_description",
+		titleKey: "commands.forget.attribute.success_title",
+		descriptionKey: "commands.forget.attribute.success_description",
 		descriptionVars: {
 			attribute: attributeToRemove,
 		},
@@ -110,7 +110,7 @@ export const configureSubcommand = (
 	subcommand
 		.setName("attribute")
 		.setDescription(
-			localizer("en-US", "commands.unlearn.attribute.description"),
+			localizer("en-US", "commands.forget.attribute.description"),
 		);
 
 /**
@@ -143,7 +143,9 @@ export async function execute(
 
 	try {
 		// 2. Load server's Tomori state (Rule 17)
-		tomoriState = await loadTomoriState(interaction.guild?.id ?? interaction.user.id);
+		tomoriState = await loadTomoriState(
+			interaction.guild?.id ?? interaction.user.id,
+		);
 		if (!tomoriState) {
 			await replyInfoEmbed(interaction, locale, {
 				titleKey: "general.errors.tomori_not_setup_title",
@@ -179,8 +181,8 @@ export async function execute(
 		// 6. Check if there are any attributes to remove
 		if (currentAttributes.length === 0) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.unlearn.attribute.no_attributes_title",
-				descriptionKey: "commands.unlearn.attribute.no_attributes",
+				titleKey: "commands.forget.attribute.no_attributes_title",
+				descriptionKey: "commands.forget.attribute.no_attributes",
 				color: ColorCode.WARN,
 				flags: MessageFlags.Ephemeral,
 			});
@@ -198,13 +200,13 @@ export async function execute(
 
 		const modalResult = await promptWithPaginatedModal(interaction, locale, {
 			modalCustomId: MODAL_CUSTOM_ID,
-			modalTitleKey: "commands.unlearn.attribute.modal_title",
+			modalTitleKey: "commands.forget.attribute.modal_title",
 			components: [
 				{
 					customId: ATTRIBUTE_SELECT_ID,
-					labelKey: "commands.unlearn.attribute.select_label",
-					descriptionKey: "commands.unlearn.attribute.select_description",
-					placeholder: "commands.unlearn.attribute.select_placeholder",
+					labelKey: "commands.forget.attribute.select_label",
+					descriptionKey: "commands.forget.attribute.select_description",
+					placeholder: "commands.forget.attribute.select_placeholder",
 					required: true,
 					options: attributeSelectOptions,
 				},
@@ -223,7 +225,10 @@ export async function execute(
 		// biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
 		const modalSubmitInteraction = modalResult.interaction!;
 		// biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
-		const selectedIndex = Number.parseInt(modalResult.values![ATTRIBUTE_SELECT_ID], 10);
+		const selectedIndex = Number.parseInt(
+			modalResult.values![ATTRIBUTE_SELECT_ID],
+			10,
+		);
 		const attributeToRemove = currentAttributes[selectedIndex];
 
 		// Perform the database update - let helper functions manage interaction state

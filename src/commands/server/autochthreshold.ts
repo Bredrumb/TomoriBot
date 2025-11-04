@@ -23,7 +23,7 @@ export const configureSubcommand = (
 	subcommand
 		.setName("autochthreshold")
 		.setDescription(
-			localizer("en-US", "commands.serverconfig.autochthreshold.description"),
+			localizer("en-US", "commands.server.autochthreshold.description"),
 		)
 		.addIntegerOption((option) =>
 			option
@@ -31,7 +31,7 @@ export const configureSubcommand = (
 				.setDescription(
 					localizer(
 						"en-US",
-						"commands.serverconfig.autochthreshold.threshold_description_v2",
+						"commands.server.autochthreshold.threshold_description_v2",
 					),
 				)
 				.setMinValue(MIN_THRESHOLD)
@@ -73,9 +73,9 @@ Setting to '0' will disable auto-chat
 
 		if (!isValidThreshold) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.serverconfig.autochthreshold.invalid_range_title",
+				titleKey: "commands.server.autochthreshold.invalid_range_title",
 				descriptionKey:
-					"commands.serverconfig.autochthreshold.invalid_range_specific_description",
+					"commands.server.autochthreshold.invalid_range_specific_description",
 				descriptionVars: {
 					min: MIN_THRESHOLD.toString(),
 					range_start: RANGE_START_THRESHOLD.toString(),
@@ -161,11 +161,11 @@ Setting to '0' will disable auto-chat
 		const isAutoChatEnabled = threshold > 0;
 		await replyInfoEmbed(interaction, locale, {
 			titleKey: isAutoChatEnabled
-				? "commands.serverconfig.autochthreshold.success_title"
-				: "commands.serverconfig.autochthreshold.success_disabled_title",
+				? "commands.server.autochthreshold.success_title"
+				: "commands.server.autochthreshold.success_disabled_title",
 			descriptionKey: isAutoChatEnabled
-				? "commands.serverconfig.autochthreshold.success_description"
-				: "commands.serverconfig.autochthreshold.success_disabled_description",
+				? "commands.server.autochthreshold.success_description"
+				: "commands.server.autochthreshold.success_disabled_description",
 			descriptionVars: {
 				threshold: threshold.toString(),
 			},

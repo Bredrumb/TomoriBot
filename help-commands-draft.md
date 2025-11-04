@@ -24,7 +24,7 @@ Hi! I'm TomoriBot, your AI companion with some pretty cool abilities. Here's wha
 **Memory & Personalization** 🧠
 - I remember personal facts about you and server-wide information
 - My memories persist across conversations
-- Use `/teach` to help me remember things, `/unlearn` to forget
+- Use `/teach` to help me remember things, `/forget` to forget
 - Learn more with `/help memory`
 
 **Personality & Expression** 💫
@@ -67,8 +67,8 @@ TomoriBot uses AI providers like Google Gemini, NovelAI, or OpenRouter. You'll n
 
 **Optional: Customize Me** 🎨
 - Use `/preset` commands to change my personality
-- Configure server settings with `/serverconfig` commands
-- Set up autochannel with `/serverconfig autochchannels` to chat without mentioning me
+- Configure server settings with `/server` commands
+- Set up autochannel with `/server autochchannels` to chat without mentioning me
 
 **Need Help?**
 - `/help features` - See what I can do
@@ -269,7 +269,7 @@ Use the command:
 ---
 
 ## `/help memory`
-**Purpose**: Explain the teach/unlearn memory system
+**Purpose**: Explain the teach/forget memory system
 
 **Embed Title**: How My Memory Works 🧠
 
@@ -286,21 +286,21 @@ Use `/teach` to help me remember **facts and information**:
   - Example: "Game night is every Friday at 8 PM", "Server motto is 'Stay positive!'", "We use #general for announcements"
 
 **Forgetting Things** 🗑️
-Use `/unlearn` to make me forget memories:
-- **`/unlearn personalmemory`** - Remove personal facts about users
-- **`/unlearn servermemory`** - Remove server-wide information
+Use `/forget` to make me forget memories:
+- **`/forget personalmemory`** - Remove personal facts about users
+- **`/forget servermemory`** - Remove server-wide information
 - View all memories first, then delete specific ones by their ID
 
 **How It Works:**
 - **Personal memories** are tied to you specifically across all servers
 - **Server memories** are shared by everyone in the server
 - I automatically recall relevant memories during conversations
-- Memories persist forever until you unlearn them
+- Memories persist forever until you forget them
 
 **Memory Tips:**
 - Teach me your preferences, nicknames, and important facts
 - Use server memories for shared information, inside jokes, or server culture
-- Review your memories periodically with `/unlearn list`
+- Review your memories periodically with `/forget list`
 - Keep memories concise and clear for best results
 
 **Footer Text**: Pro tip: The more you teach me, the more personalized our conversations become! • Want to change my personality? Try `/help customization`
@@ -387,30 +387,30 @@ Bot response: {bot}: I'm doing great! Thanks for asking!
 
 **Embed Description**:
 
-## 🗑️ Unlearning Commands (`/unlearn`)
+## 🗑️ Unlearning Commands (`/forget`)
 Remove personality customizations:
 
-- `/unlearn attribute` - Remove specific personality attributes
-- `/unlearn sampledialogue` - Remove sample dialogue examples
-- `/unlearn nickname` - Reset my nickname to default
+- `/forget attribute` - Remove specific personality attributes
+- `/forget sampledialogue` - Remove sample dialogue examples
+- `/forget nickname` - Reset my nickname to default
 
 ---
 
-## ⚙️ Server Configuration (`/serverconfig`)
+## ⚙️ Server Configuration (`/server`)
 Server-wide settings and behavior:
 
 **Learning & Privacy:**
-- `/serverconfig memberpermissions` - Control who can teach me things
-- `/serverconfig blacklist` - Prevent me from learning from specific users
+- `/server memberpermissions` - Control who can teach me things
+- `/server blacklist` - Prevent me from learning from specific users
 
 **Channel Behavior:**
-- `/serverconfig autochchannels` - Set channels where I respond without mentions
-- `/serverconfig autochthreshold` - Set message threshold for auto-responses
+- `/server autochchannels` - Set channels where I respond without mentions
+- `/server autochthreshold` - Set message threshold for auto-responses
 
 **Triggers & Appearance:**
-- `/serverconfig triggeradd` - Add custom trigger words I respond to
-- `/serverconfig triggerdelete` - Remove trigger words
-- `/serverconfig avatar` - Set a custom avatar for this server
+- `/server triggeradd` - Add custom trigger words I respond to
+- `/server triggerdelete` - Remove trigger words
+- `/server avatar` - Set a custom avatar for this server
 
 **Footer Text**: Server config controls behavior across the server! • Next: Bot Settings
 
@@ -441,12 +441,12 @@ Personal bot settings:
 ## 📚 Memory Self-Learning
 Control how I learn from interactions:
 
-**Member Teaching Permissions** (`/serverconfig memberpermissions`):
+**Member Teaching Permissions** (`/server memberpermissions`):
 - Enable/disable attribute teaching by members
 - Enable/disable sample dialogue teaching by members
 - Admins can always teach regardless of settings
 
-**Blacklist System** (`/serverconfig blacklist`):
+**Blacklist System** (`/server blacklist`):
 - Prevent me from learning from specific users
 - Useful for preventing spam or unwanted influence
 - Blacklisted users can still chat, but I won't learn from them
@@ -492,6 +492,6 @@ Control how I learn from interactions:
 
 **Special Notes for `/help customization`:**
 - This is a LARGE embed with multiple sections (may need to be split or paginated if Discord has size limits)
-- Covers: `/preset`, `/teach` (non-memory), `/unlearn` (non-memory), `/serverconfig` (blacklist, memberpermissions), `/config` (excluding API keys)
+- Covers: `/preset`, `/teach` (non-memory), `/forget` (non-memory), `/server` (blacklist, memberpermissions), `/config` (excluding API keys)
 - Includes detailed placeholder documentation (`{user}` and `{bot}`)
 - Cross-references `/help memory` for memory-related commands
