@@ -142,11 +142,16 @@ export async function execute(
 			},
 		];
 
-		const modalResult = await promptWithRawModal(interaction, locale, {
-			modalCustomId: MODAL_CUSTOM_ID,
-			modalTitleKey: "commands.config.apikey.set.modal_title",
-			components: modalComponents,
-		});
+		const modalResult = await promptWithRawModal(
+			interaction,
+			locale,
+			{
+				modalCustomId: MODAL_CUSTOM_ID,
+				modalTitleKey: "commands.config.apikey.set.modal_title",
+				components: modalComponents,
+			},
+			MessageFlags.Ephemeral, // Auto-defer with ephemeral flag
+		);
 
 		// 6. Handle modal outcome
 		if (modalResult.outcome !== "submit") {

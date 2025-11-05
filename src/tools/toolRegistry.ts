@@ -29,6 +29,7 @@ export interface ToolStateForContext {
 		sticker_usage_enabled: boolean;
 		web_search_enabled: boolean;
 		self_teaching_enabled: boolean;
+		pin_message_enabled: boolean;
 	};
 }
 
@@ -643,23 +644,20 @@ class ToolRegistryImpl implements ToolRegistryInterface {
 
 	/**
 	 * Check if a feature flag is enabled for the given context
+	 * Uses centralized feature flag mapper for consistency with MCP tool filtering
 	 * @param featureFlag - Feature flag to check
 	 * @param context - Tool context
 	 * @returns True if feature is enabled
 	 */
 	private checkFeatureFlag(featureFlag: string, context: ToolContext): boolean {
-		// Map feature flags to Tomori configuration properties
-		const featureFlagMap: Record<string, boolean> = {
-			sticker_usage: context.tomoriState.config.sticker_usage_enabled,
-			web_search: context.tomoriState.config.web_search_enabled,
-			self_teaching: context.tomoriState.config.self_teaching_enabled,
-		};
-
-		return featureFlagMap[featureFlag] ?? false;
+		// Use centralized mapper to convert config to feature flags
+		const featureFlags = configToFeatureFlags(context.tomoriState.config);
+		return featureFlags[featureFlag] ?? false;
 	}
 
 	/**
 	 * Check if a feature flag is enabled (for context building without full ToolContext)
+	 * Uses centralized feature flag mapper for consistency with MCP tool filtering
 	 * @param featureFlag - Feature flag to check
 	 * @param stateForContext - Minimal state with configuration
 	 * @returns True if feature is enabled
@@ -668,14 +666,9 @@ class ToolRegistryImpl implements ToolRegistryInterface {
 		featureFlag: string,
 		stateForContext: ToolStateForContext,
 	): boolean {
-		// Map feature flags to Tomori configuration properties
-		const featureFlagMap: Record<string, boolean> = {
-			sticker_usage: stateForContext.config?.sticker_usage_enabled ?? false,
-			web_search: stateForContext.config?.web_search_enabled ?? false,
-			self_teaching: stateForContext.config?.self_teaching_enabled ?? false,
-		};
-
-		return featureFlagMap[featureFlag] ?? false;
+		// Use centralized mapper to convert config to feature flags
+		const featureFlags = configToFeatureFlags(stateForContext.config);
+		return featureFlags[featureFlag] ?? false;
 	}
 
 	/**

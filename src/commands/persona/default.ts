@@ -5,7 +5,11 @@ import {
 	type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { loadTomoriState, loadPresetRowsByLocale } from "../../utils/db/dbRead";
-import { localizer, getBaseTriggerWords, getDefaultBotName } from "../../utils/text/localizer";
+import {
+	localizer,
+	getBaseTriggerWords,
+	getDefaultBotName,
+} from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import {
 	replyInfoEmbed,
@@ -32,7 +36,7 @@ export const configureSubcommand = (
 ) =>
 	subcommand
 		.setName("default")
-		.setDescription(localizer("en-US", "commands.preset.default.description"));
+		.setDescription(localizer("en-US", "commands.persona.default.description"));
 
 /**
  * Applies a preset personality configuration to Tomori.
@@ -62,7 +66,9 @@ export async function execute(
 
 	try {
 		// 2. Load the Tomori state for this server
-		const tomoriState = await loadTomoriState(interaction.guild?.id ?? interaction.user.id);
+		const tomoriState = await loadTomoriState(
+			interaction.guild?.id ?? interaction.user.id,
+		);
 		if (!tomoriState) {
 			await replyInfoEmbed(interaction, locale, {
 				titleKey: "general.errors.tomori_not_setup_title",
@@ -79,8 +85,8 @@ export async function execute(
 		// 6. Check if there are any presets available
 		if (!presets || presets.length === 0) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.preset.default.no_presets_title",
-				descriptionKey: "commands.preset.default.no_presets_description",
+				titleKey: "commands.persona.default.no_presets_title",
+				descriptionKey: "commands.persona.default.no_presets_description",
 				color: ColorCode.WARN,
 			});
 			return;
@@ -96,20 +102,25 @@ export async function execute(
 		);
 
 		// 8. Show the modal with preset selection
-		const modalResult = await promptWithRawModal(interaction, locale, {
-			modalCustomId: MODAL_CUSTOM_ID,
-			modalTitleKey: "commands.preset.default.modal_title",
-			components: [
-				{
-					customId: PRESET_SELECT_ID,
-					labelKey: "commands.preset.default.select_label",
-					descriptionKey: "commands.preset.default.select_description",
-					placeholder: "commands.preset.default.select_placeholder",
-					required: true,
-					options: presetSelectOptions,
-				},
-			],
-		});
+		const modalResult = await promptWithRawModal(
+			interaction,
+			locale,
+			{
+				modalCustomId: MODAL_CUSTOM_ID,
+				modalTitleKey: "commands.persona.default.modal_title",
+				components: [
+					{
+						customId: PRESET_SELECT_ID,
+						labelKey: "commands.persona.default.select_label",
+						descriptionKey: "commands.persona.default.select_description",
+						placeholder: "commands.persona.default.select_placeholder",
+						required: true,
+						options: presetSelectOptions,
+					},
+				],
+			},
+			MessageFlags.Ephemeral, // Auto-defer with ephemeral flag
+		);
 
 		// 9. Handle modal outcome
 		if (modalResult.outcome !== "submit") {
@@ -133,7 +144,7 @@ export async function execute(
 
 		if (!selectedPreset) {
 			await modalSubmitInteraction.editReply({
-				content: localizer(locale, "commands.preset.default.preset_not_found"),
+				content: localizer(locale, "commands.persona.default.preset_not_found"),
 			});
 			return;
 		}
@@ -285,16 +296,16 @@ export async function execute(
 		);
 
 		await replyInfoEmbed(modalSubmitInteraction, locale, {
-			titleKey: "commands.preset.default.success_title",
-			descriptionKey: "commands.preset.default.success_description",
+			titleKey: "commands.persona.default.success_title",
+			descriptionKey: "commands.persona.default.success_description",
 			descriptionVars: {
 				preset_name: selectedPreset.tomori_preset_name,
 			},
 			color: avatarUpdateFailed || isDM ? ColorCode.WARN : ColorCode.SUCCESS,
 			footerKey: isDM
-				? "commands.preset.default.avatar_update_skipped_dm"
+				? "commands.persona.default.avatar_update_skipped_dm"
 				: avatarUpdateFailed
-					? "commands.preset.default.avatar_update_failed"
+					? "commands.persona.default.avatar_update_failed"
 					: undefined,
 		});
 	} catch (error) {

@@ -81,14 +81,19 @@ export async function execute(
 		// 5. Get optional query parameter
 		const query = interaction.options.getString("query", false);
 
-		// 6. Send immediate ephemeral response to user
+		// 6. Send immediate non-ephemeral response to user
 		const queryText = query ? ` to your query: "${query}"` : "";
-		await replyInfoEmbed(interaction, locale, {
-			titleKey: "commands.bot.reason.success_title",
-			descriptionKey: "commands.bot.reason.success_description",
-			descriptionVars: { query: queryText },
-			color: ColorCode.SUCCESS,
-		});
+		await replyInfoEmbed(
+			interaction,
+			locale,
+			{
+				titleKey: "commands.bot.reason.success_title",
+				descriptionKey: "commands.bot.reason.success_description",
+				descriptionVars: { query: queryText },
+				color: ColorCode.SUCCESS,
+			},
+			MessageFlags.SuppressNotifications,
+		);
 
 		// 7. Get the latest message in the channel
 		const messages = await interaction.channel.messages.fetch({ limit: 1 });

@@ -16,6 +16,9 @@ export const BUILTIN_TOOL_FEATURE_FLAGS: Record<string, string> = {
 	// Memory/learning tools
 	remember_this_fact: "self_teaching",
 
+	// Discord interaction tools
+	pin_selected_message: "pin_message",
+
 	// Brave Search tools (HTTP-based)
 	brave_web_search: "web_search",
 	brave_image_search: "web_search",
@@ -134,10 +137,12 @@ export function configToFeatureFlags(config: {
 	sticker_usage_enabled: boolean;
 	web_search_enabled: boolean;
 	self_teaching_enabled: boolean;
+	pin_message_enabled: boolean;
 }): Record<string, boolean> {
 	return {
 		sticker_usage: config.sticker_usage_enabled,
 		web_search: config.web_search_enabled,
 		self_teaching: config.self_teaching_enabled,
+		pin_message: config.pin_message_enabled,
 	};
 }

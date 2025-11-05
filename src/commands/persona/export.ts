@@ -25,7 +25,7 @@ export const configureSubcommand = (
 ) =>
 	subcommand
 		.setName("export")
-		.setDescription(localizer("en-US", "commands.preset.export.description"));
+		.setDescription(localizer("en-US", "commands.persona.export.description"));
 
 /**
  * Executes the 'export' command
@@ -53,10 +53,8 @@ export async function execute(
 			await interaction.editReply({
 				embeds: [
 					new EmbedBuilder()
-						.setTitle(localizer(locale, "commands.preset.export.failed_title"))
-						.setDescription(
-							localizer(locale, exportResult.error),
-						)
+						.setTitle(localizer(locale, "commands.persona.export.failed_title"))
+						.setDescription(localizer(locale, exportResult.error))
 						.setColor(ColorCode.ERROR),
 				],
 			});
@@ -80,12 +78,12 @@ export async function execute(
 				embeds: [
 					new EmbedBuilder()
 						.setTitle(
-							localizer(locale, "commands.preset.export.avatar_failed_title"),
+							localizer(locale, "commands.persona.export.avatar_failed_title"),
 						)
 						.setDescription(
 							localizer(
 								locale,
-								"commands.preset.export.avatar_failed_description",
+								"commands.persona.export.avatar_failed_description",
 							),
 						)
 						.setColor(ColorCode.ERROR),
@@ -107,12 +105,12 @@ export async function execute(
 				embeds: [
 					new EmbedBuilder()
 						.setTitle(
-							localizer(locale, "commands.preset.export.embed_failed_title"),
+							localizer(locale, "commands.persona.export.embed_failed_title"),
 						)
 						.setDescription(
 							localizer(
 								locale,
-								"commands.preset.export.embed_failed_description",
+								"commands.persona.export.embed_failed_description",
 							),
 						)
 						.setColor(ColorCode.ERROR),
@@ -138,9 +136,9 @@ export async function execute(
 		await interaction.editReply({
 			embeds: [
 				new EmbedBuilder()
-					.setTitle(localizer(locale, "commands.preset.export.success_title"))
+					.setTitle(localizer(locale, "commands.persona.export.success_title"))
 					.setDescription(
-						localizer(locale, "commands.preset.export.success_description", {
+						localizer(locale, "commands.persona.export.success_description", {
 							nickname: nickname,
 						}),
 					)

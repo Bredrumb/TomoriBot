@@ -105,20 +105,25 @@ export async function execute(
 		}));
 
 		// 5. Show the modal with model selection
-		const modalResult = await promptWithRawModal(interaction, locale, {
-			modalCustomId: MODAL_CUSTOM_ID,
-			modalTitleKey: "commands.config.model.modal_title",
-			components: [
-				{
-					customId: MODEL_SELECT_ID,
-					labelKey: "commands.config.model.select_label",
-					descriptionKey: "commands.config.model.select_description",
-					placeholder: "commands.config.model.select_placeholder",
-					required: true,
-					options: modelSelectOptions,
-				},
-			],
-		});
+		const modalResult = await promptWithRawModal(
+			interaction,
+			locale,
+			{
+				modalCustomId: MODAL_CUSTOM_ID,
+				modalTitleKey: "commands.config.model.modal_title",
+				components: [
+					{
+						customId: MODEL_SELECT_ID,
+						labelKey: "commands.config.model.select_label",
+						descriptionKey: "commands.config.model.select_description",
+						placeholder: "commands.config.model.select_placeholder",
+						required: true,
+						options: modelSelectOptions,
+					},
+				],
+			},
+			MessageFlags.Ephemeral, // Auto-defer with ephemeral flag
+		);
 
 		// 6. Handle modal outcome
 		if (modalResult.outcome !== "submit") {

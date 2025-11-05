@@ -133,43 +133,48 @@ export async function execute(
 		}));
 
 		// Create the modal using the new promptWithRawModal utility with Component Type 18 support
-		const modalResult = await promptWithRawModal(interaction, locale, {
-			modalCustomId: "tomori_setup_modal",
-			modalTitleKey: "commands.config.setup.modal_title",
-			components: [
-				{
-					customId: "api_provider",
-					labelKey: "commands.config.setup.api_provider_label",
-					descriptionKey: "commands.config.setup.api_provider_description",
-					placeholder: "commands.config.setup.api_provider_placeholder",
-					required: true,
-					options: providerSelectOptions,
-				},
-				{
-					customId: "api_key",
-					labelKey: "commands.config.setup.api_key_label",
-					descriptionKey: "commands.config.setup.api_key_description",
-					style: TextInputStyle.Short,
-					required: true,
-				},
-				{
-					customId: "preset_name",
-					labelKey: "commands.config.setup.preset_label",
-					descriptionKey: "commands.config.setup.preset_description",
-					placeholder: "commands.config.setup.preset_placeholder",
-					required: true,
-					options: presetSelectOptions,
-				},
-				{
-					customId: "timezone_offset",
-					labelKey: "commands.config.setup.timezone_label",
-					descriptionKey: "commands.config.setup.timezone_description",
-					style: TextInputStyle.Short,
-					placeholder: "commands.config.setup.timezone_placeholder",
-					required: false, // Optional - defaults to 0 (UTC) if not provided
-				},
-			],
-		});
+		const modalResult = await promptWithRawModal(
+			interaction,
+			locale,
+			{
+				modalCustomId: "tomori_setup_modal",
+				modalTitleKey: "commands.config.setup.modal_title",
+				components: [
+					{
+						customId: "api_provider",
+						labelKey: "commands.config.setup.api_provider_label",
+						descriptionKey: "commands.config.setup.api_provider_description",
+						placeholder: "commands.config.setup.api_provider_placeholder",
+						required: true,
+						options: providerSelectOptions,
+					},
+					{
+						customId: "api_key",
+						labelKey: "commands.config.setup.api_key_label",
+						descriptionKey: "commands.config.setup.api_key_description",
+						style: TextInputStyle.Short,
+						required: true,
+					},
+					{
+						customId: "preset_name",
+						labelKey: "commands.config.setup.preset_label",
+						descriptionKey: "commands.config.setup.preset_description",
+						placeholder: "commands.config.setup.preset_placeholder",
+						required: true,
+						options: presetSelectOptions,
+					},
+					{
+						customId: "timezone_offset",
+						labelKey: "commands.config.setup.timezone_label",
+						descriptionKey: "commands.config.setup.timezone_description",
+						style: TextInputStyle.Short,
+						placeholder: "commands.config.setup.timezone_placeholder",
+						required: false, // Optional - defaults to 0 (UTC) if not provided
+					},
+				],
+			},
+			MessageFlags.Ephemeral, // Auto-defer with ephemeral flag
+		);
 
 		// Handle modal outcome
 		if (modalResult.outcome !== "submit") {

@@ -21,6 +21,7 @@ export class PinMessageTool extends BaseTool {
 		"Pin a specific Discord message in the channel. Use only when specifically asked to pin a message, for very important information that other server members need to see, or as a 'pin of shame' when a server member says something embarrassing or absurd for comedy when the context/mood is appropriate. Only works on messages from recent conversation (last 100 messages).";
 	category = "discord" as const;
 	requiresPermissions = ["MANAGE_MESSAGES"];
+	requiresFeatureFlag = "pin_message";
 
 	parameters: ToolParameterSchema = {
 		type: "object",

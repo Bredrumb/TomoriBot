@@ -13,7 +13,10 @@ import { AttachmentBuilder, MessageFlags, EmbedBuilder } from "discord.js";
 import { TextInputStyle } from "discord.js";
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
+import {
+	replyInfoEmbed,
+	promptWithRawModal,
+} from "../../utils/discord/interactionHelper";
 import type { UserRow } from "../../types/db/schema";
 import { loadTomoriState } from "../../utils/db/dbRead";
 import { decryptApiKey } from "../../utils/security/crypto";
@@ -25,7 +28,10 @@ import {
 import { getServerAvatar } from "../../utils/image/avatarHelper";
 import { centerCropToSquare } from "../../utils/image/imageProcessor";
 import { embedMetadataInPNG } from "../../utils/image/pngMetadata";
-import { presetExportDataSchema, PRESET_EXPORT_VERSION } from "../../types/preset/presetExport";
+import {
+	presetExportDataSchema,
+	PRESET_EXPORT_VERSION,
+} from "../../types/preset/presetExport";
 import type { PresetExport } from "../../types/preset/presetExport";
 import type { ModalComponent } from "../../types/discord/modal";
 import axios from "axios";
@@ -46,12 +52,12 @@ export const configureSubcommand = (
 ) =>
 	subcommand
 		.setName("generate")
-		.setDescription(localizer("en-US", "commands.preset.generate.description"))
+		.setDescription(localizer("en-US", "commands.persona.generate.description"))
 		.addAttachmentOption((option) =>
 			option
 				.setName("image")
 				.setDescription(
-					localizer("en-US", "commands.preset.generate.image_description"),
+					localizer("en-US", "commands.persona.generate.image_description"),
 				)
 				.setRequired(false),
 		);
@@ -105,8 +111,10 @@ function formatDialoguePreview(
 		const botResponse = dialoguesOut[i].substring(0, maxLength);
 
 		// 3. Add ellipsis if truncated
-		const userText = dialoguesIn[i].length > maxLength ? `${userInput}...` : userInput;
-		const botText = dialoguesOut[i].length > maxLength ? `${botResponse}...` : botResponse;
+		const userText =
+			dialoguesIn[i].length > maxLength ? `${userInput}...` : userInput;
+		const botText =
+			dialoguesOut[i].length > maxLength ? `${botResponse}...` : botResponse;
 
 		// 4. Format as User/Bot pair
 		previews.push(`**User:** ${userText}\n**Bot:** ${botText}`);
@@ -149,8 +157,8 @@ export async function execute(
 		const providerName = tomoriState.llm.llm_provider.toLowerCase();
 		if (providerName !== "google" && providerName !== "gemini") {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.preset.generate.wrong_provider_title",
-				descriptionKey: "commands.preset.generate.wrong_provider_description",
+				titleKey: "commands.persona.generate.wrong_provider_title",
+				descriptionKey: "commands.persona.generate.wrong_provider_description",
 				descriptionVars: {
 					current_provider: tomoriState.llm.llm_provider,
 				},
@@ -163,8 +171,8 @@ export async function execute(
 		// 4. Get API key and decrypt
 		if (!tomoriState.config.api_key) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.preset.generate.no_api_key_title",
-				descriptionKey: "commands.preset.generate.no_api_key_description",
+				titleKey: "commands.persona.generate.no_api_key_title",
+				descriptionKey: "commands.persona.generate.no_api_key_description",
 				color: ColorCode.ERROR,
 				flags: MessageFlags.Ephemeral,
 			});
@@ -174,9 +182,9 @@ export async function execute(
 		const decryptedApiKey = await decryptApiKey(tomoriState.config.api_key);
 		if (!decryptedApiKey) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.preset.generate.api_key_decrypt_failed_title",
+				titleKey: "commands.persona.generate.api_key_decrypt_failed_title",
 				descriptionKey:
-					"commands.preset.generate.api_key_decrypt_failed_description",
+					"commands.persona.generate.api_key_decrypt_failed_description",
 				color: ColorCode.ERROR,
 				flags: MessageFlags.Ephemeral,
 			});
@@ -190,12 +198,10 @@ export async function execute(
 
 		if (imageAttachment) {
 			// Validate image type
-			if (
-				!imageAttachment.contentType?.startsWith("image/")
-			) {
+			if (!imageAttachment.contentType?.startsWith("image/")) {
 				await replyInfoEmbed(interaction, locale, {
-					titleKey: "commands.preset.generate.invalid_image_title",
-					descriptionKey: "commands.preset.generate.invalid_image_description",
+					titleKey: "commands.persona.generate.invalid_image_title",
+					descriptionKey: "commands.persona.generate.invalid_image_description",
 					color: ColorCode.ERROR,
 					flags: MessageFlags.Ephemeral,
 				});
@@ -210,9 +216,9 @@ export async function execute(
 			} catch (error) {
 				log.error("Failed to convert image attachment:", error);
 				await replyInfoEmbed(interaction, locale, {
-					titleKey: "commands.preset.generate.image_download_failed_title",
+					titleKey: "commands.persona.generate.image_download_failed_title",
 					descriptionKey:
-						"commands.preset.generate.image_download_failed_description",
+						"commands.persona.generate.image_download_failed_description",
 					color: ColorCode.ERROR,
 					flags: MessageFlags.Ephemeral,
 				});
@@ -224,60 +230,76 @@ export async function execute(
 		const modalComponents: ModalComponent[] = [
 			{
 				customId: CHARACTER_NAME_ID,
-				labelKey: "commands.preset.generate.modal.character_name_label",
-				placeholder: "commands.preset.generate.modal.character_name_placeholder",
+				labelKey: "commands.persona.generate.modal.character_name_label",
+				placeholder:
+					"commands.persona.generate.modal.character_name_placeholder",
 				required: true,
 				style: TextInputStyle.Short,
 				maxLength: 100,
 			},
 			{
 				customId: CHARACTER_DESC_ID,
-				labelKey: "commands.preset.generate.modal.character_desc_label",
-				placeholder: "commands.preset.generate.modal.character_desc_placeholder",
+				labelKey: "commands.persona.generate.modal.character_desc_label",
+				placeholder:
+					"commands.persona.generate.modal.character_desc_placeholder",
 				required: true,
 				style: TextInputStyle.Paragraph,
 				maxLength: 1000,
 			},
 			{
 				customId: SPEECH_EXAMPLES_ID,
-				labelKey: "commands.preset.generate.modal.speech_examples_label",
-				placeholder: "commands.preset.generate.modal.speech_examples_placeholder",
+				labelKey: "commands.persona.generate.modal.speech_examples_label",
+				placeholder:
+					"commands.persona.generate.modal.speech_examples_placeholder",
 				required: true,
 				style: TextInputStyle.Paragraph,
 				maxLength: 1000,
 			},
 			{
 				customId: WEB_SEARCH_ID,
-				labelKey: "commands.preset.generate.modal.web_search_label",
-				descriptionKey: "commands.preset.generate.modal.web_search_description",
-				placeholder: "commands.preset.generate.modal.web_search_placeholder",
+				labelKey: "commands.persona.generate.modal.web_search_label",
+				descriptionKey:
+					"commands.persona.generate.modal.web_search_description",
+				placeholder: "commands.persona.generate.modal.web_search_placeholder",
 				required: true,
 				options: [
 					{
-						label: localizer(locale, "commands.preset.generate.modal.web_search_yes"),
+						label: localizer(
+							locale,
+							"commands.persona.generate.modal.web_search_yes",
+						),
 						value: "yes",
 					},
 					{
-						label: localizer(locale, "commands.preset.generate.modal.web_search_no"),
+						label: localizer(
+							locale,
+							"commands.persona.generate.modal.web_search_no",
+						),
 						value: "no",
 					},
 				],
 			},
 			{
 				customId: ADDITIONAL_INST_ID,
-				labelKey: "commands.preset.generate.modal.additional_inst_label",
-				placeholder: "commands.preset.generate.modal.additional_inst_placeholder",
+				labelKey: "commands.persona.generate.modal.additional_inst_label",
+				placeholder:
+					"commands.persona.generate.modal.additional_inst_placeholder",
 				required: false,
 				style: TextInputStyle.Paragraph,
 				maxLength: 500,
 			},
 		];
 
-		const modalResult = await promptWithRawModal(interaction, locale, {
-			modalCustomId: MODAL_CUSTOM_ID,
-			modalTitleKey: "commands.preset.generate.modal.title",
-			components: modalComponents,
-		});
+		const modalResult = await promptWithRawModal(
+			interaction,
+			locale,
+			{
+				modalCustomId: MODAL_CUSTOM_ID,
+				modalTitleKey: "commands.persona.generate.modal.title",
+				components: modalComponents,
+			},
+			true, // Auto-defer with public reply
+		);
 
 		// 7. Handle modal outcome
 		if (modalResult.outcome !== "submit") {
@@ -304,16 +326,18 @@ export async function execute(
 			return;
 		}
 
-		// 8. Defer reply with processing message (not ephemeral - public visibility)
-		await modalSubmitInteraction.deferReply();
-
-		// 9. Show processing embed
+		// 8. Show processing embed
 		await modalSubmitInteraction.editReply({
 			embeds: [
 				new EmbedBuilder()
-					.setTitle(localizer(locale, "commands.preset.generate.processing_title"))
+					.setTitle(
+						localizer(locale, "commands.persona.generate.processing_title"),
+					)
 					.setDescription(
-						localizer(locale, "commands.preset.generate.processing_description"),
+						localizer(
+							locale,
+							"commands.persona.generate.processing_description",
+						),
 					)
 					.setColor(ColorCode.INFO),
 			],
@@ -368,12 +392,15 @@ export async function execute(
 				embeds: [
 					new EmbedBuilder()
 						.setTitle(
-							localizer(locale, "commands.preset.generate.generation_failed_title"),
+							localizer(
+								locale,
+								"commands.persona.generate.generation_failed_title",
+							),
 						)
 						.setDescription(
 							localizer(
 								locale,
-								"commands.preset.generate.generation_failed_description",
+								"commands.persona.generate.generation_failed_description",
 								{
 									error: genResult.error || "Unknown error",
 								},
@@ -390,8 +417,14 @@ export async function execute(
 		if (!validationResult.success) {
 			// Log detailed validation errors
 			log.error("Generated preset failed validation:");
-			log.error("Validation errors:", JSON.stringify(validationResult.error.format(), null, 2));
-			log.error("Generated preset data:", JSON.stringify(genResult.preset, null, 2));
+			log.error(
+				"Validation errors:",
+				JSON.stringify(validationResult.error.format(), null, 2),
+			);
+			log.error(
+				"Generated preset data:",
+				JSON.stringify(genResult.preset, null, 2),
+			);
 
 			// Extract specific error messages for user
 			const errorDetails = validationResult.error.issues
@@ -404,13 +437,13 @@ export async function execute(
 						.setTitle(
 							localizer(
 								locale,
-								"commands.preset.generate.validation_failed_title",
+								"commands.persona.generate.validation_failed_title",
 							),
 						)
 						.setDescription(
 							`${localizer(
 								locale,
-								"commands.preset.generate.validation_failed_description",
+								"commands.persona.generate.validation_failed_description",
 							)}\n\n**Details:**\n\`\`\`\n${errorDetails.substring(0, 500)}\n\`\`\``,
 						)
 						.setColor(ColorCode.ERROR),
@@ -443,13 +476,13 @@ export async function execute(
 							.setTitle(
 								localizer(
 									locale,
-									"commands.preset.generate.image_processing_failed_title",
+									"commands.persona.generate.image_processing_failed_title",
 								),
 							)
 							.setDescription(
 								localizer(
 									locale,
-									"commands.preset.generate.image_processing_failed_description",
+									"commands.persona.generate.image_processing_failed_description",
 								),
 							)
 							.setColor(ColorCode.ERROR),
@@ -471,13 +504,13 @@ export async function execute(
 							.setTitle(
 								localizer(
 									locale,
-									"commands.preset.generate.avatar_fetch_failed_title",
+									"commands.persona.generate.avatar_fetch_failed_title",
 								),
 							)
 							.setDescription(
 								localizer(
 									locale,
-									"commands.preset.generate.avatar_fetch_failed_description",
+									"commands.persona.generate.avatar_fetch_failed_description",
 								),
 							)
 							.setColor(ColorCode.ERROR),
@@ -508,13 +541,13 @@ export async function execute(
 						.setTitle(
 							localizer(
 								locale,
-								"commands.preset.generate.metadata_embed_failed_title",
+								"commands.persona.generate.metadata_embed_failed_title",
 							),
 						)
 						.setDescription(
 							localizer(
 								locale,
-								"commands.preset.generate.metadata_embed_failed_description",
+								"commands.persona.generate.metadata_embed_failed_description",
 							),
 						)
 						.setColor(ColorCode.ERROR),
@@ -547,12 +580,12 @@ export async function execute(
 
 		const successEmbed = new EmbedBuilder()
 			.setTitle(
-				localizer(locale, "commands.preset.generate.success_title", {
+				localizer(locale, "commands.persona.generate.success_title", {
 					character_name: characterName,
 				}),
 			)
 			.setDescription(
-				localizer(locale, "commands.preset.generate.success_description", {
+				localizer(locale, "commands.persona.generate.success_description", {
 					character_name: characterName,
 					attribute_preview: attributePreview,
 					dialogue_preview: dialoguePreview,
@@ -562,10 +595,13 @@ export async function execute(
 			.setImage(`attachment://${filename}`)
 			.addFields([
 				{
-					name: localizer(locale, "commands.preset.generate.success_next_steps_title"),
+					name: localizer(
+						locale,
+						"commands.persona.generate.success_next_steps_title",
+					),
 					value: localizer(
 						locale,
-						"commands.preset.generate.success_next_steps_description",
+						"commands.persona.generate.success_next_steps_description",
 					),
 					inline: false,
 				},
@@ -574,7 +610,10 @@ export async function execute(
 		// Add DM-specific footer if in DM
 		if (isDM) {
 			successEmbed.setFooter({
-				text: localizer(locale, "commands.preset.generate.avatar_update_skipped_dm"),
+				text: localizer(
+					locale,
+					"commands.persona.generate.avatar_update_skipped_dm",
+				),
 			});
 		}
 

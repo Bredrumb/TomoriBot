@@ -12,13 +12,22 @@ import { AttachmentBuilder, MessageFlags, EmbedBuilder } from "discord.js";
 import { TextInputStyle } from "discord.js";
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
+import {
+	replyInfoEmbed,
+	promptWithRawModal,
+} from "../../utils/discord/interactionHelper";
 import type { UserRow } from "../../types/db/schema";
 import { getServerAvatar } from "../../utils/image/avatarHelper";
 import { centerCropToSquare } from "../../utils/image/imageProcessor";
 import { embedMetadataInPNG } from "../../utils/image/pngMetadata";
-import { presetExportDataSchema, PRESET_EXPORT_VERSION } from "../../types/preset/presetExport";
-import type { PresetExport, PresetExportData } from "../../types/preset/presetExport";
+import {
+	presetExportDataSchema,
+	PRESET_EXPORT_VERSION,
+} from "../../types/preset/presetExport";
+import type {
+	PresetExport,
+	PresetExportData,
+} from "../../types/preset/presetExport";
 import type { ModalComponent } from "../../types/discord/modal";
 import axios from "axios";
 
@@ -37,12 +46,12 @@ export const configureSubcommand = (
 ) =>
 	subcommand
 		.setName("create")
-		.setDescription(localizer("en-US", "commands.preset.create.description"))
+		.setDescription(localizer("en-US", "commands.persona.create.description"))
 		.addAttachmentOption((option) =>
 			option
 				.setName("image")
 				.setDescription(
-					localizer("en-US", "commands.preset.create.image_description"),
+					localizer("en-US", "commands.persona.create.image_description"),
 				)
 				.setRequired(false),
 		);
@@ -80,12 +89,10 @@ export async function execute(
 
 		if (imageAttachment) {
 			// Validate image type
-			if (
-				!imageAttachment.contentType?.startsWith("image/")
-			) {
+			if (!imageAttachment.contentType?.startsWith("image/")) {
 				await replyInfoEmbed(interaction, locale, {
-					titleKey: "commands.preset.create.invalid_image_title",
-					descriptionKey: "commands.preset.create.invalid_image_description",
+					titleKey: "commands.persona.create.invalid_image_title",
+					descriptionKey: "commands.persona.create.invalid_image_description",
 					color: ColorCode.ERROR,
 					flags: MessageFlags.Ephemeral,
 				});
@@ -102,9 +109,9 @@ export async function execute(
 			} catch (error) {
 				log.error("Failed to download image attachment:", error);
 				await replyInfoEmbed(interaction, locale, {
-					titleKey: "commands.preset.create.image_download_failed_title",
+					titleKey: "commands.persona.create.image_download_failed_title",
 					descriptionKey:
-						"commands.preset.create.image_download_failed_description",
+						"commands.persona.create.image_download_failed_description",
 					color: ColorCode.ERROR,
 					flags: MessageFlags.Ephemeral,
 				});
@@ -116,44 +123,50 @@ export async function execute(
 		const modalComponents: ModalComponent[] = [
 			{
 				customId: CHARACTER_NAME_ID,
-				labelKey: "commands.preset.create.modal.character_name_label",
-				placeholder: "commands.preset.create.modal.character_name_placeholder",
+				labelKey: "commands.persona.create.modal.character_name_label",
+				placeholder: "commands.persona.create.modal.character_name_placeholder",
 				required: true,
 				style: TextInputStyle.Short,
 				maxLength: 100,
 			},
 			{
 				customId: CHARACTER_DESC_ID,
-				labelKey: "commands.preset.create.modal.character_desc_label",
-				placeholder: "commands.preset.create.modal.character_desc_placeholder",
+				labelKey: "commands.persona.create.modal.character_desc_label",
+				placeholder: "commands.persona.create.modal.character_desc_placeholder",
 				required: true,
 				style: TextInputStyle.Paragraph,
 				maxLength: 1000,
 			},
 			{
 				customId: EXAMPLE_USER_ID,
-				labelKey: "commands.preset.create.modal.example_user_label",
-				descriptionKey: "commands.preset.create.modal.example_user_description",
-				placeholder: "commands.preset.create.modal.example_user_placeholder",
+				labelKey: "commands.persona.create.modal.example_user_label",
+				descriptionKey:
+					"commands.persona.create.modal.example_user_description",
+				placeholder: "commands.persona.create.modal.example_user_placeholder",
 				required: true,
 				style: TextInputStyle.Paragraph,
 				maxLength: 500,
 			},
 			{
 				customId: EXAMPLE_BOT_ID,
-				labelKey: "commands.preset.create.modal.example_bot_label",
-				placeholder: "commands.preset.create.modal.example_bot_placeholder",
+				labelKey: "commands.persona.create.modal.example_bot_label",
+				placeholder: "commands.persona.create.modal.example_bot_placeholder",
 				required: true,
 				style: TextInputStyle.Paragraph,
 				maxLength: 500,
 			},
 		];
 
-		const modalResult = await promptWithRawModal(interaction, locale, {
-			modalCustomId: MODAL_CUSTOM_ID,
-			modalTitleKey: "commands.preset.create.modal.title",
-			components: modalComponents,
-		});
+		const modalResult = await promptWithRawModal(
+			interaction,
+			locale,
+			{
+				modalCustomId: MODAL_CUSTOM_ID,
+				modalTitleKey: "commands.persona.create.modal.title",
+				components: modalComponents,
+			},
+			true, // Auto-defer with public reply
+		);
 
 		// 4. Handle modal outcome
 		if (modalResult.outcome !== "submit") {
@@ -179,9 +192,6 @@ export async function execute(
 			return;
 		}
 
-		// 5. Defer reply with processing message (not ephemeral - public visibility)
-		await modalSubmitInteraction.deferReply();
-
 		// 6. Create minimal preset data structure
 		const presetData: PresetExportData = {
 			tomori_nickname: characterName,
@@ -196,7 +206,10 @@ export async function execute(
 		if (!validationResult.success) {
 			// Log detailed validation errors
 			log.error("Created preset failed validation:");
-			log.error("Validation errors:", JSON.stringify(validationResult.error.format(), null, 2));
+			log.error(
+				"Validation errors:",
+				JSON.stringify(validationResult.error.format(), null, 2),
+			);
 			log.error("Preset data:", JSON.stringify(presetData, null, 2));
 
 			// Extract specific error messages for user
@@ -210,13 +223,13 @@ export async function execute(
 						.setTitle(
 							localizer(
 								locale,
-								"commands.preset.create.validation_failed_title",
+								"commands.persona.create.validation_failed_title",
 							),
 						)
 						.setDescription(
 							`${localizer(
 								locale,
-								"commands.preset.create.validation_failed_description",
+								"commands.persona.create.validation_failed_description",
 							)}\n\n**Details:**\n\`\`\`\n${errorDetails.substring(0, 500)}\n\`\`\``,
 						)
 						.setColor(ColorCode.ERROR),
@@ -243,13 +256,13 @@ export async function execute(
 							.setTitle(
 								localizer(
 									locale,
-									"commands.preset.create.image_processing_failed_title",
+									"commands.persona.create.image_processing_failed_title",
 								),
 							)
 							.setDescription(
 								localizer(
 									locale,
-									"commands.preset.create.image_processing_failed_description",
+									"commands.persona.create.image_processing_failed_description",
 								),
 							)
 							.setColor(ColorCode.ERROR),
@@ -271,13 +284,13 @@ export async function execute(
 							.setTitle(
 								localizer(
 									locale,
-									"commands.preset.create.avatar_fetch_failed_title",
+									"commands.persona.create.avatar_fetch_failed_title",
 								),
 							)
 							.setDescription(
 								localizer(
 									locale,
-									"commands.preset.create.avatar_fetch_failed_description",
+									"commands.persona.create.avatar_fetch_failed_description",
 								),
 							)
 							.setColor(ColorCode.ERROR),
@@ -308,13 +321,13 @@ export async function execute(
 						.setTitle(
 							localizer(
 								locale,
-								"commands.preset.create.metadata_embed_failed_title",
+								"commands.persona.create.metadata_embed_failed_title",
 							),
 						)
 						.setDescription(
 							localizer(
 								locale,
-								"commands.preset.create.metadata_embed_failed_description",
+								"commands.persona.create.metadata_embed_failed_description",
 							),
 						)
 						.setColor(ColorCode.ERROR),
@@ -333,26 +346,29 @@ export async function execute(
 		const isDM = !interaction.guild;
 
 		// Truncate description if too long for embed
-		const descriptionPreview = characterDesc.length > 200
-			? `${characterDesc.substring(0, 200)}...`
-			: characterDesc;
+		const descriptionPreview =
+			characterDesc.length > 200
+				? `${characterDesc.substring(0, 200)}...`
+				: characterDesc;
 
 		// Truncate dialogue examples if too long
-		const userPreview = exampleUser.length > 100
-			? `${exampleUser.substring(0, 100)}...`
-			: exampleUser;
-		const botPreview = exampleBot.length > 100
-			? `${exampleBot.substring(0, 100)}...`
-			: exampleBot;
+		const userPreview =
+			exampleUser.length > 100
+				? `${exampleUser.substring(0, 100)}...`
+				: exampleUser;
+		const botPreview =
+			exampleBot.length > 100
+				? `${exampleBot.substring(0, 100)}...`
+				: exampleBot;
 
 		const successEmbed = new EmbedBuilder()
 			.setTitle(
-				localizer(locale, "commands.preset.create.success_title", {
+				localizer(locale, "commands.persona.create.success_title", {
 					character_name: characterName,
 				}),
 			)
 			.setDescription(
-				localizer(locale, "commands.preset.create.success_description", {
+				localizer(locale, "commands.persona.create.success_description", {
 					character_name: characterName,
 					character_description: descriptionPreview,
 				}),
@@ -361,15 +377,21 @@ export async function execute(
 			.setImage(`attachment://${filename}`)
 			.addFields([
 				{
-					name: localizer(locale, "commands.preset.create.success_dialogue_title"),
+					name: localizer(
+						locale,
+						"commands.persona.create.success_dialogue_title",
+					),
 					value: `**User:** ${userPreview}\n**Bot:** ${botPreview}`,
 					inline: false,
 				},
 				{
-					name: localizer(locale, "commands.preset.create.success_next_steps_title"),
+					name: localizer(
+						locale,
+						"commands.persona.create.success_next_steps_title",
+					),
 					value: localizer(
 						locale,
-						"commands.preset.create.success_next_steps_description",
+						"commands.persona.create.success_next_steps_description",
 					),
 					inline: false,
 				},
@@ -378,7 +400,10 @@ export async function execute(
 		// Add DM-specific footer if in DM
 		if (isDM) {
 			successEmbed.setFooter({
-				text: localizer(locale, "commands.preset.create.avatar_update_skipped_dm"),
+				text: localizer(
+					locale,
+					"commands.persona.create.avatar_update_skipped_dm",
+				),
 			});
 		}
 

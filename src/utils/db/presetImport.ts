@@ -41,7 +41,7 @@ export async function importPresetData(
 			if (!validation.isValid) {
 				return {
 					success: false,
-					error: `commands.preset.import.error_invalid_attribute|${validation.error}`,
+					error: `commands.persona.import.error_invalid_attribute|${validation.error}`,
 				};
 			}
 		}
@@ -52,7 +52,7 @@ export async function importPresetData(
 			if (!validation.isValid) {
 				return {
 					success: false,
-					error: `commands.preset.import.error_invalid_dialogue_in|${validation.error}`,
+					error: `commands.persona.import.error_invalid_dialogue_in|${validation.error}`,
 				};
 			}
 		}
@@ -63,7 +63,7 @@ export async function importPresetData(
 			if (!validation.isValid) {
 				return {
 					success: false,
-					error: `commands.preset.import.error_invalid_dialogue_out|${validation.error}`,
+					error: `commands.persona.import.error_invalid_dialogue_out|${validation.error}`,
 				};
 			}
 		}
@@ -74,7 +74,7 @@ export async function importPresetData(
 			if (!validation.isValid) {
 				return {
 					success: false,
-					error: `commands.preset.import.error_invalid_trigger_word|${validation.error}`,
+					error: `commands.persona.import.error_invalid_trigger_word|${validation.error}`,
 				};
 			}
 		}
@@ -86,7 +86,7 @@ export async function importPresetData(
 		) {
 			return {
 				success: false,
-				error: "commands.preset.import.error_dialogue_mismatch",
+				error: "commands.persona.import.error_dialogue_mismatch",
 			};
 		}
 
@@ -97,7 +97,7 @@ export async function importPresetData(
 			log.error("Config field validation failed during preset import:", error);
 			return {
 				success: false,
-				error: "commands.preset.import.error_invalid_config",
+				error: "commands.persona.import.error_invalid_config",
 			};
 		}
 
@@ -113,7 +113,7 @@ export async function importPresetData(
 		if (!serverRows.length) {
 			return {
 				success: false,
-				error: "commands.preset.import.error_no_server_data",
+				error: "commands.persona.import.error_no_server_data",
 			};
 		}
 
@@ -170,13 +170,10 @@ export async function importPresetData(
 			},
 		};
 	} catch (error) {
-		log.error(
-			`Error importing preset data for server ${serverDiscId}:`,
-			error,
-		);
+		log.error(`Error importing preset data for server ${serverDiscId}:`, error);
 		return {
 			success: false,
-			error: "commands.preset.import.error_import_failed",
+			error: "commands.persona.import.error_import_failed",
 		};
 	}
 }
@@ -191,7 +188,7 @@ export function validatePresetFile(jsonData: unknown): ValidationResult {
 	if (typeof jsonData !== "object" || jsonData === null) {
 		return {
 			valid: false,
-			error: "commands.preset.import.error_not_json",
+			error: "commands.persona.import.error_not_json",
 		};
 	}
 
@@ -200,7 +197,7 @@ export function validatePresetFile(jsonData: unknown): ValidationResult {
 	if (version !== PRESET_EXPORT_VERSION) {
 		return {
 			valid: false,
-			error: `commands.preset.import.error_incompatible_version|${PRESET_EXPORT_VERSION}|${version || "unknown"}`,
+			error: `commands.persona.import.error_incompatible_version|${PRESET_EXPORT_VERSION}|${version || "unknown"}`,
 		};
 	}
 
@@ -209,7 +206,7 @@ export function validatePresetFile(jsonData: unknown): ValidationResult {
 	if (type !== "preset") {
 		return {
 			valid: false,
-			error: `commands.preset.import.error_invalid_type|${type}`,
+			error: `commands.persona.import.error_invalid_type|${type}`,
 		};
 	}
 
@@ -219,7 +216,7 @@ export function validatePresetFile(jsonData: unknown): ValidationResult {
 		log.error("Preset import validation failed:", validated.error);
 		return {
 			valid: false,
-			error: "commands.preset.import.error_invalid_format",
+			error: "commands.persona.import.error_invalid_format",
 		};
 	}
 

@@ -149,6 +149,7 @@ export class GoogleProvider extends BaseLLMProvider implements LLMProvider {
 					sticker_usage_enabled: tomoriState.config.sticker_usage_enabled,
 					web_search_enabled: tomoriState.config.web_search_enabled,
 					self_teaching_enabled: tomoriState.config.self_teaching_enabled,
+					pin_message_enabled: tomoriState.config.pin_message_enabled,
 				},
 			};
 

@@ -67,6 +67,14 @@ export const configureSubcommand = (
 						),
 						value: "websearch",
 					},
+					// New: Added Pin Message permission choice
+					{
+						name: localizer(
+							"en-US",
+							"commands.config.permissions.pinmessage_option",
+						),
+						value: "pinmessage",
+					},
 				),
 		)
 		.addStringOption((option) =>
@@ -163,6 +171,12 @@ export async function execute(
 				dbColumnName = "web_search_enabled";
 				permissionTypeKey = "commands.config.permissions.websearch_option";
 				currentSetting = tomoriState.config.web_search_enabled;
+				break;
+			// New: Handle Pin Message permission
+			case "pinmessage":
+				dbColumnName = "pin_message_enabled";
+				permissionTypeKey = "commands.config.permissions.pinmessage_option";
+				currentSetting = tomoriState.config.pin_message_enabled;
 				break;
 			default:
 				// This should not happen due to Discord's option validation

@@ -43,22 +43,22 @@ function localizeError(locale: string, errorString: string): string {
 	}
 
 	// Handle keys with variables
-	if (key === "commands.preset.import.error_invalid_attribute") {
+	if (key === "commands.persona.import.error_invalid_attribute") {
 		return localizer(locale, key, { details: parts[1] });
 	}
-	if (key === "commands.preset.import.error_invalid_dialogue_in") {
+	if (key === "commands.persona.import.error_invalid_dialogue_in") {
 		return localizer(locale, key, { details: parts[1] });
 	}
-	if (key === "commands.preset.import.error_invalid_dialogue_out") {
+	if (key === "commands.persona.import.error_invalid_dialogue_out") {
 		return localizer(locale, key, { details: parts[1] });
 	}
-	if (key === "commands.preset.import.error_invalid_trigger_word") {
+	if (key === "commands.persona.import.error_invalid_trigger_word") {
 		return localizer(locale, key, { details: parts[1] });
 	}
-	if (key === "commands.preset.import.error_incompatible_version") {
+	if (key === "commands.persona.import.error_incompatible_version") {
 		return localizer(locale, key, { expected: parts[1], actual: parts[2] });
 	}
-	if (key === "commands.preset.import.error_invalid_type") {
+	if (key === "commands.persona.import.error_invalid_type") {
 		return localizer(locale, key, { type: parts[1] });
 	}
 
@@ -74,12 +74,12 @@ export const configureSubcommand = (
 ) =>
 	subcommand
 		.setName("import")
-		.setDescription(localizer("en-US", "commands.preset.import.description"))
+		.setDescription(localizer("en-US", "commands.persona.import.description"))
 		.addAttachmentOption((option) =>
 			option
 				.setName("file")
 				.setDescription(
-					localizer("en-US", "commands.preset.import.file_description"),
+					localizer("en-US", "commands.persona.import.file_description"),
 				)
 				.setRequired(true),
 		)
@@ -87,21 +87,24 @@ export const configureSubcommand = (
 			option
 				.setName("confirmation")
 				.setDescription(
-					localizer("en-US", "commands.preset.import.confirmation_description"),
+					localizer(
+						"en-US",
+						"commands.persona.import.confirmation_description",
+					),
 				)
 				.setRequired(true)
 				.addChoices(
 					{
 						name: localizer(
 							"en-US",
-							"commands.preset.import.confirmation_choice_yes",
+							"commands.persona.import.confirmation_choice_yes",
 						),
 						value: "yes",
 					},
 					{
 						name: localizer(
 							"en-US",
-							"commands.preset.import.confirmation_choice_no",
+							"commands.persona.import.confirmation_choice_no",
 						),
 						value: "no",
 					},
@@ -128,8 +131,8 @@ export async function execute(
 
 		if (confirmation !== "yes") {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.preset.import.cancelled_title",
-				descriptionKey: "commands.preset.import.cancelled_description",
+				titleKey: "commands.persona.import.cancelled_title",
+				descriptionKey: "commands.persona.import.cancelled_description",
 				color: ColorCode.INFO,
 				flags: MessageFlags.Ephemeral,
 			});
@@ -143,8 +146,8 @@ export async function execute(
 
 			if (!hasPermission) {
 				await replyInfoEmbed(interaction, locale, {
-					titleKey: "commands.preset.import.no_permission_title",
-					descriptionKey: "commands.preset.import.no_permission_description",
+					titleKey: "commands.persona.import.no_permission_title",
+					descriptionKey: "commands.persona.import.no_permission_description",
 					color: ColorCode.ERROR,
 					flags: MessageFlags.Ephemeral,
 				});
@@ -158,8 +161,8 @@ export async function execute(
 		// 5. Validate file type and size
 		if (!attachment.name.endsWith(".png")) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.preset.import.invalid_file_type_title",
-				descriptionKey: "commands.preset.import.invalid_file_type_description",
+				titleKey: "commands.persona.import.invalid_file_type_title",
+				descriptionKey: "commands.persona.import.invalid_file_type_description",
 				color: ColorCode.ERROR,
 				flags: MessageFlags.Ephemeral,
 			});
@@ -168,8 +171,8 @@ export async function execute(
 
 		if (attachment.size > MAX_FILE_SIZE) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.preset.import.file_too_large_title",
-				descriptionKey: "commands.preset.import.file_too_large_description",
+				titleKey: "commands.persona.import.file_too_large_title",
+				descriptionKey: "commands.persona.import.file_too_large_description",
 				color: ColorCode.ERROR,
 				flags: MessageFlags.Ephemeral,
 			});
@@ -196,12 +199,15 @@ export async function execute(
 				embeds: [
 					new EmbedBuilder()
 						.setTitle(
-							localizer(locale, "commands.preset.import.download_failed_title"),
+							localizer(
+								locale,
+								"commands.persona.import.download_failed_title",
+							),
 						)
 						.setDescription(
 							localizer(
 								locale,
-								"commands.preset.import.download_failed_description",
+								"commands.persona.import.download_failed_description",
 							),
 						)
 						.setColor(ColorCode.ERROR),
@@ -220,12 +226,12 @@ export async function execute(
 				embeds: [
 					new EmbedBuilder()
 						.setTitle(
-							localizer(locale, "commands.preset.import.invalid_png_title"),
+							localizer(locale, "commands.persona.import.invalid_png_title"),
 						)
 						.setDescription(
 							localizer(
 								locale,
-								"commands.preset.import.invalid_png_description",
+								"commands.persona.import.invalid_png_description",
 							),
 						)
 						.setColor(ColorCode.ERROR),
@@ -242,10 +248,13 @@ export async function execute(
 				embeds: [
 					new EmbedBuilder()
 						.setTitle(
-							localizer(locale, "commands.preset.import.no_metadata_title"),
+							localizer(locale, "commands.persona.import.no_metadata_title"),
 						)
 						.setDescription(
-							localizer(locale, "commands.preset.import.no_metadata_description"),
+							localizer(
+								locale,
+								"commands.persona.import.no_metadata_description",
+							),
 						)
 						.setColor(ColorCode.ERROR),
 				],
@@ -261,15 +270,15 @@ export async function execute(
 				embeds: [
 					new EmbedBuilder()
 						.setTitle(
-							localizer(locale, "commands.preset.import.invalid_file_title"),
+							localizer(locale, "commands.persona.import.invalid_file_title"),
 						)
 						.setDescription(
 							validation.error
 								? localizeError(locale, validation.error)
 								: localizer(
 										locale,
-										"commands.preset.import.invalid_file_description",
-								  ),
+										"commands.persona.import.invalid_file_description",
+									),
 						)
 						.setColor(ColorCode.ERROR),
 				],
@@ -288,11 +297,14 @@ export async function execute(
 			await interaction.editReply({
 				embeds: [
 					new EmbedBuilder()
-						.setTitle(localizer(locale, "commands.preset.import.failed_title"))
+						.setTitle(localizer(locale, "commands.persona.import.failed_title"))
 						.setDescription(
 							importResult.error
 								? localizeError(locale, importResult.error)
-								: localizer(locale, "commands.preset.import.failed_description"),
+								: localizer(
+										locale,
+										"commands.persona.import.failed_description",
+									),
 						)
 						.setColor(ColorCode.ERROR),
 				],
@@ -364,9 +376,9 @@ export async function execute(
 
 		// Build success embed with DM-aware messaging
 		const successEmbed = new EmbedBuilder()
-			.setTitle(localizer(locale, "commands.preset.import.success_title"))
+			.setTitle(localizer(locale, "commands.persona.import.success_title"))
 			.setDescription(
-				localizer(locale, "commands.preset.import.success_description", {
+				localizer(locale, "commands.persona.import.success_description", {
 					nickname: itemsImported.nickname,
 					attribute_count: itemsImported.attributeCount,
 					dialogue_count: itemsImported.dialogueCount,
@@ -378,7 +390,10 @@ export async function execute(
 		// Add DM-specific footer if in DM
 		if (isDM) {
 			successEmbed.setFooter({
-				text: localizer(locale, "commands.preset.import.avatar_update_skipped_dm"),
+				text: localizer(
+					locale,
+					"commands.persona.import.avatar_update_skipped_dm",
+				),
 			});
 		}
 

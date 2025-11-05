@@ -43,12 +43,17 @@ export async function execute(
 	}
 
 	try {
-		// 3. Send immediate ephemeral response to user
-		await replyInfoEmbed(interaction, locale, {
-			titleKey: "commands.bot.respond.success_title",
-			descriptionKey: "commands.bot.respond.success_description",
-			color: ColorCode.SUCCESS,
-		});
+		// 3. Send immediate non-ephemeral response to user
+		await replyInfoEmbed(
+			interaction,
+			locale,
+			{
+				titleKey: "commands.bot.respond.success_title",
+				descriptionKey: "commands.bot.respond.success_description",
+				color: ColorCode.SUCCESS,
+			},
+			MessageFlags.SuppressNotifications,
+		);
 
 		// 4. Get the latest message in the channel (excluding the interaction itself)
 		const messages = await interaction.channel.messages.fetch({ limit: 1 });

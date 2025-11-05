@@ -1076,12 +1076,14 @@ export async function replyPaginatedChoices(
  * @param interaction The interaction to respond to
  * @param locale The locale for localization
  * @param options Configuration for the modal and its components
+ * @param autoDeferReply Optional. If provided, automatically defers the modal submission reply to prevent 3-second timeout. Pass `true` for public reply, or `MessageFlags.Ephemeral` for ephemeral reply.
  * @returns Promise resolving to a ModalResult
  */
 export async function promptWithRawModal(
 	interaction: ChatInputCommandInteraction | ButtonInteraction,
 	locale: string,
 	options: ModalOptions,
+	autoDeferReply?: boolean | MessageFlags.Ephemeral,
 ): Promise<ModalResult> {
 	// Set up WebSocket interception FIRST, before showing the modal
 	setupWebSocketInterception(interaction.client);
@@ -1253,6 +1255,15 @@ export async function promptWithRawModal(
 
 			// Clean up stored values
 			modalSelectValues.delete(submitted.id);
+
+			// Auto-defer reply if requested to prevent 3-second interaction timeout
+			if (autoDeferReply) {
+				const flags = typeof autoDeferReply === "boolean" ? undefined : autoDeferReply;
+				await submitted.deferReply({ flags });
+				log.info(
+					`Auto-deferred modal submission reply (flags: ${flags ? MessageFlags[flags] : "none"})`,
+				);
+			}
 
 			return { outcome: "submit", values, interaction: submitted };
 		} catch (error) {

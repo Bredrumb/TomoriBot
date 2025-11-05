@@ -22,17 +22,27 @@ const MODAL_COMMAND_TIMEOUT = 700000; // 700 Seconds (11.67 minutes) for modal c
 // Commands that use modals and need longer timeout
 // Format: "category.subcommand" for flat commands, "category.group.subcommand" for grouped commands
 const MODAL_COMMANDS = new Set([
+	// Config commands
+	"config.setup",
+	"config.model",
+	"config.humanizer",
+	"config.apikey.set",
+	// Teach commands
 	"teach.attribute",
 	"teach.sampledialogue",
-	"teach.servermemory",
-	"teach.personalmemory",
-	"config.setup",
-	"config.preset",
-	"config.humanizerdegree",
-	"config.model",
-	"config.apikey.set", // Updated for subcommand group structure
-	"preset.generate", // AI-powered preset generation with modal
-	"preset.create", // Manual preset creation with modal
+	"teach.memory.server",
+	"teach.memory.personal",
+	// Forget commands
+	"forget.attribute",
+	"forget.sampledialogue",
+	"forget.memory.server",
+	"forget.memory.personal",
+	// Persona commands
+	"persona.default",
+	"persona.generate",
+	"persona.create",
+	// Server commands
+	"server.trigger.delete",
 ]);
 
 /**

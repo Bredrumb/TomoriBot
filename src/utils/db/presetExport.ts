@@ -33,7 +33,7 @@ export async function exportPresetData(
 		if (!serverRows.length) {
 			return {
 				success: false,
-				error: "commands.preset.export.error_no_server_data",
+				error: "commands.persona.export.error_no_server_data",
 			};
 		}
 
@@ -56,7 +56,7 @@ export async function exportPresetData(
 		if (!presetRows.length) {
 			return {
 				success: false,
-				error: "commands.preset.export.error_no_preset_data",
+				error: "commands.persona.export.error_no_preset_data",
 			};
 		}
 
@@ -85,7 +85,7 @@ export async function exportPresetData(
 			);
 			return {
 				success: false,
-				error: "commands.preset.export.error_validation_failed",
+				error: "commands.persona.export.error_validation_failed",
 			};
 		}
 
@@ -98,13 +98,10 @@ export async function exportPresetData(
 			data: validated.data,
 		};
 	} catch (error) {
-		log.error(
-			`Error exporting preset data for server ${serverDiscId}:`,
-			error,
-		);
+		log.error(`Error exporting preset data for server ${serverDiscId}:`, error);
 		return {
 			success: false,
-			error: "commands.preset.export.error_export_failed",
+			error: "commands.persona.export.error_export_failed",
 		};
 	}
 }

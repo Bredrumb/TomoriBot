@@ -388,8 +388,8 @@ async function extractReferencedKeys(): Promise<Map<string, Set<string>>> {
 	try {
 		const glob = new Glob("**/*.ts");
 		for await (const file of glob.scan(srcPath)) {
-			// Skip locale files
-			if (file.includes("locales/")) {
+			// Skip locale files and handleCommands.ts (contains command path identifiers, not locale keys)
+			if (file.includes("locales/") || file.includes("handleCommands.ts")) {
 				continue;
 			}
 
