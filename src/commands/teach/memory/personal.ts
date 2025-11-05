@@ -11,20 +11,20 @@ import {
 	type UserRow,
 	type ErrorContext,
 	type TomoriState,
-} from "../../types/db/schema";
-import { localizer } from "../../utils/text/localizer";
-import { log, ColorCode } from "../../utils/misc/logger";
+} from "../../../types/db/schema";
+import { localizer } from "../../../utils/text/localizer";
+import { log, ColorCode } from "../../../utils/misc/logger";
 import {
 	replyInfoEmbed,
 	promptWithRawModal,
-} from "../../utils/discord/interactionHelper";
-import { loadTomoriState, isBlacklisted } from "../../utils/db/dbRead";
-import type { ModalResult } from "../../types/discord/modal";
+} from "../../../utils/discord/interactionHelper";
+import { loadTomoriState, isBlacklisted } from "../../../utils/db/dbRead";
+import type { ModalResult } from "../../../types/discord/modal";
 import {
 	validateMemoryContent,
 	checkPersonalMemoryLimit,
 	getMemoryLimits,
-} from "../../utils/db/memoryLimits";
+} from "../../../utils/db/memoryLimits";
 
 // Rule 20: Constants for modal and input IDs
 const MODAL_CUSTOM_ID = "teach_personalmemory_add_modal";
@@ -38,9 +38,9 @@ export const configureSubcommand = (
 	subcommand: SlashCommandSubcommandBuilder,
 ) =>
 	subcommand
-		.setName("personalmemory")
+		.setName("personal")
 		.setDescription(
-			localizer("en-US", "commands.teach.personalmemory.description"),
+			localizer("en-US", "commands.teach.memory.personal.description"),
 		);
 
 /**
@@ -98,9 +98,9 @@ export async function execute(
 		);
 		if (!personalLimitCheck.isValid) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.teach.personalmemory.limit_exceeded_title",
+				titleKey: "commands.teach.memory.personal.limit_exceeded_title",
 				descriptionKey:
-					"commands.teach.personalmemory.limit_exceeded_description",
+					"commands.teach.memory.personal.limit_exceeded_description",
 				descriptionVars: {
 					max_allowed:
 						personalLimitCheck.maxAllowed || memoryLimits.maxPersonalMemories,
@@ -114,13 +114,13 @@ export async function execute(
 		// 5. Prompt user with a modal with Component Type 18 support (Rule 10, 12, 19, 25)
 		modalResult = await promptWithRawModal(interaction, locale, {
 			modalCustomId: MODAL_CUSTOM_ID,
-			modalTitleKey: "commands.teach.personalmemory.modal_title",
+			modalTitleKey: "commands.teach.memory.personal.modal_title",
 			components: [
 				{
 					customId: MEMORY_INPUT_ID,
-					labelKey: "commands.teach.personalmemory.memory_input_label",
-					descriptionKey: "commands.teach.personalmemory.modal_description",
-					placeholder: "commands.teach.personalmemory.memory_input_placeholder",
+					labelKey: "commands.teach.memory.personal.memory_input_label",
+					descriptionKey: "commands.teach.memory.personal.modal_description",
+					placeholder: "commands.teach.memory.personal.memory_input_placeholder",
 					style: TextInputStyle.Paragraph,
 					required: true,
 					maxLength: memoryLimits.maxMemoryLength,
@@ -148,9 +148,9 @@ export async function execute(
 		const contentValidation = validateMemoryContent(newMemory);
 		if (!contentValidation.isValid) {
 			await replyInfoEmbed(modalSubmitInteraction, locale, {
-				titleKey: "commands.teach.personalmemory.content_too_long_title",
+				titleKey: "commands.teach.memory.personal.content_too_long_title",
 				descriptionKey:
-					"commands.teach.personalmemory.content_too_long_description",
+					"commands.teach.memory.personal.content_too_long_description",
 				descriptionVars: { max_length: memoryLimits.maxMemoryLength },
 				color: ColorCode.ERROR,
 			});
@@ -158,14 +158,14 @@ export async function execute(
 		}
 
 		// 10. Check if user has opted out of personalization (privacy setting)
-		const { isPrivacyOptedOut } = await import("../../utils/db/dbRead");
+		const { isPrivacyOptedOut } = await import("../../../utils/db/dbRead");
 		const userOptedOut = await isPrivacyOptedOut(interaction.user.id);
 
 		if (userOptedOut) {
 			await replyInfoEmbed(modalSubmitInteraction, locale, {
-				titleKey: "commands.teach.personalmemory.opted_out_error_title",
+				titleKey: "commands.teach.memory.personal.opted_out_error_title",
 				descriptionKey:
-					"commands.teach.personalmemory.opted_out_error_description",
+					"commands.teach.memory.personal.opted_out_error_description",
 				color: ColorCode.ERROR,
 				flags: MessageFlags.Ephemeral,
 			});
@@ -181,8 +181,8 @@ export async function execute(
 		// 12. Check for duplicates within the user's memories
 		if (currentMemories.includes(newMemory)) {
 			await replyInfoEmbed(modalSubmitInteraction, locale, {
-				titleKey: "commands.teach.personalmemory.duplicate_title",
-				descriptionKey: "commands.teach.personalmemory.duplicate_description",
+				titleKey: "commands.teach.memory.personal.duplicate_title",
+				descriptionKey: "commands.teach.memory.personal.duplicate_description",
 				descriptionVars: { memory: newMemory },
 				color: ColorCode.WARN,
 			});
@@ -235,7 +235,7 @@ export async function execute(
 		}
 
 		// 15. Check personalization settings and user blacklisting status to prepare appropriate message
-		let descriptionKey = "commands.teach.personalmemory.success_description";
+		let descriptionKey = "commands.teach.memory.personal.success_description";
 		let embedColor = ColorCode.SUCCESS;
 
 		// Check both personalization settings and user blacklisting (similar to memoryTool.ts:437-454)
@@ -248,17 +248,17 @@ export async function execute(
 
 		if (!personalizationEnabled) {
 			descriptionKey =
-				"commands.teach.personalmemory.success_but_disabled_description";
+				"commands.teach.memory.personal.success_but_disabled_description";
 			embedColor = ColorCode.WARN;
 		} else if (userIsBlacklisted) {
 			descriptionKey =
-				"commands.teach.personalmemory.success_but_blacklisted_description";
+				"commands.teach.memory.personal.success_but_blacklisted_description";
 			embedColor = ColorCode.WARN;
 		}
 
 		// 15. Success! Confirm addition (with potential warning) (Rule 12, 19)
 		await replyInfoEmbed(modalSubmitInteraction, locale, {
-			titleKey: "commands.teach.personalmemory.success_title",
+			titleKey: "commands.teach.memory.personal.success_title",
 			descriptionKey: descriptionKey, // Use the determined description key
 			descriptionVars: {
 				memory:

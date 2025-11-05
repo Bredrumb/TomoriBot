@@ -12,17 +12,17 @@ import {
 	type UserRow,
 	type ErrorContext,
 	type TomoriState,
-} from "../../types/db/schema";
-import { localizer } from "../../utils/text/localizer";
-import { log, ColorCode } from "../../utils/misc/logger";
+} from "../../../types/db/schema";
+import { localizer } from "../../../utils/text/localizer";
+import { log, ColorCode } from "../../../utils/misc/logger";
 import {
 	replyInfoEmbed,
 	promptWithPaginatedModal,
 	safeSelectOptionText,
-} from "../../utils/discord/interactionHelper";
-import { loadTomoriState } from "../../utils/db/dbRead";
-import type { SelectOption } from "../../types/discord/modal";
-import { createStandardEmbed } from "../../utils/discord/embedHelper";
+} from "../../../utils/discord/interactionHelper";
+import { loadTomoriState } from "../../../utils/db/dbRead";
+import type { SelectOption } from "../../../types/discord/modal";
+import { createStandardEmbed } from "../../../utils/discord/embedHelper";
 
 // Rule 20: Constants for static values at the top
 const MODAL_CUSTOM_ID = "forget_personalmemory_modal";
@@ -96,8 +96,8 @@ async function performPersonalMemoryRemoval(
 	);
 
 	await replyInfoEmbed(replyInteraction, locale, {
-		titleKey: "commands.forget.personalmemory.success_title",
-		descriptionKey: "commands.forget.personalmemory.success_description",
+		titleKey: "commands.forget.memory.personal.success_title",
+		descriptionKey: "commands.forget.memory.personal.success_description",
 		descriptionVars: {
 			memory:
 				memoryToRemove.length > 50
@@ -113,9 +113,9 @@ export const configureSubcommand = (
 	subcommand: SlashCommandSubcommandBuilder,
 ) =>
 	subcommand
-		.setName("personalmemory")
+		.setName("personal")
 		.setDescription(
-			localizer("en-US", "commands.forget.personalmemory.description"),
+			localizer("en-US", "commands.forget.memory.personal.description"),
 		);
 
 /**
@@ -174,8 +174,8 @@ export async function execute(
 		// 5. Check if there are any memories to remove
 		if (currentMemories.length === 0) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.forget.personalmemory.no_memories_title",
-				descriptionKey: "commands.forget.personalmemory.no_memories",
+				titleKey: "commands.forget.memory.personal.no_memories_title",
+				descriptionKey: "commands.forget.memory.personal.no_memories",
 				color: ColorCode.WARN,
 				flags: MessageFlags.Ephemeral,
 			});
@@ -194,13 +194,13 @@ export async function execute(
 		// 7. Show the paginated modal with memory selection
 		const modalResult = await promptWithPaginatedModal(interaction, locale, {
 			modalCustomId: MODAL_CUSTOM_ID,
-			modalTitleKey: "commands.forget.personalmemory.modal_title",
+			modalTitleKey: "commands.forget.memory.personal.modal_title",
 			components: [
 				{
 					customId: MEMORY_SELECT_ID,
-					labelKey: "commands.forget.personalmemory.select_label",
-					descriptionKey: "commands.forget.personalmemory.select_description",
-					placeholder: "commands.forget.personalmemory.select_placeholder",
+					labelKey: "commands.forget.memory.personal.select_label",
+					descriptionKey: "commands.forget.memory.personal.select_description",
+					placeholder: "commands.forget.memory.personal.select_placeholder",
 					required: true,
 					options: memorySelectOptions,
 				},
@@ -241,9 +241,9 @@ export async function execute(
 			await modalSubmitInteraction.followUp({
 				embeds: [
 					createStandardEmbed(locale, {
-						titleKey: "commands.forget.personalmemory.warning_disabled_title",
+						titleKey: "commands.forget.memory.personal.warning_disabled_title",
 						descriptionKey:
-							"commands.forget.personalmemory.warning_disabled_description",
+							"commands.forget.memory.personal.warning_disabled_description",
 						color: ColorCode.WARN,
 					}),
 				],

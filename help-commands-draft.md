@@ -434,7 +434,7 @@ Personal bot settings:
 - `/config rename` - Change what you want to call me
 - `/config language` - Change my response language
 - `/config timezone` - Set timezone for time-aware responses
-- `/config botpermissions` - Configure what I'm allowed to do
+- `/config permissions` - Configure what I'm allowed to do
 
 ---
 

@@ -12,16 +12,16 @@ import {
 	type UserRow,
 	type ErrorContext,
 	type TomoriState,
-} from "../../types/db/schema";
-import { localizer } from "../../utils/text/localizer";
-import { log, ColorCode } from "../../utils/misc/logger";
+} from "../../../types/db/schema";
+import { localizer } from "../../../utils/text/localizer";
+import { log, ColorCode } from "../../../utils/misc/logger";
 import {
 	replyInfoEmbed,
 	promptWithPaginatedModal,
 	safeSelectOptionText,
-} from "../../utils/discord/interactionHelper";
-import { loadTomoriState } from "../../utils/db/dbRead";
-import type { SelectOption } from "../../types/discord/modal";
+} from "../../../utils/discord/interactionHelper";
+import { loadTomoriState } from "../../../utils/db/dbRead";
+import type { SelectOption } from "../../../types/discord/modal";
 
 // Rule 20: Constants for static values at the top
 const MODAL_CUSTOM_ID = "forget_servermemory_modal";
@@ -94,8 +94,8 @@ async function performServerMemoryRemoval(
 	);
 
 	await replyInfoEmbed(replyInteraction, locale, {
-		titleKey: "commands.forget.servermemory.success_title",
-		descriptionKey: "commands.forget.servermemory.success_description",
+		titleKey: "commands.forget.memory.server.success_title",
+		descriptionKey: "commands.forget.memory.server.success_description",
 		descriptionVars: {
 			memory:
 				memoryToDelete.content.length > 50
@@ -111,9 +111,9 @@ export const configureSubcommand = (
 	subcommand: SlashCommandSubcommandBuilder,
 ) =>
 	subcommand
-		.setName("servermemory")
+		.setName("server")
 		.setDescription(
-			localizer("en-US", "commands.forget.servermemory.description"),
+			localizer("en-US", "commands.forget.memory.server.description"),
 		);
 
 /**
@@ -168,9 +168,9 @@ export async function execute(
 			!hasManagePermission
 		) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.teach.servermemory.teaching_disabled_title",
+				titleKey: "commands.teach.memory.server.teaching_disabled_title",
 				descriptionKey:
-					"commands.teach.servermemory.teaching_disabled_description",
+					"commands.teach.memory.server.teaching_disabled_description",
 				color: ColorCode.ERROR,
 				flags: MessageFlags.Ephemeral,
 			});
@@ -202,10 +202,10 @@ export async function execute(
 			// 6. Check if there are any memories to remove (using the potentially filtered list)
 			// Use a different message if the list is empty *because* of permissions vs. no memories exist at all
 			const descriptionKey = hasManagePermission
-				? "commands.forget.servermemory.no_memories" // No memories on server
-				: "commands.forget.servermemory.no_owned_memories"; // User owns no memories
+				? "commands.forget.memory.server.no_memories" // No memories on server
+				: "commands.forget.memory.server.no_owned_memories"; // User owns no memories
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.forget.servermemory.no_memories_title",
+				titleKey: "commands.forget.memory.server.no_memories_title",
 				descriptionKey: descriptionKey,
 				color: ColorCode.WARN,
 				flags: MessageFlags.Ephemeral,
@@ -224,13 +224,13 @@ export async function execute(
 
 		const modalResult = await promptWithPaginatedModal(interaction, locale, {
 			modalCustomId: MODAL_CUSTOM_ID,
-			modalTitleKey: "commands.forget.servermemory.modal_title",
+			modalTitleKey: "commands.forget.memory.server.modal_title",
 			components: [
 				{
 					customId: MEMORY_SELECT_ID,
-					labelKey: "commands.forget.servermemory.select_label",
-					descriptionKey: "commands.forget.servermemory.select_description",
-					placeholder: "commands.forget.servermemory.select_placeholder",
+					labelKey: "commands.forget.memory.server.select_label",
+					descriptionKey: "commands.forget.memory.server.select_description",
+					placeholder: "commands.forget.memory.server.select_placeholder",
 					required: true,
 					options: memorySelectOptions,
 				},
@@ -262,7 +262,7 @@ export async function execute(
 		if (!selectedMemory) {
 			await replyInfoEmbed(modalSubmitInteraction, locale, {
 				titleKey: "general.errors.operation_failed_title",
-				descriptionKey: "commands.forget.servermemory.memory_not_found",
+				descriptionKey: "commands.forget.memory.server.memory_not_found",
 				color: ColorCode.ERROR,
 			});
 			return;

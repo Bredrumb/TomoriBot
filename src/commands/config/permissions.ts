@@ -19,46 +19,43 @@ export const configureSubcommand = (
 	subcommand: SlashCommandSubcommandBuilder,
 ) =>
 	subcommand
-		.setName("botpermissions")
+		.setName("permissions")
 		.setDescription(
-			localizer("en-US", "commands.config.botpermissions.description"),
+			localizer("en-US", "commands.config.permissions.description"),
 		)
 		.addStringOption((option) =>
 			option
 				.setName("permission")
 				.setDescription(
-					localizer(
-						"en-US",
-						"commands.config.botpermissions.option_description",
-					),
+					localizer("en-US", "commands.config.permissions.option_description"),
 				)
 				.setRequired(true)
 				.addChoices(
 					{
 						name: localizer(
 							"en-US",
-							"commands.config.botpermissions.selfteaching_option",
+							"commands.config.permissions.selfteaching_option",
 						),
 						value: "selfteaching",
 					},
 					{
 						name: localizer(
 							"en-US",
-							"commands.config.botpermissions.personalization_option",
+							"commands.config.permissions.personalization_option",
 						),
 						value: "personalization",
 					},
 					{
 						name: localizer(
 							"en-US",
-							"commands.config.botpermissions.emojiusage_option",
+							"commands.config.permissions.emojiusage_option",
 						),
 						value: "emojiusage",
 					},
 					{
 						name: localizer(
 							"en-US",
-							"commands.config.botpermissions.stickerusage_option",
+							"commands.config.permissions.stickerusage_option",
 						),
 						value: "stickerusage",
 					},
@@ -66,7 +63,7 @@ export const configureSubcommand = (
 					{
 						name: localizer(
 							"en-US",
-							"commands.config.botpermissions.websearch_option",
+							"commands.config.permissions.websearch_option",
 						),
 						value: "websearch",
 					},
@@ -76,7 +73,7 @@ export const configureSubcommand = (
 			option
 				.setName("set")
 				.setDescription(
-					localizer("en-US", "commands.config.botpermissions.set_description"),
+					localizer("en-US", "commands.config.permissions.set_description"),
 				)
 				.setRequired(true)
 				.addChoices(
@@ -142,37 +139,35 @@ export async function execute(
 		switch (permissionChoice) {
 			case "selfteaching":
 				dbColumnName = "self_teaching_enabled";
-				permissionTypeKey =
-					"commands.config.botpermissions.selfteaching_option";
+				permissionTypeKey = "commands.config.permissions.selfteaching_option";
 				currentSetting = tomoriState.config.self_teaching_enabled;
 				break;
 			case "personalization":
 				dbColumnName = "personal_memories_enabled";
 				permissionTypeKey =
-					"commands.config.botpermissions.personalization_option";
+					"commands.config.permissions.personalization_option";
 				currentSetting = tomoriState.config.personal_memories_enabled;
 				break;
 			case "emojiusage":
 				dbColumnName = "emoji_usage_enabled";
-				permissionTypeKey = "commands.config.botpermissions.emojiusage_option";
+				permissionTypeKey = "commands.config.permissions.emojiusage_option";
 				currentSetting = tomoriState.config.emoji_usage_enabled;
 				break;
 			case "stickerusage":
 				dbColumnName = "sticker_usage_enabled";
-				permissionTypeKey =
-					"commands.config.botpermissions.stickerusage_option";
+				permissionTypeKey = "commands.config.permissions.stickerusage_option";
 				currentSetting = tomoriState.config.sticker_usage_enabled;
 				break;
 			// New: Handle Web Search permission (Brave Search)
 			case "websearch":
 				dbColumnName = "web_search_enabled";
-				permissionTypeKey = "commands.config.botpermissions.websearch_option";
+				permissionTypeKey = "commands.config.permissions.websearch_option";
 				currentSetting = tomoriState.config.web_search_enabled;
 				break;
 			default:
 				// This should not happen due to Discord's option validation
 				log.error(
-					`Invalid permissionChoice received in /config botpermissions: ${permissionChoice}`,
+					`Invalid permissionChoice received in /config permissions: ${permissionChoice}`,
 				);
 				await replyInfoEmbed(interaction, locale, {
 					titleKey: "general.errors.invalid_option_title",
@@ -185,10 +180,10 @@ export async function execute(
 		// 6. Check if the setting is already the desired value
 		if (currentSetting === isEnabled) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.config.botpermissions.already_set_title",
+				titleKey: "commands.config.permissions.already_set_title",
 				descriptionKey: isEnabled
-					? "commands.config.botpermissions.already_enabled_description"
-					: "commands.config.botpermissions.already_disabled_description",
+					? "commands.config.permissions.already_enabled_description"
+					: "commands.config.permissions.already_disabled_description",
 				descriptionVars: {
 					permission_type: localizer(locale, permissionTypeKey),
 				},
@@ -217,7 +212,7 @@ export async function execute(
 				userId: userData.user_id,
 				errorType: "DatabaseUpdateError",
 				metadata: {
-					command: "config botpermissions",
+					command: "config permissions",
 					guildId: interaction.guild?.id ?? interaction.user.id,
 					permissionChoice,
 					dbColumnName,
@@ -245,10 +240,10 @@ export async function execute(
 
 		// 9. Success! Show the permission change
 		await replyInfoEmbed(interaction, locale, {
-			titleKey: "commands.config.botpermissions.success_title",
+			titleKey: "commands.config.permissions.success_title",
 			descriptionKey: isEnabled
-				? "commands.config.botpermissions.enabled_success"
-				: "commands.config.botpermissions.disabled_success",
+				? "commands.config.permissions.enabled_success"
+				: "commands.config.permissions.disabled_success",
 			descriptionVars: {
 				permission_type: localizer(locale, permissionTypeKey),
 			},
@@ -270,7 +265,7 @@ export async function execute(
 			tomoriId: tomoriIdForError,
 			errorType: "CommandExecutionError",
 			metadata: {
-				command: "config botpermissions",
+				command: "config permissions",
 				guildId: interaction.guild?.id ?? interaction.user.id,
 				executorDiscordId: interaction.user.id,
 				permissionAttempted: interaction.options.getString("permission"),
@@ -278,7 +273,7 @@ export async function execute(
 			},
 		};
 		await log.error(
-			`Error executing /config botpermissions for user ${userData.user_disc_id}`,
+			`Error executing /config permissions for user ${userData.user_disc_id}`,
 			error as Error,
 			context,
 		);

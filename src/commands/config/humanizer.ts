@@ -25,7 +25,7 @@ const HUMANIZER_MAX = 3;
 const HUMANIZER_DEFAULT = 1;
 
 // Modal configuration constants
-const MODAL_CUSTOM_ID = "config_humanizerdegree_modal";
+const MODAL_CUSTOM_ID = "config_humanizer_modal";
 const HUMANIZER_SELECT_ID = "humanizer_select";
 
 /**
@@ -36,36 +36,24 @@ const HUMANIZER_SELECT_ID = "humanizer_select";
 function createHumanizerOptions(locale: string): SelectOption[] {
 	return [
 		{
-			label: localizer(locale, "commands.config.humanizerdegree.choice_none"),
+			label: localizer(locale, "commands.config.humanizer.choice_none"),
 			value: "0",
-			description: localizer(
-				locale,
-				"commands.config.humanizerdegree.desc_none",
-			),
+			description: localizer(locale, "commands.config.humanizer.desc_none"),
 		},
 		{
-			label: localizer(locale, "commands.config.humanizerdegree.choice_light"),
+			label: localizer(locale, "commands.config.humanizer.choice_light"),
 			value: "1",
-			description: localizer(
-				locale,
-				"commands.config.humanizerdegree.desc_light",
-			),
+			description: localizer(locale, "commands.config.humanizer.desc_light"),
 		},
 		{
-			label: localizer(locale, "commands.config.humanizerdegree.choice_medium"),
+			label: localizer(locale, "commands.config.humanizer.choice_medium"),
 			value: "2",
-			description: localizer(
-				locale,
-				"commands.config.humanizerdegree.desc_medium",
-			),
+			description: localizer(locale, "commands.config.humanizer.desc_medium"),
 		},
 		{
-			label: localizer(locale, "commands.config.humanizerdegree.choice_heavy"),
+			label: localizer(locale, "commands.config.humanizer.choice_heavy"),
 			value: "3",
-			description: localizer(
-				locale,
-				"commands.config.humanizerdegree.desc_heavy",
-			),
+			description: localizer(locale, "commands.config.humanizer.desc_heavy"),
 		},
 	];
 }
@@ -75,9 +63,9 @@ export const configureSubcommand = (
 	subcommand: SlashCommandSubcommandBuilder,
 ) =>
 	subcommand
-		.setName("humanizerdegree")
+		.setName("humanizer")
 		.setDescription(
-			localizer("en-US", "commands.config.humanizerdegree.description"),
+			localizer("en-US", "commands.config.humanizer.description"),
 		);
 
 /**
@@ -126,13 +114,13 @@ export async function execute(
 		// 3. Show the modal with humanizer degree selection
 		const modalResult = await promptWithRawModal(interaction, locale, {
 			modalCustomId: MODAL_CUSTOM_ID,
-			modalTitleKey: "commands.config.humanizerdegree.modal_title",
+			modalTitleKey: "commands.config.humanizer.modal_title",
 			components: [
 				{
 					customId: HUMANIZER_SELECT_ID,
-					labelKey: "commands.config.humanizerdegree.select_label",
-					descriptionKey: "commands.config.humanizerdegree.select_description",
-					placeholder: "commands.config.humanizerdegree.select_placeholder",
+					labelKey: "commands.config.humanizer.select_label",
+					descriptionKey: "commands.config.humanizer.select_description",
+					placeholder: "commands.config.humanizer.select_placeholder",
 					required: true,
 					options: createHumanizerOptions(locale),
 				},
@@ -162,7 +150,7 @@ export async function execute(
 		) {
 			await replyInfoEmbed(modalSubmitInteraction, locale, {
 				titleKey: "general.errors.operation_failed_title",
-				descriptionKey: "commands.config.humanizerdegree.invalid_value_description",
+				descriptionKey: "commands.config.humanizer.invalid_value_description",
 				color: ColorCode.ERROR,
 			});
 			return;
@@ -173,9 +161,8 @@ export async function execute(
 			tomoriState.config.humanizer_degree ?? HUMANIZER_DEFAULT;
 		if (humanizerValue === currentHumanizer) {
 			await replyInfoEmbed(modalSubmitInteraction, locale, {
-				titleKey: "commands.config.humanizerdegree.already_set_title",
-				descriptionKey:
-					"commands.config.humanizerdegree.already_set_description",
+				titleKey: "commands.config.humanizer.already_set_title",
+				descriptionKey: "commands.config.humanizer.already_set_description",
 				descriptionVars: {
 					value: getHumanizerLabel(locale, humanizerValue),
 				},
@@ -202,7 +189,7 @@ export async function execute(
 				userId: userData.user_id,
 				errorType: "DatabaseUpdateError",
 				metadata: {
-					command: "config humanizerdegree",
+					command: "config humanizer",
 					guildId: interaction.guild?.id ?? interaction.user.id,
 					humanizerValue,
 					validationErrors: validatedConfig.success
@@ -229,8 +216,8 @@ export async function execute(
 
 		// 9. Success message with explanation of the humanizer effect
 		await replyInfoEmbed(modalSubmitInteraction, locale, {
-			titleKey: "commands.config.humanizerdegree.success_title",
-			descriptionKey: "commands.config.humanizerdegree.success_description",
+			titleKey: "commands.config.humanizer.success_title",
+			descriptionKey: "commands.config.humanizer.success_description",
 			descriptionVars: {
 				value: getHumanizerLabel(locale, humanizerValue),
 				previous_value: getHumanizerLabel(locale, currentHumanizer),
@@ -254,13 +241,13 @@ export async function execute(
 			tomoriId: tomoriIdForError,
 			errorType: "CommandExecutionError",
 			metadata: {
-				command: "config humanizerdegree",
+				command: "config humanizer",
 				guildId: interaction.guild?.id ?? interaction.user.id,
 				executorDiscordId: interaction.user.id,
 			},
 		};
 		await log.error(
-			`Error executing /config humanizerdegree for user ${userData.user_disc_id}`,
+			`Error executing /config humanizer for user ${userData.user_disc_id}`,
 			error as Error,
 			context,
 		);
@@ -290,18 +277,18 @@ export async function execute(
 function getHumanizerLabel(locale: string, value: number): string {
 	switch (value) {
 		case 0:
-			return localizer(locale, "commands.config.humanizerdegree.choice_none");
+			return localizer(locale, "commands.config.humanizer.choice_none");
 		case 1:
-			return localizer(locale, "commands.config.humanizerdegree.choice_light");
+			return localizer(locale, "commands.config.humanizer.choice_light");
 		case 2:
-			return localizer(locale, "commands.config.humanizerdegree.choice_medium");
+			return localizer(locale, "commands.config.humanizer.choice_medium");
 		case 3:
-			return localizer(locale, "commands.config.humanizerdegree.choice_heavy");
+			return localizer(locale, "commands.config.humanizer.choice_heavy");
 		default:
 			// Default to light if value is somehow unexpected, though validation should prevent this
 			log.warn(
 				`Unexpected humanizer value encountered in getHumanizerLabel: ${value}`,
 			);
-			return localizer(locale, "commands.config.humanizerdegree.choice_light");
+			return localizer(locale, "commands.config.humanizer.choice_light");
 	}
 }

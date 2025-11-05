@@ -11,21 +11,21 @@ import {
 	type UserRow,
 	type ErrorContext,
 	type TomoriState,
-} from "../../types/db/schema";
-import { localizer } from "../../utils/text/localizer";
-import { log, ColorCode } from "../../utils/misc/logger";
+} from "../../../types/db/schema";
+import { localizer } from "../../../utils/text/localizer";
+import { log, ColorCode } from "../../../utils/misc/logger";
 import {
 	replyInfoEmbed,
 	promptWithRawModal,
-} from "../../utils/discord/interactionHelper";
-import { loadTomoriState } from "../../utils/db/dbRead";
-import { isBlacklisted } from "../../utils/db/dbRead";
-import type { ModalResult } from "../../types/discord/modal";
+} from "../../../utils/discord/interactionHelper";
+import { loadTomoriState } from "../../../utils/db/dbRead";
+import { isBlacklisted } from "../../../utils/db/dbRead";
+import type { ModalResult } from "../../../types/discord/modal";
 import {
 	validateMemoryContent,
 	checkServerMemoryLimit,
 	getMemoryLimits,
-} from "../../utils/db/memoryLimits";
+} from "../../../utils/db/memoryLimits";
 
 // Rule 20: Constants for modal and input IDs
 const MODAL_CUSTOM_ID = "teach_servermemory_add_modal";
@@ -39,9 +39,9 @@ export const configureSubcommand = (
 	subcommand: SlashCommandSubcommandBuilder,
 ) =>
 	subcommand
-		.setName("servermemory")
+		.setName("server")
 		.setDescription(
-			localizer("en-US", "commands.teach.servermemory.description"),
+			localizer("en-US", "commands.teach.memory.server.description"),
 		);
 
 /**
@@ -119,9 +119,9 @@ export async function execute(
 			!hasManagePermission
 		) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.teach.servermemory.teaching_disabled_title",
+				titleKey: "commands.teach.memory.server.teaching_disabled_title",
 				descriptionKey:
-					"commands.teach.servermemory.teaching_disabled_description",
+					"commands.teach.memory.server.teaching_disabled_description",
 				color: ColorCode.ERROR,
 				flags: MessageFlags.Ephemeral,
 			});
@@ -134,9 +134,9 @@ export async function execute(
 		);
 		if (!serverLimitCheck.isValid) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.teach.servermemory.limit_exceeded_title",
+				titleKey: "commands.teach.memory.server.limit_exceeded_title",
 				descriptionKey:
-					"commands.teach.servermemory.limit_exceeded_description",
+					"commands.teach.memory.server.limit_exceeded_description",
 				descriptionVars: {
 					current_count: serverLimitCheck.currentCount?.toString() || "0",
 					max_allowed: (
@@ -152,13 +152,13 @@ export async function execute(
 		// 7. Prompt user with a modal with Component Type 18 support (Rule 10, 12, 19, 25)
 		modalResult = await promptWithRawModal(interaction, locale, {
 			modalCustomId: MODAL_CUSTOM_ID,
-			modalTitleKey: "commands.teach.servermemory.modal_title",
+			modalTitleKey: "commands.teach.memory.server.modal_title",
 			components: [
 				{
 					customId: MEMORY_INPUT_ID,
-					labelKey: "commands.teach.servermemory.memory_input_label",
-					descriptionKey: "commands.teach.servermemory.modal_description",
-					placeholder: "commands.teach.servermemory.memory_input_placeholder",
+					labelKey: "commands.teach.memory.server.memory_input_label",
+					descriptionKey: "commands.teach.memory.server.modal_description",
+					placeholder: "commands.teach.memory.server.memory_input_placeholder",
 					style: TextInputStyle.Paragraph,
 					required: true,
 					maxLength: memoryLimits.maxMemoryLength,
@@ -186,9 +186,9 @@ export async function execute(
 		const contentValidation = validateMemoryContent(newMemory);
 		if (!contentValidation.isValid) {
 			await replyInfoEmbed(modalSubmitInteraction, locale, {
-				titleKey: "commands.teach.servermemory.content_too_long_title",
+				titleKey: "commands.teach.memory.server.content_too_long_title",
 				descriptionKey:
-					"commands.teach.servermemory.content_too_long_description",
+					"commands.teach.memory.server.content_too_long_description",
 				descriptionVars: { max_length: memoryLimits.maxMemoryLength },
 				color: ColorCode.ERROR,
 			});
@@ -241,8 +241,8 @@ export async function execute(
 
 		// 15. Success! Confirm addition (Rule 12, 19)
 		await replyInfoEmbed(modalSubmitInteraction, locale, {
-			titleKey: "commands.teach.servermemory.success_title",
-			descriptionKey: "commands.teach.servermemory.success_description",
+			titleKey: "commands.teach.memory.server.success_title",
+			descriptionKey: "commands.teach.memory.server.success_description",
 			descriptionVars: {
 				memory:
 					newMemory.length > 96 ? `${newMemory.slice(0, 96)}...` : newMemory, // Truncate for display

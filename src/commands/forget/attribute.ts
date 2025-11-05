@@ -224,8 +224,8 @@ export async function execute(
 		// Extract values from the modal
 		// biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
 		const modalSubmitInteraction = modalResult.interaction!;
-		// biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
 		const selectedIndex = Number.parseInt(
+			// biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
 			modalResult.values![ATTRIBUTE_SELECT_ID],
 			10,
 		);
