@@ -4,20 +4,20 @@ import {
 	type Client,
 	type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { localizer } from "../../utils/text/localizer";
-import { log, ColorCode } from "../../utils/misc/logger";
+import { localizer } from "../../../utils/text/localizer";
+import { log, ColorCode } from "../../../utils/misc/logger";
 import {
 	replyInfoEmbed,
 	promptWithPaginatedModal,
 	safeSelectOptionText,
-} from "../../utils/discord/interactionHelper";
-import { loadTomoriState } from "../../utils/db/dbRead";
+} from "../../../utils/discord/interactionHelper";
+import { loadTomoriState } from "../../../utils/db/dbRead";
 import {
 	type UserRow,
 	type ErrorContext,
 	tomoriConfigSchema,
-} from "../../types/db/schema";
-import type { SelectOption } from "../../types/discord/modal";
+} from "../../../types/db/schema";
+import type { SelectOption } from "../../../types/discord/modal";
 import { sql } from "bun";
 
 // Rule 20: Constants for static values at the top
@@ -29,9 +29,9 @@ export const configureSubcommand = (
 	subcommand: SlashCommandSubcommandBuilder,
 ) =>
 	subcommand
-		.setName("triggerdelete")
+		.setName("delete")
 		.setDescription(
-			localizer("en-US", "commands.server.triggerdelete.description"),
+			localizer("en-US", "commands.server.trigger.delete.description"),
 		);
 
 /**
@@ -85,9 +85,9 @@ export async function execute(
 				interaction,
 				locale,
 				{
-					titleKey: "commands.server.triggerdelete.no_triggers_title",
+					titleKey: "commands.server.trigger.delete.no_triggers_title",
 					descriptionKey:
-						"commands.server.triggerdelete.no_triggers_description",
+						"commands.server.trigger.delete.no_triggers_description",
 					color: ColorCode.WARN,
 				},
 				MessageFlags.Ephemeral,
@@ -107,13 +107,13 @@ export async function execute(
 		// 7. Show the paginated modal with trigger word selection
 		const modalResult = await promptWithPaginatedModal(interaction, locale, {
 			modalCustomId: MODAL_CUSTOM_ID,
-			modalTitleKey: "commands.server.triggerdelete.modal_title",
+			modalTitleKey: "commands.server.trigger.delete.modal_title",
 			components: [
 				{
 					customId: TRIGGER_SELECT_ID,
-					labelKey: "commands.server.triggerdelete.select_label",
-					descriptionKey: "commands.server.triggerdelete.select_description",
-					placeholder: "commands.server.triggerdelete.select_placeholder",
+					labelKey: "commands.server.trigger.delete.select_label",
+					descriptionKey: "commands.server.trigger.delete.select_description",
+					placeholder: "commands.server.trigger.delete.select_placeholder",
 					required: true,
 					options: triggerWordSelectOptions,
 				},
@@ -193,8 +193,8 @@ export async function execute(
 		);
 
 		await replyInfoEmbed(modalSubmitInteraction, locale, {
-			titleKey: "commands.server.triggerdelete.success_title",
-			descriptionKey: "commands.server.triggerdelete.success_description",
+			titleKey: "commands.server.trigger.delete.success_title",
+			descriptionKey: "commands.server.trigger.delete.success_description",
 			descriptionVars: {
 				triggerWord: wordToRemove,
 			},

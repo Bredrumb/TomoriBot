@@ -4,12 +4,12 @@ import type {
 	SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { sql } from "bun";
-import { loadTomoriState } from "../../utils/db/dbRead";
-import { tomoriConfigSchema } from "../../types/db/schema";
-import { localizer } from "../../utils/text/localizer";
-import { log, ColorCode } from "../../utils/misc/logger";
-import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
-import type { UserRow, ErrorContext } from "../../types/db/schema";
+import { loadTomoriState } from "../../../utils/db/dbRead";
+import { tomoriConfigSchema } from "../../../types/db/schema";
+import { localizer } from "../../../utils/text/localizer";
+import { log, ColorCode } from "../../../utils/misc/logger";
+import { replyInfoEmbed } from "../../../utils/discord/interactionHelper";
+import type { UserRow, ErrorContext } from "../../../types/db/schema";
 
 // Constants for threshold limits (Rule #20)
 const MIN_THRESHOLD = 0; // The absolute minimum value allowed (0)
@@ -21,9 +21,9 @@ export const configureSubcommand = (
 	subcommand: SlashCommandSubcommandBuilder,
 ) =>
 	subcommand
-		.setName("autochthreshold")
+		.setName("threshold")
 		.setDescription(
-			localizer("en-US", "commands.server.autochthreshold.description"),
+			localizer("en-US", "commands.server.autotrigger.threshold.description"),
 		)
 		.addIntegerOption((option) =>
 			option
@@ -31,7 +31,7 @@ export const configureSubcommand = (
 				.setDescription(
 					localizer(
 						"en-US",
-						"commands.server.autochthreshold.threshold_description_v2",
+						"commands.server.autotrigger.threshold.threshold_description_v2",
 					),
 				)
 				.setMinValue(MIN_THRESHOLD)
@@ -73,9 +73,9 @@ Setting to '0' will disable auto-chat
 
 		if (!isValidThreshold) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.server.autochthreshold.invalid_range_title",
+				titleKey: "commands.server.autotrigger.threshold.invalid_range_title",
 				descriptionKey:
-					"commands.server.autochthreshold.invalid_range_specific_description",
+					"commands.server.autotrigger.threshold.invalid_range_specific_description",
 				descriptionVars: {
 					min: MIN_THRESHOLD.toString(),
 					range_start: RANGE_START_THRESHOLD.toString(),
@@ -158,18 +158,18 @@ Setting to '0' will disable auto-chat
 		}
 
 		// Success message based on auto-chat state
-		const isAutoChatEnabled = threshold > 0;
+		const isAutoTriggerEnabled = threshold > 0;
 		await replyInfoEmbed(interaction, locale, {
-			titleKey: isAutoChatEnabled
-				? "commands.server.autochthreshold.success_title"
-				: "commands.server.autochthreshold.success_disabled_title",
-			descriptionKey: isAutoChatEnabled
-				? "commands.server.autochthreshold.success_description"
-				: "commands.server.autochthreshold.success_disabled_description",
+			titleKey: isAutoTriggerEnabled
+				? "commands.server.autotrigger.threshold.success_title"
+				: "commands.server.autotrigger.threshold.success_disabled_title",
+			descriptionKey: isAutoTriggerEnabled
+				? "commands.server.autotrigger.threshold.success_description"
+				: "commands.server.autotrigger.threshold.success_disabled_description",
 			descriptionVars: {
 				threshold: threshold.toString(),
 			},
-			color: isAutoChatEnabled ? ColorCode.SUCCESS : ColorCode.WARN,
+			color: isAutoTriggerEnabled ? ColorCode.SUCCESS : ColorCode.WARN,
 		});
 	} catch (error) {
 		const context: ErrorContext = {

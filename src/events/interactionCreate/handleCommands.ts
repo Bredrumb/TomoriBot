@@ -20,6 +20,7 @@ const TIMEOUT_DURATION = 100000; // 100 Seconds
 const MODAL_COMMAND_TIMEOUT = 700000; // 700 Seconds (11.67 minutes) for modal commands - Must exceed modal submission timeout (600s)
 
 // Commands that use modals and need longer timeout
+// Format: "category.subcommand" for flat commands, "category.group.subcommand" for grouped commands
 const MODAL_COMMANDS = new Set([
 	"teach.attribute",
 	"teach.sampledialogue",
@@ -29,7 +30,7 @@ const MODAL_COMMANDS = new Set([
 	"config.preset",
 	"config.humanizerdegree",
 	"config.model",
-	"config.apikeyset",
+	"config.apikey.set", // Updated for subcommand group structure
 	"preset.generate", // AI-powered preset generation with modal
 	"preset.create", // Manual preset creation with modal
 ]);
@@ -37,15 +38,23 @@ const MODAL_COMMANDS = new Set([
 /**
  * Determines if a command uses modals and needs longer timeout
  * @param commandName - The command category
+ * @param groupName - The subcommand group name (null for flat commands)
  * @param subcommandName - The subcommand name
  * @returns boolean indicating if command uses modals
  */
 function isModalCommand(
 	commandName: string,
+	groupName: string | null,
 	subcommandName: string | null,
 ): boolean {
 	if (!subcommandName) return false;
-	return MODAL_COMMANDS.has(`${commandName}.${subcommandName}`);
+
+	// Build the full command path
+	const commandPath = groupName
+		? `${commandName}.${groupName}.${subcommandName}`
+		: `${commandName}.${subcommandName}`;
+
+	return MODAL_COMMANDS.has(commandPath);
 }
 
 const COOLDOWN_MAP = new Map<string, number>([
@@ -155,8 +164,9 @@ const handler = async (
 			log.success("Command execution maps initialized.");
 		}
 
-		// 2. Get command and subcommand names
+		// 2. Get command, group, and subcommand names
 		const commandName = interaction.commandName; // The top-level command (category)
+		const groupName = interaction.options.getSubcommandGroup(false); // The subcommand group (null for flat commands)
 		const subcommandName = interaction.options.getSubcommand(false); // The specific subcommand (may be null)
 
 		// Guild-only subcommand restrictions are now handled at the Discord registration level
@@ -196,10 +206,18 @@ const handler = async (
 			return;
 		}
 
+		// Build execution key based on whether command is grouped or flat
+		const executionKey = groupName
+			? `${groupName}.${subcommandName}`
+			: subcommandName;
+
 		// Get the execute function for this subcommand
-		const executeFunction = subcommandMap.get(subcommandName);
+		const executeFunction = subcommandMap.get(executionKey);
 		if (!executeFunction) {
-			log.warn(`Subcommand not found: ${commandName} ${subcommandName}`);
+			const fullCommandPath = groupName
+				? `${commandName} ${groupName} ${subcommandName}`
+				: `${commandName} ${subcommandName}`;
+			log.warn(`Subcommand not found: ${fullCommandPath}`);
 			await replyInfoEmbed(
 				interaction,
 				initialLocale,
@@ -305,7 +323,7 @@ const handler = async (
 		};
 
 		// Race main logic against timeout (use longer timeout for modal commands)
-		const isModal = isModalCommand(commandName, subcommandName);
+		const isModal = isModalCommand(commandName, groupName, subcommandName);
 		const timeoutDuration = isModal ? MODAL_COMMAND_TIMEOUT : TIMEOUT_DURATION;
 
 		// Create timeout with proper cleanup
@@ -316,6 +334,7 @@ const handler = async (
 				// Log timeout context before rejecting
 				const timeoutContext = {
 					commandName,
+					groupName: groupName ?? "none",
 					subcommandName,
 					isModalCommand: isModal,
 					timeoutDuration: `${timeoutDuration / 1000}s`,
@@ -344,6 +363,7 @@ const handler = async (
 			errorType: "CommandHandlingError",
 			metadata: {
 				commandName: interaction.commandName,
+				groupName: interaction.options.getSubcommandGroup(false) ?? "none",
 				subcommandName: interaction.options.getSubcommand(false),
 				userDiscordId: interaction.user.id,
 				guildDiscordId: interaction.guild?.id ?? "DM",

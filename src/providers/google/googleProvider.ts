@@ -44,8 +44,7 @@ import {
 import { getGoogleToolAdapter } from "./googleToolAdapter";
 
 // Default values for Gemini API
-const DEFAULT_MODEL =
-	process.env.DEFAULT_GEMINI_MODEL || "gemini-2.5-flash-preview-05-20";
+const DEFAULT_MODEL = process.env.DEFAULT_GEMINI_MODEL || "gemini-2.5-flash";
 
 // Google-specific configuration extending the base ProviderConfig
 export interface GoogleProviderConfig extends ProviderConfig {
@@ -74,7 +73,7 @@ export class GoogleProvider extends BaseLLMProvider implements LLMProvider {
 			name: "google",
 			displayName: "Google Gemini",
 			supportedModels: [
-				"gemini-2.5-flash-preview-05-20",
+				"gemini-2.5-flash",
 				"gemini-2.5-pro-preview-05-06",
 				"gemini-2.0-flash-thinking-exp-01-21",
 			],
@@ -155,10 +154,11 @@ export class GoogleProvider extends BaseLLMProvider implements LLMProvider {
 
 			// Use context-aware tool availability when streaming context is provided
 			// Use centralized tool filtering (built-in + MCP with feature flags)
-			const { builtInTools: availableBuiltInTools, mcpFunctionNames, totalCount } = await getAvailableToolsWithMCP(
-				"google",
-				toolStateForContext,
-			);
+			const {
+				builtInTools: availableBuiltInTools,
+				mcpFunctionNames,
+				totalCount,
+			} = await getAvailableToolsWithMCP("google", toolStateForContext);
 
 			// Apply streaming context filtering if available
 			let finalBuiltInTools = availableBuiltInTools;
@@ -177,13 +177,15 @@ export class GoogleProvider extends BaseLLMProvider implements LLMProvider {
 				// Apply additional streaming-aware filtering for tools that support it
 				finalBuiltInTools = availableBuiltInTools.filter((tool) => {
 					// Use context-aware availability check if available, otherwise keep the tool
-					const isContextAvailable = 'isAvailableForContext' in tool && typeof tool.isAvailableForContext === 'function'
-						? tool.isAvailableForContext("google", minimalContext)
-						: true; // Keep tool if no context-aware check available
+					const isContextAvailable =
+						"isAvailableForContext" in tool &&
+						typeof tool.isAvailableForContext === "function"
+							? tool.isAvailableForContext("google", minimalContext)
+							: true; // Keep tool if no context-aware check available
 
 					return isContextAvailable;
 				});
-				
+
 				log.info(
 					`Applied streaming context filtering: ${availableBuiltInTools.length} → ${finalBuiltInTools.length} built-in tools`,
 				);
@@ -363,7 +365,9 @@ export class GoogleProvider extends BaseLLMProvider implements LLMProvider {
 
 				// Provider context
 				provider: "google",
-				locale: ('guild' in channel ? channel.guild?.preferredLocale : undefined) ?? "en-US",
+				locale:
+					("guild" in channel ? channel.guild?.preferredLocale : undefined) ??
+					"en-US",
 			};
 
 			// Create the modular streaming components

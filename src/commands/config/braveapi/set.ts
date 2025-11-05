@@ -4,13 +4,17 @@ import {
 	type Client,
 	type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { loadTomoriState } from "../../utils/db/dbRead";
-import { localizer } from "../../utils/text/localizer";
-import { log, ColorCode } from "../../utils/misc/logger";
-import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
-import type { UserRow, ErrorContext, TomoriState } from "../../types/db/schema";
-import { storeOptApiKey } from "../../utils/security/crypto";
-import { braveWebSearch } from "../../tools/restAPIs/brave/braveSearchService";
+import { loadTomoriState } from "../../../utils/db/dbRead";
+import { localizer } from "../../../utils/text/localizer";
+import { log, ColorCode } from "../../../utils/misc/logger";
+import { replyInfoEmbed } from "../../../utils/discord/interactionHelper";
+import type {
+	UserRow,
+	ErrorContext,
+	TomoriState,
+} from "../../../types/db/schema";
+import { storeOptApiKey } from "../../../utils/security/crypto";
+import { braveWebSearch } from "../../../tools/restAPIs/brave/braveSearchService";
 
 /**
  * Configure the subcommand for setting Brave Search API key
@@ -21,15 +25,15 @@ export const configureSubcommand = (
 	subcommand: SlashCommandSubcommandBuilder,
 ) =>
 	subcommand
-		.setName("braveapiset")
+		.setName("set")
 		.setDescription(
-			localizer("en-US", "commands.config.braveapiset.description"),
+			localizer("en-US", "commands.config.braveapi.set.description"),
 		)
 		.addStringOption((option) =>
 			option
 				.setName("key")
 				.setDescription(
-					localizer("en-US", "commands.config.braveapiset.key_description"),
+					localizer("en-US", "commands.config.braveapi.set.key_description"),
 				)
 				.setRequired(true),
 		);
@@ -68,8 +72,8 @@ export async function execute(
 		// 3. Basic validation (no specific Brave API validation available)
 		if (!apiKey || apiKey.length < 10) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.config.braveapiset.invalid_key_title",
-				descriptionKey: "commands.config.braveapiset.invalid_key_description",
+				titleKey: "commands.config.braveapi.set.invalid_key_title",
+				descriptionKey: "commands.config.braveapi.set.invalid_key_description",
 				color: ColorCode.ERROR,
 			});
 			return;
@@ -103,9 +107,9 @@ export async function execute(
 					`Brave API key validation failed for server ${tomoriState.server_id}`,
 				);
 				await replyInfoEmbed(interaction, locale, {
-					titleKey: "commands.config.braveapiset.key_validation_failed_title",
+					titleKey: "commands.config.braveapi.set.key_validation_failed_title",
 					descriptionKey:
-						"commands.config.braveapiset.key_validation_failed_description",
+						"commands.config.braveapi.set.key_validation_failed_description",
 					color: ColorCode.ERROR,
 				});
 				return;
@@ -116,9 +120,9 @@ export async function execute(
 				`Brave API key validation error for server ${tomoriState.server_id}`,
 			);
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.config.braveapiset.key_validation_failed_title",
+				titleKey: "commands.config.braveapi.set.key_validation_failed_title",
 				descriptionKey:
-					"commands.config.braveapiset.key_validation_failed_description",
+					"commands.config.braveapi.set.key_validation_failed_description",
 				color: ColorCode.ERROR,
 			});
 			return;
@@ -159,8 +163,8 @@ export async function execute(
 
 		// 10. Success message
 		await replyInfoEmbed(interaction, locale, {
-			titleKey: "commands.config.braveapiset.success_title",
-			descriptionKey: "commands.config.braveapiset.success_description",
+			titleKey: "commands.config.braveapi.set.success_title",
+			descriptionKey: "commands.config.braveapi.set.success_description",
 			color: ColorCode.SUCCESS,
 			flags: MessageFlags.Ephemeral,
 		});

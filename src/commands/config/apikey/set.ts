@@ -5,24 +5,27 @@ import {
 	type Client,
 	type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { loadTomoriState, loadUniqueProviders } from "../../utils/db/dbRead";
-import { localizer } from "../../utils/text/localizer";
-import { log, ColorCode } from "../../utils/misc/logger";
+import { loadTomoriState, loadUniqueProviders } from "../../../utils/db/dbRead";
+import { localizer } from "../../../utils/text/localizer";
+import { log, ColorCode } from "../../../utils/misc/logger";
 import {
 	replyInfoEmbed,
 	promptWithRawModal,
-} from "../../utils/discord/interactionHelper";
+} from "../../../utils/discord/interactionHelper";
 import {
 	type UserRow,
 	type ErrorContext,
 	tomoriConfigSchema,
-} from "../../types/db/schema";
-import type { SelectOption, ModalComponent } from "../../types/discord/modal";
+} from "../../../types/db/schema";
+import type {
+	SelectOption,
+	ModalComponent,
+} from "../../../types/discord/modal";
 import {
 	ProviderFactory,
 	ProviderType,
-} from "../../utils/provider/providerFactory";
-import { encryptApiKey } from "../../utils/security/crypto";
+} from "../../../utils/provider/providerFactory";
+import { encryptApiKey } from "../../../utils/security/crypto";
 import { sql } from "bun";
 
 // Modal configuration constants
@@ -35,9 +38,9 @@ export const configureSubcommand = (
 	subcommand: SlashCommandSubcommandBuilder,
 ) =>
 	subcommand
-		.setName("apikeyset")
+		.setName("set")
 		.setDescription(
-			localizer("en-US", "commands.config.apikeyset.description"),
+			localizer("en-US", "commands.config.apikey.set.description"),
 		);
 
 /**
@@ -83,8 +86,8 @@ export async function execute(
 		const uniqueProviders = await loadUniqueProviders();
 		if (!uniqueProviders || uniqueProviders.length === 0) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.config.apikeyset.no_providers_title",
-				descriptionKey: "commands.config.apikeyset.no_providers_description",
+				titleKey: "commands.config.apikey.set.no_providers_title",
+				descriptionKey: "commands.config.apikey.set.no_providers_description",
 				color: ColorCode.ERROR,
 				flags: MessageFlags.Ephemeral,
 			});
@@ -122,17 +125,17 @@ export async function execute(
 		const modalComponents: ModalComponent[] = [
 			{
 				customId: PROVIDER_SELECT_ID,
-				labelKey: "commands.config.apikeyset.provider_label",
-				descriptionKey: "commands.config.apikeyset.provider_description",
-				placeholder: "commands.config.apikeyset.provider_placeholder",
+				labelKey: "commands.config.apikey.set.provider_label",
+				descriptionKey: "commands.config.apikey.set.provider_description",
+				placeholder: "commands.config.apikey.set.provider_placeholder",
 				required: true,
 				options: providerSelectOptions,
 			},
 			{
 				customId: API_KEY_INPUT_ID,
-				labelKey: "commands.config.apikeyset.api_key_label",
-				descriptionKey: "commands.config.apikeyset.api_key_description",
-				placeholder: "commands.config.apikeyset.api_key_placeholder",
+				labelKey: "commands.config.apikey.set.api_key_label",
+				descriptionKey: "commands.config.apikey.set.api_key_description",
+				placeholder: "commands.config.apikey.set.api_key_placeholder",
 				required: true,
 				style: TextInputStyle.Short,
 				maxLength: 200,
@@ -141,7 +144,7 @@ export async function execute(
 
 		const modalResult = await promptWithRawModal(interaction, locale, {
 			modalCustomId: MODAL_CUSTOM_ID,
-			modalTitleKey: "commands.config.apikeyset.modal_title",
+			modalTitleKey: "commands.config.apikey.set.modal_title",
 			components: modalComponents,
 		});
 
@@ -167,8 +170,8 @@ export async function execute(
 		// 7. Basic API key validation - let helper functions manage interaction state
 		if (apiKey.length < 10) {
 			await replyInfoEmbed(modalSubmitInteraction, locale, {
-				titleKey: "commands.config.apikeyset.invalid_key_title",
-				descriptionKey: "commands.config.apikeyset.invalid_key_description",
+				titleKey: "commands.config.apikey.set.invalid_key_title",
+				descriptionKey: "commands.config.apikey.set.invalid_key_description",
 				color: ColorCode.ERROR,
 			});
 			return;
@@ -185,15 +188,15 @@ export async function execute(
 
 			if (providerName === "google" || providerName === "gemini") {
 				const { GoogleProvider } = await import(
-					"../../providers/google/googleProvider"
+					"../../../providers/google/googleProvider"
 				);
 				provider = new GoogleProvider();
 			} else {
 				// Unsupported provider selected
 				await replyInfoEmbed(modalSubmitInteraction, locale, {
-					titleKey: "commands.config.apikeyset.unsupported_provider_title",
+					titleKey: "commands.config.apikey.set.unsupported_provider_title",
 					descriptionKey:
-						"commands.config.apikeyset.unsupported_provider_description",
+						"commands.config.apikey.set.unsupported_provider_description",
 					descriptionVars: {
 						provider: selectedProvider,
 					},
@@ -216,9 +219,9 @@ export async function execute(
 				error as Error,
 			);
 			await replyInfoEmbed(modalSubmitInteraction, locale, {
-				titleKey: "commands.config.apikeyset.validation_error_title",
+				titleKey: "commands.config.apikey.set.validation_error_title",
 				descriptionKey:
-					"commands.config.apikeyset.validation_error_description",
+					"commands.config.apikey.set.validation_error_description",
 				color: ColorCode.ERROR,
 			});
 			return;
@@ -227,9 +230,9 @@ export async function execute(
 		// 10. Handle validation failure with error embed (not reply)
 		if (!isValid) {
 			await replyInfoEmbed(modalSubmitInteraction, locale, {
-				titleKey: "commands.config.apikeyset.key_validation_failed_title",
+				titleKey: "commands.config.apikey.set.key_validation_failed_title",
 				descriptionKey:
-					"commands.config.apikeyset.key_validation_failed_description",
+					"commands.config.apikey.set.key_validation_failed_description",
 				descriptionVars: {
 					provider:
 						selectedProvider.charAt(0).toUpperCase() +
@@ -286,8 +289,8 @@ export async function execute(
 
 		// 14. Success message
 		await replyInfoEmbed(modalSubmitInteraction, locale, {
-			titleKey: "commands.config.apikeyset.success_title",
-			descriptionKey: "commands.config.apikeyset.success_description",
+			titleKey: "commands.config.apikey.set.success_title",
+			descriptionKey: "commands.config.apikey.set.success_description",
 			descriptionVars: {
 				provider:
 					selectedProvider.charAt(0).toUpperCase() + selectedProvider.slice(1),

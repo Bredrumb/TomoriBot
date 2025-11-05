@@ -76,7 +76,7 @@ interface GoogleStreamChunk {
  */
 export class GoogleStreamAdapter implements StreamProvider {
 	private static readonly DEFAULT_MODEL =
-		process.env.DEFAULT_GEMINI_MODEL || "gemini-2.5-flash-preview-05-20";
+		process.env.DEFAULT_GEMINI_MODEL || "gemini-2.5-flash";
 
 	private static readonly SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
 		ContextItemTag.KNOWLEDGE_SERVER_INFO,
@@ -473,7 +473,6 @@ export class GoogleStreamAdapter implements StreamProvider {
 	 * Formats errors as "Error Code {code}: {Google message}"
 	 */
 	createErrorDescription(error: ProviderError, locale: string): string | null {
-
 		// Get Google-specific message based on error code and type
 		let googleMessage = error.userMessage;
 
@@ -513,7 +512,10 @@ export class GoogleStreamAdapter implements StreamProvider {
 				googleMessage = localizer(locale, `genai.google.${messageKey}`);
 			} catch {
 				// If locale key doesn't exist, use a generic fallback
-				googleMessage = localizer(locale, "genai.google.unknown_default_message");
+				googleMessage = localizer(
+					locale,
+					"genai.google.unknown_default_message",
+				);
 			}
 		}
 
@@ -533,7 +535,6 @@ export class GoogleStreamAdapter implements StreamProvider {
 			supportsFunctionCalling: true,
 		};
 	}
-
 
 	/**
 	 * Assemble context items into Google's expected format
@@ -617,7 +618,9 @@ export class GoogleStreamAdapter implements StreamProvider {
 								// Regular image processing (non-GIF)
 								const imageResponse = await fetch(part.uri);
 								if (!imageResponse.ok) {
-									throw new Error(`Image fetch failed: ${imageResponse.status}`);
+									throw new Error(
+										`Image fetch failed: ${imageResponse.status}`,
+									);
 								}
 								const imageArrayBuffer = await imageResponse.arrayBuffer();
 								const base64ImageData =

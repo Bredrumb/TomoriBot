@@ -4,15 +4,15 @@ import {
 	type Client,
 	type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { loadTomoriState } from "../../utils/db/dbRead";
-import { localizer } from "../../utils/text/localizer";
-import { log, ColorCode } from "../../utils/misc/logger";
-import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
+import { loadTomoriState } from "../../../utils/db/dbRead";
+import { localizer } from "../../../utils/text/localizer";
+import { log, ColorCode } from "../../../utils/misc/logger";
+import { replyInfoEmbed } from "../../../utils/discord/interactionHelper";
 import {
 	type UserRow,
 	type ErrorContext,
 	tomoriConfigSchema,
-} from "../../types/db/schema";
+} from "../../../types/db/schema";
 import { sql } from "bun";
 
 // Configure the subcommand
@@ -20,9 +20,9 @@ export const configureSubcommand = (
 	subcommand: SlashCommandSubcommandBuilder,
 ) =>
 	subcommand
-		.setName("apikeydelete")
+		.setName("delete")
 		.setDescription(
-			localizer("en-US", "commands.config.apikeydelete.description"),
+			localizer("en-US", "commands.config.apikey.delete.description"),
 		);
 
 /**
@@ -65,8 +65,8 @@ export async function execute(
 		// 4. Check if there's an API key to remove
 		if (!tomoriState.config.api_key) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.config.apikeydelete.no_key_title",
-				descriptionKey: "commands.config.apikeydelete.no_key_description",
+				titleKey: "commands.config.apikey.delete.no_key_title",
+				descriptionKey: "commands.config.apikey.delete.no_key_description",
 				color: ColorCode.WARN,
 			});
 			return;
@@ -116,8 +116,8 @@ export async function execute(
 
 		// 7. Success message with embed
 		await replyInfoEmbed(interaction, locale, {
-			titleKey: "commands.config.apikeydelete.success_title",
-			descriptionKey: "commands.config.apikeydelete.success_description",
+			titleKey: "commands.config.apikey.delete.success_title",
+			descriptionKey: "commands.config.apikey.delete.success_description",
 			color: ColorCode.SUCCESS,
 		});
 	} catch (error) {

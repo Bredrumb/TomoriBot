@@ -116,8 +116,8 @@ jobs:
           GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}
           DEEPL_KEY=${{ secrets.DEEPL_KEY }}
 
-          DEFAULT_GEMINI_MODEL=gemini-2.5-flash-preview-05-20
-          DEFAULT_GEMINI_SUBAGENT_MODEL=gemini-2.5-flash-preview-05-20
+          DEFAULT_GEMINI_MODEL=gemini-2.5-flash
+          DEFAULT_GEMINI_SUBAGENT_MODEL=gemini-2.5-flash
           STREAMING_ENABLED=true
           PREFIX==
 

@@ -4,12 +4,16 @@ import {
 	type Client,
 	type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { loadTomoriState } from "../../utils/db/dbRead";
-import { localizer } from "../../utils/text/localizer";
-import { log, ColorCode } from "../../utils/misc/logger";
-import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
-import type { UserRow, ErrorContext, TomoriState } from "../../types/db/schema";
-import { deleteOptApiKey, hasOptApiKey } from "../../utils/security/crypto";
+import { loadTomoriState } from "../../../utils/db/dbRead";
+import { localizer } from "../../../utils/text/localizer";
+import { log, ColorCode } from "../../../utils/misc/logger";
+import { replyInfoEmbed } from "../../../utils/discord/interactionHelper";
+import type {
+	UserRow,
+	ErrorContext,
+	TomoriState,
+} from "../../../types/db/schema";
+import { deleteOptApiKey, hasOptApiKey } from "../../../utils/security/crypto";
 
 /**
  * Configure the subcommand for deleting Brave Search API key
@@ -20,9 +24,9 @@ export const configureSubcommand = (
 	subcommand: SlashCommandSubcommandBuilder,
 ) =>
 	subcommand
-		.setName("braveapidelete")
+		.setName("delete")
 		.setDescription(
-			localizer("en-US", "commands.config.braveapidelete.description"),
+			localizer("en-US", "commands.config.braveapi.delete.description"),
 		);
 
 /**
@@ -69,8 +73,8 @@ export async function execute(
 		const hasKey = await hasOptApiKey(tomoriState.server_id, "brave-search");
 		if (!hasKey) {
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.config.braveapidelete.no_key_title",
-				descriptionKey: "commands.config.braveapidelete.no_key_description",
+				titleKey: "commands.config.braveapi.delete.no_key_title",
+				descriptionKey: "commands.config.braveapi.delete.no_key_description",
 				color: ColorCode.WARN,
 				flags: MessageFlags.Ephemeral,
 			});
@@ -111,8 +115,8 @@ export async function execute(
 
 		// 6. Success message
 		await replyInfoEmbed(interaction, locale, {
-			titleKey: "commands.config.braveapidelete.success_title",
-			descriptionKey: "commands.config.braveapidelete.success_description",
+			titleKey: "commands.config.braveapi.delete.success_title",
+			descriptionKey: "commands.config.braveapi.delete.success_description",
 			color: ColorCode.SUCCESS,
 			flags: MessageFlags.Ephemeral,
 		});

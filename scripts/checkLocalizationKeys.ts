@@ -177,6 +177,19 @@ function isValidLocalizationKey(key: string): boolean {
 	const segments = key.split(".");
 	if (segments.length < 2) return false;
 
+	// Filter out template/placeholder strings (generic documentation examples)
+	const templatePatterns = [
+		/^category\./i, // "category.group.subcommand"
+		/^example\./i, // "example.key.path"
+		/^placeholder\./i, // "placeholder.text"
+		/^template\./i, // "template.string"
+		/\.placeholder$/i, // "something.placeholder"
+	];
+
+	for (const pattern of templatePatterns) {
+		if (pattern.test(key)) return false;
+	}
+
 	// Filter out common false positives
 	const falsePositives = [
 		// URLs and domains
@@ -314,6 +327,45 @@ async function checkModalTitleLengths(
 }
 
 /**
+ * Checks if a string appears in a Set declaration context
+ * @param content - The file content
+ * @param matchIndex - The index where the string was matched
+ * @returns True if the string is in a Set declaration
+ */
+function isInSetDeclaration(content: string, matchIndex: number): boolean {
+	// Look backwards from the match to find if it's in a Set declaration
+	const lookbackDistance = 300;
+	const beforeMatch = content.substring(Math.max(0, matchIndex - lookbackDistance), matchIndex);
+
+	// Check for Set initialization patterns
+	// These patterns look for: new Set([... or Set([... with optional type parameters
+	const setPatterns = [
+		/new\s+Set\s*\<[^>]*\>\s*\(\s*\[[\s\S]*$/,  // new Set<T>([...
+		/new\s+Set\s*\(\s*\[[\s\S]*$/,              // new Set([...
+		/Set\s*\<[^>]*\>\s*\(\s*\[[\s\S]*$/,        // Set<T>([...
+		/Set\s*\(\s*\[[\s\S]*$/,                    // Set([...
+		/=\s*new\s+Set\s*\<[^>]*\>\s*\(\s*\[[\s\S]*$/, // = new Set<T>([...
+		/=\s*new\s+Set\s*\(\s*\[[\s\S]*$/,          // = new Set([...
+	];
+
+	for (const pattern of setPatterns) {
+		if (pattern.test(beforeMatch)) {
+			// Additional check: make sure we're still inside the array (no closing ])
+			const afterSetDecl = beforeMatch.match(pattern)?.[0] || "";
+			const openBrackets = (afterSetDecl.match(/\[/g) || []).length;
+			const closeBrackets = (afterSetDecl.match(/\]/g) || []).length;
+
+			// If we have more open brackets than close brackets, we're still inside the Set
+			if (openBrackets > closeBrackets) {
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+/**
  * Extracts localization keys referenced in TypeScript source files
  * @returns Map of referenced keys to files that reference them
  */
@@ -352,6 +404,13 @@ async function extractReferencedKeys(): Promise<Map<string, Set<string>>> {
 					match = pattern.exec(content);
 					while (match !== null) {
 						const key = match[1];
+						const matchIndex = match.index;
+
+						// Skip if in a Set declaration
+						if (isInSetDeclaration(content, matchIndex)) {
+							match = pattern.exec(content);
+							continue;
+						}
 
 						// Filter out false positives
 						if (isValidLocalizationKey(key)) {
