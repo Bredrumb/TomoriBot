@@ -165,6 +165,52 @@ export class ReviewCapabilitiesTool extends BaseTool {
 	}
 
 	/**
+	 * Create a mock subcommand builder for extracting command details
+	 * @returns Mock builder object
+	 */
+	private createMockBuilder() {
+		return {
+			name: "",
+			description: "",
+			setName: function (name: string) {
+				this.name = name;
+				return this;
+			},
+			setDescription: function (desc: string) {
+				this.description = desc;
+				return this;
+			},
+			addStringOption: function () {
+				return this;
+			},
+			addIntegerOption: function () {
+				return this;
+			},
+			addBooleanOption: function () {
+				return this;
+			},
+			addUserOption: function () {
+				return this;
+			},
+			addChannelOption: function () {
+				return this;
+			},
+			addRoleOption: function () {
+				return this;
+			},
+			addMentionableOption: function () {
+				return this;
+			},
+			addNumberOption: function () {
+				return this;
+			},
+			addAttachmentOption: function () {
+				return this;
+			},
+		};
+	}
+
+	/**
 	 * Dynamically scan the commands directory and generate slash command documentation
 	 * @returns Promise resolving to tool result with slash commands
 	 */
@@ -179,7 +225,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
 			// 3. Build markdown documentation
 			let commandsMarkdown = "# TomoriBot Slash Commands\n\n";
 			commandsMarkdown +=
-				"Here are all available slash commands organized by category. All commands use the format `/{category} {subcommand}`.\n\n";
+				"Here are all available slash commands organized by category. Commands may use the format `/{category} {subcommand}` or `/{category} {group} {subcommand}`.\n\n";
 
 			let totalCommands = 0;
 
@@ -195,13 +241,13 @@ export class ReviewCapabilitiesTool extends BaseTool {
 				commandsMarkdown += `## /${categoryName}\n`;
 				commandsMarkdown += `${categoryDescription}\n\n`;
 
-				// 6. Get all command files in this category
-				const commandFiles = getAllFiles(categoryDir).filter((file) =>
+				// 6. Get direct command files (immediate children - direct subcommands)
+				const directCommandFiles = getAllFiles(categoryDir).filter((file) =>
 					file.endsWith(".ts"),
 				);
 
-				// 7. Process each command file
-				for (const commandFile of commandFiles) {
+				// 7. Process direct subcommands (no subcommand group)
+				for (const commandFile of directCommandFiles) {
 					try {
 						// 8. Import the command module
 						const commandModule = await import(commandFile);
@@ -212,59 +258,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
 						}
 
 						// 10. Create a mock subcommand builder to extract command details
-						const mockBuilder: {
-							name: string;
-							description: string;
-							setName: (name: string) => typeof mockBuilder;
-							setDescription: (desc: string) => typeof mockBuilder;
-							addStringOption: () => typeof mockBuilder;
-							addIntegerOption: () => typeof mockBuilder;
-							addBooleanOption: () => typeof mockBuilder;
-							addUserOption: () => typeof mockBuilder;
-							addChannelOption: () => typeof mockBuilder;
-							addRoleOption: () => typeof mockBuilder;
-							addMentionableOption: () => typeof mockBuilder;
-							addNumberOption: () => typeof mockBuilder;
-							addAttachmentOption: () => typeof mockBuilder;
-						} = {
-							name: "",
-							description: "",
-							setName: function (name: string) {
-								this.name = name;
-								return this;
-							},
-							setDescription: function (desc: string) {
-								this.description = desc;
-								return this;
-							},
-							addStringOption: function () {
-								return this;
-							},
-							addIntegerOption: function () {
-								return this;
-							},
-							addBooleanOption: function () {
-								return this;
-							},
-							addUserOption: function () {
-								return this;
-							},
-							addChannelOption: function () {
-								return this;
-							},
-							addRoleOption: function () {
-								return this;
-							},
-							addMentionableOption: function () {
-								return this;
-							},
-							addNumberOption: function () {
-								return this;
-							},
-							addAttachmentOption: function () {
-								return this;
-							},
-						};
+						const mockBuilder = this.createMockBuilder();
 
 						// 11. Call configureSubcommand to populate the mock builder
 						commandModule.configureSubcommand(
@@ -287,17 +281,66 @@ export class ReviewCapabilitiesTool extends BaseTool {
 					}
 				}
 
+				// 13. Get subdirectories (potential subcommand groups)
+				const subcommandGroups = getAllFiles(categoryDir, true);
+
+				// 14. Process subcommand groups
+				for (const groupDir of subcommandGroups) {
+					const groupName = path.basename(groupDir);
+
+					// 15. Get command files in this subcommand group
+					const groupCommandFiles = getAllFiles(groupDir).filter((file) =>
+						file.endsWith(".ts"),
+					);
+
+					// 16. Process each command file in the group
+					for (const commandFile of groupCommandFiles) {
+						try {
+							// 17. Import the command module
+							const commandModule = await import(commandFile);
+
+							// 18. Validate exports
+							if (!commandModule.configureSubcommand) {
+								continue;
+							}
+
+							// 19. Create a mock subcommand builder to extract command details
+							const mockBuilder = this.createMockBuilder();
+
+							// 20. Call configureSubcommand to populate the mock builder
+							commandModule.configureSubcommand(
+								mockBuilder as unknown as SlashCommandSubcommandBuilder,
+							);
+
+							// 21. Extract command information
+							const subcommandName = mockBuilder.name;
+							const subcommandDescription = mockBuilder.description;
+
+							if (subcommandName && subcommandDescription) {
+								// 22. Format with subcommand group: /{category} {group} {subcommand}
+								commandsMarkdown += `- **/${categoryName} ${groupName} ${subcommandName}** - ${subcommandDescription}\n`;
+								totalCommands++;
+							}
+						} catch (_error) {
+							// Skip files that fail to import (might be helpers or non-command files)
+							log.warn(
+								`Skipped command file during capability scan: ${commandFile}`,
+							);
+						}
+					}
+				}
+
 				commandsMarkdown += "\n";
 			}
 
-			// 13. Add footer with command count
+			// 23. Add footer with command count
 			commandsMarkdown += `---\n\n**Total Commands**: ${totalCommands} slash commands across ${categoryDirs.length} categories\n`;
 
 			log.success(
 				`Successfully generated slash command documentation: ${totalCommands} commands`,
 			);
 
-			// 14. Return the generated markdown
+			// 24. Return the generated markdown
 			// Note: Put content in both message and data.summary for maximum compatibility
 			// GoogleToolAdapter looks for data.summary/data.message when converting results
 			return {

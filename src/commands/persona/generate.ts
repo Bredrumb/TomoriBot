@@ -7,7 +7,7 @@ import type {
 	ChatInputCommandInteraction,
 	Client,
 	SlashCommandSubcommandBuilder,
-	Attachment,
+	APIAttachment,
 } from "discord.js";
 import { AttachmentBuilder, MessageFlags, EmbedBuilder } from "discord.js";
 import { TextInputStyle } from "discord.js";
@@ -39,10 +39,10 @@ import axios from "axios";
 // Modal constants
 const MODAL_CUSTOM_ID = "preset_generate_modal";
 const CHARACTER_NAME_ID = "character_name";
-const CHARACTER_DESC_ID = "character_desc";
-const SPEECH_EXAMPLES_ID = "speech_examples";
+const CHARACTER_INFO_ID = "character_info"; // Combined description and speech examples
 const WEB_SEARCH_ID = "web_search";
 const ADDITIONAL_INST_ID = "additional_inst";
+const FILE_UPLOAD_ID = "avatar_image";
 
 /**
  * Configure the 'generate' subcommand
@@ -52,22 +52,14 @@ export const configureSubcommand = (
 ) =>
 	subcommand
 		.setName("generate")
-		.setDescription(localizer("en-US", "commands.persona.generate.description"))
-		.addAttachmentOption((option) =>
-			option
-				.setName("image")
-				.setDescription(
-					localizer("en-US", "commands.persona.generate.image_description"),
-				)
-				.setRequired(false),
-		);
+		.setDescription(localizer("en-US", "commands.persona.generate.description"));
 
 /**
  * Convert Discord attachment to base64
  * @param attachment - Discord attachment object
  * @returns Promise<{base64: string, mimeType: string}> - Base64 data and MIME type
  */
-async function attachmentToBase64(attachment: Attachment): Promise<{
+async function attachmentToBase64(attachment: APIAttachment): Promise<{
 	base64: string;
 	mimeType: string;
 }> {
@@ -78,7 +70,7 @@ async function attachmentToBase64(attachment: Attachment): Promise<{
 
 	// Convert to base64
 	const base64 = Buffer.from(response.data).toString("base64");
-	const mimeType = attachment.contentType || "image/png";
+	const mimeType = attachment.content_type || "image/png";
 
 	return { base64, mimeType };
 }
@@ -191,42 +183,7 @@ export async function execute(
 			return;
 		}
 
-		// 5. Get optional image attachment
-		const imageAttachment = interaction.options.getAttachment("image");
-		let imageBase64: string | undefined;
-		let imageMimeType: string | undefined;
-
-		if (imageAttachment) {
-			// Validate image type
-			if (!imageAttachment.contentType?.startsWith("image/")) {
-				await replyInfoEmbed(interaction, locale, {
-					titleKey: "commands.persona.generate.invalid_image_title",
-					descriptionKey: "commands.persona.generate.invalid_image_description",
-					color: ColorCode.ERROR,
-					flags: MessageFlags.Ephemeral,
-				});
-				return;
-			}
-
-			try {
-				const { base64, mimeType } = await attachmentToBase64(imageAttachment);
-				imageBase64 = base64;
-				imageMimeType = mimeType;
-				log.info("Image attachment converted to base64");
-			} catch (error) {
-				log.error("Failed to convert image attachment:", error);
-				await replyInfoEmbed(interaction, locale, {
-					titleKey: "commands.persona.generate.image_download_failed_title",
-					descriptionKey:
-						"commands.persona.generate.image_download_failed_description",
-					color: ColorCode.ERROR,
-					flags: MessageFlags.Ephemeral,
-				});
-				return;
-			}
-		}
-
-		// 6. Show modal with generation fields
+		// 5. Show modal with generation fields
 		const modalComponents: ModalComponent[] = [
 			{
 				customId: CHARACTER_NAME_ID,
@@ -238,22 +195,15 @@ export async function execute(
 				maxLength: 100,
 			},
 			{
-				customId: CHARACTER_DESC_ID,
-				labelKey: "commands.persona.generate.modal.character_desc_label",
+				customId: CHARACTER_INFO_ID,
+				labelKey: "commands.persona.generate.modal.character_info_label",
+				descriptionKey:
+					"commands.persona.generate.modal.character_info_description",
 				placeholder:
-					"commands.persona.generate.modal.character_desc_placeholder",
+					"commands.persona.generate.modal.character_info_placeholder",
 				required: true,
 				style: TextInputStyle.Paragraph,
-				maxLength: 1000,
-			},
-			{
-				customId: SPEECH_EXAMPLES_ID,
-				labelKey: "commands.persona.generate.modal.speech_examples_label",
-				placeholder:
-					"commands.persona.generate.modal.speech_examples_placeholder",
-				required: true,
-				style: TextInputStyle.Paragraph,
-				maxLength: 1000,
+				maxLength: 2000, // Increased to accommodate both description and speech examples
 			},
 			{
 				customId: WEB_SEARCH_ID,
@@ -288,6 +238,15 @@ export async function execute(
 				style: TextInputStyle.Paragraph,
 				maxLength: 500,
 			},
+			{
+				customId: FILE_UPLOAD_ID,
+				labelKey: "commands.persona.generate.modal.file_upload_label",
+				descriptionKey:
+					"commands.persona.generate.modal.file_upload_description",
+				minValues: 0,
+				maxValues: 1,
+				required: false,
+			},
 		];
 
 		const modalResult = await promptWithRawModal(
@@ -309,8 +268,7 @@ export async function execute(
 
 		const modalSubmitInteraction = modalResult.interaction;
 		const characterName = modalResult.values?.[CHARACTER_NAME_ID];
-		const characterDesc = modalResult.values?.[CHARACTER_DESC_ID];
-		const speechExamples = modalResult.values?.[SPEECH_EXAMPLES_ID];
+		const characterInfo = modalResult.values?.[CHARACTER_INFO_ID];
 		const webSearch = modalResult.values?.[WEB_SEARCH_ID];
 		const additionalInst = modalResult.values?.[ADDITIONAL_INST_ID];
 
@@ -318,12 +276,72 @@ export async function execute(
 		if (
 			!modalSubmitInteraction ||
 			!characterName ||
-			!characterDesc ||
-			!speechExamples ||
+			!characterInfo ||
 			!webSearch
 		) {
 			log.error("Modal result unexpectedly missing values");
 			return;
+		}
+
+		// Split combined character info into description and speech examples
+		// Users are expected to use natural formatting (newlines or clear sections)
+		// We'll pass the full info as description and let the AI parse it intelligently
+		const characterDesc = characterInfo;
+		const speechExamples = characterInfo; // AI will extract speech patterns from context
+
+		// 6. Get optional image attachment from modal
+		const imageAttachment = modalResult.attachments?.[FILE_UPLOAD_ID];
+		let imageBase64: string | undefined;
+		let imageMimeType: string | undefined;
+
+		if (imageAttachment) {
+			// Validate image type
+			if (!imageAttachment.content_type?.startsWith("image/")) {
+				await modalSubmitInteraction.editReply({
+					embeds: [
+						new EmbedBuilder()
+							.setTitle(
+								localizer(locale, "commands.persona.generate.invalid_image_title"),
+							)
+							.setDescription(
+								localizer(
+									locale,
+									"commands.persona.generate.invalid_image_description",
+								),
+							)
+							.setColor(ColorCode.ERROR),
+					],
+				});
+				return;
+			}
+
+			try {
+				const { base64, mimeType } = await attachmentToBase64(imageAttachment);
+				imageBase64 = base64;
+				imageMimeType = mimeType;
+				log.info("Image attachment converted to base64 from modal");
+			} catch (error) {
+				log.error("Failed to convert image attachment from modal:", error);
+				await modalSubmitInteraction.editReply({
+					embeds: [
+						new EmbedBuilder()
+							.setTitle(
+								localizer(
+									locale,
+									"commands.persona.generate.image_download_failed_title",
+								),
+							)
+							.setDescription(
+								localizer(
+									locale,
+									"commands.persona.generate.image_download_failed_description",
+								),
+							)
+							.setColor(ColorCode.ERROR),
+					],
+				});
+				return;
+			}
 		}
 
 		// 8. Show processing embed

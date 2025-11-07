@@ -27,13 +27,17 @@ export interface RawDiscordComponent {
 	min_length?: number;
 	/** Maximum length for text inputs */
 	max_length?: number;
+	/** Minimum number of items (for file uploads and select menus) */
+	min_values?: number;
+	/** Maximum number of items (for file uploads and select menus) */
+	max_values?: number;
 	/** Component label text */
 	label?: string;
 	/** Component description text */
 	description?: string;
 	/** Component value (for text inputs) */
 	value?: string;
-	/** Selected values (for select menus) */
+	/** Selected values (for select menus and file upload attachment IDs) */
 	values?: string[];
 	/** Nested component (for type 18 wrappers) */
 	component?: RawDiscordComponent;
@@ -78,6 +82,26 @@ export interface RawDiscordWebSocketPacket {
 			component_type?: number;
 			/** Values array for select menus */
 			values?: string[];
+			/** Resolved data (attachments, users, roles, etc.) */
+			resolved?: {
+				/** Attachments uploaded via file upload components */
+				attachments?: Record<
+					string,
+					{
+						id: string;
+						filename: string;
+						size: number;
+						url: string;
+						proxy_url: string;
+						content_type?: string;
+						width?: number;
+						height?: number;
+						ephemeral?: boolean;
+						placeholder?: string;
+						placeholder_version?: number;
+					}
+				>;
+			};
 		};
 		/** Interaction type */
 		type?: number;

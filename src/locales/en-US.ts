@@ -480,23 +480,23 @@ Discord API Latency: \`{discord_response}ms\``,
 			},
 			generate: {
 				description: `AI-powered personality generation using Google Gemini`,
-				image_description: `Optional character image for visual context and export`,
 				// Modal fields
 				modal: {
 					title: `Generate AI Personality`,
 					character_name_label: `Character Name`,
 					character_name_placeholder: `Name of the character`,
-					character_desc_label: `Character Description`,
-					character_desc_placeholder: `Be as descriptive as possible for best results`,
-					speech_examples_label: `How should they speak?`,
-					speech_examples_placeholder: `Give examples for best results`,
+					character_info_label: `Character Info & Speech Examples`,
+					character_info_description: `Describe the character and how they speak`,
+					character_info_placeholder: `Personality, backstory, speech style, example phrases, etc.`,
 					web_search_label: `Search the Web?`,
 					web_search_description: `Search for character info (for existing characters from media)`,
 					web_search_placeholder: `Select Yes or No`,
 					web_search_yes: `Yes, search for character information`,
 					web_search_no: `No, create original character`,
 					additional_inst_label: `Additional Instructions`,
-					additional_inst_placeholder: `Optional: Other instructions (e.g., "text in Japanese")`,
+					additional_inst_placeholder: `Optional: Other instructions (e.g., "please keep the character's responses short")`,
+					file_upload_label: `Character Image (Optional)`,
+					file_upload_description: `Upload an image for export and to help with generating the character`,
 				},
 				// Error messages
 				wrong_provider_title: `❌ Incompatible Provider`,
@@ -532,19 +532,21 @@ Discord API Latency: \`{discord_response}ms\``,
 			},
 			create: {
 				description: `Create a simple personality preset manually`,
-				image_description: `Optional character image for export`,
 				// Modal fields
 				modal: {
-					title: `Create Persona (/generate recommended)`,
+					title: `Create Persona`,
 					character_name_label: `Character Name`,
+					character_name_description: `Tip: Use /persona generate instead for better results`,
 					character_name_placeholder: `Enter character name`,
 					character_desc_label: `Character Description`,
 					character_desc_placeholder: `Describe your character (personality, appearance, backstory, etc.)`,
 					example_user_label: `Example User Message`,
 					example_user_description: `Tip: Add more using /teach sampledialogue after`,
-					example_user_placeholder: `Example of what a user might say`,
+					example_user_placeholder: `Hi {bot}!`,
 					example_bot_label: `Example Bot Reply`,
-					example_bot_placeholder: `How the bot should respond`,
+					example_bot_placeholder: `Hello {user}! You doing good?`,
+					file_upload_label: `Character Image (Optional)`,
+					file_upload_description: `Upload an image for the character export`,
 				},
 				// Error messages
 				invalid_image_title: `❌ Invalid Image`,
@@ -561,8 +563,8 @@ Discord API Latency: \`{discord_response}ms\``,
 				metadata_embed_failed_description: `Failed to embed personality data in the image. Please try again.`,
 				// Success
 				success_title: `✅ {character_name} Created Successfully!`,
-				success_description: `Your persona has been created for **{character_name}**!\n\n**Description:**\n{character_description}`,
-				success_dialogue_title: `💬 Sample Dialogue`,
+				success_description: `Persona has been created for **{character_name}**!\n\n**Description:**\n{character_description}`,
+				success_dialogue_title: `Sample Dialogue`,
 				success_next_steps_title: `📥 Next Steps`,
 				success_next_steps_description: `1. Download the attached PNG file\n2. Use \`/persona import\` with the PNG to import this character\n3. (Optional) Use \`/teach\` commands to add more depth and examples`,
 				avatar_update_skipped_dm: `ℹ️ Note: Avatar and nickname updates are not available in Direct Messages. Preset was created successfully.`,
@@ -595,6 +597,33 @@ Discord API Latency: \`{discord_response}ms\``,
 				success_description: `Using advanced reasoning to respond{query}...`,
 				no_smart_model_title: `No Reasoning Model Found`,
 				no_smart_model_description: `No reasoning model found for your current AI provider. Please switch to a provider that supports reasoning models using \`/config apikeyset\`.`,
+			},
+		},
+
+		// Support commands
+		support: {
+			discord: {
+				description: `Get the official Discord server link for bug reports, feedback, and community chat.`,
+				title: `Join Our Discord Server`,
+				description_text: `Need help with TomoriBot or want to hang out with the community?\n\n🔗 **Discord Server**: https://discord.gg/PLACEHOLDER\n\nJoin us to:\n• Report bugs and issues\n• Share feedback and suggestions\n• Chat with other users and the dev team\n• Stay updated on new features`,
+			},
+		},
+
+		// Contribute commands
+		contribute: {
+			github: {
+				description: `Get the GitHub repository link and learn how to contribute to TomoriBot.`,
+				title: `Contribute to TomoriBot`,
+				description_text: `Want to help make TomoriBot better? We'd love your contributions!\n\n🔗 **GitHub Repository**: https://github.com/PLACEHOLDER\n\nWays to contribute:\n• Star the repository on GitHub ⭐\n• Submit bug reports and feature requests\n• Contribute code improvements and new features\n• Help translate TomoriBot to other languages\n• Improve documentation`,
+			},
+		},
+
+		// Donate commands
+		donate: {
+			kofi: {
+				description: `Support TomoriBot development through Ko-fi donations.`,
+				title: `Support TomoriBot Development`,
+				description_text: `Love using TomoriBot? Help keep it free and support ongoing development!\n\n🔗 **Ko-fi**: https://ko-fi.com/PLACEHOLDER\n\nYour donations help:\n• Keep TomoriBot running and maintained\n• Add new features and improvements\n• Support server costs and development time\n• Keep TomoriBot completely free for everyone\n\nEvery contribution, big or small, is greatly appreciated! ❤️`,
 			},
 		},
 

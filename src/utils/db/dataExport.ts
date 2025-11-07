@@ -137,7 +137,9 @@ export async function exportServerData(
 			ORDER BY created_at DESC
 		`;
 
-		const serverMemories = memoryRows.map((row: { content: string }) => row.content);
+		const serverMemories = memoryRows.map(
+			(row: { content: string }) => row.content,
+		);
 
 		// 4. Build export object
 		const exportData: ServerExport = {
@@ -150,7 +152,8 @@ export async function exportServerData(
 					humanizer_degree: configData.humanizer_degree,
 					timezone_offset: configData.timezone_offset,
 					server_memteaching_enabled: configData.server_memteaching_enabled,
-					attribute_memteaching_enabled: configData.attribute_memteaching_enabled,
+					attribute_memteaching_enabled:
+						configData.attribute_memteaching_enabled,
 					sampledialogue_memteaching_enabled:
 						configData.sampledialogue_memteaching_enabled,
 					self_teaching_enabled: configData.self_teaching_enabled,
@@ -271,14 +274,17 @@ export async function exportPersonalityData(
 		textOutput += `NOTE\n`;
 		textOutput += `========================================\n\n`;
 		textOutput += `This export is for informational purposes only.\n`;
-		textOutput += `To import personalities, use the /preset commands.\n`;
+		textOutput += `To import personalities, use the /persona commands.\n`;
 
 		return {
 			success: true,
 			text: textOutput,
 		};
 	} catch (error) {
-		log.error(`Error exporting personality data for server ${serverDiscId}:`, error);
+		log.error(
+			`Error exporting personality data for server ${serverDiscId}:`,
+			error,
+		);
 		return {
 			success: false,
 			error: "commands.data.export.error_export_failed",

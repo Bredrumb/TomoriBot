@@ -481,23 +481,23 @@ Discord API 遅延: \`{discord_response}ms\``,
 			},
 			generate: {
 				description: `Google GeminiのAIを使用した人格生成`,
-				image_description: `キャラクターのビジュアルコンテキストとエクスポート用の画像(任意)`,
 				// Modal fields
 				modal: {
 					title: `AI人格生成`,
 					character_name_label: `キャラクター名`,
 					character_name_placeholder: `キャラクターの名前`,
-					character_desc_label: `キャラクター説明`,
-					character_desc_placeholder: `最良の結果を得るために、できるだけ詳しく記述してください`,
-					speech_examples_label: `どのように話すべきか？`,
-					speech_examples_placeholder: `最良の結果を得るために例を挙げてください`,
+					character_info_label: `キャラクター情報と話し方の例`,
+					character_info_description: `キャラクターとその話し方を説明してください`,
+					character_info_placeholder: `性格、背景、話し方、例示のフレーズなど`,
 					web_search_label: `ウェブ検索を使用しますか？`,
 					web_search_description: `キャラクター情報を検索(既存メディアのキャラクター用)`,
 					web_search_placeholder: `はいまたはいいえを選択`,
 					web_search_yes: `はい、キャラクター情報を検索します`,
 					web_search_no: `いいえ、オリジナルキャラクターを作成します`,
 					additional_inst_label: `追加の指示`,
-					additional_inst_placeholder: `任意：その他の指示(例：「日本語でテキスト」)`,
+					additional_inst_placeholder: `任意：その他の指示（例：「キャラクターの返答は短くしてください」）`,
+					file_upload_label: `キャラクター画像 (任意)`,
+					file_upload_description: `エクスポート用およびキャラクター生成の補助のために画像をアップロード`,
 				},
 				// Error messages
 				wrong_provider_title: `❌ 互換性のないプロバイダー`,
@@ -533,19 +533,21 @@ Discord API 遅延: \`{discord_response}ms\``,
 			},
 			create: {
 				description: `シンプルな人格プリセットを手動で作成`,
-				image_description: `エクスポート用のキャラクター画像(任意)`,
 				// Modal fields
 				modal: {
-					title: `ペルソナ作成 (ヒント: AI生成には /persona generate を使用！)`,
+					title: `ペルソナ作成`,
 					character_name_label: `キャラクター名`,
+					character_name_description: `ヒント: より良い結果を得るには、/persona generate を使用してください`,
 					character_name_placeholder: `キャラクター名を入力`,
 					character_desc_label: `キャラクター説明`,
 					character_desc_placeholder: `キャラクターを説明してください（性格、外見、背景など）`,
 					example_user_label: `ユーザーメッセージの例`,
 					example_user_description: `ヒント: インポート後に /teach sampledialogue で例を追加できます`,
-					example_user_placeholder: `ユーザーが言いそうなことの例`,
+					example_user_placeholder: `こんにちは、{bot}！`,
 					example_bot_label: `ボット返信の例`,
-					example_bot_placeholder: `ボットがどのように応答すべきか`,
+					example_bot_placeholder: `こんにちは、{user}！お元気ですか？`,
+					file_upload_label: `キャラクター画像 (任意)`,
+					file_upload_description: `キャラクターエクスポート用の画像をアップロード`,
 				},
 				// Error messages
 				invalid_image_title: `❌ 無効な画像`,
@@ -563,7 +565,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 				// Success
 				success_title: `✅ {character_name} の作成に成功しました！`,
 				success_description: `**{character_name}** のペルソナが作成されました！\n\n**説明:**\n{character_description}`,
-				success_dialogue_title: `💬 サンプル対話`,
+				success_dialogue_title: `サンプル対話`,
 				success_next_steps_title: `📥 次のステップ`,
 				success_next_steps_description: `1. 添付されたPNGファイルをダウンロード\n2. PNGファイルと共に\`/persona import\`を使用してこのキャラクターをインポート\n3. (任意) \`/teach\`コマンドを使用してさらに深みと例を追加`,
 				avatar_update_skipped_dm: `ℹ️ 注意: アバターとニックネームの更新はダイレクトメッセージでは利用できません。ペルソナが正常に作成されました。`,
@@ -596,6 +598,33 @@ Discord API 遅延: \`{discord_response}ms\``,
 				success_description: `高度な推論を使用して応答します{query}...`,
 				no_smart_model_title: `推論モデルが見つかりません`,
 				no_smart_model_description: `現在のAIプロバイダーに推論モデルが見つかりませんでした。\`/config apikeyset\`を使用して、推論モデルをサポートするプロバイダーに切り替えてください。`,
+			},
+		},
+
+		// サポートコマンド
+		support: {
+			discord: {
+				description: `バグ報告、フィードバック、コミュニティチャットのための公式Discordサーバーリンクを取得します。`,
+				title: `Discordサーバーに参加`,
+				description_text: `TomoriBotのヘルプが必要ですか？またはコミュニティと交流したいですか？\n\n🔗 **Discordサーバー**: https://discord.gg/PLACEHOLDER\n\n参加して:\n• バグや問題を報告\n• フィードバックや提案を共有\n• 他のユーザーや開発チームとチャット\n• 新機能の最新情報を入手`,
+			},
+		},
+
+		// 貢献コマンド
+		contribute: {
+			github: {
+				description: `GitHubリポジトリのリンクを取得し、TomoriBotへの貢献方法を学びます。`,
+				title: `TomoriBotに貢献する`,
+				description_text: `TomoriBotをより良くするお手伝いをしたいですか？貢献をお待ちしています！\n\n🔗 **GitHubリポジトリ**: https://github.com/PLACEHOLDER\n\n貢献方法:\n• GitHubでリポジトリにスターを付ける ⭐\n• バグ報告や機能リクエストを送信\n• コードの改善や新機能を貢献\n• TomoriBotを他の言語に翻訳するお手伝い\n• ドキュメントの改善`,
+			},
+		},
+
+		// 寄付コマンド
+		donate: {
+			kofi: {
+				description: `Ko-fiを通じてTomoriBotの開発を支援します。`,
+				title: `TomoriBotの開発を支援`,
+				description_text: `TomoriBotを使うのが好きですか？無料で維持し、継続的な開発を支援してください！\n\n🔗 **Ko-fi**: https://ko-fi.com/PLACEHOLDER\n\nあなたの寄付は以下に役立ちます:\n• TomoriBotの運営と保守\n• 新機能と改善の追加\n• サーバーコストと開発時間のサポート\n• TomoriBotを完全に無料で維持\n\n大小問わず、すべての貢献に心から感謝します！ ❤️`,
 			},
 		},
 

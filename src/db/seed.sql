@@ -10,7 +10,7 @@ INSERT INTO llms (llm_provider, llm_codename, is_smartest, is_default, is_reason
 VALUES
   ('google', 'gemini-2.0-flash', false, false, false, true, 'Fast multimodal model for everyday tasks'),
   ('google', 'gemini-2.5-flash-lite', false, false, false, false, 'Lightweight version optimized for speed and efficiency'),
-  ('google', 'gemini-2.5-flash-05-20', false, false, false, true, 'Balanced model for general-purpose applications'),
+  ('google', 'gemini-2.5-flash-preview-05-20', false, false, false, true, 'Balanced model for general-purpose applications'),
   ('google', 'gemini-2.5-flash-preview-09-2025', false, false, false, false, 'Experimental model for general-purpose applications'),
   ('google', 'gemini-2.5-flash', false, true, false, false, 'Balanced model for general-purpose applications'),
   ('google', 'gemini-2.5-pro', true, false, true, false, 'Most capable model for complex reasoning and analysis')

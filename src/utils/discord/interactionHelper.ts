@@ -17,6 +17,7 @@ import type {
 	MessageActionRowComponentBuilder,
 	ModalSubmitInteraction,
 	InteractionReplyOptions,
+	APIAttachment,
 } from "discord.js";
 import { localizer } from "../text/localizer";
 import { log, ColorCode } from "../misc/logger";
@@ -29,6 +30,12 @@ import type {
 
 // Clean storage for select values (Discord.js will strip them, so we preserve them)
 const modalSelectValues = new Map<string, Record<string, string>>();
+
+// Storage for resolved attachments from modal file uploads (Discord.js doesn't expose these)
+const modalResolvedAttachments = new Map<
+	string,
+	Record<string, APIAttachment>
+>();
 
 /**
  * Tracks interactions that were acknowledged via raw Discord REST API
@@ -64,11 +71,15 @@ function transformModalSubmissionPacket(
 						// Preserve all component data based on type
 						...(nestedComponent.type === 3 && {
 							// STRING_SELECT
-							values: nestedComponent.values, // This is the key fix!
+							values: nestedComponent.values,
 						}),
 						...(nestedComponent.type === 4 && {
 							// TEXT_INPUT
 							value: nestedComponent.value,
+						}),
+						...(nestedComponent.type === 19 && {
+							// FILE_UPLOAD
+							values: nestedComponent.values, // Array of attachment IDs
 						}),
 						// Include any other properties
 						...Object.fromEntries(
@@ -120,9 +131,9 @@ function setupWebSocketInterception(client: any) {
 							"Transforming Component Type 18 modal submission for Discord.js compatibility",
 						);
 
-						// Store select values before Discord.js strips them
 						const interactionId = packet.d.id;
 						if (interactionId) {
+							// Store select values before Discord.js strips them
 							const selectValues: Record<string, string> = {};
 
 							for (const comp of packet.d.data.components) {
@@ -141,6 +152,16 @@ function setupWebSocketInterception(client: any) {
 								modalSelectValues.set(interactionId, selectValues);
 								log.info(
 									`Stored ${Object.keys(selectValues).length} select values for interaction`,
+								);
+							}
+
+							// Store resolved attachments before Discord.js processes them
+							if (packet.d.data.resolved?.attachments) {
+								const resolvedAttachments = packet.d.data.resolved
+									.attachments as Record<string, APIAttachment>;
+								modalResolvedAttachments.set(interactionId, resolvedAttachments);
+								log.info(
+									`Stored ${Object.keys(resolvedAttachments).length} resolved attachments for interaction ${interactionId}`,
 								);
 							}
 						}
@@ -185,6 +206,7 @@ import type {
 import {
 	isModalInputField,
 	isModalSelectField,
+	isModalFileUploadField,
 } from "../../types/discord/modal";
 import { createStandardEmbed, createSummaryEmbed } from "./embedHelper";
 
@@ -1176,9 +1198,35 @@ export async function promptWithRawModal(
 						}
 
 						return labelComponent;
+					} else if (isModalFileUploadField(component)) {
+						// File Upload wrapped in Label component (type 18)
+						const rawComponent: RawDiscordComponent = {
+							type: 19, // ComponentType.FileUpload
+							custom_id: component.customId,
+							min_values: component.minValues ?? 0,
+							max_values: component.maxValues ?? 1,
+							required: component.required ?? false,
+						};
+
+						// Wrap in Label component (type 18)
+						const labelComponent: RawDiscordComponent = {
+							type: 18, // ComponentType.Label
+							label: localizer(locale, component.labelKey),
+							component: rawComponent,
+						};
+
+						// Add description if provided
+						if (component.descriptionKey) {
+							labelComponent.description = safeModalLocalizer(
+								locale,
+								component.descriptionKey,
+							);
+						}
+
+						return labelComponent;
 					}
 
-					throw new Error(`Unsupported modal component type: ${component}`);
+					throw new Error(`Unsupported modal component type: ${JSON.stringify(component)}`);
 				}),
 			},
 		};
@@ -1219,6 +1267,7 @@ export async function promptWithRawModal(
 
 			// Extract values using Discord.js methods and stored select values
 			const values: Record<string, string> = {};
+			const attachments: Record<string, APIAttachment> = {};
 
 			for (const component of components) {
 				if (isModalInputField(component)) {
@@ -1250,11 +1299,39 @@ export async function promptWithRawModal(
 							`Failed to get select value for ${component.customId}: ${error}`,
 						);
 					}
+				} else if (isModalFileUploadField(component)) {
+					try {
+						// Get stored resolved attachments from WebSocket interception
+						const storedAttachments = modalResolvedAttachments.get(submitted.id);
+
+						if (storedAttachments) {
+							// Look through all stored attachments and match by component
+							// For single file upload modals, we assume the first attachment belongs to this component
+							for (const [attachmentId, attachment] of Object.entries(
+								storedAttachments,
+							)) {
+								attachments[component.customId] = attachment;
+								log.info(
+									`Extracted file upload for ${component.customId}: ${attachmentId} (${attachment.filename})`,
+								);
+								break; // For single file uploads, take the first one
+							}
+						} else {
+							log.info(
+								`No stored attachments found for interaction ${submitted.id}`,
+							);
+						}
+					} catch (error) {
+						log.warn(
+							`Failed to extract file upload for ${component.customId}: ${error}`,
+						);
+					}
 				}
 			}
 
 			// Clean up stored values
 			modalSelectValues.delete(submitted.id);
+			modalResolvedAttachments.delete(submitted.id);
 
 			// Auto-defer reply if requested to prevent 3-second interaction timeout
 			if (autoDeferReply) {
@@ -1265,7 +1342,7 @@ export async function promptWithRawModal(
 				);
 			}
 
-			return { outcome: "submit", values, interaction: submitted };
+			return { outcome: "submit", values, attachments, interaction: submitted };
 		} catch (error) {
 			// This will only catch actual errors, not artificial timeouts
 			// Discord's natural timeout or user cancellation will be handled by command timeout

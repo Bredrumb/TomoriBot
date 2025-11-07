@@ -66,9 +66,9 @@ TomoriBot uses AI providers like Google Gemini, NovelAI, or OpenRouter. You'll n
 - Teach me things with `/teach` so I remember them
 
 **Optional: Customize Me** 🎨
-- Use `/preset` commands to change my personality
+- Use `/persona` commands to change my personality
 - Configure server settings with `/server` commands
-- Set up autochannel with `/server autochchannels` to chat without mentioning me
+- Set up auto-trigger with `/server autotrigger` to chat without mentioning me
 
 **Need Help?**
 - `/help features` - See what I can do
@@ -280,15 +280,15 @@ I have a persistent memory system that helps me remember **facts and information
 
 **Teaching Me Things** 📝
 Use `/teach` to help me remember **facts and information**:
-- **Personal memories** (`/teach personalmemory`): Facts about individual users
+- **Personal memories** (`/teach memory personal`): Facts about individual users
   - Example: "Alex loves cats", "Prefers dark mode", "Is allergic to peanuts"
-- **Server memories** (`/teach servermemory`): Information relevant to the whole server
+- **Server memories** (`/teach memory server`): Information relevant to the whole server
   - Example: "Game night is every Friday at 8 PM", "Server motto is 'Stay positive!'", "We use #general for announcements"
 
 **Forgetting Things** 🗑️
 Use `/forget` to make me forget memories:
-- **`/forget personalmemory`** - Remove personal facts about users
-- **`/forget servermemory`** - Remove server-wide information
+- **`/forget memory personal`** - Remove personal facts about users
+- **`/forget memory server`** - Remove server-wide information
 - View all memories first, then delete specific ones by their ID
 
 **How It Works:**
@@ -325,23 +325,23 @@ TomoriBot is highly customizable! Here's everything you can configure to make me
 
 **Note**: This is about **how I behave** (personality, tone, settings). For **what I remember** (facts, memories), see `/help memory` instead!
 
-## 🎭 Personality Presets
+## 🎭 Personality Personas
 Control my core personality and behavior:
 
-**Preset Commands** (`/preset`):
-- `/preset create` - Create a custom personality from scratch
-- `/preset generate` - AI-generate a personality based on your description
-- `/preset default` - Switch to default personality
-- `/preset export` - Export your preset to share or backup
-- `/preset import` - Import a preset from a file
+**Persona Commands** (`/persona`):
+- `/persona create` - Create a custom personality from scratch
+- `/persona generate` - AI-generate a personality based on your description
+- `/persona default` - Switch to default personality
+- `/persona export` - Export your persona to share or backup
+- `/persona import` - Import a persona from a file
 
-**What Presets Include:**
+**What Personas Include:**
 - Personality attributes (traits, characteristics)
 - Sample dialogues (example conversations I learn from)
 - Custom avatar for that personality
 - Behavior and tone settings
 
-**Footer Text**: Presets are the foundation of my personality! • Next: Teaching Commands
+**Footer Text**: Personas are the foundation of my personality! • Next: Teaching Commands
 
 ---
 
@@ -403,13 +403,13 @@ Server-wide settings and behavior:
 - `/server memberpermissions` - Control who can teach me things
 - `/server blacklist` - Prevent me from learning from specific users
 
-**Channel Behavior:**
-- `/server autochchannels` - Set channels where I respond without mentions
-- `/server autochthreshold` - Set message threshold for auto-responses
+**Auto-Trigger Behavior:**
+- `/server autotrigger channels` - Set channels where I respond without mentions
+- `/server autotrigger threshold` - Set message threshold for auto-responses
 
 **Triggers & Appearance:**
-- `/server triggeradd` - Add custom trigger words I respond to
-- `/server triggerdelete` - Remove trigger words
+- `/server trigger add` - Add custom trigger words I respond to
+- `/server trigger delete` - Remove trigger words
 - `/server avatar` - Set a custom avatar for this server
 
 **Footer Text**: Server config controls behavior across the server! • Next: Bot Settings
@@ -428,11 +428,16 @@ Personal bot settings:
 **AI Settings:**
 - `/config model` - Choose which AI model to use
 - `/config temperature` - Adjust creativity/randomness (0.0-2.0)
-- `/config humanizerdegree` - Control response length (concise/normal/detailed)
+- `/config humanizer` - Control response length (concise/normal/detailed)
+
+**API Keys:**
+- `/config apikey set` - Set your AI provider API key
+- `/config apikey delete` - Remove your API key
+- `/config braveapi set` - Set Brave Search API key (optional)
+- `/config braveapi delete` - Remove Brave Search API key
 
 **Personalization:**
 - `/config rename` - Change what you want to call me
-- `/config language` - Change my response language
 - `/config timezone` - Set timezone for time-aware responses
 - `/config permissions` - Configure what I'm allowed to do
 
@@ -456,13 +461,13 @@ Control how I learn from interactions:
 ---
 
 ## 💡 Pro Tips
-- Start with a preset (default or generated) as a foundation
+- Start with a persona (default or generated) as a foundation
 - Use `/teach attribute` for quick personality tweaks
 - Sample dialogues are powerful - use them for complex behaviors
 - Test changes by chatting - iterate until it feels right
-- Export your preset to back it up or share with other servers!
+- Export your persona to back it up or share with other servers!
 
-**Footer Text**: Ready to create? Start with `/preset generate` for AI assistance! • Learn more: `/help memory`
+**Footer Text**: Ready to create? Start with `/persona generate` for AI assistance! • Learn more: `/help memory`
 
 ---
 
@@ -491,7 +496,17 @@ Control how I learn from interactions:
 6. `/help data` - Data management and privacy policy
 
 **Special Notes for `/help customization`:**
-- This is a LARGE embed with multiple sections (may need to be split or paginated if Discord has size limits)
-- Covers: `/preset`, `/teach` (non-memory), `/forget` (non-memory), `/server` (blacklist, memberpermissions), `/config` (excluding API keys)
-- Includes detailed placeholder documentation (`{user}` and `{bot}`)
-- Cross-references `/help memory` for memory-related commands
+- **Split into 4 consecutive embeds** to avoid Discord size limits:
+  1. **replyInfoEmbed**: Overview + Personality Personas (`/persona` commands)
+  2. **sendStandardEmbed**: Teaching System (`/teach` non-memory, placeholder documentation)
+  3. **sendStandardEmbed**: Configuration & Management (`/forget` non-memory, `/server`)
+  4. **sendStandardEmbed**: Advanced Settings (`/config`, self-learning, pro tips)
+- Includes detailed placeholder documentation (`{user}` and `{bot}`) with code examples
+- **Clear distinction** from `/help memory`: customization = behavior, memory = facts
+- Cross-references `/help memory` multiple times to reinforce the distinction
+
+**Special Notes for `/help memory`:**
+- Emphasizes "facts and information" vs "behavior and personality"
+- Updated command examples to use subcommand groups (`/teach memory personal`, `/forget memory server`)
+- Better examples showing the type of information stored
+- Cross-references `/help customization` in footer

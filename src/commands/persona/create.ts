@@ -37,6 +37,7 @@ const CHARACTER_NAME_ID = "character_name";
 const CHARACTER_DESC_ID = "character_desc";
 const EXAMPLE_USER_ID = "example_user";
 const EXAMPLE_BOT_ID = "example_bot";
+const FILE_UPLOAD_ID = "avatar_image";
 
 /**
  * Configure the 'create' subcommand
@@ -46,15 +47,7 @@ export const configureSubcommand = (
 ) =>
 	subcommand
 		.setName("create")
-		.setDescription(localizer("en-US", "commands.persona.create.description"))
-		.addAttachmentOption((option) =>
-			option
-				.setName("image")
-				.setDescription(
-					localizer("en-US", "commands.persona.create.image_description"),
-				)
-				.setRequired(false),
-		);
+		.setDescription(localizer("en-US", "commands.persona.create.description"));
 
 /**
  * Executes the 'create' command
@@ -83,47 +76,13 @@ export async function execute(
 			return;
 		}
 
-		// 2. Get optional image attachment
-		const imageAttachment = interaction.options.getAttachment("image");
-		let imageBuffer: Buffer | undefined;
-
-		if (imageAttachment) {
-			// Validate image type
-			if (!imageAttachment.contentType?.startsWith("image/")) {
-				await replyInfoEmbed(interaction, locale, {
-					titleKey: "commands.persona.create.invalid_image_title",
-					descriptionKey: "commands.persona.create.invalid_image_description",
-					color: ColorCode.ERROR,
-					flags: MessageFlags.Ephemeral,
-				});
-				return;
-			}
-
-			// Download image
-			try {
-				const response = await axios.get(imageAttachment.url, {
-					responseType: "arraybuffer",
-				});
-				imageBuffer = Buffer.from(response.data);
-				log.info("Image attachment downloaded successfully");
-			} catch (error) {
-				log.error("Failed to download image attachment:", error);
-				await replyInfoEmbed(interaction, locale, {
-					titleKey: "commands.persona.create.image_download_failed_title",
-					descriptionKey:
-						"commands.persona.create.image_download_failed_description",
-					color: ColorCode.ERROR,
-					flags: MessageFlags.Ephemeral,
-				});
-				return;
-			}
-		}
-
-		// 3. Show modal with creation fields
+		// 2. Show modal with creation fields
 		const modalComponents: ModalComponent[] = [
 			{
 				customId: CHARACTER_NAME_ID,
 				labelKey: "commands.persona.create.modal.character_name_label",
+				descriptionKey:
+					"commands.persona.create.modal.character_name_description",
 				placeholder: "commands.persona.create.modal.character_name_placeholder",
 				required: true,
 				style: TextInputStyle.Short,
@@ -154,6 +113,14 @@ export async function execute(
 				required: true,
 				style: TextInputStyle.Paragraph,
 				maxLength: 500,
+			},
+			{
+				customId: FILE_UPLOAD_ID,
+				labelKey: "commands.persona.create.modal.file_upload_label",
+				descriptionKey: "commands.persona.create.modal.file_upload_description",
+				minValues: 0,
+				maxValues: 1,
+				required: false,
 			},
 		];
 
@@ -190,6 +157,62 @@ export async function execute(
 		) {
 			log.error("Modal result unexpectedly missing values");
 			return;
+		}
+
+		// 5. Get optional image attachment from modal
+		const imageAttachment = modalResult.attachments?.[FILE_UPLOAD_ID];
+		let imageBuffer: Buffer | undefined;
+
+		if (imageAttachment) {
+			// Validate image type
+			if (!imageAttachment.content_type?.startsWith("image/")) {
+				await modalSubmitInteraction.editReply({
+					embeds: [
+						new EmbedBuilder()
+							.setTitle(
+								localizer(locale, "commands.persona.create.invalid_image_title"),
+							)
+							.setDescription(
+								localizer(
+									locale,
+									"commands.persona.create.invalid_image_description",
+								),
+							)
+							.setColor(ColorCode.ERROR),
+					],
+				});
+				return;
+			}
+
+			// Download image
+			try {
+				const response = await axios.get(imageAttachment.url, {
+					responseType: "arraybuffer",
+				});
+				imageBuffer = Buffer.from(response.data);
+				log.info("Image attachment downloaded successfully from modal");
+			} catch (error) {
+				log.error("Failed to download image attachment from modal:", error);
+				await modalSubmitInteraction.editReply({
+					embeds: [
+						new EmbedBuilder()
+							.setTitle(
+								localizer(
+									locale,
+									"commands.persona.create.image_download_failed_title",
+								),
+							)
+							.setDescription(
+								localizer(
+									locale,
+									"commands.persona.create.image_download_failed_description",
+								),
+							)
+							.setColor(ColorCode.ERROR),
+					],
+				});
+				return;
+			}
 		}
 
 		// 6. Create minimal preset data structure
