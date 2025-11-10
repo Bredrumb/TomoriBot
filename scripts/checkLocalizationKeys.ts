@@ -41,6 +41,16 @@ interface ModalTitleViolation {
 }
 
 /**
+ * Interface for modal description length violations
+ */
+interface ModalDescriptionViolation {
+	key: string;
+	value: string;
+	length: number;
+	locale: string;
+}
+
+/**
  * Interface for analysis results
  */
 interface AnalysisResult {
@@ -51,6 +61,7 @@ interface AnalysisResult {
 	localeKeys: Map<string, Set<string>>;
 	parityIssues: LocaleParityIssue[];
 	modalTitleViolations: ModalTitleViolation[];
+	modalDescriptionViolations: ModalDescriptionViolation[];
 }
 
 /**
@@ -242,6 +253,17 @@ function isModalTitleKey(key: string): boolean {
 }
 
 /**
+ * Checks if a localization key is used for a modal description
+ * @param key - The localization key to check
+ * @returns True if the key is used for a modal description
+ */
+function isModalDescriptionKey(key: string): boolean {
+	// Pattern 1: *.modal_description (direct underscore separator)
+	// Pattern 2: *.modal.*_description (nested with field name)
+	return /\.modal_description$|\.modal\.[a-z_]+_description$/.test(key);
+}
+
+/**
  * Recursively extracts string values from a nested locale object
  * @param obj - The locale object or nested object
  * @param prefix - Current key path prefix
@@ -327,6 +349,63 @@ async function checkModalTitleLengths(
 }
 
 /**
+ * Checks modal description lengths across all locales
+ * @param localeKeys - Map of locale names to their key sets
+ * @returns Array of modal description length violations
+ */
+async function checkModalDescriptionLengths(
+	localeKeys: Map<string, Set<string>>,
+): Promise<ModalDescriptionViolation[]> {
+	const violations: ModalDescriptionViolation[] = [];
+	const localesPath = join(process.cwd(), "src", "locales");
+
+	// Discord modal description constraint
+	const MAX_LENGTH = 97;
+
+	for (const [localeName, keys] of localeKeys) {
+		// Filter to only modal description keys
+		const modalDescriptionKeys = Array.from(keys).filter(isModalDescriptionKey);
+
+		if (modalDescriptionKeys.length === 0) continue;
+
+		try {
+			// Load the locale file
+			const filePath = join(localesPath, `${localeName}.ts`);
+			const module = await import(filePath);
+			const localeObject = module.default;
+
+			// Extract all string values from the locale object
+			const stringValues = extractStringValues(localeObject);
+
+			// Check each modal description key
+			for (const key of modalDescriptionKeys) {
+				const value = stringValues.get(key);
+				if (!value) continue;
+
+				const length = value.length;
+
+				// Check if length violates Discord constraint (only max, no min)
+				if (length > MAX_LENGTH) {
+					violations.push({
+						key,
+						value,
+						length,
+						locale: localeName,
+					});
+				}
+			}
+		} catch (error) {
+			log.error(
+				`Failed to check modal descriptions in locale: ${localeName}`,
+				error,
+			);
+		}
+	}
+
+	return violations;
+}
+
+/**
  * Checks if a string appears in a Set declaration context
  * @param content - The file content
  * @param matchIndex - The index where the string was matched
@@ -335,17 +414,20 @@ async function checkModalTitleLengths(
 function isInSetDeclaration(content: string, matchIndex: number): boolean {
 	// Look backwards from the match to find if it's in a Set declaration
 	const lookbackDistance = 300;
-	const beforeMatch = content.substring(Math.max(0, matchIndex - lookbackDistance), matchIndex);
+	const beforeMatch = content.substring(
+		Math.max(0, matchIndex - lookbackDistance),
+		matchIndex,
+	);
 
 	// Check for Set initialization patterns
 	// These patterns look for: new Set([... or Set([... with optional type parameters
 	const setPatterns = [
-		/new\s+Set\s*<[^>]*>\s*\(\s*\[[\s\S]*$/,  // new Set<T>([...
-		/new\s+Set\s*\(\s*\[[\s\S]*$/,              // new Set([...
-		/Set\s*<[^>]*>\s*\(\s*\[[\s\S]*$/,        // Set<T>([...
-		/Set\s*\(\s*\[[\s\S]*$/,                    // Set([...
+		/new\s+Set\s*<[^>]*>\s*\(\s*\[[\s\S]*$/, // new Set<T>([...
+		/new\s+Set\s*\(\s*\[[\s\S]*$/, // new Set([...
+		/Set\s*<[^>]*>\s*\(\s*\[[\s\S]*$/, // Set<T>([...
+		/Set\s*\(\s*\[[\s\S]*$/, // Set([...
 		/=\s*new\s+Set\s*<[^>]*>\s*\(\s*\[[\s\S]*$/, // = new Set<T>([...
-		/=\s*new\s+Set\s*\(\s*\[[\s\S]*$/,          // = new Set([...
+		/=\s*new\s+Set\s*\(\s*\[[\s\S]*$/, // = new Set([...
 	];
 
 	for (const pattern of setPatterns) {
@@ -389,7 +471,7 @@ function extractDynamicTemplateKeys(
 		const suffix = match[3]; // e.g., "" (empty in most cases)
 
 		// Extract the variable name (strip any property access or array indexing)
-		const variableName = variable.split(/[.\[]/)[0];
+		const variableName = variable.split(/[.[]/)[0];
 
 		// Look for string assignments to this variable in the same file
 		// Patterns like: errorKey = "invalid_image_description"
@@ -443,7 +525,7 @@ function extractLocalizerTemplateKeys(
 		const suffix = match[3]; // e.g., "" (usually empty)
 
 		// Extract the variable name (strip any property access)
-		const variableName = variable.split(/[.\[]/)[0];
+		const variableName = variable.split(/[.[]/)[0];
 
 		// Look for string literal assignments to this variable in the same file
 		// Patterns like: messageKey = "429_default_message"
@@ -495,7 +577,7 @@ function extractErrorCodeKeys(
 		const suffix = match[2]; // e.g., "_default_message"
 
 		// Extract the variable name (strip any property access)
-		const variableName = variable.split(/[.\[]/)[0];
+		const variableName = variable.split(/[.[]/)[0];
 
 		// Look for all available keys that match this pattern
 		// Common error codes and status codes
@@ -547,7 +629,7 @@ function extractErrorCodeKeys(
 
 		// Skip if this is already handled by extractDynamicTemplateKeys
 		// (those have titleKey/descriptionKey before the backtick)
-		const variableName = variable.split(/[.\[]/)[0];
+		const variableName = variable.split(/[.[]/)[0];
 
 		const commonCodes = [
 			"400",
@@ -749,6 +831,11 @@ async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
 	log.info("📏 Checking modal title lengths...");
 	const modalTitleViolations = await checkModalTitleLengths(localeKeys);
 
+	// Check modal description lengths
+	log.info("📏 Checking modal description lengths...");
+	const modalDescriptionViolations =
+		await checkModalDescriptionLengths(localeKeys);
+
 	// Extract referenced keys from source code
 	log.info("🔎 Scanning source code for referenced keys...");
 	const referencedKeysMap = await extractReferencedKeys(availableKeys);
@@ -778,6 +865,7 @@ async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
 		localeKeys,
 		parityIssues,
 		modalTitleViolations,
+		modalDescriptionViolations,
 	};
 }
 
@@ -829,6 +917,31 @@ function displayResults(results: AnalysisResult): void {
 		console.log("\n✅ All modal titles meet Discord length requirements!");
 	}
 
+	// Modal description length violations section
+	if (results.modalDescriptionViolations.length > 0) {
+		console.log(
+			"\n📏 MODAL DESCRIPTION LENGTH VIOLATIONS (Must be ≤99 characters for Discord):",
+		);
+		console.log("-".repeat(60));
+
+		for (const {
+			key,
+			value,
+			length,
+			locale,
+		} of results.modalDescriptionViolations.sort((a, b) =>
+			a.key.localeCompare(b.key),
+		)) {
+			console.log(`  ⚠️  ${key} [${locale}]`);
+			console.log(`     ❌ Too long: "${value}" (${length} characters)`);
+			console.log(`     ℹ️  Discord requires ≤99 characters`);
+		}
+	} else {
+		console.log(
+			"\n✅ All modal descriptions meet Discord length requirements!",
+		);
+	}
+
 	// Missing keys section
 	if (results.missingKeys.length > 0) {
 		console.log("\n❌ MISSING LOCALIZATION KEYS (Referenced but don't exist):");
@@ -878,6 +991,9 @@ function displayResults(results: AnalysisResult): void {
 		`  • ${results.modalTitleViolations.length} modal title length violations (must be 5-45 chars)`,
 	);
 	console.log(
+		`  • ${results.modalDescriptionViolations.length} modal description length violations (must be ≤99 chars)`,
+	);
+	console.log(
 		`  • ${results.missingKeys.length} missing keys (referenced but don't exist)`,
 	);
 	console.log(
@@ -888,7 +1004,8 @@ function displayResults(results: AnalysisResult): void {
 		results.missingKeys.length === 0 &&
 		results.unusedKeys.length === 0 &&
 		results.parityIssues.length === 0 &&
-		results.modalTitleViolations.length === 0
+		results.modalTitleViolations.length === 0 &&
+		results.modalDescriptionViolations.length === 0
 	) {
 		console.log("\n🎉 Perfect! Your localization is fully synchronized!");
 	}
@@ -904,11 +1021,12 @@ async function main(): Promise<void> {
 		const results = await analyzeLocalizationKeys();
 		displayResults(results);
 
-		// Exit with error code for critical issues (missing keys, parity issues, or modal title violations)
+		// Exit with error code for critical issues (missing keys, parity issues, or modal violations)
 		if (
 			results.missingKeys.length > 0 ||
 			results.parityIssues.length > 0 ||
-			results.modalTitleViolations.length > 0
+			results.modalTitleViolations.length > 0 ||
+			results.modalDescriptionViolations.length > 0
 		) {
 			process.exit(1);
 		}

@@ -24,7 +24,7 @@ import {
 	loadPresetOptionsByLocale,
 } from "@/utils/db/dbRead";
 
-import { HumanizerDegree } from "@/types/db/schema";
+import type { HumanizerDegree } from "@/types/db/schema";
 
 // Define constants at the top (Rule #20)
 
@@ -132,6 +132,51 @@ export async function execute(
 			description: preset.description,
 		}));
 
+		// Create humanizer degree options for the select menu
+		const humanizerSelectOptions: SelectOption[] = [
+			{
+				label: localizer(locale, "commands.config.setup.humanizer_option_none_label"),
+				value: "0",
+				description: localizer(
+					locale,
+					"commands.config.setup.humanizer_option_none_desc",
+				),
+			},
+			{
+				label: localizer(
+					locale,
+					"commands.config.setup.humanizer_option_light_label",
+				),
+				value: "1",
+				description: localizer(
+					locale,
+					"commands.config.setup.humanizer_option_light_desc",
+				),
+			},
+			{
+				label: localizer(
+					locale,
+					"commands.config.setup.humanizer_option_default_label",
+				),
+				value: "2",
+				description: localizer(
+					locale,
+					"commands.config.setup.humanizer_option_default_desc",
+				),
+			},
+			{
+				label: localizer(
+					locale,
+					"commands.config.setup.humanizer_option_heavy_label",
+				),
+				value: "3",
+				description: localizer(
+					locale,
+					"commands.config.setup.humanizer_option_heavy_desc",
+				),
+			},
+		];
+
 		// Create the modal using the new promptWithRawModal utility with Component Type 18 support
 		const modalResult = await promptWithRawModal(
 			interaction,
@@ -152,6 +197,7 @@ export async function execute(
 						customId: "api_key",
 						labelKey: "commands.config.setup.api_key_label",
 						descriptionKey: "commands.config.setup.api_key_description",
+						placeholder: "commands.config.setup.api_key_placeholder",
 						style: TextInputStyle.Short,
 						required: true,
 					},
@@ -162,6 +208,14 @@ export async function execute(
 						placeholder: "commands.config.setup.preset_placeholder",
 						required: true,
 						options: presetSelectOptions,
+					},
+					{
+						customId: "humanizer_degree",
+						labelKey: "commands.config.setup.humanizer_label",
+						descriptionKey: "commands.config.setup.humanizer_description",
+						placeholder: "commands.config.setup.humanizer_placeholder",
+						required: true,
+						options: humanizerSelectOptions,
 					},
 					{
 						customId: "timezone_offset",
@@ -195,14 +249,16 @@ export async function execute(
 			const apiProvider = modalResult.values?.api_provider;
 			const apiKey = modalResult.values?.api_key;
 			const presetName = modalResult.values?.preset_name;
+			const humanizerDegreeStr = modalResult.values?.humanizer_degree;
 			const timezoneOffsetStr = modalResult.values?.timezone_offset;
 
 			// Validate that all required values are present - let helper functions manage interaction state
-			if (!apiProvider || !apiKey || !presetName) {
+			if (!apiProvider || !apiKey || !presetName || !humanizerDegreeStr) {
 				log.error("Missing required modal values:", {
 					apiProvider: apiProvider || "MISSING",
 					apiKey: apiKey ? "PROVIDED" : "MISSING",
 					presetName: presetName || "MISSING",
+					humanizerDegree: humanizerDegreeStr || "MISSING",
 					allValuesKeys: modalResult.values
 						? Object.keys(modalResult.values)
 						: "NO_VALUES",
@@ -306,7 +362,33 @@ export async function execute(
 				`Selected preset ID: ${selectedPresetId} (${selectedPresetOption.name})`,
 			);
 
-			// 5. Validate timezone offset (optional, defaults to 0 if not provided or invalid)
+			// 5. Validate humanizer degree (required, must be 0-3)
+			const parsedHumanizer = Number.parseInt(humanizerDegreeStr, 10);
+
+			// Check if it's a valid number
+			if (Number.isNaN(parsedHumanizer)) {
+				await replyInfoEmbed(modalSubmitInteraction, locale, {
+					titleKey: "general.errors.operation_failed_title",
+					descriptionKey: "commands.config.setup.humanizer_invalid",
+					color: ColorCode.ERROR,
+				});
+				return;
+			}
+
+			// Validate it's a valid HumanizerDegree value (0-3)
+			if (parsedHumanizer < 0 || parsedHumanizer > 3) {
+				await replyInfoEmbed(modalSubmitInteraction, locale, {
+					titleKey: "general.errors.operation_failed_title",
+					descriptionKey: "commands.config.setup.humanizer_invalid",
+					color: ColorCode.ERROR,
+				});
+				return;
+			}
+
+			const humanizerDegree = parsedHumanizer as HumanizerDegree;
+			log.info(`Selected humanizer degree: ${humanizerDegree}`);
+
+			// 6. Validate timezone offset (optional, defaults to 0 if not provided or invalid)
 			let timezoneOffset = 0; // Default to UTC
 			if (timezoneOffsetStr?.trim()) {
 				const parsedOffset = Number.parseFloat(timezoneOffsetStr.trim());
@@ -349,7 +431,7 @@ export async function execute(
 				encryptedApiKey: encryptedKey,
 				provider: normalizedProvider, // Use the case-normalized provider name
 				presetId: selectedPresetId,
-				humanizer: HumanizerDegree.HEAVY, // Always default to HEAVY as decided
+				humanizer: humanizerDegree, // Use the selected humanizer degree
 				tomoriName: getDefaultBotName(locale), // Get bot name from locale files
 				timezoneOffset: timezoneOffset, // Add timezone offset to config
 				locale,
@@ -382,6 +464,15 @@ export async function execute(
 			}
 
 			// Prepare fields for success message
+			// Map humanizer degree to user-friendly label
+			const humanizerLabels = [
+				localizer(locale, "commands.config.setup.humanizer_option_none_label"),
+				localizer(locale, "commands.config.setup.humanizer_option_light_label"),
+				localizer(locale, "commands.config.setup.humanizer_option_default_label"),
+				localizer(locale, "commands.config.setup.humanizer_option_heavy_label"),
+			];
+			const humanizerLabel = humanizerLabels[humanizerDegree] || "Unknown";
+
 			const successFields = [
 				{
 					nameKey: "commands.config.setup.preset_field",
@@ -393,6 +484,10 @@ export async function execute(
 						locale === "ja"
 							? process.env.DEFAULT_BOTNAME_JP || "ともり" // Use environment variable with fallback
 							: process.env.DEFAULT_BOTNAME || "Tomori", // Use environment variable with fallback
+				},
+				{
+					nameKey: "commands.config.setup.humanizer_field",
+					value: humanizerLabel,
 				},
 			];
 
