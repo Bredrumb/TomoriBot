@@ -1,7 +1,7 @@
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-  <a href="https://github.com/Eliolocin/TomoriBot">
+  <a href="https://github.com/Bredrumb/TomoriBot">
     <img src="img/tomoricon.png" alt="Logo" width="80" height="80">
   </a>
 
@@ -11,14 +11,14 @@
     A customizable AI assistant (or waifu) for Discord featuring editable memory, personality switching, smart autonomous tool usage, and much more!
       <br />
         <br />
-      <a href="https://github.com/Eliolocin/TomoriBot"><strong>EXPLORE THE WIKI »</strong></a>
+      <a href="https://github.com/Bredrumb/TomoriBot"><strong>EXPLORE THE WIKI »</strong></a>
       <br />
       <br />
-      <a href="https://github.com/Eliolocin/TomoriBot/releases">View Releases</a>
+      <a href="https://github.com/Bredrumb/TomoriBot/releases">View Releases</a>
       &middot;
-      <a href="https://github.com/Eliolocin/TomoriBot/issues/new?labels=bug&template=bug-report---.md">Report Bug </a>
+      <a href="https://github.com/Bredrumb/TomoriBot/issues/new?labels=bug&template=bug-report---.md">Report Bug </a>
       &middot;
-      <a href="https://github.com/Eliolocin/TomoriBot/issues/new?labels=enhancement&template=feature-request---.md"> Request Feature</a>
+      <a href="https://github.com/Bredrumb/TomoriBot/issues/new?labels=enhancement&template=feature-request---.md"> Request Feature</a>
   </p>
 </div>
 
@@ -124,7 +124,7 @@ Before running TomoriBot, ensure you have the following installed:
 
 1. **Clone the repository**
    ```sh
-   git clone https://github.com/Eliolocin/TomoriBot.git
+   git clone https://github.com/Bredrumb/TomoriBot.git
    cd TomoriBot
    ```
 
@@ -208,7 +208,7 @@ Or slide into TomoriBot's DMs and say hi!
 - [ ] Image generation capabilities
 - [ ] Web dashboard for configuration
 
-See the [open issues](https://github.com/Eliolocin/TomoriBot/issues) for a full list of proposed features and known issues.
+See the [open issues](https://github.com/Bredrumb/TomoriBot/issues) for a full list of proposed features and known issues.
 
 
 <!-- CONTRIBUTING -->
@@ -227,7 +227,7 @@ Distributed under the GPL License. See `LICENSE` for more information.
 <!-- CONTACT -->
 ## Contact
 
-Project Link: [https://github.com/Eliolocin/TomoriBot](https://github.com/Eliolocin/TomoriBot)
+Project Link: [https://github.com/Bredrumb/TomoriBot](https://github.com/Bredrumb/TomoriBot)
 
 
 <!-- MARKDOWN LINKS & IMAGES -->

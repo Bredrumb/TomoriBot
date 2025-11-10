@@ -1,81 +1,83 @@
 # TomoriBot Help Commands - Content Draft
 
-This is a scratchpad for drafting the content of help commands before implementation.
+This is a scratchpad for drafting the content of help commands before implementation. Make sure all replyInfoEmbeds use MessageFlags.SuppressNotifications (not MessageFlags.Ephemeral) so that all users can see it when the command is run.
 
 ---
 
 ## `/help features`
 **Purpose**: Show users what TomoriBot can do (based on chatCapabilities.md)
 
-**Embed Title**: What I Can Do! ✨
+**Embed Title**: What I Can Do! (Version XXXX, [take from package.json])
 
 **Embed Description**:
-Hi! I'm TomoriBot, your AI companion with some pretty cool abilities. Here's what I can do:
-
 **Vision & Media** 👁️
-- I can see and analyze images, videos, stickers, and emojis you share
-- Never hesitate to share visual content with me!
+- I can see and analyze images, videos, stickers, and emojis
+- I can watch YouTube videos from links
+- I can see content within Tweets
 
 **Search & Information** 🔍
-- Web search for current information via Brave Search
-- Image, video, and news search
-- Fetch and read content from URLs you share
+- I can search the web for current information
+- I can also do image, video, and news search (via `/config braveapi`)
+- I can fetch and read content from URLs
 
-**Memory & Personalization** 🧠
-- I remember personal facts about you and server-wide information
-- My memories persist across conversations
-- Use `/teach` to help me remember things, `/forget` to forget
-- Learn more with `/help memory`
-
-**Personality & Expression** 💫
-- I can switch between different personalities/presets
-- I can send emojis and stickers to express myself
-- My behavior and tone can be customized
+**Personality & Customization** 💫
+- I can change my name and avatar using `/config rename` and `/server avatar`
+- I can switch between different personas using `/persona` (you can also share and save personas using `/persona export`!)
+- My behavior and tone can be tweaked with `/teach`
 - Learn more with `/help customization`
 
-**Helpful Tools** 🛠️
-- Pin important messages (reply to a message and mention it!)
-- Set up reminders for you
-- Look at Discord profile pictures
-- Multi-language support
+**Memory & Personalization** 🧠
+- I can remember personal facts about you and server-wide information, persisting across conversations
+- Personal memories persist across servers (try talking to me in another server!)
+- Change what I call you using `/personal nickname`
+- Use `/teach` to manually help me remember things, `/forget` to forget them
+- Learn more with `/help memory`
 
-**Footer Text**: Want to get started? Try `/help setup` • Need an API key? Try `/help apikey`
+**Time Awareness** 🕰️
+- I know what time it currently is in the server (via `/config timezone`)
+- I can set up reminders for you (try asking me to remind you about something!)
+
+**Footer Text**: Note: Not all features are available for all providers. It is recommended to use Google's Gemini
 
 ---
 
 ## `/help setup`
 **Purpose**: Guide new users through first-time server configuration
 
-**Embed Title**: Getting Started with TomoriBot 🚀
+**Embed Title**: Getting Started with TomoriBot
 
 **Embed Description**:
-Welcome! Here's how to set up TomoriBot in your server:
+Here's how to set up TomoriBot in your server (or DMs!):
 
 **Step 1: Get an API Key** 🔑
 TomoriBot uses AI providers like Google Gemini, NovelAI, or OpenRouter. You'll need an API key from one of them.
 - Use `/help apikey` to learn how to get one
+  - Google's Gemini = general-purpose, free, and can run all of TomoriBot's features
+  - NovelAI = role-playing and storytelling specialized
+  - OpenRouter = various available AI models
+- Do **NOT** share this API key with anyone else
 
-**Step 2: Configure Your API Key** ⚙️
-- Use `/apikey set` to securely add your API key
-- Your key is encrypted and stored safely
+**Step 2: Run the Setup Command** ⚙️
+- Use `/config setup` to securely add your API key and initialize TomoriBot 
+- Your API key is encrypted and stored safely
 - Each server has its own configuration
 
 **Step 3: Start Chatting!** 💬
 - Just mention me or reply to my messages to chat
-- I'll remember our conversations with my memory system
-- Teach me things with `/teach` so I remember them
+- Change how I get triggered using `/server trigger`
+- I'll remember our conversations with my memory system (which you can disable using `/config permissions`!)
+- Set up auto-trigger with `/server autotrigger` to chat without mentioning me
 
 **Optional: Customize Me** 🎨
-- Use `/persona` commands to change my personality
-- Configure server settings with `/server` commands
-- Set up auto-trigger with `/server autotrigger` to chat without mentioning me
+- Use `/persona` commands to completely change my personality
+- Configure my settings with `/server`, `/personal`, and `/config` commands
+- You can also manually teach me things with `/teach`
 
 **Need Help?**
 - `/help features` - See what I can do
 - `/help memory` - Learn about my memory system
 - `/help customization` - Learn about personality customization
-
-**Footer Text**: Questions? Just ask me directly - I'm here to help!
+- `/support server` - Join the official TomoriBot support server
 
 ---
 
@@ -85,13 +87,11 @@ TomoriBot uses AI providers like Google Gemini, NovelAI, or OpenRouter. You'll n
 **Embed Title**: Managing Your Data 🗂️
 
 **Embed Description**:
-TomoriBot gives you complete control over your data. Here's what you can do:
-
 **Export Your Data** 📤
 Use `/data export` to download your data:
 - **Personal data**: Your memories, preferences, and user settings
 - **Server data**: Server memories, configurations, and bot settings
-- **Personality data**: Custom personality presets you've created
+- **Personality data**: Custom personality presets you've created (use `/persona export` instead to share it with others)
 - Data is sent to your DMs as a JSON or text file
 
 **Import Your Data** 📥
@@ -104,25 +104,23 @@ Use `/data import` to restore previously exported data:
 **Delete Your Data** 🗑️
 Use `/data delete` to permanently remove your data:
 - **Personal deletion**: Removes all your user data, memories, and preferences
-- **Server deletion**: Removes all server data (requires Manage Server permission)
+- **Server deletion**: Removes all server data
 - Requires confirmation to prevent accidental deletion
 - This action cannot be undone!
 
 **Privacy Notice** 🔒
-**What TomoriBot Stores:**
-- ✅ Memories you teach me with `/teach`
-- ✅ Your preferences and settings
-- ✅ Server configurations
-- ✅ Encrypted API keys
+**What TomoriBot Stores:** ✅
+- Server/personal memories
+- My settings and persona
+- Server configurations
+- Encrypted API keys
 
-**What TomoriBot Does NOT Store:**
-- ❌ Your Discord messages (except when explicitly taught as memories)
-- ❌ Message content from conversations
-- ❌ Chat history
+**What TomoriBot Does NOT Store:** ❌
+- Your Discord messages
+- Message content from conversations
+- Chat history
 
 **Important**: Your chosen AI provider (Google, NovelAI, OpenRouter) processes your messages according to their own privacy policies. Never share personal information in conversations if you're concerned about privacy.
-
-**Footer Text**: Questions about data? Use `/data export` to see exactly what's stored • Need help? Try `/help setup`
 
 ---
 
@@ -308,7 +306,7 @@ Use `/forget` to make me forget memories:
 ---
 
 ## `/help customization`
-**Purpose**: Comprehensive guide to customizing TomoriBot's behavior and personality
+**Purpose**: Comprehensive guide to customizing TomoriBot's behavior and personality, sent as multiple embeds with the first one being the reply
 
 **💡 KEY DISTINCTION:**
 - **`/help customization`** = How TomoriBot **behaves** (personality, tone, settings)

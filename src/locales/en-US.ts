@@ -525,7 +525,7 @@ Discord API Latency: \`{discord_response}ms\``,
 				metadata_embed_failed_description: `Failed to embed personality data in the image. Please try again.`,
 				// Success
 				success_title: `✨ {character_name} Generated Successfully!`,
-				success_description: `I've generated a persona for **{character_name}**!\n\n**Attribute Preview:**\n{attribute_preview}\n\n**Sample Dialogues:**\n{dialogue_preview}`,
+				success_description: `I've generated a persona for **{character_name}**!\n\n**Attributes Preview:**\n{attribute_preview}\n\n**Sample Dialogues:**\n{dialogue_preview}`,
 				success_next_steps_title: `📥 Next Steps`,
 				success_next_steps_description: `1. Download the attached PNG file\n2. Use \`/persona import\` with the PNG to import this character\n3. (Optional) Use \`/server avatar\` to change the avatar if desired`,
 				avatar_update_skipped_dm: `ℹ️ Note: Avatar and nickname updates are not available in Direct Messages. Personality was generated successfully.`,
@@ -1178,7 +1178,7 @@ To protect your privacy again, use \`/personal privacy\` and select "Opt Out".`,
 			setup_prompt_title: `TomoriBot Successfully Added`,
 			setup_prompt_description: `Thanks for adding me! To get started, someone with the **Manage Server** permission needs to run my \`/config setup\` command to choose my initial personality and configure my AI features. You can also manage or delete your data anytime with \`/data\`.
 
-			Use the \`/help apikey\` command if you are unsure on how to create an API key for your chosen AI provider. API keys will be kept encrypted but if you are still wary of giving it to a public Discord bot (as you normally should), feel free to run your own TomoriBot using the [repository's guide](https://github.com/Eliolocin/TomoriBot) instead.
+			Use the \`/help apikey\` command if you are unsure on how to create an API key for your chosen AI provider. API keys will be kept encrypted but if you are still wary of giving it to a public Discord bot (as you normally should), feel free to run your own TomoriBot using the [repository's guide](https://github.com/Bredrumb/TomoriBot) instead.
 
 			**IMPORTANT NOTICE:** I do not save any of your Discord messages. I only store Memories and relevant Settings, all of which you can freely delete and modify using my slash commands. However, the AI providers you choose to power me can have different privacy policies. If you or your server's members do not agree with your chosen provider's privacy policies, please refrain from using me. **Otherwise, just make sure to never share any personal information**.`,
 		},

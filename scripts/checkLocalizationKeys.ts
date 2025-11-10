@@ -203,8 +203,8 @@ function isValidLocalizationKey(key: string): boolean {
 		/^node:|^@\w+/,
 		// Error codes
 		/^\d{3}_/,
-		// Database/SQL patterns (word boundaries to avoid false positives)
-		/\b(?:SELECT|INSERT|UPDATE|DELETE|FROM|WHERE)\b/i,
+		// Database/SQL patterns - match only when multiple keywords appear together (more likely to be actual SQL)
+		/(?:SELECT|INSERT|UPDATE|DELETE)[\s\S]*(?:FROM|WHERE|INTO|SET)/i,
 	];
 
 	for (const pattern of falsePositives) {
@@ -366,10 +366,235 @@ function isInSetDeclaration(content: string, matchIndex: number): boolean {
 }
 
 /**
+ * Extracts dynamic template literal keys from file content
+ * @param content - The file content to analyze
+ * @param availableKeys - Set of all available locale keys to match against
+ * @returns Array of matched keys
+ */
+function extractDynamicTemplateKeys(
+	content: string,
+	availableKeys: Set<string>,
+): string[] {
+	const matchedKeys: string[] = [];
+
+	// Pattern to find template literals with locale key prefixes
+	// Matches patterns like: `commands.server.avatar.${errorKey}`
+	const templatePattern =
+		/(?:titleKey|descriptionKey|nameKey|labelKey|modalTitleKey|itemLabelKey):\s*`([a-zA-Z][a-zA-Z0-9._]*)\$\{([^}]+)\}([a-zA-Z0-9._]*)`/g;
+
+	let match = templatePattern.exec(content);
+	while (match !== null) {
+		const prefix = match[1]; // e.g., "commands.server.avatar."
+		const variable = match[2]; // e.g., "errorKey"
+		const suffix = match[3]; // e.g., "" (empty in most cases)
+
+		// Extract the variable name (strip any property access or array indexing)
+		const variableName = variable.split(/[.\[]/)[0];
+
+		// Look for string assignments to this variable in the same file
+		// Patterns like: errorKey = "invalid_image_description"
+		const assignmentPattern = new RegExp(
+			`${variableName}\\s*=\\s*["']([a-zA-Z0-9._]+)["']`,
+			"g",
+		);
+
+		let assignmentMatch = assignmentPattern.exec(content);
+		while (assignmentMatch !== null) {
+			const assignedValue = assignmentMatch[1];
+			// Construct the full key
+			const fullKey = `${prefix}${assignedValue}${suffix}`;
+
+			// Check if this constructed key exists in available keys
+			if (availableKeys.has(fullKey)) {
+				matchedKeys.push(fullKey);
+			}
+
+			assignmentMatch = assignmentPattern.exec(content);
+		}
+
+		match = templatePattern.exec(content);
+	}
+
+	return matchedKeys;
+}
+
+/**
+ * Extracts keys from localizer() calls with template literals
+ * Handles patterns like: localizer(locale, `genai.google.${messageKey}`)
+ * @param content - The file content to analyze
+ * @param availableKeys - Set of all available locale keys to match against
+ * @returns Array of matched keys
+ */
+function extractLocalizerTemplateKeys(
+	content: string,
+	availableKeys: Set<string>,
+): string[] {
+	const matchedKeys: string[] = [];
+
+	// Pattern: localizer() with template literal as second argument
+	// Matches: localizer(locale, `genai.google.${messageKey}`)
+	const localizerTemplatePattern =
+		/localizer\s*\([^,]+,\s*`([a-zA-Z][a-zA-Z0-9._]*)\$\{([^}]+)\}([a-zA-Z0-9._]*)`\)/g;
+
+	let match = localizerTemplatePattern.exec(content);
+	while (match !== null) {
+		const prefix = match[1]; // e.g., "genai.google."
+		const variable = match[2]; // e.g., "messageKey"
+		const suffix = match[3]; // e.g., "" (usually empty)
+
+		// Extract the variable name (strip any property access)
+		const variableName = variable.split(/[.\[]/)[0];
+
+		// Look for string literal assignments to this variable in the same file
+		// Patterns like: messageKey = "429_default_message"
+		const assignmentPattern = new RegExp(
+			`${variableName}\\s*=\\s*["'\`]([a-zA-Z0-9._]+)["'\`]`,
+			"g",
+		);
+
+		let assignmentMatch = assignmentPattern.exec(content);
+		while (assignmentMatch !== null) {
+			const assignedValue = assignmentMatch[1];
+			// Construct the full key
+			const fullKey = `${prefix}${assignedValue}${suffix}`;
+
+			// Check if this constructed key exists in available keys
+			if (availableKeys.has(fullKey)) {
+				matchedKeys.push(fullKey);
+			}
+
+			assignmentMatch = assignmentPattern.exec(content);
+		}
+
+		match = localizerTemplatePattern.exec(content);
+	}
+
+	return matchedKeys;
+}
+
+/**
+ * Extracts error code pattern keys from file content
+ * Handles patterns like: messageKey = `${errorCode}_default_message`
+ * @param content - The file content to analyze
+ * @param availableKeys - Set of all available locale keys to match against
+ * @returns Array of matched keys
+ */
+function extractErrorCodeKeys(
+	content: string,
+	availableKeys: Set<string>,
+): string[] {
+	const matchedKeys: string[] = [];
+
+	// Pattern 1: Template literals with variable + suffix
+	// Matches: `${errorCode}_default_message` or `${statusCode}_error_title`
+	const templateWithSuffixPattern = /`\$\{([^}]+)\}([a-zA-Z0-9._]+)`/g;
+
+	let match = templateWithSuffixPattern.exec(content);
+	while (match !== null) {
+		const variable = match[1]; // e.g., "errorCode"
+		const suffix = match[2]; // e.g., "_default_message"
+
+		// Extract the variable name (strip any property access)
+		const variableName = variable.split(/[.\[]/)[0];
+
+		// Look for all available keys that match this pattern
+		// Common error codes and status codes
+		const commonCodes = [
+			"400",
+			"401",
+			"403",
+			"404",
+			"429",
+			"500",
+			"503",
+			"504",
+			"unknown",
+		];
+
+		// Also search for numeric assignments in the file
+		const numericAssignPattern = new RegExp(
+			`${variableName}\\s*===?\\s*(\\d+|["']\\d+["'])`,
+			"g",
+		);
+		let numMatch = numericAssignPattern.exec(content);
+		while (numMatch !== null) {
+			const code = numMatch[1].replace(/["']/g, "");
+			commonCodes.push(code);
+			numMatch = numericAssignPattern.exec(content);
+		}
+
+		// Check if any constructed key exists in available keys
+		for (const code of commonCodes) {
+			const fullKey = `${code}${suffix}`;
+			if (availableKeys.has(fullKey)) {
+				matchedKeys.push(fullKey);
+			}
+		}
+
+		match = templateWithSuffixPattern.exec(content);
+	}
+
+	// Pattern 2: Template literals with prefix + variable
+	// Matches: `genai.google.${errorCode}_default_message`
+	const templateWithPrefixPattern =
+		/`([a-zA-Z][a-zA-Z0-9._]*)\$\{([^}]+)\}([a-zA-Z0-9._]*)`/g;
+
+	let prefixMatch = templateWithPrefixPattern.exec(content);
+	while (prefixMatch !== null) {
+		const prefix = prefixMatch[1]; // e.g., "genai.google."
+		const variable = prefixMatch[2]; // e.g., "errorCode"
+		const suffix = prefixMatch[3]; // e.g., "_default_message"
+
+		// Skip if this is already handled by extractDynamicTemplateKeys
+		// (those have titleKey/descriptionKey before the backtick)
+		const variableName = variable.split(/[.\[]/)[0];
+
+		const commonCodes = [
+			"400",
+			"401",
+			"403",
+			"404",
+			"429",
+			"500",
+			"503",
+			"504",
+			"unknown",
+		];
+
+		// Also search for numeric assignments in the file
+		const numericAssignPattern = new RegExp(
+			`${variableName}\\s*===?\\s*(\\d+|["']\\d+["'])`,
+			"g",
+		);
+		let numMatch = numericAssignPattern.exec(content);
+		while (numMatch !== null) {
+			const code = numMatch[1].replace(/["']/g, "");
+			commonCodes.push(code);
+			numMatch = numericAssignPattern.exec(content);
+		}
+
+		// Check if any constructed key exists in available keys
+		for (const code of commonCodes) {
+			const fullKey = `${prefix}${code}${suffix}`;
+			if (availableKeys.has(fullKey)) {
+				matchedKeys.push(fullKey);
+			}
+		}
+
+		prefixMatch = templateWithPrefixPattern.exec(content);
+	}
+
+	return matchedKeys;
+}
+
+/**
  * Extracts localization keys referenced in TypeScript source files
+ * @param availableKeys - Set of all available locale keys for dynamic key matching
  * @returns Map of referenced keys to files that reference them
  */
-async function extractReferencedKeys(): Promise<Map<string, Set<string>>> {
+async function extractReferencedKeys(
+	availableKeys: Set<string>,
+): Promise<Map<string, Set<string>>> {
 	const referencedKeys = new Map<string, Set<string>>();
 	const srcPath = join(process.cwd(), "src");
 
@@ -421,6 +646,36 @@ async function extractReferencedKeys(): Promise<Map<string, Set<string>>> {
 						}
 						match = pattern.exec(content);
 					}
+				}
+
+				// Extract dynamic template literal keys
+				const dynamicKeys = extractDynamicTemplateKeys(content, availableKeys);
+				for (const key of dynamicKeys) {
+					if (!referencedKeys.has(key)) {
+						referencedKeys.set(key, new Set());
+					}
+					referencedKeys.get(key)?.add(file);
+				}
+
+				// Extract localizer template literal keys
+				const localizerTemplateKeys = extractLocalizerTemplateKeys(
+					content,
+					availableKeys,
+				);
+				for (const key of localizerTemplateKeys) {
+					if (!referencedKeys.has(key)) {
+						referencedKeys.set(key, new Set());
+					}
+					referencedKeys.get(key)?.add(file);
+				}
+
+				// Extract error code pattern keys
+				const errorCodeKeys = extractErrorCodeKeys(content, availableKeys);
+				for (const key of errorCodeKeys) {
+					if (!referencedKeys.has(key)) {
+						referencedKeys.set(key, new Set());
+					}
+					referencedKeys.get(key)?.add(file);
 				}
 			} catch (readError) {
 				log.warn(`Failed to read file: ${file}`, readError);
@@ -496,7 +751,7 @@ async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
 
 	// Extract referenced keys from source code
 	log.info("🔎 Scanning source code for referenced keys...");
-	const referencedKeysMap = await extractReferencedKeys();
+	const referencedKeysMap = await extractReferencedKeys(availableKeys);
 	const referencedKeys = new Set(referencedKeysMap.keys());
 
 	// Find missing keys (referenced but not available)
