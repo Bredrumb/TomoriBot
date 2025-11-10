@@ -42,9 +42,55 @@ import {
 	type StreamResult,
 } from "../../types/provider/interfaces";
 import { getGoogleToolAdapter } from "./googleToolAdapter";
+import {
+	getCachedDefaultLLM,
+	isLLMCacheReady,
+} from "../../utils/cache/llmCache";
+import { loadDefaultModelForProvider } from "../../utils/db/dbRead";
 
-// Default values for Gemini API
-const DEFAULT_MODEL = process.env.DEFAULT_GEMINI_MODEL || "gemini-2.5-flash";
+/**
+ * Gets the default Google Gemini model with a robust fallback chain:
+ * 1. First checks the cached is_default LLM from the database
+ * 2. Falls back to database query for is_default model if cache is not ready
+ * 3. Falls back to environment variable DEFAULT_GEMINI_MODEL
+ * 4. Ultimate fallback to hardcoded "gemini-2.5-flash"
+ * @returns Promise<string> - The default model codename
+ */
+async function getDefaultGoogleModel(): Promise<string> {
+	// 1. Try to get default from cache (fastest, no DB query)
+	if (isLLMCacheReady()) {
+		const cachedDefault = getCachedDefaultLLM("google");
+		if (cachedDefault) {
+			log.info(`Using cached default Google model: ${cachedDefault.llm_codename}`);
+			return cachedDefault.llm_codename;
+		}
+	}
+
+	// 2. Cache not ready or no default found - query database
+	try {
+		const dbDefault = await loadDefaultModelForProvider("google");
+		if (dbDefault) {
+			log.info(`Using database default Google model: ${dbDefault.llm_codename}`);
+			return dbDefault.llm_codename;
+		}
+	} catch (error) {
+		log.warn("Failed to load default model from database, falling back to env/hardcoded", {
+			error: error as Error,
+		});
+	}
+
+	// 3. Fallback to environment variable
+	const envModel = process.env.DEFAULT_GEMINI_MODEL;
+	if (envModel) {
+		log.info(`Using environment variable default Google model: ${envModel}`);
+		return envModel;
+	}
+
+	// 4. Ultimate fallback to hardcoded value
+	const hardcodedDefault = "gemini-2.5-flash";
+	log.warn(`Using hardcoded default Google model: ${hardcodedDefault}`);
+	return hardcodedDefault;
+}
 
 // Google-specific configuration extending the base ProviderConfig
 export interface GoogleProviderConfig extends ProviderConfig {
@@ -102,9 +148,10 @@ export class GoogleProvider extends BaseLLMProvider implements LLMProvider {
 			// Initialize the Google AI client with the provided API key
 			const genAI = new GoogleGenAI({ apiKey });
 
-			// Use the default model or the simplest available model
+			// Use the default model with proper fallback chain
+			const defaultModel = await getDefaultGoogleModel();
 			const response = await genAI.models.generateContent({
-				model: DEFAULT_MODEL,
+				model: defaultModel,
 				contents: [
 					{
 						text: 'This is a test message for verifying API keys. Say "VALID"',
@@ -217,10 +264,11 @@ export class GoogleProvider extends BaseLLMProvider implements LLMProvider {
 
 	/**
 	 * Get the default model for this provider
-	 * @returns The default model codename
+	 * Uses the robust fallback chain: cache > database > env > hardcoded
+	 * @returns Promise<string> - The default model codename
 	 */
-	getDefaultModel(): string {
-		return DEFAULT_MODEL;
+	async getDefaultModel(): Promise<string> {
+		return await getDefaultGoogleModel();
 	}
 
 	/**

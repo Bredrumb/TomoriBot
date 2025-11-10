@@ -113,9 +113,9 @@ export interface LLMProvider {
 
 	/**
 	 * Get the default model for this provider
-	 * @returns The default model codename
+	 * @returns Promise<string> - The default model codename
 	 */
-	getDefaultModel(): string;
+	getDefaultModel(): Promise<string>;
 
 	/**
 	 * Convert provider-specific configuration from TomoriState
@@ -149,7 +149,7 @@ export abstract class BaseLLMProvider implements LLMProvider {
 		replyToMessage?: Message,
 		streamingContext?: StreamingContext,
 	): Promise<StreamResult>;
-	abstract getDefaultModel(): string;
+	abstract getDefaultModel(): Promise<string>;
 	abstract createConfig(
 		tomoriState: TomoriState,
 		apiKey: string,
