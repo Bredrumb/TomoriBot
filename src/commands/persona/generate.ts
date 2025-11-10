@@ -171,7 +171,11 @@ export async function execute(
 			return;
 		}
 
-		const decryptedApiKey = await decryptApiKey(tomoriState.config.api_key);
+		const keyVersion = tomoriState.config.key_version || 1; // Default to V1 for backward compatibility
+		const decryptedApiKey = await decryptApiKey(
+			tomoriState.config.api_key,
+			keyVersion,
+		);
 		if (!decryptedApiKey) {
 			await replyInfoEmbed(interaction, locale, {
 				titleKey: "commands.persona.generate.api_key_decrypt_failed_title",

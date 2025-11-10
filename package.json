@@ -19,7 +19,9 @@
 		"lint": "bunx @biomejs/biome lint --fix",
 		"check": "bunx tsc --noEmit",
 		"check-locales": "bun run scripts/checkLocalizationKeys.ts",
-		"check-limits": "bun run scripts/checkDiscordLimits.ts"
+		"check-limits": "bun run scripts/checkDiscordLimits.ts",
+		"audit-keys": "bun run scripts/auditKeyVersions.ts",
+		"rotate-keys": "bun run scripts/rotateAllKeys.ts"
 	},
 	"author": "Bredrumb",
 	"license": "ISC",

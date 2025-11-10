@@ -1,9 +1,5 @@
 import type { Client, Message, Sticker, Embed } from "discord.js";
-import {
-	BaseGuildTextChannel,
-	DMChannel,
-	TextChannel,
-} from "discord.js"; // Import value for instanceof check
+import { BaseGuildTextChannel, DMChannel, TextChannel } from "discord.js"; // Import value for instanceof check
 // Provider imports moved to factory pattern
 import type { StructuredContextItem } from "../../types/misc/context";
 // Provider-specific types moved to individual providers
@@ -1642,9 +1638,13 @@ export default async function tomoriChat(
 				});
 				return;
 			}
-
 			// biome-ignore lint/style/noNonNullAssertion: API key presence was validated earlier for triggered messages, tomoriState is checked
-			const decryptedApiKey = await decryptApiKey(tomoriState!.config.api_key!);
+			const keyVersion = tomoriState!.config.key_version || 1; // Default to V1 for backward compatibility
+			const decryptedApiKey = await decryptApiKey(
+				// biome-ignore lint/style/noNonNullAssertion: API key presence was validated earlier for triggered messages, tomoriState is checked
+				tomoriState!.config.api_key!,
+				keyVersion,
+			);
 			if (!decryptedApiKey) {
 				log.error("API Key is not set or failed to decrypt.", undefined, {
 					serverId: tomoriState?.server_id,

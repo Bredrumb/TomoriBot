@@ -203,7 +203,11 @@ export async function execute(
 			try {
 				// Decrypt and validate the API key with the new provider
 				const { decryptApiKey } = await import("../../utils/security/crypto");
-				const decryptedApiKey = await decryptApiKey(tomoriState.config.api_key);
+				const keyVersion = tomoriState.config.key_version || 1; // Default to V1 for backward compatibility
+				const decryptedApiKey = await decryptApiKey(
+					tomoriState.config.api_key,
+					keyVersion,
+				);
 
 				// Create provider instance for validation
 				let isKeyCompatible = false;

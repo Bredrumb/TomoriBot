@@ -5,8 +5,18 @@ import { log } from "./utils/misc/logger";
 import path from "node:path";
 import eventHandler from "./handlers/eventHandler";
 import { initializeLocalizer } from "./utils/text/localizer";
+import { keyManager } from "./utils/security/keyManager";
 
 config();
+
+// Initialize encryption key manager (auto-initializes on import)
+log.section("Initializing Encryption Key Manager...");
+const rotationStatus = keyManager.getRotationStatus();
+log.success(
+	`Encryption key manager initialized: V${rotationStatus.currentVersion} active, ` +
+		`${rotationStatus.availableVersions.length} version(s) available, ` +
+		`rotation ${rotationStatus.rotationCapable ? "enabled" : "disabled"}`,
+);
 
 /**
  * Get PostgreSQL connection URL from environment variables

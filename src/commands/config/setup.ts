@@ -321,7 +321,8 @@ export async function execute(
 			}
 
 			// API key is valid, proceed with encryption
-			const encryptedKey = await encryptApiKey(apiKey);
+			const { encrypted: encryptedKey, version: keyVersion } =
+				await encryptApiKey(apiKey);
 
 			// 4. Validate preset name against available presets
 			const selectedPresetOption = presetOptions.find(
@@ -429,6 +430,7 @@ export async function execute(
 			const setupConfig: SetupConfig = {
 				serverId: serverId,
 				encryptedApiKey: encryptedKey,
+				keyVersion: keyVersion, // Add encryption key version
 				provider: normalizedProvider, // Use the case-normalized provider name
 				presetId: selectedPresetId,
 				humanizer: humanizerDegree, // Use the selected humanizer degree

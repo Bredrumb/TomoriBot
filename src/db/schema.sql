@@ -433,6 +433,14 @@ SELECT drop_column_if_exists('tomori_configs', 'gamba_limit');
 SELECT drop_column_if_exists('users', 'tomocoins_held');
 SELECT drop_column_if_exists('users', 'tomocoins_deposited');
 
+-- Add key_version column to opt_api_keys for encryption key rotation (November 2025)
+SELECT add_column_if_not_exists('opt_api_keys', 'key_version', 'INTEGER', '1');
+CREATE INDEX IF NOT EXISTS idx_opt_api_keys_version ON opt_api_keys(key_version);
+
+-- Add key_version column to tomori_configs for main API key rotation (November 2025)
+SELECT add_column_if_not_exists('tomori_configs', 'key_version', 'INTEGER', '1');
+CREATE INDEX IF NOT EXISTS idx_tomori_configs_key_version ON tomori_configs(key_version);
+
 -- Example usage - This shows how to add columns to existing tables
 -- You can add these calls whenever you need to introduce schema changes
 -- SELECT add_column_if_not_exists('tomori_configs', 'new_feature_flag', 'BOOLEAN', 'false');

@@ -249,12 +249,13 @@ export async function execute(
 		}
 
 		// 11. Encrypt and store the API key
-		const encryptedKey = await encryptApiKey(apiKey);
+		const { encrypted, version } = await encryptApiKey(apiKey);
 
 		// 12. Update the config in the database
 		const [updatedRow] = await sql`
 			UPDATE tomori_configs
-			SET api_key = ${encryptedKey}
+			SET api_key = ${encrypted},
+			    key_version = ${version}
 			WHERE tomori_id = ${tomoriState.tomori_id}
 			RETURNING *
 		`;

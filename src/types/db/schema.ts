@@ -61,6 +61,7 @@ export const tomoriConfigSchema = z.object({
 	llm_id: z.number(),
 	llm_temperature: z.number().min(1.0).max(2.0).default(1.5),
 	api_key: z.instanceof(Buffer).nullable(),
+	key_version: z.number().int().default(1).optional(), // Added November 2025 - Encryption key version for rotation
 	trigger_words: z.array(z.string()).default([]),
 	autoch_disc_ids: z.array(z.string()).default([]),
 	autoch_threshold: z.number().default(0),
@@ -183,6 +184,7 @@ export const optApiKeySchema = z.object({
 	server_id: z.number(), // Foreign key to servers table
 	service_name: z.string(), // Service name identifier (e.g., 'brave-search', 'duckduckgo-search', 'fetch')
 	api_key: z.instanceof(Buffer).nullable(), // Encrypted API key using pgcrypto, nullable for free services
+	key_version: z.number().int().default(1).optional(), // Added November 2025 - Encryption key version for rotation
 	created_at: z.date().optional(), // Handled by DB default
 	updated_at: z.date().optional(), // Handled by DB default/trigger
 });
@@ -226,6 +228,7 @@ export const tomoriStateSchema = tomoriSchema.extend({
 export const setupConfigSchema = z.object({
 	serverId: z.string(),
 	encryptedApiKey: z.instanceof(Buffer),
+	keyVersion: z.number().int().default(1), // Encryption key version
 	provider: z.string(), // LLM provider name (e.g., "google", "openai")
 	presetId: z.number(),
 	humanizer: z.number().default(1),
