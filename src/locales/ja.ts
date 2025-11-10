@@ -606,7 +606,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 			discord: {
 				description: `バグ報告、フィードバック、コミュニティチャットのための公式Discordサーバーリンクを取得します。`,
 				title: `Discordサーバーに参加`,
-				description_text: `TomoriBotのヘルプが必要ですか？またはコミュニティと交流したいですか？\n\n🔗 **Discordサーバー**: https://discord.gg/PLACEHOLDER\n\n参加して:\n• バグや問題を報告\n• フィードバックや提案を共有\n• 他のユーザーや開発チームとチャット\n• 新機能の最新情報を入手`,
+				description_text: `TomoriBotのヘルプが必要ですか？またはコミュニティと交流したいですか？\n\n🔗 **Discordサーバー**: https://discord.gg/W5dDmPKAMc\n\n参加して:\n• バグや問題を報告\n• フィードバックや提案を共有\n• 他のユーザーや開発チームとチャット\n• 新機能の最新情報を入手`,
 			},
 		},
 
@@ -615,7 +615,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 			github: {
 				description: `GitHubリポジトリのリンクを取得し、TomoriBotへの貢献方法を学びます。`,
 				title: `TomoriBotに貢献する`,
-				description_text: `TomoriBotをより良くするお手伝いをしたいですか？貢献をお待ちしています！\n\n🔗 **GitHubリポジトリ**: https://github.com/PLACEHOLDER\n\n貢献方法:\n• GitHubでリポジトリにスターを付ける ⭐\n• バグ報告や機能リクエストを送信\n• コードの改善や新機能を貢献\n• TomoriBotを他の言語に翻訳するお手伝い\n• ドキュメントの改善`,
+				description_text: `TomoriBotをより良くするお手伝いをしたいですか？貢献をお待ちしています！\n\n🔗 **GitHubリポジトリ**: https://github.com/Bredrumb/TomoriBot\n\n貢献方法:\n• GitHubでリポジトリにスターを付ける ⭐\n• バグ報告や機能リクエストを送信\n• コードの改善や新機能を貢献\n• TomoriBotを他の言語に翻訳するお手伝い\n• ドキュメントの改善`,
 			},
 		},
 
@@ -624,7 +624,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 			kofi: {
 				description: `Ko-fiを通じてTomoriBotの開発を支援します。`,
 				title: `TomoriBotの開発を支援`,
-				description_text: `TomoriBotを使うのが好きですか？無料で維持し、継続的な開発を支援してください！\n\n🔗 **Ko-fi**: https://ko-fi.com/PLACEHOLDER\n\nあなたの寄付は以下に役立ちます:\n• TomoriBotの運営と保守\n• 新機能と改善の追加\n• サーバーコストと開発時間のサポート\n• TomoriBotを完全に無料で維持\n\n大小問わず、すべての貢献に心から感謝します！ ❤️`,
+				description_text: `TomoriBotを使うのが好きですか？無料で維持し、継続的な開発を支援してください！\n\n🔗 **Ko-fi**: https://ko-fi.com/bredrumb\n\nあなたの寄付は以下に役立ちます:\n• TomoriBotの運営と保守\n• 新機能と改善の追加\n• サーバーコストと開発時間のサポート\n• TomoriBotを完全に無料で維持\n\n大小問わず、すべての貢献に心から感謝します！ ❤️`,
 			},
 		},
 

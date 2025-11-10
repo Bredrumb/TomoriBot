@@ -605,7 +605,7 @@ Discord API Latency: \`{discord_response}ms\``,
 			discord: {
 				description: `Get the official Discord server link for bug reports, feedback, and community chat.`,
 				title: `Join Our Discord Server`,
-				description_text: `Need help with TomoriBot or want to hang out with the community?\n\n🔗 **Discord Server**: https://discord.gg/PLACEHOLDER\n\nJoin us to:\n• Report bugs and issues\n• Share feedback and suggestions\n• Chat with other users and the dev team\n• Stay updated on new features`,
+				description_text: `Need help with TomoriBot or want to hang out with the community?\n\n🔗 **Discord Server**: https://discord.gg/W5dDmPKAMc\n\nJoin us to:\n• Report bugs and issues\n• Share feedback and suggestions\n• Chat with other users and the dev team\n• Stay updated on new features`,
 			},
 		},
 
@@ -614,7 +614,7 @@ Discord API Latency: \`{discord_response}ms\``,
 			github: {
 				description: `Get the GitHub repository link and learn how to contribute to TomoriBot.`,
 				title: `Contribute to TomoriBot`,
-				description_text: `Want to help make TomoriBot better? We'd love your contributions!\n\n🔗 **GitHub Repository**: https://github.com/PLACEHOLDER\n\nWays to contribute:\n• Star the repository on GitHub ⭐\n• Submit bug reports and feature requests\n• Contribute code improvements and new features\n• Help translate TomoriBot to other languages\n• Improve documentation`,
+				description_text: `Want to help make TomoriBot better? We'd love your contributions!\n\n🔗 **GitHub Repository**: https://github.com/Bredrumb/TomoriBot\n\nWays to contribute:\n• Star the repository on GitHub ⭐\n• Submit bug reports and feature requests\n• Contribute code improvements and new features\n• Help translate TomoriBot to other languages\n• Improve documentation`,
 			},
 		},
 
@@ -623,7 +623,7 @@ Discord API Latency: \`{discord_response}ms\``,
 			kofi: {
 				description: `Support TomoriBot development through Ko-fi donations.`,
 				title: `Support TomoriBot Development`,
-				description_text: `Love using TomoriBot? Help keep it free and support ongoing development!\n\n🔗 **Ko-fi**: https://ko-fi.com/PLACEHOLDER\n\nYour donations help:\n• Keep TomoriBot running and maintained\n• Add new features and improvements\n• Support server costs and development time\n• Keep TomoriBot completely free for everyone\n\nEvery contribution, big or small, is greatly appreciated! ❤️`,
+				description_text: `Love using TomoriBot? Help keep it free and support ongoing development!\n\n🔗 **Ko-fi**: https://ko-fi.com/bredrumb\n\nYour donations help:\n• Keep TomoriBot running and maintained\n• Add new features and improvements\n• Support server costs and development time\n• Keep TomoriBot completely free for everyone\n\nEvery contribution, big or small, is greatly appreciated! ❤️`,
 			},
 		},
 

@@ -25,6 +25,7 @@ import {
 import { PeekProfilePictureTool } from "../../tools/functionCalls/peekProfilePictureTool";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { localizer, getSupportedLocales } from "../../utils/text/localizer";
+import { sql } from "bun";
 
 import type { TomoriState } from "@/types/db/schema";
 // Provider-specific function declarations moved to providers
@@ -1656,6 +1657,42 @@ export default async function tomoriChat(
 					descriptionKey: "general.errors.api_key_error_description",
 				});
 				return;
+			}
+
+			// LAZY ROTATION: If using old key version, re-encrypt with current version
+			const { keyManager } = await import("@/utils/security/keyManager");
+			const currentVersion = keyManager.getCurrentVersion();
+			if (keyVersion !== currentVersion) {
+				log.info(
+					`Rotating main API key from version ${keyVersion} to ${currentVersion} for server ${tomoriState!.server_id}`,
+				);
+
+				try {
+					const { encryptApiKey } = await import("@/utils/security/crypto");
+					const { encrypted, version } = await encryptApiKey(decryptedApiKey);
+
+					await sql`
+						UPDATE tomori_configs
+						SET api_key = ${encrypted},
+						    key_version = ${version},
+						    updated_at = CURRENT_TIMESTAMP
+						WHERE tomori_id = ${tomoriState!.tomori_id}
+					`;
+
+					log.success(
+						`Main API key rotation completed for server ${tomoriState!.server_id}`,
+					);
+
+					// Update in-memory state to reflect the new version
+					tomoriState!.config.api_key = encrypted;
+					tomoriState!.config.key_version = version;
+				} catch (error) {
+					log.warn(
+						"Failed to rotate main API key (non-critical - will retry on next message)",
+						error,
+					);
+					// Continue execution - the old key still works
+				}
 			}
 
 			// 12. Generate Response - Get provider instance

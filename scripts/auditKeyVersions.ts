@@ -37,6 +37,35 @@ import { keyManager } from "@/utils/security/keyManager";
 
 config();
 
+/**
+ * Get PostgreSQL connection URL from environment variables
+ * Supports both POSTGRES_URL and component-based configuration
+ */
+function getPostgresUrl(): string {
+	// If POSTGRES_URL is provided, use it directly (backwards compatibility)
+	if (process.env.POSTGRES_URL) {
+		return process.env.POSTGRES_URL;
+	}
+
+	// Otherwise, build URL from components
+	const host = process.env.POSTGRES_HOST || "localhost";
+	const port = process.env.POSTGRES_PORT || "5432";
+	const user = process.env.POSTGRES_USER || "postgres";
+	const password = process.env.POSTGRES_PASSWORD;
+	const database = process.env.POSTGRES_DB || "tomodb";
+
+	if (!password) {
+		throw new Error(
+			"Database password must be provided via POSTGRES_PASSWORD or POSTGRES_URL",
+		);
+	}
+
+	return `postgresql://${user}:${password}@${host}:${port}/${database}`;
+}
+
+const postgresUrl = getPostgresUrl();
+process.env.DATABASE_URL = postgresUrl;
+
 interface VersionStats {
 	key_version: number | null;
 	count: string;
