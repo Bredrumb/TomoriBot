@@ -51,6 +51,16 @@ interface ModalDescriptionViolation {
 }
 
 /**
+ * Interface for command description length violations
+ */
+interface CommandDescriptionViolation {
+	key: string;
+	value: string;
+	length: number;
+	locale: string;
+}
+
+/**
  * Interface for analysis results
  */
 interface AnalysisResult {
@@ -62,6 +72,7 @@ interface AnalysisResult {
 	parityIssues: LocaleParityIssue[];
 	modalTitleViolations: ModalTitleViolation[];
 	modalDescriptionViolations: ModalDescriptionViolation[];
+	commandDescriptionViolations: CommandDescriptionViolation[];
 }
 
 /**
@@ -264,6 +275,17 @@ function isModalDescriptionKey(key: string): boolean {
 }
 
 /**
+ * Checks if a localization key is used for a command description
+ * @param key - The localization key to check
+ * @returns True if the key is used for a command description
+ */
+function isCommandDescriptionKey(key: string): boolean {
+	// Pattern: commands.*.*.command_description or commands.*.*.*.command_description
+	// Examples: commands.help.memory.command_description, commands.teach.memory.personal.command_description
+	return /^commands\.[a-z]+(\.[a-z]+)+\.command_description$/.test(key);
+}
+
+/**
  * Recursively extracts string values from a nested locale object
  * @param obj - The locale object or nested object
  * @param prefix - Current key path prefix
@@ -397,6 +419,66 @@ async function checkModalDescriptionLengths(
 		} catch (error) {
 			log.error(
 				`Failed to check modal descriptions in locale: ${localeName}`,
+				error,
+			);
+		}
+	}
+
+	return violations;
+}
+
+/**
+ * Checks command description lengths across all locales
+ * @param localeKeys - Map of locale names to their key sets
+ * @returns Array of command description length violations
+ */
+async function checkCommandDescriptionLengths(
+	localeKeys: Map<string, Set<string>>,
+): Promise<CommandDescriptionViolation[]> {
+	const violations: CommandDescriptionViolation[] = [];
+	const localesPath = join(process.cwd(), "src", "locales");
+
+	// Discord command description constraints
+	const MIN_LENGTH = 1;
+	const MAX_LENGTH = 100;
+
+	for (const [localeName, keys] of localeKeys) {
+		// Filter to only command description keys
+		const commandDescriptionKeys = Array.from(keys).filter(
+			isCommandDescriptionKey,
+		);
+
+		if (commandDescriptionKeys.length === 0) continue;
+
+		try {
+			// Load the locale file
+			const filePath = join(localesPath, `${localeName}.ts`);
+			const module = await import(filePath);
+			const localeObject = module.default;
+
+			// Extract all string values from the locale object
+			const stringValues = extractStringValues(localeObject);
+
+			// Check each command description key
+			for (const key of commandDescriptionKeys) {
+				const value = stringValues.get(key);
+				if (!value) continue;
+
+				const length = value.length;
+
+				// Check if length violates Discord constraints
+				if (length < MIN_LENGTH || length > MAX_LENGTH) {
+					violations.push({
+						key,
+						value,
+						length,
+						locale: localeName,
+					});
+				}
+			}
+		} catch (error) {
+			log.error(
+				`Failed to check command descriptions in locale: ${localeName}`,
 				error,
 			);
 		}
@@ -836,6 +918,11 @@ async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
 	const modalDescriptionViolations =
 		await checkModalDescriptionLengths(localeKeys);
 
+	// Check command description lengths
+	log.info("📏 Checking command description lengths...");
+	const commandDescriptionViolations =
+		await checkCommandDescriptionLengths(localeKeys);
+
 	// Extract referenced keys from source code
 	log.info("🔎 Scanning source code for referenced keys...");
 	const referencedKeysMap = await extractReferencedKeys(availableKeys);
@@ -866,6 +953,7 @@ async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
 		parityIssues,
 		modalTitleViolations,
 		modalDescriptionViolations,
+		commandDescriptionViolations,
 	};
 }
 
@@ -942,6 +1030,32 @@ function displayResults(results: AnalysisResult): void {
 		);
 	}
 
+	// Command description length violations section
+	if (results.commandDescriptionViolations.length > 0) {
+		console.log(
+			"\n📏 COMMAND DESCRIPTION LENGTH VIOLATIONS (Must be 1-100 characters for Discord):",
+		);
+		console.log("-".repeat(60));
+
+		for (const {
+			key,
+			value,
+			length,
+			locale,
+		} of results.commandDescriptionViolations.sort((a, b) =>
+			a.key.localeCompare(b.key),
+		)) {
+			const status = length < 1 ? "Empty" : "Too long";
+			console.log(`  ⚠️  ${key} [${locale}]`);
+			console.log(`     ❌ ${status}: "${value}" (${length} characters)`);
+			console.log(`     ℹ️  Discord requires 1-100 characters`);
+		}
+	} else {
+		console.log(
+			"\n✅ All command descriptions meet Discord length requirements!",
+		);
+	}
+
 	// Missing keys section
 	if (results.missingKeys.length > 0) {
 		console.log("\n❌ MISSING LOCALIZATION KEYS (Referenced but don't exist):");
@@ -994,6 +1108,9 @@ function displayResults(results: AnalysisResult): void {
 		`  • ${results.modalDescriptionViolations.length} modal description length violations (must be ≤99 chars)`,
 	);
 	console.log(
+		`  • ${results.commandDescriptionViolations.length} command description length violations (must be 1-100 chars)`,
+	);
+	console.log(
 		`  • ${results.missingKeys.length} missing keys (referenced but don't exist)`,
 	);
 	console.log(
@@ -1005,7 +1122,8 @@ function displayResults(results: AnalysisResult): void {
 		results.unusedKeys.length === 0 &&
 		results.parityIssues.length === 0 &&
 		results.modalTitleViolations.length === 0 &&
-		results.modalDescriptionViolations.length === 0
+		results.modalDescriptionViolations.length === 0 &&
+		results.commandDescriptionViolations.length === 0
 	) {
 		console.log("\n🎉 Perfect! Your localization is fully synchronized!");
 	}
@@ -1021,12 +1139,13 @@ async function main(): Promise<void> {
 		const results = await analyzeLocalizationKeys();
 		displayResults(results);
 
-		// Exit with error code for critical issues (missing keys, parity issues, or modal violations)
+		// Exit with error code for critical issues (missing keys, parity issues, or length violations)
 		if (
 			results.missingKeys.length > 0 ||
 			results.parityIssues.length > 0 ||
 			results.modalTitleViolations.length > 0 ||
-			results.modalDescriptionViolations.length > 0
+			results.modalDescriptionViolations.length > 0 ||
+			results.commandDescriptionViolations.length > 0
 		) {
 			process.exit(1);
 		}

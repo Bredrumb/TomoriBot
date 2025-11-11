@@ -573,8 +573,304 @@ Discord API Latency: \`{discord_response}ms\``,
 
 		// Help commands
 		help: {
+			// /help features
+			features: {
+				command_description: `Show what TomoriBot can do`,
+				title: `What I Can Do! (Version {version})`,
+				embed_description: `Here's everything I'm capable of:`,
+				vision_title: `Vision & Media 👁️`,
+				vision_description: `- I can see and analyze images, videos, stickers, and emojis
+- I can watch YouTube videos from links
+- I can see content within Tweets`,
+				search_title: `Search & Information 🔍`,
+				search_description: `- I can search the web for current information
+- I can also do image, video, and news search (via \`/config braveapi\`)
+- I can fetch and read content from URLs`,
+				personality_title: `Personality & Customization 💫`,
+				personality_description: `- I can change my name and avatar using \`/config rename\` and \`/server avatar\`
+- I can switch between different personas using \`/persona\` (you can also share and save personas using \`/persona export\`!)
+- My behavior and tone can be tweaked with \`/teach\`
+- Learn more with \`/help customization\``,
+				memory_title: `Memory & Personalization 🧠`,
+				memory_description: `- I can remember personal facts about you and server-wide information, persisting across conversations
+- Personal memories persist across servers (try talking to me in another server!)
+- Change what I call you using \`/personal nickname\`
+- Use \`/teach\` to manually help me remember things, \`/forget\` to remove them
+- Learn more with \`/help memory\``,
+				time_title: `Time Awareness 🕰️`,
+				time_description: `- I know what time it currently is in the server (via \`/config timezone\`)
+- I can set up reminders for you (try asking me to remind you about something!)`,
+				footer: `Note: Not all features are available for all providers. It is recommended to use Google's Gemini`,
+			},
+
+			// /help setup
+			setup: {
+				command_description: `Learn how to set up TomoriBot for the first time`,
+				title: `Getting Started with TomoriBot`,
+				embed_description: `Here's how to set up TomoriBot in your server (or DMs!):`,
+				step1_title: `Step 1: Get an API Key 🔑`,
+				step1_description: `TomoriBot uses AI providers like Google Gemini, NovelAI, or OpenRouter. You'll need an API key from one of them.
+- Use {helpApikey} to learn how to get one
+  - Google's Gemini = general-purpose, free, and can run all of TomoriBot's features
+  - NovelAI = role-playing and storytelling specialized
+  - OpenRouter = various available AI models
+- Do **NOT** share this API key with anyone else`,
+				step2_title: `Step 2: Run the Setup Command ⚙️`,
+				step2_description: `- Use {configSetup} to securely add your API key and initialize TomoriBot
+- Your API key is encrypted and stored safely
+- Each server has its own configuration`,
+				step3_title: `Step 3: Start Chatting! 💬`,
+				step3_description: `- Just mention me or reply to my messages to chat
+- Change how I get triggered using {serverTrigger}
+- I'll remember our conversations with my memory system (which you can disable using {configPermissions}!)
+- Set up auto-trigger with {serverAutotrigger} to chat without mentioning me`,
+				step4_title: `Optional: Customize Me 🎨`,
+				step4_description: `- Use {persona} commands to completely change my personality
+- Configure my settings with {server}, {personal}, and {config} commands
+- You can also manually teach me things with {teach}`,
+				need_help_title: `Need Help?`,
+				need_help_description: `- {helpFeatures} - See what I can do
+- {helpMemory} - Learn about my memory system
+- {helpCustomization} - Learn about personality customization
+- {supportServer} - Join the official TomoriBot support server`,
+			},
+
+			// /help data
+			data: {
+				command_description: `Learn about data management and privacy`,
+				title: `Managing Your Data 🗂️`,
+				embed_description: ``,
+				export_title: `Export Your Data 📤`,
+				export_description: `Use {dataExport} to download your data:
+- **Personal data**: Your memories, preferences, and user settings
+- **Server data**: Server memories, configurations, and bot settings
+- **Personality data**: Custom personality presets you've created (use {personaExport} instead to share it with others)
+- Data is sent to your DMs as a JSON or text file`,
+				import_title: `Import Your Data 📥`,
+				import_description: `Use {dataImport} to restore previously exported data:
+- Restore your personal data across servers
+- Transfer server configurations to a new server
+- Share personality presets with others
+- Simply attach your exported file when using the command`,
+				delete_title: `Delete Your Data 🗑️`,
+				delete_description: `Use {dataDelete} to permanently remove your data:
+- **Personal deletion**: Removes all your user data, memories, and preferences
+- **Server deletion**: Removes all server data
+- Requires confirmation to prevent accidental deletion
+- This action cannot be undone!`,
+				privacy_title: `Privacy Notice 🔒`,
+				privacy_description: `**What I Store:**
+- Server/personal memories
+- My settings and persona
+- Server configurations
+- Encrypted API keys
+
+**What I Do NOT Store:**
+- Your Discord messages
+- Chat history
+
+**What is Sent to Me and your Chosen AI Provider:**
+Whenever I'm triggered, I fetch the **latest messages** in the text channel as well as any **relevant memories** as context to form my reply
+
+You may opt out of my Memory features by using the {personalPrivacy} command, as well as turn off my self-learning using the {configPermissions} command.`,
+				footer: `**Important**: Your chosen AI provider (Google, NovelAI, OpenRouter) processes your messages according to their own privacy policies. Never share personal information with me if you're concerned about privacy.`,
+			},
+
+			// /help apikey
 			apikey: {
-				title: `API Key Help`,
+				command_description: `Learn how to set up API keys for AI providers`,
+				provider_description: `Choose your AI provider`,
+				// Brave Search
+				brave_title: `Setting Up Brave Search API Key`,
+				brave_description: `Brave Search is optional and only enhances my search capabilities. It does NOT power my AI as that's handled by your main provider.
+- Enables image, video, and news search
+- Provides real-time information from the internet
+- Enhances my ability to answer current questions
+- Free Tier includes 2,000 queries per month`,
+				brave_getting_key_title: `Getting Your API Key:`,
+				brave_getting_key_description: `1. Visit [Brave Search API](https://brave.com/search/api/)
+2. Sign up for a free account
+3. Navigate to your [API Keys](https://api-dashboard.search.brave.com/app/keys) section in the Dashboard
+4. Create a new API key
+5. Copy and input your API key using the {configBraveapiSet} command`,
+				brave_important_title: `Important Notes:`,
+				brave_important_description: `- Your API key is encrypted and stored securely
+- This is separate from your main LLM provider
+- Without Brave API key, I can still function and use built-in web search`,
+				brave_footer: `Want to set up your main AI provider? Check the other \`/help apikey\` options!`,
+				// Google Gemini
+				google_title: `Setting Up Google Gemini API Key`,
+				google_description: `Google Gemini offers free and paid tiers with powerful AI models.
+- Free tier available with generous limits
+- Supports all TomoriBot features such as vision and persona generation
+- [Gemini Privacy Policy](https://ai.google.dev/gemini-api/terms)`,
+				google_getting_key_title: `Getting Your API Key:`,
+				google_getting_key_description: `1. Visit [Google AI Studio](https://aistudio.google.com/apikey)
+2. Click \`Create API Key\` on the top-right
+3. Copy this API key into {configSetup} or {configApikeySet}`,
+				google_footer: `After setting up this provider, change its default model with {configModel}!`,
+				// NovelAI
+				novelai_title: `Setting Up NovelAI API Key`,
+				novelai_description: `NovelAI is a subscription-based service focused on creative storytelling and roleplay.
+- Unlimited uncensored messages
+- Currently does not support all TomoriBot features
+- [NovelAI Terms of Service](https://novelai.net/terms)`,
+				novelai_getting_key_title: `Getting Your API Key:`,
+				novelai_getting_key_description: `1. Visit [NovelAI](https://novelai.net/stories)
+2. Navigate to settings through the ⚙️ icon on the top-left
+3. Go to \`Account\`
+4. Look for \`Get Persistent API Token\`
+5. Copy this API key {configSetup} or {configApikeySet}`,
+				novelai_footer: `After setting up this provider, change its default model with {configModel}!`,
+				// OpenRouter
+				openrouter_title: `Setting Up OpenRouter API Key`,
+				openrouter_description: `OpenRouter provides access to multiple AI models from different providers on a pay-as-you-go basis.
+- Access to latest and most powerful AI models
+- Currently does not support all TomoriBot features
+- [OpenRouter Terms of Service](https://openrouter.ai/terms)`,
+				openrouter_getting_key_title: `Getting Your API Key:`,
+				openrouter_getting_key_description: `1. Visit [OpenRouter](https://openrouter.ai/settings/keys)
+2. Click \`Create API Key\`
+3. Copy this API key {configSetup} or {configApikeySet}
+3. Add credits to your account (pay-as-you-go)`,
+				openrouter_footer: `After setting up this provider, change its default model with {configModel}!`,
+			},
+
+			// /help memory
+			memory: {
+				command_description: `Learn about TomoriBot's memory system`,
+				title: `How My Memory Works 🧠`,
+				embed_description: `I have a persistent memory system that helps me remember facts and information about users and servers across conversations! This is about **what I know** (facts, context, information). For **how I behave** (personality, tone, settings), see {helpCustomization} instead!`,
+				teaching_title: `Teaching Me Things 📝`,
+				teaching_description: `Use {teach} to help me remember **facts and information**:
+- **Personal memories** ({teachMemoryPersonal}): Facts about individual users
+  - Example: "Alex loves cats", "Prefers dark mode", "Is allergic to peanuts"
+- **Server memories** ({teachMemoryServer}): Information relevant to the whole server
+  - Example: "Game night is every Friday at 8 PM", "No posting of NSFW", "We use #general for announcements"`,
+				forgetting_title: `Forgetting Things 🗑️`,
+				forgetting_description: `Use {forget} to make me forget memories:
+- {forgetMemoryPersonal} - Remove personal facts about users
+- {forgetMemoryServer} - Remove server-wide information`,
+				how_it_works_title: `How It Works:`,
+				how_it_works_description: `- **Personal memories** are tied to you specifically across all servers which I only keep in mind when replying in conversations you are actively participating in
+- **Server memories** only stay within the server, I always keep them in mind when replying in a conversation within the server
+- Memories persist until you use the \`/forget\` command on them`,
+				tips_title: `Memory Tips:`,
+				tips_description: `- Teach me your preferences, nicknames, and important facts
+- Use server memories for shared information, inside jokes, or server culture
+- Review your memories periodically with {dataExport} or {status}
+- Keep memories concise and clear for best results`,
+			},
+
+			// /help customization
+			customization: {
+				command_description: `Learn how to customize TomoriBot's personality and behavior`,
+				// Embed 1: Overview + Personas
+				embed1_title: `Customizing TomoriBot 🎨`,
+				embed1_description: `TomoriBot is highly customizable! Here's everything you can configure to make me truly yours. This is about **how I behave** (personality, tone, settings). For **what I remember** (facts, memories), see {helpMemory} instead!`,
+				embed1_personas_title: `🎭 Personality Personas`,
+				embed1_personas_description: `Control my core personality and behavior:
+
+**Persona Commands:**
+- {personaCreate} - Create a custom personality from scratch
+- {personaGenerate} - AI-generate a personality based on your description (Requires Gemini)
+- {personaDefault} - Switch to a default personality
+- {personaExport} - Export your persona to share or backup
+- {personaImport} - Import a persona from a file
+- {teach} - Teach me on how I should talk and act
+- {serverAvatar} - Change my profile picture`,
+				embed1_what_personas_include_title: `What Personas Include:`,
+				embed1_what_personas_include_description: `- Personality attributes (traits, characteristics, and quirks)
+- Sample dialogues (example conversations that teach me on how I should speak)
+- Custom server avatar for that personality
+- Behavior and tone settings`,
+				embed1_footer: `Next: Teaching Commands`,
+				// Embed 2: Teaching System
+				embed2_title: `Teaching Commands ✍️`,
+				embed2_description: `## ✍️ Teaching Commands (\`/teach\`)
+Fine-tune my personality and knowledge:
+
+**Personality Shaping:**
+- {teachAttribute} - Add personality traits (e.g., "friendly", "sarcastic", "formal")
+- {teachSampledialogue} - Add example conversations to shape how I talk
+- {configRename} - Set what I should call myself
+
+**Writing Sample Dialogues:**
+Use \`{{user}}\` and \`{{bot}}\` placeholders in your examples:
+- \`{{user}}\` = Replaced with the actual user's name/nickname
+- \`{{bot}}\` = Replaced with my current name
+
+**Example:**
+\`\`\`
+User message: {{user}}: Hey, how are you?
+Bot response: {{bot}}: Yoooo {{user}}! I'm doin' great, ya feel me?
+\`\`\`
+
+**Tips for Great Sample Dialogues:**
+- Write natural, conversational exchanges
+- Include personality traits you want me to exhibit
+- Demonstrate the tone you want
+- Add variety to help me learn better
+- Use placeholders so dialogues work for everyone when sharing me with \`/persona export\``,
+				embed2_footer: `Next: Configuration`,
+				// Embed 3: Configuration & Management
+				embed3_title: `Configuration & Management ⚙️`,
+				embed3_description: `## 🗑️ Unlearning Commands (\`/forget\`)
+Remove personality customizations:
+
+- {forgetAttribute} - Remove specific personality attributes
+- {forgetSampledialogue} - Remove sample dialogue examples
+
+---
+
+## ⚙️ Server Configuration (\`/server\`)
+Server-wide settings and behavior:
+
+**Learning & Privacy:**
+- {serverMemberpermissions} - Control who can teach me things
+- {serverBlacklist} - Prevent me from learning and using memories from specific users
+
+**Auto-Trigger Behavior:**
+- {serverAutotriggerChannels} - Set channels where I respond without mentions
+- {serverAutotriggerThreshold} - Set message threshold for auto-responses
+
+**Triggers & Appearance:**
+- {serverTriggerAdd} - Add custom trigger words I respond to
+- {serverTriggerDelete} - Remove trigger words
+- {serverAvatar} - Set my custom profile picture for this server`,
+				embed3_footer: `Next: Bot Settings`,
+				// Embed 4: Advanced Settings
+				embed4_title: `Advanced Settings 🔧`,
+				embed4_description: `## 🔧 Bot Configuration (\`/config\`)
+Personal bot settings:
+
+**AI Settings:**
+- {configModel} - Choose which AI model to use
+- {configTemperature} - Adjust creativity/randomness. The higher, the more varied the responses (1.0-2.0)
+- {configHumanizer} - Change how humanlike my responses should be
+
+**API Keys:**
+- {configApikeySet} - Set your AI provider API key
+- {configApikeyDelete} - Remove your API key
+- {configBraveapiSet} - Set Brave Search API key (optional)
+- {configBraveapiDelete} - Remove Brave Search API key
+
+**Personalization:**
+- {configRename} - Change what I refer to myself as
+- {configTimezone} - Set timezone for time-aware responses and reminders
+- {configPermissions} - Configure what I'm allowed to do`,
+				embed4_footer: `Next: Pro Tips`,
+				// Embed 5: Pro Tips
+				embed5_title: `Pro Tips 💡`,
+				embed5_description: `- Start with a persona (default or generated) as a foundation
+- Use \`/teach attribute\` for quick personality tweaks
+- For Sample Dialogues, using examples that exhibit their attributes and traits as well is effective:
+\`\`\`
+User message: {{user}}: What's your favorite hobby?
+Bot response: {{bot}}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
+\`\`\`
+- Test changes by chatting, iterate until it feels right
+- Export your persona to back it up or share with other servers!`,
 			},
 		},
 

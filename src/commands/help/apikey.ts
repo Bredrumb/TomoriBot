@@ -3,36 +3,43 @@ import type {
 	Client,
 	SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { MessageFlags } from "discord.js"; // Import if needed for error replies
-import type { UserRow } from "../../types/db/schema"; // Rule 14: Use type for imports
-import type { ErrorContext } from "../../types/db/schema"; // Rule 14: Use type for imports
-import { localizer } from "../../utils/text/localizer"; // Rule 9: Use localizer
-import { log, ColorCode } from "../../utils/misc/logger"; // Rule 12, 18: Use logger and ColorCode
-import { replySummaryEmbed } from "../../utils/discord/interactionHelper"; // Rule 12, 19: Use helpers
+import { MessageFlags } from "discord.js";
+import type { UserRow } from "@/types/db/schema";
+import type { ErrorContext } from "@/types/db/schema";
+import type { SummaryEmbedOptions } from "@/types/discord/embed";
+import { localizer } from "@/utils/text/localizer";
+import { log, ColorCode } from "@/utils/misc/logger";
+import { replySummaryEmbed } from "@/utils/discord/interactionHelper";
+import { commandRegistry } from "@/utils/discord/commandRegistry";
 
-// --- Configuration ---
-// TODO: Replace '__topic__' with the actual help topic name (e.g., 'apikey', 'preset')
-const HELP_TOPIC_NAME = "__topic__";
-// --- End Configuration ---
-
-// Rule 21: Configure the subcommand
+/**
+ * Configure the /help apikey subcommand
+ * Provider-specific instructions for getting and setting up API keys
+ */
 export const configureSubcommand = (
 	subcommand: SlashCommandSubcommandBuilder,
 ) =>
 	subcommand
-		.setName(HELP_TOPIC_NAME) // Use the constant for the name
-		.setDescription(
-			// Use a consistent key structure: commands.help.<topic>.command_description
-			localizer(
-				"en-US",
-				`commands.help.${HELP_TOPIC_NAME}.command_description`,
-			),
+		.setName("apikey")
+		.setDescription(localizer("en-US", "commands.help.apikey.command_description"))
+		.addStringOption((option) =>
+			option
+				.setName("provider")
+				.setDescription(
+					localizer("en-US", "commands.help.apikey.provider_description"),
+				)
+				.setRequired(true)
+				.addChoices(
+					{ name: "Brave Search", value: "brave" },
+					{ name: "Google Gemini", value: "google" },
+					{ name: "NovelAI", value: "novelai" },
+					{ name: "OpenRouter", value: "openrouter" },
+				),
 		);
 
 /**
- * Rule 1: JSDoc comment for exported function
- * Displays help information about the '__topic__' feature.
- * TODO: Update the description above.
+ * Execute the /help apikey command
+ * Displays provider-specific API key setup instructions
  * @param _client - Discord client instance
  * @param interaction - Command interaction
  * @param userData - User data from database
@@ -45,58 +52,157 @@ export async function execute(
 	locale: string,
 ): Promise<void> {
 	try {
-		// 1. Use replySummaryEmbed to show structured help info (Rule 19)
-		// Help commands are typically non-ephemeral so everyone can see the info.
+		const provider = interaction.options.getString("provider", true);
+
+		// Get command mentions for cross-references
+		const configBraveapiSetMention = commandRegistry.getCommandMention(
+			"config",
+			"braveapi",
+			"set",
+		);
+		const configSetupMention = commandRegistry.getCommandMention("config", "setup");
+		const configApikeySetMention = commandRegistry.getCommandMention(
+			"config",
+			"apikey",
+			"set",
+		);
+		const configModelMention = commandRegistry.getCommandMention("config", "model");
+
+		// Build options based on provider
+		let embedOptions: SummaryEmbedOptions;
+
+		switch (provider) {
+			case "brave":
+				embedOptions = {
+					titleKey: "commands.help.apikey.brave_title",
+					descriptionKey: "commands.help.apikey.brave_description",
+					color: ColorCode.INFO,
+					fields: [
+						{
+							nameKey: "commands.help.apikey.brave_getting_key_title",
+							value: localizer(
+								locale,
+								"commands.help.apikey.brave_getting_key_description",
+								{
+									configBraveapiSet: configBraveapiSetMention,
+								},
+							),
+							inline: false,
+						},
+						{
+							nameKey: "commands.help.apikey.brave_important_title",
+							value: localizer(
+								locale,
+								"commands.help.apikey.brave_important_description",
+							),
+							inline: false,
+						},
+					],
+					footerKey: "commands.help.apikey.brave_footer",
+				};
+				break;
+
+			case "google":
+				embedOptions = {
+					titleKey: "commands.help.apikey.google_title",
+					descriptionKey: "commands.help.apikey.google_description",
+					color: ColorCode.INFO,
+					fields: [
+						{
+							nameKey: "commands.help.apikey.google_getting_key_title",
+							value: localizer(
+								locale,
+								"commands.help.apikey.google_getting_key_description",
+								{
+									configSetup: configSetupMention,
+									configApikeySet: configApikeySetMention,
+								},
+							),
+							inline: false,
+						},
+					],
+					footerKey: "commands.help.apikey.google_footer",
+					footerVars: {
+						configModel: configModelMention,
+					},
+				};
+				break;
+
+			case "novelai":
+				embedOptions = {
+					titleKey: "commands.help.apikey.novelai_title",
+					descriptionKey: "commands.help.apikey.novelai_description",
+					color: ColorCode.INFO,
+					fields: [
+						{
+							nameKey: "commands.help.apikey.novelai_getting_key_title",
+							value: localizer(
+								locale,
+								"commands.help.apikey.novelai_getting_key_description",
+								{
+									configSetup: configSetupMention,
+									configApikeySet: configApikeySetMention,
+								},
+							),
+							inline: false,
+						},
+					],
+					footerKey: "commands.help.apikey.novelai_footer",
+					footerVars: {
+						configModel: configModelMention,
+					},
+				};
+				break;
+
+			case "openrouter":
+				embedOptions = {
+					titleKey: "commands.help.apikey.openrouter_title",
+					descriptionKey: "commands.help.apikey.openrouter_description",
+					color: ColorCode.INFO,
+					fields: [
+						{
+							nameKey: "commands.help.apikey.openrouter_getting_key_title",
+							value: localizer(
+								locale,
+								"commands.help.apikey.openrouter_getting_key_description",
+								{
+									configSetup: configSetupMention,
+									configApikeySet: configApikeySetMention,
+								},
+							),
+							inline: false,
+						},
+					],
+					footerKey: "commands.help.apikey.openrouter_footer",
+					footerVars: {
+						configModel: configModelMention,
+					},
+				};
+				break;
+
+			default:
+				// Should never happen due to choices validation
+				throw new Error(`Unknown provider: ${provider}`);
+		}
+
+		// Use replySummaryEmbed to show provider-specific guide
 		await replySummaryEmbed(
 			interaction,
 			locale,
-			{
-				// Use consistent key structure
-				titleKey: `commands.help.${HELP_TOPIC_NAME}.title`,
-				descriptionKey: `commands.help.${HELP_TOPIC_NAME}.description`,
-				color: ColorCode.INFO, // Rule 12: Use INFO color for help
-				fields: [
-					// TODO: Add 1-5 fields explaining the feature.
-					// Use localizer() directly for the 'value' as it might contain formatting.
-					{
-						nameKey: `commands.help.${HELP_TOPIC_NAME}.field_1_name`, // Key for field name
-						value: localizer(
-							locale,
-							`commands.help.${HELP_TOPIC_NAME}.field_1_value`,
-						), // Localized value
-						inline: false, // Usually false for help text blocks
-					},
-					{
-						nameKey: `commands.help.${HELP_TOPIC_NAME}.field_2_name`,
-						value: localizer(
-							locale,
-							`commands.help.${HELP_TOPIC_NAME}.field_2_value`,
-						),
-						inline: false,
-					},
-				],
-				// Non-ephemeral by default
-			},
+			embedOptions,
 			MessageFlags.SuppressNotifications,
-		); // Explicitly pass undefined to override ephemeral default
+		);
 	} catch (error) {
-		// Rule 22: Log error with context
+		// Log error with context
 		const context: ErrorContext = {
 			userId: userData.user_id,
-			serverId: interaction.guild?.id, // Use guildId directly if available
+			serverId: interaction.guild?.id,
 			errorType: "CommandExecutionError",
-			metadata: { commandName: `/help ${HELP_TOPIC_NAME}` },
+			metadata: { commandName: "/help apikey" },
 		};
-		// Log the error with context
-		await log.error(
-			`Error executing /help ${HELP_TOPIC_NAME} command`,
-			error as Error, // Cast error to Error type
-			context,
-		);
+		await log.error("Error executing /help apikey command", error as Error, context);
 
 		// Inform user of error (ephemeral)
-		// Check if interaction can be replied to or followed up
-		// Use a simple followUp/reply for error to avoid potential issues with helpers during error handling
 		const errorMessage = localizer(
 			locale,
 			"general.errors.unknown_error_description",
@@ -115,11 +221,7 @@ export async function execute(
 			}
 		} catch (replyError) {
 			// Log if even the error reply fails
-			log.error(
-				`Failed to send error reply for /help ${HELP_TOPIC_NAME}`,
-				replyError,
-				context, // Reuse context
-			);
+			log.error("Failed to send error reply for /help apikey", replyError, context);
 		}
 	}
 }

@@ -574,8 +574,304 @@ Discord API 遅延: \`{discord_response}ms\``,
 
 		// ヘルプコマンド
 		help: {
+			// /help features
+			features: {
+				command_description: `TomoriBotができることを表示`,
+				title: `私ができること！（バージョン {version}）`,
+				embed_description: `これが私の全機能です：`,
+				vision_title: `ビジョン＆メディア 👁️`,
+				vision_description: `- 画像、動画、スタンプ、絵文字を見て分析できます
+- YouTubeリンクから動画を視聴できます
+- ツイート内のコンテンツを見ることができます`,
+				search_title: `検索＆情報 🔍`,
+				search_description: `- 最新情報をウェブ検索できます
+- 画像、動画、ニュース検索も可能です（\`/config braveapi\`経由）
+- URLからコンテンツを取得して読むことができます`,
+				personality_title: `パーソナリティ＆カスタマイズ 💫`,
+				personality_description: `- \`/config rename\`と\`/server avatar\`で名前とアバターを変更できます
+- \`/persona\`で異なるペルソナに切り替えられます（\`/persona export\`でペルソナを共有・保存もできます！）
+- \`/teach\`で行動やトーンを調整できます
+- 詳しくは\`/help customization\`をご覧ください`,
+				memory_title: `記憶＆パーソナライゼーション 🧠`,
+				memory_description: `- ユーザーやサーバーに関する事実を記憶し、会話を跨いで保持します
+- 個人的な記憶は全サーバーで保持されます（他のサーバーでも私に話しかけてみて！）
+- \`/personal nickname\`であなたを呼ぶ名前を変更できます
+- \`/teach\`で手動で記憶させ、\`/forget\`で削除できます
+- 詳しくは\`/help memory\`をご覧ください`,
+				time_title: `時間認識 🕰️`,
+				time_description: `- サーバーの現在時刻を認識しています（\`/config timezone\`経由）
+- リマインダーを設定できます（何かを思い出させるように頼んでみて！）`,
+				footer: `注：すべての機能がすべてのプロバイダーで利用できるわけではありません。GoogleのGeminiの使用を推奨します`,
+			},
+
+			// /help setup
+			setup: {
+				command_description: `TomoriBotの初期設定方法を学ぶ`,
+				title: `TomoriBotを始める`,
+				embed_description: `サーバー（またはDM）でTomoriBotを設定する方法：`,
+				step1_title: `ステップ1：APIキーを取得 🔑`,
+				step1_description: `TomoriBotはGoogle Gemini、NovelAI、OpenRouterなどのAIプロバイダーを使用します。いずれかのAPIキーが必要です。
+- {helpApikey}で取得方法を確認
+  - GoogleのGemini = 汎用、無料、TomoriBotの全機能を実行可能
+  - NovelAI = ロールプレイとストーリーテリング特化
+  - OpenRouter = 様々なAIモデルが利用可能
+- このAPIキーを**他人と共有しないでください**`,
+				step2_title: `ステップ2：セットアップコマンドを実行 ⚙️`,
+				step2_description: `- {configSetup}を使用してAPIキーを安全に追加し、TomoriBotを初期化
+- APIキーは暗号化されて安全に保存されます
+- 各サーバーには独自の設定があります`,
+				step3_title: `ステップ3：チャットを始める！ 💬`,
+				step3_description: `- メンションするか、私のメッセージに返信するだけでチャットできます
+- {serverTrigger}でトリガー方法を変更できます
+- 記憶システムで会話を記憶します（{configPermissions}で無効化できます！）
+- {serverAutotrigger}で自動トリガーを設定し、メンションなしでチャットできます`,
+				step4_title: `オプション：カスタマイズする 🎨`,
+				step4_description: `- {persona}コマンドで私のパーソナリティを完全に変更
+- {server}、{personal}、{config}コマンドで設定を調整
+- {teach}で手動で物事を教えることもできます`,
+				need_help_title: `ヘルプが必要ですか？`,
+				need_help_description: `- {helpFeatures} - 私ができることを見る
+- {helpMemory} - 記憶システムについて学ぶ
+- {helpCustomization} - パーソナリティのカスタマイズについて学ぶ
+- {supportServer} - 公式TomoriBotサポートサーバーに参加`,
+			},
+
+			// /help data
+			data: {
+				command_description: `データ管理とプライバシーについて学ぶ`,
+				title: `データの管理 🗂️`,
+				embed_description: ``,
+				export_title: `データのエクスポート 📤`,
+				export_description: `{dataExport}を使用してデータをダウンロード：
+- **個人データ**：記憶、設定、ユーザー設定
+- **サーバーデータ**：サーバーの記憶、設定、ボット設定
+- **パーソナリティデータ**：作成したカスタムペルソナ（他の人と共有する場合は{personaExport}を使用）
+- データはJSONまたはテキストファイルとしてDMに送信されます`,
+				import_title: `データのインポート 📥`,
+				import_description: `{dataImport}を使用してエクスポートしたデータを復元：
+- サーバー間で個人データを復元
+- サーバー設定を新しいサーバーに転送
+- パーソナリティプリセットを共有
+- コマンド使用時にエクスポートしたファイルを添付するだけ`,
+				delete_title: `データの削除 🗑️`,
+				delete_description: `{dataDelete}を使用してデータを完全に削除：
+- **個人削除**：すべてのユーザーデータ、記憶、設定を削除
+- **サーバー削除**：すべてのサーバーデータを削除
+- 誤削除を防ぐため確認が必要です
+- この操作は元に戻せません！`,
+				privacy_title: `プライバシー通知 🔒`,
+				privacy_description: `**保存するもの：**
+- サーバー/個人の記憶
+- 私の設定とペルソナ
+- サーバー設定
+- 暗号化されたAPIキー
+
+**保存しないもの：**
+- Discordメッセージ
+- チャット履歴
+
+**私と選択したAIプロバイダーに送信されるもの：**
+トリガーされるたびに、返信を形成するためのコンテキストとして、テキストチャンネルの**最新メッセージ**と**関連する記憶**を取得します
+
+{personalPrivacy}コマンドで記憶機能をオプトアウトし、{configPermissions}コマンドで自己学習を無効化できます。`,
+				footer: `**重要**：選択したAIプロバイダー（Google、NovelAI、OpenRouter）は独自のプライバシーポリシーに従ってメッセージを処理します。プライバシーが気になる場合は、個人情報を共有しないでください。`,
+			},
+
+			// /help apikey
 			apikey: {
-				title: `APIキーヘルプ`,
+				command_description: `AIプロバイダーのAPIキー設定方法を学ぶ`,
+				provider_description: `AIプロバイダーを選択`,
+				// Brave Search
+				brave_title: `Brave Search APIキーの設定`,
+				brave_description: `Brave Searchはオプションで、検索機能を強化するだけです。これは私のAIを動かすものではありません（それはメインプロバイダーが担当します）。
+- 画像、動画、ニュース検索を有効化
+- インターネットからリアルタイム情報を提供
+- 最新の質問に答える能力を強化
+- 無料プランには月2,000クエリが含まれます`,
+				brave_getting_key_title: `APIキーの取得：`,
+				brave_getting_key_description: `1. [Brave Search API](https://brave.com/search/api/)にアクセス
+2. 無料アカウントに登録
+3. ダッシュボードの[APIキー](https://api-dashboard.search.brave.com/app/keys)セクションに移動
+4. 新しいAPIキーを作成
+5. {configBraveapiSet}コマンドでAPIキーをコピーして入力`,
+				brave_important_title: `重要な注意事項：`,
+				brave_important_description: `- APIキーは暗号化されて安全に保存されます
+- これはメインLLMプロバイダーとは別です
+- Brave APIキーがなくても、組み込みウェブ検索で機能します`,
+				brave_footer: `メインAIプロバイダーを設定したいですか？他の\`/help apikey\`オプションを確認してください！`,
+				// Google Gemini
+				google_title: `Google Gemini APIキーの設定`,
+				google_description: `Google Geminiは強力なAIモデルを備えた無料および有料プランを提供します。
+- 無料プランで十分な制限あり
+- ビジョンやペルソナ生成などTomoriBotの全機能をサポート
+- [Geminiプライバシーポリシー](https://ai.google.dev/gemini-api/terms)`,
+				google_getting_key_title: `APIキーの取得：`,
+				google_getting_key_description: `1. [Google AI Studio](https://aistudio.google.com/apikey)にアクセス
+2. 右上の\`APIキーを作成\`をクリック
+3. このAPIキーを{configSetup}または{configApikeySet}にコピー`,
+				google_footer: `このプロバイダーを設定したら、{configModel}でデフォルトモデルを変更しましょう！`,
+				// NovelAI
+				novelai_title: `NovelAI APIキーの設定`,
+				novelai_description: `NovelAIはクリエイティブなストーリーテリングとロールプレイに焦点を当てたサブスクリプションベースのサービスです。
+- 無制限の無検閲メッセージ
+- 現在、TomoriBotの全機能をサポートしていません
+- [NovelAI利用規約](https://novelai.net/terms)`,
+				novelai_getting_key_title: `APIキーの取得：`,
+				novelai_getting_key_description: `1. [NovelAI](https://novelai.net/stories)にアクセス
+2. 左上の⚙️アイコンから設定に移動
+3. \`アカウント\`に移動
+4. \`永続的APIトークンを取得\`を探す
+5. このAPIキーを{configSetup}または{configApikeySet}にコピー`,
+				novelai_footer: `このプロバイダーを設定したら、{configModel}でデフォルトモデルを変更しましょう！`,
+				// OpenRouter
+				openrouter_title: `OpenRouter APIキーの設定`,
+				openrouter_description: `OpenRouterは従量課金制で複数のプロバイダーの様々なAIモデルへのアクセスを提供します。
+- 最新かつ最も強力なAIモデルへのアクセス
+- 現在、TomoriBotの全機能をサポートしていません
+- [OpenRouter利用規約](https://openrouter.ai/terms)`,
+				openrouter_getting_key_title: `APIキーの取得：`,
+				openrouter_getting_key_description: `1. [OpenRouter](https://openrouter.ai/settings/keys)にアクセス
+2. \`APIキーを作成\`をクリック
+3. このAPIキーを{configSetup}または{configApikeySet}にコピー
+3. アカウントにクレジットを追加（従量課金制）`,
+				openrouter_footer: `このプロバイダーを設定したら、{configModel}でデフォルトモデルを変更しましょう！`,
+			},
+
+			// /help memory
+			memory: {
+				command_description: `TomoriBotの記憶システムについて学ぶ`,
+				title: `記憶の仕組み 🧠`,
+				embed_description: `会話を跨いでユーザーやサーバーに関する事実や情報を記憶する永続的な記憶システムがあります！これは**私が知っていること**（事実、コンテキスト、情報）についてです。**私がどう振る舞うか**（パーソナリティ、トーン、設定）については、代わりに{helpCustomization}をご覧ください！`,
+				teaching_title: `物事を教える 📝`,
+				teaching_description: `{teach}を使用して**事実と情報**を記憶させます：
+- **個人的な記憶**（{teachMemoryPersonal}）：個々のユーザーに関する事実
+  - 例：「Alexは猫が好き」、「ダークモードを好む」、「ピーナッツアレルギー」
+- **サーバーの記憶**（{teachMemoryServer}）：サーバー全体に関連する情報
+  - 例：「ゲームナイトは毎週金曜日午後8時」、「NSFWの投稿禁止」、「お知らせには#generalを使用」`,
+				forgetting_title: `忘れること 🗑️`,
+				forgetting_description: `{forget}を使用して記憶を削除：
+- {forgetMemoryPersonal} - ユーザーに関する個人的な事実を削除
+- {forgetMemoryServer} - サーバー全体の情報を削除`,
+				how_it_works_title: `仕組み：`,
+				how_it_works_description: `- **個人的な記憶**は全サーバーであなた専用に紐付けられ、あなたが積極的に参加している会話で返信する際にのみ記憶します
+- **サーバーの記憶**はサーバー内にのみ留まり、サーバー内の会話で返信する際に常に記憶します
+- 記憶は\`/forget\`コマンドを使用するまで保持されます`,
+				tips_title: `記憶のヒント：`,
+				tips_description: `- 好み、ニックネーム、重要な事実を教えてください
+- サーバーの記憶には共有情報、内輪ネタ、サーバー文化を使用
+- {dataExport}または{status}で定期的に記憶を確認
+- 最良の結果を得るために記憶を簡潔明瞭に保つ`,
+			},
+
+			// /help customization
+			customization: {
+				command_description: `TomoriBotのパーソナリティと動作をカスタマイズする方法を学ぶ`,
+				// Embed 1: Overview + Personas
+				embed1_title: `TomoriBotのカスタマイズ 🎨`,
+				embed1_description: `TomoriBotは高度にカスタマイズ可能です！私を本当にあなたのものにするために設定できるすべてがここにあります。これは**私がどう振る舞うか**（パーソナリティ、トーン、設定）についてです。**私が記憶していること**（事実、記憶）については、代わりに{helpMemory}をご覧ください！`,
+				embed1_personas_title: `🎭 パーソナリティペルソナ`,
+				embed1_personas_description: `私の核となるパーソナリティと動作を制御：
+
+**ペルソナコマンド：**
+- {personaCreate} - ゼロからカスタムパーソナリティを作成
+- {personaGenerate} - 説明に基づいてAIがパーソナリティを生成（Gemini必要）
+- {personaDefault} - デフォルトのパーソナリティに切り替え
+- {personaExport} - ペルソナを共有またはバックアップ用にエクスポート
+- {personaImport} - ファイルからペルソナをインポート
+- {teach} - 話し方や行動を教える
+- {serverAvatar} - プロフィール画像を変更`,
+				embed1_what_personas_include_title: `ペルソナに含まれるもの：`,
+				embed1_what_personas_include_description: `- パーソナリティ属性（特性、特徴、癖）
+- サンプル対話（話し方を教える会話例）
+- そのパーソナリティ用のカスタムサーバーアバター
+- 動作とトーンの設定`,
+				embed1_footer: `次：教えるコマンド`,
+				// Embed 2: Teaching System
+				embed2_title: `教えるコマンド ✍️`,
+				embed2_description: `## ✍️ 教えるコマンド（\`/teach\`）
+パーソナリティと知識を微調整：
+
+**パーソナリティの形成：**
+- {teachAttribute} - パーソナリティの特性を追加（例：「フレンドリー」、「皮肉っぽい」、「フォーマル」）
+- {teachSampledialogue} - 話し方を形作る会話例を追加
+- {configRename} - 自分を何と呼ぶべきかを設定
+
+**サンプル対話の書き方：**
+例で\`{{user}}\`と\`{{bot}}\`のプレースホルダーを使用：
+- \`{{user}}\` = 実際のユーザーの名前/ニックネームに置き換えられます
+- \`{{bot}}\` = 私の現在の名前に置き換えられます
+
+**例：**
+\`\`\`
+ユーザーメッセージ：{{user}}：やあ、元気？
+ボットの応答：{{bot}}：よぉ{{user}}！超元気だぜ、わかるだろ？
+\`\`\`
+
+**優れたサンプル対話のヒント：**
+- 自然で会話的なやり取りを書く
+- 表現したいパーソナリティの特性を含める
+- 望むトーンを示す
+- より良く学習できるように多様性を追加
+- \`/persona export\`で共有する際にみんなに使えるようプレースホルダーを使用`,
+				embed2_footer: `次：設定`,
+				// Embed 3: Configuration & Management
+				embed3_title: `設定＆管理 ⚙️`,
+				embed3_description: `## 🗑️ 忘れるコマンド（\`/forget\`）
+パーソナリティのカスタマイズを削除：
+
+- {forgetAttribute} - 特定のパーソナリティ属性を削除
+- {forgetSampledialogue} - サンプル対話の例を削除
+
+---
+
+## ⚙️ サーバー設定（\`/server\`）
+サーバー全体の設定と動作：
+
+**学習＆プライバシー：**
+- {serverMemberpermissions} - 誰が私に物事を教えられるかを制御
+- {serverBlacklist} - 特定のユーザーから学習したり記憶を使用するのを防ぐ
+
+**自動トリガー動作：**
+- {serverAutotriggerChannels} - メンションなしで応答するチャンネルを設定
+- {serverAutotriggerThreshold} - 自動応答のメッセージ閾値を設定
+
+**トリガー＆外観：**
+- {serverTriggerAdd} - 反応するカスタムトリガーワードを追加
+- {serverTriggerDelete} - トリガーワードを削除
+- {serverAvatar} - このサーバー用のカスタムプロフィール画像を設定`,
+				embed3_footer: `次：ボット設定`,
+				// Embed 4: Advanced Settings
+				embed4_title: `詳細設定 🔧`,
+				embed4_description: `## 🔧 ボット設定（\`/config\`）
+個人的なボット設定：
+
+**AI設定：**
+- {configModel} - 使用するAIモデルを選択
+- {configTemperature} - 創造性/ランダム性を調整。高いほど応答がより多様に（1.0-2.0）
+- {configHumanizer} - 応答の人間らしさを変更
+
+**APIキー：**
+- {configApikeySet} - AIプロバイダーのAPIキーを設定
+- {configApikeyDelete} - APIキーを削除
+- {configBraveapiSet} - Brave Search APIキーを設定（オプション）
+- {configBraveapiDelete} - Brave Search APIキーを削除
+
+**パーソナライゼーション：**
+- {configRename} - 自分を何と呼ぶかを変更
+- {configTimezone} - 時間認識応答とリマインダー用のタイムゾーンを設定
+- {configPermissions} - 許可される操作を設定`,
+				embed4_footer: `次：プロのヒント`,
+				// Embed 5: Pro Tips
+				embed5_title: `プロのヒント 💡`,
+				embed5_description: `- ペルソナ（デフォルトまたは生成）を基盤として始める
+- 素早くパーソナリティを調整するには\`/teach attribute\`を使用
+- サンプル対話では、属性や特性も示す例を使用すると効果的：
+\`\`\`
+ユーザーメッセージ：{{user}}：お気に入りの趣味は？
+ボットの応答：{{bot}}：ふふ〜小さなぬいぐるみに小さな服を編むのが好きです〜♥
+\`\`\`
+- チャットして変更をテストし、しっくりくるまで繰り返す
+- ペルソナをエクスポートしてバックアップするか、他のサーバーと共有！`,
 			},
 		},
 

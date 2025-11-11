@@ -126,7 +126,7 @@ function processLocaleStrings(obj: unknown): LocaleValue {
 /**
  * Get a localized string for a specific key.
  * @param locale - The locale code (e.g., 'en-US', 'ja').
- * @param key - The key path from the locale object (e.g., 'commands.help.apikey.title').
+ * @param key - The key path from the locale object (e.g., 'commands.help.features.title').
  * @param variables - Key-value pairs to replace placeholders in the localized string.
  * @returns The localized string, or the key itself if not found.
  */
