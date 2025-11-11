@@ -18,6 +18,7 @@ import {
 // Define constants at the top (Rule #20)
 const TIMEOUT_DURATION = 100000; // 100 Seconds
 const MODAL_COMMAND_TIMEOUT = 700000; // 700 Seconds (11.67 minutes) for modal commands - Must exceed modal submission timeout (600s)
+const DEFAULT_COOLDOWN = 1600; // 1.6 second default cooldown for all commands
 
 // Commands that use modals and need longer timeout
 // Format: "category.subcommand" for flat commands, "category.group.subcommand" for grouped commands
@@ -68,12 +69,13 @@ function isModalCommand(
 }
 
 const COOLDOWN_MAP = new Map<string, number>([
-	["economy", 2000],
-	["scrape", 10000],
-	["tool", 1000],
-	["fun", 2000],
-	["config", 5000], // Add cooldown for config category
-	["teach", 5000], // Add cooldown for config category
+	["config", 3000],
+	["teach", 3000],
+	["data", 3000],
+	["forget", 3000],
+	["persona", 3000],
+	["server", 3000],
+	["personal", 3000],
 ]);
 
 // Cache for command execution maps - stored at module level
@@ -244,39 +246,40 @@ const handler = async (
 		// --- Start of main logic execution with timeout ---
 		const mainLogicPromise = async () => {
 			// 4. Check cooldowns based on the category (top-level command)
-			// biome-ignore lint/style/noNonNullAssertion: We've checked it's not null before entering this block
-			const cooldownDuration = cooldownMap!.get(commandName);
+			// Use DEFAULT_COOLDOWN if no specific cooldown is defined for this category
+			const cooldownDuration =
+				// biome-ignore lint/style/noNonNullAssertion: We've checked it's not null before entering this block
+				cooldownMap!.get(commandName) ?? DEFAULT_COOLDOWN;
 
-			if (cooldownDuration) {
-				const isOnCooldown = await checkCooldown(
+			// Check if user is on cooldown for this command category
+			const isOnCooldown = await checkCooldown(
+				interaction.user.id,
+				commandName,
+			);
+			if (isOnCooldown) {
+				const remainingSeconds = await getRemainingCooldown(
 					interaction.user.id,
 					commandName,
 				);
-				if (isOnCooldown) {
-					const remainingSeconds = await getRemainingCooldown(
-						interaction.user.id,
-						commandName,
-					);
-					await replyInfoEmbed(
-						interaction,
-						initialLocale,
-						{
-							titleKey: "general.cooldown_title",
-							descriptionKey: "general.cooldown",
-							descriptionVars: {
-								seconds: remainingSeconds,
-								category: commandName,
-							},
-							color: ColorCode.WARN,
+				await replyInfoEmbed(
+					interaction,
+					initialLocale,
+					{
+						titleKey: "general.cooldown_title",
+						descriptionKey: "general.cooldown",
+						descriptionVars: {
+							seconds: remainingSeconds,
+							category: commandName,
 						},
-						MessageFlags.Ephemeral,
-					);
-					return;
-				}
-
-				// Set new cooldown if not on cooldown
-				await setCooldown(interaction.user.id, commandName, cooldownDuration);
+						color: ColorCode.WARN,
+					},
+					MessageFlags.Ephemeral,
+				);
+				return;
 			}
+
+			// Set new cooldown for this command category
+			await setCooldown(interaction.user.id, commandName, cooldownDuration);
 
 			// 5. Get or create user data
 			let userData: UserRow | undefined;

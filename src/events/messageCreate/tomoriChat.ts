@@ -1664,7 +1664,7 @@ export default async function tomoriChat(
 			const currentVersion = keyManager.getCurrentVersion();
 			if (keyVersion !== currentVersion) {
 				log.info(
-					`Rotating main API key from version ${keyVersion} to ${currentVersion} for server ${tomoriState!.server_id}`,
+					`Rotating main API key from version ${keyVersion} to ${currentVersion} for server ${tomoriState?.server_id}`,
 				);
 
 				try {
@@ -1676,15 +1676,17 @@ export default async function tomoriChat(
 						SET api_key = ${encrypted},
 						    key_version = ${version},
 						    updated_at = CURRENT_TIMESTAMP
-						WHERE tomori_id = ${tomoriState!.tomori_id}
+						WHERE tomori_id = ${tomoriState?.tomori_id}
 					`;
 
 					log.success(
-						`Main API key rotation completed for server ${tomoriState!.server_id}`,
+						`Main API key rotation completed for server ${tomoriState?.server_id}`,
 					);
 
 					// Update in-memory state to reflect the new version
+					// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
 					tomoriState!.config.api_key = encrypted;
+					// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
 					tomoriState!.config.key_version = version;
 				} catch (error) {
 					log.warn(

@@ -41,7 +41,10 @@ export async function execute(
 ): Promise<void> {
 	try {
 		// Get command mentions for cross-references
-		const helpMemoryMention = commandRegistry.getCommandMention("help", "memory");
+		const helpMemoryMention = commandRegistry.getCommandMention(
+			"help",
+			"memory",
+		);
 		const personaCreateMention = commandRegistry.getCommandMention(
 			"persona",
 			"create",
@@ -75,7 +78,10 @@ export async function execute(
 			"teach",
 			"sampledialogue",
 		);
-		const configRenameMention = commandRegistry.getCommandMention("config", "rename");
+		const configRenameMention = commandRegistry.getCommandMention(
+			"config",
+			"rename",
+		);
 		const forgetAttributeMention = commandRegistry.getCommandMention(
 			"forget",
 			"attribute",
@@ -112,7 +118,10 @@ export async function execute(
 			"trigger",
 			"delete",
 		);
-		const configModelMention = commandRegistry.getCommandMention("config", "model");
+		const configModelMention = commandRegistry.getCommandMention(
+			"config",
+			"model",
+		);
 		const configTemperatureMention = commandRegistry.getCommandMention(
 			"config",
 			"temperature",
@@ -180,7 +189,8 @@ export async function execute(
 						inline: false,
 					},
 					{
-						nameKey: "commands.help.customization.embed1_what_personas_include_title",
+						nameKey:
+							"commands.help.customization.embed1_what_personas_include_title",
 						value: localizer(
 							locale,
 							"commands.help.customization.embed1_what_personas_include_description",
@@ -202,9 +212,7 @@ export async function execute(
 				channel.type !== ChannelType.GuildNews &&
 				channel.type !== ChannelType.DM)
 		) {
-			log.warn(
-				"Invalid channel type for /help customization follow-up embeds",
-			);
+			log.warn("Invalid channel type for /help customization follow-up embeds");
 			return;
 		}
 
@@ -261,11 +269,12 @@ export async function execute(
 		});
 
 		// EMBED 5: Pro Tips
+		/*
 		await sendStandardEmbed(channel, locale, {
 			titleKey: "commands.help.customization.embed5_title",
 			descriptionKey: "commands.help.customization.embed5_description",
 			color: ColorCode.INFO,
-		});
+		});*/
 	} catch (error) {
 		// Log error with context
 		const context: ErrorContext = {
