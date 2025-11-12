@@ -45,15 +45,13 @@ export default {
 			guild_only_command_description: `This command can only be used within a server, not in Direct Messages.`,
 			channel_not_supported_title: `Unsupported Channel Type`,
 			channel_not_supported_description: `Sorry, I can only work in server text channels or Direct Messages. Group DMs and other channel types are not supported.`,
-			dm_not_supported_title: `DMs Not Supported`,
-			dm_not_supported_description: `Sorry, I can only chat in server channels, not direct messages. This may change in the future, but for now I only work in servers!`,
 			tomori_not_setup_title: `Initial Setup Required`,
 			tomori_not_setup_description: `It seems I haven't been set up on this server yet. A server member with \`Manage Server\` permissions needs to use \`/config setup\` first. You may also use the \`/help setup\` for help, and the \`/config language\` command to set your preferred language.`,
-			tomori_not_setup_dm_footer: `Note: DMs are treated as mini "servers" wherein I respond to any of your messages privately. All server related commands will still work as intended and there is no need for the \`Manage Server\` permissions within DMs.`,
+			tomori_not_setup_dm_footer: `DMs are treated as mini "servers" wherein I respond to any of your messages privately. Most server related commands will still work as intended.`,
 			api_key_missing_title: `API Key Missing`,
-			api_key_missing_description: `I need an API key to function, but one hasn't been configured for this server. A server member with \`Manage Server\` permissions can set one using \`/config apikeyset\`.`,
+			api_key_missing_description: `I need an API key to function, but one hasn't been configured for this server. A server member with \`Manage Server\` permissions can set one using \`/config apikey set\`.`,
 			api_key_error_title: `API Key Error`,
-			api_key_error_description: `There was an issue accessing or decrypting the configured API key. Please ensure it was set correctly using \`/config apikeyset\`.`,
+			api_key_error_description: `There was an issue accessing or decrypting the configured API key. Please ensure it was set correctly using \`/config apikey set\`.`,
 			context_error_title: `Context Building Error`,
 			context_error_description: `I encountered an error while trying to understand the conversation context.`,
 			critical_error_title: `Critical Error`,
@@ -61,7 +59,7 @@ export default {
 			update_failed_title: `Update Failed`,
 			update_failed_description: `Failed to update the configuration in the database. Please try again.`,
 			unknown_error_title: `Unknown Error`,
-			unknown_error_description: `An unexpected error occurred. If the issue persists, please report it through \`/support report\`.`,
+			unknown_error_description: `An unexpected error occurred. If the issue persists, please report it through \`/support discord\`.`,
 			unexpected_title: `Unexpected Error`,
 			unexpected_description: `An unexpected error occurred: {error}`,
 			invalid_option_title: `Invalid Option`,
@@ -69,14 +67,14 @@ export default {
 			brave_api: {
 				missing_key: {
 					title: `Brave API Key Missing`,
-					description: `I need a Brave Search API key to perform searches, but one hasn't been configured for this server. A server member with \`Manage Server\` permissions can set one using \`/config braveapiset\` or disable it using \`/config permissions\`.`,
-					footer: `Get a free API key at https://brave.com/search/api/`,
+					description: `I need a Brave Search API key to perform searches, but one hasn't been configured for this server. A server member with \`Manage Server\` permissions can set one using \`/config braveapi set\`.`,
+					footer: `Learn how using /help apikey`,
 				},
 			},
 			duckduckgo_rate_limit: {
 				title: `DuckDuckGo Rate Limited`,
-				description: `DuckDuckGo search is currently rate limited. For more reliable searching, a server member with \`Manage Server\` permissions can set up Brave Search using \`/config braveapiset\` or disable it using \`/config permissions\`.`,
-				footer: `Get a free Brave Search API key at https://brave.com/search/api/`,
+				description: `DuckDuckGo search is currently rate limited. For more reliable searching, a server member with \`Manage Server\` permissions can set up Brave Search using \`/config braveapi set\`.`,
+				footer: `Learn how using /help apikey`,
 			},
 			operation_failed_title: `Operation Failed`,
 			operation_failed_description: `The requested operation could not be completed. Please try again.`,
@@ -94,22 +92,22 @@ export default {
 		// Errors related to LLM API generation
 		generic_error_title: `Generation Error`,
 		generic_error_description: `{error_message}`,
-		generic_error_footer: `Please run \`/tool refresh\` and then try again. If the issue persists, please report it through \`/support report\`.`,
+		generic_error_footer: `Please run \`/tool refresh\` and then try again. If the issue persists, please report it through \`/support discord\`.`,
 		error_stream_timeout_title: "Connection Timeout",
 
 		// Provider error format template: "{Provider name} Error Code {number}: {message from Google}. {tip from us}"
 		provider_error_format:
 			"{providerName} Error Code {errorCode}: {apiMessage}. {tip}",
 		error_stream_timeout_description:
-			"If this keeps happening, there might be a temporary issue with the service. Please try your request again in a moment or use `/tools refresh` to refresh the context history.",
+			"If this keeps happening, there might be a temporary issue with your chosen AI provider. Please try again later or use `/tools refresh` to refresh the context history.",
 
 		// Empty response from API
 		empty_response_title: `Empty Response`,
-		empty_response_description: `I received an empty response from the AI.`,
+		empty_response_description: `I received an empty response from the AI, use \`/tools refresh\` if this issue persists.`,
 		// New: Max iterations for function calls
 		max_iterations_title: "Thinking Loop",
 		max_iterations_streaming_description:
-			"I got stuck in a thinking loop and couldn't complete the request.",
+			"I got stuck in a thinking loop and couldn't complete the request, use `/tools refresh` if this issue persists.",
 
 		// Search related messages
 		search: {
@@ -146,11 +144,12 @@ export default {
 			// Error interaction messages
 			provider_error_interaction:
 				"Stream response blocked/stopped. Reason: {reason}.",
-			retry_message: "This error is temporary. You can try your request again.",
+			retry_message: "This error is temporary. You can try again later.",
 
 			// Universal provider error titles and tips (moved from genai.google)
 			api_error_title: "❌ API Error",
-			api_error_tip: "Please verify your API key and try again",
+			api_error_tip:
+				"Please verify your API key and try again. If this error persists, use `/support discord` to report it.",
 
 			rate_limit_title: "🟡 Rate Limit Exceeded",
 			rate_limit_tip: "Please wait a few minutes before trying again",
@@ -164,11 +163,11 @@ export default {
 
 			provider_overloaded_title: "🛑 Provider Overloaded",
 			provider_overloaded_tip:
-				"Provider is currently experiencing unexpectedly high usage, please try again later",
+				"Provider is currently experiencing unexpectedly high usage, please try again later or swap to a different provider",
 
 			unknown_title: "❓ Provider Error",
 			unknown_tip:
-				"Please try again or use `/support report` if this keeps happening",
+				"Please try again or use `/support discord` if this keeps happening",
 		},
 
 		// Google-specific error messages (provider-specific default messages only)
@@ -223,11 +222,6 @@ export default {
 			personal_memory_footer_user_blacklisted:
 				"This memory was saved, but the user in question is currently blacklisted from personalization features on this server, so it will not have an immediate effect here",
 		},
-
-		// Test/placeholder keys
-		some_other: {
-			title: `Test GenAI Feature`,
-		},
 	},
 
 	commands: {
@@ -247,18 +241,16 @@ export default {
 			false: "False",
 			opt_out: "Block Memory Storage",
 			opt_in: "Allow Memory Storage",
+			none: "None",
 		},
 
 		// General utility commands
 		tool: {
 			ping: {
 				description: `Check the bot's latency.`,
-				response_fast: `Pong! 🏓
-Response Time: \`{response_time}ms\`
-Discord API Latency: \`{discord_response}ms\``,
-				response_slow: `Pong! 🐢 (A bit slow...)
-Response Time: \`{response_time}ms\`
-Discord API Latency: \`{discord_response}ms\``,
+				title: `Pong! 🏓`,
+				response_fast: `Response Time: \`{response_time}ms\``,
+				response_slow: `Response Time: \`{response_time}ms\``,
 			},
 			refresh: {
 				description: `Clears the recent conversation history.`,
@@ -277,12 +269,15 @@ Discord API Latency: \`{discord_response}ms\``,
 				field_model: `AI Model`,
 				field_temperature: `Temperature`,
 				field_humanizer: `Humanizer Level`,
+				field_timezone: `Server Timezone`,
 				field_autoch_threshold: `Auto-Chat Threshold`,
 				field_autoch_channels: `Auto-Chat Channels`,
 				field_trigger_words: `Trigger Words`,
 				field_personalization: `Personalization`,
+				field_blacklisted_members: `Blacklisted Members`,
 				field_self_teach: `Self-Teaching`,
 				field_api_key_set: `API Key Set`,
+				field_brave_api_key_set: `Brave API Key Set`,
 				field_emoji_usage: `Emoji Usage`,
 				field_sticker_usage: `Sticker Usage`,
 				field_web_search: `Web Search`,
@@ -294,6 +289,7 @@ Discord API Latency: \`{discord_response}ms\``,
 				field_attributes: `Attributes`,
 				field_user_nickname: `User Nickname`,
 				field_language_pref: `Language Preference`,
+				field_privacy: `Privacy Mode`,
 				field_reminders_count: `Active Reminders`,
 				field_personal_memories: `Personal Memories`,
 				field_server_memories: `Server Memories`,
@@ -309,8 +305,10 @@ Discord API Latency: \`{discord_response}ms\``,
 				field_personal_memories_with_count: `Personal Memories ({current} out of {max} slots used)`,
 				field_trigger_words_with_count: `Trigger Words ({current} out of {max} slots used)`,
 				field_attributes_with_count: `Attributes ({current} out of {max} slots used)`,
+				field_slot_usage: `{current} out of {max} slots used`,
 				field_server_memories_with_count: `Server Memories ({current} out of {max} slots used)`,
-				field_dialogue_count_with_count: `Sample Dialogues ({current} out of {max} slots used)`,
+				field_dialogue_count_with_count: `{current} out of {max} slots used`,
+				field_blacklisted_members_with_count: `{current} members`,
 			},
 		},
 
@@ -325,7 +323,7 @@ Discord API Latency: \`{discord_response}ms\``,
 				type_choice_personality: `Personality Info`,
 				success_title: `✅ Export Successful`,
 				success_description: `Your {type} data has been sent to your DMs!`,
-				success_description_personality: `TomoriBot's personality has been exported and sent to your DMs!\n\n**Note:** This export is for informational purposes only. To import personalities, use the \`/persona\` commands instead.`,
+				success_description_personality: `My personality has been exported and sent to your DMs!\n\n**Note:** This export is for informational purposes only. To import personalities, use the \`/persona\` commands instead.`,
 				failed_title: `❌ Export Failed`,
 				failed_description: `Failed to export your data. Please try again later.`,
 				dm_title: `📦 Data Export`,
@@ -389,7 +387,8 @@ Discord API Latency: \`{discord_response}ms\``,
 				type_choice_server: `Server Data`,
 				confirmation_description: `Confirm permanent deletion (THIS CANNOT BE UNDONE!)`,
 				confirmation_yes: `Yes, permanently delete - I understand this cannot be undone`,
-				confirmation_required_title: `⚠️ Confirmation Required`,
+				confirmation_no: `No, cancel deletion`,
+				confirmation_required_title: `Confirmation Required`,
 				confirmation_required_description: `You must confirm deletion by selecting the confirmation option.`,
 				success_personal_title: `✅ Personal Data Deleted`,
 				success_personal_description: `All your personal data has been permanently deleted. You'll start fresh with default settings if you interact with me again.`,
@@ -430,11 +429,11 @@ Discord API Latency: \`{discord_response}ms\``,
 				confirmation_choice_yes: `Yes, replace my current persona`,
 				confirmation_choice_no: `No, cancel import`,
 				success_title: `✅ Persona Imported Successfully`,
-				success_description: `Successfully imported persona **{nickname}**!\n📝 Attributes: {attribute_count}\n💬 Sample Dialogues: {dialogue_count}\n🔔 Trigger Words: {trigger_word_count}\n\n**Note:** Server avatar and nickname have also been updated if permissions allow.`,
+				success_description: `Successfully imported persona **{nickname}**!\n📝 Attributes: {attribute_count}\n💬 Sample Dialogues: {dialogue_count}\n🔔 Trigger Words: {trigger_word_count}\n\nServer avatar and nickname have also been updated if permissions allow.`,
 				failed_title: `❌ Import Failed`,
 				failed_description: `Failed to import the persona. Please check the file and try again.`,
 				cancelled_title: `❌ Import Cancelled`,
-				cancelled_description: `The import has been cancelled. No changes were made to your persona.`,
+				cancelled_description: `The import has been cancelled. No changes were made to my persona.`,
 				invalid_file_type_title: `❌ Invalid File Type`,
 				invalid_file_type_description: `Please upload a valid .png file containing persona data.`,
 				file_too_large_title: `❌ File Too Large`,
@@ -456,13 +455,13 @@ Discord API Latency: \`{discord_response}ms\``,
 				error_invalid_trigger_word: `Invalid trigger word: {details}`,
 				error_dialogue_mismatch: `Sample dialogue arrays don't match in length`,
 				error_invalid_config: `Invalid configuration fields in persona data`,
-				error_no_server_data: `Server not found in database. Please run /config setup first.`,
+				error_no_server_data: `Server not found in database. Please run \`/config setup\` first.`,
 				error_import_failed: `Failed to import persona data`,
 				error_not_json: `Preset file must contain valid JSON data`,
 				error_incompatible_version: `Incompatible preset version. Expected {expected}, got {actual}`,
 				error_invalid_format: `Invalid persona file format`,
 				error_invalid_type: `Invalid persona type: {type}. Expected "persona"`,
-				avatar_update_skipped_dm: `ℹ️ Note: Avatar and nickname updates are not available in Direct Messages. Preset was imported successfully.`,
+				avatar_update_skipped_dm: `Preset was imported successfully, except avatar and nickname updates which are not available in Direct Messages`,
 			},
 			default: {
 				description: `Apply a preset personality configuration`,
@@ -471,12 +470,12 @@ Discord API Latency: \`{discord_response}ms\``,
 				select_description: `Choose a preset to apply. This will overwrite current attributes and dialogues.`,
 				select_placeholder: `Choose a preset...`,
 				no_presets_title: `No Presets Available`,
-				no_presets_description: `There are no personality presets available for your language. Please run \`/support report\`.`,
+				no_presets_description: `There are no personality presets available for your language. Please report through \`/support discord\`.`,
 				preset_not_found: `The selected preset could not be found.`,
 				success_title: `Preset Applied`,
 				success_description: `Successfully applied the '{preset_name}' preset.`,
-				avatar_update_failed: `⚠️ Note: Server avatar could not be updated (Discord API error). Personality was applied successfully.`,
-				avatar_update_skipped_dm: `ℹ️ Note: Avatar and nickname updates are not available in Direct Messages. Personality settings were applied successfully.`,
+				avatar_update_failed: `⚠️ Server avatar could not be updated due to a Discord API error, but persona was applied successfully.`,
+				avatar_update_skipped_dm: `Preset was applied successfully, except avatar updates which are not available in Direct Messages`,
 			},
 			generate: {
 				description: `AI-powered personality generation using Google Gemini`,
@@ -500,18 +499,18 @@ Discord API Latency: \`{discord_response}ms\``,
 				},
 				// Error messages
 				wrong_provider_title: `❌ Incompatible Provider`,
-				wrong_provider_description: `Preset generation requires Google Gemini. Your current provider is **{current_provider}**. Please use \`/config apikeyset\` to switch to Google.`,
+				wrong_provider_description: `Preset generation requires Google Gemini. Your current provider is **{current_provider}**. Please use \`/config apikey set\` to switch to Google.`,
 				no_api_key_title: `❌ No API Key`,
-				no_api_key_description: `No API key configured. Please use \`/config apikeyset\` to set up your Google API key.`,
+				no_api_key_description: `No API key configured. Please use \`/config apikey set\` to set up your Google API key.`,
 				api_key_decrypt_failed_title: `❌ API Key Error`,
-				api_key_decrypt_failed_description: `Failed to decrypt API key. Please reconfigure using \`/config apikeyset\`.`,
+				api_key_decrypt_failed_description: `Failed to decrypt API key. Please reconfigure using \`/config apikey set\`.`,
 				invalid_image_title: `❌ Invalid Image`,
 				invalid_image_description: `Please upload a valid image file (PNG, JPG, JPEG, etc.).`,
 				image_download_failed_title: `❌ Image Download Failed`,
 				image_download_failed_description: `Failed to download the attached image. Please try again.`,
 				// Processing
-				processing_title: `🤖 Generating Personality...`,
-				processing_description: `This may take 1-2 minutes. Please wait while I generate the character...\n\n**Note:** This may produce unexpected results. You can regenerate if needed.`,
+				processing_title: `Generating Personality...`,
+				processing_description: `This may take 1-2 minutes. Please wait while I generate the character...\n\nThis may produce unexpected results. You can regenerate if needed.`,
 				// Generation errors
 				generation_failed_title: `❌ Generation Failed`,
 				generation_failed_description: `Failed to generate personality: {error}\n\nPlease try again with different inputs or check your API key.`,
@@ -526,9 +525,9 @@ Discord API Latency: \`{discord_response}ms\``,
 				// Success
 				success_title: `✨ {character_name} Generated Successfully!`,
 				success_description: `I've generated a persona for **{character_name}**!\n\n**Attributes Preview:**\n{attribute_preview}\n\n**Sample Dialogues:**\n{dialogue_preview}`,
-				success_next_steps_title: `📥 Next Steps`,
-				success_next_steps_description: `1. Download the attached PNG file\n2. Use \`/persona import\` with the PNG to import this character\n3. (Optional) Use \`/server avatar\` to change the avatar if desired`,
-				avatar_update_skipped_dm: `ℹ️ Note: Avatar and nickname updates are not available in Direct Messages. Personality was generated successfully.`,
+				success_next_steps_title: `Next Steps`,
+				success_next_steps_description: `1. Download the attached PNG file\n2. Use \`/persona import\` with the PNG to import this character\n3. Run \`/tool refresh\` on ongoing conversations to apply my new personality\n4. (Optional) Use \`/server avatar\` to change the avatar if desired`,
+				avatar_update_skipped_dm: `Please note that avatar and nickname updates are not available to import in Direct Messages.`,
 			},
 			create: {
 				description: `Create a simple personality preset manually`,
@@ -565,9 +564,9 @@ Discord API Latency: \`{discord_response}ms\``,
 				success_title: `✅ {character_name} Created Successfully!`,
 				success_description: `Persona has been created for **{character_name}**!\n\n**Description:**\n{character_description}`,
 				success_dialogue_title: `Sample Dialogue`,
-				success_next_steps_title: `📥 Next Steps`,
-				success_next_steps_description: `1. Download the attached PNG file\n2. Use \`/persona import\` with the PNG to import this character\n3. (Optional) Use \`/teach\` commands to add more depth and examples`,
-				avatar_update_skipped_dm: `ℹ️ Note: Avatar and nickname updates are not available in Direct Messages. Preset was created successfully.`,
+				success_next_steps_title: `Next Steps`,
+				success_next_steps_description: `1. Download the attached PNG file\n2. Use \`/persona import\` with the PNG to import this character\n3. Run \`/tool refresh\` on ongoing conversations to apply my new personality\n4. (Optional) Use \`/server avatar\` to change the avatar if desired`,
+				avatar_update_skipped_dm: `Please note that avatar and nickname updates are not available in Direct Messages.`,
 			},
 		},
 
@@ -575,13 +574,13 @@ Discord API Latency: \`{discord_response}ms\``,
 		help: {
 			// /help features
 			features: {
-				command_description: `Show what TomoriBot can do`,
-				title: `What I Can Do! (Version {version})`,
+				description: `Shows what TomoriBot can do`,
+				title: `TomoriBot Features (Version {version})`,
 				embed_description: `Here's everything I'm capable of:`,
 				vision_title: `Vision & Media 👁️`,
 				vision_description: `- I can see and analyze images, videos, stickers, and emojis
 - I can watch YouTube videos from links
-- I can see content within Tweets`,
+- I can see content within shared embeds (like tweets, articles, etc.)`,
 				search_title: `Search & Information 🔍`,
 				search_description: `- I can search the web for current information
 - I can also do image, video, and news search (via \`/config braveapi\`)
@@ -600,19 +599,19 @@ Discord API Latency: \`{discord_response}ms\``,
 				time_title: `Time Awareness 🕰️`,
 				time_description: `- I know what time it currently is in the server (via \`/config timezone\`)
 - I can set up reminders for you (try asking me to remind you about something!)`,
-				footer: `Note: Not all features are available for all providers. It is recommended to use Google's Gemini`,
+				footer: `Not all features are available for all AI providers. It is recommended to use Google's Gemini`,
 			},
 
 			// /help setup
 			setup: {
-				command_description: `Learn how to set up TomoriBot for the first time`,
+				description: `Learn how to set up TomoriBot for the first time`,
 				title: `Getting Started with TomoriBot`,
 				embed_description: `Here's how to set up TomoriBot in your server (or DMs!):`,
 				step1_title: `Step 1: Get an API Key 🔑`,
 				step1_description: `TomoriBot uses AI providers like Google Gemini, NovelAI, or OpenRouter. You'll need an API key from one of them.
 - Use {helpApikey} to learn how to get one
-  - Google's Gemini = general-purpose, free, and can run all of TomoriBot's features
-  - NovelAI = role-playing and storytelling specialized
+  - Google's Gemini = general-purpose, free, and can run all features
+  - NovelAI = uncensored role-playing and storytelling specialized
   - OpenRouter = various available AI models
 - Do **NOT** share this API key with anyone else`,
 				step2_title: `Step 2: Run the Setup Command ⚙️`,
@@ -637,9 +636,9 @@ Discord API Latency: \`{discord_response}ms\``,
 
 			// /help data
 			data: {
-				command_description: `Learn about data management and privacy`,
-				title: `Managing Your Data 🗂️`,
-				embed_description: ``,
+				description: `Learn about data management and privacy`,
+				title: `Managing Your Data`,
+				embed_description: `How you can manage your data and what I store:`,
 				export_title: `Export Your Data 📤`,
 				export_description: `Use {dataExport} to download your data:
 - **Personal data**: Your memories, preferences, and user settings
@@ -650,35 +649,33 @@ Discord API Latency: \`{discord_response}ms\``,
 				import_description: `Use {dataImport} to restore previously exported data:
 - Restore your personal data across servers
 - Transfer server configurations to a new server
-- Share personality presets with others
 - Simply attach your exported file when using the command`,
 				delete_title: `Delete Your Data 🗑️`,
 				delete_description: `Use {dataDelete} to permanently remove your data:
 - **Personal deletion**: Removes all your user data, memories, and preferences
 - **Server deletion**: Removes all server data
-- Requires confirmation to prevent accidental deletion
 - This action cannot be undone!`,
 				privacy_title: `Privacy Notice 🔒`,
 				privacy_description: `**What I Store:**
 - Server/personal memories
 - My settings and persona
-- Server configurations
+- My server configurations
 - Encrypted API keys
 
 **What I Do NOT Store:**
 - Your Discord messages
-- Chat history
+- Chat History
 
-**What is Sent to Me and your Chosen AI Provider:**
-Whenever I'm triggered, I fetch the **latest messages** in the text channel as well as any **relevant memories** as context to form my reply
+**What is Sent to your Chosen AI Provider:**
+Whenever I'm triggered, I fetch the **latest messages** in the text channel as well as any **relevant memories** as context for the AI model to form my reply
 
 You may opt out of my Memory features by using the {personalPrivacy} command, as well as turn off my self-learning using the {configPermissions} command.`,
-				footer: `**Important**: Your chosen AI provider (Google, NovelAI, OpenRouter) processes your messages according to their own privacy policies. Never share personal information with me if you're concerned about privacy.`,
+				footer: `Your chosen AI provider (Google, NovelAI, OpenRouter) processes your messages according to their own privacy policies. Never share personal information with me for privacy.`,
 			},
 
 			// /help apikey
 			apikey: {
-				command_description: `Learn how to set up API keys for AI providers`,
+				description: `Learn how to set up API keys for AI providers`,
 				provider_description: `Choose your AI provider`,
 				// Brave Search
 				brave_title: `Setting Up Brave Search API Key`,
@@ -694,10 +691,9 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
 4. Create a new API key
 5. Copy and input your API key using the {configBraveapiSet} command`,
 				brave_important_title: `Important Notes:`,
-				brave_important_description: `- Your API key is encrypted and stored securely
-- This is separate from your main LLM provider
+				brave_important_description: `- This is separate from your main AI provider
 - Without Brave API key, I can still function and use built-in web search`,
-				brave_footer: `Want to set up your main AI provider? Check the other \`/help apikey\` options!`,
+				brave_footer: `For setting up your main AI provider, use the other \`/help apikey\` options`,
 				// Google Gemini
 				google_title: `Setting Up Google Gemini API Key`,
 				google_description: `Google Gemini offers free and paid tiers with powerful AI models.
@@ -706,9 +702,9 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
 - [Gemini Privacy Policy](https://ai.google.dev/gemini-api/terms)`,
 				google_getting_key_title: `Getting Your API Key:`,
 				google_getting_key_description: `1. Visit [Google AI Studio](https://aistudio.google.com/apikey)
-2. Click \`Create API Key\` on the top-right
+2. Click \`Create API Key\` on the top-right (create a new Project if needed)
 3. Copy this API key into {configSetup} or {configApikeySet}`,
-				google_footer: `After setting up this provider, change its default model with {configModel}!`,
+				google_footer: `After setting up this provider, you may change its default model with {configModel}`,
 				// NovelAI
 				novelai_title: `Setting Up NovelAI API Key`,
 				novelai_description: `NovelAI is a subscription-based service focused on creative storytelling and roleplay.
@@ -720,8 +716,8 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
 2. Navigate to settings through the ⚙️ icon on the top-left
 3. Go to \`Account\`
 4. Look for \`Get Persistent API Token\`
-5. Copy this API key {configSetup} or {configApikeySet}`,
-				novelai_footer: `After setting up this provider, change its default model with {configModel}!`,
+5. Copy this API key into {configSetup} or {configApikeySet}`,
+				novelai_footer: `After setting up this provider, you may change its default model with {configModel}`,
 				// OpenRouter
 				openrouter_title: `Setting Up OpenRouter API Key`,
 				openrouter_description: `OpenRouter provides access to multiple AI models from different providers on a pay-as-you-go basis.
@@ -732,19 +728,19 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
 				openrouter_getting_key_description: `1. Visit [OpenRouter](https://openrouter.ai/settings/keys)
 2. Click \`Create API Key\`
 3. Copy this API key {configSetup} or {configApikeySet}
-3. Add credits to your account (pay-as-you-go)`,
-				openrouter_footer: `After setting up this provider, change its default model with {configModel}!`,
+4. Add credits to your account (pay-as-you-go)`,
+				openrouter_footer: `After setting up this provider, you may change its default model with {configModel}`,
 			},
 
 			// /help memory
 			memory: {
-				command_description: `Learn about TomoriBot's memory system`,
+				description: `Learn about TomoriBot's memory system`,
 				title: `How My Memory Works 🧠`,
-				embed_description: `I have a persistent memory system that helps me remember facts and information about users and servers across conversations! This is about **what I know** (facts, context, information). For **how I behave** (personality, tone, settings), see {helpCustomization} instead!`,
+				embed_description: `I have a persistent memory system that helps me remember facts and information about users and servers across conversations. This is about **what I know** (facts, context, information). For **how I behave** (personality, tone, settings), see {helpCustomization} instead!`,
 				teaching_title: `Teaching Me Things 📝`,
 				teaching_description: `Use {teach} to help me remember **facts and information**:
 - **Personal memories** ({teachMemoryPersonal}): Facts about individual users
-  - Example: "Alex loves cats", "Prefers dark mode", "Is allergic to peanuts"
+  - Example: "Amaori loves cats", "Prefers dark mode", "Is allergic to peanuts"
 - **Server memories** ({teachMemoryServer}): Information relevant to the whole server
   - Example: "Game night is every Friday at 8 PM", "No posting of NSFW", "We use #general for announcements"`,
 				forgetting_title: `Forgetting Things 🗑️`,
@@ -757,23 +753,23 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
 - Memories persist until you use the \`/forget\` command on them`,
 				tips_title: `Memory Tips:`,
 				tips_description: `- Teach me your preferences, nicknames, and important facts
-- Use server memories for shared information, inside jokes, or server culture
+- Use server memories for shared information, inside jokes, or server rules
 - Review your memories periodically with {dataExport} or {status}
 - Keep memories concise and clear for best results`,
 			},
 
 			// /help customization
 			customization: {
-				command_description: `Learn how to customize TomoriBot's personality and behavior`,
+				description: `Learn how to customize TomoriBot's personality and behavior`,
 				// Embed 1: Overview + Personas
 				embed1_title: `Customizing TomoriBot 🎨`,
-				embed1_description: `TomoriBot is highly customizable! Here's everything you can configure to make me truly yours. This is about **how I behave** (personality, tone, settings). For **what I remember** (facts, memories), see {helpMemory} instead!`,
+				embed1_description: `TomoriBot is highly customizable! This is about **how I behave** (personality, tone, settings). For **what I remember** (facts, memories), see {helpMemory} instead!`,
 				embed1_personas_title: `🎭 Personality Personas`,
 				embed1_personas_description: `Control my core personality and behavior:
 
 **Persona Commands:**
 - {personaCreate} - Create a custom personality from scratch
-- {personaGenerate} - AI-generate a personality based on your description (Requires Gemini)
+- {personaGenerate} - AI-generate a personality based on a description and image (Requires Gemini)
 - {personaDefault} - Switch to a default personality
 - {personaExport} - Export your persona to share or backup
 - {personaImport} - Import a persona from a file
@@ -787,23 +783,22 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
 				embed1_footer: `Next: Teaching Commands`,
 				// Embed 2: Teaching System
 				embed2_title: `Teaching Commands ✍️`,
-				embed2_description: `## ✍️ Teaching Commands (\`/teach\`)
-Fine-tune my personality and knowledge:
+				embed2_description: `Fine-tune my personality and knowledge:
 
 **Personality Shaping:**
-- {teachAttribute} - Add personality traits (e.g., "friendly", "sarcastic", "formal")
+- {teachAttribute} - Add personality traits or physical characteristics (e.g., "friendly", "red hair", "ends sentences with *Nya~*")
 - {teachSampledialogue} - Add example conversations to shape how I talk
 - {configRename} - Set what I should call myself
 
 **Writing Sample Dialogues:**
-Use \`{{user}}\` and \`{{bot}}\` placeholders in your examples:
-- \`{{user}}\` = Replaced with the actual user's name/nickname
-- \`{{bot}}\` = Replaced with my current name
+Use \`{user}\` and \`{bot}\` placeholders in your examples:
+- \`{user}\` = Replaced with the actual user's name/nickname
+- \`{bot}\` = Replaced with my current name
 
 **Example:**
 \`\`\`
-User message: {{user}}: Hey, how are you?
-Bot response: {{bot}}: Yoooo {{user}}! I'm doin' great, ya feel me?
+{user}: Hey, how are you?
+{bot}: Yoooo {user}! I'm doin' great, ya feel me?
 \`\`\`
 
 **Tips for Great Sample Dialogues:**
@@ -815,68 +810,55 @@ Bot response: {{bot}}: Yoooo {{user}}! I'm doin' great, ya feel me?
 				embed2_footer: `Next: Configuration`,
 				// Embed 3: Configuration & Management
 				embed3_title: `Configuration & Management ⚙️`,
-				embed3_description: `## 🗑️ Unlearning Commands (\`/forget\`)
-Remove personality customizations:
-
+				embed3_description: `**Remove personality customizations:**
 - {forgetAttribute} - Remove specific personality attributes
 - {forgetSampledialogue} - Remove sample dialogue examples
 
----
-
-## ⚙️ Server Configuration (\`/server\`)
-Server-wide settings and behavior:
-
-**Learning & Privacy:**
+**Server-wide settings and behavior:**
+Learning & Privacy:
 - {serverMemberpermissions} - Control who can teach me things
 - {serverBlacklist} - Prevent me from learning and using memories from specific users
 
-**Auto-Trigger Behavior:**
+Auto-Trigger Behavior:
 - {serverAutotriggerChannels} - Set channels where I respond without mentions
 - {serverAutotriggerThreshold} - Set message threshold for auto-responses
 
-**Triggers & Appearance:**
+Triggers & Appearance:
 - {serverTriggerAdd} - Add custom trigger words I respond to
 - {serverTriggerDelete} - Remove trigger words
 - {serverAvatar} - Set my custom profile picture for this server`,
 				embed3_footer: `Next: Bot Settings`,
 				// Embed 4: Advanced Settings
 				embed4_title: `Advanced Settings 🔧`,
-				embed4_description: `## 🔧 Bot Configuration (\`/config\`)
-Personal bot settings:
-
-**AI Settings:**
+				embed4_description: `**Personal bot settings:**
+AI Settings:
 - {configModel} - Choose which AI model to use
 - {configTemperature} - Adjust creativity/randomness. The higher, the more varied the responses (1.0-2.0)
 - {configHumanizer} - Change how humanlike my responses should be
 
-**API Keys:**
+API Keys:
 - {configApikeySet} - Set your AI provider API key
 - {configApikeyDelete} - Remove your API key
 - {configBraveapiSet} - Set Brave Search API key (optional)
 - {configBraveapiDelete} - Remove Brave Search API key
 
-**Personalization:**
+Personalization:
 - {configRename} - Change what I refer to myself as
 - {configTimezone} - Set timezone for time-aware responses and reminders
 - {configPermissions} - Configure what I'm allowed to do`,
-				embed4_footer: `Next: Pro Tips`,
+				embed4_footer: `If you have any more questions, join the support server with /support discord`,
 				// Embed 5: Pro Tips
 				embed5_title: `Pro Tips 💡`,
 				embed5_description: `- Start with a persona (default or generated) as a foundation
 - Use \`/teach attribute\` for quick personality tweaks
 - For Sample Dialogues, using examples that exhibit their attributes and traits as well is effective:
 \`\`\`
-User message: {{user}}: What's your favorite hobby?
-Bot response: {{bot}}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
+User message: {user}: What's your favorite hobby?
+Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 \`\`\`
 - Test changes by chatting, iterate until it feels right
 - Export your persona to back it up or share with other servers!`,
 			},
-		},
-
-		// Test/placeholder commands
-		some_feature: {
-			title: `Test Feature`,
 		},
 
 		// Bot manual control commands
@@ -890,9 +872,9 @@ Bot response: {{bot}}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				description: `Use current AI provider's smartest reasoning model to respond with optional query.`,
 				query_description: `Optional query to focus reasoning on.`,
 				success_title: `Reasoning Mode Activated`,
-				success_description: `Using advanced reasoning to respond{query}...`,
+				success_description: `Using advanced reasoning to respond{query}`,
 				no_smart_model_title: `No Reasoning Model Found`,
-				no_smart_model_description: `No reasoning model found for your current AI provider. Please switch to a provider that supports reasoning models using \`/config apikeyset\`.`,
+				no_smart_model_description: `No reasoning model found for your current AI provider. Please switch to a provider that supports reasoning models using \`/config apikey set\`.`,
 			},
 		},
 
@@ -900,8 +882,8 @@ Bot response: {{bot}}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 		support: {
 			discord: {
 				description: `Get the official Discord server link for bug reports, feedback, and community chat.`,
-				title: `Join Our Discord Server`,
-				description_text: `Need help with TomoriBot or want to hang out with the community?\n\n🔗 **Discord Server**: https://discord.gg/W5dDmPKAMc\n\nJoin us to:\n• Report bugs and issues\n• Share feedback and suggestions\n• Chat with other users and the dev team\n• Stay updated on new features`,
+				title: `Join the TomoriBot Discord Server!`,
+				description_text: `Need help with TomoriBot or want to hang out with the community?\n\n🔗 **Discord Server**: https://discord.gg/W5dDmPKAMc\n- Report bugs and issues\n- Share feedback and suggestions\n- Interact with other users of TomoriBot\n- Stay updated on new features`,
 			},
 		},
 
@@ -909,8 +891,8 @@ Bot response: {{bot}}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 		contribute: {
 			github: {
 				description: `Get the GitHub repository link and learn how to contribute to TomoriBot.`,
-				title: `Contribute to TomoriBot`,
-				description_text: `Want to help make TomoriBot better? We'd love your contributions!\n\n🔗 **GitHub Repository**: https://github.com/Bredrumb/TomoriBot\n\nWays to contribute:\n• Star the repository on GitHub ⭐\n• Submit bug reports and feature requests\n• Contribute code improvements and new features\n• Help translate TomoriBot to other languages\n• Improve documentation`,
+				title: `Contribute to TomoriBot!`,
+				description_text: `Want to help make TomoriBot better?\n\n🔗 **GitHub Repository**: https://github.com/Bredrumb/TomoriBot\n- Star the repository on GitHub ⭐\n- Submit bug reports and feature requests\n- Contribute code improvements and new features\n- Help translate TomoriBot to other languages`,
 			},
 		},
 
@@ -918,8 +900,8 @@ Bot response: {{bot}}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 		donate: {
 			kofi: {
 				description: `Support TomoriBot development through Ko-fi donations.`,
-				title: `Support TomoriBot Development`,
-				description_text: `Love using TomoriBot? Help keep it free and support ongoing development!\n\n🔗 **Ko-fi**: https://ko-fi.com/bredrumb\n\nYour donations help:\n• Keep TomoriBot running and maintained\n• Add new features and improvements\n• Support server costs and development time\n• Keep TomoriBot completely free for everyone\n\nEvery contribution, big or small, is greatly appreciated! ❤️`,
+				title: `Support TomoriBot Development!`,
+				description_text: `Love using TomoriBot? Help support ongoing development!\n\n🔗 **Ko-fi**: https://ko-fi.com/bredrumb\nYour donations help:\n- Keep TomoriBot running and maintained\n- Add new features and improvements\n- Support server costs\n- Buy TomoriBot shawarmas`,
 			},
 		},
 
@@ -945,7 +927,7 @@ Bot response: {{bot}}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 					api_key_description: `This key will be securely stored. Use the '/help apikey' command for instructions in getting one`,
 					api_key_placeholder: `Do NOT share this key with anyone`,
 					no_providers_title: `No Providers Available`,
-					no_providers_description: `No AI providers are available in the database. Please contact the bot administrator.`,
+					no_providers_description: `No AI providers are available in the database. Please report through \`/support discord\`.`,
 					invalid_key_title: `Invalid API Key Format`,
 					invalid_key_description: `The provided API key seems too short or invalid. Please provide a valid key.`,
 					validating_key: `Validating API key...`,
@@ -991,18 +973,18 @@ Bot response: {{bot}}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				},
 			},
 			humanizer: {
-				description: `Set how 'human-like' my responses should feel.`,
+				description: `Set how 'human-like' my responses should be.`,
 				// value_description: `The level of humanization (0=None, 1=Prompt, 2=Typing/Chunking, 3=Lowercase/No Punctuation).`,
 				modal_title: `Set Humanizer Degree`,
 				select_label: `Humanizer Level`,
-				select_description: `Choose how human-like my responses should feel`,
+				select_description: `Choose how human-like my responses should be`,
 				select_placeholder: `Choose a level...`,
 				choice_none: `0: None (Raw AI Output)`,
 				choice_light: `1: Light (Prompt Injection)`,
-				choice_medium: `2: Medium (Typing Simulation & Chunking)`,
-				choice_heavy: `3: Heavy (Lowercase & No Punctuation - Default)`,
+				choice_medium: `2: Default (Typing Simulation & Chunking)`,
+				choice_heavy: `3: Heavy (Lowercase & No Punctuation)`,
 				desc_none: `No humanization. Standard AI responses with formal tone and structure.`,
-				desc_light: `Adds human-like response guidelines. Limits emojis (0-2), prefers concise responses.`,
+				desc_light: `Adds human-like response guidelines to context. Limits emojis (0-2), prefers concise responses.`,
 				desc_medium: `Light features + typing simulation and improved message chunking for natural flow.`,
 				desc_heavy: `All features + casual text processing (lowercase, reduced punctuation) for informal tone.`,
 				// invalid_value_title: `Invalid Value`,
@@ -1019,7 +1001,7 @@ Bot response: {{bot}}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				select_description: `Choose the AI model for me to use`,
 				select_placeholder: `Choose a model...`,
 				no_api_key_title: `No API Key Set`,
-				no_api_key_description: `An API key must be configured before changing models. Please use \`/config apikeyset\` to set an API key first.`,
+				no_api_key_description: `An API key must be configured before changing models. Please use \`/config apikey set\` to set an API key first.`,
 				no_models_title: `No Models Found`,
 				no_models_description: `Could not load available AI models from the database.`,
 				// invalid_model_title: `Invalid Model`,
@@ -1028,7 +1010,7 @@ Bot response: {{bot}}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				already_selected_description: `I'm is already using the \`{model_name}\` model.`,
 				validating_api_key_compatibility: `Validating API key compatibility with new provider...`,
 				api_key_incompatible_title: `API Key Incompatible`,
-				api_key_incompatible_description: `The current API key is not compatible with the {model_name} model from {provider}. Please set a valid API key for {provider} using \`/config apikeyset\`.`,
+				api_key_incompatible_description: `The current API key is not compatible with the {model_name} model from {provider}. Please set a valid API key for {provider} using \`/config apikey set\`.`,
 				validation_error_title: `Validation Error`,
 				validation_error_description: `An error occurred while validating API key compatibility. Please try again.`,
 				success_title: `Model Updated`,
@@ -1052,11 +1034,11 @@ Bot response: {{bot}}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 			},
 			setup: {
 				description: `Start the initial setup process.`,
-				no_presets_found: `Error: No personality presets found for your language. Cannot proceed with setup.`,
+				no_presets_found: `No personality presets found in the database, please report through \`/support discord\`.`,
 				modal_title: `Initial Setup`,
 				api_provider_label: `API Provider`,
 				api_provider_description: `Please choose the provider of the LLM of your choice`,
-				api_provider_placeholder: `Choose...`,
+				api_provider_placeholder: `Choose a provider...`,
 				api_key_label: `API Key`,
 				api_key_description: `This key will be securely stored. Use the '/help apikey' command for instructions in getting one`,
 				api_key_placeholder: `Do NOT share this key with anyone`,
@@ -1098,9 +1080,9 @@ Bot response: {{bot}}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				dm_context_explanation_title: `About Direct Messages`,
 				dm_context_explanation: `I will still refer to this Direct Message as a "server". Meaning all "server" features work the same way, just privately here between us! Think of this Direct Message as a 1-on-1 server with me, therefore its server memories are my memories within here only.`,
 				already_setup_title: `Already Set Up`,
-				already_setup_description: `I am already set up for this server. To modify my configuration, please use other commands like \`/config humanizer\`, \`/config temperature\`, \`/teach attribute\`, etc.
+				already_setup_description: `I am already set up for this server. To modify my configuration, please use other commands like \`/config\`, \`/teach\`, etc.
 
-				If you wish to swap my provider, use the \`/config apikeyset\` command.`,
+				If you wish to swap my provider, use the \`/config apikey set\` command.`,
 			},
 			temperature: {
 				description: `Set the creativity/randomness of my responses (0.1-2.0).`,
@@ -1275,21 +1257,21 @@ Bot response: {{bot}}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				opted_out_description: `You have successfully opted out of personal memory storage.
 
 **What this means:**
-• I will not save any new personal memories about you
-• You cannot use \`/teach personalmemory\` while opted out
-• Existing personal memories remain in the database but won't be used
-• This setting applies across all servers where I'm present
-• Server-wide memories are not affected
+- I will not save any new personal memories about you
+- You cannot use \`/teach personalmemory\` while opted out
+- Existing personal memories remain in the database but won't be used
+- This setting applies across all servers where I'm present
+- Server-wide memories are not affected
 
 To opt back in and allow personal memories again, use \`/personal privacy\` and select "Opt In".`,
 				opted_in_title: `✅ Personalization Enabled`,
 				opted_in_description: `You have successfully opted into personal memory storage.
 
 **What this means:**
-• I can now save personal memories about you across servers
-• You can use \`/teach personalmemory\` to add your own memories
-• Any previously saved memories will be available again
-• I can learn new things about you through conversations
+- I can now save personal memories about you across servers
+- You can use \`/teach personalmemory\` to add your own memories
+- Any previously saved memories will be available again
+- I can learn new things about you through conversations
 
 To protect your privacy again, use \`/personal privacy\` and select "Opt Out".`,
 				already_opted_out_title: `Already Opted Out`,
@@ -1319,8 +1301,8 @@ To protect your privacy again, use \`/personal privacy\` and select "Opt Out".`,
 				invalid_length_title: `Invalid Nickname Length`,
 				invalid_length: `Nickname must be between {min} and {max} characters.`,
 				success_title: `Personal Nickname Updated`,
-				success_description: `Okay, I'll call you '{new_nickname}' from now on (previously '{old_nickname}').`,
-				success_but_disabled_description: `Okay, I'll remember to call you '{new_nickname}' (previously '{old_nickname}').
+				success_description: `I'll call you '{new_nickname}' from now on! (previously '{old_nickname}').`,
+				success_but_disabled_description: `I'll remember to call you '{new_nickname}'! (previously '{old_nickname}').
 
 **Warning:** Personalization is currently disabled on this server, so I won't use this nickname here. I'll still use it on other servers where personalization is enabled.`, // Natural line break
 			},
@@ -1331,14 +1313,14 @@ To protect your privacy again, use \`/personal privacy\` and select "Opt Out".`,
 			sampledialogue: {
 				description: `Add a sample user/bot dialogue pair to as an example for how I should respond.`,
 				teaching_disabled_title: `Sample Dialogue Teaching Disabled`,
-				teaching_disabled_description: `Members are not currently allowed to teach/forget sample dialogues on this server. A server member with \`Manage Server\` permissions can enable this using \`/config memberpermissions\`.`,
+				teaching_disabled_description: `Members are currently not allowed to teach/forget sample dialogues on this server. A server member with \`Manage Server\` permissions can enable this using \`/server memberpermissions\`.`,
 				modal_title: `Add Sample Dialogue`,
 				user_input_label: `User's Line`,
 				user_input_description: `A sample question for the bot. Use \`{user}\` instead as a placeholder for the user's name, if used.`,
 				user_input_placeholder: `What's your favorite food?`,
 				bot_input_label: `My Response`,
 				bot_input_description: `How the bot should respond. Use \`{bot}\` instead as a placeholder for the bot's name, if used.`,
-				bot_input_placeholder: `I-I like mangoes...`,
+				bot_input_placeholder: `I-I like mango floats...`,
 				limit_exceeded_title: `Sample Dialogue Limit Exceeded`,
 				limit_exceeded_description: `This server has reached its sample dialogue limit of {max_allowed} dialogues (currently has {current_count}). Please remove some sample dialogues with \`/forget sampledialogue\` before adding new ones.`,
 				success_title: `Sample Dialogue Added`,
@@ -1353,11 +1335,11 @@ To protect your privacy again, use \`/personal privacy\` and select "Opt Out".`,
 			attribute: {
 				description: `Add a personality attribute describing me for this server.`,
 				teaching_disabled_title: `Attribute Teaching Disabled`,
-				teaching_disabled_description: `Members are not currently allowed to teach/forget personality attributes on this server. A server member with \`Manage Server\` permissions can enable this using \`/config memberpermissions\`.`,
+				teaching_disabled_description: `Members are not currently allowed to teach/forget personality attributes on this server. A server member with \`Manage Server\` permissions can enable this using \`/server memberpermissions\`.`,
 				modal_title: `Add Personality Attribute`,
 				modal_description: `A personality trait that I have for this server. Use \`{bot}\` as a placeholder for my name`,
 				attribute_input_label: `New Attribute`,
-				attribute_input_placeholder: `{bot} ikes mangoes`,
+				attribute_input_placeholder: `{bot} likes mango floats`,
 				duplicate_title: `Duplicate Attribute`,
 				duplicate_description: `This attribute '{attribute}' is already in my attribute list.`,
 				limit_exceeded_title: `Attribute Limit Exceeded`,
@@ -1372,7 +1354,7 @@ To protect your privacy again, use \`/personal privacy\` and select "Opt Out".`,
 					modal_title: `Add Personal Memory`,
 					modal_description: `A memory of you that I remember no matter the server.`,
 					memory_input_label: `New Personal Memory`,
-					memory_input_placeholder: `{user} likes mangoes`,
+					memory_input_placeholder: `{user} likes mango floats`,
 					duplicate_title: `Duplicate Personal Memory`,
 					duplicate_description: `This memory '{memory}' is already in your personal memories.`,
 					limit_exceeded_title: `Personal Memory Limit Reached`,
@@ -1393,11 +1375,11 @@ To protect your privacy again, use \`/personal privacy\` and select "Opt Out".`,
 				server: {
 					description: `Add a server memory to my knowledge base.`,
 					teaching_disabled_title: `Server Memory Teaching Disabled`,
-					teaching_disabled_description: `Members are not currently allowed to add/remove server memories on this server. A server member with \`Manage Server\` permissions can enable this using \`/config memberpermissions\`.`,
+					teaching_disabled_description: `Members are not currently allowed to add/remove server memories on this server. A server member with \`Manage Server\` permissions can enable this using \`/server memberpermissions\`.`,
 					modal_title: `Add Server Memory`,
 					modal_description: `A memory that I remember for this server only.`,
 					memory_input_label: `New Server Memory`,
-					memory_input_placeholder: `This server's members like mangoes`,
+					memory_input_placeholder: `This server's members like mango floats`,
 					duplicate_title: `Duplicate Memory`,
 					duplicate_description: `This memory '{memory}' is already in my memories for this server.`,
 					limit_exceeded_title: `Server Memory Limit Reached`,
@@ -1482,13 +1464,13 @@ To protect your privacy again, use \`/personal privacy\` and select "Opt Out".`,
 			rejoin_title: `TomoriBot is Back!`,
 			rejoin_description: `Looks like I was re-added to this server. My previous settings and personality are still intact! You can manage me using the \`/config\`, \`/teach\`, and \`forget\` commands. You can also manage or delete your data anytime with \`/data\`.
 
-			If you wish to swap my provider, use the \`/config apikeyset\` command.
+			If you wish to swap my provider, use the \`/config apikey set\` command.
 
 			**IMPORTANT NOTICE:** I do not save any of your Discord messages. I only store Memories and relevant Settings, all of which you can freely delete and modify using my slash commands. However, the AI providers you choose to power me can have different privacy policies. If you or your server's members do not agree with your chosen provider's privacy policies, please refrain from using me. **Otherwise, just make sure to never share any personal information**.`,
 			setup_prompt_title: `TomoriBot Successfully Added`,
 			setup_prompt_description: `Thanks for adding me! To get started, someone with the **Manage Server** permission needs to run my \`/config setup\` command to choose my initial personality and configure my AI features. You can also manage or delete your data anytime with \`/data\`.
 
-			Use the \`/help apikey\` command if you are unsure on how to create an API key for your chosen AI provider. API keys will be kept encrypted but if you are still wary of giving it to a public Discord bot (as you normally should), feel free to run your own TomoriBot using the [repository's guide](https://github.com/Bredrumb/TomoriBot) instead.
+			Use the \`/help apikey\` command if you are unsure on how to create an API key for your chosen AI provider. API keys will be kept encrypted but if you are still wary of giving it to a public Discord bot, feel free to run your own TomoriBot using the [repository's guide](https://github.com/Bredrumb/TomoriBot) instead.
 
 			**IMPORTANT NOTICE:** I do not save any of your Discord messages. I only store Memories and relevant Settings, all of which you can freely delete and modify using my slash commands. However, the AI providers you choose to power me can have different privacy policies. If you or your server's members do not agree with your chosen provider's privacy policies, please refrain from using me. **Otherwise, just make sure to never share any personal information**.`,
 		},

@@ -15,30 +15,34 @@ export const configureSubcommand = (
 
 // Command logic with the UserRow parameter
 export async function execute(
-	client: Client,
+	_client: Client,
 	interaction: ChatInputCommandInteraction,
 	_userData: UserRow,
 	locale: string,
 ): Promise<void> {
-	// Use userData for locale preference
-	// Special case: defer needed for timing measurement, then use helper for response
+	// Defer reply for timing measurement
 	await interaction.deferReply();
 
 	const reply = await interaction.fetchReply();
 	const responseTime = reply.createdTimestamp - interaction.createdTimestamp;
-	const discordPing = client.ws.ping;
 
-	// Now use editReply directly since we already deferred - avoid helper conflict
+	// Determine if response is slow
 	const isLaggy = responseTime > 250;
+
 	const embed = new EmbedBuilder()
 		.setColor(isLaggy ? ColorCode.WARN : ColorCode.SUCCESS)
-		.setTitle(localizer(locale, "commands.tool.ping.description"))
-		.setDescription(localizer(locale, isLaggy
-			? "commands.tool.ping.response_slow"
-			: "commands.tool.ping.response_fast", {
-				response_time: responseTime,
-				discord_response: discordPing,
-			}));
+		.setTitle(localizer(locale, "commands.tool.ping.title"))
+		.setDescription(
+			localizer(
+				locale,
+				isLaggy
+					? "commands.tool.ping.response_slow"
+					: "commands.tool.ping.response_fast",
+				{
+					response_time: responseTime,
+				},
+			),
+		);
 
 	await interaction.editReply({ embeds: [embed] });
 }

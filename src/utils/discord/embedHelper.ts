@@ -91,6 +91,7 @@ export function createSummaryEmbed(
 ): EmbedBuilder {
 	const {
 		titleKey,
+		titleVars = {},
 		descriptionKey,
 		descriptionVars = {},
 		color = ColorCode.INFO,
@@ -103,7 +104,7 @@ export function createSummaryEmbed(
 
 	const embed = new EmbedBuilder()
 		.setColor(color)
-		.setTitle(localizer(locale, titleKey))
+		.setTitle(localizer(locale, titleKey, titleVars))
 		.setDescription(localizer(locale, descriptionKey, descriptionVars))
 		.addFields(
 			// 1. Map over the fields provided in options

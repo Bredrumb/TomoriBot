@@ -143,7 +143,10 @@ export async function convertMentions(
 						log.error(
 							`Error resolving nickname for user ${id} in convertMentions:`,
 							error,
-							{ serverId, metadata: { userIdToResolve: id } },
+							{
+							errorType: "MentionResolutionError",
+							metadata: { userIdToResolve: id, guildDiscordId: serverId },
+						},
 						);
 					}
 					log.warn(`Could not resolve user mention: ${match}`);
@@ -164,7 +167,10 @@ export async function convertMentions(
 						log.error(
 							`Error resolving channel mention ${id} in convertMentions:`,
 							error,
-							{ serverId, metadata: { channelIdToResolve: id } },
+							{
+							errorType: "MentionResolutionError",
+							metadata: { channelIdToResolve: id, guildDiscordId: serverId },
+						},
 						);
 					}
 					log.warn(`Could not resolve channel mention: ${match}`);
@@ -185,7 +191,10 @@ export async function convertMentions(
 						log.error(
 							`Error resolving role mention ${id} in convertMentions:`,
 							error,
-							{ serverId, metadata: { roleIdToResolve: id } },
+							{
+							errorType: "MentionResolutionError",
+							metadata: { roleIdToResolve: id, guildDiscordId: serverId },
+						},
 						);
 					}
 					log.warn(`Could not resolve role mention: ${match}`);
@@ -504,8 +513,8 @@ export async function buildContext({
 						`Error registering user ${userIdToProcess} during context building:`,
 						error,
 						{
-							serverId: guildId,
 							errorType: "UserRegistrationError",
+							metadata: { guildDiscordId: guildId },
 						},
 					);
 				}

@@ -9,6 +9,7 @@ export interface MemoryLimits {
 	maxServerMemories: number;
 	maxMemoryLength: number;
 	maxSampleDialogueLength: number; // Separate limit for sample dialogues (longer than regular memories)
+	maxAttributeLength: number; // Separate limit for attribute descriptions (detailed personality info)
 	maxTriggerWords: number;
 	maxSampleDialogues: number;
 	maxAttributes: number;
@@ -46,7 +47,7 @@ export function getMemoryLimits(): MemoryLimits {
 		10,
 	);
 	const maxServerMemories = Number.parseInt(
-		process.env.MAX_SERVER_MEMORIES || "50",
+		process.env.MAX_SERVER_MEMORIES || "30",
 		10,
 	);
 	const maxMemoryLength = Number.parseInt(
@@ -55,6 +56,10 @@ export function getMemoryLimits(): MemoryLimits {
 	);
 	const maxSampleDialogueLength = Number.parseInt(
 		process.env.MAX_SAMPLE_DIALOGUE_LENGTH || "2000",
+		10,
+	);
+	const maxAttributeLength = Number.parseInt(
+		process.env.MAX_ATTRIBUTE_LENGTH || "2000",
 		10,
 	);
 	const maxTriggerWords = Number.parseInt(
@@ -81,6 +86,7 @@ export function getMemoryLimits(): MemoryLimits {
 			maxServerMemories,
 			maxMemoryLength,
 			maxSampleDialogueLength,
+			maxAttributeLength,
 			maxTriggerWords,
 			maxSampleDialogues,
 			maxAttributes,
@@ -100,6 +106,7 @@ export function getMemoryLimits(): MemoryLimits {
 			maxServerMemories: 50,
 			maxMemoryLength,
 			maxSampleDialogueLength,
+			maxAttributeLength,
 			maxTriggerWords,
 			maxSampleDialogues,
 			maxAttributes,
@@ -119,6 +126,7 @@ export function getMemoryLimits(): MemoryLimits {
 			maxServerMemories,
 			maxMemoryLength: 500,
 			maxSampleDialogueLength,
+			maxAttributeLength,
 			maxTriggerWords,
 			maxSampleDialogues,
 			maxAttributes,
@@ -138,6 +146,27 @@ export function getMemoryLimits(): MemoryLimits {
 			maxServerMemories,
 			maxMemoryLength,
 			maxSampleDialogueLength: 2000,
+			maxAttributeLength,
+			maxTriggerWords,
+			maxSampleDialogues,
+			maxAttributes,
+		};
+	}
+
+	if (
+		!Number.isInteger(maxAttributeLength) ||
+		maxAttributeLength <= 0 ||
+		maxAttributeLength > 5000
+	) {
+		log.warn(
+			`Invalid MAX_ATTRIBUTE_LENGTH value: ${process.env.MAX_ATTRIBUTE_LENGTH}. Using default: 2000`,
+		);
+		return {
+			maxPersonalMemories,
+			maxServerMemories,
+			maxMemoryLength,
+			maxSampleDialogueLength,
+			maxAttributeLength: 2000,
 			maxTriggerWords,
 			maxSampleDialogues,
 			maxAttributes,
@@ -157,6 +186,7 @@ export function getMemoryLimits(): MemoryLimits {
 			maxServerMemories,
 			maxMemoryLength,
 			maxSampleDialogueLength,
+			maxAttributeLength,
 			maxTriggerWords: 10,
 			maxSampleDialogues,
 			maxAttributes,
@@ -176,6 +206,7 @@ export function getMemoryLimits(): MemoryLimits {
 			maxServerMemories,
 			maxMemoryLength,
 			maxSampleDialogueLength,
+			maxAttributeLength,
 			maxTriggerWords,
 			maxSampleDialogues: 10,
 			maxAttributes,
@@ -195,6 +226,7 @@ export function getMemoryLimits(): MemoryLimits {
 			maxServerMemories,
 			maxMemoryLength,
 			maxSampleDialogueLength,
+			maxAttributeLength,
 			maxTriggerWords,
 			maxSampleDialogues,
 			maxAttributes: 10,
@@ -206,6 +238,7 @@ export function getMemoryLimits(): MemoryLimits {
 		maxServerMemories,
 		maxMemoryLength,
 		maxSampleDialogueLength,
+		maxAttributeLength,
 		maxTriggerWords,
 		maxSampleDialogues,
 		maxAttributes,
@@ -241,17 +274,43 @@ export function validateMemoryContent(content: string): MemoryValidationResult {
 }
 
 /**
- * Validate attribute and sample dialogue content length
- * Both attributes and sample dialogues use a higher limit (default 2000) than regular memories (default 256)
- * This is because:
- * - Attributes contain detailed 2-3 paragraph personality descriptions
- * - Sample dialogues need more context for meaningful conversations
- * @param content - The attribute or sample dialogue content to validate
+ * Validate attribute content length
+ * Attributes use a higher limit (default 2000) than regular memories (default 256)
+ * This is because attributes contain detailed 2-3 paragraph personality descriptions
+ * @param content - The attribute content to validate
  * @returns MemoryValidationResult indicating if content length is valid
  */
-export function validateAttributeAndDialogue(
-	content: string,
-): MemoryValidationResult {
+export function validateAttribute(content: string): MemoryValidationResult {
+	const limits = getMemoryLimits();
+
+	// Check if content is empty or just whitespace
+	if (!content || !content.trim()) {
+		return {
+			isValid: false,
+			error: "CONTENT_EMPTY",
+		};
+	}
+
+	// Check if content exceeds maximum length for attributes
+	if (content.length > limits.maxAttributeLength) {
+		return {
+			isValid: false,
+			error: "CONTENT_TOO_LONG",
+			maxAllowed: limits.maxAttributeLength,
+		};
+	}
+
+	return { isValid: true };
+}
+
+/**
+ * Validate sample dialogue content length
+ * Sample dialogues use a higher limit (default 2000) than regular memories (default 256)
+ * This is because sample dialogues need more context for meaningful conversations
+ * @param content - The sample dialogue content to validate
+ * @returns MemoryValidationResult indicating if content length is valid
+ */
+export function validateSampleDialogue(content: string): MemoryValidationResult {
 	const limits = getMemoryLimits();
 
 	// Check if content is empty or just whitespace
@@ -272,6 +331,21 @@ export function validateAttributeAndDialogue(
 	}
 
 	return { isValid: true };
+}
+
+/**
+ * @deprecated Use validateAttribute() or validateSampleDialogue() instead for clearer intent
+ * Validate attribute and sample dialogue content length
+ * Both attributes and sample dialogues use a higher limit (default 2000) than regular memories (default 256)
+ * @param content - The attribute or sample dialogue content to validate
+ * @returns MemoryValidationResult indicating if content length is valid
+ */
+export function validateAttributeAndDialogue(
+	content: string,
+): MemoryValidationResult {
+	// Delegates to validateSampleDialogue for backward compatibility
+	// (uses the same limit as before)
+	return validateSampleDialogue(content);
 }
 
 /**

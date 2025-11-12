@@ -44,10 +44,16 @@ export const configureSubcommand = (
 					localizer("en-US", "commands.data.delete.confirmation_description"),
 				)
 				.setRequired(true)
-				.addChoices({
-					name: localizer("en-US", "commands.data.delete.confirmation_yes"),
-					value: "yes",
-				}),
+				.addChoices(
+					{
+						name: localizer("en-US", "commands.data.delete.confirmation_yes"),
+						value: "yes",
+					},
+					{
+						name: localizer("en-US", "commands.data.delete.confirmation_no"),
+						value: "no",
+					},
+				),
 		);
 
 /**
@@ -183,13 +189,12 @@ export async function execute(
 		// 6. Handle unexpected errors
 		const context: ErrorContext = {
 			userId: userData.user_id,
-			serverId: interaction.guild?.id,
 			errorType: "CommandExecutionError",
 			metadata: {
 				command: "data delete",
 				deleteType,
 				userDiscordId: interaction.user.id,
-				guildId: interaction.guild?.id,
+				guildDiscordId: interaction.guild?.id,
 			},
 		};
 

@@ -662,8 +662,6 @@ export default async function tomoriChat(
 				// 1. Add new type to union: 'memory_learning' | 'reset' | 'reminder_set' | 'new_type' | null
 				// 2. Add new localizer checks inside the locale loop:
 				// const newTypeTitles = [
-				//     localizer(supportedLocale, "commands.some_feature.title"),
-				//     localizer(supportedLocale, "genai.some_other.title"),
 				// ];
 				// if (newTypeTitles.some(title => embedTitle === title)) {
 				//     return { isTarget: true, type: 'new_type' };

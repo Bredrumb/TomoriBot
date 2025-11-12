@@ -1,5 +1,6 @@
 import { HumanizerDegree } from "@/types/db/schema";
 import { log } from "../misc/logger";
+import { localizer } from "./localizer";
 /**
  * Creates a regex pattern for splitting sentences while preserving common abbreviations.
  *
@@ -1631,6 +1632,19 @@ export function humanizeString(text: string): string {
  */
 export function formatBoolean(value: boolean): string {
 	return value ? "`Enabled`" : "`Disabled`";
+}
+
+/**
+ * Formats a boolean value into a localized user-friendly string ("Enabled" or "Disabled").
+ * Uses locale keys from commands.choices.enabled and commands.choices.disabled.
+ * @param value - The boolean value to format.
+ * @param locale - The user's locale for localization.
+ * @returns Localized "Enabled" if true, "Disabled" if false, wrapped in backticks.
+ */
+export function formatBooleanLocalized(value: boolean, locale: string): string {
+	return value
+		? `\`${localizer(locale, "commands.choices.enabled")}\``
+		: `\`${localizer(locale, "commands.choices.disabled")}\``;
 }
 
 /**

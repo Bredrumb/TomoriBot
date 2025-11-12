@@ -1,11 +1,10 @@
 import type { Client } from "discord.js";
-import { chatInputApplicationCommandMention } from "discord.js";
 import { log } from "@/utils/misc/logger";
 
 /**
- * Registry for caching Discord command IDs and generating command mentions.
- * This allows us to create clickable command references like </help setup:123456>
- * without hardcoding command IDs.
+ * Registry for caching Discord command IDs and generating command references.
+ * Provides plain text command references (e.g., `/help setup`) that work reliably
+ * in all contexts, including embed footers where Discord mentions often fail.
  */
 class CommandRegistry {
 	/** Map of command names to their IDs (format: "commandName" or "commandName:subcommand") */
@@ -72,16 +71,21 @@ class CommandRegistry {
 	}
 
 	/**
-	 * Get a Discord command mention string that renders as a clickable command reference.
+	 * Get a plain text command reference that works reliably in all contexts.
+	 * Returns the command formatted as inline code (e.g., `/help setup`).
+	 * This approach is more reliable than Discord mentions, which:
+	 * - Don't render properly in embed footers
+	 * - Break when commands are re-registered
+	 * - May not work for users who haven't cached command IDs
 	 * @param commandName - The base command name (e.g., "help")
 	 * @param subcommand - Optional subcommand name (e.g., "setup")
 	 * @param subcommandGroup - Optional subcommand group name (e.g., "memory" for "/teach memory personal")
-	 * @returns A command mention string like "</help setup:123456>" or plain text if ID not found
+	 * @returns A plain text command reference like "`/help setup`"
 	 * @example
-	 * // Returns: "</help setup:123456>"
+	 * // Returns: "`/help setup`"
 	 * getCommandMention("help", "setup");
 	 *
-	 * // Returns: "</teach memory:789012>"
+	 * // Returns: "`/teach memory personal`"
 	 * getCommandMention("teach", "memory", "personal");
 	 */
 	getCommandMention(
@@ -89,35 +93,22 @@ class CommandRegistry {
 		subcommand?: string,
 		subcommandGroup?: string,
 	): string {
-		// Build the lookup key based on parameters
-		let lookupKey: string;
-		let mentionName: string;
+		// Build the command string based on parameters
+		let commandString: string;
 
 		if (subcommandGroup && subcommand) {
-			// Format: "command:group:subcommand"
-			lookupKey = `${commandName}:${subcommandGroup}:${subcommand}`;
-			mentionName = `${commandName} ${subcommandGroup} ${subcommand}`;
+			// Format: "/command group subcommand"
+			commandString = `/${commandName} ${subcommandGroup} ${subcommand}`;
 		} else if (subcommand) {
-			// Format: "command:subcommand"
-			lookupKey = `${commandName}:${subcommand}`;
-			mentionName = `${commandName} ${subcommand}`;
+			// Format: "/command subcommand"
+			commandString = `/${commandName} ${subcommand}`;
 		} else {
-			// Format: "command"
-			lookupKey = commandName;
-			mentionName = commandName;
+			// Format: "/command"
+			commandString = `/${commandName}`;
 		}
 
-		// Get command ID from registry
-		const commandId = this.commandIds.get(lookupKey);
-
-		if (!commandId) {
-			// Fallback to plain text if command not found
-			log.warn(`Command ID not found in registry: ${lookupKey}`);
-			return `\`/${mentionName}\``;
-		}
-
-		// Use Discord.js helper to create the mention
-		return chatInputApplicationCommandMention(mentionName, commandId);
+		// Return as inline code for clear formatting
+		return `\`${commandString}\``;
 	}
 
 	/**

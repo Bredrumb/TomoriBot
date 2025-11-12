@@ -20,7 +20,7 @@ export const configureSubcommand = (
 ) =>
 	subcommand
 		.setName("data")
-		.setDescription(localizer("en-US", "commands.help.data.command_description"));
+		.setDescription(localizer("en-US", "commands.help.data.description"));
 
 /**
  * Execute the /help data command
@@ -102,9 +102,11 @@ export async function execute(
 		// Log error with context
 		const context: ErrorContext = {
 			userId: userData.user_id,
-			serverId: interaction.guild?.id,
 			errorType: "CommandExecutionError",
-			metadata: { commandName: "/help data" },
+			metadata: {
+				commandName: "/help data",
+				guildDiscordId: interaction.guild?.id,
+			},
 		};
 		await log.error("Error executing /help data command", error as Error, context);
 

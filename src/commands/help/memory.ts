@@ -20,7 +20,7 @@ export const configureSubcommand = (
 ) =>
 	subcommand
 		.setName("memory")
-		.setDescription(localizer("en-US", "commands.help.memory.command_description"));
+		.setDescription(localizer("en-US", "commands.help.memory.description"));
 
 /**
  * Execute the /help memory command
@@ -121,9 +121,11 @@ export async function execute(
 		// Log error with context
 		const context: ErrorContext = {
 			userId: userData.user_id,
-			serverId: interaction.guild?.id,
 			errorType: "CommandExecutionError",
-			metadata: { commandName: "/help memory" },
+			metadata: {
+				commandName: "/help memory",
+				guildDiscordId: interaction.guild?.id,
+			},
 		};
 		await log.error("Error executing /help memory command", error as Error, context);
 

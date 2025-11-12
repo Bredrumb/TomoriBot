@@ -21,7 +21,7 @@ export const configureSubcommand = (
 	subcommand
 		.setName("features")
 		.setDescription(
-			localizer("en-US", "commands.help.features.command_description"),
+			localizer("en-US", "commands.help.features.description"),
 		);
 
 /**
@@ -86,9 +86,11 @@ export async function execute(
 		// Log error with context
 		const context: ErrorContext = {
 			userId: userData.user_id,
-			serverId: interaction.guild?.id,
 			errorType: "CommandExecutionError",
-			metadata: { commandName: "/help features" },
+			metadata: {
+				commandName: "/help features",
+				guildDiscordId: interaction.guild?.id,
+			},
 		};
 		await log.error(
 			"Error executing /help features command",

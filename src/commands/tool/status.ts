@@ -10,9 +10,14 @@ import {
 } from "../../utils/discord/interactionHelper";
 import { ColorCode, log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
-import { loadTomoriState, getUserReminderCount } from "../../utils/db/dbRead";
+import {
+	loadTomoriState,
+	getUserReminderCount,
+	getBraveApiKeyStatus,
+	getBlacklistedMemberIds,
+} from "../../utils/db/dbRead";
 import type { UserRow } from "../../types/db/schema";
-import { formatBoolean } from "@/utils/text/stringHelper";
+import { formatBooleanLocalized } from "@/utils/text/stringHelper";
 import { getMemoryLimits } from "@/utils/db/memoryLimits";
 
 // Constants
@@ -32,7 +37,7 @@ const ATTRIBUTE_TRUNCATE_LENGTH = 200; // Max length for attribute snippets
 function formatMemoriesForDisplay(memories: string[], locale: string): string {
 	// 1. Handle empty memories
 	if (memories.length === 0) {
-		return localizer(locale, "commands.tool.status.none");
+		return localizer(locale, "commands.choices.none");
 	}
 
 	// 2. Limit to first MAX_MEMORIES_DISPLAY memories
@@ -157,6 +162,11 @@ export async function execute(
 						inline: true,
 					},
 					{
+						name: localizer(locale, "commands.tool.status.field_privacy"),
+						value: formatBooleanLocalized(userData.privacy_opt_out, locale),
+						inline: true,
+					},
+					{
 						name: localizer(
 							locale,
 							"commands.tool.status.field_reminders_count",
@@ -194,7 +204,57 @@ export async function execute(
 				const config = tomoriState.config;
 				const llm = tomoriState.llm;
 
-				// 3. Format Auto-Chat Channels
+				// 3. Get Brave API key status
+				const braveApiKeySet = await getBraveApiKeyStatus(tomoriState.server_id);
+
+				// 4. Get blacklisted members
+				const blacklistedMemberIds = await getBlacklistedMemberIds(
+					tomoriState.server_id,
+				);
+
+				// 5. Format timezone offset (UTC+08:00 or UTC-05:00 format)
+				const timezoneOffset = config.timezone_offset;
+				const timezoneSign = timezoneOffset >= 0 ? "+" : "-";
+				const timezoneHours = Math.abs(timezoneOffset)
+					.toString()
+					.padStart(2, "0");
+				const timezoneValue = `UTC${timezoneSign}${timezoneHours}:00`;
+
+				// 6. Format blacklisted members for display
+				const blacklistedCount = blacklistedMemberIds.length;
+				let blacklistedMembersValue: string;
+				let blacklistedMembersFieldName: string;
+
+				if (blacklistedCount === 0) {
+					// No blacklisted members
+					blacklistedMembersValue = localizer(locale, "commands.choices.none");
+					blacklistedMembersFieldName = localizer(
+						locale,
+						"commands.tool.status.field_blacklisted_members",
+					);
+				} else if (blacklistedCount <= MAX_ITEMS_DISPLAY) {
+					// Show user mentions
+					blacklistedMembersValue = blacklistedMemberIds
+						.map((id) => `<@${id}>`)
+						.join(", ");
+					blacklistedMembersFieldName = localizer(
+						locale,
+						"commands.tool.status.field_blacklisted_members",
+					);
+				} else {
+					// Show count only - simple field name, count in value
+					blacklistedMembersFieldName = localizer(
+						locale,
+						"commands.tool.status.field_blacklisted_members",
+					);
+					blacklistedMembersValue = localizer(
+						locale,
+						"commands.tool.status.field_blacklisted_members_with_count",
+						{ current: blacklistedCount },
+					);
+				}
+
+				// 7. Format Auto-Chat Channels
 				const autoChannelMentions = await Promise.all(
 					config.autoch_disc_ids.map(async (id) => {
 						try {
@@ -212,14 +272,14 @@ export async function execute(
 							: localizer(locale, "commands.tool.status.item_count", {
 									count: autoChannelMentions.length,
 								})
-						: localizer(locale, "commands.tool.status.none");
+						: localizer(locale, "commands.choices.none");
 
 				// 4. Format Trigger Words with slot usage - always show all trigger words
 				const triggerWordsCount = config.trigger_words.length;
 				const triggerWordsValue =
 					triggerWordsCount > 0
 						? config.trigger_words.map((w) => `\`${w}\``).join(", ")
-						: localizer(locale, "commands.tool.status.none");
+						: localizer(locale, "commands.choices.none");
 				const triggerWordsFieldName = localizer(
 					locale,
 					"commands.tool.status.field_trigger_words_with_count",
@@ -231,32 +291,46 @@ export async function execute(
 
 				// 5. Format Attributes with slot usage
 				const attributesCount = tomoriState.attribute_list.length;
-				const attributesValue =
-					attributesCount > 0
-						? attributesCount <= MAX_ATTRIBUTES_DISPLAY
-							? tomoriState.attribute_list
-									.slice(0, MAX_ATTRIBUTES_DISPLAY)
-									.map((attr) => {
-										// Truncate long attributes to prevent exceeding Discord's field limit
-										const truncated =
-											attr.length > ATTRIBUTE_TRUNCATE_LENGTH
-												? `${attr.substring(0, ATTRIBUTE_TRUNCATE_LENGTH)}...`
-												: attr;
-										return `• ${truncated}`;
-									})
-									.join("\n")
-							: localizer(locale, "commands.tool.status.item_count", {
-									count: attributesCount,
-								})
-						: localizer(locale, "commands.tool.status.none");
-				const attributesFieldName = localizer(
-					locale,
-					"commands.tool.status.field_attributes_with_count",
-					{
-						current: attributesCount,
-						max: limits.maxAttributes,
-					},
-				);
+				let attributesValue: string;
+				let attributesFieldName: string;
+
+				if (attributesCount === 0) {
+					// No attributes - simple field name, "None" value
+					attributesFieldName = localizer(locale, "commands.tool.status.field_attributes");
+					attributesValue = localizer(locale, "commands.choices.none");
+				} else if (attributesCount <= MAX_ATTRIBUTES_DISPLAY) {
+					// Show attribute snippets - include slot count in field name
+					attributesFieldName = localizer(
+						locale,
+						"commands.tool.status.field_attributes_with_count",
+						{
+							current: attributesCount,
+							max: limits.maxAttributes,
+						},
+					);
+					attributesValue = tomoriState.attribute_list
+						.slice(0, MAX_ATTRIBUTES_DISPLAY)
+						.map((attr) => {
+							// Truncate long attributes to prevent exceeding Discord's field limit
+							const truncated =
+								attr.length > ATTRIBUTE_TRUNCATE_LENGTH
+									? `${attr.substring(0, ATTRIBUTE_TRUNCATE_LENGTH)}...`
+									: attr;
+							return `• ${truncated}`;
+						})
+						.join("\n");
+				} else {
+					// Show count only - simple field name, slot count in value
+					attributesFieldName = localizer(locale, "commands.tool.status.field_attributes");
+					attributesValue = localizer(
+						locale,
+						"commands.tool.status.field_slot_usage",
+						{
+							current: attributesCount,
+							max: limits.maxAttributes,
+						},
+					);
+				}
 
 				// 6. Format Server Memories with slot usage
 				const serverMemoriesCount = tomoriState.server_memories.length;
@@ -277,7 +351,11 @@ export async function execute(
 				const dialogueCount = tomoriState.sample_dialogues_in.length;
 				const dialogueFieldName = localizer(
 					locale,
-					"commands.tool.status.field_dialogue_count_with_count",
+					"commands.tool.status.field_dialogue_count",
+				);
+				const dialogueValue = localizer(
+					locale,
+					"commands.tool.status.field_slot_usage",
 					{
 						current: dialogueCount,
 						max: limits.maxSampleDialogues,
@@ -303,6 +381,11 @@ export async function execute(
 						inline: true,
 					},
 					{
+						name: localizer(locale, "commands.tool.status.field_timezone"),
+						value: timezoneValue,
+						inline: true,
+					},
+					{
 						name: localizer(
 							locale,
 							"commands.tool.status.field_autoch_threshold",
@@ -310,7 +393,7 @@ export async function execute(
 						value:
 							config.autoch_threshold > 0
 								? String(config.autoch_threshold)
-								: localizer(locale, "commands.tool.status.disabled"),
+								: localizer(locale, "commands.choices.disabled"),
 						inline: true,
 					},
 					{
@@ -331,32 +414,42 @@ export async function execute(
 							locale,
 							"commands.tool.status.field_personalization",
 						),
-						value: formatBoolean(config.personal_memories_enabled),
+						value: formatBooleanLocalized(config.personal_memories_enabled, locale),
 						inline: true,
 					},
 					{
+						name: blacklistedMembersFieldName,
+						value: blacklistedMembersValue,
+						inline: blacklistedCount <= MAX_ITEMS_DISPLAY,
+					},
+					{
 						name: localizer(locale, "commands.tool.status.field_self_teach"),
-						value: formatBoolean(config.self_teaching_enabled),
+						value: formatBooleanLocalized(config.self_teaching_enabled, locale),
 						inline: true,
 					},
 					{
 						name: localizer(locale, "commands.tool.status.field_api_key_set"),
-						value: formatBoolean(!!config.api_key),
+						value: formatBooleanLocalized(!!config.api_key, locale),
+						inline: true,
+					},
+					{
+						name: localizer(locale, "commands.tool.status.field_brave_api_key_set"),
+						value: formatBooleanLocalized(braveApiKeySet, locale),
 						inline: true,
 					},
 					{
 						name: localizer(locale, "commands.tool.status.field_emoji_usage"),
-						value: formatBoolean(config.emoji_usage_enabled),
+						value: formatBooleanLocalized(config.emoji_usage_enabled, locale),
 						inline: true,
 					},
 					{
 						name: localizer(locale, "commands.tool.status.field_sticker_usage"),
-						value: formatBoolean(config.sticker_usage_enabled),
+						value: formatBooleanLocalized(config.sticker_usage_enabled, locale),
 						inline: true,
 					},
 					{
 						name: localizer(locale, "commands.tool.status.field_web_search"),
-						value: formatBoolean(config.web_search_enabled),
+						value: formatBooleanLocalized(config.web_search_enabled, locale),
 						inline: true,
 					},
 					{
@@ -364,7 +457,7 @@ export async function execute(
 							locale,
 							"commands.tool.status.field_server_memteaching",
 						),
-						value: formatBoolean(config.server_memteaching_enabled),
+						value: formatBooleanLocalized(config.server_memteaching_enabled, locale),
 						inline: true,
 					},
 					{
@@ -372,7 +465,7 @@ export async function execute(
 							locale,
 							"commands.tool.status.field_attribute_memteaching",
 						),
-						value: formatBoolean(config.attribute_memteaching_enabled),
+						value: formatBooleanLocalized(config.attribute_memteaching_enabled, locale),
 						inline: true,
 					},
 					{
@@ -380,7 +473,7 @@ export async function execute(
 							locale,
 							"commands.tool.status.field_sampledialogue_memteaching",
 						),
-						value: formatBoolean(config.sampledialogue_memteaching_enabled),
+						value: formatBooleanLocalized(config.sampledialogue_memteaching_enabled, locale),
 						inline: true,
 					},
 					// Personality Section
@@ -391,7 +484,7 @@ export async function execute(
 					},
 					{
 						name: dialogueFieldName,
-						value: String(dialogueCount),
+						value: dialogueValue,
 						inline: true,
 					},
 					{
@@ -432,9 +525,12 @@ export async function execute(
 		});
 	} catch (error) {
 		log.error(`Error executing status command for type ${statusType}:`, error, {
-			serverId: serverDiscId,
 			errorType: "CommandExecutionError",
-			metadata: { commandName: "status", type: statusType },
+			metadata: {
+				commandName: "status",
+				type: statusType,
+				guildDiscordId: serverDiscId,
+			},
 		});
 		await replyInfoEmbed(interaction, locale, {
 			titleKey: "general.errors.unknown_error_title",

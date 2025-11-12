@@ -1,7 +1,6 @@
 import type { SlashCommandSubcommandBuilder } from "discord.js";
 import type { ChatInputCommandInteraction, Client } from "discord.js";
-import { MessageFlags } from "discord.js";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { AttachmentBuilder, EmbedBuilder, MessageFlags } from "discord.js";
 import { ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { UserRow } from "@/types/db/schema";
@@ -31,14 +30,24 @@ export async function execute(
 	_userData: UserRow,
 	locale: string,
 ): Promise<void> {
-	await replyInfoEmbed(
-		interaction,
-		locale,
-		{
-			titleKey: "commands.donate.kofi.title",
-			descriptionKey: "commands.donate.kofi.description_text",
-			color: ColorCode.INFO,
-		},
-		MessageFlags.SuppressNotifications,
-	);
+	// 1. Load kofibanner.png image as attachment
+	const bannerFile = Bun.file("img/kofibanner.png");
+	const bannerBuffer = await bannerFile.arrayBuffer();
+	const attachment = new AttachmentBuilder(Buffer.from(bannerBuffer), {
+		name: "kofibanner.png",
+	});
+
+	// 2. Create embed with image attachment
+	const embed = new EmbedBuilder()
+		.setTitle(localizer(locale, "commands.donate.kofi.title"))
+		.setDescription(localizer(locale, "commands.donate.kofi.description_text"))
+		.setColor(ColorCode.INFO)
+		.setImage("attachment://kofibanner.png");
+
+	// 3. Reply with embed and attachment (suppress notifications)
+	await interaction.reply({
+		embeds: [embed],
+		files: [attachment],
+		flags: MessageFlags.SuppressNotifications,
+	});
 }

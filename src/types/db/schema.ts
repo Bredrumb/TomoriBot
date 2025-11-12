@@ -13,6 +13,7 @@ export const userSchema = z.object({
 	user_disc_id: z.string(),
 	user_nickname: z.string(),
 	language_pref: z.string().default("en-US"),
+	privacy_opt_out: z.boolean().default(false),
 	personal_memories: z.array(z.string()).default([]),
 	created_at: z.date().optional(),
 	updated_at: z.date().optional(),
@@ -167,7 +168,7 @@ export type ErrorLogRow = z.infer<typeof errorLogSchema>;
 export interface ErrorContext {
 	tomoriId?: number | null;
 	userId?: number | null;
-	serverId?: number | string | null;
+	serverId?: number | null; // Database ID only - use metadata for Discord snowflakes
 	errorType?: string;
 	metadata?: Record<string, unknown> | null;
 }

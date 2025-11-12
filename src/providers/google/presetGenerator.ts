@@ -211,7 +211,12 @@ export async function searchCharacterInfo(
 	// 1. Validate API key
 	if (!apiKey || apiKey.trim().length < 10) {
 		return {
-			error: createGoogleErrorMessage("API_KEY", 403, "Invalid API key", locale),
+			error: createGoogleErrorMessage(
+				"API_KEY",
+				403,
+				"Invalid API key",
+				locale,
+			),
 			errorType: "API_KEY",
 		};
 	}
@@ -430,7 +435,12 @@ IMPORTANT: In any dialogue examples, use "{user}" as a placeholder when referrin
 		}
 
 		return {
-			error: createGoogleErrorMessage("UNKNOWN", undefined, errorMessage, locale),
+			error: createGoogleErrorMessage(
+				"UNKNOWN",
+				undefined,
+				errorMessage,
+				locale,
+			),
 			errorType: "UNKNOWN",
 		};
 	}
@@ -450,7 +460,7 @@ export function sanitizeSampleDialogueText(dialogue: string): string {
 	const cleaned = dialogue
 		.replace(/^{{char}}:\s*/i, "") // Remove {{char}}: prefix
 		.replace(/^{{character}}:\s*/i, "") // Remove {{character}}: prefix
-		.replace(/^{{user}}:\s*/i, "") // Remove {{user}}: prefix
+		.replace(/^{user}:\s*/i, "") // Remove {user}: prefix
 		.replace(/^User:\s*/i, "") // Remove User: prefix
 		.replace(/^Character:\s*/i, "") // Remove Character: prefix
 		.replace(/^[^:]+:\s*/, ""); // Remove any "Name:" style prefix
@@ -474,7 +484,12 @@ export async function generatePresetFromPrompt(
 	// 1. Validate API key
 	if (!apiKey || apiKey.trim().length < 10) {
 		return {
-			error: createGoogleErrorMessage("API_KEY", 403, "Invalid API key", locale),
+			error: createGoogleErrorMessage(
+				"API_KEY",
+				403,
+				"Invalid API key",
+				locale,
+			),
 			errorType: "API_KEY",
 		};
 	}
@@ -912,7 +927,12 @@ Use the web search information to accurately represent the character's personali
 		}
 
 		return {
-			error: createGoogleErrorMessage("UNKNOWN", undefined, errorMessage, locale),
+			error: createGoogleErrorMessage(
+				"UNKNOWN",
+				undefined,
+				errorMessage,
+				locale,
+			),
 			errorType: "UNKNOWN",
 		};
 	}

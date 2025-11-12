@@ -1100,3 +1100,55 @@ export async function getPendingRemindersForUser(
 		return null;
 	}
 }
+
+/**
+ * Checks if a Brave Search API key is set for the server.
+ * @param serverId - The internal server ID (from servers table)
+ * @returns True if Brave API key exists, false otherwise
+ */
+export async function getBraveApiKeyStatus(serverId: number): Promise<boolean> {
+	try {
+		// 1. Query opt_api_keys table for Brave Search API key
+		const result = await sql`
+			SELECT api_key FROM opt_api_keys
+			WHERE server_id = ${serverId}
+			AND service_name = 'brave-search'
+			LIMIT 1
+		`;
+
+		// 2. Return true if key exists (even if encrypted), false otherwise
+		return result && result.length > 0;
+	} catch (error) {
+		log.error(`Error checking Brave API key status for server ${serverId}:`, error);
+		return false;
+	}
+}
+
+/**
+ * Gets the list of blacklisted member Discord IDs for a server.
+ * @param serverId - The internal server ID (from servers table)
+ * @returns Array of Discord user IDs, or empty array if none or error
+ */
+export async function getBlacklistedMemberIds(serverId: number): Promise<string[]> {
+	try {
+		// 1. Query personalization_blacklist table for blacklisted members
+		const result = await sql`
+			SELECT user_disc_id FROM personalization_blacklist
+			WHERE server_id = ${serverId}
+			ORDER BY user_disc_id ASC
+		`;
+
+		// 2. Extract user_disc_id values from result
+		if (!result || result.length === 0) {
+			return [];
+		}
+
+		// 3. Map to array of Discord IDs
+		const memberIds = result.map((row: unknown) => (row as { user_disc_id: string }).user_disc_id);
+		log.info(`Found ${memberIds.length} blacklisted members for server ${serverId}`);
+		return memberIds;
+	} catch (error) {
+		log.error(`Error loading blacklisted members for server ${serverId}:`, error);
+		return [];
+	}
+}

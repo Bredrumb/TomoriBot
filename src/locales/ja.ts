@@ -45,15 +45,13 @@ export default {
 			channel_only_description: `このコマンドは正常に動作するためにチャンネルが必要です。`,
 			channel_not_supported_title: `サポートされていないチャンネルタイプ`,
 			channel_not_supported_description: `申し訳ありませんが、サーバーのテキストチャンネルまたはダイレクトメッセージでのみ動作します。グループDMやその他のチャンネルタイプはサポートされていません。`,
-			dm_not_supported_title: `DMはサポートされていません`,
-			dm_not_supported_description: `申し訳ありませんが、ダイレクトメッセージではなく、サーバーチャンネル内でのみチャットできます。これは将来変更されるかもしれませんが、今のところサーバーでのみ動作します！`,
 			tomori_not_setup_title: `初期設定が必要です`,
 			tomori_not_setup_description: `このサーバーではまだ私の設定が行われていないようです。\`サーバー管理\`権限を持つメンバーが最初に\`/config setup\`を使用する必要があります。`,
-			tomori_not_setup_dm_footer: `注：DMは「ミニサーバー」として扱われ、私はあなたのメッセージに個人的に応答します。すべてのサーバー関連コマンドは意図通りに動作し、DM内では\`サーバー管理\`権限は必要ありません。`,
+			tomori_not_setup_dm_footer: `DMは「ミニサーバー」として扱われ、私はあなたのメッセージに個人的に応答します。ほとんどのサーバー関連コマンドは意図通りに動作します。`,
 			api_key_missing_title: `APIキーがありません`,
-			api_key_missing_description: `機能するにはAPIキーが必要ですが、このサーバーには設定されていません。\`サーバー管理\`権限を持つメンバーが\`/config apikeyset\`を使用して設定できます。`,
+			api_key_missing_description: `機能するにはAPIキーが必要ですが、このサーバーには設定されていません。\`サーバー管理\`権限を持つメンバーが\`/config apikey set\`を使用して設定できます。`,
 			api_key_error_title: `APIキーエラー`,
-			api_key_error_description: `設定されたAPIキーへのアクセスまたは復号化で問題が発生しました。\`/config apikeyset\`を使用して正しく設定されているか確認してください。`,
+			api_key_error_description: `設定されたAPIキーへのアクセスまたは復号化で問題が発生しました。\`/config apikey set\`を使用して正しく設定されているか確認してください。`,
 			context_error_title: `コンテキスト構築エラー`,
 			context_error_description: `会話のコンテキストを理解しようとしているときにエラーが発生しました。`,
 			critical_error_title: `重大なエラー`,
@@ -61,7 +59,7 @@ export default {
 			update_failed_title: `更新に失敗しました`,
 			update_failed_description: `データベースの設定の更新に失敗しました。もう一度お試しください。`,
 			unknown_error_title: `不明なエラー`,
-			unknown_error_description: `予期しないエラーが発生しました。`,
+			unknown_error_description: `予期しないエラーが発生しました。問題が解決しない場合は、\`/support discord\`で報告してください。`,
 			unexpected_title: `予期しないエラー`,
 			unexpected_description: `予期しないエラーが発生しました：{error}`,
 			invalid_option_title: `無効なオプション`,
@@ -69,14 +67,14 @@ export default {
 			brave_api: {
 				missing_key: {
 					title: `Brave APIキーがありません`,
-					description: `検索を実行するにはBrave Search APIキーが必要ですが、このサーバーには設定されていません。\`サーバー管理\`権限を持つメンバーが\`/config braveapiset\`で設定するか、\`/config permissions\`で無効にすることができます。`,
-					footer: `無料のAPIキーを https://brave.com/search/api/ で取得できます`,
+					description: `検索を実行するにはBrave Search APIキーが必要ですが、このサーバーには設定されていません。\`サーバー管理\`権限を持つメンバーが\`/config braveapi set\`を使用して設定できます。`,
+					footer: `/help apikeyで詳細を確認してください`,
 				},
 			},
 			duckduckgo_rate_limit: {
 				title: `DuckDuckGoがレート制限されています`,
-				description: `DuckDuckGo検索は現在レート制限されています。より信頼性の高い検索のために、\`サーバー管理\`権限を持つメンバーが\`/config braveapiset\`でBrave Searchを設定するか、\`/config permissions\`で無効にすることができます。`,
-				footer: `無料のBrave Search APIキーを https://brave.com/search/api/ で取得できます`,
+				description: `DuckDuckGo検索は現在レート制限されています。より信頼性の高い検索のために、\`サーバー管理\`権限を持つメンバーが\`/config braveapi set\`を使用してBrave Searchを設定できます。`,
+				footer: `/help apikeyで詳細を確認してください`,
 			},
 			operation_failed_title: `操作に失敗しました`,
 			operation_failed_description: `要求された操作を完了できませんでした。もう一度お試しください。`,
@@ -95,22 +93,22 @@ export default {
 		generic_error_title: `生成エラー`,
 		generic_error_description: `申し訳ありません、応答を生成中にエラーが発生しました ({error_message})。`,
 		generic_error_footer:
-			"`/tool refresh`を実行してからもう一度お試しください。問題が解決しない場合は、`/support report`で報告してください。",
+			"`/tool refresh`を実行してからもう一度お試しください。問題が解決しない場合は、`/support discord`で報告してください。",
 		error_stream_timeout_title: "接続タイムアウト",
 
 		// プロバイダーエラー形式テンプレート
 		provider_error_format:
 			"{providerName} エラーコード {errorCode}: {apiMessage}。{tip}",
 		error_stream_timeout_description:
-			"この問題が続く場合、サービスに一時的な問題がある可能性があります。しばらくしてからリクエストを再試行するか、`/tools refresh`を使用してコンテキスト履歴をリフレッシュしてください。",
+			"この問題が続く場合、選択したAIプロバイダーに一時的な問題がある可能性があります。後でもう一度お試しいただくか、`/tools refresh`を使用してコンテキスト履歴をリフレッシュしてください。",
 
 		// APIからの空の応答
 		empty_response_title: `空の応答`,
-		empty_response_description: `AIから空の応答を受け取りました。`,
+		empty_response_description: `AIから空の応答を受け取りました。この問題が解決しない場合は、\`/tools refresh\`を使用してください。`,
 		// 新規: 関数呼び出しの最大反復回数
 		max_iterations_title: "思考ループ",
 		max_iterations_streaming_description:
-			"思考ループに陥り、リクエストを完了できませんでした。",
+			"思考ループに陥り、リクエストを完了できませんでした。この問題が解決しない場合は、`/tools refresh`を使用してください。",
 
 		// 検索関連メッセージ
 		search: {
@@ -148,11 +146,12 @@ export default {
 			provider_error_interaction:
 				"ストリーム応答がブロック/停止されました。理由: {reason}。",
 			retry_message:
-				"これは一時的なエラーです。リクエストを再度お試しいただけます。",
+				"これは一時的なエラーです。後でもう一度お試しください。",
 
 			// 汎用プロバイダーエラータイトルとヒント（genai.googleから移動）
 			api_error_title: "❌ APIエラー",
-			api_error_tip: "APIキーを確認して再度お試しください",
+			api_error_tip:
+				"APIキーを確認して再度お試しください。このエラーが解決しない場合は、`/support discord`で報告してください。",
 
 			rate_limit_title: "🟡 レート制限を超過",
 			rate_limit_tip: "数分お待ちいただいてから再度お試しください",
@@ -166,11 +165,11 @@ export default {
 
 			provider_overloaded_title: "🛑 プロバイダーの過負荷",
 			provider_overloaded_tip:
-				"プロバイダーが現在過負荷状態です、しばらく後に再度お試しください",
+				"プロバイダーが現在過負荷状態です。しばらく後に再度お試しいただくか、別のプロバイダーに変更してください",
 
 			unknown_title: "❓ プロバイダーエラー",
 			unknown_tip:
-				"再度お試しいただくか、この問題が続く場合は `/support report` をご利用ください",
+				"再度お試しいただくか、この問題が続く場合は `/support discord` をご利用ください",
 		},
 
 		// Google固有のエラーメッセージ（プロバイダー固有のデフォルトメッセージのみ）
@@ -224,11 +223,6 @@ export default {
 			personal_memory_footer_user_blacklisted:
 				"この記憶は保存されましたが、対象のユーザーは現在このサーバーのパーソナライズ機能のブラックリストに登録されているため、すぐには効果がありません。",
 		},
-
-		// テスト/プレースホルダーキー
-		some_other: {
-			title: `テスト GenAI 機能`,
-		},
 	},
 
 	commands: {
@@ -248,18 +242,16 @@ export default {
 			false: "偽",
 			opt_out: "記憶の保存をブロック",
 			opt_in: "記憶の保存を許可",
+			none: "なし",
 		},
 
 		// 一般的なユーティリティコマンド
 		tool: {
 			ping: {
-				description: `ボットの遅延を確認します。`,
-				response_fast: `Pong! 🏓
-応答時間: \`{response_time}ms\`
-Discord API 遅延: \`{discord_response}ms\``,
-				response_slow: `Pong! 🐢 (少し遅いです...)
-応答時間: \`{response_time}ms\`
-Discord API 遅延: \`{discord_response}ms\``,
+				description: `ボットの遅延を確認します`,
+				title: `Pong! 🏓`,
+				response_fast: `応答時間: \`{response_time}ms\``,
+				response_slow: `応答時間: \`{response_time}ms\``,
 			},
 			refresh: {
 				description: `最近の会話履歴をクリアします。`,
@@ -278,12 +270,15 @@ Discord API 遅延: \`{discord_response}ms\``,
 				field_model: `AIモデル`,
 				field_temperature: `Temperature`,
 				field_humanizer: `ヒューマナイザーレベル`,
+				field_timezone: `サーバータイムゾーン`,
 				field_autoch_threshold: `自動チャット閾値`,
 				field_autoch_channels: `自動チャットチャンネル`,
 				field_trigger_words: `トリガーワード`,
 				field_personalization: `パーソナライズ`,
+				field_blacklisted_members: `ブラックリスト登録済みメンバー`,
 				field_self_teach: `自己学習`,
 				field_api_key_set: `APIキー設定済み`,
+				field_brave_api_key_set: `Brave APIキー設定済み`,
 				field_emoji_usage: `絵文字使用`,
 				field_sticker_usage: `スタンプ使用`,
 				field_web_search: `ウェブ検索`,
@@ -295,6 +290,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 				field_attributes: `属性`,
 				field_user_nickname: `ユーザーニックネーム`,
 				field_language_pref: `言語設定`,
+				field_privacy: `プライバシーモード`,
 				field_reminders_count: `アクティブなリマインダー`,
 				field_personal_memories: `個人の記憶`,
 				field_server_memories: `サーバーの記憶`,
@@ -310,8 +306,10 @@ Discord API 遅延: \`{discord_response}ms\``,
 				field_personal_memories_with_count: `個人の記憶 ({current}/{max} 枠使用中)`,
 				field_trigger_words_with_count: `トリガーワード ({current}/{max} 枠使用中)`,
 				field_attributes_with_count: `属性 ({current}/{max} 枠使用中)`,
+				field_slot_usage: `{current}/{max} 枠使用中`,
 				field_server_memories_with_count: `サーバーの記憶 ({current}/{max} 枠使用中)`,
-				field_dialogue_count_with_count: `サンプル対話 ({current}/{max} 枠使用中)`,
+				field_dialogue_count_with_count: `{current}/{max} 枠使用中`,
+				field_blacklisted_members_with_count: `{current} 人`,
 			},
 		},
 
@@ -326,7 +324,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 				type_choice_personality: `性格情報`,
 				success_title: `✅ エクスポート成功`,
 				success_description: `{type}データがDMに送信されました！`,
-				success_description_personality: `トモリボットの性格がエクスポートされ、DMに送信されました！\n\n**注意:** このエクスポートは情報提供のみを目的としています。性格をインポートするには、代わりに\`/persona\`コマンドを使用してください。`,
+				success_description_personality: `私の性格がエクスポートされ、DMに送信されました！\n\n**注意:** このエクスポートは情報提供のみを目的としています。性格をインポートするには、代わりに\`/persona\`コマンドを使用してください。`,
 				failed_title: `❌ エクスポート失敗`,
 				failed_description: `データのエクスポートに失敗しました。後でもう一度お試しください。`,
 				dm_title: `📦 データエクスポート`,
@@ -390,7 +388,8 @@ Discord API 遅延: \`{discord_response}ms\``,
 				type_choice_server: `サーバーデータ`,
 				confirmation_description: `完全削除を確認（これは元に戻せません！）`,
 				confirmation_yes: `はい、完全に削除します - 元に戻せないことを理解しています`,
-				confirmation_required_title: `⚠️ 確認が必要です`,
+				confirmation_no: `いいえ、削除をキャンセルします`,
+				confirmation_required_title: `確認が必要です`,
 				confirmation_required_description: `削除を確認するには確認オプションを選択する必要があります。`,
 				success_personal_title: `✅ 個人データが削除されました`,
 				success_personal_description: `すべての個人データが完全に削除されました。再び私とやり取りすると、デフォルト設定で新規開始します。`,
@@ -419,7 +418,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 				embed_failed_title: `❌ PNG処理に失敗しました`,
 				embed_failed_description: `PNGファイルへのメタデータの埋め込みに失敗しました。もう一度お試しください。`,
 				// Error messages from presetExport utility
-				error_no_server_data: `データベースにサーバーが見つかりません。まず /config setup を実行してください。`,
+				error_no_server_data: `データベースにサーバーが見つかりません。まず \`/config setup\` を実行してください。`,
 				error_no_preset_data: `ペルソナデータが見つかりません。まず /config setup を実行してください。`,
 				error_validation_failed: `エクスポートデータ構造の検証に失敗しました`,
 				error_export_failed: `ペルソナデータのエクスポートに失敗しました`,
@@ -431,11 +430,11 @@ Discord API 遅延: \`{discord_response}ms\``,
 				confirmation_choice_yes: `はい、現在のペルソナを置き換えます`,
 				confirmation_choice_no: `いいえ、インポートをキャンセルします`,
 				success_title: `✅ ペルソナのインポートに成功しました`,
-				success_description: `ペルソナ **{nickname}** が正常にインポートされました！\n📝 属性: {attribute_count}\n💬 サンプル対話: {dialogue_count}\n🔔 トリガーワード: {trigger_word_count}\n\n**注意：** 権限が許可されている場合、サーバーアバターとニックネームも更新されました。`,
+				success_description: `ペルソナ **{nickname}** が正常にインポートされました！\n📝 属性: {attribute_count}\n💬 サンプル対話: {dialogue_count}\n🔔 トリガーワード: {trigger_word_count}\n\n権限が許可されている場合、サーバーアバターとニックネームも更新されました。`,
 				failed_title: `❌ インポートに失敗しました`,
 				failed_description: `ペルソナのインポートに失敗しました。ファイルを確認してもう一度お試しください。`,
 				cancelled_title: `❌ インポートがキャンセルされました`,
-				cancelled_description: `インポートがキャンセルされました。ペルソナに変更はありませんでした。`,
+				cancelled_description: `インポートがキャンセルされました。私のペルソナに変更はありませんでした。`,
 				invalid_file_type_title: `❌ 無効なファイル形式`,
 				invalid_file_type_description: `ペルソナデータを含む有効な.pngファイルをアップロードしてください。`,
 				file_too_large_title: `❌ ファイルが大きすぎます`,
@@ -457,13 +456,13 @@ Discord API 遅延: \`{discord_response}ms\``,
 				error_invalid_trigger_word: `無効なトリガーワード: {details}`,
 				error_dialogue_mismatch: `サンプル対話配列の長さが一致しません`,
 				error_invalid_config: `ペルソナデータに無効な設定フィールドがあります`,
-				error_no_server_data: `データベースにサーバーが見つかりません。まず /config setup を実行してください。`,
+				error_no_server_data: `データベースにサーバーが見つかりません。まず \`/config setup\` を実行してください。`,
 				error_import_failed: `ペルソナデータのインポートに失敗しました`,
 				error_not_json: `ペルソナファイルには有効なJSONデータが含まれている必要があります`,
 				error_incompatible_version: `互換性のないペルソナバージョン。期待: {expected}、実際: {actual}`,
 				error_invalid_format: `無効なペルソナファイル形式`,
 				error_invalid_type: `無効なペルソナタイプ: {type}。"preset"が期待されます`,
-				avatar_update_skipped_dm: `ℹ️ 注意: アバターとニックネームの更新はダイレクトメッセージでは利用できません。ペルソナが正常にインポートされました。`,
+				avatar_update_skipped_dm: `ペルソナが正常にインポートされましたが、アバターとニックネームの更新はダイレクトメッセージでは利用できません。`,
 			},
 			default: {
 				description: `人格設定のペルソナを適用します`,
@@ -472,12 +471,12 @@ Discord API 遅延: \`{discord_response}ms\``,
 				select_description: `適用するプリセットを選択してください。これにより、現在の属性と対話が上書きされます。`,
 				select_placeholder: `プリセットを選択...`,
 				no_presets_title: `利用可能なプリセットがありません`,
-				no_presets_description: `あなたの言語で利用可能な人格プリセットがありません。\`/support report\`で報告してください。`,
+				no_presets_description: `あなたの言語で利用可能な人格プリセットがありません。\`/support discord\`で報告してください。`,
 				preset_not_found: `選択されたプリセットが見つかりませんでした。`,
 				success_title: `プリセットが適用されました`,
 				success_description: `'{preset_name}'ペルソナが正常に適用されました。`,
-				avatar_update_failed: `⚠️ 注意: サーバーアバターを更新できませんでした (Discord APIエラー)。人格設定は正常に適用されました。`,
-				avatar_update_skipped_dm: `ℹ️ 注意: アバターとニックネームの更新はダイレクトメッセージでは利用できません。人格設定は正常に適用されました。`,
+				avatar_update_failed: `⚠️ Discord APIエラーによりサーバーアバターを更新できませんでしたが、ペルソナは正常に適用されました。`,
+				avatar_update_skipped_dm: `プリセットは正常に適用されましたが、アバター更新はダイレクトメッセージでは利用できません`,
 			},
 			generate: {
 				description: `Google GeminiのAIを使用した人格生成`,
@@ -501,18 +500,18 @@ Discord API 遅延: \`{discord_response}ms\``,
 				},
 				// Error messages
 				wrong_provider_title: `❌ 互換性のないプロバイダー`,
-				wrong_provider_description: `ペルソナ生成にはGoogle Geminiが必要です。現在のプロバイダーは **{current_provider}** です。\`/config apikeyset\`を使用してGoogleに切り替えてください。`,
+				wrong_provider_description: `ペルソナ生成にはGoogle Geminiが必要です。現在のプロバイダーは **{current_provider}** です。\`/config apikey set\`を使用してGoogleに切り替えてください。`,
 				no_api_key_title: `❌ APIキーがありません`,
-				no_api_key_description: `APIキーが設定されていません。\`/config apikeyset\`を使用してGoogle APIキーを設定してください。`,
+				no_api_key_description: `APIキーが設定されていません。\`/config apikey set\`を使用してGoogle APIキーを設定してください。`,
 				api_key_decrypt_failed_title: `❌ APIキーエラー`,
-				api_key_decrypt_failed_description: `APIキーの復号化に失敗しました。\`/config apikeyset\`を使用して再設定してください。`,
+				api_key_decrypt_failed_description: `APIキーの復号化に失敗しました。\`/config apikey set\`を使用して再設定してください。`,
 				invalid_image_title: `❌ 無効な画像`,
 				invalid_image_description: `有効な画像ファイル(PNG、JPG、JPEGなど)をアップロードしてください。`,
 				image_download_failed_title: `❌ 画像のダウンロードに失敗しました`,
 				image_download_failed_description: `添付画像のダウンロードに失敗しました。もう一度お試しください。`,
 				// Processing
-				processing_title: `🤖 人格を生成しています...`,
-				processing_description: `これには1～2分かかる場合があります。キャラクターを生成していますので、お待ちください...\n\n**注意：** これは予期しない結果が生成される場合があります。必要に応じて再生成できます。`,
+				processing_title: `人格を生成しています...`,
+				processing_description: `これには1～2分かかる場合があります。キャラクターを生成していますので、お待ちください...\n\nこれは予期しない結果が生成される場合があります。必要に応じて再生成できます。`,
 				// Generation errors
 				generation_failed_title: `❌ 生成に失敗しました`,
 				generation_failed_description: `人格の生成に失敗しました：{error}\n\n異なる入力で再度お試しいただくか、APIキーを確認してください。`,
@@ -528,8 +527,8 @@ Discord API 遅延: \`{discord_response}ms\``,
 				success_title: `✨ {character_name} の生成に成功しました！`,
 				success_description: `**{character_name}** の人格を生成しました！\n\n**属性プレビュー:**\n{attribute_preview}\n\n**サンプル対話:**\n{dialogue_preview}`,
 				success_next_steps_title: `📥 次のステップ`,
-				success_next_steps_description: `1. 添付されたPNGファイルをダウンロード\n2. PNGファイルと共に\`/persona import\`を使用してこのキャラクターをインポート\n3. (任意) 必要に応じて\`/server avatar\`でアバターを変更`,
-				avatar_update_skipped_dm: `ℹ️ 注意: アバターとニックネームの更新はダイレクトメッセージでは利用できません。人格が正常に生成されました。`,
+				success_next_steps_description: `1. 添付されたPNGファイルをダウンロード\n2. PNGファイルと共に\`/persona import\`を使用してこのキャラクターをインポート\n3. 進行中の会話に新しい人格を適用するには\`/tool refresh\`を実行\n4. (任意) 必要に応じて\`/server avatar\`でアバターを変更`,
+				avatar_update_skipped_dm: `アバターとニックネームの更新はダイレクトメッセージでインポートできませんのでご注意ください。`,
 			},
 			create: {
 				description: `シンプルな人格プリセットを手動で作成`,
@@ -567,8 +566,8 @@ Discord API 遅延: \`{discord_response}ms\``,
 				success_description: `**{character_name}** のペルソナが作成されました！\n\n**説明:**\n{character_description}`,
 				success_dialogue_title: `サンプル対話`,
 				success_next_steps_title: `📥 次のステップ`,
-				success_next_steps_description: `1. 添付されたPNGファイルをダウンロード\n2. PNGファイルと共に\`/persona import\`を使用してこのキャラクターをインポート\n3. (任意) \`/teach\`コマンドを使用してさらに深みと例を追加`,
-				avatar_update_skipped_dm: `ℹ️ 注意: アバターとニックネームの更新はダイレクトメッセージでは利用できません。ペルソナが正常に作成されました。`,
+				success_next_steps_description: `1. 添付されたPNGファイルをダウンロード\n2. PNGファイルと共に\`/persona import\`を使用してこのキャラクターをインポート\n3. 進行中の会話に新しい人格を適用するには\`/tool refresh\`を実行\n4. (任意) 必要に応じて\`/server avatar\`でアバターを変更`,
+				avatar_update_skipped_dm: `アバターとニックネームの更新はダイレクトメッセージでは利用できませんのでご注意ください。`,
 			},
 		},
 
@@ -576,13 +575,13 @@ Discord API 遅延: \`{discord_response}ms\``,
 		help: {
 			// /help features
 			features: {
-				command_description: `TomoriBotができることを表示`,
-				title: `私ができること！（バージョン {version}）`,
+				description: `TomoriBotができることを表示`,
+				title: `TomoriBotの機能（バージョン {version}）`,
 				embed_description: `これが私の全機能です：`,
 				vision_title: `ビジョン＆メディア 👁️`,
 				vision_description: `- 画像、動画、スタンプ、絵文字を見て分析できます
 - YouTubeリンクから動画を視聴できます
-- ツイート内のコンテンツを見ることができます`,
+- 共有された埋め込み（ツイート、記事など）の内容を見ることができます`,
 				search_title: `検索＆情報 🔍`,
 				search_description: `- 最新情報をウェブ検索できます
 - 画像、動画、ニュース検索も可能です（\`/config braveapi\`経由）
@@ -601,19 +600,19 @@ Discord API 遅延: \`{discord_response}ms\``,
 				time_title: `時間認識 🕰️`,
 				time_description: `- サーバーの現在時刻を認識しています（\`/config timezone\`経由）
 - リマインダーを設定できます（何かを思い出させるように頼んでみて！）`,
-				footer: `注：すべての機能がすべてのプロバイダーで利用できるわけではありません。GoogleのGeminiの使用を推奨します`,
+				footer: `すべての機能がすべてのAIプロバイダーで利用できるわけではありません。GoogleのGeminiの使用を推奨します`,
 			},
 
 			// /help setup
 			setup: {
-				command_description: `TomoriBotの初期設定方法を学ぶ`,
+				description: `TomoriBotの初期設定方法を学ぶ`,
 				title: `TomoriBotを始める`,
 				embed_description: `サーバー（またはDM）でTomoriBotを設定する方法：`,
 				step1_title: `ステップ1：APIキーを取得 🔑`,
 				step1_description: `TomoriBotはGoogle Gemini、NovelAI、OpenRouterなどのAIプロバイダーを使用します。いずれかのAPIキーが必要です。
 - {helpApikey}で取得方法を確認
-  - GoogleのGemini = 汎用、無料、TomoriBotの全機能を実行可能
-  - NovelAI = ロールプレイとストーリーテリング特化
+  - GoogleのGemini = 汎用、無料、すべての機能を実行可能
+  - NovelAI = 無検閲なロールプレイとストーリーテリング特化
   - OpenRouter = 様々なAIモデルが利用可能
 - このAPIキーを**他人と共有しないでください**`,
 				step2_title: `ステップ2：セットアップコマンドを実行 ⚙️`,
@@ -638,9 +637,9 @@ Discord API 遅延: \`{discord_response}ms\``,
 
 			// /help data
 			data: {
-				command_description: `データ管理とプライバシーについて学ぶ`,
-				title: `データの管理 🗂️`,
-				embed_description: ``,
+				description: `データ管理とプライバシーについて学ぶ`,
+				title: `データの管理`,
+				embed_description: `データの管理方法と保存内容：`,
 				export_title: `データのエクスポート 📤`,
 				export_description: `{dataExport}を使用してデータをダウンロード：
 - **個人データ**：記憶、設定、ユーザー設定
@@ -651,35 +650,33 @@ Discord API 遅延: \`{discord_response}ms\``,
 				import_description: `{dataImport}を使用してエクスポートしたデータを復元：
 - サーバー間で個人データを復元
 - サーバー設定を新しいサーバーに転送
-- パーソナリティプリセットを共有
 - コマンド使用時にエクスポートしたファイルを添付するだけ`,
 				delete_title: `データの削除 🗑️`,
 				delete_description: `{dataDelete}を使用してデータを完全に削除：
 - **個人削除**：すべてのユーザーデータ、記憶、設定を削除
 - **サーバー削除**：すべてのサーバーデータを削除
-- 誤削除を防ぐため確認が必要です
 - この操作は元に戻せません！`,
 				privacy_title: `プライバシー通知 🔒`,
 				privacy_description: `**保存するもの：**
 - サーバー/個人の記憶
 - 私の設定とペルソナ
-- サーバー設定
+- 私のサーバー設定
 - 暗号化されたAPIキー
 
 **保存しないもの：**
 - Discordメッセージ
 - チャット履歴
 
-**私と選択したAIプロバイダーに送信されるもの：**
-トリガーされるたびに、返信を形成するためのコンテキストとして、テキストチャンネルの**最新メッセージ**と**関連する記憶**を取得します
+**選択したAIプロバイダーに送信されるもの：**
+トリガーされるたびに、AIモデルが返信を形成するためのコンテキストとして、テキストチャンネルの**最新メッセージ**と**関連する記憶**を取得します
 
 {personalPrivacy}コマンドで記憶機能をオプトアウトし、{configPermissions}コマンドで自己学習を無効化できます。`,
-				footer: `**重要**：選択したAIプロバイダー（Google、NovelAI、OpenRouter）は独自のプライバシーポリシーに従ってメッセージを処理します。プライバシーが気になる場合は、個人情報を共有しないでください。`,
+				footer: `選択したAIプロバイダー（Google、NovelAI、OpenRouter）は独自のプライバシーポリシーに従ってメッセージを処理します。プライバシーのため、個人情報を共有しないでください。`,
 			},
 
 			// /help apikey
 			apikey: {
-				command_description: `AIプロバイダーのAPIキー設定方法を学ぶ`,
+				description: `AIプロバイダーのAPIキー設定方法を学ぶ`,
 				provider_description: `AIプロバイダーを選択`,
 				// Brave Search
 				brave_title: `Brave Search APIキーの設定`,
@@ -695,10 +692,9 @@ Discord API 遅延: \`{discord_response}ms\``,
 4. 新しいAPIキーを作成
 5. {configBraveapiSet}コマンドでAPIキーをコピーして入力`,
 				brave_important_title: `重要な注意事項：`,
-				brave_important_description: `- APIキーは暗号化されて安全に保存されます
-- これはメインLLMプロバイダーとは別です
+				brave_important_description: `- これはメインAIプロバイダーとは別です
 - Brave APIキーがなくても、組み込みウェブ検索で機能します`,
-				brave_footer: `メインAIプロバイダーを設定したいですか？他の\`/help apikey\`オプションを確認してください！`,
+				brave_footer: `メインAIプロバイダーの設定については、他の\`/help apikey\`オプションを確認してください`,
 				// Google Gemini
 				google_title: `Google Gemini APIキーの設定`,
 				google_description: `Google Geminiは強力なAIモデルを備えた無料および有料プランを提供します。
@@ -707,9 +703,9 @@ Discord API 遅延: \`{discord_response}ms\``,
 - [Geminiプライバシーポリシー](https://ai.google.dev/gemini-api/terms)`,
 				google_getting_key_title: `APIキーの取得：`,
 				google_getting_key_description: `1. [Google AI Studio](https://aistudio.google.com/apikey)にアクセス
-2. 右上の\`APIキーを作成\`をクリック
+2. 右上の\`APIキーを作成\`をクリック（必要に応じて新しいプロジェクトを作成）
 3. このAPIキーを{configSetup}または{configApikeySet}にコピー`,
-				google_footer: `このプロバイダーを設定したら、{configModel}でデフォルトモデルを変更しましょう！`,
+				google_footer: `このプロバイダーを設定したら、{configModel}でデフォルトモデルを変更できます`,
 				// NovelAI
 				novelai_title: `NovelAI APIキーの設定`,
 				novelai_description: `NovelAIはクリエイティブなストーリーテリングとロールプレイに焦点を当てたサブスクリプションベースのサービスです。
@@ -722,7 +718,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 3. \`アカウント\`に移動
 4. \`永続的APIトークンを取得\`を探す
 5. このAPIキーを{configSetup}または{configApikeySet}にコピー`,
-				novelai_footer: `このプロバイダーを設定したら、{configModel}でデフォルトモデルを変更しましょう！`,
+				novelai_footer: `このプロバイダーを設定したら、{configModel}でデフォルトモデルを変更できます`,
 				// OpenRouter
 				openrouter_title: `OpenRouter APIキーの設定`,
 				openrouter_description: `OpenRouterは従量課金制で複数のプロバイダーの様々なAIモデルへのアクセスを提供します。
@@ -733,13 +729,13 @@ Discord API 遅延: \`{discord_response}ms\``,
 				openrouter_getting_key_description: `1. [OpenRouter](https://openrouter.ai/settings/keys)にアクセス
 2. \`APIキーを作成\`をクリック
 3. このAPIキーを{configSetup}または{configApikeySet}にコピー
-3. アカウントにクレジットを追加（従量課金制）`,
-				openrouter_footer: `このプロバイダーを設定したら、{configModel}でデフォルトモデルを変更しましょう！`,
+4. アカウントにクレジットを追加（従量課金制）`,
+				openrouter_footer: `このプロバイダーを設定したら、{configModel}でデフォルトモデルを変更できます`,
 			},
 
 			// /help memory
 			memory: {
-				command_description: `TomoriBotの記憶システムについて学ぶ`,
+				description: `TomoriBotの記憶システムについて学ぶ`,
 				title: `記憶の仕組み 🧠`,
 				embed_description: `会話を跨いでユーザーやサーバーに関する事実や情報を記憶する永続的な記憶システムがあります！これは**私が知っていること**（事実、コンテキスト、情報）についてです。**私がどう振る舞うか**（パーソナリティ、トーン、設定）については、代わりに{helpCustomization}をご覧ください！`,
 				teaching_title: `物事を教える 📝`,
@@ -765,7 +761,7 @@ Discord API 遅延: \`{discord_response}ms\``,
 
 			// /help customization
 			customization: {
-				command_description: `TomoriBotのパーソナリティと動作をカスタマイズする方法を学ぶ`,
+				description: `TomoriBotのパーソナリティと動作をカスタマイズする方法を学ぶ`,
 				// Embed 1: Overview + Personas
 				embed1_title: `TomoriBotのカスタマイズ 🎨`,
 				embed1_description: `TomoriBotは高度にカスタマイズ可能です！私を本当にあなたのものにするために設定できるすべてがここにあります。これは**私がどう振る舞うか**（パーソナリティ、トーン、設定）についてです。**私が記憶していること**（事実、記憶）については、代わりに{helpMemory}をご覧ください！`,
@@ -797,14 +793,14 @@ Discord API 遅延: \`{discord_response}ms\``,
 - {configRename} - 自分を何と呼ぶべきかを設定
 
 **サンプル対話の書き方：**
-例で\`{{user}}\`と\`{{bot}}\`のプレースホルダーを使用：
-- \`{{user}}\` = 実際のユーザーの名前/ニックネームに置き換えられます
-- \`{{bot}}\` = 私の現在の名前に置き換えられます
+例で\`{user}\`と\`{bot}\`のプレースホルダーを使用：
+- \`{user}\` = 実際のユーザーの名前/ニックネームに置き換えられます
+- \`{bot}\` = 私の現在の名前に置き換えられます
 
 **例：**
 \`\`\`
-ユーザーメッセージ：{{user}}：やあ、元気？
-ボットの応答：{{bot}}：よぉ{{user}}！超元気だぜ、わかるだろ？
+ユーザーメッセージ：{user}：やあ、元気？
+ボットの応答：{bot}：よぉ{user}！超元気だぜ、わかるだろ？
 \`\`\`
 
 **優れたサンプル対話のヒント：**
@@ -867,17 +863,12 @@ Discord API 遅延: \`{discord_response}ms\``,
 - 素早くパーソナリティを調整するには\`/teach attribute\`を使用
 - サンプル対話では、属性や特性も示す例を使用すると効果的：
 \`\`\`
-ユーザーメッセージ：{{user}}：お気に入りの趣味は？
-ボットの応答：{{bot}}：ふふ〜小さなぬいぐるみに小さな服を編むのが好きです〜♥
+ユーザーメッセージ：{user}：お気に入りの趣味は？
+ボットの応答：{bot}：ふふ〜小さなぬいぐるみに小さな服を編むのが好きです〜♥
 \`\`\`
 - チャットして変更をテストし、しっくりくるまで繰り返す
 - ペルソナをエクスポートしてバックアップするか、他のサーバーと共有！`,
 			},
-		},
-
-		// テスト/プレースホルダーコマンド
-		some_feature: {
-			title: `テスト機能`,
 		},
 
 		// ボットの手動制御コマンド
