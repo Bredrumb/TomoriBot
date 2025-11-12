@@ -63,15 +63,17 @@ export interface NovelaiStreamConfig extends StreamConfig {
 export class NovelaiStreamAdapter implements StreamProvider {
 	/**
 	 * Tags that should be prepended as system instructions
+	 * Note: Function-related tags (SYSTEM_FUNCTION_GUIDE, KNOWLEDGE_SERVER_EMOJIS,
+	 * KNOWLEDGE_SERVER_STICKERS) are excluded because NovelAI doesn't support
+	 * function calling and can't use these features
 	 */
 	private static readonly SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
 		ContextItemTag.SYSTEM_INSTRUCTION_BLOCK,
 		ContextItemTag.SYSTEM_PERSONALITY,
 		ContextItemTag.SYSTEM_HUMANIZER_RULES,
-		ContextItemTag.SYSTEM_FUNCTION_GUIDE,
+		// SYSTEM_FUNCTION_GUIDE excluded - NovelAI doesn't support function calling
 		ContextItemTag.KNOWLEDGE_SERVER_INFO,
-		ContextItemTag.KNOWLEDGE_SERVER_EMOJIS,
-		ContextItemTag.KNOWLEDGE_SERVER_STICKERS,
+		// Emoji and sticker knowledge excluded - NovelAI can't use function calling
 		ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
 		ContextItemTag.KNOWLEDGE_USER_MEMORIES,
 		ContextItemTag.KNOWLEDGE_USER_STATUS,
@@ -87,6 +89,9 @@ export class NovelaiStreamAdapter implements StreamProvider {
 	): AsyncGenerator<RawStreamChunk, void, unknown> {
 		log.info("NovelAIStreamAdapter: Initializing NovelAI streaming");
 
+		// Reset buffer for new stream
+		this.generationBuffer = "";
+
 		// Ensure model is provided
 		if (!config.model) {
 			throw new Error(
@@ -95,14 +100,22 @@ export class NovelaiStreamAdapter implements StreamProvider {
 		}
 
 		// Assemble context for NovelAI format
-		const prompt = this.assembleNovelAIPrompt(
+		const basePrompt = this.assembleNovelAIPrompt(
 			context.contextItems,
 			context.tomoriState.tomori_nickname,
 		);
 
+		// Append bot name at the end to signal it should generate the bot's response
+		// This is the standard NovelAI roleplay format: the prompt should end with "BotName: "
+		const prompt = `${basePrompt}\n${context.tomoriState.tomori_nickname}: `;
+
 		log.info(
 			`Assembled NovelAI prompt. Length: ${prompt.length} characters`,
 		);
+
+		// Log the full prompt for debugging
+		log.section("NovelAI Full Prompt");
+		log.info(prompt);
 
 		// Get generation parameters for the model
 		const parameters = getParametersForModel(
@@ -110,12 +123,11 @@ export class NovelaiStreamAdapter implements StreamProvider {
 			config.temperature,
 		);
 
-		// Build request
+		// Build request (no prefix parameter needed - we already added bot name to prompt)
 		const request: NovelAIGenerationRequest = {
 			input: prompt,
 			model: config.model,
 			parameters,
-			prefix: `${context.tomoriState.tomori_nickname}:`, // Force bot name at start
 		};
 
 		// Log sanitized request for debugging
@@ -154,6 +166,13 @@ export class NovelaiStreamAdapter implements StreamProvider {
 	}
 
 	/**
+	 * Accumulated buffer for detecting speaker transitions
+	 * NovelAI sometimes continues generating and starts a new speaker's turn
+	 * We need to detect and strip this out
+	 */
+	private generationBuffer = "";
+
+	/**
 	 * Process a raw NovelAI chunk into normalized format
 	 */
 	processChunk(chunk: RawStreamChunk): ProcessedChunk {
@@ -184,6 +203,8 @@ export class NovelaiStreamAdapter implements StreamProvider {
 
 		// Check for completion
 		if (novelaiChunk.final) {
+			// Clear buffer on completion
+			this.generationBuffer = "";
 			return {
 				type: "done",
 			};
@@ -191,6 +212,24 @@ export class NovelaiStreamAdapter implements StreamProvider {
 
 		// Check for text content
 		if (novelaiChunk.token) {
+			// Add to buffer for speaker detection
+			this.generationBuffer += novelaiChunk.token;
+
+			// Check if we've hit a speaker transition pattern
+			// Pattern: newline(s) followed by text and a colon (e.g., "\n\nUsername:")
+			const speakerPattern = /\n+([^\n:]+):\s*/;
+			const match = this.generationBuffer.match(speakerPattern);
+
+			if (match) {
+				// Found a speaker transition - this means the model is trying to generate
+				// another character's turn. We need to stop here.
+				// Return empty content and signal done
+				this.generationBuffer = "";
+				return {
+					type: "done",
+				};
+			}
+
 			return {
 				type: "text",
 				content: novelaiChunk.token,
@@ -368,13 +407,13 @@ export class NovelaiStreamAdapter implements StreamProvider {
 		}
 
 		// Combine parts: system instructions first, then dialogue
-		const prompt = [
-			...systemInstructionParts,
-			"", // Empty line separator
-			...dialogueParts,
-		]
-			.filter((part) => part !== undefined && part !== "")
-			.join("\n\n");
+		// Use double newlines to separate system instructions, single newlines for dialogue
+		const systemText = systemInstructionParts.join("\n\n");
+		const dialogueText = dialogueParts.join("\n");
+
+		// Combine with double newline between system and dialogue sections
+		const parts = [systemText, dialogueText].filter((part) => part?.trim());
+		const prompt = parts.join("\n\n");
 
 		return prompt;
 	}
@@ -389,7 +428,6 @@ export class NovelaiStreamAdapter implements StreamProvider {
 		log.section("NovelAIStreamAdapter: Request Details");
 
 		log.info(`Model: ${request.model}`);
-		log.info(`Prefix: ${request.prefix}`);
 		log.info(`Prompt Length: ${promptLength} characters`);
 		log.info(
 			`Parameters: temperature=${request.parameters.temperature}, max_length=${request.parameters.max_length}`,

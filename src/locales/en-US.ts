@@ -936,8 +936,11 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 					validation_error_description: `An error occurred while validating the API key. Please try again.`,
 					key_validation_failed_title: `API Key Validation Failed`,
 					key_validation_failed_description: `The provided API key is not valid for {provider}. Please check the key and try again.`,
+					no_default_model_title: `No Default Model Found`,
+					no_default_model_description: `Could not find a default model for the {provider} provider. Please report this issue through \`/support discord\`.`,
 					success_title: `API Key Set`,
 					success_description: `The {provider} API key has been successfully validated, encrypted, and saved.`,
+					success_with_model_description: `The {provider} API key has been successfully validated, encrypted, and saved. Your model has been automatically changed to \`{model_name}\` (the default for this provider).`,
 				},
 				delete: {
 					description: `Remove the currently configured AI provider API key.`,

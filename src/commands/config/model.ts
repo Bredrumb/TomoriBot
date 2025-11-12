@@ -6,7 +6,7 @@ import type {
 import { MessageFlags } from "discord.js";
 // Import sql
 import { sql } from "bun";
-import { loadTomoriState, loadAvailableLlms } from "../../utils/db/dbRead";
+import { loadTomoriState, loadAvailableModelsForProvider } from "../../utils/db/dbRead";
 // Remove updateTomoriConfig import
 // import { updateTomoriConfig } from "../../utils/db/dbWrite";
 import { localizer } from "../../utils/text/localizer";
@@ -87,8 +87,9 @@ export async function execute(
 			return;
 		}
 
-		// 3. Load all available models from the database for modal options
-		const availableModels = await loadAvailableLlms();
+		// 3. Load available models for the current provider from the database for modal options
+		const currentProvider = tomoriState.llm.llm_provider;
+		const availableModels = await loadAvailableModelsForProvider(currentProvider);
 		if (!availableModels || availableModels.length === 0) {
 			await replyInfoEmbed(interaction, locale, {
 				titleKey: "commands.config.model.no_models_title",
@@ -192,10 +193,10 @@ export async function execute(
 		}
 
 		// 8.5. Validate API key compatibility with new model's provider (if different provider)
-		const currentProvider = tomoriState.llm?.llm_provider?.toLowerCase();
-		const newProvider = selectedModel.llm_provider?.toLowerCase();
+		const currentModelProvider = tomoriState.llm?.llm_provider?.toLowerCase();
+		const newModelProvider = selectedModel.llm_provider?.toLowerCase();
 
-		if (currentProvider !== newProvider) {
+		if (currentModelProvider !== newModelProvider) {
 			// Show validation message
 			await modalSubmitInteraction.editReply({
 				content: localizer(
@@ -222,7 +223,7 @@ export async function execute(
 					);
 					// Partial TomoriState for validation only - provider doesn't use these fields during validateApiKey()
 					const provider = await ProviderFactory.getProvider({
-						llm: { llm_provider: newProvider, llm_codename: "" },
+						llm: { llm_provider: newModelProvider, llm_codename: "" },
 						server_id: tomoriState.server_id,
 						tomori_id: tomoriState.tomori_id,
 						config: tomoriState.config,
@@ -233,7 +234,7 @@ export async function execute(
 				} catch (providerError) {
 					// Provider not found or other error
 					log.warn(
-						`Cannot validate API key for provider ${newProvider}: ${providerError instanceof Error ? providerError.message : String(providerError)}`,
+						`Cannot validate API key for provider ${newModelProvider}: ${providerError instanceof Error ? providerError.message : String(providerError)}`,
 					);
 					// Assume compatible if provider cannot be loaded
 					isKeyCompatible = true;
@@ -247,7 +248,7 @@ export async function execute(
 						descriptionVars: {
 							model_name: selectedModel.llm_codename,
 							provider:
-								newProvider.charAt(0).toUpperCase() + newProvider.slice(1),
+								newModelProvider.charAt(0).toUpperCase() + newModelProvider.slice(1),
 						},
 						color: ColorCode.ERROR,
 					});
@@ -255,7 +256,7 @@ export async function execute(
 				}
 			} catch (error) {
 				log.error(
-					`Error validating API key compatibility for provider ${newProvider}`,
+					`Error validating API key compatibility for provider ${newModelProvider}`,
 					error as Error,
 				);
 				await replyInfoEmbed(modalSubmitInteraction, locale, {

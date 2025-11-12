@@ -40,7 +40,13 @@ export interface NovelAIParameters {
 	mirostat_lr?: number | null;
 	mirostat_tau?: number | null;
 	order?: number[];
-	phrase_rep_pen?: "off" | "very_light" | "light" | "medium" | "aggressive" | "very_aggressive";
+	phrase_rep_pen?:
+		| "off"
+		| "very_light"
+		| "light"
+		| "medium"
+		| "aggressive"
+		| "very_aggressive";
 	prefix?: string;
 	repetition_penalty?: number;
 	repetition_penalty_frequency?: number;
@@ -113,7 +119,7 @@ export interface ApiResult<T> {
  */
 export function getKayraParameters(): NovelAIParameters {
 	return {
-		max_length: 2048, // Increased from reference for longer responses
+		max_length: 150, // Increased from reference for longer responses
 		min_length: 10,
 		temperature: 1.35,
 		top_k: 15,
@@ -142,7 +148,7 @@ export function getKayraParameters(): NovelAIParameters {
  */
 export function getGlmParameters(): NovelAIParameters {
 	return {
-		max_length: 2048, // Increased from reference for longer responses
+		max_length: 150, // Increased from reference for longer responses
 		min_length: 1,
 		temperature: 1,
 		top_k: 40,
@@ -248,7 +254,9 @@ async function makeNovelAIRequest<T>(
 	} catch (error) {
 		if (error instanceof Error) {
 			if (error.name === "AbortError") {
-				log.error(`NovelAI API request to ${endpoint} timed out after ${timeout}ms`);
+				log.error(
+					`NovelAI API request to ${endpoint} timed out after ${timeout}ms`,
+				);
 				return {
 					success: false,
 					error: "Request timed out",
@@ -306,7 +314,9 @@ export async function* novelaiGenerateStream(
 
 		if (!response.ok) {
 			const errorText = await response.text().catch(() => "Unknown error");
-			log.error(`NovelAI streaming request failed: ${response.status} ${errorText}`);
+			log.error(
+				`NovelAI streaming request failed: ${response.status} ${errorText}`,
+			);
 
 			yield {
 				error: `API request failed (${response.status}): ${response.statusText}`,
@@ -397,16 +407,19 @@ export async function validateNovelAIApiKey(apiKey: string): Promise<boolean> {
 	try {
 		log.info("Validating NovelAI API key");
 
+		// Get proper parameters for kayra-v1 (use existing preset)
+		const parameters = getKayraParameters();
+		// Override to minimal generation for faster validation
+		parameters.max_length = 10;
+		parameters.min_length = 1;
+
 		// Make a minimal request to test the key
 		const result = await makeNovelAIRequest<NovelAIGenerationResponse>(
 			"/ai/generate",
 			{
-				input: "test",
+				input: "Test",
 				model: "kayra-v1",
-				parameters: {
-					max_length: 1,
-					temperature: 1,
-				},
+				parameters,
 			},
 			{ apiKey, timeout: 10000 },
 		);

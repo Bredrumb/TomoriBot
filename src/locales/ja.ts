@@ -944,8 +944,11 @@ export default {
 					validation_error_description: `APIキーの検証中にエラーが発生しました。もう一度お試しください。`,
 					key_validation_failed_title: `APIキーの検証に失敗しました`,
 					key_validation_failed_description: `{provider}に対して提供されたAPIキーは無効です。キーを確認してもう一度お試しください。`,
+					no_default_model_title: `デフォルトモデルが見つかりません`,
+					no_default_model_description: `{provider}プロバイダーのデフォルトモデルが見つかりませんでした。この問題を\`/support discord\`で報告してください。`,
 					success_title: `APIキーが設定されました`,
 					success_description: `{provider}のAPIキーが正常に検証、暗号化、保存されました。`,
+					success_with_model_description: `{provider}のAPIキーが正常に検証、暗号化、保存されました。モデルは自動的に\`{model_name}\`（このプロバイダーのデフォルト）に変更されました。`,
 				},
 				delete: {
 					description: `現在設定されているAIプロバイダーのAPIキーを削除します。`,
