@@ -15,7 +15,7 @@ import {
 	replySummaryEmbed,
 	promptWithRawModal,
 } from "../../utils/discord/interactionHelper";
-import { GoogleProvider } from "../../providers/google/googleProvider";
+import { ProviderFactory } from "../../utils/provider/providerFactory";
 import { encryptApiKey } from "../../utils/security/crypto";
 import { setupServer } from "../../utils/db/dbWrite";
 import {
@@ -135,7 +135,10 @@ export async function execute(
 		// Create humanizer degree options for the select menu
 		const humanizerSelectOptions: SelectOption[] = [
 			{
-				label: localizer(locale, "commands.config.setup.humanizer_option_none_label"),
+				label: localizer(
+					locale,
+					"commands.config.setup.humanizer_option_none_label",
+				),
 				value: "0",
 				description: localizer(
 					locale,
@@ -300,16 +303,26 @@ export async function execute(
 				return;
 			}
 
-			// Test the API key with a real API call (currently only supports Google)
-			if (normalizedProvider.toLowerCase() === "google") {
-				await replyInfoEmbed(modalSubmitInteraction, locale, {
-					titleKey: "commands.config.setup.api_key_validating",
-					descriptionKey: "commands.config.setup.api_key_validating",
-					color: ColorCode.INFO,
-				});
+			// Test the API key with a real API call using provider factory
+			await replyInfoEmbed(modalSubmitInteraction, locale, {
+				titleKey: "commands.config.setup.api_key_validating",
+				descriptionKey: "commands.config.setup.api_key_validating",
+				color: ColorCode.INFO,
+			});
 
-				const googleProvider = new GoogleProvider();
-				const isApiKeyValid = await googleProvider.validateApiKey(apiKey);
+			try {
+				// Use factory to get provider instance (handles all providers and aliases)
+				// Partial TomoriState for validation only - provider doesn't use these fields during validateApiKey()
+				const provider = await ProviderFactory.getProvider({
+					llm: { llm_provider: normalizedProvider, llm_codename: "" },
+					server_id: 0, // Temporary, not used for validation
+					tomori_id: 0, // Temporary, not used for validation
+					// biome-ignore lint/suspicious/noExplicitAny: Empty config object is sufficient for validation
+					config: {} as any,
+					// biome-ignore lint/suspicious/noExplicitAny: Minimal object structure needed for factory pattern
+				} as any);
+
+				const isApiKeyValid = await provider.validateApiKey(apiKey);
 				if (!isApiKeyValid) {
 					await replyInfoEmbed(modalSubmitInteraction, locale, {
 						titleKey: "general.errors.operation_failed_title",
@@ -318,6 +331,17 @@ export async function execute(
 					});
 					return;
 				}
+			} catch (providerError) {
+				log.error(
+					`Error validating API key for provider ${normalizedProvider}`,
+					providerError as Error,
+				);
+				await replyInfoEmbed(modalSubmitInteraction, locale, {
+					titleKey: "general.errors.operation_failed_title",
+					descriptionKey: "commands.config.setup.api_key_invalid_api",
+					color: ColorCode.ERROR,
+				});
+				return;
 			}
 
 			// API key is valid, proceed with encryption
@@ -470,7 +494,10 @@ export async function execute(
 			const humanizerLabels = [
 				localizer(locale, "commands.config.setup.humanizer_option_none_label"),
 				localizer(locale, "commands.config.setup.humanizer_option_light_label"),
-				localizer(locale, "commands.config.setup.humanizer_option_default_label"),
+				localizer(
+					locale,
+					"commands.config.setup.humanizer_option_default_label",
+				),
 				localizer(locale, "commands.config.setup.humanizer_option_heavy_label"),
 			];
 			const humanizerLabel = humanizerLabels[humanizerDegree] || "Unknown";

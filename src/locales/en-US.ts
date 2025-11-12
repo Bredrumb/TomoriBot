@@ -721,14 +721,13 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
 				// OpenRouter
 				openrouter_title: `Setting Up OpenRouter API Key`,
 				openrouter_description: `OpenRouter provides access to multiple AI models from different providers on a pay-as-you-go basis.
-- Access to latest and most powerful AI models
+- Access to latest and most powerful AI models (some are free)
 - Currently does not support all TomoriBot features
 - [OpenRouter Terms of Service](https://openrouter.ai/terms)`,
 				openrouter_getting_key_title: `Getting Your API Key:`,
 				openrouter_getting_key_description: `1. Visit [OpenRouter](https://openrouter.ai/settings/keys)
 2. Click \`Create API Key\`
-3. Copy this API key {configSetup} or {configApikeySet}
-4. Add credits to your account (pay-as-you-go)`,
+3. Copy this API key {configSetup} or {configApikeySet}`,
 				openrouter_footer: `After setting up this provider, you may change its default model with {configModel}`,
 			},
 

@@ -1,6 +1,6 @@
 /**
  * Provider Factory for creating LLM provider instances
- * This factory implements the switch statement based on the llm_provider setting
+ * This factory implements auto-discovery of providers from src/providers/* directories
  * and provides a clean interface for getting the appropriate provider.
  */
 
@@ -10,83 +10,205 @@ import type {
 	ProviderInfo,
 } from "../../types/provider/interfaces";
 import type { TomoriState } from "../../types/db/schema";
-
-// Import provider implementations
-// Note: We'll add these imports as we create the providers
-// import { GoogleProvider } from "./google/GoogleProvider";
-// import { OpenAIProvider } from "./openai/OpenAIProvider";
-// import { AnthropicProvider } from "./anthropic/AnthropicProvider";
-
-/**
- * Supported LLM providers
- */
-export enum ProviderType {
-	GOOGLE = "google",
-	OPENAI = "openai",
-	ANTHROPIC = "anthropic",
-}
+import * as path from "node:path";
+import { Glob } from "bun";
 
 /**
  * Provider factory namespace for creating LLM provider instances
  */
 export namespace ProviderFactory {
-	const providerInstances = new Map<ProviderType, LLMProvider>();
+	// Map of provider names (including aliases) to provider instances
+	const providerInstances = new Map<string, LLMProvider>();
+
+	// Map of provider names to their class constructors for lazy loading
+	const providerRegistry = new Map<
+		string,
+		() => Promise<new () => LLMProvider>
+	>();
+
+	// Flag to track if discovery has been run
+	let discoveryComplete = false;
 
 	/**
-	 * Get a provider instance based on the provider type
+	 * Discover all available providers by scanning src/providers/* directories
+	 * This function is called lazily on first access to any provider
+	 */
+	async function discoverProviders(): Promise<void> {
+		if (discoveryComplete) {
+			return;
+		}
+
+		log.info("Discovering providers from src/providers/*...");
+
+		try {
+			// 1. Scan for provider directories using Bun.glob
+			const glob = new Glob("*/");
+			const providersPath = path.join(import.meta.dir, "../../providers");
+
+			const providerDirs: string[] = [];
+			for await (const dir of glob.scan({
+				cwd: providersPath,
+				onlyFiles: false,
+			})) {
+				providerDirs.push(dir);
+			}
+
+			if (providerDirs.length === 0) {
+				log.warn("No provider directories found in src/providers/");
+				discoveryComplete = true;
+				return;
+			}
+
+			log.info(
+				`Found ${providerDirs.length} provider directories: ${providerDirs.join(", ")}`,
+			);
+
+			// 2. For each directory, check if it has a provider implementation file
+			for (const dir of providerDirs) {
+				const providerName = dir.replace(/\/$/, ""); // Remove trailing slash
+				const providerFileName = `${providerName}Provider.ts`;
+				const providerPath = path.join(providersPath, dir, providerFileName);
+
+				try {
+					// 3. Check if the provider file exists
+					const file = Bun.file(providerPath);
+					const exists = await file.exists();
+
+					if (!exists) {
+						log.warn(`Skipping ${providerName}: No ${providerFileName} found`);
+						continue;
+					}
+
+					// 4. Register the provider with a lazy loader
+					const importPath = `../../providers/${providerName}/${providerFileName.replace(".ts", "")}`;
+					providerRegistry.set(providerName, async () => {
+						const module = await import(importPath);
+						const className = `${providerName.charAt(0).toUpperCase()}${providerName.slice(1)}Provider`;
+						const ProviderClass = module[className];
+
+						if (!ProviderClass) {
+							throw new Error(
+								`Provider class ${className} not found in ${importPath}`,
+							);
+						}
+
+						return ProviderClass;
+					});
+
+					log.info(`Registered provider: ${providerName}`);
+				} catch (error) {
+					log.error(
+						`Error registering provider ${providerName}`,
+						error as Error,
+					);
+				}
+			}
+
+			discoveryComplete = true;
+			log.success(
+				`Provider discovery complete. Registered ${providerRegistry.size} providers.`,
+			);
+		} catch (error) {
+			log.error("Error during provider discovery", error as Error);
+			discoveryComplete = true; // Mark as complete to avoid retry loops
+		}
+	}
+
+	/**
+	 * Get a provider instance by name (canonical name or alias)
 	 * Uses singleton pattern to reuse provider instances
-	 * @param providerType - The type of provider to create
+	 * @param providerName - The name or alias of the provider (e.g., "google", "gemini")
 	 * @returns The provider instance
 	 * @throws Error if provider is not supported
 	 */
-	function getProviderInstance(providerType: ProviderType): LLMProvider {
-		// Check if we already have an instance
-		if (providerInstances.has(providerType)) {
-			const instance = providerInstances.get(providerType);
+	async function getProviderInstance(
+		providerName: string,
+	): Promise<LLMProvider> {
+		// Ensure discovery has run
+		await discoverProviders();
+
+		const normalizedName = providerName.toLowerCase().trim();
+
+		// 1. Check if we already have an instance (check cache first for canonical and alias)
+		if (providerInstances.has(normalizedName)) {
+			const instance = providerInstances.get(normalizedName);
 			if (instance) {
 				return instance;
 			}
 		}
 
-		// Create new provider instance based on type
-		let provider: LLMProvider;
-
-		switch (providerType) {
-			case ProviderType.GOOGLE: {
-				// Import the Google provider
-				const {
-					GoogleProvider,
-				} = require("../../providers/google/googleProvider");
-				provider = new GoogleProvider();
-				break;
+		// 2. Check if this is a registered canonical provider name
+		if (providerRegistry.has(normalizedName)) {
+			const ProviderClassLoader = providerRegistry.get(normalizedName);
+			if (!ProviderClassLoader) {
+				throw new Error(`Provider loader not found for: ${normalizedName}`);
 			}
 
-			case ProviderType.OPENAI: {
-				throw new Error("OpenAI provider is not yet implemented");
-				// Future implementation:
-				// const { OpenAIProvider } = require("./openai/OpenAIProvider");
-				// provider = new OpenAIProvider();
-				// break;
+			const ProviderClass = await ProviderClassLoader();
+			const provider = new ProviderClass();
+
+			// Cache the instance under canonical name
+			providerInstances.set(normalizedName, provider);
+
+			// Also cache under all aliases
+			const info = provider.getInfo();
+			if (info.aliases) {
+				for (const alias of info.aliases) {
+					const aliasLower = alias.toLowerCase().trim();
+					providerInstances.set(aliasLower, provider);
+					log.info(`Registered alias "${alias}" for provider "${info.name}"`);
+				}
 			}
 
-			case ProviderType.ANTHROPIC: {
-				throw new Error("Anthropic provider is not yet implemented");
-				// Future implementation:
-				// const { AnthropicProvider } = require("./anthropic/AnthropicProvider");
-				// provider = new AnthropicProvider();
-				// break;
-			}
+			log.info(`Created new provider instance: ${normalizedName}`);
+			return provider;
+		}
 
-			default: {
-				throw new Error(`Unsupported provider type: ${providerType}`);
+		// 3. Check if this might be an alias - try loading all providers to check aliases
+		// This is less efficient but handles the case where an alias is used before the provider is loaded
+		for (const [registeredName, loader] of providerRegistry.entries()) {
+			try {
+				const ProviderClass = await loader();
+				const tempInstance = new ProviderClass();
+				const info = tempInstance.getInfo();
+
+				// Check if the normalized name matches any alias
+				if (
+					info.aliases?.some(
+						(alias) => alias.toLowerCase().trim() === normalizedName,
+					)
+				) {
+					// Found a match! Cache it properly
+					providerInstances.set(info.name.toLowerCase(), tempInstance);
+
+					// Cache all aliases
+					if (info.aliases) {
+						for (const alias of info.aliases) {
+							const aliasLower = alias.toLowerCase().trim();
+							providerInstances.set(aliasLower, tempInstance);
+						}
+					}
+
+					log.info(
+						`Resolved alias "${normalizedName}" to provider "${info.name}"`,
+					);
+					return tempInstance;
+				}
+			} catch (error) {
+				log.warn(
+					`Failed to load provider ${registeredName} while checking aliases`,
+					{
+						error: error as Error,
+					},
+				);
 			}
 		}
 
-		// Cache the instance
-		providerInstances.set(providerType, provider);
-		log.info(`Created new provider instance: ${providerType}`);
-
-		return provider;
+		// 4. Provider not found
+		const availableProviders = Array.from(providerRegistry.keys());
+		throw new Error(
+			`Unsupported provider: ${providerName}. Available providers: ${availableProviders.join(", ")}`,
+		);
 	}
 
 	/**
@@ -95,50 +217,20 @@ export namespace ProviderFactory {
 	 * @returns The appropriate provider instance
 	 * @throws Error if provider is not supported or not configured
 	 */
-	export function getProvider(tomoriState: TomoriState): LLMProvider {
+	export async function getProvider(
+		tomoriState: TomoriState,
+	): Promise<LLMProvider> {
 		if (!tomoriState.llm?.llm_provider) {
 			throw new Error("No LLM provider configured in TomoriState");
 		}
 
 		const providerName = tomoriState.llm.llm_provider.toLowerCase().trim();
-
-		// Convert provider name to enum
-		let providerType: ProviderType;
-		switch (providerName) {
-			case "google":
-			case "gemini": {
-				providerType = ProviderType.GOOGLE;
-				break;
-			}
-			case "openai":
-			case "gpt": {
-				providerType = ProviderType.OPENAI;
-				break;
-			}
-			case "anthropic":
-			case "claude": {
-				providerType = ProviderType.ANTHROPIC;
-				break;
-			}
-			default: {
-				log.error(`Unsupported LLM provider: ${providerName}`, undefined, {
-					serverId: tomoriState.server_id,
-					errorType: "UnsupportedProviderError",
-					metadata: {
-						providerName,
-						supportedProviders: Object.values(ProviderType),
-					},
-				});
-				throw new Error(
-					`Unsupported LLM provider: ${providerName}. Supported providers: ${Object.values(ProviderType).join(", ")}`,
-				);
-			}
-		}
-
-		// Validate that the configured model is supported by the provider
-		const provider = getProviderInstance(providerType);
 		const modelCodename = tomoriState.llm.llm_codename;
 
+		// Get the provider instance (handles aliases automatically)
+		const provider = await getProviderInstance(providerName);
+
+		// Validate that the configured model is supported by the provider
 		if (
 			modelCodename &&
 			!provider.getInfo().supportedModels.includes(modelCodename)
@@ -164,50 +256,67 @@ export namespace ProviderFactory {
 	 * Get all available providers and their information
 	 * @returns Array of provider information objects
 	 */
-	export function getAvailableProviders(): Array<{
-		type: ProviderType;
-		info: ProviderInfo;
-	}> {
-		const availableProviders: Array<{
-			type: ProviderType;
-			info: ProviderInfo;
-		}> = [];
+	export async function getAvailableProviders(): Promise<
+		Array<{ name: string; info: ProviderInfo }>
+	> {
+		// Ensure discovery has run
+		await discoverProviders();
 
-		// Only include implemented providers
-		try {
-			const googleProvider = getProviderInstance(ProviderType.GOOGLE);
-			availableProviders.push({
-				type: ProviderType.GOOGLE,
-				info: googleProvider.getInfo(),
-			});
-		} catch (error) {
-			log.warn(
-				`Google provider not available: ${error instanceof Error ? error.message : String(error)}`,
-			);
+		const availableProviders: Array<{ name: string; info: ProviderInfo }> = [];
+
+		// Try to load each registered provider
+		for (const providerName of providerRegistry.keys()) {
+			try {
+				const provider = await getProviderInstance(providerName);
+				availableProviders.push({
+					name: providerName,
+					info: provider.getInfo(),
+				});
+			} catch (error) {
+				log.warn(
+					`Provider ${providerName} not available: ${error instanceof Error ? error.message : String(error)}`,
+				);
+			}
 		}
-
-		// Future: Add other providers when implemented
-		// try {
-		//   const openaiProvider = this.getProviderInstance(ProviderType.OPENAI);
-		//   availableProviders.push({ type: ProviderType.OPENAI, info: openaiProvider.getInfo() });
-		// } catch (error) {
-		//   log.warn(`OpenAI provider not available: ${error.message}`);
-		// }
 
 		return availableProviders;
 	}
 
 	/**
-	 * Check if a provider type is supported
+	 * Check if a provider type is supported (including aliases)
 	 * @param providerName - The provider name to check
 	 * @returns True if the provider is supported
 	 */
-	export function isProviderSupported(providerName: string): boolean {
+	export async function isProviderSupported(
+		providerName: string,
+	): Promise<boolean> {
+		// Ensure discovery has run
+		await discoverProviders();
+
 		const normalizedName = providerName.toLowerCase().trim();
-		return (
-			Object.values(ProviderType).includes(normalizedName as ProviderType) ||
-			["gemini", "gpt", "claude"].includes(normalizedName)
-		);
+
+		// Check if it's a canonical name
+		if (providerRegistry.has(normalizedName)) {
+			return true;
+		}
+
+		// Check if it's an alias by trying to load all providers
+		for (const [registeredName] of providerRegistry.entries()) {
+			try {
+				const provider = await getProviderInstance(registeredName);
+				const info = provider.getInfo();
+
+				if (
+					info.aliases?.some(
+						(alias) => alias.toLowerCase().trim() === normalizedName,
+					)
+				) {
+					return true;
+				}
+			} catch (_error) {}
+		}
+
+		return false;
 	}
 
 	/**
@@ -217,6 +326,16 @@ export namespace ProviderFactory {
 		providerInstances.clear();
 		log.info("Cleared provider instance cache");
 	}
+
+	/**
+	 * Reset discovery state (useful for testing)
+	 */
+	export function resetDiscovery(): void {
+		providerRegistry.clear();
+		providerInstances.clear();
+		discoveryComplete = false;
+		log.info("Reset provider discovery state");
+	}
 }
 
 /**
@@ -224,6 +343,8 @@ export namespace ProviderFactory {
  * @param tomoriState - The Tomori state
  * @returns The appropriate provider instance
  */
-export function getProviderForTomori(tomoriState: TomoriState): LLMProvider {
+export async function getProviderForTomori(
+	tomoriState: TomoriState,
+): Promise<LLMProvider> {
 	return ProviderFactory.getProvider(tomoriState);
 }

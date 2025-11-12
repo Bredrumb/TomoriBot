@@ -1700,7 +1700,7 @@ export default async function tomoriChat(
 			// Get the appropriate provider based on TomoriState configuration
 			let provider: LLMProvider;
 			try {
-				provider = getProviderForTomori(tomoriState);
+				provider = await getProviderForTomori(tomoriState);
 			} catch (error) {
 				log.error(
 					`Failed to get LLM provider: ${error instanceof Error ? error.message : String(error)}`,

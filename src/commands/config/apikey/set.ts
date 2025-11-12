@@ -21,10 +21,7 @@ import type {
 	SelectOption,
 	ModalComponent,
 } from "../../../types/discord/modal";
-import {
-	ProviderFactory,
-	ProviderType,
-} from "../../../utils/provider/providerFactory";
+import { ProviderFactory } from "../../../utils/provider/providerFactory";
 import { encryptApiKey } from "../../../utils/security/crypto";
 import { sql } from "bun";
 
@@ -96,29 +93,11 @@ export async function execute(
 
 		// 4. Create provider select options with descriptions
 		const providerSelectOptions: SelectOption[] = uniqueProviders.map(
-			(provider) => {
-				// Get provider info for description
-				let description = `${provider} API key`;
-				try {
-					const providerEnum = provider.toLowerCase() as ProviderType;
-					if (Object.values(ProviderType).includes(providerEnum)) {
-						const info = ProviderFactory.getAvailableProviders().find(
-							(p) => p.type === providerEnum,
-						);
-						if (info) {
-							description = info.info.name || description;
-						}
-					}
-				} catch {
-					// Fallback to default description
-				}
-
-				return {
-					label: provider.charAt(0).toUpperCase() + provider.slice(1),
-					value: provider.toLowerCase(),
-					description: undefined,
-				};
-			},
+			(provider) => ({
+				label: provider.charAt(0).toUpperCase() + provider.slice(1),
+				value: provider.toLowerCase(),
+				description: undefined,
+			}),
 		);
 
 		// 5. Show modal with provider selection and API key input
@@ -182,22 +161,33 @@ export async function execute(
 			return;
 		}
 
-		// 9. Create provider instance and validate API key
+		// 9. Get provider instance and validate API key using factory
 		let isValid = false;
 		try {
-			// Create a temporary provider instance for validation
-			let provider: {
-				validateApiKey: (key: string) => Promise<boolean>;
-			} | null = null;
 			const providerName = selectedProvider.toLowerCase();
 
-			if (providerName === "google" || providerName === "gemini") {
-				const { GoogleProvider } = await import(
-					"../../../providers/google/googleProvider"
-				);
-				provider = new GoogleProvider();
-			} else {
-				// Unsupported provider selected
+			// Use factory to get provider instance (handles all providers and aliases)
+			// Partial TomoriState for validation only - provider doesn't use these fields during validateApiKey()
+			const provider = await ProviderFactory.getProvider({
+				llm: { llm_provider: providerName, llm_codename: "" },
+				server_id: tomoriState.server_id,
+				tomori_id: tomoriState.tomori_id,
+				config: tomoriState.config,
+				// biome-ignore lint/suspicious/noExplicitAny: Minimal object structure needed for factory pattern
+			} as any);
+
+			// Validate the API key with the provider
+			isValid = await provider.validateApiKey(apiKey);
+		} catch (error) {
+			log.error(
+				`Error validating API key for provider ${selectedProvider}`,
+				error as Error,
+			);
+
+			// Check if error is due to unsupported provider
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			if (errorMessage.includes("Unsupported provider")) {
 				await replyInfoEmbed(modalSubmitInteraction, locale, {
 					titleKey: "commands.config.apikey.set.unsupported_provider_title",
 					descriptionKey:
@@ -207,28 +197,14 @@ export async function execute(
 					},
 					color: ColorCode.ERROR,
 				});
-				return;
-			}
-
-			// Validate the API key with the provider
-			if (provider?.validateApiKey) {
-				isValid = await provider.validateApiKey(apiKey);
 			} else {
-				throw new Error(
-					`Provider ${selectedProvider} does not support API key validation`,
-				);
+				await replyInfoEmbed(modalSubmitInteraction, locale, {
+					titleKey: "commands.config.apikey.set.validation_error_title",
+					descriptionKey:
+						"commands.config.apikey.set.validation_error_description",
+					color: ColorCode.ERROR,
+				});
 			}
-		} catch (error) {
-			log.error(
-				`Error validating API key for provider ${selectedProvider}`,
-				error as Error,
-			);
-			await replyInfoEmbed(modalSubmitInteraction, locale, {
-				titleKey: "commands.config.apikey.set.validation_error_title",
-				descriptionKey:
-					"commands.config.apikey.set.validation_error_description",
-				color: ColorCode.ERROR,
-			});
 			return;
 		}
 

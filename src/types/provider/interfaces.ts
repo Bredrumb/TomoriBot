@@ -41,6 +41,7 @@ export interface ProviderConfig {
 export interface ProviderInfo {
 	name: string;
 	displayName: string;
+	aliases?: string[]; // Optional aliases for provider name (e.g., ["gemini"] for "google")
 	supportedModels: string[];
 	requiresApiKey: boolean;
 	supportsStreaming: boolean;

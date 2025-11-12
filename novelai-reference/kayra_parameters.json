@@ -1,0 +1,67 @@
+{
+    "bad_words_ids": [
+        [ 3 ],      [ 49356 ], [ 1431 ],
+        [ 31715 ],  [ 34387 ], [ 20765 ],
+        [ 30702 ],  [ 10691 ], [ 49333 ],
+        [ 1266 ],   [ 19438 ], [ 43145 ],
+        [ 26523 ],  [ 41471 ], [ 2936 ],
+        [ 85, 85 ], [ 49332 ], [ 7286 ],
+        [ 1115 ],   [ 24 ]
+    ],
+    "bracket_ban": true,
+    "cfg_scale": 1,
+    "force_emotion": false,
+    "generate_until_sentence": true,
+    "logit_bias_exp": [
+        {
+            "sequence": [ 23 ],
+            "bias": 0.08,
+            "ensure_sequence_finish": false,
+            "generate_once": false
+        },
+        {
+            "sequence": [ 21 ],
+            "bias": -0.08,
+            "ensure_sequence_finish": false,
+            "generate_once": false
+        }
+    ],
+    "math1_quad": 0,
+    "math1_quad_entropy_scale": 0,
+    "math1_temp": 1,
+    "max_length": 100,
+    "min_length": 10,
+    "min_p": 0,
+    "mirostat_lr": null,
+    "mirostat_tau": null,
+    "num_logprobs": null,
+    "order": [2, 3, 0, 4, 1],
+    "phrase_rep_pen": "aggressive",
+    "prefix": "vanilla",
+    "repetition_penalty": 2.8,
+    "repetition_penalty_frequency": 0.02,
+    "repetition_penalty_presence": 0,
+    "repetition_penalty_range": 2048,
+    "repetition_penalty_slope": 0.02,
+    "repetition_penalty_whitelist": [
+        49256, 49264, 49231, 49230, 49287,    85, 49255, 49399,
+        49262,   336,   333,   432,   363,   468,   492,   745,
+        401,   426,   623,   794,  1096,  2919,  2072,  7379,
+        1259,  2110,   620,   526,   487, 16562,   603,   805,
+        761,  2681,   942,  8917,   653,  3513,   506,  5301,
+        562,  5010,   614, 10942,   539,  2976,   462,  5189,
+        567,  2032,   123,   124,   125,   126,   127,   128,
+        129,   130,   131,   132,   588,   803,  1040, 49209,
+        4,     5,     6,     7,     8,     9,    10,    11,
+        12
+    ],
+    "stop_sequences": [[ 85 ], [ 85, 23 ], [ 50890, 49672, 50609 ]],
+    "tail_free_sampling": 0.915,
+    "temperature": 1.35,
+    "top_a": 0.1,
+    "top_g": 0,
+    "top_k": 15,
+    "top_p": 0.85,
+    "typical_p": null,
+    "use_string": true
+}

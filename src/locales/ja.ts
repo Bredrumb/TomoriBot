@@ -145,8 +145,7 @@ export default {
 			// エラーインタラクションメッセージ
 			provider_error_interaction:
 				"ストリーム応答がブロック/停止されました。理由: {reason}。",
-			retry_message:
-				"これは一時的なエラーです。後でもう一度お試しください。",
+			retry_message: "これは一時的なエラーです。後でもう一度お試しください。",
 
 			// 汎用プロバイダーエラータイトルとヒント（genai.googleから移動）
 			api_error_title: "❌ APIエラー",
@@ -722,14 +721,13 @@ export default {
 				// OpenRouter
 				openrouter_title: `OpenRouter APIキーの設定`,
 				openrouter_description: `OpenRouterは従量課金制で複数のプロバイダーの様々なAIモデルへのアクセスを提供します。
-- 最新かつ最も強力なAIモデルへのアクセス
+- 最新かつ最も強力なAIモデルへのアクセス（無料もあります）
 - 現在、TomoriBotの全機能をサポートしていません
 - [OpenRouter利用規約](https://openrouter.ai/terms)`,
 				openrouter_getting_key_title: `APIキーの取得：`,
 				openrouter_getting_key_description: `1. [OpenRouter](https://openrouter.ai/settings/keys)にアクセス
 2. \`APIキーを作成\`をクリック
-3. このAPIキーを{configSetup}または{configApikeySet}にコピー
-4. アカウントにクレジットを追加（従量課金制）`,
+3. このAPIキーを{configSetup}または{configApikeySet}にコピー`,
 				openrouter_footer: `このプロバイダーを設定したら、{configModel}でデフォルトモデルを変更できます`,
 			},
 

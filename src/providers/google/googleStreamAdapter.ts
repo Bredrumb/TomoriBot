@@ -75,9 +75,6 @@ interface GoogleStreamChunk {
  * - Enables the model to maintain reasoning context across function calls
  */
 export class GoogleStreamAdapter implements StreamProvider {
-	private static readonly DEFAULT_MODEL =
-		process.env.DEFAULT_GEMINI_MODEL || "gemini-2.5-flash";
-
 	private static readonly SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
 		ContextItemTag.KNOWLEDGE_SERVER_INFO,
 		ContextItemTag.KNOWLEDGE_SERVER_EMOJIS,
@@ -207,9 +204,12 @@ export class GoogleStreamAdapter implements StreamProvider {
 			}
 		}
 
-		log.info(
-			`Generating content with model ${config.model || GoogleStreamAdapter.DEFAULT_MODEL}`,
-		);
+		// Ensure model is provided
+		if (!config.model) {
+			throw new Error("Model must be specified in config. Use GoogleProvider.getDefaultModel() if needed.");
+		}
+
+		log.info(`Generating content with model ${config.model}`);
 
 		// Log sanitized request for debugging
 		this.logSanitizedRequest(requestConfig, finalContents);
@@ -217,7 +217,7 @@ export class GoogleStreamAdapter implements StreamProvider {
 		try {
 			// Start the streaming
 			const stream = await genAI.models.generateContentStream({
-				model: config.model || GoogleStreamAdapter.DEFAULT_MODEL,
+				model: config.model,
 				contents: finalContents,
 				config: requestConfig,
 			});
@@ -229,7 +229,7 @@ export class GoogleStreamAdapter implements StreamProvider {
 					provider: "google",
 					metadata: {
 						timestamp: Date.now(),
-						model: config.model || GoogleStreamAdapter.DEFAULT_MODEL,
+						model: config.model,
 					},
 				};
 			}

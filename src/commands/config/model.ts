@@ -63,7 +63,9 @@ export async function execute(
 	let selectedModel: LlmRow | null = null; // For error context and logic
 	try {
 		// 2. Load the Tomori state for this server (Rule #17)
-		const tomoriState = await loadTomoriState(interaction.guild?.id ?? interaction.user.id);
+		const tomoriState = await loadTomoriState(
+			interaction.guild?.id ?? interaction.user.id,
+		);
 		if (!tomoriState) {
 			await replyInfoEmbed(interaction, locale, {
 				titleKey: "general.errors.tomori_not_setup_title",
@@ -101,7 +103,9 @@ export async function execute(
 		const modelSelectOptions: SelectOption[] = availableModels.map((model) => ({
 			label: safeSelectOptionText(model.llm_codename), // Use codename as display label
 			value: safeSelectOptionText(model.llm_codename), // Use codename as value
-			description: safeSelectOptionText(model.llm_description || `${model.llm_provider} model`), // Use description from DB or fallback
+			description: safeSelectOptionText(
+				model.llm_description || `${model.llm_provider} model`,
+			), // Use description from DB or fallback
 		}));
 
 		// 5. Show the modal with model selection
@@ -209,20 +213,29 @@ export async function execute(
 					keyVersion,
 				);
 
-				// Create provider instance for validation
+				// Create provider instance for validation using factory
 				let isKeyCompatible = false;
-				if (newProvider === "google" || newProvider === "gemini") {
-					const { GoogleProvider } = await import(
-						"../../providers/google/googleProvider"
+				try {
+					// Use factory to get provider instance (handles all providers and aliases)
+					const { ProviderFactory } = await import(
+						"../../utils/provider/providerFactory"
 					);
-					const provider = new GoogleProvider();
+					// Partial TomoriState for validation only - provider doesn't use these fields during validateApiKey()
+					const provider = await ProviderFactory.getProvider({
+						llm: { llm_provider: newProvider, llm_codename: "" },
+						server_id: tomoriState.server_id,
+						tomori_id: tomoriState.tomori_id,
+						config: tomoriState.config,
+						// biome-ignore lint/suspicious/noExplicitAny: Minimal object structure needed for factory pattern
+					} as any);
+
 					isKeyCompatible = await provider.validateApiKey(decryptedApiKey);
-				} else {
-					// For other providers, we can't validate yet, so assume compatible
-					// but log a warning
+				} catch (providerError) {
+					// Provider not found or other error
 					log.warn(
-						`Cannot validate API key for provider ${newProvider} - validation not implemented`,
+						`Cannot validate API key for provider ${newProvider}: ${providerError instanceof Error ? providerError.message : String(providerError)}`,
 					);
+					// Assume compatible if provider cannot be loaded
 					isKeyCompatible = true;
 				}
 

@@ -46,50 +46,55 @@ import {
 	getCachedDefaultLLM,
 	isLLMCacheReady,
 } from "../../utils/cache/llmCache";
-import { loadDefaultModelForProvider } from "../../utils/db/dbRead";
+import { loadDefaultModelForProvider, loadAvailableModelsForProvider } from "../../utils/db/dbRead";
 
 /**
  * Gets the default Google Gemini model with a robust fallback chain:
  * 1. First checks the cached is_default LLM from the database
  * 2. Falls back to database query for is_default model if cache is not ready
- * 3. Falls back to environment variable DEFAULT_GEMINI_MODEL
- * 4. Ultimate fallback to hardcoded "gemini-2.5-flash"
+ * 3. Falls back to first non-deprecated model from database
+ * 4. Throws error if no models are available
  * @returns Promise<string> - The default model codename
  */
 async function getDefaultGoogleModel(): Promise<string> {
+	const providerName = "google";
+
 	// 1. Try to get default from cache (fastest, no DB query)
 	if (isLLMCacheReady()) {
-		const cachedDefault = getCachedDefaultLLM("google");
+		const cachedDefault = getCachedDefaultLLM(providerName);
 		if (cachedDefault) {
-			log.info(`Using cached default Google model: ${cachedDefault.llm_codename}`);
+			log.info(`Using cached default ${providerName} model: ${cachedDefault.llm_codename}`);
 			return cachedDefault.llm_codename;
 		}
 	}
 
-	// 2. Cache not ready or no default found - query database
+	// 2. Cache not ready or no default found - query database for is_default model
 	try {
-		const dbDefault = await loadDefaultModelForProvider("google");
+		const dbDefault = await loadDefaultModelForProvider(providerName);
 		if (dbDefault) {
-			log.info(`Using database default Google model: ${dbDefault.llm_codename}`);
+			log.info(`Using database default ${providerName} model: ${dbDefault.llm_codename}`);
 			return dbDefault.llm_codename;
 		}
 	} catch (error) {
-		log.warn("Failed to load default model from database, falling back to env/hardcoded", {
+		log.warn(`Failed to load default model from database for ${providerName}`, {
 			error: error as Error,
 		});
 	}
 
-	// 3. Fallback to environment variable
-	const envModel = process.env.DEFAULT_GEMINI_MODEL;
-	if (envModel) {
-		log.info(`Using environment variable default Google model: ${envModel}`);
-		return envModel;
+	// 3. Fallback to first non-deprecated model from database
+	try {
+		const availableModels = await loadAvailableModelsForProvider(providerName);
+		if (availableModels && availableModels.length > 0) {
+			const firstModel = availableModels[0].llm_codename;
+			log.warn(`No default model found, using first available ${providerName} model: ${firstModel}`);
+			return firstModel;
+		}
+	} catch (error) {
+		log.error(`Failed to load available models for ${providerName}`, error as Error);
 	}
 
-	// 4. Ultimate fallback to hardcoded value
-	const hardcodedDefault = "gemini-2.5-flash";
-	log.warn(`Using hardcoded default Google model: ${hardcodedDefault}`);
-	return hardcodedDefault;
+	// 4. No models found - throw error
+	throw new Error(`No default model found for provider: ${providerName}. Please configure models in the database.`);
 }
 
 // Google-specific configuration extending the base ProviderConfig
@@ -118,6 +123,7 @@ export class GoogleProvider extends BaseLLMProvider implements LLMProvider {
 		return {
 			name: "google",
 			displayName: "Google Gemini",
+			aliases: ["gemini"], // Support "gemini" as an alias for "google"
 			supportedModels: [
 				"gemini-2.5-flash",
 				"gemini-2.5-pro-preview-05-06",
