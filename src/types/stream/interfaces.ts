@@ -17,6 +17,7 @@ import type {
 } from "discord.js";
 import type {
 	FunctionCall,
+	FunctionResponseImageMetadata,
 	ProviderConfig,
 	StreamResult,
 } from "../provider/interfaces";
@@ -94,6 +95,7 @@ export interface StreamContext {
 	functionInteractionHistory?: Array<{
 		functionCall: FunctionCall;
 		functionResponse: Record<string, unknown>;
+		imageMetadata?: FunctionResponseImageMetadata;
 	}>;
 
 	// Provider context

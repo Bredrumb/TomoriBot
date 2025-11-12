@@ -154,9 +154,55 @@ export class GoogleStreamAdapter implements StreamProvider {
 					role: "model",
 					parts: [{ functionCall: item.functionCall as GoogleFunctionCall }],
 				});
+
+				// Build function response parts array
+				const responseParts: Part[] = [item.functionResponse as Part];
+
+				// Add image parts if present (for tools that send images like brave_image_search)
+				if (item.imageMetadata?.imageUrls) {
+					log.info(
+						`Adding ${item.imageMetadata.imageUrls.length} image(s) to function response for LLM visibility`,
+					);
+
+					for (const imageInfo of item.imageMetadata.imageUrls) {
+						try {
+							// Fetch and convert image to base64 (same logic as context images)
+							const imageResponse = await fetch(imageInfo.url);
+							if (!imageResponse.ok) {
+								log.warn(
+									`Failed to fetch image for function response: ${imageInfo.url} (status: ${imageResponse.status})`,
+								);
+								continue;
+							}
+
+							const imageArrayBuffer = await imageResponse.arrayBuffer();
+							const base64ImageData =
+								Buffer.from(imageArrayBuffer).toString("base64");
+
+							responseParts.push({
+								inlineData: {
+									mimeType: imageInfo.mimeType || "image/jpeg",
+									data: base64ImageData,
+								},
+							});
+
+							log.success(
+								`Successfully added image to function response: ${imageInfo.url}`,
+							);
+						} catch (imgErr) {
+							log.warn(
+								`Error processing image for function response: ${imageInfo.url}`,
+								{
+									error: imgErr instanceof Error ? imgErr.message : String(imgErr),
+								},
+							);
+						}
+					}
+				}
+
 				finalContents.push({
 					role: "user",
-					parts: [item.functionResponse as Part],
+					parts: responseParts,
 				});
 			}
 		}

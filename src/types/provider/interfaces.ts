@@ -58,6 +58,21 @@ export interface FunctionCall {
 }
 
 /**
+ * Metadata about images sent to Discord by tool execution
+ * Used to make LLM aware of images it sent via tools
+ */
+export interface FunctionResponseImageMetadata {
+	imageUrls: Array<{
+		url: string;
+		mimeType?: string;
+		wasCompressed?: boolean;
+		originalUrl?: string;
+	}>;
+	totalSent: number;
+	totalValidated: number;
+}
+
+/**
  * Base interface that all LLM providers must implement
  */
 export interface LLMProvider {
@@ -105,6 +120,7 @@ export interface LLMProvider {
 		functionInteractionHistory?: Array<{
 			functionCall: FunctionCall;
 			functionResponse: Record<string, unknown>;
+			imageMetadata?: FunctionResponseImageMetadata;
 		}>,
 		initialInteraction?: CommandInteraction,
 		replyToMessage?: Message,
@@ -144,6 +160,7 @@ export abstract class BaseLLMProvider implements LLMProvider {
 		functionInteractionHistory?: Array<{
 			functionCall: FunctionCall;
 			functionResponse: Record<string, unknown>;
+			imageMetadata?: FunctionResponseImageMetadata;
 		}>,
 		initialInteraction?: CommandInteraction,
 		replyToMessage?: Message,

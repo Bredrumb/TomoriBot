@@ -11,6 +11,7 @@ import type {
 	TypedMCPToolResult,
 	MCPExecutionContext,
 } from "./mcpTypes";
+import type { FunctionResponseImageMetadata } from "../provider/interfaces";
 
 /**
  * Tool parameter schema definition
@@ -72,6 +73,7 @@ export interface ToolResult {
 	data?: unknown;
 	error?: string;
 	message?: string;
+	imageMetadata?: FunctionResponseImageMetadata;
 }
 
 /**

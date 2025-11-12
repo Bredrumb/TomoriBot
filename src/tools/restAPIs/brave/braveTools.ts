@@ -58,26 +58,9 @@ abstract class BaseBraveSearchTool extends BaseTool {
 	 * @param result - Result from function implementation
 	 * @returns Standardized ToolResult
 	 */
-	protected convertToToolResult(result: {
-		success: boolean;
-		message: string;
-		data?: unknown; // ← Added data field!
-		error?: string;
-	}): ToolResult {
-		const toolResult: ToolResult = {
-			success: result.success,
-			message: result.message,
-		};
-
-		if (result.data) {
-			toolResult.data = result.data;
-		}
-
-		if (result.error) {
-			toolResult.error = result.error;
-		}
-
-		return toolResult;
+	protected convertToToolResult(result: ToolResult): ToolResult {
+		// If result already includes all ToolResult fields, pass it through
+		return result;
 	}
 }
 

@@ -5,7 +5,7 @@
  */
 
 import { log } from "../../../utils/misc/logger";
-import type { ToolContext } from "../../../types/tool/interfaces";
+import type { ToolContext, ToolResult } from "../../../types/tool/interfaces";
 import { sendStandardEmbed } from "../../../utils/discord/embedHelper";
 import { ColorCode } from "../../../utils/misc/logger";
 import sharp from "sharp";
@@ -240,12 +240,7 @@ export async function brave_web_search(
 export async function brave_image_search(
 	args: Record<string, unknown>,
 	context?: ToolContext,
-): Promise<{
-	success: boolean;
-	message: string;
-	data?: unknown;
-	error?: string;
-}> {
+): Promise<ToolResult> {
 	try {
 		// Validate required parameters
 		if (!args.query || typeof args.query !== "string") {
@@ -623,13 +618,32 @@ export async function brave_image_search(
 						completionMessage += ` (Note: ${failedUrls.length} image URLs were inaccessible and were filtered out.)`;
 					}
 
-					return createToolResult(true, completionMessage, {
-						results: completionMessage,
-						imagesSent: attachments.length,
-						imagesValidated: validatedUrls.length,
-						imagesFiltered: failedUrls.length,
-						status: "completed_and_sent",
-					});
+					// Build image metadata for LLM visibility
+					const imageMetadata = {
+						imageUrls: validatedUrls.map((url) => {
+							const wasCompressed = compressedImageMap.has(url);
+							return {
+								url,
+								mimeType: wasCompressed ? "image/jpeg" : "image/jpeg", // All attachments are sent as JPEG
+								wasCompressed,
+							};
+						}),
+						totalSent: attachments.length,
+						totalValidated: validatedUrls.length,
+					};
+
+					return {
+						success: true,
+						message: completionMessage,
+						data: {
+							results: completionMessage,
+							imagesSent: attachments.length,
+							imagesValidated: validatedUrls.length,
+							imagesFiltered: failedUrls.length,
+							status: "completed_and_sent",
+						},
+						imageMetadata,
+					};
 				} catch (sendError) {
 					log.error(
 						"Failed to send image attachments to Discord:",

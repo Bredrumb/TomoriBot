@@ -2229,7 +2229,11 @@ export default async function tomoriChat(
 						}
 
 						// 3. Add the model's function call and our function's result to the history
-						functionInteractionHistory.push({
+						const historyEntry: {
+							functionCall: FunctionCall;
+							functionResponse: Record<string, unknown>;
+							imageMetadata?: typeof toolResult.imageMetadata;
+						} = {
 							functionCall: funcCall,
 							functionResponse: {
 								functionResponse: {
@@ -2237,7 +2241,17 @@ export default async function tomoriChat(
 									response: { result: functionExecutionResult },
 								},
 							},
-						});
+						};
+
+						// Add imageMetadata if present (for tools that send images like brave_image_search)
+						if (toolResult.imageMetadata) {
+							historyEntry.imageMetadata = toolResult.imageMetadata;
+							log.info(
+								`Including ${toolResult.imageMetadata.totalSent} image(s) in function response history for LLM visibility`,
+							);
+						}
+
+						functionInteractionHistory.push(historyEntry);
 
 						// 4. Safety break if max iterations reached
 						if (i === MAX_FUNCTION_CALL_ITERATIONS - 1) {

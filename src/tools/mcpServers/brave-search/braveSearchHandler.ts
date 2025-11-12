@@ -172,11 +172,24 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
 				const queryTerm = args.query || "images";
 				const completionMessage = `Found and sent ${attachments.length} ${queryTerm} images directly to Discord. The images are now displayed for the user.`;
 
-				return {
+				// Build image metadata for LLM visibility
+				const imageMetadata = {
+					imageUrls: imageUrls
+						.filter((url) => !failedUrls.includes(url))
+						.map((url) => ({
+							url,
+							mimeType: "image/jpeg", // MCP images sent as JPEG
+							wasCompressed: false, // MCP doesn't compress images
+						})),
+					totalSent: attachments.length,
+					totalValidated: attachments.length,
+				};
+
+				const toolResult: TypedMCPToolResult = {
 					success: true,
 					message: completionMessage,
 					data: {
-						source: "mcp",
+						source: "mcp" as const,
 						functionName: "brave_image_search",
 						serverName: this.serverName,
 						rawResult: this.cleanImageSearchResult(mcpResult),
@@ -186,7 +199,10 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
 						completionMessage: completionMessage,
 						// Deliberately not including imageUrls or rawResult to prevent duplicate sending
 					},
+					imageMetadata,
 				};
+
+				return toolResult;
 			} else {
 				const queryTerm = args.query || "images";
 				return {
