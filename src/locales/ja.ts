@@ -709,7 +709,7 @@ export default {
 				novelai_title: `NovelAI APIキーの設定`,
 				novelai_description: `NovelAIはクリエイティブなストーリーテリングとロールプレイに焦点を当てたサブスクリプションベースのサービスです。
 - 無制限の無検閲メッセージ
-- 現在、TomoriBotの全機能をサポートしていません
+- 現在、テキスト生成のみをサポートしています（ビジョンやアシスタント機能はありません）。
 - [NovelAI利用規約](https://novelai.net/terms)`,
 				novelai_getting_key_title: `APIキーの取得：`,
 				novelai_getting_key_description: `1. [NovelAI](https://novelai.net/stories)にアクセス

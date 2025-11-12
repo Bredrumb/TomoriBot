@@ -13,7 +13,9 @@ VALUES
   ('google', 'gemini-2.5-flash-preview-05-20', false, false, false, true, 'Balanced model for general-purpose applications'),
   ('google', 'gemini-2.5-flash-preview-09-2025', false, false, false, false, 'Experimental model for general-purpose applications'),
   ('google', 'gemini-2.5-flash', false, true, false, false, 'Balanced model for general-purpose applications'),
-  ('google', 'gemini-2.5-pro', true, false, true, false, 'Most capable model for complex reasoning and analysis')
+  ('google', 'gemini-2.5-pro', true, false, true, false, 'Most capable model for complex reasoning and analysis'),
+  ('novelai', 'glm-4-6', true, true, false, false, 'Latest NovelAI roleplay model with enhanced creativity and character consistency'),
+  ('novelai', 'kayra-v1', false, false, false, false, 'Legacy Kayra model for storytelling and roleplay')
 ON CONFLICT (llm_codename) DO UPDATE SET
   llm_description = EXCLUDED.llm_description,
   is_smartest = EXCLUDED.is_smartest,

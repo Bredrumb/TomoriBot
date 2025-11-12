@@ -709,7 +709,7 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
 				novelai_title: `Setting Up NovelAI API Key`,
 				novelai_description: `NovelAI is a subscription-based service focused on creative storytelling and roleplay.
 - Unlimited uncensored messages
-- Currently does not support all TomoriBot features
+- Currently only supports text generation (no vision or assistant features)
 - [NovelAI Terms of Service](https://novelai.net/terms)`,
 				novelai_getting_key_title: `Getting Your API Key:`,
 				novelai_getting_key_description: `1. Visit [NovelAI](https://novelai.net/stories)
