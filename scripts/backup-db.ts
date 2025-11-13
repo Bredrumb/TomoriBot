@@ -56,14 +56,30 @@ async function backupDatabase(): Promise<void> {
 
 	// If DATABASE_URL not found, construct from individual Postgres variables
 	if (!dbUrl) {
-		const { POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB } = process.env;
+		const {
+			POSTGRES_HOST,
+			POSTGRES_PORT,
+			POSTGRES_USER,
+			POSTGRES_PASSWORD,
+			POSTGRES_DB,
+		} = process.env;
 
-		if (!POSTGRES_HOST || !POSTGRES_PORT || !POSTGRES_USER || !POSTGRES_PASSWORD || !POSTGRES_DB) {
+		if (
+			!POSTGRES_HOST ||
+			!POSTGRES_PORT ||
+			!POSTGRES_USER ||
+			!POSTGRES_PASSWORD ||
+			!POSTGRES_DB
+		) {
 			log.error("Database connection not configured!");
 			log.info("Please ensure your .env file contains either:");
-			log.info("  1. DATABASE_URL (e.g., postgresql://user:pass@host:port/dbname)");
+			log.info(
+				"  1. DATABASE_URL (e.g., postgresql://user:pass@host:port/dbname)",
+			);
 			log.info("  OR");
-			log.info("  2. Individual variables: POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB");
+			log.info(
+				"  2. Individual variables: POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB",
+			);
 			process.exit(1);
 		}
 
@@ -96,7 +112,9 @@ async function backupDatabase(): Promise<void> {
 		} catch {
 			log.error("pg_dump command not found!");
 			log.info("Please install PostgreSQL command-line tools:");
-			log.info("  - Windows: Install PostgreSQL from https://www.postgresql.org/download/windows/");
+			log.info(
+				"  - Windows: Install PostgreSQL from https://www.postgresql.org/download/windows/",
+			);
 			log.info("  - macOS: brew install postgresql");
 			log.info("  - Linux: sudo apt-get install postgresql-client");
 		}

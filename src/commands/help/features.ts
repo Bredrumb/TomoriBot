@@ -20,9 +20,7 @@ export const configureSubcommand = (
 ) =>
 	subcommand
 		.setName("features")
-		.setDescription(
-			localizer("en-US", "commands.help.features.description"),
-		);
+		.setDescription(localizer("en-US", "commands.help.features.description"));
 
 /**
  * Execute the /help features command
@@ -51,12 +49,18 @@ export async function execute(
 				fields: [
 					{
 						nameKey: "commands.help.features.vision_title",
-						value: localizer(locale, "commands.help.features.vision_description"),
+						value: localizer(
+							locale,
+							"commands.help.features.vision_description",
+						),
 						inline: false,
 					},
 					{
 						nameKey: "commands.help.features.search_title",
-						value: localizer(locale, "commands.help.features.search_description"),
+						value: localizer(
+							locale,
+							"commands.help.features.search_description",
+						),
 						inline: false,
 					},
 					{
@@ -69,7 +73,10 @@ export async function execute(
 					},
 					{
 						nameKey: "commands.help.features.memory_title",
-						value: localizer(locale, "commands.help.features.memory_description"),
+						value: localizer(
+							locale,
+							"commands.help.features.memory_description",
+						),
 						inline: false,
 					},
 					{

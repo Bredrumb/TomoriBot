@@ -88,9 +88,7 @@ export async function getServerAvatar(
 			// But if somehow it doesn't, we'll just use it as-is and let PNG metadata functions handle it
 		}
 
-		log.success(
-			`Successfully downloaded avatar (${imageBuffer.length} bytes)`,
-		);
+		log.success(`Successfully downloaded avatar (${imageBuffer.length} bytes)`);
 		return imageBuffer;
 	} catch (error) {
 		log.error("Failed to get server avatar:", error as Error);
@@ -222,10 +220,7 @@ export async function initializePresetAvatarCache(
 			}
 
 			// 3. Construct absolute path from relative path
-			const absolutePath = path.join(
-				process.cwd(),
-				preset.preset_avatar_path,
-			);
+			const absolutePath = path.join(process.cwd(), preset.preset_avatar_path);
 
 			try {
 				// 4. Read the image file

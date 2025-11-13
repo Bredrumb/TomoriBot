@@ -120,7 +120,8 @@ export async function execute(
 					customId: MEMORY_INPUT_ID,
 					labelKey: "commands.teach.memory.personal.memory_input_label",
 					descriptionKey: "commands.teach.memory.personal.modal_description",
-					placeholder: "commands.teach.memory.personal.memory_input_placeholder",
+					placeholder:
+						"commands.teach.memory.personal.memory_input_placeholder",
 					style: TextInputStyle.Paragraph,
 					required: true,
 					maxLength: memoryLimits.maxMemoryLength,
@@ -243,7 +244,8 @@ export async function execute(
 			tomoriState?.config.personal_memories_enabled ?? true;
 		// Only check blacklisting for guild contexts (DM users can't be blacklisted)
 		const userIsBlacklisted = interaction.guild
-			? (await isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false
+			? ((await isBlacklisted(interaction.guild.id, interaction.user.id)) ??
+				false)
 			: false;
 
 		if (!personalizationEnabled) {

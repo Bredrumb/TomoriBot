@@ -163,10 +163,7 @@ export async function importServerData(
 			},
 		};
 	} catch (error) {
-		log.error(
-			`Error importing server data for server ${serverDiscId}:`,
-			error,
-		);
+		log.error(`Error importing server data for server ${serverDiscId}:`, error);
 		return {
 			success: false,
 			error: "commands.data.import.error_import_failed",

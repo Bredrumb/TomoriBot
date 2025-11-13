@@ -1,6 +1,6 @@
 /**
  * TypeScript types for enhanced context processing in function call tools
- * 
+ *
  * This module provides proper type definitions for extended content objects
  * that include additional properties for enhanced context processing in AI tools.
  */

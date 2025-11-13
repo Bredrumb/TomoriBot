@@ -7,9 +7,7 @@
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { log } from "../misc/logger";
-import type {
-	EnhancedMCPServerConfig,
-} from "../../types/tool/mcpTypes";
+import type { EnhancedMCPServerConfig } from "../../types/tool/mcpTypes";
 
 /**
  * MCP Configuration Manager
@@ -142,24 +140,41 @@ export class MCPConfigManager {
 		// Create enhanced configuration with defaults and proper type casting
 		const enhancedConfig: EnhancedMCPServerConfig = {
 			name: typeof rawConfig.name === "string" ? rawConfig.name : serverName,
-			displayName: typeof rawConfig.displayName === "string" ? rawConfig.displayName : serverName,
-			description: typeof rawConfig.description === "string" ? rawConfig.description : "",
+			displayName:
+				typeof rawConfig.displayName === "string"
+					? rawConfig.displayName
+					: serverName,
+			description:
+				typeof rawConfig.description === "string" ? rawConfig.description : "",
 			requiredEnvVars,
 			optionalEnvVars,
 			enabled: Boolean(rawConfig.enabled),
-			category: typeof rawConfig.category === "string" && 
-				["search", "utility", "media", "ai", "data"].includes(rawConfig.category) 
-				? rawConfig.category as "search" | "utility" | "media" | "ai" | "data"
-				: "utility",
+			category:
+				typeof rawConfig.category === "string" &&
+				["search", "utility", "media", "ai", "data"].includes(
+					rawConfig.category,
+				)
+					? (rawConfig.category as
+							| "search"
+							| "utility"
+							| "media"
+							| "ai"
+							| "data")
+					: "utility",
 			priority: typeof rawConfig.priority === "number" ? rawConfig.priority : 5,
-			transport: typeof rawConfig.transport === "string" &&
+			transport:
+				typeof rawConfig.transport === "string" &&
 				["stdio", "http", "websocket"].includes(rawConfig.transport)
-				? rawConfig.transport as "stdio" | "http" | "websocket"
-				: "stdio",
+					? (rawConfig.transport as "stdio" | "http" | "websocket")
+					: "stdio",
 
 			// Optional fields
-			npmPackage: typeof rawConfig.npmPackage === "string" ? rawConfig.npmPackage : undefined,
-			command: typeof rawConfig.command === "string" ? rawConfig.command : undefined,
+			npmPackage:
+				typeof rawConfig.npmPackage === "string"
+					? rawConfig.npmPackage
+					: undefined,
+			command:
+				typeof rawConfig.command === "string" ? rawConfig.command : undefined,
 			args: Array.isArray(rawConfig.args) ? rawConfig.args : [],
 			timeout:
 				typeof rawConfig.timeout === "number" ? rawConfig.timeout : 30000,
@@ -168,9 +183,14 @@ export class MCPConfigManager {
 			behaviorHandler: this.determineBehaviorHandler(serverName),
 
 			// Capabilities (will be determined at runtime)
-			supportedFunctions: Array.isArray(rawConfig.supportedFunctions) ? rawConfig.supportedFunctions : [],
+			supportedFunctions: Array.isArray(rawConfig.supportedFunctions)
+				? rawConfig.supportedFunctions
+				: [],
 			requiresAuth: requiredEnvVars.length > 0,
-			rateLimited: typeof rawConfig.rateLimited === "boolean" ? rawConfig.rateLimited : false,
+			rateLimited:
+				typeof rawConfig.rateLimited === "boolean"
+					? rawConfig.rateLimited
+					: false,
 		};
 
 		// Validate the configuration
@@ -193,7 +213,6 @@ export class MCPConfigManager {
 
 		return handlerMap[serverName];
 	}
-
 
 	/**
 	 * Validate a server configuration
@@ -235,9 +254,7 @@ export class MCPConfigManager {
 	 * @param enabledOnly - Whether to return only enabled servers
 	 * @returns Array of server configurations
 	 */
-	public getAllConfigurations(
-		enabledOnly = false,
-	): EnhancedMCPServerConfig[] {
+	public getAllConfigurations(enabledOnly = false): EnhancedMCPServerConfig[] {
 		const configs = Array.from(this.configCache.values());
 		return enabledOnly ? configs.filter((config) => config.enabled) : configs;
 	}

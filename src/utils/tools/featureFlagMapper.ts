@@ -99,7 +99,7 @@ export function shouldFilterTool(
 	featureFlags: Record<string, boolean>,
 ): boolean {
 	const requiredFlag = getRequiredFeatureFlag(toolName);
-	
+
 	// If no feature flag is required, don't filter
 	if (!requiredFlag) {
 		return false;
@@ -108,7 +108,9 @@ export function shouldFilterTool(
 	// Filter out if the required feature flag is disabled
 	const isEnabled = featureFlags[requiredFlag] ?? false;
 	if (!isEnabled) {
-		log.info(`Filtering out tool '${toolName}' (feature flag '${requiredFlag}' disabled)`);
+		log.info(
+			`Filtering out tool '${toolName}' (feature flag '${requiredFlag}' disabled)`,
+		);
 		return true;
 	}
 
@@ -125,7 +127,9 @@ export function filterToolsByFeatureFlags(
 	toolNames: string[],
 	featureFlags: Record<string, boolean>,
 ): string[] {
-	return toolNames.filter((toolName) => !shouldFilterTool(toolName, featureFlags));
+	return toolNames.filter(
+		(toolName) => !shouldFilterTool(toolName, featureFlags),
+	);
 }
 
 /**

@@ -38,13 +38,13 @@ export class ReminderTimer {
 		this.isRunning = true;
 
 		// Run immediately on start
-		this.checkReminders().catch(error => {
+		this.checkReminders().catch((error) => {
 			log.error("Error during initial reminder check on timer start:", error);
 		});
 
 		// Set up interval for regular checks
 		this.intervalId = setInterval(() => {
-			this.checkReminders().catch(error => {
+			this.checkReminders().catch((error) => {
 				log.error("Error during scheduled reminder check:", error);
 			});
 		}, this.POLL_INTERVAL_MS);
@@ -90,7 +90,6 @@ export class ReminderTimer {
 			for (const reminder of dueReminders) {
 				await this.executeReminder(reminder);
 			}
-
 		} catch (error) {
 			log.error("Error checking for due reminders:", error);
 		}
@@ -101,20 +100,34 @@ export class ReminderTimer {
 	 */
 	private async executeReminder(reminder: ReminderRow): Promise<void> {
 		try {
-			log.info(`Executing reminder ${reminder.reminder_id} for user ${reminder.user_nickname} (${reminder.user_discord_id})`);
+			log.info(
+				`Executing reminder ${reminder.reminder_id} for user ${reminder.user_nickname} (${reminder.user_discord_id})`,
+			);
 
 			// Get the channel where the reminder was set
-			const channel = await this.client.channels.fetch(reminder.channel_disc_id);
+			const channel = await this.client.channels.fetch(
+				reminder.channel_disc_id,
+			);
 
 			if (!channel) {
-				log.error(`Channel ${reminder.channel_disc_id} not found for reminder ${reminder.reminder_id}`);
-				await this.handleReminderExecutionFailure(reminder, `Channel not found: ${reminder.channel_disc_id}`);
+				log.error(
+					`Channel ${reminder.channel_disc_id} not found for reminder ${reminder.reminder_id}`,
+				);
+				await this.handleReminderExecutionFailure(
+					reminder,
+					`Channel not found: ${reminder.channel_disc_id}`,
+				);
 				return;
 			}
 
 			if (!channel.isTextBased()) {
-				log.error(`Channel ${reminder.channel_disc_id} is not text-based for reminder ${reminder.reminder_id}`);
-				await this.handleReminderExecutionFailure(reminder, "Channel is not text-based");
+				log.error(
+					`Channel ${reminder.channel_disc_id} is not text-based for reminder ${reminder.reminder_id}`,
+				);
+				await this.handleReminderExecutionFailure(
+					reminder,
+					"Channel is not text-based",
+				);
 				return;
 			}
 
@@ -124,13 +137,21 @@ export class ReminderTimer {
 				const messages = await channel.messages.fetch({ limit: 1 });
 				lastMessage = messages.first();
 			} catch (fetchError) {
-				log.error(`Failed to fetch last message from channel ${reminder.channel_disc_id} for reminder ${reminder.reminder_id}:`, fetchError);
+				log.error(
+					`Failed to fetch last message from channel ${reminder.channel_disc_id} for reminder ${reminder.reminder_id}:`,
+					fetchError,
+				);
 			}
 
 			// If no message found, we can't trigger tomoriChat directly
 			if (!lastMessage) {
-				log.warn(`No messages found in channel ${reminder.channel_disc_id} for reminder ${reminder.reminder_id}, sending error embed instead`);
-				await this.handleReminderExecutionFailure(reminder, "No messages found in channel for context");
+				log.warn(
+					`No messages found in channel ${reminder.channel_disc_id} for reminder ${reminder.reminder_id}, sending error embed instead`,
+				);
+				await this.handleReminderExecutionFailure(
+					reminder,
+					"No messages found in channel for context",
+				);
 				return;
 			}
 
@@ -138,19 +159,23 @@ export class ReminderTimer {
 			const currentTime = new Date();
 			const lateness = calculateLateness(reminder.reminder_time, currentTime);
 
-			log.info(`About to call tomoriChat for reminder ${reminder.reminder_id}:`);
-			log.info(`- Last message author: ${lastMessage.author.username} (bot: ${lastMessage.author.bot})`);
+			log.info(
+				`About to call tomoriChat for reminder ${reminder.reminder_id}:`,
+			);
+			log.info(
+				`- Last message author: ${lastMessage.author.username} (bot: ${lastMessage.author.bot})`,
+			);
 			log.info(`- Last message ID: ${lastMessage.id}`);
 			log.info(`- Reminder recipient ID: ${reminder.user_discord_id}`);
 			log.info(`- Reminder purpose: "${reminder.reminder_purpose}"`);
-			log.info(`- Lateness: ${lateness || 'none'}`);
+			log.info(`- Lateness: ${lateness || "none"}`);
 
 			// Call tomoriChat with manual trigger and reminder recipient ID
 			await tomoriChat(
 				this.client,
 				lastMessage,
 				false, // isFromQueue
-				true,  // isManuallyTriggered
+				true, // isManuallyTriggered
 				false, // forceReason
 				undefined, // llmOverrideCodename
 				false, // isStopResponse
@@ -160,29 +185,38 @@ export class ReminderTimer {
 				{
 					reminder_purpose: reminder.reminder_purpose,
 					reminder_lateness: lateness,
-				}
+				},
 			);
 
-			log.info(`tomoriChat call completed for reminder ${reminder.reminder_id}`);
+			log.info(
+				`tomoriChat call completed for reminder ${reminder.reminder_id}`,
+			);
 
 			// Successfully executed, delete the reminder
 			if (reminder.reminder_id) {
 				await deleteReminderById(reminder.reminder_id);
-				log.success(`Reminder ${reminder.reminder_id} executed and deleted successfully`);
+				log.success(
+					`Reminder ${reminder.reminder_id} executed and deleted successfully`,
+				);
 			} else {
 				log.error("Cannot delete reminder: reminder_id is undefined");
 			}
-
 		} catch (error) {
 			log.error(`Error executing reminder ${reminder.reminder_id}:`, error);
-			await this.handleReminderExecutionFailure(reminder, error instanceof Error ? error.message : "Unknown error");
+			await this.handleReminderExecutionFailure(
+				reminder,
+				error instanceof Error ? error.message : "Unknown error",
+			);
 		}
 	}
 
 	/**
 	 * Handles cases where reminder execution fails
 	 */
-	private async handleReminderExecutionFailure(reminder: ReminderRow, errorReason: string): Promise<void> {
+	private async handleReminderExecutionFailure(
+		reminder: ReminderRow,
+		errorReason: string,
+	): Promise<void> {
 		try {
 			// Delete the reminder even if execution failed to prevent retry loops
 			if (reminder.reminder_id) {
@@ -191,31 +225,48 @@ export class ReminderTimer {
 
 			// Try to send an error embed to the channel mentioning the user
 			try {
-				const channel = await this.client.channels.fetch(reminder.channel_disc_id);
-				if (channel?.isTextBased() && ("send" in channel)) {
+				const channel = await this.client.channels.fetch(
+					reminder.channel_disc_id,
+				);
+				if (channel?.isTextBased() && "send" in channel) {
 					const currentTime = new Date();
-					const lateness = calculateLateness(reminder.reminder_time, currentTime);
+					const lateness = calculateLateness(
+						reminder.reminder_time,
+						currentTime,
+					);
 
-					await sendStandardEmbed(channel as import("discord.js").TextChannel, "en-US", {
-						color: ColorCode.ERROR,
-						titleKey: "reminders.reminder_error_title",
-						descriptionKey: "reminders.reminder_error_description",
-						descriptionVars: {
-							user_mention: `<@${reminder.user_discord_id}>`,
-							reminder_purpose: reminder.reminder_purpose,
-							error_reason: errorReason,
-							lateness: lateness || "on time",
+					await sendStandardEmbed(
+						channel as import("discord.js").TextChannel,
+						"en-US",
+						{
+							color: ColorCode.ERROR,
+							titleKey: "reminders.reminder_error_title",
+							descriptionKey: "reminders.reminder_error_description",
+							descriptionVars: {
+								user_mention: `<@${reminder.user_discord_id}>`,
+								reminder_purpose: reminder.reminder_purpose,
+								error_reason: errorReason,
+								lateness: lateness || "on time",
+							},
+							footerKey: "reminders.reminder_error_footer",
 						},
-						footerKey: "reminders.reminder_error_footer",
-					});
+					);
 				}
 			} catch (fallbackError) {
-				log.error(`Failed to send fallback reminder error embed for reminder ${reminder.reminder_id}:`, fallbackError);
+				log.error(
+					`Failed to send fallback reminder error embed for reminder ${reminder.reminder_id}:`,
+					fallbackError,
+				);
 			}
 
-			log.warn(`Reminder ${reminder.reminder_id} deleted due to execution failure: ${errorReason}`);
+			log.warn(
+				`Reminder ${reminder.reminder_id} deleted due to execution failure: ${errorReason}`,
+			);
 		} catch (error) {
-			log.error(`Error handling reminder execution failure for reminder ${reminder.reminder_id}:`, error);
+			log.error(
+				`Error handling reminder execution failure for reminder ${reminder.reminder_id}:`,
+				error,
+			);
 		}
 	}
 
@@ -265,7 +316,10 @@ export function stopReminderTimer(): void {
 /**
  * Gets the status of the reminder timer system
  */
-export function getReminderTimerStatus(): { isRunning: boolean; intervalMs: number } | null {
+export function getReminderTimerStatus(): {
+	isRunning: boolean;
+	intervalMs: number;
+} | null {
 	return reminderTimerInstance ? reminderTimerInstance.getStatus() : null;
 }
 

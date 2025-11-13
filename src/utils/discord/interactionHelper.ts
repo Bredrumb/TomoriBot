@@ -159,7 +159,10 @@ function setupWebSocketInterception(client: any) {
 							if (packet.d.data.resolved?.attachments) {
 								const resolvedAttachments = packet.d.data.resolved
 									.attachments as Record<string, APIAttachment>;
-								modalResolvedAttachments.set(interactionId, resolvedAttachments);
+								modalResolvedAttachments.set(
+									interactionId,
+									resolvedAttachments,
+								);
 								log.info(
 									`Stored ${Object.keys(resolvedAttachments).length} resolved attachments for interaction ${interactionId}`,
 								);
@@ -565,7 +568,9 @@ export async function replyInfoEmbed(
 		id: interaction.id,
 	};
 
-	log.info(`replyInfoEmbed interaction state: ${JSON.stringify(interactionState)}`);
+	log.info(
+		`replyInfoEmbed interaction state: ${JSON.stringify(interactionState)}`,
+	);
 
 	// 4. Check if interaction was acknowledged via raw REST API (e.g., modal shown)
 	// Discord.js state may be out of sync in this case
@@ -575,7 +580,9 @@ export async function replyInfoEmbed(
 
 	if (wasRawModalSent && !interaction.deferred && !interaction.replied) {
 		// State desync detected: Discord thinks acknowledged, but Discord.js doesn't know
-		log.info(`Raw modal state desync detected for interaction ${interaction.id}, using followUp directly`);
+		log.info(
+			`Raw modal state desync detected for interaction ${interaction.id}, using followUp directly`,
+		);
 		try {
 			await interaction.followUp({
 				embeds: [embed],
@@ -584,7 +591,10 @@ export async function replyInfoEmbed(
 			});
 			return;
 		} catch (followUpError) {
-			log.error("followUp failed for raw-modal-acknowledged interaction:", followUpError);
+			log.error(
+				"followUp failed for raw-modal-acknowledged interaction:",
+				followUpError,
+			);
 			// Fall through to standard error handling
 		}
 	}
@@ -599,13 +609,14 @@ export async function replyInfoEmbed(
 		}
 	} catch (error) {
 		log.warn("Failed to show info embed via primary method:", error);
-		
+
 		// Enhanced fallback logic with more specific error handling
 		try {
 			// Only attempt followUp if the interaction was actually replied to successfully
 			// Check if the error suggests the interaction wasn't properly replied to
-			const errorMessage = error instanceof Error ? error.message : String(error);
-			
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+
 			if (errorMessage.includes("has already been acknowledged")) {
 				// Interaction was acknowledged but editReply failed - try followUp
 				log.info("Attempting followUp due to acknowledgment conflict");
@@ -617,10 +628,10 @@ export async function replyInfoEmbed(
 			} else if (errorMessage.includes("not been sent or deferred")) {
 				// Interaction wasn't properly acknowledged - try reply without flags first
 				log.info("Attempting basic reply due to no prior acknowledgment");
-				await interaction.reply({ 
-					embeds: [embed], 
-					components: [], 
-					flags: MessageFlags.Ephemeral // Force ephemeral for fallback
+				await interaction.reply({
+					embeds: [embed],
+					components: [],
+					flags: MessageFlags.Ephemeral, // Force ephemeral for fallback
 				});
 			} else {
 				// Other error - try followUp as last resort
@@ -678,7 +689,9 @@ export async function replySummaryEmbed(
 		id: interaction.id,
 	};
 
-	log.info(`replySummaryEmbed interaction state: ${JSON.stringify(interactionState)}`);
+	log.info(
+		`replySummaryEmbed interaction state: ${JSON.stringify(interactionState)}`,
+	);
 
 	// Check if interaction was acknowledged via raw REST API (e.g., modal shown)
 	const wasRawModalSent = rawModalAcknowledged.get(
@@ -687,7 +700,9 @@ export async function replySummaryEmbed(
 
 	if (wasRawModalSent && !interaction.deferred && !interaction.replied) {
 		// State desync detected: Discord thinks acknowledged, but Discord.js doesn't know
-		log.info(`Raw modal state desync detected for interaction ${interaction.id}, using followUp directly`);
+		log.info(
+			`Raw modal state desync detected for interaction ${interaction.id}, using followUp directly`,
+		);
 		try {
 			await interaction.followUp({
 				embeds: [embed],
@@ -696,7 +711,10 @@ export async function replySummaryEmbed(
 			});
 			return;
 		} catch (followUpError) {
-			log.error("followUp failed for raw-modal-acknowledged interaction:", followUpError);
+			log.error(
+				"followUp failed for raw-modal-acknowledged interaction:",
+				followUpError,
+			);
 			// Fall through to standard error handling
 		}
 	}
@@ -709,11 +727,12 @@ export async function replySummaryEmbed(
 		}
 	} catch (error) {
 		log.warn("Failed to show summary embed via primary method:", error);
-		
+
 		// Enhanced fallback logic matching replyInfoEmbed
 		try {
-			const errorMessage = error instanceof Error ? error.message : String(error);
-			
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+
 			if (errorMessage.includes("has already been acknowledged")) {
 				log.info("Attempting followUp due to acknowledgment conflict");
 				await interaction.followUp({
@@ -723,10 +742,10 @@ export async function replySummaryEmbed(
 				});
 			} else if (errorMessage.includes("not been sent or deferred")) {
 				log.info("Attempting basic reply due to no prior acknowledgment");
-				await interaction.reply({ 
-					embeds: [embed], 
-					components: [], 
-					flags: flags || MessageFlags.Ephemeral 
+				await interaction.reply({
+					embeds: [embed],
+					components: [],
+					flags: flags || MessageFlags.Ephemeral,
 				});
 			} else {
 				log.info("Attempting followUp as last resort fallback");
@@ -1226,7 +1245,9 @@ export async function promptWithRawModal(
 						return labelComponent;
 					}
 
-					throw new Error(`Unsupported modal component type: ${JSON.stringify(component)}`);
+					throw new Error(
+						`Unsupported modal component type: ${JSON.stringify(component)}`,
+					);
 				}),
 			},
 		};
@@ -1302,7 +1323,9 @@ export async function promptWithRawModal(
 				} else if (isModalFileUploadField(component)) {
 					try {
 						// Get stored resolved attachments from WebSocket interception
-						const storedAttachments = modalResolvedAttachments.get(submitted.id);
+						const storedAttachments = modalResolvedAttachments.get(
+							submitted.id,
+						);
 
 						if (storedAttachments) {
 							// Look through all stored attachments and match by component
@@ -1335,7 +1358,8 @@ export async function promptWithRawModal(
 
 			// Auto-defer reply if requested to prevent 3-second interaction timeout
 			if (autoDeferReply) {
-				const flags = typeof autoDeferReply === "boolean" ? undefined : autoDeferReply;
+				const flags =
+					typeof autoDeferReply === "boolean" ? undefined : autoDeferReply;
 				await submitted.deferReply({ flags });
 				log.info(
 					`Auto-deferred modal submission reply (flags: ${flags ? MessageFlags[flags] : "none"})`,

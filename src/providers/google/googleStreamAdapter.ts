@@ -190,7 +190,8 @@ export class GoogleStreamAdapter implements StreamProvider {
 							log.warn(
 								`Error processing image for function response: ${imageInfo.url}`,
 								{
-									error: imgErr instanceof Error ? imgErr.message : String(imgErr),
+									error:
+										imgErr instanceof Error ? imgErr.message : String(imgErr),
 								},
 							);
 						}
@@ -206,7 +207,9 @@ export class GoogleStreamAdapter implements StreamProvider {
 
 		// Ensure model is provided
 		if (!config.model) {
-			throw new Error("Model must be specified in config. Use GoogleProvider.getDefaultModel() if needed.");
+			throw new Error(
+				"Model must be specified in config. Use GoogleProvider.getDefaultModel() if needed.",
+			);
 		}
 
 		log.info(`Generating content with model ${config.model}`);

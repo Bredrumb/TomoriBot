@@ -124,9 +124,7 @@ export class PinMessageTool extends BaseTool {
 
 			// 6. Check if message is already pinned
 			if (targetMessage.pinned) {
-				log.info(
-					`PinMessageTool: Message ID ${messageId} is already pinned`,
-				);
+				log.info(`PinMessageTool: Message ID ${messageId} is already pinned`);
 
 				// Get a preview of the message content for the response
 				const messagePreview =
@@ -141,7 +139,8 @@ export class PinMessageTool extends BaseTool {
 					data: {
 						status: "message_already_pinned",
 						message_id: targetMessage.id,
-						author: targetMessage.author.displayName || targetMessage.author.username,
+						author:
+							targetMessage.author.displayName || targetMessage.author.username,
 						preview: messagePreview,
 					},
 				};
@@ -166,7 +165,8 @@ export class PinMessageTool extends BaseTool {
 				data: {
 					status: "message_pinned_successfully",
 					message_id: targetMessage.id,
-					author: targetMessage.author.displayName || targetMessage.author.username,
+					author:
+						targetMessage.author.displayName || targetMessage.author.username,
 					timestamp: targetMessage.createdAt.toISOString(),
 					preview: messagePreview,
 					channel_id: context.channel.id,
@@ -244,7 +244,8 @@ export class PinMessageTool extends BaseTool {
 				data: {
 					status: "pin_operation_failed",
 					attempted_id: messageId,
-					error_details: error instanceof Error ? error.message : "Unknown error",
+					error_details:
+						error instanceof Error ? error.message : "Unknown error",
 				},
 			};
 		}

@@ -42,7 +42,9 @@ export async function execute(
 	// 2. Create embed with image attachment
 	const embed = new EmbedBuilder()
 		.setTitle(localizer(locale, "commands.contribute.github.title"))
-		.setDescription(localizer(locale, "commands.contribute.github.description_text"))
+		.setDescription(
+			localizer(locale, "commands.contribute.github.description_text"),
+		)
 		.setColor(ColorCode.INFO)
 		.setImage("attachment://gitbanner.png");
 

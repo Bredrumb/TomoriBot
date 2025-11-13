@@ -34,7 +34,6 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
 		"brave_summarizer",
 	];
 
-
 	/**
 	 * Check if this handler supports a specific function
 	 * @param functionName - Function name to check
@@ -43,7 +42,6 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
 	public supportsFunction(functionName: string): boolean {
 		return this.SUPPORTED_FUNCTIONS.includes(functionName);
 	}
-
 
 	/**
 	 * Process MCP function result before returning to LLM

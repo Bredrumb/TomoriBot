@@ -115,7 +115,7 @@ export interface News {
 
 /**
  * Videos results container
- */  
+ */
 export interface Videos {
 	/** Video results */
 	results: VideoResult[];
@@ -429,17 +429,17 @@ export interface BraveApiError {
 /**
  * All possible Brave Search API responses
  */
-export type BraveSearchResponse = 
-	| WebSearchApiResponse 
-	| ImageSearchApiResponse 
-	| VideoSearchApiResponse 
+export type BraveSearchResponse =
+	| WebSearchApiResponse
+	| ImageSearchApiResponse
+	| VideoSearchApiResponse
 	| NewsSearchApiResponse;
 
 /**
  * All possible search result types
  */
-export type BraveSearchResult = 
-	| WebResult 
-	| ImageResult 
-	| VideoResult 
+export type BraveSearchResult =
+	| WebResult
+	| ImageResult
+	| VideoResult
 	| NewsResult;

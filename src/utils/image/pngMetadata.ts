@@ -122,9 +122,7 @@ function verifyPNGSignature(data: Uint8Array): boolean {
  * @param pngBuffer - PNG file as Buffer
  * @returns PresetExport object if found, null otherwise
  */
-export function extractMetadataFromPNG(
-	pngBuffer: Buffer,
-): PresetExport | null {
+export function extractMetadataFromPNG(pngBuffer: Buffer): PresetExport | null {
 	try {
 		// 1. Convert Buffer to Uint8Array for processing
 		const data = new Uint8Array(pngBuffer);
@@ -177,7 +175,9 @@ export function extractMetadataFromPNG(
 					// 7. Parse and return the JSON data
 					try {
 						const parsed = JSON.parse(value) as PresetExport;
-						log.success("Successfully extracted TomoriPreset metadata from PNG");
+						log.success(
+							"Successfully extracted TomoriPreset metadata from PNG",
+						);
 						return parsed;
 					} catch (error) {
 						log.error(

@@ -144,9 +144,9 @@ export async function convertMentions(
 							`Error resolving nickname for user ${id} in convertMentions:`,
 							error,
 							{
-							errorType: "MentionResolutionError",
-							metadata: { userIdToResolve: id, guildDiscordId: serverId },
-						},
+								errorType: "MentionResolutionError",
+								metadata: { userIdToResolve: id, guildDiscordId: serverId },
+							},
 						);
 					}
 					log.warn(`Could not resolve user mention: ${match}`);
@@ -168,9 +168,9 @@ export async function convertMentions(
 							`Error resolving channel mention ${id} in convertMentions:`,
 							error,
 							{
-							errorType: "MentionResolutionError",
-							metadata: { channelIdToResolve: id, guildDiscordId: serverId },
-						},
+								errorType: "MentionResolutionError",
+								metadata: { channelIdToResolve: id, guildDiscordId: serverId },
+							},
 						);
 					}
 					log.warn(`Could not resolve channel mention: ${match}`);
@@ -192,9 +192,9 @@ export async function convertMentions(
 							`Error resolving role mention ${id} in convertMentions:`,
 							error,
 							{
-							errorType: "MentionResolutionError",
-							metadata: { roleIdToResolve: id, guildDiscordId: serverId },
-						},
+								errorType: "MentionResolutionError",
+								metadata: { roleIdToResolve: id, guildDiscordId: serverId },
+							},
 						);
 					}
 					log.warn(`Could not resolve role mention: ${match}`);

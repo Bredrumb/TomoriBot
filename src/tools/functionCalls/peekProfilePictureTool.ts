@@ -172,7 +172,8 @@ export class PeekProfilePictureTool extends BaseTool {
 			}
 
 			// Check if this is the bot's own profile picture
-			const isBotSelf = context.client.user && userId === context.client.user.id;
+			const isBotSelf =
+				context.client.user && userId === context.client.user.id;
 			const contextText = isBotSelf
 				? "[This message contains profile picture content from a previous avatar analysis request you made for yourself]"
 				: `[This message contains profile picture content from a previous avatar analysis request you made for user: ${userDisplayText}]`;
@@ -205,11 +206,14 @@ export class PeekProfilePictureTool extends BaseTool {
 			// Return completely clean response following BraveSearchHandler pattern
 			// Store image data externally and return clean text only
 			// This prevents rate limit issues while still triggering enhanced context restart
-			
+
 			// Store the enhanced context item in a module-level map for tomoriChat to access
 			// This is the cleanest way to avoid serializing base64 data in tool responses
-			PeekProfilePictureTool.pendingEnhancedContextItems.set(userId, imageContextItem);
-			
+			PeekProfilePictureTool.pendingEnhancedContextItems.set(
+				userId,
+				imageContextItem,
+			);
+
 			return {
 				success: true,
 				message: `Profile picture analyzed for user: ${avatarData.username}. Image processing completed and ready for enhanced context restart.`,
@@ -313,7 +317,9 @@ export class PeekProfilePictureTool extends BaseTool {
 								forceStatic: false, // Allow animated avatars if present
 							});
 							serverNickname = member.nickname ?? undefined;
-							log.info(`Using guild-specific avatar for user ${userId} in guild ${context.guildId}`);
+							log.info(
+								`Using guild-specific avatar for user ${userId} in guild ${context.guildId}`,
+							);
 						} else {
 							// Fallback to global avatar if member not found
 							avatarUrl = user.displayAvatarURL({
@@ -332,7 +338,9 @@ export class PeekProfilePictureTool extends BaseTool {
 					}
 				} catch (error) {
 					// Fallback to global avatar on error
-					log.warn(`Could not fetch guild member for user ${userId}: ${error instanceof Error ? error.message : "Unknown error"}. Using global avatar.`);
+					log.warn(
+						`Could not fetch guild member for user ${userId}: ${error instanceof Error ? error.message : "Unknown error"}. Using global avatar.`,
+					);
 					avatarUrl = user.displayAvatarURL({
 						size: 1024,
 						extension: "png",
@@ -423,8 +431,11 @@ export class PeekProfilePictureTool extends BaseTool {
 	 * @param userId - User ID to get pending context for
 	 * @returns Enhanced context item if found, undefined otherwise
 	 */
-	static getPendingEnhancedContext(userId: string): StructuredContextItem | undefined {
-		const contextItem = PeekProfilePictureTool.pendingEnhancedContextItems.get(userId);
+	static getPendingEnhancedContext(
+		userId: string,
+	): StructuredContextItem | undefined {
+		const contextItem =
+			PeekProfilePictureTool.pendingEnhancedContextItems.get(userId);
 		if (contextItem) {
 			// Remove from map to prevent memory leaks
 			PeekProfilePictureTool.pendingEnhancedContextItems.delete(userId);

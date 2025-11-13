@@ -60,7 +60,10 @@ export async function execute(
 			"memory",
 			"server",
 		);
-		const dataExportMention = commandRegistry.getCommandMention("data", "export");
+		const dataExportMention = commandRegistry.getCommandMention(
+			"data",
+			"export",
+		);
 		const statusMention = commandRegistry.getCommandMention("status");
 		const helpCustomizationMention = commandRegistry.getCommandMention(
 			"help",
@@ -81,20 +84,28 @@ export async function execute(
 				fields: [
 					{
 						nameKey: "commands.help.memory.teaching_title",
-						value: localizer(locale, "commands.help.memory.teaching_description", {
-							teach: teachMention,
-							teachMemoryPersonal: teachMemoryPersonalMention,
-							teachMemoryServer: teachMemoryServerMention,
-						}),
+						value: localizer(
+							locale,
+							"commands.help.memory.teaching_description",
+							{
+								teach: teachMention,
+								teachMemoryPersonal: teachMemoryPersonalMention,
+								teachMemoryServer: teachMemoryServerMention,
+							},
+						),
 						inline: false,
 					},
 					{
 						nameKey: "commands.help.memory.forgetting_title",
-						value: localizer(locale, "commands.help.memory.forgetting_description", {
-							forget: forgetMention,
-							forgetMemoryPersonal: forgetMemoryPersonalMention,
-							forgetMemoryServer: forgetMemoryServerMention,
-						}),
+						value: localizer(
+							locale,
+							"commands.help.memory.forgetting_description",
+							{
+								forget: forgetMention,
+								forgetMemoryPersonal: forgetMemoryPersonalMention,
+								forgetMemoryServer: forgetMemoryServerMention,
+							},
+						),
 						inline: false,
 					},
 					{
@@ -127,7 +138,11 @@ export async function execute(
 				guildDiscordId: interaction.guild?.id,
 			},
 		};
-		await log.error("Error executing /help memory command", error as Error, context);
+		await log.error(
+			"Error executing /help memory command",
+			error as Error,
+			context,
+		);
 
 		// Inform user of error (ephemeral)
 		const errorMessage = localizer(
@@ -148,7 +163,11 @@ export async function execute(
 			}
 		} catch (replyError) {
 			// Log if even the error reply fails
-			log.error("Failed to send error reply for /help memory", replyError, context);
+			log.error(
+				"Failed to send error reply for /help memory",
+				replyError,
+				context,
+			);
 		}
 	}
 }

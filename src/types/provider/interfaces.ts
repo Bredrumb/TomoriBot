@@ -19,7 +19,13 @@ import type { StreamingContext } from "../tool/interfaces";
  * Generic stream response result
  */
 export interface StreamResult {
-	status: "completed" | "function_call" | "error" | "timeout" | "stopped_by_user" | "empty_response";
+	status:
+		| "completed"
+		| "function_call"
+		| "error"
+		| "timeout"
+		| "stopped_by_user"
+		| "empty_response";
 	data?: unknown | Error; // Function call data or error details
 }
 
@@ -140,7 +146,10 @@ export interface LLMProvider {
 	 * @param apiKey - The decrypted API key
 	 * @returns Provider-specific configuration object
 	 */
-	createConfig(tomoriState: TomoriState, apiKey: string): Promise<ProviderConfig>;
+	createConfig(
+		tomoriState: TomoriState,
+		apiKey: string,
+	): Promise<ProviderConfig>;
 }
 
 /**
@@ -149,7 +158,9 @@ export interface LLMProvider {
 export abstract class BaseLLMProvider implements LLMProvider {
 	abstract getInfo(): ProviderInfo;
 	abstract validateApiKey(apiKey: string): Promise<boolean>;
-	abstract getTools(tomoriState: TomoriState): Promise<Array<Record<string, unknown>>>;
+	abstract getTools(
+		tomoriState: TomoriState,
+	): Promise<Array<Record<string, unknown>>>;
 	abstract streamToDiscord(
 		channel: BaseGuildTextChannel,
 		client: Client,

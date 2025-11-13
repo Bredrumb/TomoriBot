@@ -1125,7 +1125,10 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 			}
 		} else {
 			// Get provider-specific error description
-			const providerDescription = provider.createErrorDescription(providerError, locale);
+			const providerDescription = provider.createErrorDescription(
+				providerError,
+				locale,
+			);
 
 			if (providerDescription) {
 				// Determine universal title and tip based on error type
@@ -1170,9 +1173,14 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 						text: localizer(locale, tipKey),
 					});
 
-				await context.channel.send({ embeds: [embed] }).catch((e) =>
-					log.warn("Stream: Failed to send provider error embed to channel", e),
-				);
+				await context.channel
+					.send({ embeds: [embed] })
+					.catch((e) =>
+						log.warn(
+							"Stream: Failed to send provider error embed to channel",
+							e,
+						),
+					);
 				return;
 			}
 
@@ -1325,5 +1333,4 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 		// Fallback: assume non-empty if we can't determine
 		return false;
 	}
-
 }

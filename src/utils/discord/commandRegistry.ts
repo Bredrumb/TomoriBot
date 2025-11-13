@@ -29,7 +29,9 @@ class CommandRegistry {
 			const commands = await client.application?.commands.fetch();
 
 			if (!commands) {
-				log.warn("No application commands found during registry initialization");
+				log.warn(
+					"No application commands found during registry initialization",
+				);
 				return;
 			}
 

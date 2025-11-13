@@ -38,9 +38,18 @@ export async function execute(
 ): Promise<void> {
 	try {
 		// Get command mentions for cross-references
-		const dataExportMention = commandRegistry.getCommandMention("data", "export");
-		const dataImportMention = commandRegistry.getCommandMention("data", "import");
-		const dataDeleteMention = commandRegistry.getCommandMention("data", "delete");
+		const dataExportMention = commandRegistry.getCommandMention(
+			"data",
+			"export",
+		);
+		const dataImportMention = commandRegistry.getCommandMention(
+			"data",
+			"import",
+		);
+		const dataDeleteMention = commandRegistry.getCommandMention(
+			"data",
+			"delete",
+		);
 		const personaExportMention = commandRegistry.getCommandMention(
 			"persona",
 			"export",
@@ -108,7 +117,11 @@ export async function execute(
 				guildDiscordId: interaction.guild?.id,
 			},
 		};
-		await log.error("Error executing /help data command", error as Error, context);
+		await log.error(
+			"Error executing /help data command",
+			error as Error,
+			context,
+		);
 
 		// Inform user of error (ephemeral)
 		const errorMessage = localizer(
@@ -129,7 +142,11 @@ export async function execute(
 			}
 		} catch (replyError) {
 			// Log if even the error reply fails
-			log.error("Failed to send error reply for /help data", replyError, context);
+			log.error(
+				"Failed to send error reply for /help data",
+				replyError,
+				context,
+			);
 		}
 	}
 }

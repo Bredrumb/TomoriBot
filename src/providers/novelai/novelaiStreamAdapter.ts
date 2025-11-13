@@ -109,19 +109,14 @@ export class NovelaiStreamAdapter implements StreamProvider {
 		// This is the standard NovelAI roleplay format: the prompt should end with "BotName: "
 		const prompt = `${basePrompt}\n${context.tomoriState.tomori_nickname}: `;
 
-		log.info(
-			`Assembled NovelAI prompt. Length: ${prompt.length} characters`,
-		);
+		log.info(`Assembled NovelAI prompt. Length: ${prompt.length} characters`);
 
 		// Log the full prompt for debugging
 		log.section("NovelAI Full Prompt");
 		log.info(prompt);
 
 		// Get generation parameters for the model
-		const parameters = getParametersForModel(
-			config.model,
-			config.temperature,
-		);
+		const parameters = getParametersForModel(config.model, config.temperature);
 
 		// Build request (no prefix parameter needed - we already added bot name to prompt)
 		const request: NovelAIGenerationRequest = {
@@ -183,7 +178,10 @@ export class NovelaiStreamAdapter implements StreamProvider {
 		// Handle errors first
 		if (novelaiChunk.error) {
 			// If error is already a ProviderError (from startStream catch)
-			if (typeof novelaiChunk.error === "object" && "type" in novelaiChunk.error) {
+			if (
+				typeof novelaiChunk.error === "object" &&
+				"type" in novelaiChunk.error
+			) {
 				return {
 					type: "error",
 					error: novelaiChunk.error as ProviderError,
@@ -271,10 +269,16 @@ export class NovelaiStreamAdapter implements StreamProvider {
 		if (statusCode === 401 || isNovelAIApiKeyError(errorMessage, statusCode)) {
 			errorType = "api_error";
 			retryable = false;
-		} else if (statusCode === 402 || isNovelAICreditsError(errorMessage, statusCode)) {
+		} else if (
+			statusCode === 402 ||
+			isNovelAICreditsError(errorMessage, statusCode)
+		) {
 			errorType = "api_error";
 			retryable = false;
-		} else if (statusCode === 429 || isNovelAIRateLimitError(errorMessage, statusCode)) {
+		} else if (
+			statusCode === 429 ||
+			isNovelAIRateLimitError(errorMessage, statusCode)
+		) {
 			errorType = "rate_limit";
 			retryable = true;
 		} else if (statusCode === 500 || statusCode === 502) {
@@ -283,7 +287,10 @@ export class NovelaiStreamAdapter implements StreamProvider {
 		} else if (statusCode === 503) {
 			errorType = "provider_overloaded";
 			retryable = true;
-		} else if (statusCode === 504 || errorMessage.toLowerCase().includes("timeout")) {
+		} else if (
+			statusCode === 504 ||
+			errorMessage.toLowerCase().includes("timeout")
+		) {
 			errorType = "timeout";
 			retryable = true;
 		} else {
@@ -386,15 +393,25 @@ export class NovelaiStreamAdapter implements StreamProvider {
 			}
 
 			// Check if this should be system instruction
-			if (
-				item.role === "system" ||
-				(item.metadataTag &&
+			// If item has a metadataTag, it must be in the whitelist to be included
+			// If no metadataTag, include only if role is "system"
+			if (item.metadataTag) {
+				// Has a tag - only include if in whitelist
+				if (
 					NovelaiStreamAdapter.SYSTEM_INSTRUCTION_TAGS.includes(
 						item.metadataTag,
-					))
-			) {
+					)
+				) {
+					systemInstructionParts.push(textContent);
+				}
+				// Else: skip this item (not in whitelist)
+			} else if (item.role === "system") {
+				// No tag, but role is system - include it
 				systemInstructionParts.push(textContent);
-			} else if (
+			}
+
+			// Handle dialogue turns
+			if (
 				(item.role === "user" || item.role === "model") &&
 				item.metadataTag &&
 				(item.metadataTag === ContextItemTag.DIALOGUE_HISTORY ||

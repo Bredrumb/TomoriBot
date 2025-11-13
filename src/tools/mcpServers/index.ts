@@ -9,10 +9,7 @@ import {
 	getBraveSearchHandler,
 } from "./brave-search/braveSearchHandler";
 
-import {
-	FetchHandler,
-	getFetchHandler,
-} from "./fetch/fetchHandler";
+import { FetchHandler, getFetchHandler } from "./fetch/fetchHandler";
 
 import {
 	DuckDuckGoHandler,
@@ -22,23 +19,18 @@ import {
 import type { MCPServerBehaviorHandler } from "../../types/tool/mcpTypes";
 
 // Re-export handlers for external use
-export {
-	BraveSearchHandler,
-	getBraveSearchHandler,
-};
+export { BraveSearchHandler, getBraveSearchHandler };
 
-export {
-	FetchHandler,
-	getFetchHandler,
-};
+export { FetchHandler, getFetchHandler };
 
-export {
-	DuckDuckGoHandler,
-	getDuckDuckGoHandler,
-};
+export { DuckDuckGoHandler, getDuckDuckGoHandler };
 
 // Re-export common types for convenience
-export type { Tool, ToolContext, ToolResult } from "../../types/tool/interfaces";
+export type {
+	Tool,
+	ToolContext,
+	ToolResult,
+} from "../../types/tool/interfaces";
 
 // Re-export MCP-specific types
 export type {
@@ -66,24 +58,16 @@ export {
 	getAvailableMCPFunctions,
 } from "../../utils/mcp/mcpExecutor";
 
-export {
-	getMCPConfigManager,
-} from "../../utils/mcp/mcpConfig";
+export { getMCPConfigManager } from "../../utils/mcp/mcpConfig";
 
-export {
-	getMCPManager,
-} from "../../utils/mcp/mcpManager";
+export { getMCPManager } from "../../utils/mcp/mcpManager";
 
 /**
  * Get all available MCP server behavior handlers
  * @returns Array of handler instances
  */
 export function getAllMCPHandlers(): MCPServerBehaviorHandler[] {
-	return [
-		getBraveSearchHandler(),
-		getFetchHandler(),
-		getDuckDuckGoHandler(),
-	];
+	return [getBraveSearchHandler(), getFetchHandler(), getDuckDuckGoHandler()];
 }
 
 /**
@@ -91,7 +75,9 @@ export function getAllMCPHandlers(): MCPServerBehaviorHandler[] {
  * @param serverName - Name of the MCP server
  * @returns Handler instance or null if not found
  */
-export function getMCPHandlerByName(serverName: string): MCPServerBehaviorHandler | null {
+export function getMCPHandlerByName(
+	serverName: string,
+): MCPServerBehaviorHandler | null {
 	const handlers = getAllMCPHandlers();
-	return handlers.find(handler => handler.serverName === serverName) || null;
+	return handlers.find((handler) => handler.serverName === serverName) || null;
 }

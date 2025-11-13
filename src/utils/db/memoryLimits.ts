@@ -310,7 +310,9 @@ export function validateAttribute(content: string): MemoryValidationResult {
  * @param content - The sample dialogue content to validate
  * @returns MemoryValidationResult indicating if content length is valid
  */
-export function validateSampleDialogue(content: string): MemoryValidationResult {
+export function validateSampleDialogue(
+	content: string,
+): MemoryValidationResult {
 	const limits = getMemoryLimits();
 
 	// Check if content is empty or just whitespace

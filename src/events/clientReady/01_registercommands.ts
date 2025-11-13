@@ -55,11 +55,7 @@ export default async (): Promise<void> => {
 				errorType: "CommandRegistrationError",
 				metadata: { scope: "global" },
 			};
-			await log.error(
-				"Failed to register commands globally:",
-				error,
-				context,
-			);
+			await log.error("Failed to register commands globally:", error, context);
 		}
 	} catch (error) {
 		const context: ErrorContext = {

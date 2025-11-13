@@ -194,7 +194,9 @@ export const localizer = (
 export function getSupportedLocales(): string[] {
 	// Return empty array if not initialized to avoid errors
 	if (!isInitialized) {
-		log.warn("Localization system not initialized when requesting supported locales");
+		log.warn(
+			"Localization system not initialized when requesting supported locales",
+		);
 		return [];
 	}
 
@@ -237,7 +239,9 @@ export function getDefaultBotName(locale: string): string {
 export function getBaseTriggerWords(locale: string): string[] {
 	// 1. Check if localization system is initialized
 	if (!isInitialized) {
-		log.warn("Localization system not initialized when requesting base trigger words");
+		log.warn(
+			"Localization system not initialized when requesting base trigger words",
+		);
 		// Fallback to environment variable or hardcoded defaults
 		return (
 			process.env.BASE_TRIGGER_WORDS?.split(",").map((word) => word.trim()) || [

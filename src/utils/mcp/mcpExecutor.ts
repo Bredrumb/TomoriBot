@@ -171,7 +171,10 @@ export class MCPExecutor {
 
 			// DuckDuckGo Search functions
 			case "web-search":
-				modifiedArgs.numResults = Math.min(Number(modifiedArgs.numResults) || 12, 20); // Default 12, max 20
+				modifiedArgs.numResults = Math.min(
+					Number(modifiedArgs.numResults) || 12,
+					20,
+				); // Default 12, max 20
 				modifiedArgs.page = 1; // Always start from first page
 				break;
 
@@ -180,8 +183,12 @@ export class MCPExecutor {
 				break;
 
 			case "fetch-url":
-				modifiedArgs.maxLength = Math.min(Number(modifiedArgs.maxLength) || 15000, 50000); // Default 15k, max 50k
-				modifiedArgs.extractMainContent = modifiedArgs.extractMainContent !== false; // Default true
+				modifiedArgs.maxLength = Math.min(
+					Number(modifiedArgs.maxLength) || 15000,
+					50000,
+				); // Default 15k, max 50k
+				modifiedArgs.extractMainContent =
+					modifiedArgs.extractMainContent !== false; // Default true
 				modifiedArgs.includeLinks = modifiedArgs.includeLinks !== false; // Default true
 				modifiedArgs.includeImages = modifiedArgs.includeImages !== false; // Default true
 				break;
@@ -261,21 +268,23 @@ export class MCPExecutor {
 			}
 
 			// Create MCP execution context
-			const mcpContext: MCPExecutionContext = context ? {
-				...context, // Spread the tool context if it exists
-				functionName,
-				originalArgs: { ...args },
-				modifiedArgs: { ...args },
-				executionStartTime,
-				serverName: handler?.serverName || "unknown",
-			} : {
-				// Create minimal context if none provided
-				functionName,
-				originalArgs: { ...args },
-				modifiedArgs: { ...args },
-				executionStartTime,
-				serverName: handler?.serverName || "unknown",
-			} as unknown as MCPExecutionContext;
+			const mcpContext: MCPExecutionContext = context
+				? {
+						...context, // Spread the tool context if it exists
+						functionName,
+						originalArgs: { ...args },
+						modifiedArgs: { ...args },
+						executionStartTime,
+						serverName: handler?.serverName || "unknown",
+					}
+				: ({
+						// Create minimal context if none provided
+						functionName,
+						originalArgs: { ...args },
+						modifiedArgs: { ...args },
+						executionStartTime,
+						serverName: handler?.serverName || "unknown",
+					} as unknown as MCPExecutionContext);
 
 			// Apply business rules for parameters before sending to MCP server
 			mcpContext.modifiedArgs = this.applyBusinessRules(functionName, args);
@@ -312,7 +321,8 @@ export class MCPExecutor {
 								// Cast to TypedMCPToolResult and ensure execution time is set correctly
 								const typedResult = processedResult as TypedMCPToolResult;
 								if (typedResult.data) {
-									typedResult.data.executionTime = Date.now() - executionStartTime;
+									typedResult.data.executionTime =
+										Date.now() - executionStartTime;
 								}
 								return typedResult;
 							}
@@ -485,7 +495,9 @@ export class MCPExecutor {
 				try {
 					const geminiTool = await mcpTool.tool();
 					const toolFunctionNames =
-						geminiTool.functionDeclarations?.map((f) => f.name).filter((name): name is string => typeof name === "string") || [];
+						geminiTool.functionDeclarations
+							?.map((f) => f.name)
+							.filter((name): name is string => typeof name === "string") || [];
 					functionNames.push(...toolFunctionNames);
 				} catch (error) {
 					log.warn("Error getting MCP tool functions:", error as Error);

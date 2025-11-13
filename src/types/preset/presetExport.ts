@@ -97,9 +97,7 @@ export const presetExportDataSchema = z.object({
 	sample_dialogues_out: z
 		.array(z.string().max(MAX_STRING_LENGTH))
 		.max(MAX_ARRAY_SIZE),
-	trigger_words: z
-		.array(z.string().max(MAX_STRING_LENGTH))
-		.max(MAX_ARRAY_SIZE),
+	trigger_words: z.array(z.string().max(MAX_STRING_LENGTH)).max(MAX_ARRAY_SIZE),
 });
 
 /**

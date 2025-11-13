@@ -715,7 +715,7 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
 				novelai_getting_key_description: `1. Visit [NovelAI](https://novelai.net/stories)
 2. Navigate to settings through the ⚙️ icon on the top-left
 3. Go to \`Account\`
-4. Look for \`Get Persistent API Token\`
+4. Look for \`Get Persistent API Token\` (subscription required!)
 5. Copy this API key into {configSetup} or {configApikeySet}`,
 				novelai_footer: `After setting up this provider, you may change its default model with {configModel}`,
 				// OpenRouter

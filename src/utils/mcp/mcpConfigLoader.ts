@@ -54,11 +54,7 @@ export async function loadMcpConfigs(): Promise<McpServerConfig[]> {
 				continue;
 			}
 
-			const configPath = path.join(
-				mcpServersPath,
-				dirent.name,
-				"config.json",
-			);
+			const configPath = path.join(mcpServersPath, dirent.name, "config.json");
 
 			try {
 				// Read and parse the configuration file
@@ -75,9 +71,7 @@ export async function loadMcpConfigs(): Promise<McpServerConfig[]> {
 						`Loaded MCP server config: ${validatedConfig.name} (${validatedConfig.displayName})`,
 					);
 				} else {
-					log.info(
-						`Skipped disabled MCP server: ${validatedConfig.name}`,
-					);
+					log.info(`Skipped disabled MCP server: ${validatedConfig.name}`);
 				}
 			} catch (error) {
 				log.error(
@@ -138,25 +132,19 @@ export async function validateMcpDependencies(): Promise<{
 	for (const config of configs) {
 		// Note: We can't easily check if npm packages are installed without running npm
 		// This validation could be enhanced to check package availability if needed
-		
+
 		// Validate required environment variables structure
 		if (!Array.isArray(config.requiredEnvVars)) {
-			errors.push(
-				`Invalid requiredEnvVars for ${config.name}: must be array`,
-			);
+			errors.push(`Invalid requiredEnvVars for ${config.name}: must be array`);
 		}
 
 		if (!Array.isArray(config.optionalEnvVars)) {
-			errors.push(
-				`Invalid optionalEnvVars for ${config.name}: must be array`,
-			);
+			errors.push(`Invalid optionalEnvVars for ${config.name}: must be array`);
 		}
 
 		// Validate transport type
 		if (!["stdio", "http", "websocket"].includes(config.transport)) {
-			errors.push(
-				`Invalid transport for ${config.name}: ${config.transport}`,
-			);
+			errors.push(`Invalid transport for ${config.name}: ${config.transport}`);
 		}
 	}
 

@@ -60,13 +60,19 @@ export async function execute(
 			"braveapi",
 			"set",
 		);
-		const configSetupMention = commandRegistry.getCommandMention("config", "setup");
+		const configSetupMention = commandRegistry.getCommandMention(
+			"config",
+			"setup",
+		);
 		const configApikeySetMention = commandRegistry.getCommandMention(
 			"config",
 			"apikey",
 			"set",
 		);
-		const configModelMention = commandRegistry.getCommandMention("config", "model");
+		const configModelMention = commandRegistry.getCommandMention(
+			"config",
+			"model",
+		);
 
 		// Build options based on provider
 		let embedOptions: SummaryEmbedOptions;
@@ -202,7 +208,11 @@ export async function execute(
 				guildDiscordId: interaction.guild?.id,
 			},
 		};
-		await log.error("Error executing /help apikey command", error as Error, context);
+		await log.error(
+			"Error executing /help apikey command",
+			error as Error,
+			context,
+		);
 
 		// Inform user of error (ephemeral)
 		const errorMessage = localizer(
@@ -223,7 +233,11 @@ export async function execute(
 			}
 		} catch (replyError) {
 			// Log if even the error reply fails
-			log.error("Failed to send error reply for /help apikey", replyError, context);
+			log.error(
+				"Failed to send error reply for /help apikey",
+				replyError,
+				context,
+			);
 		}
 	}
 }

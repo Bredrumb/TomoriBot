@@ -163,9 +163,14 @@ export async function execute(
 			await interaction.editReply({
 				embeds: [
 					new EmbedBuilder()
-						.setTitle(localizer(locale, "commands.data.import.parse_failed_title"))
+						.setTitle(
+							localizer(locale, "commands.data.import.parse_failed_title"),
+						)
 						.setDescription(
-							localizer(locale, "commands.data.import.parse_failed_description"),
+							localizer(
+								locale,
+								"commands.data.import.parse_failed_description",
+							),
 						)
 						.setColor(ColorCode.ERROR),
 				],
@@ -180,11 +185,16 @@ export async function execute(
 			await interaction.editReply({
 				embeds: [
 					new EmbedBuilder()
-						.setTitle(localizer(locale, "commands.data.import.invalid_file_title"))
+						.setTitle(
+							localizer(locale, "commands.data.import.invalid_file_title"),
+						)
 						.setDescription(
 							validation.error
 								? localizeError(locale, validation.error)
-								: localizer(locale, "commands.data.import.invalid_file_description"),
+								: localizer(
+										locale,
+										"commands.data.import.invalid_file_description",
+									),
 						)
 						.setColor(ColorCode.ERROR),
 				],
@@ -207,7 +217,10 @@ export async function execute(
 									localizer(locale, "commands.data.import.no_permission_title"),
 								)
 								.setDescription(
-									localizer(locale, "commands.data.import.no_permission_description"),
+									localizer(
+										locale,
+										"commands.data.import.no_permission_description",
+									),
 								)
 								.setColor(ColorCode.ERROR),
 						],
@@ -218,7 +231,9 @@ export async function execute(
 		}
 
 		// 8. Import data based on type
-		let importResult: Awaited<ReturnType<typeof importPersonalData>> | Awaited<ReturnType<typeof importServerData>>;
+		let importResult:
+			| Awaited<ReturnType<typeof importPersonalData>>
+			| Awaited<ReturnType<typeof importServerData>>;
 
 		if (validation.type === "personal") {
 			importResult = await importPersonalData(
@@ -264,12 +279,14 @@ export async function execute(
 
 		// 10. Send success message with import summary
 		const memoriesCount = importResult.itemsImported?.memoriesCount || 0;
-		const configFieldsCount = importResult.itemsImported?.configFieldsCount || 0;
+		const configFieldsCount =
+			importResult.itemsImported?.configFieldsCount || 0;
 
 		// Use different description for server imports (mentions excluded data)
-		const successDescriptionKey = validation.type === "server"
-			? "commands.data.import.success_description_server"
-			: "commands.data.import.success_description";
+		const successDescriptionKey =
+			validation.type === "server"
+				? "commands.data.import.success_description_server"
+				: "commands.data.import.success_description";
 
 		await interaction.editReply({
 			embeds: [

@@ -64,7 +64,9 @@ export async function initializeTools(): Promise<void> {
 			file.endsWith("braveTools.ts"),
 		);
 
-		log.info(`Scanning ${braveToolFiles.length} files in Brave tools directory...`);
+		log.info(
+			`Scanning ${braveToolFiles.length} files in Brave tools directory...`,
+		);
 
 		for (const braveFile of braveToolFiles) {
 			const discovered = await discoverAndRegisterTools(braveFile, "brave");

@@ -4,7 +4,14 @@
  */
 
 import type { TomoriState } from "../db/schema";
-import type { BaseGuildTextChannel, Client, Message, DMChannel, NewsChannel, TextChannel } from "discord.js";
+import type {
+	BaseGuildTextChannel,
+	Client,
+	Message,
+	DMChannel,
+	NewsChannel,
+	TextChannel,
+} from "discord.js";
 import type {
 	MCPServerResponse,
 	EnhancedMCPServerConfig,

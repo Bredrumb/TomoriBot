@@ -205,7 +205,9 @@ export async function execute(
 				const llm = tomoriState.llm;
 
 				// 3. Get Brave API key status
-				const braveApiKeySet = await getBraveApiKeyStatus(tomoriState.server_id);
+				const braveApiKeySet = await getBraveApiKeyStatus(
+					tomoriState.server_id,
+				);
 
 				// 4. Get blacklisted members
 				const blacklistedMemberIds = await getBlacklistedMemberIds(
@@ -296,7 +298,10 @@ export async function execute(
 
 				if (attributesCount === 0) {
 					// No attributes - simple field name, "None" value
-					attributesFieldName = localizer(locale, "commands.tool.status.field_attributes");
+					attributesFieldName = localizer(
+						locale,
+						"commands.tool.status.field_attributes",
+					);
 					attributesValue = localizer(locale, "commands.choices.none");
 				} else if (attributesCount <= MAX_ATTRIBUTES_DISPLAY) {
 					// Show attribute snippets - include slot count in field name
@@ -321,7 +326,10 @@ export async function execute(
 						.join("\n");
 				} else {
 					// Show count only - simple field name, slot count in value
-					attributesFieldName = localizer(locale, "commands.tool.status.field_attributes");
+					attributesFieldName = localizer(
+						locale,
+						"commands.tool.status.field_attributes",
+					);
 					attributesValue = localizer(
 						locale,
 						"commands.tool.status.field_slot_usage",
@@ -414,7 +422,10 @@ export async function execute(
 							locale,
 							"commands.tool.status.field_personalization",
 						),
-						value: formatBooleanLocalized(config.personal_memories_enabled, locale),
+						value: formatBooleanLocalized(
+							config.personal_memories_enabled,
+							locale,
+						),
 						inline: true,
 					},
 					{
@@ -433,7 +444,10 @@ export async function execute(
 						inline: true,
 					},
 					{
-						name: localizer(locale, "commands.tool.status.field_brave_api_key_set"),
+						name: localizer(
+							locale,
+							"commands.tool.status.field_brave_api_key_set",
+						),
 						value: formatBooleanLocalized(braveApiKeySet, locale),
 						inline: true,
 					},
@@ -457,7 +471,10 @@ export async function execute(
 							locale,
 							"commands.tool.status.field_server_memteaching",
 						),
-						value: formatBooleanLocalized(config.server_memteaching_enabled, locale),
+						value: formatBooleanLocalized(
+							config.server_memteaching_enabled,
+							locale,
+						),
 						inline: true,
 					},
 					{
@@ -465,7 +482,10 @@ export async function execute(
 							locale,
 							"commands.tool.status.field_attribute_memteaching",
 						),
-						value: formatBooleanLocalized(config.attribute_memteaching_enabled, locale),
+						value: formatBooleanLocalized(
+							config.attribute_memteaching_enabled,
+							locale,
+						),
 						inline: true,
 					},
 					{
@@ -473,7 +493,10 @@ export async function execute(
 							locale,
 							"commands.tool.status.field_sampledialogue_memteaching",
 						),
-						value: formatBooleanLocalized(config.sampledialogue_memteaching_enabled, locale),
+						value: formatBooleanLocalized(
+							config.sampledialogue_memteaching_enabled,
+							locale,
+						),
 						inline: true,
 					},
 					// Personality Section

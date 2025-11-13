@@ -38,7 +38,9 @@ export const encryptApiKey = async (
 			throw new Error("Encryption failed");
 		}
 
-		log.success(`API key encrypted successfully with version ${currentVersion}`);
+		log.success(
+			`API key encrypted successfully with version ${currentVersion}`,
+		);
 
 		// PostgreSQL already returns bytea as Buffer - don't convert to string first
 		return {

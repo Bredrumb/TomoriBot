@@ -26,18 +26,34 @@ if (!process.env.DATABASE_URL) {
  * Supports both DATABASE_URL and individual Postgres variables.
  */
 function validateDatabaseConfig(): void {
-	const { DATABASE_URL, POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB } = process.env;
+	const {
+		DATABASE_URL,
+		POSTGRES_HOST,
+		POSTGRES_PORT,
+		POSTGRES_USER,
+		POSTGRES_PASSWORD,
+		POSTGRES_DB,
+	} = process.env;
 
 	// Check if either DATABASE_URL or all individual variables are set
 	const hasDatabaseUrl = !!DATABASE_URL;
-	const hasIndividualVars = POSTGRES_HOST && POSTGRES_PORT && POSTGRES_USER && POSTGRES_PASSWORD && POSTGRES_DB;
+	const hasIndividualVars =
+		POSTGRES_HOST &&
+		POSTGRES_PORT &&
+		POSTGRES_USER &&
+		POSTGRES_PASSWORD &&
+		POSTGRES_DB;
 
 	if (!hasDatabaseUrl && !hasIndividualVars) {
 		log.error("Database connection not configured!");
 		log.info("Please ensure your .env file contains either:");
-		log.info("  1. DATABASE_URL (e.g., postgresql://user:pass@host:port/dbname)");
+		log.info(
+			"  1. DATABASE_URL (e.g., postgresql://user:pass@host:port/dbname)",
+		);
 		log.info("  OR");
-		log.info("  2. Individual variables: POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB");
+		log.info(
+			"  2. Individual variables: POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB",
+		);
 		process.exit(1);
 	}
 
@@ -71,12 +87,20 @@ async function migrateNullableUserId(): Promise<void> {
 	log.section("🔄 DATABASE MIGRATION: User Data Retention");
 	log.info("This migration will modify the following tables:");
 	log.info("  1. server_memories: Make user_id nullable (SET NULL on delete)");
-	log.info("  2. reminders: Make created_by_user_id nullable (SET NULL on delete)");
-	log.info("  3. personalization_blacklist: Change user_id to user_disc_id (persist opt-outs)");
+	log.info(
+		"  2. reminders: Make created_by_user_id nullable (SET NULL on delete)",
+	);
+	log.info(
+		"  3. personalization_blacklist: Change user_id to user_disc_id (persist opt-outs)",
+	);
 	log.info("");
-	log.info("Impact: Community data and privacy preferences persist when users delete accounts.");
+	log.info(
+		"Impact: Community data and privacy preferences persist when users delete accounts.",
+	);
 	log.info("");
-	log.warn("⚠️  IMPORTANT: Ensure you have a database backup before proceeding!");
+	log.warn(
+		"⚠️  IMPORTANT: Ensure you have a database backup before proceeding!",
+	);
 	log.info("Run: bun run backup-db");
 	log.info("");
 
@@ -178,7 +202,9 @@ async function migrateNullableUserId(): Promise<void> {
 		log.info("=== Migrating personalization_blacklist table ===");
 
 		// 9. Migrate existing data from user_id to user_disc_id
-		log.info("Step 3a: Adding user_disc_id column to personalization_blacklist...");
+		log.info(
+			"Step 3a: Adding user_disc_id column to personalization_blacklist...",
+		);
 		await sql`
 			ALTER TABLE personalization_blacklist
 			ADD COLUMN IF NOT EXISTS user_disc_id TEXT;
@@ -233,10 +259,14 @@ async function migrateNullableUserId(): Promise<void> {
 			ALTER TABLE personalization_blacklist
 			ADD PRIMARY KEY (server_id, user_disc_id);
 		`;
-		log.success("✅ New PRIMARY KEY constraint added (server_id, user_disc_id)");
+		log.success(
+			"✅ New PRIMARY KEY constraint added (server_id, user_disc_id)",
+		);
 
 		// 16. Add comment on personalization_blacklist
-		log.info("Step 3h: Adding documentation comment on personalization_blacklist...");
+		log.info(
+			"Step 3h: Adding documentation comment on personalization_blacklist...",
+		);
 		await sql`
 			COMMENT ON COLUMN personalization_blacklist.user_disc_id IS
 			'Discord ID of user who opted out (persists even if user deletes account)';
@@ -245,7 +275,9 @@ async function migrateNullableUserId(): Promise<void> {
 
 		log.info("");
 		log.section("✅ Migration completed successfully!");
-		log.info("Community data and privacy preferences will now persist when users delete accounts.");
+		log.info(
+			"Community data and privacy preferences will now persist when users delete accounts.",
+		);
 	} catch (error) {
 		log.error("❌ Migration failed!");
 		log.error("Error details:", error);
@@ -253,7 +285,9 @@ async function migrateNullableUserId(): Promise<void> {
 		log.warn("⚠️  Database may be in an inconsistent state!");
 		log.info("To restore from backup:");
 		log.info("  1. Find your backup file in backups/ directory");
-		log.info("  2. Run: psql [DATABASE_URL] < backups/tomoribot_backup_[timestamp].sql");
+		log.info(
+			"  2. Run: psql [DATABASE_URL] < backups/tomoribot_backup_[timestamp].sql",
+		);
 		process.exit(1);
 	} finally {
 		process.exit(0);

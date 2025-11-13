@@ -15,9 +15,7 @@ export const configureSubcommand = (
 ) =>
 	subcommand
 		.setName("discord")
-		.setDescription(
-			localizer("en-US", "commands.support.discord.description"),
-		);
+		.setDescription(localizer("en-US", "commands.support.discord.description"));
 
 /**
  * Execute the support discord command - show Discord server link and support resources
@@ -42,7 +40,9 @@ export async function execute(
 	// 2. Create embed with image attachment
 	const embed = new EmbedBuilder()
 		.setTitle(localizer(locale, "commands.support.discord.title"))
-		.setDescription(localizer(locale, "commands.support.discord.description_text"))
+		.setDescription(
+			localizer(locale, "commands.support.discord.description_text"),
+		)
 		.setColor(ColorCode.INFO)
 		.setImage("attachment://tomobanner.png");
 

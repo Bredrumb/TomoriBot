@@ -6,7 +6,10 @@ import type {
 import { MessageFlags } from "discord.js";
 // Import sql
 import { sql } from "bun";
-import { loadTomoriState, loadAvailableModelsForProvider } from "../../utils/db/dbRead";
+import {
+	loadTomoriState,
+	loadAvailableModelsForProvider,
+} from "../../utils/db/dbRead";
 // Remove updateTomoriConfig import
 // import { updateTomoriConfig } from "../../utils/db/dbWrite";
 import { localizer } from "../../utils/text/localizer";
@@ -89,7 +92,8 @@ export async function execute(
 
 		// 3. Load available models for the current provider from the database for modal options
 		const currentProvider = tomoriState.llm.llm_provider;
-		const availableModels = await loadAvailableModelsForProvider(currentProvider);
+		const availableModels =
+			await loadAvailableModelsForProvider(currentProvider);
 		if (!availableModels || availableModels.length === 0) {
 			await replyInfoEmbed(interaction, locale, {
 				titleKey: "commands.config.model.no_models_title",
@@ -248,7 +252,8 @@ export async function execute(
 						descriptionVars: {
 							model_name: selectedModel.llm_codename,
 							provider:
-								newModelProvider.charAt(0).toUpperCase() + newModelProvider.slice(1),
+								newModelProvider.charAt(0).toUpperCase() +
+								newModelProvider.slice(1),
 						},
 						color: ColorCode.ERROR,
 					});

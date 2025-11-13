@@ -70,7 +70,12 @@ export type ModalComponent =
 export function isModalInputField(
 	component: ModalComponent,
 ): component is ModalInputField {
-	return "style" in component || (!("options" in component) && !("minValues" in component) && !("maxValues" in component));
+	return (
+		"style" in component ||
+		(!("options" in component) &&
+			!("minValues" in component) &&
+			!("maxValues" in component))
+	);
 }
 
 /**

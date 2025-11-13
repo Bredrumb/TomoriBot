@@ -68,7 +68,10 @@ async function rotateAllKeys() {
 
 	console.log(`Current version: V${currentVersion}`);
 	console.log(
-		`Available versions: ${keyManager.getAvailableVersions().map((v) => `V${v}`).join(", ")}\n`,
+		`Available versions: ${keyManager
+			.getAvailableVersions()
+			.map((v) => `V${v}`)
+			.join(", ")}\n`,
 	);
 
 	// 1. Find all keys not on current version
@@ -120,7 +123,9 @@ async function rotateAllKeys() {
 
 	// 2. Check if there's anything to rotate
 	if (oldKeys.length === 0) {
-		console.log(`✅ All keys are already on the current version (V${currentVersion})`);
+		console.log(
+			`✅ All keys are already on the current version (V${currentVersion})`,
+		);
 		console.log("   No rotation needed!\n");
 		return;
 	}

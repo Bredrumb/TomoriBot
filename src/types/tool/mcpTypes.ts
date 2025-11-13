@@ -241,8 +241,6 @@ export interface URLMetadataResponse extends MCPServerResponse {
  */
 export interface DuckDuckGoSearchResponse extends DuckDuckGoWebSearchResponse {}
 
-
-
 /**
  * MCP function execution context
  * Extended context specifically for MCP function execution
@@ -253,7 +251,7 @@ export interface MCPExecutionContext extends ToolContext {
 	functionName: string;
 	originalArgs: Record<string, unknown>;
 	modifiedArgs: Record<string, unknown>;
-	
+
 	// Execution metadata
 	executionStartTime: number;
 	overridesApplied?: string[];
@@ -281,9 +279,8 @@ export interface MCPServerBehaviorHandler {
 		functionName: string,
 		mcpResult: MCPServerResponse,
 		context: MCPExecutionContext,
-		args: Record<string, unknown>
+		args: Record<string, unknown>,
 	): Promise<ToolResult>;
-
 
 	/**
 	 * Check if this handler supports a specific function
@@ -325,10 +322,10 @@ export interface EnhancedMCPServerConfig {
 	priority: number;
 	transport: "stdio" | "http" | "websocket";
 	timeout?: number;
-	
+
 	// Handler configuration
 	behaviorHandler?: string; // Class name of the behavior handler
-	
+
 	// Capabilities
 	supportedFunctions?: string[];
 	requiresAuth?: boolean;
@@ -347,22 +344,22 @@ export interface TypedMCPToolResult extends ToolResult {
 		rawResult: MCPServerResponse;
 		executionTime: number;
 		overridesApplied?: string[];
-		
+
 		// Function-specific data
 		imagesSent?: number;
 		urlsFound?: number;
 		fetchCapabilityReminder?: boolean;
 		agentInstructions?: string;
-		
+
 		// Status information
 		status: "completed" | "completed_and_sent" | "failed" | "partial";
 		completionMessage?: string;
-		
+
 		// Handler-specific extensions
-		error?: string;          // For error scenarios
+		error?: string; // For error scenarios
 		searchProvider?: string; // For search-specific information
-		contentLength?: number;  // For fetch-specific information
-		
+		contentLength?: number; // For fetch-specific information
+
 		// Allow additional properties for future extensibility
 		[key: string]: unknown;
 	};
@@ -372,29 +369,52 @@ export interface TypedMCPToolResult extends ToolResult {
  * Type guard functions for MCP response type checking
  */
 export const MCPTypeGuards = {
-	isBraveWebSearchResponse: (response: MCPServerResponse): response is BraveWebSearchResponse => {
-		return 'web_results' in response || (response.text?.includes('web search') ?? false);
+	isBraveWebSearchResponse: (
+		response: MCPServerResponse,
+	): response is BraveWebSearchResponse => {
+		return (
+			"web_results" in response ||
+			(response.text?.includes("web search") ?? false)
+		);
 	},
 
-	isBraveImageSearchResponse: (response: MCPServerResponse): response is BraveImageSearchResponse => {
-		return 'image_results' in response || 
-		       (Array.isArray(response.content) && response.content.some(item => item.type === 'image'));
+	isBraveImageSearchResponse: (
+		response: MCPServerResponse,
+	): response is BraveImageSearchResponse => {
+		return (
+			"image_results" in response ||
+			(Array.isArray(response.content) &&
+				response.content.some((item) => item.type === "image"))
+		);
 	},
 
-	isBraveVideoSearchResponse: (response: MCPServerResponse): response is BraveVideoSearchResponse => {
-		return 'video_results' in response || (response.text?.includes('video search') ?? false);
+	isBraveVideoSearchResponse: (
+		response: MCPServerResponse,
+	): response is BraveVideoSearchResponse => {
+		return (
+			"video_results" in response ||
+			(response.text?.includes("video search") ?? false)
+		);
 	},
 
-	isFetchResponse: (response: MCPServerResponse): response is FetchMCPResponse => {
-		return 'url' in response || 'markdown' in response || 'status_code' in response;
+	isFetchResponse: (
+		response: MCPServerResponse,
+	): response is FetchMCPResponse => {
+		return (
+			"url" in response || "markdown" in response || "status_code" in response
+		);
 	},
 
 	hasImageContent: (response: MCPServerResponse): boolean => {
 		if (Array.isArray(response.content)) {
-			return response.content.some(item => item.type === 'image' || item.image_url);
+			return response.content.some(
+				(item) => item.type === "image" || item.image_url,
+			);
 		}
 		if (Array.isArray(response.functionResponse?.response?.content)) {
-			return response.functionResponse.response.content.some(item => item.type === 'image' || item.image_url);
+			return response.functionResponse.response.content.some(
+				(item) => item.type === "image" || item.image_url,
+			);
 		}
 		return false;
 	},
@@ -413,7 +433,10 @@ export const MCPTypeGuards = {
 				if (item?.type === "text" && item.text) {
 					try {
 						const imageData = JSON.parse(item.text);
-						if (imageData.image_url && typeof imageData.image_url === "string") {
+						if (
+							imageData.image_url &&
+							typeof imageData.image_url === "string"
+						) {
 							imageUrls.push(imageData.image_url);
 						}
 					} catch {
@@ -433,7 +456,7 @@ export const MCPTypeGuards = {
 		}
 
 		return imageUrls;
-	}
+	},
 };
 
 /**
@@ -444,7 +467,7 @@ export class MCPExecutionError extends Error {
 		message: string,
 		public functionName: string,
 		public serverName: string,
-		public originalError?: Error
+		public originalError?: Error,
 	) {
 		super(message);
 		this.name = "MCPExecutionError";

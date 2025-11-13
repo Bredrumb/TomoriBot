@@ -64,9 +64,7 @@ export async function loadTomoriState(
 
 		// Fallback to database if cache miss (cache not initialized or LLM not found)
 		if (!llmData) {
-			log.info(
-				`Cache miss for LLM ID ${configData.llm_id}, querying database`,
-			);
+			log.info(`Cache miss for LLM ID ${configData.llm_id}, querying database`);
 			const llmRows = await sql`
 				SELECT * FROM llms
 				WHERE llm_id = ${configData.llm_id}
@@ -198,9 +196,7 @@ export async function isBlacklisted(
  * @param userDiscId - The Discord ID of the user to check
  * @returns True if the user has opted out, false otherwise
  */
-export async function isPrivacyOptedOut(
-	userDiscId: string,
-): Promise<boolean> {
+export async function isPrivacyOptedOut(userDiscId: string): Promise<boolean> {
 	try {
 		// Check the privacy_opt_out column in the users table
 		const result = await sql`
@@ -693,7 +689,9 @@ export async function loadPresetOptionsByLocale(
 			`;
 
 			if (presetRows.length > 0) {
-				log.info(`No presets found for locale '${locale}', using base language '${baseLanguage}' instead.`);
+				log.info(
+					`No presets found for locale '${locale}', using base language '${baseLanguage}' instead.`,
+				);
 			}
 		}
 
@@ -707,13 +705,17 @@ export async function loadPresetOptionsByLocale(
 			`;
 
 			if (presetRows.length > 0) {
-				log.info(`No presets found for locale '${locale}', falling back to English presets.`);
+				log.info(
+					`No presets found for locale '${locale}', falling back to English presets.`,
+				);
 			}
 		}
 
 		// 4. Check if any rows were returned after all fallback attempts
 		if (!presetRows || presetRows.length === 0) {
-			log.warn(`No personality presets found for locale '${locale}' or any fallback language.`);
+			log.warn(
+				`No personality presets found for locale '${locale}' or any fallback language.`,
+			);
 			return null;
 		}
 
@@ -737,7 +739,10 @@ export async function loadPresetOptionsByLocale(
 		return presetOptions;
 	} catch (error) {
 		// 6. Log any unexpected errors during the database query
-		log.error(`Error loading preset options for locale '${locale}' from database:`, error);
+		log.error(
+			`Error loading preset options for locale '${locale}' from database:`,
+			error,
+		);
 		return null;
 	}
 }
@@ -770,7 +775,9 @@ export async function loadPresetRowsByLocale(
 			`;
 
 			if (presets.length > 0) {
-				log.info(`No presets found for locale '${locale}', using base language '${baseLanguage}' instead.`);
+				log.info(
+					`No presets found for locale '${locale}', using base language '${baseLanguage}' instead.`,
+				);
 			}
 		}
 
@@ -783,13 +790,17 @@ export async function loadPresetRowsByLocale(
 			`;
 
 			if (presets.length > 0) {
-				log.info(`No presets found for locale '${locale}', falling back to English presets.`);
+				log.info(
+					`No presets found for locale '${locale}', falling back to English presets.`,
+				);
 			}
 		}
 
 		// 4. Check if any rows were returned after all fallback attempts
 		if (!presets || presets.length === 0) {
-			log.warn(`No personality presets found for locale '${locale}' or any fallback language.`);
+			log.warn(
+				`No personality presets found for locale '${locale}' or any fallback language.`,
+			);
 			return null;
 		}
 
@@ -799,7 +810,10 @@ export async function loadPresetRowsByLocale(
 		return presets as TomoriPresetRow[];
 	} catch (error) {
 		// 5. Log any unexpected errors during the database query
-		log.error(`Error loading preset rows for locale '${locale}' from database:`, error);
+		log.error(
+			`Error loading preset rows for locale '${locale}' from database:`,
+			error,
+		);
 		return null;
 	}
 }
@@ -988,7 +1002,9 @@ export async function getReminderById(
  * @param userDiscordId - The Discord ID of the user
  * @returns The count of active reminders for the user, or 0 if error
  */
-export async function getUserReminderCount(userDiscordId: string): Promise<number> {
+export async function getUserReminderCount(
+	userDiscordId: string,
+): Promise<number> {
 	try {
 		const [result] = await sql`
 			SELECT COUNT(*) as reminder_count
@@ -1119,7 +1135,10 @@ export async function getBraveApiKeyStatus(serverId: number): Promise<boolean> {
 		// 2. Return true if key exists (even if encrypted), false otherwise
 		return result && result.length > 0;
 	} catch (error) {
-		log.error(`Error checking Brave API key status for server ${serverId}:`, error);
+		log.error(
+			`Error checking Brave API key status for server ${serverId}:`,
+			error,
+		);
 		return false;
 	}
 }
@@ -1129,7 +1148,9 @@ export async function getBraveApiKeyStatus(serverId: number): Promise<boolean> {
  * @param serverId - The internal server ID (from servers table)
  * @returns Array of Discord user IDs, or empty array if none or error
  */
-export async function getBlacklistedMemberIds(serverId: number): Promise<string[]> {
+export async function getBlacklistedMemberIds(
+	serverId: number,
+): Promise<string[]> {
 	try {
 		// 1. Query personalization_blacklist table for blacklisted members
 		const result = await sql`
@@ -1144,11 +1165,18 @@ export async function getBlacklistedMemberIds(serverId: number): Promise<string[
 		}
 
 		// 3. Map to array of Discord IDs
-		const memberIds = result.map((row: unknown) => (row as { user_disc_id: string }).user_disc_id);
-		log.info(`Found ${memberIds.length} blacklisted members for server ${serverId}`);
+		const memberIds = result.map(
+			(row: unknown) => (row as { user_disc_id: string }).user_disc_id,
+		);
+		log.info(
+			`Found ${memberIds.length} blacklisted members for server ${serverId}`,
+		);
 		return memberIds;
 	} catch (error) {
-		log.error(`Error loading blacklisted members for server ${serverId}:`, error);
+		log.error(
+			`Error loading blacklisted members for server ${serverId}:`,
+			error,
+		);
 		return [];
 	}
 }

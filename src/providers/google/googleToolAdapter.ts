@@ -265,7 +265,11 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
 		serverId?: number,
 		allowedMCPFunctions?: string[],
 	): Promise<Array<Record<string, unknown>>> {
-		return this.getAllToolsInGoogleFormat(builtInTools, serverId, allowedMCPFunctions);
+		return this.getAllToolsInGoogleFormat(
+			builtInTools,
+			serverId,
+			allowedMCPFunctions,
+		);
 	}
 
 	/**
@@ -294,7 +298,7 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
 			// Brave search tool names for filtering
 			const braveSearchToolNames = [
 				"brave_web_search",
-				"brave_image_search", 
+				"brave_image_search",
 				"brave_video_search",
 				"brave_news_search",
 			];
@@ -345,18 +349,19 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
 							const geminiTool = await mcpTool.tool();
 							if (geminiTool.functionDeclarations) {
 								// Filter declarations to only include allowed functions and exclude disabled DDG functions
-								const declarations = (geminiTool.functionDeclarations as Record<string, unknown>[])
-									.filter((declaration) => {
-										const functionName = declaration.name as string;
+								const declarations = (
+									geminiTool.functionDeclarations as Record<string, unknown>[]
+								).filter((declaration) => {
+									const functionName = declaration.name as string;
 
-										// Exclude disabled DuckDuckGo functions
-										if (disabledDDGFunctions.includes(functionName)) {
-											disabledFunctionsCount++;
-											return false;
-										}
+									// Exclude disabled DuckDuckGo functions
+									if (disabledDDGFunctions.includes(functionName)) {
+										disabledFunctionsCount++;
+										return false;
+									}
 
-										return allowedFunctionSet.has(functionName);
-									});
+									return allowedFunctionSet.has(functionName);
+								});
 
 								if (declarations.length > 0) {
 									allFunctionDeclarations.push(...declarations);
@@ -384,38 +389,44 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
 					const mcpTools = mcpManager.getMCPTools();
 
 					// DuckDuckGo search function names for filtering when Brave is available
-					const duckduckgoSearchFunctions = [
-						"web-search",
-						"url-metadata",
-					];
+					const duckduckgoSearchFunctions = ["web-search", "url-metadata"];
 
 					for (const mcpTool of mcpTools) {
 						try {
 							const geminiTool = await mcpTool.tool();
 							if (geminiTool.functionDeclarations) {
 								// Cast FunctionDeclaration to Record<string, unknown> for type compatibility
-								let declarations = geminiTool.functionDeclarations as Record<string, unknown>[];
+								let declarations = geminiTool.functionDeclarations as Record<
+									string,
+									unknown
+								>[];
 
 								// Filter out disabled DuckDuckGo functions (always)
 								const originalCount = declarations.length;
-								declarations = declarations.filter((declaration: Record<string, unknown>) => {
-									const functionName = declaration.name as string;
+								declarations = declarations.filter(
+									(declaration: Record<string, unknown>) => {
+										const functionName = declaration.name as string;
 
-									// Always exclude disabled functions
-									if (disabledDDGFunctions.includes(functionName)) {
-										disabledFunctionsCount++;
-										return false;
-									}
+										// Always exclude disabled functions
+										if (disabledDDGFunctions.includes(functionName)) {
+											disabledFunctionsCount++;
+											return false;
+										}
 
-									// Filter out DuckDuckGo search functions if Brave API key is available
-									if (hasBraveApiKey && duckduckgoSearchFunctions.includes(functionName)) {
-										return false;
-									}
+										// Filter out DuckDuckGo search functions if Brave API key is available
+										if (
+											hasBraveApiKey &&
+											duckduckgoSearchFunctions.includes(functionName)
+										) {
+											return false;
+										}
 
-									return true;
-								});
+										return true;
+									},
+								);
 
-								excludedDDGFunctionsCount += originalCount - declarations.length - disabledFunctionsCount;
+								excludedDDGFunctionsCount +=
+									originalCount - declarations.length - disabledFunctionsCount;
 
 								// Add remaining declarations
 								if (declarations.length > 0) {

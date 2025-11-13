@@ -170,7 +170,10 @@ export async function execute(
 					embeds: [
 						new EmbedBuilder()
 							.setTitle(
-								localizer(locale, "commands.persona.create.invalid_image_title"),
+								localizer(
+									locale,
+									"commands.persona.create.invalid_image_title",
+								),
 							)
 							.setDescription(
 								localizer(

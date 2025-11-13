@@ -715,7 +715,7 @@ export default {
 				novelai_getting_key_description: `1. [NovelAI](https://novelai.net/stories)にアクセス
 2. 左上の⚙️アイコンから設定に移動
 3. \`アカウント\`に移動
-4. \`永続的APIトークンを取得\`を探す
+4. \`永続的APIトークンを取得\`を探す（購読申し込みが必要です！）
 5. このAPIキーを{configSetup}または{configApikeySet}にコピー`,
 				novelai_footer: `このプロバイダーを設定したら、{configModel}でデフォルトモデルを変更できます`,
 				// OpenRouter

@@ -28,7 +28,10 @@ export const configureSubcommand = (
 				.setRequired(true)
 				.addChoices(
 					{
-						name: localizer("en-US", "commands.data.delete.type_choice_personal"),
+						name: localizer(
+							"en-US",
+							"commands.data.delete.type_choice_personal",
+						),
 						value: "personal",
 					},
 					{

@@ -35,10 +35,7 @@ import {
 	type ProviderInfo,
 	type StreamResult,
 } from "@/types/provider/interfaces";
-import {
-	getCachedDefaultLLM,
-	isLLMCacheReady,
-} from "@/utils/cache/llmCache";
+import { getCachedDefaultLLM, isLLMCacheReady } from "@/utils/cache/llmCache";
 import {
 	loadDefaultModelForProvider,
 	loadAvailableModelsForProvider,
@@ -77,12 +74,9 @@ async function getDefaultNovelAIModel(): Promise<string> {
 			return dbDefault.llm_codename;
 		}
 	} catch (error) {
-		log.warn(
-			`Failed to load default model from database for ${providerName}`,
-			{
-				error: error as Error,
-			},
-		);
+		log.warn(`Failed to load default model from database for ${providerName}`, {
+			error: error as Error,
+		});
 	}
 
 	// 3. Fallback to first non-deprecated model from database
@@ -180,7 +174,9 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
 		_streamingContext?: StreamingContext,
 	): Promise<Array<Record<string, unknown>>> {
 		// NovelAI doesn't support function calling
-		log.info("NovelAI provider: No tools available (function calling not supported)");
+		log.info(
+			"NovelAI provider: No tools available (function calling not supported)",
+		);
 		return [];
 	}
 

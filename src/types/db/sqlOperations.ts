@@ -56,7 +56,7 @@ export type SqlSetClause = string[];
  * Security-validated field name arrays for dynamic SQL operations.
  * These types represent field names that have been validated against whitelists
  * to prevent SQL injection in dynamic UPDATE operations.
- * 
+ *
  * Field validation is performed by functions in src/utils/db/sqlSecurity.ts
  * which maintain whitelists derived from Zod schemas.
  */

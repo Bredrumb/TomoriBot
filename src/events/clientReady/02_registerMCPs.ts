@@ -54,11 +54,7 @@ export default async (): Promise<void> => {
 			metadata: { stage: "startup" },
 		};
 
-		await log.error(
-			"Error during MCP server initialization:",
-			error,
-			context,
-		);
+		await log.error("Error during MCP server initialization:", error, context);
 
 		// Don't throw the error - MCP failures shouldn't prevent bot startup
 		// The bot can still function with built-in tools even if MCP servers fail

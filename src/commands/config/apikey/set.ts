@@ -5,7 +5,11 @@ import {
 	type Client,
 	type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { loadTomoriState, loadUniqueProviders, loadDefaultModelForProvider } from "../../../utils/db/dbRead";
+import {
+	loadTomoriState,
+	loadUniqueProviders,
+	loadDefaultModelForProvider,
+} from "../../../utils/db/dbRead";
 import { localizer } from "../../../utils/text/localizer";
 import { log, ColorCode } from "../../../utils/misc/logger";
 import {
@@ -234,15 +238,19 @@ export async function execute(
 
 		if (currentProvider !== newProvider) {
 			// Provider changed, load default model for new provider
-			log.info(`Provider changed from ${currentProvider} to ${newProvider}, loading default model`);
+			log.info(
+				`Provider changed from ${currentProvider} to ${newProvider}, loading default model`,
+			);
 			const defaultModel = await loadDefaultModelForProvider(newProvider);
 
 			if (!defaultModel || !defaultModel.llm_id) {
 				await replyInfoEmbed(modalSubmitInteraction, locale, {
 					titleKey: "commands.config.apikey.set.no_default_model_title",
-					descriptionKey: "commands.config.apikey.set.no_default_model_description",
+					descriptionKey:
+						"commands.config.apikey.set.no_default_model_description",
 					descriptionVars: {
-						provider: newProvider.charAt(0).toUpperCase() + newProvider.slice(1),
+						provider:
+							newProvider.charAt(0).toUpperCase() + newProvider.slice(1),
 					},
 					color: ColorCode.ERROR,
 				});
@@ -250,7 +258,9 @@ export async function execute(
 			}
 
 			newLlmId = defaultModel.llm_id;
-			log.info(`Switching to default model for ${newProvider}: ${defaultModel.llm_codename} (ID: ${newLlmId})`);
+			log.info(
+				`Switching to default model for ${newProvider}: ${defaultModel.llm_codename} (ID: ${newLlmId})`,
+			);
 		}
 
 		// 12. Update the config in the database (includes llm_id if provider changed)
@@ -297,12 +307,14 @@ export async function execute(
 		}
 
 		// 14. Success message (include model info if provider changed)
-		const successDescriptionKey = currentProvider !== newProvider
-			? "commands.config.apikey.set.success_with_model_description"
-			: "commands.config.apikey.set.success_description";
+		const successDescriptionKey =
+			currentProvider !== newProvider
+				? "commands.config.apikey.set.success_with_model_description"
+				: "commands.config.apikey.set.success_description";
 
 		const descriptionVars: Record<string, string> = {
-			provider: selectedProvider.charAt(0).toUpperCase() + selectedProvider.slice(1),
+			provider:
+				selectedProvider.charAt(0).toUpperCase() + selectedProvider.slice(1),
 		};
 
 		// Add model name if provider changed

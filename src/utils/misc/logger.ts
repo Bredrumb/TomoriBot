@@ -15,7 +15,7 @@ export enum ColorCode {
 /**
  * Determines if non-essential logs should be shown based on environment
  */
-const isProduction = process.env.RUN_ENV === 'production';
+const isProduction = process.env.RUN_ENV === "production";
 
 /**
  * Logging utility for formatted info, success, error, warning, and section messages.

@@ -38,8 +38,14 @@ export async function execute(
 ): Promise<void> {
 	try {
 		// Get command mentions for cross-references
-		const helpApikeyMention = commandRegistry.getCommandMention("help", "apikey");
-		const configSetupMention = commandRegistry.getCommandMention("config", "setup");
+		const helpApikeyMention = commandRegistry.getCommandMention(
+			"help",
+			"apikey",
+		);
+		const configSetupMention = commandRegistry.getCommandMention(
+			"config",
+			"setup",
+		);
 		const serverTriggerMention = commandRegistry.getCommandMention(
 			"server",
 			"trigger",
@@ -61,7 +67,10 @@ export async function execute(
 			"help",
 			"features",
 		);
-		const helpMemoryMention = commandRegistry.getCommandMention("help", "memory");
+		const helpMemoryMention = commandRegistry.getCommandMention(
+			"help",
+			"memory",
+		);
 		const helpCustomizationMention = commandRegistry.getCommandMention(
 			"help",
 			"customization",
@@ -116,12 +125,16 @@ export async function execute(
 					},
 					{
 						nameKey: "commands.help.setup.need_help_title",
-						value: localizer(locale, "commands.help.setup.need_help_description", {
-							helpFeatures: helpFeaturesMention,
-							helpMemory: helpMemoryMention,
-							helpCustomization: helpCustomizationMention,
-							supportServer: supportServerMention,
-						}),
+						value: localizer(
+							locale,
+							"commands.help.setup.need_help_description",
+							{
+								helpFeatures: helpFeaturesMention,
+								helpMemory: helpMemoryMention,
+								helpCustomization: helpCustomizationMention,
+								supportServer: supportServerMention,
+							},
+						),
 						inline: false,
 					},
 				],
@@ -138,7 +151,11 @@ export async function execute(
 				guildDiscordId: interaction.guild?.id,
 			},
 		};
-		await log.error("Error executing /help setup command", error as Error, context);
+		await log.error(
+			"Error executing /help setup command",
+			error as Error,
+			context,
+		);
 
 		// Inform user of error (ephemeral)
 		const errorMessage = localizer(
@@ -159,7 +176,11 @@ export async function execute(
 			}
 		} catch (replyError) {
 			// Log if even the error reply fails
-			log.error("Failed to send error reply for /help setup", replyError, context);
+			log.error(
+				"Failed to send error reply for /help setup",
+				replyError,
+				context,
+			);
 		}
 	}
 }

@@ -34,7 +34,6 @@ export const DISCORD_STREAMING_CONSTANTS = {
 	INACTIVITY_TIMEOUT_MS: 120000, // 2 minutes
 } as const;
 
-
 /**
  * Stream state tracking for buffer management and code block detection
  */

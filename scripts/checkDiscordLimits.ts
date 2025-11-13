@@ -186,7 +186,8 @@ function checkSelectMenuLimits(content: string, file: string): Violation[] {
 		const menuBlock = match[1];
 
 		// Look for .addOptions([...]) or .setOptions([...])
-		const optionsPattern = /\.(addOptions|setOptions)\s*\(\s*\[([\s\S]*?)\]\s*\)/g;
+		const optionsPattern =
+			/\.(addOptions|setOptions)\s*\(\s*\[([\s\S]*?)\]\s*\)/g;
 		let optionsMatch: RegExpExecArray | null = optionsPattern.exec(menuBlock);
 
 		while (optionsMatch !== null) {

@@ -46,7 +46,10 @@ import {
 	getCachedDefaultLLM,
 	isLLMCacheReady,
 } from "../../utils/cache/llmCache";
-import { loadDefaultModelForProvider, loadAvailableModelsForProvider } from "../../utils/db/dbRead";
+import {
+	loadDefaultModelForProvider,
+	loadAvailableModelsForProvider,
+} from "../../utils/db/dbRead";
 
 /**
  * Gets the default Google Gemini model with a robust fallback chain:
@@ -63,7 +66,9 @@ async function getDefaultGoogleModel(): Promise<string> {
 	if (isLLMCacheReady()) {
 		const cachedDefault = getCachedDefaultLLM(providerName);
 		if (cachedDefault) {
-			log.info(`Using cached default ${providerName} model: ${cachedDefault.llm_codename}`);
+			log.info(
+				`Using cached default ${providerName} model: ${cachedDefault.llm_codename}`,
+			);
 			return cachedDefault.llm_codename;
 		}
 	}
@@ -72,7 +77,9 @@ async function getDefaultGoogleModel(): Promise<string> {
 	try {
 		const dbDefault = await loadDefaultModelForProvider(providerName);
 		if (dbDefault) {
-			log.info(`Using database default ${providerName} model: ${dbDefault.llm_codename}`);
+			log.info(
+				`Using database default ${providerName} model: ${dbDefault.llm_codename}`,
+			);
 			return dbDefault.llm_codename;
 		}
 	} catch (error) {
@@ -86,15 +93,22 @@ async function getDefaultGoogleModel(): Promise<string> {
 		const availableModels = await loadAvailableModelsForProvider(providerName);
 		if (availableModels && availableModels.length > 0) {
 			const firstModel = availableModels[0].llm_codename;
-			log.warn(`No default model found, using first available ${providerName} model: ${firstModel}`);
+			log.warn(
+				`No default model found, using first available ${providerName} model: ${firstModel}`,
+			);
 			return firstModel;
 		}
 	} catch (error) {
-		log.error(`Failed to load available models for ${providerName}`, error as Error);
+		log.error(
+			`Failed to load available models for ${providerName}`,
+			error as Error,
+		);
 	}
 
 	// 4. No models found - throw error
-	throw new Error(`No default model found for provider: ${providerName}. Please configure models in the database.`);
+	throw new Error(
+		`No default model found for provider: ${providerName}. Please configure models in the database.`,
+	);
 }
 
 // Google-specific configuration extending the base ProviderConfig

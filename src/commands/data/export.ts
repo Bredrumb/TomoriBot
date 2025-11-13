@@ -32,7 +32,10 @@ export const configureSubcommand = (
 				.setRequired(true)
 				.addChoices(
 					{
-						name: localizer("en-US", "commands.data.export.type_choice_personal"),
+						name: localizer(
+							"en-US",
+							"commands.data.export.type_choice_personal",
+						),
 						value: "personal",
 					},
 					{
@@ -40,7 +43,10 @@ export const configureSubcommand = (
 						value: "server",
 					},
 					{
-						name: localizer("en-US", "commands.data.export.type_choice_personality"),
+						name: localizer(
+							"en-US",
+							"commands.data.export.type_choice_personality",
+						),
 						value: "personality",
 					},
 				),
@@ -99,7 +105,10 @@ export async function execute(
 							.setDescription(
 								personalityResult.error
 									? localizer(locale, personalityResult.error)
-									: localizer(locale, "commands.data.export.failed_description"),
+									: localizer(
+											locale,
+											"commands.data.export.failed_description",
+										),
 							)
 							.setColor(ColorCode.ERROR),
 					],
@@ -134,7 +143,10 @@ export async function execute(
 						new EmbedBuilder()
 							.setTitle(localizer(locale, "commands.data.export.dm_title"))
 							.setDescription(
-								localizer(locale, "commands.data.export.dm_description_personality"),
+								localizer(
+									locale,
+									"commands.data.export.dm_description_personality",
+								),
 							)
 							.setThumbnail(botAvatarUrl)
 							.setColor(ColorCode.INFO),
@@ -165,7 +177,9 @@ export async function execute(
 				await interaction.editReply({
 					embeds: [
 						new EmbedBuilder()
-							.setTitle(localizer(locale, "commands.data.export.dm_failed_title"))
+							.setTitle(
+								localizer(locale, "commands.data.export.dm_failed_title"),
+							)
 							.setDescription(
 								localizer(locale, "commands.data.export.dm_failed_description"),
 							)
@@ -263,7 +277,10 @@ export async function execute(
 			});
 		} catch (dmError) {
 			// DM failed, likely because user has DMs disabled
-			log.warn(`Failed to send export DM to user ${interaction.user.id}:`, dmError as Error);
+			log.warn(
+				`Failed to send export DM to user ${interaction.user.id}:`,
+				dmError as Error,
+			);
 			await interaction.editReply({
 				embeds: [
 					new EmbedBuilder()

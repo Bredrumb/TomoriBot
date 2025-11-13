@@ -84,7 +84,7 @@ export class StickerTool extends BaseTool {
 		}
 
 		// Check if this is a DM channel - stickers are not available in DMs
-		if (!('guild' in context.channel)) {
+		if (!("guild" in context.channel)) {
 			return {
 				success: false,
 				error: "Stickers not available in DMs",
@@ -189,7 +189,7 @@ export class StickerTool extends BaseTool {
 	}> {
 		try {
 			// Return empty array for DM channels - no stickers available
-			if (!('guild' in context.channel)) {
+			if (!("guild" in context.channel)) {
 				return [];
 			}
 

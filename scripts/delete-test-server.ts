@@ -72,7 +72,9 @@ async function deleteTestServer() {
 	`;
 
 	if (serverCheck.length === 0) {
-		log.info(`Server ${testServerId} not found in database. Nothing to delete.`);
+		log.info(
+			`Server ${testServerId} not found in database. Nothing to delete.`,
+		);
 		process.exit(0);
 	}
 
@@ -166,7 +168,9 @@ async function deleteTestServer() {
 			WHERE server_disc_id = ${testServerId}
 		`;
 
-		log.success(`Server ${testServerId} and all related data deleted successfully!`);
+		log.success(
+			`Server ${testServerId} and all related data deleted successfully!`,
+		);
 		log.info(
 			`${deleteResult.count} server record deleted (cascaded to related tables)`,
 		);
@@ -185,7 +189,9 @@ async function deleteTestServer() {
 			log.info("Server has been completely removed from the database.");
 			log.info("You can now test setting up TomoriBot from scratch.");
 		} else {
-			log.error(`Verification failed: ${remainingCount} server record(s) still exist in database!`);
+			log.error(
+				`Verification failed: ${remainingCount} server record(s) still exist in database!`,
+			);
 		}
 	} catch (error) {
 		log.error("Error during deletion process:", error);

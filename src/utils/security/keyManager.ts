@@ -40,7 +40,10 @@ class CryptoKeyManager {
 
 		// Determine current version: explicit override or auto-detect highest
 		if (process.env.CRYPTO_SECRET_CURRENT) {
-			this.currentVersion = Number.parseInt(process.env.CRYPTO_SECRET_CURRENT, 10);
+			this.currentVersion = Number.parseInt(
+				process.env.CRYPTO_SECRET_CURRENT,
+				10,
+			);
 			log.info(`Using explicit current version: V${this.currentVersion}`);
 		} else {
 			this.currentVersion = Math.max(...versions);

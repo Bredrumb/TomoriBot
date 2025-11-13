@@ -1,6 +1,6 @@
 /**
  * TypeScript types for Discord's raw API data structures
- * 
+ *
  * This module provides proper type definitions for Discord API data that doesn't
  * have complete TypeScript support in Discord.js, particularly for custom components
  * and raw WebSocket message handling.
@@ -147,7 +147,10 @@ export interface RawDiscordWebSocketPacket {
 export interface ExtendedDiscordClient {
 	/** WebSocket manager with handlePacket method */
 	ws?: {
-		handlePacket?: (packet: RawDiscordWebSocketPacket, shard: RawDiscordShard) => void;
+		handlePacket?: (
+			packet: RawDiscordWebSocketPacket,
+			shard: RawDiscordShard,
+		) => void;
 		[key: string]: unknown;
 	} & Record<string, unknown>;
 	/** Additional client properties */

@@ -1,7 +1,7 @@
 /**
  * YouTube URL Cleaning Utility
  * Provides functions to detect and remove YouTube URLs from text content
- * 
+ *
  * Used primarily for enhanced context restart to prevent infinite loops
  * where TomoriBot keeps seeing YouTube URLs after processing them as video parts
  */
@@ -24,21 +24,21 @@ export const YOUTUBE_URL_PATTERNS = [
  */
 export function extractYouTubeUrls(text: string): string[] {
 	const urls: string[] = [];
-	
+
 	for (const pattern of YOUTUBE_URL_PATTERNS) {
 		// Reset regex lastIndex to ensure proper matching
 		pattern.lastIndex = 0;
-		
+
 		let match: RegExpExecArray | null;
 		// biome-ignore lint/suspicious/noAssignInExpressions: RegExp.exec() pattern requires assignment in expression
 		while ((match = pattern.exec(text)) !== null) {
 			urls.push(match[0]);
 		}
-		
+
 		// Reset again after processing
 		pattern.lastIndex = 0;
 	}
-	
+
 	// Remove duplicates and return
 	return [...new Set(urls)];
 }
@@ -50,11 +50,11 @@ export function extractYouTubeUrls(text: string): string[] {
  */
 export function extractYouTubeVideoIds(text: string): string[] {
 	const videoIds: string[] = [];
-	
+
 	for (const pattern of YOUTUBE_URL_PATTERNS) {
 		// Reset regex lastIndex to ensure proper matching
 		pattern.lastIndex = 0;
-		
+
 		let match: RegExpExecArray | null;
 		// biome-ignore lint/suspicious/noAssignInExpressions: RegExp.exec() pattern requires assignment in expression
 		while ((match = pattern.exec(text)) !== null) {
@@ -62,11 +62,11 @@ export function extractYouTubeVideoIds(text: string): string[] {
 				videoIds.push(match[1]);
 			}
 		}
-		
+
 		// Reset again after processing
 		pattern.lastIndex = 0;
 	}
-	
+
 	// Remove duplicates and return
 	return [...new Set(videoIds)];
 }
@@ -78,12 +78,9 @@ export function extractYouTubeVideoIds(text: string): string[] {
  * @param replacement - Optional replacement text (default: empty string)
  * @returns Text with YouTube URLs removed/replaced
  */
-export function removeYouTubeUrls(
-	text: string, 
-	replacement = ""
-): string {
+export function removeYouTubeUrls(text: string, replacement = ""): string {
 	let cleanedText = text;
-	
+
 	for (const pattern of YOUTUBE_URL_PATTERNS) {
 		// Reset regex lastIndex to ensure proper matching
 		pattern.lastIndex = 0;
@@ -91,7 +88,7 @@ export function removeYouTubeUrls(
 		// Reset again after processing
 		pattern.lastIndex = 0;
 	}
-	
+
 	// Clean up any extra whitespace that might result from URL removal
 	return cleanedText.replace(/\s+/g, " ").trim();
 }
@@ -105,14 +102,14 @@ export function removeYouTubeUrls(
  */
 export function replaceYouTubeUrlsWithPlaceholders(
 	text: string,
-	placeholder = "[YouTube video processed]"
+	placeholder = "[YouTube video processed]",
 ): string {
 	let processedText = text;
-	
+
 	for (const pattern of YOUTUBE_URL_PATTERNS) {
 		// Reset regex lastIndex to ensure proper matching
 		pattern.lastIndex = 0;
-		
+
 		processedText = processedText.replace(pattern, (_, videoId) => {
 			// If placeholder contains {videoId}, replace it with actual video ID
 			if (placeholder.includes("{videoId}") && videoId) {
@@ -120,11 +117,11 @@ export function replaceYouTubeUrlsWithPlaceholders(
 			}
 			return placeholder;
 		});
-		
+
 		// Reset again after processing
 		pattern.lastIndex = 0;
 	}
-	
+
 	return processedText.replace(/\s+/g, " ").trim();
 }
 
@@ -160,7 +157,7 @@ export function getYouTubeUrlStats(text: string): {
 } {
 	const urls = extractYouTubeUrls(text);
 	const videoIds = extractYouTubeVideoIds(text);
-	
+
 	return {
 		urlCount: urls.length,
 		uniqueVideoIds: videoIds,

@@ -329,14 +329,18 @@ export async function brave_image_search(
 						method: "GET",
 						signal: controller.signal,
 						headers: {
-							"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+							"User-Agent":
+								"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 						},
 					});
 
 					clearTimeout(timeoutId);
 
 					if (!response.ok) {
-						return { success: false, reason: `fetch_failed_${response.status}` };
+						return {
+							success: false,
+							reason: `fetch_failed_${response.status}`,
+						};
 					}
 
 					// 2. Get image buffer
@@ -359,7 +363,6 @@ export async function brave_image_search(
 
 						// Reduce quality for next iteration
 						quality -= 10;
-
 					} while (quality > 20 && compressedBuffer.length > targetSize);
 
 					// 5. Check final result
@@ -367,9 +370,10 @@ export async function brave_image_search(
 						return { success: false, reason: "compression_insufficient" };
 					}
 
-					log.info(`Compressed image from ${imageBuffer.length} bytes to ${compressedBuffer.length} bytes (quality: ${quality}%)`);
+					log.info(
+						`Compressed image from ${imageBuffer.length} bytes to ${compressedBuffer.length} bytes (quality: ${quality}%)`,
+					);
 					return { success: true, buffer: compressedBuffer };
-
 				} catch (error) {
 					return {
 						success: false,
@@ -385,7 +389,12 @@ export async function brave_image_search(
 			 */
 			const validateImageUrl = async (
 				imageUrl: string,
-			): Promise<{ url: string; valid: boolean; reason?: string; compressedBuffer?: Buffer }> => {
+			): Promise<{
+				url: string;
+				valid: boolean;
+				reason?: string;
+				compressedBuffer?: Buffer;
+			}> => {
 				try {
 					// 1. Quick pattern filtering for known problematic domains
 					const badPatterns = [
@@ -426,7 +435,9 @@ export async function brave_image_search(
 						const discordLimit = 8 * 1024 * 1024; // 8MB Discord limit
 
 						if (contentLength && parseInt(contentLength, 10) > discordLimit) {
-							log.info(`Image ${imageUrl} is ${contentLength} bytes, attempting compression...`);
+							log.info(
+								`Image ${imageUrl} is ${contentLength} bytes, attempting compression...`,
+							);
 
 							// Attempt compression
 							const compressionResult = await compressImage(imageUrl);
@@ -435,7 +446,7 @@ export async function brave_image_search(
 								return {
 									url: imageUrl,
 									valid: true,
-									compressedBuffer: compressionResult.buffer
+									compressedBuffer: compressionResult.buffer,
 								};
 							} else {
 								return {
@@ -472,7 +483,12 @@ export async function brave_image_search(
 			// Create a shared results array to collect partial results during timeout
 			const partialResults = new Map<
 				string,
-				{ url: string; valid: boolean; reason?: string; compressedBuffer?: Buffer }
+				{
+					url: string;
+					valid: boolean;
+					reason?: string;
+					compressedBuffer?: Buffer;
+				}
 			>();
 
 			// Wrap each validation promise to store results immediately when they complete
@@ -494,7 +510,12 @@ export async function brave_image_search(
 
 			// Overall timeout that preserves any completed validations
 			const timeoutPromise = new Promise<
-				{ url: string; valid: boolean; reason?: string; compressedBuffer?: Buffer }[]
+				{
+					url: string;
+					valid: boolean;
+					reason?: string;
+					compressedBuffer?: Buffer;
+				}[]
 			>((resolve) => {
 				setTimeout(() => {
 					log.warn(
@@ -504,7 +525,12 @@ export async function brave_image_search(
 					// Return completed results + mark incomplete ones as timed out
 					const results = imageUrls.map((url) => {
 						if (partialResults.has(url)) {
-							return partialResults.get(url) as { url: string; valid: boolean; reason?: string; compressedBuffer?: Buffer };
+							return partialResults.get(url) as {
+								url: string;
+								valid: boolean;
+								reason?: string;
+								compressedBuffer?: Buffer;
+							};
 						} else {
 							return { url, valid: false, reason: "overall_timeout" };
 						}
@@ -514,7 +540,12 @@ export async function brave_image_search(
 				}, 3000);
 			});
 
-			let validationResults: { url: string; valid: boolean; reason?: string; compressedBuffer?: Buffer }[];
+			let validationResults: {
+				url: string;
+				valid: boolean;
+				reason?: string;
+				compressedBuffer?: Buffer;
+			}[];
 			try {
 				// Use Promise.race to ensure we never wait more than 5 seconds total
 				// But preserve any partial results that completed within the timeout

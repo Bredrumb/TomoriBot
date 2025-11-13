@@ -1,13 +1,13 @@
 {
-  "name": "duckduckgo-search",
-  "displayName": "DuckDuckGo & Felo AI Search", 
-  "npmPackage": "@oevortex/ddg_search@latest",
-  "command": ["npx", "-y", "@oevortex/ddg_search@latest"],
-  "description": "Blazing-fast web search via DuckDuckGo, AI-powered search via Felo AI, URL content extraction, and metadata retrieval (no API key required)",
-  "requiredEnvVars": [],
-  "optionalEnvVars": [],
-  "enabled": true,
-  "category": "search",
-  "priority": 1,
-  "transport": "stdio"
+	"name": "duckduckgo-search",
+	"displayName": "DuckDuckGo & Felo AI Search",
+	"npmPackage": "@oevortex/ddg_search@latest",
+	"command": ["npx", "-y", "@oevortex/ddg_search@latest"],
+	"description": "Blazing-fast web search via DuckDuckGo, AI-powered search via Felo AI, URL content extraction, and metadata retrieval (no API key required)",
+	"requiredEnvVars": [],
+	"optionalEnvVars": [],
+	"enabled": true,
+	"category": "search",
+	"priority": 1,
+	"transport": "stdio"
 }

@@ -24,10 +24,7 @@ export class FetchHandler implements MCPServerBehaviorHandler {
 	/**
 	 * Supported Fetch functions
 	 */
-	private readonly SUPPORTED_FUNCTIONS = [
-		"fetch"
-	];
-
+	private readonly SUPPORTED_FUNCTIONS = ["fetch"];
 
 	/**
 	 * Check if this handler supports a specific function
@@ -37,7 +34,6 @@ export class FetchHandler implements MCPServerBehaviorHandler {
 	public supportsFunction(functionName: string): boolean {
 		return this.SUPPORTED_FUNCTIONS.includes(functionName);
 	}
-
 
 	/**
 	 * Process MCP function result before returning to LLM
@@ -51,7 +47,7 @@ export class FetchHandler implements MCPServerBehaviorHandler {
 		functionName: string,
 		mcpResult: MCPServerResponse,
 		context: MCPExecutionContext,
-		args: Record<string, unknown>
+		args: Record<string, unknown>,
 	): Promise<TypedMCPToolResult> {
 		try {
 			if (functionName === "fetch") {
@@ -61,10 +57,7 @@ export class FetchHandler implements MCPServerBehaviorHandler {
 			// Fallback for unknown functions (shouldn't happen)
 			return this.processStandardResult(functionName, mcpResult, context, args);
 		} catch (error) {
-			log.error(
-				`Failed to process ${functionName} result:`,
-				error as Error
-			);
+			log.error(`Failed to process ${functionName} result:`, error as Error);
 			return {
 				success: false,
 				message: "Failed to process Fetch result",
@@ -91,7 +84,7 @@ export class FetchHandler implements MCPServerBehaviorHandler {
 	private async processFetchResult(
 		mcpResult: MCPServerResponse,
 		context: MCPExecutionContext,
-		args: Record<string, unknown>
+		args: Record<string, unknown>,
 	): Promise<TypedMCPToolResult> {
 		try {
 			// Type guard to check if this is a fetch response
@@ -107,7 +100,7 @@ export class FetchHandler implements MCPServerBehaviorHandler {
 			if (isFetchResponse) {
 				// Handle structured fetch response
 				resultText = fetchResult.markdown || fetchResult.text || "";
-				url = fetchResult.url || args.url as string || "";
+				url = fetchResult.url || (args.url as string) || "";
 				title = fetchResult.title || "";
 				statusCode = fetchResult.status_code || 200;
 
@@ -137,7 +130,7 @@ export class FetchHandler implements MCPServerBehaviorHandler {
 					// Fallback: try to stringify the result
 					resultText = JSON.stringify(mcpResult, null, 2);
 				}
-				url = args.url as string || "";
+				url = (args.url as string) || "";
 			}
 
 			// Check for error responses
@@ -174,7 +167,7 @@ export class FetchHandler implements MCPServerBehaviorHandler {
 			}
 
 			log.info(
-				`Fetch completed successfully for ${url} - Content length: ${resultText.length} characters`
+				`Fetch completed successfully for ${url} - Content length: ${resultText.length} characters`,
 			);
 
 			return {
@@ -224,7 +217,7 @@ export class FetchHandler implements MCPServerBehaviorHandler {
 		functionName: string,
 		mcpResult: MCPServerResponse,
 		context: MCPExecutionContext,
-		_args: Record<string, unknown>
+		_args: Record<string, unknown>,
 	): TypedMCPToolResult {
 		try {
 			// Extract result text from various possible locations in MCP response
@@ -271,7 +264,7 @@ export class FetchHandler implements MCPServerBehaviorHandler {
 		} catch (error) {
 			log.error(
 				`Error processing standard Fetch result for ${functionName}:`,
-				error as Error
+				error as Error,
 			);
 			return {
 				success: false,

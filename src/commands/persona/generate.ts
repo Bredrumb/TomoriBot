@@ -52,7 +52,9 @@ export const configureSubcommand = (
 ) =>
 	subcommand
 		.setName("generate")
-		.setDescription(localizer("en-US", "commands.persona.generate.description"));
+		.setDescription(
+			localizer("en-US", "commands.persona.generate.description"),
+		);
 
 /**
  * Convert Discord attachment to base64
@@ -305,7 +307,10 @@ export async function execute(
 					embeds: [
 						new EmbedBuilder()
 							.setTitle(
-								localizer(locale, "commands.persona.generate.invalid_image_title"),
+								localizer(
+									locale,
+									"commands.persona.generate.invalid_image_title",
+								),
 							)
 							.setDescription(
 								localizer(
