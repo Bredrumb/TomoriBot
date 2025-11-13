@@ -205,6 +205,28 @@ export default {
 			unknown_default_message: "An unexpected error occurred",
 		},
 
+		// NovelAI-specific error messages (provider-specific default messages only)
+		novelai: {
+			// 401 UNAUTHORIZED
+			"401_default_message": "Your NovelAI API key is invalid or expired",
+
+			// 402 PAYMENT_REQUIRED
+			"402_default_message": "You don't have enough Anlas credits",
+
+			// 429 TOO_MANY_REQUESTS
+			"429_default_message":
+				"You're sending too many requests, please slow down",
+
+			// 503 SERVICE_UNAVAILABLE
+			"503_default_message": "NovelAI servers are currently overloaded",
+
+			// 504 GATEWAY_TIMEOUT
+			"504_default_message": "Your request took too long to process",
+
+			// Generic fallback for unknown NovelAI errors
+			unknown_default_message: "An unexpected error occurred",
+		},
+
 		self_teach: {
 			server_memory_learned_title: "🧠 I Learned Something New! (Server-Wide)",
 			server_memory_learned_description:

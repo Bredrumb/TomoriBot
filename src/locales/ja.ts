@@ -205,6 +205,28 @@ export default {
 			unknown_default_message: "予期しないエラーが発生しました",
 		},
 
+		// NovelAI固有のエラーメッセージ（プロバイダー固有のデフォルトメッセージのみ）
+		novelai: {
+			// 401 UNAUTHORIZED
+			"401_default_message": "NovelAIのAPIキーが無効または期限切れです",
+
+			// 402 PAYMENT_REQUIRED
+			"402_default_message": "Anlasクレジットが不足しています",
+
+			// 429 TOO_MANY_REQUESTS
+			"429_default_message":
+				"リクエストを送信しすぎています。ペースを落としてください",
+
+			// 503 SERVICE_UNAVAILABLE
+			"503_default_message": "NovelAIサーバーが現在過負荷状態です",
+
+			// 504 GATEWAY_TIMEOUT
+			"504_default_message": "リクエストの処理時間が長すぎました",
+
+			// Generic fallback for unknown NovelAI errors
+			unknown_default_message: "予期しないエラーが発生しました",
+		},
+
 		self_teach: {
 			server_memory_learned_title: "🧠 新しいことを学びました！ (サーバー全体)",
 			server_memory_learned_description:
