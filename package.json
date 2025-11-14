@@ -28,6 +28,7 @@
 	"dependencies": {
 		"@google/genai": "^1.15.0",
 		"@modelcontextprotocol/sdk": "^1.17.3",
+		"@openrouter/sdk": "^0.1.11",
 		"@types/bun": "^1.2.12",
 		"@types/dotenv": "^8.2.3",
 		"@types/node": "^22.15.3",

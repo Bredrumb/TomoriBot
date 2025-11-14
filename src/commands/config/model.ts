@@ -36,7 +36,7 @@ const MODEL_SELECT_ID = "model_select";
  * Helper function to get localized LLM description based on user's locale
  * @param model - LLM model row from database
  * @param locale - User's preferred locale (e.g., "ja", "en-US")
- * @returns Localized description or fallback
+ * @returns Localized description with flags prepended (e.g., "(FREE+TOOLS) Description")
  */
 function getLocalizedDescription(model: LlmRow, locale: string): string {
 	// Normalize locale to handle variations (e.g., "ja-JP" -> "ja")
@@ -51,7 +51,19 @@ function getLocalizedDescription(model: LlmRow, locale: string): string {
 	}
 
 	// Fallback chain: locale-specific -> default -> provider fallback
-	return description || model.llm_description || `${model.llm_provider} model`;
+	const baseDescription =
+		description || model.llm_description || `${model.llm_provider} model`;
+
+	// Build flags array based on model capabilities
+	const flags: string[] = [];
+	if (model.is_free) flags.push("FREE");
+	if (model.has_tools) flags.push("TOOLS");
+	if (model.sees_images) flags.push("IMAGES");
+	if (model.is_uncensored) flags.push("UNCENSORED");
+
+	// Prepend flags with + connector if any exist
+	const flagPrefix = flags.length > 0 ? `(${flags.join("+")}) ` : "";
+	return `${flagPrefix}${baseDescription}`;
 }
 
 // Configure the subcommand (Rule #21)

@@ -149,7 +149,7 @@ export default {
 			// Universal provider error titles and tips (moved from genai.google)
 			api_error_title: "❌ API Error",
 			api_error_tip:
-				"Please verify your API key and try again. If this error persists, use `/support discord` to report it.",
+				"Please verify your API key and try again. If this error persists, report through `/support discord`",
 
 			rate_limit_title: "🟡 Rate Limit Exceeded",
 			rate_limit_tip: "Please wait a few minutes before trying again",
@@ -224,6 +224,47 @@ export default {
 			"504_default_message": "Your request took too long to process",
 
 			// Generic fallback for unknown NovelAI errors
+			unknown_default_message: "An unexpected error occurred",
+		},
+
+		// OpenRouter-specific error messages (provider-specific default messages only)
+		openrouter: {
+			// 400 BAD_REQUEST
+			"400_default_message":
+				"Bad request: invalid or missing params, or CORS issue",
+
+			// 401 UNAUTHORIZED
+			"401_default_message":
+				"Invalid credentials: OAuth session expired or disabled/invalid API key",
+
+			// 402 PAYMENT_REQUIRED
+			"402_default_message":
+				"Your account or API key has insufficient credits. Add more credits and retry the request.",
+
+			// 403 FORBIDDEN
+			"403_default_message":
+				"Your chosen model requires moderation and your input was flagged",
+
+			// 404 NOT_FOUND
+			"404_default_message":
+				"No endpoints found that support the requested features (tools/images). Try a different model.",
+
+			// 408 REQUEST_TIMEOUT
+			"408_default_message": "Your request timed out",
+
+			// 429 TOO_MANY_REQUESTS
+			"429_default_message":
+				"You are being rate limited. Please retry shortly, or use a different model that isn't free.",
+
+			// 502 BAD_GATEWAY
+			"502_default_message":
+				"Your chosen model is down or we received an invalid response from it",
+
+			// 503 SERVICE_UNAVAILABLE
+			"503_default_message":
+				"There is no available model provider that meets your routing requirements",
+
+			// Generic fallback for unknown OpenRouter errors
 			unknown_default_message: "An unexpected error occurred",
 		},
 
@@ -1022,7 +1063,7 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				description: `Change the underlying AI model that I use.`,
 				modal_title: `Select AI Model`,
 				select_label: `AI Model`,
-				select_description: `Choose the AI model for me to use`,
+				select_description: `Choose the AI model for me to use. Check your AI provider's website for pricing of non-free models.`,
 				select_placeholder: `Choose a model...`,
 				no_api_key_title: `No API Key Set`,
 				no_api_key_description: `An API key must be configured before changing models. Please use \`/config apikey set\` to set an API key first.`,

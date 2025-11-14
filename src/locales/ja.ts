@@ -227,6 +227,47 @@ export default {
 			unknown_default_message: "予期しないエラーが発生しました",
 		},
 
+		// OpenRouter固有のエラーメッセージ（プロバイダー固有のデフォルトメッセージのみ）
+		openrouter: {
+			// 400 BAD_REQUEST
+			"400_default_message":
+				"不正なリクエスト：無効または欠落したパラメータ、またはCORSの問題",
+
+			// 401 UNAUTHORIZED
+			"401_default_message":
+				"無効な認証情報：OAuthセッションの期限切れ、または無効/無効化されたAPIキー",
+
+			// 402 PAYMENT_REQUIRED
+			"402_default_message":
+				"アカウントまたはAPIキーのクレジットが不足しています。クレジットを追加して再試行してください。",
+
+			// 403 FORBIDDEN
+			"403_default_message":
+				"選択したモデルはモデレーションが必要で、入力がフラグされました",
+
+			// 404 NOT_FOUND
+			"404_default_message":
+				"要求された機能（ツール/画像）をサポートするエンドポイントが見つかりません。別のモデルをお試しください。",
+
+			// 408 REQUEST_TIMEOUT
+			"408_default_message": "リクエストがタイムアウトしました",
+
+			// 429 TOO_MANY_REQUESTS
+			"429_default_message":
+				"レート制限中です。しばらくしてから再試行するか、無料ではないモデルを使用してください。",
+
+			// 502 BAD_GATEWAY
+			"502_default_message":
+				"選択したモデルがダウンしているか、無効な応答を受信しました",
+
+			// 503 SERVICE_UNAVAILABLE
+			"503_default_message":
+				"ルーティング要件を満たす利用可能なモデルプロバイダーがありません",
+
+			// Generic fallback for unknown OpenRouter errors
+			unknown_default_message: "予期しないエラーが発生しました",
+		},
+
 		self_teach: {
 			server_memory_learned_title: "🧠 新しいことを学びました！ (サーバー全体)",
 			server_memory_learned_description:
@@ -1028,7 +1069,7 @@ export default {
 				description: `私が使用する基盤となるAIモデルを変更します。`,
 				modal_title: `AIモデルの選択`,
 				select_label: `AIモデル`,
-				select_description: `私が使用するAIモデルを選択してください`,
+				select_description: `私が使用するAIモデルを選択してください。無料でないモデルの価格については、各AIプロバイダーの公式サイトをご確認ください。`,
 				select_placeholder: `モデルを選択...`,
 				no_api_key_title: `APIキーが設定されていません`,
 				no_api_key_description: `モデルを変更する前にAPIキーを設定する必要があります。まず \`/config apikeyset\` を使用してAPIキーを設定してください。`,
