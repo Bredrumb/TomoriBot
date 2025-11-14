@@ -35,6 +35,7 @@ export async function initializeLLMCache(): Promise<void> {
 				is_reasoning,
 				is_deprecated,
 				llm_description,
+				ja_description,
 				created_at,
 				updated_at
 			FROM llms

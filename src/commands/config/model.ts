@@ -32,6 +32,28 @@ import type { SelectOption } from "../../types/discord/modal";
 const MODAL_CUSTOM_ID = "config_model_modal";
 const MODEL_SELECT_ID = "model_select";
 
+/**
+ * Helper function to get localized LLM description based on user's locale
+ * @param model - LLM model row from database
+ * @param locale - User's preferred locale (e.g., "ja", "en-US")
+ * @returns Localized description or fallback
+ */
+function getLocalizedDescription(model: LlmRow, locale: string): string {
+	// Normalize locale to handle variations (e.g., "ja-JP" -> "ja")
+	const normalizedLocale = locale.toLowerCase().split("-")[0];
+
+	// Select description based on locale
+	let description: string | null | undefined;
+	if (normalizedLocale === "ja") {
+		description = model.ja_description;
+	} else {
+		description = model.llm_description;
+	}
+
+	// Fallback chain: locale-specific -> default -> provider fallback
+	return description || model.llm_description || `${model.llm_provider} model`;
+}
+
 // Configure the subcommand (Rule #21)
 export const configureSubcommand = (
 	subcommand: SlashCommandSubcommandBuilder,
@@ -104,13 +126,13 @@ export async function execute(
 			return;
 		}
 
-		// 4. Create model options for the select menu using database descriptions
+		// 4. Create model options for the select menu using localized descriptions
 		const modelSelectOptions: SelectOption[] = availableModels.map((model) => ({
 			label: safeSelectOptionText(model.llm_codename), // Use codename as display label
 			value: safeSelectOptionText(model.llm_codename), // Use codename as value
 			description: safeSelectOptionText(
-				model.llm_description || `${model.llm_provider} model`,
-			), // Use description from DB or fallback
+				getLocalizedDescription(model, userData.language_pref),
+			), // Use locale-specific description
 		}));
 
 		// 5. Show the modal with model selection

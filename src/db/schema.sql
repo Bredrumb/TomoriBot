@@ -126,6 +126,7 @@ SELECT add_column_if_not_exists('llms', 'is_default', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'is_reasoning', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'is_deprecated', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'llm_description', 'TEXT');
+SELECT add_column_if_not_exists('llms', 'ja_description', 'TEXT');
 
 
 -- Create updated_at trigger for llms table

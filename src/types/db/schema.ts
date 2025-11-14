@@ -51,6 +51,7 @@ export const llmSchema = z.object({
 	is_reasoning: z.boolean().default(false),
 	is_deprecated: z.boolean().default(false),
 	llm_description: z.string().nullable().optional(),
+	ja_description: z.string().nullable().optional(),
 	created_at: z.date().optional(),
 	updated_at: z.date().optional(),
 });

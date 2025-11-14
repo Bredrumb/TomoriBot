@@ -520,6 +520,107 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 	}
 
 	/**
+	 * Automatically closes incomplete semantic markers in the buffer
+	 * This is a QoL fix to prevent message loss when LLMs stop mid-sentence
+	 * with unclosed parentheses, quotes, markdown formatting, etc.
+	 *
+	 * @param buffer - The text buffer that may contain incomplete semantic markers
+	 * @returns The buffer with all incomplete markers properly closed
+	 */
+	private autoCloseIncompleteMarkers(buffer: string): string {
+		let fixedBuffer = buffer;
+		const fixes: string[] = [];
+
+		// 1. Close unbalanced parentheses
+		let parenDepth = 0;
+		for (const char of fixedBuffer) {
+			if (char === "(") parenDepth++;
+			else if (char === ")") parenDepth--;
+		}
+		if (parenDepth > 0) {
+			// Add closing parentheses
+			const closingParens = ")".repeat(parenDepth);
+			fixedBuffer += closingParens;
+			fixes.push(`${parenDepth} closing parentheses`);
+		}
+
+		// 2. Close unclosed regular quotes
+		const regularQuoteCount = (fixedBuffer.match(/"/g) || []).length;
+		if (regularQuoteCount % 2 !== 0) {
+			fixedBuffer += '"';
+			fixes.push("closing quote");
+		}
+
+		// 3. Close unclosed Japanese quotes
+		const japOpenCount = (fixedBuffer.match(/「/g) || []).length;
+		const japCloseCount = (fixedBuffer.match(/」/g) || []).length;
+		if (japOpenCount > japCloseCount) {
+			const missingCount = japOpenCount - japCloseCount;
+			fixedBuffer += "」".repeat(missingCount);
+			fixes.push(`${missingCount} Japanese closing quote(s)`);
+		}
+
+		// 4. Close incomplete markdown bold (**text or __text)
+		// Check for ** bold markers
+		const doubleStar = (fixedBuffer.match(/\*\*/g) || []).length;
+		if (doubleStar % 2 !== 0) {
+			fixedBuffer += "**";
+			fixes.push("markdown bold (**)");
+		}
+
+		// Check for __ bold markers
+		const doubleUnderscore = (fixedBuffer.match(/__/g) || []).length;
+		if (doubleUnderscore % 2 !== 0) {
+			fixedBuffer += "__";
+			fixes.push("markdown bold (__)");
+		}
+
+		// 5. Close incomplete markdown italic (*text or _text)
+		// Need to be careful not to count ** as * for italic
+		// Count single asterisks not part of **
+		const singleStars = (fixedBuffer.match(/(?<!\*)\*(?!\*)/g) || []).length;
+		if (singleStars % 2 !== 0) {
+			fixedBuffer += "*";
+			fixes.push("markdown italic (*)");
+		}
+
+		// Count single underscores not part of __
+		const singleUnderscores = (fixedBuffer.match(/(?<!_)_(?!_)/g) || []).length;
+		if (singleUnderscores % 2 !== 0) {
+			fixedBuffer += "_";
+			fixes.push("markdown italic (_)");
+		}
+
+		// 6. Close incomplete markdown strikethrough (~~text)
+		const doubleTilde = (fixedBuffer.match(/~~/g) || []).length;
+		if (doubleTilde % 2 !== 0) {
+			fixedBuffer += "~~";
+			fixes.push("markdown strikethrough (~~)");
+		}
+
+		// 7. Close incomplete markdown links
+		// Pattern 1: [text](url - missing closing )
+		if (fixedBuffer.match(/\[[^\]]+\]\([^)]*$/)) {
+			fixedBuffer += ")";
+			fixes.push("markdown link closing parenthesis");
+		}
+		// Pattern 2: [text - missing closing ] and the whole (url) part
+		else if (fixedBuffer.match(/\[[^\]]*$/)) {
+			fixedBuffer += "](#)";
+			fixes.push("markdown link closing bracket and empty URL");
+		}
+
+		// Log what was fixed
+		if (fixes.length > 0) {
+			log.info(
+				`Stream Auto-Close: Applied fixes - ${fixes.join(", ")} to buffer: "${buffer.substring(0, 100)}${buffer.length > 100 ? "..." : ""}"`,
+			);
+		}
+
+		return fixedBuffer;
+	}
+
+	/**
 	 * Process buffer content to determine if flushing is needed
 	 * This is the core logic extracted from the original streamGeminiToDiscord
 	 */
@@ -1019,9 +1120,11 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 			}
 
 			if (state.hasSemanticMarkers) {
-				log.warn(
-					"Stream Seg: Final flush occurred with semantic markers present. Some semantic blocks might be incomplete.",
+				log.info(
+					"Stream Seg: Final flush has incomplete semantic markers. Auto-closing them to prevent message loss.",
 				);
+				// Auto-close incomplete markers to prevent message loss
+				state.buffer = this.autoCloseIncompleteMarkers(state.buffer);
 			}
 
 			await this.sendBufferSegment(
@@ -1054,9 +1157,11 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 		}
 
 		if (state.hasSemanticMarkers) {
-			log.warn(
-				"Stream Seg: Function call received with semantic markers present. Flushing incomplete semantic blocks.",
+			log.info(
+				"Stream Seg: Function call received with incomplete semantic markers. Auto-closing them before flushing.",
 			);
+			// Auto-close incomplete markers before function call
+			state.buffer = this.autoCloseIncompleteMarkers(state.buffer);
 			state.hasSemanticMarkers = false;
 		}
 

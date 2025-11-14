@@ -4,20 +4,22 @@ SELECT add_column_if_not_exists('llms', 'is_default', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'is_reasoning', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'is_deprecated', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'llm_description', 'TEXT');
+SELECT add_column_if_not_exists('llms', 'ja_description', 'TEXT');
 
 -- Insert LLMs with conflict resolution that updates descriptions
-INSERT INTO llms (llm_provider, llm_codename, is_smartest, is_default, is_reasoning, is_deprecated, llm_description)
+INSERT INTO llms (llm_provider, llm_codename, is_smartest, is_default, is_reasoning, is_deprecated, llm_description, ja_description)
 VALUES
-  ('google', 'gemini-2.0-flash', false, false, false, true, 'Fast multimodal model for everyday tasks'),
-  ('google', 'gemini-2.5-flash-lite', false, false, false, false, 'Lightweight version optimized for speed and efficiency'),
-  ('google', 'gemini-2.5-flash-preview-05-20', false, false, false, true, 'Balanced model for general-purpose applications'),
-  ('google', 'gemini-2.5-flash-preview-09-2025', false, false, false, false, 'Experimental model for general-purpose applications'),
-  ('google', 'gemini-2.5-flash', false, true, false, false, 'Balanced model for general-purpose applications'),
-  ('google', 'gemini-2.5-pro', true, false, true, false, 'Most capable model for complex reasoning and analysis'),
-  ('novelai', 'glm-4-6', true, true, false, false, 'Latest NovelAI roleplay model with enhanced creativity and character consistency'),
-  ('novelai', 'kayra-v1', false, false, false, false, 'Legacy Kayra model for storytelling and roleplay')
+  ('google', 'gemini-2.0-flash', false, false, false, true, NULL, NULL),
+  ('google', 'gemini-2.5-flash-lite', false, false, false, false, 'Lightweight version optimized for speed and efficiency', '速度と効率を最適化した軽量版モデル'),
+  ('google', 'gemini-2.5-flash-preview-05-20', false, false, false, true, NULL, NULL),
+  ('google', 'gemini-2.5-flash-preview-09-2025', false, false, false, false, 'Experimental model for general-purpose applications', '実験的な汎用アプリケーション向けモデル'),
+  ('google', 'gemini-2.5-flash', false, true, false, false, 'Balanced model for general-purpose applications', '汎用アプリケーション向けのバランス型モデル'),
+  ('google', 'gemini-2.5-pro', true, false, true, false, 'Most capable model for complex reasoning and analysis', '複雑な推論と分析に最も優れたモデル'),
+  ('novelai', 'glm-4-6', true, true, false, false, 'Latest NovelAI roleplay model with enhanced creativity and character consistency', '創造性とキャラクター一貫性を強化した最新のNovelAIロールプレイモデル'),
+  ('novelai', 'kayra-v1', false, false, false, false, 'Legacy Kayra model for storytelling and roleplay', 'ストーリーテリングとロールプレイ向けのレガシーKayraモデル')
 ON CONFLICT (llm_codename) DO UPDATE SET
   llm_description = EXCLUDED.llm_description,
+  ja_description = EXCLUDED.ja_description,
   is_smartest = EXCLUDED.is_smartest,
   is_default = EXCLUDED.is_default,
   is_reasoning = EXCLUDED.is_reasoning,

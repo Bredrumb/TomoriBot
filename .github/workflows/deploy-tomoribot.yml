@@ -1,16 +1,16 @@
 name: Deploy TomoriBot
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:  # Manual trigger - allows running on any branch
+    branches: [main]
+  workflow_dispatch: # Manual trigger - allows running on any branch
     inputs:
       branch:
-        description: 'Branch to deploy (leave empty for current branch)'
+        description: "Branch to deploy (leave empty for current branch)"
         required: false
-        default: ''
+        default: ""
 
 jobs:
-  # 🔐 SECRETS VALIDATION
+  # SECRETS VALIDATION
   validate-secrets:
     runs-on: self-hosted
     steps:
@@ -18,43 +18,43 @@ jobs:
         run: |
           echo "Validating required secrets..."
           $missingSecrets = @()
-          
+
           # Check required secrets
           if ("${{ secrets.DISCORD_TOKEN }}" -eq "") { $missingSecrets += "DISCORD_TOKEN" }
           if ("${{ secrets.CRYPTO_SECRET }}" -eq "") { $missingSecrets += "CRYPTO_SECRET" }
           if ("${{ secrets.POSTGRES_PASSWORD }}" -eq "") { $missingSecrets += "POSTGRES_PASSWORD" }
           if ("${{ secrets.GOOGLE_API_KEY }}" -eq "") { $missingSecrets += "GOOGLE_API_KEY" }
           if ("${{ secrets.DEEPL_KEY }}" -eq "") { $missingSecrets += "DEEPL_KEY" }
-          
+
           # Check optional secrets
           $optionalSecrets = @()
           if ("${{ secrets.DISCORD_WEBHOOK_URL }}" -eq "") { $optionalSecrets += "DISCORD_WEBHOOK_URL" }
-          
+
           if ($missingSecrets.Count -gt 0) {
             echo "Missing required secrets: $($missingSecrets -join ', ')"
             exit 1
           }
-          
+
           if ($optionalSecrets.Count -gt 0) {
             echo "Optional secrets not configured: $($optionalSecrets -join ', ')"
           }
-          
+
           echo "All required secrets are configured!"
 
-  # 🧪 PARALLEL TESTING PHASE
+  # PARALLEL TESTING PHASE
   test-lint:
     runs-on: self-hosted
     needs: validate-secrets
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
       - name: Install dependencies
         run: |
           echo "Installing dependencies..."
           bun install
           echo "Dependencies installed!"
-        
+
       - name: Run linting and type checks
         run: |
           echo "Running linting and TypeScript checks..."
@@ -68,16 +68,16 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
       - name: Check localization keys
         run: |
           echo "Checking localization keys..."
           $output = bun run check-locales 2>&1
           $exitCode = $LASTEXITCODE
-          
+
           # Always show the output
           echo $output
-          
+
           # Check if there are missing keys (critical errors)
           if ($output -match "❌ MISSING LOCALIZATION KEYS") {
             echo "Critical error: Missing localization keys found!"
@@ -88,14 +88,14 @@ jobs:
             echo "Localization warnings found, but no critical missing keys. Continuing deployment..."
           }
 
-  # 🚀 SEQUENTIAL DEPLOYMENT CHAIN
+  # SEQUENTIAL DEPLOYMENT CHAIN
   setup-environment:
     runs-on: self-hosted
     needs: [test-lint, test-locales]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
       - name: Create environment file
         run: |
           echo "Creating environment file from secrets..."
@@ -131,7 +131,7 @@ jobs:
           HAVENSRV_ID=1040174444074782802
           "@
           [System.IO.File]::WriteAllText("$PWD\.env", $envContent, [System.Text.Encoding]::UTF8)
-      
+
       - name: Debug environment file
         run: |
           echo "Environment file contents:"
@@ -179,7 +179,7 @@ jobs:
           echo "Stopping and cleaning up old TomoriBot resources..."
           docker compose down --remove-orphans
         continue-on-error: true
-        
+
       - name: Wait for Docker cleanup
         run: |
           echo "Waiting for containers to fully stop..."
@@ -198,8 +198,8 @@ jobs:
               break
             }
           } while ($true)
-          
-      - name: Start updated containers  
+
+      - name: Start updated containers
         run: |
           echo "Starting updated TomoriBot..."
           docker compose up -d
@@ -338,61 +338,61 @@ jobs:
             echo "No .md files found in $versionFolder"
             exit 1
           }
-          
+
           if (-not $imageName) {
             echo "No image file found, Discord notification will be text-only"
             $imageName = ""
           }
-          
+
           # Read the release notes template
           $releaseNotes = Get-Content $releaseNotesPath -Raw
-          
+
           # Replace all placeholders
           $releaseNotes = $releaseNotes.Replace("{VERSION}", $version)
           $releaseNotes = $releaseNotes.Replace("{TIMESTAMP}", (Get-Date -Format "yyyy-MM-dd HH:mm:ss UTC"))
           $releaseNotes = $releaseNotes.Replace("{COMMIT_HASH}", "${{ needs.verify-deployment.outputs.commit-hash }}")
           $releaseNotes = $releaseNotes.Replace("{REPO_OWNER}", "${{ github.repository_owner }}")
           $releaseNotes = $releaseNotes.Replace("{REPO_NAME}", "${{ github.event.repository.name }}")
-          
+
           # Save processed release notes and asset info
           [System.IO.File]::WriteAllText("$PWD\processed-release-notes.md", $releaseNotes, [System.Text.Encoding]::UTF8)
           echo "image-name=$imageName" >> $env:GITHUB_OUTPUT
-          
+
           echo "Release notes processed successfully!"
 
       - name: Export Docker image
         run: |
           echo "Exporting Docker image as release asset..."
-          
+
           # Get the image name and tag it with version
           $imageName = "tomoribot"
           $version = "${{ needs.check-release-assets.outputs.version }}"
-          
+
           # Tag the current image with version (Docker Compose creates images as project-service format)
           docker tag "tomoribot-tomoribot:latest" "${imageName}:v${version}"
-          
+
           # Export Docker image to tar file
           docker save "${imageName}:v${version}" -o "tomoribot-v${version}-docker-image.tar"
-          
+
           # Compress the tar file to reduce size
           Compress-Archive -Path "tomoribot-v${version}-docker-image.tar" -DestinationPath "tomoribot-v${version}-docker-image.tar.gz"
-          
+
           # Clean up uncompressed file
           Remove-Item "tomoribot-v${version}-docker-image.tar"
-          
+
           echo "Docker image exported and compressed!"
 
       - name: Create GitHub Release
         run: |
           echo "Creating GitHub Release v${{ needs.check-release-assets.outputs.version }}..."
-          
+
           # Create release with Docker image as asset
           gh release create "v${{ needs.check-release-assets.outputs.version }}" `
             --title "TomoriBot v${{ needs.check-release-assets.outputs.version }}" `
             --notes-file "processed-release-notes.md" `
             --latest `
             "tomoribot-v${{ needs.check-release-assets.outputs.version }}-docker-image.tar.gz#Docker Image (Ready to Deploy)"
-          
+
           echo "GitHub release created with Docker image asset!"
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -409,19 +409,19 @@ jobs:
             $status = "FAILED"
             $color = "15158332"  # Red  
           }
-          
+
           # Read and process release notes for Discord
           $releaseNotes = Get-Content processed-release-notes.md -Raw
-          
+
           # Strip markdown image syntax for cleaner Discord text
           $releaseNotes = $releaseNotes -replace '!\[.*?\]\([^)]*\)', ''
-          
+
           # Clean up extra whitespace and truncate for Discord limits
           $releaseNotes = $releaseNotes -replace '\n\s*\n', "`n`n"  # Remove excessive line breaks
           if ($releaseNotes.Length -gt 4090) {
             $releaseNotes = $releaseNotes.Substring(0, 4090) + "..."
           }
-          
+
           # Construct image URL from detected file
           $version = "${{ needs.check-release-assets.outputs.version }}"
           $imageName = "${{ steps.release-notes.outputs.image-name }}"
@@ -433,7 +433,7 @@ jobs:
           } else {
             echo "Text-only Discord notification (no image found)"
           }
-          
+
           # Construct Discord webhook payload  
           $embed = @{
             title = "TomoriBot v$version Released!"
@@ -441,16 +441,16 @@ jobs:
             color = [int]$color
             timestamp = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
           }
-          
+
           # Add image if available
           if ($imageUrl) {
             $embed.image = @{ url = $imageUrl }
           }
-          
+
           $webhookData = @{
             embeds = @($embed)
           } | ConvertTo-Json -Depth 10
-          
+
           # Send to Discord (placeholder - requires DISCORD_WEBHOOK_URL secret)
           $discordWebhookUrl = "${{ secrets.DISCORD_WEBHOOK_URL }}"
           if ($discordWebhookUrl -ne "") {
