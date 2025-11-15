@@ -334,13 +334,23 @@ export class ReminderTool extends BaseTool {
 			const guildMember =
 				context.message?.guild?.members.cache.get(targetUserDiscordId);
 			const guildDisplayName = guildMember?.displayName?.toLowerCase();
+			const discordUsername = guildMember?.user?.username?.toLowerCase();
 
-			if (
-				actualNicknameInDB.toLowerCase() !== targetUserNickname.toLowerCase() &&
-				actualNicknameInDB.toLowerCase() !== guildDisplayName
-			) {
+			// Allow if LLM-provided nickname matches ANY of:
+			// 1. Database nickname
+			// 2. Current guild display name
+			// 3. Discord username (bulletproof fallback)
+			const providedNicknameLower = targetUserNickname.toLowerCase();
+			const dbNicknameLower = actualNicknameInDB.toLowerCase();
+			const nicknameValid =
+				dbNicknameLower === providedNicknameLower ||
+				providedNicknameLower === guildDisplayName ||
+				dbNicknameLower === guildDisplayName ||
+				providedNicknameLower === discordUsername;
+
+			if (!nicknameValid) {
 				log.warn(
-					`Reminder: Nickname mismatch for target user ${targetUserDiscordId}. LLM provided: '${targetUserNickname}', DB has: '${actualNicknameInDB}'.`,
+					`Reminder: Nickname mismatch for target user ${targetUserDiscordId}. LLM provided: '${targetUserNickname}', DB has: '${actualNicknameInDB}', Guild display: '${guildMember?.displayName}', Discord username: '${guildMember?.user?.username}'.`,
 				);
 				return {
 					success: false,
@@ -350,7 +360,9 @@ export class ReminderTool extends BaseTool {
 						target_user_discord_id: targetUserDiscordId,
 						provided_nickname: targetUserNickname,
 						actual_nickname: actualNicknameInDB,
-						reason: `The provided nickname '${targetUserNickname}' does not match the records for user ID '${targetUserDiscordId}' (TomoriBot knows them as '${actualNicknameInDB}'). Please ensure the Discord ID and nickname correspond to the same user.`,
+						guild_display_name: guildMember?.displayName,
+						discord_username: guildMember?.user?.username,
+						reason: `The provided nickname '${targetUserNickname}' does not match the records for user ID '${targetUserDiscordId}' (TomoriBot knows them as '${actualNicknameInDB}', guild shows '${guildMember?.displayName}', Discord username '${guildMember?.user?.username}'). Please ensure the Discord ID and nickname correspond to the same user.`,
 					},
 				};
 			}

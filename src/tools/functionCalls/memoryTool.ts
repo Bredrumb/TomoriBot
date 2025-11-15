@@ -400,14 +400,23 @@ export class MemoryTool extends BaseTool {
 					targetUserDiscordIdArg,
 				);
 				const guildDisplayName = guildMember?.displayName?.toLowerCase();
+				const discordUsername = guildMember?.user?.username?.toLowerCase();
 
-				if (
-					actualNicknameInDB.toLowerCase() !==
-						targetUserNicknameArg.toLowerCase() &&
-					actualNicknameInDB.toLowerCase() !== guildDisplayName
-				) {
+				// Allow if LLM-provided nickname matches ANY of:
+				// 1. Database nickname
+				// 2. Current guild display name
+				// 3. Discord username (bulletproof fallback)
+				const providedNicknameLower = targetUserNicknameArg.toLowerCase();
+				const dbNicknameLower = actualNicknameInDB.toLowerCase();
+				const nicknameValid =
+					dbNicknameLower === providedNicknameLower ||
+					providedNicknameLower === guildDisplayName ||
+					dbNicknameLower === guildDisplayName ||
+					providedNicknameLower === discordUsername;
+
+				if (!nicknameValid) {
 					log.warn(
-						`Self-teach: Nickname mismatch for target user ${targetUserDiscordIdArg}. LLM provided: '${targetUserNicknameArg}', DB has: '${actualNicknameInDB}'.`,
+						`Self-teach: Nickname mismatch for target user ${targetUserDiscordIdArg}. LLM provided: '${targetUserNicknameArg}', DB has: '${actualNicknameInDB}', Guild display: '${guildMember?.displayName}', Discord username: '${guildMember?.user?.username}'.`,
 					);
 					return {
 						success: false,
@@ -418,7 +427,9 @@ export class MemoryTool extends BaseTool {
 							target_user_discord_id: targetUserDiscordIdArg,
 							provided_nickname: targetUserNicknameArg,
 							actual_nickname: actualNicknameInDB,
-							reason: `The provided nickname '${targetUserNicknameArg}' does not match the records for user ID '${targetUserDiscordIdArg}' (Tomori knows them as '${actualNicknameInDB}'). Please ensure the Discord ID and nickname correspond to the same user.`,
+							guild_display_name: guildMember?.displayName,
+							discord_username: guildMember?.user?.username,
+							reason: `The provided nickname '${targetUserNicknameArg}' does not match the records for user ID '${targetUserDiscordIdArg}' (Tomori knows them as '${actualNicknameInDB}', guild shows '${guildMember?.displayName}', Discord username '${guildMember?.user?.username}'). Please ensure the Discord ID and nickname correspond to the same user.`,
 						},
 					};
 				}

@@ -43,11 +43,11 @@ export type MemoryValidationError =
  */
 export function getMemoryLimits(): MemoryLimits {
 	const maxPersonalMemories = Number.parseInt(
-		process.env.MAX_PERSONAL_MEMORIES || "30",
+		process.env.MAX_PERSONAL_MEMORIES || "25",
 		10,
 	);
 	const maxServerMemories = Number.parseInt(
-		process.env.MAX_SERVER_MEMORIES || "30",
+		process.env.MAX_SERVER_MEMORIES || "25",
 		10,
 	);
 	const maxMemoryLength = Number.parseInt(

@@ -111,6 +111,12 @@ async function getDefaultOpenrouterModel(): Promise<string> {
 export interface OpenrouterProviderConfig extends ProviderConfig {
 	// OpenRouter uses OpenAI-compatible API, simple configuration
 	seesImages?: boolean; // Whether the model supports image inputs
+	// Sampling parameters to control output quality
+	topP?: number; // Nucleus sampling (0.0-1.0)
+	topK?: number; // Top-k sampling
+	frequencyPenalty?: number; // Penalize frequent tokens (-2.0 to 2.0)
+	presencePenalty?: number; // Penalize repeated topics (-2.0 to 2.0)
+	repetitionPenalty?: number; // Penalize token repetition (0.0-2.0)
 }
 
 /**
@@ -297,6 +303,11 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 			temperature: tomoriState.config.llm_temperature,
 			maxOutputTokens: 4096, // Default, can be adjusted per model
 			seesImages: tomoriState.llm.sees_images, // Pass image capability flag
+			// Sampling parameters to reduce hallucinations and improve coherence
+			topP: 0.9, // Nucleus sampling - use top 90% probability mass
+			frequencyPenalty: 0.3, // Slightly penalize frequent tokens
+			presencePenalty: 0.2, // Slightly penalize repeated topics
+			repetitionPenalty: 1.1, // Penalize exact token repetition
 		};
 
 		// Only add tools field if the model supports them

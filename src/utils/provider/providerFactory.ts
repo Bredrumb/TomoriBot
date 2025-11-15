@@ -231,9 +231,12 @@ export namespace ProviderFactory {
 		const provider = await getProviderInstance(providerName);
 
 		// Validate that the configured model is supported by the provider
+		// Skip validation if supportedModels is empty (indicates provider accepts any model, e.g., OpenRouter)
+		const providerInfo = provider.getInfo();
 		if (
 			modelCodename &&
-			!provider.getInfo().supportedModels.includes(modelCodename)
+			providerInfo.supportedModels.length > 0 &&
+			!providerInfo.supportedModels.includes(modelCodename)
 		) {
 			log.warn(
 				`Model ${modelCodename} is not officially supported by provider ${providerName}. This may cause issues.`,
@@ -242,7 +245,7 @@ export namespace ProviderFactory {
 					metadata: {
 						providerName,
 						modelCodename,
-						supportedModels: provider.getInfo().supportedModels,
+						supportedModels: providerInfo.supportedModels,
 					},
 				},
 			);

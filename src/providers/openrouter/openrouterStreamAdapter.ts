@@ -37,6 +37,12 @@ import type {
 export interface OpenrouterStreamConfig extends StreamConfig {
 	// OpenRouter uses OpenAI-compatible config, simple structure
 	seesImages?: boolean; // Whether the model supports image inputs
+	// Sampling parameters to control output quality
+	topP?: number; // Nucleus sampling (0.0-1.0)
+	topK?: number; // Top-k sampling
+	frequencyPenalty?: number; // Penalize frequent tokens (-2.0 to 2.0)
+	presencePenalty?: number; // Penalize repeated topics (-2.0 to 2.0)
+	repetitionPenalty?: number; // Penalize token repetition (0.0-2.0)
 }
 
 /**
@@ -52,8 +58,11 @@ interface OpenrouterStreamChunk {
 		index: number;
 		delta?: {
 			role?: string;
-			content?: string;
-			tool_calls?: Array<{
+			content?: string | null;
+			reasoning?: string | null;
+			// OpenRouter SDK uses camelCase, not snake_case!
+			toolCalls?: Array<{
+				index?: number; // Index of the tool call (for tracking across chunks)
 				id?: string;
 				type?: string;
 				function?: {
@@ -62,17 +71,30 @@ interface OpenrouterStreamChunk {
 				};
 			}>;
 		};
-		finish_reason?: string | null;
+		// OpenRouter SDK uses camelCase finishReason, not snake_case finish_reason!
+		finishReason?: string | null;
+		logprobs?: unknown | null;
 	}>;
 	usage?: {
-		prompt_tokens?: number;
-		completion_tokens?: number;
-		total_tokens?: number;
+		promptTokens?: number;
+		completionTokens?: number;
+		totalTokens?: number;
+		completionTokensDetails?: unknown;
 	};
 	error?: {
 		code: string;
 		message: string;
 	};
+}
+
+/**
+ * Accumulated tool call data across streaming chunks
+ */
+interface AccumulatedToolCall {
+	id?: string;
+	type?: string;
+	functionName: string;
+	functionArguments: string;
 }
 
 /**
@@ -88,6 +110,9 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		ContextItemTag.KNOWLEDGE_CURRENT_CONTEXT,
 	];
 
+	// Accumulator for tool calls across streaming chunks (per-stream instance)
+	private toolCallAccumulator: Map<number, AccumulatedToolCall> = new Map();
+
 	/**
 	 * Start streaming from OpenRouter's API
 	 */
@@ -96,6 +121,9 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		context: StreamContext,
 	): AsyncGenerator<RawStreamChunk, void, unknown> {
 		log.info("OpenrouterStreamAdapter: Initializing OpenRouter streaming");
+
+		// Reset tool call accumulator for this stream
+		this.toolCallAccumulator.clear();
 
 		// Initialize OpenRouter client
 		const openRouter = new OpenRouter({ apiKey: config.apiKey });
@@ -154,6 +182,9 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		}
 
 		try {
+			// Cast config to access OpenRouter-specific fields
+			const openrouterConfig = config as OpenrouterStreamConfig;
+
 			// Build SDK request - conditionally include tools
 			const requestParams = {
 				model: config.model,
@@ -170,6 +201,22 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 							tools: config.tools as any,
 						}
 					: {}),
+				// Add OpenRouter-specific sampling parameters if provided
+				...(openrouterConfig.topP !== undefined && {
+					top_p: openrouterConfig.topP,
+				}),
+				...(openrouterConfig.topK !== undefined && {
+					top_k: openrouterConfig.topK,
+				}),
+				...(openrouterConfig.frequencyPenalty !== undefined && {
+					frequency_penalty: openrouterConfig.frequencyPenalty,
+				}),
+				...(openrouterConfig.presencePenalty !== undefined && {
+					presence_penalty: openrouterConfig.presencePenalty,
+				}),
+				...(openrouterConfig.repetitionPenalty !== undefined && {
+					repetition_penalty: openrouterConfig.repetitionPenalty,
+				}),
 			};
 
 			// Log whether tools are included
@@ -178,6 +225,11 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 			} else {
 				log.info("[DEBUG] Tools field OMITTED from SDK request");
 			}
+
+			// Log sampling parameters for debugging
+			log.info(
+				`[DEBUG] Sampling params - temp: ${config.temperature}, top_p: ${openrouterConfig.topP ?? "default"}, freq_penalty: ${openrouterConfig.frequencyPenalty ?? "default"}, pres_penalty: ${openrouterConfig.presencePenalty ?? "default"}, rep_penalty: ${openrouterConfig.repetitionPenalty ?? "default"}`,
+			);
 
 			// Start the streaming
 			// biome-ignore lint/suspicious/noExplicitAny: SDK streaming response needs async iterator cast
@@ -218,6 +270,12 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 	processChunk(chunk: RawStreamChunk): ProcessedChunk {
 		const openrouterChunk = chunk.data as OpenrouterStreamChunk;
 
+		// DEBUG: Log every chunk to see what we're receiving
+		const debugChunk = JSON.stringify(openrouterChunk);
+		log.info(
+			`[DEBUG] OpenRouter chunk received: ${debugChunk.substring(0, 300)}${debugChunk.length > 300 ? "..." : ""}`,
+		);
+
 		// Handle errors first (both pre-stream and mid-stream errors)
 		if ("error" in openrouterChunk && openrouterChunk.error) {
 			return {
@@ -235,14 +293,20 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		const choice = openrouterChunk.choices?.[0];
 		if (!choice) {
 			// Empty chunk, likely keepalive
+			log.info("[DEBUG] OpenRouter chunk has no choices - keepalive");
 			return {
 				type: "text",
 				content: "",
 			};
 		}
 
-		// Check for finish_reason "error" (mid-stream error in unified format)
-		if (choice.finish_reason === "error") {
+		// DEBUG: Log choice details
+		log.info(
+			`[DEBUG] Choice - finishReason: ${choice.finishReason}, has delta: ${!!choice.delta}, delta.content: ${!!choice.delta?.content}, delta.toolCalls: ${!!choice.delta?.toolCalls}`,
+		);
+
+		// Check for finishReason "error" (mid-stream error in unified format)
+		if (choice.finishReason === "error") {
 			return {
 				type: "error",
 				error: {
@@ -259,26 +323,60 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		if (openrouterChunk.usage) {
 			metadata.usage = openrouterChunk.usage;
 			log.info(
-				`OpenRouter usage: ${openrouterChunk.usage.total_tokens} total tokens`,
+				`OpenRouter usage: ${openrouterChunk.usage.totalTokens} total tokens`,
 			);
 		}
 
-		// Check for tool/function calls
-		if (choice.delta?.tool_calls && choice.delta.tool_calls.length > 0) {
-			const toolCall = choice.delta.tool_calls[0];
-			if (toolCall.function) {
-				const functionCall: FunctionCall = {
-					name: toolCall.function.name || "",
-					args: toolCall.function.arguments
-						? JSON.parse(toolCall.function.arguments)
-						: {},
-				};
-				return {
-					type: "function_call",
-					functionCall,
-					metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-				};
+		// Accumulate tool/function calls from delta (streaming tool calls arrive incrementally)
+		// In OpenAI/OpenRouter streaming format, tool calls come in multiple chunks:
+		// - First chunk: { index: 0, id: "call_123", type: "function", function: { name: "search" } }
+		// - Later chunks: { index: 0, function: { arguments: '{"query' } }
+		// - More chunks: { index: 0, function: { arguments: '":"test"}' } }
+		// We need to accumulate all chunks before parsing the complete JSON arguments
+		if (choice.delta?.toolCalls && choice.delta.toolCalls.length > 0) {
+			for (const deltaToolCall of choice.delta.toolCalls) {
+				const index = deltaToolCall.index ?? 0;
+
+				// Get or create accumulator for this tool call index
+				let accumulated = this.toolCallAccumulator.get(index);
+				if (!accumulated) {
+					accumulated = {
+						functionName: "",
+						functionArguments: "",
+					};
+					this.toolCallAccumulator.set(index, accumulated);
+				}
+
+				// Accumulate id and type (usually only in first chunk)
+				if (deltaToolCall.id) {
+					accumulated.id = deltaToolCall.id;
+				}
+				if (deltaToolCall.type) {
+					accumulated.type = deltaToolCall.type;
+				}
+
+				// Accumulate function name and arguments
+				if (deltaToolCall.function) {
+					if (deltaToolCall.function.name) {
+						accumulated.functionName += deltaToolCall.function.name;
+					}
+					if (deltaToolCall.function.arguments) {
+						accumulated.functionArguments += deltaToolCall.function.arguments;
+					}
+				}
+
+				log.info(
+					`OpenRouter: Accumulated tool call [${index}] - name: "${accumulated.functionName}", args so far: "${accumulated.functionArguments.substring(0, 100)}${accumulated.functionArguments.length > 100 ? "..." : ""}"`,
+				);
 			}
+
+			// Don't return yet - continue accumulating until finish_reason
+			// Return empty text to signal chunk was processed but not ready to act on
+			return {
+				type: "text",
+				content: "",
+				metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+			};
 		}
 
 		// Check for text content
@@ -290,10 +388,69 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 			};
 		}
 
-		// Handle finish reason indicating completion
-		if (choice.finish_reason === "stop") {
+		// Handle finish reasons
+		// OpenRouter normalizes finishReason to: tool_calls, stop, length, content_filter, error
+		if (choice.finishReason === "stop") {
 			return {
 				type: "done",
+				metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+			};
+		}
+
+		// Handle finishReason "tool_calls" (model wants to use a tool)
+		// This signals the end of tool call streaming - parse accumulated data
+		if (choice.finishReason === "tool_calls") {
+			log.info(
+				"OpenRouter: finish_reason is 'tool_calls' - parsing accumulated tool calls",
+			);
+
+			// Get the first accumulated tool call (we only support one at a time currently)
+			const accumulated = this.toolCallAccumulator.get(0);
+
+			if (!accumulated || !accumulated.functionName) {
+				log.warn(
+					"OpenRouter: finish_reason is 'tool_calls' but no tool call was accumulated!",
+				);
+				// Return done to avoid infinite retry
+				return {
+					type: "done",
+					metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+				};
+			}
+
+			// Parse the accumulated arguments JSON
+			let parsedArgs: Record<string, unknown> = {};
+			if (accumulated.functionArguments) {
+				try {
+					parsedArgs = JSON.parse(accumulated.functionArguments);
+					log.info(
+						`OpenRouter: Successfully parsed tool call arguments: ${JSON.stringify(parsedArgs)}`,
+					);
+				} catch (parseError) {
+					log.error(
+						`OpenRouter: Failed to parse accumulated arguments as JSON: "${accumulated.functionArguments}"`,
+						parseError,
+					);
+					// Continue with empty args rather than failing
+				}
+			}
+
+			// Create the function call
+			const functionCall: FunctionCall = {
+				name: accumulated.functionName,
+				args: parsedArgs,
+			};
+
+			log.info(
+				`OpenRouter: Returning function_call - name: "${functionCall.name}", args: ${JSON.stringify(functionCall.args)}`,
+			);
+
+			// Clear accumulator for next stream
+			this.toolCallAccumulator.clear();
+
+			return {
+				type: "function_call",
+				functionCall,
 				metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
 			};
 		}
@@ -313,8 +470,8 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		const openrouterChunk = chunk.data as OpenrouterStreamChunk;
 
 		const choice = openrouterChunk.choices?.[0];
-		if (choice?.delta?.tool_calls && choice.delta.tool_calls.length > 0) {
-			const toolCall = choice.delta.tool_calls[0];
+		if (choice?.delta?.toolCalls && choice.delta.toolCalls.length > 0) {
+			const toolCall = choice.delta.toolCalls[0];
 			if (toolCall.function) {
 				return {
 					name: toolCall.function.name || "",
@@ -660,7 +817,7 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 				messages.push({
 					role: "assistant",
 					content: null,
-					tool_calls: [
+					toolCalls: [
 						{
 							id: toolCallId,
 							type: "function",
@@ -675,7 +832,7 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 				// Add tool response
 				messages.push({
 					role: "tool",
-					tool_call_id: toolCallId,
+					toolCallId: toolCallId,
 					content: JSON.stringify(interaction.functionResponse),
 				});
 			}
