@@ -791,6 +791,21 @@ export default {
 				openrouter_getting_key_description: `1. [OpenRouter](https://openrouter.ai/settings/keys)にアクセス
 2. \`APIキーを作成\`をクリック
 3. このAPIキーを{configSetup}または{configApikeySet}にコピー`,
+				openrouter_model_selection_title: `モデルの選択：`,
+				openrouter_model_selection_description: `OpenRouterは多くの異なるAIモデルへのアクセスを提供します。
+- 現在利用可能なモデルは人気と性能に基づいており、区別のためのタグが付いています：
+  - (TOOLS) = ツール使用をサポート（ウェブ検索、自己学習、ステッカーなど）
+  - (IMAGES) = 画像を認識
+  - (UNCENSORED) = コンテンツフィルタリングなし
+  - (FREE) = 無料ですが、レート制限がある場合があります
+- 希望のモデルが見つからない場合は、「account-setting」プロバイダーオプションを試してみてください
+- {supportServer}で追加のモデルを提案してください`,
+				openrouter_pricing_title: `重要な価格に関する注意事項：`,
+				openrouter_pricing_description: `- **無料モデルは厳格なレート制限があります** - より信頼性の高い有料モデルをお勧めします
+- 予期しないコストを避けるため、モデルを選択する前に**OpenRouterで必ず価格を確認してください**
+- モデルによってコストが大きく異なります`,
+				openrouter_settings_title: `OpenRouterアカウント設定：`,
+				openrouter_settings_description: `OpenRouterアカウントで設定された設定（モデルの優先順位、レート制限など）は、TomoriBotを使用する際にも適用されます`,
 				openrouter_footer: `このプロバイダーを設定したら、{configModel}でデフォルトモデルを変更できます`,
 			},
 

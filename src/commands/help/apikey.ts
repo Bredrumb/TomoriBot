@@ -73,6 +73,10 @@ export async function execute(
 			"config",
 			"model",
 		);
+		const supportServerMention = commandRegistry.getCommandMention(
+			"support",
+			"discord",
+		);
 
 		// Build options based on provider
 		let embedOptions: SummaryEmbedOptions;
@@ -175,6 +179,33 @@ export async function execute(
 									configSetup: configSetupMention,
 									configApikeySet: configApikeySetMention,
 								},
+							),
+							inline: false,
+						},
+						{
+							nameKey: "commands.help.apikey.openrouter_model_selection_title",
+							value: localizer(
+								locale,
+								"commands.help.apikey.openrouter_model_selection_description",
+								{
+									supportServer: supportServerMention,
+								},
+							),
+							inline: false,
+						},
+						{
+							nameKey: "commands.help.apikey.openrouter_pricing_title",
+							value: localizer(
+								locale,
+								"commands.help.apikey.openrouter_pricing_description",
+							),
+							inline: false,
+						},
+						{
+							nameKey: "commands.help.apikey.openrouter_settings_title",
+							value: localizer(
+								locale,
+								"commands.help.apikey.openrouter_settings_description",
 							),
 							inline: false,
 						},

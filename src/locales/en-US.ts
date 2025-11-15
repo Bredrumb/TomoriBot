@@ -791,6 +791,21 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
 				openrouter_getting_key_description: `1. Visit [OpenRouter](https://openrouter.ai/settings/keys)
 2. Click \`Create API Key\`
 3. Copy this API key {configSetup} or {configApikeySet}`,
+				openrouter_model_selection_title: `Choosing Models:`,
+				openrouter_model_selection_description: `OpenRouter offers access to many different AI models.
+- Currently available models are based on popularity and performance, with tags for distinction:
+  - (TOOLS) = Supports tool usage (web search, self-learning, stickers, etc.)
+  - (IMAGES) = Sees images
+  - (UNCENSORED) = No content filtering
+  - (FREE) = No cost, but may have rate limits
+- If you can't find what you want, try using the \`account-setting\` provider option
+- Suggest additional models in {supportServer}`,
+				openrouter_pricing_title: `Important Pricing Notes:`,
+				openrouter_pricing_description: `- **Free models have strict rate limits** - paid models are recommended for better reliability
+- **Always check pricing** on OpenRouter before selecting a model to avoid unexpected costs
+- Costs vary significantly between models`,
+				openrouter_settings_title: `OpenRouter Account Settings:`,
+				openrouter_settings_description: `Settings configured in your OpenRouter account (such as model preferences, rate limits, etc.) will also apply when using TomoriBot`,
 				openrouter_footer: `After setting up this provider, you may change its default model with {configModel}`,
 			},
 

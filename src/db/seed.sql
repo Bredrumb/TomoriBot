@@ -27,15 +27,15 @@ VALUES
   ('openrouter', 'stepfun-ai/step3', false, false, false, false, false, false, true, false, 'General-use model that can see images and is also great in role-play', '画像を見ることができ、ロールプレイにも優れた汎用モデル'),
   ('openrouter', 'z-ai/glm-4.6', false, false, true, false, false, true, false, false, 'State-of-the-art human-aligned model that also performs natural role-play', '自然なロールプレイも可能な最先端の人間調整型モデル'),
   ('openrouter', 'thedrummer/cydonia-24b-v4.1', false, false, false, false, false, false, false, true, 'Uncensored model specializing in creative writing and role-play', '創作とロールプレイに特化した無検閲モデル'),
-  ('openrouter', 'deepseek/deepseek-v3.2-exp', false, false, false, false, false, true, false, false, 'Cost-efficient Experimental Model that is also great in role-play', 'ロールプレイにも優れたコスト効率の良い実験モデル'),
+  ('openrouter', 'deepseek/deepseek-v3.2-exp', false, false, false, false, false, true, false, true, 'Cost-efficient Experimental Model that is also great in role-play', 'ロールプレイにも優れたコスト効率の良い実験モデル'),
   ('openrouter', 'x-ai/grok-4-fast', false, false, true, false, false, true, true, false, 'Fast and efficient general-purpose model', '高速かつ効率的な汎用モデル'),
   ('openrouter', 'anthropic/claude-sonnet-4.5', false, false, false, false, false, true, true, false, 'State-of-the-art performance in complex tasks and problems, also great in role-playing and creative writing', '複雑なタスクや問題に優れた最先端性能を持ち、ロールプレイや創作にも秀でたモデル'),
   ('openrouter', 'anthropic/claude-haiku-4.5', false, false, false, false, false, true, true, false, 'Lightweight version of claude-sonnet-4.5', 'claude-sonnet-4.5の軽量版'),
   ('openrouter', 'openai/gpt-5', true, false, true, false, false, true, true, false, 'State-of-the-art performance in complex tasks and problems', '複雑なタスクや問題に優れた最先端性能'),
   ('openrouter', 'cognitivecomputations/dolphin-mistral-24b-venice-edition:free', false, false, false, false, true, false, false, true, 'Free model without censoring constraints', '検閲制約のない無料モデル'),
-  ('openrouter', 'deepseek/deepseek-chat-v3-0324:free', false, false, false, false, true, true, false, false, 'Free general-purpose model that also performs good role-play', 'ロールプレイにも優れた無料の汎用モデル'),
+  ('openrouter', 'deepseek/deepseek-chat-v3-0324:free', false, false, false, false, true, true, false, true, 'Free general-purpose model that also performs good role-play', 'ロールプレイにも優れた無料の汎用モデル'),
   ('openrouter', 'mistralai/mistral-small-3.2-24b-instruct:free', false, true, false, false, true, true, true, false, 'Free general-purpose model supporting images and tools', '画像とツールをサポートする無料の汎用モデル'),
-  ('openrouter', 'tngtech/deepseek-r1t2-chimera:free', false, false, true, false, true, false, false, false, 'Free model for solving complex tasks and problems', '複雑なタスクや問題の解決に適した無料モデル'),
+  ('openrouter', 'tngtech/deepseek-r1t2-chimera:free', false, false, true, false, true, false, false, true, 'Free model for solving complex tasks and problems', '複雑なタスクや問題の解決に適した無料モデル'),
   ('openrouter', 'account-setting', false, false, false, false, false, false, false, false, 'For advanced users that cannot find the model they want, uses the set Default Model in your OpenRouter settings', '目的のモデルが見つからない上級者向け、OpenRouter設定のデフォルトモデルを使用')
 ON CONFLICT (llm_codename) DO UPDATE SET
   llm_description = EXCLUDED.llm_description,

@@ -22,6 +22,7 @@ import {
 	removeYouTubeUrls,
 	extractYouTubeVideoIds,
 } from "../../utils/text/youTubeUrlCleaner";
+import { resolveTenorUrl } from "../../utils/media/tenorResolver";
 import { PeekProfilePictureTool } from "../../tools/functionCalls/peekProfilePictureTool";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { localizer, getSupportedLocales } from "../../utils/text/localizer";
@@ -144,8 +145,10 @@ const SUPPORTED_VIDEO_MIME_TYPES = [
 	"video/3gpp",
 ];
 
-// Regex to identify if a string is solely a Tenor GIF URL
-//const TENOR_GIF_REGEX = /^(https?:\/\/)?(www\.)?tenor\.com\/view\/[a-zA-Z0-9-]+-gif-\d+(\?.*)?$/i;
+// Regex to detect Tenor GIF URLs anywhere in the message content
+// Includes % for URL-encoded characters (e.g., Japanese characters in slugs)
+const TENOR_GIF_REGEX =
+	/(https?:\/\/)?(www\.)?tenor\.com\/view\/[a-zA-Z0-9%-]+-gif-\d+(\?.*)?/gi;
 
 // Define a type for our simplified message structure.
 // This will be passed to buildContext, which will then convert it into StructuredContextItem[].
@@ -1368,28 +1371,128 @@ export default async function tomoriChat(
 					}
 				}
 
-				// 5.b. Check for Tenor GIF links if no direct image attachments were found
-				// and the message content solely consists of a Tenor link.
-				/*
-			if (
-				imageAttachments.length === 0 &&
-				msg.content &&
-				TENOR_GIF_REGEX.test(msg.content.trim())
-			) {
-				const tenorUrl = msg.content.trim();
-				imageAttachments.push({
-					url: tenorUrl,
-					proxyUrl: tenorUrl, // For Tenor links, original URL is the proxy for now
-					mimeType: "image/gif", // Assume GIF for Tenor links
-					filename: "tenor.gif", // Generic filename for Tenor GIFs
-				});
-				// If the content was *only* a Tenor link, we can set content to null
-				// as the image part will represent it.
-				messageContentForLlm = null;
-				log.info(
-					`Detected Tenor GIF link as image content: ${tenorUrl} for msg ID ${msg.id}`,
-				);
-			}*/
+				// 5.b. Check for Tenor GIF links in the message content
+				// Can detect multiple Tenor URLs and works even with accompanying text
+				// Note: We check regardless of existing attachments because Discord may have added a PNG preview
+				if (msg.content) {
+					// Use matchAll to find all Tenor URLs in the message
+					const tenorMatches = Array.from(
+						msg.content.matchAll(TENOR_GIF_REGEX),
+					);
+
+					if (tenorMatches.length > 0) {
+						log.info(
+							`Detected ${tenorMatches.length} Tenor GIF link(s) in msg ID ${msg.id}`,
+						);
+
+						// Process each Tenor URL found (typically just one)
+						for (const match of tenorMatches) {
+							const tenorViewUrl = match[0];
+
+							// Ensure it's a complete URL (add https:// if missing)
+							const fullUrl = tenorViewUrl.startsWith("http")
+								? tenorViewUrl
+								: `https://${tenorViewUrl}`;
+
+							log.info(`Processing Tenor URL: ${fullUrl}`);
+
+							// Resolve Tenor view URL to direct GIF CDN URL
+							const directGifUrl = await resolveTenorUrl(fullUrl);
+
+							if (directGifUrl) {
+								// Determine if this is a GIF or video based on file extension
+								const fileExt = directGifUrl.split(".").pop()?.toLowerCase();
+								const isVideo =
+									fileExt === "mp4" || fileExt === "webm" || fileExt === "mov";
+								const isGif = fileExt === "gif";
+
+								// Check if Discord already added a preview attachment for this Tenor URL
+								// Discord proxy URLs look like: https://images-ext-1.discordapp.net/external/.../media.tenor.com/...png
+								const discordTenorProxyIndex = imageAttachments.findIndex(
+									(att) =>
+										att.proxyUrl.includes("discordapp.net/external") &&
+										att.proxyUrl.includes("media.tenor.com"),
+								);
+
+								if (isGif) {
+									// Handle as GIF (image with keyframe extraction)
+									if (discordTenorProxyIndex !== -1) {
+										// Replace Discord's PNG preview with our resolved GIF
+										imageAttachments[discordTenorProxyIndex] = {
+											url: directGifUrl,
+											proxyUrl: directGifUrl,
+											mimeType: "image/gif",
+											filename: `tenor_${discordTenorProxyIndex + 1}.gif`,
+										};
+										log.success(
+											`Replaced Discord Tenor preview with resolved GIF: ${directGifUrl}`,
+										);
+										log.info(
+											`[DEBUG] Replaced Discord proxy attachment at index ${discordTenorProxyIndex} with mimeType: "image/gif"`,
+										);
+									} else {
+										// No Discord preview found, add as new attachment
+										imageAttachments.push({
+											url: directGifUrl,
+											proxyUrl: directGifUrl,
+											mimeType: "image/gif",
+											filename: `tenor_${imageAttachments.length + 1}.gif`,
+										});
+										log.success(
+											`Successfully resolved Tenor URL to GIF: ${directGifUrl}`,
+										);
+										log.info(
+											`[DEBUG] Added Tenor GIF to imageAttachments with mimeType: "image/gif"`,
+										);
+									}
+								} else if (isVideo) {
+									// Handle as video (for providers that support video like Gemini)
+									// Remove Discord's preview if it exists since we're adding the actual video
+									if (discordTenorProxyIndex !== -1) {
+										imageAttachments.splice(discordTenorProxyIndex, 1);
+										log.info(
+											`[DEBUG] Removed Discord preview, will add as video instead`,
+										);
+									}
+
+									// Determine video mimeType
+									const videoMimeType =
+										fileExt === "mp4"
+											? "video/mp4"
+											: fileExt === "webm"
+												? "video/webm"
+												: "video/quicktime"; // for .mov
+
+									// Add as video attachment
+									videoAttachments.push({
+										url: directGifUrl,
+										proxyUrl: directGifUrl,
+										mimeType: videoMimeType,
+										filename: `tenor_${videoAttachments.length + 1}.${fileExt}`,
+										isYouTubeLink: false, // This is a direct Tenor video, not YouTube
+									});
+									log.success(
+										`Successfully resolved Tenor URL to video (${videoMimeType}): ${directGifUrl}`,
+									);
+									log.info(
+										`[DEBUG] Added Tenor video to videoAttachments with mimeType: "${videoMimeType}"`,
+									);
+								} else {
+									log.warn(
+										`Unknown Tenor media format: ${fileExt}, keeping as text`,
+									);
+								}
+							} else {
+								log.warn(
+									`Failed to resolve Tenor URL, keeping as text: ${fullUrl}`,
+								);
+							}
+						}
+
+						// Keep the Tenor URL(s) as text content since they often contain useful descriptive context
+						// (e.g., "tsukimura-dark-souls-death-idolmaster" provides context about the GIF)
+					}
+				}
 
 				// 5.c. Check if this message is from the same effective author as the previous one
 				const prevMessage = simplifiedMessages[simplifiedMessages.length - 1];

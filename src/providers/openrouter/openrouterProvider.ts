@@ -297,10 +297,18 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 		log.info(`[DEBUG] sees_images flag: ${tomoriState.llm.sees_images}`);
 
 		// Build config object - only include tools if model supports them
+		// NOTE: OpenRouter models are more sensitive to temperature than other providers.
+		// Database stores temperature in range 1.0-2.0, but OpenRouter works best with 0.2-1.2.
+		// We subtract 0.8 to adjust the range specifically for OpenRouter (hidden from user).
+		const adjustedTemperature = Math.max(
+			0.2,
+			Math.min(1.2, tomoriState.config.llm_temperature - 0.8),
+		);
+
 		const config: OpenrouterProviderConfig = {
 			model: tomoriState.llm.llm_codename,
 			apiKey: apiKey,
-			temperature: tomoriState.config.llm_temperature,
+			temperature: adjustedTemperature,
 			maxOutputTokens: 4096, // Default, can be adjusted per model
 			seesImages: tomoriState.llm.sees_images, // Pass image capability flag
 			// Sampling parameters to reduce hallucinations and improve coherence

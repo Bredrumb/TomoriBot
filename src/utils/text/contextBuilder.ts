@@ -539,13 +539,29 @@ export async function buildContext({
 			const customNickname = userRow.user_nickname;
 			const serverNickname = member?.nickname;
 
-			if (customNickname) {
+			// Check personalization settings FIRST to determine which nickname to use
+			const serverPersonalizationEnabled =
+				tomoriConfig.personal_memories_enabled ?? true;
+			const userIsBlacklisted = await isBlacklisted(
+				guildId,
+				userRow.user_disc_id,
+			);
+			const userOptedOut = await isPrivacyOptedOut(userRow.user_disc_id);
+
+			if (
+				customNickname &&
+				serverPersonalizationEnabled &&
+				!userIsBlacklisted &&
+				!userOptedOut
+			) {
 				// Use custom nickname as base, add server nickname if it exists
+				// Only use custom nickname if user is not blacklisted AND personalization is enabled
 				displayName = serverNickname
 					? `${customNickname} (Server Nickname: "${serverNickname}")`
 					: customNickname;
 			} else if (serverNickname) {
-				// No custom nickname but has server nickname
+				// No custom nickname OR user is blacklisted/opted-out OR personalization disabled
+				// Use server nickname (Discord-native feature, not personalization)
 				displayName = serverNickname;
 			} else {
 				// No custom or server nickname, fallback to mention format
@@ -556,14 +572,6 @@ export async function buildContext({
 			let userSpecificContent = "";
 
 			// 6.a. Add Personal Memories (conditionally)
-			const serverPersonalizationEnabled =
-				tomoriConfig.personal_memories_enabled ?? true;
-			const userIsBlacklisted = await isBlacklisted(
-				guildId,
-				userRow.user_disc_id,
-			);
-			const userOptedOut = await isPrivacyOptedOut(userRow.user_disc_id);
-
 			log.info(
 				`User ${userDiscordId}: Server Personalization Enabled: ${serverPersonalizationEnabled}, User Blacklisted: ${userIsBlacklisted}, Privacy Opted Out: ${userOptedOut}`,
 			);
@@ -809,6 +817,9 @@ export async function buildContext({
 					uri: attachment.proxyUrl,
 					mimeType: attachment.mimeType,
 				});
+				log.info(
+					`[DEBUG] ContextBuilder: Added image part with mimeType="${attachment.mimeType}", uri="${attachment.proxyUrl}", filename="${attachment.filename}"`,
+				);
 			} else {
 				log.warn(
 					`Skipping image attachment due to missing mimeType: ${attachment.filename} from user ${msg.authorName}`,

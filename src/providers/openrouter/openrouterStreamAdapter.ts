@@ -22,6 +22,7 @@ import {
 } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
+import { extractGifKeyframes } from "../../utils/media/gifProcessor";
 import type {
 	ProcessedChunk,
 	ProviderError,
@@ -747,27 +748,69 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 
 						// Handle images with URI - fetch and convert to base64
 						try {
-							const imageResponse = await fetch(part.uri);
-							if (!imageResponse.ok) {
-								log.warn(
-									`Failed to fetch image: ${part.uri} (status: ${imageResponse.status})`,
+							log.info(
+								`[DEBUG] OpenrouterStreamAdapter: Processing image with mimeType="${part.mimeType}", uri="${part.uri}"`,
+							);
+
+							// Check if this is a GIF - process as keyframes instead
+							if (part.mimeType === "image/gif") {
+								log.info(
+									`OpenrouterStreamAdapter: GIF detected, extracting keyframes: ${part.uri}`,
 								);
-								continue;
+
+								// Extract keyframes from GIF
+								const keyframes = await extractGifKeyframes(part.uri);
+
+								// Add a text part describing the keyframes
+								contentParts.push({
+									type: "text",
+									text: `[Animated GIF - ${keyframes.length} keyframes extracted from ${keyframes[0].totalFrames} total frames]`,
+								});
+
+								// Add each keyframe as a separate image
+								for (const frame of keyframes) {
+									// Add frame label
+									contentParts.push({
+										type: "text",
+										text: `Frame ${frame.frameNumber + 1}/${keyframes.length} (original frame ${frame.originalFrameIndex + 1}/${frame.totalFrames}):`,
+									});
+
+									// Add frame image
+									contentParts.push({
+										type: "image_url",
+										imageUrl: {
+											url: `data:${frame.mimeType};base64,${frame.data}`,
+										},
+									});
+								}
+
+								log.success(
+									`OpenrouterStreamAdapter: Successfully processed GIF into ${keyframes.length} keyframes`,
+								);
+							} else {
+								// Regular image processing (non-GIF)
+								const imageResponse = await fetch(part.uri);
+								if (!imageResponse.ok) {
+									log.warn(
+										`Failed to fetch image: ${part.uri} (status: ${imageResponse.status})`,
+									);
+									continue;
+								}
+
+								const imageArrayBuffer = await imageResponse.arrayBuffer();
+								const base64ImageData =
+									Buffer.from(imageArrayBuffer).toString("base64");
+
+								// Add image as OpenAI format
+								contentParts.push({
+									type: "image_url",
+									imageUrl: {
+										url: `data:${part.mimeType};base64,${base64ImageData}`,
+									},
+								});
+
+								log.success(`Successfully added image to message: ${part.uri}`);
 							}
-
-							const imageArrayBuffer = await imageResponse.arrayBuffer();
-							const base64ImageData =
-								Buffer.from(imageArrayBuffer).toString("base64");
-
-							// Add image as OpenAI format
-							contentParts.push({
-								type: "image_url",
-								imageUrl: {
-									url: `data:${part.mimeType};base64,${base64ImageData}`,
-								},
-							});
-
-							log.success(`Successfully added image to message: ${part.uri}`);
 						} catch (imgErr) {
 							log.warn(`Error processing image: ${part.uri}`, {
 								error:
