@@ -15,6 +15,7 @@ docker-pip-cache/
 characterDrafts.md
 backups/
 references/
+security-review/
 
 # Proompting
 .roo/

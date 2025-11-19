@@ -796,7 +796,6 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
 - Currently available models are based on popularity and performance, with tags for distinction:
   - (TOOLS) = Supports tool usage (web search, self-learning, stickers, etc.)
   - (IMAGES) = Sees images
-  - (UNCENSORED) = Mostly no content filtering
   - (FREE) = No cost, but may have rate limits
 - If you can't find what you want, try using the \`account-setting\` provider option
 - Suggest additional models in {supportServer}`,

@@ -59,7 +59,7 @@ function getLocalizedDescription(model: LlmRow, locale: string): string {
 	if (model.is_free) flags.push("FREE");
 	if (model.has_tools) flags.push("TOOLS");
 	if (model.sees_images) flags.push("IMAGES");
-	if (model.is_uncensored) flags.push("UNCENSORED");
+	//if (model.is_uncensored) flags.push("UNCENSORED");
 
 	// Prepend flags with + connector if any exist
 	const flagPrefix = flags.length > 0 ? `(${flags.join("+")}) ` : "";
