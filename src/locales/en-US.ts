@@ -88,6 +88,16 @@ export default {
 			"Currently responding to this message: {message_link}. Your message has been queued.",
 	},
 
+	rate_limit: {
+		// User-level rate limiting (DM notification)
+		user_exceeded_title: `⚠️ Rate Limit Reached`,
+		user_exceeded_description: `You currently have {current_count} active messages being processed across all servers (limit: {max_limit}).\n\nTo prevent abuse, your most recent trigger attempt has been dropped. Please wait for some of your messages to finish processing before sending more.`,
+
+		// Server-level rate limiting (public channel notification)
+		server_exceeded_title: `⚠️ Server Overloaded`,
+		server_exceeded_description: `This server currently has {current_count} active messages being processed (limit: {max_limit}).\n\nI'm at capacity right now! Please try again in a moment, or use me in another server or via Direct Messages instead.`,
+	},
+
 	genai: {
 		// Errors related to LLM API generation
 		generic_error_title: `Generation Error`,
@@ -669,27 +679,26 @@ export default {
 			cost: {
 				description: `Estimate API costs for paid AI providers`,
 				title: `💰 Estimated API Costs`,
-				embed_description: `Here are estimated costs per trigger when using paid AI providers like **{provider}** (Input: {inputPrice}/M tokens, Output: {outputPrice}/M tokens).
-
-**Note:** These are rough estimates. Actual costs may vary based on conversation length, memory usage, and response complexity.`,
-				minimum_scenario_title: `📉 Minimum Scenario (Light Usage)`,
+				embed_description: `Here are **VERY ROUGH** estimated costs per trigger in a Discord channel when using paid AI providers. Costs are estimated using example **{provider}** costs (Input: {inputPrice}/M tokens, Output: {outputPrice}/M tokens)`,
+				minimum_scenario_title: `Minimum Scenario (Light Usage)`,
 				minimum_scenario_value: `**Context:** 1 user with 0 memories, 1 paragraph of persona, conversations are less than a sentence per message
 **Tokens:** {inputTokens} input + {outputTokens} output = {totalTokens} total
 **Cost:** ~{costPerMessage} per trigger (~{costPer100} per 100 triggers)`,
-				average_scenario_title: `📊 Average Scenario (Moderate Usage)`,
+				average_scenario_title: `Average Scenario (Moderate Usage)`,
 				average_scenario_value: `**Context:** 3 users with 10 memories each, ~16 paragraphs of persona (includes attributes & dialogues), conversations are 1-2 sentences per message
 **Tokens:** {inputTokens} input + {outputTokens} output = {totalTokens} total
 **Cost:** ~{costPerMessage} per trigger (~{costPer100} per 100 triggers)`,
-				maximum_scenario_title: `📈 Maximum Scenario (Heavy Usage)`,
+				maximum_scenario_title: `Maximum Scenario (Heavy Usage)`,
 				maximum_scenario_value: `**Context:** 5 users with 25 memories each, ~31 paragraphs of persona (includes attributes & dialogues), conversations are 2 paragraphs per message
 **Tokens:** {inputTokens} input + {outputTokens} output = {totalTokens} total
 **Cost:** ~{costPerMessage} per trigger (~{costPer100} per 100 triggers)`,
-				breakdown_title: `🔍 What Affects Cost?`,
+				breakdown_title: `What Affects Cost?`,
 				breakdown_value: `**Input tokens (context sent to AI):**
 - Persona paragraphs (includes attributes & sample dialogues)
 - Server & personal memories
+- Enabled tools (if any)
 - User statuses & reminders
-- Recent conversation history (80 messages max)
+- Recent conversation history (includes images, videos, stickers, emojis, embeds if provider supports)
 - Server emojis (10 constant)
 
 **Output tokens (AI response):**
@@ -697,6 +706,7 @@ export default {
 - More detailed questions = longer responses = higher cost
 
 **Tips to reduce costs:**
+I have built-in features to help reduce costs from abusers or spammers in your server, but here are some additional tips:
 - Use fewer persona paragraphs (attributes & dialogues)
 - Keep memories concise
 - Use free AI providers (Google Gemini free tier)

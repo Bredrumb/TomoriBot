@@ -186,6 +186,8 @@ interface ChannelLockEntry {
 	isLocked: boolean;
 	lockedAt: number; // Timestamp when the lock was acquired
 	currentMessageId?: string; // Discord ID of the message currently being processed
+	serverDiscId: string; // Server/DM channel Discord ID for rate limiting
+	userDiscId?: string; // Discord ID of user whose message is currently being processed
 	messageQueue: Array<{
 		message: Message;
 		isManuallyTriggered?: boolean;
@@ -206,6 +208,136 @@ function isNaturalStopMessage(content: string): boolean {
 	return NATURAL_STOP_PATTERNS.some((pattern) =>
 		pattern.test(content.toLowerCase()),
 	);
+}
+
+/**
+ * Counts the total number of active messages (processing + queued) for a specific user across all servers.
+ * This is used for user-level rate limiting to prevent abuse.
+ * @param userDiscId - The Discord user ID to count messages for
+ * @returns The total count of active messages for this user
+ */
+function getUserActiveMessageCount(userDiscId: string): number {
+	let count = 0;
+
+	// Iterate through all channel locks
+	for (const lockEntry of channelLocks.values()) {
+		// 1. Count if user's message is currently being processed
+		if (lockEntry.isLocked && lockEntry.userDiscId === userDiscId) {
+			count++;
+		}
+
+		// 2. Count queued messages from this user
+		count += lockEntry.messageQueue.filter(
+			(queuedMsg) => queuedMsg.message.author.id === userDiscId,
+		).length;
+	}
+
+	return count;
+}
+
+/**
+ * Counts the total number of active messages (processing + queued) for a specific server across all channels.
+ * This is used for server-level rate limiting to prevent overload.
+ * @param serverDiscId - The Discord server ID (or DM channel ID) to count messages for
+ * @returns The total count of active messages for this server
+ */
+function getServerActiveMessageCount(serverDiscId: string): number {
+	let count = 0;
+
+	// Iterate through all channel locks
+	for (const lockEntry of channelLocks.values()) {
+		// Only process channels belonging to this server
+		if (lockEntry.serverDiscId === serverDiscId) {
+			// 1. Count if a message is currently being processed
+			if (lockEntry.isLocked) {
+				count++;
+			}
+
+			// 2. Count all queued messages in this channel
+			count += lockEntry.messageQueue.length;
+		}
+	}
+
+	return count;
+}
+
+/**
+ * Sends a DM to a user notifying them that they have exceeded the rate limit.
+ * Handles cases where the user has blocked DMs or the bot cannot send DMs.
+ * @param userDiscId - The Discord user ID to send the DM to
+ * @param client - The Discord client instance
+ * @param userLocale - The user's preferred locale for the message
+ * @param currentCount - The current number of active messages for this user
+ */
+async function sendUserRateLimitDM(
+	userDiscId: string,
+	client: Client,
+	userLocale: string,
+	currentCount: number,
+): Promise<void> {
+	try {
+		// Fetch the user
+		const user = await client.users.fetch(userDiscId);
+
+		// Create the rate limit embed
+		const rateLimitEmbed = createStandardEmbed(userLocale, {
+			titleKey: "rate_limit.user_exceeded_title",
+			descriptionKey: "rate_limit.user_exceeded_description",
+			descriptionVars: {
+				current_count: currentCount.toString(),
+				max_limit: (
+					Number.parseInt(process.env.MAX_USER_ACTIVE_MESSAGES || "5", 10)
+				).toString(),
+			},
+			color: ColorCode.WARN,
+		});
+
+		// Send the DM
+		await user.send({ embeds: [rateLimitEmbed] });
+		log.info(
+			`Sent rate limit DM to user ${userDiscId} (${currentCount} active messages)`,
+		);
+	} catch (error) {
+		// User likely has DMs disabled or blocked the bot - this is expected, log as info not error
+		log.info(
+			`Could not send rate limit DM to user ${userDiscId}: ${error instanceof Error ? error.message : "Unknown error"}`,
+		);
+	}
+}
+
+/**
+ * Sends a public embed in the channel notifying that the server has exceeded the rate limit.
+ * Suggests using DMs or other servers as alternatives.
+ * @param channel - The Discord channel to send the embed to
+ * @param locale - The server's preferred locale for the message
+ * @param currentCount - The current number of active messages for this server
+ */
+async function sendServerRateLimitEmbed(
+	channel: TextChannel | DMChannel | BaseGuildTextChannel,
+	locale: string,
+	currentCount: number,
+): Promise<void> {
+	try {
+		await sendStandardEmbed(channel, locale, {
+			titleKey: "rate_limit.server_exceeded_title",
+			descriptionKey: "rate_limit.server_exceeded_description",
+			descriptionVars: {
+				current_count: currentCount.toString(),
+				max_limit: (
+					Number.parseInt(process.env.MAX_SERVER_ACTIVE_MESSAGES || "10", 10)
+				).toString(),
+			},
+			color: ColorCode.WARN,
+		});
+		log.info(
+			`Sent rate limit embed to channel ${channel.id} (${currentCount} active messages in server)`,
+		);
+	} catch (error) {
+		log.warn(
+			`Failed to send rate limit embed to channel ${channel.id}`,
+			error,
+		);
+	}
 }
 
 /**
@@ -406,6 +538,8 @@ export default async function tomoriChat(
 				isLocked: false,
 				lockedAt: 0,
 				currentMessageId: undefined,
+				serverDiscId: serverDiscId, // Track server for rate limiting
+				userDiscId: undefined, // Set when lock is acquired
 				messageQueue: [],
 			};
 			channelLocks.set(channelLockId, lockEntry);
@@ -420,6 +554,7 @@ export default async function tomoriChat(
 				`Channel ${channelLockId} lock is stale (locked since ${new Date(lockEntry.lockedAt).toISOString()} for message ${lockEntry.currentMessageId}). Forcibly releasing. Previous queue length: ${lockEntry.messageQueue.length}`,
 			);
 			lockEntry.isLocked = false; // Release stale lock
+			lockEntry.userDiscId = undefined; // Clear user tracking
 			lockEntry.messageQueue = []; // Clear queue as well, as context might be very old
 			// The current message will now attempt to acquire the lock.
 		}
@@ -465,6 +600,60 @@ export default async function tomoriChat(
 					isManuallyTriggered ||
 					shouldBotReply(message, modifiedEarlyTomoriStateForCheck)
 				) {
+					// Rate limit check: Check user and server limits before enqueueing
+					const maxUserLimit = Number.parseInt(
+						process.env.MAX_USER_ACTIVE_MESSAGES || "5",
+						10,
+					);
+					const maxServerLimit = Number.parseInt(
+						process.env.MAX_SERVER_ACTIVE_MESSAGES || "10",
+						10,
+					);
+
+					// Check user-level rate limit first (stricter)
+					const userActiveCount = getUserActiveMessageCount(userDiscId);
+					if (userActiveCount >= maxUserLimit) {
+						log.warn(
+							`User ${userDiscId} exceeded rate limit (${userActiveCount}/${maxUserLimit} active messages). Dropping message ${message.id}.`,
+						);
+
+						// Load user locale for DM
+						const tempUserRow = await loadUserRow(userDiscId);
+						const userLocale =
+							tempUserRow?.language_pref ?? guild?.preferredLocale ?? "en-US";
+
+						// Send DM notification (silent drop if DMs blocked)
+						await sendUserRateLimitDM(
+							userDiscId,
+							client,
+							userLocale,
+							userActiveCount,
+						);
+
+						return; // Drop message
+					}
+
+					// Check server-level rate limit
+					const serverActiveCount = getServerActiveMessageCount(serverDiscId);
+					if (serverActiveCount >= maxServerLimit) {
+						log.warn(
+							`Server ${serverDiscId} exceeded rate limit (${serverActiveCount}/${maxServerLimit} active messages). Dropping message ${message.id}.`,
+						);
+
+						// Get server locale
+						const serverLocale = guild?.preferredLocale ?? "en-US";
+
+						// Send public embed notification
+						await sendServerRateLimitEmbed(
+							channel,
+							serverLocale,
+							serverActiveCount,
+						);
+
+						return; // Drop message
+					}
+
+					// Rate limits not exceeded, proceed with normal enqueueing
 					lockEntry.messageQueue.push({
 						message,
 						isManuallyTriggered,
@@ -562,6 +751,7 @@ export default async function tomoriChat(
 		lockEntry.isLocked = true;
 		lockEntry.lockedAt = Date.now();
 		lockEntry.currentMessageId = message.id;
+		lockEntry.userDiscId = userDiscId; // Track user for rate limiting
 	}
 	// --- End Semaphore Logic ---
 
@@ -2481,6 +2671,7 @@ export default async function tomoriChat(
 			lockEntry.isLocked = false;
 			lockEntry.lockedAt = 0;
 			lockEntry.currentMessageId = undefined;
+			lockEntry.userDiscId = undefined; // Clear user tracking for rate limiting
 			log.info(
 				`Channel ${channelLockId} lock released for message ${message.id}.`,
 			);
