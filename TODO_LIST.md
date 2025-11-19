@@ -88,13 +88,28 @@ Slash Commands: When a user types /hello, Discord sends that command down the al
 
 Result: **Since TomoriBot initiated the call, it counts as "Outbound" traffic.**
   - DB SG: Inbound PostgreSQL from bot only
-- [ ] **1.5** Set up RDS PostgreSQL instance
+- [x] **1.5** Set up RDS PostgreSQL instance
+
+This is the most complex step because we have to connect three different pieces:
+
+    Subnet Group: To force the DB into the "Private" safe room.
+
+    Parameter Group: To force SSL encryption (Security requirement).
+
+    The Database Itself: The actual PostgreSQL engine.
   - Enable encryption at rest
-  - Enable automated backups (7 days retention)
+  - Enable automated backups (1 day retention)
   - Configure in private subnet
   - **Enable SSL/TLS enforcement** (force_ssl parameter)
-- [ ] **1.6** Set up ECR (Elastic Container Registry) for Docker images
+SSL (Secure Sockets Layer) puts that postcard inside a locked, steel envelope.
 
+Encryption: Even if someone intercepts the message, they only see scrambled garbage (ciphertext).
+
+Why Force it? By setting rds.force_ssl = 1, you tell the database: "If someone tries to send me a naked postcard, burn it immediately." It prevents you (or a buggy version of TomoriBot) from accidentally connecting insecurely.
+
+- [x] **1.6** Set up ECR (Elastic Container Registry) for Docker images
+
+ECR (The "Code Garage") We need a place to park your bot's "Image" (the packaged version of your code) before it runs.
 **Deliverable:** Working AWS infrastructure, no application deployed yet
 **Reference:** `security-review/4_urgent_vulnerabilities.md` sections 3, 4
 
@@ -103,19 +118,17 @@ Result: **Since TomoriBot initiated the call, it counts as "Outbound" traffic.**
 ### 🔴 2. AWS Secrets Manager Migration (1-2 days)
 **Why Second:** Need secrets in place before deploying application
 
-- [ ] **2.1** Create secrets in AWS Secrets Manager
-  - `tomoribot/discord-token`
-  - `tomoribot/crypto-secret`
-  - `tomoribot/postgres-password`
+- [x] **2.1** Create secrets in AWS Secrets Manager
+  - `tomoribot/production` (just one secret as multiple parsable key-value pairs to save costs)
   - Any MCP API keys (if used)
-- [ ] **2.2** Update `src/utils/security/secretsManager.ts`
+- [x] **2.2** Update `src/utils/security/secretsManager.ts`
   - Implement `getSecret()` function using AWS SDK
   - Add fallback to env vars for local development
   - Update `getSecretOrEnv()` helper
-- [ ] **2.3** Update `src/index.ts` to use Secrets Manager in production
+- [x] **2.3** Update `src/index.ts` to use Secrets Manager in production
   ```typescript
-  const discordToken = await getSecretOrEnv('tomoribot/discord-token', 'DISCORD_TOKEN');
-  const cryptoSecret = await getSecretOrEnv('tomoribot/crypto-secret', 'CRYPTO_SECRET');
+  // Example
+  const discordToken = await getSecretOrEnv('tomoribot/production', 'DISCORD_TOKEN');
   ```
 - [ ] **2.4** Update IAM role to grant `secretsmanager:GetSecretValue` permission
 - [ ] **2.5** Test locally with AWS CLI credentials

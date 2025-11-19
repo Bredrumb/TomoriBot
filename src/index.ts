@@ -6,8 +6,42 @@ import path from "node:path";
 import eventHandler from "./handlers/eventHandler";
 import { initializeLocalizer } from "./utils/text/localizer";
 import { keyManager } from "./utils/security/keyManager";
+import { getAppSecrets } from "./utils/security/secretsManager";
 
 config();
+
+// Load secrets from AWS Secrets Manager (production) or .env (development)
+log.section("Loading Application Secrets...");
+const secrets = await getAppSecrets();
+
+// Assign secrets to process.env for backwards compatibility with existing code
+process.env.DISCORD_TOKEN = secrets.DISCORD_TOKEN;
+process.env.POSTGRES_HOST = secrets.POSTGRES_HOST;
+process.env.POSTGRES_PORT = secrets.POSTGRES_PORT;
+process.env.POSTGRES_USER = secrets.POSTGRES_USER;
+process.env.POSTGRES_PASSWORD = secrets.POSTGRES_PASSWORD;
+process.env.POSTGRES_DB = secrets.POSTGRES_DB;
+process.env.CRYPTO_SECRET = secrets.CRYPTO_SECRET;
+
+// Auto-detect and assign key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
+if (secrets.CRYPTO_SECRET_V1) {
+	process.env.CRYPTO_SECRET_V1 = secrets.CRYPTO_SECRET_V1;
+}
+if (secrets.CRYPTO_SECRET_V2) {
+	process.env.CRYPTO_SECRET_V2 = secrets.CRYPTO_SECRET_V2;
+}
+if (secrets.CRYPTO_SECRET_V3) {
+	process.env.CRYPTO_SECRET_V3 = secrets.CRYPTO_SECRET_V3;
+}
+
+// Optional webhook URL
+if (secrets.DISCORD_WEBHOOK_URL) {
+	process.env.DISCORD_WEBHOOK_URL = secrets.DISCORD_WEBHOOK_URL;
+}
+
+log.success(
+	`Secrets loaded successfully from ${process.env.NODE_ENV === "production" ? "AWS Secrets Manager" : ".env file"}`,
+);
 
 // Initialize encryption key manager (auto-initializes on import)
 log.section("Initializing Encryption Key Manager...");

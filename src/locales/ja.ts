@@ -665,6 +665,45 @@ export default {
 				footer: `すべての機能がすべてのAIプロバイダーで利用できるわけではありません。GoogleのGeminiの使用を推奨します`,
 			},
 
+			// /help cost
+			cost: {
+				description: `有料AIプロバイダーのAPI費用を見積もる`,
+				title: `💰 推定API費用`,
+				embed_description: `**{provider}** などの有料AIプロバイダーを使用した場合のトリガーあたりの推定費用です（入力：{inputPrice}/百万トークン、出力：{outputPrice}/百万トークン）。
+
+**注意：** これらはおおよその見積もりです。実際の費用は会話の長さ、メモリ使用量、応答の複雑さによって異なる場合があります。`,
+				minimum_scenario_title: `📉 最小シナリオ（軽量使用）`,
+				minimum_scenario_value: `**コンテキスト：** 1ユーザー、メモリなし、1段落のペルソナ、会話は1メッセージあたり1文未満
+**トークン数：** {inputTokens} 入力 + {outputTokens} 出力 = {totalTokens} 合計
+**費用：** ~{costPerMessage} /トリガー（~{costPer100} /100トリガー）`,
+				average_scenario_title: `📊 平均シナリオ（中程度使用）`,
+				average_scenario_value: `**コンテキスト：** 3ユーザー（各10メモリ）、~16段落のペルソナ（属性と対話を含む）、会話は1メッセージあたり1〜2文
+**トークン数：** {inputTokens} 入力 + {outputTokens} 出力 = {totalTokens} 合計
+**費用：** ~{costPerMessage} /トリガー（~{costPer100} /100トリガー）`,
+				maximum_scenario_title: `📈 最大シナリオ（重量使用）`,
+				maximum_scenario_value: `**コンテキスト：** 5ユーザー（各25メモリ）、~31段落のペルソナ（属性と対話を含む）、会話は1メッセージあたり2段落
+**トークン数：** {inputTokens} 入力 + {outputTokens} 出力 = {totalTokens} 合計
+**費用：** ~{costPerMessage} /トリガー（~{costPer100} /100トリガー）`,
+				breakdown_title: `🔍 費用に影響する要因`,
+				breakdown_value: `**入力トークン（AIに送信されるコンテキスト）：**
+- ペルソナの段落数（属性とサンプル対話を含む）
+- サーバー＆個人メモリ
+- ユーザーステータス＆リマインダー
+- 最近の会話履歴（最大80メッセージ）
+- サーバー絵文字（常に10個）
+
+**出力トークン（AI応答）：**
+- 応答の長さはクエリの複雑さによって異なります
+- より詳細な質問 = より長い応答 = より高い費用
+
+**費用を削減するヒント：**
+- ペルソナの段落数を少なくする（属性と対話）
+- メモリを簡潔に保つ
+- 無料のAIプロバイダーを使用する（Google Gemini無料プラン）
+- 自動トリガーチャンネルを制限する`,
+				footer: `Google Gemini（無料プラン）や一部のOpenRouterモデルなどの無料プロバイダーは費用がかかりません！NovelAIはサブスクリプション制で無制限に使用できます。プロバイダーの詳細は\`/help apikey\`をご覧ください。`,
+			},
+
 			// /help setup
 			setup: {
 				description: `TomoriBotの初期設定方法を学ぶ`,

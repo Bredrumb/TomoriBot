@@ -665,6 +665,45 @@ export default {
 				footer: `Not all features are available for all AI providers. It is recommended to use Google's Gemini`,
 			},
 
+			// /help cost
+			cost: {
+				description: `Estimate API costs for paid AI providers`,
+				title: `💰 Estimated API Costs`,
+				embed_description: `Here are estimated costs per trigger when using paid AI providers like **{provider}** (Input: {inputPrice}/M tokens, Output: {outputPrice}/M tokens).
+
+**Note:** These are rough estimates. Actual costs may vary based on conversation length, memory usage, and response complexity.`,
+				minimum_scenario_title: `📉 Minimum Scenario (Light Usage)`,
+				minimum_scenario_value: `**Context:** 1 user with 0 memories, 1 paragraph of persona, conversations are less than a sentence per message
+**Tokens:** {inputTokens} input + {outputTokens} output = {totalTokens} total
+**Cost:** ~{costPerMessage} per trigger (~{costPer100} per 100 triggers)`,
+				average_scenario_title: `📊 Average Scenario (Moderate Usage)`,
+				average_scenario_value: `**Context:** 3 users with 10 memories each, ~16 paragraphs of persona (includes attributes & dialogues), conversations are 1-2 sentences per message
+**Tokens:** {inputTokens} input + {outputTokens} output = {totalTokens} total
+**Cost:** ~{costPerMessage} per trigger (~{costPer100} per 100 triggers)`,
+				maximum_scenario_title: `📈 Maximum Scenario (Heavy Usage)`,
+				maximum_scenario_value: `**Context:** 5 users with 25 memories each, ~31 paragraphs of persona (includes attributes & dialogues), conversations are 2 paragraphs per message
+**Tokens:** {inputTokens} input + {outputTokens} output = {totalTokens} total
+**Cost:** ~{costPerMessage} per trigger (~{costPer100} per 100 triggers)`,
+				breakdown_title: `🔍 What Affects Cost?`,
+				breakdown_value: `**Input tokens (context sent to AI):**
+- Persona paragraphs (includes attributes & sample dialogues)
+- Server & personal memories
+- User statuses & reminders
+- Recent conversation history (80 messages max)
+- Server emojis (10 constant)
+
+**Output tokens (AI response):**
+- Response length varies by query complexity
+- More detailed questions = longer responses = higher cost
+
+**Tips to reduce costs:**
+- Use fewer persona paragraphs (attributes & dialogues)
+- Keep memories concise
+- Use free AI providers (Google Gemini free tier)
+- Limit auto-trigger channels`,
+				footer: `Free providers like Google Gemini (free tier) and some OpenRouter models have no cost! NovelAI offers unlimited usage with a subscription. Use \`/help apikey\` to learn more.`,
+			},
+
 			// /help setup
 			setup: {
 				description: `Learn how to set up TomoriBot for the first time`,

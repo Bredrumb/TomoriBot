@@ -38,7 +38,10 @@ import type {
 import { ToolRegistry } from "../../tools/toolRegistry";
 
 // Constants
-const MESSAGE_FETCH_LIMIT = 80;
+const MESSAGE_FETCH_LIMIT = Number.parseInt(
+	process.env.MESSAGE_FETCH_LIMIT || "80",
+	10,
+);
 
 // Base trigger words that will always work (with or without spaces for English)
 const BASE_TRIGGER_WORDS = process.env.BASE_TRIGGER_WORDS?.split(",").map(

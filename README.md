@@ -154,7 +154,60 @@ Before running TomoriBot, ensure you have the following installed:
     DEFAULT_BOTNAME=Tomori
     DEFAULT_BOTNAME_JP=ともり
     BASE_TRIGGER_WORDS=tomori,tomo,トモリ,ともり
+    RUN_ENV=development
+
+    # Message History Configuration (Optional)
+    MESSAGE_FETCH_LIMIT=80
+
+    # Memory Limits (Optional)
+    MAX_PERSONAL_MEMORIES=25
+    MAX_SERVER_MEMORIES=25
+    MAX_MEMORY_LENGTH=256
+    MAX_SAMPLE_DIALOGUE_LENGTH=2000
+    MAX_ATTRIBUTE_LENGTH=2000
+    MAX_TRIGGER_WORDS=10
+    MAX_SAMPLE_DIALOGUES=10
+    MAX_ATTRIBUTES=10
    ```
+
+### Environment Variables Reference
+
+#### Required Variables
+- **DISCORD_TOKEN**: Your Discord bot authentication token from the [Discord Developer Portal](https://discord.com/developers/applications)
+- **CRYPTO_SECRET**: A 32-character secret key for encrypting API keys stored in the database
+- **POSTGRES_HOST**: PostgreSQL server hostname (default: `localhost`)
+- **POSTGRES_PORT**: PostgreSQL server port (default: `5432`)
+- **POSTGRES_USER**: PostgreSQL database username
+- **POSTGRES_PASSWORD**: PostgreSQL database password
+- **POSTGRES_DB**: PostgreSQL database name
+
+#### Optional Variables
+
+##### Bot Configuration
+- **DEFAULT_BOTNAME**: Default bot name in English (default: `Tomori`)
+- **DEFAULT_BOTNAME_JP**: Default bot name in Japanese (default: `ともり`)
+- **BASE_TRIGGER_WORDS**: Comma-separated list of words that trigger the bot in channels (default: `tomori,tomo,トモリ,ともり`)
+- **RUN_ENV**: Runtime environment identifier for logging (default: `development`)
+
+##### Message History Configuration
+- **MESSAGE_FETCH_LIMIT**: Number of previous messages to fetch for conversation context (default: `80`)
+  - Higher values provide more context but increase API costs and response time
+  - Recommended range: 20-150
+
+##### Memory Limits
+- **MAX_PERSONAL_MEMORIES**: Maximum personal memories per user (default: `25`)
+- **MAX_SERVER_MEMORIES**: Maximum memories per server (default: `25`)
+- **MAX_MEMORY_LENGTH**: Maximum character length for memory content (default: `256`)
+- **MAX_SAMPLE_DIALOGUE_LENGTH**: Maximum character length for sample dialogues (default: `2000`)
+- **MAX_ATTRIBUTE_LENGTH**: Maximum character length for personality attributes (default: `2000`)
+- **MAX_TRIGGER_WORDS**: Maximum custom trigger words per server (default: `10`)
+- **MAX_SAMPLE_DIALOGUES**: Maximum sample dialogue pairs per server (default: `10`)
+- **MAX_ATTRIBUTES**: Maximum personality attributes per server (default: `10`)
+
+##### Logging
+- **DISCORD_WEBHOOK_URL**: Discord webhook URL for centralized error logging (optional)
+  - Useful for monitoring production deployments
+  - Create webhooks in Discord Server Settings > Integrations > Webhooks
 
 
 <!-- USAGE EXAMPLES -->
