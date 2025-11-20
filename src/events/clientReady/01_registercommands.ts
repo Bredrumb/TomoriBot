@@ -1,4 +1,4 @@
-import { REST, Routes } from "discord.js";
+import { type Client, REST, Routes } from "discord.js";
 import { log } from "../../utils/misc/logger";
 import { loadCommandData } from "../../utils/discord/commandLoader";
 import type { ErrorContext } from "../../types/db/schema";
@@ -6,19 +6,23 @@ import type { ErrorContext } from "../../types/db/schema";
 /**
  * Event handler for registering commands when the bot is ready
  */
-export default async (): Promise<void> => {
+export default async (client: Client): Promise<void> => {
 	try {
 		log.section("Registering application commands");
 
-		const { DISCORD_TOKEN, TOMORI_ID } = process.env;
-		if (!DISCORD_TOKEN || !TOMORI_ID) {
+		// DYNAMIC FIX: Get the ID directly from the logged-in client
+		// We still use process.env.DISCORD_TOKEN since we know it exists (bot wouldn't be running without it)
+		const discordToken = process.env.DISCORD_TOKEN;
+		const applicationId = client.user?.id || client.application?.id;
+
+		if (!discordToken || !applicationId) {
 			const context: ErrorContext = {
 				errorType: "CommandRegistrationError",
 				metadata: { stage: "environment" },
 			};
 			await log.error(
-				"Missing required environment variables for command registration",
-				new Error("DISCORD_TOKEN or TOMORI_ID not found"),
+				"Missing required credentials for command registration",
+				new Error("DISCORD_TOKEN or Client ID could not be determined"),
 				context,
 			);
 			return;
@@ -37,14 +41,14 @@ export default async (): Promise<void> => {
 		);
 
 		// Initialize REST API for command registration
-		const rest = new REST().setToken(DISCORD_TOKEN);
+		const rest = new REST().setToken(discordToken);
 
 		// Register globally for both production and development
 		// Guild-only restrictions are handled via InteractionContextType in command definitions
 		log.info("Registering commands globally");
 
 		try {
-			await rest.put(Routes.applicationCommands(TOMORI_ID), {
+			await rest.put(Routes.applicationCommands(applicationId), {
 				body: registrationData,
 			});
 			log.success(
