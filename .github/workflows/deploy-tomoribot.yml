@@ -7,7 +7,7 @@ on:
   push:
     branches:
       - main
-      - cicd/aws-deployment # Testing branch - remove before merging to main
+      - cicd/aws-deployment # Testing branch - TODO: remove before merging to main
   workflow_dispatch: # Manual trigger - allows running on any branch
     inputs:
       environment:
@@ -473,7 +473,8 @@ jobs:
 
       - name: Prepare ECS task definition
         env:
-          IMAGE_URI: ${{ needs.push-to-ecr.outputs.image-uri }}
+          # We build the string ourselves instead of relying on the job handoff
+          IMAGE_URI: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY_NAME }}:${{ github.sha }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
           RDS_ENDPOINT: ${{ secrets.RDS_ENDPOINT }}
           EXECUTION_ROLE: ${{ secrets.TASK_EXECUTION_ROLE_ARN }}

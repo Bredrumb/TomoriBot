@@ -34,8 +34,6 @@ class CryptoKeyManager {
 	private currentVersion: number;
 
 	constructor() {
-		this.loadKeysFromEnv();
-
 		const versions = this.getAvailableVersions();
 
 		// Determine current version: explicit override or auto-detect highest
@@ -70,6 +68,10 @@ class CryptoKeyManager {
 				"Only one key version available - rotation not possible until additional version added",
 			);
 		}
+	}
+
+	public initialize() {
+		this.loadKeysFromEnv();
 	}
 
 	/**

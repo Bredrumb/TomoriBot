@@ -36,6 +36,7 @@ import type {
 	StreamResult,
 } from "../../types/provider/interfaces";
 import { ToolRegistry } from "../../tools/toolRegistry";
+import { keyManager } from "@/utils/security/keyManager";
 
 // Constants
 const MESSAGE_FETCH_LIMIT = Number.parseInt(
@@ -285,8 +286,9 @@ async function sendUserRateLimitDM(
 			descriptionKey: "rate_limit.user_exceeded_description",
 			descriptionVars: {
 				current_count: currentCount.toString(),
-				max_limit: (
-					Number.parseInt(process.env.MAX_USER_ACTIVE_MESSAGES || "5", 10)
+				max_limit: Number.parseInt(
+					process.env.MAX_USER_ACTIVE_MESSAGES || "5",
+					10,
 				).toString(),
 			},
 			color: ColorCode.WARN,
@@ -323,8 +325,9 @@ async function sendServerRateLimitEmbed(
 			descriptionKey: "rate_limit.server_exceeded_description",
 			descriptionVars: {
 				current_count: currentCount.toString(),
-				max_limit: (
-					Number.parseInt(process.env.MAX_SERVER_ACTIVE_MESSAGES || "10", 10)
+				max_limit: Number.parseInt(
+					process.env.MAX_SERVER_ACTIVE_MESSAGES || "10",
+					10,
 				).toString(),
 			},
 			color: ColorCode.WARN,
@@ -333,10 +336,7 @@ async function sendServerRateLimitEmbed(
 			`Sent rate limit embed to channel ${channel.id} (${currentCount} active messages in server)`,
 		);
 	} catch (error) {
-		log.warn(
-			`Failed to send rate limit embed to channel ${channel.id}`,
-			error,
-		);
+		log.warn(`Failed to send rate limit embed to channel ${channel.id}`, error);
 	}
 }
 
@@ -1954,7 +1954,6 @@ export default async function tomoriChat(
 			}
 
 			// LAZY ROTATION: If using old key version, re-encrypt with current version
-			const { keyManager } = await import("@/utils/security/keyManager");
 			const currentVersion = keyManager.getCurrentVersion();
 			if (keyVersion !== currentVersion) {
 				log.info(

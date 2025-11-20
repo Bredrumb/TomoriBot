@@ -6,6 +6,7 @@ import path from "node:path";
 import eventHandler from "./handlers/eventHandler";
 import { initializeLocalizer } from "./utils/text/localizer";
 import { getAppSecrets } from "./utils/security/secretsManager";
+import { keyManager } from "./utils/security/keyManager";
 
 config();
 
@@ -45,7 +46,8 @@ log.success(
 // Initialize encryption key manager AFTER secrets are loaded
 log.section("Initializing Encryption Key Manager...");
 // Dynamically import keyManager NOW, after process.env is populated
-const { keyManager } = await import("./utils/security/keyManager");
+keyManager.initialize();
+
 const rotationStatus = keyManager.getRotationStatus();
 log.success(
 	`Encryption key manager initialized: V${rotationStatus.currentVersion} active, ` +
@@ -101,9 +103,10 @@ function getPostgresUrl(): string {
 			"Database password must be provided via POSTGRES_PASSWORD or POSTGRES_URL",
 		);
 	}
+	const encodedPassword = encodeURIComponent(password);
 
 	// Build connection string with SSL mode
-	return `postgresql://${user}:${password}@${host}:${port}/${database}?sslmode=${sslMode}`;
+	return `postgresql://${user}:${encodedPassword}@${host}:${port}/${database}?sslmode=${sslMode}`;
 }
 
 const postgresUrl = getPostgresUrl();
