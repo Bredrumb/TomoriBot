@@ -4,7 +4,7 @@
  * for use with LLM providers that don't support GIF format
  */
 
-import gifFrames from "gif-frames";
+import { parseGIF, decompressFrames } from "gifuct-js";
 import sharp from "sharp";
 import { log } from "../misc/logger";
 
@@ -168,13 +168,11 @@ async function extractFramesInternal(
 		gifBuffer = gifSource;
 	}
 
-	// 2. Get frame metadata to determine total frame count
-	// Extract all frames first to get accurate count
-	const allFramesData = await gifFrames({
-		url: gifBuffer,
-		frames: "all",
-		cumulative: true, // Important: composite frames for GIFs with delta encoding
-	});
+	// 2. Parse and decompress the GIF
+	// parseGIF expects ArrayBuffer, convert Buffer to ArrayBuffer
+	const uint8Array = new Uint8Array(gifBuffer);
+	const gif = parseGIF(uint8Array.buffer);
+	const allFramesData = decompressFrames(gif, true); // buildPatch=true for RGBA data
 
 	const totalFrames = allFramesData.length;
 	log.info(`GIF Processor: Total frames in GIF: ${totalFrames}`);
@@ -276,7 +274,7 @@ function calculateKeyframeIndices(
 /**
  * Process a single GIF frame: convert to JPEG and compress
  *
- * @param frameData - Frame data from gif-frames
+ * @param frameData - Frame data from gifuct-js
  * @param frameNumber - Sequential frame number in the output (0-indexed)
  * @param totalOutputFrames - Total number of frames in the output (keyframes)
  * @param originalFrameIndex - Original frame index in the source GIF
@@ -285,28 +283,30 @@ function calculateKeyframeIndices(
  * @returns Processed frame with base64 data
  */
 async function processFrame(
-	frameData: { getImage: () => NodeJS.ReadableStream },
+	frameData: {
+		patch: Uint8ClampedArray;
+		dims: { width: number; height: number; top: number; left: number };
+	},
 	frameNumber: number,
 	totalOutputFrames: number,
 	originalFrameIndex: number,
 	totalSourceFrames: number,
 	config: Required<GifProcessorConfig>,
 ): Promise<ProcessedGifFrame> {
-	// 1. Get the frame as a buffer
-	const frameStream = frameData.getImage();
-	const chunks: Buffer[] = [];
-
-	// Convert stream to buffer
-	await new Promise<void>((resolve, reject) => {
-		frameStream.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
-		frameStream.on("end", () => resolve());
-		frameStream.on("error", (error) => reject(error));
-	});
-
-	const frameBuffer = Buffer.concat(chunks);
+	// 1. Convert RGBA pixel data to raw buffer
+	// gifuct-js provides patch as Uint8ClampedArray with RGBA pixel data
+	const { patch, dims } = frameData;
+	const frameBuffer = Buffer.from(patch.buffer);
 
 	// 2. Process with sharp: resize and convert to JPEG
-	const processedBuffer = await sharp(frameBuffer)
+	// Create Sharp instance from raw RGBA pixel data
+	const processedBuffer = await sharp(frameBuffer, {
+		raw: {
+			width: dims.width,
+			height: dims.height,
+			channels: 4, // RGBA
+		},
+	})
 		.resize(config.maxWidth, undefined, {
 			fit: "inside", // Maintain aspect ratio
 			withoutEnlargement: true, // Don't upscale small images

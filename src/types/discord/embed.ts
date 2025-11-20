@@ -61,7 +61,6 @@ export type ConfirmationResult = {
  */
 export enum TranslationProvider {
 	GOOGLE = "google",
-	DEEPL = "deepl",
 	BING = "bing",
 }
 
@@ -70,7 +69,6 @@ export enum TranslationProvider {
  */
 export const TRANSLATOR_COLORS = {
 	[TranslationProvider.GOOGLE]: "#DE3163", // Google red
-	[TranslationProvider.DEEPL]: "#09B1CE", // DeepL blue
 	[TranslationProvider.BING]: "#7DDA58", // Bing green
 } as const satisfies Record<TranslationProvider, ColorResolvable>;
 
@@ -79,7 +77,6 @@ export const TRANSLATOR_COLORS = {
  */
 export const TRANSLATOR_STYLES = {
 	[TranslationProvider.GOOGLE]: ButtonStyle.Danger,
-	[TranslationProvider.DEEPL]: ButtonStyle.Primary,
 	[TranslationProvider.BING]: ButtonStyle.Success,
 } as const satisfies Record<TranslationProvider, ButtonStyle>;
 

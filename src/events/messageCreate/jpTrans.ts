@@ -1,12 +1,10 @@
 import { translate } from "bing-translate-api";
 import type { Client, Message } from "discord.js";
-import deepl from "deepl";
 import { translate as googleTranslate } from "google-translate-api-x";
 import { log } from "../../utils/misc/logger";
 import { sendTranslationEmbed } from "../../utils/discord/embedHelper";
 import type {
 	BingResponse,
-	DeeplResponse,
 	GoogleResponse,
 } from "../../types/misc/translation";
 import { TranslationProvider } from "../../types/discord/embed";
@@ -44,14 +42,8 @@ const handler = async (_client: Client, message: Message): Promise<void> => {
 		log.info("Japanese message detected, translating...");
 
 		// Get translations from each provider
-		const [bingResult, deeplResult, googleResult] = await Promise.all([
+		const [bingResult, googleResult] = await Promise.all([
 			translate(message.content, undefined, "en") as Promise<BingResponse>,
-			deepl({
-				free_api: true,
-				text: message.content,
-				target_lang: "EN",
-				auth_key: process.env.DEEPL_KEY || "",
-			}) as Promise<DeeplResponse>,
 			googleTranslate(message.content, {
 				to: "en",
 				forceBatch: false,
@@ -63,7 +55,6 @@ const handler = async (_client: Client, message: Message): Promise<void> => {
 			text: message.content,
 			translations: {
 				[TranslationProvider.GOOGLE]: googleResult.text,
-				[TranslationProvider.DEEPL]: deeplResult.data.translations[0].text,
 				[TranslationProvider.BING]: bingResult.translation,
 			},
 			initialProvider: TranslationProvider.GOOGLE,
