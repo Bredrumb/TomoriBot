@@ -31,13 +31,15 @@ interface RotationStatus {
  */
 class CryptoKeyManager {
 	private keys: Map<number, string> = new Map();
-	private currentVersion: number;
+	private currentVersion: number = 0;
 
-	constructor() {
+	public initialize() {
+		this.loadKeysFromEnv();
+
 		const versions = this.getAvailableVersions();
 
-		// Determine current version: explicit override or auto-detect highest
 		if (process.env.CRYPTO_SECRET_CURRENT) {
+			// Determine current version: explicit override or auto-detect highest
 			this.currentVersion = Number.parseInt(
 				process.env.CRYPTO_SECRET_CURRENT,
 				10,
@@ -48,8 +50,8 @@ class CryptoKeyManager {
 			log.info(`Auto-detected current version: V${this.currentVersion}`);
 		}
 
-		// Safety check: current version must exist in environment
 		if (!this.keys.has(this.currentVersion)) {
+			// Safety check: current version must exist in environment
 			const availableVersionsStr = versions.map((v) => `V${v}`).join(", ");
 			throw new Error(
 				`Current encryption key version V${this.currentVersion} not found in environment! ` +
@@ -62,16 +64,12 @@ class CryptoKeyManager {
 			`Crypto key manager initialized with ${this.keys.size} key version(s)`,
 		);
 
-		// Warn if only one version (no rotation capability)
 		if (this.keys.size === 1) {
+			// Warn if only one version (no rotation capability)
 			log.warn(
 				"Only one key version available - rotation not possible until additional version added",
 			);
 		}
-	}
-
-	public initialize() {
-		this.loadKeysFromEnv();
 	}
 
 	/**
