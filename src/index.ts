@@ -5,7 +5,6 @@ import { log } from "./utils/misc/logger";
 import path from "node:path";
 import eventHandler from "./handlers/eventHandler";
 import { initializeLocalizer } from "./utils/text/localizer";
-import { keyManager } from "./utils/security/keyManager";
 import { getAppSecrets } from "./utils/security/secretsManager";
 
 config();
@@ -43,8 +42,10 @@ log.success(
 	`Secrets loaded successfully from ${(process.env.RUN_ENV || "development") === "production" ? "AWS Secrets Manager" : ".env file"}`,
 );
 
-// Initialize encryption key manager (auto-initializes on import)
+// Initialize encryption key manager AFTER secrets are loaded
 log.section("Initializing Encryption Key Manager...");
+// Dynamically import keyManager NOW, after process.env is populated
+const { keyManager } = await import("./utils/security/keyManager");
 const rotationStatus = keyManager.getRotationStatus();
 log.success(
 	`Encryption key manager initialized: V${rotationStatus.currentVersion} active, ` +

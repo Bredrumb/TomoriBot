@@ -1,7 +1,6 @@
 import { log } from "../misc/logger";
 import { sql } from "bun";
 import type { OptApiKeyRow } from "../../types/db/schema";
-import { keyManager } from "./keyManager";
 
 /**
  * Encrypts an API key before storing it in the database using pgcrypto's PGP symmetric encryption.
@@ -12,6 +11,7 @@ import { keyManager } from "./keyManager";
 export const encryptApiKey = async (
 	apiKey: string,
 ): Promise<{ encrypted: Buffer; version: number }> => {
+	const { keyManager } = await import("./keyManager");
 	if (!apiKey) {
 		log.warn("Empty API key provided for encryption");
 		return {
@@ -64,6 +64,7 @@ export const decryptApiKey = async (
 	encryptedKey: Buffer,
 	keyVersion: number = 1,
 ): Promise<string> => {
+	const { keyManager } = await import("./keyManager");
 	if (!encryptedKey || encryptedKey.length === 0) {
 		log.warn("Empty encrypted key provided for decryption");
 		return "";
@@ -179,6 +180,7 @@ export const getOptApiKey = async (
 	serverId: number,
 	serviceName: string,
 ): Promise<string | null> => {
+	const { keyManager } = await import("./keyManager");
 	if (!serviceName || !serverId) {
 		log.warn("Missing required parameters for optional API key retrieval");
 		return null;
@@ -248,6 +250,7 @@ export const getOptApiKey = async (
 export const getAllOptApiKeysForServer = async (
 	serverId: number,
 ): Promise<Record<string, string>> => {
+	const { keyManager } = await import("./keyManager");
 	if (!serverId) {
 		log.warn("Missing serverId for optional API key retrieval");
 		return {};
