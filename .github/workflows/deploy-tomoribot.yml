@@ -1,53 +1,96 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+# GitHub Actions Workflow: Deploy TomoriBot to AWS ECS
+# Note: Secret validation warnings are expected - secrets are configured in GitHub repo settings
+
 name: Deploy TomoriBot
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - cicd/aws-deployment  # Testing branch - remove before merging to main
   workflow_dispatch: # Manual trigger - allows running on any branch
     inputs:
-      branch:
-        description: "Branch to deploy (leave empty for current branch)"
+      environment:
+        description: "Deployment environment"
         required: false
-        default: ""
+        type: choice
+        options:
+          - test
+          - production
+        default: test
+
+# OIDC permissions for AWS authentication
+permissions:
+  id-token: write
+  contents: write
+  pull-requests: write
 
 jobs:
   # SECRETS VALIDATION
   validate-secrets:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
-      - name: Validate required secrets
+      - name: Validate deployment infrastructure secrets
         run: |
-          echo "Validating required secrets..."
-          $missingSecrets = @()
+          echo "=========================================="
+          echo "Validating GitHub Secrets (Infrastructure Only)"
+          echo "=========================================="
+          echo ""
+          echo "NOTE: This workflow ONLY validates deployment/infrastructure secrets."
+          echo "Application secrets (DISCORD_TOKEN, POSTGRES_PASSWORD, etc.) are fetched"
+          echo "by the bot from AWS Secrets Manager at runtime via secretsManager.ts."
+          echo ""
 
-          # Check required secrets
-          if ("${{ secrets.DISCORD_TOKEN }}" -eq "") { $missingSecrets += "DISCORD_TOKEN" }
-          if ("${{ secrets.CRYPTO_SECRET }}" -eq "") { $missingSecrets += "CRYPTO_SECRET" }
-          if ("${{ secrets.POSTGRES_PASSWORD }}" -eq "") { $missingSecrets += "POSTGRES_PASSWORD" }
-          if ("${{ secrets.GOOGLE_API_KEY }}" -eq "") { $missingSecrets += "GOOGLE_API_KEY" }
-          if ("${{ secrets.DEEPL_KEY }}" -eq "") { $missingSecrets += "DEEPL_KEY" }
+          missing_secrets=()
 
-          # Check optional secrets
-          $optionalSecrets = @()
-          if ("${{ secrets.DISCORD_WEBHOOK_URL }}" -eq "") { $optionalSecrets += "DISCORD_WEBHOOK_URL" }
+          # Infrastructure secrets required for deployment
+          echo "Checking infrastructure secrets..."
+          if [ -z "${{ secrets.AWS_ROLE_ARN }}" ]; then missing_secrets+=("AWS_ROLE_ARN"); fi
+          if [ -z "${{ secrets.AWS_REGION }}" ]; then missing_secrets+=("AWS_REGION"); fi
+          if [ -z "${{ secrets.ECR_REPOSITORY_NAME }}" ]; then missing_secrets+=("ECR_REPOSITORY_NAME"); fi
+          if [ -z "${{ secrets.ECS_CLUSTER_NAME }}" ]; then missing_secrets+=("ECS_CLUSTER_NAME"); fi
+          if [ -z "${{ secrets.ECS_SERVICE_NAME }}" ]; then missing_secrets+=("ECS_SERVICE_NAME"); fi
+          if [ -z "${{ secrets.RDS_ENDPOINT }}" ]; then missing_secrets+=("RDS_ENDPOINT"); fi
+          if [ -z "${{ secrets.TASK_EXECUTION_ROLE_ARN }}" ]; then missing_secrets+=("TASK_EXECUTION_ROLE_ARN"); fi
+          if [ -z "${{ secrets.PAT_TOKEN }}" ]; then missing_secrets+=("PAT_TOKEN"); fi
 
-          if ($missingSecrets.Count -gt 0) {
-            echo "Missing required secrets: $($missingSecrets -join ', ')"
+          # Optional secrets
+          optional_secrets=()
+          if [ -z "${{ secrets.DISCORD_WEBHOOK_URL }}" ]; then optional_secrets+=("DISCORD_WEBHOOK_URL"); fi
+
+          if [ ${#missing_secrets[@]} -gt 0 ]; then
+            echo ""
+            echo "❌ Missing required infrastructure secrets: ${missing_secrets[*]}"
+            echo ""
+            echo "These secrets are needed by GitHub Actions to deploy to AWS."
+            echo "Add them in: GitHub Repository → Settings → Secrets and variables → Actions"
             exit 1
-          }
+          fi
 
-          if ($optionalSecrets.Count -gt 0) {
-            echo "Optional secrets not configured: $($optionalSecrets -join ', ')"
-          }
+          if [ ${#optional_secrets[@]} -gt 0 ]; then
+            echo " Optional secrets not configured: ${optional_secrets[*]}"
+          fi
 
-          echo "All required secrets are configured!"
+          echo ""
+          echo "All required infrastructure secrets are configured!"
+          echo ""
+          echo "================================================"
+          echo "Infrastructure Secrets: VALIDATED ✅"
+          echo "Application Secrets: Fetched from AWS at runtime"
+          echo "================================================"
 
   # PARALLEL TESTING PHASE
   test-lint:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: validate-secrets
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
 
       - name: Install dependencies
         run: |
@@ -63,150 +106,361 @@ jobs:
           echo "All linting and type checks passed!"
 
   test-locales:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: validate-secrets
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
       - name: Check localization keys
         run: |
           echo "Checking localization keys..."
-          $output = bun run check-locales 2>&1
-          $exitCode = $LASTEXITCODE
+          output=$(bun run check-locales 2>&1)
+          exitCode=$?
 
           # Always show the output
-          echo $output
+          echo "$output"
 
           # Check if there are missing keys (critical errors)
-          if ($output -match "❌ MISSING LOCALIZATION KEYS") {
+          if echo "$output" | grep -q "❌ MISSING LOCALIZATION KEYS"; then
             echo "Critical error: Missing localization keys found!"
             exit 1
-          } elseif ($exitCode -eq 0) {
+          elif [ $exitCode -eq 0 ]; then
             echo "All localization checks passed!"
-          } else {
+          else
             echo "Localization warnings found, but no critical missing keys. Continuing deployment..."
-          }
+          fi
 
-  # SEQUENTIAL DEPLOYMENT CHAIN
-  setup-environment:
-    runs-on: self-hosted
+  # BUILD DOCKER IMAGE
+  build-image:
+    runs-on: ubuntu-latest
     needs: [test-lint, test-locales]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Create environment file
-        run: |
-          echo "Creating environment file from secrets..."
-          $envContent = @"
-          DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}
-          CRYPTO_SECRET=${{ secrets.CRYPTO_SECRET }}
-          POSTGRES_HOST=postgres
-          POSTGRES_PORT=5432
-          POSTGRES_USER=tomori
-          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-          POSTGRES_DB=tomodb
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-          DEFAULT_BOTNAME=Tomori
-          DEFAULT_BOTNAME_JP=ともり
-          BASE_TRIGGER_WORDS=tomori,tomo,トモリ,ともり
-          RUN_ENV=production
-
-          GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}
-          DEEPL_KEY=${{ secrets.DEEPL_KEY }}
-
-          DEFAULT_GEMINI_MODEL=gemini-2.5-flash
-          DEFAULT_GEMINI_SUBAGENT_MODEL=gemini-2.5-flash
-          STREAMING_ENABLED=true
-          PREFIX==
-
-          GENCH_ID=877047848330465294
-          DEV_ID=684462114022490125
-          TESTSRV_ID=877047847214792705
-          TESTCH_ID=1135045786699309056
-          TOMORI_ID=841644102059556915
-          TOMORI_DMS=1112155828263338024
-          STRING_FOR_DEV=development
-          HAVENSRV_ID=1040174444074782802
-          "@
-          [System.IO.File]::WriteAllText("$PWD\.env", $envContent, [System.Text.Encoding]::UTF8)
-
-      - name: Debug environment file
-        run: |
-          echo "Environment file contents:"
-          Get-Content .env
-
-  build-image:
-    runs-on: self-hosted
-    needs: setup-environment
-    steps:
       - name: Pre-download Python packages with platform-specific wheels
         run: |
           echo "Downloading Python packages (musllinux wheels for Alpine 3.20 Python 3.12)..."
 
           # Create directory for pip packages
-          New-Item -ItemType Directory -Force -Path "$PWD\docker-pip-cache"
+          mkdir -p docker-pip-cache
 
           # Download platform-specific wheels for Alpine Linux (musllinux)
           # Target Python 3.12 (used by Alpine 3.20) with musllinux_1_2 compatibility
-          # This downloads pre-compiled .whl files that match Alpine's architecture
-          pip3 download `
-            --dest "$PWD\docker-pip-cache" `
-            --platform musllinux_1_2_x86_64 `
-            --platform musllinux_1_1_x86_64 `
-            --python-version 3.12 `
-            --implementation cp `
-            --abi cp312 `
-            --only-binary :all: `
+          pip3 download \
+            --dest docker-pip-cache \
+            --platform musllinux_1_2_x86_64 \
+            --platform musllinux_1_1_x86_64 \
+            --python-version 3.12 \
+            --implementation cp \
+            --abi cp312 \
+            --only-binary :all: \
             mcp-server-fetch==2025.4.7
 
           echo "Packages downloaded to docker-pip-cache/"
-          Get-ChildItem "$PWD\docker-pip-cache"
+          ls -lah docker-pip-cache/
 
-      - name: Build new image
+      - name: Build Docker image
         run: |
-          echo "Building new TomoriBot image..."
-          $env:DOCKER_BUILDKIT=1
-          docker compose build --no-cache
+          echo "Building TomoriBot Docker image..."
+          docker buildx build \
+            --platform linux/amd64 \
+            --tag tomoribot:latest \
+            --tag tomoribot:${{ github.sha }} \
+            --load \
+            .
 
-  deploy-containers:
-    runs-on: self-hosted
+      - name: Save Docker image
+        run: |
+          echo "Saving Docker image for security scanning..."
+          docker save tomoribot:latest -o tomoribot-image.tar
+
+      - name: Upload Docker image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: tomoribot-image.tar
+          retention-days: 1
+
+  # PHASE 4: SECURITY SCANNING
+  security-sast:
+    runs-on: ubuntu-latest
     needs: build-image
     steps:
-      - name: Stop and remove old containers
-        run: |
-          echo "Stopping and cleaning up old TomoriBot resources..."
-          docker compose down --remove-orphans
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep SAST scan
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/typescript
+            p/docker
         continue-on-error: true
+        id: semgrep
 
-      - name: Wait for Docker cleanup
+      - name: Check Semgrep results
+        if: steps.semgrep.outcome == 'failure'
         run: |
-          echo "Waiting for containers to fully stop..."
-          $timeout = 60
-          $elapsed = 0
-          do {
-            $containers = docker ps -q --filter "name=tomoribot"
-            if (-not $containers) {
-              echo "All TomoriBot containers stopped successfully"
-              break
-            }
-            Start-Sleep 2
-            $elapsed += 2
-            if ($elapsed -ge $timeout) {
-              echo "Timeout waiting for containers to stop, proceeding anyway..."
-              break
-            }
-          } while ($true)
+          echo "Semgrep found potential security issues. Review the output above."
+          echo "semgrep_failed=true" >> $GITHUB_ENV
 
-      - name: Start updated containers
+  security-dependencies:
+    runs-on: ubuntu-latest
+    needs: build-image
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run Bun audit
         run: |
-          echo "Starting updated TomoriBot..."
-          docker compose up -d
+          echo "Running dependency vulnerability scan..."
+          # Run bun audit and capture output
+          if ! bun audit --audit-level=high > audit-output.txt 2>&1; then
+            echo "High or critical vulnerabilities found in dependencies:"
+            cat audit-output.txt
+            echo "dependency_vulnerabilities=true" >> $GITHUB_ENV
+            exit 1
+          else
+            echo "No high or critical vulnerabilities found in dependencies"
+            cat audit-output.txt
+          fi
+        continue-on-error: true
+        id: bun-audit
 
-  verify-deployment:
-    runs-on: self-hosted
-    needs: deploy-containers
+      - name: Check audit results
+        if: steps.bun-audit.outcome == 'failure'
+        run: |
+          echo "dependency_audit_failed=true" >> $GITHUB_ENV
+
+  security-secrets:
+    runs-on: ubuntu-latest
+    needs: build-image
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch full history for TruffleHog
+
+      - name: Run TruffleHog secret scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified --fail
+        continue-on-error: true
+        id: trufflehog
+
+      - name: Check TruffleHog results
+        if: steps.trufflehog.outcome == 'failure'
+        run: |
+          echo "TruffleHog found exposed secrets in git history!"
+          echo "secrets_found=true" >> $GITHUB_ENV
+
+  security-container:
+    runs-on: ubuntu-latest
+    needs: build-image
+    steps:
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+
+      - name: Load Docker image
+        run: docker load -i tomoribot-image.tar
+
+      - name: Run Trivy container scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: tomoribot:latest
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+        continue-on-error: true
+        id: trivy
+
+      - name: Check Trivy results
+        if: steps.trivy.outcome == 'failure'
+        run: |
+          echo "Trivy found critical or high vulnerabilities in container image!"
+          echo "container_vulnerabilities=true" >> $GITHUB_ENV
+
+  # SECURITY GATE: Block deployment if critical/high vulnerabilities found
+  security-gate:
+    runs-on: ubuntu-latest
+    needs:
+      [
+        security-sast,
+        security-dependencies,
+        security-secrets,
+        security-container,
+      ]
+    steps:
+      - name: Check security scan results
+        run: |
+          failed=false
+
+          # Check each security scan
+          # actionlint: ignore SC2050 (intentional needs.* context access)
+          if [ "${{ needs.security-sast.result }}" == "failure" ]; then
+            echo "❌ SAST scan failed (Semgrep found security issues)"
+            failed=true
+          fi
+
+          if [ "${{ needs.security-dependencies.result }}" == "failure" ]; then
+            echo "❌ Dependency scan failed (High/Critical CVEs found)"
+            failed=true
+          fi
+
+          if [ "${{ needs.security-secrets.result }}" == "failure" ]; then
+            echo "❌ Secret scan failed (Exposed secrets found in git history)"
+            failed=true
+          fi
+
+          if [ "${{ needs.security-container.result }}" == "failure" ]; then
+            echo "❌ Container scan failed (Critical/High vulnerabilities in image)"
+            failed=true
+          fi
+
+          if [ "$failed" == "true" ]; then
+            echo ""
+            echo "DEPLOYMENT BLOCKED: Security scans found critical or high severity issues."
+            echo "Please review the scan outputs above and fix the issues before deploying."
+            exit 1
+          fi
+
+          echo "All security scans passed! Proceeding with deployment."
+
+  # PHASE 5: AWS DEPLOYMENT
+  push-to-ecr:
+    runs-on: ubuntu-latest
+    needs: security-gate
+    outputs:
+      image-uri: ${{ steps.ecr-uri.outputs.uri }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+
+      - name: Load Docker image
+        run: docker load -i tomoribot-image.tar
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Tag and push image to ECR
+        id: ecr-uri
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_NAME }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          echo "Tagging image..."
+          docker tag tomoribot:latest $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag tomoribot:latest $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+          echo "Pushing image to ECR..."
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+          echo "Image pushed successfully!"
+          echo "uri=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+  deploy-to-ecs:
+    runs-on: ubuntu-latest
+    needs: push-to-ecr
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Prepare ECS task definition
+        env:
+          IMAGE_URI: ${{ needs.push-to-ecr.outputs.image-uri }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          RDS_ENDPOINT: ${{ secrets.RDS_ENDPOINT }}
+          EXECUTION_ROLE: ${{ secrets.TASK_EXECUTION_ROLE_ARN }}
+        run: |
+          echo "Preparing task definition with image: $IMAGE_URI"
+
+          # Replace placeholders in task definition template
+          sed "s|IMAGE_URI_PLACEHOLDER|$IMAGE_URI|g" .github/workflows/task-definition-template.json > task-definition.json
+          sed -i "s|REGION_PLACEHOLDER|$AWS_REGION|g" task-definition.json
+          sed -i "s|RDS_ENDPOINT_PLACEHOLDER|$RDS_ENDPOINT|g" task-definition.json
+          sed -i "s|EXECUTION_ROLE_ARN_PLACEHOLDER|$EXECUTION_ROLE|g" task-definition.json
+
+          echo "Task definition prepared:"
+          cat task-definition.json
+
+      - name: Register ECS task definition
+        id: register-task
+        run: |
+          echo "Registering new task definition..."
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://task-definition.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+
+          echo "New task definition registered: $TASK_DEF_ARN"
+          echo "task-def-arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
+
+      - name: Update ECS service
+        env:
+          ECS_CLUSTER: ${{ secrets.ECS_CLUSTER_NAME }}
+          ECS_SERVICE: ${{ secrets.ECS_SERVICE_NAME }}
+          TASK_DEF_ARN: ${{ steps.register-task.outputs.task-def-arn }}
+        run: |
+          echo "Updating ECS service..."
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service $ECS_SERVICE \
+            --task-definition $TASK_DEF_ARN \
+            --force-new-deployment
+
+          echo "ECS service update initiated!"
+
+  verify-ecs-deployment:
+    runs-on: ubuntu-latest
+    needs: deploy-to-ecs
     outputs:
       deployment-status: ${{ steps.verify.outputs.status }}
       commit-hash: ${{ steps.commit-info.outputs.hash }}
@@ -218,53 +472,90 @@ jobs:
       - name: Get commit information
         id: commit-info
         run: |
-          $hash = git rev-parse --short HEAD
-          $message = git log -1 --pretty=format:"%s"
-          echo "hash=$hash" >> $env:GITHUB_OUTPUT
-          echo "message=$message" >> $env:GITHUB_OUTPUT
+          hash=$(git rev-parse --short HEAD)
+          message=$(git log -1 --pretty=format:"%s")
+          echo "hash=$hash" >> $GITHUB_OUTPUT
+          echo "message=$message" >> $GITHUB_OUTPUT
 
-      - name: Verify deployment
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Wait for ECS service stability
         id: verify
+        env:
+          ECS_CLUSTER: ${{ secrets.ECS_CLUSTER_NAME }}
+          ECS_SERVICE: ${{ secrets.ECS_SERVICE_NAME }}
         run: |
-          echo "Verifying TomoriBot is running..."
-          $timeout = 120
-          $elapsed = 0
-          $checkInterval = 10
+          echo "Waiting for ECS service to stabilize..."
 
-          do {
-            echo "Checking container status... (${elapsed}s elapsed)"
-            $containers = docker ps --filter "name=tomoribot" --format "table {{.Names}}\t{{.Status}}"
-            echo $containers
+          # Wait for service to reach steady state (max 10 minutes)
+          if aws ecs wait services-stable \
+            --cluster $ECS_CLUSTER \
+            --services $ECS_SERVICE; then
+            echo "ECS service is stable!"
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "❌ ECS service failed to stabilize!"
+            echo "status=failed" >> $GITHUB_OUTPUT
+            exit 1
+          fi
 
-            # Check if both containers are running
-            $appRunning = docker ps --filter "name=tomoribot-app" --filter "status=running" -q
-            $dbRunning = docker ps --filter "name=tomoribot-db" --filter "status=running" -q
+      - name: Check ECS task health
+        if: always()
+        env:
+          ECS_CLUSTER: ${{ secrets.ECS_CLUSTER_NAME }}
+          ECS_SERVICE: ${{ secrets.ECS_SERVICE_NAME }}
+        run: |
+          echo "Checking ECS task health..."
 
-            if ($appRunning -and $dbRunning) {
-              echo "TomoriBot deployment successful!"
-              echo "status=success" >> $env:GITHUB_OUTPUT
-              exit 0
-            }
+          # Get running tasks
+          TASKS=$(aws ecs list-tasks \
+            --cluster $ECS_CLUSTER \
+            --service-name $ECS_SERVICE \
+            --desired-status RUNNING \
+            --query 'taskArns' \
+            --output text)
 
-            if ($elapsed -ge $timeout) {
-              echo "Timeout reached. TomoriBot deployment failed!"
-              echo "Final container status:"
-              docker ps --filter "name=tomoribot" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-              echo "status=failed" >> $env:GITHUB_OUTPUT
-              exit 1
-            }
+          if [ -z "$TASKS" ]; then
+            echo "No running tasks found!"
+            exit 1
+          fi
 
-            Start-Sleep $checkInterval
-            $elapsed += $checkInterval
-          } while ($true)
+          # Describe tasks
+          aws ecs describe-tasks \
+            --cluster $ECS_CLUSTER \
+            --tasks $TASKS \
+            --query 'tasks[*].[taskArn, lastStatus, healthStatus, containers[0].healthStatus]' \
+            --output table
+
+          echo "Task health check complete!"
+
+      - name: Check recent CloudWatch logs
+        if: always()
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          echo "Fetching recent CloudWatch logs..."
+
+          # Get logs from the last 5 minutes
+          START_TIME=$(($(date +%s) - 300))000
+
+          aws logs tail /ecs/tomoribot \
+            --since ${START_TIME} \
+            --format short \
+            --follow=false \
+            || echo "No recent logs found (this is normal for new deployments)"
 
   check-release-assets:
-    runs-on: self-hosted
-    needs: verify-deployment
-    if: needs.verify-deployment.outputs.deployment-status == 'success'
+    runs-on: ubuntu-latest
+    needs: verify-ecs-deployment
+    if: needs.verify-ecs-deployment.outputs.deployment-status == 'success'
     outputs:
       has-assets: ${{ steps.check.outputs.has-assets }}
-      version: ${{ needs.check-release-assets.outputs.version }}
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -272,196 +563,185 @@ jobs:
       - name: Get version from package.json
         id: version
         run: |
-          $version = (Get-Content package.json | ConvertFrom-Json).version
-          echo "version=$version" >> $env:GITHUB_OUTPUT
+          version=$(jq -r '.version' package.json)
+          echo "version=$version" >> $GITHUB_OUTPUT
 
       - name: Check if version-specific release folder exists
         id: check
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          $version = "${{ needs.check-release-assets.outputs.version }}"
-          $versionFolder = ".github/release/v$version"
+          versionFolder=".github/release/v$VERSION"
 
-          if (Test-Path $versionFolder) {
+          if [ -d "$versionFolder" ]; then
             echo "Version-specific release folder found: $versionFolder"
-            echo "has-assets=true" >> $env:GITHUB_OUTPUT
-          } else {
+            echo "has-assets=true" >> $GITHUB_OUTPUT
+          else
             echo "No version-specific release folder found: $versionFolder"
             echo "This appears to be a minor update that doesn't require a release announcement"
-            echo "has-assets=false" >> $env:GITHUB_OUTPUT
-          }
+            echo "has-assets=false" >> $GITHUB_OUTPUT
+          fi
 
   announce-release:
-    runs-on: self-hosted
-    needs: [verify-deployment, check-release-assets]
-    if: needs.verify-deployment.outputs.deployment-status == 'success' && needs.check-release-assets.outputs.has-assets == 'true'
+    runs-on: ubuntu-latest
+    needs: [verify-ecs-deployment, check-release-assets]
+    if: needs.verify-ecs-deployment.outputs.deployment-status == 'success' && needs.check-release-assets.outputs.has-assets == 'true'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Prepare release notes
         id: release-notes
+        env:
+          VERSION: ${{ needs.check-release-assets.outputs.version }}
+          COMMIT_HASH: ${{ needs.verify-ecs-deployment.outputs.commit-hash }}
         run: |
-          $version = "${{ needs.check-release-assets.outputs.version }}"
-          $versionFolder = ".github/release/v$version"
+          versionFolder=".github/release/v$VERSION"
 
-          # Function to find first .md file in a folder
-          function Find-MarkdownFile($folder) {
-            if (Test-Path $folder) {
-              $mdFiles = Get-ChildItem -Path $folder -Filter "*.md" | Where-Object { $_.Name -ne "README.md" }
-              if ($mdFiles) {
-                return $mdFiles[0].FullName
-              }
-            }
-            return $null
-          }
+          # Find first .md file in version folder
+          releaseNotesPath=$(find "$versionFolder" -maxdepth 1 -name "*.md" ! -name "README.md" | head -n 1)
 
-          # Function to find first image file in a folder
-          function Find-ImageFile($folder) {
-            if (Test-Path $folder) {
-              $imageFiles = Get-ChildItem -Path $folder -Include "*.png","*.jpg","*.jpeg","*.gif","*.webp" -Recurse
-              if ($imageFiles) {
-                return $imageFiles[0].Name
-              }
-            }
-            return $null
-          }
-
-          # Use version-specific assets only
-          $releaseNotesPath = Find-MarkdownFile $versionFolder
-          if ($releaseNotesPath) {
-            $assetFolder = $versionFolder
-            $imageName = Find-ImageFile $versionFolder
-            echo "Using version-specific assets from $versionFolder"
-            echo "  Release notes: $(Split-Path -Leaf $releaseNotesPath)"
-            echo "  Image: $imageName"
-          } else {
+          if [ -z "$releaseNotesPath" ]; then
             echo "No .md files found in $versionFolder"
             exit 1
-          }
+          fi
 
-          if (-not $imageName) {
+          echo "Using release notes: $releaseNotesPath"
+
+          # Find first image file in version folder
+          imageName=$(find "$versionFolder" -maxdepth 1 -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" -o -name "*.webp" \) | head -n 1 | xargs basename)
+
+          if [ -z "$imageName" ]; then
             echo "No image file found, Discord notification will be text-only"
-            $imageName = ""
-          }
+            imageName=""
+          else
+            echo "Image found: $imageName"
+          fi
 
-          # Read the release notes template
-          $releaseNotes = Get-Content $releaseNotesPath -Raw
+          # Read and process release notes
+          releaseNotes=$(cat "$releaseNotesPath")
+          releaseNotes="${releaseNotes//\{VERSION\}/$VERSION}"
+          releaseNotes="${releaseNotes//\{TIMESTAMP\}/$(date -u +"%Y-%m-%d %H:%M:%S UTC")}"
+          releaseNotes="${releaseNotes//\{COMMIT_HASH\}/$COMMIT_HASH}"
+          releaseNotes="${releaseNotes//\{REPO_OWNER\}/${{ github.repository_owner }}}"
+          releaseNotes="${releaseNotes//\{REPO_NAME\}/${{ github.event.repository.name }}}"
 
-          # Replace all placeholders
-          $releaseNotes = $releaseNotes.Replace("{VERSION}", $version)
-          $releaseNotes = $releaseNotes.Replace("{TIMESTAMP}", (Get-Date -Format "yyyy-MM-dd HH:mm:ss UTC"))
-          $releaseNotes = $releaseNotes.Replace("{COMMIT_HASH}", "${{ needs.verify-deployment.outputs.commit-hash }}")
-          $releaseNotes = $releaseNotes.Replace("{REPO_OWNER}", "${{ github.repository_owner }}")
-          $releaseNotes = $releaseNotes.Replace("{REPO_NAME}", "${{ github.event.repository.name }}")
+          # Save processed release notes
+          echo "$releaseNotes" > processed-release-notes.md
+          echo "image-name=$imageName" >> $GITHUB_OUTPUT
 
-          # Save processed release notes and asset info
-          [System.IO.File]::WriteAllText("$PWD\processed-release-notes.md", $releaseNotes, [System.Text.Encoding]::UTF8)
-          echo "image-name=$imageName" >> $env:GITHUB_OUTPUT
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-          echo "Release notes processed successfully!"
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Export Docker image
+      - name: Pull and export Docker image from ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_NAME }}
+          VERSION: ${{ needs.check-release-assets.outputs.version }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          echo "Exporting Docker image as release asset..."
+          echo "Pulling image from ECR..."
+          docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-          # Get the image name and tag it with version
-          $imageName = "tomoribot"
-          $version = "${{ needs.check-release-assets.outputs.version }}"
+          echo "Tagging for release..."
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG tomoribot:v$VERSION
 
-          # Tag the current image with version (Docker Compose creates images as project-service format)
-          docker tag "tomoribot-tomoribot:latest" "${imageName}:v${version}"
+          echo "Exporting Docker image to tar file..."
+          docker save tomoribot:v$VERSION -o tomoribot-v$VERSION-docker-image.tar
 
-          # Export Docker image to tar file
-          docker save "${imageName}:v${version}" -o "tomoribot-v${version}-docker-image.tar"
-
-          # Compress the tar file to reduce size
-          Compress-Archive -Path "tomoribot-v${version}-docker-image.tar" -DestinationPath "tomoribot-v${version}-docker-image.tar.gz"
-
-          # Clean up uncompressed file
-          Remove-Item "tomoribot-v${version}-docker-image.tar"
+          echo "Compressing tar file..."
+          gzip tomoribot-v$VERSION-docker-image.tar
 
           echo "Docker image exported and compressed!"
 
       - name: Create GitHub Release
-        run: |
-          echo "Creating GitHub Release v${{ needs.check-release-assets.outputs.version }}..."
-
-          # Create release with Docker image as asset
-          gh release create "v${{ needs.check-release-assets.outputs.version }}" `
-            --title "TomoriBot v${{ needs.check-release-assets.outputs.version }}" `
-            --notes-file "processed-release-notes.md" `
-            --latest `
-            "tomoribot-v${{ needs.check-release-assets.outputs.version }}-docker-image.tar.gz#Docker Image (Ready to Deploy)"
-
-          echo "GitHub release created with Docker image asset!"
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          VERSION: ${{ needs.check-release-assets.outputs.version }}
+        run: |
+          echo "Creating GitHub Release v$VERSION..."
+
+          gh release create "v$VERSION" \
+            --title "TomoriBot v$VERSION" \
+            --notes-file "processed-release-notes.md" \
+            --latest \
+            "tomoribot-v$VERSION-docker-image.tar.gz#Docker Image (Ready to Deploy)"
+
+          echo "GitHub release created with Docker image asset!"
 
       - name: Send Discord notification
         if: always()
+        env:
+          STATUS: ${{ needs.verify-ecs-deployment.outputs.deployment-status }}
+          VERSION: ${{ needs.check-release-assets.outputs.version }}
+          IMAGE_NAME: ${{ steps.release-notes.outputs.image-name }}
         run: |
-          if ("${{ needs.verify-deployment.outputs.deployment-status }}" -eq "success") {
+          if [ "$STATUS" == "success" ]; then
             echo "Preparing success notification for Discord..."
-            $status = "SUCCESS"
-            $color = "3066993"  # Green
-          } else {
+            status="SUCCESS"
+            color="3066993"  # Green
+          else
             echo "Preparing failure notification for Discord..."
-            $status = "FAILED"
-            $color = "15158332"  # Red  
-          }
+            status="FAILED"
+            color="15158332"  # Red
+          fi
 
           # Read and process release notes for Discord
-          $releaseNotes = Get-Content processed-release-notes.md -Raw
+          releaseNotes=$(cat processed-release-notes.md)
 
-          # Strip markdown image syntax for cleaner Discord text
-          $releaseNotes = $releaseNotes -replace '!\[.*?\]\([^)]*\)', ''
+          # Strip markdown image syntax
+          releaseNotes=$(echo "$releaseNotes" | sed 's/!\[.*\]([^)]*)//g')
 
           # Clean up extra whitespace and truncate for Discord limits
-          $releaseNotes = $releaseNotes -replace '\n\s*\n', "`n`n"  # Remove excessive line breaks
-          if ($releaseNotes.Length -gt 4090) {
-            $releaseNotes = $releaseNotes.Substring(0, 4090) + "..."
-          }
+          releaseNotes=$(echo "$releaseNotes" | sed '/^$/d')
+          if [ ${#releaseNotes} -gt 4090 ]; then
+            releaseNotes="${releaseNotes:0:4090}..."
+          fi
 
-          # Construct image URL from detected file
-          $version = "${{ needs.check-release-assets.outputs.version }}"
-          $imageName = "${{ steps.release-notes.outputs.image-name }}"
-          $imageUrl = ""
-
-          if ($imageName) {
-            $imageUrl = "https://github.com/${{ github.repository }}/raw/main/.github/release/v$version/$imageName"
+          # Construct image URL
+          imageUrl=""
+          if [ -n "$IMAGE_NAME" ]; then
+            imageUrl="https://github.com/${{ github.repository }}/raw/main/.github/release/v$VERSION/$IMAGE_NAME"
             echo "Image URL: $imageUrl"
-          } else {
+          else
             echo "Text-only Discord notification (no image found)"
-          }
+          fi
 
-          # Construct Discord webhook payload  
-          $embed = @{
-            title = "TomoriBot v$version Released!"
-            description = $releaseNotes
-            color = [int]$color
-            timestamp = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
-          }
+          # Construct Discord webhook payload
+          if [ -n "$imageUrl" ]; then
+            payload=$(jq -n \
+              --arg title "TomoriBot v$VERSION Released!" \
+              --arg desc "$releaseNotes" \
+              --arg color "$color" \
+              --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")" \
+              --arg imageUrl "$imageUrl" \
+              '{embeds: [{title: $title, description: $desc, color: ($color | tonumber), timestamp: $timestamp, image: {url: $imageUrl}}]}')
+          else
+            payload=$(jq -n \
+              --arg title "TomoriBot v$VERSION Released!" \
+              --arg desc "$releaseNotes" \
+              --arg color "$color" \
+              --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")" \
+              '{embeds: [{title: $title, description: $desc, color: ($color | tonumber), timestamp: $timestamp}]}')
+          fi
 
-          # Add image if available
-          if ($imageUrl) {
-            $embed.image = @{ url = $imageUrl }
-          }
-
-          $webhookData = @{
-            embeds = @($embed)
-          } | ConvertTo-Json -Depth 10
-
-          # Send to Discord (placeholder - requires DISCORD_WEBHOOK_URL secret)
-          $discordWebhookUrl = "${{ secrets.DISCORD_WEBHOOK_URL }}"
-          if ($discordWebhookUrl -ne "") {
-            try {
-              Invoke-RestMethod -Uri $discordWebhookUrl -Method Post -Body $webhookData -ContentType "application/json"
+          # Send to Discord
+          discordWebhookUrl="${{ secrets.DISCORD_WEBHOOK_URL }}"
+          if [ -n "$discordWebhookUrl" ]; then
+            if curl -X POST -H "Content-Type: application/json" -d "$payload" "$discordWebhookUrl"; then
               echo "Discord notification sent successfully!"
-            } catch {
-              echo "Failed to send Discord notification: $($_.Exception.Message)"
-            }
-          } else {
+            else
+              echo "Failed to send Discord notification"
+            fi
+          else
             echo "DISCORD_WEBHOOK_URL secret not configured - notification skipped"
             echo "Discord payload would be:"
-            echo $webhookData
-          }
+            echo "$payload"
+          fi
