@@ -38,6 +38,6 @@ export const GeminiConfigSchema = z.object({
 			threshold: z.nativeEnum(HarmBlockThreshold), // Convert enum to Zod enum type
 		}),
 	),
-	tools: z.array(z.record(z.any())).optional(), // Now accepts any object in the array
+	tools: z.array(z.record(z.string(), z.any())).optional(), // Now accepts any object in the array
 	enableSearch: z.boolean().optional(),
 });

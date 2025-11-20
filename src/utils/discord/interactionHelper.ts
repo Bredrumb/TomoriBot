@@ -508,11 +508,9 @@ export async function promptWithModal(
 				);
 			} else if (isModalSelectField(component)) {
 				// Get selected values from string select
-				const selectedValues = submitted.fields.getField(
-					component.customId,
-				)?.value;
-				if (selectedValues) {
-					values[component.customId] = selectedValues;
+				const field = submitted.fields.getField(component.customId);
+				if (field && "value" in field) {
+					values[component.customId] = field.value;
 				}
 			}
 		}

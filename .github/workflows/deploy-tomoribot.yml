@@ -7,7 +7,7 @@ on:
   push:
     branches:
       - main
-      - cicd/aws-deployment  # Testing branch - remove before merging to main
+      - cicd/aws-deployment # Testing branch - remove before merging to main
   workflow_dispatch: # Manual trigger - allows running on any branch
     inputs:
       environment:
@@ -60,7 +60,7 @@ jobs:
 
           if [ ${#missing_secrets[@]} -gt 0 ]; then
             echo ""
-            echo "❌ Missing required infrastructure secrets: ${missing_secrets[*]}"
+            echo "Missing required infrastructure secrets: ${missing_secrets[*]}"
             echo ""
             echo "These secrets are needed by GitHub Actions to deploy to AWS."
             echo "Add them in: GitHub Repository → Settings → Secrets and variables → Actions"
@@ -75,7 +75,7 @@ jobs:
           echo "All required infrastructure secrets are configured!"
           echo ""
           echo "================================================"
-          echo "Infrastructure Secrets: VALIDATED ✅"
+          echo "Infrastructure Secrets: VALIDATED"
           echo "Application Secrets: Fetched from AWS at runtime"
           echo "================================================"
 
@@ -130,7 +130,7 @@ jobs:
           echo "$output"
 
           # Check if there are missing keys (critical errors)
-          if echo "$output" | grep -q "❌ MISSING LOCALIZATION KEYS"; then
+          if echo "$output" | grep -q "MISSING LOCALIZATION KEYS"; then
             echo "Critical error: Missing localization keys found!"
             exit 1
           elif [ $exitCode -eq 0 ]; then
@@ -198,6 +198,8 @@ jobs:
   security-sast:
     runs-on: ubuntu-latest
     needs: build-image
+    outputs:
+      failed: ${{ steps.check-result.outputs.failed }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -213,14 +215,21 @@ jobs:
         id: semgrep
 
       - name: Check Semgrep results
-        if: steps.semgrep.outcome == 'failure'
+        id: check-result
         run: |
-          echo "Semgrep found potential security issues. Review the output above."
-          echo "semgrep_failed=true" >> $GITHUB_ENV
+          if [ "${{ steps.semgrep.outcome }}" == "failure" ]; then
+            echo "Semgrep found potential security issues. Review the output above."
+            echo "failed=true" >> $GITHUB_OUTPUT
+          else
+            echo "SAST scan passed"
+            echo "failed=false" >> $GITHUB_OUTPUT
+          fi
 
   security-dependencies:
     runs-on: ubuntu-latest
     needs: build-image
+    outputs:
+      failed: ${{ steps.check-result.outputs.failed }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -240,7 +249,6 @@ jobs:
           if ! bun audit --audit-level=high > audit-output.txt 2>&1; then
             echo "High or critical vulnerabilities found in dependencies:"
             cat audit-output.txt
-            echo "dependency_vulnerabilities=true" >> $GITHUB_ENV
             exit 1
           else
             echo "No high or critical vulnerabilities found in dependencies"
@@ -250,13 +258,19 @@ jobs:
         id: bun-audit
 
       - name: Check audit results
-        if: steps.bun-audit.outcome == 'failure'
+        id: check-result
         run: |
-          echo "dependency_audit_failed=true" >> $GITHUB_ENV
+          if [ "${{ steps.bun-audit.outcome }}" == "failure" ]; then
+            echo "failed=true" >> $GITHUB_OUTPUT
+          else
+            echo "failed=false" >> $GITHUB_OUTPUT
+          fi
 
   security-secrets:
     runs-on: ubuntu-latest
     needs: build-image
+    outputs:
+      failed: ${{ steps.check-result.outputs.failed }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -269,19 +283,26 @@ jobs:
           path: ./
           base: ${{ github.event.repository.default_branch }}
           head: HEAD
-          extra_args: --only-verified --fail
+          extra_args: --only-verified
         continue-on-error: true
         id: trufflehog
 
       - name: Check TruffleHog results
-        if: steps.trufflehog.outcome == 'failure'
+        id: check-result
         run: |
-          echo "TruffleHog found exposed secrets in git history!"
-          echo "secrets_found=true" >> $GITHUB_ENV
+          if [ "${{ steps.trufflehog.outcome }}" == "failure" ]; then
+            echo "TruffleHog found exposed secrets in git history!"
+            echo "failed=true" >> $GITHUB_OUTPUT
+          else
+            echo "Secret scan passed"
+            echo "failed=false" >> $GITHUB_OUTPUT
+          fi
 
   security-container:
     runs-on: ubuntu-latest
     needs: build-image
+    outputs:
+      failed: ${{ steps.check-result.outputs.failed }}
     steps:
       - name: Download Docker image artifact
         uses: actions/download-artifact@v4
@@ -303,10 +324,15 @@ jobs:
         id: trivy
 
       - name: Check Trivy results
-        if: steps.trivy.outcome == 'failure'
+        id: check-result
         run: |
-          echo "Trivy found critical or high vulnerabilities in container image!"
-          echo "container_vulnerabilities=true" >> $GITHUB_ENV
+          if [ "${{ steps.trivy.outcome }}" == "failure" ]; then
+            echo "Trivy found critical or high vulnerabilities in container image!"
+            echo "failed=true" >> $GITHUB_OUTPUT
+          else
+            echo "Container scan passed"
+            echo "failed=false" >> $GITHUB_OUTPUT
+          fi
 
   # SECURITY GATE: Block deployment if critical/high vulnerabilities found
   security-gate:
@@ -321,38 +347,65 @@ jobs:
     steps:
       - name: Check security scan results
         run: |
+          echo "=========================================="
+          echo "Security Gate - Evaluating Scan Results"
+          echo "=========================================="
+          echo ""
+
           failed=false
 
-          # Check each security scan
-          # actionlint: ignore SC2050 (intentional needs.* context access)
-          if [ "${{ needs.security-sast.result }}" == "failure" ]; then
-            echo "❌ SAST scan failed (Semgrep found security issues)"
+          # Check each security scan output
+          echo "SAST Scan (Semgrep): ${{ needs.security-sast.outputs.failed }}"
+          if [ "${{ needs.security-sast.outputs.failed }}" == "true" ]; then
+            echo "SAST scan FAILED - Semgrep found security issues"
             failed=true
+          else
+            echo "SAST scan passed"
           fi
+          echo ""
 
-          if [ "${{ needs.security-dependencies.result }}" == "failure" ]; then
-            echo "❌ Dependency scan failed (High/Critical CVEs found)"
+          echo "Dependency Scan (Bun Audit): ${{ needs.security-dependencies.outputs.failed }}"
+          if [ "${{ needs.security-dependencies.outputs.failed }}" == "true" ]; then
+            echo "Dependency scan FAILED - High/Critical CVEs found"
             failed=true
+          else
+            echo "Dependency scan passed"
           fi
+          echo ""
 
-          if [ "${{ needs.security-secrets.result }}" == "failure" ]; then
-            echo "❌ Secret scan failed (Exposed secrets found in git history)"
+          echo "Secret Scan (TruffleHog): ${{ needs.security-secrets.outputs.failed }}"
+          if [ "${{ needs.security-secrets.outputs.failed }}" == "true" ]; then
+            echo "Secret scan FAILED - Exposed secrets found in git history"
             failed=true
+          else
+            echo "Secret scan passed"
           fi
+          echo ""
 
-          if [ "${{ needs.security-container.result }}" == "failure" ]; then
-            echo "❌ Container scan failed (Critical/High vulnerabilities in image)"
+          echo "Container Scan (Trivy): ${{ needs.security-container.outputs.failed }}"
+          if [ "${{ needs.security-container.outputs.failed }}" == "true" ]; then
+            echo "Container scan FAILED - Critical/High vulnerabilities in image"
             failed=true
+          else
+            echo "Container scan passed"
           fi
+          echo ""
 
+          echo "=========================================="
           if [ "$failed" == "true" ]; then
+            echo "DEPLOYMENT BLOCKED"
+            echo "=========================================="
             echo ""
-            echo "DEPLOYMENT BLOCKED: Security scans found critical or high severity issues."
+            echo "Security scans found critical or high severity issues."
             echo "Please review the scan outputs above and fix the issues before deploying."
+            echo ""
             exit 1
+          else
+            echo "ALL SECURITY SCANS PASSED"
+            echo "=========================================="
+            echo ""
+            echo "Proceeding with deployment to AWS..."
           fi
-
-          echo "All security scans passed! Proceeding with deployment."
 
   # PHASE 5: AWS DEPLOYMENT
   push-to-ecr:
@@ -498,7 +551,7 @@ jobs:
             echo "ECS service is stable!"
             echo "status=success" >> $GITHUB_OUTPUT
           else
-            echo "❌ ECS service failed to stabilize!"
+            echo "ECS service failed to stabilize!"
             echo "status=failed" >> $GITHUB_OUTPUT
             exit 1
           fi

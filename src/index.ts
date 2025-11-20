@@ -74,9 +74,9 @@ function getPostgresUrl(): string {
 	const runEnv = process.env.RUN_ENV || "development";
 	const isProduction = runEnv === "production";
 
-	// Development: Try SSL, fallback to non-SSL if not available
+	// Development: Fallback to non-SSL when dealing with localhost
 	// Production: Require SSL with full certificate verification (protects against MITM attacks)
-	const sslMode = isProduction ? "require" : "prefer";
+	const sslMode = isProduction ? "require" : "disable";
 
 	// If POSTGRES_URL is provided, use it directly (backwards compatibility)
 	if (process.env.POSTGRES_URL) {
