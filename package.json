@@ -21,7 +21,8 @@
 		"check-locales": "bun run scripts/checkLocalizationKeys.ts",
 		"check-limits": "bun run scripts/checkDiscordLimits.ts",
 		"audit-keys": "bun run scripts/auditKeyVersions.ts",
-		"rotate-keys": "bun run scripts/rotateAllKeys.ts"
+		"rotate-keys": "bun run scripts/rotateAllKeys.ts",
+		"check-keys": "bun run scripts/checkKeys.ts"
 	},
 	"author": "Bredrumb",
 	"license": "ISC",

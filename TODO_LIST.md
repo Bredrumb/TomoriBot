@@ -130,8 +130,11 @@ ECR (The "Code Garage") We need a place to park your bot's "Image" (the packaged
   // Example
   const discordToken = await getSecretOrEnv('tomoribot/production', 'DISCORD_TOKEN');
   ```
-- [ ] **2.4** Update IAM role to grant `secretsmanager:GetSecretValue` permission
-- [ ] **2.5** Test locally with AWS CLI credentials
+- [x] **2.4** Update IAM role to grant `secretsmanager:GetSecretValue` permission
+
+Gives TomoriBot instance the permission to get secrets
+
+- [x] **2.5** Test locally with AWS CLI credentials
 
 **Deliverable:** Application can fetch secrets from AWS Secrets Manager
 **Reference:** `security-review/4_urgent_vulnerabilities.md` section 2
@@ -141,14 +144,14 @@ ECR (The "Code Garage") We need a place to park your bot's "Image" (the packaged
 ### 🔴 3. Database SSL/TLS Enforcement (1 day)
 **Why Third:** Builds on RDS setup, required for secure connections
 
-- [ ] **3.1** Update `src/index.ts` database connection logic
+- [x] **3.1** Update `src/index.ts` database connection logic
   ```typescript
   // Force SSL in production, prefer in development
   const sslMode = process.env.NODE_ENV === 'production' ? 'require' : 'prefer';
   ```
-- [ ] **3.2** Configure RDS parameter group with `rds.force_ssl = 1`
-- [ ] **3.3** Test database connection with SSL enabled
-- [ ] **3.4** Verify SSL is working (check PostgreSQL logs)
+- [x] **3.2** Configure RDS parameter group with `rds.force_ssl = 1`
+- [x] **3.3** Test database connection with SSL enabled
+- [x] **3.4** Verify SSL is working (check PostgreSQL logs)
 
 **Deliverable:** Database connections are encrypted in transit
 **Reference:** `security-review/4_urgent_vulnerabilities.md` section 4
@@ -252,19 +255,15 @@ Create **separate workflow** for AWS (keep existing self-hosted for development)
 Current: Per-user cooldown exists ✅
 Needed: Global limits and circuit breakers
 
-- [ ] **7.1** Implement global rate limiter
+- [X] **7.1** Implement global rate limiter
   - Max 100 requests/minute per user across all commands
   - Store in memory (acceptable for single instance)
   - Log violations to CloudWatch
-- [ ] **7.2** Add circuit breaker for AI providers
+- [X] **7.2** Add circuit breaker for AI providers
   - Track failure rates for Gemini, NovelAI, OpenRouter
   - Open circuit after 5 consecutive failures
   - Auto-recover after 1 minute
   - Return user-friendly error when circuit open
-- [ ] **7.3** Add API cost tracking
-  - Log each AI API call with estimated cost
-  - Daily summary of API usage
-  - Alert if daily cost exceeds threshold
 
 **Deliverable:** Protection against API abuse and cost spikes
 **Reference:** `security-review/4_urgent_vulnerabilities.md` section 7, `security-review/2_attack_vectors.md`

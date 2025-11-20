@@ -1008,7 +1008,7 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 			discord: {
 				description: `Get the official Discord server link for bug reports, feedback, and community chat.`,
 				title: `Join the TomoriBot Discord Server!`,
-				description_text: `Need help with TomoriBot or want to hang out with the community?\n\n🔗 **Discord Server**: https://discord.gg/W5dDmPKAMc\n- Report bugs and issues\n- Share feedback and suggestions\n- Interact with other users of TomoriBot\n- Stay updated on new features`,
+				description_text: `Need help with TomoriBot or want to hang out with the community?\n\n🔗 **Discord Server**: https://discord.gg/bjCfHm9QsB\n- Report bugs and issues\n- Share feedback and suggestions\n- Interact with other users of TomoriBot\n- Stay updated on new features`,
 			},
 		},
 

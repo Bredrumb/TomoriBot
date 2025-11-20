@@ -15,7 +15,7 @@ export default async (client: Client): Promise<void> => {
 		await commandRegistry.initialize(client);
 
 		// Log registered commands for debugging (optional)
-		if (process.env.NODE_ENV !== "production") {
+		if ((process.env.RUN_ENV || "development") !== "production") {
 			const commands = commandRegistry.getRegisteredCommands();
 			log.info(`Command registry entries: ${commands.join(", ")}`);
 		}

@@ -190,7 +190,7 @@ bun run dev
 docker compose build
 
 # Start TomoriBot and her database
-# For the database of the Docker version, local '.env' only needs POSTGRES_PASSWORD variable
+# For the database of the Docker version, local '.env' only needs POSTGRES_PASSWORD variable for PostgreS
 docker compose up
 ```
 

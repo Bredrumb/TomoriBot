@@ -1017,7 +1017,7 @@ export default {
 			discord: {
 				description: `バグ報告、フィードバック、コミュニティチャットのための公式Discordサーバーリンクを取得します。`,
 				title: `Discordサーバーに参加`,
-				description_text: `TomoriBotのヘルプが必要ですか？またはコミュニティと交流したいですか？\n\n🔗 **Discordサーバー**: https://discord.gg/W5dDmPKAMc\n\n参加して:\n• バグや問題を報告\n• フィードバックや提案を共有\n• 他のユーザーや開発チームとチャット\n• 新機能の最新情報を入手`,
+				description_text: `TomoriBotのヘルプが必要ですか？またはコミュニティと交流したいですか？\n\n🔗 **Discordサーバー**: https://discord.gg/bjCfHm9QsB\n\n参加して:\n• バグや問題を報告\n• フィードバックや提案を共有\n• 他のユーザーや開発チームとチャット\n• 新機能の最新情報を入手`,
 			},
 		},
 

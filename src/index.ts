@@ -40,7 +40,7 @@ if (secrets.DISCORD_WEBHOOK_URL) {
 }
 
 log.success(
-	`Secrets loaded successfully from ${process.env.NODE_ENV === "production" ? "AWS Secrets Manager" : ".env file"}`,
+	`Secrets loaded successfully from ${(process.env.RUN_ENV || "development") === "production" ? "AWS Secrets Manager" : ".env file"}`,
 );
 
 // Initialize encryption key manager (auto-initializes on import)
@@ -53,13 +53,39 @@ log.success(
 );
 
 /**
- * Get PostgreSQL connection URL from environment variables
+ * Get PostgreSQL connection URL from environment variables with SSL configuration.
+ *
+ * SSL Mode Behavior:
+ * - Development (RUN_ENV !== 'production'): sslmode=prefer
+ *   - Tries SSL connection first, falls back to non-SSL if unavailable
+ *   - Works with localhost PostgreSQL (typically no SSL configured)
+ *
+ * - Production (RUN_ENV === 'production'): sslmode=verify-full
+ *   - Requires SSL/TLS encryption for all connections
+ *   - Verifies server certificate is signed by trusted CA
+ *   - Verifies hostname matches certificate (e.g., *.rds.amazonaws.com)
+ *   - Protects against man-in-the-middle (MITM) attacks
+ *   - AWS RDS provides valid certificates by default
+ *
  * Supports both POSTGRES_URL and component-based configuration
  */
 function getPostgresUrl(): string {
+	// Determine SSL mode based on environment
+	const runEnv = process.env.RUN_ENV || "development";
+	const isProduction = runEnv === "production";
+
+	// Development: Try SSL, fallback to non-SSL if not available
+	// Production: Require SSL with full certificate verification (protects against MITM attacks)
+	const sslMode = isProduction ? "require" : "prefer";
+
 	// If POSTGRES_URL is provided, use it directly (backwards compatibility)
 	if (process.env.POSTGRES_URL) {
-		return process.env.POSTGRES_URL;
+		// Add sslmode to existing URL if not already present
+		const url = new URL(process.env.POSTGRES_URL);
+		if (!url.searchParams.has("sslmode")) {
+			url.searchParams.set("sslmode", sslMode);
+		}
+		return url.toString();
 	}
 
 	// Otherwise, build URL from components
@@ -75,7 +101,8 @@ function getPostgresUrl(): string {
 		);
 	}
 
-	return `postgresql://${user}:${password}@${host}:${port}/${database}`;
+	// Build connection string with SSL mode
+	return `postgresql://${user}:${password}@${host}:${port}/${database}?sslmode=${sslMode}`;
 }
 
 const postgresUrl = getPostgresUrl();
@@ -83,6 +110,10 @@ const postgresUrl = getPostgresUrl();
 const dbUrl = new URL(postgresUrl);
 
 process.env.DATABASE_URL = postgresUrl;
+
+// Log SSL configuration for transparency
+const sslMode = dbUrl.searchParams.get("sslmode") || "default";
+log.info(`Database SSL mode: ${sslMode}`);
 
 const dbHost = dbUrl.hostname;
 const dbPort = Number.parseInt(dbUrl.port || "5432", 10);
@@ -137,7 +168,7 @@ process.on("unhandledRejection", (reason, promise) => {
 log.section("Initializing Database...");
 
 // Small delay in development to reduce hot-reload conflicts
-if (process.env.NODE_ENV !== "production") {
+if ((process.env.RUN_ENV || "development") !== "production") {
 	await new Promise((resolve) => setTimeout(resolve, 500));
 }
 

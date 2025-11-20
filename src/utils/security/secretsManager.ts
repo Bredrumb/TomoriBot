@@ -35,16 +35,21 @@ export interface TomoriSecrets {
  * Fetches application secrets from AWS Secrets Manager (production) or process.env (development).
  *
  * Environment-Based Behavior:
- * - Development (NODE_ENV !== 'production'):
+ * - Development (RUN_ENV !== 'production' OR RUN_ENV not set):
  *   - Reads secrets from process.env (loaded via dotenv)
  *   - No AWS API calls
- *   - Maintains current .env workflow
+ *   - Safe default for local users without AWS setup
  *
- * - Production (NODE_ENV === 'production'):
- *   - Fetches from AWS Secrets Manager (us-east-1)
+ * - Production (RUN_ENV === 'production'):
+ *   - Fetches from AWS Secrets Manager
+ *   - Region: Configurable via AWS_REGION (defaults to us-east-1)
  *   - Secret name: "tomoribot/production"
  *   - Parses JSON string and validates required fields
  *   - Auto-detects CRYPTO_SECRET_V* key versions
+ *
+ * AWS Configuration:
+ * - AWS_REGION environment variable (defaults to "us-east-1")
+ * - AWS credentials from environment, IAM role, or ~/.aws/credentials
  *
  * Key Version Auto-Detection:
  * - Scans for CRYPTO_SECRET_V1, CRYPTO_SECRET_V2, CRYPTO_SECRET_V3, etc.
@@ -66,7 +71,9 @@ export interface TomoriSecrets {
  * process.env.POSTGRES_HOST = secrets.POSTGRES_HOST;
  */
 export async function getAppSecrets(): Promise<TomoriSecrets> {
-	const isProduction = process.env.NODE_ENV === "production";
+	// Default to 'development' if RUN_ENV is not set (safe for local users)
+	const runEnv = process.env.RUN_ENV || "development";
+	const isProduction = runEnv === "production";
 
 	// Development mode: Use process.env (loaded via dotenv)
 	if (!isProduction) {
@@ -105,11 +112,14 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
 	}
 
 	// Production mode: Fetch from AWS Secrets Manager
-	log.info("Fetching secrets from AWS Secrets Manager (production mode)");
+	const awsRegion = process.env.AWS_REGION || "us-east-1";
+	log.info(
+		`Fetching secrets from AWS Secrets Manager (production mode, region: ${awsRegion})`,
+	);
 
 	try {
-		// 1. Create AWS Secrets Manager client
-		const client = new SecretsManagerClient({ region: "us-east-1" });
+		// 1. Create AWS Secrets Manager client with configurable region
+		const client = new SecretsManagerClient({ region: awsRegion });
 
 		// 2. Fetch secret value
 		const command = new GetSecretValueCommand({
@@ -163,7 +173,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
 		if (error instanceof Error) {
 			if (error.name === "ResourceNotFoundException") {
 				throw new Error(
-					`AWS Secrets Manager: Secret "tomoribot/production" not found in us-east-1. ` +
+					`AWS Secrets Manager: Secret "tomoribot/production" not found in ${awsRegion}. ` +
 						`Please create the secret in AWS Secrets Manager console.`,
 				);
 			}
@@ -171,14 +181,14 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
 			if (error.name === "AccessDeniedException") {
 				throw new Error(
 					`AWS Secrets Manager: Access denied to "tomoribot/production". ` +
-						`Ensure your EC2 instance role has secretsmanager:GetSecretValue permission.`,
+						`Ensure your IAM user/role has secretsmanager:GetSecretValue permission.`,
 				);
 			}
 
 			if (error.message.includes("getaddrinfo ENOTFOUND")) {
 				throw new Error(
 					`AWS Secrets Manager: Network error. ` +
-						`Ensure your EC2 instance has internet connectivity and can reach AWS services.`,
+						`Ensure your system has internet connectivity and can reach AWS services.`,
 				);
 			}
 		}
