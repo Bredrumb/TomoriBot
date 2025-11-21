@@ -1,0 +1,24 @@
+version: "3.8"
+
+services:
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: tomoribot-dashboard
+    ports:
+      - "3000:3000"
+    volumes:
+      # Persistent storage so you don't lose graphs when you restart
+      - grafana_data:/var/lib/grafana
+    environment:
+      # Set a default password to skip the "change password" screen
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      # Allow installing plugins (needed for some advanced AWS widgets)
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    networks:
+      - monitoring
+
+volumes:
+  grafana_data:
+
+networks:
+  monitoring:

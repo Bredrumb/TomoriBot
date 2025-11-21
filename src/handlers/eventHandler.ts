@@ -35,6 +35,7 @@ const setupEventListeners = (client: Client): void => {
 		stickerCreate: "guildStickersUpdate", // Map sticker events to one folder
 		stickerDelete: "guildStickersUpdate",
 		stickerUpdate: "guildStickersUpdate",
+		rateLimit: "rateLimit", // Map rate limit events for API monitoring
 	};
 
 	// 2. Get all unique handler folder names that we expect to exist

@@ -91,7 +91,6 @@ export async function execute(
 			interaction.memberPermissions?.has("ManageGuild") ?? false;
 
 		// Check if attribute teaching is enabled and if user has bypass permissions
-		// TODO: Verify/add 'attribute_memteaching_enabled' to ConfigRow and tomoriConfigSchema
 		if (
 			!tomoriState.config.attribute_memteaching_enabled &&
 			!hasManagePermission

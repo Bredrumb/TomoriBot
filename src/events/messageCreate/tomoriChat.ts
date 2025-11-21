@@ -1161,10 +1161,19 @@ export default async function tomoriChat(
 			// 7. Prepare Data for buildContext
 			await channel.sendTyping();
 
-			// Fetch messages (newest to oldest is default)
-			const fetchedMessages = await channel.messages.fetch({
-				limit: MESSAGE_FETCH_LIMIT,
-			});
+			/**
+			 * Cache-first message fetching optimization:
+			 * 1. Check if we already have enough messages in cache (from real-time events or previous fetches)
+			 * 2. Only fetch from Discord API if cache has fewer than MESSAGE_FETCH_LIMIT messages
+			 * 3. This reduces redundant API calls and improves rate limit efficiency
+			 */
+			let fetchedMessages = channel.messages.cache;
+			if (fetchedMessages.size < MESSAGE_FETCH_LIMIT) {
+				// Cache doesn't have enough messages, fetch from API
+				fetchedMessages = await channel.messages.fetch({
+					limit: MESSAGE_FETCH_LIMIT,
+				});
+			}
 
 			// Convert to array and reverse to get chronological order (oldest first)
 			const messagesArray = Array.from(fetchedMessages.values()).reverse();
@@ -1620,9 +1629,6 @@ export default async function tomoriChat(
 										log.success(
 											`Replaced Discord Tenor preview with resolved GIF: ${directGifUrl}`,
 										);
-										log.info(
-											`[DEBUG] Replaced Discord proxy attachment at index ${discordTenorProxyIndex} with mimeType: "image/gif"`,
-										);
 									} else {
 										// No Discord preview found, add as new attachment
 										imageAttachments.push({
@@ -1634,18 +1640,12 @@ export default async function tomoriChat(
 										log.success(
 											`Successfully resolved Tenor URL to GIF: ${directGifUrl}`,
 										);
-										log.info(
-											`[DEBUG] Added Tenor GIF to imageAttachments with mimeType: "image/gif"`,
-										);
 									}
 								} else if (isVideo) {
 									// Handle as video (for providers that support video like Gemini)
 									// Remove Discord's preview if it exists since we're adding the actual video
 									if (discordTenorProxyIndex !== -1) {
 										imageAttachments.splice(discordTenorProxyIndex, 1);
-										log.info(
-											`[DEBUG] Removed Discord preview, will add as video instead`,
-										);
 									}
 
 									// Determine video mimeType
@@ -1666,9 +1666,6 @@ export default async function tomoriChat(
 									});
 									log.success(
 										`Successfully resolved Tenor URL to video (${videoMimeType}): ${directGifUrl}`,
-									);
-									log.info(
-										`[DEBUG] Added Tenor video to videoAttachments with mimeType: "${videoMimeType}"`,
 									);
 								} else {
 									log.warn(
@@ -2062,9 +2059,6 @@ export default async function tomoriChat(
 				try {
 					// Debug: Log final context right before sending to LLM
 					if (reminderRecipientID) {
-						log.info(
-							`DEBUG: Final context being sent to LLM (${contextSegments.length} segments):`,
-						);
 						for (
 							let i = Math.max(0, contextSegments.length - 3);
 							i < contextSegments.length;
@@ -2087,7 +2081,7 @@ export default async function tomoriChat(
 								.map((p) => (p as { type: "text"; text: string }).text)
 								.join(" ");
 							if (fullText.includes("[System:")) {
-								log.info(`DEBUG: Complete system message: ${fullText}`);
+								log.info(`Complete system message: ${fullText}`);
 							}
 						}
 					}

@@ -291,10 +291,9 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 		tomoriState: TomoriState,
 		apiKey: string,
 	): Promise<OpenrouterProviderConfig> {
-		// DEBUG: Log model capabilities
-		log.info(`[DEBUG] createConfig for model: ${tomoriState.llm.llm_codename}`);
-		log.info(`[DEBUG] has_tools flag: ${tomoriState.llm.has_tools}`);
-		log.info(`[DEBUG] sees_images flag: ${tomoriState.llm.sees_images}`);
+		log.info(`createConfig for model: ${tomoriState.llm.llm_codename}`);
+		log.info(`has_tools flag: ${tomoriState.llm.has_tools}`);
+		log.info(`sees_images flag: ${tomoriState.llm.sees_images}`);
 
 		// Build config object - only include tools if model supports them
 		// NOTE: OpenRouter models are more sensitive to temperature than other providers.
@@ -319,12 +318,8 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 		};
 
 		// Only add tools field if the model supports them
-		if (tomoriState.llm.has_tools) {
+		if (tomoriState.llm.has_tools)
 			config.tools = await this.getTools(tomoriState);
-			log.info(`[DEBUG] Tools field added: ${config.tools.length} tools`);
-		} else {
-			log.info(`[DEBUG] Tools field OMITTED (model doesn't support tools)`);
-		}
 
 		return config;
 	}
@@ -389,11 +384,11 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 				);
 				streamConfig.tools = contextAwareTools;
 				log.info(
-					`[DEBUG] Context-aware tools loaded: ${contextAwareTools.length} tools`,
+					`Context-aware tools loaded: ${contextAwareTools.length} tools`,
 				);
 			} else if (streamingContext && !tomoriState.llm.has_tools) {
 				log.info(
-					"[DEBUG] Skipping context-aware tool reload - model doesn't support tools",
+					"Skipping context-aware tool reload - model doesn't support tools",
 				);
 			}
 

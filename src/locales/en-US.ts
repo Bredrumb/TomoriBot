@@ -109,15 +109,15 @@ export default {
 		provider_error_format:
 			"{providerName} Error Code {errorCode}: {apiMessage}. {tip}",
 		error_stream_timeout_description:
-			"If this keeps happening, there might be a temporary issue with your chosen AI provider. Please try again later or use `/tools refresh` to refresh the context history.",
+			"If this keeps happening, there might be a temporary issue with your chosen AI provider. Please try again later or use `/tool refresh` to refresh the context history.",
 
 		// Empty response from API
 		empty_response_title: `Empty Response`,
-		empty_response_description: `I received an empty response from the AI, use \`/tools refresh\` if this issue persists.`,
+		empty_response_description: `I received an empty response from the AI, use \`/tool refresh\` if this issue persists.`,
 		// New: Max iterations for function calls
 		max_iterations_title: "Thinking Loop",
 		max_iterations_streaming_description:
-			"I got stuck in a thinking loop and couldn't complete the request, use `/tools refresh` if this issue persists.",
+			"I got stuck in a thinking loop and couldn't complete the request, use `/tool refresh` if this issue persists.",
 
 		// Search related messages
 		search: {

@@ -817,9 +817,6 @@ export async function buildContext({
 					uri: attachment.proxyUrl,
 					mimeType: attachment.mimeType,
 				});
-				log.info(
-					`[DEBUG] ContextBuilder: Added image part with mimeType="${attachment.mimeType}", uri="${attachment.proxyUrl}", filename="${attachment.filename}"`,
-				);
 			} else {
 				log.warn(
 					`Skipping image attachment due to missing mimeType: ${attachment.filename} from user ${msg.authorName}`,

@@ -136,6 +136,28 @@ const client = new Client({
 		GatewayIntentBits.GuildExpressions,
 	],
 	partials: [Partials.Channel, Partials.Message],
+	/**
+	 * Cache sweepers prevent unbounded memory growth by automatically removing old cached data.
+	 * These settings optimize memory usage while maintaining recent data for performance.
+	 */
+	sweepers: {
+		/**
+		 * Message sweeper: Removes messages older than 30 minutes, runs every hour.
+		 * Keeps recent conversation context while preventing message cache bloat.
+		 */
+		messages: {
+			interval: 3600, // Run sweep every 1 hour (in seconds)
+			lifetime: 1800, // Keep messages for 30 minutes (in seconds)
+		},
+		/**
+		 * User sweeper: Removes bot users from cache, runs every hour.
+		 * Keeps real users cached for faster lookups while removing unnecessary bot data.
+		 */
+		users: {
+			interval: 3600, // Run sweep every 1 hour (in seconds)
+			filter: () => (user) => user.bot,
+		},
+	},
 });
 
 /**

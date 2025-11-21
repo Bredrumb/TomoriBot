@@ -633,9 +633,6 @@ export class GoogleStreamAdapter implements StreamProvider {
 					} else if (part.type === "image" && part.uri && part.mimeType) {
 						// Handle images with URI - fetch and convert to base64
 						try {
-							log.info(
-								`[DEBUG] GoogleStreamAdapter: Processing image with mimeType="${part.mimeType}", uri="${part.uri}"`,
-							);
 							// Check if this is a GIF - process as keyframes instead
 							if (part.mimeType === "image/gif") {
 								log.info(

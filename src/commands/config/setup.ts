@@ -23,6 +23,7 @@ import {
 	loadUniqueProviders,
 	loadPresetOptionsByLocale,
 } from "@/utils/db/dbRead";
+import { getCachedPresetAvatar } from "@/utils/image/avatarHelper";
 
 import type { HumanizerDegree } from "@/types/db/schema";
 
@@ -489,6 +490,51 @@ export async function execute(
 				return;
 			}
 
+			// Update guild avatar to match the selected preset (guild-only operation)
+			let avatarUpdateFailed = false;
+
+			// Only attempt avatar update in guilds (not available in DMs)
+			if (!isDMChannel && interaction.guild) {
+				try {
+					// 1. Try to get cached preset avatar
+					const cachedAvatar = getCachedPresetAvatar(selectedPresetId);
+
+					// 2. Prepare avatar value (base64 data URI or null)
+					const avatarValue = cachedAvatar || null;
+
+					// 3. Update guild avatar via Discord API
+					const endpoint = `https://discord.com/api/v10/guilds/${interaction.guild.id}/members/@me`;
+					const response = await fetch(endpoint, {
+						method: "PATCH",
+						headers: {
+							Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify({ avatar: avatarValue }),
+					});
+
+					if (response.ok) {
+						const actionDescription = cachedAvatar
+							? `Set preset avatar for "${selectedPresetOption.name}"`
+							: "Reset guild avatar to bot default";
+						log.info(
+							`${actionDescription} for guild ${interaction.guild.id} during setup`,
+						);
+					} else {
+						avatarUpdateFailed = true;
+						log.warn(
+							`Failed to update guild avatar during setup: ${response.status} ${response.statusText}`,
+						);
+					}
+				} catch (avatarError) {
+					// Log avatar error but don't fail the setup
+					avatarUpdateFailed = true;
+					log.warn(
+						`Failed to update avatar during setup: ${avatarError}`,
+					);
+				}
+			}
+
 			// Prepare fields for success message
 			// Map humanizer degree to user-friendly label
 			const humanizerLabels = [
@@ -537,8 +583,13 @@ export async function execute(
 				descriptionKey: isDMChannel
 					? "commands.config.setup.success_desc_dm"
 					: "commands.config.setup.success_desc",
-				color: ColorCode.SUCCESS,
+				color: avatarUpdateFailed || isDMChannel ? ColorCode.WARN : ColorCode.SUCCESS,
 				fields: successFields,
+				footerKey: isDMChannel
+					? "commands.persona.default.avatar_update_skipped_dm"
+					: avatarUpdateFailed
+						? "commands.persona.default.avatar_update_failed"
+						: undefined,
 			});
 		} catch (modalError) {
 			// Handle errors within modal submission context

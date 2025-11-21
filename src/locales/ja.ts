@@ -110,15 +110,15 @@ export default {
 		provider_error_format:
 			"{providerName} エラーコード {errorCode}: {apiMessage}。{tip}",
 		error_stream_timeout_description:
-			"この問題が続く場合、選択したAIプロバイダーに一時的な問題がある可能性があります。後でもう一度お試しいただくか、`/tools refresh`を使用してコンテキスト履歴をリフレッシュしてください。",
+			"この問題が続く場合、選択したAIプロバイダーに一時的な問題がある可能性があります。後でもう一度お試しいただくか、`/tool refresh`を使用してコンテキスト履歴をリフレッシュしてください。",
 
 		// APIからの空の応答
 		empty_response_title: `空の応答`,
-		empty_response_description: `AIから空の応答を受け取りました。この問題が解決しない場合は、\`/tools refresh\`を使用してください。`,
+		empty_response_description: `AIから空の応答を受け取りました。この問題が解決しない場合は、\`/tool refresh\`を使用してください。`,
 		// 新規: 関数呼び出しの最大反復回数
 		max_iterations_title: "思考ループ",
 		max_iterations_streaming_description:
-			"思考ループに陥り、リクエストを完了できませんでした。この問題が解決しない場合は、`/tools refresh`を使用してください。",
+			"思考ループに陥り、リクエストを完了できませんでした。この問題が解決しない場合は、`/tool refresh`を使用してください。",
 
 		// 検索関連メッセージ
 		search: {

@@ -42,6 +42,18 @@ export const log = {
 		}
 	},
 	/**
+	 * Logs Discord API rate limit events.
+	 * Always shown in production for monitoring purposes.
+	 * @param msg - The rate limit message to log.
+	 * @param metadata - Optional metadata object with rate limit details.
+	 */
+	rateLimit: (msg: string, metadata?: Record<string, unknown>) => {
+		console.log(`\x1b[93m[RATE LIMIT]\x1b[0m ${msg}`);
+		if (metadata) {
+			console.log(JSON.stringify(metadata, null, 2));
+		}
+	},
+	/**
 	 * Logs an error message to the console and attempts to insert it into the database.
 	 * @param msg - The primary error message to log.
 	 * @param err - The actual Error object or unknown error data (optional).

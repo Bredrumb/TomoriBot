@@ -1,5 +1,8 @@
 nul
 
+# Local Monitoring
+grafana_data/
+
 # Docker
 .env.local
 .env.docker

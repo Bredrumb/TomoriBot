@@ -154,33 +154,11 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 			Array.isArray(config.tools) &&
 			config.tools.length > 0
 		) {
-			log.info(`[DEBUG] Tools available: ${config.tools.length} tools`);
-			log.info(`[DEBUG] Tools:\n${JSON.stringify(config.tools, null, 2)}`);
-		} else {
-			log.info(
-				"[DEBUG] No tools field in config - will be OMITTED from SDK call",
-			);
+			log.info(`Tools:\n${JSON.stringify(config.tools, null, 2)}`);
 		}
 
 		// Log sanitized request for debugging
 		this.logSanitizedRequest(messages);
-
-		// DEBUG: Log the last message to see if user input is correct
-		if (messages.length > 0) {
-			const lastMessage = messages[messages.length - 1];
-			log.info(
-				`[DEBUG] Last message in array - Role: ${lastMessage.role}, Content type: ${typeof lastMessage.content}`,
-			);
-			if (typeof lastMessage.content === "string") {
-				log.info(
-					`[DEBUG] Last message content (string): "${lastMessage.content.substring(0, 200)}"`,
-				);
-			} else if (Array.isArray(lastMessage.content)) {
-				log.info(
-					`[DEBUG] Last message content (array): ${lastMessage.content.length} parts`,
-				);
-			}
-		}
 
 		try {
 			// Cast config to access OpenRouter-specific fields
@@ -220,16 +198,8 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 				}),
 			};
 
-			// Log whether tools are included
-			if (config.tools && config.tools.length > 0) {
-				log.info("[DEBUG] Tools field INCLUDED in SDK request");
-			} else {
-				log.info("[DEBUG] Tools field OMITTED from SDK request");
-			}
-
-			// Log sampling parameters for debugging
 			log.info(
-				`[DEBUG] Sampling params - temp: ${config.temperature}, top_p: ${openrouterConfig.topP ?? "default"}, freq_penalty: ${openrouterConfig.frequencyPenalty ?? "default"}, pres_penalty: ${openrouterConfig.presencePenalty ?? "default"}, rep_penalty: ${openrouterConfig.repetitionPenalty ?? "default"}`,
+				`Sampling params - temp: ${config.temperature}, top_p: ${openrouterConfig.topP ?? "default"}, freq_penalty: ${openrouterConfig.frequencyPenalty ?? "default"}, pres_penalty: ${openrouterConfig.presencePenalty ?? "default"}, rep_penalty: ${openrouterConfig.repetitionPenalty ?? "default"}`,
 			);
 
 			// Start the streaming
@@ -271,12 +241,6 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 	processChunk(chunk: RawStreamChunk): ProcessedChunk {
 		const openrouterChunk = chunk.data as OpenrouterStreamChunk;
 
-		// DEBUG: Log every chunk to see what we're receiving
-		const debugChunk = JSON.stringify(openrouterChunk);
-		log.info(
-			`[DEBUG] OpenRouter chunk received: ${debugChunk.substring(0, 300)}${debugChunk.length > 300 ? "..." : ""}`,
-		);
-
 		// Handle errors first (both pre-stream and mid-stream errors)
 		if ("error" in openrouterChunk && openrouterChunk.error) {
 			return {
@@ -294,16 +258,14 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		const choice = openrouterChunk.choices?.[0];
 		if (!choice) {
 			// Empty chunk, likely keepalive
-			log.info("[DEBUG] OpenRouter chunk has no choices - keepalive");
 			return {
 				type: "text",
 				content: "",
 			};
 		}
 
-		// DEBUG: Log choice details
 		log.info(
-			`[DEBUG] Choice - finishReason: ${choice.finishReason}, has delta: ${!!choice.delta}, delta.content: ${!!choice.delta?.content}, delta.toolCalls: ${!!choice.delta?.toolCalls}`,
+			`Choice - finishReason: ${choice.finishReason}, has delta: ${!!choice.delta}, delta.content: ${!!choice.delta?.content}, delta.toolCalls: ${!!choice.delta?.toolCalls}`,
 		);
 
 		// Check for finishReason "error" (mid-stream error in unified format)
@@ -748,10 +710,6 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 
 						// Handle images with URI - fetch and convert to base64
 						try {
-							log.info(
-								`[DEBUG] OpenrouterStreamAdapter: Processing image with mimeType="${part.mimeType}", uri="${part.uri}"`,
-							);
-
 							// Check if this is a GIF - process as keyframes instead
 							if (part.mimeType === "image/gif") {
 								log.info(

@@ -282,10 +282,6 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 				};
 			}
 
-			// Final buffer flush
-			log.info(
-				`[DEBUG] Before final flush - buffer length: ${state.buffer.length}, messageSent: ${state.messageSentCount}`,
-			);
 			await this.flushFinalBuffer(state, textConfig, typingConfig, context);
 
 			// Complete metrics and return success with message count for empty response detection
