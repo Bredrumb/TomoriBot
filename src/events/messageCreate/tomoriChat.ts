@@ -1162,18 +1162,14 @@ export default async function tomoriChat(
 			await channel.sendTyping();
 
 			/**
-			 * Cache-first message fetching optimization:
-			 * 1. Check if we already have enough messages in cache (from real-time events or previous fetches)
-			 * 2. Only fetch from Discord API if cache has fewer than MESSAGE_FETCH_LIMIT messages
-			 * 3. This reduces redundant API calls and improves rate limit efficiency
+			 * Fetch recent message history for context building.
+			 * Note: We always fetch from API rather than relying on cache to ensure we have
+			 * the most recent consecutive messages in correct order. Cache may contain gaps
+			 * or out-of-order messages from gateway events.
 			 */
-			let fetchedMessages = channel.messages.cache;
-			if (fetchedMessages.size < MESSAGE_FETCH_LIMIT) {
-				// Cache doesn't have enough messages, fetch from API
-				fetchedMessages = await channel.messages.fetch({
-					limit: MESSAGE_FETCH_LIMIT,
-				});
-			}
+			const fetchedMessages = await channel.messages.fetch({
+				limit: MESSAGE_FETCH_LIMIT,
+			});
 
 			// Convert to array and reverse to get chronological order (oldest first)
 			const messagesArray = Array.from(fetchedMessages.values()).reverse();

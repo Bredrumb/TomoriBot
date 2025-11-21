@@ -109,7 +109,7 @@ export class MCPManager {
 		// Initialize each server concurrently with individual error handling
 		const initPromises = serverConfigs.map((config) =>
 			this.initializeServer(config).catch((error) => {
-				log.warn(
+				log.error(
 					`Failed to initialize MCP server '${config.displayName}':`,
 					error as Error,
 				);
