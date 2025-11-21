@@ -66,6 +66,12 @@ RUN if [ "$(ls -A /tmp/pip-packages 2>/dev/null)" ]; then \
     fi && \
     rm -rf /tmp/pip-packages
 
+# Pre-cache npm-based MCP servers by running npx once as tomori user
+# This downloads and caches the package in ~/.npm/_npx, preventing timeout during bot startup
+RUN echo "Pre-caching npm MCP servers for tomori user..." && \
+    timeout 60 npx -y @oevortex/ddg_search@latest --help > /dev/null 2>&1 || true && \
+    echo "DuckDuckGo MCP server cached successfully"
+
 # Copy package files first for better Docker layer caching
 # This is like getting the "lease agreement" (dependencies) ready first
 COPY --chown=tomori:tomori package.json ./
