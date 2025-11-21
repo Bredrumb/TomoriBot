@@ -44,11 +44,13 @@
 		"google-translate-api-x": "^10.7.2",
 		"libsodium-wrappers": "^0.7.15",
 		"pg": "^8.16.3",
+		"pino": "^10.1.0",
 		"sharp": "^0.34.5",
 		"zod": "^4.1.12"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.3.6",
+		"pino-pretty": "^13.1.2",
 		"typescript": "^5.9.3"
 	}
 }

@@ -44,7 +44,6 @@ log.success(
 );
 
 // Initialize encryption key manager AFTER secrets are loaded
-log.section("Initializing Encryption Key Manager...");
 // Dynamically import keyManager NOW, after process.env is populated
 keyManager.initialize();
 

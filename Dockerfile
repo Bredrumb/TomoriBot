@@ -18,6 +18,12 @@ RUN apk add --no-cache \
     nodejs \
     npm
 
+# Pre-install npm-based MCP servers globally as root (before switching to non-root user)
+# This prevents on-the-fly downloads during container startup which can timeout
+RUN echo "Pre-installing npm-based MCP servers..." && \
+    npm install -g @oevortex/ddg_search@latest && \
+    echo "DuckDuckGo MCP server installed successfully"
+
 # Create a non-root user for security
 # It's like giving TomoriBot her own user account instead of admin access
 RUN addgroup -g 1001 -S tomori && \
@@ -37,13 +43,10 @@ ENV PATH="/home/tomori/.local/bin:$PATH"
 # For local builds, this directory may be empty (packages will be downloaded from PyPI)
 COPY --chown=tomori:tomori docker-pip-cache/ /tmp/pip-packages/
 
-# Install MCP servers that are required by TomoriBot
-# Fetch MCP server needs to be pre-installed with pip
-# Install as tomori user to avoid permission issues
+# Install Python-based MCP servers as tomori user
 # Use --break-system-packages for Alpine Linux PEP 668 compliance
-# Let pip handle all dependencies automatically (including pydantic if needed)
 RUN if [ "$(ls -A /tmp/pip-packages 2>/dev/null)" ]; then \
-        echo "Installing from pre-downloaded packages (with all dependencies)..." && \
+        echo "Installing Python MCP servers from pre-downloaded packages..." && \
         pip3 install --user --break-system-packages --no-index --find-links=/tmp/pip-packages mcp-server-fetch; \
     else \
         echo "No pre-downloaded packages found, downloading from PyPI..." && \

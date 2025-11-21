@@ -38,7 +38,7 @@ import { setupConfigSchema, setupResultSchema } from "../../types/db/schema";
  *
  * @param userDiscId - Discord user ID of the user to register
  * @param displayName - User's display name or nickname
- * @param language - Preferred language code, defaults to 'en'
+ * @param language - Preferred language/locale code (e.g., 'en-US'), defaults to 'en'
  * @returns The validated UserRow object, or null if registration failed
  */
 export async function registerUser(
@@ -50,14 +50,17 @@ export async function registerUser(
 		log.info(`Registering/updating user ${userDiscId} (${displayName})`);
 
 		// Apply UPSERT pattern with RETURNING (Rule #15)
+		// registration_locale is only set on INSERT (static field for analytics)
 		const [userData] = await sql`
             INSERT INTO users (
                 user_disc_id,
                 user_nickname,
-                language_pref
+                language_pref,
+                registration_locale
             ) VALUES (
                 ${userDiscId},
                 ${displayName},
+                ${language},
                 ${language}
             )
             ON CONFLICT (user_disc_id) DO UPDATE
