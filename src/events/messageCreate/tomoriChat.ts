@@ -2152,28 +2152,28 @@ export default async function tomoriChat(
 						throw raceError;
 					}
 
-					if (streamResult.status === "completed") {
-						log.success("Streaming to Discord completed successfully.");
-						finalStreamCompleted = true;
-						break; // Exit loop, final text stream was handled by streamGeminiToDiscord
-					}
+					// Use switch statement for exhaustive status checking
+					switch (streamResult.status) {
+						case "completed":
+							log.success("Streaming to Discord completed successfully.");
+							finalStreamCompleted = true;
+							break; // Exit loop, final text stream was handled by streamGeminiToDiscord
 
-					if (streamResult.status === "error") {
-						log.error(
-							"Streaming to Discord reported an error.",
-							streamResult.data,
-							{
-								serverId: tomoriState?.server_id,
-								errorType: "StreamingError",
-							},
-						);
-						// streamGeminiToDiscord already attempts to send an error message.
-						finalStreamCompleted = true; // Consider it "completed" to break loop, error handled.
-						break;
-					}
+						case "error":
+							log.error(
+								"Streaming to Discord reported an error.",
+								streamResult.data,
+								{
+									serverId: tomoriState?.server_id,
+									errorType: "StreamingError",
+								},
+							);
+							// streamGeminiToDiscord already attempts to send an error message.
+							finalStreamCompleted = true; // Consider it "completed" to break loop, error handled.
+							break;
 
-					// Handle empty response with fresh context retry
-					if (streamResult.status === "empty_response") {
+						case "empty_response": {
+							// Handle empty response with fresh context retry
 						const MAX_EMPTY_RESPONSE_RETRIES = 2;
 						const RETRY_DELAY_MS = 1000;
 
@@ -2219,8 +2219,8 @@ export default async function tomoriChat(
 						}
 					}
 
-					// This is the internal stream inactivity timeout from streamGeminiToDiscord
-					if (streamResult.status === "timeout") {
+					case "timeout":
+						// This is the internal stream inactivity timeout from streamGeminiToDiscord
 						log.warn(
 							`Streaming to Discord timed out due to inactivity for channel ${channel.id}.`,
 							streamResult.data,
@@ -2232,19 +2232,15 @@ export default async function tomoriChat(
 						});
 						finalStreamCompleted = true;
 						break;
-					}
 
-					// Handle user-requested stop (natural stop triggers)
-					if (streamResult.status === "stopped_by_user") {
+					case "stopped_by_user": {
+						// Handle user-requested stop (natural stop triggers)
 						log.info(
 							`Streaming was stopped by user request for channel ${channel.id}.`,
 						);
 						finalStreamCompleted = true;
 
 						// Check if we have stop context to create a response
-						const { StreamOrchestrator } = await import(
-							"../../utils/discord/streamOrchestrator"
-						);
 						const stopContext = StreamOrchestrator.getAndClearStopContext(
 							channel.id,
 						);
@@ -2271,7 +2267,16 @@ export default async function tomoriChat(
 						break; // Exit the loop gracefully, stop response will be handled by queue
 					}
 
-					if (streamResult.status === "function_call" && streamResult.data) {
+					case "function_call": {
+						if (!streamResult.data) {
+							// Function call without data - log error and break
+							log.error(
+								"Function call status received without data:",
+								streamResult,
+							);
+							finalStreamCompleted = true;
+							break;
+						}
 						const funcCall = streamResult.data as FunctionCall; // Type assertion
 						const funcName = funcCall.name?.trim() ?? "";
 						log.info(
@@ -2562,15 +2567,31 @@ export default async function tomoriChat(
 							break;
 						}
 						// Continue to the next iteration of the loop to call streamGeminiToDiscord again with updated history
-					} else {
-						// Should not happen if status is not completed, error, or function_call
+						break;
+					}
+
+					default: {
+						// Exhaustive check - TypeScript will error if a new status is added but not handled
+						const _exhaustive: never = streamResult.status;
 						log.error(
-							"Unexpected streamResult status in streaming loop:",
-							streamResult,
+							`Unhandled stream status in streaming loop: ${_exhaustive}`,
+							new Error(`Unknown status: ${JSON.stringify(streamResult)}`),
 						);
+
+						// Show user-facing error for unknown status
+						await sendStandardEmbed(channel, locale, {
+							titleKey: "genai.no_response_title",
+							descriptionKey: "genai.no_response_description",
+							color: ColorCode.WARN,
+							footerKey: "genai.generic_error_footer",
+						}).catch((e) =>
+							log.warn("Failed to send unhandled status embed to channel", e),
+						);
+
 						finalStreamCompleted = true; // Break loop on unexpected status
 						break;
 					}
+				} // End of switch statement
 				} catch (streamingError) {
 					log.error(
 						"Critical error during streamGeminiToDiscord call within streaming loop:",

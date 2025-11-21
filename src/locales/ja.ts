@@ -120,6 +120,10 @@ export default {
 		max_iterations_streaming_description:
 			"思考ループに陥り、リクエストを完了できませんでした。この問題が解決しない場合は、`/tool refresh`を使用してください。",
 
+		// 一般的な応答なし警告（不明なステータスまたは未処理のケース用）
+		no_response_title: `応答なし`,
+		no_response_description: `応答がありませんでした - これはAIからの空の応答またはタイムアウトが原因である可能性があります。`,
+
 		// 検索関連メッセージ
 		search: {
 			web_search_title: `🔍 ウェブで \`{query}\` を検索中...`,
