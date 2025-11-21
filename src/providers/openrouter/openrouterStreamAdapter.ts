@@ -264,9 +264,10 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 			};
 		}
 
-		log.info(
-			`Choice - finishReason: ${choice.finishReason}, has delta: ${!!choice.delta}, delta.content: ${!!choice.delta?.content}, delta.toolCalls: ${!!choice.delta?.toolCalls}`,
-		);
+		if (choice.finishReason !== null)
+			log.info(
+				`Choice - finishReason: ${choice.finishReason}, has delta: ${!!choice.delta}, delta.content: ${!!choice.delta?.content}, delta.toolCalls: ${!!choice.delta?.toolCalls}`,
+			);
 
 		// Check for finishReason "error" (mid-stream error in unified format)
 		if (choice.finishReason === "error") {

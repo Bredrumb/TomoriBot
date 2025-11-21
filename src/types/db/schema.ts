@@ -13,7 +13,7 @@ export const userSchema = z.object({
 	user_disc_id: z.string(),
 	user_nickname: z.string(),
 	language_pref: z.string().default("en-US"),
-	registration_locale: z.string().optional(), // Static locale captured at registration (January 2025)
+	registration_locale: z.string().nullable(), // Static locale captured at registration (January 2025)
 	privacy_opt_out: z.boolean().default(false),
 	personal_memories: z.array(z.string()).default([]),
 	created_at: z.date().optional(),

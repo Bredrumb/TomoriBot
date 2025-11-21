@@ -2592,6 +2592,11 @@ export default async function tomoriChat(
 						break;
 					}
 				} // End of switch statement
+
+				// Check if we should exit the loop after switch statement
+				if (finalStreamCompleted) {
+					break; // Exit the for loop
+				}
 				} catch (streamingError) {
 					log.error(
 						"Critical error during streamGeminiToDiscord call within streaming loop:",
