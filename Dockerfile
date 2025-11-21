@@ -18,11 +18,23 @@ RUN apk add --no-cache \
     nodejs \
     npm
 
+# Copy pre-downloaded npm packages (downloaded by GitHub Actions runner)
+# This avoids network issues during Docker build in CI/CD
+# For local builds, this directory may be empty (packages will be downloaded from npm)
+COPY docker-npm-cache/ /tmp/npm-packages/
+
 # Pre-install npm-based MCP servers globally as root (before switching to non-root user)
 # This prevents on-the-fly downloads during container startup which can timeout
-RUN echo "Pre-installing npm-based MCP servers..." && \
-    npm install -g @oevortex/ddg_search@latest && \
-    echo "DuckDuckGo MCP server installed successfully"
+RUN if [ "$(ls -A /tmp/npm-packages 2>/dev/null)" ]; then \
+        echo "Installing npm MCP servers from pre-downloaded packages..." && \
+        npm install -g /tmp/npm-packages/*.tgz && \
+        echo "npm MCP servers installed from cache"; \
+    else \
+        echo "No pre-downloaded packages found, downloading from npm..." && \
+        npm install -g @oevortex/ddg_search@latest && \
+        echo "DuckDuckGo MCP server installed from npm"; \
+    fi && \
+    rm -rf /tmp/npm-packages
 
 # Create a non-root user for security
 # It's like giving TomoriBot her own user account instead of admin access

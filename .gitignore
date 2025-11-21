@@ -11,6 +11,7 @@ grafana_data/
 # Docker volumes and data
 docker-data/
 docker-pip-cache/
+docker-npm-cache/
 
 # Other folders
 .deprecated/
