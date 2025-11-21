@@ -106,39 +106,19 @@ export async function execute(
 			return;
 		}
 
-		// 8. Create a "passport" message that will trigger tomoriChat
-		// If query is provided, we need to modify the message content to include it
-		const passportMessage = latestMessage;
-
-		if (query) {
-			// Create a temporary modified message that includes the query and trigger words
-			// This ensures tomoriChat will process it while providing the reasoning query context
-			const modifiedContent = `tomori ${query}`;
-
-			// Create a copy of the message with modified content
-			// We'll use Object.defineProperty to temporarily override the content property
-			const originalContent = passportMessage.content;
-			Object.defineProperty(passportMessage, "content", {
-				value: modifiedContent,
-				configurable: true,
-			});
-
-			log.info(
-				`Modified passport message content from "${originalContent}" to "${modifiedContent}" for reasoning command`,
-			);
-		}
-
-		// 9. Manually trigger tomoriChat with reasoning flags
+		// 8. Manually trigger tomoriChat with reasoning flags
+		// Pass the query as a separate parameter to be injected as a system message
 		log.info(
-			`Manual reason command triggered by ${interaction.user.id} in channel ${interaction.channel.id} for message ${latestMessage.id} using model ${smartestModel.llm_codename}`,
+			`Manual reason command triggered by ${interaction.user.id} in channel ${interaction.channel.id} for message ${latestMessage.id} using model ${smartestModel.llm_codename}${query ? ` with query: "${query}"` : ""}`,
 		);
 
 		await tomoriChat(
 			client,
-			passportMessage as Message,
+			latestMessage as Message,
 			false, // isFromQueue
 			true, // isManuallyTriggered - bypasses normal trigger logic
 			true, // forceReason - enables reasoning mode
+			query ?? undefined, // reasoningQuery - injected as system message
 			smartestModel.llm_codename, // llmOverrideCodename - use smartest model
 		);
 	} catch (error) {

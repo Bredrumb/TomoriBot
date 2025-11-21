@@ -177,6 +177,7 @@ export class ReminderTimer {
 				false, // isFromQueue
 				true, // isManuallyTriggered
 				false, // forceReason
+				undefined, // reasoningQuery
 				undefined, // llmOverrideCodename
 				false, // isStopResponse
 				0, // retryCount

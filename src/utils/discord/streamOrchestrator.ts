@@ -1189,11 +1189,8 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 		context: StreamContext,
 	): Promise<void> {
 		const providerError = error as ProviderError;
-		// Get locale for localized messages
-		const locale =
-			"guild" in context.channel
-				? context.channel.guild.preferredLocale
-				: "en-US";
+		// Use user's locale from context (prioritizes user language preference)
+		const locale = context.locale;
 
 		// Create localized error message for interactions
 		const errorMessage = localizer(

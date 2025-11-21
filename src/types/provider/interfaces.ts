@@ -114,6 +114,8 @@ export interface LLMProvider {
 	 * @param functionInteractionHistory - Optional function calling history
 	 * @param initialInteraction - Optional initial interaction for error reporting
 	 * @param replyToMessage - Optional message to reply to
+	 * @param streamingContext - Optional streaming context for context-aware tool availability
+	 * @param userLocale - User's preferred locale for error messages (defaults to en-US)
 	 * @returns Promise<StreamResult> - The outcome of the streaming operation
 	 */
 	streamToDiscord(
@@ -132,6 +134,7 @@ export interface LLMProvider {
 		initialInteraction?: CommandInteraction,
 		replyToMessage?: Message,
 		streamingContext?: StreamingContext,
+		userLocale?: string,
 	): Promise<StreamResult>;
 
 	/**
@@ -177,6 +180,7 @@ export abstract class BaseLLMProvider implements LLMProvider {
 		initialInteraction?: CommandInteraction,
 		replyToMessage?: Message,
 		streamingContext?: StreamingContext,
+		userLocale?: string,
 	): Promise<StreamResult>;
 	abstract getDefaultModel(): Promise<string>;
 	abstract createConfig(

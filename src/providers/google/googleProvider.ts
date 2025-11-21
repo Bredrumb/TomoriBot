@@ -357,6 +357,7 @@ export class GoogleProvider extends BaseLLMProvider implements LLMProvider {
 		initialInteraction?: CommandInteraction,
 		replyToMessage?: Message,
 		streamingContext?: StreamingContext,
+		userLocale?: string,
 	): Promise<StreamResult> {
 		log.info(
 			`GoogleProvider: Starting modular streaming for server ${tomoriState.server_id}, model ${config.model}`,
@@ -434,9 +435,7 @@ export class GoogleProvider extends BaseLLMProvider implements LLMProvider {
 
 				// Provider context
 				provider: "google",
-				locale:
-					("guild" in channel ? channel.guild?.preferredLocale : undefined) ??
-					"en-US",
+				locale: userLocale ?? "en-US", // Use user's preferred locale, fallback to en-US
 			};
 
 			// Create the modular streaming components

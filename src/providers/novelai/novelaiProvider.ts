@@ -227,6 +227,7 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
 		initialInteraction?: CommandInteraction,
 		replyToMessage?: Message,
 		_streamingContext?: StreamingContext,
+		userLocale?: string,
 	): Promise<StreamResult> {
 		log.info(
 			`NovelAIProvider: Starting streaming for server ${tomoriState.server_id}, model ${config.model}`,
@@ -268,9 +269,7 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
 
 				// Provider context
 				provider: "novelai",
-				locale:
-					("guild" in channel ? channel.guild?.preferredLocale : undefined) ??
-					"en-US",
+				locale: userLocale ?? "en-US", // Use user's preferred locale, fallback to en-US
 			};
 
 			// Create the modular streaming components

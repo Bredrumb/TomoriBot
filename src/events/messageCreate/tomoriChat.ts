@@ -2,6 +2,7 @@ import type { Client, Message, Sticker, Embed } from "discord.js";
 import { BaseGuildTextChannel, DMChannel, TextChannel } from "discord.js"; // Import value for instanceof check
 // Provider imports moved to factory pattern
 import type { StructuredContextItem } from "../../types/misc/context";
+import { ContextItemTag } from "../../types/misc/context";
 // Provider-specific types moved to individual providers
 import type { FunctionCall } from "../../types/provider/interfaces";
 import {
@@ -193,6 +194,7 @@ interface ChannelLockEntry {
 		message: Message;
 		isManuallyTriggered?: boolean;
 		forceReason?: boolean;
+		reasoningQuery?: string; // Query to inject as system message for reasoning mode
 		llmOverrideCodename?: string;
 		isStopResponse?: boolean; // Flag to prevent stopping stop responses
 	}>;
@@ -347,6 +349,7 @@ async function sendServerRateLimitEmbed(
  * @param isFromQueue - Whether this message is being processed from the queue.
  * @param isManuallyTriggered - Whether this call is triggered by a manual command.
  * @param forceReason - Whether to use reasoning mode for this response.
+ * @param reasoningQuery - Query to inject as system message for reasoning mode.
  * @param llmOverrideCodename - Override LLM model codename to use instead of server default.
  * @param isStopResponse - Whether this is a stop response (cannot be stopped).
  * @param retryCount - Number of retry attempts for empty responses (internal use).
@@ -358,6 +361,7 @@ export default async function tomoriChat(
 	isFromQueue: boolean,
 	isManuallyTriggered?: boolean,
 	forceReason?: boolean,
+	reasoningQuery?: string,
 	llmOverrideCodename?: string,
 	isStopResponse?: boolean,
 	retryCount = 0,
@@ -658,6 +662,7 @@ export default async function tomoriChat(
 						message,
 						isManuallyTriggered,
 						forceReason,
+						reasoningQuery,
 						llmOverrideCodename,
 					});
 					log.info(
@@ -1798,7 +1803,8 @@ export default async function tomoriChat(
 			// Inject continuation prompt for manual triggers when Tomori is the last speaker
 			// This fixes the UX issue where manual /bot respond or /bot reason commands
 			// don't work if Tomori was the last one to speak in the conversation
-			if (isManuallyTriggered && simplifiedMessages.length > 0) {
+			// IMPORTANT: Skip this for reasoning queries - they have their own system message
+			if (isManuallyTriggered && !reasoningQuery && simplifiedMessages.length > 0) {
 				const lastMessage = simplifiedMessages[simplifiedMessages.length - 1];
 
 				// 1. Check if the last message in history is from Tomori
@@ -1901,12 +1907,32 @@ export default async function tomoriChat(
 									text: "[System: The user has requested you to stop your current generation]",
 								},
 							],
+							metadataTag: ContextItemTag.DIALOGUE_HISTORY,
 						};
 						contextSegments.push(systemStopContext);
 						log.info(
 							"Added system stop context as new message (no user context found)",
 						);
 					}
+				}
+
+				// Inject reasoning query as user message in dialogue if provided
+				if (reasoningQuery) {
+					// Add reasoning query as a user message in the conversation dialogue
+					const reasoningUserMessage: StructuredContextItem = {
+						role: "user",
+						parts: [
+							{
+								type: "text",
+								text: `[System: The user has activated reasoning mode with the following query: "${reasoningQuery}". Please provide a thoughtful, well-reasoned response to this query.]`,
+							},
+						],
+						metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+					};
+					contextSegments.push(reasoningUserMessage);
+					log.info(
+						`Injected reasoning query as user message in dialogue: "${reasoningQuery}"`,
+					);
 				}
 			} catch (error) {
 				log.error("Error building context for LLM API Call:", error, {
@@ -2097,6 +2123,7 @@ export default async function tomoriChat(
 						undefined,
 						isFromQueue ? message : undefined,
 						streamingContext, // Pass streaming context for context-aware tool availability
+						locale, // Pass user's preferred locale for error messages
 					);
 					const timeoutPromise = new Promise<never>(
 						(
@@ -2190,6 +2217,7 @@ export default async function tomoriChat(
 								isFromQueue,
 								true, // isManuallyTriggered - bypass trigger checks for retry
 								forceReason,
+								reasoningQuery,
 								llmOverrideCodename,
 								isStopResponse,
 								retryCount + 1, // Increment retry count
@@ -2735,6 +2763,7 @@ export default async function tomoriChat(
 							true,
 							nextMessageData.isManuallyTriggered,
 							nextMessageData.forceReason,
+							nextMessageData.reasoningQuery,
 							nextMessageData.llmOverrideCodename,
 							nextMessageData.isStopResponse, // Pass through the stop response flag
 							0, // retryCount - start fresh for queued messages
@@ -2864,6 +2893,7 @@ export async function handleStopResponse(
 			true, // isFromQueue to trigger reply to same message
 			true, // isManuallyTriggered - this bypasses normal trigger logic and forces response
 			false, // forceReason
+			undefined, // reasoningQuery
 			undefined, // llmOverrideCodename
 			true, // isStopResponse - This prevents the stop response from being stopped
 			0, // retryCount - start fresh for stop responses

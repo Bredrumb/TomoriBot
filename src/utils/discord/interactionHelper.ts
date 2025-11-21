@@ -642,17 +642,26 @@ export async function replyInfoEmbed(
 			}
 		} catch (fallbackError) {
 			// All methods failed - log comprehensive error details
-			log.error("All interaction methods failed for replyInfoEmbed:", {
-				originalError: error,
-				fallbackError: fallbackError,
-				interactionState: {
-					id: interaction.id,
-					type: interaction.type,
-					deferred: interaction.deferred,
-					replied: interaction.replied,
+			await log.error(
+				"All interaction methods failed for replyInfoEmbed:",
+				error,
+				{
+					errorType: "InteractionReplyFailure",
+					metadata: {
+						fallbackError:
+							fallbackError instanceof Error
+								? fallbackError.message
+								: String(fallbackError),
+						interactionState: {
+							id: interaction.id,
+							type: interaction.type,
+							deferred: interaction.deferred,
+							replied: interaction.replied,
+						},
+						embedTitle: options.titleKey,
+					},
 				},
-				embedTitle: options.titleKey,
-			});
+			);
 		}
 	}
 }
@@ -754,17 +763,26 @@ export async function replySummaryEmbed(
 				});
 			}
 		} catch (fallbackError) {
-			log.error("All interaction methods failed for replySummaryEmbed:", {
-				originalError: error,
-				fallbackError: fallbackError,
-				interactionState: {
-					id: interaction.id,
-					type: interaction.type,
-					deferred: interaction.deferred,
-					replied: interaction.replied,
+			await log.error(
+				"All interaction methods failed for replySummaryEmbed:",
+				error,
+				{
+					errorType: "InteractionReplyFailure",
+					metadata: {
+						fallbackError:
+							fallbackError instanceof Error
+								? fallbackError.message
+								: String(fallbackError),
+						interactionState: {
+							id: interaction.id,
+							type: interaction.type,
+							deferred: interaction.deferred,
+							replied: interaction.replied,
+						},
+						embedTitle: options.titleKey,
+					},
 				},
-				embedTitle: options.titleKey,
-			});
+			);
 		}
 	}
 }
