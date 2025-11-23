@@ -74,10 +74,14 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
 	// Default to 'development' if RUN_ENV is not set (safe for local users)
 	const runEnv = process.env.RUN_ENV || "development";
 	const isProduction = runEnv === "production";
+	const isTestProduction = process.env.TEST_PRODUCTION === "true";
 
-	// Development mode: Use process.env (loaded via dotenv)
-	if (!isProduction) {
-		log.info("Loading secrets from .env (development mode)");
+	// Development mode OR test production mode: Use process.env (loaded via dotenv)
+	// TEST_PRODUCTION allows testing production behavior locally without AWS
+	if (!isProduction || isTestProduction) {
+		log.info(
+			`Loading secrets from .env (${isTestProduction ? "test production" : "development"} mode)`,
+		);
 
 		const secrets: TomoriSecrets = {
 			DISCORD_TOKEN: process.env.DISCORD_TOKEN || "",

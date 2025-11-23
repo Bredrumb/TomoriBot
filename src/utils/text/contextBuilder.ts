@@ -39,6 +39,7 @@ const HUMANIZE_INSTRUCTION =
  * This is an internal representation before converting to StructuredContextItem.
  */
 type SimplifiedMessageForContext = {
+	id: string; // Discord message ID
 	authorId: string;
 	authorName: string;
 	content: string | null;
@@ -869,6 +870,7 @@ export async function buildContext({
 				role,
 				parts,
 				metadataTag: ContextItemTag.DIALOGUE_HISTORY, // Tagging
+				messageId: msg.id, // Include Discord message ID for tools
 			});
 		}
 	}

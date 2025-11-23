@@ -91,11 +91,11 @@ export default {
 	rate_limit: {
 		// User-level rate limiting (DM notification)
 		user_exceeded_title: `⚠️ Rate Limit Reached`,
-		user_exceeded_description: `You currently have {current_count} active messages being processed across all servers (limit: {max_limit}). To prevent abuse, your most recent trigger attempt has been dropped. Please wait for some of your messages to finish processing before sending more.`,
+		user_exceeded_description: `You currently have too much active messages being processed across all servers. To prevent abuse, your most recent trigger attempt has been dropped. Please wait for some of your messages to finish processing before sending more.`,
 
 		// Server-level rate limiting (public channel notification)
 		server_exceeded_title: `⚠️ Server Overloaded`,
-		server_exceeded_description: `This server currently has {current_count} active messages being processed (limit: {max_limit}). I'm at capacity right now! Please try again in a moment, or use me in another server or via Direct Messages instead.`,
+		server_exceeded_description: `This server currently has too much active messages being processed. I'm at capacity right now! Please try again in a moment, or use me in another server or via Direct Messages instead.`,
 	},
 
 	genai: {

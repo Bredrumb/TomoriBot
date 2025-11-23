@@ -40,7 +40,7 @@ if (secrets.DISCORD_WEBHOOK_URL) {
 }
 
 log.success(
-	`Secrets loaded successfully from ${(process.env.RUN_ENV || "development") === "production" ? "AWS Secrets Manager" : ".env file"}`,
+	`Secrets loaded successfully from ${(process.env.RUN_ENV || "development") === "production" && process.env.TEST_PRODUCTION !== "true" ? "AWS Secrets Manager" : ".env file"}`,
 );
 
 // Initialize encryption key manager AFTER secrets are loaded
@@ -78,7 +78,10 @@ function getPostgresUrl(): string {
 
 	// Development: Fallback to non-SSL when dealing with localhost
 	// Production: Require SSL with full certificate verification (protects against MITM attacks)
-	const sslMode = isProduction ? "require" : "disable";
+	const sslMode =
+		isProduction && process.env.TEST_PRODUCTION !== "true"
+			? "require"
+			: "disable";
 
 	// If POSTGRES_URL is provided, use it directly (backwards compatibility)
 	if (process.env.POSTGRES_URL) {

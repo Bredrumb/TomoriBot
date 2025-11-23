@@ -22,7 +22,6 @@ import {
 } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
-import { extractGifKeyframes } from "../../utils/media/gifProcessor";
 import type {
 	ProcessedChunk,
 	ProviderError,
@@ -711,41 +710,42 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 
 						// Handle images with URI - fetch and convert to base64
 						try {
-							// Check if this is a GIF - process as keyframes instead
+							// Check if this is a GIF - handle based on environment
 							if (part.mimeType === "image/gif") {
-								log.info(
-									`OpenrouterStreamAdapter: GIF detected, extracting keyframes: ${part.uri}`,
-								);
+								const isProduction = process.env.RUN_ENV === "production";
 
-								// Extract keyframes from GIF
-								const keyframes = await extractGifKeyframes(part.uri);
+								if (isProduction) {
+									// Production: Replace with text placeholder
+									// Check if this is a Tenor link (has descriptive slug)
+									if (part.uri.includes("tenor.com")) {
+										// Keep Tenor link intact for context (descriptive slug)
+										contentParts.push({
+											type: "text",
+											text: `[System: This message contains a GIF from Tenor: ${part.uri}. GIF processing disabled in production to prevent memory issues.]`,
+										});
+									} else {
+										// Discord attachment GIF: Just note its presence
+										contentParts.push({
+											type: "text",
+											text: "[System: This message contains a GIF. GIF processing disabled in production to prevent memory issues.]",
+										});
+									}
 
-								// Add a text part describing the keyframes
-								contentParts.push({
-									type: "text",
-									text: `[Animated GIF - ${keyframes.length} keyframes extracted from ${keyframes[0].totalFrames} total frames]`,
-								});
-
-								// Add each keyframe as a separate image
-								for (const frame of keyframes) {
-									// Add frame label
+									log.info(
+										`OpenrouterStreamAdapter: GIF detected in production mode, replaced with placeholder: ${part.uri}`,
+									);
+								} else {
+									// Development: Replace with message ID hint for process_gif tool
+									// Note: URL intentionally omitted to prevent hallucinations - AI should use the tool
 									contentParts.push({
 										type: "text",
-										text: `Frame ${frame.frameNumber + 1}/${keyframes.length} (original frame ${frame.originalFrameIndex + 1}/${frame.totalFrames}):`,
+										text: `[System: This message (ID: ${item.messageId}) contains a GIF. Use process_gif tool with this message ID to process it if needed for context.]`,
 									});
 
-									// Add frame image
-									contentParts.push({
-										type: "image_url",
-										imageUrl: {
-											url: `data:${frame.mimeType};base64,${frame.data}`,
-										},
-									});
+									log.info(
+										`OpenrouterStreamAdapter: GIF detected in dev mode, added process_gif hint for message: ${item.messageId}`,
+									);
 								}
-
-								log.success(
-									`OpenrouterStreamAdapter: Successfully processed GIF into ${keyframes.length} keyframes`,
-								);
 							} else {
 								// Regular image processing (non-GIF)
 								const imageResponse = await fetch(part.uri);

@@ -45,6 +45,7 @@ export type StructuredContextItem = {
 	role: "system" | "user" | "model"; // 'system' for initial instructions, 'user' for user/tool inputs, 'model' for LLM responses
 	parts: ContextPart[];
 	metadataTag?: ContextItemTag; // Optional tag for internal processing
+	messageId?: string; // Optional Discord message ID for tools that need to reference the original message
 };
 
 /**

@@ -633,36 +633,39 @@ export class GoogleStreamAdapter implements StreamProvider {
 					} else if (part.type === "image" && part.uri && part.mimeType) {
 						// Handle images with URI - fetch and convert to base64
 						try {
-							// Check if this is a GIF - process as keyframes instead
+							// Check if this is a GIF - handle based on environment
 							if (part.mimeType === "image/gif") {
-								log.info(
-									`GoogleStreamAdapter: GIF detected, extracting keyframes: ${part.uri}`,
-								);
+								const isProduction = process.env.RUN_ENV === "production";
 
-								// Extract keyframes from GIF
-								const keyframes = await extractGifKeyframes(part.uri);
+								if (isProduction) {
+									// Production: Replace with text placeholder
+									// Check if this is a Tenor link (has descriptive slug)
+									if (part.uri.includes("tenor.com")) {
+										// Keep Tenor link intact for context (descriptive slug)
+										geminiParts.push({
+											text: `[System: This message contains a GIF from Tenor: ${part.uri}. GIF processing disabled in production to prevent memory issues.]`,
+										});
+									} else {
+										// Discord attachment GIF: Just note its presence
+										geminiParts.push({
+											text: "[System: This message contains a GIF. GIF processing disabled in production to prevent memory issues.]",
+										});
+									}
 
-								// Add a text label before the keyframes
-								geminiParts.push({
-									text: `[Animated GIF - ${keyframes.length} keyframes extracted from ${keyframes[0].totalFrames} total frames]`,
-								});
-
-								// Add each keyframe as a separate image with a label
-								for (const frame of keyframes) {
+									log.info(
+										`GoogleStreamAdapter: GIF detected in production mode, replaced with placeholder: ${part.uri}`,
+									);
+								} else {
+									// Development: Replace with message ID hint for process_gif tool
+									// Note: URL intentionally omitted to prevent hallucinations - AI should use the tool
 									geminiParts.push({
-										text: `Frame ${frame.frameNumber + 1}/${keyframes.length} (original frame ${frame.originalFrameIndex + 1}/${frame.totalFrames}):`,
+										text: `[System: This message (ID: ${item.messageId}) contains a GIF. Use process_gif tool with this message ID to process it if needed for context.]`,
 									});
-									geminiParts.push({
-										inlineData: {
-											mimeType: frame.mimeType,
-											data: frame.data,
-										},
-									});
+
+									log.info(
+										`GoogleStreamAdapter: GIF detected in dev mode, added process_gif hint for message: ${item.messageId}`,
+									);
 								}
-
-								log.success(
-									`GoogleStreamAdapter: Successfully processed GIF into ${keyframes.length} keyframes`,
-								);
 							} else {
 								// Regular image processing (non-GIF)
 								const imageResponse = await fetch(part.uri);

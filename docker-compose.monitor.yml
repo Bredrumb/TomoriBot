@@ -4,6 +4,7 @@ services:
   grafana:
     image: grafana/grafana-oss:latest
     container_name: tomoribot-dashboard
+    restart: unless-stopped
     ports:
       - "3000:3000"
     volumes:

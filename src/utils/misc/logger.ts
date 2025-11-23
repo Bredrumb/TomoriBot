@@ -16,20 +16,23 @@ export enum ColorCode {
 
 /**
  * Determines if non-essential logs should be shown based on environment
+ * TEST_PRODUCTION mode: Show all logs even when RUN_ENV=production
  */
 const isProduction = process.env.RUN_ENV === "production";
+const isTestProduction = process.env.TEST_PRODUCTION === "true";
+const shouldHideLogs = isProduction && !isTestProduction;
 
 /**
  * Pino logger instance with custom levels and formatting
  */
 const pinoLogger = pino({
-	level: isProduction ? "error" : "info",
+	level: shouldHideLogs ? "error" : "info",
 	customLevels: {
 		success: 35, // Between info (30) and warn (40)
 		section: 31, // Just above info (30)
 		rateLimit: 55, // Between error (50) and fatal (60)
 	},
-	transport: !isProduction
+	transport: !shouldHideLogs
 		? {
 				target: "pino-pretty",
 				options: {
@@ -65,7 +68,7 @@ export const log = {
 	 * @param msg - The message to log.
 	 */
 	info: (msg: string) => {
-		pinoLogger.info(isProduction ? msg : `${colors.cyan}${msg}${colors.reset}`);
+		pinoLogger.info(shouldHideLogs ? msg : `${colors.cyan}${msg}${colors.reset}`);
 	},
 
 	/**
@@ -76,7 +79,7 @@ export const log = {
 		// Pino adds custom level methods at runtime, but TypeScript doesn't know about them
 		// biome-ignore lint/suspicious/noExplicitAny: Custom Pino level added at runtime
 		(pinoLogger as any).success(
-			isProduction
+			shouldHideLogs
 				? `✓ ${msg}`
 				: `${colors.green}✓ ${msg}${colors.reset}`,
 		);
@@ -88,7 +91,7 @@ export const log = {
 	 * @param err - Optional error object to include.
 	 */
 	warn: (msg: string, err?: unknown) => {
-		const coloredMsg = isProduction
+		const coloredMsg = shouldHideLogs
 			? msg
 			: `${colors.yellow}${msg}${colors.reset}`;
 		if (err) {
@@ -108,7 +111,7 @@ export const log = {
 	 * @param metadata - Optional metadata object with rate limit details.
 	 */
 	rateLimit: (msg: string, metadata?: Record<string, unknown>) => {
-		const coloredMsg = isProduction
+		const coloredMsg = shouldHideLogs
 			? msg
 			: `${colors.brightYellow}${msg}${colors.reset}`;
 		// Pino adds custom level methods at runtime, but TypeScript doesn't know about them
@@ -133,7 +136,7 @@ export const log = {
 		err?: unknown,
 		context?: ErrorContext,
 	): Promise<void> => {
-		const coloredMsg = isProduction
+		const coloredMsg = shouldHideLogs
 			? msg
 			: `${colors.red}${msg}${colors.reset}`;
 
@@ -197,7 +200,7 @@ export const log = {
 	 * @param msg - The section title.
 	 */
 	section: (msg: string) => {
-		const coloredMsg = isProduction
+		const coloredMsg = shouldHideLogs
 			? `\n=== ${msg} ===`
 			: `${colors.magenta}\n=== ${msg} ===${colors.reset}`;
 		// Pino adds custom level methods at runtime, but TypeScript doesn't know about them

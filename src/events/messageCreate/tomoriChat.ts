@@ -38,6 +38,10 @@ import type {
 } from "../../types/provider/interfaces";
 import { ToolRegistry } from "../../tools/toolRegistry";
 import { keyManager } from "@/utils/security/keyManager";
+import {
+	checkUserRateLimit,
+	checkServerRateLimit,
+} from "@/utils/security/rateLimiter";
 
 // Constants
 const MESSAGE_FETCH_LIMIT = Number.parseInt(
@@ -160,6 +164,7 @@ const TENOR_GIF_REGEX =
 // Rule 13: This type is local to this file's processing logic for now.
 // If it becomes shared across multiple files for context building, we can move it to /types/.
 type SimplifiedMessageForContext = {
+	id: string; // Discord message ID
 	authorId: string;
 	authorName: string; // Resolved name (Tomori's nickname or user's display name)
 	content: string | null; // Message text content
@@ -286,13 +291,6 @@ async function sendUserRateLimitDM(
 		const rateLimitEmbed = createStandardEmbed(userLocale, {
 			titleKey: "rate_limit.user_exceeded_title",
 			descriptionKey: "rate_limit.user_exceeded_description",
-			descriptionVars: {
-				current_count: currentCount.toString(),
-				max_limit: Number.parseInt(
-					process.env.MAX_USER_ACTIVE_MESSAGES || "5",
-					10,
-				).toString(),
-			},
 			color: ColorCode.WARN,
 		});
 
@@ -325,13 +323,6 @@ async function sendServerRateLimitEmbed(
 		await sendStandardEmbed(channel, locale, {
 			titleKey: "rate_limit.server_exceeded_title",
 			descriptionKey: "rate_limit.server_exceeded_description",
-			descriptionVars: {
-				current_count: currentCount.toString(),
-				max_limit: Number.parseInt(
-					process.env.MAX_SERVER_ACTIVE_MESSAGES || "10",
-					10,
-				).toString(),
-			},
 			color: ColorCode.WARN,
 		});
 		log.info(
@@ -605,20 +596,12 @@ export default async function tomoriChat(
 					shouldBotReply(message, modifiedEarlyTomoriStateForCheck)
 				) {
 					// Rate limit check: Check user and server limits before enqueueing
-					const maxUserLimit = Number.parseInt(
-						process.env.MAX_USER_ACTIVE_MESSAGES || "5",
-						10,
-					);
-					const maxServerLimit = Number.parseInt(
-						process.env.MAX_SERVER_ACTIVE_MESSAGES || "10",
-						10,
-					);
-
 					// Check user-level rate limit first (stricter)
 					const userActiveCount = getUserActiveMessageCount(userDiscId);
-					if (userActiveCount >= maxUserLimit) {
+					const userRateCheck = checkUserRateLimit(userActiveCount);
+					if (!userRateCheck.allowed) {
 						log.warn(
-							`User ${userDiscId} exceeded rate limit (${userActiveCount}/${maxUserLimit} active messages). Dropping message ${message.id}.`,
+							`User ${userDiscId} exceeded rate limit (${userRateCheck.currentCount}/${userRateCheck.maxLimit} active messages). Dropping message ${message.id}.`,
 						);
 
 						// Load user locale for DM
@@ -639,9 +622,10 @@ export default async function tomoriChat(
 
 					// Check server-level rate limit
 					const serverActiveCount = getServerActiveMessageCount(serverDiscId);
-					if (serverActiveCount >= maxServerLimit) {
+					const serverRateCheck = checkServerRateLimit(serverActiveCount);
+					if (!serverRateCheck.allowed) {
 						log.warn(
-							`Server ${serverDiscId} exceeded rate limit (${serverActiveCount}/${maxServerLimit} active messages). Dropping message ${message.id}.`,
+							`Server ${serverDiscId} exceeded rate limit (${serverRateCheck.currentCount}/${serverRateCheck.maxLimit} active messages). Dropping message ${message.id}.`,
 						);
 
 						// Get server locale
@@ -1730,6 +1714,7 @@ export default async function tomoriChat(
 				) {
 					// Create a new entry if it's a different author or the previous has no content
 					simplifiedMessages.push({
+						id: msg.id,
 						authorId: effectiveAuthorId,
 						authorName,
 						content: messageContentForLlm,
@@ -1786,6 +1771,7 @@ export default async function tomoriChat(
 
 				// Create synthetic simplified message for the reminder
 				const reminderMessage: SimplifiedMessageForContext = {
+					id: `synthetic-reminder-${Date.now()}`, // Synthetic ID for system-generated reminder
 					authorId: reminderRecipientID,
 					authorName: "System", // Use bot's nickname
 					content: reminderContent,
@@ -1818,6 +1804,7 @@ export default async function tomoriChat(
 					// Create a fake user message prompting Tomori to continue
 					// Use "0" as authorId to ensure it's not the bot's ID (will be labeled as "user" role)
 					const continuationPrompt: SimplifiedMessageForContext = {
+						id: `synthetic-continuation-${Date.now()}`, // Synthetic ID for system-generated continuation
 						authorId: "0", // Placeholder ID that's definitely not the bot's ID
 						authorName: "System",
 						content: "[Continue your last message]",
