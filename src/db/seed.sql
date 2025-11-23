@@ -13,13 +13,13 @@ SELECT add_column_if_not_exists('llms', 'ja_description', 'TEXT');
 -- Insert LLMs with conflict resolution that updates descriptions
 INSERT INTO llms (llm_provider, llm_codename, is_smartest, is_default, is_reasoning, is_deprecated, is_free, has_tools, sees_images, is_uncensored, llm_description, ja_description)
 VALUES
-  -- Google Models
-  ('google', 'gemini-2.0-flash', false, false, false, true, false, true, false, false, NULL, NULL),
-  ('google', 'gemini-2.5-flash-lite', false, false, false, false, false, true, false, false, 'Lightweight version optimized for speed and efficiency', '速度と効率を最適化した軽量版モデル'),
-  ('google', 'gemini-2.5-flash-preview-05-20', false, false, false, true, false, true, false, false, NULL, NULL),
-  ('google', 'gemini-2.5-flash-preview-09-2025', false, false, false, false, false, true, false, false, 'Experimental model for general-purpose applications', '実験的な汎用アプリケーション向けモデル'),
-  ('google', 'gemini-2.5-flash', false, true, false, false, false, true, false, false, 'Balanced model for general-purpose applications', '汎用アプリケーション向けのバランス型モデル'),
-  ('google', 'gemini-2.5-pro', true, false, true, false, false, true, false, false, 'Most capable model for complex reasoning and analysis', '複雑な推論と分析に最も優れたモデル'),
+  -- Google Models (all Gemini models support vision by default)
+  ('google', 'gemini-2.0-flash', false, false, false, true, false, true, true, false, NULL, NULL),
+  ('google', 'gemini-2.5-flash-lite', false, false, false, false, false, true, true, false, 'Lightweight version optimized for speed and efficiency', '速度と効率を最適化した軽量版モデル'),
+  ('google', 'gemini-2.5-flash-preview-05-20', false, false, false, true, false, true, true, false, NULL, NULL),
+  ('google', 'gemini-2.5-flash-preview-09-2025', false, false, false, false, false, true, true, false, 'Experimental model for general-purpose applications', '実験的な汎用アプリケーション向けモデル'),
+  ('google', 'gemini-2.5-flash', false, true, false, false, false, true, true, false, 'Balanced model for general-purpose applications', '汎用アプリケーション向けのバランス型モデル'),
+  ('google', 'gemini-2.5-pro', true, false, true, false, false, true, true, false, 'Most capable model for complex reasoning and analysis', '複雑な推論と分析に最も優れたモデル'),
   -- NovelAI Models
   ('novelai', 'glm-4-6', true, true, false, false, false, false, false, false, 'Latest NovelAI roleplay model with enhanced creativity and character consistency', '創造性とキャラクター一貫性を強化した最新のNovelAIロールプレイモデル'),
   ('novelai', 'kayra-v1', false, false, false, false, false, false, false, false, 'Legacy Kayra model for storytelling and roleplay', 'ストーリーテリングとロールプレイ向けのレガシーKayraモデル'),

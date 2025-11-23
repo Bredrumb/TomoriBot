@@ -9,7 +9,7 @@ import { log } from "@/utils/misc/logger";
 
 // Environment check - disable guards in development
 const IS_PRODUCTION = process.env.RUN_ENV === "production";
-const GUARDS_ENABLED = IS_PRODUCTION; // Automatically disabled in dev
+export const GUARDS_ENABLED = IS_PRODUCTION; // Automatically disabled in dev
 
 // -----------------------------------------------------------------------------
 // MESSAGE QUEUE RATE LIMITS

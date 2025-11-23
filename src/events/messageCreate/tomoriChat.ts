@@ -25,6 +25,7 @@ import {
 } from "../../utils/text/youTubeUrlCleaner";
 import { resolveTenorUrl } from "../../utils/media/tenorResolver";
 import { PeekProfilePictureTool } from "../../tools/functionCalls/peekProfilePictureTool";
+import { ProcessGifTool } from "../../tools/functionCalls/processGifTool";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { localizer, getSupportedLocales } from "../../utils/text/localizer";
 import { sql } from "bun";
@@ -383,6 +384,7 @@ export default async function tomoriChat(
 	const streamingContext = {
 		disableYouTubeProcessing: false, // Will be set to true during enhanced context restart
 		disableProfilePictureProcessing: false, // Will be set to true during enhanced context restart
+		disableGifProcessing: false, // Will be set to true during enhanced context restart
 		forceReason, // Pass reasoning flag for enhanced AI responses
 		isManuallyTriggered, // Pass command flag to indicate manual triggering
 	};
@@ -2514,6 +2516,50 @@ export default async function tomoriChat(
 										`Profile picture for user ${username} already exists in context. Skipping duplication.`,
 									);
 								}
+
+								// Continue to next iteration WITHOUT adding to function interaction history
+								// This will restart the streaming with enhanced context
+								continue;
+							}
+
+							// Handle GIF processing restart signal (enhanced context restart)
+							if (
+								funcName === "process_gif" &&
+								toolResult.data &&
+								(toolResult.data as Record<string, unknown>).type ===
+									"context_restart_with_gif"
+							) {
+								const restartData = toolResult.data as Record<string, unknown>;
+								const messageId = restartData.message_id as string;
+								const frameCount = restartData.frame_count as number;
+
+								log.info(
+									`GIF processing restart signal detected for message: ${messageId} (${frameCount} frames). Enhancing context with GIF keyframes.`,
+								);
+
+								// Get the enhanced context item from external storage
+								const enhancedContextItem =
+									ProcessGifTool.getPendingEnhancedContext(messageId);
+
+								if (!enhancedContextItem) {
+									log.warn(
+										`No pending enhanced context found for message ${messageId}. GIF restart failed.`,
+									);
+									continue;
+								}
+
+								// Set flag to disable GIF processing during enhanced context restart
+								// This prevents TomoriBot from making additional GIF function calls while processing
+								streamingContext.disableGifProcessing = true;
+								log.info(
+									"Temporarily disabled GIF processing function during enhanced context restart",
+								);
+
+								// Add the GIF frames context item to existing context
+								contextSegments.push(enhancedContextItem);
+								log.success(
+									`Enhanced context with ${frameCount} GIF keyframes for message: ${messageId}. Total context items: ${contextSegments.length}`,
+								);
 
 								// Continue to next iteration WITHOUT adding to function interaction history
 								// This will restart the streaming with enhanced context

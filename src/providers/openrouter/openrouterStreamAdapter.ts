@@ -721,13 +721,13 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 										// Keep Tenor link intact for context (descriptive slug)
 										contentParts.push({
 											type: "text",
-											text: `[System: This message contains a GIF from Tenor: ${part.uri}. GIF processing disabled in production to prevent memory issues.]`,
+											text: `[System: This message contains a GIF from Tenor: ${part.uri}. GIF processing disabled in production.]`,
 										});
 									} else {
 										// Discord attachment GIF: Just note its presence
 										contentParts.push({
 											type: "text",
-											text: "[System: This message contains a GIF. GIF processing disabled in production to prevent memory issues.]",
+											text: "[System: This message contains a GIF. GIF processing disabled in production.]",
 										});
 									}
 
