@@ -93,6 +93,36 @@ export const MEDIA_LIMITS = {
 } as const;
 
 // -----------------------------------------------------------------------------
+// FETCH TOOL LIMITS (MCP Fetch Server Protection)
+// -----------------------------------------------------------------------------
+export const FETCH_LIMITS = {
+	/**
+	 * Maximum fetch response size in MB (byte size check via HEAD request)
+	 * Prevents downloading excessively large webpages into memory
+	 * @default 5 MB in production, 50 MB in development
+	 */
+	MAX_FETCH_SIZE_MB: GUARDS_ENABLED
+		? Number.parseInt(process.env.MAX_FETCH_SIZE_MB || "5", 10)
+		: Number.parseInt(process.env.MAX_FETCH_SIZE_MB || "50", 10),
+
+	/**
+	 * Base maximum character count for fetch content
+	 * This is dynamically reduced based on memory status using percentage cuts
+	 * @default 50000 characters
+	 */
+	FETCH_CHAR_LIMIT: 50000,
+
+	/**
+	 * Percentage cuts applied to FETCH_CHAR_LIMIT based on memory status
+	 * Safe mode: 100% (50k chars)
+	 * Warning mode: 30% (15k chars)
+	 * Critical mode: 4% (2k chars)
+	 */
+	MEMORY_REDUCTION_WARNING: 0.3, // 30% of base limit
+	MEMORY_REDUCTION_CRITICAL: 0.04, // 4% of base limit
+} as const;
+
+// -----------------------------------------------------------------------------
 // MEMORY PROTECTION (Global Process Memory)
 // -----------------------------------------------------------------------------
 export const MEMORY_PROTECTION = {
@@ -314,6 +344,37 @@ class MemoryGuard {
 	}
 
 	/**
+	 * Gets the current fetch character limit based on memory status
+	 * Dynamically reduces fetch size during high memory pressure
+	 * @returns Maximum characters allowed for fetch tool
+	 */
+	getFetchCharLimit(): number {
+		const memCheck = this.checkMemory();
+
+		if (memCheck.status === "critical") {
+			return Math.floor(
+				FETCH_LIMITS.FETCH_CHAR_LIMIT * FETCH_LIMITS.MEMORY_REDUCTION_CRITICAL,
+			); // 4% = 2k chars
+		}
+
+		if (memCheck.status === "warning") {
+			return Math.floor(
+				FETCH_LIMITS.FETCH_CHAR_LIMIT * FETCH_LIMITS.MEMORY_REDUCTION_WARNING,
+			); // 30% = 15k chars
+		}
+
+		return FETCH_LIMITS.FETCH_CHAR_LIMIT; // 100% = 50k chars in safe mode
+	}
+
+	/**
+	 * Gets the current memory status without full check result
+	 * @returns Current memory status (safe/warning/critical)
+	 */
+	getStatus(): MemoryStatus {
+		return this.checkMemory().status;
+	}
+
+	/**
 	 * Manually force emergency mode exit (for testing or admin commands)
 	 */
 	forceExitEmergencyMode(): void {
@@ -418,6 +479,12 @@ export function logGuardConfiguration(): void {
 	log.info(`GIF Limit: ${MEDIA_LIMITS.GIF_LIMIT}`);
 	log.info(`Max Media Size: ${MEDIA_LIMITS.MAX_MEDIA_SIZE_MB} MB`);
 	log.info(`Total Media Budget: ${MEDIA_LIMITS.TOTAL_MEDIA_BUDGET_MB} MB`);
+	log.info("\n--- Fetch Tool Limits ---");
+	log.info(`Max Fetch Size: ${FETCH_LIMITS.MAX_FETCH_SIZE_MB} MB`);
+	log.info(`Base Fetch Char Limit: ${FETCH_LIMITS.FETCH_CHAR_LIMIT}`);
+	log.info(
+		`Memory Reductions: ${FETCH_LIMITS.MEMORY_REDUCTION_WARNING * 100}% (warning), ${FETCH_LIMITS.MEMORY_REDUCTION_CRITICAL * 100}% (critical)`,
+	);
 	log.info("\n--- Memory Protection ---");
 	log.info(
 		`Container Memory Limit: ${MEMORY_PROTECTION.CONTAINER_MEMORY_LIMIT_MB} MB`,

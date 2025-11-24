@@ -50,6 +50,9 @@ jobs:
           if [ -z "${{ secrets.ECR_REPOSITORY_NAME }}" ]; then missing_secrets+=("ECR_REPOSITORY_NAME"); fi
           if [ -z "${{ secrets.ECS_CLUSTER_NAME }}" ]; then missing_secrets+=("ECS_CLUSTER_NAME"); fi
           if [ -z "${{ secrets.ECS_SERVICE_NAME }}" ]; then missing_secrets+=("ECS_SERVICE_NAME"); fi
+          if [ -z "${{ secrets.ECS_TASK_FAMILY }}" ]; then missing_secrets+=("ECS_TASK_FAMILY"); fi
+          if [ -z "${{ secrets.ECS_TASK_CPU }}" ]; then missing_secrets+=("ECS_TASK_CPU"); fi
+          if [ -z "${{ secrets.ECS_TASK_MEMORY }}" ]; then missing_secrets+=("ECS_TASK_MEMORY"); fi
           if [ -z "${{ secrets.RDS_ENDPOINT }}" ]; then missing_secrets+=("RDS_ENDPOINT"); fi
           if [ -z "${{ secrets.TASK_EXECUTION_ROLE_ARN }}" ]; then missing_secrets+=("TASK_EXECUTION_ROLE_ARN"); fi
           if [ -z "${{ secrets.PAT_TOKEN }}" ]; then missing_secrets+=("PAT_TOKEN"); fi
@@ -489,19 +492,71 @@ jobs:
 
       - name: Prepare ECS task definition
         env:
-          # We build the string ourselves instead of relying on the job handoff
+          # Infrastructure configuration from secrets
           IMAGE_URI: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY_NAME }}:${{ github.sha }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
           RDS_ENDPOINT: ${{ secrets.RDS_ENDPOINT }}
           EXECUTION_ROLE: ${{ secrets.TASK_EXECUTION_ROLE_ARN }}
+          TASK_FAMILY: ${{ secrets.ECS_TASK_FAMILY }}
+          TASK_CPU: ${{ secrets.ECS_TASK_CPU }}
+          TASK_MEMORY: ${{ secrets.ECS_TASK_MEMORY }}
         run: |
           echo "Preparing task definition with image: $IMAGE_URI"
 
-          # Replace placeholders in task definition template
-          sed "s|IMAGE_URI_PLACEHOLDER|$IMAGE_URI|g" .github/workflows/task-definition-template.json > task-definition.json
-          sed -i "s|REGION_PLACEHOLDER|$AWS_REGION|g" task-definition.json
-          sed -i "s|RDS_ENDPOINT_PLACEHOLDER|$RDS_ENDPOINT|g" task-definition.json
-          sed -i "s|EXECUTION_ROLE_ARN_PLACEHOLDER|$EXECUTION_ROLE|g" task-definition.json
+          # Generate task definition from secrets (no template file needed)
+          cat > task-definition.json <<EOF
+          {
+            "family": "$TASK_FAMILY",
+            "networkMode": "awsvpc",
+            "requiresCompatibilities": ["FARGATE"],
+            "cpu": "$TASK_CPU",
+            "memory": "$TASK_MEMORY",
+            "executionRoleArn": "$EXECUTION_ROLE",
+            "taskRoleArn": "$EXECUTION_ROLE",
+            "containerDefinitions": [
+              {
+                "name": "tomoribot",
+                "image": "$IMAGE_URI",
+                "essential": true,
+                "environment": [
+                  {
+                    "name": "NODE_ENV",
+                    "value": "production"
+                  },
+                  {
+                    "name": "RUN_ENV",
+                    "value": "production"
+                  },
+                  {
+                    "name": "POSTGRES_HOST",
+                    "value": "$RDS_ENDPOINT"
+                  },
+                  {
+                    "name": "POSTGRES_PORT",
+                    "value": "5432"
+                  },
+                  {
+                    "name": "POSTGRES_USER",
+                    "value": "postgres"
+                  },
+                  {
+                    "name": "POSTGRES_DB",
+                    "value": "tomoribot"
+                  }
+                ],
+                "logConfiguration": {
+                  "logDriver": "awslogs",
+                  "options": {
+                    "awslogs-group": "/ecs/tomoribot",
+                    "awslogs-region": "$AWS_REGION",
+                    "awslogs-stream-prefix": "ecs",
+                    "awslogs-create-group": "true"
+                  }
+                }
+              }
+            ]
+          }
+          EOF
 
           echo "Task definition prepared:"
           cat task-definition.json

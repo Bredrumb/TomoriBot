@@ -21,6 +21,65 @@ import type { ToolContext } from "../../types/tool/interfaces";
 import { getBraveSearchHandler } from "../../tools/mcpServers/brave-search/braveSearchHandler";
 import { getFetchHandler } from "../../tools/mcpServers/fetch/fetchHandler";
 import { getDuckDuckGoHandler } from "../../tools/mcpServers/duckduckgo-search/duckduckgoHandler";
+import { FETCH_LIMITS, memoryGuard } from "../security/rateLimiter";
+
+/**
+ * Validates fetch URL size before downloading
+ * Performs HEAD request to check Content-Length header
+ * @param url - URL to validate
+ * @returns Validation result with size information
+ */
+async function validateFetchSize(
+	url: string,
+): Promise<{ allowed: boolean; reason?: string; sizeMB?: number }> {
+	try {
+		const maxSizeMB = FETCH_LIMITS.MAX_FETCH_SIZE_MB;
+
+		// Perform HEAD request to get Content-Length without downloading body
+		const headResponse = await fetch(url, {
+			method: "HEAD",
+			signal: AbortSignal.timeout(5000), // 5 second timeout
+		});
+
+		// Get Content-Length header (may not always be present)
+		const contentLengthHeader = headResponse.headers.get("content-length");
+
+		if (!contentLengthHeader) {
+			// If no Content-Length header, allow but log warning
+			log.warn(
+				`No Content-Length header for URL: ${url}. Proceeding with fetch but size is unknown.`,
+			);
+			return { allowed: true };
+		}
+
+		const contentLengthBytes = Number.parseInt(contentLengthHeader, 10);
+		const contentLengthMB = contentLengthBytes / (1024 * 1024);
+
+		// Check if size exceeds limit
+		if (contentLengthMB > maxSizeMB) {
+			log.warn(
+				`Fetch size validation failed: ${contentLengthMB.toFixed(2)} MB > ${maxSizeMB} MB for URL: ${url}`,
+			);
+			return {
+				allowed: false,
+				reason: `Content size (${contentLengthMB.toFixed(2)} MB) exceeds maximum allowed size (${maxSizeMB} MB)`,
+				sizeMB: contentLengthMB,
+			};
+		}
+
+		// Size is acceptable
+		log.info(
+			`Fetch size validated: ${contentLengthMB.toFixed(2)} MB (limit: ${maxSizeMB} MB)`,
+		);
+		return { allowed: true, sizeMB: contentLengthMB };
+	} catch (error) {
+		// If HEAD request fails, allow fetch to proceed (might be a server issue, not size issue)
+		log.warn(`HEAD request failed for URL: ${url}. Proceeding with fetch.`, {
+			error: error instanceof Error ? error.message : String(error),
+		});
+		return { allowed: true };
+	}
+}
 
 /**
  * Registry of MCP server behavior handlers
@@ -182,16 +241,29 @@ export class MCPExecutor {
 				modifiedArgs.stream = false; // Disable streaming for Discord compatibility
 				break;
 
-			case "fetch-url":
+			case "fetch-url": {
+				// Get dynamic character limit based on current memory status
+				const dynamicCharLimit = memoryGuard.getFetchCharLimit();
+
+				// Apply dynamic limit with AI's request as a suggested value
 				modifiedArgs.maxLength = Math.min(
-					Number(modifiedArgs.maxLength) || 15000,
-					50000,
-				); // Default 15k, max 50k
+					Number(modifiedArgs.maxLength) || dynamicCharLimit,
+					dynamicCharLimit,
+				);
+
+				// Log if memory pressure is reducing the limit
+				const memoryStatus = memoryGuard.getStatus();
+				if (memoryStatus !== "safe") {
+					log.warn(
+						`Fetch character limit reduced to ${dynamicCharLimit} due to ${memoryStatus} memory status`,
+					);
+				}
 				modifiedArgs.extractMainContent =
 					modifiedArgs.extractMainContent !== false; // Default true
 				modifiedArgs.includeLinks = modifiedArgs.includeLinks !== false; // Default true
 				modifiedArgs.includeImages = modifiedArgs.includeImages !== false; // Default true
 				break;
+			}
 
 			// Add more function-specific rules as needed
 			default:
@@ -301,7 +373,23 @@ export class MCPExecutor {
 						// Execute the MCP function
 						log.info(`Executing MCP function: ${functionName}`);
 
-						const mcpResult = await mcpTool.callTool([
+					// Validate fetch URL size before executing (HEAD request check)
+					if (functionName === "fetch-url" && mcpContext.modifiedArgs.url) {
+						const fetchValidation = await validateFetchSize(
+							mcpContext.modifiedArgs.url as string,
+						);
+
+						if (!fetchValidation.allowed) {
+							throw new MCPExecutionError(
+								fetchValidation.reason ||
+									"Fetch size validation failed",
+								functionName,
+								handler?.serverName || "unknown",
+							);
+						}
+					}
+
+					const mcpResult = await mcpTool.callTool([
 							{ name: functionName, args: mcpContext.modifiedArgs },
 						]);
 

@@ -390,5 +390,20 @@ try {
 	// Non-critical error - reminders won't work but bot can still function
 }
 
+// Initialize memory monitoring system
+log.section("Initializing Memory Monitor...");
+try {
+	const { initializeMemoryMonitor } = await import("./timers/memoryMonitor");
+
+	// Start memory monitor after client is ready
+	client.once("clientReady", () => {
+		initializeMemoryMonitor();
+		log.success("Memory monitoring system initialized");
+	});
+} catch (error) {
+	log.error("Failed to initialize memory monitor", error as Error);
+	// Non-critical error - memory monitoring won't work but bot can still function
+}
+
 // Login Bot using Discord Token
 client.login(process.env.DISCORD_TOKEN);

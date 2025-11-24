@@ -161,7 +161,7 @@ export class FetchHandler implements MCPServerBehaviorHandler {
 			formattedMessage += resultText;
 
 			// Truncate if the content is extremely long (to avoid token limits)
-			const MAX_CONTENT_LENGTH = 8000; // Reasonable limit for LLM context
+			const MAX_CONTENT_LENGTH = 50000; // Matches MCP server maxLength capability
 			if (formattedMessage.length > MAX_CONTENT_LENGTH) {
 				formattedMessage = `${formattedMessage.substring(0, MAX_CONTENT_LENGTH)}\n\n[Content truncated due to length - this represents a portion of the full page content]`;
 			}
