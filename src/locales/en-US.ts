@@ -270,6 +270,10 @@ export default {
 			// 408 REQUEST_TIMEOUT
 			"408_default_message": "Your request timed out",
 
+			// 413 PAYLOAD_TOO_LARGE
+			"413_default_message":
+				"Request body too large (context/media exceeds provider limits). Try using `/tool refresh` to clear conversation history, or reduce the amount of media/memories in context.",
+
 			// 429 TOO_MANY_REQUESTS
 			"429_default_message":
 				"You are being rate limited. Please retry shortly, or use a different model that isn't free.",

@@ -548,6 +548,9 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		} else if (finalCode.includes("402") || finalMessage.includes("402")) {
 			errorType = "rate_limit"; // Insufficient credits
 			retryable = false;
+		} else if (finalCode.includes("413") || finalMessage.includes("413")) {
+			errorType = "api_error"; // Payload too large
+			retryable = false;
 		} else if (finalCode.includes("429") || finalMessage.includes("429")) {
 			errorType = "rate_limit";
 			retryable = true;
@@ -699,82 +702,182 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 							type: "text",
 							text: part.text,
 						});
-					} else if (part.type === "image" && part.uri && part.mimeType) {
+					} else if (part.type === "image") {
 						// Only process images if the model supports them
 						if (!seesImages) {
 							log.info(
-								`Skipping image (model doesn't support images): ${part.uri}`,
+								`Skipping image (model doesn't support images): ${part.uri || "[inlineData]"}`,
 							);
 							continue;
 						}
 
-						// Handle images with URI - fetch and convert to base64
-						try {
-							// Check if this is a GIF - handle based on environment
-							if (part.mimeType === "image/gif") {
-								const isProduction = process.env.RUN_ENV === "production";
+						// Priority 1: Check for inlineData (e.g., from peekProfilePicture tool)
+						if ("inlineData" in part && part.inlineData) {
+							try {
+								const inlineData = part.inlineData as {
+									mimeType: string;
+									data: string;
+								};
 
-								if (isProduction) {
-									// Production: Replace with text placeholder
-									// Check if this is a Tenor link (has descriptive slug)
-									if (part.uri.includes("tenor.com")) {
-										// Keep Tenor link intact for context (descriptive slug)
-										contentParts.push({
-											type: "text",
-											text: `[System: This message contains a GIF from Tenor: ${part.uri}. GIF processing disabled in production.]`,
-										});
+								// Validate inlineData structure
+								if (
+									typeof inlineData === "object" &&
+									inlineData.mimeType &&
+									inlineData.data
+								) {
+									// Check if this is a GIF - handle based on environment
+									if (inlineData.mimeType === "image/gif") {
+										const isProduction = process.env.RUN_ENV === "production";
+
+										if (isProduction) {
+											// Production: Replace with text placeholder (memory protection)
+											contentParts.push({
+												type: "text",
+												text: "[System: This context contains inline GIF data. GIF processing disabled in production.]",
+											});
+
+											log.info(
+												"OpenrouterStreamAdapter: Inline GIF detected in production mode, replaced with placeholder",
+											);
+										} else {
+											// Development: Replace with message ID hint for process_gif tool
+											// Note: URL intentionally omitted to prevent hallucinations - AI should use the tool
+											contentParts.push({
+												type: "text",
+												text: `[System: This message (ID: ${item.messageId}) contains inline GIF data. Use process_gif tool with this message ID to process it if needed for context.]`,
+											});
+
+											log.info(
+												`OpenrouterStreamAdapter: Inline GIF detected in dev mode, added process_gif hint for message: ${item.messageId}`,
+											);
+										}
 									} else {
-										// Discord attachment GIF: Just note its presence
+										// Regular image processing (non-GIF)
+										// Convert inlineData to OpenAI format
 										contentParts.push({
-											type: "text",
-											text: "[System: This message contains a GIF. GIF processing disabled in production.]",
+											type: "image_url",
+											imageUrl: {
+												url: `data:${inlineData.mimeType};base64,${inlineData.data}`,
+											},
 										});
+
+										log.info(
+											"OpenrouterStreamAdapter: Processed image with existing inlineData",
+										);
+									}
+								} else {
+									log.warn(
+										"OpenrouterStreamAdapter: Invalid inlineData structure for image part",
+									);
+								}
+							} catch (inlineErr) {
+								log.warn("OpenrouterStreamAdapter: Error processing inlineData", {
+									error:
+										inlineErr instanceof Error
+											? inlineErr.message
+											: String(inlineErr),
+								});
+							}
+							continue; // Skip to next part after handling inlineData
+						}
+
+						// Priority 2 & 3: Handle URI-based images (data URI or fetch)
+						if (part.uri && part.mimeType) {
+							try {
+								let base64ImageData: string;
+								let finalMimeType = part.mimeType;
+
+								// Check if URI is already a data URI
+								if (part.uri.startsWith("data:")) {
+									// Parse data URI format: data:image/jpeg;base64,xyz
+									const dataUriMatch = part.uri.match(
+										/^data:([^;]+);base64,(.+)$/,
+									);
+									if (dataUriMatch) {
+										finalMimeType = dataUriMatch[1];
+										base64ImageData = dataUriMatch[2];
+
+										log.info(
+											`OpenrouterStreamAdapter: Parsed data URI (${finalMimeType})`,
+										);
+									} else {
+										log.warn(
+											`OpenrouterStreamAdapter: Invalid data URI format: ${part.uri.substring(0, 50)}...`,
+										);
+										continue;
+									}
+								} else {
+									// Fetch from HTTP(S) URI
+									// Check if this is a GIF - handle based on environment
+									if (part.mimeType === "image/gif") {
+										const isProduction = process.env.RUN_ENV === "production";
+
+										if (isProduction) {
+											// Production: Replace with text placeholder
+											// Check if this is a Tenor link (has descriptive slug)
+											if (part.uri.includes("tenor.com")) {
+												// Keep Tenor link intact for context (descriptive slug)
+												contentParts.push({
+													type: "text",
+													text: `[System: This message contains a GIF from Tenor: ${part.uri}. GIF processing disabled in production.]`,
+												});
+											} else {
+												// Discord attachment GIF: Just note its presence
+												contentParts.push({
+													type: "text",
+													text: "[System: This message contains a GIF. GIF processing disabled in production.]",
+												});
+											}
+
+											log.info(
+												`OpenrouterStreamAdapter: GIF detected in production mode, replaced with placeholder: ${part.uri}`,
+											);
+										} else {
+											// Development: Replace with message ID hint for process_gif tool
+											// Note: URL intentionally omitted to prevent hallucinations - AI should use the tool
+											contentParts.push({
+												type: "text",
+												text: `[System: This message (ID: ${item.messageId}) contains a GIF. Use process_gif tool with this message ID to process it if needed for context.]`,
+											});
+
+											log.info(
+												`OpenrouterStreamAdapter: GIF detected in dev mode, added process_gif hint for message: ${item.messageId}`,
+											);
+										}
+										continue; // Skip adding the GIF as an image
 									}
 
-									log.info(
-										`OpenrouterStreamAdapter: GIF detected in production mode, replaced with placeholder: ${part.uri}`,
-									);
-								} else {
-									// Development: Replace with message ID hint for process_gif tool
-									// Note: URL intentionally omitted to prevent hallucinations - AI should use the tool
-									contentParts.push({
-										type: "text",
-										text: `[System: This message (ID: ${item.messageId}) contains a GIF. Use process_gif tool with this message ID to process it if needed for context.]`,
-									});
+									// Regular image processing (non-GIF)
+									const imageResponse = await fetch(part.uri);
+									if (!imageResponse.ok) {
+										log.warn(
+											`Failed to fetch image: ${part.uri} (status: ${imageResponse.status})`,
+										);
+										continue;
+									}
 
-									log.info(
-										`OpenrouterStreamAdapter: GIF detected in dev mode, added process_gif hint for message: ${item.messageId}`,
-									);
-								}
-							} else {
-								// Regular image processing (non-GIF)
-								const imageResponse = await fetch(part.uri);
-								if (!imageResponse.ok) {
-									log.warn(
-										`Failed to fetch image: ${part.uri} (status: ${imageResponse.status})`,
-									);
-									continue;
-								}
+									const imageArrayBuffer = await imageResponse.arrayBuffer();
+									base64ImageData =
+										Buffer.from(imageArrayBuffer).toString("base64");
 
-								const imageArrayBuffer = await imageResponse.arrayBuffer();
-								const base64ImageData =
-									Buffer.from(imageArrayBuffer).toString("base64");
+									log.success(`Successfully fetched image: ${part.uri}`);
+								}
 
 								// Add image as OpenAI format
 								contentParts.push({
 									type: "image_url",
 									imageUrl: {
-										url: `data:${part.mimeType};base64,${base64ImageData}`,
+										url: `data:${finalMimeType};base64,${base64ImageData}`,
 									},
 								});
 
-								log.success(`Successfully added image to message: ${part.uri}`);
+								log.success(`Successfully added image to message`);
+							} catch (imgErr) {
+								log.warn(`Error processing image: ${part.uri}`, {
+									error:
+										imgErr instanceof Error ? imgErr.message : String(imgErr),
+								});
 							}
-						} catch (imgErr) {
-							log.warn(`Error processing image: ${part.uri}`, {
-								error:
-									imgErr instanceof Error ? imgErr.message : String(imgErr),
-							});
 						}
 					}
 					// Note: OpenRouter doesn't widely support video yet, skip video parts

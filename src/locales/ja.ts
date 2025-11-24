@@ -270,6 +270,10 @@ export default {
 			// 408 REQUEST_TIMEOUT
 			"408_default_message": "リクエストがタイムアウトしました",
 
+			// 413 PAYLOAD_TOO_LARGE
+			"413_default_message":
+				"リクエストボディが大きすぎます（コンテキスト/メディアがプロバイダーの制限を超えています）。`/tool refresh`で会話履歴をクリアするか、コンテキスト内のメディア/記憶の量を減らしてください。",
+
 			// 429 TOO_MANY_REQUESTS
 			"429_default_message":
 				"レート制限中です。しばらくしてから再試行するか、無料ではないモデルを使用してください。",
