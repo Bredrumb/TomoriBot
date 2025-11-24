@@ -1009,7 +1009,7 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 			privacy: {
 				description: `View TomoriBot's Privacy Policy`,
 				title: `Privacy Policy`,
-				description_text: `View TomoriBot's Privacy Policy to understand how we handle your data. This applies to the official hosted instance. Self-hosted instances control their own data handling.`,
+				description_text: `View TomoriBot's Privacy Policy to understand how I handle your data. This applies to the official hosted instance. Self-hosted instances control their own data handling.`,
 				link_title: `Full Privacy Policy`,
 			},
 			terms: {

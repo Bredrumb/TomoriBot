@@ -17,7 +17,8 @@ RUN apk add --no-cache \
     py3-pip \
     nodejs \
     npm && \
-    ln -sf /usr/bin/python3 /usr/bin/python
+    ln -sf /usr/bin/python3 /usr/bin/python && \
+    npm install -g @mozilla/readability jsdom turndown
 
 # Copy pre-downloaded npm packages (downloaded by GitHub Actions runner)
 # This avoids network issues during Docker build in CI/CD
