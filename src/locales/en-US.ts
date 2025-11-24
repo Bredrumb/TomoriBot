@@ -755,7 +755,9 @@ I have built-in features to help reduce costs from abusers or spammers in your s
 				need_help_description: `- {helpFeatures} - See what I can do
 - {helpMemory} - Learn about my memory system
 - {helpCustomization} - Learn about personality customization
-- {supportServer} - Join the official TomoriBot support server`,
+- {supportServer} - Join the official TomoriBot support server
+
+**Legal:** View our \`/legal terms\` and \`/legal privacy\` anytime`,
 			},
 
 			// /help data
@@ -794,7 +796,9 @@ I have built-in features to help reduce costs from abusers or spammers in your s
 Whenever I'm triggered, I fetch the **latest messages** in the text channel as well as any **relevant memories** as context for the AI model to form my reply
 
 You may opt out of my Memory features by using the {personalPrivacy} command, as well as turn off my self-learning using the {configPermissions} command.`,
-				footer: `Your chosen AI provider (Google, NovelAI, OpenRouter) processes your messages according to their own privacy policies. Never share personal information with me for privacy.`,
+				footer: `Your chosen AI provider (Google, NovelAI, OpenRouter) processes your messages according to their own privacy policies. Never share personal information with me for privacy.
+
+For full details, see \`/legal privacy\` and \`/legal terms\``,
 			},
 
 			// /help apikey
@@ -892,7 +896,9 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
 				tips_description: `- Teach me your preferences, nicknames, and important facts
 - Use server memories for shared information, inside jokes, or server rules
 - Review your memories periodically with {dataExport} or {status}
-- Keep memories concise and clear for best results`,
+- Keep memories concise and clear for best results
+
+**Privacy:** See \`/legal privacy\` for full data handling details`,
 			},
 
 			// /help customization
@@ -995,6 +1001,22 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 \`\`\`
 - Test changes by chatting, iterate until it feels right
 - Export your persona to back it up or share with other servers!`,
+			},
+		},
+
+		// Legal commands
+		legal: {
+			privacy: {
+				description: `View TomoriBot's Privacy Policy`,
+				title: `Privacy Policy`,
+				description_text: `View TomoriBot's Privacy Policy to understand how we handle your data.`,
+				link_title: `Full Privacy Policy`,
+			},
+			terms: {
+				description: `View TomoriBot's Terms of Service`,
+				title: `Terms of Service`,
+				description_text: `View TomoriBot's Terms of Service to understand the rules and guidelines for using the bot.`,
+				link_title: `Full Terms of Service`,
 			},
 		},
 
@@ -1606,13 +1628,13 @@ To protect your privacy again, use \`/personal privacy\` and select "Opt Out".`,
 
 			If you wish to swap my provider, use the \`/config apikey set\` command.
 
-			**IMPORTANT NOTICE:** I do not save any of your Discord messages. I only store Memories and relevant Settings, all of which you can freely delete and modify using my slash commands. However, the AI providers you choose to power me can have different privacy policies. If you or your server's members do not agree with your chosen provider's privacy policies, please refrain from using me. **Otherwise, just make sure to never share any personal information**.`,
+			**By using TomoriBot, you agree to these [Terms of Service](https://github.com/Bredrumb/TomoriBot/blob/main/legal/en-US/terms-of-service.md) and [Privacy Policy](https://github.com/Bredrumb/TomoriBot/blob/main/legal/en-US/privacy-policy.md).** View them anytime with \`/legal terms\` and \`/legal privacy\`.`,
 			setup_prompt_title: `TomoriBot Successfully Added`,
 			setup_prompt_description: `Thanks for adding me! To get started, someone with the **Manage Server** permission needs to run my \`/config setup\` command to choose my initial personality and configure my AI features. You can also manage or delete your data anytime with \`/data\`.
 
 			Use the \`/help apikey\` command if you are unsure on how to create an API key for your chosen AI provider. API keys will be kept encrypted but if you are still wary of giving it to a public Discord bot, feel free to run your own TomoriBot using the [repository's guide](https://github.com/Bredrumb/TomoriBot) instead.
 
-			**IMPORTANT NOTICE:** I do not save any of your Discord messages. I only store Memories and relevant Settings, all of which you can freely delete and modify using my slash commands. However, the AI providers you choose to power me can have different privacy policies. If you or your server's members do not agree with your chosen provider's privacy policies, please refrain from using me. **Otherwise, just make sure to never share any personal information**.`,
+			**By using TomoriBot, you agree to these [Terms of Service](https://github.com/Bredrumb/TomoriBot/blob/main/legal/en-US/terms-of-service.md) and [Privacy Policy](https://github.com/Bredrumb/TomoriBot/blob/main/legal/en-US/privacy-policy.md).** View them anytime with \`/legal terms\` and \`/legal privacy\`.`,
 		},
 	},
 

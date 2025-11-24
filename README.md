@@ -45,6 +45,7 @@
     <li><a href="#usage">Usage</a></li>
     <li><a href="#roadmap">Roadmap</a></li>
     <li><a href="#contributing">Contributing</a></li>
+    <li><a href="#legal">Legal</a></li>
     <li><a href="#license">License</a></li>
     <li><a href="#contact">Contact</a></li>
   </ol>
@@ -233,15 +234,27 @@ Any contributions made  are **greatly appreciated**.
 If you have a suggestion that would make TomoriBot better, please fork the repo and create a pull request. You can also simply open an issue with the tag "Enhancement".
 
 
+<!-- LEGAL -->
+## Legal
+
+For users of the official hosted TomoriBot instance:
+- **[Terms of Service](legal/en-US/terms-of-service.md)** - Rules and guidelines for using the bot
+- **[Privacy Policy](legal/en-US/privacy-policy.md)** - How we handle your data
+
+These documents are also accessible within Discord using `/legal terms` and `/legal privacy` commands.
+
+**Note:** If you're self-hosting TomoriBot, these documents serve as reference templates. You control your own data pipeline and are responsible for your deployment's compliance.
+
 <!-- LICENSE -->
 ## License
 
-Distributed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later). See `LICENSE` for details. For questions, reach us via the GitHub issues page or the support Discord linked in `/support discord`.
+Distributed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later). See `LICENSE` for details. For questions, reach me via bredrumb@gmail.com, the GitHub issues page, or the support Discord linked in `/support discord`.
 
 <!-- CONTACT -->
 ## Contact
 
 Project Link: [https://github.com/Bredrumb/TomoriBot](https://github.com/Bredrumb/TomoriBot)
+Email: bredrumb@gmail.com
 
 
 <!-- MARKDOWN LINKS & IMAGES -->

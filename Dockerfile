@@ -91,6 +91,9 @@ COPY --chown=tomori:tomori src/ ./src/
 # Copy static images used by slash commands (banners)
 COPY --chown=tomori:tomori img/ ./img/
 
+# Copy legal documents (Terms of Service, Privacy Policy)
+COPY --chown=tomori:tomori legal/ ./legal/
+
 # No build step needed - Bun runs TypeScript natively!
 # This matches your proven development setup
 

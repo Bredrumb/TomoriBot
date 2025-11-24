@@ -755,7 +755,9 @@ export default {
 				need_help_description: `- {helpFeatures} - 私ができることを見る
 - {helpMemory} - 記憶システムについて学ぶ
 - {helpCustomization} - パーソナリティのカスタマイズについて学ぶ
-- {supportServer} - 公式TomoriBotサポートサーバーに参加`,
+- {supportServer} - 公式TomoriBotサポートサーバーに参加
+
+**法的文書:** \`/legal terms\`と\`/legal privacy\`でいつでも確認可能`,
 			},
 
 			// /help data
@@ -794,7 +796,9 @@ export default {
 トリガーされるたびに、AIモデルが返信を形成するためのコンテキストとして、テキストチャンネルの**最新メッセージ**と**関連する記憶**を取得します
 
 {personalPrivacy}コマンドで記憶機能をオプトアウトし、{configPermissions}コマンドで自己学習を無効化できます。`,
-				footer: `選択したAIプロバイダー（Google、NovelAI、OpenRouter）は独自のプライバシーポリシーに従ってメッセージを処理します。プライバシーのため、個人情報を共有しないでください。`,
+				footer: `選択したAIプロバイダー（Google、NovelAI、OpenRouter）は独自のプライバシーポリシーに従ってメッセージを処理します。プライバシーのため、個人情報を共有しないでください。
+
+詳細は\`/legal privacy\`と\`/legal terms\`をご覧ください`,
 			},
 
 			// /help apikey
@@ -892,7 +896,9 @@ export default {
 				tips_description: `- 好み、ニックネーム、重要な事実を教えてください
 - サーバーの記憶には共有情報、内輪ネタ、サーバー文化を使用
 - {dataExport}または{status}で定期的に記憶を確認
-- 最良の結果を得るために記憶を簡潔明瞭に保つ`,
+- 最良の結果を得るために記憶を簡潔明瞭に保つ
+
+**プライバシー:** データ処理の詳細は\`/legal privacy\`をご覧ください`,
 			},
 
 			// /help customization
@@ -1004,6 +1010,22 @@ export default {
 \`\`\`
 - チャットして変更をテストし、しっくりくるまで繰り返す
 - ペルソナをエクスポートしてバックアップするか、他のサーバーと共有！`,
+			},
+		},
+
+		// 法的文書コマンド
+		legal: {
+			privacy: {
+				description: `TomoriBotのプライバシーポリシーを表示`,
+				title: `プライバシーポリシー`,
+				description_text: `TomoriBotのプライバシーポリシーを表示して、データの取り扱いについて理解してください。`,
+				link_title: `完全なプライバシーポリシー`,
+			},
+			terms: {
+				description: `TomoriBotの利用規約を表示`,
+				title: `利用規約`,
+				description_text: `TomoriBotの利用規約を表示して、ボットの使用に関するルールとガイドラインを理解してください。`,
+				link_title: `完全な利用規約`,
 			},
 		},
 
@@ -1611,13 +1633,13 @@ export default {
 
 			プロバイダーを変更したい場合は、\`/config apikeyset\`コマンドを使用してください。
 
-			**重要なお知らせ:** 私はDiscordメッセージを一切保存しません。記憶と関連設定のみを保存しており、これらはスラッシュコマンドで自由に削除・変更できます。ただし、私を動かすために選択したAIプロバイダーは、それぞれ異なるプライバシーポリシーを持っている場合があります。あなたまたはサーバーのメンバーが選択したプロバイダーのプライバシーポリシーに同意しない場合は、私の使用をお控えください。**それ以外の場合は、個人情報を共有しないようにしてください**。`,
+			**TomoriBotを使用することで、[利用規約](https://github.com/Bredrumb/TomoriBot/blob/main/legal/ja/terms-of-service.md)と[プライバシーポリシー](https://github.com/Bredrumb/TomoriBot/blob/main/legal/ja/privacy-policy.md)に同意したことになります。**\`/legal terms\`と\`/legal privacy\`でいつでも確認できます。`,
 			setup_prompt_title: `TomoriBotの追加が完了しました`,
 			setup_prompt_description: `追加してくれてありがとうございます！始めるには、**サーバー管理**権限を持つ方が\`/config setup\`コマンドを実行して、私の初期の人格を選択し、AI機能を設定する必要があります。
-			
+
 			選択したAIプロバイダーのAPIキーの作成方法が不明な場合は、\`/help apikey\`コマンドを使用してください。APIキーは暗号化されて保存されますが、公開されているDiscordボットに提供することに不安がある場合（通常そうあるべきです）、[リポジトリのガイド](https://github.com/Bredrumb/TomoriBot)を使用してご自身でTomoriBotを実行することもできます。
 
-			**重要なお知らせ:** 私はDiscordメッセージを一切保存しません。記憶と関連設定のみを保存しており、これらはスラッシュコマンドで自由に削除・変更できます。ただし、私を動かすために選択したAIプロバイダーは、それぞれ異なるプライバシーポリシーを持っている場合があります。あなたまたはサーバーのメンバーが選択したプロバイダーのプライバシーポリシーに同意しない場合は、私の使用をお控えください。**それ以外の場合は、個人情報を共有しないようにしてください**。`,
+			**TomoriBotを使用することで、[利用規約](https://github.com/Bredrumb/TomoriBot/blob/main/legal/ja/terms-of-service.md)と[プライバシーポリシー](https://github.com/Bredrumb/TomoriBot/blob/main/legal/ja/privacy-policy.md)に同意したことになります。**\`/legal terms\`と\`/legal privacy\`でいつでも確認できます。`,
 		},
 	},
 
