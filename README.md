@@ -236,7 +236,7 @@ If you have a suggestion that would make TomoriBot better, please fork the repo 
 <!-- LICENSE -->
 ## License
 
-Distributed under the GPL License. See `LICENSE` for more information.
+Distributed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later). See `LICENSE` for details. For questions, reach us via the GitHub issues page or the support Discord linked in `/support discord`.
 
 <!-- CONTACT -->
 ## Contact
