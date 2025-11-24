@@ -16,7 +16,8 @@ RUN apk add --no-cache \
     python3~=3.12 \
     py3-pip \
     nodejs \
-    npm
+    npm && \
+    ln -sf /usr/bin/python3 /usr/bin/python
 
 # Copy pre-downloaded npm packages (downloaded by GitHub Actions runner)
 # This avoids network issues during Docker build in CI/CD

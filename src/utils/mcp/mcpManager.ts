@@ -242,11 +242,13 @@ export class MCPManager {
 				errorMessage.includes("not recognized") ||
 				errorMessage.includes("not found")
 			) {
-				log.info(
+				log.error(
 					`${displayName} requires ${command} to be installed - functionality will not be available`,
+					error as Error,
 				);
 			} else {
-				log.warn(`${displayName} connection failed:`, error as Error);
+				// Critical: Log MCP connection failures as errors for CloudWatch visibility
+				log.error(`${displayName} connection failed:`, error as Error);
 			}
 
 			throw error; // Re-throw to be caught by caller

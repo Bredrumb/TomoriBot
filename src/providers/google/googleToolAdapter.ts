@@ -336,7 +336,10 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
 				let excludedDDGFunctionsCount = 0;
 
 				// Disabled DuckDuckGo functions (always filtered out)
-				const disabledDDGFunctions = ["felo-search", "fetch-url"];
+				// felo-search: Streaming not compatible with Discord
+				// fetch-url: Use dedicated Fetch MCP server instead
+				// url-metadata: Redundant with Fetch MCP server
+				const disabledDDGFunctions = ["felo-search", "fetch-url", "url-metadata"];
 				let disabledFunctionsCount = 0;
 
 				if (allowedMCPFunctions) {

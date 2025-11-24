@@ -433,7 +433,8 @@ export class MCPExecutor {
 					if (error instanceof MCPExecutionError) {
 						throw error;
 					}
-					log.warn(
+					// Critical: Log MCP execution errors as errors, not warnings (for CloudWatch visibility)
+					log.error(
 						`Error executing MCP function '${functionName}':`,
 						error as Error,
 					);
