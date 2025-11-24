@@ -182,6 +182,10 @@ export default {
 			unknown_title: "❓ Provider Error",
 			unknown_tip:
 				"Please try again or use `/support discord` if this keeps happening",
+
+			flush_limit_title: "⚠️ Response Length Limit Reached",
+			flush_limit_description:
+				"This response has reached the maximum message length limit and has been stopped. You can use `/bot respond` to manually continue the response if needed.",
 		},
 
 		// Google-specific error messages (provider-specific default messages only)

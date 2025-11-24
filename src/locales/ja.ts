@@ -183,6 +183,10 @@ export default {
 			unknown_title: "❓ プロバイダーエラー",
 			unknown_tip:
 				"再度お試しいただくか、この問題が続く場合は `/support discord` をご利用ください",
+
+			flush_limit_title: "⚠️ 応答の長さ制限に達しました",
+			flush_limit_description:
+				"この応答はメッセージの最大長制限に達したため停止されました。必要に応じて `/bot respond` を使用して手動で応答を続けることができます。",
 		},
 
 		// Google固有のエラーメッセージ（プロバイダー固有のデフォルトメッセージのみ）

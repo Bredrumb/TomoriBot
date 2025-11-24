@@ -59,15 +59,6 @@ export const MEDIA_LIMITS = {
 	),
 
 	/**
-	 * Even stricter limit for GIFs (most memory-intensive media type)
-	 * Only the last N messages can contain GIFs, older GIFs become text placeholders
-	 * @default 5 in production, 20 in development
-	 */
-	GIF_LIMIT: GUARDS_ENABLED
-		? Number.parseInt(process.env.GIF_LIMIT || "5", 10)
-		: Number.parseInt(process.env.GIF_LIMIT || "20", 10),
-
-	/**
 	 * Maximum size per individual media file in MB
 	 * Larger files will be rejected or downscaled
 	 * @default 8 MB
@@ -120,6 +111,21 @@ export const FETCH_LIMITS = {
 	 */
 	MEMORY_REDUCTION_WARNING: 0.3, // 30% of base limit
 	MEMORY_REDUCTION_CRITICAL: 0.04, // 4% of base limit
+} as const;
+
+// -----------------------------------------------------------------------------
+// STREAMING LIMITS (Discord Message Flood Protection)
+// -----------------------------------------------------------------------------
+export const STREAMING_LIMITS = {
+	/**
+	 * Maximum number of message flushes per stream session
+	 * Prevents malicious prompts from causing excessive Discord API calls
+	 * Each flush = 1 Discord message sent (semantically complete chunks)
+	 * @default 20 in production, Infinity in development
+	 */
+	MAX_FLUSH_COUNT: GUARDS_ENABLED
+		? Number.parseInt(process.env.MAX_FLUSH_COUNT || "20", 10)
+		: Number.POSITIVE_INFINITY,
 } as const;
 
 // -----------------------------------------------------------------------------
@@ -324,24 +330,6 @@ class MemoryGuard {
 		return MEDIA_LIMITS.MEDIA_CONTEXT_WINDOW;
 	}
 
-	/**
-	 * Gets the current GIF limit based on memory status
-	 * Dynamically reduces GIF limit during high memory pressure
-	 * @returns Number of messages that should contain GIFs
-	 */
-	getGifLimit(): number {
-		const memCheck = this.checkMemory();
-
-		if (memCheck.status === "critical") {
-			return 0; // No GIFs in critical mode
-		}
-
-		if (memCheck.status === "warning") {
-			return Math.max(2, Math.floor(MEDIA_LIMITS.GIF_LIMIT / 2)); // Half the normal limit
-		}
-
-		return MEDIA_LIMITS.GIF_LIMIT;
-	}
 
 	/**
 	 * Gets the current fetch character limit based on memory status
@@ -476,7 +464,6 @@ export function logGuardConfiguration(): void {
 	log.info(
 		`Max Media Extend: ${MEDIA_LIMITS.MESSAGE_FETCH_LIMIT - MEDIA_LIMITS.MEDIA_CONTEXT_WINDOW}`,
 	);
-	log.info(`GIF Limit: ${MEDIA_LIMITS.GIF_LIMIT}`);
 	log.info(`Max Media Size: ${MEDIA_LIMITS.MAX_MEDIA_SIZE_MB} MB`);
 	log.info(`Total Media Budget: ${MEDIA_LIMITS.TOTAL_MEDIA_BUDGET_MB} MB`);
 	log.info("\n--- Fetch Tool Limits ---");
@@ -485,6 +472,8 @@ export function logGuardConfiguration(): void {
 	log.info(
 		`Memory Reductions: ${FETCH_LIMITS.MEMORY_REDUCTION_WARNING * 100}% (warning), ${FETCH_LIMITS.MEMORY_REDUCTION_CRITICAL * 100}% (critical)`,
 	);
+	log.info("\n--- Streaming Limits ---");
+	log.info(`Max Flush Count: ${STREAMING_LIMITS.MAX_FLUSH_COUNT}`);
 	log.info("\n--- Memory Protection ---");
 	log.info(
 		`Container Memory Limit: ${MEMORY_PROTECTION.CONTAINER_MEMORY_LIMIT_MB} MB`,

@@ -25,6 +25,7 @@ import { HumanizerDegree } from "../../types/db/schema";
 import { sendStandardEmbed } from "./embedHelper";
 import { ColorCode, log } from "../misc/logger";
 import { localizer } from "../text/localizer";
+import { STREAMING_LIMITS } from "../security/rateLimiter";
 import {
 	chunkMessage,
 	cleanLLMOutput,
@@ -980,6 +981,29 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 		context: StreamContext,
 		state: StreamState,
 	): Promise<void> {
+		// Check for flush limit before Discord API call
+		if (state.messageSentCount >= STREAMING_LIMITS.MAX_FLUSH_COUNT) {
+			log.warn(
+				`Flush limit exceeded: ${state.messageSentCount} messages sent (limit: ${STREAMING_LIMITS.MAX_FLUSH_COUNT})`,
+			);
+
+			// Send warning embed to user
+			await sendStandardEmbed(context.channel, context.locale, {
+				titleKey: "genai.stream.flush_limit_title",
+				descriptionKey: "genai.stream.flush_limit_description",
+				color: ColorCode.WARN,
+			}).catch((embedError) => {
+				log.warn(
+					"Failed to send flush limit warning embed",
+					embedError instanceof Error ? embedError : new Error(String(embedError)),
+				);
+			});
+
+			// Request graceful stop
+			StreamOrchestrator.requestStop(context.channel.id, "system");
+			return;
+		}
+
 		// Check for stop request before Discord API call
 		if (StreamOrchestrator.hasStopRequest(context.channel.id)) {
 			log.info(
