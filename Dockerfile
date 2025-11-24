@@ -88,6 +88,9 @@ RUN bun install --frozen-lockfile --production
 # This is like moving TomoriBot's belongings into her new apartment
 COPY --chown=tomori:tomori src/ ./src/
 
+# Copy static images used by slash commands (banners)
+COPY --chown=tomori:tomori img/ ./img/
+
 # No build step needed - Bun runs TypeScript natively!
 # This matches your proven development setup
 

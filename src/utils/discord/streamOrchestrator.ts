@@ -115,10 +115,19 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 	 * @param channelId - The Discord channel ID to clear
 	 */
 	public static clearStopRequest(channelId: string): void {
-		const removed = StreamOrchestrator.activeStopRequests.delete(channelId);
-		if (removed) {
-			log.info(`Cleared stop request for channel ${channelId}`);
+		const stopRequest = StreamOrchestrator.activeStopRequests.get(channelId);
+		if (!stopRequest) return;
+
+		// If we have stop context, preserve it so tomoriChat can craft a stop response later.
+		if (stopRequest.stopContext) {
+			log.info(
+				`Stop request acknowledged for channel ${channelId}; preserving context for follow-up response.`,
+			);
+			return;
 		}
+
+		StreamOrchestrator.activeStopRequests.delete(channelId);
+		log.info(`Cleared stop request for channel ${channelId}`);
 	}
 
 	/**
