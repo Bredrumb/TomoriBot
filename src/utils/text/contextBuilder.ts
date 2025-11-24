@@ -21,6 +21,7 @@ import {
 	getTimeOfDayPhrase,
 } from "./timezoneHelper";
 import { HumanizerDegree, type TomoriConfigRow } from "@/types/db/schema";
+import { memoryGuard, MEDIA_LIMITS } from "../security/rateLimiter";
 // Import ServerEmojiRow if needed for emoji query result type
 // import type { ServerEmojiRow } from "../../types/db/schema";
 
@@ -236,6 +237,52 @@ export async function convertMentions(
 
 	return result;
 }
+
+/**
+ * Builds a human-readable description of media content in a message.
+ * Handles images, videos, GIFs, and combined content.
+ * @param msg - SimplifiedMessageForContext to describe
+ * @returns Media description string (e.g., "1 GIF", "2 images and 1 video")
+ * @example
+ * buildMediaDescription({imageAttachments: [{mimeType: "image/gif"}], videoAttachments: []})
+ * // Returns: "1 GIF"
+ * @example
+ * buildMediaDescription({imageAttachments: [{mimeType: "image/png"}, {mimeType: "image/jpeg"}], videoAttachments: [{...}]})
+ * // Returns: "2 images and 1 video"
+ */
+function buildMediaDescription(msg: SimplifiedMessageForContext): string {
+	const imageCount = msg.imageAttachments.length;
+	const videoCount = msg.videoAttachments.length;
+	const hasGif = msg.imageAttachments.some((att) =>
+		att.mimeType?.includes("gif"),
+	);
+
+	const mediaParts: string[] = [];
+
+	// Handle images (with special case for GIFs)
+	if (imageCount > 0) {
+		if (hasGif && imageCount === 1) {
+			// Single GIF only
+			mediaParts.push("1 GIF");
+		} else if (hasGif) {
+			// Multiple images including at least one GIF
+			mediaParts.push(
+				`${imageCount} image${imageCount > 1 ? "s" : ""} (including GIF)`,
+			);
+		} else {
+			// Regular images only
+			mediaParts.push(`${imageCount} image${imageCount > 1 ? "s" : ""}`);
+		}
+	}
+
+	// Handle videos
+	if (videoCount > 0) {
+		mediaParts.push(`${videoCount} video${videoCount > 1 ? "s" : ""}`);
+	}
+
+	return mediaParts.join(" and ");
+}
+
 export async function buildContext({
 	guildId,
 	serverName,
@@ -251,6 +298,7 @@ export async function buildContext({
 	tomoriAttributes,
 	tomoriConfig,
 	isDMChannel = false,
+	mediaContextWindow,
 }: {
 	guildId: string;
 	serverName: string;
@@ -266,6 +314,7 @@ export async function buildContext({
 	tomoriAttributes: string[];
 	tomoriConfig: TomoriConfigRow;
 	isDMChannel?: boolean; // Added for DM support
+	mediaContextWindow?: number; // Optional override for media window size
 }): Promise<StructuredContextItem[]> {
 	const contextItems: StructuredContextItem[] = [];
 	const botName = tomoriNickname;
@@ -807,41 +856,73 @@ export async function buildContext({
 	}
 
 	// 9. Conversation History (Main Dialogue)
-	for (const msg of simplifiedMessageHistory) {
+	// Calculate media windowing boundaries
+	const totalMessages = simplifiedMessageHistory.length;
+	const effectiveMediaWindow = mediaContextWindow ?? memoryGuard.getMediaWindow();
+	const maxExtendBy = MEDIA_LIMITS.MESSAGE_FETCH_LIMIT - effectiveMediaWindow;
+	const mediaWindowCutoff = totalMessages - effectiveMediaWindow;
+
+	for (const [index, msg] of simplifiedMessageHistory.entries()) {
 		const role = msg.authorId === client.user?.id ? "model" : "user";
 		const parts: ContextPart[] = [];
-		// 9.a. Add image parts if attachments exist
-		for (const attachment of msg.imageAttachments) {
-			if (attachment.mimeType) {
-				parts.push({
-					type: "image",
-					uri: attachment.proxyUrl,
-					mimeType: attachment.mimeType,
-				});
-			} else {
-				log.warn(
-					`Skipping image attachment due to missing mimeType: ${attachment.filename} from user ${msg.authorName}`,
-				);
+
+		// Determine if this message is within the media context window
+		const isWithinMediaWindow = index >= mediaWindowCutoff;
+
+		// Check if message has media (images or videos)
+		const hasMedia =
+			msg.imageAttachments.length > 0 || msg.videoAttachments.length > 0;
+
+		// If message has media but is outside window, add placeholder
+		if (hasMedia && !isWithinMediaWindow) {
+			// Calculate extend_by needed to reach this message, capped at maxExtendBy
+			const extendByNeeded = Math.min(mediaWindowCutoff - index, maxExtendBy);
+
+			// Build media description
+			const mediaDescription = buildMediaDescription(msg);
+
+			// Add placeholder text
+			parts.push({
+				type: "text",
+				text: `[This message contained ${mediaDescription} - use increase_media_context with extend_by=${extendByNeeded} to view]`,
+			});
+		} else if (isWithinMediaWindow) {
+			// Within window: Add full media as normal
+			// 9.a. Add image parts if attachments exist
+			for (const attachment of msg.imageAttachments) {
+				if (attachment.mimeType) {
+					parts.push({
+						type: "image",
+						uri: attachment.proxyUrl,
+						mimeType: attachment.mimeType,
+					});
+				} else {
+					log.warn(
+						`Skipping image attachment due to missing mimeType: ${attachment.filename} from user ${msg.authorName}`,
+					);
+				}
+			}
+
+			// 9.b. Add video parts if attachments exist
+			for (const attachment of msg.videoAttachments) {
+				if (attachment.mimeType) {
+					parts.push({
+						type: "video",
+						uri: attachment.isYouTubeLink
+							? attachment.url
+							: attachment.proxyUrl,
+						mimeType: attachment.mimeType,
+						isYouTubeLink: attachment.isYouTubeLink,
+					});
+				} else {
+					log.warn(
+						`Skipping video attachment due to missing mimeType: ${attachment.filename} from user ${msg.authorName}`,
+					);
+				}
 			}
 		}
 
-		// 9.b. Add video parts if attachments exist
-		for (const attachment of msg.videoAttachments) {
-			if (attachment.mimeType) {
-				parts.push({
-					type: "video",
-					uri: attachment.isYouTubeLink ? attachment.url : attachment.proxyUrl,
-					mimeType: attachment.mimeType,
-					isYouTubeLink: attachment.isYouTubeLink,
-				});
-			} else {
-				log.warn(
-					`Skipping video attachment due to missing mimeType: ${attachment.filename} from user ${msg.authorName}`,
-				);
-			}
-		}
-
-		// 9.c. Add text part if content exists
+		// 9.c. Add text part if content exists (always included, regardless of window)
 		if (msg.content) {
 			// Request 4: Prepend speaker name to content
 			let processedContent = `${msg.authorName}: ${msg.content}`;

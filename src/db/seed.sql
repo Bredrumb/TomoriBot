@@ -6,37 +6,39 @@ SELECT add_column_if_not_exists('llms', 'is_deprecated', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'is_free', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'has_tools', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'sees_images', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('llms', 'sees_videos', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('llms', 'sees_youtube', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'is_uncensored', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'llm_description', 'TEXT');
 SELECT add_column_if_not_exists('llms', 'ja_description', 'TEXT');
 
 -- Insert LLMs with conflict resolution that updates descriptions
-INSERT INTO llms (llm_provider, llm_codename, is_smartest, is_default, is_reasoning, is_deprecated, is_free, has_tools, sees_images, is_uncensored, llm_description, ja_description)
+INSERT INTO llms (llm_provider, llm_codename, is_smartest, is_default, is_reasoning, is_deprecated, is_free, has_tools, sees_images, sees_videos, sees_youtube, is_uncensored, llm_description, ja_description)
 VALUES
-  -- Google Models (all Gemini models support vision by default)
-  ('google', 'gemini-2.0-flash', false, false, false, true, false, true, true, false, NULL, NULL),
-  ('google', 'gemini-2.5-flash-lite', false, false, false, false, false, true, true, false, 'Lightweight version optimized for speed and efficiency', '速度と効率を最適化した軽量版モデル'),
-  ('google', 'gemini-2.5-flash-preview-05-20', false, false, false, true, false, true, true, false, NULL, NULL),
-  ('google', 'gemini-2.5-flash-preview-09-2025', false, false, false, false, false, true, true, false, 'Experimental model for general-purpose applications', '実験的な汎用アプリケーション向けモデル'),
-  ('google', 'gemini-2.5-flash', false, true, false, false, false, true, true, false, 'Balanced model for general-purpose applications', '汎用アプリケーション向けのバランス型モデル'),
-  ('google', 'gemini-2.5-pro', true, false, true, false, false, true, true, false, 'Most capable model for complex reasoning and analysis', '複雑な推論と分析に最も優れたモデル'),
-  -- NovelAI Models
-  ('novelai', 'glm-4-6', true, true, false, false, false, false, false, false, 'Latest NovelAI roleplay model with enhanced creativity and character consistency', '創造性とキャラクター一貫性を強化した最新のNovelAIロールプレイモデル'),
-  ('novelai', 'kayra-v1', false, false, false, false, false, false, false, false, 'Legacy Kayra model for storytelling and roleplay', 'ストーリーテリングとロールプレイ向けのレガシーKayraモデル'),
-  -- OpenRouter Models
-  ('openrouter', 'stepfun-ai/step3', false, false, false, false, false, false, true, false, 'General-use model that can see images and is also great in role-play', '画像を見ることができ、ロールプレイにも優れた汎用モデル'),
-  ('openrouter', 'z-ai/glm-4.6', false, false, true, false, false, true, false, false, 'State-of-the-art human-aligned model that also performs natural role-play', '自然なロールプレイも可能な最先端の人間調整型モデル'),
-  ('openrouter', 'thedrummer/cydonia-24b-v4.1', false, false, false, false, false, false, false, true, 'Uncensored model specializing in creative writing and role-play', '創作とロールプレイに特化した無検閲モデル'),
-  ('openrouter', 'deepseek/deepseek-v3.2-exp', false, false, false, false, false, true, false, true, 'Cost-efficient Experimental Model that is also great in role-play', 'ロールプレイにも優れたコスト効率の良い実験モデル'),
-  ('openrouter', 'x-ai/grok-4-fast', false, false, true, false, false, true, true, false, 'Fast and efficient general-purpose model', '高速かつ効率的な汎用モデル'),
-  ('openrouter', 'anthropic/claude-sonnet-4.5', false, false, false, false, false, true, true, false, 'State-of-the-art performance in complex tasks and problems, also great in role-playing and creative writing', '複雑なタスクや問題に優れた最先端性能を持ち、ロールプレイや創作にも秀でたモデル'),
-  ('openrouter', 'anthropic/claude-haiku-4.5', false, false, false, false, false, true, true, false, 'Lightweight version of claude-sonnet-4.5', 'claude-sonnet-4.5の軽量版'),
-  ('openrouter', 'openai/gpt-5.1', true, false, true, false, false, true, true, false, 'State-of-the-art performance in complex tasks and problems', '複雑なタスクや問題に優れた最先端性能'),
-  ('openrouter', 'openai/gpt-5.1-chat', true, false, true, false, false, true, true, false, 'State-of-the-art performance, more conversational', '複雑なタスクや問題に優れた最先端性能'),
-  ('openrouter', 'deepseek/deepseek-chat-v3-0324:free', false, false, false, false, true, true, false, true, 'Free general-purpose model that also performs good role-play', 'ロールプレイにも優れた無料の汎用モデル'),
-  ('openrouter', 'mistralai/mistral-small-3.2-24b-instruct:free', false, true, false, false, true, true, true, false, 'Free general-purpose model supporting images and tools', '画像とツールをサポートする無料の汎用モデル'),
-  ('openrouter', 'tngtech/deepseek-r1t2-chimera:free', false, false, true, false, true, false, false, true, 'Free model for solving complex tasks and problems', '複雑なタスクや問題の解決に適した無料モデル'),
-  ('openrouter', 'account-setting', false, false, false, false, false, false, false, false, 'For advanced users that cannot find the model they want, uses the set Default Model in your OpenRouter settings', '目的のモデルが見つからない上級者向け、OpenRouter設定のデフォルトモデルを使用')
+  -- Google Models (all Gemini models support vision, videos, and YouTube by default)
+  ('google', 'gemini-2.0-flash', false, false, false, true, false, true, true, true, true, false, NULL, NULL),
+  ('google', 'gemini-2.5-flash-lite', false, false, false, false, false, true, true, true, true, false, 'Lightweight version optimized for speed and efficiency', '速度と効率を最適化した軽量版モデル'),
+  ('google', 'gemini-2.5-flash-preview-05-20', false, false, false, true, false, true, true, true, true, false, NULL, NULL),
+  ('google', 'gemini-2.5-flash-preview-09-2025', false, false, false, false, false, true, true, true, true, false, 'Experimental model for general-purpose applications', '実験的な汎用アプリケーション向けモデル'),
+  ('google', 'gemini-2.5-flash', false, true, false, false, false, true, true, true, true, false, 'Balanced model for general-purpose applications', '汎用アプリケーション向けのバランス型モデル'),
+  ('google', 'gemini-2.5-pro', true, false, true, false, false, true, true, true, true, false, 'Most capable model for complex reasoning and analysis', '複雑な推論と分析に最も優れたモデル'),
+  -- NovelAI Models (text-only, no vision capabilities)
+  ('novelai', 'glm-4-6', true, true, false, false, false, false, false, false, false, false, 'Latest NovelAI roleplay model with enhanced creativity and character consistency', '創造性とキャラクター一貫性を強化した最新のNovelAIロールプレイモデル'),
+  ('novelai', 'kayra-v1', false, false, false, false, false, false, false, false, false, false, 'Legacy Kayra model for storytelling and roleplay', 'ストーリーテリングとロールプレイ向けのレガシーKayraモデル'),
+  -- OpenRouter Models (only sees_images for vision models, no YouTube support)
+  ('openrouter', 'stepfun-ai/step3', false, false, false, false, false, false, true, false, false, false, 'General-use model that can see images and is also great in role-play', '画像を見ることができ、ロールプレイにも優れた汎用モデル'),
+  ('openrouter', 'z-ai/glm-4.6', false, false, true, false, false, true, false, false, false, false, 'State-of-the-art human-aligned model that also performs natural role-play', '自然なロールプレイも可能な最先端の人間調整型モデル'),
+  ('openrouter', 'thedrummer/cydonia-24b-v4.1', false, false, false, false, false, false, false, false, false, true, 'Uncensored model specializing in creative writing and role-play', '創作とロールプレイに特化した無検閲モデル'),
+  ('openrouter', 'deepseek/deepseek-v3.2-exp', false, false, false, false, false, true, false, false, false, true, 'Cost-efficient Experimental Model that is also great in role-play', 'ロールプレイにも優れたコスト効率の良い実験モデル'),
+  ('openrouter', 'x-ai/grok-4-fast', false, false, true, false, false, true, true, false, false, false, 'Fast and efficient general-purpose model', '高速かつ効率的な汎用モデル'),
+  ('openrouter', 'anthropic/claude-sonnet-4.5', false, false, false, false, false, true, true, false, false, false, 'State-of-the-art performance in complex tasks and problems, also great in role-playing and creative writing', '複雑なタスクや問題に優れた最先端性能を持ち、ロールプレイや創作にも秀でたモデル'),
+  ('openrouter', 'anthropic/claude-haiku-4.5', false, false, false, false, false, true, true, false, false, false, 'Lightweight version of claude-sonnet-4.5', 'claude-sonnet-4.5の軽量版'),
+  ('openrouter', 'openai/gpt-5.1', true, false, true, false, false, true, true, false, false, false, 'State-of-the-art performance in complex tasks and problems', '複雑なタスクや問題に優れた最先端性能'),
+  ('openrouter', 'openai/gpt-5.1-chat', true, false, true, false, false, true, true, false, false, false, 'State-of-the-art performance, more conversational', '複雑なタスクや問題に優れた最先端性能'),
+  ('openrouter', 'deepseek/deepseek-chat-v3-0324:free', false, false, false, false, true, true, false, false, false, true, 'Free general-purpose model that also performs good role-play', 'ロールプレイにも優れた無料の汎用モデル'),
+  ('openrouter', 'mistralai/mistral-small-3.2-24b-instruct:free', false, true, false, false, true, true, true, false, false, false, 'Free general-purpose model supporting images and tools', '画像とツールをサポートする無料の汎用モデル'),
+  ('openrouter', 'tngtech/deepseek-r1t2-chimera:free', false, false, true, false, true, false, false, false, false, true, 'Free model for solving complex tasks and problems', '複雑なタスクや問題の解決に適した無料モデル'),
+  ('openrouter', 'account-setting', false, false, false, false, false, false, false, false, false, false, 'For advanced users that cannot find the model they want, uses the set Default Model in your OpenRouter settings', '目的のモデルが見つからない上級者向け、OpenRouter設定のデフォルトモデルを使用')
 ON CONFLICT (llm_codename) DO UPDATE SET
   llm_description = EXCLUDED.llm_description,
   ja_description = EXCLUDED.ja_description,
@@ -47,6 +49,8 @@ ON CONFLICT (llm_codename) DO UPDATE SET
   is_free = EXCLUDED.is_free,
   has_tools = EXCLUDED.has_tools,
   sees_images = EXCLUDED.sees_images,
+  sees_videos = EXCLUDED.sees_videos,
+  sees_youtube = EXCLUDED.sees_youtube,
   is_uncensored = EXCLUDED.is_uncensored,
   llm_provider = EXCLUDED.llm_provider,
   updated_at = CURRENT_TIMESTAMP;

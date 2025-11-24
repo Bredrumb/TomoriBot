@@ -2565,6 +2565,54 @@ export default async function tomoriChat(
 								// This will restart the streaming with enhanced context
 								continue;
 							}
+
+							// Handle media context expansion restart signal (enhanced context restart)
+							if (
+								funcName === "increase_media_context" &&
+								toolResult.data &&
+								(toolResult.data as Record<string, unknown>).type ===
+									"context_restart_with_media"
+							) {
+								const restartData = toolResult.data as Record<string, unknown>;
+								const extendBy = restartData.extend_by as number;
+								const oldWindow = restartData.old_window as number;
+								const newWindow = restartData.new_window as number;
+
+								log.info(
+									`Media context expansion restart signal detected. Expanding window from ${oldWindow} to ${newWindow} messages (extend_by=${extendBy}).`,
+								);
+
+								// Rebuild context with expanded media window
+								// This uses the same simplifiedMessages array that's already been mushed
+								contextSegments = await buildContext({
+									guildId: serverDiscId,
+									serverName,
+									serverDescription: serverDescription ?? null,
+									simplifiedMessageHistory: simplifiedMessages,
+									userList,
+									channelDesc,
+									channelName,
+									client,
+									triggererName,
+									emojiStrings,
+									// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
+									tomoriNickname: tomoriState!.tomori_nickname,
+									// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
+									tomoriAttributes: tomoriState!.attribute_list,
+									// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
+									tomoriConfig: tomoriState!.config,
+									isDMChannel,
+									mediaContextWindow: newWindow, // Pass the expanded window
+								});
+
+								log.success(
+									`Rebuilt context with expanded media window (${newWindow} messages). Total context items: ${contextSegments.length}`,
+								);
+
+								// Continue to next iteration WITHOUT adding to function interaction history
+								// This will restart the streaming with enhanced context
+								continue;
+							}
 						} else {
 							// Tool execution failed
 							functionExecutionResult = {

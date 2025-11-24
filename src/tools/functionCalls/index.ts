@@ -21,7 +21,7 @@
 
 export { StickerTool } from "./stickerTool";
 export { MemoryTool } from "./memoryTool";
-export { YouTubeVideoTool } from "./youTubeVideoTool";
+export { YouTubeVideoTool } from "./youtubeVideoTool";
 export { PeekProfilePictureTool } from "./peekProfilePictureTool";
 export { PinMessageTool } from "./pinMessageTool";
 export { ReminderTool } from "./reminderTool";

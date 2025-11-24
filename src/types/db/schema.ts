@@ -54,6 +54,8 @@ export const llmSchema = z.object({
 	is_free: z.boolean().default(false),
 	has_tools: z.boolean().default(false),
 	sees_images: z.boolean().default(false),
+	sees_videos: z.boolean().default(false),
+	sees_youtube: z.boolean().default(false),
 	is_uncensored: z.boolean().default(false),
 	llm_description: z.string().nullable().optional(),
 	ja_description: z.string().nullable().optional(),

@@ -50,19 +50,11 @@ export const MEDIA_LIMITS = {
 	/**
 	 * Number of most recent messages that can contain full media (images, videos, GIFs)
 	 * Messages beyond this window will have media replaced with text placeholders
-	 * @default 10 in production, 50 in development
+	 * Maximum extend_by for increase_media_context = MESSAGE_FETCH_LIMIT - MEDIA_CONTEXT_WINDOW
+	 * @default 10 messages
 	 */
-	MEDIA_CONTEXT_WINDOW: GUARDS_ENABLED
-		? Number.parseInt(process.env.MEDIA_CONTEXT_WINDOW || "10", 10)
-		: Number.parseInt(process.env.MEDIA_CONTEXT_WINDOW || "50", 10),
-
-	/**
-	 * Maximum number of messages that can have media when using increase_media_context tool
-	 * Range: MEDIA_CONTEXT_WINDOW + 1 to MAX_MEDIA_FETCH_LIMIT
-	 * @default 50
-	 */
-	MAX_MEDIA_FETCH_LIMIT: Number.parseInt(
-		process.env.MAX_MEDIA_FETCH_LIMIT || "50",
+	MEDIA_CONTEXT_WINDOW: Number.parseInt(
+		process.env.MEDIA_CONTEXT_WINDOW || "10",
 		10,
 	),
 
@@ -420,7 +412,9 @@ export function logGuardConfiguration(): void {
 	);
 	log.info("\n--- Media Limits ---");
 	log.info(`Media Context Window: ${MEDIA_LIMITS.MEDIA_CONTEXT_WINDOW}`);
-	log.info(`Max Media Fetch Limit: ${MEDIA_LIMITS.MAX_MEDIA_FETCH_LIMIT}`);
+	log.info(
+		`Max Media Extend: ${MEDIA_LIMITS.MESSAGE_FETCH_LIMIT - MEDIA_LIMITS.MEDIA_CONTEXT_WINDOW}`,
+	);
 	log.info(`GIF Limit: ${MEDIA_LIMITS.GIF_LIMIT}`);
 	log.info(`Max Media Size: ${MEDIA_LIMITS.MAX_MEDIA_SIZE_MB} MB`);
 	log.info(`Total Media Budget: ${MEDIA_LIMITS.TOTAL_MEDIA_BUDGET_MB} MB`);

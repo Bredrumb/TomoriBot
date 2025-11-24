@@ -60,24 +60,41 @@ export class PeekProfilePictureTool extends BaseTool {
 	/**
 	 * Check if profile picture tool is available for the given provider
 	 * This tool requires providers with image processing capabilities
-	 * @param provider - LLM provider name
-	 * @returns True if provider supports image processing
+	 * @param _provider - LLM provider name (unused - availability based on model capabilities)
+	 * @returns True for all providers (actual check happens in isAvailableForContext)
 	 */
-	isAvailableFor(provider: string): boolean {
-		// Available for providers that support image processing
-		// Currently Google/Gemini is the primary provider with vision capabilities
-		return provider === "google";
+	isAvailableFor(_provider: string): boolean {
+		// Provider-agnostic, but requires vision capability check in isAvailableForContext
+		return true;
 	}
 
 	/**
-	 * Enhanced availability check that considers context flags
+	 * Enhanced availability check that considers context flags and model vision capabilities
 	 * @param provider - LLM provider name
-	 * @param context - Tool context that may contain disable flags
+	 * @param context - Tool context that may contain disable flags and tomoriState
 	 * @returns True if tool should be available
 	 */
 	isAvailableForContext(provider: string, context?: ToolContext): boolean {
 		// Base provider check
 		if (!this.isAvailableFor(provider)) {
+			return false;
+		}
+
+		// Require context with tomoriState
+		if (!context?.tomoriState) {
+			log.warn(
+				"PeekProfilePictureTool: No tomoriState in context, defaulting to unavailable",
+			);
+			return false;
+		}
+
+		// Check if model has vision capabilities
+		const hasVision = context.tomoriState.llm.sees_images;
+
+		if (!hasVision) {
+			log.info(
+				`PeekProfilePictureTool: Model ${context.tomoriState.llm.llm_codename} does not support vision (sees_images=false). Tool disabled.`,
+			);
 			return false;
 		}
 

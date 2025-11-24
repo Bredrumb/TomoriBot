@@ -59,12 +59,12 @@ export class ProcessGifTool extends BaseTool {
 
 	/**
 	 * Check if GIF processing tool is available for the given provider
-	 * Only available in development (GUARDS_ENABLED = false) and only for Google/Gemini
+	 * Only available in development (GUARDS_ENABLED = false)
 	 *
-	 * @param provider - LLM provider name
-	 * @returns True only if not in production and provider is Google
+	 * @param _provider - LLM provider name (unused - availability based on model capabilities and environment)
+	 * @returns True only if not in production (actual model check happens in isAvailableForContext)
 	 */
-	isAvailableFor(provider: string): boolean {
+	isAvailableFor(_provider: string): boolean {
 		// Block in production to prevent memory exhaustion
 		if (GUARDS_ENABLED) {
 			log.info(
@@ -73,22 +73,38 @@ export class ProcessGifTool extends BaseTool {
 			return false;
 		}
 
-		// Only Google/Gemini supports data URI + inlineData format
-		// OpenRouter requires fetch-able URLs and doesn't handle data URIs
-		// See ACTIVECONTEXT.md Phase 11 for future OpenRouter support
-		return provider === "google";
+		// Provider-agnostic, but requires vision capability check in isAvailableForContext
+		return true;
 	}
 
 	/**
-	 * Enhanced availability check that considers context flags
+	 * Enhanced availability check that considers context flags and model vision capabilities
 	 *
 	 * @param provider - LLM provider name
-	 * @param context - Tool context that may contain disable flags
+	 * @param context - Tool context that may contain disable flags and tomoriState
 	 * @returns True if tool should be available
 	 */
 	isAvailableForContext(provider: string, context?: ToolContext): boolean {
 		// Base provider and environment check
 		if (!this.isAvailableFor(provider)) {
+			return false;
+		}
+
+		// Require context with tomoriState
+		if (!context?.tomoriState) {
+			log.warn(
+				"ProcessGifTool: No tomoriState in context, defaulting to unavailable",
+			);
+			return false;
+		}
+
+		// Check if model has vision capabilities (GIFs require vision)
+		const hasVision = context.tomoriState.llm.sees_images;
+
+		if (!hasVision) {
+			log.info(
+				`ProcessGifTool: Model ${context.tomoriState.llm.llm_codename} does not support vision (sees_images=false). Tool disabled.`,
+			);
 			return false;
 		}
 
