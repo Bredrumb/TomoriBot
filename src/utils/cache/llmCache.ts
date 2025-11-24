@@ -37,6 +37,8 @@ export async function initializeLLMCache(): Promise<void> {
 				is_free,
 				has_tools,
 				sees_images,
+				sees_videos,
+				sees_youtube,
 				is_uncensored,
 				llm_description,
 				ja_description,

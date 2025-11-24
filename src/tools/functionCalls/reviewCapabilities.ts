@@ -290,8 +290,86 @@ export class ReviewCapabilitiesTool extends BaseTool {
 			capabilitiesContent +=
 				"- Execute arbitrary code on the server (security restriction)\n\n";
 
-			// 11. Add model switching information
+			// 11. Add "Why Features May Be Unavailable" section
 			capabilitiesContent += "---\n\n";
+			capabilitiesContent += "## Why Some Features May Be Unavailable\n\n";
+
+			// Check API key status for detailed explanations
+			const braveApiKeySet = await getBraveApiKeyStatus(
+				context.tomoriState.server_id,
+			);
+			const config = context.tomoriState.config;
+
+			const unavailableReasons: string[] = [];
+
+			// Check for missing vision capabilities
+			if (!seesImages || !seesVideos || !seesYouTube) {
+				const missingVision: string[] = [];
+				if (!seesImages) missingVision.push("images");
+				if (!seesVideos) missingVision.push("videos");
+				if (!seesYouTube) missingVision.push("YouTube videos");
+
+				unavailableReasons.push(
+					`**Vision Limitations**: Current model cannot process ${missingVision.join(", ")}. Switch to a vision-capable model using \`/config model\` or \`/config apikey\`.`,
+				);
+			}
+
+			// Check for missing function calling
+			if (!hasTools) {
+				unavailableReasons.push(
+					"**No Function Calling**: Current model does not support tools/functions. Many features (search, reminders, etc.) require function calling. Switch to a model with tool support using `/config model` or `/config apikey`.",
+				);
+			}
+
+			// Check for disabled server features
+			const disabledFeatures: Array<{ feature: string; command: string }> = [];
+			if (!config.web_search_enabled)
+				disabledFeatures.push({
+					feature: "web search",
+					command: "/config websearch",
+				});
+			if (!config.sticker_usage_enabled)
+				disabledFeatures.push({
+					feature: "sticker usage",
+					command: "/config stickerusage",
+				});
+			if (!config.emoji_usage_enabled)
+				disabledFeatures.push({
+					feature: "emoji usage",
+					command: "/config emojiusage",
+				});
+			if (!config.self_teaching_enabled)
+				disabledFeatures.push({
+					feature: "self teaching",
+					command: "/config selfteaching",
+				});
+
+			if (disabledFeatures.length > 0) {
+				let disabledText =
+					"**Server Configuration**: The following features are disabled by server admin:\n";
+				for (const { feature, command } of disabledFeatures) {
+					disabledText += `  - ${feature} (enable with \`${command}\`)\n`;
+				}
+				unavailableReasons.push(disabledText);
+			}
+
+			// Check for missing API keys
+			if (!braveApiKeySet) {
+				unavailableReasons.push(
+					"**Brave Search API Key Not Set**: Using DuckDuckGo MCP as fallback for web search (if available). For optimal search results, configure Brave API key using `/config brave_apikey`.",
+				);
+			}
+
+			if (unavailableReasons.length > 0) {
+				for (const reason of unavailableReasons) {
+					capabilitiesContent += `${reason}\n\n`;
+				}
+			} else {
+				capabilitiesContent +=
+					"✅ All features are available and properly configured!\n\n";
+			}
+
+			// 12. Add model switching information
 			capabilitiesContent +=
 				"**Need different capabilities?** Tell the user they can switch models using:\n";
 			capabilitiesContent +=
