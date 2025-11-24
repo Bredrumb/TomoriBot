@@ -981,6 +981,14 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 		context: StreamContext,
 		state: StreamState,
 	): Promise<void> {
+		// Check for stop request first (highest priority - prevents duplicate embeds)
+		if (StreamOrchestrator.hasStopRequest(context.channel.id)) {
+			log.info(
+				"Stream Send: Stop request detected before Discord API call, skipping message send",
+			);
+			return;
+		}
+
 		// Check for flush limit before Discord API call
 		if (state.messageSentCount >= STREAMING_LIMITS.MAX_FLUSH_COUNT) {
 			log.warn(
@@ -1001,14 +1009,6 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 
 			// Request graceful stop
 			StreamOrchestrator.requestStop(context.channel.id, "system");
-			return;
-		}
-
-		// Check for stop request before Discord API call
-		if (StreamOrchestrator.hasStopRequest(context.channel.id)) {
-			log.info(
-				"Stream Send: Stop request detected before Discord API call, skipping message send",
-			);
 			return;
 		}
 

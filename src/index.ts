@@ -8,7 +8,7 @@ import { initializeLocalizer } from "./utils/text/localizer";
 import { getAppSecrets } from "./utils/security/secretsManager";
 import { keyManager } from "./utils/security/keyManager";
 
-config();
+config({ quiet: true });
 
 // Load secrets from AWS Secrets Manager (production) or .env (development)
 log.section("Loading Application Secrets...");

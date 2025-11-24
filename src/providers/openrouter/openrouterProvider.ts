@@ -6,7 +6,6 @@
  * and OpenrouterStreamAdapter for better code organization and maintainability.
  */
 
-import { OpenRouter } from "@openrouter/sdk";
 import type {
 	BaseGuildTextChannel,
 	Client,
@@ -141,7 +140,8 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 	}
 
 	/**
-	 * Validate an OpenRouter API key by making a test request
+	 * Validate an OpenRouter API key using the dedicated auth endpoint
+	 * This method doesn't require a specific model and is more reliable than making a test chat request
 	 * @param apiKey - The API key to validate
 	 * @returns Promise<boolean> - True if the key is valid, false otherwise
 	 */
@@ -154,26 +154,32 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 		try {
 			log.info("Validating OpenRouter API key...");
 
-			// Initialize the OpenRouter client with the provided API key
-			const openRouter = new OpenRouter({ apiKey });
-
-			// Use the default model with proper fallback chain
-			const defaultModel = await getDefaultOpenrouterModel();
-
-			// Make a simple non-streaming request to validate the key
-			const response = await openRouter.chat.send({
-				model: defaultModel,
-				messages: [
-					{
-						role: "user",
-						content: "Test",
-					},
-				],
-				stream: false,
+			// Use OpenRouter's dedicated auth endpoint to validate the key
+			// This is more reliable than making a test chat request because:
+			// 1. It doesn't depend on a specific model being available
+			// 2. It doesn't consume credits
+			// 3. It's faster and more accurate
+			const response = await fetch("https://openrouter.ai/api/v1/auth/key", {
+				method: "GET",
+				headers: {
+					Authorization: `Bearer ${apiKey}`,
+				},
 			});
 
-			// Validate that we got a proper response structure
-			if (!response?.choices?.[0]?.message?.content) {
+			// Check if the response is successful (2xx status code)
+			if (!response.ok) {
+				log.warn(
+					`API key validation failed with status ${response.status}: ${response.statusText}`,
+				);
+				return false;
+			}
+
+			// Parse the response to ensure it contains valid user data
+			const data = await response.json();
+
+			// Validate that we got proper user data structure
+			// The response should contain user information and rate limits
+			if (!data || typeof data !== "object") {
 				log.warn("API key validation received invalid response structure");
 				return false;
 			}

@@ -887,36 +887,86 @@ export async function buildContext({
 				text: `[This message contained ${mediaDescription} - use increase_media_context with extend_by=${extendByNeeded} to view]`,
 			});
 		} else if (isWithinMediaWindow) {
-			// Within window: Add full media as normal
+			// Within window: Add full media if model supports it, otherwise add placeholder
+			// Check model capability flags
+			const seesImages = tomoriState?.llm.sees_images ?? false;
+			const seesVideos = tomoriState?.llm.sees_videos ?? false;
+
 			// 9.a. Add image parts if attachments exist
-			for (const attachment of msg.imageAttachments) {
-				if (attachment.mimeType) {
-					parts.push({
-						type: "image",
-						uri: attachment.proxyUrl,
-						mimeType: attachment.mimeType,
-					});
+			if (msg.imageAttachments.length > 0) {
+				if (seesImages) {
+					// Model supports images - add them normally
+					for (const attachment of msg.imageAttachments) {
+						if (attachment.mimeType) {
+							parts.push({
+								type: "image",
+								uri: attachment.proxyUrl,
+								mimeType: attachment.mimeType,
+							});
+						} else {
+							log.warn(
+								`Skipping image attachment due to missing mimeType: ${attachment.filename} from user ${msg.authorName}`,
+							);
+						}
+					}
 				} else {
-					log.warn(
-						`Skipping image attachment due to missing mimeType: ${attachment.filename} from user ${msg.authorName}`,
+					// Model doesn't support images - add placeholder text
+					const imageCount = msg.imageAttachments.length;
+					const hasGif = msg.imageAttachments.some((att) =>
+						att.mimeType?.includes("gif"),
+					);
+					let imageDescription: string;
+
+					if (hasGif && imageCount === 1) {
+						imageDescription = "a GIF";
+					} else if (hasGif) {
+						imageDescription = `${imageCount} images (including GIF)`;
+					} else {
+						imageDescription = `${imageCount === 1 ? "an image" : `${imageCount} images`}`;
+					}
+
+					parts.push({
+						type: "text",
+						text: `[System: This message contains ${imageDescription}. Current model does not support images.]`,
+					});
+					log.info(
+						`Images skipped for message ${msg.id} - model does not support images`,
 					);
 				}
 			}
 
 			// 9.b. Add video parts if attachments exist
-			for (const attachment of msg.videoAttachments) {
-				if (attachment.mimeType) {
-					parts.push({
-						type: "video",
-						uri: attachment.isYouTubeLink
-							? attachment.url
-							: attachment.proxyUrl,
-						mimeType: attachment.mimeType,
-						isYouTubeLink: attachment.isYouTubeLink,
-					});
+			if (msg.videoAttachments.length > 0) {
+				if (seesVideos) {
+					// Model supports videos - add them normally
+					for (const attachment of msg.videoAttachments) {
+						if (attachment.mimeType) {
+							parts.push({
+								type: "video",
+								uri: attachment.isYouTubeLink
+									? attachment.url
+									: attachment.proxyUrl,
+								mimeType: attachment.mimeType,
+								isYouTubeLink: attachment.isYouTubeLink,
+							});
+						} else {
+							log.warn(
+								`Skipping video attachment due to missing mimeType: ${attachment.filename} from user ${msg.authorName}`,
+							);
+						}
+					}
 				} else {
-					log.warn(
-						`Skipping video attachment due to missing mimeType: ${attachment.filename} from user ${msg.authorName}`,
+					// Model doesn't support videos - add placeholder text
+					const videoCount = msg.videoAttachments.length;
+					const videoDescription =
+						videoCount === 1 ? "a video" : `${videoCount} videos`;
+
+					parts.push({
+						type: "text",
+						text: `[System: This message contains ${videoDescription}. Current model does not support videos.]`,
+					});
+					log.info(
+						`Videos skipped for message ${msg.id} - model does not support videos`,
 					);
 				}
 			}
