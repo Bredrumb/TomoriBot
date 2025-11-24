@@ -556,31 +556,75 @@ export default async function tomoriChat(
 			// The current message will now attempt to acquire the lock.
 		}
 
-		// MODIFIED: Check if locked AND if Tomori would reply
-		if (lockEntry.isLocked) {
-			// Check for natural stop message first (if not already a stop response)
-			if (!isStopResponse && isNaturalStopMessage(message.content)) {
-				log.info(
-					`Stop message detected in channel ${channelLockId} while processing message ${lockEntry.currentMessageId}. Signaling graceful stop.`,
+		// Handle stop requests while locked before rate limiting
+		if (
+			lockEntry.isLocked &&
+			!isStopResponse &&
+			isNaturalStopMessage(message.content)
+		) {
+			log.info(
+				`Stop message detected in channel ${channelLockId} while processing message ${lockEntry.currentMessageId}. Signaling graceful stop.`,
+			);
+
+			const { StreamOrchestrator } = await import(
+				"../../utils/discord/streamOrchestrator"
+			);
+
+			StreamOrchestrator.requestStop(channelLockId, message.author.id, {
+				originalStopMessage: message,
+				client,
+			});
+
+			log.info(
+				`Stop signal sent for channel ${channelLockId}. Stop response will be generated after stream completes.`,
+			);
+			return;
+		}
+
+		// Global rate limit guard (applies before both immediate processing and enqueueing)
+		if (!isStopResponse) {
+			const userActiveCount = getUserActiveMessageCount(userDiscId);
+			const userRateCheck = checkUserRateLimit(userActiveCount);
+			if (!userRateCheck.allowed) {
+				log.warn(
+					`User ${userDiscId} exceeded rate limit (${userRateCheck.currentCount}/${userRateCheck.maxLimit} active messages). Dropping message ${message.id}.`,
 				);
 
-				// Import at the top if not already imported
-				const { StreamOrchestrator } = await import(
-					"../../utils/discord/streamOrchestrator"
-				);
+				const tempUserRow = await loadUserRow(userDiscId);
+				const userLocale =
+					tempUserRow?.language_pref ?? guild?.preferredLocale ?? "en-US";
 
-				// Signal the stream to stop with context for later response generation
-				StreamOrchestrator.requestStop(channelLockId, message.author.id, {
-					originalStopMessage: message,
+				await sendUserRateLimitDM(
+					userDiscId,
 					client,
-				});
-
-				log.info(
-					`Stop signal sent for channel ${channelLockId}. Stop response will be generated after stream completes.`,
+					userLocale,
+					userActiveCount,
 				);
-				return;
+
+				return; // Drop message
 			}
 
+			const serverActiveCount = getServerActiveMessageCount(serverDiscId);
+			const serverRateCheck = checkServerRateLimit(serverActiveCount);
+			if (!serverRateCheck.allowed) {
+				log.warn(
+					`Server ${serverDiscId} exceeded rate limit (${serverRateCheck.currentCount}/${serverRateCheck.maxLimit} active messages). Dropping message ${message.id}.`,
+				);
+
+				const serverLocale = guild?.preferredLocale ?? "en-US";
+
+				await sendServerRateLimitEmbed(
+					channel,
+					serverLocale,
+					serverActiveCount,
+				);
+
+				return; // Drop message
+			}
+		}
+
+		// MODIFIED: Check if locked AND if Tomori would reply
+		if (lockEntry.isLocked) {
 			// Only enqueue and send "busy" message if Tomori is set up and would have replied.
 			if (earlyTomoriState) {
 				// 1. Create a modified version of earlyTomoriState for the shouldBotReply check.
@@ -597,53 +641,7 @@ export default async function tomoriChat(
 					isManuallyTriggered ||
 					shouldBotReply(message, modifiedEarlyTomoriStateForCheck)
 				) {
-					// Rate limit check: Check user and server limits before enqueueing
-					// Check user-level rate limit first (stricter)
-					const userActiveCount = getUserActiveMessageCount(userDiscId);
-					const userRateCheck = checkUserRateLimit(userActiveCount);
-					if (!userRateCheck.allowed) {
-						log.warn(
-							`User ${userDiscId} exceeded rate limit (${userRateCheck.currentCount}/${userRateCheck.maxLimit} active messages). Dropping message ${message.id}.`,
-						);
-
-						// Load user locale for DM
-						const tempUserRow = await loadUserRow(userDiscId);
-						const userLocale =
-							tempUserRow?.language_pref ?? guild?.preferredLocale ?? "en-US";
-
-						// Send DM notification (silent drop if DMs blocked)
-						await sendUserRateLimitDM(
-							userDiscId,
-							client,
-							userLocale,
-							userActiveCount,
-						);
-
-						return; // Drop message
-					}
-
-					// Check server-level rate limit
-					const serverActiveCount = getServerActiveMessageCount(serverDiscId);
-					const serverRateCheck = checkServerRateLimit(serverActiveCount);
-					if (!serverRateCheck.allowed) {
-						log.warn(
-							`Server ${serverDiscId} exceeded rate limit (${serverRateCheck.currentCount}/${serverRateCheck.maxLimit} active messages). Dropping message ${message.id}.`,
-						);
-
-						// Get server locale
-						const serverLocale = guild?.preferredLocale ?? "en-US";
-
-						// Send public embed notification
-						await sendServerRateLimitEmbed(
-							channel,
-							serverLocale,
-							serverActiveCount,
-						);
-
-						return; // Drop message
-					}
-
-					// Rate limits not exceeded, proceed with normal enqueueing
+					// Rate limits already validated above, proceed with normal enqueueing
 					lockEntry.messageQueue.push({
 						message,
 						isManuallyTriggered,
