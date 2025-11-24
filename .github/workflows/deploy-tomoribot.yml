@@ -7,7 +7,6 @@ on:
   push:
     branches:
       - main
-      - cicd/aws-deployment # TODO: Remove before putting into main
   workflow_dispatch: # Manual trigger - allows running on any branch
     inputs:
       environment:
@@ -178,7 +177,7 @@ jobs:
       - name: Setup Node.js for npm caching
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Pre-download npm-based MCP servers
         run: |

@@ -757,7 +757,7 @@ I have built-in features to help reduce costs from abusers or spammers in your s
 - {helpCustomization} - Learn about personality customization
 - {supportServer} - Join the official TomoriBot support server
 
-**Legal:** View our \`/legal terms\` and \`/legal privacy\` anytime`,
+Setting up TomoriBot means that you and your server members agree to its \`/legal terms\` and \`/legal privacy\` notices`,
 			},
 
 			// /help data
@@ -1009,13 +1009,13 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 			privacy: {
 				description: `View TomoriBot's Privacy Policy`,
 				title: `Privacy Policy`,
-				description_text: `View TomoriBot's Privacy Policy to understand how we handle your data.`,
+				description_text: `View TomoriBot's Privacy Policy to understand how we handle your data. **Note:** This applies to the official hosted instance. Self-hosted instances control their own data handling.`,
 				link_title: `Full Privacy Policy`,
 			},
 			terms: {
 				description: `View TomoriBot's Terms of Service`,
 				title: `Terms of Service`,
-				description_text: `View TomoriBot's Terms of Service to understand the rules and guidelines for using the bot.`,
+				description_text: `View TomoriBot's Terms of Service to understand the rules and guidelines for using the bot. **Note:** This applies to the official hosted instance. Self-hosted instances are governed by the AGPLv3 license.`,
 				link_title: `Full Terms of Service`,
 			},
 		},

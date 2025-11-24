@@ -757,7 +757,7 @@ export default {
 - {helpCustomization} - パーソナリティのカスタマイズについて学ぶ
 - {supportServer} - 公式TomoriBotサポートサーバーに参加
 
-**法的文書:** \`/legal terms\`と\`/legal privacy\`でいつでも確認可能`,
+TomoriBotをセットアップすることで、あなたとサーバーメンバーは\`/legal terms\`と\`/legal privacy\`の通知に同意したことになります`,
 			},
 
 			// /help data
@@ -1018,13 +1018,13 @@ export default {
 			privacy: {
 				description: `TomoriBotのプライバシーポリシーを表示`,
 				title: `プライバシーポリシー`,
-				description_text: `TomoriBotのプライバシーポリシーを表示して、データの取り扱いについて理解してください。`,
+				description_text: `TomoriBotのプライバシーポリシーを表示して、データの取り扱いについて理解してください。これは公式ホスト版インスタンスに適用されます。セルフホスト版インスタンスは独自のデータ処理を制御します。`,
 				link_title: `完全なプライバシーポリシー`,
 			},
 			terms: {
 				description: `TomoriBotの利用規約を表示`,
 				title: `利用規約`,
-				description_text: `TomoriBotの利用規約を表示して、ボットの使用に関するルールとガイドラインを理解してください。`,
+				description_text: `TomoriBotの利用規約を表示して、ボットの使用に関するルールとガイドラインを理解してください。これは公式ホスト版インスタンスに適用されます。セルフホスト版インスタンスはAGPLv3ライセンスに準拠します。`,
 				link_title: `完全な利用規約`,
 			},
 		},
