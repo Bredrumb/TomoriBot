@@ -61,7 +61,7 @@ export const MEDIA_LIMITS = {
 	/**
 	 * Maximum size per individual media file in MB (for conversation context)
 	 * Larger files will be rejected or downscaled
-	 * @default 8 MB
+	 * @default 10 MB
 	 */
 	MAX_MEDIA_SIZE_MB: Number.parseInt(process.env.MAX_MEDIA_SIZE_MB || "8", 10),
 
@@ -80,10 +80,10 @@ export const PERSONA_LIMITS = {
 	/**
 	 * Maximum size for persona avatar attachments (create/generate commands)
 	 * Used for image processing operations (download, crop, base64 encode)
-	 * @default 8 MB (matches Discord's standard upload limit)
+	 * @default 10 MB (matches Discord's standard upload limit)
 	 */
 	MAX_AVATAR_SIZE_MB: Number.parseInt(
-		process.env.MAX_AVATAR_SIZE_MB || "8",
+		process.env.MAX_AVATAR_SIZE_MB || "10",
 		10,
 	),
 } as const;
