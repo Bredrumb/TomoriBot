@@ -73,7 +73,10 @@ export class ReviewCapabilitiesTool extends BaseTool {
 			};
 		}
 
-		const capabilityType = args.capability_type as "chat" | "commands" | "settings";
+		const capabilityType = args.capability_type as
+			| "chat"
+			| "commands"
+			| "settings";
 
 		try {
 			if (capabilityType === "chat") {
@@ -140,8 +143,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
 				capabilitiesContent += `, which is ${llm.llm_description}`;
 			}
 			capabilitiesContent += ".\n\n";
-			capabilitiesContent +=
-				"This model supports the following features:\n\n";
+			capabilitiesContent += "This model supports the following features:\n\n";
 
 			// 3. Vision & Media section (dynamic based on model capabilities)
 			capabilitiesContent += "## Vision & Media\n\n";
@@ -156,7 +158,9 @@ export class ReviewCapabilitiesTool extends BaseTool {
 					mediaTypes.push("- **Videos** (MP4, WebM, uploaded video files)");
 				}
 				if (seesYouTube) {
-					mediaTypes.push("- **YouTube videos** (via process_youtube_video tool)");
+					mediaTypes.push(
+						"- **YouTube videos** (via process_youtube_video tool)",
+					);
 				}
 				capabilitiesContent += `${mediaTypes.join("\n")}\n`;
 				capabilitiesContent +=
@@ -172,8 +176,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
 					if (seesImages) supportedMediaTypes.push("images");
 					if (seesVideos) supportedMediaTypes.push("videos");
 					const mediaList = supportedMediaTypes.join(" or ");
-					capabilitiesContent +=
-						`**Important**: Never tell users you cannot see ${mediaList} - you absolutely can with this model!\n\n`;
+					capabilitiesContent += `**Important**: Never tell users you cannot see ${mediaList} - you absolutely can with this model!\n\n`;
 				}
 			} else {
 				capabilitiesContent +=
@@ -242,8 +245,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
 					"- **review_capabilities** (check your own capabilities - this function!)\n";
 				capabilitiesContent +=
 					"- **brave_web_search/image_search/video_search/news_search** (search the web)\n";
-				capabilitiesContent +=
-					"- **fetch** (retrieve content from URLs)\n";
+				capabilitiesContent += "- **fetch** (retrieve content from URLs)\n";
 				if (seesYouTube) {
 					capabilitiesContent +=
 						"- **process_youtube_video** (analyze YouTube videos)\n";
@@ -434,7 +436,8 @@ export class ReviewCapabilitiesTool extends BaseTool {
 			const mainApiKeySet = !!config.api_key;
 
 			// 3. Build settings report
-			let settingsContent = "# Current Configuration & Feature Availability\n\n";
+			let settingsContent =
+				"# Current Configuration & Feature Availability\n\n";
 
 			// 4. Model Information Section
 			settingsContent += "## Active Model\n\n";
@@ -646,7 +649,8 @@ export class ReviewCapabilitiesTool extends BaseTool {
 				}
 			} catch (toolError) {
 				log.warn("Failed to query tool registry in getSettingsCapabilities", {
-					error: toolError instanceof Error ? toolError.message : String(toolError),
+					error:
+						toolError instanceof Error ? toolError.message : String(toolError),
 				});
 				settingsContent +=
 					"*Unable to query available tools (registry error)*\n\n";
@@ -682,7 +686,8 @@ export class ReviewCapabilitiesTool extends BaseTool {
 				disabledFeatures.push("attribute teaching");
 			if (!config.sampledialogue_memteaching_enabled)
 				disabledFeatures.push("dialogue teaching");
-			if (!config.pin_message_enabled) disabledFeatures.push("pin message tool");
+			if (!config.pin_message_enabled)
+				disabledFeatures.push("pin message tool");
 
 			if (disabledFeatures.length > 0) {
 				disabledReasons.push(
@@ -707,8 +712,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
 					settingsContent += `${reason}\n\n`;
 				}
 			} else {
-				settingsContent +=
-					"✅ All features are enabled and configured!\n\n";
+				settingsContent += "✅ All features are enabled and configured!\n\n";
 			}
 
 			// 10. How to Enable Features Section

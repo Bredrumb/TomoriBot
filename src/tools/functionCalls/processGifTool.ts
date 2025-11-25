@@ -30,10 +30,7 @@ export class ProcessGifTool extends BaseTool {
 	 * Static storage for enhanced context items to avoid serializing base64 in tool responses
 	 * Key: message ID, Value: StructuredContextItem with processed GIF frames
 	 */
-	static pendingEnhancedContextItems = new Map<
-		string,
-		StructuredContextItem
-	>();
+	static pendingEnhancedContextItems = new Map<string, StructuredContextItem>();
 
 	name = "process_gif";
 	description =

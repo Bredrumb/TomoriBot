@@ -7,7 +7,6 @@ import type {
 	ChatInputCommandInteraction,
 	Client,
 	SlashCommandSubcommandBuilder,
-	APIAttachment,
 } from "discord.js";
 import { AttachmentBuilder, MessageFlags, EmbedBuilder } from "discord.js";
 import { TextInputStyle } from "discord.js";
@@ -20,6 +19,8 @@ import {
 import type { UserRow } from "../../types/db/schema";
 import { loadTomoriState } from "../../utils/db/dbRead";
 import { decryptApiKey } from "../../utils/security/crypto";
+import { memoryGuard, PERSONA_LIMITS } from "../../utils/security/rateLimiter";
+import { safeDownload } from "../../utils/security/safeDownload";
 import {
 	searchCharacterInfo,
 	generatePresetFromPrompt,
@@ -34,7 +35,6 @@ import {
 } from "../../types/preset/presetExport";
 import type { PresetExport } from "../../types/preset/presetExport";
 import type { ModalComponent } from "../../types/discord/modal";
-import axios from "axios";
 
 // Modal constants
 const MODAL_CUSTOM_ID = "preset_generate_modal";
@@ -55,27 +55,6 @@ export const configureSubcommand = (
 		.setDescription(
 			localizer("en-US", "commands.persona.generate.description"),
 		);
-
-/**
- * Convert Discord attachment to base64
- * @param attachment - Discord attachment object
- * @returns Promise<{base64: string, mimeType: string}> - Base64 data and MIME type
- */
-async function attachmentToBase64(attachment: APIAttachment): Promise<{
-	base64: string;
-	mimeType: string;
-}> {
-	// Download the attachment
-	const response = await axios.get(attachment.url, {
-		responseType: "arraybuffer",
-	});
-
-	// Convert to base64
-	const base64 = Buffer.from(response.data).toString("base64");
-	const mimeType = attachment.content_type || "image/png";
-
-	return { base64, mimeType };
-}
 
 /**
  * Format sample dialogues for preview display
@@ -299,8 +278,33 @@ export async function execute(
 		const imageAttachment = modalResult.attachments?.[FILE_UPLOAD_ID];
 		let imageBase64: string | undefined;
 		let imageMimeType: string | undefined;
+		let imageBuffer: Buffer | undefined;
 
 		if (imageAttachment) {
+			// Early memory guard check
+			const memCheck = memoryGuard.checkMemory();
+			if (memCheck.status === "critical") {
+				await modalSubmitInteraction.editReply({
+					embeds: [
+						new EmbedBuilder()
+							.setTitle(
+								localizer(
+									locale,
+									"commands.persona.generate.error_memory_critical_title",
+								),
+							)
+							.setDescription(
+								localizer(
+									locale,
+									"commands.persona.generate.error_memory_critical_description",
+								),
+							)
+							.setColor(ColorCode.ERROR),
+					],
+				});
+				return;
+			}
+
 			// Validate image type
 			if (!imageAttachment.content_type?.startsWith("image/")) {
 				await modalSubmitInteraction.editReply({
@@ -324,26 +328,44 @@ export async function execute(
 				return;
 			}
 
-			try {
-				const { base64, mimeType } = await attachmentToBase64(imageAttachment);
-				imageBase64 = base64;
-				imageMimeType = mimeType;
-				log.info("Image attachment converted to base64 from modal");
-			} catch (error) {
-				log.error("Failed to convert image attachment from modal:", error);
+			// Download once with safeDownload
+			const downloadResult = await safeDownload(imageAttachment.url, {
+				maxSizeMB: PERSONA_LIMITS.MAX_AVATAR_SIZE_MB,
+				timeoutMs: 10000,
+				knownSize: imageAttachment.size,
+			});
+
+			if (!downloadResult.success) {
+				// Handle different error types with localized messages
+				let errorKey: string;
+				if (downloadResult.error === "size_exceeded") {
+					errorKey = "commands.persona.generate.error_file_too_large";
+				} else if (downloadResult.error === "timeout") {
+					errorKey = "commands.persona.generate.error_download_timeout";
+				} else {
+					errorKey = "commands.persona.generate.error_download_failed";
+				}
+
+				await modalSubmitInteraction.editReply({
+					embeds: [
+						new EmbedBuilder()
+							.setTitle(localizer(locale, errorKey))
+							.setColor(ColorCode.ERROR),
+					],
+				});
+				return;
+			}
+
+			// Store buffer for later reuse (image processing) and convert to base64 (AI generation)
+			// Buffer is guaranteed to exist when success is true
+			if (!downloadResult.buffer) {
 				await modalSubmitInteraction.editReply({
 					embeds: [
 						new EmbedBuilder()
 							.setTitle(
 								localizer(
 									locale,
-									"commands.persona.generate.image_download_failed_title",
-								),
-							)
-							.setDescription(
-								localizer(
-									locale,
-									"commands.persona.generate.image_download_failed_description",
+									"commands.persona.generate.error_download_failed",
 								),
 							)
 							.setColor(ColorCode.ERROR),
@@ -351,6 +373,11 @@ export async function execute(
 				});
 				return;
 			}
+
+			imageBuffer = downloadResult.buffer;
+			imageBase64 = imageBuffer.toString("base64");
+			imageMimeType = imageAttachment.content_type || "image/png";
+			log.info("Image attachment downloaded and converted to base64");
 		}
 
 		// 8. Show processing embed
@@ -484,17 +511,12 @@ export async function execute(
 		// 14. Get image for export (uploaded image or server avatar)
 		let pngBuffer: Buffer;
 
-		if (imageAttachment) {
-			// Use uploaded image
+		if (imageBuffer) {
+			// Use uploaded image (already downloaded earlier, reuse buffer)
 			try {
-				const imageResponse = await axios.get(imageAttachment.url, {
-					responseType: "arraybuffer",
-				});
-				const imageBuffer = Buffer.from(imageResponse.data);
-
 				// Crop to 1:1 square
 				pngBuffer = await centerCropToSquare(imageBuffer);
-				log.info("Uploaded image cropped to 1:1 square");
+				log.info("Uploaded image cropped to 1:1 square (reused buffer)");
 			} catch (error) {
 				log.error("Failed to process uploaded image:", error);
 				await modalSubmitInteraction.editReply({

@@ -39,7 +39,8 @@ const pinoLogger = pino({
 					colorize: false,
 					translateTime: "HH:MM:ss",
 					ignore: "pid,hostname",
-					customLevels: "trace:10,debug:20,info:30,section:31,success:35,warn:40,error:50,rateLimit:55,fatal:60",
+					customLevels:
+						"trace:10,debug:20,info:30,section:31,success:35,warn:40,error:50,rateLimit:55,fatal:60",
 				},
 			}
 		: undefined,
@@ -68,7 +69,9 @@ export const log = {
 	 * @param msg - The message to log.
 	 */
 	info: (msg: string) => {
-		pinoLogger.info(shouldHideLogs ? msg : `${colors.cyan}${msg}${colors.reset}`);
+		pinoLogger.info(
+			shouldHideLogs ? msg : `${colors.cyan}${msg}${colors.reset}`,
+		);
 	},
 
 	/**
@@ -79,9 +82,7 @@ export const log = {
 		// Pino adds custom level methods at runtime, but TypeScript doesn't know about them
 		// biome-ignore lint/suspicious/noExplicitAny: Custom Pino level added at runtime
 		(pinoLogger as any).success(
-			shouldHideLogs
-				? `✓ ${msg}`
-				: `${colors.green}✓ ${msg}${colors.reset}`,
+			shouldHideLogs ? `✓ ${msg}` : `${colors.green}✓ ${msg}${colors.reset}`,
 		);
 	},
 

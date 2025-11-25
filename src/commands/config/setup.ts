@@ -529,9 +529,7 @@ export async function execute(
 				} catch (avatarError) {
 					// Log avatar error but don't fail the setup
 					avatarUpdateFailed = true;
-					log.warn(
-						`Failed to update avatar during setup: ${avatarError}`,
-					);
+					log.warn(`Failed to update avatar during setup: ${avatarError}`);
 				}
 			}
 
@@ -583,7 +581,10 @@ export async function execute(
 				descriptionKey: isDMChannel
 					? "commands.config.setup.success_desc_dm"
 					: "commands.config.setup.success_desc",
-				color: avatarUpdateFailed || isDMChannel ? ColorCode.WARN : ColorCode.SUCCESS,
+				color:
+					avatarUpdateFailed || isDMChannel
+						? ColorCode.WARN
+						: ColorCode.SUCCESS,
 				fields: successFields,
 				footerKey: isDMChannel
 					? "commands.persona.default.avatar_update_skipped_dm"

@@ -339,7 +339,11 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
 				// felo-search: Streaming not compatible with Discord
 				// fetch-url: Use dedicated Fetch MCP server instead
 				// url-metadata: Redundant with Fetch MCP server
-				const disabledDDGFunctions = ["felo-search", "fetch-url", "url-metadata"];
+				const disabledDDGFunctions = [
+					"felo-search",
+					"fetch-url",
+					"url-metadata",
+				];
 				let disabledFunctionsCount = 0;
 
 				if (allowedMCPFunctions) {

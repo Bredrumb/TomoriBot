@@ -858,7 +858,8 @@ export async function buildContext({
 	// 9. Conversation History (Main Dialogue)
 	// Calculate media windowing boundaries
 	const totalMessages = simplifiedMessageHistory.length;
-	const effectiveMediaWindow = mediaContextWindow ?? memoryGuard.getMediaWindow();
+	const effectiveMediaWindow =
+		mediaContextWindow ?? memoryGuard.getMediaWindow();
 	const maxExtendBy = MEDIA_LIMITS.MESSAGE_FETCH_LIMIT - effectiveMediaWindow;
 	const mediaWindowCutoff = totalMessages - effectiveMediaWindow;
 

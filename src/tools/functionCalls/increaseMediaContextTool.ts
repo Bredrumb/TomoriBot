@@ -26,7 +26,6 @@ import {
  * and can request to see those images by calling this tool
  */
 export class IncreaseMediaContextTool extends BaseTool {
-
 	name = "increase_media_context";
 	description =
 		"Expand the media context window to view images and videos from older messages that were hidden for optimization. Use when you see placeholders indicating hidden media. The placeholder text tells you the exact extend_by value needed.";
@@ -112,8 +111,7 @@ export class IncreaseMediaContextTool extends BaseTool {
 
 		// 2. Calculate maximum allowed extend_by
 		const currentMediaWindow = memoryGuard.getMediaWindow();
-		const maxExtendBy =
-			MEDIA_LIMITS.MESSAGE_FETCH_LIMIT - currentMediaWindow;
+		const maxExtendBy = MEDIA_LIMITS.MESSAGE_FETCH_LIMIT - currentMediaWindow;
 
 		if (typeof extendBy !== "number" || extendBy < 1) {
 			log.warn(

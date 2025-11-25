@@ -771,12 +771,15 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 									);
 								}
 							} catch (inlineErr) {
-								log.warn("OpenrouterStreamAdapter: Error processing inlineData", {
-									error:
-										inlineErr instanceof Error
-											? inlineErr.message
-											: String(inlineErr),
-								});
+								log.warn(
+									"OpenrouterStreamAdapter: Error processing inlineData",
+									{
+										error:
+											inlineErr instanceof Error
+												? inlineErr.message
+												: String(inlineErr),
+									},
+								);
 							}
 							continue; // Skip to next part after handling inlineData
 						}

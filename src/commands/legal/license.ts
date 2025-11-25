@@ -33,13 +33,14 @@ export async function execute(
 	locale: string,
 ): Promise<void> {
 	// 1. Build GitHub URL to LICENSE file (always in root, no locale variation)
-	const githubUrl =
-		"https://github.com/Bredrumb/TomoriBot/blob/main/LICENSE";
+	const githubUrl = "https://github.com/Bredrumb/TomoriBot/blob/main/LICENSE";
 
 	// 2. Create embed with title, description, and link
 	const embed = new EmbedBuilder()
 		.setTitle(localizer(locale, "commands.legal.license.title"))
-		.setDescription(localizer(locale, "commands.legal.license.description_text"))
+		.setDescription(
+			localizer(locale, "commands.legal.license.description_text"),
+		)
 		.addFields({
 			name: localizer(locale, "commands.legal.license.link_title"),
 			value: githubUrl,

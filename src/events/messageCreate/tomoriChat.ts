@@ -1790,7 +1790,11 @@ export default async function tomoriChat(
 			// This fixes the UX issue where manual /bot respond or /bot reason commands
 			// don't work if Tomori was the last one to speak in the conversation
 			// IMPORTANT: Skip this for reasoning queries - they have their own system message
-			if (isManuallyTriggered && !reasoningQuery && simplifiedMessages.length > 0) {
+			if (
+				isManuallyTriggered &&
+				!reasoningQuery &&
+				simplifiedMessages.length > 0
+			) {
 				const lastMessage = simplifiedMessages[simplifiedMessages.length - 1];
 
 				// 1. Check if the last message in history is from Tomori
@@ -2184,522 +2188,537 @@ export default async function tomoriChat(
 
 						case "empty_response": {
 							// Handle empty response with fresh context retry
-						const MAX_EMPTY_RESPONSE_RETRIES = 2;
-						const RETRY_DELAY_MS = 1000;
+							const MAX_EMPTY_RESPONSE_RETRIES = 2;
+							const RETRY_DELAY_MS = 1000;
 
-						if (retryCount < MAX_EMPTY_RESPONSE_RETRIES) {
+							if (retryCount < MAX_EMPTY_RESPONSE_RETRIES) {
+								log.info(
+									`Empty response detected (attempt ${retryCount + 1}/${MAX_EMPTY_RESPONSE_RETRIES + 1}). Retrying with fresh context in ${RETRY_DELAY_MS}ms...`,
+								);
+
+								// Wait before retry
+								await new Promise((resolve) =>
+									setTimeout(resolve, RETRY_DELAY_MS),
+								);
+
+								// Recursive call with fresh context (skipLock=true to avoid semaphore issues)
+								return await tomoriChat(
+									client,
+									message,
+									isFromQueue,
+									true, // isManuallyTriggered - bypass trigger checks for retry
+									forceReason,
+									reasoningQuery,
+									llmOverrideCodename,
+									isStopResponse,
+									retryCount + 1, // Increment retry count
+									true, // skipLock - parent already holds the lock
+								);
+							} else {
+								// Max retries reached, show error embed
+								log.warn(
+									`Empty response after ${MAX_EMPTY_RESPONSE_RETRIES} retries. Showing error embed.`,
+								);
+
+								await sendStandardEmbed(channel, locale, {
+									titleKey: "genai.empty_response_title",
+									descriptionKey: "genai.empty_response_description",
+									color: ColorCode.WARN,
+									footerKey: "genai.generic_error_footer",
+								}).catch((e) =>
+									log.warn("Failed to send empty response embed to channel", e),
+								);
+
+								finalStreamCompleted = true; // Mark as completed to exit
+								break;
+							}
+						}
+
+						case "timeout":
+							// This is the internal stream inactivity timeout from streamGeminiToDiscord
+							log.warn(
+								`Streaming to Discord timed out due to inactivity for channel ${channel.id}.`,
+								streamResult.data,
+							);
+							await sendStandardEmbed(channel, locale, {
+								color: ColorCode.WARN,
+								titleKey: "genai.error_stream_timeout_title",
+								descriptionKey: "genai.error_stream_timeout_description",
+							});
+							finalStreamCompleted = true;
+							break;
+
+						case "stopped_by_user": {
+							// Handle user-requested stop (natural stop triggers)
 							log.info(
-								`Empty response detected (attempt ${retryCount + 1}/${MAX_EMPTY_RESPONSE_RETRIES + 1}). Retrying with fresh context in ${RETRY_DELAY_MS}ms...`,
+								`Streaming was stopped by user request for channel ${channel.id}.`,
+							);
+							finalStreamCompleted = true;
+
+							// Check if we have stop context to create a response
+							const stopContext = StreamOrchestrator.getAndClearStopContext(
+								channel.id,
 							);
 
-							// Wait before retry
-							await new Promise((resolve) =>
-								setTimeout(resolve, RETRY_DELAY_MS),
+							if (stopContext) {
+								// Get the current lock entry to queue the stop response
+								const currentLockEntry = channelLocks.get(channel.id);
+								if (currentLockEntry) {
+									// Queue the original stop message as a "passport" for stop response
+									currentLockEntry.messageQueue.unshift({
+										message: stopContext.originalStopMessage,
+										isManuallyTriggered: true, // This bypasses normal trigger logic
+										forceReason: false,
+										llmOverrideCodename,
+										isStopResponse: true, // This response cannot be stopped
+									});
+
+									log.info(
+										`Stop response queued after stream completion for channel ${channel.id}. Queue size: ${currentLockEntry.messageQueue.length}`,
+									);
+								}
+							}
+
+							break; // Exit the loop gracefully, stop response will be handled by queue
+						}
+
+						case "function_call": {
+							if (!streamResult.data) {
+								// Function call without data - log error and break
+								log.error(
+									"Function call status received without data:",
+									streamResult,
+								);
+								finalStreamCompleted = true;
+								break;
+							}
+							const funcCall = streamResult.data as FunctionCall; // Type assertion
+							const funcName = funcCall.name?.trim() ?? "";
+							log.info(
+								`Stream LLM wants to call function: ${funcName} with args: ${JSON.stringify(funcCall.args)}`,
 							);
 
-							// Recursive call with fresh context (skipLock=true to avoid semaphore issues)
-							return await tomoriChat(
+							// 2. Execute function using modular tool system
+							log.info(
+								`Executing tool: ${funcName} with args: ${JSON.stringify(funcCall.args)}`,
+							);
+
+							// Build tool execution context
+							const toolContext = {
+								channel,
 								client,
 								message,
-								isFromQueue,
-								true, // isManuallyTriggered - bypass trigger checks for retry
-								forceReason,
-								reasoningQuery,
-								llmOverrideCodename,
-								isStopResponse,
-								retryCount + 1, // Increment retry count
-								true, // skipLock - parent already holds the lock
+								userId: userRow?.user_id?.toString() || userDiscId,
+								guildId: message.guild?.id, // Pass guild ID for guild-specific features (e.g., server avatars)
+								tomoriState,
+								locale,
+								provider: "google" as const,
+								streamContext: streamingContext, // Pass streaming context to tools
+							};
+
+							// Execute tool using ToolRegistry (handles both built-in and MCP tools seamlessly)
+							// Check for stop request before executing function call
+							if (StreamOrchestrator.hasStopRequest(channel.id)) {
+								log.info(
+									`Function call execution cancelled due to stop request: ${funcName}`,
+								);
+								finalStreamCompleted = true;
+								break;
+							}
+
+							const functionCallStart = Date.now();
+							const toolResult = await ToolRegistry.executeTool(
+								funcName,
+								funcCall.args || {},
+								toolContext,
 							);
-						} else {
-							// Max retries reached, show error embed
-							log.warn(
-								`Empty response after ${MAX_EMPTY_RESPONSE_RETRIES} retries. Showing error embed.`,
+							const functionCallDuration = Date.now() - functionCallStart;
+
+							// Log function call timing (especially long-running ones)
+							if (functionCallDuration > 5000) {
+								log.warn(
+									`Long-running function call: ${funcName} took ${functionCallDuration}ms`,
+								);
+							} else {
+								log.info(
+									`Function call completed: ${funcName} (${functionCallDuration}ms)`,
+								);
+							}
+
+							// Convert tool result to function execution result format
+							let functionExecutionResult: Record<string, unknown>;
+
+							if (toolResult.success) {
+								functionExecutionResult = (toolResult.data as Record<
+									string,
+									unknown
+								>) || { status: "completed" };
+
+								// Handle sticker selection specifically (extract sticker for later sending)
+								if (
+									funcName === "select_sticker_for_response" &&
+									toolResult.data
+								) {
+									const stickerData = toolResult.data as Record<
+										string,
+										unknown
+									>;
+									if (stickerData.status === "sticker_selected_successfully") {
+										// Find the sticker in guild cache to send later
+										const discordSticker = guild?.stickers.cache.get(
+											stickerData.sticker_id as string,
+										);
+										selectedStickerToSend = discordSticker || null;
+										log.success(
+											`Sticker '${stickerData.sticker_name}' selected for sending`,
+										);
+									} else {
+										selectedStickerToSend = null;
+									}
+								}
+
+								// Handle YouTube video restart signal (enhanced context restart)
+								if (
+									funcName === "process_youtube_video" &&
+									toolResult.data &&
+									(toolResult.data as Record<string, unknown>).type ===
+										"context_restart_with_video"
+								) {
+									const restartData = toolResult.data as Record<
+										string,
+										unknown
+									>;
+									const enhancedContextItem =
+										restartData.enhanced_context_item as StructuredContextItem;
+									const videoUrl = restartData.video_url as string;
+									const videoId = restartData.video_id as string;
+
+									log.info(
+										`YouTube video restart signal detected for: ${videoUrl}. Cleaning URLs and enhancing context.`,
+									);
+
+									// Set flag to disable YouTube processing during enhanced context restart
+									// This prevents TomoriBot from making additional YouTube function calls while processing
+									streamingContext.disableYouTubeProcessing = true;
+									log.info(
+										"Temporarily disabled YouTube processing function during enhanced context restart",
+									);
+
+									// Clean YouTube URLs from all existing context text parts FIRST to prevent false duplication detection
+									for (const contextItem of contextSegments) {
+										for (const part of contextItem.parts) {
+											if (part.type === "text") {
+												const originalText = part.text;
+												part.text = removeYouTubeUrls(part.text, "");
+												if (originalText !== part.text) {
+													log.info(
+														`Cleaned YouTube URLs from context text during duplication check. Original length: ${originalText.length}, cleaned length: ${part.text.length}`,
+													);
+												}
+											}
+										}
+									}
+
+									// Check for existing video parts with same video ID to prevent duplication
+									// Only check actual video Parts, not text mentions (which are now cleaned)
+									const existingVideoIds = new Set<string>();
+									for (const contextItem of contextSegments) {
+										for (const part of contextItem.parts) {
+											// Check for enhanced context YouTube video parts specifically
+											if (
+												part.type === "video" &&
+												part.uri &&
+												"isYouTubeLink" in part &&
+												(part as { isYouTubeLink: boolean }).isYouTubeLink &&
+												"enhancedContext" in part &&
+												(part as { enhancedContext: boolean }).enhancedContext
+											) {
+												const existingIds = extractYouTubeVideoIds(part.uri);
+												for (const id of existingIds) {
+													existingVideoIds.add(id);
+												}
+											}
+										}
+									}
+
+									// Only add video part if not already present
+									if (!existingVideoIds.has(videoId)) {
+										// Add the video context item to existing context
+										contextSegments.push(enhancedContextItem);
+										log.success(
+											`Enhanced context with YouTube video Part (ID: ${videoId}). Total context items: ${contextSegments.length}`,
+										);
+									} else {
+										log.warn(
+											`YouTube video ${videoId} already exists in context. Skipping duplication.`,
+										);
+									}
+
+									// Continue to next iteration WITHOUT adding to function interaction history
+									// This will restart the streaming with enhanced context
+									continue;
+								}
+
+								// Handle profile picture restart signal (enhanced context restart)
+								if (
+									funcName === "peek_profile_picture" &&
+									toolResult.data &&
+									(toolResult.data as Record<string, unknown>).type ===
+										"context_restart_with_image"
+								) {
+									const restartData = toolResult.data as Record<
+										string,
+										unknown
+									>;
+									const userId = restartData.user_id as string;
+									const username = restartData.username as string;
+
+									log.info(
+										`Profile picture restart signal detected for user: ${username} (${userId}). Enhancing context with avatar image.`,
+									);
+
+									// Get the enhanced context item from external storage
+									const enhancedContextItem =
+										PeekProfilePictureTool.getPendingEnhancedContext(userId);
+
+									if (!enhancedContextItem) {
+										log.warn(
+											`No pending enhanced context found for user ${userId}. Profile picture restart failed.`,
+										);
+										continue;
+									}
+
+									// Set flag to disable profile picture processing during enhanced context restart
+									// This prevents TomoriBot from making additional profile picture function calls while processing
+									streamingContext.disableProfilePictureProcessing = true;
+									log.info(
+										"Temporarily disabled profile picture processing function during enhanced context restart",
+									);
+
+									// Check for existing profile picture parts for this user to prevent duplication
+									let hasExistingProfilePicture = false;
+									for (const contextItem of contextSegments) {
+										for (const part of contextItem.parts) {
+											// Check for enhanced context profile picture parts specifically
+											if (
+												part.type === "image" &&
+												"isProfilePicture" in part &&
+												(part as { isProfilePicture: boolean })
+													.isProfilePicture &&
+												"enhancedContext" in part &&
+												(part as { enhancedContext: boolean }).enhancedContext
+											) {
+												hasExistingProfilePicture = true;
+												break;
+											}
+										}
+										if (hasExistingProfilePicture) break;
+									}
+
+									// Only add profile picture part if not already present
+									if (!hasExistingProfilePicture) {
+										// Add the profile picture context item to existing context
+										contextSegments.push(enhancedContextItem);
+										log.success(
+											`Enhanced context with profile picture for user: ${username}. Total context items: ${contextSegments.length}`,
+										);
+									} else {
+										log.warn(
+											`Profile picture for user ${username} already exists in context. Skipping duplication.`,
+										);
+									}
+
+									// Continue to next iteration WITHOUT adding to function interaction history
+									// This will restart the streaming with enhanced context
+									continue;
+								}
+
+								// Handle GIF processing restart signal (enhanced context restart)
+								if (
+									funcName === "process_gif" &&
+									toolResult.data &&
+									(toolResult.data as Record<string, unknown>).type ===
+										"context_restart_with_gif"
+								) {
+									const restartData = toolResult.data as Record<
+										string,
+										unknown
+									>;
+									const messageId = restartData.message_id as string;
+									const frameCount = restartData.frame_count as number;
+
+									log.info(
+										`GIF processing restart signal detected for message: ${messageId} (${frameCount} frames). Enhancing context with GIF keyframes.`,
+									);
+
+									// Get the enhanced context item from external storage
+									const enhancedContextItem =
+										ProcessGifTool.getPendingEnhancedContext(messageId);
+
+									if (!enhancedContextItem) {
+										log.warn(
+											`No pending enhanced context found for message ${messageId}. GIF restart failed.`,
+										);
+										continue;
+									}
+
+									// Set flag to disable GIF processing during enhanced context restart
+									// This prevents TomoriBot from making additional GIF function calls while processing
+									streamingContext.disableGifProcessing = true;
+									log.info(
+										"Temporarily disabled GIF processing function during enhanced context restart",
+									);
+
+									// Add the GIF frames context item to existing context
+									contextSegments.push(enhancedContextItem);
+									log.success(
+										`Enhanced context with ${frameCount} GIF keyframes for message: ${messageId}. Total context items: ${contextSegments.length}`,
+									);
+
+									// Continue to next iteration WITHOUT adding to function interaction history
+									// This will restart the streaming with enhanced context
+									continue;
+								}
+
+								// Handle media context expansion restart signal (enhanced context restart)
+								if (
+									funcName === "increase_media_context" &&
+									toolResult.data &&
+									(toolResult.data as Record<string, unknown>).type ===
+										"context_restart_with_media"
+								) {
+									const restartData = toolResult.data as Record<
+										string,
+										unknown
+									>;
+									const extendBy = restartData.extend_by as number;
+									const oldWindow = restartData.old_window as number;
+									const newWindow = restartData.new_window as number;
+
+									log.info(
+										`Media context expansion restart signal detected. Expanding window from ${oldWindow} to ${newWindow} messages (extend_by=${extendBy}).`,
+									);
+
+									// Rebuild context with expanded media window
+									// This uses the same simplifiedMessages array that's already been mushed
+									contextSegments = await buildContext({
+										guildId: serverDiscId,
+										serverName,
+										serverDescription: serverDescription ?? null,
+										simplifiedMessageHistory: simplifiedMessages,
+										userList,
+										channelDesc,
+										channelName,
+										client,
+										triggererName,
+										emojiStrings,
+										// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
+										tomoriNickname: tomoriState!.tomori_nickname,
+										// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
+										tomoriAttributes: tomoriState!.attribute_list,
+										// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
+										tomoriConfig: tomoriState!.config,
+										isDMChannel,
+										mediaContextWindow: newWindow, // Pass the expanded window
+									});
+
+									log.success(
+										`Rebuilt context with expanded media window (${newWindow} messages). Total context items: ${contextSegments.length}`,
+									);
+
+									// Continue to next iteration WITHOUT adding to function interaction history
+									// This will restart the streaming with enhanced context
+									continue;
+								}
+							} else {
+								// Tool execution failed
+								functionExecutionResult = {
+									status: "tool_execution_failed",
+									reason:
+										toolResult.error ||
+										"Tool execution failed without specific error",
+									tool_name: funcName,
+								};
+								log.error(
+									`Tool execution failed for ${funcName}: ${toolResult.error}`,
+								);
+							}
+
+							// 3. Add the model's function call and our function's result to the history
+							const historyEntry: {
+								functionCall: FunctionCall;
+								functionResponse: Record<string, unknown>;
+								imageMetadata?: typeof toolResult.imageMetadata;
+							} = {
+								functionCall: funcCall,
+								functionResponse: {
+									functionResponse: {
+										name: funcName,
+										response: { result: functionExecutionResult },
+									},
+								},
+							};
+
+							// Add imageMetadata if present (for tools that send images like brave_image_search)
+							if (toolResult.imageMetadata) {
+								historyEntry.imageMetadata = toolResult.imageMetadata;
+								log.info(
+									`Including ${toolResult.imageMetadata.totalSent} image(s) in function response history for LLM visibility`,
+								);
+							}
+
+							functionInteractionHistory.push(historyEntry);
+
+							// 4. Safety break if max iterations reached
+							if (i === MAX_FUNCTION_CALL_ITERATIONS - 1) {
+								log.warn(
+									"Max function call iterations reached in streaming mode. LLM did not provide a final text stream.",
+								);
+								// Send a fallback message if no stream occurred.
+								// If some text was streamed before this, this might be redundant.
+								// For now, assume streamGeminiToDiscord handles its own errors if it starts streaming.
+								// If it returns function_call repeatedly, this is the fallback.
+								await sendStandardEmbed(channel, locale, {
+									color: ColorCode.WARN,
+									titleKey: "genai.max_iterations_title", // New locale key
+									descriptionKey: "genai.max_iterations_streaming_description", // New locale key
+									footerKey: "genai.generic_error_footer",
+								});
+								finalStreamCompleted = true; // Mark as "completed" to exit loop
+								selectedStickerToSend = null; // Clear sticker
+								break;
+							}
+							// Continue to the next iteration of the loop to call streamGeminiToDiscord again with updated history
+							break;
+						}
+
+						default: {
+							// Exhaustive check - TypeScript will error if a new status is added but not handled
+							const _exhaustive: never = streamResult.status;
+							log.error(
+								`Unhandled stream status in streaming loop: ${_exhaustive}`,
+								new Error(`Unknown status: ${JSON.stringify(streamResult)}`),
 							);
 
+							// Show user-facing error for unknown status
 							await sendStandardEmbed(channel, locale, {
-								titleKey: "genai.empty_response_title",
-								descriptionKey: "genai.empty_response_description",
+								titleKey: "genai.no_response_title",
+								descriptionKey: "genai.no_response_description",
 								color: ColorCode.WARN,
 								footerKey: "genai.generic_error_footer",
 							}).catch((e) =>
-								log.warn("Failed to send empty response embed to channel", e),
+								log.warn("Failed to send unhandled status embed to channel", e),
 							);
 
-							finalStreamCompleted = true; // Mark as completed to exit
+							finalStreamCompleted = true; // Break loop on unexpected status
 							break;
 						}
+					} // End of switch statement
+
+					// Check if we should exit the loop after switch statement
+					if (finalStreamCompleted) {
+						break; // Exit the for loop
 					}
-
-					case "timeout":
-						// This is the internal stream inactivity timeout from streamGeminiToDiscord
-						log.warn(
-							`Streaming to Discord timed out due to inactivity for channel ${channel.id}.`,
-							streamResult.data,
-						);
-						await sendStandardEmbed(channel, locale, {
-							color: ColorCode.WARN,
-							titleKey: "genai.error_stream_timeout_title",
-							descriptionKey: "genai.error_stream_timeout_description",
-						});
-						finalStreamCompleted = true;
-						break;
-
-					case "stopped_by_user": {
-						// Handle user-requested stop (natural stop triggers)
-						log.info(
-							`Streaming was stopped by user request for channel ${channel.id}.`,
-						);
-						finalStreamCompleted = true;
-
-						// Check if we have stop context to create a response
-						const stopContext = StreamOrchestrator.getAndClearStopContext(
-							channel.id,
-						);
-
-						if (stopContext) {
-							// Get the current lock entry to queue the stop response
-							const currentLockEntry = channelLocks.get(channel.id);
-							if (currentLockEntry) {
-								// Queue the original stop message as a "passport" for stop response
-								currentLockEntry.messageQueue.unshift({
-									message: stopContext.originalStopMessage,
-									isManuallyTriggered: true, // This bypasses normal trigger logic
-									forceReason: false,
-									llmOverrideCodename,
-									isStopResponse: true, // This response cannot be stopped
-								});
-
-								log.info(
-									`Stop response queued after stream completion for channel ${channel.id}. Queue size: ${currentLockEntry.messageQueue.length}`,
-								);
-							}
-						}
-
-						break; // Exit the loop gracefully, stop response will be handled by queue
-					}
-
-					case "function_call": {
-						if (!streamResult.data) {
-							// Function call without data - log error and break
-							log.error(
-								"Function call status received without data:",
-								streamResult,
-							);
-							finalStreamCompleted = true;
-							break;
-						}
-						const funcCall = streamResult.data as FunctionCall; // Type assertion
-						const funcName = funcCall.name?.trim() ?? "";
-						log.info(
-							`Stream LLM wants to call function: ${funcName} with args: ${JSON.stringify(funcCall.args)}`,
-						);
-
-						// 2. Execute function using modular tool system
-						log.info(
-							`Executing tool: ${funcName} with args: ${JSON.stringify(funcCall.args)}`,
-						);
-
-						// Build tool execution context
-						const toolContext = {
-							channel,
-							client,
-							message,
-							userId: userRow?.user_id?.toString() || userDiscId,
-							guildId: message.guild?.id, // Pass guild ID for guild-specific features (e.g., server avatars)
-							tomoriState,
-							locale,
-							provider: "google" as const,
-							streamContext: streamingContext, // Pass streaming context to tools
-						};
-
-						// Execute tool using ToolRegistry (handles both built-in and MCP tools seamlessly)
-						// Check for stop request before executing function call
-						if (StreamOrchestrator.hasStopRequest(channel.id)) {
-							log.info(
-								`Function call execution cancelled due to stop request: ${funcName}`,
-							);
-							finalStreamCompleted = true;
-							break;
-						}
-
-						const functionCallStart = Date.now();
-						const toolResult = await ToolRegistry.executeTool(
-							funcName,
-							funcCall.args || {},
-							toolContext,
-						);
-						const functionCallDuration = Date.now() - functionCallStart;
-
-						// Log function call timing (especially long-running ones)
-						if (functionCallDuration > 5000) {
-							log.warn(
-								`Long-running function call: ${funcName} took ${functionCallDuration}ms`,
-							);
-						} else {
-							log.info(
-								`Function call completed: ${funcName} (${functionCallDuration}ms)`,
-							);
-						}
-
-						// Convert tool result to function execution result format
-						let functionExecutionResult: Record<string, unknown>;
-
-						if (toolResult.success) {
-							functionExecutionResult = (toolResult.data as Record<
-								string,
-								unknown
-							>) || { status: "completed" };
-
-							// Handle sticker selection specifically (extract sticker for later sending)
-							if (
-								funcName === "select_sticker_for_response" &&
-								toolResult.data
-							) {
-								const stickerData = toolResult.data as Record<string, unknown>;
-								if (stickerData.status === "sticker_selected_successfully") {
-									// Find the sticker in guild cache to send later
-									const discordSticker = guild?.stickers.cache.get(
-										stickerData.sticker_id as string,
-									);
-									selectedStickerToSend = discordSticker || null;
-									log.success(
-										`Sticker '${stickerData.sticker_name}' selected for sending`,
-									);
-								} else {
-									selectedStickerToSend = null;
-								}
-							}
-
-							// Handle YouTube video restart signal (enhanced context restart)
-							if (
-								funcName === "process_youtube_video" &&
-								toolResult.data &&
-								(toolResult.data as Record<string, unknown>).type ===
-									"context_restart_with_video"
-							) {
-								const restartData = toolResult.data as Record<string, unknown>;
-								const enhancedContextItem =
-									restartData.enhanced_context_item as StructuredContextItem;
-								const videoUrl = restartData.video_url as string;
-								const videoId = restartData.video_id as string;
-
-								log.info(
-									`YouTube video restart signal detected for: ${videoUrl}. Cleaning URLs and enhancing context.`,
-								);
-
-								// Set flag to disable YouTube processing during enhanced context restart
-								// This prevents TomoriBot from making additional YouTube function calls while processing
-								streamingContext.disableYouTubeProcessing = true;
-								log.info(
-									"Temporarily disabled YouTube processing function during enhanced context restart",
-								);
-
-								// Clean YouTube URLs from all existing context text parts FIRST to prevent false duplication detection
-								for (const contextItem of contextSegments) {
-									for (const part of contextItem.parts) {
-										if (part.type === "text") {
-											const originalText = part.text;
-											part.text = removeYouTubeUrls(part.text, "");
-											if (originalText !== part.text) {
-												log.info(
-													`Cleaned YouTube URLs from context text during duplication check. Original length: ${originalText.length}, cleaned length: ${part.text.length}`,
-												);
-											}
-										}
-									}
-								}
-
-								// Check for existing video parts with same video ID to prevent duplication
-								// Only check actual video Parts, not text mentions (which are now cleaned)
-								const existingVideoIds = new Set<string>();
-								for (const contextItem of contextSegments) {
-									for (const part of contextItem.parts) {
-										// Check for enhanced context YouTube video parts specifically
-										if (
-											part.type === "video" &&
-											part.uri &&
-											"isYouTubeLink" in part &&
-											(part as { isYouTubeLink: boolean }).isYouTubeLink &&
-											"enhancedContext" in part &&
-											(part as { enhancedContext: boolean }).enhancedContext
-										) {
-											const existingIds = extractYouTubeVideoIds(part.uri);
-											for (const id of existingIds) {
-												existingVideoIds.add(id);
-											}
-										}
-									}
-								}
-
-								// Only add video part if not already present
-								if (!existingVideoIds.has(videoId)) {
-									// Add the video context item to existing context
-									contextSegments.push(enhancedContextItem);
-									log.success(
-										`Enhanced context with YouTube video Part (ID: ${videoId}). Total context items: ${contextSegments.length}`,
-									);
-								} else {
-									log.warn(
-										`YouTube video ${videoId} already exists in context. Skipping duplication.`,
-									);
-								}
-
-								// Continue to next iteration WITHOUT adding to function interaction history
-								// This will restart the streaming with enhanced context
-								continue;
-							}
-
-							// Handle profile picture restart signal (enhanced context restart)
-							if (
-								funcName === "peek_profile_picture" &&
-								toolResult.data &&
-								(toolResult.data as Record<string, unknown>).type ===
-									"context_restart_with_image"
-							) {
-								const restartData = toolResult.data as Record<string, unknown>;
-								const userId = restartData.user_id as string;
-								const username = restartData.username as string;
-
-								log.info(
-									`Profile picture restart signal detected for user: ${username} (${userId}). Enhancing context with avatar image.`,
-								);
-
-								// Get the enhanced context item from external storage
-								const enhancedContextItem =
-									PeekProfilePictureTool.getPendingEnhancedContext(userId);
-
-								if (!enhancedContextItem) {
-									log.warn(
-										`No pending enhanced context found for user ${userId}. Profile picture restart failed.`,
-									);
-									continue;
-								}
-
-								// Set flag to disable profile picture processing during enhanced context restart
-								// This prevents TomoriBot from making additional profile picture function calls while processing
-								streamingContext.disableProfilePictureProcessing = true;
-								log.info(
-									"Temporarily disabled profile picture processing function during enhanced context restart",
-								);
-
-								// Check for existing profile picture parts for this user to prevent duplication
-								let hasExistingProfilePicture = false;
-								for (const contextItem of contextSegments) {
-									for (const part of contextItem.parts) {
-										// Check for enhanced context profile picture parts specifically
-										if (
-											part.type === "image" &&
-											"isProfilePicture" in part &&
-											(part as { isProfilePicture: boolean })
-												.isProfilePicture &&
-											"enhancedContext" in part &&
-											(part as { enhancedContext: boolean }).enhancedContext
-										) {
-											hasExistingProfilePicture = true;
-											break;
-										}
-									}
-									if (hasExistingProfilePicture) break;
-								}
-
-								// Only add profile picture part if not already present
-								if (!hasExistingProfilePicture) {
-									// Add the profile picture context item to existing context
-									contextSegments.push(enhancedContextItem);
-									log.success(
-										`Enhanced context with profile picture for user: ${username}. Total context items: ${contextSegments.length}`,
-									);
-								} else {
-									log.warn(
-										`Profile picture for user ${username} already exists in context. Skipping duplication.`,
-									);
-								}
-
-								// Continue to next iteration WITHOUT adding to function interaction history
-								// This will restart the streaming with enhanced context
-								continue;
-							}
-
-							// Handle GIF processing restart signal (enhanced context restart)
-							if (
-								funcName === "process_gif" &&
-								toolResult.data &&
-								(toolResult.data as Record<string, unknown>).type ===
-									"context_restart_with_gif"
-							) {
-								const restartData = toolResult.data as Record<string, unknown>;
-								const messageId = restartData.message_id as string;
-								const frameCount = restartData.frame_count as number;
-
-								log.info(
-									`GIF processing restart signal detected for message: ${messageId} (${frameCount} frames). Enhancing context with GIF keyframes.`,
-								);
-
-								// Get the enhanced context item from external storage
-								const enhancedContextItem =
-									ProcessGifTool.getPendingEnhancedContext(messageId);
-
-								if (!enhancedContextItem) {
-									log.warn(
-										`No pending enhanced context found for message ${messageId}. GIF restart failed.`,
-									);
-									continue;
-								}
-
-								// Set flag to disable GIF processing during enhanced context restart
-								// This prevents TomoriBot from making additional GIF function calls while processing
-								streamingContext.disableGifProcessing = true;
-								log.info(
-									"Temporarily disabled GIF processing function during enhanced context restart",
-								);
-
-								// Add the GIF frames context item to existing context
-								contextSegments.push(enhancedContextItem);
-								log.success(
-									`Enhanced context with ${frameCount} GIF keyframes for message: ${messageId}. Total context items: ${contextSegments.length}`,
-								);
-
-								// Continue to next iteration WITHOUT adding to function interaction history
-								// This will restart the streaming with enhanced context
-								continue;
-							}
-
-							// Handle media context expansion restart signal (enhanced context restart)
-							if (
-								funcName === "increase_media_context" &&
-								toolResult.data &&
-								(toolResult.data as Record<string, unknown>).type ===
-									"context_restart_with_media"
-							) {
-								const restartData = toolResult.data as Record<string, unknown>;
-								const extendBy = restartData.extend_by as number;
-								const oldWindow = restartData.old_window as number;
-								const newWindow = restartData.new_window as number;
-
-								log.info(
-									`Media context expansion restart signal detected. Expanding window from ${oldWindow} to ${newWindow} messages (extend_by=${extendBy}).`,
-								);
-
-								// Rebuild context with expanded media window
-								// This uses the same simplifiedMessages array that's already been mushed
-								contextSegments = await buildContext({
-									guildId: serverDiscId,
-									serverName,
-									serverDescription: serverDescription ?? null,
-									simplifiedMessageHistory: simplifiedMessages,
-									userList,
-									channelDesc,
-									channelName,
-									client,
-									triggererName,
-									emojiStrings,
-									// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
-									tomoriNickname: tomoriState!.tomori_nickname,
-									// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
-									tomoriAttributes: tomoriState!.attribute_list,
-									// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
-									tomoriConfig: tomoriState!.config,
-									isDMChannel,
-									mediaContextWindow: newWindow, // Pass the expanded window
-								});
-
-								log.success(
-									`Rebuilt context with expanded media window (${newWindow} messages). Total context items: ${contextSegments.length}`,
-								);
-
-								// Continue to next iteration WITHOUT adding to function interaction history
-								// This will restart the streaming with enhanced context
-								continue;
-							}
-						} else {
-							// Tool execution failed
-							functionExecutionResult = {
-								status: "tool_execution_failed",
-								reason:
-									toolResult.error ||
-									"Tool execution failed without specific error",
-								tool_name: funcName,
-							};
-							log.error(
-								`Tool execution failed for ${funcName}: ${toolResult.error}`,
-							);
-						}
-
-						// 3. Add the model's function call and our function's result to the history
-						const historyEntry: {
-							functionCall: FunctionCall;
-							functionResponse: Record<string, unknown>;
-							imageMetadata?: typeof toolResult.imageMetadata;
-						} = {
-							functionCall: funcCall,
-							functionResponse: {
-								functionResponse: {
-									name: funcName,
-									response: { result: functionExecutionResult },
-								},
-							},
-						};
-
-						// Add imageMetadata if present (for tools that send images like brave_image_search)
-						if (toolResult.imageMetadata) {
-							historyEntry.imageMetadata = toolResult.imageMetadata;
-							log.info(
-								`Including ${toolResult.imageMetadata.totalSent} image(s) in function response history for LLM visibility`,
-							);
-						}
-
-						functionInteractionHistory.push(historyEntry);
-
-						// 4. Safety break if max iterations reached
-						if (i === MAX_FUNCTION_CALL_ITERATIONS - 1) {
-							log.warn(
-								"Max function call iterations reached in streaming mode. LLM did not provide a final text stream.",
-							);
-							// Send a fallback message if no stream occurred.
-							// If some text was streamed before this, this might be redundant.
-							// For now, assume streamGeminiToDiscord handles its own errors if it starts streaming.
-							// If it returns function_call repeatedly, this is the fallback.
-							await sendStandardEmbed(channel, locale, {
-								color: ColorCode.WARN,
-								titleKey: "genai.max_iterations_title", // New locale key
-								descriptionKey: "genai.max_iterations_streaming_description", // New locale key
-								footerKey: "genai.generic_error_footer",
-							});
-							finalStreamCompleted = true; // Mark as "completed" to exit loop
-							selectedStickerToSend = null; // Clear sticker
-							break;
-						}
-						// Continue to the next iteration of the loop to call streamGeminiToDiscord again with updated history
-						break;
-					}
-
-					default: {
-						// Exhaustive check - TypeScript will error if a new status is added but not handled
-						const _exhaustive: never = streamResult.status;
-						log.error(
-							`Unhandled stream status in streaming loop: ${_exhaustive}`,
-							new Error(`Unknown status: ${JSON.stringify(streamResult)}`),
-						);
-
-						// Show user-facing error for unknown status
-						await sendStandardEmbed(channel, locale, {
-							titleKey: "genai.no_response_title",
-							descriptionKey: "genai.no_response_description",
-							color: ColorCode.WARN,
-							footerKey: "genai.generic_error_footer",
-						}).catch((e) =>
-							log.warn("Failed to send unhandled status embed to channel", e),
-						);
-
-						finalStreamCompleted = true; // Break loop on unexpected status
-						break;
-					}
-				} // End of switch statement
-
-				// Check if we should exit the loop after switch statement
-				if (finalStreamCompleted) {
-					break; // Exit the for loop
-				}
 				} catch (streamingError) {
 					log.error(
 						"Critical error during streamGeminiToDiscord call within streaming loop:",

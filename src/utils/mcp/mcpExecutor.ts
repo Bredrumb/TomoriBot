@@ -373,23 +373,22 @@ export class MCPExecutor {
 						// Execute the MCP function
 						log.info(`Executing MCP function: ${functionName}`);
 
-					// Validate fetch URL size before executing (HEAD request check)
-					if (functionName === "fetch-url" && mcpContext.modifiedArgs.url) {
-						const fetchValidation = await validateFetchSize(
-							mcpContext.modifiedArgs.url as string,
-						);
-
-						if (!fetchValidation.allowed) {
-							throw new MCPExecutionError(
-								fetchValidation.reason ||
-									"Fetch size validation failed",
-								functionName,
-								handler?.serverName || "unknown",
+						// Validate fetch URL size before executing (HEAD request check)
+						if (functionName === "fetch-url" && mcpContext.modifiedArgs.url) {
+							const fetchValidation = await validateFetchSize(
+								mcpContext.modifiedArgs.url as string,
 							);
-						}
-					}
 
-					const mcpResult = await mcpTool.callTool([
+							if (!fetchValidation.allowed) {
+								throw new MCPExecutionError(
+									fetchValidation.reason || "Fetch size validation failed",
+									functionName,
+									handler?.serverName || "unknown",
+								);
+							}
+						}
+
+						const mcpResult = await mcpTool.callTool([
 							{ name: functionName, args: mcpContext.modifiedArgs },
 						]);
 

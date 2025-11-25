@@ -40,7 +40,9 @@ export async function execute(
 	// 2. Create embed with title, description, and link
 	const embed = new EmbedBuilder()
 		.setTitle(localizer(locale, "commands.legal.privacy.title"))
-		.setDescription(localizer(locale, "commands.legal.privacy.description_text"))
+		.setDescription(
+			localizer(locale, "commands.legal.privacy.description_text"),
+		)
 		.addFields({
 			name: localizer(locale, "commands.legal.privacy.link_title"),
 			value: githubUrl,

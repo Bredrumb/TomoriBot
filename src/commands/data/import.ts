@@ -8,6 +8,7 @@ import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
 import type { UserRow } from "../../types/db/schema";
+import { memoryGuard, IMPORT_LIMITS } from "../../utils/security/rateLimiter";
 import {
 	validateImportFile,
 	importPersonalData,
@@ -52,8 +53,8 @@ function localizeError(locale: string, errorString: string): string {
 	return localizer(locale, key);
 }
 
-// Maximum file size for imports (1MB)
-const MAX_FILE_SIZE = 1024 * 1024;
+// Maximum file size for imports (uses centralized constant)
+const MAX_FILE_SIZE = IMPORT_LIMITS.MAX_DATA_IMPORT_SIZE_MB * 1024 * 1024;
 
 /**
  * Configure the 'import' subcommand
@@ -152,14 +153,70 @@ export async function execute(
 		// 4. Defer reply while we process
 		await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-		// 5. Download and parse the JSON file
+		// 4.5. Memory guard check (defense-in-depth)
+		const memCheck = memoryGuard.checkMemory();
+		if (memCheck.status === "critical") {
+			await interaction.editReply({
+				embeds: [
+					new EmbedBuilder()
+						.setTitle(
+							localizer(
+								locale,
+								"commands.data.import.error_memory_critical_title",
+							),
+						)
+						.setDescription(
+							localizer(
+								locale,
+								"commands.data.import.error_memory_critical_description",
+							),
+						)
+						.setColor(ColorCode.ERROR),
+				],
+			});
+			return;
+		}
+
+		// 5. Download and parse the JSON file with timeout
 		let jsonData: unknown;
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
 		try {
-			const response = await fetch(attachment.url);
+			const response = await fetch(attachment.url, {
+				signal: controller.signal,
+			});
+			clearTimeout(timeoutId);
+
+			if (!response.ok) {
+				throw new Error(`HTTP ${response.status}`);
+			}
+
 			const textContent = await response.text();
 			jsonData = JSON.parse(textContent);
-		} catch (parseError) {
-			log.error("Failed to parse import file:", parseError as Error);
+		} catch (error) {
+			clearTimeout(timeoutId);
+
+			// Handle timeout vs other errors
+			if (error instanceof Error && error.name === "AbortError") {
+				log.warn("Data import download timed out");
+				await interaction.editReply({
+					embeds: [
+						new EmbedBuilder()
+							.setTitle(
+								localizer(
+									locale,
+									"commands.data.import.error_download_timeout",
+								),
+							)
+							.setColor(ColorCode.ERROR),
+					],
+				});
+				return;
+			}
+
+			// Parse/download errors
+			log.error("Failed to download or parse import file:", error as Error);
 			await interaction.editReply({
 				embeds: [
 					new EmbedBuilder()

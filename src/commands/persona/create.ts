@@ -17,6 +17,8 @@ import {
 	promptWithRawModal,
 } from "../../utils/discord/interactionHelper";
 import type { UserRow } from "../../types/db/schema";
+import { memoryGuard, PERSONA_LIMITS } from "../../utils/security/rateLimiter";
+import { safeDownload } from "../../utils/security/safeDownload";
 import { getServerAvatar } from "../../utils/image/avatarHelper";
 import { centerCropToSquare } from "../../utils/image/imageProcessor";
 import { embedMetadataInPNG } from "../../utils/image/pngMetadata";
@@ -29,7 +31,6 @@ import type {
 	PresetExportData,
 } from "../../types/preset/presetExport";
 import type { ModalComponent } from "../../types/discord/modal";
-import axios from "axios";
 
 // Modal constants
 const MODAL_CUSTOM_ID = "preset_create_modal";
@@ -164,6 +165,30 @@ export async function execute(
 		let imageBuffer: Buffer | undefined;
 
 		if (imageAttachment) {
+			// Early memory guard check
+			const memCheck = memoryGuard.checkMemory();
+			if (memCheck.status === "critical") {
+				await modalSubmitInteraction.editReply({
+					embeds: [
+						new EmbedBuilder()
+							.setTitle(
+								localizer(
+									locale,
+									"commands.persona.create.error_memory_critical_title",
+								),
+							)
+							.setDescription(
+								localizer(
+									locale,
+									"commands.persona.create.error_memory_critical_description",
+								),
+							)
+							.setColor(ColorCode.ERROR),
+					],
+				});
+				return;
+			}
+
 			// Validate image type
 			if (!imageAttachment.content_type?.startsWith("image/")) {
 				await modalSubmitInteraction.editReply({
@@ -187,35 +212,36 @@ export async function execute(
 				return;
 			}
 
-			// Download image
-			try {
-				const response = await axios.get(imageAttachment.url, {
-					responseType: "arraybuffer",
-				});
-				imageBuffer = Buffer.from(response.data);
-				log.info("Image attachment downloaded successfully from modal");
-			} catch (error) {
-				log.error("Failed to download image attachment from modal:", error);
+			// Download image with safeDownload
+			const downloadResult = await safeDownload(imageAttachment.url, {
+				maxSizeMB: PERSONA_LIMITS.MAX_AVATAR_SIZE_MB,
+				timeoutMs: 10000,
+				knownSize: imageAttachment.size,
+			});
+
+			if (!downloadResult.success) {
+				// Handle different error types with localized messages
+				let errorKey: string;
+				if (downloadResult.error === "size_exceeded") {
+					errorKey = "commands.persona.create.error_file_too_large";
+				} else if (downloadResult.error === "timeout") {
+					errorKey = "commands.persona.create.error_download_timeout";
+				} else {
+					errorKey = "commands.persona.create.error_download_failed";
+				}
+
 				await modalSubmitInteraction.editReply({
 					embeds: [
 						new EmbedBuilder()
-							.setTitle(
-								localizer(
-									locale,
-									"commands.persona.create.image_download_failed_title",
-								),
-							)
-							.setDescription(
-								localizer(
-									locale,
-									"commands.persona.create.image_download_failed_description",
-								),
-							)
+							.setTitle(localizer(locale, errorKey))
 							.setColor(ColorCode.ERROR),
 					],
 				});
 				return;
 			}
+
+			imageBuffer = downloadResult.buffer;
+			log.info("Image attachment downloaded successfully");
 		}
 
 		// 6. Create minimal preset data structure

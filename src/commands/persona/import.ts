@@ -13,6 +13,7 @@ import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
 import type { UserRow } from "../../types/db/schema";
+import { memoryGuard, IMPORT_LIMITS } from "../../utils/security/rateLimiter";
 import {
 	validatePresetFile,
 	importPresetData,
@@ -22,9 +23,9 @@ import { extractMetadataFromPNG } from "../../utils/image/pngMetadata";
 import { validatePNGBuffer } from "../../utils/image/avatarHelper";
 
 /**
- * Maximum file size for imports (10MB)
+ * Maximum file size for imports (uses centralized constant)
  */
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_FILE_SIZE = IMPORT_LIMITS.MAX_PERSONA_IMPORT_SIZE_MB * 1024 * 1024;
 
 /**
  * Helper function to localize error messages from utility functions
@@ -182,19 +183,72 @@ export async function execute(
 		// 6. Defer reply while we process
 		await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-		// 7. Download the PNG file
+		// 6.5. Memory guard check (defense-in-depth)
+		const memCheck = memoryGuard.checkMemory();
+		if (memCheck.status === "critical") {
+			await interaction.editReply({
+				embeds: [
+					new EmbedBuilder()
+						.setTitle(
+							localizer(
+								locale,
+								"commands.persona.import.error_memory_critical_title",
+							),
+						)
+						.setDescription(
+							localizer(
+								locale,
+								"commands.persona.import.error_memory_critical_description",
+							),
+						)
+						.setColor(ColorCode.ERROR),
+				],
+			});
+			return;
+		}
+
+		// 7. Download the PNG file with timeout
 		let pngBuffer: Buffer;
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout for larger files
+
 		try {
-			const response = await fetch(attachment.url);
+			const response = await fetch(attachment.url, {
+				signal: controller.signal,
+			});
+			clearTimeout(timeoutId);
+
 			if (!response.ok) {
 				throw new Error(
 					`Failed to download file: ${response.status} ${response.statusText}`,
 				);
 			}
+
 			const arrayBuffer = await response.arrayBuffer();
 			pngBuffer = Buffer.from(arrayBuffer);
-		} catch (downloadError) {
-			log.error("Failed to download attachment:", downloadError as Error);
+		} catch (error) {
+			clearTimeout(timeoutId);
+
+			// Handle timeout vs other errors
+			if (error instanceof Error && error.name === "AbortError") {
+				log.warn("Persona import download timed out");
+				await interaction.editReply({
+					embeds: [
+						new EmbedBuilder()
+							.setTitle(
+								localizer(
+									locale,
+									"commands.persona.import.error_download_timeout",
+								),
+							)
+							.setColor(ColorCode.ERROR),
+					],
+				});
+				return;
+			}
+
+			// Other download errors
+			log.error("Failed to download attachment:", error as Error);
 			await interaction.editReply({
 				embeds: [
 					new EmbedBuilder()

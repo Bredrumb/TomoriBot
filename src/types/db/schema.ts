@@ -166,7 +166,11 @@ export const errorLogSchema = z.object({
 	error_type: z.string().default("GenericError"), // Categorize the error, default if not specified
 	error_message: z.string(), // The main error message, required
 	stack_trace: z.string().nullable().optional(), // Dedicated field for stack trace, optional
-	error_metadata: z.record(z.string(), z.unknown()).nullable().optional().default({}), // Flexible JSON for extra context, optional
+	error_metadata: z
+		.record(z.string(), z.unknown())
+		.nullable()
+		.optional()
+		.default({}), // Flexible JSON for extra context, optional
 	// Timestamps
 	created_at: z.date().optional(), // Handled by DB default
 	updated_at: z.date().optional(), // Handled by DB default/trigger

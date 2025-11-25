@@ -59,21 +59,11 @@ export const MEDIA_LIMITS = {
 	),
 
 	/**
-	 * Maximum size per individual media file in MB
+	 * Maximum size per individual media file in MB (for conversation context)
 	 * Larger files will be rejected or downscaled
 	 * @default 8 MB
 	 */
 	MAX_MEDIA_SIZE_MB: Number.parseInt(process.env.MAX_MEDIA_SIZE_MB || "8", 10),
-
-	/**
-	 * Total memory budget for all media in a single context in MB
-	 * If exceeded, oldest media is dropped from context
-	 * @default 100 MB
-	 */
-	TOTAL_MEDIA_BUDGET_MB: Number.parseInt(
-		process.env.TOTAL_MEDIA_BUDGET_MB || "100",
-		10,
-	),
 
 	/**
 	 * Maximum size per individual GIF file in MB (for process_gif tool in dev)
@@ -81,6 +71,44 @@ export const MEDIA_LIMITS = {
 	 * @default 50 MB
 	 */
 	MAX_GIF_SIZE_MB: Number.parseInt(process.env.MAX_GIF_SIZE_MB || "50", 10),
+} as const;
+
+// -----------------------------------------------------------------------------
+// PERSONA/AVATAR UPLOAD LIMITS
+// -----------------------------------------------------------------------------
+export const PERSONA_LIMITS = {
+	/**
+	 * Maximum size for persona avatar attachments (create/generate commands)
+	 * Used for image processing operations (download, crop, base64 encode)
+	 * @default 8 MB (matches Discord's standard upload limit)
+	 */
+	MAX_AVATAR_SIZE_MB: Number.parseInt(
+		process.env.MAX_AVATAR_SIZE_MB || "8",
+		10,
+	),
+} as const;
+
+// -----------------------------------------------------------------------------
+// IMPORT FILE LIMITS
+// -----------------------------------------------------------------------------
+export const IMPORT_LIMITS = {
+	/**
+	 * Maximum size for data export JSON files (personal/server memories)
+	 * @default 1 MB
+	 */
+	MAX_DATA_IMPORT_SIZE_MB: Number.parseInt(
+		process.env.MAX_DATA_IMPORT_SIZE_MB || "1",
+		10,
+	),
+
+	/**
+	 * Maximum size for persona preset PNG files (image + embedded metadata)
+	 * @default 10 MB
+	 */
+	MAX_PERSONA_IMPORT_SIZE_MB: Number.parseInt(
+		process.env.MAX_PERSONA_IMPORT_SIZE_MB || "10",
+		10,
+	),
 } as const;
 
 // -----------------------------------------------------------------------------
@@ -330,7 +358,6 @@ class MemoryGuard {
 		return MEDIA_LIMITS.MEDIA_CONTEXT_WINDOW;
 	}
 
-
 	/**
 	 * Gets the current fetch character limit based on memory status
 	 * Dynamically reduces fetch size during high memory pressure
@@ -465,7 +492,14 @@ export function logGuardConfiguration(): void {
 		`Max Media Extend: ${MEDIA_LIMITS.MESSAGE_FETCH_LIMIT - MEDIA_LIMITS.MEDIA_CONTEXT_WINDOW}`,
 	);
 	log.info(`Max Media Size: ${MEDIA_LIMITS.MAX_MEDIA_SIZE_MB} MB`);
-	log.info(`Total Media Budget: ${MEDIA_LIMITS.TOTAL_MEDIA_BUDGET_MB} MB`);
+	log.info(`Max GIF Size: ${MEDIA_LIMITS.MAX_GIF_SIZE_MB} MB`);
+	log.info("\n--- Persona Limits ---");
+	log.info(`Max Avatar Size: ${PERSONA_LIMITS.MAX_AVATAR_SIZE_MB} MB`);
+	log.info("\n--- Import Limits ---");
+	log.info(`Max Data Import Size: ${IMPORT_LIMITS.MAX_DATA_IMPORT_SIZE_MB} MB`);
+	log.info(
+		`Max Persona Import Size: ${IMPORT_LIMITS.MAX_PERSONA_IMPORT_SIZE_MB} MB`,
+	);
 	log.info("\n--- Fetch Tool Limits ---");
 	log.info(`Max Fetch Size: ${FETCH_LIMITS.MAX_FETCH_SIZE_MB} MB`);
 	log.info(`Base Fetch Char Limit: ${FETCH_LIMITS.FETCH_CHAR_LIMIT}`);

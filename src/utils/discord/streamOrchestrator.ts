@@ -1012,7 +1012,9 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 			}).catch((embedError) => {
 				log.warn(
 					"Failed to send flush limit warning embed",
-					embedError instanceof Error ? embedError : new Error(String(embedError)),
+					embedError instanceof Error
+						? embedError
+						: new Error(String(embedError)),
 				);
 			});
 
