@@ -7,7 +7,6 @@ on:
   push:
     branches:
       - main
-      - dev # TODO :remove after testing
   workflow_dispatch: # Manual trigger - allows running on any branch
     inputs:
       environment:

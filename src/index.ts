@@ -58,16 +58,21 @@ log.success(
  * Get PostgreSQL connection URL from environment variables with SSL configuration.
  *
  * SSL Mode Behavior:
- * - Development (RUN_ENV !== 'production'): sslmode=prefer
- *   - Tries SSL connection first, falls back to non-SSL if unavailable
+ * - Development (RUN_ENV !== 'production'): sslmode=disable
+ *   - No SSL/TLS encryption for local development
  *   - Works with localhost PostgreSQL (typically no SSL configured)
  *
  * - Production (RUN_ENV === 'production'): sslmode=verify-full
  *   - Requires SSL/TLS encryption for all connections
- *   - Verifies server certificate is signed by trusted CA
+ *   - Verifies server certificate is signed by trusted CA (using AWS RDS CA bundle)
  *   - Verifies hostname matches certificate (e.g., *.rds.amazonaws.com)
  *   - Protects against man-in-the-middle (MITM) attacks
- *   - AWS RDS provides valid certificates by default
+ *   - Certificate path: /app/certs/rds-ca-bundle.pem (mounted in Docker)
+ *
+ * SSL Certificate Configuration:
+ * - Environment variable POSTGRES_SSL_ROOT_CERT can override certificate path
+ * - Default production path: /app/certs/rds-ca-bundle.pem
+ * - Certificate must be readable by the application user
  *
  * Supports both POSTGRES_URL and component-based configuration
  */
@@ -80,8 +85,13 @@ function getPostgresUrl(): string {
 	// Production: Require SSL with full certificate verification (protects against MITM attacks)
 	const sslMode =
 		isProduction && process.env.TEST_PRODUCTION !== "true"
-			? "require"
+			? "verify-full"
 			: "disable";
+
+	// SSL certificate path for verify-full mode
+	// Can be overridden via POSTGRES_SSL_ROOT_CERT environment variable
+	const sslRootCert =
+		process.env.POSTGRES_SSL_ROOT_CERT || "/app/certs/rds-ca-bundle.pem";
 
 	// If POSTGRES_URL is provided, use it directly (backwards compatibility)
 	if (process.env.POSTGRES_URL) {
@@ -89,6 +99,10 @@ function getPostgresUrl(): string {
 		const url = new URL(process.env.POSTGRES_URL);
 		if (!url.searchParams.has("sslmode")) {
 			url.searchParams.set("sslmode", sslMode);
+		}
+		// Add sslrootcert for verify-full mode
+		if (sslMode === "verify-full" && !url.searchParams.has("sslrootcert")) {
+			url.searchParams.set("sslrootcert", sslRootCert);
 		}
 		return url.toString();
 	}
@@ -108,7 +122,14 @@ function getPostgresUrl(): string {
 	const encodedPassword = encodeURIComponent(password);
 
 	// Build connection string with SSL mode
-	return `postgresql://${user}:${encodedPassword}@${host}:${port}/${database}?sslmode=${sslMode}`;
+	let connectionString = `postgresql://${user}:${encodedPassword}@${host}:${port}/${database}?sslmode=${sslMode}`;
+
+	// Add certificate path for verify-full mode
+	if (sslMode === "verify-full") {
+		connectionString += `&sslrootcert=${encodeURIComponent(sslRootCert)}`;
+	}
+
+	return connectionString;
 }
 
 const postgresUrl = getPostgresUrl();

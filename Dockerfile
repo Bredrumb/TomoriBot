@@ -95,6 +95,10 @@ COPY --chown=tomori:tomori img/ ./img/
 # Copy legal documents (Terms of Service, Privacy Policy)
 COPY --chown=tomori:tomori legal/ ./legal/
 
+# Copy SSL certificates for secure database connections
+# AWS RDS CA bundle for verify-full SSL mode (protects against MITM attacks)
+COPY --chown=tomori:tomori docker/certs/ ./certs/
+
 # No build step needed - Bun runs TypeScript natively!
 # This matches your proven development setup
 

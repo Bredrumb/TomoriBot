@@ -22,7 +22,7 @@ services:
       - ./docker/init-pgcron.sql:/docker-entrypoint-initdb.d/init-pgcron.sql:ro
     ports:
       # Only expose internally - not accessible from outside Docker network
-      - "15432:5432"  # Expose on port 5433 to avoid conflict with your Windows PostgreSQL
+      - "15432:5432" # Expose on port 5433 to avoid conflict with your Windows PostgreSQL
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tomori -d tomodb"]
@@ -49,8 +49,13 @@ services:
     env_file: .env
     environment:
       # Hard-coded Docker-specific database connection
+      # Note: Local PostgreSQL in Docker Compose doesn't use SSL (same network)
+      # SSL is enforced for production AWS RDS connections
       POSTGRES_URL: postgresql://tomori:${POSTGRES_PASSWORD:-secure_default_password}@postgres:5432/tomodb
-      NODE_ENV: production
+      NODE_ENV: development
+      # Override RUN_ENV to 'development' for local compose to disable SSL verification
+      # Production deployments to AWS ECS will use RUN_ENV=production automatically
+      RUN_ENV: development
     restart: unless-stopped
     networks:
       - tomori-network

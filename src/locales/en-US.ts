@@ -793,12 +793,10 @@ Setting up TomoriBot means that you and your server members agree to its \`/lega
 - Chat History
 
 **What is Sent to your Chosen AI Provider:**
-Whenever I'm triggered, I fetch the **latest messages** in the text channel as well as any **relevant memories** as context for the AI model to form my reply
+Whenever I'm triggered, I fetch the **latest messages** in the text channel as well as any **relevant memories** as context for the AI model to form my reply. I do NOT actively monitor and look at messages outside of these triggers.
 
 You may opt out of my Memory features by using the {personalPrivacy} command, as well as turn off my self-learning using the {configPermissions} command.`,
-				footer: `Your chosen AI provider (Google, NovelAI, OpenRouter) processes your messages according to their own privacy policies. Never share personal information with me for privacy.
-
-For full details, see \`/legal privacy\` and \`/legal terms\``,
+				footer: `Your chosen AI provider (Google, NovelAI, OpenRouter) processes your messages according to their own privacy policies. Never share personal information with me for privacy. For full details, see \`/legal privacy\` and \`/legal terms\``,
 			},
 
 			// /help apikey
@@ -1017,6 +1015,12 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				title: `Terms of Service`,
 				description_text: `View TomoriBot's Terms of Service to understand the rules and guidelines for using the bot. This applies to the official hosted instance. Self-hosted instances are governed by the AGPLv3 license.`,
 				link_title: `Full Terms of Service`,
+			},
+			license: {
+				description: `View TomoriBot's open-source license`,
+				title: `Open Source License`,
+				description_text: `TomoriBot is open-source software licensed under the GNU Affero General Public License v3.0 (AGPLv3). This license allows you to use, modify, and distribute the code freely, with the requirement that any modifications to publicly hosted instances must also be open-sourced.`,
+				link_title: `Full AGPLv3 License`,
 			},
 		},
 
