@@ -126,7 +126,7 @@ export async function execute(
 					},
 				],
 			},
-			MessageFlags.SuppressNotifications,
+			MessageFlags.Ephemeral,
 		);
 	} catch (error) {
 		// Log error with context

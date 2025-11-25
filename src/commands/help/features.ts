@@ -87,7 +87,7 @@ export async function execute(
 				],
 				footerKey: "commands.help.features.footer",
 			},
-			MessageFlags.SuppressNotifications,
+			MessageFlags.Ephemeral,
 		);
 	} catch (error) {
 		// Log error with context

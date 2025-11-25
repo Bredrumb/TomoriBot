@@ -1,50 +1,60 @@
 # TomoriBot Terms of Service
-Last updated: 2025-11-24
+Last updated: 2025-11-25
 
-These Terms apply to the official hosted TomoriBot instance on Discord. If you run your own copy from this open-source repository, you are not bound by these Terms; your use is governed by the AGPLv3 license in `LICENSE`, and you alone control data handling in your self-hosted environment.
+By setting up or interacting with TomoriBot, you accept these Terms and Discord's Terms of Service and Community Guidelines. These Terms apply to the official hosted TomoriBot instance on Discord. If you run your own copy from TomoriBot's open-source repository, you are not bound by these Terms; your use is governed by the AGPLv3 license in `LICENSE` instead, and you alone control data handling in your self-hosted environment. 
 
-## 1) Acceptance & Eligibility
-- By adding or interacting with TomoriBot, you accept these Terms and Discord's Terms of Service and Community Guidelines.
-- You must be at least 13 years old (or the minimum age required by your jurisdiction) and legally allowed to use Discord.
+## 1) Definition of Terms
+For clarity, these terms are used throughout this document:
+- **Server**: A Discord guild/community where TomoriBot is set up
+- **Memories**: Facts or information taught to TomoriBot via `/teach` commands, or self-taught through the `remember_this_fact` function tool
+- **Persona/Preset**: Configurable personality and behavioral profiles that change how TomoriBot responds
+- **Provider**: Third-party AI or search services (e.g., Google, NovelAI, OpenRouter, Brave Search) that you configure TomoriBot to use
+- **Hosted Instance**: The official TomoriBot service maintained as a public bot for Discord, as opposed to self-hosted copies
+- **API Key**: Authentication credentials you provide to connect TomoriBot to your chosen Providers
+- **Trigger**: An event that causes TomoriBot to generate a response in a Discord text channel using your configured provider, such as: mentioning the bot, replying to its messages, using slash commands that require AI/search processing, or sending messages in channels where auto-reply is enabled. Triggers consume API credits/tokens from your provider account.
 
 ## 2) Scope of Service
-- TomoriBot is an AI-powered assistant that responds to Discord interactions, stores optional persona/memory data, and can use external AI/search providers you configure.
-- The bot may change, suspend, or end features at any time for maintenance, safety, or legal reasons.
+- TomoriBot is an AI-powered chatbot that responds to Discord interactions using external Providers that you configure.
+- We may change, suspend, or end features of TomoriBot at any time for maintenance, safety, or legal reasons.
 
 ## 3) Your Responsibilities
 - Do not use TomoriBot for unlawful, harmful, or platform-disallowed content, harassment, or unauthorized access attempts.
-- You remain responsible for content you or your server members provide (messages, memories, persona data, uploads). Ensure you have rights to share it and avoid sensitive data you do not want processed by AI providers.
+- You must be at least 13 years old (or the minimum age required by Discord in your jurisdiction) to use TomoriBot. By using the service, you represent that you meet this age requirement.
+- You remain responsible for content you or your server members provide (messages, memories, persona data, uploads). Ensure you have rights to share it and avoid sensitive data you do not want processed by your configured Providers.
 - Respect rate limits and avoid spam or abuse that degrades the service.
 
 ## 4) Third-Party Providers & Models
-- You may connect TomoriBot to AI or search providers (e.g., Anthropic, Google Gemini, OpenAI/OpenRouter, NovelAI, Brave Search). Their terms, privacy policies, safety filters, and billing apply to any content you send through them.
-- We cannot control the behavior, retention, or safety policies of those providers. Review their terms before sending sensitive or regulated data.
+- You may connect TomoriBot to external Providers (e.g., Anthropic, Google Gemini, OpenAI/OpenRouter, NovelAI, Brave Search). Their terms, privacy policies, safety filters, and billing apply to any content you send through them.
+- We cannot control the behavior, retention, or safety policies of those Providers. Review your chosen Provider's terms before configuring them with TomoriBot.
 - AI-generated content may be inaccurate, biased, or inappropriate despite safety filters. TomoriBot does not verify or endorse AI outputs.
-- Server administrators are responsible for monitoring bot interactions and configuring appropriate channel permissions, safety features, and content filters.
-- You acknowledge that AI providers may use your prompts to train or improve their models unless you opt out through their respective settings. Check each provider's data usage policies.
 
 ## 5) API Keys and Billing
-- If you supply API keys for AI/search providers, you authorize TomoriBot to store and use them to fulfill your requests. Keys are encrypted at rest using the configured `CRYPTO_SECRET`, but you are responsible for provider-side costs and account usage.
+- If you supply API keys for AI/search providers, you authorize TomoriBot to store and use them to fulfill your requests. All provided keys are encrypted at rest.
+- We will only use your API keys to process your explicit interactions with TomoriBot. We do not pool API keys, use your keys to process other users' requests, or use them for testing, development, analytics, or any purpose other than fulfilling you and your server members' direct requests to TomoriBot.
+- You are responsible for all provider-side costs and account usage caused by each TomoriBot Trigger associated with your API key. Monitor your API key dashboards for usage and billing. The `/help cost` command provides a rough estimate of per-trigger costs.
+- We recommend using API keys with minimal required permissions and considering using provider-specific rate limits and spending caps where available.
 
-## 6) Data Handling Summary
-- Data collected and usage purposes are described in the Privacy Policy. Key examples include Discord IDs, server configurations, optional memories/persona data, reminders, and error diagnostics.
-- You can export or delete data using in-bot commands where available; some records may persist where required by law or for security.
+## 6) Data Handling
+- Data collected and usage purposes are described in the Privacy Policy, which you also accept by setting up or interacting with TomoriBot.
+- You can export or delete your data using in-bot commands where available; some records may persist where required by law or for security.
 
-## 7) Self-Hosted Use & Source Code Access
-- Running TomoriBot yourself from this repository is treated as separate from the hosted service. You are responsible for complying with the AGPLv3 license, Discord rules, and any provider terms you enable.
-- Under the AGPLv3 license, if you modify and host TomoriBot publicly, you must make your modified source code available to users interacting with your bot over the network (see AGPLv3 Section 13).
-- The hosted Terms and Privacy Policy act only as a reference template for self-hosts.
-
-## 8) Availability, Support, and Changes
+## 7) Availability, Support, and Changes
 - Service availability is not guaranteed. Outages, maintenance, or rate limits may interrupt responses.
 - We may update these Terms at any time. Material changes will be announced with at least 30 days' notice through the support Discord or project GitHub, and will be reflected by updating the "Last updated" date. Continuing to use the bot after changes means you accept the revised Terms.
 
-## 9) Termination
-- We may suspend or remove access for violations of these Terms, legal requirements, or safety/security concerns. You may remove the bot at any time; consider using the `/data delete` command to remove stored data before removal.
+## 8) Termination
+- We may suspend or remove access for violations of these Terms, legal requirements, or safety/security concerns. You may remove TomoriBot at any time; consider using the `/data delete` command to remove stored data before removal.
 
-## 10) Disclaimers and Liability
+## 9) Disclaimers and Liability
 - The service is provided "AS IS" and "AS AVAILABLE" without warranties of any kind. We disclaim implied warranties of merchantability, fitness for a particular purpose, non-infringement, and uninterrupted availability.
-- To the maximum extent permitted by law, we are not liable for indirect, incidental, consequential, or punitive damages, or for actions of third-party providers or users. Our total liability is limited to the greater of (a) amounts you paid us for the service (typically $0) or (b) $10.
+- We implement industry-standard security practices including encryption at rest, SSL/TLS for database connections with certificate verification, and secure credential handling. However, we cannot guarantee absolute security against all potential threats, breaches, or unauthorized access.
+- To the maximum extent permitted by law, we are not liable for:       
+  - Indirect, incidental, consequential, or punitive damages
+  - Actions of third-party providers or users
+  - Unauthorized access to, theft of, corruption of, or loss of any data stored by TomoriBot (including API keys, memories, personas, and configurations)
+  - Any damages except in cases of gross negligence or intentional misconduct on our part
+  - Our total liability is limited to the greater of (a) amounts you paid us for the service (typically $0 USD; voluntary donations are not payment for service) or (b) $10 USD in aggregate for all claims.
+  - By using the hosted TomoriBot service, you accept these risks. If you are uncomfortable with these risks, consider self-hosting TomoriBot from the open-source repository, where you maintain full control over data storage, encryption, and security practices.
 
-## 11) Contact
-- For hosted-instance questions or concerns, reach out via the project GitHub issues or the support Discord linked in the `/support discord` command.
+## 10) Contact
+- For hosted instance questions or concerns, reach out via the email `bredrumb@gmail.com`, the project GitHub issues, or the [official TomoriBot support Discord server](https://discord.gg/bjCfHm9QsB).

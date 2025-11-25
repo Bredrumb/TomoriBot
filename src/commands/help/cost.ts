@@ -291,7 +291,7 @@ export async function execute(
 				fields,
 				footerKey: "commands.help.cost.footer",
 			},
-			MessageFlags.SuppressNotifications,
+			MessageFlags.Ephemeral,
 		);
 	} catch (error) {
 		// Log error with context

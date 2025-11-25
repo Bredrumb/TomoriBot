@@ -15,7 +15,7 @@ export default {
 
 		// Standard interaction responses (buttons, selects)
 		interaction: {
-			cancel_title: `❌ Command Cancelled`,
+			cancel_title: `🔴 Command Cancelled`,
 			cancel_description: `The command has been cancelled.`,
 			timeout_title: `⏰ Command Timed Out`,
 			timeout_description: `You didn't respond in time. Please try again.`,
@@ -90,11 +90,11 @@ export default {
 
 	rate_limit: {
 		// User-level rate limiting (DM notification)
-		user_exceeded_title: `⚠️ Rate Limit Reached`,
+		user_exceeded_title: `🟡️ Rate Limit Reached`,
 		user_exceeded_description: `You currently have too much active messages being processed across all servers. To prevent abuse, your most recent trigger attempt has been dropped. Please wait for some of your messages to finish processing before sending more.`,
 
 		// Server-level rate limiting (public channel notification)
-		server_exceeded_title: `⚠️ Server Overloaded`,
+		server_exceeded_title: `🟡️ Server Overloaded`,
 		server_exceeded_description: `This server currently has too much active messages being processed. I'm at capacity right now! Please try again in a moment, or use me in another server or via Direct Messages instead.`,
 	},
 
@@ -161,29 +161,29 @@ export default {
 			retry_message: "This error is temporary. You can try again later.",
 
 			// Universal provider error titles and tips (moved from genai.google)
-			api_error_title: "❌ API Error",
+			api_error_title: "🔴 API Error",
 			api_error_tip:
 				"Please verify your API key and try again. If this error persists, report through `/support discord`",
 
 			rate_limit_title: "🟡 Rate Limit Exceeded",
 			rate_limit_tip: "Please wait a few minutes before trying again",
 
-			content_blocked_title: "🛡️ Content Blocked",
+			content_blocked_title: "🔴️ Content Blocked",
 			content_blocked_tip:
 				"Please rephrase your message to comply with content policies",
 
-			timeout_title: "⏱️ Request Timeout",
+			timeout_title: "🟡️ Request Timeout",
 			timeout_tip: "Try shortening your message or try again",
 
-			provider_overloaded_title: "🛑 Provider Overloaded",
+			provider_overloaded_title: "🔴 Provider Overloaded",
 			provider_overloaded_tip:
 				"Provider is currently experiencing unexpectedly high usage, please try again later or swap to a different provider",
 
-			unknown_title: "❓ Provider Error",
+			unknown_title: "🔴 Provider Error",
 			unknown_tip:
 				"Please try again or use `/support discord` if this keeps happening",
 
-			flush_limit_title: "⚠️ Response Length Limit Reached",
+			flush_limit_title: "🟡️ Response Length Limit Reached",
 			flush_limit_description:
 				"This response has reached the maximum message length limit and has been stopped. You can use `/bot respond` to manually continue the response if needed.",
 		},
@@ -406,18 +406,18 @@ export default {
 				type_choice_personal: `Personal Data`,
 				type_choice_server: `Server Data`,
 				type_choice_personality: `Personality Info`,
-				success_title: `✅ Export Successful`,
+				success_title: `🟢 Export Successful`,
 				success_description: `Your {type} data has been sent to your DMs!`,
 				success_description_personality: `My personality has been exported and sent to your DMs!\n\n**Note:** This export is for informational purposes only. To import personalities, use the \`/persona\` commands instead.`,
-				failed_title: `❌ Export Failed`,
+				failed_title: `🔴 Export Failed`,
 				failed_description: `Failed to export your data. Please try again later.`,
-				dm_title: `📦 Data Export`,
+				dm_title: `Data Export`,
 				dm_description: `Here's the {type} data that you requested from me!`,
 				dm_description_server: `Here's the server data you requested!\n\n**Note:** Trigger words and API keys are excluded for security. You'll need to reconfigure those manually after import.`,
 				dm_description_personality: `Here's the personality information you requested!\n\n**Note:** This text file is for informational purposes only. To import personalities into your server, use the \`/persona\` commands instead.`,
-				dm_failed_title: `❌ Could Not Send DM`,
+				dm_failed_title: `🔴 Could Not Send DM`,
 				dm_failed_description: `I couldn't send you a DM. Please make sure you have DMs enabled from server members, then try again.`,
-				no_permission_title: `🔒 Permission Denied`,
+				no_permission_title: `🔴 Permission Denied`,
 				no_permission_description: `You need the **Manage Server** permission to export server data.`,
 				// Error messages from dataExport utility
 				error_no_user_data: `No user data found. You may need to interact with the bot first.`,
@@ -434,26 +434,26 @@ export default {
 				confirmation_description_server: `WARNING: Replaces server settings & memories. Does NOT restore: trigger words, API keys, personality, avatar.`,
 				confirmation_choice_yes: `Yes, I understand and want to proceed`,
 				confirmation_choice_no: `No, cancel the import`,
-				success_title: `✅ Import Successful`,
-				success_description: `Successfully imported {type} data!\n📝 Memories imported: {memories_count}\n⚙️ Config fields updated: {config_count}`,
-				success_description_server: `Successfully imported server data!\n📝 Memories: {memories_count}\n⚙️ Settings: {config_count}\n\n**Remember:** Trigger words and API keys were not imported. Configure those separately if needed.`,
-				failed_title: `❌ Import Failed`,
+				success_title: `🟢 Import Successful`,
+				success_description: `Successfully imported {type} data!\nMemories imported: {memories_count}\n Config fields updated: {config_count}`,
+				success_description_server: `Successfully imported server data!\nMemories: {memories_count}\n Settings: {config_count}\n\n**Remember:** Trigger words and API keys were not imported. Configure those separately if needed.`,
+				failed_title: `🔴 Import Failed`,
 				failed_description: `Failed to import your data. Please check the file and try again.`,
-				cancelled_title: `❌ Import Cancelled`,
+				cancelled_title: `🔴 Import Cancelled`,
 				cancelled_description: `The import has been cancelled. No data was changed.`,
-				invalid_file_type_title: `❌ Invalid File Type`,
+				invalid_file_type_title: `🔴 Invalid File Type`,
 				invalid_file_type_description: `Please upload a valid .json file.`,
-				file_too_large_title: `❌ File Too Large`,
+				file_too_large_title: `🔴 File Too Large`,
 				file_too_large_description: `The file is too large. Maximum file size is 1MB.`,
-				parse_failed_title: `❌ Invalid JSON`,
+				parse_failed_title: `🔴 Invalid JSON`,
 				parse_failed_description: `The file is not a valid JSON file. Please check the file format.`,
-				invalid_file_title: `❌ Invalid Import File`,
+				invalid_file_title: `🔴 Invalid Import File`,
 				invalid_file_description: `The import file format is invalid or incompatible.`,
-				no_permission_title: `🔒 Permission Denied`,
+				no_permission_title: `🔴 Permission Denied`,
 				no_permission_description: `You need the **Manage Server** permission to import server data.`,
 				error_download_timeout: `File download timed out. Please try again.`,
 				error_download_failed: `Failed to download import file.`,
-				error_memory_critical_title: `🛑 System Overloaded`,
+				error_memory_critical_title: `🔴 System Overloaded`,
 				error_memory_critical_description: `I'm currently experiencing high memory usage, preventing file uploads. Please try again in a moment.`,
 				// Error messages from dataImport utility
 				error_invalid_memory: `Invalid memory content: {details}`,
@@ -479,15 +479,15 @@ export default {
 				confirmation_no: `No, cancel deletion`,
 				confirmation_required_title: `Confirmation Required`,
 				confirmation_required_description: `You must confirm deletion by selecting the confirmation option.`,
-				success_personal_title: `✅ Personal Data Deleted`,
+				success_personal_title: `🟢 Personal Data Deleted`,
 				success_personal_description: `All your personal data has been permanently deleted. You'll start fresh with default settings if you interact with me again.`,
-				success_server_title: `✅ Server Data Deleted`,
+				success_server_title: `🟢 Server Data Deleted`,
 				success_server_description: `All server data has been permanently deleted. You'll need to run \`/config setup\` to use me again.`,
-				no_data_title: `ℹ️ No Data Found`,
+				no_data_title: `🟡️ No Data Found`,
 				no_data_description: `You don't have any personal data stored in the database.`,
-				no_server_data_title: `ℹ️ No Server Data Found`,
+				no_server_data_title: `🟡 No Server Data Found`,
 				no_server_data_description: `This server doesn't have any data stored in the database. Please run \`/config setup\` first.`,
-				no_permission_title: `🔒 Permission Denied`,
+				no_permission_title: `🔴 Permission Denied`,
 				no_permission_description: `You need the **Manage Server** permission to delete server data.`,
 			},
 		},
@@ -497,13 +497,13 @@ export default {
 			description: `Manage personality presets`,
 			export: {
 				description: `Export current personality as a shareable PNG file`,
-				success_title: `✅ Persona Exported Successfully`,
+				success_title: `🟢 Persona Exported Successfully`,
 				success_description: `Current persona **{nickname}** has been exported! Share this PNG file with others to spread this personality configuration.`,
-				failed_title: `❌ Export Failed`,
+				failed_title: `🔴 Export Failed`,
 				failed_description: `Failed to export the persona. Please try again later.`,
-				avatar_failed_title: `❌ Avatar Download Failed`,
+				avatar_failed_title: `🔴 Avatar Download Failed`,
 				avatar_failed_description: `Failed to download the server avatar. Please try again later.`,
-				embed_failed_title: `❌ PNG Processing Failed`,
+				embed_failed_title: `🔴 PNG Processing Failed`,
 				embed_failed_description: `Failed to embed metadata into the PNG file. Please try again.`,
 				// Error messages from presetExport utility
 				error_no_server_data: `Server not found in database. Please run /config setup first.`,
@@ -517,29 +517,29 @@ export default {
 				confirmation_description: `WARNING: This will REPLACE your current personality settings. Continue?`,
 				confirmation_choice_yes: `Yes, replace my current persona`,
 				confirmation_choice_no: `No, cancel import`,
-				success_title: `✅ Persona Imported Successfully`,
-				success_description: `Successfully imported persona **{nickname}**!\n📝 Attributes: {attribute_count}\n💬 Sample Dialogues: {dialogue_count}\n🔔 Trigger Words: {trigger_word_count}\n\nServer avatar and nickname have also been updated if permissions allow.`,
-				failed_title: `❌ Import Failed`,
+				success_title: `🟢 Persona Imported Successfully`,
+				success_description: `Successfully imported persona **{nickname}**!\nAttributes: {attribute_count}\nSample Dialogues: {dialogue_count}\nTrigger Words: {trigger_word_count}\n\nServer avatar and nickname have also been updated if permissions allow.`,
+				failed_title: `🔴 Import Failed`,
 				failed_description: `Failed to import the persona. Please check the file and try again.`,
-				cancelled_title: `❌ Import Cancelled`,
+				cancelled_title: `🔴 Import Cancelled`,
 				cancelled_description: `The import has been cancelled. No changes were made to my persona.`,
-				invalid_file_type_title: `❌ Invalid File Type`,
+				invalid_file_type_title: `🔴 Invalid File Type`,
 				invalid_file_type_description: `Please upload a valid .png file containing persona data.`,
-				file_too_large_title: `❌ File Too Large`,
+				file_too_large_title: `🔴 File Too Large`,
 				file_too_large_description: `The file is too large. Maximum file size is 10MB.`,
-				download_failed_title: `❌ Download Failed`,
+				download_failed_title: `🔴 Download Failed`,
 				download_failed_description: `Failed to download the attached file. Please try again.`,
-				invalid_png_title: `❌ Invalid PNG File`,
+				invalid_png_title: `🔴 Invalid PNG File`,
 				invalid_png_description: `The uploaded file is not a valid PNG image.`,
-				no_metadata_title: `❌ No Persona Data Found`,
+				no_metadata_title: `🔴 No Persona Data Found`,
 				no_metadata_description: `This PNG file doesn't contain persona data. Please use a file exported by \`/persona export\`.`,
-				invalid_file_title: `❌ Invalid Persona File`,
+				invalid_file_title: `🔴 Invalid Persona File`,
 				invalid_file_description: `The persona file format is invalid or incompatible.`,
-				no_permission_title: `🔒 Permission Denied`,
+				no_permission_title: `🔴 Permission Denied`,
 				no_permission_description: `You need the **Manage Server** permission to import personas.`,
 				error_download_timeout: `File download timed out. Please try again.`,
 				error_download_failed: `Failed to download preset file.`,
-				error_memory_critical_title: `🛑 System Overloaded`,
+				error_memory_critical_title: `🔴 System Overloaded`,
 				error_memory_critical_description: `I'm currently experiencing high memory usage, preventing file uploads. Please try again in a moment.`,
 				// Error messages from presetImport utility
 				error_invalid_attribute: `Invalid attribute content: {details}`,
@@ -567,7 +567,7 @@ export default {
 				preset_not_found: `The selected preset could not be found.`,
 				success_title: `Preset Applied`,
 				success_description: `Successfully applied the '{preset_name}' preset.`,
-				avatar_update_failed: `⚠️ Server avatar could not be updated due to a Discord API error, but persona was applied successfully.`,
+				avatar_update_failed: `🟡️ Server avatar could not be updated due to a Discord API error, but persona was applied successfully.`,
 				avatar_update_skipped_dm: `Preset was applied successfully, except avatar updates which are not available in Direct Messages`,
 			},
 			generate: {
@@ -591,17 +591,17 @@ export default {
 					file_upload_description: `Upload an image for export and to help with generating the character`,
 				},
 				// Error messages
-				wrong_provider_title: `❌ Incompatible Provider`,
+				wrong_provider_title: `🔴 Incompatible Provider`,
 				wrong_provider_description: `Preset generation requires Google Gemini. Your current provider is **{current_provider}**. Please use \`/config apikey set\` to switch to Google.`,
-				no_api_key_title: `❌ No API Key`,
+				no_api_key_title: `🔴 No API Key`,
 				no_api_key_description: `No API key configured. Please use \`/config apikey set\` to set up your Google API key.`,
-				api_key_decrypt_failed_title: `❌ API Key Error`,
+				api_key_decrypt_failed_title: `🔴 API Key Error`,
 				api_key_decrypt_failed_description: `Failed to decrypt API key. Please reconfigure using \`/config apikey set\`.`,
-				invalid_image_title: `❌ Invalid Image`,
+				invalid_image_title: `🔴 Invalid Image`,
 				invalid_image_description: `Please upload a valid image file (PNG, JPG, JPEG, etc.).`,
-				image_download_failed_title: `❌ Image Download Failed`,
+				image_download_failed_title: `🔴 Image Download Failed`,
 				image_download_failed_description: `Failed to download the attached image. Please try again.`,
-				error_memory_critical_title: `🛑 System Overloaded`,
+				error_memory_critical_title: `🔴 System Overloaded`,
 				error_memory_critical_description: `I'm currently experiencing high memory usage, preventing file uploads. Please try again in a moment.`,
 				error_file_too_large: `Avatar image must be under 10 MB.`,
 				error_download_timeout: `Avatar download timed out. Please try again.`,
@@ -610,18 +610,18 @@ export default {
 				processing_title: `Generating Personality...`,
 				processing_description: `This may take 1-2 minutes. Please wait while I generate the character...\n\nThis may produce unexpected results. You can regenerate if needed.`,
 				// Generation errors
-				generation_failed_title: `❌ Generation Failed`,
+				generation_failed_title: `🔴 Generation Failed`,
 				generation_failed_description: `Failed to generate personality: {error}\n\nPlease try again with different inputs or check your API key.`,
-				validation_failed_title: `❌ Validation Failed`,
+				validation_failed_title: `🔴 Validation Failed`,
 				validation_failed_description: `The generated personality data failed validation. Please try again.`,
-				image_processing_failed_title: `❌ Image Processing Failed`,
+				image_processing_failed_title: `🔴 Image Processing Failed`,
 				image_processing_failed_description: `Failed to process the uploaded image. Please try a different image.`,
-				avatar_fetch_failed_title: `❌ Avatar Fetch Failed`,
+				avatar_fetch_failed_title: `🔴 Avatar Fetch Failed`,
 				avatar_fetch_failed_description: `Failed to fetch the server avatar for export. Please try uploading an image instead.`,
-				metadata_embed_failed_title: `❌ Export Failed`,
+				metadata_embed_failed_title: `🔴 Export Failed`,
 				metadata_embed_failed_description: `Failed to embed personality data in the image. Please try again.`,
 				// Success
-				success_title: `✨ {character_name} Generated Successfully!`,
+				success_title: `🟢 {character_name} Generated Successfully!`,
 				success_description: `I've generated a persona for **{character_name}**!\n\n**Attributes Preview:**\n{attribute_preview}\n\n**Sample Dialogues:**\n{dialogue_preview}`,
 				success_next_steps_title: `Next Steps`,
 				success_next_steps_description: `1. Download the attached PNG file\n2. Use \`/persona import\` with the PNG to import this character\n3. Run \`/tool refresh\` on ongoing conversations to apply my new personality\n4. (Optional) Use \`/server avatar\` to change the avatar if desired`,
@@ -646,25 +646,25 @@ export default {
 					file_upload_description: `Upload an image for the character export`,
 				},
 				// Error messages
-				invalid_image_title: `❌ Invalid Image`,
+				invalid_image_title: `🔴 Invalid Image`,
 				invalid_image_description: `Please upload a valid image file (PNG, JPG, JPEG, etc.).`,
-				image_download_failed_title: `❌ Image Download Failed`,
+				image_download_failed_title: `🔴 Image Download Failed`,
 				image_download_failed_description: `Failed to download the attached image. Please try again.`,
-				error_memory_critical_title: `🛑 System Overloaded`,
+				error_memory_critical_title: `🔴 System Overloaded`,
 				error_memory_critical_description: `I'm currently experiencing high memory usage, preventing file uploads. Please try again in a moment.`,
 				error_file_too_large: `Avatar image must be under 10 MB.`,
 				error_download_timeout: `Avatar download timed out. Please try again.`,
 				error_download_failed: `Failed to download avatar image.`,
-				validation_failed_title: `❌ Validation Failed`,
+				validation_failed_title: `🔴 Validation Failed`,
 				validation_failed_description: `The preset data failed validation. Please try again.`,
-				image_processing_failed_title: `❌ Image Processing Failed`,
+				image_processing_failed_title: `🔴 Image Processing Failed`,
 				image_processing_failed_description: `Failed to process the uploaded image. Please try a different image.`,
-				avatar_fetch_failed_title: `❌ Avatar Fetch Failed`,
+				avatar_fetch_failed_title: `🔴 Avatar Fetch Failed`,
 				avatar_fetch_failed_description: `Failed to fetch the server avatar for export. Please try uploading an image instead.`,
-				metadata_embed_failed_title: `❌ Export Failed`,
+				metadata_embed_failed_title: `🔴 Export Failed`,
 				metadata_embed_failed_description: `Failed to embed personality data in the image. Please try again.`,
 				// Success
-				success_title: `✅ {character_name} Created Successfully!`,
+				success_title: `🟢 {character_name} Created Successfully!`,
 				success_description: `Persona has been created for **{character_name}**!\n\n**Description:**\n{character_description}`,
 				success_dialogue_title: `Sample Dialogue`,
 				success_next_steps_title: `Next Steps`,
@@ -680,26 +680,26 @@ export default {
 				description: `Shows what TomoriBot can do`,
 				title: `TomoriBot Features (Version {version})`,
 				embed_description: `Here's everything I'm capable of:`,
-				vision_title: `Vision & Media 👁️`,
+				vision_title: `Vision & Media`,
 				vision_description: `- I can see and analyze images, videos, stickers, and emojis
 - I can watch YouTube videos from links
 - I can see content within shared embeds (like tweets, articles, etc.)`,
-				search_title: `Search & Information 🔍`,
+				search_title: `Search & Information`,
 				search_description: `- I can search the web for current information
 - I can also do image, video, and news search (via \`/config braveapi\`)
 - I can fetch and read content from URLs`,
-				personality_title: `Personality & Customization 💫`,
+				personality_title: `Personality & Customization`,
 				personality_description: `- I can change my name and avatar using \`/config rename\` and \`/server avatar\`
 - I can switch between different personas using \`/persona\` (you can also share and save personas using \`/persona export\`!)
 - My behavior and tone can be tweaked with \`/teach\`
 - Learn more with \`/help customization\``,
-				memory_title: `Memory & Personalization 🧠`,
+				memory_title: `Memory & Personalization`,
 				memory_description: `- I can remember personal facts about you and server-wide information, persisting across conversations
 - Personal memories persist across servers (try talking to me in another server!)
 - Change what I call you using \`/personal nickname\`
 - Use \`/teach\` to manually help me remember things, \`/forget\` to remove them
 - Learn more with \`/help memory\``,
-				time_title: `Time Awareness 🕰️`,
+				time_title: `Time Awareness`,
 				time_description: `- I know what time it currently is in the server (via \`/config timezone\`)
 - I can set up reminders for you (try asking me to remind you about something!)`,
 				footer: `Not all features are available for all AI providers. It is recommended to use Google's Gemini`,
@@ -708,7 +708,7 @@ export default {
 			// /help cost
 			cost: {
 				description: `Estimate API costs for paid AI providers`,
-				title: `💰 Estimated API Costs`,
+				title: `Estimated API Costs`,
 				embed_description: `Here are **VERY ROUGH** estimated costs per trigger in a Discord channel when using paid AI providers. Costs are estimated using example **{provider}** costs (Input: {inputPrice}/M tokens, Output: {outputPrice}/M tokens)`,
 				minimum_scenario_title: `Minimum Scenario (Light Usage)`,
 				minimum_scenario_value: `**Context:** 1 user with 0 memories, 1 paragraph of persona, conversations are less than a sentence per message
@@ -749,23 +749,23 @@ I have built-in features to help reduce costs from abusers or spammers in your s
 				description: `Learn how to set up TomoriBot for the first time`,
 				title: `Getting Started with TomoriBot`,
 				embed_description: `Here's how to set up TomoriBot in your server (or DMs!):`,
-				step1_title: `Step 1: Get an API Key 🔑`,
+				step1_title: `Step 1: Get an API Key`,
 				step1_description: `TomoriBot uses AI providers like Google Gemini, NovelAI, or OpenRouter. You'll need an API key from one of them.
 - Use {helpApikey} to learn how to get one
   - Google's Gemini = general-purpose, free, and can run all features
   - NovelAI = uncensored role-playing and storytelling specialized
   - OpenRouter = various available AI models
 - Do **NOT** share this API key with anyone else`,
-				step2_title: `Step 2: Run the Setup Command ⚙️`,
+				step2_title: `Step 2: Run the Setup Command`,
 				step2_description: `- Use {configSetup} to securely add your API key and initialize TomoriBot
 - Your API key is encrypted and stored safely
 - Each server has its own configuration`,
-				step3_title: `Step 3: Start Chatting! 💬`,
+				step3_title: `Step 3: Start Chatting!`,
 				step3_description: `- Just mention me or reply to my messages to chat
 - Change how I get triggered using {serverTrigger}
 - I'll remember our conversations with my memory system (which you can disable using {configPermissions}!)
 - Set up auto-trigger with {serverAutotrigger} to chat without mentioning me`,
-				step4_title: `Optional: Customize Me 🎨`,
+				step4_title: `Optional: Customize Me`,
 				step4_description: `- Use {persona} commands to completely change my personality
 - Configure my settings with {server}, {personal}, and {config} commands
 - You can also manually teach me things with {teach}`,
@@ -783,23 +783,23 @@ Setting up TomoriBot means that you and your server members agree to its \`/lega
 				description: `Learn about data management and privacy`,
 				title: `Managing Your Data`,
 				embed_description: `How you can manage your data and what I store:`,
-				export_title: `Export Your Data 📤`,
+				export_title: `Export Your Data`,
 				export_description: `Use {dataExport} to download your data:
 - **Personal data**: Your memories, preferences, and user settings
 - **Server data**: Server memories, configurations, and bot settings
 - **Personality data**: Custom personality presets you've created (use {personaExport} instead to share it with others)
 - Data is sent to your DMs as a JSON or text file`,
-				import_title: `Import Your Data 📥`,
+				import_title: `Import Your Data`,
 				import_description: `Use {dataImport} to restore previously exported data:
 - Restore your personal data across servers
 - Transfer server configurations to a new server
 - Simply attach your exported file when using the command`,
-				delete_title: `Delete Your Data 🗑️`,
+				delete_title: `Delete Your Data`,
 				delete_description: `Use {dataDelete} to permanently remove your data:
 - **Personal deletion**: Removes all your user data, memories, and preferences
 - **Server deletion**: Removes all server data
 - This action cannot be undone!`,
-				privacy_title: `Privacy Notice 🔒`,
+				privacy_title: `Privacy Notice`,
 				privacy_description: `**What I Store:**
 - Server/personal memories
 - My settings and persona
@@ -892,15 +892,15 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
 			// /help memory
 			memory: {
 				description: `Learn about TomoriBot's memory system`,
-				title: `How My Memory Works 🧠`,
+				title: `How My Memory Works`,
 				embed_description: `I have a persistent memory system that helps me remember facts and information about users and servers across conversations. This is about **what I know** (facts, context, information). For **how I behave** (personality, tone, settings), see {helpCustomization} instead!`,
-				teaching_title: `Teaching Me Things 📝`,
+				teaching_title: `Teaching Me Things`,
 				teaching_description: `Use {teach} to help me remember **facts and information**:
 - **Personal memories** ({teachMemoryPersonal}): Facts about individual users
   - Example: "Amaori loves cats", "Prefers dark mode", "Is allergic to peanuts"
 - **Server memories** ({teachMemoryServer}): Information relevant to the whole server
   - Example: "Game night is every Friday at 8 PM", "No posting of NSFW", "We use #general for announcements"`,
-				forgetting_title: `Forgetting Things 🗑️`,
+				forgetting_title: `Forgetting Things`,
 				forgetting_description: `Use {forget} to make me forget memories:
 - {forgetMemoryPersonal} - Remove personal facts about users
 - {forgetMemoryServer} - Remove server-wide information`,
@@ -921,9 +921,9 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
 			customization: {
 				description: `Learn how to customize TomoriBot's personality and behavior`,
 				// Embed 1: Overview + Personas
-				embed1_title: `Customizing TomoriBot 🎨`,
+				embed1_title: `Customizing TomoriBot`,
 				embed1_description: `TomoriBot is highly customizable! This is about **how I behave** (personality, tone, settings). For **what I remember** (facts, memories), see {helpMemory} instead!`,
-				embed1_personas_title: `🎭 Personality Personas`,
+				embed1_personas_title: `Personality Personas`,
 				embed1_personas_description: `Control my core personality and behavior:
 
 **Persona Commands:**
@@ -941,7 +941,7 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
 - Behavior and tone settings`,
 				embed1_footer: `Next: Teaching Commands`,
 				// Embed 2: Teaching System
-				embed2_title: `Teaching Commands ✍️`,
+				embed2_title: `Teaching Commands`,
 				embed2_description: `Fine-tune my personality and knowledge:
 
 **Personality Shaping:**
@@ -968,7 +968,7 @@ Use \`{user}\` and \`{bot}\` placeholders in your examples:
 - Use placeholders so dialogues work for everyone when sharing me with \`/persona export\``,
 				embed2_footer: `Next: Configuration`,
 				// Embed 3: Configuration & Management
-				embed3_title: `Configuration & Management ⚙️`,
+				embed3_title: `Configuration & Management`,
 				embed3_description: `**Remove personality customizations:**
 - {forgetAttribute} - Remove specific personality attributes
 - {forgetSampledialogue} - Remove sample dialogue examples
@@ -988,7 +988,7 @@ Triggers & Appearance:
 - {serverAvatar} - Set my custom profile picture for this server`,
 				embed3_footer: `Next: Bot Settings`,
 				// Embed 4: Advanced Settings
-				embed4_title: `Advanced Settings 🔧`,
+				embed4_title: `Advanced Settings`,
 				embed4_description: `**Personal bot settings:**
 AI Settings:
 - {configModel} - Choose which AI model to use
@@ -1007,7 +1007,7 @@ Personalization:
 - {configPermissions} - Configure what I'm allowed to do`,
 				embed4_footer: `If you have any more questions, join the support server with /support discord`,
 				// Embed 5: Pro Tips
-				embed5_title: `Pro Tips 💡`,
+				embed5_title: `Pro Tips`,
 				embed5_description: `- Start with a persona (default or generated) as a foundation
 - Use \`/teach attribute\` for quick personality tweaks
 - For Sample Dialogues, using examples that exhibit their attributes and traits as well is effective:
@@ -1256,7 +1256,7 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				modal_values_missing: `Error: Some required values were not received from the setup form. Please try the setup command again.`,
 				provider_invalid: `Error: Invalid API provider selected. Please choose from the available options.`,
 				preset_not_found: `Error: The selected preset was not found in the database. Please try again.`,
-				success_title: `🎉 Setup Complete!`,
+				success_title: `🟢 Setup Complete!`,
 				success_desc: `I am now configured for this server! To modify my configuration, use my \`/config\` and \`/server\` commands. You can also manage or delete your data anytime with \`/data\`. Here's a summary:`,
 				success_desc_dm: `I am now configured for this Direct Message. You can manage or delete your data anytime with \`/data\`. Here's a summary:`,
 				preset_field: `Personality Preset`,
@@ -1437,7 +1437,7 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 			privacy: {
 				description: `Control personal memory storage and privacy settings`,
 				setting_description: `Choose your privacy preference`,
-				opted_out_title: `🔒 Privacy Protection Enabled`,
+				opted_out_title: `🔴 Privacy Protection Enabled`,
 				opted_out_description: `You have successfully opted out of personal memory storage.
 
 **What this means:**
@@ -1448,7 +1448,7 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 - Server-wide memories are not affected
 
 To opt back in and allow personal memories again, use \`/personal privacy\` and select "Opt In".`,
-				opted_in_title: `✅ Personalization Enabled`,
+				opted_in_title: `🟢 Personalization Enabled`,
 				opted_in_description: `You have successfully opted into personal memory storage.
 
 **What this means:**

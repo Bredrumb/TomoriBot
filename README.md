@@ -248,7 +248,7 @@ These documents are also accessible within Discord using `/legal terms` and `/le
 <!-- LICENSE -->
 ## License
 
-Distributed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later). See `LICENSE` for details. For questions, reach me via bredrumb@gmail.com, the GitHub issues page, or the support Discord linked in `/support discord`.
+Distributed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later). See `LICENSE` for details. For questions, reach me via bredrumb@gmail.com, the GitHub issues page, or the [official support Discord server](https://discord.gg/bjCfHm9QsB).
 
 <!-- CONTACT -->
 ## Contact

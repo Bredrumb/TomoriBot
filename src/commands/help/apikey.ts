@@ -227,7 +227,7 @@ export async function execute(
 			interaction,
 			locale,
 			embedOptions,
-			MessageFlags.SuppressNotifications,
+			MessageFlags.Ephemeral,
 		);
 	} catch (error) {
 		// Log error with context
