@@ -60,6 +60,18 @@ type SimplifiedMessageForContext = {
 };
 
 /**
+ * Quick check to determine if text contains patterns that need conversion.
+ * Avoids expensive processing for text without Discord mentions or template variables.
+ * @param text - Text to check
+ * @returns True if text needs conversion, false otherwise
+ */
+function needsConversion(text: string): boolean {
+	// Check for Discord mentions: <@userid>, <#channelid>, <@&roleid>
+	// Check for template variables: {bot}, {user}
+	return /<[@#][!&]?\d{17,19}>/.test(text) || /\{(?:bot|user)\}/i.test(text);
+}
+
+/**
  * Converts Discord mention IDs to human-readable names using cached database lookups.
  * Also handles special placeholders like {user} and {bot}.
  * Checks for custom user nicknames first, falls back to Discord usernames.
@@ -69,6 +81,7 @@ type SimplifiedMessageForContext = {
  * @param triggererName - Name of the user who triggered the action (for {user} replacement)
  * @param tomoriNickname - The bot's current nickname for {bot} replacement.
  * @param personalMemoriesEnabled - Whether server personalization is enabled (affects custom nickname usage)
+ * @param snapshot - Optional per-request snapshot to avoid redundant DB queries
  * @returns Text with mentions and placeholders replaced by human-readable names
  */
 export async function convertMentions(
@@ -78,15 +91,23 @@ export async function convertMentions(
 	triggererName?: string,
 	tomoriNickname?: string, // Added tomoriNickname parameter
 	personalMemoriesEnabled?: boolean, // Added personalMemoriesEnabled parameter
+	snapshot?: import("../../types/misc/context").RequestSnapshot, // Added snapshot parameter
 ): Promise<string> {
+	// Early return: if text doesn't contain mentions or placeholders, skip processing
+	if (!needsConversion(text)) {
+		return text;
+	}
+
 	// Clear the cache before processing new text
 	mentionCache.clear();
 
 	// 1. Determine Tomori's nickname for {bot} replacement.
-	//    If not passed, load it. If passed, use the provided one.
+	//    If not passed, load it (using snapshot if available, otherwise DB query).
 	let currentTomoriNickname = tomoriNickname;
 	if (!currentTomoriNickname) {
-		const tomoriState = await loadTomoriState(serverId);
+		// Use snapshot if available, otherwise load from DB
+		const tomoriState =
+			snapshot?.tomoriState ?? (await loadTomoriState(serverId));
 		currentTomoriNickname =
 			tomoriState?.tomori_nickname || process.env.DEFAULT_BOTNAME || "Tomori";
 	}
@@ -118,8 +139,15 @@ export async function convertMentions(
 							return `${currentTomoriNickname}`;
 						}
 
-						const isUserBlacklisted = await isBlacklisted(serverId, id);
-						const userData = await loadUserRow(id);
+						// Check if this is the triggerer and we have snapshot data
+						const isTriggererId =
+							snapshot?.triggererUserRow?.user_disc_id === id;
+						const isUserBlacklisted = isTriggererId
+							? (snapshot?.isTriggererBlacklisted ?? false)
+							: await isBlacklisted(serverId, id);
+						const userData = isTriggererId
+							? snapshot?.triggererUserRow
+							: await loadUserRow(id);
 						const serverPersonalizationDisabled =
 							personalMemoriesEnabled === false;
 
@@ -299,6 +327,7 @@ export async function buildContext({
 	tomoriConfig,
 	isDMChannel = false,
 	mediaContextWindow,
+	snapshot,
 }: {
 	guildId: string;
 	serverName: string;
@@ -315,6 +344,7 @@ export async function buildContext({
 	tomoriConfig: TomoriConfigRow;
 	isDMChannel?: boolean; // Added for DM support
 	mediaContextWindow?: number; // Optional override for media window size
+	snapshot?: import("../../types/misc/context").RequestSnapshot; // Optional per-request snapshot
 }): Promise<StructuredContextItem[]> {
 	const contextItems: StructuredContextItem[] = [];
 	const botName = tomoriNickname;
@@ -333,6 +363,7 @@ export async function buildContext({
 		triggererName,
 		botName,
 		tomoriConfig.personal_memories_enabled,
+		snapshot,
 	);
 	personalityInstructionText += `\nWhen ${botName} wants to mention and ping a specific user in their response, they MUST use the format <@ > with the user's ID (e.g., <@123456789012345678>). The user's ID can be found in the user's status block in this context (e.g., "Nickname (User ID: 123...)"). This ensures the user gets a notification.`;
 
@@ -370,6 +401,7 @@ export async function buildContext({
 					triggererName,
 					botName,
 					tomoriConfig.personal_memories_enabled,
+					snapshot,
 				),
 			},
 		],
@@ -402,6 +434,7 @@ export async function buildContext({
 						triggererName,
 						botName,
 						tomoriConfig.personal_memories_enabled,
+						snapshot,
 					),
 				},
 			],
@@ -440,7 +473,8 @@ export async function buildContext({
 	}
 
 	// 5. Server Memories / Conversation Memories
-	const tomoriState = await loadTomoriState(guildId);
+	// Use snapshot if available, otherwise load from DB
+	const tomoriState = snapshot?.tomoriState ?? (await loadTomoriState(guildId));
 	if (
 		tomoriState?.server_memories &&
 		Array.isArray(tomoriState.server_memories) &&
@@ -592,11 +626,16 @@ export async function buildContext({
 			// Check personalization settings FIRST to determine which nickname to use
 			const serverPersonalizationEnabled =
 				tomoriConfig.personal_memories_enabled ?? true;
-			const userIsBlacklisted = await isBlacklisted(
-				guildId,
-				userRow.user_disc_id,
-			);
-			const userOptedOut = await isPrivacyOptedOut(userRow.user_disc_id);
+
+			// Check if this is the triggerer and we have snapshot data
+			const isTriggererId =
+				snapshot?.triggererUserRow?.user_disc_id === userRow.user_disc_id;
+			const userIsBlacklisted = isTriggererId
+				? (snapshot?.isTriggererBlacklisted ?? false)
+				: await isBlacklisted(guildId, userRow.user_disc_id);
+			const userOptedOut = isTriggererId
+				? (snapshot?.isTriggererOptedOut ?? false)
+				: await isPrivacyOptedOut(userRow.user_disc_id);
 
 			if (
 				customNickname &&
@@ -695,9 +734,25 @@ export async function buildContext({
 
 			// 6.c. Add User Status (always, if userRow is valid)
 			// For DMs, presence information is not available since there's no guild context
+			// In production: Only fetch triggerer's presence (save API calls)
+			// In development: Fetch all users' presence (for testing)
+			const isProduction = process.env.RUN_ENV === "production";
 			const presenceInfo = isDMChannel
 				? "Online (Direct Message)" // Simple fallback for DMs
-				: await getUserPresenceDetails(client, userRow.user_disc_id, guildId);
+				: isTriggererId
+					? await getUserPresenceDetails(
+							client,
+							userRow.user_disc_id,
+							guildId,
+							snapshot?.preloadedMember, // Use preloaded member for triggerer (no extra API cost)
+						)
+					: isProduction
+						? "Status unknown" // Production: Skip fetching for non-triggerer users (save API calls)
+						: await getUserPresenceDetails(
+								client,
+								userRow.user_disc_id,
+								guildId,
+							); // Development: Fetch for testing
 			userSpecificContent += `### ${nickname} (User ID: ${userDiscordId})'s current status\n${presenceInfo}\n\n`;
 			combinedUserContextText += userSpecificContent;
 		}
@@ -1018,12 +1073,14 @@ export async function buildContext({
  * @param client - Discord client for presence lookups
  * @param userId - Discord user ID to fetch presence for
  * @param guildId - Discord guild ID where the user is active
+ * @param preloadedMember - Optional preloaded GuildMember to avoid redundant fetches
  * @returns A formatted string describing user's status and activities
  */
 async function getUserPresenceDetails(
 	client: Client,
 	userId: string,
 	guildId: string,
+	preloadedMember?: import("discord.js").GuildMember | null,
 ): Promise<string> {
 	try {
 		log.info(`Fetching presence data for user ${userId} in guild ${guildId}`);
@@ -1035,15 +1092,27 @@ async function getUserPresenceDetails(
 			return "Status unknown";
 		}
 
-		// 2. Attempt to get the member with presence data
-		// Note: This requires GUILD_PRESENCES intent to be enabled
-		log.info(`Fetching member data for ${userId} in guild ${guild.name}`);
-		const member = await guild.members
-			.fetch({ user: userId, force: true })
-			.catch((error) => {
-				log.warn(`Failed to fetch member ${userId}: ${error}`);
-				return null;
-			});
+		// 2. Use preloaded member if provided, otherwise fetch with presence data
+		// Preloaded member is provided for triggerer (no extra cost)
+		// For non-triggerer users, this only runs in development (production skips them entirely)
+		// Note: Fetching requires GUILD_PRESENCES intent to be enabled
+		let member: import("discord.js").GuildMember | null = null;
+		if (preloadedMember && preloadedMember.id === userId) {
+			log.info(
+				`Using preloaded member data for ${userId} in guild ${guild.name}`,
+			);
+			member = preloadedMember;
+		} else {
+			log.info(
+				`Fetching member data for ${userId} in guild ${guild.name} (development mode)`,
+			);
+			member = await guild.members
+				.fetch({ user: userId, force: true })
+				.catch((error) => {
+					log.warn(`Failed to fetch member ${userId}: ${error}`);
+					return null;
+				});
+		}
 
 		if (!member) {
 			log.warn(`Member ${userId} not found in guild ${guild.name}`);

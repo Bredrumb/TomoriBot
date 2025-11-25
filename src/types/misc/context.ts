@@ -63,3 +63,33 @@ export interface ContextOptions {
 	}>;
 	variables: Record<string, string>;
 }
+
+/**
+ * Per-request snapshot of data used throughout context building.
+ * Created once at the start of a request and reused across context builds/rebuilds
+ * to avoid redundant database queries and ensure state consistency.
+ *
+ * @remarks
+ * - Snapshot is per-request only (not shared globally)
+ * - Provides consistency for the entire request lifecycle, including context restarts
+ * - All fields are optional to maintain backward compatibility
+ */
+export interface RequestSnapshot {
+	/** Tomori configuration and state for the server/DM */
+	tomoriState?: import("@/types/db/schema").TomoriState;
+
+	/** User row data for the message triggerer */
+	triggererUserRow?: import("@/types/db/schema").UserRow | null;
+
+	/** Whether the triggerer is blacklisted in this server */
+	isTriggererBlacklisted?: boolean;
+
+	/** Whether the triggerer has opted out of personalization */
+	isTriggererOptedOut?: boolean;
+
+	/**
+	 * Preloaded GuildMember for the triggerer (for presence lookups).
+	 * Null for DM channels where member data doesn't apply.
+	 */
+	preloadedMember?: import("discord.js").GuildMember | null;
+}

@@ -1,12 +1,16 @@
 import type { Client, Message, Sticker, Embed } from "discord.js";
 import { BaseGuildTextChannel, DMChannel, TextChannel } from "discord.js"; // Import value for instanceof check
 // Provider imports moved to factory pattern
-import type { StructuredContextItem } from "../../types/misc/context";
+import type {
+	StructuredContextItem,
+	RequestSnapshot,
+} from "../../types/misc/context";
 import { ContextItemTag } from "../../types/misc/context";
 // Provider-specific types moved to individual providers
 import type { FunctionCall } from "../../types/provider/interfaces";
 import {
 	isBlacklisted,
+	isPrivacyOptedOut,
 	loadServerEmojis,
 	loadTomoriState,
 	loadUserRow,
@@ -767,6 +771,31 @@ export default async function tomoriChat(
 				!userRow?.user_nickname
 					? message.author.username
 					: userRow.user_nickname;
+
+			// Create per-request snapshot to avoid redundant DB queries and ensure consistency
+			// Check if user opted out of personalization
+			const isUserOptedOut = await isPrivacyOptedOut(userDiscId);
+
+			// Preload guild member for presence lookups (only if not DM)
+			let preloadedMember = null;
+			if (!isDMChannel && guild) {
+				preloadedMember = await guild.members
+					.fetch(userDiscId)
+					.catch(() => null);
+			}
+
+			// Create the snapshot
+			const requestSnapshot: RequestSnapshot = {
+				tomoriState: tomoriState ?? undefined,
+				triggererUserRow: userRow ?? null,
+				isTriggererBlacklisted: isUserBlacklisted,
+				isTriggererOptedOut: isUserOptedOut,
+				preloadedMember: preloadedMember,
+			};
+
+			log.info(
+				`[Snapshot] Created per-request snapshot for message ${message.id} in ${isDMChannel ? "DM" : `server ${serverDiscId}`}`,
+			);
 
 			// Function to check for base trigger words - stays contained within the try block
 			function checkForBaseTriggerWords(content: string): boolean {
@@ -1852,6 +1881,7 @@ export default async function tomoriChat(
 					// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked
 					tomoriConfig: tomoriState!.config,
 					isDMChannel, // Pass DM channel flag for proper context building
+					snapshot: requestSnapshot, // Pass per-request snapshot
 				});
 
 				// Inject system context for stop responses
@@ -2620,6 +2650,7 @@ export default async function tomoriChat(
 										tomoriConfig: tomoriState!.config,
 										isDMChannel,
 										mediaContextWindow: newWindow, // Pass the expanded window
+										snapshot: requestSnapshot, // Reuse snapshot for context rebuild
 									});
 
 									log.success(
