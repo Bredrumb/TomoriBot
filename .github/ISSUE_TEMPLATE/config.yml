@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Discord Support Server
+    url: https://discord.gg/bjCfHm9QsB
+    about: Join our Discord server for quick help, discussions, and community support
+  - name: GitHub Discussions
+    url: https://github.com/Bredrumb/TomoriBot/discussions
+    about: Ask questions, share ideas, or discuss TomoriBot with the community

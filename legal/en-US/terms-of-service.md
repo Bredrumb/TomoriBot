@@ -25,6 +25,7 @@ For clarity, these terms are used throughout this document:
 
 ## 4) Third-Party Providers & Models
 - You may connect TomoriBot to external Providers (e.g., Anthropic, Google Gemini, OpenAI/OpenRouter, NovelAI, Brave Search). Their terms, privacy policies, safety filters, and billing apply to any content you send through them.
+- TomoriBot is not affiliated with, endorsed by, or sponsored by Discord or any of these Providers. We are an independent service that integrates with their APIs.
 - We cannot control the behavior, retention, or safety policies of those Providers. Review your chosen Provider's terms before configuring them with TomoriBot.
 - AI-generated content may be inaccurate, biased, or inappropriate despite safety filters. TomoriBot does not verify or endorse AI outputs.
 

@@ -1,64 +1,58 @@
-<!-- PROJECT LOGO -->
+
+
+
+
 <br />
 <div align="center">
+
   <a href="https://github.com/Bredrumb/TomoriBot">
     <img src="img/tomoricon.png" alt="Logo" width="80" height="80">
   </a>
 
-<h3 align="center">TomoriBot (WORK IN PROGRESS)</h3>
+<h3 align="center">TomoriBot</h3>
 
-  <p align="center">
-    A customizable AI assistant (or waifu) for Discord featuring editable memory, personality switching, smart autonomous tool usage, and much more!
+A highly customizable chatbot/waifu for Discord featuring smart agentic AI features such as memory, personas, tool usage, and more!
+
+<p align="center">
+
+English | [日本語](README_ja.md)
+<br />
       <br />
-        <br />
-      <a href="https://github.com/Bredrumb/TomoriBot"><strong>EXPLORE THE WIKI »</strong></a>
-      <br />
-      <br />
-      <a href="https://github.com/Bredrumb/TomoriBot/releases">View Releases</a>
+      <a href="https://github.com/Bredrumb/TomoriBot/releases">Latest Releases</a>
+      &middot;
+      <a href="https://discord.com/oauth2/authorize?client_id=841644102059556915">Invite TomoriBot</a>
+      &middot;
+      <a href="https://discord.gg/bjCfHm9QsB">Discord Server</a>
       &middot;
       <a href="https://github.com/Bredrumb/TomoriBot/issues/new?labels=bug&template=bug-report---.md">Report Bug </a>
       &middot;
       <a href="https://github.com/Bredrumb/TomoriBot/issues/new?labels=enhancement&template=feature-request---.md"> Request Feature</a>
+
+[![GitHub Stars](https://img.shields.io/github/stars/Bredrumb/TomoriBot.svg)](https://github.com/Bredrumb/TomoriBot/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/Bredrumb/TomoriBot.svg)](https://github.com/Bredrumb/TomoriBot/forks)
+[![GitHub Issues](https://img.shields.io/github/issues/Bredrumb/TomoriBot.svg)](https://github.com/Bredrumb/TomoriBot/issues)
+[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/Bredrumb/TomoriBot.svg)](https://github.com/Bredrumb/TomoriBot/pulls)
+
   </p>
+
+
+
+
+<!-- PROJECT LOGO -->
+![TomoriBot Banner](img/tomobanner.png)
+[![Bun][Bun.sh]][Bun-url][![Discord.js][Discord.js]][Discord-url][![TypeScript][TypeScript.js]][TypeScript-url][![PostgreSQL][PostgreSQL.org]][PostgreSQL-url]
+
+  
 </div>
 
-![TomoriBot Banner](img/tomobanner.png)
-
-<!-- TABLE OF CONTENTS -->
-<details>
-  <summary>Table of Contents</summary>
-  <ol>
-    <li>
-      <a href="#about-the-project">About The Project</a>
-      <ul>
-        <li><a href="#built-with">Built With</a></li>
-      </ul>
-    </li>
-    <li>
-      <a href="#getting-started">Getting Started</a>
-      <ul>
-        <li><a href="#prerequisites">Prerequisites</a></li>
-        <li><a href="#installation">Installation</a></li>
-        <li><a href="#configuration">Configuration</a></li>
-      </ul>
-    </li>
-    <li><a href="#usage">Usage</a></li>
-    <li><a href="#roadmap">Roadmap</a></li>
-    <li><a href="#contributing">Contributing</a></li>
-    <li><a href="#legal">Legal</a></li>
-    <li><a href="#license">License</a></li>
-    <li><a href="#contact">Contact</a></li>
-  </ol>
-</details>
 
 <!-- ABOUT THE PROJECT -->
-## About The Project
+## About the Project
 
-TomoriBot is a Discord chatbot built with TypeScript and Bun, featuring AI-powered conversations using various AI Providers such as Google's Gemini. 
+TomoriBot is a free and open-source hobby project inspired by [SillyTavern](https://github.com/SillyTavern/SillyTavern) and Discord's discontinued Clyde. It was created to bring both practical AI assistants and custom AI companions into Discord, all with configurable settings and behaviors.
 
-Tomori provides an interactive and customizable chat experience with memory retention, expressions, multi-language support, and personality switching capabilities.
+## Feature Showcase
 
-### Key Features
 * 🤖 **AI-Powered Chat**: Advanced conversational AI using Large Language Models
 * 🧠 **Memory System**: Persistent user and server memory for contextual conversations
 * 🗿 **Emoji/Sticker Expressions**: Uses function calls to send your favorite Server Stickers and Emojis
@@ -70,15 +64,8 @@ Tomori provides an interactive and customizable chat experience with memory rete
 * 📊 **PostgreSQL Database**: Robust data persistence and user management
 * 🔧 **Slash Commands**: Modern Discord interaction system with comprehensive command structure
 
-### Built With
-
-* [![TypeScript][TypeScript.js]][TypeScript-url]
-* [![Bun][Bun.sh]][Bun-url]
-* [![Discord.js][Discord.js]][Discord-url]
-* [![PostgreSQL][PostgreSQL.org]][PostgreSQL-url]
-
 <!-- GETTING STARTED -->
-## Getting Started
+## Self-Hosting
 
 This guide will help you set up TomoriBot locally for development or personal use.
 
@@ -216,15 +203,18 @@ Or slide into TomoriBot's DMs and say hi!
 ## Roadmap
 
 - [x] Core AI chat functionality
-- [x] Multi-language support
 - [x] Memory system implementation
 - [x] Slash command structure
+- [x] Multi-language Support (Locale system)
+- [x] Multiple Provider Support
+- [ ] TomoriBot Wiki (for local set-up and locale contributions)
+- [ ] Replace AI-generated placeholder assets
+- [ ] Image/Video generation capabilities
+- [ ] KoboldCPP integration (local only)
 - [ ] Voice channel integration
-- [ ] Image generation capabilities
 - [ ] Web dashboard for configuration
 
 See the [open issues](https://github.com/Bredrumb/TomoriBot/issues) for a full list of proposed features and known issues.
-
 
 <!-- CONTRIBUTING -->
 ## Contributing
@@ -243,7 +233,7 @@ For users of the official hosted TomoriBot instance:
 
 These documents are also accessible within Discord using `/legal terms` and `/legal privacy` commands.
 
-**Note:** If you're self-hosting TomoriBot, these documents serve as reference templates. You control your own data pipeline and are responsible for your deployment's compliance.
+**Note:** If you're self-hosting TomoriBot, these documents serve as reference templates. Instead, you control your own data pipeline and are responsible for your deployment's compliance under the GNU Affero General Public License v3.0.
 
 <!-- LICENSE -->
 ## License
@@ -260,7 +250,7 @@ Email: bredrumb@gmail.com
 <!-- MARKDOWN LINKS & IMAGES -->
 [TypeScript.js]: https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white
 [TypeScript-url]: https://www.typescriptlang.org/
-[Bun.sh]: https://img.shields.io/badge/Bun-000000?style=for-the-badge&logo=bun&logoColor=white
+[Bun.sh]: https://img.shields.io/badge/Bun-f472b6?style=for-the-badge&logo=bun&logoColor=white
 [Bun-url]: https://bun.sh/
 [Discord.js]: https://img.shields.io/badge/Discord.js-5865F2?style=for-the-badge&logo=discord&logoColor=white
 [Discord-url]: https://discord.js.org/

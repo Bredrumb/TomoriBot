@@ -73,7 +73,7 @@ const COOLDOWN_MAP = new Map<string, number>([
 	["teach", 3000],
 	["data", 3000],
 	["forget", 3000],
-	["persona", 3000],
+	["persona", 30000],
 	["server", 3000],
 	["personal", 3000],
 ]);
