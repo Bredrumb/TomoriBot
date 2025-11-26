@@ -297,15 +297,12 @@ jobs:
         with:
           fetch-depth: 0 # Fetch full history for TruffleHog
 
-      - name: Fetch main branch for comparison
-        run: git fetch origin main
-
       - name: Run TruffleHog secret scan
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
+          base: ${{ github.event.before }}
+          head: ${{ github.event.after }}
           extra_args: --only-verified
         continue-on-error: true
         id: trufflehog
