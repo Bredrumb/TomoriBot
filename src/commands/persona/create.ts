@@ -17,7 +17,12 @@ import {
 	promptWithRawModal,
 } from "../../utils/discord/interactionHelper";
 import type { UserRow } from "../../types/db/schema";
-import { memoryGuard, PERSONA_LIMITS } from "../../utils/security/rateLimiter";
+import {
+	memoryGuard,
+	PERSONA_LIMITS,
+	checkPersonaQuota,
+	incrementPersonaQuota,
+} from "../../utils/security/rateLimiter";
 import { safeDownload } from "../../utils/security/safeDownload";
 import { getServerAvatar } from "../../utils/image/avatarHelper";
 import { centerCropToSquare } from "../../utils/image/imageProcessor";
@@ -160,7 +165,33 @@ export async function execute(
 			return;
 		}
 
-		// 5. Get optional image attachment from modal
+		// 5. Check persona operation quota (volume-based DDoS protection)
+		const quotaCheck = checkPersonaQuota(interaction.user.id);
+		if (!quotaCheck.allowed) {
+			const resetTime = quotaCheck.resetAt
+				? new Date(quotaCheck.resetAt).toLocaleString(locale)
+				: "unknown";
+
+			await modalSubmitInteraction.editReply({
+				embeds: [
+					new EmbedBuilder()
+						.setTitle(
+							localizer(locale, "rate_limit.error_quota_exceeded_title"),
+						)
+						.setDescription(
+							localizer(locale, "rate_limit.error_quota_exceeded_description", {
+								current: String(quotaCheck.current || 0),
+								max: String(quotaCheck.max || 0),
+								reset_time: resetTime,
+							}),
+						)
+						.setColor(ColorCode.ERROR),
+				],
+			});
+			return;
+		}
+
+		// 6. Get optional image attachment from modal
 		const imageAttachment = modalResult.attachments?.[FILE_UPLOAD_ID];
 		let imageBuffer: Buffer | undefined;
 
@@ -168,23 +199,52 @@ export async function execute(
 			// Early memory guard check
 			const memCheck = memoryGuard.checkMemory();
 			if (memCheck.status === "critical") {
+				// Preserve modal inputs for user convenience
+				const embed = new EmbedBuilder()
+					.setTitle(localizer(locale, "rate_limit.error_memory_critical_title"))
+					.setDescription(
+						localizer(locale, "rate_limit.error_memory_critical_description"),
+					)
+					.setColor(ColorCode.ERROR);
+
+				// Add modal inputs as fields (excluding image)
+				embed.addFields(
+					{
+						name: localizer(
+							locale,
+							"commands.persona.create.field_character_name",
+						),
+						value: characterName.substring(0, 1024) || "N/A",
+						inline: false,
+					},
+					{
+						name: localizer(
+							locale,
+							"commands.persona.create.field_character_desc",
+						),
+						value: characterDesc.substring(0, 1024) || "N/A",
+						inline: false,
+					},
+					{
+						name: localizer(
+							locale,
+							"commands.persona.create.field_example_user",
+						),
+						value: exampleUser.substring(0, 1024) || "N/A",
+						inline: false,
+					},
+					{
+						name: localizer(
+							locale,
+							"commands.persona.create.field_example_bot",
+						),
+						value: exampleBot.substring(0, 1024) || "N/A",
+						inline: false,
+					},
+				);
+
 				await modalSubmitInteraction.editReply({
-					embeds: [
-						new EmbedBuilder()
-							.setTitle(
-								localizer(
-									locale,
-									"commands.persona.create.error_memory_critical_title",
-								),
-							)
-							.setDescription(
-								localizer(
-									locale,
-									"commands.persona.create.error_memory_critical_description",
-								),
-							)
-							.setColor(ColorCode.ERROR),
-					],
+					embeds: [embed],
 				});
 				return;
 			}
@@ -464,6 +524,9 @@ export async function execute(
 			embeds: [successEmbed],
 			files: [attachment],
 		});
+
+		// 14. Increment persona quota after successful operation
+		incrementPersonaQuota(interaction.user.id);
 
 		log.success(`Preset created successfully for: ${characterName}`);
 	} catch (error) {

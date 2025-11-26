@@ -76,12 +76,17 @@ export async function execute(
 	let modalSubmitInteraction: ModalSubmitInteraction | null = null;
 
 	try {
-		// 2. Check blacklisting only for guild contexts
+		// 2. Check if user has Manage Server permission - used for blacklist and teaching restriction bypass
+		const hasManagePermission =
+			interaction.memberPermissions?.has("ManageGuild") ?? false;
+
+		// 3. Check blacklisting only for guild contexts
+		// Users with Manage Server permission can bypass blacklist (they can unblacklist themselves anyway)
 		if (interaction.guild) {
 			const blacklisted =
 				(await isBlacklisted(interaction.guild.id, interaction.user.id)) ??
 				false;
-			if (blacklisted) {
+			if (blacklisted && !hasManagePermission) {
 				await replyInfoEmbed(interaction, locale, {
 					titleKey: "general.errors.user_blacklisted_title",
 					descriptionKey: "general.errors.user_blacklisted_description",
@@ -92,12 +97,12 @@ export async function execute(
 			}
 		}
 
-		// 3. Load server's Tomori state (Rule 17) - Still needed for server_id and config checks
+		// 4. Load server's Tomori state (Rule 17) - Still needed for server_id and config checks
 		tomoriState = await loadTomoriState(
 			interaction.guild?.id ?? interaction.user.id,
 		);
 
-		// 3. Check if Tomori is set up
+		// 5. Check if Tomori is set up
 		if (!tomoriState) {
 			await replyInfoEmbed(interaction, locale, {
 				titleKey: "general.errors.tomori_not_setup_title",
@@ -108,11 +113,7 @@ export async function execute(
 			return;
 		}
 
-		// 4. Check if user has Manage Server permission - admins can bypass teaching restriction
-		const hasManagePermission =
-			interaction.memberPermissions?.has("ManageGuild") ?? false;
-
-		// 5. Check if server memory teaching is enabled
+		// 6. Check if server memory teaching is enabled
 		// NOTE: Check the correct config key name from tomori_configs table
 		if (
 			!tomoriState.config.server_memteaching_enabled && // Assuming this is the correct key
@@ -128,7 +129,7 @@ export async function execute(
 			return;
 		}
 
-		// 6. Check server memory limit before showing modal (better UX)
+		// 7. Check server memory limit before showing modal (better UX)
 		const serverLimitCheck = await checkServerMemoryLimit(
 			tomoriState.server_id,
 		);
@@ -149,7 +150,7 @@ export async function execute(
 			return;
 		}
 
-		// 7. Prompt user with a modal with Component Type 18 support (Rule 10, 12, 19, 25)
+		// 8. Prompt user with a modal with Component Type 18 support (Rule 10, 12, 19, 25)
 		modalResult = await promptWithRawModal(interaction, locale, {
 			modalCustomId: MODAL_CUSTOM_ID,
 			modalTitleKey: "commands.teach.memory.server.modal_title",
@@ -166,7 +167,7 @@ export async function execute(
 			],
 		});
 
-		// 8. Handle modal outcome
+		// 9. Handle modal outcome
 		if (modalResult.outcome !== "submit") {
 			log.info(
 				`Server memory add modal ${modalResult.outcome} for user ${userData.user_id}`,
@@ -174,15 +175,15 @@ export async function execute(
 			return;
 		}
 
-		// 9. Capture the modal submission interaction - let helper functions manage interaction state
+		// 10. Capture the modal submission interaction - let helper functions manage interaction state
 		// biome-ignore lint/style/noNonNullAssertion: Outcome 'submit' guarantees interaction
 		modalSubmitInteraction = modalResult.interaction!;
 
-		// 10. Get input from modal
+		// 11. Get input from modal
 		// biome-ignore lint/style/noNonNullAssertion: Outcome 'submit' + required=true guarantees value
 		const newMemory = modalResult.values![MEMORY_INPUT_ID];
 
-		// 11. Validate memory content length
+		// 12. Validate memory content length
 		const contentValidation = validateMemoryContent(newMemory);
 		if (!contentValidation.isValid) {
 			await replyInfoEmbed(modalSubmitInteraction, locale, {

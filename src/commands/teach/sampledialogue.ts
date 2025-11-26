@@ -17,7 +17,7 @@ import {
 	replyInfoEmbed,
 	promptWithRawModal,
 } from "../../utils/discord/interactionHelper";
-import { loadTomoriState } from "../../utils/db/dbRead";
+import { loadTomoriState, isBlacklisted } from "../../utils/db/dbRead";
 import {
 	checkSampleDialogueLimit,
 	getMemoryLimits,
@@ -67,12 +67,33 @@ export async function execute(
 	}
 
 	try {
-		// 2. Load server's Tomori state (Rule 17)
+		// 2. Check if user has Manage Server permission - used for blacklist and teaching restriction bypass
+		const hasManagePermission =
+			interaction.memberPermissions?.has("ManageGuild") ?? false;
+
+		// 3. Check blacklisting only for guild contexts
+		// Users with Manage Server permission can bypass blacklist (they can unblacklist themselves anyway)
+		if (interaction.guild) {
+			const blacklisted =
+				(await isBlacklisted(interaction.guild.id, interaction.user.id)) ??
+				false;
+			if (blacklisted && !hasManagePermission) {
+				await replyInfoEmbed(interaction, locale, {
+					titleKey: "general.errors.user_blacklisted_title",
+					descriptionKey: "general.errors.user_blacklisted_description",
+					color: ColorCode.ERROR,
+					flags: MessageFlags.Ephemeral,
+				});
+				return;
+			}
+		}
+
+		// 4. Load server's Tomori state (Rule 17)
 		const tomoriState: TomoriState | null = await loadTomoriState(
 			interaction.guild?.id ?? interaction.user.id,
 		);
 
-		// 3. Check if Tomori is set up and if sample dialogue teaching is enabled
+		// 5. Check if Tomori is set up and if sample dialogue teaching is enabled
 		if (!tomoriState) {
 			await replyInfoEmbed(interaction, locale, {
 				titleKey: "general.errors.tomori_not_setup_title",
@@ -82,9 +103,8 @@ export async function execute(
 			});
 			return;
 		}
-		// Check if user has Manage Server permission - admins can bypass teaching restriction
-		const hasManagePermission =
-			interaction.memberPermissions?.has("ManageGuild") ?? false;
+
+		// 6. Check if sample dialogue teaching is enabled and if user has bypass permissions
 		// Access config directly from tomoriState
 		if (
 			!tomoriState.config.sampledialogue_memteaching_enabled &&
@@ -100,7 +120,7 @@ export async function execute(
 			return;
 		}
 
-		// 4. Check sample dialogue limit before showing modal (better UX)
+		// 7. Check sample dialogue limit before showing modal (better UX)
 		if (!tomoriState.tomori_id) {
 			log.error("TomoriState missing tomori_id - this should never happen");
 			return;
@@ -123,7 +143,7 @@ export async function execute(
 			return;
 		}
 
-		// 5. Prompt user with a modal with Component Type 18 support (Rule 10, 12, 19)
+		// 8. Prompt user with a modal with Component Type 18 support (Rule 10, 12, 19)
 		// NOTE: Ensure locale keys resolve to strings <= 45 chars for labels!
 		const modalResult = await promptWithRawModal(interaction, locale, {
 			modalCustomId: MODAL_CUSTOM_ID,
@@ -153,7 +173,7 @@ export async function execute(
 			],
 		});
 
-		// 5. Handle modal outcome
+		// 9. Handle modal outcome
 		if (modalResult.outcome !== "submit") {
 			log.info(
 				`Sample dialogue add modal ${modalResult.outcome} for user ${userData.user_id}`,
@@ -164,13 +184,13 @@ export async function execute(
 		// biome-ignore lint/style/noNonNullAssertion: Modal submit guarantees interaction exists
 		const modalSubmitInteraction = modalResult.interaction!;
 
-		// 6. Get inputs from modal - let helper functions manage interaction state
+		// 10. Get inputs from modal - let helper functions manage interaction state
 		// biome-ignore lint/style/noNonNullAssertion: Modal submit + required=true guarantees values exist
 		const userInput = modalResult.values![USER_INPUT_ID];
 		// biome-ignore lint/style/noNonNullAssertion: Modal submit + required=true guarantees values exist
 		const botInput = modalResult.values![BOT_INPUT_ID];
 
-		// 8. Update Tomori row in the database using Bun SQL (Rule 4, 15, 23)
+		// 11. Update Tomori row in the database using Bun SQL (Rule 4, 15, 23)
 		// Use array_append for atomic array operations
 		const [updatedTomoriResult] = await sql`
 			UPDATE tomoris
@@ -181,7 +201,7 @@ export async function execute(
 			RETURNING *
 		`;
 
-		// 9. Validate the result from the database (Rule 3, 5, 6)
+		// 12. Validate the result from the database (Rule 3, 5, 6)
 		// Note: tomoriSchema validates a TomoriRow, not the full TomoriState
 		const validationResult = tomoriSchema.safeParse(updatedTomoriResult);
 
@@ -213,7 +233,7 @@ export async function execute(
 			return;
 		}
 
-		// 10. Success! Confirm addition (Rule 12, 19)
+		// 13. Success! Confirm addition (Rule 12, 19)
 		await replyInfoEmbed(modalSubmitInteraction, locale, {
 			titleKey: "commands.teach.sampledialogue.success_title",
 			descriptionKey: "commands.teach.sampledialogue.success_description",

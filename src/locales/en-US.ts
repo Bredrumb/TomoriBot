@@ -96,6 +96,12 @@ export default {
 		// Server-level rate limiting (public channel notification)
 		server_exceeded_title: `🟡️ Server Overloaded`,
 		server_exceeded_description: `This server currently has too much active messages being processed. I'm at capacity right now! Please try again in a moment, or use me in another server or via Direct Messages instead.`,
+
+		error_memory_critical_title: `🔴 System Overloaded`,
+		error_memory_critical_description: `I'm currently experiencing high memory usage, preventing file uploads. Please try again in a moment.`,
+
+		error_quota_exceeded_title: `🔴 Daily Limit Reached`,
+		error_quota_exceeded_description: `You've reached the daily limit for import operations. Your quota resets at **{reset_time}**.\n\nPlease try again after the reset time.`,
 	},
 
 	genai: {
@@ -453,8 +459,6 @@ export default {
 				no_permission_description: `You need the **Manage Server** permission to import server data.`,
 				error_download_timeout: `File download timed out. Please try again.`,
 				error_download_failed: `Failed to download import file.`,
-				error_memory_critical_title: `🔴 System Overloaded`,
-				error_memory_critical_description: `I'm currently experiencing high memory usage, preventing file uploads. Please try again in a moment.`,
 				// Error messages from dataImport utility
 				error_invalid_memory: `Invalid memory content: {details}`,
 				error_update_failed: `Failed to update user data in database`,
@@ -539,8 +543,6 @@ export default {
 				no_permission_description: `You need the **Manage Server** permission to import personas.`,
 				error_download_timeout: `File download timed out. Please try again.`,
 				error_download_failed: `Failed to download preset file.`,
-				error_memory_critical_title: `🔴 System Overloaded`,
-				error_memory_critical_description: `I'm currently experiencing high memory usage, preventing file uploads. Please try again in a moment.`,
 				// Error messages from presetImport utility
 				error_invalid_attribute: `Invalid attribute content: {details}`,
 				error_invalid_dialogue_in: `Invalid sample dialogue (input): {details}`,
@@ -590,6 +592,11 @@ export default {
 					file_upload_label: `Character Image (Optional)`,
 					file_upload_description: `Upload an image for export and to help with generating the character`,
 				},
+				// Field labels for memory critical error preservation
+				field_character_name: `Character Name`,
+				field_character_info: `Character Info & Speech Examples`,
+				field_web_search: `Search the Web?`,
+				field_additional_inst: `Additional Instructions`,
 				// Error messages
 				wrong_provider_title: `🔴 Incompatible Provider`,
 				wrong_provider_description: `Preset generation requires Google Gemini. Your current provider is **{current_provider}**. Please use \`/config apikey set\` to switch to Google.`,
@@ -601,11 +608,10 @@ export default {
 				invalid_image_description: `Please upload a valid image file (PNG, JPG, JPEG, etc.).`,
 				image_download_failed_title: `🔴 Image Download Failed`,
 				image_download_failed_description: `Failed to download the attached image. Please try again.`,
-				error_memory_critical_title: `🔴 System Overloaded`,
-				error_memory_critical_description: `I'm currently experiencing high memory usage, preventing file uploads. Please try again in a moment.`,
 				error_file_too_large: `Avatar image must be under 10 MB.`,
 				error_download_timeout: `Avatar download timed out. Please try again.`,
 				error_download_failed: `Failed to download avatar image.`,
+
 				// Processing
 				processing_title: `Generating Personality...`,
 				processing_description: `This may take 1-2 minutes. Please wait while I generate the character...\n\nThis may produce unexpected results. You can regenerate if needed.`,
@@ -645,16 +651,20 @@ export default {
 					file_upload_label: `Character Image (Optional)`,
 					file_upload_description: `Upload an image for the character export`,
 				},
+				// Field labels for memory critical error preservation
+				field_character_name: `Character Name`,
+				field_character_desc: `Character Description`,
+				field_example_user: `Example User Message`,
+				field_example_bot: `Example Bot Reply`,
 				// Error messages
 				invalid_image_title: `🔴 Invalid Image`,
 				invalid_image_description: `Please upload a valid image file (PNG, JPG, JPEG, etc.).`,
 				image_download_failed_title: `🔴 Image Download Failed`,
 				image_download_failed_description: `Failed to download the attached image. Please try again.`,
-				error_memory_critical_title: `🔴 System Overloaded`,
-				error_memory_critical_description: `I'm currently experiencing high memory usage, preventing file uploads. Please try again in a moment.`,
 				error_file_too_large: `Avatar image must be under 10 MB.`,
 				error_download_timeout: `Avatar download timed out. Please try again.`,
 				error_download_failed: `Failed to download avatar image.`,
+
 				validation_failed_title: `🔴 Validation Failed`,
 				validation_failed_description: `The preset data failed validation. Please try again.`,
 				image_processing_failed_title: `🔴 Image Processing Failed`,
@@ -1428,6 +1438,9 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				conversion_error_description: `Failed to process the image. Please try a different image file.`,
 				api_error_title: `API Error`,
 				api_error_description: `Failed to update the avatar through Discord's API. Please try again later.`,
+
+				error_download_timeout: `Avatar download timed out after 15 seconds. Please try again.`,
+				error_api_timeout: `Discord API call timed out after 15 seconds. Please try again.`,
 			},
 		},
 

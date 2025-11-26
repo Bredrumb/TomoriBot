@@ -4,11 +4,17 @@ import type {
 	SlashCommandSubcommandBuilder,
 	Attachment,
 } from "discord.js";
-import { MessageFlags } from "discord.js";
+import { MessageFlags, EmbedBuilder } from "discord.js";
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
 import type { UserRow, ErrorContext } from "../../types/db/schema";
+import { safeDownload } from "../../utils/security/safeDownload";
+import {
+	memoryGuard,
+	checkAvatarQuota,
+	incrementAvatarQuota,
+} from "../../utils/security/rateLimiter";
 
 /**
  * Configure the avatar subcommand
@@ -74,55 +80,71 @@ function validateImage(attachment: Attachment): {
 }
 
 /**
- * Converts an image attachment to a base64 data URI
+ * Converts an image attachment to a base64 data URI with timeout protection
  * @param attachment - Discord attachment to convert
- * @returns Promise resolving to data URI string
+ * @returns Promise resolving to SafeDownloadResult-like object with dataUri or error
  */
-async function attachmentToBase64DataUri(
-	attachment: Attachment,
-): Promise<string> {
-	try {
-		// 1. Fetch the image data
-		const response = await fetch(attachment.url);
-		if (!response.ok) {
-			throw new Error(`Failed to fetch image: ${response.statusText}`);
-		}
+async function attachmentToBase64DataUri(attachment: Attachment): Promise<{
+	success: boolean;
+	dataUri?: string;
+	error?: "size_exceeded" | "timeout" | "network_error" | "invalid_response";
+	details?: string;
+}> {
+	// 1. Use safeDownload with 15s timeout and 8MB size limit
+	const downloadResult = await safeDownload(attachment.url, {
+		maxSizeMB: 8,
+		timeoutMs: 15000, // 15 seconds
+		knownSize: attachment.size,
+	});
 
-		// 2. Get the image buffer
-		const arrayBuffer = await response.arrayBuffer();
-		const buffer = Buffer.from(arrayBuffer);
-
-		// 3. Convert to base64
-		const base64 = buffer.toString("base64");
-
-		// 4. Create data URI with proper MIME type
-		const mimeType = attachment.contentType || "image/png";
-		return `data:${mimeType};base64,${base64}`;
-	} catch (error) {
-		throw new Error(`Failed to convert image to base64: ${error}`);
+	// 2. If download failed, return error
+	if (!downloadResult.success) {
+		return {
+			success: false,
+			error: downloadResult.error,
+			details: downloadResult.details,
+		};
 	}
+
+	// 3. Convert buffer to base64 data URI
+	const base64 = downloadResult.buffer?.toString("base64");
+	const mimeType = attachment.contentType || "image/png";
+	const dataUri = `data:${mimeType};base64,${base64}`;
+
+	return {
+		success: true,
+		dataUri,
+	};
 }
 
 /**
- * Updates the bot's guild avatar using Discord's raw API
+ * Updates the bot's guild avatar using Discord's raw API with timeout protection
  * @param guildId - Guild ID where to update the avatar
  * @param avatarDataUri - Base64 data URI of the avatar image, or null to remove
- * @returns Promise resolving to success boolean
+ * @returns Promise resolving to object with success status and optional error type
  */
 async function updateGuildAvatar(
 	guildId: string,
 	avatarDataUri: string | null,
-): Promise<boolean> {
+): Promise<{
+	success: boolean;
+	error?: "timeout" | "api_error";
+	details?: string;
+}> {
+	// 1. Setup timeout controller (15s)
+	const controller = new AbortController();
+	const timeoutId = setTimeout(() => controller.abort(), 15000);
+
 	try {
-		// 1. Prepare the API endpoint
+		// 2. Prepare the API endpoint
 		const endpoint = `https://discord.com/api/v10/guilds/${guildId}/members/@me`;
 
-		// 2. Prepare the payload
+		// 3. Prepare the payload
 		const payload = {
 			avatar: avatarDataUri,
 		};
 
-		// 3. Make the API call
+		// 4. Make the API call with timeout
 		const response = await fetch(endpoint, {
 			method: "PATCH",
 			headers: {
@@ -130,20 +152,46 @@ async function updateGuildAvatar(
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify(payload),
+			signal: controller.signal,
 		});
+
+		clearTimeout(timeoutId);
 
 		if (!response.ok) {
 			const errorText = await response.text();
 			log.error(
 				`Failed to update guild avatar: ${response.status} ${response.statusText} - ${errorText}`,
 			);
-			return false;
+			return {
+				success: false,
+				error: "api_error",
+				details: `${response.status} ${response.statusText}`,
+			};
 		}
 
-		return true;
+		return { success: true };
 	} catch (error) {
+		clearTimeout(timeoutId);
+
+		// Handle abort (timeout)
+		if (error instanceof Error && error.name === "AbortError") {
+			log.warn("Discord API call timed out after 15s", {
+				metadata: { guildId },
+			});
+			return {
+				success: false,
+				error: "timeout",
+				details: "Discord API call timed out after 15s",
+			};
+		}
+
+		// Handle other errors
 		log.error("Error updating guild avatar via Discord API", error);
-		return false;
+		return {
+			success: false,
+			error: "api_error",
+			details: error instanceof Error ? error.message : String(error),
+		};
 	}
 }
 
@@ -174,18 +222,71 @@ export async function execute(
 	await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
 	try {
-		// 3. Get the attachment option
+		// 3. Memory guard check (defense-in-depth)
+		const memCheck = memoryGuard.checkMemory();
+		if (memCheck.status === "critical") {
+			await interaction.editReply({
+				embeds: [
+					new EmbedBuilder()
+						.setTitle(
+							localizer(locale, "rate_limit.error_memory_critical_title"),
+						)
+						.setDescription(
+							localizer(locale, "rate_limit.error_memory_critical_description"),
+						)
+						.setColor(ColorCode.ERROR),
+				],
+			});
+			return;
+		}
+
+		// 4. Check quota (per-server, volume-based DDoS protection)
+		const quotaCheck = checkAvatarQuota(interaction.guild.id);
+		if (!quotaCheck.allowed) {
+			const resetTime = quotaCheck.resetAt
+				? new Date(quotaCheck.resetAt).toLocaleString(locale)
+				: "unknown";
+
+			await interaction.editReply({
+				embeds: [
+					new EmbedBuilder()
+						.setTitle(
+							localizer(locale, "rate_limit.error_quota_exceeded_title"),
+						)
+						.setDescription(
+							localizer(locale, "rate_limit.error_quota_exceeded_description", {
+								current: String(quotaCheck.current || 0),
+								max: String(quotaCheck.max || 0),
+								reset_time: resetTime,
+							}),
+						)
+						.setColor(ColorCode.ERROR),
+				],
+			});
+			return;
+		}
+
+		// 5. Get the attachment option
 		const imageAttachment = interaction.options.getAttachment("image");
 
-		// 4. Handle avatar removal (no attachment provided)
+		// 6. Handle avatar removal (no attachment provided)
 		if (!imageAttachment) {
-			const success = await updateGuildAvatar(interaction.guild.id, null);
+			const result = await updateGuildAvatar(interaction.guild.id, null);
 
-			if (success) {
+			if (result.success) {
+				// Increment quota after successful removal
+				incrementAvatarQuota(interaction.guild.id);
+
 				await replyInfoEmbed(interaction, locale, {
 					titleKey: "commands.server.avatar.removed_title",
 					descriptionKey: "commands.server.avatar.removed_description",
 					color: ColorCode.SUCCESS,
+				});
+			} else if (result.error === "timeout") {
+				await replyInfoEmbed(interaction, locale, {
+					titleKey: "commands.server.avatar.error_api_timeout",
+					descriptionKey: "commands.server.avatar.error_api_timeout",
+					color: ColorCode.ERROR,
 				});
 			} else {
 				await replyInfoEmbed(interaction, locale, {
@@ -219,41 +320,49 @@ export async function execute(
 			return;
 		}
 
-		// 6. Convert image to base64 data URI
-		let avatarDataUri: string;
-		try {
-			avatarDataUri = await attachmentToBase64DataUri(imageAttachment);
-		} catch (error) {
-			const context: ErrorContext = {
-				errorType: "CommandExecutionError",
-				metadata: {
-					command: "config avatar",
-					guildId: interaction.guild.id,
-					attachmentSize: imageAttachment.size,
-					attachmentType: imageAttachment.contentType,
-				},
-			};
-			await log.error("Failed to convert image to base64", error, context);
+		// 7. Convert image to base64 data URI with timeout protection
+		const downloadResult = await attachmentToBase64DataUri(imageAttachment);
+		if (!downloadResult.success) {
+			let errorKey: string;
+			if (downloadResult.error === "size_exceeded") {
+				errorKey = "commands.server.avatar.file_too_large_description";
+			} else if (downloadResult.error === "timeout") {
+				errorKey = "commands.server.avatar.error_download_timeout";
+			} else {
+				errorKey = "commands.server.avatar.conversion_error_description";
+			}
 
 			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.server.avatar.conversion_error_title",
-				descriptionKey: "commands.server.avatar.conversion_error_description",
+				titleKey: "commands.server.avatar.invalid_image_title",
+				descriptionKey: errorKey,
 				color: ColorCode.ERROR,
 			});
 			return;
 		}
 
-		// 7. Update the guild avatar via Discord API
-		const success = await updateGuildAvatar(
+		// biome-ignore lint/style/noNonNullAssertion: Download result is checked in success condition
+		const avatarDataUri = downloadResult.dataUri!;
+
+		// 8. Update the guild avatar via Discord API with timeout protection
+		const updateResult = await updateGuildAvatar(
 			interaction.guild.id,
 			avatarDataUri,
 		);
 
-		if (success) {
+		if (updateResult.success) {
+			// Increment quota after successful avatar update
+			incrementAvatarQuota(interaction.guild.id);
+
 			await replyInfoEmbed(interaction, locale, {
 				titleKey: "commands.server.avatar.success_title",
 				descriptionKey: "commands.server.avatar.success_description",
 				color: ColorCode.SUCCESS,
+			});
+		} else if (updateResult.error === "timeout") {
+			await replyInfoEmbed(interaction, locale, {
+				titleKey: "commands.server.avatar.error_api_timeout",
+				descriptionKey: "commands.server.avatar.error_api_timeout",
+				color: ColorCode.ERROR,
 			});
 		} else {
 			await replyInfoEmbed(interaction, locale, {

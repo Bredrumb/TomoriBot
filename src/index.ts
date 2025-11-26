@@ -426,5 +426,19 @@ try {
 	// Non-critical error - memory monitoring won't work but bot can still function
 }
 
+// Initialize quota cleanup system
+log.section("Initializing Upload Quota System...");
+try {
+	const { initializeQuotaCleanup } = await import(
+		"./utils/security/rateLimiter"
+	);
+
+	initializeQuotaCleanup();
+	log.success("Upload quota tracking system initialized");
+} catch (error) {
+	log.error("Failed to initialize quota cleanup system", error as Error);
+	// Non-critical error - quota tracking won't work but bot can still function
+}
+
 // Login Bot using Discord Token
 client.login(process.env.DISCORD_TOKEN);

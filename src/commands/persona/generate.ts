@@ -19,7 +19,12 @@ import {
 import type { UserRow } from "../../types/db/schema";
 import { loadTomoriState } from "../../utils/db/dbRead";
 import { decryptApiKey } from "../../utils/security/crypto";
-import { memoryGuard, PERSONA_LIMITS } from "../../utils/security/rateLimiter";
+import {
+	memoryGuard,
+	PERSONA_LIMITS,
+	checkPersonaQuota,
+	incrementPersonaQuota,
+} from "../../utils/security/rateLimiter";
 import { safeDownload } from "../../utils/security/safeDownload";
 import {
 	searchCharacterInfo,
@@ -268,13 +273,39 @@ export async function execute(
 			return;
 		}
 
+		// 8. Check persona operation quota (volume-based DDoS protection)
+		const quotaCheck = checkPersonaQuota(interaction.user.id);
+		if (!quotaCheck.allowed) {
+			const resetTime = quotaCheck.resetAt
+				? new Date(quotaCheck.resetAt).toLocaleString(locale)
+				: "unknown";
+
+			await modalSubmitInteraction.editReply({
+				embeds: [
+					new EmbedBuilder()
+						.setTitle(
+							localizer(locale, "rate_limit.error_quota_exceeded_title"),
+						)
+						.setDescription(
+							localizer(locale, "rate_limit.error_quota_exceeded_description", {
+								current: String(quotaCheck.current || 0),
+								max: String(quotaCheck.max || 0),
+								reset_time: resetTime,
+							}),
+						)
+						.setColor(ColorCode.ERROR),
+				],
+			});
+			return;
+		}
+
 		// Split combined character info into description and speech examples
 		// Users are expected to use natural formatting (newlines or clear sections)
 		// We'll pass the full info as description and let the AI parse it intelligently
 		const characterDesc = characterInfo;
 		const speechExamples = characterInfo; // AI will extract speech patterns from context
 
-		// 6. Get optional image attachment from modal
+		// 9. Get optional image attachment from modal
 		const imageAttachment = modalResult.attachments?.[FILE_UPLOAD_ID];
 		let imageBase64: string | undefined;
 		let imageMimeType: string | undefined;
@@ -284,23 +315,52 @@ export async function execute(
 			// Early memory guard check
 			const memCheck = memoryGuard.checkMemory();
 			if (memCheck.status === "critical") {
+				// Preserve modal inputs for user convenience
+				const embed = new EmbedBuilder()
+					.setTitle(localizer(locale, "rate_limit.error_memory_critical_title"))
+					.setDescription(
+						localizer(locale, "rate_limit.error_memory_critical_description"),
+					)
+					.setColor(ColorCode.ERROR);
+
+				// Add modal inputs as fields (excluding image)
+				embed.addFields(
+					{
+						name: localizer(
+							locale,
+							"commands.persona.generate.field_character_name",
+						),
+						value: characterName.substring(0, 1024) || "N/A",
+						inline: false,
+					},
+					{
+						name: localizer(
+							locale,
+							"commands.persona.generate.field_character_info",
+						),
+						value: characterInfo.substring(0, 1024) || "N/A",
+						inline: false,
+					},
+					{
+						name: localizer(
+							locale,
+							"commands.persona.generate.field_web_search",
+						),
+						value: webSearch.substring(0, 1024) || "N/A",
+						inline: false,
+					},
+					{
+						name: localizer(
+							locale,
+							"commands.persona.generate.field_additional_inst",
+						),
+						value: additionalInst?.substring(0, 1024) || "N/A",
+						inline: false,
+					},
+				);
+
 				await modalSubmitInteraction.editReply({
-					embeds: [
-						new EmbedBuilder()
-							.setTitle(
-								localizer(
-									locale,
-									"commands.persona.generate.error_memory_critical_title",
-								),
-							)
-							.setDescription(
-								localizer(
-									locale,
-									"commands.persona.generate.error_memory_critical_description",
-								),
-							)
-							.setColor(ColorCode.ERROR),
-					],
+					embeds: [embed],
 				});
 				return;
 			}
@@ -671,6 +731,9 @@ export async function execute(
 			embeds: [successEmbed],
 			files: [attachment],
 		});
+
+		// 20. Increment persona quota after successful operation
+		incrementPersonaQuota(interaction.user.id);
 
 		log.success(`Preset generated successfully for: ${characterName}`);
 	} catch (error) {

@@ -13,7 +13,12 @@ import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
 import type { UserRow } from "../../types/db/schema";
-import { memoryGuard, IMPORT_LIMITS } from "../../utils/security/rateLimiter";
+import {
+	memoryGuard,
+	IMPORT_LIMITS,
+	checkImportQuota,
+	incrementImportQuota,
+} from "../../utils/security/rateLimiter";
 import {
 	validatePresetFile,
 	importPresetData,
@@ -183,6 +188,32 @@ export async function execute(
 		// 6. Defer reply while we process
 		await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
+		// 6.25. Check import operation quota (volume-based DDoS protection)
+		const quotaCheck = checkImportQuota(interaction.user.id);
+		if (!quotaCheck.allowed) {
+			const resetTime = quotaCheck.resetAt
+				? new Date(quotaCheck.resetAt).toLocaleString(locale)
+				: "unknown";
+
+			await interaction.editReply({
+				embeds: [
+					new EmbedBuilder()
+						.setTitle(
+							localizer(locale, "rate_limit.error_quota_exceeded_title"),
+						)
+						.setDescription(
+							localizer(locale, "rate_limit.error_quota_exceeded_description", {
+								current: String(quotaCheck.current || 0),
+								max: String(quotaCheck.max || 0),
+								reset_time: resetTime,
+							}),
+						)
+						.setColor(ColorCode.ERROR),
+				],
+			});
+			return;
+		}
+
 		// 6.5. Memory guard check (defense-in-depth)
 		const memCheck = memoryGuard.checkMemory();
 		if (memCheck.status === "critical") {
@@ -190,16 +221,10 @@ export async function execute(
 				embeds: [
 					new EmbedBuilder()
 						.setTitle(
-							localizer(
-								locale,
-								"commands.persona.import.error_memory_critical_title",
-							),
+							localizer(locale, "rate_limit.error_memory_critical_title"),
 						)
 						.setDescription(
-							localizer(
-								locale,
-								"commands.persona.import.error_memory_critical_description",
-							),
+							localizer(locale, "rate_limit.error_memory_critical_description"),
 						)
 						.setColor(ColorCode.ERROR),
 				],
@@ -454,6 +479,9 @@ export async function execute(
 		await interaction.editReply({
 			embeds: [successEmbed],
 		});
+
+		// Increment import quota after successful operation
+		incrementImportQuota(interaction.user.id);
 
 		log.success(
 			`Successfully imported preset for ${isDM ? "DM" : "guild"} ${serverDiscId}: ${itemsImported.nickname}`,

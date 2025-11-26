@@ -17,7 +17,7 @@ import {
 	replyInfoEmbed,
 	promptWithRawModal,
 } from "../../utils/discord/interactionHelper";
-import { loadTomoriState } from "../../utils/db/dbRead";
+import { loadTomoriState, isBlacklisted } from "../../utils/db/dbRead";
 import type { ModalResult } from "../../types/discord/modal";
 import {
 	checkAttributeLimit,
@@ -69,12 +69,33 @@ export async function execute(
 	let modalResult: ModalResult | null = null;
 
 	try {
-		// 3. Load server's Tomori state (Rule 17)
+		// 2. Check if user has Manage Server permission - used for blacklist and teaching restriction bypass
+		const hasManagePermission =
+			interaction.memberPermissions?.has("ManageGuild") ?? false;
+
+		// 3. Check blacklisting only for guild contexts
+		// Users with Manage Server permission can bypass blacklist (they can unblacklist themselves anyway)
+		if (interaction.guild) {
+			const blacklisted =
+				(await isBlacklisted(interaction.guild.id, interaction.user.id)) ??
+				false;
+			if (blacklisted && !hasManagePermission) {
+				await replyInfoEmbed(interaction, locale, {
+					titleKey: "general.errors.user_blacklisted_title",
+					descriptionKey: "general.errors.user_blacklisted_description",
+					color: ColorCode.ERROR,
+					flags: MessageFlags.Ephemeral,
+				});
+				return;
+			}
+		}
+
+		// 4. Load server's Tomori state (Rule 17)
 		tomoriState = await loadTomoriState(
 			interaction.guild?.id ?? interaction.user.id,
 		);
 
-		// 4. Check if Tomori is set up
+		// 5. Check if Tomori is set up
 		if (!tomoriState) {
 			await replyInfoEmbed(interaction, locale, {
 				titleKey: "general.errors.tomori_not_setup_title",
@@ -85,12 +106,7 @@ export async function execute(
 			return;
 		}
 
-		// 5. Check if attribute teaching is enabled (Assuming config key exists)
-		// Check if user has Manage Server permission - admins can bypass teaching restriction
-		const hasManagePermission =
-			interaction.memberPermissions?.has("ManageGuild") ?? false;
-
-		// Check if attribute teaching is enabled and if user has bypass permissions
+		// 6. Check if attribute teaching is enabled and if user has bypass permissions
 		if (
 			!tomoriState.config.attribute_memteaching_enabled &&
 			!hasManagePermission
@@ -105,7 +121,7 @@ export async function execute(
 			return;
 		}
 
-		// 6. Check attribute limit before showing modal (better UX)
+		// 7. Check attribute limit before showing modal (better UX)
 		if (!tomoriState.tomori_id) {
 			log.error("TomoriState missing tomori_id - this should never happen");
 			return;
@@ -126,7 +142,7 @@ export async function execute(
 			return;
 		}
 
-		// 7. Prompt user with a modal with Component Type 18 support (Rule 10, 12, 19)
+		// 8. Prompt user with a modal with Component Type 18 support (Rule 10, 12, 19)
 		// NOTE: Ensure locale keys resolve to strings <= 45 chars for labels!
 		modalResult = await promptWithRawModal(interaction, locale, {
 			modalCustomId: MODAL_CUSTOM_ID,
@@ -144,7 +160,7 @@ export async function execute(
 			],
 		});
 
-		// 7. Handle modal outcome
+		// 9. Handle modal outcome
 		if (modalResult.outcome !== "submit") {
 			log.info(
 				`Attribute add modal ${modalResult.outcome} for user ${userData.user_id}`,
@@ -157,11 +173,11 @@ export async function execute(
 		// biome-ignore lint/style/noNonNullAssertion: Outcome 'submit' guarantees interaction
 		const modalSubmitInteraction = modalResult.interaction!;
 
-		// 8. Get input from modal - let helper functions manage interaction state
+		// 10. Get input from modal - let helper functions manage interaction state
 		// biome-ignore lint/style/noNonNullAssertion: Outcome 'submit' + required=true guarantees value
 		const newAttribute = modalResult.values![ATTRIBUTE_INPUT_ID];
 
-		// 9. Prepare updated array (Access directly from tomoriState)
+		// 11. Prepare updated array (Access directly from tomoriState)
 		const currentAttributes = tomoriState.attribute_list || [];
 
 		// Optional: Check for duplicates before adding
@@ -176,7 +192,7 @@ export async function execute(
 			return;
 		}
 
-		// 10. Update Tomori row in the database using array_append (Rule 4, 15, 23)
+		// 12. Update Tomori row in the database using array_append (Rule 4, 15, 23)
 		const [updatedTomoriResult] = await sql`
 			UPDATE tomoris
 			SET attribute_list = array_append(attribute_list, ${newAttribute})
@@ -184,7 +200,7 @@ export async function execute(
 			RETURNING *
 		`;
 
-		// 11. Validate the result from the database (Rule 3, 5, 6)
+		// 13. Validate the result from the database (Rule 3, 5, 6)
 		const validationResult = tomoriSchema.safeParse(updatedTomoriResult);
 
 		if (!validationResult.success) {
@@ -217,7 +233,7 @@ export async function execute(
 			return;
 		}
 
-		// 12. Success! Confirm addition (Rule 12, 19)
+		// 14. Success! Confirm addition (Rule 12, 19)
 		await replyInfoEmbed(modalSubmitInteraction, locale, {
 			titleKey: "commands.teach.attribute.success_title", // New locale key
 			descriptionKey: "commands.teach.attribute.success_description", // New locale key

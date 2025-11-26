@@ -160,16 +160,10 @@ export async function execute(
 				embeds: [
 					new EmbedBuilder()
 						.setTitle(
-							localizer(
-								locale,
-								"commands.data.import.error_memory_critical_title",
-							),
+							localizer(locale, "rate_limit.error_memory_critical_title"),
 						)
 						.setDescription(
-							localizer(
-								locale,
-								"commands.data.import.error_memory_critical_description",
-							),
+							localizer(locale, "rate_limit.error_memory_critical_description"),
 						)
 						.setColor(ColorCode.ERROR),
 				],

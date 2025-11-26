@@ -112,6 +112,43 @@ export const IMPORT_LIMITS = {
 } as const;
 
 // -----------------------------------------------------------------------------
+// UPLOAD QUOTA LIMITS (Volume-Based DDoS Protection)
+// -----------------------------------------------------------------------------
+export const PERSONA_RATE_LIMITS = {
+	/**
+	 * Maximum persona operations (create/generate) per user per 24 hours
+	 * Prevents volume-based DDoS via rapid successive uploads
+	 * @default 30 in production, Infinity in development
+	 */
+	MAX_OPERATIONS_PER_DAY: GUARDS_ENABLED
+		? Number.parseInt(process.env.MAX_PERSONA_OPERATIONS_PER_DAY || "30", 10)
+		: Number.POSITIVE_INFINITY,
+} as const;
+
+export const IMPORT_RATE_LIMITS = {
+	/**
+	 * Maximum import operations per user per 24 hours
+	 * Prevents volume-based DDoS via rapid successive imports
+	 * @default 100 in production, Infinity in development
+	 */
+	MAX_OPERATIONS_PER_DAY: GUARDS_ENABLED
+		? Number.parseInt(process.env.MAX_IMPORT_OPERATIONS_PER_DAY || "100", 10)
+		: Number.POSITIVE_INFINITY,
+} as const;
+
+export const AVATAR_RATE_LIMITS = {
+	/**
+	 * Maximum avatar changes per server (guild) per 24 hours
+	 * Note: This is a guild-level quota, not user-level
+	 * Prevents server avatar spam attacks
+	 * @default 30 in production, Infinity in development
+	 */
+	MAX_OPERATIONS_PER_DAY: GUARDS_ENABLED
+		? Number.parseInt(process.env.MAX_AVATAR_OPERATIONS_PER_DAY || "30", 10)
+		: Number.POSITIVE_INFINITY,
+} as const;
+
+// -----------------------------------------------------------------------------
 // FETCH TOOL LIMITS (MCP Fetch Server Protection)
 // -----------------------------------------------------------------------------
 export const FETCH_LIMITS = {
@@ -404,6 +441,58 @@ export const memoryGuard = new MemoryGuard();
 
 /**
  * ============================================================================
+ * QUOTA TRACKING SYSTEM
+ * In-memory quota tracking for volume-based DDoS protection
+ * ============================================================================
+ */
+
+/**
+ * Quota entry tracking usage count and reset timestamp
+ */
+interface QuotaEntry {
+	/**
+	 * Number of operations used within the current 24-hour window
+	 */
+	count: number;
+
+	/**
+	 * Unix timestamp (milliseconds) when the quota resets (24 hours from first operation)
+	 */
+	resetAt: number;
+}
+
+/**
+ * Quota tracking result returned by check functions
+ */
+interface QuotaCheckResult {
+	/**
+	 * Whether the operation is allowed (quota not exceeded)
+	 */
+	allowed: boolean;
+
+	/**
+	 * Unix timestamp when the quota resets (if quota exceeded)
+	 */
+	resetAt?: number;
+
+	/**
+	 * Current operation count (if quota exceeded)
+	 */
+	current?: number;
+
+	/**
+	 * Maximum allowed operations (if quota exceeded)
+	 */
+	max?: number;
+}
+
+// In-memory quota storage (resets on bot restart, which is acceptable)
+const personaQuotaMap = new Map<string, QuotaEntry>(); // Key: userId
+const importQuotaMap = new Map<string, QuotaEntry>(); // Key: userId
+const avatarQuotaMap = new Map<string, QuotaEntry>(); // Key: guildId (server-level)
+
+/**
+ * ============================================================================
  * RATE LIMIT GUARDS
  * Centralized rate limiting logic for messages and media
  * ============================================================================
@@ -468,6 +557,209 @@ export function checkServerRateLimit(
 
 /**
  * ============================================================================
+ * QUOTA CHECK/INCREMENT FUNCTIONS
+ * Volume-based DDoS protection for upload operations
+ * ============================================================================
+ */
+
+/**
+ * Checks if a user has exceeded their persona operation quota (create/generate)
+ * @param userId - Discord user ID
+ * @returns Quota check result with reset timestamp if exceeded
+ */
+export function checkPersonaQuota(userId: string): QuotaCheckResult {
+	// Disabled in development
+	if (!GUARDS_ENABLED) {
+		return { allowed: true };
+	}
+
+	const now = Date.now();
+	const quota = personaQuotaMap.get(userId);
+
+	// No quota entry exists - first operation allowed
+	if (!quota) {
+		return { allowed: true };
+	}
+
+	// Quota expired - reset and allow
+	if (now >= quota.resetAt) {
+		personaQuotaMap.delete(userId);
+		return { allowed: true };
+	}
+
+	// Check if quota exceeded
+	const limit = PERSONA_RATE_LIMITS.MAX_OPERATIONS_PER_DAY;
+	if (quota.count >= limit) {
+		return {
+			allowed: false,
+			resetAt: quota.resetAt,
+			current: quota.count,
+			max: limit,
+		};
+	}
+
+	return { allowed: true };
+}
+
+/**
+ * Increments the persona operation quota for a user
+ * Should be called after a successful persona create/generate operation
+ * @param userId - Discord user ID
+ */
+export function incrementPersonaQuota(userId: string): void {
+	// Disabled in development
+	if (!GUARDS_ENABLED) {
+		return;
+	}
+
+	const now = Date.now();
+	const quota = personaQuotaMap.get(userId);
+
+	if (!quota || now >= quota.resetAt) {
+		// First operation or expired quota - create new entry
+		personaQuotaMap.set(userId, {
+			count: 1,
+			resetAt: now + 24 * 60 * 60 * 1000, // 24 hours from now
+		});
+	} else {
+		// Increment existing quota
+		quota.count++;
+	}
+}
+
+/**
+ * Checks if a user has exceeded their import operation quota
+ * @param userId - Discord user ID
+ * @returns Quota check result with reset timestamp if exceeded
+ */
+export function checkImportQuota(userId: string): QuotaCheckResult {
+	// Disabled in development
+	if (!GUARDS_ENABLED) {
+		return { allowed: true };
+	}
+
+	const now = Date.now();
+	const quota = importQuotaMap.get(userId);
+
+	// No quota entry exists - first operation allowed
+	if (!quota) {
+		return { allowed: true };
+	}
+
+	// Quota expired - reset and allow
+	if (now >= quota.resetAt) {
+		importQuotaMap.delete(userId);
+		return { allowed: true };
+	}
+
+	// Check if quota exceeded
+	const limit = IMPORT_RATE_LIMITS.MAX_OPERATIONS_PER_DAY;
+	if (quota.count >= limit) {
+		return {
+			allowed: false,
+			resetAt: quota.resetAt,
+			current: quota.count,
+			max: limit,
+		};
+	}
+
+	return { allowed: true };
+}
+
+/**
+ * Increments the import operation quota for a user
+ * Should be called after a successful import operation
+ * @param userId - Discord user ID
+ */
+export function incrementImportQuota(userId: string): void {
+	// Disabled in development
+	if (!GUARDS_ENABLED) {
+		return;
+	}
+
+	const now = Date.now();
+	const quota = importQuotaMap.get(userId);
+
+	if (!quota || now >= quota.resetAt) {
+		// First operation or expired quota - create new entry
+		importQuotaMap.set(userId, {
+			count: 1,
+			resetAt: now + 24 * 60 * 60 * 1000, // 24 hours from now
+		});
+	} else {
+		// Increment existing quota
+		quota.count++;
+	}
+}
+
+/**
+ * Checks if a server (guild) has exceeded their avatar change quota
+ * Note: This is a guild-level quota, not user-level
+ * @param guildId - Discord guild ID
+ * @returns Quota check result with reset timestamp if exceeded
+ */
+export function checkAvatarQuota(guildId: string): QuotaCheckResult {
+	// Disabled in development
+	if (!GUARDS_ENABLED) {
+		return { allowed: true };
+	}
+
+	const now = Date.now();
+	const quota = avatarQuotaMap.get(guildId);
+
+	// No quota entry exists - first operation allowed
+	if (!quota) {
+		return { allowed: true };
+	}
+
+	// Quota expired - reset and allow
+	if (now >= quota.resetAt) {
+		avatarQuotaMap.delete(guildId);
+		return { allowed: true };
+	}
+
+	// Check if quota exceeded
+	const limit = AVATAR_RATE_LIMITS.MAX_OPERATIONS_PER_DAY;
+	if (quota.count >= limit) {
+		return {
+			allowed: false,
+			resetAt: quota.resetAt,
+			current: quota.count,
+			max: limit,
+		};
+	}
+
+	return { allowed: true };
+}
+
+/**
+ * Increments the avatar change quota for a server (guild)
+ * Should be called after a successful avatar update operation
+ * @param guildId - Discord guild ID
+ */
+export function incrementAvatarQuota(guildId: string): void {
+	// Disabled in development
+	if (!GUARDS_ENABLED) {
+		return;
+	}
+
+	const now = Date.now();
+	const quota = avatarQuotaMap.get(guildId);
+
+	if (!quota || now >= quota.resetAt) {
+		// First operation or expired quota - create new entry
+		avatarQuotaMap.set(guildId, {
+			count: 1,
+			resetAt: now + 24 * 60 * 60 * 1000, // 24 hours from now
+		});
+	} else {
+		// Increment existing quota
+		quota.count++;
+	}
+}
+
+/**
+ * ============================================================================
  * UTILITY FUNCTIONS
  * ============================================================================
  */
@@ -500,6 +792,16 @@ export function logGuardConfiguration(): void {
 	log.info(
 		`Max Persona Import Size: ${IMPORT_LIMITS.MAX_PERSONA_IMPORT_SIZE_MB} MB`,
 	);
+	log.info("\n--- Upload Quota Limits (24h) ---");
+	log.info(
+		`Max Persona Operations: ${PERSONA_RATE_LIMITS.MAX_OPERATIONS_PER_DAY} per user`,
+	);
+	log.info(
+		`Max Import Operations: ${IMPORT_RATE_LIMITS.MAX_OPERATIONS_PER_DAY} per user`,
+	);
+	log.info(
+		`Max Avatar Operations: ${AVATAR_RATE_LIMITS.MAX_OPERATIONS_PER_DAY} per server`,
+	);
 	log.info("\n--- Fetch Tool Limits ---");
 	log.info(`Max Fetch Size: ${FETCH_LIMITS.MAX_FETCH_SIZE_MB} MB`);
 	log.info(`Base Fetch Char Limit: ${FETCH_LIMITS.FETCH_CHAR_LIMIT}`);
@@ -530,4 +832,49 @@ export function logGuardConfiguration(): void {
 export function getMemoryStatusSummary(): string {
 	const check = memoryGuard.checkMemory();
 	return `Memory: ${check.heapUsedMB.toFixed(2)} MB / ${check.heapLimitMB} MB (${(check.percentUsed * 100).toFixed(1)}%) - Status: ${check.status.toUpperCase()}`;
+}
+
+/**
+ * Initializes the quota cleanup interval
+ * Removes expired quota entries every hour to prevent memory leaks
+ * Should be called once during application startup
+ */
+export function initializeQuotaCleanup(): void {
+	// Run cleanup every hour
+	const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+
+	setInterval(() => {
+		const now = Date.now();
+		let cleanedCount = 0;
+
+		// Clean persona quotas
+		for (const [userId, quota] of personaQuotaMap.entries()) {
+			if (now >= quota.resetAt) {
+				personaQuotaMap.delete(userId);
+				cleanedCount++;
+			}
+		}
+
+		// Clean import quotas
+		for (const [userId, quota] of importQuotaMap.entries()) {
+			if (now >= quota.resetAt) {
+				importQuotaMap.delete(userId);
+				cleanedCount++;
+			}
+		}
+
+		// Clean avatar quotas
+		for (const [guildId, quota] of avatarQuotaMap.entries()) {
+			if (now >= quota.resetAt) {
+				avatarQuotaMap.delete(guildId);
+				cleanedCount++;
+			}
+		}
+
+		if (cleanedCount > 0) {
+			log.info(`Quota cleanup: Removed ${cleanedCount} expired entries`);
+		}
+	}, CLEANUP_INTERVAL_MS);
+
+	log.info("Quota cleanup interval initialized (runs every 1 hour)");
 }
