@@ -95,4 +95,34 @@ function createDatabaseClient(): SQL {
 	});
 }
 
-export const sql = createDatabaseClient();
+// Lazily create the client so secrets/env vars are set first (avoids premature
+// initialization when modules import sql before dotenv/Secrets Manager runs).
+let cachedClient: SQL | null = null;
+
+function getClient(): SQL {
+	if (!cachedClient) {
+		cachedClient = createDatabaseClient();
+	}
+	return cachedClient;
+}
+
+// Proxy keeps the same sql API (tagged template + helper methods) while
+// deferring the real client creation until first use.
+export const sql = new Proxy(
+	function sqlTag(strings: TemplateStringsArray, ...values: unknown[]) {
+		return getClient()(strings, ...values);
+	} as unknown as SQL,
+	{
+		apply(_target, thisArg, argArray) {
+			const client = getClient() as unknown as (
+				...args: unknown[]
+			) => unknown;
+			return Reflect.apply(client, thisArg, argArray);
+		},
+		get(_target, prop, receiver) {
+			const client = getClient() as object;
+			const value = Reflect.get(client, prop, receiver);
+			return typeof value === "function" ? value.bind(client) : value;
+		},
+	},
+) as SQL;
