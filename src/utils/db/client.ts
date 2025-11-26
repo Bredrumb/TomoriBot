@@ -1,5 +1,5 @@
 import { SQL } from "bun";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -46,14 +46,20 @@ function createDatabaseClient(): SQL {
 
 	// Production: TLS with CA certificate verification
 	if (isProduction) {
-		const certPath = join(
-			process.cwd(),
-			"docker",
-			"certs",
-			"rds-ca-bundle.pem",
-		);
+		// Allow overriding CA bundle location; fall back to common paths for dev and container builds.
+		const caPathEnv = process.env.POSTGRES_CA_CERT_PATH;
+		const candidatePaths = [
+			caPathEnv,
+			join(process.cwd(), "docker", "certs", "rds-ca-bundle.pem"),
+			join(process.cwd(), "certs", "rds-ca-bundle.pem"),
+		].filter(Boolean) as string[];
+
+		const certPath = candidatePaths.find((p) => existsSync(p));
 
 		try {
+			if (!certPath) {
+				throw new Error("CA bundle not found in any known path");
+			}
 			const ca = readFileSync(certPath, "utf8");
 			console.log(
 				"\x1b[36m[INFO]\x1b[0m Database SSL mode: verify-full (production with CA certificate)",
@@ -76,8 +82,9 @@ function createDatabaseClient(): SQL {
 				error,
 			);
 			throw new Error(
-				`Production database requires CA certificate at ${certPath}. ` +
-					"Please ensure docker/certs/rds-ca-bundle.pem exists.",
+				"Production database requires a CA certificate. " +
+					`Searched paths: ${candidatePaths.join(", ")}. ` +
+					"Set POSTGRES_CA_CERT_PATH to the correct file if needed.",
 			);
 		}
 	}
