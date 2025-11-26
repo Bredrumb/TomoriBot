@@ -5,7 +5,7 @@ import type {
 } from "discord.js";
 import { MessageFlags } from "discord.js";
 // Import sql
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 import {
 	loadTomoriState,
 	loadAvailableModelsForProvider,

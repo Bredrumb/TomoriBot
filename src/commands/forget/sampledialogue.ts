@@ -20,7 +20,7 @@ import {
 	tomoriSchema,
 	type TomoriState,
 } from "../../types/db/schema";
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 import type { SelectOption } from "../../types/discord/modal";
 
 // Rule 20: Constants for static values at the top

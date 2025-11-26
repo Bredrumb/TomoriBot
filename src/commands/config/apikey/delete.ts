@@ -13,7 +13,7 @@ import {
 	type ErrorContext,
 	tomoriConfigSchema,
 } from "../../../types/db/schema";
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 
 // Configure the subcommand
 export const configureSubcommand = (

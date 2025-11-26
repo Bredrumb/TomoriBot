@@ -4,7 +4,7 @@ import {
 	type Client,
 	type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 import { loadTomoriState } from "../../../utils/db/dbRead";
 import { tomoriConfigSchema } from "../../../types/db/schema";
 import { localizer } from "../../../utils/text/localizer";

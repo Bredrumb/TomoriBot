@@ -297,15 +297,12 @@ jobs:
         with:
           fetch-depth: 0 # Fetch full history for TruffleHog
 
-      - name: Fetch main branch for comparison
-        run: git fetch origin main:main
-
       - name: Run TruffleHog secret scan
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
+          base: ${{ github.event.before }}
+          head: ${{ github.event.after }}
           extra_args: --only-verified
         continue-on-error: true
         id: trufflehog
@@ -678,6 +675,10 @@ jobs:
             --follow=false \
             || echo "No recent logs found (this is normal for new deployments)"
 
+  # PHASE 6: GITHUB RELEASES (Source Code Only)
+  # Creates GitHub releases with source code and release notes when .github/release/vX.X.X/ folder exists
+  # Docker images are NOT included - users should clone and use docker-compose.yaml for self-hosting
+  # Future: May include installer packages (.exe, .app) for easier end-user setup
   check-release-assets:
     runs-on: ubuntu-latest
     needs: verify-ecs-deployment
@@ -711,7 +712,7 @@ jobs:
             echo "has-assets=false" >> $GITHUB_OUTPUT
           fi
 
-  announce-release:
+  create-release:
     runs-on: ubuntu-latest
     needs: [verify-ecs-deployment, check-release-assets]
     if: needs.verify-ecs-deployment.outputs.deployment-status == 'success' && needs.check-release-assets.outputs.has-assets == 'true'
@@ -719,7 +720,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Prepare release notes
+      - name: Prepare release notes and Discord notification
         id: release-notes
         env:
           VERSION: ${{ needs.check-release-assets.outputs.version }}
@@ -759,51 +760,22 @@ jobs:
           echo "$releaseNotes" > processed-release-notes.md
           echo "image-name=$imageName" >> $GITHUB_OUTPUT
 
-      - name: Configure AWS Credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Pull and export Docker image from ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_NAME }}
-          VERSION: ${{ needs.check-release-assets.outputs.version }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          echo "Pulling image from ECR..."
-          docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-
-          echo "Tagging for release..."
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG tomoribot:v$VERSION
-
-          echo "Exporting Docker image to tar file..."
-          docker save tomoribot:v$VERSION -o tomoribot-v$VERSION-docker-image.tar
-
-          echo "Compressing tar file..."
-          gzip tomoribot-v$VERSION-docker-image.tar
-
-          echo "Docker image exported and compressed!"
-
-      - name: Create GitHub Release
+      - name: Create GitHub Release (Source Code Only)
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
           VERSION: ${{ needs.check-release-assets.outputs.version }}
         run: |
-          echo "Creating GitHub Release v$VERSION..."
+          echo "Creating GitHub Release v$VERSION (source code only)..."
 
           gh release create "v$VERSION" \
             --title "TomoriBot v$VERSION" \
             --notes-file "processed-release-notes.md" \
-            --latest \
-            "tomoribot-v$VERSION-docker-image.tar.gz#Docker Image (Ready to Deploy)"
+            --latest
 
-          echo "GitHub release created with Docker image asset!"
+          echo "GitHub release created!"
+          echo ""
+          echo "Note: Users can download source code and use 'docker-compose up' for self-hosting."
+          echo "Future releases may include installer packages (.exe, .app, etc.) for easier setup."
 
       - name: Send Discord notification
         if: always()

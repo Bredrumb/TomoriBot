@@ -1,5 +1,5 @@
 import { MessageFlags, type Client, type Interaction } from "discord.js";
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
 import { ColorCode, log } from "../../utils/misc/logger";
 import {

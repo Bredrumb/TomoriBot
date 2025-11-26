@@ -17,7 +17,7 @@ import {
 	tomoriConfigSchema,
 } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 
 // Define constants at the top (Rule #20)
 const HUMANIZER_MIN = 0;

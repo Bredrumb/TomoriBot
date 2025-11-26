@@ -32,7 +32,7 @@ import { PeekProfilePictureTool } from "../../tools/functionCalls/peekProfilePic
 import { ProcessGifTool } from "../../tools/functionCalls/processGifTool";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { localizer, getSupportedLocales } from "../../utils/text/localizer";
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 
 import type { TomoriState } from "@/types/db/schema";
 // Provider-specific function declarations moved to providers

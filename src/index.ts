@@ -1,6 +1,6 @@
 import { Client, GatewayIntentBits, Partials } from "discord.js";
 import { config } from "dotenv";
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 import { log } from "./utils/misc/logger";
 import path from "node:path";
 import eventHandler from "./handlers/eventHandler";
@@ -54,96 +54,8 @@ log.success(
 		`rotation ${rotationStatus.rotationCapable ? "enabled" : "disabled"}`,
 );
 
-/**
- * Get PostgreSQL connection URL from environment variables with SSL configuration.
- *
- * SSL Mode Behavior:
- * - Development (RUN_ENV !== 'production'): sslmode=disable
- *   - No SSL/TLS encryption for local development
- *   - Works with localhost PostgreSQL (typically no SSL configured)
- *
- * - Production (RUN_ENV === 'production'): sslmode=verify-full
- *   - Requires SSL/TLS encryption for all connections
- *   - Verifies server certificate is signed by trusted CA (using AWS RDS CA bundle)
- *   - Verifies hostname matches certificate (e.g., *.rds.amazonaws.com)
- *   - Protects against man-in-the-middle (MITM) attacks
- *   - Certificate path: /app/certs/rds-ca-bundle.pem (mounted in Docker)
- *
- * SSL Certificate Configuration:
- * - Environment variable POSTGRES_SSL_ROOT_CERT can override certificate path
- * - Default production path: /app/certs/rds-ca-bundle.pem
- * - Certificate must be readable by the application user
- *
- * Supports both POSTGRES_URL and component-based configuration
- */
-function getPostgresUrl(): string {
-	// Determine SSL mode based on environment
-	const runEnv = process.env.RUN_ENV || "development";
-	const isProduction = runEnv === "production";
-
-	// Development: Fallback to non-SSL when dealing with localhost
-	// Production: Require SSL with full certificate verification (protects against MITM attacks)
-	const sslMode =
-		isProduction && process.env.TEST_PRODUCTION !== "true"
-			? "verify-full"
-			: "disable";
-
-	// SSL certificate path for verify-full mode
-	// Can be overridden via POSTGRES_SSL_ROOT_CERT environment variable
-	const sslRootCert =
-		process.env.POSTGRES_SSL_ROOT_CERT || "/app/certs/rds-ca-bundle.pem";
-
-	// If POSTGRES_URL is provided, use it directly (backwards compatibility)
-	if (process.env.POSTGRES_URL) {
-		// Add sslmode to existing URL if not already present
-		const url = new URL(process.env.POSTGRES_URL);
-		if (!url.searchParams.has("sslmode")) {
-			url.searchParams.set("sslmode", sslMode);
-		}
-		// Add sslrootcert for verify-full mode
-		if (sslMode === "verify-full" && !url.searchParams.has("sslrootcert")) {
-			url.searchParams.set("sslrootcert", sslRootCert);
-		}
-		return url.toString();
-	}
-
-	// Otherwise, build URL from components
-	const host = process.env.POSTGRES_HOST || "localhost";
-	const port = process.env.POSTGRES_PORT || "5432";
-	const user = process.env.POSTGRES_USER || "postgres";
-	const password = process.env.POSTGRES_PASSWORD;
-	const database = process.env.POSTGRES_DB || "tomodb";
-
-	if (!password) {
-		throw new Error(
-			"Database password must be provided via POSTGRES_PASSWORD or POSTGRES_URL",
-		);
-	}
-	const encodedPassword = encodeURIComponent(password);
-
-	// Build connection string with SSL mode
-	let connectionString = `postgresql://${user}:${encodedPassword}@${host}:${port}/${database}?sslmode=${sslMode}`;
-
-	// Add certificate path for verify-full mode
-	if (sslMode === "verify-full") {
-		connectionString += `&sslrootcert=${encodeURIComponent(sslRootCert)}`;
-	}
-
-	return connectionString;
-}
-
-const postgresUrl = getPostgresUrl();
-
-const dbUrl = new URL(postgresUrl);
-
-process.env.DATABASE_URL = postgresUrl;
-
-// Log SSL configuration for transparency
-const sslMode = dbUrl.searchParams.get("sslmode") || "default";
-log.info(`Database SSL mode: ${sslMode}`);
-
-const dbHost = dbUrl.hostname;
-const dbPort = Number.parseInt(dbUrl.port || "5432", 10);
+// Database client is now initialized in @/utils/db/client.ts
+// SSL configuration and connection setup is handled there based on environment
 
 const client = new Client({
 	intents: [
@@ -292,20 +204,17 @@ try {
 }
 
 // Attempt to set up pg_cron for production environments (non-critical)
-if (!postgresUrl) {
-	log.warn("POSTGRES_URL not found in .env. Skipping cron job scheduling.");
-} else {
-	try {
-		if (!dbHost || Number.isNaN(dbPort)) {
-			throw new Error(
-				`Could not parse hostname or port from POSTGRES_URL: ${postgresUrl}`,
-			);
-		}
+try {
+	const host = process.env.POSTGRES_HOST || "localhost";
+	const port = Number.parseInt(process.env.POSTGRES_PORT || "5432", 10);
 
+	if (!host || Number.isNaN(port)) {
+		log.warn("Could not determine database host/port for pg_cron setup");
+	} else {
 		// 1. First check if the pg_cron extension is available
 		const [extensionCheck] = await sql`
 			SELECT EXISTS (
-				SELECT 1 FROM pg_available_extensions 
+				SELECT 1 FROM pg_available_extensions
 				WHERE name = 'pg_cron'
 			) as available
 		`;
@@ -324,24 +233,24 @@ if (!postgresUrl) {
 				VALUES (
 					'0 * * * *', -- Run at the start of every hour
 					'SELECT cleanup_expired_cooldowns();',
-					${dbHost},          -- Use parsed hostname
-					${dbPort},          -- Use parsed port
-					current_database(), -- Still use SQL functions for these
+					${host},
+					${port},
+					current_database(),
 					current_user
 				)
 				ON CONFLICT (command, database, username, nodename, nodeport)
-				DO UPDATE SET schedule = EXCLUDED.schedule; -- Update schedule if job already exists
+				DO UPDATE SET schedule = EXCLUDED.schedule;
 			`;
 			log.success(
-				`pg_cron job for cooldown cleanup scheduled/verified for ${dbHost}:${dbPort}`,
+				`pg_cron job for cooldown cleanup scheduled/verified for ${host}:${port}`,
 			);
 		}
-	} catch (err) {
-		log.info(
-			`pg_cron setup failed (non-critical): ${err instanceof Error ? err.message : err}`,
-		);
-		log.info("Cooldown cleanup will be handled by startup method instead");
 	}
+} catch (err) {
+	log.info(
+		`pg_cron setup failed (non-critical): ${err instanceof Error ? err.message : err}`,
+	);
+	log.info("Cooldown cleanup will be handled by startup method instead");
 }
 
 // Initialize modular tool system

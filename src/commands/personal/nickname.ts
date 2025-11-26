@@ -4,7 +4,7 @@ import type {
 	SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 import {
 	userSchema,
 	type UserRow,

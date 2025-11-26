@@ -18,7 +18,7 @@ import {
 	tomoriConfigSchema,
 } from "../../../types/db/schema";
 import type { SelectOption } from "../../../types/discord/modal";
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 
 // Rule 20: Constants for static values at the top
 const MODAL_CUSTOM_ID = "server_triggerdelete_modal";

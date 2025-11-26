@@ -1,4 +1,4 @@
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { sendStandardEmbed } from "../../utils/discord/embedHelper";
 import type { Client, Guild } from "discord.js";

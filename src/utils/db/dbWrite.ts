@@ -1,4 +1,4 @@
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 import type { SqlParameterArray } from "@/types/db/sqlOperations";
 import {
 	tomoriSchema,

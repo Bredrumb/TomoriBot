@@ -8,7 +8,7 @@ import { localizer } from "../../../utils/text/localizer";
 import { log, ColorCode } from "../../../utils/misc/logger";
 import { replyInfoEmbed } from "../../../utils/discord/interactionHelper";
 import type { UserRow, ErrorContext } from "../../../types/db/schema";
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 import {
 	checkTriggerWordLimit,
 	validateMemoryContent,

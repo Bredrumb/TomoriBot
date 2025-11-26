@@ -3,7 +3,7 @@
  * Provides in-memory caching for LLM model configurations to eliminate database queries on every chat message
  */
 
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 import type { LlmRow } from "../../types/db/schema";
 import { log } from "../misc/logger";
 

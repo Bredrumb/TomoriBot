@@ -12,7 +12,7 @@ import {
 	type ErrorContext,
 	userSchema,
 } from "../../types/db/schema";
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 
 // Define constants at the top (Rule #20)
 const SUPPORTED_LANGUAGES = ["en-US", "ja"] as const;

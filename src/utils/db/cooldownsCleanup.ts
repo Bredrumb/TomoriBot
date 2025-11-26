@@ -1,4 +1,4 @@
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 import { log } from "../misc/logger";
 
 /**

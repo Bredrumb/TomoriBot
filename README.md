@@ -173,14 +173,20 @@ bun run dev
 ```
 
 #### Launching with Docker Compose
+**Required .env variables for Docker Compose:**
+- `DISCORD_TOKEN` - Your Discord bot token
+- `CRYPTO_SECRET` - 32-character encryption key
+- `POSTGRES_PASSWORD` - Database password (other DB settings are auto-configured)
+
 ```sh
 # Build TomoriBot's container (first time or after code changes)
 docker compose build
 
-# Start TomoriBot and her database
-# For the database of the Docker version, local '.env' only needs POSTGRES_PASSWORD variable for PostgreS
+# Start TomoriBot and her database (uses docker-compose.yaml)
 docker compose up
 ```
+
+**Note:** Docker Compose automatically configures the database connection. The PostgreSQL service runs in development mode (no SSL) and connects to the internal Docker network.
 
 ### Basic Commands
 
@@ -213,6 +219,7 @@ Or slide into TomoriBot's DMs and say hi!
 - [ ] KoboldCPP integration (local only)
 - [ ] Voice channel integration
 - [ ] Web dashboard for configuration
+- [ ] Create "easy install" file for non-technical users wishing to host their own TomoriBot
 
 See the [open issues](https://github.com/Bredrumb/TomoriBot/issues) for a full list of proposed features and known issues.
 

@@ -1,5 +1,5 @@
 import { type Client, type Guild, GuildEmoji } from "discord.js"; // Import GuildEmoji
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 import type { EventFunction, EventArg } from "../../types/discord/global"; // Rule 14
 import type { ErrorContext } from "../../types/db/schema"; // Rule 14
 import { serverEmojiSchema } from "../../types/db/schema"; // Rule 6, Use serverEmojiSchema

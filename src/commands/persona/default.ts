@@ -23,7 +23,7 @@ import {
 	type TomoriPresetRow,
 } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 import { getCachedPresetAvatar } from "../../utils/image/avatarHelper";
 
 // Modal configuration constants

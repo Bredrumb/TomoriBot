@@ -50,6 +50,7 @@ TomoriBot's first public release! She's now hosted cozily in the cloud 24/7. By 
 - Rate Limits against DDoS (disabled in self-hosted TomoriBot instances)
 - SSL Database Encryption
 - Key Rotations
+- CI/CD Pipeline that prevents me from accidentally shipping my password
 
 ### Optimizations
 

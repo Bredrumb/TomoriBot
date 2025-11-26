@@ -50,7 +50,9 @@ RUN chown -R tomori:tomori /app
 USER tomori
 
 # Add user's local bin directory to PATH for pip installed scripts
+# Add NODE_PATH so mcp-server-fetch can find globally installed npm packages
 ENV PATH="/home/tomori/.local/bin:$PATH"
+ENV NODE_PATH="/usr/lib/node_modules"
 
 # Copy pre-downloaded Python packages (downloaded by GitHub Actions runner)
 # This avoids network issues during Docker build in CI/CD

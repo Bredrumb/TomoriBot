@@ -14,7 +14,7 @@ import {
 	tomoriSchema,
 	tomoriConfigSchema,
 } from "../../types/db/schema";
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 
 // Constants for validation
 const NICKNAME_MIN_LENGTH = 2;

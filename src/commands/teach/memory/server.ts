@@ -5,7 +5,7 @@ import type {
 	ModalSubmitInteraction,
 } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 import {
 	serverMemorySchema, // Use the correct schema for validation
 	type UserRow,

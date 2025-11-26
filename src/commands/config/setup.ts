@@ -4,7 +4,7 @@ import type {
 	Client,
 	SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 import type { SetupConfig, UserRow } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
 import { setupConfigSchema } from "../../types/db/schema";

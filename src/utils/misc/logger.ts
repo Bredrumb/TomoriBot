@@ -1,5 +1,5 @@
 import type { ErrorContext } from "@/types/db/schema";
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 import pino from "pino";
 
 /**

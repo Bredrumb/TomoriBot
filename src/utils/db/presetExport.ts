@@ -3,7 +3,7 @@
  * Handles exporting TomoriBot personality data from the database
  */
 
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 import { log } from "../misc/logger";
 import {
 	PRESET_EXPORT_VERSION,

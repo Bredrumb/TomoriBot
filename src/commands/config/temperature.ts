@@ -13,7 +13,7 @@ import {
 	type ErrorContext,
 	tomoriConfigSchema,
 } from "../../types/db/schema";
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 
 // Define constants at the top (Rule #20)
 const TEMPERATURE_MIN = 1.0;

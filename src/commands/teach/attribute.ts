@@ -4,7 +4,7 @@ import type {
 	SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 import {
 	tomoriSchema, // Use tomoriSchema for validation
 	type UserRow,

@@ -27,7 +27,7 @@ import type {
 } from "../../../types/discord/modal";
 import { ProviderFactory } from "../../../utils/provider/providerFactory";
 import { encryptApiKey } from "../../../utils/security/crypto";
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 
 // Modal configuration constants
 const MODAL_CUSTOM_ID = "config_apikeyset_modal";

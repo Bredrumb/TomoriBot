@@ -13,7 +13,7 @@ import {
 	type ErrorContext,
 	tomoriConfigSchema, // Rule 6
 } from "../../types/db/schema";
-import { sql } from "bun"; // Rule 4
+import { sql } from "@/utils/db/client"; // Rule 4
 // Rule 21: Configure the subcommand
 export const configureSubcommand = (
 	subcommand: SlashCommandSubcommandBuilder,

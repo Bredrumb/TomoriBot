@@ -1,5 +1,5 @@
 import { log } from "../misc/logger";
-import { sql } from "bun";
+import { sql } from "@/utils/db/client";
 import type { OptApiKeyRow } from "../../types/db/schema";
 import { keyManager } from "./keyManager";
 /**
