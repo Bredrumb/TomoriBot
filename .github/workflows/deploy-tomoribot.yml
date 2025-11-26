@@ -298,7 +298,7 @@ jobs:
           fetch-depth: 0 # Fetch full history for TruffleHog
 
       - name: Fetch main branch for comparison
-        run: git fetch origin main:main
+        run: git fetch origin main
 
       - name: Run TruffleHog secret scan
         uses: trufflesecurity/trufflehog@main
