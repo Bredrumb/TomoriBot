@@ -94,10 +94,10 @@ export const PERSONA_LIMITS = {
 export const IMPORT_LIMITS = {
 	/**
 	 * Maximum size for data export JSON files (personal/server memories)
-	 * @default 1 MB
+	 * @default 2 MB
 	 */
 	MAX_DATA_IMPORT_SIZE_MB: Number.parseInt(
-		process.env.MAX_DATA_IMPORT_SIZE_MB || "1",
+		process.env.MAX_DATA_IMPORT_SIZE_MB || "2",
 		10,
 	),
 
@@ -118,10 +118,10 @@ export const PERSONA_RATE_LIMITS = {
 	/**
 	 * Maximum persona operations (create/generate) per user per 24 hours
 	 * Prevents volume-based DDoS via rapid successive uploads
-	 * @default 30 in production, Infinity in development
+	 * @default 25 in production, Infinity in development
 	 */
 	MAX_OPERATIONS_PER_DAY: GUARDS_ENABLED
-		? Number.parseInt(process.env.MAX_PERSONA_OPERATIONS_PER_DAY || "30", 10)
+		? Number.parseInt(process.env.MAX_PERSONA_OPERATIONS_PER_DAY || "25", 10)
 		: Number.POSITIVE_INFINITY,
 } as const;
 
@@ -129,10 +129,10 @@ export const IMPORT_RATE_LIMITS = {
 	/**
 	 * Maximum import operations per user per 24 hours
 	 * Prevents volume-based DDoS via rapid successive imports
-	 * @default 100 in production, Infinity in development
+	 * @default 50 in production, Infinity in development
 	 */
 	MAX_OPERATIONS_PER_DAY: GUARDS_ENABLED
-		? Number.parseInt(process.env.MAX_IMPORT_OPERATIONS_PER_DAY || "100", 10)
+		? Number.parseInt(process.env.MAX_IMPORT_OPERATIONS_PER_DAY || "50", 10)
 		: Number.POSITIVE_INFINITY,
 } as const;
 
@@ -563,11 +563,12 @@ export function checkServerRateLimit(
  */
 
 /**
- * Checks if a user has exceeded their persona operation quota (create/generate)
+ * Atomically checks and reserves a persona operation quota slot
+ * Combines check and increment into a single operation to prevent race conditions
  * @param userId - Discord user ID
- * @returns Quota check result with reset timestamp if exceeded
+ * @returns Quota check result - if allowed, quota is already reserved
  */
-export function checkPersonaQuota(userId: string): QuotaCheckResult {
+export function reservePersonaQuota(userId: string): QuotaCheckResult {
 	// Disabled in development
 	if (!GUARDS_ENABLED) {
 		return { allowed: true };
@@ -575,85 +576,18 @@ export function checkPersonaQuota(userId: string): QuotaCheckResult {
 
 	const now = Date.now();
 	const quota = personaQuotaMap.get(userId);
-
-	// No quota entry exists - first operation allowed
-	if (!quota) {
-		return { allowed: true };
-	}
-
-	// Quota expired - reset and allow
-	if (now >= quota.resetAt) {
-		personaQuotaMap.delete(userId);
-		return { allowed: true };
-	}
-
-	// Check if quota exceeded
 	const limit = PERSONA_RATE_LIMITS.MAX_OPERATIONS_PER_DAY;
-	if (quota.count >= limit) {
-		return {
-			allowed: false,
-			resetAt: quota.resetAt,
-			current: quota.count,
-			max: limit,
-		};
-	}
 
-	return { allowed: true };
-}
-
-/**
- * Increments the persona operation quota for a user
- * Should be called after a successful persona create/generate operation
- * @param userId - Discord user ID
- */
-export function incrementPersonaQuota(userId: string): void {
-	// Disabled in development
-	if (!GUARDS_ENABLED) {
-		return;
-	}
-
-	const now = Date.now();
-	const quota = personaQuotaMap.get(userId);
-
+	// First operation or expired quota - create with count 1 (atomically reserve)
 	if (!quota || now >= quota.resetAt) {
-		// First operation or expired quota - create new entry
 		personaQuotaMap.set(userId, {
 			count: 1,
-			resetAt: now + 24 * 60 * 60 * 1000, // 24 hours from now
+			resetAt: now + 24 * 60 * 60 * 1000,
 		});
-	} else {
-		// Increment existing quota
-		quota.count++;
-	}
-}
-
-/**
- * Checks if a user has exceeded their import operation quota
- * @param userId - Discord user ID
- * @returns Quota check result with reset timestamp if exceeded
- */
-export function checkImportQuota(userId: string): QuotaCheckResult {
-	// Disabled in development
-	if (!GUARDS_ENABLED) {
 		return { allowed: true };
 	}
 
-	const now = Date.now();
-	const quota = importQuotaMap.get(userId);
-
-	// No quota entry exists - first operation allowed
-	if (!quota) {
-		return { allowed: true };
-	}
-
-	// Quota expired - reset and allow
-	if (now >= quota.resetAt) {
-		importQuotaMap.delete(userId);
-		return { allowed: true };
-	}
-
-	// Check if quota exceeded
-	const limit = IMPORT_RATE_LIMITS.MAX_OPERATIONS_PER_DAY;
+	// Check if quota would exceed limit BEFORE incrementing
 	if (quota.count >= limit) {
 		return {
 			allowed: false,
@@ -663,63 +597,37 @@ export function checkImportQuota(userId: string): QuotaCheckResult {
 		};
 	}
 
+	// Atomically increment and return success
+	quota.count++;
 	return { allowed: true };
 }
 
 /**
- * Increments the import operation quota for a user
- * Should be called after a successful import operation
+ * Atomically checks and reserves an import operation quota slot
+ * Combines check and increment into a single operation to prevent race conditions
  * @param userId - Discord user ID
+ * @returns Quota check result - if allowed, quota is already reserved
  */
-export function incrementImportQuota(userId: string): void {
+export function reserveImportQuota(userId: string): QuotaCheckResult {
 	// Disabled in development
 	if (!GUARDS_ENABLED) {
-		return;
+		return { allowed: true };
 	}
 
 	const now = Date.now();
 	const quota = importQuotaMap.get(userId);
+	const limit = IMPORT_RATE_LIMITS.MAX_OPERATIONS_PER_DAY;
 
+	// First operation or expired quota - create with count 1 (atomically reserve)
 	if (!quota || now >= quota.resetAt) {
-		// First operation or expired quota - create new entry
 		importQuotaMap.set(userId, {
 			count: 1,
-			resetAt: now + 24 * 60 * 60 * 1000, // 24 hours from now
+			resetAt: now + 24 * 60 * 60 * 1000,
 		});
-	} else {
-		// Increment existing quota
-		quota.count++;
-	}
-}
-
-/**
- * Checks if a server (guild) has exceeded their avatar change quota
- * Note: This is a guild-level quota, not user-level
- * @param guildId - Discord guild ID
- * @returns Quota check result with reset timestamp if exceeded
- */
-export function checkAvatarQuota(guildId: string): QuotaCheckResult {
-	// Disabled in development
-	if (!GUARDS_ENABLED) {
 		return { allowed: true };
 	}
 
-	const now = Date.now();
-	const quota = avatarQuotaMap.get(guildId);
-
-	// No quota entry exists - first operation allowed
-	if (!quota) {
-		return { allowed: true };
-	}
-
-	// Quota expired - reset and allow
-	if (now >= quota.resetAt) {
-		avatarQuotaMap.delete(guildId);
-		return { allowed: true };
-	}
-
-	// Check if quota exceeded
-	const limit = AVATAR_RATE_LIMITS.MAX_OPERATIONS_PER_DAY;
+	// Check if quota would exceed limit BEFORE incrementing
 	if (quota.count >= limit) {
 		return {
 			allowed: false,
@@ -729,33 +637,50 @@ export function checkAvatarQuota(guildId: string): QuotaCheckResult {
 		};
 	}
 
+	// Atomically increment and return success
+	quota.count++;
 	return { allowed: true };
 }
 
 /**
- * Increments the avatar change quota for a server (guild)
- * Should be called after a successful avatar update operation
+ * Atomically checks and reserves an avatar change quota slot
+ * Combines check and increment into a single operation to prevent race conditions
+ * Note: This is a guild-level quota, not user-level
  * @param guildId - Discord guild ID
+ * @returns Quota check result - if allowed, quota is already reserved
  */
-export function incrementAvatarQuota(guildId: string): void {
+export function reserveAvatarQuota(guildId: string): QuotaCheckResult {
 	// Disabled in development
 	if (!GUARDS_ENABLED) {
-		return;
+		return { allowed: true };
 	}
 
 	const now = Date.now();
 	const quota = avatarQuotaMap.get(guildId);
+	const limit = AVATAR_RATE_LIMITS.MAX_OPERATIONS_PER_DAY;
 
+	// First operation or expired quota - create with count 1 (atomically reserve)
 	if (!quota || now >= quota.resetAt) {
-		// First operation or expired quota - create new entry
 		avatarQuotaMap.set(guildId, {
 			count: 1,
-			resetAt: now + 24 * 60 * 60 * 1000, // 24 hours from now
+			resetAt: now + 24 * 60 * 60 * 1000,
 		});
-	} else {
-		// Increment existing quota
-		quota.count++;
+		return { allowed: true };
 	}
+
+	// Check if quota would exceed limit BEFORE incrementing
+	if (quota.count >= limit) {
+		return {
+			allowed: false,
+			resetAt: quota.resetAt,
+			current: quota.count,
+			max: limit,
+		};
+	}
+
+	// Atomically increment and return success
+	quota.count++;
+	return { allowed: true };
 }
 
 /**

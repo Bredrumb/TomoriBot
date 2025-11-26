@@ -16,8 +16,7 @@ import type { UserRow } from "../../types/db/schema";
 import {
 	memoryGuard,
 	IMPORT_LIMITS,
-	checkImportQuota,
-	incrementImportQuota,
+	reserveImportQuota,
 } from "../../utils/security/rateLimiter";
 import {
 	validatePresetFile,
@@ -188,11 +187,11 @@ export async function execute(
 		// 6. Defer reply while we process
 		await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-		// 6.25. Check import operation quota (volume-based DDoS protection)
-		const quotaCheck = checkImportQuota(interaction.user.id);
-		if (!quotaCheck.allowed) {
-			const resetTime = quotaCheck.resetAt
-				? new Date(quotaCheck.resetAt).toLocaleString(locale)
+		// 6.25. Reserve import operation quota (atomic check+increment for DDoS protection)
+		const quotaReserve = reserveImportQuota(interaction.user.id);
+		if (!quotaReserve.allowed) {
+			const resetTime = quotaReserve.resetAt
+				? new Date(quotaReserve.resetAt).toLocaleString(locale)
 				: "unknown";
 
 			await interaction.editReply({
@@ -203,8 +202,6 @@ export async function execute(
 						)
 						.setDescription(
 							localizer(locale, "rate_limit.error_quota_exceeded_description", {
-								current: String(quotaCheck.current || 0),
-								max: String(quotaCheck.max || 0),
 								reset_time: resetTime,
 							}),
 						)
@@ -480,9 +477,7 @@ export async function execute(
 			embeds: [successEmbed],
 		});
 
-		// Increment import quota after successful operation
-		incrementImportQuota(interaction.user.id);
-
+		// Quota already reserved at step 6.25 - no increment needed
 		log.success(
 			`Successfully imported preset for ${isDM ? "DM" : "guild"} ${serverDiscId}: ${itemsImported.nickname}`,
 		);

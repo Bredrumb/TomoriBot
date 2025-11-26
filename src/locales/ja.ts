@@ -101,7 +101,7 @@ export default {
 		error_memory_critical_description: `現在メモリ使用率が高く、ファイルアップロードができません。しばらく後にお試しください。`,
 
 		error_quota_exceeded_title: `🔴 1日の上限に達しました`,
-		error_quota_exceeded_description: `インポート操作の1日の上限に達しました。クォータは**{reset_time}**にリセットされます。\n\nリセット時刻以降に再度お試しください。`,
+		error_quota_exceeded_description: `このコマンドの1日の上限に達しました。クォータは**{reset_time}**にリセットされます。\n\nリセット時刻以降に再度お試しください。`,
 	},
 
 	genai: {

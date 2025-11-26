@@ -20,8 +20,7 @@ import type { UserRow } from "../../types/db/schema";
 import {
 	memoryGuard,
 	PERSONA_LIMITS,
-	checkPersonaQuota,
-	incrementPersonaQuota,
+	reservePersonaQuota,
 } from "../../utils/security/rateLimiter";
 import { safeDownload } from "../../utils/security/safeDownload";
 import { getServerAvatar } from "../../utils/image/avatarHelper";
@@ -165,11 +164,11 @@ export async function execute(
 			return;
 		}
 
-		// 5. Check persona operation quota (volume-based DDoS protection)
-		const quotaCheck = checkPersonaQuota(interaction.user.id);
-		if (!quotaCheck.allowed) {
-			const resetTime = quotaCheck.resetAt
-				? new Date(quotaCheck.resetAt).toLocaleString(locale)
+		// 5. Reserve persona operation quota (atomic check+increment for DDoS protection)
+		const quotaReserve = reservePersonaQuota(interaction.user.id);
+		if (!quotaReserve.allowed) {
+			const resetTime = quotaReserve.resetAt
+				? new Date(quotaReserve.resetAt).toLocaleString(locale)
 				: "unknown";
 
 			await modalSubmitInteraction.editReply({
@@ -180,8 +179,6 @@ export async function execute(
 						)
 						.setDescription(
 							localizer(locale, "rate_limit.error_quota_exceeded_description", {
-								current: String(quotaCheck.current || 0),
-								max: String(quotaCheck.max || 0),
 								reset_time: resetTime,
 							}),
 						)
@@ -525,9 +522,7 @@ export async function execute(
 			files: [attachment],
 		});
 
-		// 14. Increment persona quota after successful operation
-		incrementPersonaQuota(interaction.user.id);
-
+		// Quota already reserved at step 5 - no increment needed
 		log.success(`Preset created successfully for: ${characterName}`);
 	} catch (error) {
 		log.error("Error in preset create command:", error);

@@ -12,8 +12,7 @@ import type { UserRow, ErrorContext } from "../../types/db/schema";
 import { safeDownload } from "../../utils/security/safeDownload";
 import {
 	memoryGuard,
-	checkAvatarQuota,
-	incrementAvatarQuota,
+	reserveAvatarQuota,
 } from "../../utils/security/rateLimiter";
 
 /**
@@ -240,11 +239,11 @@ export async function execute(
 			return;
 		}
 
-		// 4. Check quota (per-server, volume-based DDoS protection)
-		const quotaCheck = checkAvatarQuota(interaction.guild.id);
-		if (!quotaCheck.allowed) {
-			const resetTime = quotaCheck.resetAt
-				? new Date(quotaCheck.resetAt).toLocaleString(locale)
+		// 4. Reserve avatar quota (atomic check+increment for per-server DDoS protection)
+		const quotaReserve = reserveAvatarQuota(interaction.guild.id);
+		if (!quotaReserve.allowed) {
+			const resetTime = quotaReserve.resetAt
+				? new Date(quotaReserve.resetAt).toLocaleString(locale)
 				: "unknown";
 
 			await interaction.editReply({
@@ -255,8 +254,6 @@ export async function execute(
 						)
 						.setDescription(
 							localizer(locale, "rate_limit.error_quota_exceeded_description", {
-								current: String(quotaCheck.current || 0),
-								max: String(quotaCheck.max || 0),
 								reset_time: resetTime,
 							}),
 						)
@@ -274,9 +271,7 @@ export async function execute(
 			const result = await updateGuildAvatar(interaction.guild.id, null);
 
 			if (result.success) {
-				// Increment quota after successful removal
-				incrementAvatarQuota(interaction.guild.id);
-
+				// Quota already reserved at step 4 - no increment needed
 				await replyInfoEmbed(interaction, locale, {
 					titleKey: "commands.server.avatar.removed_title",
 					descriptionKey: "commands.server.avatar.removed_description",
@@ -350,9 +345,7 @@ export async function execute(
 		);
 
 		if (updateResult.success) {
-			// Increment quota after successful avatar update
-			incrementAvatarQuota(interaction.guild.id);
-
+			// Quota already reserved at step 4 - no increment needed
 			await replyInfoEmbed(interaction, locale, {
 				titleKey: "commands.server.avatar.success_title",
 				descriptionKey: "commands.server.avatar.success_description",

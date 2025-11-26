@@ -101,7 +101,7 @@ export default {
 		error_memory_critical_description: `I'm currently experiencing high memory usage, preventing file uploads. Please try again in a moment.`,
 
 		error_quota_exceeded_title: `🔴 Daily Limit Reached`,
-		error_quota_exceeded_description: `You've reached the daily limit for import operations. Your quota resets at **{reset_time}**.\n\nPlease try again after the reset time.`,
+		error_quota_exceeded_description: `You've reached the daily limit for this command. Your quota resets at **{reset_time}**.\n\nPlease try again after the reset time.`,
 	},
 
 	genai: {
