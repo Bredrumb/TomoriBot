@@ -82,6 +82,9 @@ CREATE TABLE IF NOT EXISTS servers (
 -- Add DM channel identification column (January 2025)
 SELECT add_column_if_not_exists('servers', 'is_dm_channel', 'BOOLEAN', 'false');
 
+-- Add registration_locale column for server region analytics (January 2025)
+SELECT add_column_if_not_exists('servers', 'registration_locale', 'TEXT');
+
 -- Create index for faster lookups
 CREATE INDEX IF NOT EXISTS idx_servers_disc_id ON servers(server_disc_id);
 CREATE INDEX IF NOT EXISTS idx_servers_is_dm_channel ON servers(is_dm_channel);

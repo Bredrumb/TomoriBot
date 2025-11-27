@@ -25,6 +25,7 @@ export const serverSchema = z.object({
 	server_id: z.number().optional(),
 	server_disc_id: z.string(),
 	is_dm_channel: z.boolean().default(false), // Added for DM support (January 2025)
+	registration_locale: z.string().nullable(), // Static locale captured at server setup (January 2025)
 	created_at: z.date().optional(),
 	updated_at: z.date().optional(),
 });
@@ -248,6 +249,7 @@ export const setupConfigSchema = z.object({
 	tomoriName: z.string(),
 	timezoneOffset: z.number().int().min(-12).max(14).default(0), // Timezone offset in hours
 	locale: z.string(),
+	registrationLocale: z.string().nullable(), // Analytics-only locale captured at setup; not used for functionality
 });
 export type SetupConfig = z.infer<typeof setupConfigSchema>;
 

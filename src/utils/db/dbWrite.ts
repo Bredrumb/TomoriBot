@@ -307,9 +307,10 @@ export async function setupServer(
 			const defaultTriggers = getBaseTriggerWords(validConfig.locale);
 
 			// 1. Create or update server record with DM support (Rule 15)
+			// registration_locale is only set on INSERT (static field for analytics)
 			const [server] = await tx`
-				INSERT INTO servers (server_disc_id, is_dm_channel)
-				VALUES (${validConfig.serverId}, ${isDMChannel})
+				INSERT INTO servers (server_disc_id, is_dm_channel, registration_locale)
+				VALUES (${validConfig.serverId}, ${isDMChannel}, ${validConfig.registrationLocale})
 				ON CONFLICT (server_disc_id) DO UPDATE
 				SET is_dm_channel = EXCLUDED.is_dm_channel
 				RETURNING *

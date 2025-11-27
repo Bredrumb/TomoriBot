@@ -42,7 +42,7 @@ export const configureSubcommand = (
  * @param _client - Discord client instance
  * @param interaction - Command interaction
  * @param userData - User data from database
- * @param locale - Locale of the interaction
+ * @param locale - Locale of the interaction (user-facing language)
  */
 export async function execute(
 	_client: Client,
@@ -65,6 +65,10 @@ export async function execute(
 	// Determine if this is a DM or guild context
 	const isDMChannel = interaction.channel.isDMBased();
 	const serverId = isDMChannel ? interaction.user.id : interaction.guild?.id;
+	// Use guild locale when available so server-level triggers/localized defaults match the guild language
+	const serverLocale = interaction.guildLocale ?? locale;
+	// Analytics-only locale capture (static); do not use for functionality
+	const registrationLocale = interaction.guildLocale ?? locale ?? null;
 
 	if (!serverId) {
 		await interaction.reply({
@@ -461,7 +465,8 @@ export async function execute(
 				humanizer: humanizerDegree, // Use the selected humanizer degree
 				tomoriName: getDefaultBotName(locale), // Get bot name from locale files
 				timezoneOffset: timezoneOffset, // Add timezone offset to config
-				locale,
+				locale: serverLocale, // Persist guild locale for server analytics/triggers; DM falls back to user locale
+				registrationLocale, // Analytics-only locale for servers
 			};
 
 			// Validate config using zod schema

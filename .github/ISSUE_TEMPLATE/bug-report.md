@@ -30,8 +30,10 @@ If applicable, add screenshots or error logs to help explain your problem.
 - Attach the exported JSON files to this issue (make sure to remove any sensitive information first!)
 
 ## Environment
-- **TomoriBot Version**: [e.g., v1.0.0 or commit hash]
 - **Deployment Method**: [Self-hosted with Bun / Self-hosted with Docker / Official hosted instance]
+
+If Self-Hosted, state the following as well:
+- **TomoriBot Version**: [e.g., v1.0.0 or commit hash]
 - **OS**: [e.g., Windows 11, Ubuntu 22.04, macOS 14]
 - **Bun Version**: [e.g., 1.0.0] (if self-hosted with Bun)
 - **Node.js Version**: [e.g., 20.0.0] (if applicable)

@@ -1,5 +1,5 @@
 # TomoriBot Privacy Policy
-Last updated: 2025-11-25
+Last updated: 2025-11-27
 
 This Privacy Policy explains how the official hosted TomoriBot instance handles data. If you self-host TomoriBot from this repository, you control your own data; this document is a reference template and does not govern your self-hosted deployment. 
 
@@ -11,15 +11,15 @@ Terms like "Server," "Memories," "Persona/Preset," "Provider," "Trigger," and "A
 The following data is stored in our database until you delete it using TomoriBot's slash commands:
 - **Discord identifiers and preferences:** User IDs, server IDs, nicknames, language/locale preferences, and privacy opt-out status to route commands and localize responses.
 - **Server configuration and persona data:** TomoriBot nicknames, persona attributes, sample dialogues, trigger words, LLM/provider selections, timezone offsets, and feature toggles configured per server.
-- **Server emoji and sticker metadata:** Discord IDs, names, descriptions, emotion keys (e.g., "happy", "smug"), and format flags for custom emojis/stickers configured for emotional expressions. The actual image files are NOT stored; only metadata is retained to identify and use them.
-- **Memories and content you provide:** Personal memories, server memories, and text you submit via commands. These may reference Discord users and message content you supply.
+- **Server emoji and sticker metadata:** Discord IDs, names, descriptions, and format flags for custom emojis/stickers configured for emotional expressions. The actual image files are NOT stored; only metadata is retained to identify and use them.
+- **Memories and content you provide through commands:** Personal memories, server memories, and text you submit via commands. These may reference Discord users and message content you supply.
 - **Reminders:** Reminder text, target user/channel, scheduled time, recurrence settings, and timezone information stored when you create reminders via bot commands.
 - **API keys:** Provider keys (e.g., AI or search) you choose to store. Keys are encrypted at rest.
 - **Operational logs:** Error logs containing interaction IDs, user/server IDs, command names, error types, and stack traces for debugging. No message content or personal conversations are logged. Routine successful operations are not logged.
 
 ### 1.2) Data Processed Ephemerally (Not Stored)
 The following data is accessed temporarily during Trigger processing (as defined in the Terms of Service) and is NOT stored in our database:
-- **Recent Discord messages:** Latest content (typically last 80 messages) in the triggered Discord text channel are read in-memory to build conversation context and sent to your configured Provider for AI responses. This data is immediately discarded after the response is generated.
+- **Discord messages:** Latest content (typically last 80 messages) in the triggered Discord text channel are read in-memory to build conversation context and sent to your configured Provider for AI responses. This data is immediately discarded after the response is generated.
 - **Attachments and media:** Images you upload for persona avatars, message video/image attachments, or profile picture analysis (e.g., `/peek profile_picture`) are processed in-memory and sent to your configured AI provider if needed, but are NOT stored by TomoriBot. Once processing completes, these files are discarded.
 - **Server asset URLs:** When emojis/stickers are used in AI responses, their image URLs are fetched fresh from Discord each time and may be sent to AI providers as conversation context. These URLs are not stored.
 
@@ -36,7 +36,7 @@ The following data is accessed temporarily during Trigger processing (as defined
 - We do not sell personal data. Sharing occurs only as necessary to operate the features you invoke or to comply with law.
 
 ## 4) Your Choices and Controls
-- Use `/personal privacy` to stop saving personal memories about you across servers. Other server-level data (e.g., persona, server memories) may still exist if maintained by admins.
+- Use `/personal privacy` to stop saving personal memories about you across servers.
 - Use `/data export` to retrieve personal or server data.
 - Use `/data delete personal` to remove your user record (cascades related personal data) or `/data delete server` to remove a server's TomoriBot data.
 - Server admins can disable features such as sample dialogue teaching, personal memories, web search, or other permissions using configuration commands.

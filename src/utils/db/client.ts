@@ -31,9 +31,7 @@ function createDatabaseClient(): SQL {
 	// Allow initialization without password for scripts that don't use the database
 	// (e.g., localization checks, linting). Database operations will fail if attempted.
 	if (!password) {
-		console.warn(
-			"\x1b[33m[WARN]\x1b[0m POSTGRES_PASSWORD not set - database client created but operations will fail",
-		);
+		// console.warn("\x1b[33m[WARN]\x1b[0m POSTGRES_PASSWORD not set - database client created but operations will fail",);
 		// Return a dummy client that will error on actual use
 		return new SQL({
 			hostname: host,
@@ -61,9 +59,7 @@ function createDatabaseClient(): SQL {
 				throw new Error("CA bundle not found in any known path");
 			}
 			const ca = readFileSync(certPath, "utf8");
-			console.log(
-				"\x1b[36m[INFO]\x1b[0m Database SSL mode: verify-full (production with CA certificate)",
-			);
+			// console.log("\x1b[36m[INFO]\x1b[0m Database SSL mode: verify-full (production with CA certificate)",);
 
 			return new SQL({
 				hostname: host,
@@ -121,9 +117,7 @@ export const sql = new Proxy(
 	} as unknown as SQL,
 	{
 		apply(_target, thisArg, argArray) {
-			const client = getClient() as unknown as (
-				...args: unknown[]
-			) => unknown;
+			const client = getClient() as unknown as (...args: unknown[]) => unknown;
 			return Reflect.apply(client, thisArg, argArray);
 		},
 		get(_target, prop, receiver) {
