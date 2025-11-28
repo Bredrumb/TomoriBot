@@ -2,9 +2,10 @@ import { type ActivityOptions, ActivityType, type Client } from "discord.js";
 import pkg from "../../../package.json";
 import { log } from "../../utils/misc/logger";
 import { getMCPManager } from "../../utils/mcp/mcpManager";
+import { sql } from "@/utils/db/client";
 
-// Cycle delay in milliseconds (300000ms = 5 minutes)
-const CYCLE_DELAY = 300000;
+// Cycle delay in milliseconds (1 minute)
+const CYCLE_DELAY = 60000;
 
 // Tomori's birthday (May 11)
 const BIRTHDAY_MONTH = 4; // 0-indexed (April = 3, May = 4)
@@ -17,6 +18,33 @@ const BIRTHDAY_DAY = 11;
 function isTomoriBirthday(): boolean {
 	const now = new Date();
 	return now.getMonth() === BIRTHDAY_MONTH && now.getDate() === BIRTHDAY_DAY;
+}
+
+/**
+ * Gets the server count from the database (including all servers and DM channels).
+ * Falls back to Discord cache count on error.
+ * @param client - The Discord client instance for fallback count.
+ * @returns {Promise<number>} The number of servers.
+ */
+async function getServerCount(client: Client): Promise<number> {
+	try {
+		// Query database for total server count (includes DMs)
+		const result = await sql<[{ count: string }]>`
+			SELECT COUNT(*) as count
+			FROM servers
+		`;
+
+		// sql returns count as string, parse to number
+		const count = Number.parseInt(result[0]?.count || "0", 10);
+		return count;
+	} catch (error) {
+		// Fall back to Discord cache if database query fails
+		log.warn("Failed to get server count from database, using cache", {
+			errorType: "DatabaseQueryError",
+			metadata: { error },
+		});
+		return client.guilds.cache.size;
+	}
 }
 
 /**
@@ -51,21 +79,6 @@ const handler = async (client: Client): Promise<void> => {
 	log.section("Listening for error and info logs...");
 	log.info(`Time started: [${new Date().toLocaleTimeString()}]`);
 
-	const normalStatus: ActivityOptions[] = [
-		{
-			name: `Running on version ${pkg.version}`,
-			type: ActivityType.Playing,
-		},
-		{
-			name: "Listening for /help",
-			type: ActivityType.Listening,
-		},
-		{
-			name: `Watching over ${client.guilds.cache.size} servers`,
-			type: ActivityType.Watching,
-		},
-	];
-
 	const birthdayStatus: ActivityOptions = {
 		name: "Celebrating my birthday!",
 		type: ActivityType.Streaming,
@@ -75,8 +88,9 @@ const handler = async (client: Client): Promise<void> => {
 	/**
 	 * Updates the bot's status based on whether it's Tomori's birthday.
 	 * If it's May 11, shows birthday status; otherwise rotates through normal statuses.
+	 * Fetches server count from database for accurate status display.
 	 */
-	function updateStatus(): void {
+	async function updateStatus(): Promise<void> {
 		if (!client.user) return;
 
 		// 1. Check if today is Tomori's birthday
@@ -84,7 +98,26 @@ const handler = async (client: Client): Promise<void> => {
 			// 2. Set birthday status
 			client.user.setActivity(birthdayStatus);
 		} else {
-			// 3. Normal status rotation
+			// 3. Get current server count from database
+			const serverCount = await getServerCount(client);
+
+			// 4. Build normal status options with current server count
+			const normalStatus: ActivityOptions[] = [
+				{
+					name: `Running on version ${pkg.version}`,
+					type: ActivityType.Playing,
+				},
+				{
+					name: "Listening for /help",
+					type: ActivityType.Listening,
+				},
+				{
+					name: `Watching over ${serverCount} servers`,
+					type: ActivityType.Watching,
+				},
+			];
+
+			// 5. Normal status rotation
 			if (normalStatus.length > 0) {
 				const random = Math.floor(Math.random() * normalStatus.length);
 				client.user.setActivity(normalStatus[random]);
@@ -93,11 +126,11 @@ const handler = async (client: Client): Promise<void> => {
 	}
 
 	// Set initial status on startup
-	updateStatus();
+	await updateStatus();
 
 	// Update status every cycle (5 minutes)
 	setInterval(() => {
-		updateStatus();
+		void updateStatus(); // Use void to indicate intentional fire-and-forget
 	}, CYCLE_DELAY);
 };
 
