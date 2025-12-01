@@ -72,7 +72,14 @@ VALUES
    '品質と速度のバランスが取れた高速で効率的な画像生成モデル'),
   ('google', 'gemini-3-pro-image-preview', false, false, false, false,
    'Advanced image generation model with higher resolution support (1K/2K/4K) and enhanced quality',
-   '高解像度対応（1K/2K/4K）と強化された品質を備えた高度な画像生成モデル')
+   '高解像度対応（1K/2K/4K）と強化された品質を備えた高度な画像生成モデル'),
+  -- OpenRouter Gemini Image Generation Models (via OpenRouter API)
+  ('openrouter', 'google/gemini-2.5-flash-image', true, false, false, false,
+   'Fast and efficient image generation via OpenRouter with balanced quality and speed',
+   'OpenRouter経由の品質と速度のバランスが取れた高速で効率的な画像生成'),
+  ('openrouter', 'google/gemini-3-pro-image-preview', false, false, false, false,
+   'Advanced image generation via OpenRouter with enhanced quality and resolution options',
+   'OpenRouter経由の強化された品質と解像度オプションを備えた高度な画像生成')
 ON CONFLICT (codename) DO UPDATE SET
   model_description = EXCLUDED.model_description,
   ja_description = EXCLUDED.ja_description,

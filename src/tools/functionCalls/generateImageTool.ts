@@ -14,7 +14,7 @@ import {
 	type ToolResult,
 	type ToolParameterSchema,
 } from "../../types/tool/interfaces";
-import { sql } from "bun";
+import { sql } from "../../utils/db/client";
 import type { FunctionResponseImageMetadata } from "../../types/provider/interfaces";
 import { decryptApiKey } from "../../utils/security/crypto";
 
@@ -44,7 +44,18 @@ export class GenerateImageTool extends BaseTool {
 				type: "string",
 				description:
 					"Optional: The aspect ratio for the generated image. Default is '1:1' (square).",
-				enum: ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"],
+				enum: [
+					"1:1",
+					"2:3",
+					"3:2",
+					"3:4",
+					"4:3",
+					"4:5",
+					"5:4",
+					"9:16",
+					"16:9",
+					"21:9",
+				],
 			},
 		},
 		required: ["prompt"],
@@ -52,12 +63,12 @@ export class GenerateImageTool extends BaseTool {
 
 	/**
 	 * Check if image generation is available for the given provider
-	 * Currently only Google Gemini supports Imagen API
+	 * Supports Google Gemini (direct API) and OpenRouter (via their API)
 	 * @param provider - LLM provider name
-	 * @returns True if provider is Google
+	 * @returns True if provider is Google or OpenRouter
 	 */
 	isAvailableFor(provider: string): boolean {
-		return provider === "google";
+		return provider === "google" || provider === "openrouter";
 	}
 
 	/**
@@ -130,9 +141,8 @@ export class GenerateImageTool extends BaseTool {
 
 					// Convert to base64
 					const imageArrayBuffer = await imageResponse.arrayBuffer();
-					const base64ImageData = Buffer.from(imageArrayBuffer).toString(
-						"base64",
-					);
+					const base64ImageData =
+						Buffer.from(imageArrayBuffer).toString("base64");
 
 					inlineDataArray.push({
 						mimeType: attachment.contentType || "image/jpeg",
@@ -162,6 +172,135 @@ export class GenerateImageTool extends BaseTool {
 	}
 
 	/**
+	 * Generate image using OpenRouter API
+	 * @param apiKey - Decrypted API key
+	 * @param modelCodename - Model codename (e.g., "google/gemini-2.5-flash-image")
+	 * @param prompt - Text prompt for image generation
+	 * @param aspectRatio - Aspect ratio (e.g., "16:9")
+	 * @param referenceImages - Optional array of reference images for img2img
+	 * @returns Promise resolving to generated image data and mimeType
+	 */
+	private async generateImageWithOpenRouter(
+		apiKey: string,
+		modelCodename: string,
+		prompt: string,
+		aspectRatio: string,
+		referenceImages?: Array<{ mimeType: string; data: string }>,
+	): Promise<{ imageData: string | null; mimeType: string | null }> {
+		// Helpful debug log for provider/model combo
+		log.info(
+			`[OpenRouter] Sending image request to model "${modelCodename}" (aspect ratio: ${aspectRatio}, refs: ${referenceImages?.length ?? 0})`,
+		);
+
+		// Prepare messages array
+		const messages: Array<{
+			role: string;
+			content: Array<{
+				type: string;
+				text?: string;
+				image_url?: { url: string };
+			}>;
+		}> = [];
+
+		// Build content array with text prompt
+		const contentParts: Array<{
+			type: string;
+			text?: string;
+			image_url?: { url: string };
+		}> = [{ type: "text", text: prompt }];
+
+		// Add reference images if provided (for img2img)
+		if (referenceImages && referenceImages.length > 0) {
+			for (const img of referenceImages) {
+				contentParts.push({
+					type: "image_url",
+					image_url: {
+						url: `data:${img.mimeType};base64,${img.data}`,
+					},
+				});
+			}
+		}
+
+		messages.push({
+			role: "user",
+			content: contentParts,
+		});
+
+		// Call OpenRouter API
+		const response = await fetch(
+			"https://openrouter.ai/api/v1/chat/completions",
+			{
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${apiKey}`,
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					model: modelCodename,
+					messages: messages,
+					modalities: ["image", "text"],
+					image_config: {
+						aspect_ratio: aspectRatio,
+					},
+				}),
+			},
+		);
+
+		if (!response.ok) {
+			const errorText = await response.text();
+			// Log richer context without dumping the whole prompt
+			const bodySnippet = errorText.slice(0, 500);
+			log.warn(
+				`[OpenRouter] Image request failed (${response.status} ${response.statusText}) for model "${modelCodename}". Body: ${bodySnippet}`,
+			);
+
+			// Try to pull a human-readable message out of the body if possible
+			let parsedMessage = "";
+			try {
+				const parsed = JSON.parse(errorText);
+				parsedMessage =
+					(parsed?.error?.message as string | undefined) ||
+					(parsed?.message as string | undefined) ||
+					"";
+			} catch {
+				// ignore JSON parse errors; fall back to raw snippet
+			}
+
+			const friendlyMessage =
+				parsedMessage ||
+				bodySnippet ||
+				`${response.status} ${response.statusText}`.trim();
+
+			throw new Error(
+				`OpenRouter API request failed (${response.status} ${response.statusText}) for model "${modelCodename}": ${friendlyMessage}`,
+			);
+		}
+
+		const result = await response.json();
+
+		// Extract image from response
+		if (result.choices?.[0]?.message?.images) {
+			const firstImage = result.choices[0].message.images[0];
+			// OpenRouter may return either snake_case (image_url) or camelCase (imageUrl)
+			const dataUrl =
+				firstImage?.image_url?.url || firstImage?.imageUrl?.url || null;
+			if (dataUrl) {
+				// OpenRouter returns data URLs like "data:image/png;base64,..."
+				const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+
+				if (matches) {
+					return {
+						imageData: matches[2], // Base64 data
+						mimeType: matches[1], // MIME type
+					};
+				}
+			}
+		}
+
+		return { imageData: null, mimeType: null };
+	}
+
+	/**
 	 * Execute image generation
 	 * @param args - Arguments containing prompt, optional message_id, and optional aspect_ratio
 	 * @param context - Tool execution context
@@ -187,8 +326,7 @@ export class GenerateImageTool extends BaseTool {
 
 		try {
 			// Get the diffusion model codename from database
-			const diffusionModelId =
-				context.tomoriState.config.diffusion_model_id;
+			const diffusionModelId = context.tomoriState.config.diffusion_model_id;
 
 			if (!diffusionModelId) {
 				return {
@@ -201,9 +339,7 @@ export class GenerateImageTool extends BaseTool {
 			const modelCodename =
 				await this.getDiffusionModelCodename(diffusionModelId);
 
-			log.info(
-				`Using diffusion model: ${modelCodename} for image generation`,
-			);
+			log.info(`Using diffusion model: ${modelCodename} for image generation`);
 
 			// Decrypt API key
 			const encryptedApiKey = context.tomoriState.config.api_key;
@@ -225,68 +361,86 @@ export class GenerateImageTool extends BaseTool {
 				};
 			}
 
-			// Initialize Google AI client
-			const ai = new GoogleGenAI({ apiKey });
-
-			// Create chat for image generation
-			const chat = ai.chats.create({
-				model: modelCodename,
-			});
-
-			// Prepare message content
-			const messagePayload: {
-				message: string;
-				media?: Array<{ mimeType: string; data: string }>;
-				config?: {
-					responseModalities: string[];
-					imageConfig: {
-						aspectRatio: string;
-					};
-				};
-			} = {
-				message: prompt,
-				config: {
-					responseModalities: ["IMAGE"],
-					imageConfig: {
-						aspectRatio: aspectRatio,
-					},
-				},
-			};
-
-			// If message_id provided, extract images for img2img
+			// Extract reference images if message_id provided
+			let referenceImages:
+				| Array<{ mimeType: string; data: string }>
+				| undefined;
 			if (messageId) {
 				log.info(
 					`Extracting images from message ${messageId} for image-to-image generation`,
 				);
-				const referenceImages =
-					await this.extractImagesFromMessage(messageId, context);
-				messagePayload.media = referenceImages;
+				referenceImages = await this.extractImagesFromMessage(
+					messageId,
+					context,
+				);
 				log.info(
 					`Using ${referenceImages.length} reference image(s) for generation`,
 				);
 			}
 
-			// Call Gemini Imagen API
+			// Call appropriate provider API
 			log.info(
-				`Generating image with prompt: "${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}" (aspect ratio: ${aspectRatio})`,
+				`Generating image with ${context.provider} via ${modelCodename}: "${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}" (aspect ratio: ${aspectRatio})`,
 			);
 
-			const response = await chat.sendMessage(messagePayload);
-
-			// Extract generated image from response
 			let generatedImageData: string | null = null;
 			let generatedImageMimeType: string | null = null;
 
-			if (
-				response?.candidates &&
-				response.candidates.length > 0 &&
-				response.candidates[0]?.content?.parts
-			) {
-				for (const part of response.candidates[0].content.parts) {
-					if (part.inlineData) {
-						generatedImageData = part.inlineData.data ?? null;
-						generatedImageMimeType = part.inlineData.mimeType ?? null;
-						break;
+			if (context.provider === "openrouter") {
+				// Use OpenRouter API
+				const result = await this.generateImageWithOpenRouter(
+					apiKey,
+					modelCodename,
+					prompt,
+					aspectRatio,
+					referenceImages,
+				);
+				generatedImageData = result.imageData;
+				generatedImageMimeType = result.mimeType;
+			} else if (context.provider === "google") {
+				// Use Google Gemini API
+				const ai = new GoogleGenAI({ apiKey });
+				const chat = ai.chats.create({
+					model: modelCodename,
+				});
+
+				const messagePayload: {
+					message: string;
+					media?: Array<{ mimeType: string; data: string }>;
+					config?: {
+						responseModalities: string[];
+						imageConfig: {
+							aspectRatio: string;
+						};
+					};
+				} = {
+					message: prompt,
+					config: {
+						responseModalities: ["IMAGE"],
+						imageConfig: {
+							aspectRatio: aspectRatio,
+						},
+					},
+				};
+
+				if (referenceImages) {
+					messagePayload.media = referenceImages;
+				}
+
+				const response = await chat.sendMessage(messagePayload);
+
+				// Extract generated image from response
+				if (
+					response?.candidates &&
+					response.candidates.length > 0 &&
+					response.candidates[0]?.content?.parts
+				) {
+					for (const part of response.candidates[0].content.parts) {
+						if (part.inlineData) {
+							generatedImageData = part.inlineData.data ?? null;
+							generatedImageMimeType = part.inlineData.mimeType ?? null;
+							break;
+						}
 					}
 				}
 			}
@@ -295,7 +449,7 @@ export class GenerateImageTool extends BaseTool {
 				return {
 					success: false,
 					error:
-						"No image data received from Gemini API. The generation may have been blocked or failed.",
+						"No image data received from API. The generation may have been blocked or failed.",
 				};
 			}
 
@@ -305,24 +459,23 @@ export class GenerateImageTool extends BaseTool {
 				name: `generated_${Date.now()}.png`,
 			});
 
-			// Send image to Discord channel
-			await context.channel.send({
+			// Send image to Discord channel and capture the sent message for metadata
+			const sentMessage = await context.channel.send({
 				files: [attachment],
 			});
 
 			log.success("Successfully generated and sent image to Discord");
 
 			// Prepare image metadata for LLM visibility
+			const sentAttachments = Array.from(sentMessage.attachments.values());
 			const imageMetadata: FunctionResponseImageMetadata = {
-				imageUrls: [
-					{
-						url: `generated_image_${Date.now()}.png`, // Placeholder URL for context
-						mimeType: generatedImageMimeType || "image/png",
-						wasCompressed: false,
-					},
-				],
-				totalSent: 1,
-				totalValidated: 1,
+				imageUrls: sentAttachments.map((att) => ({
+					url: att.url,
+					mimeType: att.contentType || generatedImageMimeType || "image/png",
+					wasCompressed: false,
+				})),
+				totalSent: sentAttachments.length,
+				totalValidated: sentAttachments.length,
 			};
 
 			return {
@@ -335,6 +488,13 @@ export class GenerateImageTool extends BaseTool {
 			const errorMessage =
 				error instanceof Error ? error.message : String(error);
 
+			// Localize errors, but fall back to readable defaults if the localizer
+			// isn't initialized or a key is missing (to avoid leaking locale keys)
+			const getReadableError = (key: string, fallback: string): string => {
+				const localized = localizer(context.locale, key);
+				return localized === key ? fallback : localized;
+			};
+
 			log.error("Image generation failed:", error as Error);
 
 			// Check for billing/payment errors
@@ -346,9 +506,9 @@ export class GenerateImageTool extends BaseTool {
 			) {
 				return {
 					success: false,
-					error: localizer(
-						context.locale,
+					error: getReadableError(
 						"errors.google.400_billing_default_message",
+						"Billing is required for this service",
 					),
 				};
 			}
@@ -361,9 +521,9 @@ export class GenerateImageTool extends BaseTool {
 			) {
 				return {
 					success: false,
-					error: localizer(
-						context.locale,
+					error: getReadableError(
 						"errors.google.content_blocked_default_message",
+						"Your content was blocked by safety filters",
 					),
 				};
 			}

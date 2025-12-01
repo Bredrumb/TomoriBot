@@ -943,6 +943,63 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 					toolCallId: toolCallId,
 					content: JSON.stringify(interaction.functionResponse),
 				});
+
+				// Build a follow-up user message with the tool result text + any images
+				const responseParts: Array<Record<string, unknown>> = [];
+
+				// Include the raw function response as a text part (helps model know tool finished)
+				if (interaction.functionResponse) {
+					responseParts.push({
+						type: "text",
+						text: JSON.stringify(interaction.functionResponse),
+					});
+				}
+
+				// If the tool returned images, surface them to the model as image_url parts
+				if (
+					interaction.imageMetadata?.imageUrls &&
+					interaction.imageMetadata.imageUrls.length > 0
+				) {
+					for (const img of interaction.imageMetadata.imageUrls) {
+						try {
+							const imageResponse = await fetch(img.url);
+							if (!imageResponse.ok) {
+								log.warn(
+									`OpenrouterStreamAdapter: Failed to fetch tool image for context (${imageResponse.status}) ${img.url}`,
+								);
+								continue;
+							}
+
+							const arrayBuffer = await imageResponse.arrayBuffer();
+							const base64Data = Buffer.from(arrayBuffer).toString("base64");
+							const mimeType = img.mimeType || "image/png";
+
+							responseParts.push({
+								type: "image_url",
+								imageUrl: {
+									url: `data:${mimeType};base64,${base64Data}`,
+								},
+							});
+						} catch (imgErr) {
+							log.warn(
+								"OpenrouterStreamAdapter: Error processing tool image for context",
+								{
+									error:
+										imgErr instanceof Error ? imgErr.message : String(imgErr),
+									url: img.url,
+								},
+							);
+						}
+					}
+				}
+
+				if (responseParts.length > 0) {
+					// Add a follow-up user message carrying the result + images for model visibility
+					messages.push({
+						role: "user",
+						content: responseParts,
+					});
+				}
 			}
 		}
 

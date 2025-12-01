@@ -2342,7 +2342,7 @@ export default async function tomoriChat(
 								guildId: message.guild?.id, // Pass guild ID for guild-specific features (e.g., server avatars)
 								tomoriState,
 								locale,
-								provider: "google" as const,
+								provider: provider.getInfo().name,
 								streamContext: streamingContext, // Pass streaming context to tools
 							};
 
