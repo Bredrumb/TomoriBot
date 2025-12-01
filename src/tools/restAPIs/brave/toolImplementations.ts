@@ -302,9 +302,19 @@ export async function brave_image_search(
 		}
 
 		// Extract image URLs and process for Discord
-		const imageUrls = extractImageUrls(result.data);
+		const allImageUrls = extractImageUrls(result.data);
+		const isSupportedImageUrl = (url: string): boolean =>
+			!url.toLowerCase().includes(".avif");
+		const imageUrls = allImageUrls.filter(isSupportedImageUrl);
+		const skippedUrls = allImageUrls.filter((url) => !isSupportedImageUrl(url));
 
-		log.info(`Total image URLs extracted: ${imageUrls.length}`);
+		log.info(
+			`Total image URLs extracted: ${allImageUrls.length} (supported: ${imageUrls.length}, skipped AVIF: ${skippedUrls.length})`,
+		);
+
+		if (skippedUrls.length > 0) {
+			log.warn(`Skipped ${skippedUrls.length} unsupported AVIF image(s).`);
+		}
 
 		if (imageUrls.length > 0 && context?.channel) {
 			// Pre-validate URLs and create Discord attachments only for accessible images

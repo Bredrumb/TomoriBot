@@ -105,10 +105,22 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
 		context: MCPExecutionContext,
 		args: Record<string, unknown>,
 	): Promise<TypedMCPToolResult> {
+		const isSupportedImageUrl = (url: string): boolean => {
+			const lower = url.toLowerCase();
+			return !lower.includes(".avif");
+		};
+
 		try {
-			const imageUrls = MCPTypeGuards.extractImageUrls(mcpResult);
+			const allImageUrls = MCPTypeGuards.extractImageUrls(mcpResult);
+			const imageUrls = allImageUrls.filter(isSupportedImageUrl);
+			const skippedUrls = allImageUrls.filter((url) => !isSupportedImageUrl(url));
 
 			log.info(`Total image URLs extracted: ${imageUrls.length}`);
+			if (skippedUrls.length > 0) {
+				log.warn(
+					`BraveImageSearch: Skipped ${skippedUrls.length} unsupported AVIF image(s)`,
+				);
+			}
 
 			if (imageUrls.length > 0) {
 				// Create Discord attachments from image URLs
