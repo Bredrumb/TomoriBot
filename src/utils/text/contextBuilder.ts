@@ -928,6 +928,7 @@ export async function buildContext({
 		// Check if message has media (images or videos)
 		const hasMedia =
 			msg.imageAttachments.length > 0 || msg.videoAttachments.length > 0;
+		let mediaIdHintAdded = false;
 
 		// If message has media but is outside window, add placeholder
 		if (hasMedia && !isWithinMediaWindow) {
@@ -940,8 +941,9 @@ export async function buildContext({
 			// Add placeholder text
 			parts.push({
 				type: "text",
-				text: `[This message contained ${mediaDescription} - use increase_media_context with extend_by=${extendByNeeded} to view]`,
+				text: `[This message (ID: ${msg.id}) contained ${mediaDescription} - use increase_media_context with extend_by=${extendByNeeded} to view]`,
 			});
+			mediaIdHintAdded = true;
 		} else if (isWithinMediaWindow) {
 			// Within window: Add full media if model supports it, otherwise add placeholder
 			// Check model capability flags
@@ -1050,6 +1052,14 @@ export async function buildContext({
 				tomoriConfig.personal_memories_enabled,
 			);
 			parts.push({ type: "text", text: processedContent });
+		}
+
+		// Expose message ID for media messages so tools (generate_image, process_gif) can reference attachments
+		if (hasMedia && !mediaIdHintAdded) {
+			parts.push({
+				type: "text",
+				text: `[System: Media message ID for tool use: ${msg.id}]`,
+			});
 		}
 
 		if (parts.length > 0) {

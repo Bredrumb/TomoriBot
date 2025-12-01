@@ -15,7 +15,10 @@
  */
 
 import { OpenRouter } from "@openrouter/sdk";
-import type { FunctionCall } from "../../types/provider/interfaces";
+import type {
+	FunctionCall,
+	FunctionResponseImageMetadata,
+} from "../../types/provider/interfaces";
 import {
 	ContextItemTag,
 	type StructuredContextItem,
@@ -169,9 +172,12 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 				// biome-ignore lint/suspicious/noExplicitAny: SDK types don't match our internal format
 				messages: messages as any,
 				temperature: config.temperature,
-				maxTokens: config.maxOutputTokens,
+				// OpenRouter follows OpenAI's snake_case for max_tokens
+				...(config.maxOutputTokens !== undefined && {
+					max_tokens: config.maxOutputTokens,
+				}),
 				stream: true,
-				streamOptions: { includeUsage: true },
+				stream_options: { include_usage: true },
 				// Only include tools if defined and has items
 				...(config.tools && config.tools.length > 0
 					? {
@@ -658,6 +664,7 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		functionInteractionHistory?: Array<{
 			functionCall: FunctionCall;
 			functionResponse: Record<string, unknown>;
+			imageMetadata?: FunctionResponseImageMetadata;
 		}>,
 		seesImages: boolean = true,
 	): Promise<Array<Record<string, unknown>>> {
@@ -924,7 +931,18 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 				// Add assistant message with tool call
 				messages.push({
 					role: "assistant",
-					content: null,
+					content: "",
+					tool_calls: [
+						{
+							id: toolCallId,
+							type: "function",
+							function: {
+								name: interaction.functionCall.name,
+								arguments: JSON.stringify(interaction.functionCall.args || {}),
+							},
+						},
+					],
+					// Provide camelCase alias for SDK validation compatibility
 					toolCalls: [
 						{
 							id: toolCallId,
@@ -940,7 +958,8 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 				// Add tool response
 				messages.push({
 					role: "tool",
-					toolCallId: toolCallId,
+					tool_call_id: toolCallId,
+					toolCallId: toolCallId, // CamelCase alias for SDK validator
 					content: JSON.stringify(interaction.functionResponse),
 				});
 
@@ -955,42 +974,45 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 					});
 				}
 
-				// If the tool returned images, surface them to the model as image_url parts
+				// If the tool returned images, surface them to the model as image_url parts (only if model supports images)
 				if (
 					interaction.imageMetadata?.imageUrls &&
 					interaction.imageMetadata.imageUrls.length > 0
 				) {
-					for (const img of interaction.imageMetadata.imageUrls) {
-						try {
-							const imageResponse = await fetch(img.url);
-							if (!imageResponse.ok) {
-								log.warn(
-									`OpenrouterStreamAdapter: Failed to fetch tool image for context (${imageResponse.status}) ${img.url}`,
-								);
-								continue;
-							}
-
-							const arrayBuffer = await imageResponse.arrayBuffer();
-							const base64Data = Buffer.from(arrayBuffer).toString("base64");
-							const mimeType = img.mimeType || "image/png";
-
-							responseParts.push({
-								type: "image_url",
-								imageUrl: {
-									url: `data:${mimeType};base64,${base64Data}`,
-								},
-							});
-						} catch (imgErr) {
-							log.warn(
-								"OpenrouterStreamAdapter: Error processing tool image for context",
-								{
-									error:
-										imgErr instanceof Error ? imgErr.message : String(imgErr),
-									url: img.url,
-								},
-							);
-						}
+					if (!seesImages) {
+						log.info(
+							"OpenrouterStreamAdapter: Skipping tool images (model does not support images)",
+						);
 					}
+
+					for (const img of interaction.imageMetadata.imageUrls) {
+						if (!seesImages) {
+							continue;
+						}
+						const sourceUrl = img.originalUrl || img.url;
+
+						// Prefer direct URL; fall back to data URL if already provided
+						responseParts.push({
+							type: "image_url",
+							imageUrl: {
+								url: sourceUrl,
+								// OpenRouter allows URLs or data URLs; mimeType not required here
+							},
+						});
+						log.info(
+							`OpenrouterStreamAdapter: Added tool image reference for context: ${sourceUrl}`,
+						);
+					}
+				}
+
+				if (
+					interaction.imageMetadata?.messageIds &&
+					interaction.imageMetadata.messageIds.length > 0
+				) {
+					responseParts.push({
+						type: "text",
+						text: `[System: Images were sent to Discord in message ID(s): ${interaction.imageMetadata.messageIds.join(", ")}]`,
+					});
 				}
 
 				if (responseParts.length > 0) {
@@ -1018,33 +1040,17 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 					...msg,
 					content: msg.content.map((part: Record<string, unknown>) => {
 						if (part.type === "image_url") {
-							// Handle both snake_case (image_url) and camelCase (imageUrl) formats
-							const imageUrlField = part.image_url || part.imageUrl;
-							if (imageUrlField) {
-								const imageUrl = imageUrlField as Record<string, unknown>;
-								if (
-									imageUrl.url &&
-									typeof imageUrl.url === "string" &&
-									imageUrl.url.startsWith("data:")
-								) {
-									return {
-										type: "image_url",
-										// Preserve the original field name format
-										...(part.image_url
-											? {
-													image_url: {
-														...imageUrl,
-														url: "[BASE64_HIDDEN]",
-													},
-												}
-											: {
-													imageUrl: {
-														...imageUrl,
-														url: "[BASE64_HIDDEN]",
-													},
-												}),
-									};
-								}
+							const imageUrlField =
+								(part as { imageUrl?: { url?: string } }).imageUrl ||
+								(part as { image_url?: { url?: string } }).image_url;
+							if (imageUrlField?.url?.startsWith("data:")) {
+								return {
+									type: "image_url",
+									imageUrl: {
+										...imageUrlField,
+										url: "[BASE64_HIDDEN]",
+									},
+								};
 							}
 						}
 						return part;

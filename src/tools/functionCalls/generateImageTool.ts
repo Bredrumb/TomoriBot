@@ -24,8 +24,9 @@ import { decryptApiKey } from "../../utils/security/crypto";
 export class GenerateImageTool extends BaseTool {
 	name = "generate_image";
 	description =
-		"Generate an AI image using Google's Gemini Imagen. Provide a detailed text prompt describing what image you want to create. Optionally reference a message_id to use existing images from that message for image-to-image generation (modifying/editing existing images based on your prompt). You can also specify an aspect ratio (default is 1:1). After generating, the image will be sent directly to the Discord channel.";
+		"Generate an AI image using Google's Gemini Imagen. Provide a detailed text prompt describing what image you want to create. Optionally reference a message_id to use existing images from that message for image-to-image generation, or pass a user_id to use a Discord profile picture as a reference. You can also specify an aspect ratio (default is 1:1). After generating, the image will be sent directly to the Discord channel.";
 	category = "utility" as const;
+	private static readonly DISCORD_ID_PATTERN = /^\d{17,19}$/;
 
 	parameters: ToolParameterSchema = {
 		type: "object",
@@ -39,6 +40,11 @@ export class GenerateImageTool extends BaseTool {
 				type: "string",
 				description:
 					"Optional: The Discord message ID containing images to use as reference for image-to-image generation. The tool will extract all images from this message and use them to guide the generation along with your prompt. If not provided, generates a new image from scratch (text-to-image).",
+			},
+			user_id: {
+				type: "string",
+				description:
+					"Optional: Discord user ID whose profile picture should be used as a reference image. Useful for avatar-based edits. Can be combined with message_id references.",
 			},
 			aspect_ratio: {
 				type: "string",
@@ -322,6 +328,7 @@ export class GenerateImageTool extends BaseTool {
 		// Extract arguments
 		const prompt = args.prompt as string;
 		const messageId = args.message_id as string | undefined;
+		const userId = args.user_id as string | undefined;
 		const aspectRatio = (args.aspect_ratio as string) || "1:1";
 
 		try {
@@ -361,21 +368,57 @@ export class GenerateImageTool extends BaseTool {
 				};
 			}
 
-			// Extract reference images if message_id provided
-			let referenceImages:
-				| Array<{ mimeType: string; data: string }>
-				| undefined;
+			// Collect reference images from message attachments and/or profile picture
+			const referenceImages: Array<{ mimeType: string; data: string }> = [];
+
 			if (messageId) {
 				log.info(
 					`Extracting images from message ${messageId} for image-to-image generation`,
 				);
-				referenceImages = await this.extractImagesFromMessage(
+				const messageImages = await this.extractImagesFromMessage(
 					messageId,
 					context,
 				);
+				referenceImages.push(...messageImages);
 				log.info(
-					`Using ${referenceImages.length} reference image(s) for generation`,
+					`Using ${messageImages.length} reference image(s) from message ${messageId} for generation`,
 				);
+			}
+
+			if (userId) {
+				if (!this.isValidDiscordId(userId)) {
+					return {
+						success: false,
+						error: "Invalid Discord user ID format",
+						message:
+							"The provided user_id is not a valid Discord snowflake. Please supply a 17-19 digit Discord user ID.",
+					};
+				}
+
+				try {
+					const avatarData = await this.fetchUserAvatar(userId, context);
+					const avatarBase64 = await this.fetchAndConvertImageToBase64(
+						avatarData.avatarUrl,
+					);
+					referenceImages.push({
+						mimeType: "image/png",
+						data: avatarBase64,
+					});
+					log.info(
+						`Added profile picture reference for user ${avatarData.username} (${userId})`,
+					);
+				} catch (avatarErr) {
+					log.error(
+						`Failed to fetch profile picture for user ${userId}`,
+						avatarErr as Error,
+					);
+					return {
+						success: false,
+						error: "Failed to fetch profile picture for user_id",
+						message:
+							"Could not fetch that user's profile picture. Please confirm the user ID is correct and try again.",
+					};
+				}
 			}
 
 			// Call appropriate provider API
@@ -393,7 +436,7 @@ export class GenerateImageTool extends BaseTool {
 					modelCodename,
 					prompt,
 					aspectRatio,
-					referenceImages,
+					referenceImages.length > 0 ? referenceImages : undefined,
 				);
 				generatedImageData = result.imageData;
 				generatedImageMimeType = result.mimeType;
@@ -423,7 +466,7 @@ export class GenerateImageTool extends BaseTool {
 					},
 				};
 
-				if (referenceImages) {
+				if (referenceImages.length > 0) {
 					messagePayload.media = referenceImages;
 				}
 
@@ -473,14 +516,18 @@ export class GenerateImageTool extends BaseTool {
 					url: att.url,
 					mimeType: att.contentType || generatedImageMimeType || "image/png",
 					wasCompressed: false,
+					originalUrl: att.proxyURL ?? att.url,
 				})),
 				totalSent: sentAttachments.length,
 				totalValidated: sentAttachments.length,
+				messageIds: [sentMessage.id],
 			};
 
 			return {
 				success: true,
-				message: `Successfully generated and sent image to Discord. The image has been created based on your prompt${messageId ? " and the reference image(s)" : ""}.`,
+				message: `Successfully generated and sent image to Discord (message ID: ${sentMessage.id}). The image has been created based on your prompt${
+					referenceImages.length > 0 ? " and the reference image(s)" : ""
+				}.`,
 				imageMetadata,
 			};
 		} catch (error) {
@@ -534,5 +581,79 @@ export class GenerateImageTool extends BaseTool {
 				error: `Failed to generate image: ${errorMessage}`,
 			};
 		}
+	}
+
+	/**
+	 * Validate Discord snowflake format
+	 */
+	private isValidDiscordId(userId: string): boolean {
+		return GenerateImageTool.DISCORD_ID_PATTERN.test(userId);
+	}
+
+	/**
+	 * Fetch Discord user and their avatar URL (prefers guild avatar when available)
+	 */
+	private async fetchUserAvatar(
+		userId: string,
+		context: ToolContext,
+	): Promise<{ username: string; avatarUrl: string; serverNickname?: string }> {
+		const user = await context.client.users.fetch(userId);
+
+		let avatarUrl: string;
+		let serverNickname: string | undefined;
+
+		if (context.guildId) {
+			const guild = context.client.guilds.cache.get(context.guildId);
+			if (guild) {
+				const member = await guild.members.fetch(userId).catch(() => null);
+				if (member) {
+					avatarUrl = member.displayAvatarURL({
+						size: 1024,
+						extension: "png",
+						forceStatic: false,
+					});
+					serverNickname = member.nickname ?? undefined;
+				} else {
+					avatarUrl = user.displayAvatarURL({
+						size: 1024,
+						extension: "png",
+						forceStatic: false,
+					});
+				}
+			} else {
+				avatarUrl = user.displayAvatarURL({
+					size: 1024,
+					extension: "png",
+					forceStatic: false,
+				});
+			}
+		} else {
+			avatarUrl = user.displayAvatarURL({
+				size: 1024,
+				extension: "png",
+				forceStatic: false,
+			});
+		}
+
+		return {
+			username: user.username,
+			avatarUrl,
+			serverNickname,
+		};
+	}
+
+	/**
+	 * Fetch an image URL and convert to base64 (used for profile pictures)
+	 */
+	private async fetchAndConvertImageToBase64(imageUrl: string): Promise<string> {
+		const response = await fetch(imageUrl);
+		if (!response.ok) {
+			throw new Error(
+				`Failed to fetch image: ${response.status} ${response.statusText}`,
+			);
+		}
+
+		const imageArrayBuffer = await response.arrayBuffer();
+		return Buffer.from(imageArrayBuffer).toString("base64");
 	}
 }

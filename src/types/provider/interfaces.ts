@@ -77,6 +77,11 @@ export interface FunctionResponseImageMetadata {
 	}>;
 	totalSent: number;
 	totalValidated: number;
+	/**
+	 * Discord message IDs where these images were sent (if applicable)
+	 * Allows follow-up tools to reference the original attachments via message_id
+	 */
+	messageIds?: string[];
 }
 
 /**

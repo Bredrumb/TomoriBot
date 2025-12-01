@@ -35,6 +35,7 @@ import {
 	type ProviderConfig,
 	type ProviderInfo,
 	type StreamResult,
+	type FunctionResponseImageMetadata,
 } from "../../types/provider/interfaces";
 import { getOpenrouterToolAdapter } from "./openrouterToolAdapter";
 import {
@@ -345,6 +346,7 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 		functionInteractionHistory?: Array<{
 			functionCall: FunctionCall;
 			functionResponse: Record<string, unknown>;
+			imageMetadata?: FunctionResponseImageMetadata;
 		}>,
 		initialInteraction?: CommandInteraction,
 		replyToMessage?: Message,
@@ -374,6 +376,7 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 					DISCORD_STREAMING_CONSTANTS.MIN_VISIBLE_TYPING_DURATION_MS,
 				humanizerDegree: tomoriState.config.humanizer_degree,
 				emojiUsageEnabled: tomoriState.config.emoji_usage_enabled,
+				seesImages: tomoriState.llm.sees_images,
 				// Command-specific overrides from streaming context
 				forceReason: streamingContext?.forceReason,
 				isManuallyTriggered: streamingContext?.isManuallyTriggered,

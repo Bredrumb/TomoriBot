@@ -198,6 +198,16 @@ export class GoogleStreamAdapter implements StreamProvider {
 					}
 				}
 
+				// Surface Discord message IDs where images were sent so tools can reference them
+				if (
+					item.imageMetadata?.messageIds &&
+					item.imageMetadata.messageIds.length > 0
+				) {
+					responseParts.push({
+						text: `[System: Images were sent to Discord in message ID(s): ${item.imageMetadata.messageIds.join(", ")}]`,
+					});
+				}
+
 				finalContents.push({
 					role: "user",
 					parts: responseParts,

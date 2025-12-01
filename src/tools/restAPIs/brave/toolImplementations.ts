@@ -597,6 +597,7 @@ export async function brave_image_search(
 			);
 
 			// 3. Create Discord attachments for validated URLs (using compressed buffers when available)
+			const attachmentCompressionFlags: boolean[] = [];
 			for (let i = 0; i < validatedUrls.length; i++) {
 				try {
 					const imageUrl = validatedUrls[i];
@@ -610,6 +611,7 @@ export async function brave_image_search(
 						},
 					);
 					attachments.push(attachment);
+					attachmentCompressionFlags.push(Boolean(compressedBuffer));
 
 					if (compressedBuffer) {
 						log.info(
@@ -633,16 +635,17 @@ export async function brave_image_search(
 			// Send attachments to Discord channel
 			if (attachments.length > 0) {
 				try {
-					await context.channel.send({
+					const sentMessage = await context.channel.send({
 						files: attachments,
 					});
 					log.success(
 						`Sent ${attachments.length} validated image attachments to Discord`,
 					);
+					const sentAttachments = Array.from(sentMessage.attachments.values());
 
 					// Return simplified response to LLM - no URLs or image data to prevent duplicate processing
 					const queryTerm = args.query || "images";
-					let completionMessage = `Found and sent ${attachments.length} ${queryTerm} images directly to Discord. The images are now displayed for the user.`;
+					let completionMessage = `Found and sent ${attachments.length} ${queryTerm} images directly to Discord (message ID: ${sentMessage.id}). The images are now displayed for the user.`;
 
 					// Add information about failed URLs if any
 					if (failedUrls.length > 0) {
@@ -651,16 +654,15 @@ export async function brave_image_search(
 
 					// Build image metadata for LLM visibility
 					const imageMetadata = {
-						imageUrls: validatedUrls.map((url) => {
-							const wasCompressed = compressedImageMap.has(url);
-							return {
-								url,
-								mimeType: wasCompressed ? "image/jpeg" : "image/jpeg", // All attachments are sent as JPEG
-								wasCompressed,
-							};
-						}),
-						totalSent: attachments.length,
+						imageUrls: sentAttachments.map((att, index) => ({
+							url: att.url,
+							mimeType: att.contentType || "image/jpeg",
+							wasCompressed: attachmentCompressionFlags[index] ?? false,
+							originalUrl: att.proxyURL ?? att.url,
+						})),
+						totalSent: sentAttachments.length,
 						totalValidated: validatedUrls.length,
+						messageIds: [sentMessage.id],
 					};
 
 					return {

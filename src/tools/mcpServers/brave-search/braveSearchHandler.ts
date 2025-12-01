@@ -113,6 +113,8 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
 			if (imageUrls.length > 0) {
 				// Create Discord attachments from image URLs
 				const attachments: AttachmentBuilder[] = [];
+				let sentMessageId: string | undefined;
+				let sentAttachments: Array<import("discord.js").Attachment> | undefined;
 				const failedUrls: string[] = [];
 
 				for (let i = 0; i < imageUrls.length; i++) {
@@ -135,10 +137,12 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
 				// Send attachments to Discord channel
 				if (attachments.length > 0 && context.channel) {
 					try {
-						await context.channel.send({
+						const sentMessage = await context.channel.send({
 							files: attachments,
 							// content: `Found ${imageCount} image${imageCount !== 1 ? "s" : ""}:`,
 						});
+						sentMessageId = sentMessage.id;
+						sentAttachments = Array.from(sentMessage.attachments.values());
 						log.success(
 							`Sent ${attachments.length} image attachments to Discord`,
 						);
@@ -168,19 +172,27 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
 
 				// Return simplified response to LLM - no URLs or image data to prevent duplicate processing
 				const queryTerm = args.query || "images";
-				const completionMessage = `Found and sent ${attachments.length} ${queryTerm} images directly to Discord. The images are now displayed for the user.`;
+				const completionMessage = `Found and sent ${attachments.length} ${queryTerm} images directly to Discord (message ID: ${sentMessageId ?? "unknown"}). The images are now displayed for the user.`;
 
 				// Build image metadata for LLM visibility
 				const imageMetadata = {
-					imageUrls: imageUrls
-						.filter((url) => !failedUrls.includes(url))
-						.map((url) => ({
-							url,
-							mimeType: "image/jpeg", // MCP images sent as JPEG
-							wasCompressed: false, // MCP doesn't compress images
-						})),
+					imageUrls: sentAttachments
+						? sentAttachments.map((att) => ({
+								url: att.url,
+								mimeType: att.contentType || "image/jpeg",
+								wasCompressed: false, // MCP doesn't compress images
+								originalUrl: att.proxyURL ?? att.url,
+						  }))
+						: imageUrls
+								.filter((url) => !failedUrls.includes(url))
+								.map((url) => ({
+									url,
+									mimeType: "image/jpeg", // MCP images sent as JPEG
+									wasCompressed: false, // MCP doesn't compress images
+								})),
 					totalSent: attachments.length,
 					totalValidated: attachments.length,
+					messageIds: sentMessageId ? [sentMessageId] : undefined,
 				};
 
 				const toolResult: TypedMCPToolResult = {
