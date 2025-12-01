@@ -68,6 +68,11 @@ export async function execute(
 		return;
 	}
 
+	// Track the active interaction for error handling
+	let activeInteraction:
+		| ChatInputCommandInteraction
+		| import("discord.js").ModalSubmitInteraction = interaction;
+
 	try {
 		// 2. Load the Tomori state for this server/user
 		// Use user ID for DM context, guild ID for server context
@@ -155,6 +160,9 @@ export async function execute(
 			return;
 		}
 
+		// Update active interaction for error handling
+		activeInteraction = modalSubmitInteraction;
+
 		// 7. Basic API key validation - let helper functions manage interaction state
 		if (apiKey.length < 10) {
 			await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -235,6 +243,7 @@ export async function execute(
 		const currentProvider = tomoriState.llm.llm_provider.toLowerCase();
 		const newProvider = selectedProvider.toLowerCase();
 		let newLlmId = tomoriState.config.llm_id; // Default to current model
+		let newDiffusionModelId = tomoriState.config.diffusion_model_id; // Default to current diffusion model
 
 		if (currentProvider !== newProvider) {
 			// Provider changed, load default model for new provider
@@ -261,14 +270,57 @@ export async function execute(
 			log.info(
 				`Switching to default model for ${newProvider}: ${defaultModel.llm_codename} (ID: ${newLlmId})`,
 			);
+
+			// Load default diffusion model for new provider (for image generation)
+			const defaultDiffusionModel = (
+				await sql`
+					SELECT * FROM diffusion_models
+					WHERE provider = ${newProvider}
+					  AND is_default = true
+					  AND is_deprecated = false
+					ORDER BY diffusion_model_id ASC
+					LIMIT 1
+				`
+			)[0];
+
+			// Fallback: if no default diffusion model found, get the first available non-deprecated model
+			if (!defaultDiffusionModel) {
+				const fallbackDiffusionModel = (
+					await sql`
+						SELECT * FROM diffusion_models
+						WHERE provider = ${newProvider}
+						  AND is_deprecated = false
+						ORDER BY diffusion_model_id ASC
+						LIMIT 1
+					`
+				)[0];
+
+				if (fallbackDiffusionModel) {
+					newDiffusionModelId = fallbackDiffusionModel.diffusion_model_id;
+					log.warn(
+						`No default diffusion model found for ${newProvider}, using fallback: ${fallbackDiffusionModel.codename}`,
+					);
+				} else {
+					newDiffusionModelId = null;
+					log.info(
+						`No diffusion models available for ${newProvider} (image generation not supported)`,
+					);
+				}
+			} else {
+				newDiffusionModelId = defaultDiffusionModel.diffusion_model_id;
+				log.info(
+					`Switching to default diffusion model for ${newProvider}: ${defaultDiffusionModel.codename} (ID: ${newDiffusionModelId})`,
+				);
+			}
 		}
 
-		// 12. Update the config in the database (includes llm_id if provider changed)
+		// 12. Update the config in the database (includes llm_id and diffusion_model_id if provider changed)
 		const [updatedRow] = await sql`
 			UPDATE tomori_configs
 			SET api_key = ${encrypted},
 			    key_version = ${version},
-			    llm_id = ${newLlmId}
+			    llm_id = ${newLlmId},
+			    diffusion_model_id = ${newDiffusionModelId}
 			WHERE tomori_id = ${tomoriState.tomori_id}
 			RETURNING *
 		`;
@@ -357,17 +409,12 @@ export async function execute(
 			context,
 		);
 
-		// Inform user of unknown error
-		if (!interaction.replied && !interaction.deferred) {
-			await interaction.reply({
-				content: localizer(locale, "general.errors.unknown_error_description"),
-				flags: MessageFlags.Ephemeral,
-			});
-		} else {
-			await interaction.followUp({
-				content: localizer(locale, "general.errors.unknown_error_description"),
-				flags: MessageFlags.Ephemeral,
-			});
-		}
+		// Inform user of unknown error - use the active interaction (modal submit if available, otherwise original)
+		await replyInfoEmbed(activeInteraction, locale, {
+			titleKey: "general.errors.unknown_error_title",
+			descriptionKey: "general.errors.unknown_error_description",
+			color: ColorCode.ERROR,
+			flags: MessageFlags.Ephemeral,
+		});
 	}
 }

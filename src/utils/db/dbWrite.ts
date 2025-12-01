@@ -304,6 +304,51 @@ export async function setupServer(
 				);
 			}
 
+			// Find the default diffusion model for the selected provider (for image generation)
+			// First try to get the default diffusion model (is_default = true) for this provider, excluding deprecated
+			let selectedDiffusionModel = (
+				await tx`
+					SELECT * FROM diffusion_models
+					WHERE provider = ${validConfig.provider}
+					  AND is_default = true
+					  AND is_deprecated = false
+					ORDER BY diffusion_model_id ASC
+					LIMIT 1
+				`
+			)[0];
+
+			// Fallback: if no default diffusion model found, get the first available non-deprecated model for this provider
+			if (!selectedDiffusionModel) {
+				selectedDiffusionModel = (
+					await tx`
+						SELECT * FROM diffusion_models
+						WHERE provider = ${validConfig.provider}
+						  AND is_deprecated = false
+						ORDER BY diffusion_model_id ASC
+						LIMIT 1
+					`
+				)[0];
+
+				if (selectedDiffusionModel) {
+					log.warn(
+						`No default diffusion model found for provider ${validConfig.provider}, using fallback: ${selectedDiffusionModel.codename}`,
+					);
+				} else {
+					log.info(
+						`No diffusion models available for provider ${validConfig.provider} (image generation not supported)`,
+					);
+				}
+			} else {
+				log.info(
+					`Using default diffusion model for ${validConfig.provider}: ${selectedDiffusionModel.codename}`,
+				);
+			}
+
+			// Extract diffusion_model_id (null if no model found)
+			const selectedDiffusionModelId = selectedDiffusionModel
+				? selectedDiffusionModel.diffusion_model_id
+				: null;
+
 			const defaultTriggers = getBaseTriggerWords(validConfig.locale);
 
 			// 1. Create or update server record with DM support (Rule 15)
@@ -356,7 +401,8 @@ export async function setupServer(
 					humanizer_degree,
 					attribute_memteaching_enabled,
 					sampledialogue_memteaching_enabled,
-					timezone_offset
+					timezone_offset,
+					diffusion_model_id
 				)
 				VALUES (
 					${tomori.tomori_id},
@@ -367,7 +413,8 @@ export async function setupServer(
 					${validConfig.humanizer},
 					${isDMChannel},
 					${isDMChannel},
-					${validConfig.timezoneOffset}
+					${validConfig.timezoneOffset},
+					${selectedDiffusionModelId}
 				)
 				RETURNING *
 			`;

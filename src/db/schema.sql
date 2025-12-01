@@ -139,6 +139,32 @@ BEFORE UPDATE ON llms
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 
+-- Diffusion Models table for image generation models (January 2025)
+CREATE TABLE IF NOT EXISTS diffusion_models (
+  diffusion_model_id SERIAL PRIMARY KEY,
+  provider TEXT NOT NULL,
+  codename TEXT NOT NULL UNIQUE,
+  model_description TEXT,
+  ja_description TEXT,
+  is_default BOOLEAN DEFAULT false,
+  is_deprecated BOOLEAN DEFAULT false,
+  is_free BOOLEAN DEFAULT false,
+  is_uncensored BOOLEAN DEFAULT false,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create updated_at trigger for diffusion_models table
+DROP TRIGGER IF EXISTS update_diffusion_models_timestamp ON diffusion_models;
+CREATE TRIGGER update_diffusion_models_timestamp
+BEFORE UPDATE ON diffusion_models
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
+-- Create indexes for faster lookups
+CREATE INDEX IF NOT EXISTS idx_diffusion_models_provider ON diffusion_models(provider);
+CREATE INDEX IF NOT EXISTS idx_diffusion_models_default ON diffusion_models(is_default, is_deprecated);
+
 CREATE TABLE IF NOT EXISTS tomori_configs (
   tomori_config_id SERIAL PRIMARY KEY,
   tomori_id INT NOT NULL UNIQUE,
@@ -172,6 +198,24 @@ SELECT add_column_if_not_exists('tomori_configs', 'web_search_enabled', 'BOOLEAN
 
 -- Add pin message permission (November 2025)
 SELECT add_column_if_not_exists('tomori_configs', 'pin_message_enabled', 'BOOLEAN', 'true');
+
+-- Add diffusion model reference for image generation (January 2025)
+SELECT add_column_if_not_exists('tomori_configs', 'diffusion_model_id', 'INTEGER');
+
+-- Add foreign key constraint if the column was just created
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'tomori_configs_diffusion_model_id_fkey'
+    ) THEN
+        ALTER TABLE tomori_configs
+        ADD CONSTRAINT tomori_configs_diffusion_model_id_fkey
+        FOREIGN KEY (diffusion_model_id)
+        REFERENCES diffusion_models(diffusion_model_id)
+        ON DELETE SET NULL;
+    END IF;
+END $$;
 
 -- Migrate existing google_search_enabled values to web_search_enabled if the old column exists
 DO $$

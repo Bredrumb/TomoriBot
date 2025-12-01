@@ -35,8 +35,8 @@ VALUES
   ('openrouter', 'anthropic/claude-haiku-4.5', false, false, false, false, false, true, true, false, false, false, 'Lightweight version of claude-sonnet-4.5', 'claude-sonnet-4.5の軽量版'),
   ('openrouter', 'openai/gpt-5.1', true, false, true, false, false, true, true, false, false, false, 'State-of-the-art performance in complex tasks and problems', '複雑なタスクや問題に優れた最先端性能'),
   ('openrouter', 'openai/gpt-5.1-chat', true, false, true, false, false, true, true, false, false, false, 'State-of-the-art performance, more conversational', '複雑なタスクや問題に優れた最先端性能'),
-  ('openrouter', 'deepseek/deepseek-chat-v3-0324:free', false, true, false, false, true, true, false, false, false, true, 'Free general-purpose model that also performs good role-play', 'ロールプレイにも優れた無料の汎用モデル'),
-  ('openrouter', 'mistralai/mistral-small-3.2-24b-instruct:free', false, false, false, true, true, true, true, false, false, false, 'Free general-purpose model supporting images and tools', '画像とツールをサポートする無料の汎用モデル'),
+  ('openrouter', 'deepseek/deepseek-chat-v3-0324:free', false, true, false, false, true, false, false, false, false, true, 'Free general-purpose model that also performs good role-play', 'ロールプレイにも優れた無料の汎用モデル'),
+  ('openrouter', 'mistralai/mistral-small-3.2-24b-instruct:free', false, false, false, true, true, false, false, false, false, false, 'Free general-purpose model', '無料の汎用モデル'),
   ('openrouter', 'tngtech/deepseek-r1t2-chimera:free', false, false, true, false, true, false, false, false, false, true, 'Free model for solving complex tasks and problems', '複雑なタスクや問題の解決に適した無料モデル'),
   ('openrouter', 'account-setting', false, false, false, false, false, false, false, false, false, false, 'For advanced users that cannot find the model they want, uses the set Default Model in your OpenRouter settings', '目的のモデルが見つからない上級者向け、OpenRouter設定のデフォルトモデルを使用')
 ON CONFLICT (llm_codename) DO UPDATE SET
@@ -53,6 +53,34 @@ ON CONFLICT (llm_codename) DO UPDATE SET
   sees_youtube = EXCLUDED.sees_youtube,
   is_uncensored = EXCLUDED.is_uncensored,
   llm_provider = EXCLUDED.llm_provider,
+  updated_at = CURRENT_TIMESTAMP;
+
+-- Ensure all required columns exist in diffusion_models table
+SELECT add_column_if_not_exists('diffusion_models', 'is_default', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('diffusion_models', 'is_deprecated', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('diffusion_models', 'is_free', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('diffusion_models', 'is_uncensored', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('diffusion_models', 'model_description', 'TEXT');
+SELECT add_column_if_not_exists('diffusion_models', 'ja_description', 'TEXT');
+
+-- Insert Diffusion Models with conflict resolution
+INSERT INTO diffusion_models (provider, codename, is_default, is_deprecated, is_free, is_uncensored, model_description, ja_description)
+VALUES
+  -- Google Gemini Image Generation Models
+  ('google', 'gemini-2.5-flash-image', true, false, false, false,
+   'Fast and efficient image generation model with balanced quality and speed',
+   '品質と速度のバランスが取れた高速で効率的な画像生成モデル'),
+  ('google', 'gemini-3-pro-image-preview', false, false, false, false,
+   'Advanced image generation model with higher resolution support (1K/2K/4K) and enhanced quality',
+   '高解像度対応（1K/2K/4K）と強化された品質を備えた高度な画像生成モデル')
+ON CONFLICT (codename) DO UPDATE SET
+  model_description = EXCLUDED.model_description,
+  ja_description = EXCLUDED.ja_description,
+  is_default = EXCLUDED.is_default,
+  is_deprecated = EXCLUDED.is_deprecated,
+  is_free = EXCLUDED.is_free,
+  is_uncensored = EXCLUDED.is_uncensored,
+  provider = EXCLUDED.provider,
   updated_at = CURRENT_TIMESTAMP;
 
 -- Insert Tomori Presets (English)

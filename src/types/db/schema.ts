@@ -65,10 +65,26 @@ export const llmSchema = z.object({
 });
 export type LlmRow = z.infer<typeof llmSchema>;
 
+export const diffusionModelSchema = z.object({
+	diffusion_model_id: z.number().optional(),
+	provider: z.string(),
+	codename: z.string(),
+	model_description: z.string().nullable().optional(),
+	ja_description: z.string().nullable().optional(),
+	is_default: z.boolean().default(false),
+	is_deprecated: z.boolean().default(false),
+	is_free: z.boolean().default(false),
+	is_uncensored: z.boolean().default(false),
+	created_at: z.date().optional(),
+	updated_at: z.date().optional(),
+});
+export type DiffusionModelRow = z.infer<typeof diffusionModelSchema>;
+
 export const tomoriConfigSchema = z.object({
 	tomori_config_id: z.number().optional(),
 	tomori_id: z.number(),
 	llm_id: z.number(),
+	diffusion_model_id: z.number().int().nullable().optional(), // Added January 2025 - Image generation model
 	llm_temperature: z.number().min(1.0).max(2.0).default(1.5),
 	api_key: z.instanceof(Buffer).nullable(),
 	key_version: z.number().int().default(1).optional(), // Added November 2025 - Encryption key version for rotation
