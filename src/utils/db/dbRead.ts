@@ -660,7 +660,7 @@ export async function loadPresetOptions(
 
 /**
  * Loads personality presets filtered by locale with truncated descriptions for dynamic select menus.
- * Implements fallback logic: tries exact locale match → base language → 'en' fallback.
+ * Implements fallback logic: tries exact locale match → base language → 'en-US' fallback.
  * @param locale - The locale code to filter by (e.g., 'en-US', 'ja')
  * @param maxDescriptionLength - Maximum length for preset descriptions (default: 100)
  * @returns An array of preset options with truncated descriptions, or null if error or none found.
@@ -695,12 +695,12 @@ export async function loadPresetOptionsByLocale(
 			}
 		}
 
-		// 3. If still no presets, fall back to 'en'
-		if (presetRows.length === 0 && locale !== "en") {
+		// 3. If still no presets, fall back to 'en-US'
+		if (presetRows.length === 0 && locale !== "en-US") {
 			presetRows = await sql`
 				SELECT tomori_preset_name, tomori_preset_desc
 				FROM tomori_presets
-				WHERE preset_language = 'en'
+				WHERE preset_language = 'en-US'
 				ORDER BY tomori_preset_name ASC
 			`;
 
@@ -749,7 +749,7 @@ export async function loadPresetOptionsByLocale(
 
 /**
  * Loads full personality preset rows filtered by locale.
- * Implements fallback logic: tries exact locale match → base language → 'en' fallback.
+ * Implements fallback logic: tries exact locale match → base language → 'en-US' fallback.
  * Returns complete TomoriPresetRow objects with all fields (attributes, sample dialogues, etc.).
  * @param locale - The locale code to filter by (e.g., 'en-US', 'ja')
  * @returns An array of TomoriPresetRow objects, or null if error or none found.
@@ -781,11 +781,11 @@ export async function loadPresetRowsByLocale(
 			}
 		}
 
-		// 3. If still no presets, fall back to 'en'
-		if (presets.length === 0 && locale !== "en") {
+		// 3. If still no presets, fall back to 'en-US'
+		if (presets.length === 0 && locale !== "en-US") {
 			presets = await sql`
 				SELECT * FROM tomori_presets
-				WHERE preset_language = 'en'
+				WHERE preset_language = 'en-US'
 				ORDER BY tomori_preset_name ASC
 			`;
 
