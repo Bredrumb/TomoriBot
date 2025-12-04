@@ -10,16 +10,28 @@ services:
     volumes:
       # Persistent storage so you don't lose graphs when you restart
       - grafana_data:/var/lib/grafana
+      # Auto-provision PostgreSQL data source when running with docker-compose.yaml
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
     environment:
       # Set a default password to skip the "change password" screen
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
-      # Allow installing plugins (needed for some advanced AWS widgets)
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      # Allow installing plugins (needed for some advanced widgets)
       - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+      # PostgreSQL connection details (connects to postgres container in docker-compose.yaml)
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=tomodb
+      - POSTGRES_USER=tomori
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secure_default_password}
     networks:
-      - monitoring
+      - tomori-network
 
 volumes:
   grafana_data:
 
+# Join the network from docker-compose.yaml to access the postgres container
+# Run with: docker compose -f docker-compose.yaml -f docker-compose.monitor.yaml up
 networks:
-  monitoring:
+  tomori-network:
+    external: true
+    name: tomoribot_tomori-network
