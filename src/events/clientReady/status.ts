@@ -89,19 +89,26 @@ const handler = async (client: Client): Promise<void> => {
 	 * Updates the bot's status based on whether it's Tomori's birthday.
 	 * If it's May 11, shows birthday status; otherwise rotates through normal statuses.
 	 * Fetches server count from database for accurate status display.
+	 * Skips setting status if not in production environment.
 	 */
 	async function updateStatus(): Promise<void> {
 		if (!client.user) return;
 
-		// 1. Check if today is Tomori's birthday
+		// 1. Skip status updates in non-production environments
+		const isProduction = process.env.NODE_ENV === "production";
+		if (!isProduction) {
+			return;
+		}
+
+		// 2. Check if today is Tomori's birthday
 		if (isTomoriBirthday()) {
-			// 2. Set birthday status
+			// 3. Set birthday status
 			client.user.setActivity(birthdayStatus);
 		} else {
-			// 3. Get current server count from database
+			// 4. Get current server count from database
 			const serverCount = await getServerCount(client);
 
-			// 4. Build normal status options with current server count
+			// 5. Build normal status options with current server count
 			const normalStatus: ActivityOptions[] = [
 				{
 					name: `Running on version ${pkg.version}`,
@@ -117,7 +124,7 @@ const handler = async (client: Client): Promise<void> => {
 				},
 			];
 
-			// 5. Normal status rotation
+			// 6. Normal status rotation
 			if (normalStatus.length > 0) {
 				const random = Math.floor(Math.random() * normalStatus.length);
 				client.user.setActivity(normalStatus[random]);
