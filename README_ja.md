@@ -237,6 +237,25 @@ docker compose up
 
 **注意：** Docker Composeはデータベース接続を自動的に設定します。PostgreSQLサービスは開発モード（SSLなし）で実行され、内部Dockerネットワークに接続します。
 
+#### Grafanaでのモニタリング（オプション）
+
+GrafanaダッシュボードでTomoriBotインスタンスをモニタリングするには：
+
+```sh
+# TomoriBotとGrafanaを一緒に起動
+docker compose -f docker-compose.yaml -f docker-compose.monitor.yaml up
+```
+
+これにより以下が実行されます：
+- TomoriBotとPostgreSQLを起動（DBはポート15432）
+- Grafanaをポート3000で起動し、PostgreSQLデータソースを自動設定
+- 両方のサービスを同じDockerネットワークで接続
+
+`http://localhost:3000`でGrafanaにアクセス：
+- **ユーザー名**: `admin`
+- **パスワード**: `.env`の`GRAFANA_PASSWORD`で設定（デフォルトは`admin`）
+
+PostgreSQLデータソースは自動的に設定され、ボットのメトリクス、データベースクエリ、パフォーマンスをモニタリングするためのダッシュボード作成の準備が整います。
 
 <!-- ROADMAP -->
 ## ロードマップ
