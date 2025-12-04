@@ -58,41 +58,6 @@ ON CONFLICT (llm_codename) DO UPDATE SET
   llm_provider = EXCLUDED.llm_provider,
   updated_at = CURRENT_TIMESTAMP;
 
--- Ensure all required columns exist in diffusion_models table
-SELECT add_column_if_not_exists('diffusion_models', 'is_default', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('diffusion_models', 'is_deprecated', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('diffusion_models', 'is_free', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('diffusion_models', 'is_uncensored', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('diffusion_models', 'model_description', 'TEXT');
-SELECT add_column_if_not_exists('diffusion_models', 'ja_description', 'TEXT');
-
--- Insert Diffusion Models with conflict resolution
-INSERT INTO diffusion_models (provider, codename, is_default, is_deprecated, is_free, is_uncensored, model_description, ja_description)
-VALUES
-  -- Google Gemini Image Generation Models
-  ('google', 'gemini-2.5-flash-image', true, false, false, false,
-   'Fast and efficient image generation model with balanced quality and speed',
-   '品質と速度のバランスが取れた高速で効率的な画像生成モデル'),
-  ('google', 'gemini-3-pro-image-preview', false, false, false, false,
-   'Advanced image generation model with higher resolution support (1K/2K/4K) and enhanced quality',
-   '高解像度対応（1K/2K/4K）と強化された品質を備えた高度な画像生成モデル'),
-  -- OpenRouter Gemini Image Generation Models (via OpenRouter API)
-  ('openrouter', 'google/gemini-2.5-flash-image', true, false, false, false,
-   'Fast and efficient image generation via OpenRouter with balanced quality and speed',
-   'OpenRouter経由の品質と速度のバランスが取れた高速で効率的な画像生成'),
-  ('openrouter', 'google/gemini-3-pro-image-preview', false, false, false, false,
-   'Advanced image generation via OpenRouter with enhanced quality and resolution options',
-   'OpenRouter経由の強化された品質と解像度オプションを備えた高度な画像生成')
-ON CONFLICT (codename) DO UPDATE SET
-  model_description = EXCLUDED.model_description,
-  ja_description = EXCLUDED.ja_description,
-  is_default = EXCLUDED.is_default,
-  is_deprecated = EXCLUDED.is_deprecated,
-  is_free = EXCLUDED.is_free,
-  is_uncensored = EXCLUDED.is_uncensored,
-  provider = EXCLUDED.provider,
-  updated_at = CURRENT_TIMESTAMP;
-
 -- Insert Tomori Presets (English)
 INSERT INTO tomori_presets (
   tomori_preset_name,
