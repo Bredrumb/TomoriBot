@@ -189,8 +189,15 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 			return true;
 		} catch (error) {
 			// Log the specific error during validation failure
-			log.error(
-				`API key validation failed: ${error instanceof Error ? error.message : String(error)}`,
+			await log.error(
+				"API key validation failed",
+				error,
+				{
+					errorType: "APIKeyValidationError",
+					metadata: {
+						provider: "openrouter",
+					},
+				},
 			);
 			return false;
 		}

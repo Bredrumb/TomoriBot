@@ -155,8 +155,15 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
 
 			return isValid;
 		} catch (error) {
-			log.error(
-				`NovelAI API key validation failed: ${error instanceof Error ? error.message : String(error)}`,
+			await log.error(
+				"API key validation failed",
+				error,
+				{
+					errorType: "APIKeyValidationError",
+					metadata: {
+						provider: "novelai",
+					},
+				},
 			);
 			return false;
 		}

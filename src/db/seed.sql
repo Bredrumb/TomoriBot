@@ -35,9 +35,12 @@ VALUES
   ('openrouter', 'anthropic/claude-haiku-4.5', false, false, false, false, false, true, true, false, false, false, 'Lightweight version of claude-sonnet-4.5', 'claude-sonnet-4.5の軽量版'),
   ('openrouter', 'openai/gpt-5.1', true, false, true, false, false, true, true, false, false, false, 'State-of-the-art performance in complex tasks and problems', '複雑なタスクや問題に優れた最先端性能'),
   ('openrouter', 'openai/gpt-5.1-chat', true, false, true, false, false, true, true, false, false, false, 'State-of-the-art performance, more conversational', '複雑なタスクや問題に優れた最先端性能'),
-  ('openrouter', 'deepseek/deepseek-chat-v3-0324:free', false, true, false, false, true, false, false, false, false, true, 'Free general-purpose model that also performs good role-play', 'ロールプレイにも優れた無料の汎用モデル'),
+  ('openrouter', 'deepseek/deepseek-chat-v3-0324:free', false, false, false, true, true, false, false, false, false, true, 'Free general-purpose model that also performs good role-play', 'ロールプレイにも優れた無料の汎用モデル'),
   ('openrouter', 'mistralai/mistral-small-3.2-24b-instruct:free', false, false, false, true, true, false, false, false, false, false, 'Free general-purpose model', '無料の汎用モデル'),
-  ('openrouter', 'tngtech/deepseek-r1t2-chimera:free', false, false, true, false, true, false, false, false, false, true, 'Free model for solving complex tasks and problems', '複雑なタスクや問題の解決に適した無料モデル'),
+  ('openrouter', 'tngtech/deepseek-r1t2-chimera:free', false, false, true, true, true, false, false, false, false, true, 'Free model for solving complex tasks and problems', '複雑なタスクや問題の解決に適した無料モデル'),
+  ('openrouter', 'mistralai/mistral-small-3.1-24b-instruct:free', false, true, false, false, true, true, true, false, false, false, 'Free multimodal model with enhanced reasoning and vision capabilities', '強化された推論とビジョン機能を備えた無料のマルチモーダルモデル'),
+  ('openrouter', 'z-ai/glm-4.5-air:free', false, false, false, false, true, true, false, false, false, false, 'Free lightweight model with thinking mode for reasoning and agent tasks', '推論とエージェントタスク向けのシンキングモードを備えた無料軽量モデル'),
+  ('openrouter', 'tngtech/tng-r1t-chimera:free', false, false, false, false, true, true, false, false, false, false, 'Free experimental model for creative storytelling and character interaction', '創作とキャラクター対話に特化した無料の実験モデル'),
   ('openrouter', 'account-setting', false, false, false, false, false, false, false, false, false, false, 'For advanced users that cannot find the model they want, uses the set Default Model in your OpenRouter settings', '目的のモデルが見つからない上級者向け、OpenRouter設定のデフォルトモデルを使用')
 ON CONFLICT (llm_codename) DO UPDATE SET
   llm_description = EXCLUDED.llm_description,

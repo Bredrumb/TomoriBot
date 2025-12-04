@@ -32,6 +32,7 @@ import { PeekProfilePictureTool } from "../../tools/functionCalls/peekProfilePic
 import { ProcessGifTool } from "../../tools/functionCalls/processGifTool";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { localizer, getSupportedLocales } from "../../utils/text/localizer";
+import { escapeRegExp } from "../../utils/text/stringHelper";
 import { sql } from "@/utils/db/client";
 
 import type { TomoriState } from "@/types/db/schema";
@@ -437,7 +438,7 @@ export default async function tomoriChat(
 					}
 				} else {
 					// For English triggers, use word boundaries
-					const regex = new RegExp(`\\b${baseWord}\\b`, "i");
+					const regex = new RegExp(`\\b${escapeRegExp(baseWord)}\\b`, "i");
 					if (regex.test(message.content)) {
 						shouldShowError = true;
 						break;
@@ -808,7 +809,7 @@ export default async function tomoriChat(
 						}
 					} else {
 						// For English triggers, use word boundaries to ensure it's a distinct word
-						const regex = new RegExp(`\\b${baseWord}\\b`, "i");
+						const regex = new RegExp(`\\b${escapeRegExp(baseWord)}\\b`, "i");
 						if (regex.test(content)) {
 							return true;
 						}
@@ -2976,7 +2977,7 @@ export function shouldBotReply(
 			return message.content.includes(trigger);
 		}
 		// Use word boundaries for English triggers (case-insensitive)
-		const regex = new RegExp(`\\b${trigger}\\b`, "i");
+		const regex = new RegExp(`\\b${escapeRegExp(trigger)}\\b`, "i");
 		return regex.test(message.content);
 	});
 
