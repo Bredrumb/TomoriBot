@@ -145,7 +145,14 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 			);
 		}
 
-		log.info(`Generating content with model ${config.model}`);
+		// Log model being used (or account default)
+		if (config.model === "account-setting") {
+			log.info(
+				"Generating content with OpenRouter account default model (model parameter omitted)",
+			);
+		} else {
+			log.info(`Generating content with model ${config.model}`);
+		}
 
 		// Log tools FIRST (before conversation history for better readability)
 		if (
@@ -165,7 +172,8 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 
 			// Build SDK request - conditionally include tools
 			const requestParams = {
-				model: config.model,
+				// Only include model if it's not "account-setting" (which signals to use the user's OpenRouter account default)
+				...(config.model !== "account-setting" && { model: config.model }),
 				// biome-ignore lint/suspicious/noExplicitAny: SDK types don't match our internal format
 				messages: messages as any,
 				temperature: config.temperature,
