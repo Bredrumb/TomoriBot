@@ -343,9 +343,19 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
 								if (declarations.length > 0) {
 									// Wrap each MCP function in OpenAI tool format
 									for (const declaration of declarations) {
+										// Convert MCP schema format to OpenAI format
+										// MCP uses "parametersJsonSchema", OpenAI uses "parameters"
+										const openAIDeclaration: Record<string, unknown> = {
+											...declaration,
+										};
+										if ("parametersJsonSchema" in declaration) {
+											delete openAIDeclaration.parametersJsonSchema;
+											openAIDeclaration.parameters = declaration.parametersJsonSchema;
+										}
+
 										allTools.push({
 											type: "function",
-											function: declaration,
+											function: openAIDeclaration,
 										});
 									}
 									addedMCPToolsCount++;
