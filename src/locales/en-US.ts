@@ -157,7 +157,7 @@ export default {
 				"The response was blocked due to prohibited content detection.",
 			prohibited_content_admin_notice_title: "Admin Notice",
 			prohibited_content_admin_notice_description:
-				"Please make sure content sent (media, conversation messages, and memories) complies with the AI provider's content policies. Run `/tool refresh` to clear conversation content.",
+				"Check: messages (`/tool refresh`), personality/memories (`/data export`), blacklist problematic members (`/server blacklist`), or switch provider (`/config model`)",
 			streaming_failed_description:
 				"An issue while trying to stream the response.",
 
@@ -176,7 +176,7 @@ export default {
 
 			content_blocked_title: "🔴️ Content Blocked",
 			content_blocked_tip:
-				"Please rephrase your message to comply with content policies",
+				"Check: messages (`/tool refresh`), personality/memories (`/data export`), blacklist problematic members (`/server blacklist`), or switch provider (`/config model`)",
 
 			timeout_title: "🟡️ Request Timeout",
 			timeout_tip: "Try shortening your message or try again",
