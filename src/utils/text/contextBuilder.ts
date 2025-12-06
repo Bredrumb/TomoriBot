@@ -847,8 +847,7 @@ export async function buildContext({
 			// 8.a. User's part of the sample dialogue
 			// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
 			let userSampleText = tomoriState!.sample_dialogues_in[i];
-			// Prepend a generic "User:" for sample dialogues to avoid associating examples with the triggerer
-			userSampleText = `${triggererName}: ${userSampleText}`;
+			// No username prefix - prevents associating examples with the triggerer
 			if (tomoriConfig.humanizer_degree >= HumanizerDegree.HEAVY) {
 				userSampleText = humanizeString(userSampleText);
 			}

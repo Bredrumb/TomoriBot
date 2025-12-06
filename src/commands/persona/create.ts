@@ -107,7 +107,7 @@ export async function execute(
 				descriptionKey:
 					"commands.persona.create.modal.example_user_description",
 				placeholder: "commands.persona.create.modal.example_user_placeholder",
-				required: true,
+				required: false,
 				style: TextInputStyle.Paragraph,
 				maxLength: 500,
 			},
@@ -115,7 +115,7 @@ export async function execute(
 				customId: EXAMPLE_BOT_ID,
 				labelKey: "commands.persona.create.modal.example_bot_label",
 				placeholder: "commands.persona.create.modal.example_bot_placeholder",
-				required: true,
+				required: false,
 				style: TextInputStyle.Paragraph,
 				maxLength: 500,
 			},
@@ -152,15 +152,9 @@ export async function execute(
 		const exampleUser = modalResult.values?.[EXAMPLE_USER_ID];
 		const exampleBot = modalResult.values?.[EXAMPLE_BOT_ID];
 
-		// Safety checks
-		if (
-			!modalSubmitInteraction ||
-			!characterName ||
-			!characterDesc ||
-			!exampleUser ||
-			!exampleBot
-		) {
-			log.error("Modal result unexpectedly missing values");
+		// Safety checks (only character name and description are required)
+		if (!modalSubmitInteraction || !characterName || !characterDesc) {
+			log.error("Modal result unexpectedly missing required values");
 			return;
 		}
 
@@ -205,7 +199,7 @@ export async function execute(
 					.setColor(ColorCode.ERROR);
 
 				// Add modal inputs as fields (excluding image)
-				embed.addFields(
+				const memoryErrorFields = [
 					{
 						name: localizer(
 							locale,
@@ -222,23 +216,31 @@ export async function execute(
 						value: characterDesc.substring(0, 1024) || "N/A",
 						inline: false,
 					},
-					{
+				];
+
+				// Only add sample dialogue fields if they were provided
+				if (exampleUser) {
+					memoryErrorFields.push({
 						name: localizer(
 							locale,
 							"commands.persona.create.field_example_user",
 						),
 						value: exampleUser.substring(0, 1024) || "N/A",
 						inline: false,
-					},
-					{
+					});
+				}
+				if (exampleBot) {
+					memoryErrorFields.push({
 						name: localizer(
 							locale,
 							"commands.persona.create.field_example_bot",
 						),
 						value: exampleBot.substring(0, 1024) || "N/A",
 						inline: false,
-					},
-				);
+					});
+				}
+
+				embed.addFields(memoryErrorFields);
 
 				await modalSubmitInteraction.editReply({
 					embeds: [embed],
@@ -302,11 +304,15 @@ export async function execute(
 		}
 
 		// 6. Create minimal preset data structure
+		// Only include sample dialogues if BOTH fields have content
+		const hasSampleDialogue =
+			exampleUser?.trim() && exampleBot?.trim();
+
 		const presetData: PresetExportData = {
 			tomori_nickname: characterName,
 			attribute_list: [characterDesc],
-			sample_dialogues_in: [exampleUser],
-			sample_dialogues_out: [exampleBot],
+			sample_dialogues_in: hasSampleDialogue ? [exampleUser] : [],
+			sample_dialogues_out: hasSampleDialogue ? [exampleBot] : [],
 			trigger_words: [],
 		};
 
@@ -460,15 +466,43 @@ export async function execute(
 				? `${characterDesc.substring(0, 200)}...`
 				: characterDesc;
 
-		// Truncate dialogue examples if too long
-		const userPreview =
-			exampleUser.length > 100
-				? `${exampleUser.substring(0, 100)}...`
-				: exampleUser;
-		const botPreview =
-			exampleBot.length > 100
-				? `${exampleBot.substring(0, 100)}...`
-				: exampleBot;
+		// Build embed fields array
+		const embedFields = [];
+
+		// Only add dialogue field if sample dialogues were provided
+		if (hasSampleDialogue && exampleUser && exampleBot) {
+			// Truncate dialogue examples if too long
+			const userPreview =
+				exampleUser.length > 100
+					? `${exampleUser.substring(0, 100)}...`
+					: exampleUser;
+			const botPreview =
+				exampleBot.length > 100
+					? `${exampleBot.substring(0, 100)}...`
+					: exampleBot;
+
+			embedFields.push({
+				name: localizer(
+					locale,
+					"commands.persona.create.success_dialogue_title",
+				),
+				value: `**User:** ${userPreview}\n**Bot:** ${botPreview}`,
+				inline: false,
+			});
+		}
+
+		// Add next steps field
+		embedFields.push({
+			name: localizer(
+				locale,
+				"commands.persona.create.success_next_steps_title",
+			),
+			value: localizer(
+				locale,
+				"commands.persona.create.success_next_steps_description",
+			),
+			inline: false,
+		});
 
 		const successEmbed = new EmbedBuilder()
 			.setTitle(
@@ -484,27 +518,7 @@ export async function execute(
 			)
 			.setColor(isDM ? ColorCode.WARN : ColorCode.SUCCESS)
 			.setImage(`attachment://${filename}`)
-			.addFields([
-				{
-					name: localizer(
-						locale,
-						"commands.persona.create.success_dialogue_title",
-					),
-					value: `**User:** ${userPreview}\n**Bot:** ${botPreview}`,
-					inline: false,
-				},
-				{
-					name: localizer(
-						locale,
-						"commands.persona.create.success_next_steps_title",
-					),
-					value: localizer(
-						locale,
-						"commands.persona.create.success_next_steps_description",
-					),
-					inline: false,
-				},
-			]);
+			.addFields(embedFields);
 
 		// Add DM-specific footer if in DM
 		if (isDM) {
