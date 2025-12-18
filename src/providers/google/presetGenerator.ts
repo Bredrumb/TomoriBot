@@ -200,6 +200,7 @@ export interface CharacterSearchContext {
  * @param characterName - Name of the character to search for
  * @param locale - User's locale for error messages
  * @param context - Optional additional context for search
+ * @param fallbackModel - Optional fallback model to use if primary model fails
  * @returns Promise<CharacterSearchResult> - Search results or error
  */
 export async function searchCharacterInfo(
@@ -207,6 +208,7 @@ export async function searchCharacterInfo(
 	characterName: string,
 	locale: string,
 	context?: CharacterSearchContext,
+	fallbackModel?: string,
 ): Promise<CharacterSearchResult> {
 	// 1. Validate API key
 	if (!apiKey || apiKey.trim().length < 10) {
@@ -226,7 +228,8 @@ export async function searchCharacterInfo(
 		const genAI = new GoogleGenAI({ apiKey });
 
 		// 3. Use Gemini 2.5 Flash for fast and cost-effective search
-		const MODEL_NAME = "gemini-2.5-flash";
+		const PRIMARY_MODEL = "gemini-2.5-flash";
+		let MODEL_NAME = PRIMARY_MODEL;
 
 		// 4. Configure generation with Google Search tool
 		const generationConfig: GenerateContentConfig = {
@@ -277,146 +280,189 @@ IMPORTANT: In any dialogue examples, use "{user}" as a placeholder when referrin
 
 		log.info(`Searching for character: ${characterName}`);
 
-		try {
-			// 8. Create timeout promise (60 seconds for search)
-			const timeoutPromise = new Promise<never>((_, reject) => {
-				setTimeout(
-					() =>
-						reject(new Error("Character search timed out after 45 seconds")),
-					60000,
-				);
-			});
-
-			// 9. Make API call with timeout
-			const result = await Promise.race([
-				genAI.models.generateContent({
-					model: MODEL_NAME,
-					contents: [userPromptContent],
-					config: generationConfig,
-				}),
-				timeoutPromise,
-			]);
-
-			log.info("Character search completed");
-
-			// 10. Check for blocked content
-			if (result.promptFeedback?.blockReason) {
-				return {
-					error: createGoogleErrorMessage(
-						"BLOCKED_CONTENT",
-						"BLOCKED",
-						`Character search was blocked: ${result.promptFeedback.blockReason}`,
-						locale,
-					),
-					errorType: "BLOCKED_CONTENT",
-				};
-			}
-
-			const responseText = result.text;
-
-			// 11. Check if response is empty
-			if (!responseText || responseText.trim() === "") {
-				return {
-					error: createGoogleErrorMessage(
-						"EMPTY_RESPONSE",
-						undefined,
-						"Character search returned an empty response",
-						locale,
-					),
-					errorType: "EMPTY_RESPONSE",
-				};
-			}
-
-			log.success("Character search successful");
-			return { characterInfo: responseText.trim() };
-		} catch (apiError: unknown) {
-			const errorMessage = getErrorMessage(apiError);
-
-			// Try to extract error code from Google API error
-			let errorCode: number | undefined;
-			try {
-				if (errorMessage.includes('{"error":')) {
-					const jsonMatch = errorMessage.match(/\{.*\}/s);
-					if (jsonMatch) {
-						const parsedError = JSON.parse(jsonMatch[0]);
-						errorCode = parsedError.error?.code || parsedError.code;
-					}
-				}
-			} catch {
-				// Ignore parsing errors
-			}
-
-			// 12. Handle specific API errors
-			if (errorMessage.includes("timed out")) {
-				return {
-					error: createGoogleErrorMessage("TIMEOUT", 504, errorMessage, locale),
-					errorType: "TIMEOUT",
-				};
-			}
-
-			if (
-				errorMessage.includes("RESOURCE_EXHAUSTED") ||
-				errorMessage.includes("rate limit")
-			) {
-				return {
-					error: createGoogleErrorMessage(
-						"RATE_LIMIT",
-						errorCode || 429,
-						errorMessage,
-						locale,
-					),
-					errorType: "RATE_LIMIT",
-				};
-			}
-
-			if (
-				errorMessage.includes("INVALID_ARGUMENT") ||
-				errorMessage.includes("blocked")
-			) {
-				return {
-					error: createGoogleErrorMessage(
-						"BLOCKED_CONTENT",
-						errorCode || 400,
-						errorMessage,
-						locale,
-					),
-					errorType: "BLOCKED_CONTENT",
-				};
-			}
-
-			if (
-				errorMessage.includes("PERMISSION_DENIED") ||
-				errorMessage.includes("API key")
-			) {
-				return {
-					error: createGoogleErrorMessage(
-						"API_KEY",
-						errorCode || 403,
-						errorMessage,
-						locale,
-					),
-					errorType: "API_KEY",
-				};
-			}
-
-			if (
-				errorMessage.includes("model not found") ||
-				errorMessage.includes("MODEL_NOT_FOUND")
-			) {
-				return {
-					error: createGoogleErrorMessage(
-						"MODEL_ERROR",
-						errorCode || 404,
-						errorMessage,
-						locale,
-					),
-					errorType: "MODEL_ERROR",
-				};
-			}
-
-			// Re-throw for outer catch
-			throw apiError;
+		// 8. Retry logic with fallback model
+		let lastError: CharacterSearchResult | null = null;
+		const modelsToTry = [PRIMARY_MODEL];
+		if (fallbackModel && fallbackModel !== PRIMARY_MODEL) {
+			modelsToTry.push(fallbackModel);
 		}
+
+		for (const currentModel of modelsToTry) {
+			MODEL_NAME = currentModel;
+			log.info(`Attempting character search with model: ${MODEL_NAME}`);
+
+			try {
+				// 9. Create timeout promise (60 seconds for search)
+				const timeoutPromise = new Promise<never>((_, reject) => {
+					setTimeout(
+						() =>
+							reject(new Error("Character search timed out after 45 seconds")),
+						60000,
+					);
+				});
+
+				// 10. Make API call with timeout
+				const result = await Promise.race([
+					genAI.models.generateContent({
+						model: MODEL_NAME,
+						contents: [userPromptContent],
+						config: generationConfig,
+					}),
+					timeoutPromise,
+				]);
+
+				log.info(`Character search completed with model: ${MODEL_NAME}`);
+
+				// 11. Check for blocked content
+				if (result.promptFeedback?.blockReason) {
+					lastError = {
+						error: createGoogleErrorMessage(
+							"BLOCKED_CONTENT",
+							"BLOCKED",
+							`Character search was blocked: ${result.promptFeedback.blockReason}`,
+							locale,
+						),
+						errorType: "BLOCKED_CONTENT",
+					};
+					continue; // Try fallback model if available
+				}
+
+				const responseText = result.text;
+
+				// 12. Check if response is empty
+				if (!responseText || responseText.trim() === "") {
+					lastError = {
+						error: createGoogleErrorMessage(
+							"EMPTY_RESPONSE",
+							undefined,
+							"Character search returned an empty response",
+							locale,
+						),
+						errorType: "EMPTY_RESPONSE",
+					};
+					continue; // Try fallback model if available
+				}
+
+				log.success(`Character search successful with model: ${MODEL_NAME}`);
+				return { characterInfo: responseText.trim() };
+			} catch (apiError: unknown) {
+				const errorMessage = getErrorMessage(apiError);
+
+				// Try to extract error code from Google API error
+				let errorCode: number | undefined;
+				try {
+					if (errorMessage.includes('{"error":')) {
+						const jsonMatch = errorMessage.match(/\{.*\}/s);
+						if (jsonMatch) {
+							const parsedError = JSON.parse(jsonMatch[0]);
+							errorCode = parsedError.error?.code || parsedError.code;
+						}
+					}
+				} catch {
+					// Ignore parsing errors
+				}
+
+				// 13. Handle specific API errors
+				if (errorMessage.includes("timed out")) {
+					lastError = {
+						error: createGoogleErrorMessage(
+							"TIMEOUT",
+							504,
+							errorMessage,
+							locale,
+						),
+						errorType: "TIMEOUT",
+					};
+					continue; // Try fallback model if available
+				}
+
+				if (
+					errorMessage.includes("RESOURCE_EXHAUSTED") ||
+					errorMessage.includes("rate limit")
+				) {
+					lastError = {
+						error: createGoogleErrorMessage(
+							"RATE_LIMIT",
+							errorCode || 429,
+							errorMessage,
+							locale,
+						),
+						errorType: "RATE_LIMIT",
+					};
+					// Don't retry on rate limit
+					return lastError;
+				}
+
+				if (
+					errorMessage.includes("INVALID_ARGUMENT") ||
+					errorMessage.includes("blocked")
+				) {
+					lastError = {
+						error: createGoogleErrorMessage(
+							"BLOCKED_CONTENT",
+							errorCode || 400,
+							errorMessage,
+							locale,
+						),
+						errorType: "BLOCKED_CONTENT",
+					};
+					continue; // Try fallback model if available
+				}
+
+				if (
+					errorMessage.includes("PERMISSION_DENIED") ||
+					errorMessage.includes("API key")
+				) {
+					lastError = {
+						error: createGoogleErrorMessage(
+							"API_KEY",
+							errorCode || 403,
+							errorMessage,
+							locale,
+						),
+						errorType: "API_KEY",
+					};
+					// Don't retry on auth error
+					return lastError;
+				}
+
+				if (
+					errorMessage.includes("model not found") ||
+					errorMessage.includes("MODEL_NOT_FOUND")
+				) {
+					lastError = {
+						error: createGoogleErrorMessage(
+							"MODEL_ERROR",
+							errorCode || 404,
+							errorMessage,
+							locale,
+						),
+						errorType: "MODEL_ERROR",
+					};
+					log.warn(`Model ${MODEL_NAME} not found, trying fallback...`);
+					continue; // Try fallback model if available
+				}
+
+				// Re-throw for outer catch
+				throw apiError;
+			}
+		}
+
+		// 14. If all models failed, return the last error
+		if (lastError) {
+			return lastError;
+		}
+
+		// 15. Fallback error if no lastError was set (should never happen)
+		return {
+			error: createGoogleErrorMessage(
+				"UNKNOWN",
+				undefined,
+				"Character search failed with no error details",
+				locale,
+			),
+			errorType: "UNKNOWN",
+		};
 	} catch (error) {
 		log.error("Character search error:", error);
 		const errorMessage = getErrorMessage(error);
@@ -474,12 +520,14 @@ export function sanitizeSampleDialogueText(dialogue: string): string {
  * @param apiKey - Decrypted Google API key
  * @param params - Generation parameters
  * @param locale - User's locale for error messages
+ * @param fallbackModel - Optional fallback model to use if primary model fails
  * @returns Promise<PresetGenerationResult> - Generated preset or error
  */
 export async function generatePresetFromPrompt(
 	apiKey: string,
 	params: GeneratePresetParams,
 	locale: string,
+	fallbackModel?: string,
 ): Promise<PresetGenerationResult> {
 	// 1. Validate API key
 	if (!apiKey || apiKey.trim().length < 10) {
@@ -499,7 +547,8 @@ export async function generatePresetFromPrompt(
 		const genAI = new GoogleGenAI({ apiKey });
 
 		// 3. Use Gemini 2.5 Pro for best quality structured output
-		const MODEL_NAME = "gemini-2.5-pro";
+		const PRIMARY_MODEL = "gemini-2.5-pro";
+		let MODEL_NAME = PRIMARY_MODEL;
 
 		// 4. Define JSON schema for structured output with length constraints
 		const responseSchema = {
@@ -667,248 +716,296 @@ Use the web search information to accurately represent the character's personali
 
 		log.info(`Generating preset for: ${params.characterName}`);
 
-		try {
-			// 12. Create timeout promise (90 seconds for generation)
-			const timeoutPromise = new Promise<never>((_, reject) => {
-				setTimeout(
-					() => reject(new Error("Request timed out after 60 seconds")),
-					90000,
-				);
-			});
-
-			// 13. Make API call with timeout
-			const result = await Promise.race([
-				genAI.models.generateContent({
-					model: MODEL_NAME,
-					contents: [userPromptContent],
-					config: generationConfig,
-				}),
-				timeoutPromise,
-			]);
-
-			log.info("Preset generation completed");
-
-			// 14. Check for blocked content
-			if (result.promptFeedback?.blockReason) {
-				return {
-					error: createGoogleErrorMessage(
-						"BLOCKED_CONTENT",
-						"BLOCKED",
-						`Content was blocked by Gemini API safety filters: ${result.promptFeedback.blockReason}`,
-						locale,
-					),
-					errorType: "BLOCKED_CONTENT",
-				};
-			}
-
-			const responseText = result.text;
-
-			// 15. Check if response is empty
-			if (!responseText || responseText.trim() === "") {
-				return {
-					error: createGoogleErrorMessage(
-						"EMPTY_RESPONSE",
-						undefined,
-						"Gemini API returned an empty response. Try using different inputs or a different image.",
-						locale,
-					),
-					errorType: "EMPTY_RESPONSE",
-				};
-			}
-
-			// 16. Parse JSON response
-			let parsedResponse: {
-				attribute_list?: string[];
-				sample_dialogues_in?: string[];
-				sample_dialogues_out?: string[];
-			};
-
-			try {
-				parsedResponse = JSON.parse(responseText);
-			} catch (parseError) {
-				log.error("Failed to parse generation JSON:", parseError);
-				const parseErrorMsg = `Failed to parse character data: ${parseError instanceof Error ? parseError.message : "Invalid JSON format"}`;
-				return {
-					error: createGoogleErrorMessage(
-						"INVALID_JSON",
-						undefined,
-						parseErrorMsg,
-						locale,
-					),
-					errorType: "INVALID_JSON",
-				};
-			}
-
-			// 17. Validate response structure
-			if (
-				!parsedResponse.attribute_list ||
-				!parsedResponse.sample_dialogues_in ||
-				!parsedResponse.sample_dialogues_out
-			) {
-				return {
-					error: createGoogleErrorMessage(
-						"INVALID_JSON",
-						undefined,
-						"Generated character data is incomplete. Please try again with different inputs.",
-						locale,
-					),
-					errorType: "INVALID_JSON",
-				};
-			}
-
-			// 18. Validate arrays have correct lengths
-			if (
-				!Array.isArray(parsedResponse.attribute_list) ||
-				parsedResponse.attribute_list.length !== 6
-			) {
-				return {
-					error: createGoogleErrorMessage(
-						"VALIDATION_ERROR",
-						undefined,
-						`Generated attribute list must contain exactly 6 items (Description, Appearance, Personality, Likes, Dislikes, Behavioral Quirks). Received ${parsedResponse.attribute_list?.length || 0} items. Please try again.`,
-						locale,
-					),
-					errorType: "VALIDATION_ERROR",
-				};
-			}
-
-			if (
-				!Array.isArray(parsedResponse.sample_dialogues_in) ||
-				parsedResponse.sample_dialogues_in.length !== 5
-			) {
-				return {
-					error: createGoogleErrorMessage(
-						"VALIDATION_ERROR",
-						undefined,
-						"Generated sample dialogues must contain exactly 5 user inputs. Please try again.",
-						locale,
-					),
-					errorType: "VALIDATION_ERROR",
-				};
-			}
-
-			if (
-				!Array.isArray(parsedResponse.sample_dialogues_out) ||
-				parsedResponse.sample_dialogues_out.length !== 5
-			) {
-				return {
-					error: createGoogleErrorMessage(
-						"VALIDATION_ERROR",
-						undefined,
-						"Generated sample dialogues must contain exactly 5 character responses. Please try again.",
-						locale,
-					),
-					errorType: "VALIDATION_ERROR",
-				};
-			}
-
-			// 19. Sanitize sample dialogues (remove any speaker prefixes)
-			const sanitizedDialoguesIn = parsedResponse.sample_dialogues_in.map(
-				sanitizeSampleDialogueText,
-			);
-			const sanitizedDialoguesOut = parsedResponse.sample_dialogues_out.map(
-				sanitizeSampleDialogueText,
-			);
-
-			// 20. Build final PresetExportData with hardcoded nickname and trigger words
-			const preset: PresetExportData = {
-				tomori_nickname: params.characterName,
-				trigger_words: [params.characterName],
-				attribute_list: parsedResponse.attribute_list,
-				sample_dialogues_in: sanitizedDialoguesIn,
-				sample_dialogues_out: sanitizedDialoguesOut,
-			};
-
-			log.success("✨ Preset generation successful");
-			return { preset };
-		} catch (apiError: unknown) {
-			const errorMessage = getErrorMessage(apiError);
-
-			// Try to extract error code from Google API error
-			let errorCode: number | undefined;
-			try {
-				if (errorMessage.includes('{"error":')) {
-					const jsonMatch = errorMessage.match(/\{.*\}/s);
-					if (jsonMatch) {
-						const parsedError = JSON.parse(jsonMatch[0]);
-						errorCode = parsedError.error?.code || parsedError.code;
-					}
-				}
-			} catch {
-				// Ignore parsing errors
-			}
-
-			// 21. Handle specific API errors
-			if (errorMessage.includes("timed out")) {
-				return {
-					error: createGoogleErrorMessage("TIMEOUT", 504, errorMessage, locale),
-					errorType: "TIMEOUT",
-				};
-			}
-
-			if (
-				errorMessage.includes("RESOURCE_EXHAUSTED") ||
-				errorMessage.includes("rate limit")
-			) {
-				return {
-					error: createGoogleErrorMessage(
-						"RATE_LIMIT",
-						errorCode || 429,
-						errorMessage,
-						locale,
-					),
-					errorType: "RATE_LIMIT",
-				};
-			}
-
-			if (
-				errorMessage.includes("INVALID_ARGUMENT") ||
-				errorMessage.includes("blocked")
-			) {
-				return {
-					error: createGoogleErrorMessage(
-						"BLOCKED_CONTENT",
-						errorCode || 400,
-						errorMessage,
-						locale,
-					),
-					errorType: "BLOCKED_CONTENT",
-				};
-			}
-
-			if (
-				errorMessage.includes("PERMISSION_DENIED") ||
-				errorMessage.includes("API key")
-			) {
-				return {
-					error: createGoogleErrorMessage(
-						"API_KEY",
-						errorCode || 403,
-						errorMessage,
-						locale,
-					),
-					errorType: "API_KEY",
-				};
-			}
-
-			if (
-				errorMessage.includes("model not found") ||
-				errorMessage.includes("MODEL_NOT_FOUND")
-			) {
-				return {
-					error: createGoogleErrorMessage(
-						"MODEL_ERROR",
-						errorCode || 404,
-						errorMessage,
-						locale,
-					),
-					errorType: "MODEL_ERROR",
-				};
-			}
-
-			// Re-throw for outer catch
-			throw apiError;
+		// 12. Retry logic with fallback model
+		let lastError: PresetGenerationResult | null = null;
+		const modelsToTry = [PRIMARY_MODEL];
+		if (fallbackModel && fallbackModel !== PRIMARY_MODEL) {
+			modelsToTry.push(fallbackModel);
 		}
+
+		for (const currentModel of modelsToTry) {
+			MODEL_NAME = currentModel;
+			log.info(`Attempting preset generation with model: ${MODEL_NAME}`);
+
+			try {
+				// 13. Create timeout promise (90 seconds for generation)
+				const timeoutPromise = new Promise<never>((_, reject) => {
+					setTimeout(
+						() => reject(new Error("Request timed out after 60 seconds")),
+						90000,
+					);
+				});
+
+				// 14. Make API call with timeout
+				const result = await Promise.race([
+					genAI.models.generateContent({
+						model: MODEL_NAME,
+						contents: [userPromptContent],
+						config: generationConfig,
+					}),
+					timeoutPromise,
+				]);
+
+				log.info(`Preset generation completed with model: ${MODEL_NAME}`);
+
+				// 15. Check for blocked content
+				if (result.promptFeedback?.blockReason) {
+					lastError = {
+						error: createGoogleErrorMessage(
+							"BLOCKED_CONTENT",
+							"BLOCKED",
+							`Content was blocked by Gemini API safety filters: ${result.promptFeedback.blockReason}`,
+							locale,
+						),
+						errorType: "BLOCKED_CONTENT",
+					};
+					continue; // Try fallback model if available
+				}
+
+				const responseText = result.text;
+
+				// 16. Check if response is empty
+				if (!responseText || responseText.trim() === "") {
+					lastError = {
+						error: createGoogleErrorMessage(
+							"EMPTY_RESPONSE",
+							undefined,
+							"Gemini API returned an empty response. Try using different inputs or a different image.",
+							locale,
+						),
+						errorType: "EMPTY_RESPONSE",
+					};
+					continue; // Try fallback model if available
+				}
+
+				// 17. Parse JSON response
+				let parsedResponse: {
+					attribute_list?: string[];
+					sample_dialogues_in?: string[];
+					sample_dialogues_out?: string[];
+				};
+
+				try {
+					parsedResponse = JSON.parse(responseText);
+				} catch (parseError) {
+					log.error("Failed to parse generation JSON:", parseError);
+					const parseErrorMsg = `Failed to parse character data: ${parseError instanceof Error ? parseError.message : "Invalid JSON format"}`;
+					lastError = {
+						error: createGoogleErrorMessage(
+							"INVALID_JSON",
+							undefined,
+							parseErrorMsg,
+							locale,
+						),
+						errorType: "INVALID_JSON",
+					};
+					continue; // Try fallback model if available
+				}
+
+				// 18. Validate response structure
+				if (
+					!parsedResponse.attribute_list ||
+					!parsedResponse.sample_dialogues_in ||
+					!parsedResponse.sample_dialogues_out
+				) {
+					lastError = {
+						error: createGoogleErrorMessage(
+							"INVALID_JSON",
+							undefined,
+							"Generated character data is incomplete. Please try again with different inputs.",
+							locale,
+						),
+						errorType: "INVALID_JSON",
+					};
+					continue; // Try fallback model if available
+				}
+
+				// 19. Validate arrays have correct lengths
+				if (
+					!Array.isArray(parsedResponse.attribute_list) ||
+					parsedResponse.attribute_list.length !== 6
+				) {
+					lastError = {
+						error: createGoogleErrorMessage(
+							"VALIDATION_ERROR",
+							undefined,
+							`Generated attribute list must contain exactly 6 items (Description, Appearance, Personality, Likes, Dislikes, Behavioral Quirks). Received ${parsedResponse.attribute_list?.length || 0} items. Please try again.`,
+							locale,
+						),
+						errorType: "VALIDATION_ERROR",
+					};
+					continue; // Try fallback model if available
+				}
+
+				if (
+					!Array.isArray(parsedResponse.sample_dialogues_in) ||
+					parsedResponse.sample_dialogues_in.length !== 5
+				) {
+					lastError = {
+						error: createGoogleErrorMessage(
+							"VALIDATION_ERROR",
+							undefined,
+							"Generated sample dialogues must contain exactly 5 user inputs. Please try again.",
+							locale,
+						),
+						errorType: "VALIDATION_ERROR",
+					};
+					continue; // Try fallback model if available
+				}
+
+				if (
+					!Array.isArray(parsedResponse.sample_dialogues_out) ||
+					parsedResponse.sample_dialogues_out.length !== 5
+				) {
+					lastError = {
+						error: createGoogleErrorMessage(
+							"VALIDATION_ERROR",
+							undefined,
+							"Generated sample dialogues must contain exactly 5 character responses. Please try again.",
+							locale,
+						),
+						errorType: "VALIDATION_ERROR",
+					};
+					continue; // Try fallback model if available
+				}
+
+				// 20. Sanitize sample dialogues (remove any speaker prefixes)
+				const sanitizedDialoguesIn = parsedResponse.sample_dialogues_in.map(
+					sanitizeSampleDialogueText,
+				);
+				const sanitizedDialoguesOut = parsedResponse.sample_dialogues_out.map(
+					sanitizeSampleDialogueText,
+				);
+
+				// 21. Build final PresetExportData with hardcoded nickname and trigger words
+				const preset: PresetExportData = {
+					tomori_nickname: params.characterName,
+					trigger_words: [params.characterName],
+					attribute_list: parsedResponse.attribute_list,
+					sample_dialogues_in: sanitizedDialoguesIn,
+					sample_dialogues_out: sanitizedDialoguesOut,
+				};
+
+				log.success(`✨ Preset generation successful with model: ${MODEL_NAME}`);
+				return { preset };
+			} catch (apiError: unknown) {
+				const errorMessage = getErrorMessage(apiError);
+
+				// Try to extract error code from Google API error
+				let errorCode: number | undefined;
+				try {
+					if (errorMessage.includes('{"error":')) {
+						const jsonMatch = errorMessage.match(/\{.*\}/s);
+						if (jsonMatch) {
+							const parsedError = JSON.parse(jsonMatch[0]);
+							errorCode = parsedError.error?.code || parsedError.code;
+						}
+					}
+				} catch {
+					// Ignore parsing errors
+				}
+
+				// 22. Handle specific API errors
+				if (errorMessage.includes("timed out")) {
+					lastError = {
+						error: createGoogleErrorMessage(
+							"TIMEOUT",
+							504,
+							errorMessage,
+							locale,
+						),
+						errorType: "TIMEOUT",
+					};
+					continue; // Try fallback model if available
+				}
+
+				if (
+					errorMessage.includes("RESOURCE_EXHAUSTED") ||
+					errorMessage.includes("rate limit")
+				) {
+					lastError = {
+						error: createGoogleErrorMessage(
+							"RATE_LIMIT",
+							errorCode || 429,
+							errorMessage,
+							locale,
+						),
+						errorType: "RATE_LIMIT",
+					};
+					// Don't retry on rate limit
+					return lastError;
+				}
+
+				if (
+					errorMessage.includes("INVALID_ARGUMENT") ||
+					errorMessage.includes("blocked")
+				) {
+					lastError = {
+						error: createGoogleErrorMessage(
+							"BLOCKED_CONTENT",
+							errorCode || 400,
+							errorMessage,
+							locale,
+						),
+						errorType: "BLOCKED_CONTENT",
+					};
+					continue; // Try fallback model if available
+				}
+
+				if (
+					errorMessage.includes("PERMISSION_DENIED") ||
+					errorMessage.includes("API key")
+				) {
+					lastError = {
+						error: createGoogleErrorMessage(
+							"API_KEY",
+							errorCode || 403,
+							errorMessage,
+							locale,
+						),
+						errorType: "API_KEY",
+					};
+					// Don't retry on auth error
+					return lastError;
+				}
+
+				if (
+					errorMessage.includes("model not found") ||
+					errorMessage.includes("MODEL_NOT_FOUND")
+				) {
+					lastError = {
+						error: createGoogleErrorMessage(
+							"MODEL_ERROR",
+							errorCode || 404,
+							errorMessage,
+							locale,
+						),
+						errorType: "MODEL_ERROR",
+					};
+					log.warn(`Model ${MODEL_NAME} not found, trying fallback...`);
+					continue; // Try fallback model if available
+				}
+
+				// Re-throw for outer catch
+				throw apiError;
+			}
+		}
+
+		// 23. If all models failed, return the last error
+		if (lastError) {
+			return lastError;
+		}
+
+		// 24. Fallback error if no lastError was set (should never happen)
+		return {
+			error: createGoogleErrorMessage(
+				"UNKNOWN",
+				undefined,
+				"Preset generation failed with no error details",
+				locale,
+			),
+			errorType: "UNKNOWN",
+		};
 	} catch (error) {
 		log.error("Preset generation error:", error);
 		const errorMessage = getErrorMessage(error);

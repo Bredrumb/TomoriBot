@@ -467,6 +467,7 @@ export async function execute(
 					speechExamples: speechExamples,
 					additionalInstructions: additionalInst,
 				},
+				tomoriState.llm.llm_codename, // Fallback to default model if primary fails
 			);
 
 			if (searchResult.error) {
@@ -495,6 +496,7 @@ export async function execute(
 			decryptedApiKey,
 			genParams,
 			locale,
+			tomoriState.llm.llm_codename, // Fallback to default model if primary fails
 		);
 
 		if (genResult.error || !genResult.preset) {
