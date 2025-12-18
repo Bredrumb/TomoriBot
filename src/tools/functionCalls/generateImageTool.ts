@@ -102,6 +102,7 @@ export class GenerateImageTool extends BaseTool {
 
 	/**
 	 * Extract images from a Discord message and convert to base64 format
+	 * Supports both direct attachments and embedded images (from links like Twitter/X)
 	 * @param messageId - Discord message ID to fetch images from
 	 * @param context - Tool execution context with channel access
 	 * @returns Array of inline data objects with mimeType and base64 data
@@ -111,36 +112,71 @@ export class GenerateImageTool extends BaseTool {
 		context: ToolContext,
 	): Promise<Array<{ mimeType: string; data: string }>> {
 		try {
-			// Fetch the Discord message
+			// 1. Fetch the Discord message
 			const message = await context.channel.messages.fetch(messageId);
 
 			if (!message) {
 				throw new Error(`Message ${messageId} not found`);
 			}
 
-			// Filter for image attachments
+			// Array to collect all image URLs (from both attachments and embeds)
+			const imageUrls: Array<{ url: string; mimeType: string; source: string }> = [];
+
+			// 2. Extract images from direct attachments
 			const imageAttachments = message.attachments.filter((attachment) =>
 				attachment.contentType?.startsWith("image/"),
 			);
 
-			if (imageAttachments.size === 0) {
-				throw new Error(`No images found in message ${messageId}`);
+			for (const attachment of imageAttachments.values()) {
+				imageUrls.push({
+					url: attachment.url,
+					mimeType: attachment.contentType || "image/jpeg",
+					source: `attachment: ${attachment.name}`,
+				});
+			}
+
+			// 3. Extract images from embeds (Twitter/X posts, direct image links, etc.)
+			for (const embed of message.embeds) {
+				// Check for main embed image
+				if (embed.image?.url) {
+					imageUrls.push({
+						url: embed.image.url,
+						mimeType: "image/jpeg", // Embeds don't provide explicit MIME type
+						source: `embed.image: ${embed.url || "unknown"}`,
+					});
+				}
+
+				// Check for embed thumbnail (some embeds use thumbnail instead of image)
+				if (embed.thumbnail?.url) {
+					imageUrls.push({
+						url: embed.thumbnail.url,
+						mimeType: "image/jpeg",
+						source: `embed.thumbnail: ${embed.url || "unknown"}`,
+					});
+				}
+			}
+
+			// 4. Validate we found at least one image
+			if (imageUrls.length === 0) {
+				throw new Error(
+					`No images found in message ${messageId} (checked both attachments and embeds)`,
+				);
 			}
 
 			log.info(
-				`Found ${imageAttachments.size} image attachment(s) in message ${messageId}`,
+				`Found ${imageUrls.length} image(s) in message ${messageId} (${imageAttachments.size} attachment(s), ${imageUrls.length - imageAttachments.size} embed(s))`,
 			);
 
-			// Convert each image to base64
+			// 5. Convert each image URL to base64
 			const inlineDataArray: Array<{ mimeType: string; data: string }> = [];
 
-			for (const attachment of imageAttachments.values()) {
+			for (const imageInfo of imageUrls) {
 				try {
 					// Fetch image data
-					const imageResponse = await fetch(attachment.url);
+					const imageResponse = await fetch(imageInfo.url);
 					if (!imageResponse.ok) {
 						log.warn(
-							`Failed to fetch image ${attachment.name}: ${imageResponse.status}`,
+							`Failed to fetch image from ${imageInfo.source}: ${imageResponse.status}`,
 						);
 						continue;
 					}
@@ -151,19 +187,22 @@ export class GenerateImageTool extends BaseTool {
 						Buffer.from(imageArrayBuffer).toString("base64");
 
 					inlineDataArray.push({
-						mimeType: attachment.contentType || "image/jpeg",
+						mimeType: imageInfo.mimeType,
 						data: base64ImageData,
 					});
 
-					log.info(`Successfully converted image ${attachment.name} to base64`);
+					log.info(
+						`Successfully converted image from ${imageInfo.source} to base64`,
+					);
 				} catch (imgErr) {
 					log.warn(
-						`Failed to process image ${attachment.name}:`,
+						`Failed to process image from ${imageInfo.source}:`,
 						imgErr as Error,
 					);
 				}
 			}
 
+			// 6. Ensure at least one image was successfully processed
 			if (inlineDataArray.length === 0) {
 				throw new Error(
 					`Failed to process any images from message ${messageId}`,
