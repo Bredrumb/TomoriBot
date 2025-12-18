@@ -308,7 +308,7 @@ export async function setupServer(
 			// First try to get the default diffusion model (is_default = true) for this provider, excluding deprecated
 			let selectedDiffusionModel = (
 				await tx`
-					SELECT * FROM diffusion_models
+					SELECT * FROM image_diffusion_models
 					WHERE provider = ${validConfig.provider}
 					  AND is_default = true
 					  AND is_deprecated = false
@@ -321,7 +321,7 @@ export async function setupServer(
 			if (!selectedDiffusionModel) {
 				selectedDiffusionModel = (
 					await tx`
-						SELECT * FROM diffusion_models
+						SELECT * FROM image_diffusion_models
 						WHERE provider = ${validConfig.provider}
 						  AND is_deprecated = false
 						ORDER BY diffusion_model_id ASC

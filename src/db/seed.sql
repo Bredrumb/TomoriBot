@@ -58,16 +58,16 @@ ON CONFLICT (llm_codename) DO UPDATE SET
   llm_provider = EXCLUDED.llm_provider,
   updated_at = CURRENT_TIMESTAMP;
 
--- Ensure all required columns exist in diffusion_models table
-SELECT add_column_if_not_exists('diffusion_models', 'is_default', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('diffusion_models', 'is_deprecated', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('diffusion_models', 'is_free', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('diffusion_models', 'is_uncensored', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('diffusion_models', 'model_description', 'TEXT');
-SELECT add_column_if_not_exists('diffusion_models', 'ja_description', 'TEXT');
+-- Ensure all required columns exist in image_diffusion_models table
+SELECT add_column_if_not_exists('image_diffusion_models', 'is_default', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('image_diffusion_models', 'is_deprecated', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('image_diffusion_models', 'is_free', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('image_diffusion_models', 'is_uncensored', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('image_diffusion_models', 'model_description', 'TEXT');
+SELECT add_column_if_not_exists('image_diffusion_models', 'ja_description', 'TEXT');
 
--- Insert Diffusion Models with conflict resolution
-INSERT INTO diffusion_models (provider, codename, is_default, is_deprecated, is_free, is_uncensored, model_description, ja_description)
+-- Insert Image Diffusion Models with conflict resolution
+INSERT INTO image_diffusion_models (provider, codename, is_default, is_deprecated, is_free, is_uncensored, model_description, ja_description)
 VALUES
   -- Google Gemini Image Generation Models
   ('google', 'gemini-2.5-flash-image', true, false, false, false,

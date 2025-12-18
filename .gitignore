@@ -1,4 +1,5 @@
 nul
+.venv*
 
 # Local Monitoring
 grafana_data/

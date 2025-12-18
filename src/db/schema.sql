@@ -139,8 +139,8 @@ BEFORE UPDATE ON llms
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 
--- Diffusion Models table for image generation models (January 2025)
-CREATE TABLE IF NOT EXISTS diffusion_models (
+-- Image Diffusion Models table for image generation models (January 2025)
+CREATE TABLE IF NOT EXISTS image_diffusion_models (
   diffusion_model_id SERIAL PRIMARY KEY,
   provider TEXT NOT NULL,
   codename TEXT NOT NULL UNIQUE,
@@ -154,16 +154,16 @@ CREATE TABLE IF NOT EXISTS diffusion_models (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create updated_at trigger for diffusion_models table
-DROP TRIGGER IF EXISTS update_diffusion_models_timestamp ON diffusion_models;
-CREATE TRIGGER update_diffusion_models_timestamp
-BEFORE UPDATE ON diffusion_models
+-- Create updated_at trigger for image_diffusion_models table
+DROP TRIGGER IF EXISTS update_image_diffusion_models_timestamp ON image_diffusion_models;
+CREATE TRIGGER update_image_diffusion_models_timestamp
+BEFORE UPDATE ON image_diffusion_models
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 
 -- Create indexes for faster lookups
-CREATE INDEX IF NOT EXISTS idx_diffusion_models_provider ON diffusion_models(provider);
-CREATE INDEX IF NOT EXISTS idx_diffusion_models_default ON diffusion_models(is_default, is_deprecated);
+CREATE INDEX IF NOT EXISTS idx_image_diffusion_models_provider ON image_diffusion_models(provider);
+CREATE INDEX IF NOT EXISTS idx_image_diffusion_models_default ON image_diffusion_models(is_default, is_deprecated);
 
 CREATE TABLE IF NOT EXISTS tomori_configs (
   tomori_config_id SERIAL PRIMARY KEY,
@@ -212,7 +212,7 @@ BEGIN
         ALTER TABLE tomori_configs
         ADD CONSTRAINT tomori_configs_diffusion_model_id_fkey
         FOREIGN KEY (diffusion_model_id)
-        REFERENCES diffusion_models(diffusion_model_id)
+        REFERENCES image_diffusion_models(diffusion_model_id)
         ON DELETE SET NULL;
     END IF;
 END $$;

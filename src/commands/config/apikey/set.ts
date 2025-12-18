@@ -274,7 +274,7 @@ export async function execute(
 			// Load default diffusion model for new provider (for image generation)
 			const defaultDiffusionModel = (
 				await sql`
-					SELECT * FROM diffusion_models
+					SELECT * FROM image_diffusion_models
 					WHERE provider = ${newProvider}
 					  AND is_default = true
 					  AND is_deprecated = false
@@ -287,7 +287,7 @@ export async function execute(
 			if (!defaultDiffusionModel) {
 				const fallbackDiffusionModel = (
 					await sql`
-						SELECT * FROM diffusion_models
+						SELECT * FROM image_diffusion_models
 						WHERE provider = ${newProvider}
 						  AND is_deprecated = false
 						ORDER BY diffusion_model_id ASC

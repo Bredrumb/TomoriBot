@@ -87,7 +87,7 @@ export class GenerateImageTool extends BaseTool {
 	): Promise<string> {
 		const result = await sql`
 			SELECT codename
-			FROM diffusion_models
+			FROM image_diffusion_models
 			WHERE diffusion_model_id = ${diffusionModelId}
 		`.values();
 
@@ -208,7 +208,7 @@ export class GenerateImageTool extends BaseTool {
 			}>;
 		}> = [];
 
-		// Build content array with text prompt
+		// Build content array with text prompt first (OpenRouter recommendation)
 		const contentParts: Array<{
 			type: string;
 			text?: string;
@@ -225,12 +225,50 @@ export class GenerateImageTool extends BaseTool {
 					},
 				});
 			}
+			log.info(
+				`[OpenRouter] Added ${referenceImages.length} reference image(s) to content array. Total content parts: ${contentParts.length}`,
+			);
 		}
 
 		messages.push({
 			role: "user",
 			content: contentParts,
 		});
+
+		// Prepare request payload
+		const requestPayload = {
+			model: modelCodename,
+			messages: messages,
+			modalities: ["image", "text"],
+			image_config: {
+				aspect_ratio: aspectRatio,
+			},
+		};
+
+		// Log request structure (without full base64 data to avoid log clutter)
+		log.info(
+			`[OpenRouter] Request payload structure: ${JSON.stringify(
+				{
+					model: requestPayload.model,
+					messageCount: requestPayload.messages.length,
+					message: {
+						role: messages[0]?.role,
+						contentParts: contentParts.map((part) => ({
+							type: part.type,
+							hasImageUrl: part.type === "image_url",
+							hasText: part.type === "text",
+							// Log first 100 chars of base64 to verify image data exists
+							imageDataPreview: part.image_url?.url.substring(0, 100),
+							textPreview: part.text?.substring(0, 50),
+						})),
+					},
+					modalities: requestPayload.modalities,
+					image_config: requestPayload.image_config,
+				},
+				null,
+				2,
+			)}`,
+		);
 
 		// Call OpenRouter API
 		const response = await fetch(
@@ -241,14 +279,7 @@ export class GenerateImageTool extends BaseTool {
 					Authorization: `Bearer ${apiKey}`,
 					"Content-Type": "application/json",
 				},
-				body: JSON.stringify({
-					model: modelCodename,
-					messages: messages,
-					modalities: ["image", "text"],
-					image_config: {
-						aspect_ratio: aspectRatio,
-					},
-				}),
+				body: JSON.stringify(requestPayload),
 			},
 		);
 

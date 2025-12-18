@@ -311,8 +311,8 @@ export async function execute(
 		const presetData: PresetExportData = {
 			tomori_nickname: characterName,
 			attribute_list: [characterDesc],
-			sample_dialogues_in: hasSampleDialogue ? [exampleUser] : [],
-			sample_dialogues_out: hasSampleDialogue ? [exampleBot] : [],
+			sample_dialogues_in: hasSampleDialogue ? [exampleUser!] : [],
+			sample_dialogues_out: hasSampleDialogue ? [exampleBot!] : [],
 			trigger_words: [],
 		};
 

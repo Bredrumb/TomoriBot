@@ -96,6 +96,23 @@ This guide will help you set up TomoriBot locally for development or personal us
 
 Before running TomoriBot, ensure you have the following installed:
 
+* **Node.js v20+** - Required for MCP servers (DuckDuckGo search requires the File API from Node 20+)
+  ```sh
+  # Check your current version
+  node --version
+
+  # If below v20, upgrade via:
+  # Ubuntu/Debian
+  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+  sudo apt-get install -y nodejs
+
+  # macOS (using Homebrew)
+  brew install node@20
+
+  # Windows (using Chocolatey)
+  choco install nodejs-lts
+  ```
+
 * **Bun** - JavaScript runtime and package manager
   ```sh
   # Windows (PowerShell)
@@ -136,6 +153,26 @@ Before running TomoriBot, ensure you have the following installed:
 
   **Note:** The database schema (including required extensions like `pgcrypto`) is automatically initialized when you first run TomoriBot.
 
+* **Python 3** (Optional but recommended) - Required for URL Fetching MCP server tool
+  ```sh
+  # Windows (using Chocolatey)
+  choco install python
+
+  # macOS (using Homebrew)
+  brew install python
+
+  # Linux (Ubuntu/Debian) - Usually pre-installed
+  sudo apt-get install python3 python3-pip
+  ```
+  - Install MCP server packages:
+  ```sh
+  # Install URL fetcher for web content analysis
+  pip install mcp-server-fetch
+
+  # Linux users: If you get an "externally-managed-environment" error, use:
+  pip install --break-system-packages mcp-server-fetch
+  # OR create a virtual environment
+  ```
 ### Installation
 
 1. **Clone the repository**
