@@ -138,11 +138,7 @@ export class GoogleProvider extends BaseLLMProvider implements LLMProvider {
 			name: "google",
 			displayName: "Google Gemini",
 			aliases: ["gemini"], // Support "gemini" as an alias for "google"
-			supportedModels: [
-				"gemini-2.5-flash",
-				"gemini-2.5-pro-preview-05-06",
-				"gemini-2.0-flash-thinking-exp-01-21",
-			],
+			supportedModels: [], // Models are loaded dynamically from database
 			requiresApiKey: true,
 			supportsStreaming: true,
 			supportsFunctionCalling: true,

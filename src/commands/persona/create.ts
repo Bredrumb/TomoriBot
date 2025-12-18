@@ -305,13 +305,14 @@ export async function execute(
 
 		// 6. Create minimal preset data structure
 		// Only include sample dialogues if BOTH fields have content
-		const hasSampleDialogue =
-			exampleUser?.trim() && exampleBot?.trim();
+		const hasSampleDialogue = exampleUser?.trim() && exampleBot?.trim();
 
 		const presetData: PresetExportData = {
 			tomori_nickname: characterName,
 			attribute_list: [characterDesc],
+			// biome-ignore lint/style/noNonNullAssertion: Both or neither has to exist
 			sample_dialogues_in: hasSampleDialogue ? [exampleUser!] : [],
+			// biome-ignore lint/style/noNonNullAssertion: Both or neither has to exist
 			sample_dialogues_out: hasSampleDialogue ? [exampleBot!] : [],
 			trigger_words: [],
 		};

@@ -31,7 +31,7 @@ export class {Provider}Provider extends BaseLLMProvider implements LLMProvider {
 			name: "{provider}",
 			displayName: "{Provider Display Name}",
 			aliases: ["{alias1}", "{alias2}"], // Optional
-			supportedModels: ["{model1}", "{model2}"],
+			supportedModels: [], // Models are loaded dynamically from database
 			requiresApiKey: true,
 			supportsStreaming: true,
 			supportsFunctionCalling: true,

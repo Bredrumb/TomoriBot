@@ -974,6 +974,14 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 		state: StreamState,
 	): Promise<void> {
 		for (const chunk of chunks) {
+			// Check for stop request before each message
+			if (StreamOrchestrator.hasStopRequest(context.channel.id)) {
+				log.info(
+					`Stream Send: Stop request detected before sending chunk in immediate mode`,
+				);
+				return;
+			}
+
 			await this.sendSingleMessage(chunk, context, state);
 		}
 	}

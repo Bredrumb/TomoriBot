@@ -20,8 +20,9 @@ VALUES
   ('google', 'gemini-2.5-flash-lite', false, false, false, false, false, true, true, true, true, false, 'Lightweight version optimized for speed and efficiency', '速度と効率を最適化した軽量版モデル'),
   ('google', 'gemini-2.5-flash-preview-05-20', false, false, false, true, false, true, true, true, true, false, NULL, NULL),
   ('google', 'gemini-2.5-flash-preview-09-2025', false, false, false, false, false, true, true, true, true, false, 'Experimental model for general-purpose applications', '実験的な汎用アプリケーション向けモデル'),
-  ('google', 'gemini-2.5-flash', false, true, false, false, false, true, true, true, true, false, 'Balanced model for general-purpose applications', '汎用アプリケーション向けのバランス型モデル'),
+  ('google', 'gemini-2.5-flash', false, false, false, false, false, true, true, true, true, false, 'Balanced model for general-purpose applications', '汎用アプリケーション向けのバランス型モデル'),
   ('google', 'gemini-2.5-pro', true, false, true, false, false, true, true, true, true, false, 'Most capable model for complex reasoning and analysis', '複雑な推論と分析に最も優れたモデル'),
+  ('google', 'gemini-3-flash-preview', false, true, false, false, false, true, true, true, true, false, 'Latest preview model with enhanced performance and capabilities', '強化されたパフォーマンスと機能を備えた最新のプレビューモデル'),
   -- NovelAI Models (text-only, no vision capabilities)
   ('novelai', 'glm-4-6', true, true, false, false, false, false, false, false, false, false, 'Latest NovelAI roleplay model with enhanced creativity and character consistency', '創造性とキャラクター一貫性を強化した最新のNovelAIロールプレイモデル'),
   ('novelai', 'kayra-v1', false, false, false, false, false, false, false, false, false, false, 'Legacy Kayra model for storytelling and roleplay', 'ストーリーテリングとロールプレイ向けのレガシーKayraモデル'),

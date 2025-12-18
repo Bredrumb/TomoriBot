@@ -123,7 +123,7 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
 			name: "novelai",
 			displayName: "NovelAI",
 			aliases: ["nai"], // Support "nai" as an alias
-			supportedModels: ["kayra-v1", "glm-4-6"],
+			supportedModels: [], // Models are loaded dynamically from database
 			requiresApiKey: true,
 			supportsStreaming: true,
 			supportsFunctionCalling: false, // NovelAI doesn't support function calling
