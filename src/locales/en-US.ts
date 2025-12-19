@@ -1653,6 +1653,62 @@ To protect your privacy again, use \`/personal privacy\` and select "Opt Out".`,
 				},
 			},
 		},
+
+		generate: {
+			image: {
+				// Command
+				description: "Generate an AI image using Google Gemini or OpenRouter",
+
+				// Modal
+				modal: {
+					title: "Generate Image",
+					prompt_label: "Image Prompt",
+					prompt_description: "Describe the image you want to generate",
+					prompt_placeholder:
+						"A cute short-haired elven anime girl eating a banana, manga style",
+					image_upload_label: "Reference Image (Optional)",
+					image_upload_description:
+						"Upload a reference image for image-to-image generation",
+					aspect_ratio_label: "Aspect Ratio",
+					aspect_ratio_description: "Select the desired aspect ratio",
+					aspect_ratio_placeholder: "Choose aspect ratio...",
+				},
+
+				// Success embed
+				success_title: "🟢 Image Generated Successfully!",
+				success_description: "Your AI-generated image is ready!",
+				field_prompt: "Prompt",
+				field_model: "Model",
+				field_generation_time: "Generation Time",
+				field_aspect_ratio: "Aspect Ratio",
+
+				// Errors
+				wrong_provider_title: "🔴 Unsupported Provider",
+				wrong_provider_description:
+					"Image generation requires Google Gemini or OpenRouter. Your current provider is **{current_provider}**.",
+				no_api_key_title: "🔴 No API Key",
+				no_api_key_description:
+					"No API key configured. Please use `/config apikey set`.",
+				api_key_decrypt_failed_title: "🔴 API Key Error",
+				api_key_decrypt_failed_description:
+					"Failed to decrypt API key. Please reconfigure using `/config apikey set`.",
+				no_diffusion_model_title: "🔴 No Image Model",
+				no_diffusion_model_description:
+					"No diffusion model configured for your provider.",
+				error_billing_title: "🔴 Billing Required",
+				error_billing_description:
+					"Your API key requires billing to be enabled for image generation.",
+				error_safety_title: "🔴 Content Blocked",
+				error_safety_description:
+					"Your prompt was blocked by safety filters. Please try a different prompt.",
+				error_generation_failed_title: "🔴 Generation Failed",
+				error_generation_failed_description:
+					"Failed to generate image: {error}",
+				invalid_image_title: "🔴 Invalid Image",
+				invalid_image_description:
+					"Please upload valid image files (PNG, JPG, etc.).",
+			},
+		},
 	},
 
 	events: {

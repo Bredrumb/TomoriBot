@@ -639,7 +639,7 @@ export class GenerateImageTool extends BaseTool {
 				return {
 					success: false,
 					error: getReadableError(
-						"errors.google.content_blocked_default_message",
+						"genai.google.content_blocked_default_message",
 						"Your content was blocked by safety filters",
 					),
 				};
