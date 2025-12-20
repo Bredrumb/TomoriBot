@@ -79,6 +79,7 @@ export async function execute(
 		await replyInfoEmbed(interaction, locale, {
 			titleKey: "commands.config.prompt.clear.success_title",
 			descriptionKey: "commands.config.prompt.clear.success_description",
+			descriptionVars: { defaultPrompt: DEFAULT_SYSTEM_PROMPT.trim() },
 			color: ColorCode.SUCCESS,
 			flags: MessageFlags.Ephemeral,
 		});

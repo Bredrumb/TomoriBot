@@ -79,10 +79,10 @@ CREATE TABLE IF NOT EXISTS servers (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Add DM channel identification column (January 2025)
+-- Add DM channel identification column 
 SELECT add_column_if_not_exists('servers', 'is_dm_channel', 'BOOLEAN', 'false');
 
--- Add registration_locale column for server region analytics (January 2025)
+-- Add registration_locale column for server region analytics 
 SELECT add_column_if_not_exists('servers', 'registration_locale', 'TEXT');
 
 -- Create index for faster lookups
@@ -139,7 +139,7 @@ BEFORE UPDATE ON llms
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 
--- Image Diffusion Models table for image generation models (January 2025)
+-- Image Diffusion Models table for image generation models 
 CREATE TABLE IF NOT EXISTS image_diffusion_models (
   diffusion_model_id SERIAL PRIMARY KEY,
   provider TEXT NOT NULL,
@@ -190,16 +190,16 @@ CREATE TABLE IF NOT EXISTS tomori_configs (
 SELECT add_column_if_not_exists('tomori_configs', 'emoji_usage_enabled', 'BOOLEAN', 'true');
 SELECT add_column_if_not_exists('tomori_configs', 'sticker_usage_enabled', 'BOOLEAN', 'true');
 
--- Add timezone offset column for server-wide timezone configuration (January 2025)
+-- Add timezone offset column for server-wide timezone configuration 
 SELECT add_column_if_not_exists('tomori_configs', 'timezone_offset', 'INTEGER', '0');
 
--- Rename google_search_enabled to web_search_enabled for Brave Search integration (January 2025)
+-- Rename google_search_enabled to web_search_enabled for Brave Search integration 
 SELECT add_column_if_not_exists('tomori_configs', 'web_search_enabled', 'BOOLEAN', 'true');
 
 -- Add pin message permission (November 2025)
 SELECT add_column_if_not_exists('tomori_configs', 'pin_message_enabled', 'BOOLEAN', 'true');
 
--- Add diffusion model reference for image generation (January 2025)
+-- Add diffusion model reference for image generation 
 SELECT add_column_if_not_exists('tomori_configs', 'diffusion_model_id', 'INTEGER');
 
 -- Add custom system prompt column (December 2025)
@@ -261,8 +261,27 @@ BEFORE UPDATE ON tomori_presets
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 
--- Add preset avatar path column for profile pictures (January 2025)
+-- Add preset avatar path column for profile pictures 
 SELECT add_column_if_not_exists('tomori_presets', 'preset_avatar_path', 'TEXT');
+
+-- Table: system_prompt_presets
+-- Purpose: Store pre-made system prompt presets that users can apply
+CREATE TABLE IF NOT EXISTS system_prompt_presets (
+  system_prompt_preset_id SERIAL PRIMARY KEY,
+  system_prompt_preset_name TEXT NOT NULL UNIQUE,
+  system_prompt_preset_desc TEXT NOT NULL,
+  ja_description TEXT,
+  preset_prompt_text TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create updated_at trigger for system_prompt_presets table
+DROP TRIGGER IF EXISTS update_system_prompt_presets_timestamp ON system_prompt_presets;
+CREATE TRIGGER update_system_prompt_presets_timestamp
+BEFORE UPDATE ON system_prompt_presets
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
 
 CREATE TABLE IF NOT EXISTS server_emojis (
   server_emoji_id SERIAL PRIMARY KEY,
@@ -324,7 +343,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- Create index for faster lookups
 CREATE INDEX IF NOT EXISTS idx_users_disc_id ON users(user_disc_id);
 
--- Add registration_locale column for user region analytics (January 2025)
+-- Add registration_locale column for user region analytics 
 SELECT add_column_if_not_exists('users', 'registration_locale', 'TEXT');
 
 -- Create updated_at trigger for users table
@@ -481,7 +500,7 @@ BEFORE UPDATE ON reminders
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 
--- Drop deprecated columns (January 2025)
+-- Drop deprecated columns 
 SELECT drop_column_if_exists('tomori_configs', 'teach_cost');
 SELECT drop_column_if_exists('tomori_configs', 'gamba_limit');
 SELECT drop_column_if_exists('users', 'tomocoins_held');

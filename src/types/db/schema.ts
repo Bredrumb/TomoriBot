@@ -13,7 +13,7 @@ export const userSchema = z.object({
 	user_disc_id: z.string(),
 	user_nickname: z.string(),
 	language_pref: z.string().default("en-US"),
-	registration_locale: z.string().nullable(), // Static locale captured at registration (January 2025)
+	registration_locale: z.string().nullable(), // Static locale captured at registration
 	privacy_opt_out: z.boolean().default(false),
 	personal_memories: z.array(z.string()).default([]),
 	created_at: z.date().optional(),
@@ -24,8 +24,8 @@ export type UserRow = z.infer<typeof userSchema>;
 export const serverSchema = z.object({
 	server_id: z.number().optional(),
 	server_disc_id: z.string(),
-	is_dm_channel: z.boolean().default(false), // Added for DM support (January 2025)
-	registration_locale: z.string().nullable(), // Static locale captured at server setup (January 2025)
+	is_dm_channel: z.boolean().default(false), // Added for DM support
+	registration_locale: z.string().nullable(), // Static locale captured at server setup
 	created_at: z.date().optional(),
 	updated_at: z.date().optional(),
 });
@@ -84,7 +84,7 @@ export const tomoriConfigSchema = z.object({
 	tomori_config_id: z.number().optional(),
 	tomori_id: z.number(),
 	llm_id: z.number(),
-	diffusion_model_id: z.number().int().nullable().optional(), // Added January 2025 - Image generation model
+	diffusion_model_id: z.number().int().nullable().optional(), // Added December 2025 - Image generation model
 	llm_temperature: z.number().min(1.0).max(2.0).default(1.5),
 	api_key: z.instanceof(Buffer).nullable(),
 	key_version: z.number().int().default(1).optional(), // Added November 2025 - Encryption key version for rotation
@@ -103,7 +103,7 @@ export const tomoriConfigSchema = z.object({
 	emoji_usage_enabled: z.boolean().default(true), // Added May 5, 2025
 	sticker_usage_enabled: z.boolean().default(true), // Added May 5, 2025
 	pin_message_enabled: z.boolean().default(true), // Added November 5, 2025 - Permission for pin message tool
-	timezone_offset: z.number().int().min(-12).max(14).default(0), // Added January 2025 - UTC offset in hours
+	timezone_offset: z.number().int().min(-12).max(14).default(0),
 	system_prompt: z.string().nullable(), // Added December 2025 - Custom system prompt for personality instructions
 	created_at: z.date().optional(),
 	updated_at: z.date().optional(),
@@ -118,11 +118,22 @@ export const tomoriPresetSchema = z.object({
 	preset_sample_dialogues_in: z.array(z.string()).default([]),
 	preset_sample_dialogues_out: z.array(z.string()).default([]),
 	preset_language: z.string(),
-	preset_avatar_path: z.string().nullable().optional(), // Added January 2025 - Path to preset profile picture
+	preset_avatar_path: z.string().nullable().optional(),
 	created_at: z.date().optional(),
 	updated_at: z.date().optional(),
 });
 export type TomoriPresetRow = z.infer<typeof tomoriPresetSchema>;
+
+export const systemPromptPresetSchema = z.object({
+	system_prompt_preset_id: z.number(),
+	system_prompt_preset_name: z.string(),
+	system_prompt_preset_desc: z.string(),
+	ja_description: z.string().nullable().optional(),
+	preset_prompt_text: z.string(),
+	created_at: z.date().optional(),
+	updated_at: z.date().optional(),
+});
+export type SystemPromptPresetRow = z.infer<typeof systemPromptPresetSchema>;
 
 export const serverEmojiSchema = z.object({
 	server_emoji_id: z.number().optional(),

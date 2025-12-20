@@ -215,6 +215,11 @@ import { createStandardEmbed, createSummaryEmbed } from "./embedHelper";
 
 const PROMPT_TIMEOUT = 15000;
 const MODAL_DESCRIPTION_MAX_LENGTH = 99; // Discord modal description limit
+const MODAL_TITLE_MAX_LENGTH = 45;
+const MODAL_LABEL_MAX_LENGTH = 45;
+const TEXT_INPUT_PLACEHOLDER_MAX_LENGTH = 100;
+const SELECT_PLACEHOLDER_MAX_LENGTH = 150;
+const SELECT_OPTION_TEXT_MAX_LENGTH = 100;
 
 /**
  * Safely localizes a string for modal usage, truncating if necessary to prevent Discord API errors
@@ -1153,7 +1158,10 @@ export async function promptWithRawModal(
 			type: InteractionResponseType.Modal, // Type 9
 			data: {
 				custom_id: modalCustomId,
-				title: localizer(locale, modalTitleKey),
+				title: safeSelectOptionText(
+					localizer(locale, modalTitleKey),
+					MODAL_TITLE_MAX_LENGTH,
+				),
 				components: components.map((component) => {
 					if (isModalInputField(component)) {
 						// Text Input wrapped in Label component (type 18)
@@ -1170,7 +1178,10 @@ export async function promptWithRawModal(
 								component.placeholder.startsWith("commands.")
 									? localizer(locale, component.placeholder)
 									: component.placeholder;
-							rawComponent.placeholder = placeholder;
+							rawComponent.placeholder = safeSelectOptionText(
+								placeholder,
+								TEXT_INPUT_PLACEHOLDER_MAX_LENGTH,
+							);
 						}
 						if (component.minLength)
 							rawComponent.min_length = component.minLength;
@@ -1181,7 +1192,10 @@ export async function promptWithRawModal(
 						// Wrap in Label component (type 18)
 						const labelComponent: RawDiscordComponent = {
 							type: 18, // ComponentType.Label
-							label: localizer(locale, component.labelKey),
+							label: safeSelectOptionText(
+								localizer(locale, component.labelKey),
+								MODAL_LABEL_MAX_LENGTH,
+							),
 							component: rawComponent,
 						};
 
@@ -1200,9 +1214,20 @@ export async function promptWithRawModal(
 							type: 3, // ComponentType.StringSelect
 							custom_id: component.customId,
 							options: component.options.map((option) => ({
-								label: option.label,
-								value: option.value,
-								description: option.description,
+								label: safeSelectOptionText(
+									option.label,
+									SELECT_OPTION_TEXT_MAX_LENGTH,
+								),
+								value: safeSelectOptionText(
+									option.value,
+									SELECT_OPTION_TEXT_MAX_LENGTH,
+								),
+								description: option.description
+									? safeSelectOptionText(
+											option.description,
+											SELECT_OPTION_TEXT_MAX_LENGTH,
+										)
+									: undefined,
 								emoji: option.emoji,
 							})),
 							required: component.required !== false,
@@ -1214,13 +1239,19 @@ export async function promptWithRawModal(
 								component.placeholder.startsWith("commands.")
 									? localizer(locale, component.placeholder)
 									: component.placeholder;
-							rawComponent.placeholder = placeholder;
+							rawComponent.placeholder = safeSelectOptionText(
+								placeholder,
+								SELECT_PLACEHOLDER_MAX_LENGTH,
+							);
 						}
 
 						// Wrap in Label component (type 18)
 						const labelComponent: RawDiscordComponent = {
 							type: 18, // ComponentType.Label
-							label: localizer(locale, component.labelKey),
+							label: safeSelectOptionText(
+								localizer(locale, component.labelKey),
+								MODAL_LABEL_MAX_LENGTH,
+							),
 							component: rawComponent,
 						};
 
@@ -1246,7 +1277,10 @@ export async function promptWithRawModal(
 						// Wrap in Label component (type 18)
 						const labelComponent: RawDiscordComponent = {
 							type: 18, // ComponentType.Label
-							label: localizer(locale, component.labelKey),
+							label: safeSelectOptionText(
+								localizer(locale, component.labelKey),
+								MODAL_LABEL_MAX_LENGTH,
+							),
 							component: rawComponent,
 						};
 

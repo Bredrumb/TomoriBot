@@ -13,6 +13,7 @@ import {
 	reminderSchema,
 	type ReminderRow,
 	type TomoriPresetRow,
+	type SystemPromptPresetRow,
 } from "../../types/db/schema"; // Import base schemas and types
 import { log } from "../misc/logger";
 import { getCachedLLM } from "../cache/llmCache";
@@ -839,6 +840,38 @@ export async function loadAllPresets(): Promise<TomoriPresetRow[] | null> {
 		return presets as TomoriPresetRow[];
 	} catch (error) {
 		log.error("Error loading all presets from database:", error);
+		return null;
+	}
+}
+
+/**
+ * Loads all system prompt presets from the database
+ * @returns Promise that resolves to array of SystemPromptPresetRow or null on error
+ */
+export async function loadSystemPromptPresets(): Promise<
+	SystemPromptPresetRow[] | null
+> {
+	try {
+		// 1. Query all system prompt presets ordered by ID
+		const presets = await sql`
+			SELECT * FROM system_prompt_presets
+			ORDER BY system_prompt_preset_id ASC
+		`;
+
+		// 2. Check if any presets were found
+		if (!presets || presets.length === 0) {
+			log.warn("No system prompt presets found in database.");
+			return null;
+		}
+
+		// 3. Log successful load
+		log.info(`Loaded ${presets.length} system prompt presets from database.`);
+
+		// 4. Return the presets
+		return presets as SystemPromptPresetRow[];
+	} catch (error) {
+		// 5. Log any errors during the database query
+		log.error("Error loading system prompt presets from database:", error);
 		return null;
 	}
 }
