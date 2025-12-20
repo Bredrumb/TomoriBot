@@ -68,46 +68,47 @@ export async function execute(
 		return;
 	}
 
-	// Track the active interaction for error handling
-	let activeInteraction:
-		| ChatInputCommandInteraction
-		| import("discord.js").ModalSubmitInteraction = interaction;
+	// 2. Load the Tomori state for this server/user
+	// Use user ID for DM context, guild ID for server context
+	const serverId = interaction.guild?.id ?? interaction.user.id;
+	const tomoriState = await loadTomoriState(serverId);
+	if (!tomoriState) {
+		await replyInfoEmbed(interaction, locale, {
+			titleKey: "general.errors.tomori_not_setup_title",
+			descriptionKey: "general.errors.tomori_not_setup_description",
+			color: ColorCode.ERROR,
+			flags: MessageFlags.Ephemeral,
+		});
+		return;
+	}
+
+	// 3. Load unique providers from database
+	const uniqueProviders = await loadUniqueProviders();
+	if (!uniqueProviders || uniqueProviders.length === 0) {
+		await replyInfoEmbed(interaction, locale, {
+			titleKey: "commands.config.apikey.set.no_providers_title",
+			descriptionKey: "commands.config.apikey.set.no_providers_description",
+			color: ColorCode.ERROR,
+			flags: MessageFlags.Ephemeral,
+		});
+		return;
+	}
+
+	// 4. Create provider select options with descriptions
+	const providerSelectOptions: SelectOption[] = uniqueProviders.map(
+		(provider) => ({
+			label: provider.charAt(0).toUpperCase() + provider.slice(1),
+			value: provider.toLowerCase(),
+			description: undefined,
+		}),
+	);
+
+	// Track modal submit interaction for error handling in catch block
+	let modalSubmitInteraction:
+		| import("discord.js").ModalSubmitInteraction
+		| undefined;
 
 	try {
-		// 2. Load the Tomori state for this server/user
-		// Use user ID for DM context, guild ID for server context
-		const serverId = interaction.guild?.id ?? interaction.user.id;
-		const tomoriState = await loadTomoriState(serverId);
-		if (!tomoriState) {
-			await replyInfoEmbed(interaction, locale, {
-				titleKey: "general.errors.tomori_not_setup_title",
-				descriptionKey: "general.errors.tomori_not_setup_description",
-				color: ColorCode.ERROR,
-				flags: MessageFlags.Ephemeral,
-			});
-			return;
-		}
-
-		// 3. Load unique providers from database
-		const uniqueProviders = await loadUniqueProviders();
-		if (!uniqueProviders || uniqueProviders.length === 0) {
-			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.config.apikey.set.no_providers_title",
-				descriptionKey: "commands.config.apikey.set.no_providers_description",
-				color: ColorCode.ERROR,
-				flags: MessageFlags.Ephemeral,
-			});
-			return;
-		}
-
-		// 4. Create provider select options with descriptions
-		const providerSelectOptions: SelectOption[] = uniqueProviders.map(
-			(provider) => ({
-				label: provider.charAt(0).toUpperCase() + provider.slice(1),
-				value: provider.toLowerCase(),
-				description: undefined,
-			}),
-		);
 
 		// 5. Show modal with provider selection and API key input
 		const modalComponents: ModalComponent[] = [
@@ -150,7 +151,7 @@ export async function execute(
 		}
 
 		// Extract values from the modal
-		const modalSubmitInteraction = modalResult.interaction;
+		modalSubmitInteraction = modalResult.interaction;
 		const selectedProvider = modalResult.values?.[PROVIDER_SELECT_ID];
 		const apiKey = modalResult.values?.[API_KEY_INPUT_ID];
 
@@ -159,9 +160,6 @@ export async function execute(
 			log.error("Modal result unexpectedly missing interaction or values");
 			return;
 		}
-
-		// Update active interaction for error handling
-		activeInteraction = modalSubmitInteraction;
 
 		// 7. Basic API key validation - let helper functions manage interaction state
 		if (apiKey.length < 10) {
@@ -409,8 +407,10 @@ export async function execute(
 			context,
 		);
 
-		// Inform user of unknown error - use the active interaction (modal submit if available, otherwise original)
-		await replyInfoEmbed(activeInteraction, locale, {
+		// Inform user of unknown error
+		// Use modalSubmitInteraction if available (error after modal), otherwise interaction (error during modal)
+		const replyTarget = modalSubmitInteraction ?? interaction;
+		await replyInfoEmbed(replyTarget, locale, {
 			titleKey: "general.errors.unknown_error_title",
 			descriptionKey: "general.errors.unknown_error_description",
 			color: ColorCode.ERROR,

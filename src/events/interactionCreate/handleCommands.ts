@@ -25,7 +25,8 @@ const DEFAULT_COOLDOWN = 1600; // 1.6 second default cooldown for all commands
 const MODAL_COMMANDS = new Set([
 	// Config commands
 	"config.setup",
-	"config.model",
+	"config.model.text",
+	"config.model.image",
 	"config.humanizer",
 	"config.apikey.set",
 	// Teach commands

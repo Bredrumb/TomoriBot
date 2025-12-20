@@ -32,6 +32,7 @@ VALUES
   ('openrouter', 'thedrummer/cydonia-24b-v4.1', false, false, false, false, false, false, false, false, false, true, 'Uncensored model specializing in creative writing and role-play', '創作とロールプレイに特化した無検閲モデル'),
   ('openrouter', 'deepseek/deepseek-v3.2-exp', false, false, false, false, false, true, false, false, false, true, 'Cost-efficient Experimental Model that is also great in role-play', 'ロールプレイにも優れたコスト効率の良い実験モデル'),
   ('openrouter', 'x-ai/grok-4-fast', false, false, true, false, false, true, true, false, false, false, 'Fast and efficient general-purpose model', '高速かつ効率的な汎用モデル'),
+  ('openrouter', 'google/gemini-3-flash-preview', false, false, false, false, false, true, true, false, false, false, 'Latest Gemini 3 Flash preview via OpenRouter with tool use and image understanding', 'OpenRouter経由でツール利用と画像理解に対応した最新のGemini 3 Flashプレビュー'),
   ('openrouter', 'anthropic/claude-sonnet-4.5', false, false, false, false, false, true, true, false, false, false, 'State-of-the-art performance in complex tasks and problems, also great in role-playing and creative writing', '複雑なタスクや問題に優れた最先端性能を持ち、ロールプレイや創作にも秀でたモデル'),
   ('openrouter', 'anthropic/claude-haiku-4.5', false, false, false, false, false, true, true, false, false, false, 'Lightweight version of claude-sonnet-4.5', 'claude-sonnet-4.5の軽量版'),
   ('openrouter', 'openai/gpt-5.1', true, false, true, false, false, true, true, false, false, false, 'State-of-the-art performance in complex tasks and problems', '複雑なタスクや問題に優れた最先端性能'),
@@ -371,4 +372,3 @@ ON CONFLICT (tomori_preset_name) DO UPDATE SET
   preset_language = EXCLUDED.preset_language,
   preset_avatar_path = EXCLUDED.preset_avatar_path,
   updated_at = CURRENT_TIMESTAMP;
-

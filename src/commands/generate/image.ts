@@ -243,79 +243,84 @@ export async function execute(
 		return;
 	}
 
+	// 2. Load TomoriState for this server/user
+	const serverId = interaction.guild?.id ?? interaction.user.id;
+	const tomoriState = await loadTomoriState(serverId);
+
+	// 3. Validate TomoriState exists
+	if (!tomoriState) {
+		await replyInfoEmbed(interaction, locale, {
+			titleKey: "general.errors.tomori_not_setup_title",
+			descriptionKey: "general.errors.tomori_not_setup_description",
+			color: ColorCode.ERROR,
+			flags: MessageFlags.Ephemeral,
+		});
+		return;
+	}
+
+	// 4. Validate provider is Google or OpenRouter
+	const provider = tomoriState.llm.llm_provider.toLowerCase();
+	if (provider !== "google" && provider !== "openrouter") {
+		await replyInfoEmbed(interaction, locale, {
+			titleKey: "commands.generate.image.wrong_provider_title",
+			descriptionKey: "commands.generate.image.wrong_provider_description",
+			descriptionVars: {
+				current_provider: tomoriState.llm.llm_provider,
+			},
+			color: ColorCode.ERROR,
+			flags: MessageFlags.Ephemeral,
+		});
+		return;
+	}
+
+	// 5. Validate API key exists
+	const encryptedApiKey = tomoriState.config.api_key;
+	const keyVersion = tomoriState.config.key_version || 1;
+
+	if (!encryptedApiKey) {
+		await replyInfoEmbed(interaction, locale, {
+			titleKey: "commands.generate.image.no_api_key_title",
+			descriptionKey: "commands.generate.image.no_api_key_description",
+			color: ColorCode.ERROR,
+			flags: MessageFlags.Ephemeral,
+		});
+		return;
+	}
+
+	// 6. Decrypt API key
+	const apiKey = await decryptApiKey(encryptedApiKey, keyVersion);
+
+	if (!apiKey) {
+		await replyInfoEmbed(interaction, locale, {
+			titleKey: "commands.generate.image.api_key_decrypt_failed_title",
+			descriptionKey:
+				"commands.generate.image.api_key_decrypt_failed_description",
+			color: ColorCode.ERROR,
+			flags: MessageFlags.Ephemeral,
+		});
+		return;
+	}
+
+	// 7. Validate diffusion model is configured
+	const diffusionModelId = tomoriState.config.diffusion_model_id;
+
+	if (!diffusionModelId) {
+		await replyInfoEmbed(interaction, locale, {
+			titleKey: "commands.generate.image.no_diffusion_model_title",
+			descriptionKey:
+				"commands.generate.image.no_diffusion_model_description",
+			color: ColorCode.ERROR,
+			flags: MessageFlags.Ephemeral,
+		});
+		return;
+	}
+
+	// Track modal submit interaction for error handling in catch block
+	let modalSubmitInteraction:
+		| import("discord.js").ModalSubmitInteraction
+		| undefined;
+
 	try {
-		// 2. Load TomoriState for this server/user
-		const serverId = interaction.guild?.id ?? interaction.user.id;
-		const tomoriState = await loadTomoriState(serverId);
-
-		// 3. Validate TomoriState exists
-		if (!tomoriState) {
-			await replyInfoEmbed(interaction, locale, {
-				titleKey: "general.errors.tomori_not_setup_title",
-				descriptionKey: "general.errors.tomori_not_setup_description",
-				color: ColorCode.ERROR,
-				flags: MessageFlags.Ephemeral,
-			});
-			return;
-		}
-
-		// 4. Validate provider is Google or OpenRouter
-		const provider = tomoriState.llm.llm_provider.toLowerCase();
-		if (provider !== "google" && provider !== "openrouter") {
-			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.generate.image.wrong_provider_title",
-				descriptionKey: "commands.generate.image.wrong_provider_description",
-				descriptionVars: {
-					current_provider: tomoriState.llm.llm_provider,
-				},
-				color: ColorCode.ERROR,
-				flags: MessageFlags.Ephemeral,
-			});
-			return;
-		}
-
-		// 5. Validate API key exists
-		const encryptedApiKey = tomoriState.config.api_key;
-		const keyVersion = tomoriState.config.key_version || 1;
-
-		if (!encryptedApiKey) {
-			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.generate.image.no_api_key_title",
-				descriptionKey: "commands.generate.image.no_api_key_description",
-				color: ColorCode.ERROR,
-				flags: MessageFlags.Ephemeral,
-			});
-			return;
-		}
-
-		// 6. Decrypt API key
-		const apiKey = await decryptApiKey(encryptedApiKey, keyVersion);
-
-		if (!apiKey) {
-			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.generate.image.api_key_decrypt_failed_title",
-				descriptionKey:
-					"commands.generate.image.api_key_decrypt_failed_description",
-				color: ColorCode.ERROR,
-				flags: MessageFlags.Ephemeral,
-			});
-			return;
-		}
-
-		// 7. Validate diffusion model is configured
-		const diffusionModelId = tomoriState.config.diffusion_model_id;
-
-		if (!diffusionModelId) {
-			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.generate.image.no_diffusion_model_title",
-				descriptionKey:
-					"commands.generate.image.no_diffusion_model_description",
-				color: ColorCode.ERROR,
-				flags: MessageFlags.Ephemeral,
-			});
-			return;
-		}
-
 		// 8. Build modal components
 		const modalComponents = [
 			{
@@ -376,7 +381,7 @@ export async function execute(
 			return;
 		}
 
-		const modalSubmitInteraction = modalResult.interaction;
+		modalSubmitInteraction = modalResult.interaction;
 		const prompt = modalResult.values?.[PROMPT_INPUT_ID];
 		const aspectRatio = modalResult.values?.[ASPECT_RATIO_SELECT_ID];
 		const imageAttachments = modalResult.attachments?.[IMAGE_UPLOAD_ID];
@@ -598,12 +603,8 @@ export async function execute(
 
 		log.error("Image generation failed:", error as Error);
 
-		// Determine which interaction to use for error reply
-		const replyTarget = interaction.deferred
-			? interaction
-			: interaction.replied
-				? interaction
-				: interaction;
+		// Use modalSubmitInteraction if available (error after modal), otherwise interaction (error during modal)
+		const replyTarget = modalSubmitInteraction ?? interaction;
 
 		// Check for billing/payment errors
 		if (

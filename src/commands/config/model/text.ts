@@ -9,27 +9,27 @@ import { sql } from "@/utils/db/client";
 import {
 	loadTomoriState,
 	loadAvailableModelsForProvider,
-} from "../../utils/db/dbRead";
+} from "../../../utils/db/dbRead";
 // Remove updateTomoriConfig import
-// import { updateTomoriConfig } from "../../utils/db/dbWrite";
-import { localizer } from "../../utils/text/localizer";
-import { log, ColorCode } from "../../utils/misc/logger";
+// import { updateTomoriConfig } from "../../../utils/db/dbWrite";
+import { localizer } from "../../../utils/text/localizer";
+import { log, ColorCode } from "../../../utils/misc/logger";
 import {
 	replyInfoEmbed,
 	promptWithRawModal,
 	safeSelectOptionText,
-} from "../../utils/discord/interactionHelper";
+} from "../../../utils/discord/interactionHelper";
 // Import TomoriConfigRow for validation and LlmRow for type hints
 import {
 	type UserRow,
 	type ErrorContext,
 	tomoriConfigSchema,
 	type LlmRow,
-} from "../../types/db/schema";
-import type { SelectOption } from "../../types/discord/modal";
+} from "../../../types/db/schema";
+import type { SelectOption } from "../../../types/discord/modal";
 
 // Modal configuration constants
-const MODAL_CUSTOM_ID = "config_model_modal";
+const MODAL_CUSTOM_ID = "config_model_text_modal";
 const MODEL_SELECT_ID = "model_select";
 
 /**
@@ -71,8 +71,8 @@ export const configureSubcommand = (
 	subcommand: SlashCommandSubcommandBuilder,
 ) =>
 	subcommand
-		.setName("model")
-		.setDescription(localizer("en-US", "commands.config.model.description"));
+		.setName("text")
+		.setDescription(localizer("en-US", "commands.config.model.text.description"));
 
 /**
  * Changes Tomori's LLM model (Gemini)
@@ -97,46 +97,51 @@ export async function execute(
 		return;
 	}
 
+	// 2. Load the Tomori state for this server
+	const tomoriState = await loadTomoriState(
+		interaction.guild?.id ?? interaction.user.id,
+	);
+	if (!tomoriState) {
+		await replyInfoEmbed(interaction, locale, {
+			titleKey: "general.errors.tomori_not_setup_title",
+			descriptionKey: "general.errors.tomori_not_setup_description",
+			color: ColorCode.ERROR,
+			flags: MessageFlags.Ephemeral,
+		});
+		return;
+	}
+
+	// 3. Check if an API key is configured
+	if (!tomoriState.config.api_key) {
+		await replyInfoEmbed(interaction, locale, {
+			titleKey: "commands.config.model.text.no_api_key_title",
+			descriptionKey: "commands.config.model.text.no_api_key_description",
+			color: ColorCode.ERROR,
+			flags: MessageFlags.Ephemeral,
+		});
+		return;
+	}
+
+	// 4. Load available models for the current provider from the database for modal options
+	const currentProvider = tomoriState.llm.llm_provider;
+	const availableModels = await loadAvailableModelsForProvider(currentProvider);
+	if (!availableModels || availableModels.length === 0) {
+		await replyInfoEmbed(interaction, locale, {
+			titleKey: "commands.config.model.text.no_models_title",
+			descriptionKey: "commands.config.model.text.no_models_description",
+			color: ColorCode.ERROR,
+			flags: MessageFlags.Ephemeral,
+		});
+		return;
+	}
+
+	// Track modal submit interaction and selected model for error handling in catch block
+	let modalSubmitInteraction:
+		| import("discord.js").ModalSubmitInteraction
+		| undefined;
 	let selectedModel: LlmRow | null = null; // For error context and logic
+
 	try {
-		// 2. Load the Tomori state for this server (Rule #17)
-		const tomoriState = await loadTomoriState(
-			interaction.guild?.id ?? interaction.user.id,
-		);
-		if (!tomoriState) {
-			await replyInfoEmbed(interaction, locale, {
-				titleKey: "general.errors.tomori_not_setup_title",
-				descriptionKey: "general.errors.tomori_not_setup_description",
-				color: ColorCode.ERROR,
-				flags: MessageFlags.Ephemeral,
-			});
-			return;
-		}
-
-		// 2.5. Check if an API key is configured
-		if (!tomoriState.config.api_key) {
-			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.config.model.no_api_key_title",
-				descriptionKey: "commands.config.model.no_api_key_description",
-				color: ColorCode.ERROR,
-				flags: MessageFlags.Ephemeral,
-			});
-			return;
-		}
-
-		// 3. Load available models for the current provider from the database for modal options
-		const currentProvider = tomoriState.llm.llm_provider;
-		const availableModels =
-			await loadAvailableModelsForProvider(currentProvider);
-		if (!availableModels || availableModels.length === 0) {
-			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.config.model.no_models_title",
-				descriptionKey: "commands.config.model.no_models_description",
-				color: ColorCode.ERROR,
-				flags: MessageFlags.Ephemeral,
-			});
-			return;
-		}
 
 		// 4. Create model options for the select menu using localized descriptions
 		const modelSelectOptions: SelectOption[] = availableModels.map((model) => ({
@@ -153,13 +158,13 @@ export async function execute(
 			locale,
 			{
 				modalCustomId: MODAL_CUSTOM_ID,
-				modalTitleKey: "commands.config.model.modal_title",
+				modalTitleKey: "commands.config.model.text.modal_title",
 				components: [
 					{
 						customId: MODEL_SELECT_ID,
-						labelKey: "commands.config.model.select_label",
-						descriptionKey: "commands.config.model.select_description",
-						placeholder: "commands.config.model.select_placeholder",
+						labelKey: "commands.config.model.text.select_label",
+						descriptionKey: "commands.config.model.text.select_description",
+						placeholder: "commands.config.model.text.select_placeholder",
 						required: true,
 						options: modelSelectOptions,
 					},
@@ -178,7 +183,7 @@ export async function execute(
 
 		// Extract values from the modal
 		// biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
-		const modalSubmitInteraction = modalResult.interaction!;
+		modalSubmitInteraction = modalResult.interaction!;
 		// biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
 		const selectedModelCodename = modalResult.values![MODEL_SELECT_ID];
 
@@ -211,7 +216,7 @@ export async function execute(
 			await modalSubmitInteraction.editReply({
 				content: localizer(
 					locale,
-					"commands.config.model.invalid_model_description",
+					"commands.config.model.text.invalid_model_description",
 				),
 			});
 			return;
@@ -220,8 +225,8 @@ export async function execute(
 		// 8. Check if this is the same as the current model
 		if (selectedModel.llm_id === tomoriState.config.llm_id) {
 			await replyInfoEmbed(modalSubmitInteraction, locale, {
-				titleKey: "commands.config.model.already_selected_title",
-				descriptionKey: "commands.config.model.already_selected_description",
+				titleKey: "commands.config.model.text.already_selected_title",
+				descriptionKey: "commands.config.model.text.already_selected_description",
 				descriptionVars: {
 					model_name: selectedModel.llm_codename,
 				},
@@ -239,13 +244,13 @@ export async function execute(
 			await modalSubmitInteraction.editReply({
 				content: localizer(
 					locale,
-					"commands.config.model.validating_api_key_compatibility",
+					"commands.config.model.text.validating_api_key_compatibility",
 				),
 			});
 
 			try {
 				// Decrypt and validate the API key with the new provider
-				const { decryptApiKey } = await import("../../utils/security/crypto");
+				const { decryptApiKey } = await import("../../../utils/security/crypto");
 				const keyVersion = tomoriState.config.key_version || 1; // Default to V1 for backward compatibility
 				const decryptedApiKey = await decryptApiKey(
 					tomoriState.config.api_key,
@@ -257,7 +262,7 @@ export async function execute(
 				try {
 					// Use factory to get provider instance (handles all providers and aliases)
 					const { ProviderFactory } = await import(
-						"../../utils/provider/providerFactory"
+						"../../../utils/provider/providerFactory"
 					);
 					// Partial TomoriState for validation only - provider doesn't use these fields during validateApiKey()
 					const provider = await ProviderFactory.getProvider({
@@ -280,9 +285,9 @@ export async function execute(
 
 				if (!isKeyCompatible) {
 					await replyInfoEmbed(modalSubmitInteraction, locale, {
-						titleKey: "commands.config.model.api_key_incompatible_title",
+						titleKey: "commands.config.model.text.api_key_incompatible_title",
 						descriptionKey:
-							"commands.config.model.api_key_incompatible_description",
+							"commands.config.model.text.api_key_incompatible_description",
 						descriptionVars: {
 							model_name: selectedModel.llm_codename,
 							provider:
@@ -299,8 +304,8 @@ export async function execute(
 					error as Error,
 				);
 				await replyInfoEmbed(modalSubmitInteraction, locale, {
-					titleKey: "commands.config.model.validation_error_title",
-					descriptionKey: "commands.config.model.validation_error_description",
+					titleKey: "commands.config.model.text.validation_error_title",
+					descriptionKey: "commands.config.model.text.validation_error_description",
 					color: ColorCode.ERROR,
 				});
 				return;
@@ -357,8 +362,8 @@ export async function execute(
 		);
 
 		await replyInfoEmbed(modalSubmitInteraction, locale, {
-			titleKey: "commands.config.model.success_title",
-			descriptionKey: "commands.config.model.success_description",
+			titleKey: "commands.config.model.text.success_title",
+			descriptionKey: "commands.config.model.text.success_description",
 			descriptionVars: {
 				model_name: selectedModel.llm_codename,
 				previous_model:
@@ -395,16 +400,13 @@ export async function execute(
 		);
 
 		// 13. Inform user of unknown error
-		if (!interaction.replied && !interaction.deferred) {
-			await interaction.reply({
-				content: localizer(locale, "general.errors.unknown_error_description"),
-				flags: MessageFlags.Ephemeral,
-			});
-		} else {
-			await interaction.followUp({
-				content: localizer(locale, "general.errors.unknown_error_description"),
-				flags: MessageFlags.Ephemeral,
-			});
-		}
+		// Use modalSubmitInteraction if available (error after modal), otherwise interaction (error during modal)
+		const replyTarget = modalSubmitInteraction ?? interaction;
+		await replyInfoEmbed(replyTarget, locale, {
+			titleKey: "general.errors.unknown_error_title",
+			descriptionKey: "general.errors.unknown_error_description",
+			color: ColorCode.ERROR,
+			flags: MessageFlags.Ephemeral,
+		});
 	}
 }
