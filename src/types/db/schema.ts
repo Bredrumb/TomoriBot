@@ -104,6 +104,7 @@ export const tomoriConfigSchema = z.object({
 	sticker_usage_enabled: z.boolean().default(true), // Added May 5, 2025
 	pin_message_enabled: z.boolean().default(true), // Added November 5, 2025 - Permission for pin message tool
 	timezone_offset: z.number().int().min(-12).max(14).default(0), // Added January 2025 - UTC offset in hours
+	system_prompt: z.string().nullable(), // Added December 2025 - Custom system prompt for personality instructions
 	created_at: z.date().optional(),
 	updated_at: z.date().optional(),
 });

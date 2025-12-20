@@ -202,6 +202,9 @@ SELECT add_column_if_not_exists('tomori_configs', 'pin_message_enabled', 'BOOLEA
 -- Add diffusion model reference for image generation (January 2025)
 SELECT add_column_if_not_exists('tomori_configs', 'diffusion_model_id', 'INTEGER');
 
+-- Add custom system prompt column (December 2025)
+SELECT add_column_if_not_exists('tomori_configs', 'system_prompt', 'TEXT', 'NULL');
+
 -- Add foreign key constraint if the column was just created
 DO $$
 BEGIN

@@ -19,6 +19,7 @@ import {
 	validateUserFields,
 } from "./sqlSecurity";
 import { getBaseTriggerWords } from "../text/localizer";
+import { DEFAULT_SYSTEM_PROMPT } from "../text/contextBuilder";
 import type { Guild } from "discord.js";
 import {
 	validateMemoryContent,
@@ -402,7 +403,8 @@ export async function setupServer(
 					attribute_memteaching_enabled,
 					sampledialogue_memteaching_enabled,
 					timezone_offset,
-					diffusion_model_id
+					diffusion_model_id,
+					system_prompt
 				)
 				VALUES (
 					${tomori.tomori_id},
@@ -414,7 +416,8 @@ export async function setupServer(
 					${isDMChannel},
 					${isDMChannel},
 					${validConfig.timezoneOffset},
-					${selectedDiffusionModelId}
+					${selectedDiffusionModelId},
+					${DEFAULT_SYSTEM_PROMPT}
 				)
 				RETURNING *
 			`;

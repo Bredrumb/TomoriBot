@@ -1167,7 +1167,7 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				},
 			},
 			humanizer: {
-				description: `Set how 'human-like' my responses should be.`,
+				description: `Set how 'human-like' my responses should be. For custom prompts, use /config prompt change.`,
 				// value_description: `The level of humanization (0=None, 1=Prompt, 2=Typing/Chunking, 3=Lowercase/No Punctuation).`,
 				modal_title: `Set Humanizer Degree`,
 				select_label: `Humanizer Level`,
@@ -1246,7 +1246,7 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				partial_success_description: `My name has been changed to \`{new_nickname}\`, but some trigger word updates failed.`,
 			},
 			setup: {
-				description: `Start the initial setup process.`,
+				description: `Start the initial setup process. Configure AI provider, personality, and system prompt.`,
 				no_presets_found: `No personality presets found in the database, please report through \`/support discord\`.`,
 				modal_title: `Initial Setup`,
 				api_provider_label: `API Provider`,
@@ -1339,6 +1339,38 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				success_title: `Permission Updated`,
 				enabled_success: `My permission for \`{permission_type}\` is now **enabled**.`,
 				disabled_success: `My permission for \`{permission_type}\` is now **disabled**.`,
+			},
+
+			// System prompt management
+			prompt: {
+				description: `Manage custom system prompt for personality instructions`,
+				change: {
+					description: `Set a custom system prompt to guide my behavior`,
+					modal_title: `Set Custom System Prompt`,
+					part1_label: `System Prompt (Part 1/4)`,
+					part1_description: `Main instructions. Use {bot} for my name, {user} for the triggering user`,
+					part1_placeholder: `e.g., {bot} is friendly and helpful...`,
+					part2_label: `System Prompt (Part 2/4) - Optional`,
+					part2_description: `Continuation of instructions (optional)`,
+					part2_placeholder: `Additional instructions...`,
+					part3_label: `System Prompt (Part 3/4) - Optional`,
+					part3_description: `Continuation of instructions (optional)`,
+					part3_placeholder: `More instructions...`,
+					part4_label: `System Prompt (Part 4/4) - Optional`,
+					part4_description: `Continuation of instructions (optional)`,
+					part4_placeholder: `Final instructions...`,
+					empty_prompt_title: `Empty System Prompt`,
+					empty_prompt_description: `The system prompt cannot be empty. Please provide at least some instructions in Part 1.`,
+					success_title: `System Prompt Updated`,
+					success_description: `Custom system prompt has been set successfully:\n{preview}...`,
+				},
+				clear: {
+					description: `Remove custom system prompt and use default system prompt`,
+					no_custom_prompt_title: `No Custom Prompt Set`,
+					no_custom_prompt_description: `There is no custom system prompt configured. Currently using the default prompt:\n\n{defaultPrompt}`,
+					success_title: `System Prompt Cleared`,
+					success_description: `Custom system prompt has been cleared. Now using the default system prompt.`,
+				},
 			},
 		},
 

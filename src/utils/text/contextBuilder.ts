@@ -32,7 +32,7 @@ import { memoryGuard, MEDIA_LIMITS } from "../security/rateLimiter";
 const mentionCache = new Map<string, string>();
 const MAX_LOADED_EMOJIS = 10;
 
-const HUMANIZE_INSTRUCTION =
+export const DEFAULT_SYSTEM_PROMPT =
 	"\n{bot} limits themselves to only 0 to 2 emojis per response ({bot} prefers to use available server emojis than normal emojis) and makes sure to respond short and concisely, as {bot} is aware that no one really likes to read walls of text. {bot} only makes lengthy responses if and only if people are asking for assistance or an explanation that warrants it.";
 
 /**
@@ -353,8 +353,11 @@ export async function buildContext({
 	// This will be expanded in Phase 2 to include all non-dialogue context.
 	// For now, it's just personality and humanizer rules.
 	let personalityInstructionText = tomoriAttributes.join("\n");
+
+	// Use custom system prompt if set, otherwise fall back to constant
 	if (tomoriConfig.humanizer_degree >= HumanizerDegree.LIGHT) {
-		personalityInstructionText += HUMANIZE_INSTRUCTION;
+		const systemPrompt = tomoriConfig.system_prompt?.trim() || DEFAULT_SYSTEM_PROMPT;
+		personalityInstructionText += `\n${systemPrompt}`;
 	}
 	personalityInstructionText = await convertMentions(
 		personalityInstructionText,
