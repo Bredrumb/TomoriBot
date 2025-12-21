@@ -1286,7 +1286,7 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				provider_invalid: `Error: Invalid API provider selected. Please choose from the available options.`,
 				preset_not_found: `Error: The selected preset was not found in the database. Please try again.`,
 				success_title: `🟢 Setup Complete!`,
-				success_desc: `I am now configured for this server! To modify my configuration, use my \`/config\` and \`/server\` commands. You can also manage or delete your data anytime with \`/data\`. Here's a summary:`,
+				success_desc: `I am now configured for this server! To modify my configuration, use my \`/config\` and \`/server\` commands. Optional but recommended: run the \`/server initialize\` commands to optimize emoji and sticker metadata. You can also manage or delete your data anytime with \`/data\`. Here's a summary:`,
 				success_desc_dm: `I am now configured for this Direct Message. You can manage or delete your data anytime with \`/data\`. Here's a summary:`,
 				preset_field: `Personality Preset`,
 				name_field: `My Name`,

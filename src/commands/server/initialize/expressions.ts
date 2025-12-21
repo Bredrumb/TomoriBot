@@ -277,7 +277,12 @@ export async function execute(
 			SELECT emoji_disc_id, emoji_name, is_animated
 			FROM server_emojis
 			WHERE server_id = ${tomoriState.server_id}
-				AND (emotion_key IS NULL OR emoji_desc IS NULL OR emoji_desc = '')
+				AND (
+					emotion_key IS NULL
+					OR emotion_key = 'unset'
+					OR emoji_desc IS NULL
+					OR emoji_desc = ''
+				)
 		`;
 
 		// 7. Query database for uninitialized stickers
@@ -285,7 +290,12 @@ export async function execute(
 			SELECT sticker_disc_id, sticker_name, sticker_format
 			FROM server_stickers
 			WHERE server_id = ${tomoriState.server_id}
-				AND (emotion_key IS NULL OR sticker_desc IS NULL OR sticker_desc = '')
+				AND (
+					emotion_key IS NULL
+					OR emotion_key = 'unset'
+					OR sticker_desc IS NULL
+					OR sticker_desc = ''
+				)
 		`;
 
 		// 8. Check if there's anything to initialize
@@ -382,6 +392,21 @@ export async function execute(
 		// 13. Build prompts
 		const systemPrompt = buildSystemPrompt();
 		const userPrompt = buildUserPrompt(items);
+		const temperature = 1.0;
+
+		log.info(
+			`LLM structured output request: ${JSON.stringify(
+				{
+					model: llm.llm_codename,
+					temperature,
+					systemPrompt,
+					userPrompt,
+					images,
+				},
+				null,
+				2,
+			)}`,
+		);
 
 		// 14. Call Google structured output (only Google supported for now)
 		const result = await callGoogleStructuredOutput({
@@ -390,8 +415,12 @@ export async function execute(
 			systemPrompt,
 			userPrompt,
 			images,
-			temperature: 1.0,
+			temperature,
 		});
+
+		log.info(
+			`LLM structured output response: ${JSON.stringify(result, null, 2)}`,
+		);
 
 		// 15. Check if LLM call was successful
 		if (!result.success) {

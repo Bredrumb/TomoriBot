@@ -40,6 +40,7 @@ export async function initializeLLMCache(): Promise<void> {
 				sees_videos,
 				sees_youtube,
 				is_uncensored,
+				supports_structoutput,
 				llm_description,
 				ja_description,
 				created_at,

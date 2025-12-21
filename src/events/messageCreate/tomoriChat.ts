@@ -191,6 +191,44 @@ type SimplifiedMessageForContext = {
 	// stickerAttachments: Array<{ name: string; id: string; formatType: StickerFormatType }>;
 };
 
+function buildEmojiCdnUrl(emojiId: string): string {
+	// Always use PNG so animated emojis fall back to their first frame.
+	return `https://cdn.discordapp.com/emojis/${emojiId}.png`;
+}
+
+function extractEmojiImageAttachments(
+	content: string,
+): SimplifiedMessageForContext["imageAttachments"] {
+	const attachments: SimplifiedMessageForContext["imageAttachments"] = [];
+	if (!content) return attachments;
+
+	const emojiPattern = /<(a?):([^:]+):(\d{17,20})>/g;
+	const seenEmojiIds = new Set<string>();
+	let match: RegExpExecArray | null;
+
+	// biome-ignore lint/suspicious/noAssignInExpressions: Separate match assignment from null check
+	while ((match = emojiPattern.exec(content)) !== null) {
+		const emojiName = match[2];
+		const emojiId = match[3];
+
+		if (seenEmojiIds.has(emojiId)) {
+			continue;
+		}
+
+		seenEmojiIds.add(emojiId);
+		const emojiUrl = buildEmojiCdnUrl(emojiId);
+
+		attachments.push({
+			url: emojiUrl,
+			proxyUrl: emojiUrl,
+			mimeType: "image/png",
+			filename: `emoji_${emojiName}_${emojiId}.png`,
+		});
+	}
+
+	return attachments;
+}
+
 // New: Constants for the semaphore/locking mechanism
 const CHANNEL_LOCK_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes for a lock to be considered stale
 
@@ -1260,6 +1298,8 @@ export default async function tomoriChat(
 				}
 			}
 
+			const shouldExtractEmojiImages = tomoriState.llm.sees_images;
+
 			for (const [index, msg] of relevantMessagesArray.entries()) {
 				const authorId = msg.author.id;
 				//const isLastMessage = index === relevantMessagesArray.length - 1;
@@ -1376,37 +1416,47 @@ export default async function tomoriChat(
 				// Check if this is the message that got reference context injection and we have stored reference message data
 				if (
 					index === latestReferenceMessageIndex &&
-					typeof referencedMessageData !== "undefined" &&
-					referencedMessageData.message.attachments.size > 0
+					typeof referencedMessageData !== "undefined"
 				) {
-					for (const attachment of referencedMessageData.message.attachments.values()) {
-						if (
-							attachment.contentType?.startsWith("image/png") ||
-							attachment.contentType?.startsWith("image/jpeg") ||
-							attachment.contentType?.startsWith("image/webp") ||
-							attachment.contentType?.startsWith("image/heic") ||
-							attachment.contentType?.startsWith("image/heif") ||
-							attachment.contentType?.startsWith("image/gif")
-						) {
-							imageAttachments.push({
-								url: attachment.url,
-								proxyUrl: attachment.proxyURL,
-								mimeType: attachment.contentType,
-								filename: attachment.name,
-							});
-						} else if (
-							attachment.contentType &&
-							SUPPORTED_VIDEO_MIME_TYPES.some((type) =>
-								attachment.contentType?.startsWith(type),
-							)
-						) {
-							videoAttachments.push({
-								url: attachment.url,
-								proxyUrl: attachment.proxyURL,
-								mimeType: attachment.contentType,
-								filename: attachment.name,
-								isYouTubeLink: false,
-							});
+					if (referencedMessageData.message.attachments.size > 0) {
+						for (const attachment of referencedMessageData.message.attachments.values()) {
+							if (
+								attachment.contentType?.startsWith("image/png") ||
+								attachment.contentType?.startsWith("image/jpeg") ||
+								attachment.contentType?.startsWith("image/webp") ||
+								attachment.contentType?.startsWith("image/heic") ||
+								attachment.contentType?.startsWith("image/heif") ||
+								attachment.contentType?.startsWith("image/gif")
+							) {
+								imageAttachments.push({
+									url: attachment.url,
+									proxyUrl: attachment.proxyURL,
+									mimeType: attachment.contentType,
+									filename: attachment.name,
+								});
+							} else if (
+								attachment.contentType &&
+								SUPPORTED_VIDEO_MIME_TYPES.some((type) =>
+									attachment.contentType?.startsWith(type),
+								)
+							) {
+								videoAttachments.push({
+									url: attachment.url,
+									proxyUrl: attachment.proxyURL,
+									mimeType: attachment.contentType,
+									filename: attachment.name,
+									isYouTubeLink: false,
+								});
+							}
+						}
+					}
+
+					if (shouldExtractEmojiImages && referencedMessageData.message.content) {
+						const referencedEmojiAttachments = extractEmojiImageAttachments(
+							referencedMessageData.message.content,
+						);
+						if (referencedEmojiAttachments.length > 0) {
+							imageAttachments.push(...referencedEmojiAttachments);
 						}
 					}
 
@@ -1565,6 +1615,16 @@ export default async function tomoriChat(
 							filename: `${sticker.name}.png`,
 						});
 						log.info(`Processed sticker: ${sticker.name} (${sticker.id})`);
+					}
+				}
+
+				if (shouldExtractEmojiImages && msg.content) {
+					const emojiAttachments = extractEmojiImageAttachments(msg.content);
+					if (emojiAttachments.length > 0) {
+						imageAttachments.push(...emojiAttachments);
+						log.info(
+							`Processed ${emojiAttachments.length} emoji(s) from message ${msg.id}`,
+						);
 					}
 				}
 

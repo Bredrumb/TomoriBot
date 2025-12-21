@@ -348,6 +348,8 @@ export async function buildContext({
 }): Promise<StructuredContextItem[]> {
 	const contextItems: StructuredContextItem[] = [];
 	const botName = tomoriNickname;
+	let missingEmojiMetadataCount = 0;
+	let missingStickerMetadataCount = 0;
 
 	// 1. System prompt + Humanizer rules (comes FIRST for prompt optimization)
 	if (tomoriConfig.humanizer_degree >= HumanizerDegree.LIGHT) {
@@ -487,6 +489,15 @@ export async function buildContext({
 				ORDER BY created_at ASC
 			`;
 
+			// Count emojis missing both emotion key and description
+			missingEmojiMetadataCount = emojiMetadata.filter((metadata) => {
+				const hasEmotionKey =
+					metadata.emotion_key && metadata.emotion_key !== "unset";
+				const hasDescription =
+					metadata.emoji_desc && metadata.emoji_desc.trim().length > 0;
+				return !hasEmotionKey && !hasDescription;
+			}).length;
+
 			// 2. Create emoji map for quick lookup
 			const emojiMap = new Map(
 				emojiMetadata.map((e) => [e.emoji_disc_id, e]),
@@ -576,6 +587,15 @@ export async function buildContext({
 				ORDER BY created_at ASC
 			`;
 
+			// Count stickers missing both emotion key and description
+			missingStickerMetadataCount = stickerMetadata.filter((metadata) => {
+				const hasEmotionKey =
+					metadata.emotion_key && metadata.emotion_key !== "unset";
+				const hasDescription =
+					metadata.sticker_desc && metadata.sticker_desc.trim().length > 0;
+				return !hasEmotionKey && !hasDescription;
+			}).length;
+
 			// 2. Create sticker map for quick lookup
 			const stickerMap = new Map(
 				stickerMetadata.map((s) => [s.sticker_disc_id, s]),
@@ -595,30 +615,28 @@ export async function buildContext({
 
 			for (const sticker of sortedStickers) {
 				const metadata = stickerMap.get(sticker.id);
-				const discordDesc = sticker.description
-					? `, Description/Usage: "${sticker.description}"`
-					: "";
 				const emotionKey =
 					metadata?.emotion_key === "unset" ? null : metadata?.emotion_key ?? null;
 
 				// Build sticker entry
 				let stickerEntry = `- Name: "${sticker.name}", ID: "${sticker.id}"`;
 
-				// Add LLM-generated metadata if available
-				if (metadata && (metadata.sticker_desc || emotionKey)) {
-					const labelParts: string[] = [];
-					if (emotionKey) {
-						labelParts.push(`Expresses ${emotionKey}`);
-					}
-					if (metadata.sticker_desc) {
-						labelParts.push(metadata.sticker_desc);
-					}
-					const label = ` (${labelParts.join("; ")})`;
-					stickerEntry += label;
+				// Add metadata label (LLM first, Discord description as fallback)
+				const labelParts: string[] = [];
+				if (emotionKey) {
+					labelParts.push(`Expresses ${emotionKey}`);
+				}
+				if (metadata?.sticker_desc) {
+					labelParts.push(metadata.sticker_desc);
+				}
+				if (labelParts.length === 0 && sticker.description) {
+					labelParts.push(sticker.description);
+				}
+				if (labelParts.length > 0) {
+					stickerEntry += ` (${labelParts.join("; ")})`;
 				}
 
-				// Add Discord description at the end
-				stickerEntry += `${discordDesc}\n`;
+				stickerEntry += "\n";
 				stickerContent += stickerEntry;
 			}
 
@@ -647,6 +665,19 @@ export async function buildContext({
 				`Loaded ${sortedStickers.length} sticker descriptions for server ${serverName}`,
 			);
 		}
+	}
+
+	// 6.5. Metadata reminder (server only)
+	if (
+		!isDMChannel &&
+		(missingEmojiMetadataCount > 0 || missingStickerMetadataCount > 0)
+	) {
+		const reminderText = `Metadata check: ${missingEmojiMetadataCount} emoji(s) and ${missingStickerMetadataCount} sticker(s) have missing emotion key and description. Remind the User to use \`/server initialize expressions\` to fill it up.`;
+		contextItems.push({
+			role: "system",
+			parts: [{ type: "text", text: reminderText }],
+			metadataTag: ContextItemTag.KNOWLEDGE_SERVER_INFO,
+		});
 	}
 
 	// 7. Users in Conversation (ALL user-specific dynamic data)
