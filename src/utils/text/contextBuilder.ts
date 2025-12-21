@@ -357,11 +357,9 @@ export async function buildContext({
 
 	// 1. System prompt + Humanizer rules (comes FIRST for prompt optimization)
 	if (tomoriConfig.humanizer_degree >= HumanizerDegree.LIGHT) {
-		const systemPrompt = tomoriConfig.system_prompt?.trim() || DEFAULT_SYSTEM_PROMPT;
+		const systemPrompt =
+			tomoriConfig.system_prompt?.trim() || DEFAULT_SYSTEM_PROMPT;
 		let humanizerText = systemPrompt;
-
-		// Add mention instruction (moved here from personality section)
-		humanizerText += `\nWhen ${botName} wants to mention and ping a specific user in their response, they MUST use the format <@ > with the user's ID (e.g., <@123456789012345678>). The user's ID can be found in the user's status block in this context (e.g., "Nickname (User ID: 123...)"). This ensures the user gets a notification.`;
 
 		// CRITICAL: Use stable "User" placeholder for system instruction to prevent cache invalidation across different users
 		humanizerText = await convertMentions(
@@ -547,7 +545,10 @@ export async function buildContext({
 			});
 
 			// 4. Deduplicate by name (case-insensitive) while keeping latest
-			const latestEmojiByName = new Map<string, (typeof sortedEmojis)[number]>();
+			const latestEmojiByName = new Map<
+				string,
+				(typeof sortedEmojis)[number]
+			>();
 			for (const emoji of sortedEmojis) {
 				if (!emoji.name) continue;
 				latestEmojiByName.set(emoji.name.toLowerCase(), emoji);
@@ -579,7 +580,9 @@ export async function buildContext({
 				if (!emoji.name) continue;
 				const emojiCode = `:${emoji.name}:`;
 				const emotionKey =
-					metadata?.emotion_key === "unset" ? null : metadata?.emotion_key ?? null;
+					metadata?.emotion_key === "unset"
+						? null
+						: (metadata?.emotion_key ?? null);
 
 				// Graceful degradation: if no metadata, just show code
 				if (!metadata || (!metadata.emoji_desc && !emotionKey)) {
@@ -641,27 +644,61 @@ export async function buildContext({
 					sticker_name: string;
 					sticker_desc: string | null;
 					emotion_key: string | null;
+					created_at: Date | null;
+					updated_at: Date | null;
 				}>
 			>`
-				SELECT sticker_disc_id, sticker_name, sticker_desc, emotion_key
+				SELECT sticker_disc_id, sticker_name, sticker_desc, emotion_key, created_at, updated_at
 				FROM server_stickers
 				WHERE server_id = ${serverId}
 				ORDER BY created_at ASC
 			`;
 
-			// Count stickers missing both emotion key and description
-			missingStickerMetadataCount = stickerMetadata.filter((metadata) => {
+			// 2. Create sticker metadata map by name (case-insensitive), prefer the latest with metadata
+			const stickerMetadataByName = new Map<
+				string,
+				(typeof stickerMetadata)[number]
+			>();
+			const hasStickerMetadata = (
+				metadata: (typeof stickerMetadata)[number],
+			) => {
 				const hasEmotionKey =
 					metadata.emotion_key && metadata.emotion_key !== "unset";
 				const hasDescription =
 					metadata.sticker_desc && metadata.sticker_desc.trim().length > 0;
-				return !hasEmotionKey && !hasDescription;
-			}).length;
+				return hasEmotionKey || hasDescription;
+			};
+			const getStickerMetadataTimestamp = (
+				metadata: (typeof stickerMetadata)[number],
+			) => {
+				const updated = metadata.updated_at?.getTime() ?? 0;
+				const created = metadata.created_at?.getTime() ?? 0;
+				return Math.max(updated, created);
+			};
 
-			// 2. Create sticker map for quick lookup
-			const stickerMap = new Map(
-				stickerMetadata.map((s) => [s.sticker_disc_id, s]),
-			);
+			for (const metadata of stickerMetadata) {
+				if (!metadata.sticker_name) continue;
+				const nameKey = metadata.sticker_name.toLowerCase();
+				const existing = stickerMetadataByName.get(nameKey);
+				if (!existing) {
+					stickerMetadataByName.set(nameKey, metadata);
+					continue;
+				}
+
+				const existingHasMeta = hasStickerMetadata(existing);
+				const currentHasMeta = hasStickerMetadata(metadata);
+				if (currentHasMeta && !existingHasMeta) {
+					stickerMetadataByName.set(nameKey, metadata);
+					continue;
+				}
+				if (currentHasMeta === existingHasMeta) {
+					const existingTime = getStickerMetadataTimestamp(existing);
+					const currentTime = getStickerMetadataTimestamp(metadata);
+					if (currentTime >= existingTime) {
+						stickerMetadataByName.set(nameKey, metadata);
+					}
+				}
+			}
 
 			// 3. Sort stickers by creation date (deterministic, oldest first for caching stability)
 			const sortedStickers = Array.from(serverStickers.values()).sort(
@@ -672,16 +709,50 @@ export async function buildContext({
 				},
 			);
 
-			// 4. Build sticker list with descriptions and emotion keys
+			// 4. Deduplicate by name (case-insensitive) while keeping latest
+			const latestStickerByName = new Map<
+				string,
+				(typeof sortedStickers)[number]
+			>();
+			for (const sticker of sortedStickers) {
+				if (!sticker.name) continue;
+				latestStickerByName.set(sticker.name.toLowerCase(), sticker);
+			}
+
+			const dedupedStickers = sortedStickers.filter((sticker) => {
+				if (!sticker.name) return false;
+				return (
+					latestStickerByName.get(sticker.name.toLowerCase())?.id === sticker.id
+				);
+			});
+
+			// 5. Count stickers missing both emotion key and description (based on display list)
+			missingStickerMetadataCount = 0;
+			for (const sticker of dedupedStickers) {
+				if (!sticker.name) continue;
+				const metadata = stickerMetadataByName.get(sticker.name.toLowerCase());
+				const hasEmotionKey =
+					metadata?.emotion_key && metadata.emotion_key !== "unset";
+				const hasDescription =
+					metadata?.sticker_desc && metadata.sticker_desc.trim().length > 0;
+				if (!hasEmotionKey && !hasDescription) {
+					missingStickerMetadataCount++;
+				}
+			}
+
+			// 6. Build sticker list with descriptions and emotion keys
 			let stickerContent = `## ${serverName}'s Stickers\nThis server has the following stickers available for ${botName} to use with the 'select_sticker_for_response' function:\n`;
 
-			for (const sticker of sortedStickers) {
-				const metadata = stickerMap.get(sticker.id);
+			for (const sticker of dedupedStickers) {
+				if (!sticker.name) continue;
+				const metadata = stickerMetadataByName.get(sticker.name.toLowerCase());
 				const emotionKey =
-					metadata?.emotion_key === "unset" ? null : metadata?.emotion_key ?? null;
+					metadata?.emotion_key === "unset"
+						? null
+						: (metadata?.emotion_key ?? null);
 
 				// Build sticker entry
-				let stickerEntry = `- Name: "${sticker.name}", ID: "${sticker.id}"`;
+				let stickerEntry = `- "${sticker.name}"`;
 
 				// Add metadata label (LLM first, Discord description as fallback)
 				const labelParts: string[] = [];
@@ -702,7 +773,8 @@ export async function buildContext({
 				stickerContent += stickerEntry;
 			}
 
-			stickerContent += `To use a sticker, the 'select_sticker_for_response' function should be called with the exact 'sticker_id' of the desired sticker.\n`;
+			stickerContent +=
+				"To use a sticker, call 'select_sticker_for_response' with the sticker's name (case-insensitive).\n";
 
 			// 5. Add as "system" role (stays in system instruction for caching)
 			contextItems.push({
@@ -760,12 +832,44 @@ export async function buildContext({
 			usersInConversationText = `[System: In #${channelName} at ${currentTime} (${timezoneLabel}), ${timeOfDayPhrase}, the following users are having a conversation:\n\n`;
 		}
 
+		usersInConversationText +=
+			`If ${botName} wants to mention and ping any of these users, simply prepend an "@" symbol to their mention handle, like @{username} (case-insensitive). If a name is duplicated, use the handle with the user ID suffix (e.g., @{name|123456789012345678}). This ensures the user gets a notification from ${botName}'s message.\n\n`;
+
+		type UserConversationEntry = {
+			userId: string;
+			displayName: string;
+			detailLines: string[];
+			isBot: boolean;
+			mentionAliases: string[];
+			primaryAlias: string | null;
+		};
+
+		const userEntries: UserConversationEntry[] = [];
+		const aliasCounts = new Map<string, number>();
+
+		const addAlias = (aliases: Set<string>, value?: string | null) => {
+			const alias = value?.trim();
+			if (!alias) return;
+			if (aliases.has(alias)) return;
+			aliases.add(alias);
+			const key = alias.toLowerCase();
+			aliasCounts.set(key, (aliasCounts.get(key) ?? 0) + 1);
+		};
+
 		// 3. Process each user (including bot itself)
 		for (const userIdToProcess of userList) {
 			// 4. Special handling for TomoriBot itself
 			if (client.user && userIdToProcess === client.user.id) {
-				usersInConversationText += `${botName} (User ID: ${userIdToProcess}) (This is you!)\n`;
-				usersInConversationText += `- Status: Online - Currently active and responding to messages\n\n`;
+				userEntries.push({
+					userId: userIdToProcess,
+					displayName: botName,
+					detailLines: [
+						"- Status: Online - Currently active and responding to messages",
+					],
+					isBot: true,
+					mentionAliases: [],
+					primaryAlias: null,
+				});
 				continue;
 			}
 
@@ -798,6 +902,9 @@ export async function buildContext({
 			const member = guild
 				? await guild.members.fetch(userIdToProcess).catch(() => null)
 				: null;
+			const fallbackUser = member
+				? null
+				: await client.users.fetch(userIdToProcess).catch(() => null);
 			const serverPersonalizationEnabled =
 				tomoriConfig.personal_memories_enabled ?? true;
 			const isTriggererId =
@@ -812,13 +919,20 @@ export async function buildContext({
 			let displayName: string;
 			const customNickname = userRow.user_nickname;
 			const serverNickname = member?.nickname;
-
-			if (
+			const username = member?.user.username ?? fallbackUser?.username ?? null;
+			const globalName = member?.user.globalName ?? fallbackUser?.globalName ?? null;
+			const canUseCustomNickname =
 				customNickname &&
 				serverPersonalizationEnabled &&
 				!userIsBlacklisted &&
-				!userOptedOut
-			) {
+				!userOptedOut;
+			const shouldIncludeCustomNicknameAlias =
+				customNickname &&
+				serverPersonalizationEnabled &&
+				!userIsBlacklisted &&
+				(!serverNickname || canUseCustomNickname);
+
+			if (canUseCustomNickname) {
 				displayName = serverNickname
 					? `${customNickname} (Server Nickname: "${serverNickname}")`
 					: customNickname;
@@ -828,8 +942,7 @@ export async function buildContext({
 				displayName = `<@${userRow.user_disc_id}>`;
 			}
 
-			// 7. Add user header
-			usersInConversationText += `${displayName} (User ID: ${userRow.user_disc_id})\n`;
+			const detailLines: string[] = [];
 
 			// 8. Add status (production: triggerer only, dev: all users)
 			const isProduction = process.env.RUN_ENV === "production";
@@ -850,14 +963,10 @@ export async function buildContext({
 								guildId,
 							);
 
-			usersInConversationText += `- Status: ${presenceInfo}\n`;
+			detailLines.push(`- Status: ${presenceInfo}`);
 
 			// 9. Add personal memories (if personalization enabled and user not blacklisted/opted-out)
-			if (
-				serverPersonalizationEnabled &&
-				!userIsBlacklisted &&
-				!userOptedOut
-			) {
+			if (serverPersonalizationEnabled && !userIsBlacklisted && !userOptedOut) {
 				if (userRow.personal_memories && userRow.personal_memories.length > 0) {
 					const processedMemories = await Promise.all(
 						userRow.personal_memories.map((memory) =>
@@ -871,7 +980,7 @@ export async function buildContext({
 							),
 						),
 					);
-					usersInConversationText += `- Memories: ${processedMemories.join(", ")}\n`;
+					detailLines.push(`- Memories: ${processedMemories.join(", ")}`);
 				}
 			}
 
@@ -881,7 +990,7 @@ export async function buildContext({
 				guildId,
 			);
 			if (pendingReminders && pendingReminders.length > 0) {
-				usersInConversationText += `- Reminders:\n`;
+				detailLines.push("- Reminders:");
 				for (const reminder of pendingReminders) {
 					const reminderDate = new Date(reminder.reminder_time);
 					const formattedTime = reminderDate.toLocaleString("en-US", {
@@ -893,8 +1002,68 @@ export async function buildContext({
 						minute: "2-digit",
 						timeZoneName: "short",
 					});
-					usersInConversationText += `  • "${reminder.reminder_purpose}" (scheduled for ${formattedTime})\n`;
+					detailLines.push(
+						`  • "${reminder.reminder_purpose}" (scheduled for ${formattedTime})`,
+					);
 				}
+			}
+
+			const aliasSet = new Set<string>();
+			if (shouldIncludeCustomNicknameAlias) addAlias(aliasSet, customNickname);
+			if (serverNickname) addAlias(aliasSet, serverNickname);
+			if (globalName) addAlias(aliasSet, globalName);
+			if (username) addAlias(aliasSet, username);
+
+			let primaryAlias: string | null = null;
+			if (canUseCustomNickname) primaryAlias = customNickname;
+			else if (serverNickname) primaryAlias = serverNickname;
+			else if (globalName) primaryAlias = globalName;
+			else if (username) primaryAlias = username;
+
+			if (!primaryAlias && aliasSet.size === 0) {
+				primaryAlias = userRow.user_disc_id;
+				addAlias(aliasSet, primaryAlias);
+			}
+
+			userEntries.push({
+				userId: userRow.user_disc_id,
+				displayName,
+				detailLines,
+				isBot: false,
+				mentionAliases: Array.from(aliasSet),
+				primaryAlias,
+			});
+		}
+
+		const formatMentionHandle = (alias: string, userId: string) => {
+			const key = alias.toLowerCase();
+			return (aliasCounts.get(key) ?? 0) > 1 ? `${alias}|${userId}` : alias;
+		};
+
+		for (const entry of userEntries) {
+			if (entry.isBot) {
+				usersInConversationText += `${entry.displayName} (User ID: ${entry.userId}) (This is you!)\n`;
+			} else {
+				const mentionParts: string[] = [];
+				if (entry.primaryAlias) {
+					const handle = formatMentionHandle(entry.primaryAlias, entry.userId);
+					mentionParts.push(`Mention: @{${handle}}`);
+				}
+
+				const aliasHandles = entry.mentionAliases
+					.filter((alias) => alias !== entry.primaryAlias)
+					.map((alias) => `@{${formatMentionHandle(alias, entry.userId)}}`);
+				if (aliasHandles.length > 0) {
+					mentionParts.push(`Aliases: ${aliasHandles.join(", ")}`);
+				}
+
+				const mentionInfo =
+					mentionParts.length > 0 ? ` (${mentionParts.join("; ")})` : "";
+				usersInConversationText += `${entry.displayName} (User ID: ${entry.userId})${mentionInfo}\n`;
+			}
+
+			for (const line of entry.detailLines) {
+				usersInConversationText += `${line}\n`;
 			}
 
 			usersInConversationText += "\n"; // Blank line between users

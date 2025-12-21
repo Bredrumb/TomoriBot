@@ -934,10 +934,79 @@ export function normalizeCustomEmojisForLlm(text: string): string {
 }
 
 /**
+ * Converts @{name} mention handles into Discord mentions using a provided lookup.
+ * Skips code blocks and inline code to preserve literal examples.
+ * @param text - Raw text from LLM output
+ * @param mentionMap - Map of normalized mention handles to user ID candidates
+ * @param mentionIdSet - Set of known user IDs for disambiguation
+ * @returns Text with mention handles replaced when resolvable
+ */
+export function replaceMentionHandles(
+	text: string,
+	mentionMap?: Map<string, string[]>,
+	mentionIdSet?: Set<string>,
+): string {
+	if (!text || !mentionMap || mentionMap.size === 0) return text;
+
+	const codeBlocks: string[] = [];
+	const inlineCode: string[] = [];
+
+	let processedText = text.replace(/```[\s\S]*?```/g, (match) => {
+		codeBlocks.push(match);
+		return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+	});
+
+	processedText = processedText.replace(/`[^`]*`/g, (match) => {
+		inlineCode.push(match);
+		return `__INLINE_CODE_${inlineCode.length - 1}__`;
+	});
+
+	processedText = processedText.replace(/@\{([^}]+)\}/g, (match, rawHandle) => {
+		const handle = (rawHandle as string).trim();
+		if (!handle) return match;
+
+		const pipeIndex = handle.lastIndexOf("|");
+		if (pipeIndex > -1) {
+			const idPart = handle.slice(pipeIndex + 1).trim();
+			if (/^\d{17,20}$/.test(idPart) && mentionIdSet?.has(idPart)) {
+				return `<@${idPart}>`;
+			}
+		}
+
+		if (/^\d{17,20}$/.test(handle) && mentionIdSet?.has(handle)) {
+			return `<@${handle}>`;
+		}
+
+		const normalizedHandle = handle.toLowerCase();
+		const ids = mentionMap.get(normalizedHandle);
+		if (!ids || ids.length !== 1) return match;
+		return `<@${ids[0]}>`;
+	});
+
+	for (let i = inlineCode.length - 1; i >= 0; i--) {
+		processedText = processedText.replace(
+			`__INLINE_CODE_${i}__`,
+			inlineCode[i],
+		);
+	}
+
+	for (let i = codeBlocks.length - 1; i >= 0; i--) {
+		processedText = processedText.replace(
+			`__CODE_BLOCK_${i}__`,
+			codeBlocks[i],
+		);
+	}
+
+	return processedText;
+}
+
+/**
  * Cleans raw LLM output for Discord display
  * @param text - Raw text from LLM
  * @param botName - Optional bot name to remove from response
  * @param emojiStrings - Array of properly formatted Discord emoji strings
+ * @param mentionMap - Map of mention handles to user IDs
+ * @param mentionIdSet - Set of known user IDs for disambiguation
  * @returns Cleaned text suitable for Discord messages
  */
 export function cleanLLMOutput(
@@ -945,6 +1014,8 @@ export function cleanLLMOutput(
 	botName?: string,
 	emojiStrings?: string[],
 	emojiUsageEnabled = true, // New parameter, defaults to true
+	mentionMap?: Map<string, string[]>,
+	mentionIdSet?: Set<string>,
 ): string {
 	// 1. Basic whitespace and separator cleanup
 	if (text.startsWith("```") || text.endsWith("```")) return text;
@@ -1051,6 +1122,9 @@ export function cleanLLMOutput(
 
 	// 4. Final generic cleanup for any stray :name: patterns
 	cleanedText = cleanedText.replace(/\s+:[a-zA-Z0-9_]+:\s+/g, " ");
+
+	// 4.5. Convert @{name} handles into mentions when resolvable
+	cleanedText = replaceMentionHandles(cleanedText, mentionMap, mentionIdSet);
 
 	// 5. Remove trailing speaker indicator
 	return cleanedText.replace(/\n([^:]+):$/, "");

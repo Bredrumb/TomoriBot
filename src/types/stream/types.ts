@@ -64,6 +64,8 @@ export interface TextProcessingConfig {
 	humanizerDegree: HumanizerDegree;
 	emojiUsageEnabled: boolean;
 	emojiStrings: string[];
+	mentionMap?: Map<string, string[]>;
+	mentionIdSet?: Set<string>;
 	botName: string;
 	maxMessageLength: number;
 }

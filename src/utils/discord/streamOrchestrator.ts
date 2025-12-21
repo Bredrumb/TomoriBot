@@ -34,6 +34,10 @@ import {
 } from "../text/stringHelper";
 
 import type { StreamResult } from "../../types/provider/interfaces";
+import {
+	ContextItemTag,
+	type StructuredContextItem,
+} from "../../types/misc/context";
 import type {
 	StreamOrchestrator as IStreamOrchestrator,
 	ProcessedChunk,
@@ -819,6 +823,8 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 			textConfig.botName,
 			textConfig.emojiStrings,
 			textConfig.emojiUsageEnabled,
+			textConfig.mentionMap,
+			textConfig.mentionIdSet,
 		);
 
 		// Send the processed segment
@@ -1450,13 +1456,57 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 		config: StreamConfig,
 		context: StreamContext,
 	): TextProcessingConfig {
+		const { mentionMap, mentionIdSet } = this.buildMentionLookup(
+			context.contextItems,
+		);
+
 		return {
 			humanizerDegree: config.humanizerDegree,
 			emojiUsageEnabled: config.emojiUsageEnabled,
 			emojiStrings: context.emojiStrings || [],
+			mentionMap,
+			mentionIdSet,
 			botName: context.tomoriState.tomori_nickname,
 			maxMessageLength: config.maxMessageLength,
 		};
+	}
+
+	private buildMentionLookup(
+		contextItems: StructuredContextItem[],
+	): { mentionMap: Map<string, string[]>; mentionIdSet: Set<string> } {
+		const mentionMap = new Map<string, string[]>();
+		const mentionIdSet = new Set<string>();
+
+		for (const item of contextItems) {
+			if (item.metadataTag !== ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION) {
+				continue;
+			}
+
+			for (const part of item.parts) {
+				if (part.type !== "text") continue;
+				const lines = part.text.split(/\r?\n/);
+				for (const line of lines) {
+					const idMatch = line.match(/User ID:\s*(\d{17,20})/);
+					if (!idMatch) continue;
+					const userId = idMatch[1];
+					mentionIdSet.add(userId);
+
+					const handleMatches = line.matchAll(/@\{([^}]+)\}/g);
+					for (const handleMatch of handleMatches) {
+						const rawHandle = handleMatch[1]?.trim();
+						if (!rawHandle) continue;
+						const normalizedHandle = rawHandle.toLowerCase();
+						const existing = mentionMap.get(normalizedHandle) ?? [];
+						if (!existing.includes(userId)) {
+							existing.push(userId);
+						}
+						mentionMap.set(normalizedHandle, existing);
+					}
+				}
+			}
+		}
+
+		return { mentionMap, mentionIdSet };
 	}
 
 	/**

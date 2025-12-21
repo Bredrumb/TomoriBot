@@ -25,13 +25,18 @@ export class StickerTool extends BaseTool {
 	parameters: ToolParameterSchema = {
 		type: "object",
 		properties: {
+			sticker_name: {
+				type: "string",
+				description:
+					"The sticker name to select (case-insensitive). Use the names from the provided list; do not include IDs.",
+			},
 			sticker_id: {
 				type: "string",
 				description:
-					"The unique Discord ID of the sticker to select (e.g., '123456789012345678'). This ID must be from the provided list of available server stickers.",
+					"Deprecated: The sticker ID. Use sticker_name instead (kept for compatibility).",
 			},
 		},
-		required: ["sticker_id"],
+		required: ["sticker_name"],
 	};
 
 	/**
@@ -55,7 +60,7 @@ export class StickerTool extends BaseTool {
 
 	/**
 	 * Execute sticker selection - Real implementation from tomoriChat.ts
-	 * @param args - Arguments containing sticker_id
+	 * @param args - Arguments containing sticker_name (preferred) or sticker_id
 	 * @param context - Tool execution context
 	 * @returns Promise resolving to tool result
 	 */
@@ -63,14 +68,20 @@ export class StickerTool extends BaseTool {
 		args: Record<string, unknown>,
 		context: ToolContext,
 	): Promise<ToolResult> {
-		// Validate parameters
-		const validation = this.validateParameters(args);
-		if (!validation.isValid) {
+		const rawStickerName = args.sticker_name;
+		const rawStickerId = args.sticker_id;
+		const stickerName =
+			typeof rawStickerName === "string" ? rawStickerName.trim() : "";
+		const stickerId = typeof rawStickerId === "string" ? rawStickerId.trim() : "";
+		const hasStickerName = stickerName.length > 0;
+		const hasStickerId = stickerId.length > 0;
+
+		if (!hasStickerName && !hasStickerId) {
 			return {
 				success: false,
-				error: `Invalid parameters: ${validation.errors?.join(", ") || `Missing required parameters: ${validation.missingParams?.join(", ")}`}`,
+				error: "Invalid parameters: missing sticker_name or sticker_id",
 				message:
-					"The sticker_id argument was missing or not in the expected format. Please provide a valid sticker_id string.",
+					"Provide a sticker_name (preferred) or a valid sticker_id.",
 			};
 		}
 
@@ -92,21 +103,45 @@ export class StickerTool extends BaseTool {
 			};
 		}
 
-		const stickerId = args.sticker_id as string;
+		const normalizedStickerName = hasStickerName
+			? stickerName.replace(/^:(.*):$/, "$1").trim()
+			: "";
 
 		try {
-			log.info(`Attempting to select sticker: ${stickerId}`);
+			log.info(
+				`Attempting to select sticker: ${normalizedStickerName || stickerId}`,
+			);
 
 			// Get the guild from channel context
 			const guild = context.channel.guild;
 
-			// Get stickers from guild cache (direct implementation from tomoriChat.ts)
-			const selectedSticker = guild.stickers.cache.get(stickerId);
+			let selectedSticker = null;
+
+			if (normalizedStickerName) {
+				const nameKey = normalizedStickerName.toLowerCase();
+				const matchingStickers = guild.stickers.cache.filter(
+					(sticker) => sticker.name?.toLowerCase() === nameKey,
+				);
+
+				if (matchingStickers.size > 0) {
+					selectedSticker = matchingStickers
+						.sort((a, b) => {
+							const aTime = a.createdTimestamp ?? 0;
+							const bTime = b.createdTimestamp ?? 0;
+							if (aTime !== bTime) return bTime - aTime;
+							return a.id.localeCompare(b.id);
+						})
+						.first();
+				}
+			} else {
+				// Legacy path: select by sticker ID
+				selectedSticker = guild.stickers.cache.get(stickerId) ?? null;
+			}
 
 			if (selectedSticker) {
 				// Success case - sticker found (from tomoriChat.ts:947-957)
 				log.success(
-					`Sticker '${selectedSticker.name}' (${stickerId}) found locally`,
+					`Sticker '${selectedSticker.name}' (${selectedSticker.id}) found locally`,
 				);
 
 				return {
@@ -127,36 +162,38 @@ export class StickerTool extends BaseTool {
 
 			// Sticker not found case (from tomoriChat.ts:958-969)
 			log.warn(
-				`Sticker with ID ${stickerId} not found in server cache. Informing LLM.`,
+				`Sticker '${normalizedStickerName || stickerId}' not found in server cache. Informing LLM.`,
 			);
 
 			// Get available stickers for error message
 			const availableStickers = guild.stickers.cache;
 			const availableStickerData = availableStickers
 				.map((sticker) => ({
-					id: sticker.id,
 					name: sticker.name,
 					description: sticker.description || "No description available",
 				}))
 				.slice(0, 10); // Limit to prevent overwhelming the LLM
 
+			const notFoundMessage = normalizedStickerName
+				? "The sticker name provided was not found among the available server stickers. Please choose from the provided list or do not use a sticker."
+				: "The sticker ID provided was not found among the available server stickers. Please choose by name from the provided list or do not use a sticker.";
+
 			return {
 				success: false,
 				error: "Sticker not found",
-				message:
-					"The sticker ID provided was not found among the available server stickers. Please choose from the provided list or do not use a sticker.",
+				message: notFoundMessage,
 				data: {
 					// Return format matching tomoriChat.ts functionExecutionResult
 					status: "sticker_not_found",
-					sticker_id_attempted: stickerId,
-					reason:
-						"The sticker ID provided was not found among the available server stickers. Please choose from the provided list or do not use a sticker.",
+					sticker_name_attempted: normalizedStickerName || undefined,
+					sticker_id_attempted: !normalizedStickerName ? stickerId : undefined,
+					reason: notFoundMessage,
 					availableStickers: availableStickerData,
 				},
 			};
 		} catch (error) {
 			log.error(
-				`Sticker selection failed for ID: ${stickerId}`,
+				`Sticker selection failed for: ${normalizedStickerName || stickerId}`,
 				error as Error,
 			);
 
