@@ -58,6 +58,7 @@ export const llmSchema = z.object({
 	sees_videos: z.boolean().default(false),
 	sees_youtube: z.boolean().default(false),
 	is_uncensored: z.boolean().default(false),
+	supports_structoutput: z.boolean().default(false),
 	llm_description: z.string().nullable().optional(),
 	ja_description: z.string().nullable().optional(),
 	created_at: z.date().optional(),

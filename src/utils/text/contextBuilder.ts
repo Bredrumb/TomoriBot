@@ -1,5 +1,6 @@
 import type { Client, PresenceStatus } from "discord.js";
 import { GatewayIntentBits } from "discord.js";
+import { sql } from "../db/client"; // Import SQL client for database queries
 import {
 	isBlacklisted, // Import blacklist checker
 	isPrivacyOptedOut, // Import privacy opt-out checker
@@ -30,7 +31,6 @@ import { memoryGuard, MEDIA_LIMITS } from "../security/rateLimiter";
  * @remarks This cache is cleared after each text processing run to avoid stale data.
  */
 const mentionCache = new Map<string, string>();
-const MAX_LOADED_EMOJIS = 10;
 
 export const DEFAULT_SYSTEM_PROMPT =
 	"\n{bot} limits themselves to only 0 to 2 emojis per response ({bot} prefers to use available server emojis than normal emojis) and makes sure to respond short and concisely, as {bot} is aware that no one really likes to read walls of text. {bot} only makes lengthy responses if and only if people are asking for assistance or an explanation that warrants it.";
@@ -317,11 +317,11 @@ export async function buildContext({
 	serverDescription,
 	simplifiedMessageHistory,
 	userList,
-	channelDesc,
+	channelDesc: _channelDesc, // Unused after Phase 1 optimization (channel info now in Users in Conversation section)
 	channelName,
 	client,
 	triggererName,
-	emojiStrings,
+	emojiStrings: _emojiStrings, // Unused after Phase 1 optimization (emojis fetched directly from guild cache)
 	tomoriNickname,
 	tomoriAttributes,
 	tomoriConfig,
@@ -349,42 +349,61 @@ export async function buildContext({
 	const contextItems: StructuredContextItem[] = [];
 	const botName = tomoriNickname;
 
-	// 1. System Instruction (Tomori's Personality and Humanizer)
-	// This will be expanded in Phase 2 to include all non-dialogue context.
-	// For now, it's just personality and humanizer rules.
-	let personalityInstructionText = tomoriAttributes.join("\n");
-
-	// Use custom system prompt if set, otherwise fall back to constant
+	// 1. System prompt + Humanizer rules (comes FIRST for prompt optimization)
 	if (tomoriConfig.humanizer_degree >= HumanizerDegree.LIGHT) {
 		const systemPrompt = tomoriConfig.system_prompt?.trim() || DEFAULT_SYSTEM_PROMPT;
-		personalityInstructionText += `\n${systemPrompt}`;
+		let humanizerText = systemPrompt;
+
+		// Add mention instruction (moved here from personality section)
+		humanizerText += `\nWhen ${botName} wants to mention and ping a specific user in their response, they MUST use the format <@ > with the user's ID (e.g., <@123456789012345678>). The user's ID can be found in the user's status block in this context (e.g., "Nickname (User ID: 123...)"). This ensures the user gets a notification.`;
+
+		// CRITICAL: Use stable "User" placeholder for system instruction to prevent cache invalidation across different users
+		humanizerText = await convertMentions(
+			humanizerText,
+			client,
+			guildId,
+			"User", // Stable placeholder instead of triggererName
+			botName,
+			tomoriConfig.personal_memories_enabled,
+			snapshot,
+		);
+
+		contextItems.push({
+			role: "system",
+			parts: [{ type: "text", text: humanizerText }],
+			metadataTag: ContextItemTag.SYSTEM_HUMANIZER_RULES,
+		});
 	}
-	personalityInstructionText = await convertMentions(
-		personalityInstructionText,
+
+	// 2. Personality attributes (SECOND - separated from humanizer for better organization)
+	let personalityText = tomoriAttributes.join("\n");
+
+	// CRITICAL: Use stable "User" placeholder for system instruction to prevent cache invalidation across different users
+	personalityText = await convertMentions(
+		personalityText,
 		client,
 		guildId,
-		triggererName,
+		"User", // Stable placeholder instead of triggererName
 		botName,
 		tomoriConfig.personal_memories_enabled,
 		snapshot,
 	);
-	personalityInstructionText += `\nWhen ${botName} wants to mention and ping a specific user in their response, they MUST use the format <@ > with the user's ID (e.g., <@123456789012345678>). The user's ID can be found in the user's status block in this context (e.g., "Nickname (User ID: 123...)"). This ensures the user gets a notification.`;
 
 	contextItems.push({
 		role: "system",
-		parts: [{ type: "text", text: personalityInstructionText }],
-		metadataTag: ContextItemTag.SYSTEM_PERSONALITY, // Tagging for personality
+		parts: [{ type: "text", text: personalityText }],
+		metadataTag: ContextItemTag.SYSTEM_PERSONALITY,
 	});
 
 	// --- Preamble/Knowledge Base Segments ---
 	// These will be consolidated into the system prompt in Phase 2.
 	// For now, they are tagged individually.
 
-	// 2. Server/DM Context
+	// 3. Server/DM Context
 	let serverInfoContent = "";
 	if (isDMChannel) {
-		// For DMs, indicate the bot is in a direct message with the triggerer
-		serverInfoContent = `# Knowledge Base\n${botName} is currently in a Direct Message with ${triggererName}.\n`;
+		// For DMs, indicate the bot is in a direct message (user name will be in dialogue section)
+		serverInfoContent = `# Knowledge Base\n${botName} is currently in a Direct Message with User.\n`;
 	} else {
 		// For servers, show server name and description
 		serverInfoContent = `# Knowledge Base\n${botName} is currently in the Discord server named "${serverName}".\n`;
@@ -401,7 +420,7 @@ export async function buildContext({
 					serverInfoContent,
 					client,
 					guildId,
-					triggererName,
+					"User", // Stable placeholder instead of triggererName
 					botName,
 					tomoriConfig.personal_memories_enabled,
 					snapshot,
@@ -411,71 +430,7 @@ export async function buildContext({
 		metadataTag: ContextItemTag.KNOWLEDGE_SERVER_INFO, // Tagging
 	});
 
-	// 3. Emojis (only available in guild channels, not DMs)
-	if (emojiStrings && emojiStrings.length > 0 && !isDMChannel) {
-		// 1. Shuffle the emoji array to randomize selection
-		const shuffledEmojis = [...emojiStrings].sort(() => Math.random() - 0.5);
-
-		// 2. Limit emojis to prevent context bloat
-		const maxEmojis = MAX_LOADED_EMOJIS;
-		const selectedEmojis = shuffledEmojis.slice(
-			0,
-			Math.min(maxEmojis, shuffledEmojis.length),
-		);
-
-		const emojiContent = `## ${serverName}'s Emojis\n- ${selectedEmojis.join("\n- ")}.`;
-		const emojiUsage = `\nIn order to use ${serverName}'s Emojis, input the name and the code like such: <:name:numbercode>\nAnimated emojis require an 'a' flag in the beginning like such: <a:name:numbercode>. {bot} only uses server emojis when it matches their actual mood. If {bot} is unsure of any available emoji, they can ask {user} for context or description if needed\n`;
-		contextItems.push({
-			role: "system",
-			parts: [
-				{
-					type: "text",
-					text: await convertMentions(
-						emojiContent + emojiUsage,
-						client,
-						guildId,
-						triggererName,
-						botName,
-						tomoriConfig.personal_memories_enabled,
-						snapshot,
-					),
-				},
-			],
-			metadataTag: ContextItemTag.KNOWLEDGE_SERVER_EMOJIS, // Tagging
-		});
-	}
-
-	// 4. Stickers (only available in guild channels, not DMs)
-	if (tomoriConfig.sticker_usage_enabled && !isDMChannel) {
-		const guild = client.guilds.cache.get(guildId);
-		const serverStickers = guild?.stickers.cache;
-		if (serverStickers && serverStickers.size > 0) {
-			let stickerContent = `## ${serverName}'s Stickers\nThis server has the following stickers available for ${botName} to use with the 'select_sticker_for_response' function:\n`;
-			for (const sticker of serverStickers.values()) {
-				stickerContent += `- Name: "${sticker.name}", ID: "${sticker.id}"${sticker.description ? `, Description/Usage: "${sticker.description}"` : ""}\n`;
-			}
-			stickerContent += `To use a sticker, the 'select_sticker_for_response' function should be called with the exact 'sticker_id' of the desired sticker.\n`;
-			contextItems.push({
-				role: "system",
-				parts: [
-					{
-						type: "text",
-						text: await convertMentions(
-							stickerContent,
-							client,
-							guildId,
-							triggererName,
-							botName,
-							tomoriConfig.personal_memories_enabled,
-						),
-					},
-				],
-				metadataTag: ContextItemTag.KNOWLEDGE_SERVER_STICKERS, // Tagging
-			});
-		}
-	}
-
-	// 5. Server Memories / Conversation Memories
+	// 4. Server Memories / Conversation Memories
 	// Use snapshot if available, otherwise load from DB
 	const tomoriState = snapshot?.tomoriState ?? (await loadTomoriState(guildId));
 	if (
@@ -485,7 +440,7 @@ export async function buildContext({
 	) {
 		// For DMs, label as "Conversation Memories". For servers, label as "Server Memories"
 		const memoryLabel = isDMChannel
-			? `\n## ${botName}'s Memories about this conversation with ${triggererName}\n`
+			? `\n## ${botName}'s Memories about this conversation with User\n`
 			: `\n## ${botName}'s Memories about ${serverName}\n`;
 		const serverMemoriesText = `${memoryLabel}${tomoriState.server_memories.join("\n")}\n`;
 		contextItems.push({
@@ -497,140 +452,261 @@ export async function buildContext({
 						serverMemoriesText,
 						client,
 						guildId,
-						triggererName,
+						"User", // Stable placeholder instead of triggererName
 						botName,
 						tomoriConfig.personal_memories_enabled,
 					),
 				},
 			],
-			metadataTag: ContextItemTag.KNOWLEDGE_SERVER_MEMORIES, // Tagging
+			metadataTag: ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
 		});
 	}
 
-	// 6. User Context (Status & Conditional Personal Memories)
-	// This section will now always try to add user status for users in userList.
-	// Personal memories will only be added if server personalization is enabled AND the specific user is not blacklisted.
-	if (userList.length > 0) {
-		// MODIFIED: Loop if there are users, status is always relevant.
-		let combinedUserContextText = ""; // MODIFIED: Renamed for clarity
-		log.info(
-			`Building user context (status and conditional memories) for ${userList.length} users in guild ${guildId}`,
-		);
+	// 5. Emojis with Semantic Metadata (only available in guild channels, not DMs)
+	// CRITICAL: Text-based format with LLM-generated descriptions and emotion keys
+	// Kept in system instruction for better caching (deterministic ordering prevents frequent invalidation)
+	if (!isDMChannel) {
+		const guild = client.guilds.cache.get(guildId);
+		const serverEmojis = guild?.emojis.cache;
 
-		// First attempt to load users from database
-		const userRowsAttempt = await Promise.all(
-			// Renamed for clarity
-			userList.map((id) =>
-				loadUserRow(id).catch(() => {
-					log.warn(`buildContext: Failed to load user ${id} initially`);
-					return null; // Return null on error to continue processing others
-				}),
-			),
-		);
+		if (serverEmojis && serverEmojis.size > 0 && tomoriState) {
+			// 1. Load emoji metadata from database (with descriptions and emotion keys)
+			const serverId = tomoriState.server_id;
+			const emojiMetadata = await sql<
+				Array<{
+					emoji_disc_id: string;
+					emoji_name: string;
+					emoji_desc: string | null;
+					emotion_key: string | null;
+					is_animated: boolean;
+				}>
+			>`
+				SELECT emoji_disc_id, emoji_name, emoji_desc, emotion_key, is_animated
+				FROM server_emojis
+				WHERE server_id = ${serverId}
+				ORDER BY created_at ASC
+			`;
 
-		log.info(
-			`Initial load attempt: ${userRowsAttempt.filter(Boolean).length}/${userList.length} user rows from DB.`,
-		);
+			// 2. Create emoji map for quick lookup
+			const emojiMap = new Map(
+				emojiMetadata.map((e) => [e.emoji_disc_id, e]),
+			);
 
-		// Process each user, registering those not found or failed to load initially
-		for (const userIdToProcess of userList) {
-			// 6.0. Special handling for TomoriBot itself
-			// If this is the bot's own ID, add just status (no personal memories - those are server memories)
-			if (client.user && userIdToProcess === client.user.id) {
-				log.info(
-					`Adding status context for TomoriBot itself (ID: ${userIdToProcess})`,
-				);
+			// 3. Sort emojis by creation date (deterministic, oldest first for caching stability)
+			const sortedEmojis = Array.from(serverEmojis.values()).sort((a, b) => {
+				const aTime = a.createdTimestamp || 0;
+				const bTime = b.createdTimestamp || 0;
+				return aTime - bTime; // Ascending order (oldest first)
+			});
 
-				// Add bot's status - always "Online" since if we're processing messages, the bot is online
-				const botStatus =
-					"Online - Currently active and responding to messages";
-				const botContextText = `### ${botName} (User ID: ${userIdToProcess})'s current status\n${botStatus}\n\n`;
+			// 4. Build emoji list with descriptions and emotion keys
+			const emojiLines: string[] = [];
+			for (const emoji of sortedEmojis) {
+				const metadata = emojiMap.get(emoji.id);
+				const prefix = emoji.animated ? "a:" : ":";
+				const emojiCode = `<${prefix}${emoji.name}:${emoji.id}>`;
+				const emotionKey =
+					metadata?.emotion_key === "unset" ? null : metadata?.emotion_key ?? null;
 
-				// Add to combined context
-				combinedUserContextText += botContextText;
-
-				log.info(
-					`Added TomoriBot status to user context section for guild ${guildId}`,
-				);
-				continue; // Skip normal user processing for the bot
-			}
-
-			let userRow =
-				userRowsAttempt.find((u) => u?.user_disc_id === userIdToProcess) ||
-				null;
-
-			// Always try to fetch member for server nickname, regardless of registration status
-			const guild = client.guilds.cache.get(guildId);
-			let member = null;
-			if (guild) {
-				member = await guild.members.fetch(userIdToProcess).catch(() => null);
-			}
-
-			if (!userRow) {
-				// If user not found in initial batch load (or failed), try to register them
-				try {
-					log.info(
-						`User ${userIdToProcess} not found in initial DB load, attempting to fetch from Discord and register.`,
-					);
-					if (guild && member) {
-						const serverLocale = guild.preferredLocale;
-						const userLanguage = serverLocale.startsWith("ja") ? "ja" : "en-US";
-						userRow = await registerUser(
-							// This will UPSERT
-							userIdToProcess,
-							member.user.username, // Base username for registration
-							userLanguage,
-						);
-						if (userRow) {
-							log.info(
-								`Successfully registered/loaded user ${userIdToProcess} (${member.user.username}) after fetch.`,
-							);
-						} else {
-							log.warn(
-								`Failed to register user ${userIdToProcess} after fetching from Discord.`,
-							);
-						}
-					} else {
-						log.warn(
-							`Could not fetch member ${userIdToProcess} from Discord for registration.`,
-						);
+				// Graceful degradation: if no metadata, just show code
+				if (!metadata || (!metadata.emoji_desc && !emotionKey)) {
+					emojiLines.push(emojiCode);
+				} else {
+					// Show emotion key and description in a natural phrase if available
+					const labelParts: string[] = [];
+					if (emotionKey) {
+						labelParts.push(`Expresses ${emotionKey}`);
 					}
-				} catch (error) {
-					await log.error(
-						`Error registering user ${userIdToProcess} during context building:`,
-						error,
-						{
-							errorType: "UserRegistrationError",
-							metadata: { guildDiscordId: guildId },
-						},
+					if (metadata.emoji_desc) {
+						labelParts.push(metadata.emoji_desc);
+					}
+					const label = ` (${labelParts.join("; ")})`;
+					emojiLines.push(`${emojiCode}${label}`);
+				}
+			}
+
+			const emojiContent = `## ${serverName}'s Emojis\n- ${emojiLines.join("\n- ")}.`;
+			const emojiUsage = `\nIn order to use ${serverName}'s Emojis, input the name and the code like such: <:name:numbercode>\nAnimated emojis require an 'a' flag in the beginning like such: <a:name:numbercode>. {bot} only uses server emojis when it matches their actual mood.\n`;
+
+			contextItems.push({
+				role: "system",
+				parts: [
+					{
+						type: "text",
+						text: await convertMentions(
+							emojiContent + emojiUsage,
+							client,
+							guildId,
+							"User", // Stable placeholder
+							botName,
+							tomoriConfig.personal_memories_enabled,
+							snapshot,
+						),
+					},
+				],
+				metadataTag: ContextItemTag.KNOWLEDGE_SERVER_EMOJIS,
+			});
+
+			log.info(
+				`Loaded ${sortedEmojis.length} emoji descriptions for server ${serverName}`,
+			);
+		}
+	}
+
+	// 6. Stickers with Semantic Metadata (only available in guild channels, not DMs)
+	// CRITICAL: Text-based format with LLM-generated descriptions and emotion keys for efficient caching
+	if (tomoriConfig.sticker_usage_enabled && !isDMChannel) {
+		const guild = client.guilds.cache.get(guildId);
+		const serverStickers = guild?.stickers.cache;
+
+		if (serverStickers && serverStickers.size > 0 && tomoriState) {
+			// 1. Load sticker metadata from database (with descriptions and emotion keys)
+			const serverId = tomoriState.server_id;
+			const stickerMetadata = await sql<
+				Array<{
+					sticker_disc_id: string;
+					sticker_name: string;
+					sticker_desc: string | null;
+					emotion_key: string | null;
+				}>
+			>`
+				SELECT sticker_disc_id, sticker_name, sticker_desc, emotion_key
+				FROM server_stickers
+				WHERE server_id = ${serverId}
+				ORDER BY created_at ASC
+			`;
+
+			// 2. Create sticker map for quick lookup
+			const stickerMap = new Map(
+				stickerMetadata.map((s) => [s.sticker_disc_id, s]),
+			);
+
+			// 3. Sort stickers by creation date (deterministic, oldest first for caching stability)
+			const sortedStickers = Array.from(serverStickers.values()).sort(
+				(a, b) => {
+					const aTime = a.createdTimestamp || 0;
+					const bTime = b.createdTimestamp || 0;
+					return aTime - bTime; // Ascending order (oldest first)
+				},
+			);
+
+			// 4. Build sticker list with descriptions and emotion keys
+			let stickerContent = `## ${serverName}'s Stickers\nThis server has the following stickers available for ${botName} to use with the 'select_sticker_for_response' function:\n`;
+
+			for (const sticker of sortedStickers) {
+				const metadata = stickerMap.get(sticker.id);
+				const discordDesc = sticker.description
+					? `, Description/Usage: "${sticker.description}"`
+					: "";
+				const emotionKey =
+					metadata?.emotion_key === "unset" ? null : metadata?.emotion_key ?? null;
+
+				// Build sticker entry
+				let stickerEntry = `- Name: "${sticker.name}", ID: "${sticker.id}"`;
+
+				// Add LLM-generated metadata if available
+				if (metadata && (metadata.sticker_desc || emotionKey)) {
+					const labelParts: string[] = [];
+					if (emotionKey) {
+						labelParts.push(`Expresses ${emotionKey}`);
+					}
+					if (metadata.sticker_desc) {
+						labelParts.push(metadata.sticker_desc);
+					}
+					const label = ` (${labelParts.join("; ")})`;
+					stickerEntry += label;
+				}
+
+				// Add Discord description at the end
+				stickerEntry += `${discordDesc}\n`;
+				stickerContent += stickerEntry;
+			}
+
+			stickerContent += `To use a sticker, the 'select_sticker_for_response' function should be called with the exact 'sticker_id' of the desired sticker.\n`;
+
+			// 5. Add as "system" role (stays in system instruction for caching)
+			contextItems.push({
+				role: "system",
+				parts: [
+					{
+						type: "text",
+						text: await convertMentions(
+							stickerContent,
+							client,
+							guildId,
+							"User", // Stable placeholder
+							botName,
+							tomoriConfig.personal_memories_enabled,
+						),
+					},
+				],
+				metadataTag: ContextItemTag.KNOWLEDGE_SERVER_STICKERS,
+			});
+
+			log.info(
+				`Loaded ${sortedStickers.length} sticker descriptions for server ${serverName}`,
+			);
+		}
+	}
+
+	// 7. Users in Conversation (ALL user-specific dynamic data)
+	// This section combines: time/date, channel, user status, memories, and reminders
+	if (userList.length > 0) {
+		// 1. Get timezone info
+		const timezoneOffset = tomoriConfig.timezone_offset ?? 0;
+		const currentTime = getCurrentTimeWithOffset(timezoneOffset);
+		const timezoneLabel = formatUTCOffset(timezoneOffset);
+		const timeOfDayPhrase = getTimeOfDayPhrase(timezoneOffset);
+
+		let usersInConversationText = "";
+
+		// 2. Header with time/channel info
+		if (isDMChannel) {
+			usersInConversationText = `[System: At ${currentTime} (${timezoneLabel}), ${timeOfDayPhrase}, the following users are having a Direct Message conversation:\n\n`;
+		} else {
+			usersInConversationText = `[System: In #${channelName} at ${currentTime} (${timezoneLabel}), ${timeOfDayPhrase}, the following users are having a conversation:\n\n`;
+		}
+
+		// 3. Process each user (including bot itself)
+		for (const userIdToProcess of userList) {
+			// 4. Special handling for TomoriBot itself
+			if (client.user && userIdToProcess === client.user.id) {
+				usersInConversationText += `${botName} (User ID: ${userIdToProcess}) (This is you!)\n`;
+				usersInConversationText += `- Status: Online - Currently active and responding to messages\n\n`;
+				continue;
+			}
+
+			// 5. Load/register user
+			let userRow = await loadUserRow(userIdToProcess).catch(() => null);
+			if (!userRow) {
+				// Try to register if not found (same logic as current implementation)
+				const guild = client.guilds.cache.get(guildId);
+				const member = guild
+					? await guild.members.fetch(userIdToProcess).catch(() => null)
+					: null;
+				if (guild && member) {
+					const serverLocale = guild.preferredLocale;
+					const userLanguage = serverLocale.startsWith("ja") ? "ja" : "en-US";
+					userRow = await registerUser(
+						userIdToProcess,
+						member.user.username,
+						userLanguage,
 					);
 				}
 			}
 
-			if (
-				!userRow || // Check if userRow is still null or invalid
-				typeof userRow.user_id !== "number" ||
-				!userRow.user_disc_id
-			) {
-				log.warn(
-					`Skipping user context for ${userIdToProcess} due to invalid/missing user data after all attempts. UserRow: ${JSON.stringify(userRow)}`,
-				);
-				continue; // Skip to the next user if userRow is still not valid
+			if (!userRow) {
+				log.warn(`Skipping user ${userIdToProcess} - could not load user data`);
+				continue;
 			}
 
-			// At this point, userRow is considered valid.
-			const userDiscordId = userRow.user_disc_id;
-
-			// Format nickname to include both custom nickname and server nickname
-			let displayName: string;
-			const customNickname = userRow.user_nickname;
-			const serverNickname = member?.nickname;
-
-			// Check personalization settings FIRST to determine which nickname to use
+			// 6. Determine display name (respecting personalization settings)
+			const guild = client.guilds.cache.get(guildId);
+			const member = guild
+				? await guild.members.fetch(userIdToProcess).catch(() => null)
+				: null;
 			const serverPersonalizationEnabled =
 				tomoriConfig.personal_memories_enabled ?? true;
-
-			// Check if this is the triggerer and we have snapshot data
 			const isTriggererId =
 				snapshot?.triggererUserRow?.user_disc_id === userRow.user_disc_id;
 			const userIsBlacklisted = isTriggererId
@@ -640,80 +716,80 @@ export async function buildContext({
 				? (snapshot?.isTriggererOptedOut ?? false)
 				: await isPrivacyOptedOut(userRow.user_disc_id);
 
+			let displayName: string;
+			const customNickname = userRow.user_nickname;
+			const serverNickname = member?.nickname;
+
 			if (
 				customNickname &&
 				serverPersonalizationEnabled &&
 				!userIsBlacklisted &&
 				!userOptedOut
 			) {
-				// Use custom nickname as base, add server nickname if it exists
-				// Only use custom nickname if user is not blacklisted AND personalization is enabled
 				displayName = serverNickname
 					? `${customNickname} (Server Nickname: "${serverNickname}")`
 					: customNickname;
 			} else if (serverNickname) {
-				// No custom nickname OR user is blacklisted/opted-out OR personalization disabled
-				// Use server nickname (Discord-native feature, not personalization)
 				displayName = serverNickname;
 			} else {
-				// No custom or server nickname, fallback to mention format
 				displayName = `<@${userRow.user_disc_id}>`;
 			}
-			const nickname = displayName;
 
-			let userSpecificContent = "";
+			// 7. Add user header
+			usersInConversationText += `${displayName} (User ID: ${userRow.user_disc_id})\n`;
 
-			// 6.a. Add Personal Memories (conditionally)
-			log.info(
-				`User ${userDiscordId}: Server Personalization Enabled: ${serverPersonalizationEnabled}, User Blacklisted: ${userIsBlacklisted}, Privacy Opted Out: ${userOptedOut}`,
-			);
+			// 8. Add status (production: triggerer only, dev: all users)
+			const isProduction = process.env.RUN_ENV === "production";
+			const presenceInfo = isDMChannel
+				? "Online (Direct Message)"
+				: isTriggererId
+					? await getUserPresenceDetails(
+							client,
+							userRow.user_disc_id,
+							guildId,
+							snapshot?.preloadedMember,
+						)
+					: isProduction
+						? "Status unknown"
+						: await getUserPresenceDetails(
+								client,
+								userRow.user_disc_id,
+								guildId,
+							);
 
-			if (serverPersonalizationEnabled && !userIsBlacklisted && !userOptedOut) {
+			usersInConversationText += `- Status: ${presenceInfo}\n`;
+
+			// 9. Add personal memories (if personalization enabled and user not blacklisted/opted-out)
+			if (
+				serverPersonalizationEnabled &&
+				!userIsBlacklisted &&
+				!userOptedOut
+			) {
 				if (userRow.personal_memories && userRow.personal_memories.length > 0) {
-					// Process personal memories with the memory owner's name for {user} token replacement
 					const processedMemories = await Promise.all(
 						userRow.personal_memories.map((memory) =>
 							convertMentions(
 								memory,
 								client,
 								guildId,
-								nickname, // Use the memory owner's name, not the triggerer's name
+								displayName, // Use memory owner's name for {user} token
 								botName,
 								tomoriConfig.personal_memories_enabled,
 							),
 						),
 					);
-					userSpecificContent += `## ${botName}'s Memories about ${nickname} (User ID: ${userDiscordId})\n${processedMemories.join("\n")}\n`;
-				}
-			} else {
-				if (!serverPersonalizationEnabled) {
-					log.info(
-						`Personal memories omitted for ${userDiscordId}: Server personalization is disabled.`,
-					);
-				}
-				if (userIsBlacklisted) {
-					log.info(
-						`Personal memories omitted for ${userDiscordId}: User is blacklisted.`,
-					);
-				}
-				if (userOptedOut) {
-					log.info(
-						`Personal memories omitted for ${userDiscordId}: User has opted out of personalization.`,
-					);
+					usersInConversationText += `- Memories: ${processedMemories.join(", ")}\n`;
 				}
 			}
 
-			// 6.b. Add Pending Reminders (if any exist)
+			// 10. Add pending reminders
 			const pendingReminders = await getPendingRemindersForUser(
-				userDiscordId,
+				userRow.user_disc_id,
 				guildId,
 			);
-
 			if (pendingReminders && pendingReminders.length > 0) {
-				userSpecificContent += `### ${botName}'s pending reminders for ${nickname} (User ID: ${userDiscordId})\n`;
-
+				usersInConversationText += `- Reminders:\n`;
 				for (const reminder of pendingReminders) {
-					// Format the reminder time in a human-readable way
 					const reminderDate = new Date(reminder.reminder_time);
 					const formattedTime = reminderDate.toLocaleString("en-US", {
 						weekday: "short",
@@ -724,105 +800,34 @@ export async function buildContext({
 						minute: "2-digit",
 						timeZoneName: "short",
 					});
-
-					userSpecificContent += `- "${reminder.reminder_purpose}" (scheduled for ${formattedTime})\n`;
+					usersInConversationText += `  • "${reminder.reminder_purpose}" (scheduled for ${formattedTime})\n`;
 				}
-
-				userSpecificContent += "\n";
-
-				log.info(
-					`Added ${pendingReminders.length} pending reminder(s) to context for user ${userDiscordId} in guild ${guildId}`,
-				);
 			}
 
-			// 6.c. Add User Status (always, if userRow is valid)
-			// For DMs, presence information is not available since there's no guild context
-			// In production: Only fetch triggerer's presence (save API calls)
-			// In development: Fetch all users' presence (for testing)
-			const isProduction = process.env.RUN_ENV === "production";
-			const presenceInfo = isDMChannel
-				? "Online (Direct Message)" // Simple fallback for DMs
-				: isTriggererId
-					? await getUserPresenceDetails(
-							client,
-							userRow.user_disc_id,
-							guildId,
-							snapshot?.preloadedMember, // Use preloaded member for triggerer (no extra API cost)
-						)
-					: isProduction
-						? "Status unknown" // Production: Skip fetching for non-triggerer users (save API calls)
-						: await getUserPresenceDetails(
-								client,
-								userRow.user_disc_id,
-								guildId,
-							); // Development: Fetch for testing
-			userSpecificContent += `### ${nickname} (User ID: ${userDiscordId})'s current status\n${presenceInfo}\n\n`;
-			combinedUserContextText += userSpecificContent;
+			usersInConversationText += "\n"; // Blank line between users
 		}
 
-		if (combinedUserContextText) {
-			contextItems.push({
-				role: "system",
-				parts: [
-					{
-						type: "text",
-						text: await convertMentions(
-							combinedUserContextText.trim(), // MODIFIED: Use new variable
-							client,
-							guildId,
-							triggererName,
-							botName,
-							tomoriConfig.personal_memories_enabled,
-						),
-					},
-				],
-				metadataTag: ContextItemTag.KNOWLEDGE_USER_MEMORIES, // MODIFIED: More generic tag
-			});
-		} else {
-			log.warn(
-				`No user context (status/memories) content generated for guild ${guildId}`,
-			);
-		}
-	} else {
-		log.info(
-			"Skipping user context section: userList is empty.", // MODIFIED: Updated log message
-		);
-	}
-	// 7. Current Context (Time, Channel)
-	// Get the server's configured timezone offset (default to 0/UTC if not set)
-	const timezoneOffset = tomoriConfig.timezone_offset ?? 0;
-	const currentTime = getCurrentTimeWithOffset(timezoneOffset);
-	const timezoneLabel = formatUTCOffset(timezoneOffset);
-	const timeOfDayPhrase = getTimeOfDayPhrase(timezoneOffset);
+		usersInConversationText += "]"; // Close [System: ...] block
 
-	let currentContextContent = `\n# Current Context\nCurrent Time (${timezoneLabel}): ${currentTime}. ${timeOfDayPhrase}.\n`;
-	if (isDMChannel) {
-		// For DMs, indicate the bot is in a direct message (no channel name needed)
-		currentContextContent += `${botName} is currently in a Direct Message conversation with ${triggererName}.`;
-	} else {
-		// For servers, show channel name and description
-		currentContextContent += `${botName} is currently in text channel #${channelName}.`;
-		if (channelDesc) {
-			currentContextContent += ` ${channelDesc}\n`;
-		}
+		// 11. Add as "user" role (goes in dialogue contents)
+		contextItems.push({
+			role: "user",
+			parts: [
+				{
+					type: "text",
+					text: await convertMentions(
+						usersInConversationText.trim(),
+						client,
+						guildId,
+						triggererName,
+						botName,
+						tomoriConfig.personal_memories_enabled,
+					),
+				},
+			],
+			metadataTag: ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION,
+		});
 	}
-	contextItems.push({
-		role: "system",
-		parts: [
-			{
-				type: "text",
-				text: await convertMentions(
-					currentContextContent,
-					client,
-					guildId,
-					triggererName,
-					botName,
-					tomoriConfig.personal_memories_enabled,
-				),
-			},
-		],
-		metadataTag: ContextItemTag.KNOWLEDGE_CURRENT_CONTEXT, // Tagging
-	});
 
 	if (
 		tomoriState &&

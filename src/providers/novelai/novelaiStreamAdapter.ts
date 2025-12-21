@@ -75,9 +75,7 @@ export class NovelaiStreamAdapter implements StreamProvider {
 		ContextItemTag.KNOWLEDGE_SERVER_INFO,
 		// Emoji and sticker knowledge excluded - NovelAI can't use function calling
 		ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
-		ContextItemTag.KNOWLEDGE_USER_MEMORIES,
-		ContextItemTag.KNOWLEDGE_USER_STATUS,
-		ContextItemTag.KNOWLEDGE_CURRENT_CONTEXT,
+		// REMOVED: KNOWLEDGE_USER_MEMORIES, KNOWLEDGE_USER_STATUS, KNOWLEDGE_CURRENT_CONTEXT (now in KNOWLEDGE_USERS_IN_CONVERSATION)
 	];
 
 	/**
@@ -411,15 +409,21 @@ export class NovelaiStreamAdapter implements StreamProvider {
 			}
 
 			// Handle dialogue turns
-			if (
-				(item.role === "user" || item.role === "model") &&
-				item.metadataTag &&
-				(item.metadataTag === ContextItemTag.DIALOGUE_HISTORY ||
-					item.metadataTag === ContextItemTag.DIALOGUE_SAMPLE)
-			) {
-				// Dialogue turns - already formatted with speaker labels from contextBuilder
-				// The context builder formats these as "{username}: {message}"
-				dialogueParts.push(textContent);
+			// CRITICAL: ALL user/model items go to dialogue (unless in SYSTEM_INSTRUCTION_TAGS)
+			// This handles DIALOGUE_HISTORY, DIALOGUE_SAMPLE, and new tags like KNOWLEDGE_USERS_IN_CONVERSATION
+			if ((item.role === "user" || item.role === "model") && textContent) {
+				// Check if this item is NOT in system instruction tags
+				const isInSystemTags =
+					item.metadataTag &&
+					NovelaiStreamAdapter.SYSTEM_INSTRUCTION_TAGS.includes(
+						item.metadataTag,
+					);
+
+				if (!isInSystemTags) {
+					// Dialogue turns - already formatted with speaker labels from contextBuilder
+					// The context builder formats these as "{username}: {message}"
+					dialogueParts.push(textContent);
+				}
 			}
 		}
 

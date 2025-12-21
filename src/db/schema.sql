@@ -128,6 +128,13 @@ SELECT add_column_if_not_exists('llms', 'is_smartest', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'is_default', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'is_reasoning', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'is_deprecated', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('llms', 'is_free', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('llms', 'has_tools', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('llms', 'sees_images', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('llms', 'sees_videos', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('llms', 'sees_youtube', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('llms', 'is_uncensored', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('llms', 'supports_structoutput', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'llm_description', 'TEXT');
 SELECT add_column_if_not_exists('llms', 'ja_description', 'TEXT');
 

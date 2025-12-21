@@ -76,12 +76,13 @@ interface GoogleStreamChunk {
  */
 export class GoogleStreamAdapter implements StreamProvider {
 	private static readonly SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
+		ContextItemTag.SYSTEM_HUMANIZER_RULES,
+		ContextItemTag.SYSTEM_PERSONALITY,
 		ContextItemTag.KNOWLEDGE_SERVER_INFO,
-		ContextItemTag.KNOWLEDGE_SERVER_EMOJIS,
-		ContextItemTag.KNOWLEDGE_SERVER_STICKERS,
+		ContextItemTag.KNOWLEDGE_SERVER_EMOJIS, // Text-based with semantic metadata (deterministic ordering)
+		ContextItemTag.KNOWLEDGE_SERVER_STICKERS, // Text-based with semantic metadata (deterministic ordering)
 		ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
-		ContextItemTag.KNOWLEDGE_USER_MEMORIES,
-		ContextItemTag.KNOWLEDGE_CURRENT_CONTEXT,
+		// REMOVED: KNOWLEDGE_USER_MEMORIES, KNOWLEDGE_CURRENT_CONTEXT (now in KNOWLEDGE_USERS_IN_CONVERSATION)
 	];
 
 	/**
@@ -629,12 +630,10 @@ export class GoogleStreamAdapter implements StreamProvider {
 					))
 			) {
 				if (itemTextContent) systemInstructionParts.push(itemTextContent);
-			} else if (
-				(item.role === "user" || item.role === "model") &&
-				item.metadataTag &&
-				(item.metadataTag === ContextItemTag.DIALOGUE_HISTORY ||
-					item.metadataTag === ContextItemTag.DIALOGUE_SAMPLE)
-			) {
+			} else if (item.role === "user" || item.role === "model") {
+				// CRITICAL: ALL user/model items go to dialogue (unless in SYSTEM_INSTRUCTION_TAGS)
+				// This handles DIALOGUE_HISTORY, DIALOGUE_SAMPLE, and new tags like KNOWLEDGE_USERS_IN_CONVERSATION
+
 				// Convert to Google Parts format
 				const geminiParts: Part[] = [];
 				for (const part of item.parts) {
