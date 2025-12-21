@@ -890,6 +890,50 @@ function addTextSegment(
 }
 
 /**
+ * Normalizes custom Discord emoji tags into :name: for LLM context.
+ * Skips code blocks and inline code to preserve literal examples.
+ * @param text - Raw message content from Discord
+ * @returns Content with custom emoji tags converted to :name:
+ */
+export function normalizeCustomEmojisForLlm(text: string): string {
+	if (!text) return text;
+
+	const codeBlocks: string[] = [];
+	const inlineCode: string[] = [];
+
+	let processedText = text.replace(/```[\s\S]*?```/g, (match) => {
+		codeBlocks.push(match);
+		return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+	});
+
+	processedText = processedText.replace(/`[^`]*`/g, (match) => {
+		inlineCode.push(match);
+		return `__INLINE_CODE_${inlineCode.length - 1}__`;
+	});
+
+	processedText = processedText.replace(
+		/<(a?):([^:>]+):\d{17,20}>/g,
+		(_match, _animated, name) => `:${name}:`,
+	);
+
+	for (let i = inlineCode.length - 1; i >= 0; i--) {
+		processedText = processedText.replace(
+			`__INLINE_CODE_${i}__`,
+			inlineCode[i],
+		);
+	}
+
+	for (let i = codeBlocks.length - 1; i >= 0; i--) {
+		processedText = processedText.replace(
+			`__CODE_BLOCK_${i}__`,
+			codeBlocks[i],
+		);
+	}
+
+	return processedText;
+}
+
+/**
  * Cleans raw LLM output for Discord display
  * @param text - Raw text from LLM
  * @param botName - Optional bot name to remove from response
@@ -939,7 +983,7 @@ export function cleanLLMOutput(
 			const m = emoji.match(/<(a?):([^:]+):([^>]+)>/);
 			if (m) {
 				const [, , name] = m;
-				emojiNameMap.set(name, emoji);
+				emojiNameMap.set(name.toLowerCase(), emoji);
 			}
 		}
 
@@ -959,7 +1003,7 @@ export function cleanLLMOutput(
 		for (const [name, full] of emojiNameMap.entries()) {
 			const pattern = new RegExp(
 				`(?<!<[^>]*)\\s*:${escapeRegExp(name)}:\\s*`,
-				"g",
+				"gi",
 			);
 			cleanedText = cleanedText.replace(pattern, ` ${full} `);
 		}
@@ -968,7 +1012,7 @@ export function cleanLLMOutput(
 		cleanedText = cleanedText.replace(
 			/<(a?):([^:>]+):?>/g, // match `<:name:>` or `<a:name:>`
 			(_match, _animated, name) => {
-				const canonical = emojiNameMap.get(name); // look up `:name:` in your map
+				const canonical = emojiNameMap.get(name.toLowerCase()); // look up `:name:` in your map
 				return canonical ?? ""; // replace with correct emoji or drop it
 			},
 		);
@@ -981,7 +1025,7 @@ export function cleanLLMOutput(
 				// a) exact valid → keep
 				if (validEmojiSet.has(full)) return full;
 				// b) name match → use canonical
-				const canonical = emojiNameMap.get(name);
+				const canonical = emojiNameMap.get(name.toLowerCase());
 				if (canonical) return canonical;
 				// c) unknown → remove
 				return "";

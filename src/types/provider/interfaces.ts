@@ -62,6 +62,11 @@ export interface ProviderInfo {
 export interface FunctionCall {
 	name: string;
 	args?: Record<string, unknown>;
+	/**
+	 * Optional thought signature for providers that require it (e.g., Gemini).
+	 * Encoded as base64 when present.
+	 */
+	thoughtSignature?: string;
 }
 
 /**

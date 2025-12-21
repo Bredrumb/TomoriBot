@@ -15,7 +15,11 @@ import {
 } from "../../types/misc/context";
 import { registerUser } from "../db/dbWrite";
 import { log } from "../misc/logger";
-import { replaceTemplateVariables, humanizeString } from "./stringHelper";
+import {
+	replaceTemplateVariables,
+	humanizeString,
+	normalizeCustomEmojisForLlm,
+} from "./stringHelper";
 import {
 	getCurrentTimeWithOffset,
 	formatUTCOffset,
@@ -481,27 +485,59 @@ export async function buildContext({
 					emoji_desc: string | null;
 					emotion_key: string | null;
 					is_animated: boolean;
+					created_at: Date | null;
+					updated_at: Date | null;
 				}>
 			>`
-				SELECT emoji_disc_id, emoji_name, emoji_desc, emotion_key, is_animated
+				SELECT emoji_disc_id, emoji_name, emoji_desc, emotion_key, is_animated, created_at, updated_at
 				FROM server_emojis
 				WHERE server_id = ${serverId}
 				ORDER BY created_at ASC
 			`;
 
-			// Count emojis missing both emotion key and description
-			missingEmojiMetadataCount = emojiMetadata.filter((metadata) => {
+			// 2. Create emoji metadata map by name (case-insensitive), prefer the latest with metadata
+			const emojiMetadataByName = new Map<
+				string,
+				(typeof emojiMetadata)[number]
+			>();
+			const hasEmojiMetadata = (metadata: (typeof emojiMetadata)[number]) => {
 				const hasEmotionKey =
 					metadata.emotion_key && metadata.emotion_key !== "unset";
 				const hasDescription =
 					metadata.emoji_desc && metadata.emoji_desc.trim().length > 0;
-				return !hasEmotionKey && !hasDescription;
-			}).length;
+				return hasEmotionKey || hasDescription;
+			};
+			const getMetadataTimestamp = (
+				metadata: (typeof emojiMetadata)[number],
+			) => {
+				const updated = metadata.updated_at?.getTime() ?? 0;
+				const created = metadata.created_at?.getTime() ?? 0;
+				return Math.max(updated, created);
+			};
 
-			// 2. Create emoji map for quick lookup
-			const emojiMap = new Map(
-				emojiMetadata.map((e) => [e.emoji_disc_id, e]),
-			);
+			for (const metadata of emojiMetadata) {
+				if (!metadata.emoji_name) continue;
+				const nameKey = metadata.emoji_name.toLowerCase();
+				const existing = emojiMetadataByName.get(nameKey);
+				if (!existing) {
+					emojiMetadataByName.set(nameKey, metadata);
+					continue;
+				}
+
+				const existingHasMeta = hasEmojiMetadata(existing);
+				const currentHasMeta = hasEmojiMetadata(metadata);
+				if (currentHasMeta && !existingHasMeta) {
+					emojiMetadataByName.set(nameKey, metadata);
+					continue;
+				}
+				if (currentHasMeta === existingHasMeta) {
+					const existingTime = getMetadataTimestamp(existing);
+					const currentTime = getMetadataTimestamp(metadata);
+					if (currentTime >= existingTime) {
+						emojiMetadataByName.set(nameKey, metadata);
+					}
+				}
+			}
 
 			// 3. Sort emojis by creation date (deterministic, oldest first for caching stability)
 			const sortedEmojis = Array.from(serverEmojis.values()).sort((a, b) => {
@@ -510,12 +546,38 @@ export async function buildContext({
 				return aTime - bTime; // Ascending order (oldest first)
 			});
 
-			// 4. Build emoji list with descriptions and emotion keys
-			const emojiLines: string[] = [];
+			// 4. Deduplicate by name (case-insensitive) while keeping latest
+			const latestEmojiByName = new Map<string, (typeof sortedEmojis)[number]>();
 			for (const emoji of sortedEmojis) {
-				const metadata = emojiMap.get(emoji.id);
-				const prefix = emoji.animated ? "a:" : ":";
-				const emojiCode = `<${prefix}${emoji.name}:${emoji.id}>`;
+				if (!emoji.name) continue;
+				latestEmojiByName.set(emoji.name.toLowerCase(), emoji);
+			}
+
+			const dedupedEmojis = sortedEmojis.filter((emoji) => {
+				if (!emoji.name) return false;
+				return latestEmojiByName.get(emoji.name.toLowerCase())?.id === emoji.id;
+			});
+
+			// 5. Count emojis missing both emotion key and description (based on display list)
+			missingEmojiMetadataCount = 0;
+			for (const emoji of dedupedEmojis) {
+				if (!emoji.name) continue;
+				const metadata = emojiMetadataByName.get(emoji.name.toLowerCase());
+				const hasEmotionKey =
+					metadata?.emotion_key && metadata.emotion_key !== "unset";
+				const hasDescription =
+					metadata?.emoji_desc && metadata.emoji_desc.trim().length > 0;
+				if (!hasEmotionKey && !hasDescription) {
+					missingEmojiMetadataCount++;
+				}
+			}
+
+			// 6. Build emoji list with descriptions and emotion keys
+			const emojiLines: string[] = [];
+			for (const emoji of dedupedEmojis) {
+				const metadata = emojiMetadataByName.get(emoji.name.toLowerCase());
+				if (!emoji.name) continue;
+				const emojiCode = `:${emoji.name}:`;
 				const emotionKey =
 					metadata?.emotion_key === "unset" ? null : metadata?.emotion_key ?? null;
 
@@ -537,7 +599,7 @@ export async function buildContext({
 			}
 
 			const emojiContent = `## ${serverName}'s Emojis\n- ${emojiLines.join("\n- ")}.`;
-			const emojiUsage = `\nIn order to use ${serverName}'s Emojis, input the name and the code like such: <:name:numbercode>\nAnimated emojis require an 'a' flag in the beginning like such: <a:name:numbercode>. {bot} only uses server emojis when it matches their actual mood.\n`;
+			const emojiUsage = `\nTo use ${serverName}'s emojis, just write :name: (name only, no IDs). Names are case-insensitive, and {bot} will expand them to the correct custom emoji. {bot} only uses server emojis when it matches their actual mood.\n`;
 
 			contextItems.push({
 				role: "system",
@@ -1071,7 +1133,8 @@ export async function buildContext({
 		// 9.c. Add text part if content exists (always included, regardless of window)
 		if (msg.content) {
 			// Request 4: Prepend speaker name to content
-			let processedContent = `${msg.authorName}: ${msg.content}`;
+			const normalizedContent = normalizeCustomEmojisForLlm(msg.content);
+			let processedContent = `${msg.authorName}: ${normalizedContent}`;
 
 			if (
 				tomoriConfig.humanizer_degree >= HumanizerDegree.HEAVY &&

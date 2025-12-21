@@ -53,7 +53,23 @@ const handleGuildStickersUpdate: EventFunction = async (
 
 		// 4. Perform database update within a transaction (Rule 15)
 		await sql.transaction(async (tx) => {
-			// 4a. Delete all existing stickers for this server
+			// 4a. Load existing sticker metadata to preserve it across refresh
+			const existingStickers = await tx<
+				Array<{
+					sticker_disc_id: string;
+					sticker_desc: string | null;
+					emotion_key: string | null;
+				}>
+			>`
+                SELECT sticker_disc_id, sticker_desc, emotion_key
+                FROM server_stickers
+                WHERE server_id = ${serverId}
+            `;
+			const existingStickerMetadata = new Map(
+				existingStickers.map((s) => [s.sticker_disc_id, s]),
+			);
+
+			// 4b. Delete all existing stickers for this server
 			const { rowCount: deletedCount } = await tx`
                 DELETE FROM server_stickers
                 WHERE server_id = ${serverId}
@@ -62,18 +78,25 @@ const handleGuildStickersUpdate: EventFunction = async (
 				`Deleted ${deletedCount} existing sticker entries for server ${serverId}.`,
 			);
 
-			// 4b. Map current stickers to database format
+			// 4c. Map current stickers to database format
 			// ... (mapping logic remains the same) ...
 			const currentStickers = Array.from(guild.stickers.cache.values());
-			const stickerValues = currentStickers.map((s) => ({
-				sticker_disc_id: s.id,
-				sticker_name: s.name,
-				sticker_desc: s.description ?? "",
-				emotion_key: "unset",
-				sticker_format: s.format,
-			}));
+			const stickerValues = currentStickers.map((s) => {
+				const existing = existingStickerMetadata.get(s.id);
+				const emotionKey =
+					existing?.emotion_key && existing.emotion_key.trim().length > 0
+						? existing.emotion_key
+						: "unset";
+				return {
+					sticker_disc_id: s.id,
+					sticker_name: s.name,
+					sticker_desc: existing?.sticker_desc ?? s.description ?? "",
+					emotion_key: emotionKey,
+					sticker_format: s.format,
+				};
+			});
 
-			// 4c. Insert the current stickers (similar to setupServer logic)
+			// 4d. Insert the current stickers (similar to setupServer logic)
 			// ... (insert loop remains the same) ...
 			let insertedCount = 0;
 			for (const {

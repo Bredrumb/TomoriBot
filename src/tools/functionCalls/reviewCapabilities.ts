@@ -208,7 +208,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
 			capabilitiesContent += "## Expression & Reactions\n\n";
 			capabilitiesContent += "You CAN express yourself:\n";
 			capabilitiesContent +=
-				"- **Server emojis** (use exact format: `<:name:id>` or `<a:name:id>`)\n";
+				"- **Server emojis** (use `:name:` from the server emoji list; case-insensitive)\n";
 			capabilitiesContent +=
 				"- **Stickers** (via select_sticker_for_response function)\n";
 			capabilitiesContent +=

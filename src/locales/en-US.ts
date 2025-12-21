@@ -1529,7 +1529,7 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				// Progress messages
 				progress_fetching: `Fetching uninitialized expressions...`,
 				progress_building: `Found {emoji_count} emojis and {sticker_count} stickers to analyze...`,
-				progress_analyzing: `Analyzing {total} expressions with AI vision...`,
+				progress_analyzing: `Analyzing {total} images...`,
 				progress_saving: `Saving results to database...`,
 			},
 		},

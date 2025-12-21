@@ -56,7 +56,23 @@ const handleGuildEmojisUpdate: EventFunction = async (
 
 		// 4. Perform database update within a transaction (Rule 15)
 		await sql.transaction(async (tx) => {
-			// 4a. Delete all existing emojis for this server
+			// 4a. Load existing emoji metadata to preserve it across refresh
+			const existingEmojis = await tx<
+				Array<{
+					emoji_disc_id: string;
+					emoji_desc: string | null;
+					emotion_key: string | null;
+				}>
+			>`
+                SELECT emoji_disc_id, emoji_desc, emotion_key
+                FROM server_emojis
+                WHERE server_id = ${serverId}
+            `;
+			const existingEmojiMetadata = new Map(
+				existingEmojis.map((e) => [e.emoji_disc_id, e]),
+			);
+
+			// 4b. Delete all existing emojis for this server
 			const { rowCount: deletedCount } = await tx`
                 DELETE FROM server_emojis
                 WHERE server_id = ${serverId}
@@ -65,19 +81,28 @@ const handleGuildEmojisUpdate: EventFunction = async (
 				`Deleted ${deletedCount} existing emoji entries for server ${serverId}.`,
 			);
 
-			// 4b. Map current emojis to database format
-			const emojiValues = currentEmojis.map((e) => ({
-				emoji_disc_id: e.id,
-				emoji_name: e.name ?? "", // Use name, default to empty string if null
-				emotion_key: "unset", // Default emotion key, can be updated later
-				is_animated: e.animated ?? false, // Use animated property
-			}));
+			// 4c. Map current emojis to database format
+			const emojiValues = currentEmojis.map((e) => {
+				const existing = existingEmojiMetadata.get(e.id);
+				const emotionKey =
+					existing?.emotion_key && existing.emotion_key.trim().length > 0
+						? existing.emotion_key
+						: "unset";
+				return {
+					emoji_disc_id: e.id,
+					emoji_name: e.name ?? "", // Use name, default to empty string if null
+					emoji_desc: existing?.emoji_desc ?? "",
+					emotion_key: emotionKey, // Preserve existing emotion key
+					is_animated: e.animated ?? false, // Use animated property
+				};
+			});
 
-			// 4c. Insert the current emojis (similar to setupServer logic)
+			// 4d. Insert the current emojis (similar to setupServer logic)
 			let insertedCount = 0;
 			for (const {
 				emoji_disc_id,
 				emoji_name,
+				emoji_desc,
 				emotion_key,
 				is_animated,
 			} of emojiValues) {
@@ -86,6 +111,7 @@ const handleGuildEmojisUpdate: EventFunction = async (
                         server_id,
                         emoji_disc_id,
                         emoji_name,
+                        emoji_desc,
                         emotion_key,
                         is_animated
                         -- is_global defaults to false in DB schema
@@ -93,6 +119,7 @@ const handleGuildEmojisUpdate: EventFunction = async (
                         ${serverId},
                         ${emoji_disc_id},
                         ${emoji_name},
+                        ${emoji_desc},
                         ${emotion_key},
                         ${is_animated}
                     )

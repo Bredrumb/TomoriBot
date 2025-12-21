@@ -1842,8 +1842,23 @@ export default async function tomoriChat(
 				const emojis = await loadServerEmojis(tomoriState.server_id!);
 				if (emojis && emojis.length > 0) {
 					// Initialize emojiStrings as an empty array of strings
+					const sortedEmojis = [...emojis].sort((a, b) => {
+						const rawATime = a.created_at
+							? new Date(a.created_at).getTime()
+							: 0;
+						const rawBTime = b.created_at
+							? new Date(b.created_at).getTime()
+							: 0;
+						const aTime = Number.isNaN(rawATime) ? 0 : rawATime;
+						const bTime = Number.isNaN(rawBTime) ? 0 : rawBTime;
+						if (aTime !== bTime) return aTime - bTime;
+						const aId = a.server_emoji_id ?? 0;
+						const bId = b.server_emoji_id ?? 0;
+						if (aId !== bId) return aId - bId;
+						return a.emoji_disc_id.localeCompare(b.emoji_disc_id);
+					});
 
-					emojiStrings = emojis.map(
+					emojiStrings = sortedEmojis.map(
 						(e) =>
 							`<${e.is_animated ? "a" : ""}:${e.emoji_name}:${e.emoji_disc_id}>`,
 					);

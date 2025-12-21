@@ -23,8 +23,11 @@ import type { UserRow, ErrorContext } from "@/types/db/schema";
 import { getAllEmotionKeys } from "@/types/misc/emotions";
 import {
 	callGoogleStructuredOutput,
+	callOpenrouterStructuredOutput,
 	type ExpressionClassification,
+	type ExpressionBatchResult,
 	ExpressionBatchResultSchema,
+	type StructuredOutputResult,
 } from "@/providers/utils/structuredOutput";
 import { decryptApiKey } from "@/utils/security/crypto";
 
@@ -151,7 +154,7 @@ async function updateExpressionsInDB(
 	await sql.transaction(async (tx) => {
 		// 2. Process each result
 		for (const result of results) {
-			// 3. Try updating emoji first (case-insensitive name match)
+			// 3. Try updating emoji first (case-insensitive name match, only if uninitialized)
 			const emojiRows = await tx`
 				UPDATE server_emojis
 				SET
@@ -160,6 +163,12 @@ async function updateExpressionsInDB(
 					updated_at = CURRENT_TIMESTAMP
 				WHERE server_id = ${serverId}
 					AND LOWER(emoji_name) = LOWER(${result.name})
+					AND (
+						emotion_key IS NULL
+						OR emotion_key = 'unset'
+						OR emoji_desc IS NULL
+						OR emoji_desc = ''
+					)
 				RETURNING emoji_disc_id
 			`;
 
@@ -169,7 +178,7 @@ async function updateExpressionsInDB(
 				continue;
 			}
 
-			// 5. If no emoji found, try sticker
+			// 5. If no emoji found, try sticker (only if uninitialized)
 			const stickerRows = await tx`
 				UPDATE server_stickers
 				SET
@@ -178,6 +187,12 @@ async function updateExpressionsInDB(
 					updated_at = CURRENT_TIMESTAMP
 				WHERE server_id = ${serverId}
 					AND LOWER(sticker_name) = LOWER(${result.name})
+					AND (
+						emotion_key IS NULL
+						OR emotion_key = 'unset'
+						OR sticker_desc IS NULL
+						OR sticker_desc = ''
+					)
 				RETURNING sticker_disc_id
 			`;
 
@@ -264,15 +279,7 @@ export async function execute(
 			return;
 		}
 
-		// 5. Update progress: Fetching uninitialized expressions
-		await interaction.editReply({
-			content: localizer(
-				locale,
-				"commands.server.initialize.expressions.progress_fetching",
-			),
-		});
-
-		// 6. Query database for uninitialized emojis
+		// 5. Query database for uninitialized emojis
 		const uninitializedEmojis = await sql<UninitializedEmoji[]>`
 			SELECT emoji_disc_id, emoji_name, is_animated
 			FROM server_emojis
@@ -285,7 +292,7 @@ export async function execute(
 				)
 		`;
 
-		// 7. Query database for uninitialized stickers
+		// 6. Query database for uninitialized stickers
 		const uninitializedStickers = await sql<UninitializedSticker[]>`
 			SELECT sticker_disc_id, sticker_name, sticker_format
 			FROM server_stickers
@@ -298,7 +305,7 @@ export async function execute(
 				)
 		`;
 
-		// 8. Check if there's anything to initialize
+		// 7. Check if there's anything to initialize
 		const totalUninitialized =
 			uninitializedEmojis.length + uninitializedStickers.length;
 
@@ -321,19 +328,7 @@ export async function execute(
 			return;
 		}
 
-		// 9. Update progress: Building image list
-		await interaction.editReply({
-			content: localizer(
-				locale,
-				"commands.server.initialize.expressions.progress_building",
-				{
-					emoji_count: uninitializedEmojis.length,
-					sticker_count: uninitializedStickers.length,
-				},
-			),
-		});
-
-		// 10. Build images array for LLM
+		// 8. Build images array for LLM
 		const images: Array<{ url: string; name: string }> = [];
 		const items: Array<{ name: string; type: "emoji" | "sticker" }> = [];
 
@@ -355,18 +350,23 @@ export async function execute(
 			items.push({ name: sticker.sticker_name, type: "sticker" });
 		}
 
-		// 11. Update progress: Analyzing with AI
+		// 9. Update progress: Analyzing with AI
 		await interaction.editReply({
-			content: localizer(
-				locale,
-				"commands.server.initialize.expressions.progress_analyzing",
+			embeds: [
 				{
-					total: totalUninitialized,
+					description: localizer(
+						locale,
+						"commands.server.initialize.expressions.progress_analyzing",
+						{
+							total: totalUninitialized,
+						},
+					),
+					color: hexToNumber(ColorCode.INFO),
 				},
-			),
+			],
 		});
 
-		// 12. Decrypt API key
+		// 10. Decrypt API key
 		if (!tomoriState.config.api_key) {
 			await interaction.editReply({
 				embeds: [
@@ -389,7 +389,7 @@ export async function execute(
 			keyVersion,
 		);
 
-		// 13. Build prompts
+		// 11. Build prompts
 		const systemPrompt = buildSystemPrompt();
 		const userPrompt = buildUserPrompt(items);
 		const temperature = 1.0;
@@ -408,21 +408,55 @@ export async function execute(
 			)}`,
 		);
 
-		// 14. Call Google structured output (only Google supported for now)
-		const result = await callGoogleStructuredOutput({
-			apiKey: decryptedApiKey,
-			model: llm.llm_codename,
-			systemPrompt,
-			userPrompt,
-			images,
-			temperature,
-		});
+		// 12. Call structured output for the current provider
+		const provider = llm.llm_provider.toLowerCase();
+		let result: StructuredOutputResult<ExpressionBatchResult>;
+
+		switch (provider) {
+			case "google":
+				result = await callGoogleStructuredOutput({
+					apiKey: decryptedApiKey,
+					model: llm.llm_codename,
+					systemPrompt,
+					userPrompt,
+					images,
+					temperature,
+				});
+				break;
+			case "openrouter":
+				result = await callOpenrouterStructuredOutput({
+					apiKey: decryptedApiKey,
+					model: llm.llm_codename,
+					systemPrompt,
+					userPrompt,
+					images,
+					temperature,
+				});
+				break;
+			default:
+				await interaction.editReply({
+					embeds: [
+						{
+							title: localizer(
+								locale,
+								"general.errors.provider_not_supported_title",
+							),
+							description: localizer(
+								locale,
+								"general.errors.provider_not_supported_description",
+							),
+							color: hexToNumber(ColorCode.ERROR),
+						},
+					],
+				});
+				return;
+		}
 
 		log.info(
 			`LLM structured output response: ${JSON.stringify(result, null, 2)}`,
 		);
 
-		// 15. Check if LLM call was successful
+		// 13. Check if LLM call was successful
 		if (!result.success) {
 			log.error("LLM structured output failed", new Error(result.error), {
 				errorType: "LLMStructuredOutputError",
@@ -450,7 +484,7 @@ export async function execute(
 			return;
 		}
 
-		// 16. Validate LLM response with Zod
+		// 14. Validate LLM response with Zod
 		const validationResult = ExpressionBatchResultSchema.safeParse(result.data);
 
 		if (!validationResult.success) {
@@ -484,15 +518,7 @@ export async function execute(
 			return;
 		}
 
-		// 17. Update progress: Saving to database
-		await interaction.editReply({
-			content: localizer(
-				locale,
-				"commands.server.initialize.expressions.progress_saving",
-			),
-		});
-
-		// 18. Update database with results
+		// 15. Update database with results
 		const { emojiCount, stickerCount } = await updateExpressionsInDB(
 			tomoriState.server_id,
 			validationResult.data.expressions,
@@ -500,7 +526,7 @@ export async function execute(
 
 		const totalProcessed = emojiCount + stickerCount;
 
-		// 19. Show result message
+		// 16. Show result message
 		if (totalProcessed === 0) {
 			// No expressions were updated (all failed to match)
 			await interaction.editReply({
@@ -565,7 +591,7 @@ export async function execute(
 			});
 		}
 	} catch (error) {
-		// 20. Log error with context
+		// 17. Log error with context
 		const context: ErrorContext = {
 			userId: userData.user_id,
 			serverId: tomoriState?.server_id ?? null,
@@ -583,7 +609,7 @@ export async function execute(
 			context,
 		);
 
-		// 21. Show error message to user
+		// 18. Show error message to user
 		await interaction.editReply({
 			embeds: [
 				{

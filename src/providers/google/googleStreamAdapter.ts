@@ -61,8 +61,9 @@ interface GoogleStreamChunk {
 	};
 	candidates?: Array<{
 		finishReason?: FinishReason;
+		content?: Content;
 	}>;
-	thoughtSignature?: Uint8Array;
+	thoughtSignature?: string | Uint8Array;
 	thoughtSummary?: string;
 }
 
@@ -148,9 +149,19 @@ export class GoogleStreamAdapter implements StreamProvider {
 			context.functionInteractionHistory.length > 0
 		) {
 			for (const item of context.functionInteractionHistory) {
+				const functionCallPart: Part = {
+					functionCall: {
+						name: item.functionCall.name,
+						args: item.functionCall.args ?? {},
+					} as GoogleFunctionCall,
+				};
+				if (item.functionCall.thoughtSignature) {
+					functionCallPart.thoughtSignature = item.functionCall.thoughtSignature;
+				}
+
 				finalContents.push({
 					role: "model",
-					parts: [{ functionCall: item.functionCall as GoogleFunctionCall }],
+					parts: [functionCallPart],
 				});
 
 				// Build function response parts array
@@ -317,8 +328,9 @@ export class GoogleStreamAdapter implements StreamProvider {
 
 		// Check for thought signatures and thought summaries
 		const metadata: Record<string, unknown> = {};
-		if (googleChunk.thoughtSignature) {
-			metadata.thoughtSignature = googleChunk.thoughtSignature;
+		const thoughtSignature = this.extractThoughtSignature(googleChunk);
+		if (thoughtSignature) {
+			metadata.thoughtSignature = thoughtSignature;
 			log.info("GoogleStreamAdapter: Received thought signature");
 		}
 		if (googleChunk.thoughtSummary) {
@@ -331,6 +343,9 @@ export class GoogleStreamAdapter implements StreamProvider {
 			const functionCall = this.convertGoogleFunctionCall(
 				googleChunk.functionCalls[0],
 			);
+			if (thoughtSignature) {
+				functionCall.thoughtSignature = thoughtSignature;
+			}
 			return {
 				type: "function_call",
 				functionCall,
@@ -370,7 +385,14 @@ export class GoogleStreamAdapter implements StreamProvider {
 		const googleChunk = chunk.data as GoogleStreamChunk;
 
 		if (googleChunk.functionCalls && googleChunk.functionCalls.length > 0) {
-			return this.convertGoogleFunctionCall(googleChunk.functionCalls[0]);
+			const functionCall = this.convertGoogleFunctionCall(
+				googleChunk.functionCalls[0],
+			);
+			const thoughtSignature = this.extractThoughtSignature(googleChunk);
+			if (thoughtSignature) {
+				functionCall.thoughtSignature = thoughtSignature;
+			}
+			return functionCall;
 		}
 
 		return null;
@@ -882,6 +904,45 @@ export class GoogleStreamAdapter implements StreamProvider {
 				: undefined;
 
 		return { systemInstruction, dialogueContents };
+	}
+
+	/**
+	 * Extract a thought signature from a Google stream chunk.
+	 */
+	private extractThoughtSignature(googleChunk: GoogleStreamChunk): string | undefined {
+		const directSignature = this.normalizeThoughtSignature(
+			googleChunk.thoughtSignature,
+		);
+		if (directSignature) {
+			return directSignature;
+		}
+
+		const parts = googleChunk.candidates?.[0]?.content?.parts;
+		if (!parts || parts.length === 0) {
+			return undefined;
+		}
+
+		const functionCallPart = parts.find((part) => part.functionCall);
+		const partSignature =
+			functionCallPart?.thoughtSignature ??
+			parts.find((part) => part.thoughtSignature)?.thoughtSignature;
+
+		return this.normalizeThoughtSignature(partSignature);
+	}
+
+	/**
+	 * Normalize a thought signature to base64 string if needed.
+	 */
+	private normalizeThoughtSignature(
+		signature?: string | Uint8Array,
+	): string | undefined {
+		if (!signature) {
+			return undefined;
+		}
+		if (typeof signature === "string") {
+			return signature;
+		}
+		return Buffer.from(signature).toString("base64");
 	}
 
 	/**
