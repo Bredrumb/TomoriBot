@@ -8,12 +8,14 @@
 
 import type {
 	BaseGuildTextChannel,
+	BaseGuildVoiceChannel,
 	Client,
 	CommandInteraction,
 	Message,
 	DMChannel,
 	NewsChannel,
 	TextChannel,
+	AnyThreadChannel,
 } from "discord.js";
 import type {
 	FunctionCall,
@@ -88,7 +90,13 @@ export interface StreamConfig extends ProviderConfig {
  */
 export interface StreamContext {
 	// Discord context
-	channel: BaseGuildTextChannel | DMChannel | NewsChannel | TextChannel;
+	channel:
+		| BaseGuildTextChannel
+		| BaseGuildVoiceChannel
+		| DMChannel
+		| NewsChannel
+		| TextChannel
+		| AnyThreadChannel;
 	client: Client;
 	initialInteraction?: CommandInteraction;
 	replyToMessage?: Message;

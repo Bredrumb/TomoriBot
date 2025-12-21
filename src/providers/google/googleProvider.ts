@@ -13,10 +13,12 @@ import {
 } from "@google/genai";
 import type {
 	BaseGuildTextChannel,
+	BaseGuildVoiceChannel,
 	Client,
 	CommandInteraction,
 	Message,
 	DMChannel,
+	AnyThreadChannel,
 } from "discord.js";
 import { StreamOrchestrator } from "../../utils/discord/streamOrchestrator";
 import {
@@ -346,7 +348,11 @@ export class GoogleProvider extends BaseLLMProvider implements LLMProvider {
 	 * This maintains the exact same interface for full backward compatibility
 	 */
 	async streamToDiscord(
-		channel: BaseGuildTextChannel | DMChannel,
+		channel:
+			| BaseGuildTextChannel
+			| BaseGuildVoiceChannel
+			| DMChannel
+			| AnyThreadChannel,
 		client: Client,
 		tomoriState: TomoriState,
 		config: ProviderConfig,

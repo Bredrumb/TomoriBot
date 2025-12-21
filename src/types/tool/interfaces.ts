@@ -6,11 +6,13 @@
 import type { TomoriState } from "../db/schema";
 import type {
 	BaseGuildTextChannel,
+	BaseGuildVoiceChannel,
 	Client,
 	Message,
 	DMChannel,
 	NewsChannel,
 	TextChannel,
+	AnyThreadChannel,
 } from "discord.js";
 import type {
 	MCPServerResponse,
@@ -55,7 +57,13 @@ export interface StreamingContext {
  */
 export interface ToolContext {
 	// Discord context
-	channel: BaseGuildTextChannel | DMChannel | NewsChannel | TextChannel;
+	channel:
+		| BaseGuildTextChannel
+		| BaseGuildVoiceChannel
+		| DMChannel
+		| NewsChannel
+		| TextChannel
+		| AnyThreadChannel;
 	client: Client;
 	message?: Message;
 

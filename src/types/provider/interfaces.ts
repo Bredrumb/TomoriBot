@@ -6,10 +6,12 @@
 
 import type {
 	BaseGuildTextChannel,
+	BaseGuildVoiceChannel,
 	Client,
 	CommandInteraction,
 	Message,
 	DMChannel,
+	AnyThreadChannel,
 } from "discord.js";
 import type { TomoriState } from "../db/schema";
 import type { StructuredContextItem } from "../misc/context";
@@ -114,7 +116,7 @@ export interface LLMProvider {
 
 	/**
 	 * Stream LLM response directly to a Discord channel
-	 * @param channel - The Discord TextChannel to send messages to
+	 * @param channel - The Discord text channel or thread to send messages to
 	 * @param client - The Discord client instance
 	 * @param tomoriState - The current Tomori state
 	 * @param config - Provider-specific configuration
@@ -129,7 +131,11 @@ export interface LLMProvider {
 	 * @returns Promise<StreamResult> - The outcome of the streaming operation
 	 */
 	streamToDiscord(
-		channel: BaseGuildTextChannel | DMChannel,
+		channel:
+			| BaseGuildTextChannel
+			| BaseGuildVoiceChannel
+			| DMChannel
+			| AnyThreadChannel,
 		client: Client,
 		tomoriState: TomoriState,
 		config: ProviderConfig,
@@ -175,7 +181,11 @@ export abstract class BaseLLMProvider implements LLMProvider {
 		tomoriState: TomoriState,
 	): Promise<Array<Record<string, unknown>>>;
 	abstract streamToDiscord(
-		channel: BaseGuildTextChannel,
+		channel:
+			| BaseGuildTextChannel
+			| BaseGuildVoiceChannel
+			| DMChannel
+			| AnyThreadChannel,
 		client: Client,
 		tomoriState: TomoriState,
 		config: ProviderConfig,

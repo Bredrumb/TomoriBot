@@ -983,6 +983,18 @@ export function replaceMentionHandles(
 		return `<@${ids[0]}>`;
 	});
 
+	processedText = processedText.replace(
+		/(^|[^\w<])@(?!(?:\{|everyone\b|here\b))([A-Za-z0-9_][A-Za-z0-9_-]{0,31})/gi,
+		(match, prefix, rawHandle) => {
+			const handle = (rawHandle as string).trim();
+			if (!handle) return match;
+			const normalizedHandle = handle.toLowerCase();
+			const ids = mentionMap.get(normalizedHandle);
+			if (!ids || ids.length !== 1) return match;
+			return `${prefix}<@${ids[0]}>`;
+		},
+	);
+
 	for (let i = inlineCode.length - 1; i >= 0; i--) {
 		processedText = processedText.replace(
 			`__INLINE_CODE_${i}__`,

@@ -3,6 +3,7 @@
  * Provides registration, discovery, and execution of tools
  */
 
+import { ChannelType } from "discord.js";
 import { log } from "../utils/misc/logger";
 import type {
 	Tool,
@@ -711,13 +712,24 @@ class ToolRegistryImpl implements ToolRegistryInterface {
 
 		if (requiredPermissions.includes("SEND_MESSAGES")) {
 			const clientUser = context.client.user;
-			if (
-				!clientUser ||
-				!("permissionsFor" in context.channel
-					? context.channel.permissionsFor(clientUser)?.has("SendMessages")
-					: true)
-			) {
+			if (!clientUser) {
 				return false;
+			}
+			if ("permissionsFor" in context.channel) {
+				const permissions = context.channel.permissionsFor(clientUser);
+				if (!permissions) {
+					return false;
+				}
+				const isThreadChannel =
+					context.channel.type === ChannelType.PublicThread ||
+					context.channel.type === ChannelType.PrivateThread ||
+					context.channel.type === ChannelType.AnnouncementThread;
+				const canSend = isThreadChannel
+					? permissions.has("SendMessagesInThreads")
+					: permissions.has("SendMessages");
+				if (!canSend) {
+					return false;
+				}
 			}
 		}
 

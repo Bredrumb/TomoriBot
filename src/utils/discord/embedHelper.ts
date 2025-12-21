@@ -10,6 +10,8 @@ import {
 	type Message,
 	type APIEmbedField,
 	type BaseGuildTextChannel,
+	type BaseGuildVoiceChannel,
+	type AnyThreadChannel,
 } from "discord.js";
 import { ColorCode } from "../misc/logger";
 import { localizer } from "../text/localizer";
@@ -160,7 +162,13 @@ export function createSummaryEmbed(
  * @returns Promise<void>
  */
 export async function sendStandardEmbed(
-	channel: TextChannel | NewsChannel | DMChannel | BaseGuildTextChannel,
+	channel:
+		| TextChannel
+		| NewsChannel
+		| DMChannel
+		| BaseGuildTextChannel
+		| AnyThreadChannel
+		| BaseGuildVoiceChannel,
 	locale: string,
 	options: StandardEmbedOptions,
 ): Promise<void> {

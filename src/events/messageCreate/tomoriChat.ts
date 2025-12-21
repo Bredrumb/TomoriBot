@@ -1,5 +1,17 @@
-import type { Client, Message, Sticker, Embed } from "discord.js";
-import { BaseGuildTextChannel, DMChannel, TextChannel } from "discord.js"; // Import value for instanceof check
+import type {
+	AnyThreadChannel,
+	BaseGuildVoiceChannel,
+	Client,
+	Message,
+	Sticker,
+	Embed,
+} from "discord.js";
+import {
+	BaseGuildTextChannel,
+	ChannelType,
+	DMChannel,
+	TextChannel,
+} from "discord.js"; // Import value for instanceof check
 // Provider imports moved to factory pattern
 import type {
 	StructuredContextItem,
@@ -359,7 +371,12 @@ async function sendUserRateLimitDM(
  * @param currentCount - The current number of active messages for this server
  */
 async function sendServerRateLimitEmbed(
-	channel: TextChannel | DMChannel | BaseGuildTextChannel,
+	channel:
+		| TextChannel
+		| DMChannel
+		| BaseGuildTextChannel
+		| AnyThreadChannel
+		| BaseGuildVoiceChannel,
 	locale: string,
 	currentCount: number,
 ): Promise<void> {
@@ -439,9 +456,16 @@ export default async function tomoriChat(
 	let guild: typeof message.guild;
 	let serverDiscId: string;
 	let isDMChannel = false;
+	const isThreadChannel =
+		channel.type === ChannelType.PublicThread ||
+		channel.type === ChannelType.PrivateThread ||
+		channel.type === ChannelType.AnnouncementThread;
+	const isVoiceChannel =
+		channel.type === ChannelType.GuildVoice ||
+		channel.type === ChannelType.GuildStageVoice;
 
-	if (channel instanceof BaseGuildTextChannel) {
-		// Standard guild text channel
+	if (channel instanceof BaseGuildTextChannel || isThreadChannel || isVoiceChannel) {
+		// Standard guild text channel, thread, or voice/stage text
 		// biome-ignore lint/style/noNonNullAssertion: Guild is always present in guild message events
 		guild = message.guild!;
 		serverDiscId = guild.id;
@@ -532,13 +556,19 @@ export default async function tomoriChat(
 	}
 	// Skip permission check for DMs as we always have send permission
 
-	if (
-		!isDMChannel &&
-		"permissionsFor" in channel &&
+	if (!isDMChannel && "permissionsFor" in channel) {
 		// biome-ignore lint/style/noNonNullAssertion: client.user is checked during startup
-		!channel.permissionsFor(client.user!)?.has("SendMessages")
-	)
-		return;
+		const permissions = channel.permissionsFor(client.user!);
+		if (!permissions) {
+			return;
+		}
+		const canSend = isThreadChannel
+			? permissions.has("SendMessagesInThreads")
+			: permissions.has("SendMessages");
+		if (!canSend) {
+			return;
+		}
+	}
 
 	// --- Pre-Semaphore Tomori State Loading for shouldBotReply check ---
 	// Attempt to load Tomori state early to determine if a reply would even be considered.
@@ -3007,13 +3037,22 @@ export function shouldBotReply(
 	tomoriState: TomoriState,
 ): boolean {
 	// 1. Basic checks: Ignore bots, commands, non-text channels, and messages with no content
+	const isThreadChannel =
+		message.channel.type === ChannelType.PublicThread ||
+		message.channel.type === ChannelType.PrivateThread ||
+		message.channel.type === ChannelType.AnnouncementThread;
+	const isVoiceChannel =
+		message.channel.type === ChannelType.GuildVoice ||
+		message.channel.type === ChannelType.GuildStageVoice;
 	if (
 		message.author.bot ||
 		message.content.startsWith("!") || // Basic command prefix check
 		!(
 			message.channel instanceof TextChannel ||
-			message.channel instanceof DMChannel
-		) // Support both TextChannel and DMChannel
+			message.channel instanceof DMChannel ||
+			isThreadChannel ||
+			isVoiceChannel
+		) // Support TextChannel, DMChannel, thread, and voice/stage channels
 	) {
 		return false;
 	}

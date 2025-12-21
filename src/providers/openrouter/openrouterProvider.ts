@@ -8,10 +8,12 @@
 
 import type {
 	BaseGuildTextChannel,
+	BaseGuildVoiceChannel,
 	Client,
 	CommandInteraction,
 	Message,
 	DMChannel,
+	AnyThreadChannel,
 } from "discord.js";
 import { StreamOrchestrator } from "../../utils/discord/streamOrchestrator";
 import {
@@ -343,7 +345,11 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 	 * Uses the modular streaming architecture with StreamOrchestrator and OpenrouterStreamAdapter
 	 */
 	async streamToDiscord(
-		channel: BaseGuildTextChannel | DMChannel,
+		channel:
+			| BaseGuildTextChannel
+			| BaseGuildVoiceChannel
+			| DMChannel
+			| AnyThreadChannel,
 		client: Client,
 		tomoriState: TomoriState,
 		config: ProviderConfig,
