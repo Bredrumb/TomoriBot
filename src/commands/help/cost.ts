@@ -10,12 +10,39 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replySummaryEmbed } from "@/utils/discord/interactionHelper";
 import { getMemoryLimits } from "@/utils/db/memoryLimits";
+import { getAvailableToolsForContext } from "@/tools/toolRegistry";
 
 /**
  * Token estimation constants
- * Based on common approximation: 1 token ≈ 4 characters for English text
+ *
+ * Important notes:
+ * - Tokenization varies a lot by language (English vs Japanese), punctuation/JSON, and provider/model.
+ * - These numbers are intentionally "ballpark" and are tuned to roughly match typical chat-style prompts.
+ * - Tool/function schemas (JSON) usually tokenize a bit denser than natural language prose.
  */
-const CHARS_PER_TOKEN = 4;
+const CHARS_PER_TOKEN_TEXT = 4;
+const CHARS_PER_TOKEN_JSON = 3.5;
+
+/**
+ * Rough per-message overhead for chat-format wrappers (role markers, separators, etc.).
+ * This is provider/model dependent, but it matters when you have ~80 messages of history.
+ */
+const TOKENS_PER_CHAT_MESSAGE_OVERHEAD = 4;
+
+/**
+ * Conversation history is formatted as "{authorName}: {message}" in contextBuilder.ts.
+ * Approximate average speaker prefix length (name + ": ").
+ */
+const AVG_SPEAKER_PREFIX_CHARS = 12;
+
+/**
+ * Approximate fixed-length instruction blocks included in contextBuilder.ts.
+ * These are intentionally rounded; exact lengths vary with server/bot/user names.
+ */
+const DEFAULT_SYSTEM_PROMPT_CHARS_EST = 360;
+const MENTION_PING_RULE_CHARS_EST = 300;
+const EMOJI_USAGE_RULES_CHARS_EST = 340;
+const STICKER_USAGE_RULES_CHARS_EST = 270; // header + footer, excluding per-sticker lines
 
 /**
  * Scenario definitions for cost estimation
@@ -33,6 +60,7 @@ interface ScenarioEstimate {
 		userStatus: number; // Presence info for all users
 		reminders: number; // Pending reminders
 		currentContext: number; // Time, channel info
+		toolSchemas: number; // Function/tool schemas (if tool calling is enabled)
 		sampleDialogues: number; // Example conversations
 		conversationHistory: number; // Recent messages
 	};
@@ -44,8 +72,73 @@ interface ScenarioEstimate {
  * @param chars - Number of characters
  * @returns Estimated token count
  */
-function charsToTokens(chars: number): number {
-	return Math.ceil(chars / CHARS_PER_TOKEN);
+function charsToTokensText(chars: number): number {
+	return Math.ceil(chars / CHARS_PER_TOKEN_TEXT);
+}
+
+/**
+ * Calculate token count for JSON-ish strings (tools, schemas).
+ * JSON generally tokenizes slightly denser than prose, so we use a smaller chars/token ratio.
+ * @param chars - Number of characters
+ * @returns Estimated token count
+ */
+function charsToTokensJson(chars: number): number {
+	return Math.ceil(chars / CHARS_PER_TOKEN_JSON);
+}
+
+/**
+ * Estimate tokens for a chat history made of many short messages.
+ * Includes a small fixed per-message overhead for chat wrappers plus speaker prefixes.
+ * @param messageCount - Number of messages
+ * @param avgMessageChars - Average characters per message (excluding speaker prefix)
+ * @returns Estimated token count
+ */
+function estimateChatHistoryTokens(
+	messageCount: number,
+	avgMessageChars: number,
+): number {
+	const totalChars =
+		messageCount * (avgMessageChars + AVG_SPEAKER_PREFIX_CHARS);
+	return (
+		charsToTokensText(totalChars) +
+		messageCount * TOKENS_PER_CHAT_MESSAGE_OVERHEAD
+	);
+}
+
+/**
+ * Estimate tool schema token overhead based on currently registered tools.
+ * Falls back to a conservative constant if tools are not initialized.
+ * @returns Estimated token count for tool schemas
+ */
+function estimateToolSchemaTokens(): number {
+	try {
+		const stateForContext = {
+			server_id: "0",
+			config: {
+				// Defaults match DB defaults in schema.sql (true)
+				sticker_usage_enabled: true,
+				web_search_enabled: true,
+				self_teaching_enabled: true,
+				pin_message_enabled: true,
+			},
+		};
+
+		// /help cost uses Gemini pricing as the example provider → estimate Google tool schemas.
+		const tools = getAvailableToolsForContext("google", stateForContext) ?? [];
+		if (tools.length === 0) return 1200;
+
+		const simplified = tools.map((t) => ({
+			name: t.name,
+			description: t.description,
+			parameters: t.parameters,
+		}));
+
+		const json = JSON.stringify(simplified);
+		return charsToTokensJson(json.length);
+	} catch {
+		// Conservative fallback
+		return 1200;
+	}
 }
 
 /**
@@ -58,83 +151,107 @@ function buildScenarioEstimates(): {
 	maximum: ScenarioEstimate;
 } {
 	const limits = getMemoryLimits();
+	const baseToolSchemaTokens = estimateToolSchemaTokens();
+	const avgMemoryChars = Math.round(limits.maxMemoryLength * 0.5); // e.g., 128 when max is 256
 
 	// 1. Minimum Scenario (Light usage)
 	// - 1 user with 0 memories
-	// - 1 paragraph of persona (just description, no attributes/dialogues, ~500 chars)
-	// - 80 messages in history (~25 chars each, less than a sentence)
+	// - Minimal persona (single short description)
+	// - 80 messages in history (short messages)
 	// - 10 emojis (constant)
 	const minimum: ScenarioEstimate = {
 		name: "Minimum",
 		components: {
-			systemPersonality: charsToTokens(500 + 200), // 1 minimal paragraph + humanizer
-			serverInfo: charsToTokens(200), // Basic server info
-			serverEmojis: charsToTokens(10 * 40), // 10 emojis × ~40 chars each (constant)
-			serverStickers: 0, // Negligible, not counted
+			systemPersonality: charsToTokensText(
+				450 + DEFAULT_SYSTEM_PROMPT_CHARS_EST + MENTION_PING_RULE_CHARS_EST,
+			), // Short description + default system prompt + mention rule
+			serverInfo: charsToTokensText(220), // Basic server info
+			serverEmojis: charsToTokensText(
+				EMOJI_USAGE_RULES_CHARS_EST + 60 + 10 * 34,
+			), // Rules + header + 10 emoji codes
+			serverStickers: 0,
 			serverMemories: 0,
 			userMemories: 0,
-			userStatus: charsToTokens(100), // 1 user status
+			userStatus: charsToTokensText(220), // 1 user status block (heading + presence line)
 			reminders: 0,
-			currentContext: charsToTokens(150), // Time + channel
-			sampleDialogues: 0, // Already counted in systemPersonality
-			conversationHistory: charsToTokens(80 * 25), // 80 messages × 25 chars
+			currentContext: charsToTokensText(200), // Time + channel
+			toolSchemas: baseToolSchemaTokens,
+			sampleDialogues: 0,
+			conversationHistory: estimateChatHistoryTokens(80, 40),
 		},
-		outputTokens: 100, // Very short response (~25 chars, less than a sentence)
+		outputTokens: 80, // Short response (1-2 short paragraphs)
 	};
 
 	// 2. Average Scenario (Moderate usage)
 	// - 3 users with 10 memories each (~128 chars avg per memory)
 	// - 10 server memories (~128 chars avg each)
-	// - ~16 paragraphs of persona (~600 chars avg each, includes 5 attributes + 5 dialogue pairs)
-	// - 80 messages in history (~125 chars avg each, 1-2 sentences per message)
+	// - Typical persona + a few sample dialogues
+	// - 80 messages in history (1-2 sentences per message)
 	// - 10 emojis (constant)
 	const average: ScenarioEstimate = {
 		name: "Average",
 		components: {
-			systemPersonality: charsToTokens(16 * 600 + 200), // 16 paragraphs (incl. dialogues) + humanizer
-			serverInfo: charsToTokens(200),
-			serverEmojis: charsToTokens(10 * 40), // 10 emojis × ~40 chars each (constant)
-			serverStickers: 0, // Negligible, not counted
-			serverMemories: charsToTokens(10 * 128), // 10 memories × 128 chars
-			userMemories: charsToTokens(3 * 10 * 128), // 3 users × 10 memories × 128 chars
-			userStatus: charsToTokens(3 * 100), // 3 users × 100 chars
-			reminders: 0, // Occasional
-			currentContext: charsToTokens(150),
-			sampleDialogues: 0, // Already counted in systemPersonality
-			conversationHistory: charsToTokens(80 * 125), // 80 messages × 125 chars
+			// Persona attributes (commonly 6 items) + fixed system prompt blocks.
+			systemPersonality: charsToTokensText(
+				6 * 700 + DEFAULT_SYSTEM_PROMPT_CHARS_EST + MENTION_PING_RULE_CHARS_EST,
+			),
+			serverInfo: charsToTokensText(260),
+			serverEmojis: charsToTokensText(
+				EMOJI_USAGE_RULES_CHARS_EST + 60 + 10 * 34,
+			),
+			// Approximate: small sticker list exists, but not huge.
+			serverStickers: charsToTokensText(STICKER_USAGE_RULES_CHARS_EST + 8 * 70),
+			serverMemories: charsToTokensText(10 * avgMemoryChars + 80), // + heading/formatting
+			userMemories: charsToTokensText(3 * 10 * avgMemoryChars + 3 * 90), // + per-user headings
+			userStatus: charsToTokensText(3 * 220),
+			reminders: charsToTokensText(3 * (80 + 1 * 140)), // 1 reminder per user on average
+			currentContext: charsToTokensText(200),
+			toolSchemas: baseToolSchemaTokens,
+			// 5 sample dialogue pairs (10 messages), short-ish.
+			sampleDialogues: estimateChatHistoryTokens(10, 160),
+			conversationHistory: estimateChatHistoryTokens(80, 140),
 		},
-		outputTokens: 300, // Moderate response (1-2 sentences, ~125 chars)
+		outputTokens: 220, // Typical response (a few paragraphs / short explanation)
 	};
 
 	// 3. Maximum Scenario (Heavy usage)
 	// - 5 users with 25 memories each (256 chars max per memory)
 	// - 25 server memories (256 chars max each)
-	// - ~31 paragraphs of persona (2000 chars max each, includes 10 attributes + 10 dialogue pairs)
-	// - 80 messages in history (~450 chars avg each, 2 paragraphs per message)
+	// - Maxed persona + maxed sample dialogues
+	// - 80 messages in history (multi-paragraph messages)
 	// - 10 emojis (constant)
 	const maximum: ScenarioEstimate = {
 		name: "Maximum",
 		components: {
-			systemPersonality: charsToTokens(
-				// 1 description + 10 attributes + (10 dialogues × 2 texts) = 31 paragraphs
-				31 * limits.maxAttributeLength + 200,
-			), // 31 paragraphs × 2000 chars + humanizer
-			serverInfo: charsToTokens(300), // Detailed description
-			serverEmojis: charsToTokens(10 * 40), // 10 emojis × ~40 chars each (constant)
-			serverStickers: 0, // Negligible, not counted
-			serverMemories: charsToTokens(
+			systemPersonality: charsToTokensText(
+				limits.maxAttributes * limits.maxAttributeLength +
+					DEFAULT_SYSTEM_PROMPT_CHARS_EST +
+					MENTION_PING_RULE_CHARS_EST,
+			),
+			serverInfo: charsToTokensText(450), // Detailed description
+			serverEmojis: charsToTokensText(
+				EMOJI_USAGE_RULES_CHARS_EST + 60 + 10 * 34,
+			),
+			serverStickers: charsToTokensText(STICKER_USAGE_RULES_CHARS_EST + 25 * 90),
+			serverMemories: charsToTokensText(
 				limits.maxServerMemories * limits.maxMemoryLength,
-			), // 25 × 256
-			userMemories: charsToTokens(
+			),
+			userMemories: charsToTokensText(
 				5 * limits.maxPersonalMemories * limits.maxMemoryLength,
-			), // 5 users × 25 × 256
-			userStatus: charsToTokens(5 * 100), // 5 users with presence
-			reminders: charsToTokens(5 * 2 * 100), // 2 reminders per user × 100 chars
-			currentContext: charsToTokens(200),
-			sampleDialogues: 0, // Already counted in systemPersonality
-			conversationHistory: charsToTokens(80 * 450), // 80 messages × 450 chars
+			),
+			userStatus: charsToTokensText(5 * 300), // activities can bloat presence strings
+			reminders: charsToTokensText(5 * (100 + 3 * 160)), // 3 reminders per user
+			currentContext: charsToTokensText(240),
+			// Tool schemas tend to be constant; add a little headroom for MCP / extra schemas.
+			toolSchemas: Math.round(baseToolSchemaTokens * 1.25),
+			// Max sample dialogues (pairs), using the separate MAX_SAMPLE_DIALOGUE_LENGTH
+			sampleDialogues: estimateChatHistoryTokens(
+				limits.maxSampleDialogues * 2,
+				limits.maxSampleDialogueLength,
+			),
+			conversationHistory: estimateChatHistoryTokens(80, 350),
 		},
-		outputTokens: 900, // Detailed response (2 paragraphs, ~450 chars)
+		outputTokens: 500, // Detailed response (multi-paragraph explanation)
 	};
 
 	return { minimum, average, maximum };
