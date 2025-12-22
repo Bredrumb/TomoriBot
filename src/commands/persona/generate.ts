@@ -1,6 +1,6 @@
 /**
  * Preset Generate Command
- * AI-powered personality generation using Google Gemini
+ * AI-powered personality generation using supported structured output providers
  */
 
 import type {
@@ -29,6 +29,7 @@ import {
 	generatePresetFromPrompt,
 	type GeneratePresetParams,
 } from "../../providers/google/presetGenerator";
+import { generatePresetFromPromptOpenrouter } from "../../providers/openrouter/presetGenerator";
 import { getServerAvatar } from "../../utils/image/avatarHelper";
 import { centerCropToSquare } from "../../utils/image/imageProcessor";
 import { embedMetadataInPNG } from "../../utils/image/pngMetadata";
@@ -38,6 +39,11 @@ import {
 } from "../../types/preset/presetExport";
 import type { PresetExport } from "../../types/preset/presetExport";
 import type { ModalComponent } from "../../types/discord/modal";
+import type { ToolContext } from "../../types/tool/interfaces";
+import { getAvailableToolsWithMCP } from "../../tools/toolRegistry";
+import { getOpenrouterToolAdapter } from "../../providers/openrouter/openrouterToolAdapter";
+import { getMCPManager } from "../../utils/mcp/mcpManager";
+import { isBraveSearchAvailable } from "../../tools/restAPIs/brave/braveSearchService";
 
 // Modal constants
 const MODAL_CUSTOM_ID = "preset_generate_modal";
@@ -133,9 +139,18 @@ function buildGenerationInputAttachment(params: {
 	});
 }
 
+type ToolContextChannel = ToolContext["channel"];
+
+function isToolContextChannel(channel: unknown): channel is ToolContextChannel {
+	if (!channel || typeof channel !== "object") return false;
+	const maybeChannel = channel as { partial?: boolean; send?: unknown };
+	if (maybeChannel.partial) return false;
+	return typeof maybeChannel.send === "function";
+}
+
 /**
  * Executes the 'generate' command
- * AI-powered personality generation using Gemini
+ * AI-powered personality generation using structured output providers
  *
  * @param client - The Discord client instance
  * @param interaction - The chat input command interaction
@@ -162,14 +177,40 @@ export async function execute(
 			return;
 		}
 
-		// 3. Check if provider is Google/Gemini
+		// 3. Validate provider and model capabilities
 		const providerName = tomoriState.llm.llm_provider.toLowerCase();
-		if (providerName !== "google" && providerName !== "gemini") {
+		const isGoogleProvider = providerName === "google" || providerName === "gemini";
+		const isOpenrouterProvider = providerName === "openrouter";
+
+		if (!isGoogleProvider && !isOpenrouterProvider) {
 			await replyInfoEmbed(interaction, locale, {
 				titleKey: "commands.persona.generate.wrong_provider_title",
 				descriptionKey: "commands.persona.generate.wrong_provider_description",
 				descriptionVars: {
 					current_provider: tomoriState.llm.llm_provider,
+				},
+				color: ColorCode.ERROR,
+				flags: MessageFlags.Ephemeral,
+			});
+			return;
+		}
+
+		const missingCapabilities: string[] = [];
+		if (!tomoriState.llm.sees_images) {
+			missingCapabilities.push("IMAGE VISION");
+		}
+		if (!tomoriState.llm.supports_structoutput) {
+			missingCapabilities.push("STRUCTURED OUTPUT");
+		}
+
+		if (missingCapabilities.length > 0) {
+			await replyInfoEmbed(interaction, locale, {
+				titleKey: "commands.persona.generate.model_incompatible_title",
+				descriptionKey:
+					"commands.persona.generate.model_incompatible_description",
+				descriptionVars: {
+					model_name: tomoriState.llm.llm_codename,
+					missing_capability: missingCapabilities.join(" and "),
 				},
 				color: ColorCode.ERROR,
 				flags: MessageFlags.Ephemeral,
@@ -501,7 +542,44 @@ export async function execute(
 			],
 		});
 
-		const useWebSearch = webSearch.trim().toLowerCase() === "yes";
+		const webSearchRequested = webSearch.trim().toLowerCase() === "yes";
+		const useWebSearch =
+			webSearchRequested && tomoriState.config.web_search_enabled;
+
+		if (webSearchRequested && !tomoriState.config.web_search_enabled) {
+			log.info(
+				"Web search requested but disabled by server configuration; proceeding without search.",
+			);
+		}
+		if (
+			webSearchRequested &&
+			tomoriState.config.web_search_enabled &&
+			!tomoriState.llm.has_tools
+		) {
+			await modalSubmitInteraction.editReply({
+				embeds: [
+					new EmbedBuilder()
+						.setTitle(
+							localizer(
+								locale,
+								"commands.persona.generate.web_search_tools_required_title",
+							),
+						)
+						.setDescription(
+							localizer(
+								locale,
+								"commands.persona.generate.web_search_tools_required_description",
+								{
+									model_name: tomoriState.llm.llm_codename,
+								},
+							),
+						)
+						.setColor(ColorCode.ERROR),
+				],
+				files: [getInputAttachment()],
+			});
+			return;
+		}
 
 		// 11. Prepare generation parameters
 		const genParams: GeneratePresetParams = {
@@ -514,13 +592,92 @@ export async function execute(
 			useWebSearch,
 		};
 
+		let openrouterTools: Array<Record<string, unknown>> | undefined;
+		let openrouterToolContext: ToolContext | undefined;
+
+		if (isOpenrouterProvider && useWebSearch) {
+			const hasBraveApiKey = await isBraveSearchAvailable(
+				tomoriState.server_id,
+			);
+
+			if (!hasBraveApiKey) {
+				const mcpManager = getMCPManager();
+				if (!mcpManager.isReady()) {
+					await mcpManager.initializeMCPServers();
+				}
+			}
+
+			const toolStateForContext = {
+				server_id: tomoriState.server_id.toString(),
+				config: {
+					sticker_usage_enabled: false,
+					web_search_enabled: true,
+					self_teaching_enabled: false,
+					pin_message_enabled: false,
+					imagegen_enabled: false,
+				},
+			};
+
+			const { builtInTools, mcpFunctionNames } =
+				await getAvailableToolsWithMCP("openrouter", toolStateForContext);
+
+			const searchTools = builtInTools.filter(
+				(tool) =>
+					tool.category === "search" ||
+					tool.requiresFeatureFlag === "web_search",
+			);
+
+			const openrouterAdapter = getOpenrouterToolAdapter();
+			openrouterTools = await openrouterAdapter.getAllToolsInOpenrouterFormat(
+				searchTools,
+				tomoriState.server_id,
+				mcpFunctionNames,
+			);
+
+			const toolChannel =
+				modalSubmitInteraction.channel ?? interaction.channel;
+			if (isToolContextChannel(toolChannel)) {
+				openrouterToolContext = {
+					channel: toolChannel,
+					client,
+					tomoriState,
+					locale,
+					provider: "openrouter",
+					userId: interaction.user.id,
+					guildId: interaction.guild?.id,
+				};
+			} else {
+				openrouterTools = undefined;
+				log.warn(
+					"OpenRouter web search tools skipped: no channel context available.",
+				);
+			}
+		}
+
 		// 12. Generate preset data
-		log.info("Generating preset data with Gemini...");
-		const genResult = await generatePresetFromPrompt(
-			decryptedApiKey,
-			genParams,
-			locale,
-		);
+		const providerLabel = isOpenrouterProvider ? "OpenRouter" : "Gemini";
+		log.info(`Generating preset data with ${providerLabel}...`);
+
+		const genResult = isOpenrouterProvider
+			? await generatePresetFromPromptOpenrouter(
+					decryptedApiKey,
+					genParams,
+					locale,
+					{
+						model: tomoriState.llm.llm_codename,
+						temperature: Math.max(
+							0.2,
+							Math.min(1.2, tomoriState.config.llm_temperature - 0.8),
+						),
+						tools: openrouterTools,
+						toolContext: openrouterToolContext,
+					},
+				)
+			: await generatePresetFromPrompt(
+					decryptedApiKey,
+					genParams,
+					locale,
+				);
 
 		if (genResult.error || !genResult.preset) {
 			// Show error embed

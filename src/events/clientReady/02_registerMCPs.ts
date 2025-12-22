@@ -3,6 +3,7 @@ import { log } from "../../utils/misc/logger";
 import type { ErrorContext } from "../../types/db/schema";
 import { registerMCPAdapter } from "../../tools/toolRegistry";
 import { getGoogleToolAdapter } from "../../providers/google/googleToolAdapter";
+import { getOpenrouterToolAdapter } from "../../providers/openrouter/openrouterToolAdapter";
 
 /**
  * Event handler for initializing MCP servers when the bot is ready
@@ -17,6 +18,10 @@ export default async (): Promise<void> => {
 		const googleAdapter = getGoogleToolAdapter();
 		registerMCPAdapter(googleAdapter);
 		log.info("Registered Google tool adapter with MCP capabilities");
+
+		const openrouterAdapter = getOpenrouterToolAdapter();
+		registerMCPAdapter(openrouterAdapter);
+		log.info("Registered OpenRouter tool adapter with MCP capabilities");
 
 		// Get the MCP manager singleton instance
 		const mcpManager = getMCPManager();

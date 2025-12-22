@@ -574,7 +574,7 @@ export default {
 				avatar_update_skipped_dm: `Preset was applied successfully, except avatar updates which are not available in Direct Messages`,
 			},
 			generate: {
-				description: `AI-powered personality generation using Google Gemini`,
+				description: `AI-powered personality generation using Google Gemini or OpenRouter`,
 				// Modal fields
 				modal: {
 					title: `Generate AI Personality`,
@@ -600,9 +600,13 @@ export default {
 				field_additional_inst: `Additional Instructions`,
 				// Error messages
 				wrong_provider_title: `🔴 Incompatible Provider`,
-				wrong_provider_description: `Preset generation requires Google Gemini. Your current provider is **{current_provider}**. Please use \`/config apikey set\` to switch to Google.`,
+				wrong_provider_description: `Preset generation requires Google Gemini or OpenRouter. Your current provider is **{current_provider}**. Please use \`/config apikey set\` to switch providers.`,
 				no_api_key_title: `🔴 No API Key`,
-				no_api_key_description: `No API key configured. Please use \`/config apikey set\` to set up your Google API key.`,
+				no_api_key_description: `No API key configured. Please use \`/config apikey set\` to set up your provider API key.`,
+				model_incompatible_title: `Incompatible Model`,
+				model_incompatible_description: `Your current model ({model_name}) does not support {missing_capability}. Please switch to a model with both IMAGE VISION and STRUCTURED OUTPUT capabilities using \`/config model text\`.`,
+				web_search_tools_required_title: `🔴 Web Search Unavailable`,
+				web_search_tools_required_description: `You selected web search, but the current model ({model_name}) does not support tools. Switch to a tool-enabled model or choose "No" for web search.`,
 				api_key_decrypt_failed_title: `🔴 API Key Error`,
 				api_key_decrypt_failed_description: `Failed to decrypt API key. Please reconfigure using \`/config apikey set\`.`,
 				invalid_image_title: `🔴 Invalid Image`,
@@ -939,7 +943,7 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
 
 **Persona Commands:**
 - {personaCreate} - Create a custom personality from scratch
-- {personaGenerate} - AI-generate a personality based on a description and image (Requires Gemini)
+- {personaGenerate} - AI-generate a personality based on a description and image (Requires a vision + structured output model like Gemini or OpenRouter)
 - {personaDefault} - Switch to a default personality
 - {personaExport} - Export your persona to share or backup
 - {personaImport} - Import a persona from a file
