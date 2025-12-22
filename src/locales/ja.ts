@@ -699,7 +699,7 @@ export default {
 - 共有された埋め込み（ツイート、記事など）の内容を見ることができます`,
 				search_title: `検索＆情報 `,
 				search_description: `- 最新情報をウェブ検索できます
-- 画像、動画、ニュース検索も可能です（\`/config braveapi\`経由）
+- 画像、動画、ニュース検索も可能です（\`/config braveapi set\`経由）
 - URLからコンテンツを取得して読むことができます`,
 				personality_title: `パーソナリティ＆カスタマイズ`,
 				personality_description: `- \`/config rename\`と\`/server avatar\`で名前とアバターを変更できます

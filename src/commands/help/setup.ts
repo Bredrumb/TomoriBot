@@ -49,6 +49,7 @@ export async function execute(
 		const serverTriggerMention = commandRegistry.getCommandMention(
 			"server",
 			"trigger",
+			"add",
 		);
 		const configPermissionsMention = commandRegistry.getCommandMention(
 			"config",
@@ -57,6 +58,7 @@ export async function execute(
 		const serverAutotriggerMention = commandRegistry.getCommandMention(
 			"server",
 			"autotrigger",
+			"channels",
 		);
 		const personaMention = commandRegistry.getCommandMention("persona");
 		const serverMention = commandRegistry.getCommandMention("server");
@@ -77,7 +79,7 @@ export async function execute(
 		);
 		const supportServerMention = commandRegistry.getCommandMention(
 			"support",
-			"server",
+			"discord",
 		);
 
 		// Use replySummaryEmbed to show structured setup guide

@@ -64,7 +64,7 @@ export async function execute(
 			"data",
 			"export",
 		);
-		const statusMention = commandRegistry.getCommandMention("status");
+		const statusMention = commandRegistry.getCommandMention("tool", "status");
 		const helpCustomizationMention = commandRegistry.getCommandMention(
 			"help",
 			"customization",

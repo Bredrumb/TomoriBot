@@ -80,8 +80,8 @@ class CommandRegistry {
 	 * - Break when commands are re-registered
 	 * - May not work for users who haven't cached command IDs
 	 * @param commandName - The base command name (e.g., "help")
-	 * @param subcommand - Optional subcommand name (e.g., "setup")
-	 * @param subcommandGroup - Optional subcommand group name (e.g., "memory" for "/teach memory personal")
+	 * @param subcommandOrGroup - Optional subcommand or subcommand group name (e.g., "setup" or "memory")
+	 * @param subcommand - Optional subcommand when using a group (e.g., "personal" for "/teach memory personal")
 	 * @returns A plain text command reference like "`/help setup`"
 	 * @example
 	 * // Returns: "`/help setup`"
@@ -92,18 +92,18 @@ class CommandRegistry {
 	 */
 	getCommandMention(
 		commandName: string,
+		subcommandOrGroup?: string,
 		subcommand?: string,
-		subcommandGroup?: string,
 	): string {
 		// Build the command string based on parameters
 		let commandString: string;
 
-		if (subcommandGroup && subcommand) {
+		if (subcommandOrGroup && subcommand) {
 			// Format: "/command group subcommand"
-			commandString = `/${commandName} ${subcommandGroup} ${subcommand}`;
-		} else if (subcommand) {
+			commandString = `/${commandName} ${subcommandOrGroup} ${subcommand}`;
+		} else if (subcommandOrGroup) {
 			// Format: "/command subcommand"
-			commandString = `/${commandName} ${subcommand}`;
+			commandString = `/${commandName} ${subcommandOrGroup}`;
 		} else {
 			// Format: "/command"
 			commandString = `/${commandName}`;

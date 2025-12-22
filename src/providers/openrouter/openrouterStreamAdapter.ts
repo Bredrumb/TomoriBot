@@ -68,11 +68,15 @@ interface OpenrouterStreamChunk {
 				index?: number; // Index of the tool call (for tracking across chunks)
 				id?: string;
 				type?: string;
+				thought_signature?: string; // Gemini-specific: signature for reasoning continuity
 				function?: {
 					name?: string;
 					arguments?: string;
 				};
 			}>;
+			// Reasoning details for preserving reasoning continuity (required for Gemini models)
+			// biome-ignore lint/suspicious/noExplicitAny: reasoning_details has complex nested structure that varies by provider
+			reasoning_details?: any[];
 		};
 		// OpenRouter SDK uses camelCase finishReason, not snake_case finish_reason!
 		finishReason?: string | null;
@@ -96,6 +100,7 @@ interface OpenrouterStreamChunk {
 interface AccumulatedToolCall {
 	id?: string;
 	type?: string;
+	thought_signature?: string; // Gemini-specific: signature for reasoning continuity
 	functionName: string;
 	functionArguments: string;
 }
@@ -117,6 +122,10 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 	// Accumulator for tool calls across streaming chunks (per-stream instance)
 	private toolCallAccumulator: Map<number, AccumulatedToolCall> = new Map();
 
+	// Accumulator for reasoning_details across streaming chunks (required for Gemini models)
+	// biome-ignore lint/suspicious/noExplicitAny: reasoning_details has complex nested structure that varies by provider
+	private reasoningDetailsAccumulator: any[] = [];
+
 	/**
 	 * Start streaming from OpenRouter's API
 	 */
@@ -126,8 +135,9 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 	): AsyncGenerator<RawStreamChunk, void, unknown> {
 		log.info("OpenrouterStreamAdapter: Initializing OpenRouter streaming");
 
-		// Reset tool call accumulator for this stream
+		// Reset accumulators for this stream
 		this.toolCallAccumulator.clear();
+		this.reasoningDetailsAccumulator = [];
 
 		// Initialize OpenRouter client
 		const openRouter = new OpenRouter({ apiKey: config.apiKey });
@@ -278,6 +288,13 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 			};
 		}
 
+		// Log full chunk when we have tool calls to debug thought_signature location
+		if (choice.delta?.toolCalls || choice.finishReason === "tool_calls") {
+			log.info(
+				`OpenRouter: FULL CHUNK with tool calls: ${JSON.stringify(openrouterChunk, null, 2)}`,
+			);
+		}
+
 		if (choice.finishReason !== null)
 			log.info(
 				`Choice - finishReason: ${choice.finishReason}, has delta: ${!!choice.delta}, delta.content: ${!!choice.delta?.content}, delta.toolCalls: ${!!choice.delta?.toolCalls}`,
@@ -305,6 +322,168 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 			);
 		}
 
+		// Handle finish reasons FIRST (before delta processing)
+		// This ensures that when a chunk has BOTH finishReason and delta (common in OpenRouter),
+		// we prioritize the finishReason to return the correct chunk type
+		// OpenRouter normalizes finishReason to: tool_calls, stop, length, content_filter, error
+		if (choice.finishReason === "tool_calls") {
+			// Handle finishReason "tool_calls" (model wants to use a tool)
+			// This signals the end of tool call streaming - parse accumulated data
+			// BUT FIRST, if this chunk also has delta.toolCalls, accumulate it before parsing
+			if (choice.delta?.toolCalls && choice.delta.toolCalls.length > 0) {
+				for (const deltaToolCall of choice.delta.toolCalls) {
+					const index = deltaToolCall.index ?? 0;
+
+					// Get or create accumulator for this tool call index
+					let accumulated = this.toolCallAccumulator.get(index);
+					if (!accumulated) {
+						accumulated = {
+							functionName: "",
+							functionArguments: "",
+						};
+						this.toolCallAccumulator.set(index, accumulated);
+					}
+
+					// Log raw deltaToolCall for debugging
+					log.info(
+						`OpenRouter: Raw deltaToolCall [${index}]: ${JSON.stringify(deltaToolCall)}`,
+					);
+
+					// Accumulate id, type, and thought_signature (usually only in first chunk)
+					if (deltaToolCall.id) {
+						accumulated.id = deltaToolCall.id;
+						log.info(`OpenRouter: Captured tool call id: ${deltaToolCall.id}`);
+					}
+					if (deltaToolCall.type) {
+						accumulated.type = deltaToolCall.type;
+						log.info(`OpenRouter: Captured tool call type: ${deltaToolCall.type}`);
+					}
+					if (deltaToolCall.thought_signature) {
+						accumulated.thought_signature = deltaToolCall.thought_signature;
+						log.info(
+							`OpenRouter: ✓ CAPTURED thought_signature from deltaToolCall: ${deltaToolCall.thought_signature}`,
+						);
+					} else {
+						log.info(
+							`OpenRouter: ✗ No thought_signature in deltaToolCall [${index}]`,
+						);
+					}
+
+					// Accumulate function name and arguments
+					if (deltaToolCall.function) {
+						if (deltaToolCall.function.name) {
+							accumulated.functionName += deltaToolCall.function.name;
+						}
+						if (deltaToolCall.function.arguments) {
+							accumulated.functionArguments += deltaToolCall.function.arguments;
+						}
+					}
+
+					log.info(
+						`OpenRouter: Accumulated tool call [${index}] - name: "${accumulated.functionName}", args so far: "${accumulated.functionArguments.substring(0, 100)}${accumulated.functionArguments.length > 100 ? "..." : ""}"`,
+					);
+				}
+			}
+
+			// Accumulate reasoning_details if present in this final chunk
+			// This is critical for Gemini models which require reasoning_details preservation
+			if (choice.delta?.reasoning_details && choice.delta.reasoning_details.length > 0) {
+				this.reasoningDetailsAccumulator.push(...choice.delta.reasoning_details);
+				log.info(
+					`OpenRouter: Accumulated ${choice.delta.reasoning_details.length} reasoning_details (total: ${this.reasoningDetailsAccumulator.length})`,
+				);
+			}
+
+			log.info(
+				"OpenRouter: finish_reason is 'tool_calls' - parsing accumulated tool calls",
+			);
+
+			// Get the first accumulated tool call (we only support one at a time currently)
+			const accumulated = this.toolCallAccumulator.get(0);
+
+			if (!accumulated || !accumulated.functionName) {
+				log.warn(
+					"OpenRouter: finish_reason is 'tool_calls' but no tool call was accumulated!",
+				);
+				// Return done to avoid infinite retry
+				return {
+					type: "done",
+					metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+				};
+			}
+
+			// Log accumulated state for debugging
+			log.info(
+				`OpenRouter: Accumulated state - id: ${accumulated.id}, type: ${accumulated.type}, thought_signature: ${accumulated.thought_signature || "NONE"}, name: ${accumulated.functionName}`,
+			);
+
+			// Parse the accumulated arguments JSON
+			let parsedArgs: Record<string, unknown> = {};
+			if (accumulated.functionArguments) {
+				try {
+					parsedArgs = JSON.parse(accumulated.functionArguments);
+					log.info(
+						`OpenRouter: Successfully parsed tool call arguments: ${JSON.stringify(parsedArgs)}`,
+					);
+				} catch (parseError) {
+					log.error(
+						`OpenRouter: Failed to parse accumulated arguments as JSON: "${accumulated.functionArguments}"`,
+						parseError,
+					);
+					// Continue with empty args rather than failing
+				}
+			}
+
+			// Create the function call with optional Gemini-specific fields
+			const functionCall: FunctionCall = {
+				name: accumulated.functionName,
+				args: parsedArgs,
+			};
+
+			// Include thought_signature if present (required for Gemini models)
+			if (accumulated.thought_signature) {
+				functionCall.thoughtSignature = accumulated.thought_signature;
+				log.info(
+					`OpenRouter: ✓ INCLUDED thought_signature in FunctionCall object: ${accumulated.thought_signature}`,
+				);
+			} else {
+				log.warn(
+					`OpenRouter: ✗ MISSING thought_signature - functionCall will not have thoughtSignature field!`,
+				);
+			}
+
+			// Include reasoning_details if any were accumulated (required for Gemini models)
+			if (this.reasoningDetailsAccumulator.length > 0) {
+				functionCall.reasoning_details = this.reasoningDetailsAccumulator;
+				log.info(
+					`OpenRouter: Including ${this.reasoningDetailsAccumulator.length} reasoning_details with function call`,
+				);
+			}
+
+			log.info(
+				`OpenRouter: Returning function_call - name: "${functionCall.name}", args: ${JSON.stringify(functionCall.args)}`,
+			);
+
+			// Clear accumulators for next stream
+			this.toolCallAccumulator.clear();
+			this.reasoningDetailsAccumulator = [];
+
+			return {
+				type: "function_call",
+				functionCall,
+				metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+			};
+		}
+
+		// Handle finishReason "stop" (normal completion)
+		if (choice.finishReason === "stop") {
+			return {
+				type: "done",
+				metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+			};
+		}
+
+		// Now handle delta fields for chunks that don't have a finishReason yet
 		// Accumulate tool/function calls from delta (streaming tool calls arrive incrementally)
 		// In OpenAI/OpenRouter streaming format, tool calls come in multiple chunks:
 		// - First chunk: { index: 0, id: "call_123", type: "function", function: { name: "search" } }
@@ -325,12 +504,29 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 					this.toolCallAccumulator.set(index, accumulated);
 				}
 
-				// Accumulate id and type (usually only in first chunk)
+				// Log raw deltaToolCall for debugging (intermediate chunks)
+				log.info(
+					`OpenRouter: [INTERMEDIATE] Raw deltaToolCall [${index}]: ${JSON.stringify(deltaToolCall)}`,
+				);
+
+				// Accumulate id, type, and thought_signature (usually only in first chunk)
 				if (deltaToolCall.id) {
 					accumulated.id = deltaToolCall.id;
+					log.info(`OpenRouter: [INTERMEDIATE] Captured id: ${deltaToolCall.id}`);
 				}
 				if (deltaToolCall.type) {
 					accumulated.type = deltaToolCall.type;
+					log.info(`OpenRouter: [INTERMEDIATE] Captured type: ${deltaToolCall.type}`);
+				}
+				if (deltaToolCall.thought_signature) {
+					accumulated.thought_signature = deltaToolCall.thought_signature;
+					log.info(
+						`OpenRouter: [INTERMEDIATE] ✓ CAPTURED thought_signature: ${deltaToolCall.thought_signature}`,
+					);
+				} else {
+					log.info(
+						`OpenRouter: [INTERMEDIATE] ✗ No thought_signature in this chunk`,
+					);
 				}
 
 				// Accumulate function name and arguments
@@ -357,78 +553,26 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 			};
 		}
 
+		// Accumulate reasoning_details from delta (required for Gemini models)
+		// These can arrive in any chunk, not just the final one
+		if (choice.delta?.reasoning_details && choice.delta.reasoning_details.length > 0) {
+			this.reasoningDetailsAccumulator.push(...choice.delta.reasoning_details);
+			log.info(
+				`OpenRouter: Accumulated ${choice.delta.reasoning_details.length} reasoning_details from delta (total: ${this.reasoningDetailsAccumulator.length})`,
+			);
+			// Return empty text to continue processing
+			return {
+				type: "text",
+				content: "",
+				metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+			};
+		}
+
 		// Check for text content
 		if (choice.delta?.content) {
 			return {
 				type: "text",
 				content: choice.delta.content,
-				metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-			};
-		}
-
-		// Handle finish reasons
-		// OpenRouter normalizes finishReason to: tool_calls, stop, length, content_filter, error
-		if (choice.finishReason === "stop") {
-			return {
-				type: "done",
-				metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-			};
-		}
-
-		// Handle finishReason "tool_calls" (model wants to use a tool)
-		// This signals the end of tool call streaming - parse accumulated data
-		if (choice.finishReason === "tool_calls") {
-			log.info(
-				"OpenRouter: finish_reason is 'tool_calls' - parsing accumulated tool calls",
-			);
-
-			// Get the first accumulated tool call (we only support one at a time currently)
-			const accumulated = this.toolCallAccumulator.get(0);
-
-			if (!accumulated || !accumulated.functionName) {
-				log.warn(
-					"OpenRouter: finish_reason is 'tool_calls' but no tool call was accumulated!",
-				);
-				// Return done to avoid infinite retry
-				return {
-					type: "done",
-					metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-				};
-			}
-
-			// Parse the accumulated arguments JSON
-			let parsedArgs: Record<string, unknown> = {};
-			if (accumulated.functionArguments) {
-				try {
-					parsedArgs = JSON.parse(accumulated.functionArguments);
-					log.info(
-						`OpenRouter: Successfully parsed tool call arguments: ${JSON.stringify(parsedArgs)}`,
-					);
-				} catch (parseError) {
-					log.error(
-						`OpenRouter: Failed to parse accumulated arguments as JSON: "${accumulated.functionArguments}"`,
-						parseError,
-					);
-					// Continue with empty args rather than failing
-				}
-			}
-
-			// Create the function call
-			const functionCall: FunctionCall = {
-				name: accumulated.functionName,
-				args: parsedArgs,
-			};
-
-			log.info(
-				`OpenRouter: Returning function_call - name: "${functionCall.name}", args: ${JSON.stringify(functionCall.args)}`,
-			);
-
-			// Clear accumulator for next stream
-			this.toolCallAccumulator.clear();
-
-			return {
-				type: "function_call",
-				functionCall,
 				metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
 			};
 		}
@@ -935,32 +1079,48 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 				// Generate a tool call ID since our generic FunctionCall doesn't have one
 				const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
-				// Add assistant message with tool call
-				messages.push({
+				// Build assistant message with tool call
+				// CRITICAL: Must include thought_signature and reasoning_details if present (required for Gemini models)
+				const toolCallObject: Record<string, unknown> = {
+					id: toolCallId,
+					type: "function",
+					function: {
+						name: interaction.functionCall.name,
+						arguments: JSON.stringify(interaction.functionCall.args || {}),
+					},
+				};
+
+				// Include thought_signature if present (required for Gemini models)
+				if (interaction.functionCall.thoughtSignature) {
+					toolCallObject.thought_signature = interaction.functionCall.thoughtSignature;
+					log.info(
+						`OpenRouter: ✓ PRESERVING thought_signature in assistant message for tool '${interaction.functionCall.name}': ${interaction.functionCall.thoughtSignature}`,
+					);
+				} else {
+					log.warn(
+						`OpenRouter: ✗ NO thought_signature to preserve for tool '${interaction.functionCall.name}' - this will cause Gemini error!`,
+					);
+				}
+
+				const assistantMessage: Record<string, unknown> = {
 					role: "assistant",
 					content: "",
-					tool_calls: [
-						{
-							id: toolCallId,
-							type: "function",
-							function: {
-								name: interaction.functionCall.name,
-								arguments: JSON.stringify(interaction.functionCall.args || {}),
-							},
-						},
-					],
+					tool_calls: [toolCallObject],
 					// Provide camelCase alias for SDK validation compatibility
-					toolCalls: [
-						{
-							id: toolCallId,
-							type: "function",
-							function: {
-								name: interaction.functionCall.name,
-								arguments: JSON.stringify(interaction.functionCall.args || {}),
-							},
-						},
-					],
-				});
+					toolCalls: [toolCallObject],
+				};
+
+				// Preserve reasoning_details if present (critical for Gemini models)
+				// See: https://openrouter.ai/docs/guides/best-practices/reasoning-tokens#preserving-reasoning-blocks
+				if (interaction.functionCall.reasoning_details && interaction.functionCall.reasoning_details.length > 0) {
+					assistantMessage.reasoning_details = interaction.functionCall.reasoning_details;
+					log.info(
+						`OpenRouter: Preserving ${interaction.functionCall.reasoning_details.length} reasoning_details in assistant message for tool '${interaction.functionCall.name}'`,
+					);
+				}
+
+				// Add assistant message to messages array
+				messages.push(assistantMessage);
 
 				// Add tool response
 				messages.push({

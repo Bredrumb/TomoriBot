@@ -69,6 +69,13 @@ export interface FunctionCall {
 	 * Encoded as base64 when present.
 	 */
 	thoughtSignature?: string;
+	/**
+	 * Optional reasoning details for OpenRouter reasoning models (Gemini, Claude, etc.).
+	 * Must be preserved when passing tool results back to maintain reasoning continuity.
+	 * See: https://openrouter.ai/docs/guides/best-practices/reasoning-tokens#preserving-reasoning-blocks
+	 */
+	// biome-ignore lint/suspicious/noExplicitAny: reasoning_details has complex nested structure that varies by provider
+	reasoning_details?: any[];
 }
 
 /**

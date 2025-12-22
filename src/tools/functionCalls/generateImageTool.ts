@@ -15,7 +15,6 @@ import {
 	type ToolParameterSchema,
 } from "../../types/tool/interfaces";
 import { sql } from "../../utils/db/client";
-import type { FunctionResponseImageMetadata } from "../../types/provider/interfaces";
 import { decryptApiKey } from "../../utils/security/crypto";
 
 /**
@@ -516,7 +515,6 @@ export class GenerateImageTool extends BaseTool {
 			);
 
 			let generatedImageData: string | null = null;
-			let generatedImageMimeType: string | null = null;
 
 			if (context.provider === "openrouter") {
 				// Use OpenRouter API
@@ -528,7 +526,6 @@ export class GenerateImageTool extends BaseTool {
 					referenceImages.length > 0 ? referenceImages : undefined,
 				);
 				generatedImageData = result.imageData;
-				generatedImageMimeType = result.mimeType;
 			} else if (context.provider === "google") {
 				// Use Google Gemini API
 				const ai = new GoogleGenAI({ apiKey });
@@ -570,7 +567,6 @@ export class GenerateImageTool extends BaseTool {
 					for (const part of response.candidates[0].content.parts) {
 						if (part.inlineData) {
 							generatedImageData = part.inlineData.data ?? null;
-							generatedImageMimeType = part.inlineData.mimeType ?? null;
 							break;
 						}
 					}
@@ -598,26 +594,18 @@ export class GenerateImageTool extends BaseTool {
 
 			log.success("Successfully generated and sent image to Discord");
 
-			// Prepare image metadata for LLM visibility
-			const sentAttachments = Array.from(sentMessage.attachments.values());
-			const imageMetadata: FunctionResponseImageMetadata = {
-				imageUrls: sentAttachments.map((att) => ({
-					url: att.url,
-					mimeType: att.contentType || generatedImageMimeType || "image/png",
-					wasCompressed: false,
-					originalUrl: att.proxyURL ?? att.url,
-				})),
-				totalSent: sentAttachments.length,
-				totalValidated: sentAttachments.length,
-				messageIds: [sentMessage.id],
-			};
+			// Note: We intentionally DO NOT include imageMetadata for generated images
+			// because Discord CDN URLs are protected and cannot be fetched by external
+			// servers (like OpenRouter). The model doesn't need to see its own generated
+			// output - it just needs confirmation that the generation succeeded.
+			// The text message includes the Discord message ID for reference.
 
 			return {
 				success: true,
 				message: `Successfully generated and sent image to Discord (message ID: ${sentMessage.id}). The image has been created based on your prompt${
 					referenceImages.length > 0 ? " and the reference image(s)" : ""
 				}.`,
-				imageMetadata,
+				// imageMetadata intentionally omitted to avoid 403 errors when OpenRouter tries to fetch Discord CDN URLs
 			};
 		} catch (error) {
 			// Handle specific Google API errors

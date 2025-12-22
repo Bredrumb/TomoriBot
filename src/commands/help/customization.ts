@@ -121,6 +121,7 @@ export async function execute(
 		const configModelMention = commandRegistry.getCommandMention(
 			"config",
 			"model",
+			"text",
 		);
 		const configTemperatureMention = commandRegistry.getCommandMention(
 			"config",

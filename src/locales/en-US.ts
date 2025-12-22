@@ -701,7 +701,7 @@ export default {
 - I can see content within shared embeds (like tweets, articles, etc.)`,
 				search_title: `Search & Information`,
 				search_description: `- I can search the web for current information
-- I can also do image, video, and news search (via \`/config braveapi\`)
+- I can also do image, video, and news search (via \`/config braveapi set\`)
 - I can fetch and read content from URLs`,
 				personality_title: `Personality & Customization`,
 				personality_description: `- I can change my name and avatar using \`/config rename\` and \`/server avatar\`

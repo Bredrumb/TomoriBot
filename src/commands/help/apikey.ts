@@ -72,6 +72,7 @@ export async function execute(
 		const configModelMention = commandRegistry.getCommandMention(
 			"config",
 			"model",
+			"text",
 		);
 		const supportServerMention = commandRegistry.getCommandMention(
 			"support",
