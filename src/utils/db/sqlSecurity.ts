@@ -23,7 +23,7 @@ const ALLOWED_USER_FIELDS = new Set<keyof UserRow>([
 	"language_pref",
 	"registration_locale", // Static field (set once at registration, but whitelisted for safety)
 	"personal_memories",
-	"privacy_opt_out",
+	"privacy_level",
 	// Exclude: user_id (primary key), created_at, updated_at (auto-managed)
 ]);
 

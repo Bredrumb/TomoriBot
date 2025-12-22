@@ -159,10 +159,12 @@ export async function execute(
 		}
 
 		// 10. Check if user has opted out of personalization (privacy setting)
-		const { isPrivacyOptedOut } = await import("../../../utils/db/dbRead");
-		const userOptedOut = await isPrivacyOptedOut(interaction.user.id);
+		const { getPrivacyLevel } = await import("../../../utils/db/dbRead");
+		const { PrivacyLevel } = await import("../../../types/db/schema");
+		const userPrivacyLevel = await getPrivacyLevel(interaction.user.id);
 
-		if (userOptedOut) {
+		// Only block FULL privacy level (MINIMAL and PARTIAL can manually teach)
+		if (userPrivacyLevel === PrivacyLevel.FULL) {
 			await replyInfoEmbed(modalSubmitInteraction, locale, {
 				titleKey: "commands.teach.memory.personal.opted_out_error_title",
 				descriptionKey:
@@ -171,7 +173,7 @@ export async function execute(
 				flags: MessageFlags.Ephemeral,
 			});
 			log.info(
-				`User ${interaction.user.id} (${userData.user_nickname}) attempted to use /teach personalmemory while opted out`,
+				`User ${interaction.user.id} (${userData.user_nickname}) attempted to use /teach personalmemory with privacy level ${userPrivacyLevel}`,
 			);
 			return;
 		}

@@ -4,12 +4,70 @@ import {
 	type Client,
 	type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { setPrivacyOptOut } from "../../utils/db/dbWrite";
-import { isPrivacyOptedOut } from "../../utils/db/dbRead";
+import { setPrivacyLevel } from "../../utils/db/dbWrite";
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
-import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
-import type { UserRow, ErrorContext } from "../../types/db/schema";
+import {
+	replyInfoEmbed,
+	promptWithRawModal,
+} from "../../utils/discord/interactionHelper";
+import {
+	type UserRow,
+	type ErrorContext,
+	PrivacyLevel,
+} from "../../types/db/schema";
+import type { SelectOption } from "../../types/discord/modal";
+
+// Modal configuration constants
+const MODAL_CUSTOM_ID = "personal_privacy_modal";
+const PRIVACY_SELECT_ID = "privacy_select";
+
+/**
+ * Creates privacy level options with localized descriptions
+ * @param locale - The locale to use for localization
+ * @returns Array of SelectOption with localized descriptions
+ */
+function createPrivacyOptions(locale: string): SelectOption[] {
+	return [
+		{
+			label: localizer(locale, "commands.personal.privacy.choice_minimal"),
+			value: "0",
+			description: localizer(locale, "commands.personal.privacy.desc_minimal"),
+		},
+		{
+			label: localizer(locale, "commands.personal.privacy.choice_partial"),
+			value: "1",
+			description: localizer(locale, "commands.personal.privacy.desc_partial"),
+		},
+		{
+			label: localizer(locale, "commands.personal.privacy.choice_full"),
+			value: "2",
+			description: localizer(locale, "commands.personal.privacy.desc_full"),
+		},
+	];
+}
+
+/**
+ * Helper function to get a user-friendly label for privacy levels
+ * @param locale - The user's locale
+ * @param level - Privacy level value
+ * @returns Localized privacy label
+ */
+function getPrivacyLevelLabel(locale: string, level: PrivacyLevel): string {
+	switch (level) {
+		case PrivacyLevel.MINIMAL:
+			return localizer(locale, "commands.personal.privacy.choice_minimal");
+		case PrivacyLevel.PARTIAL:
+			return localizer(locale, "commands.personal.privacy.choice_partial");
+		case PrivacyLevel.FULL:
+			return localizer(locale, "commands.personal.privacy.choice_full");
+		default:
+			log.warn(
+				`Unexpected privacy level encountered in getPrivacyLevelLabel: ${level}`,
+			);
+			return localizer(locale, "commands.personal.privacy.choice_minimal");
+	}
+}
 
 // Configure the subcommand
 export const configureSubcommand = (
@@ -17,29 +75,16 @@ export const configureSubcommand = (
 ) =>
 	subcommand
 		.setName("privacy")
-		.setDescription(localizer("en-US", "commands.personal.privacy.description"))
-		.addStringOption((option) =>
-			option
-				.setName("setting")
-				.setDescription(
-					localizer("en-US", "commands.personal.privacy.setting_description"),
-				)
-				.setRequired(true)
-				.addChoices(
-					{
-						name: localizer("en-US", "commands.choices.opt_out"),
-						value: "opt_out",
-					},
-					{
-						name: localizer("en-US", "commands.choices.opt_in"),
-						value: "opt_in",
-					},
-				),
-		);
+		.setDescription(localizer("en-US", "commands.personal.privacy.description"));
 
 /**
- * Manages user's global privacy opt-out settings for personal memory storage.
- * When opted out, TomoriBot will not save any personal memories about the user.
+ * Manages user's global privacy settings for personalization.
+ *
+ * Privacy levels:
+ * - Level 0 (MINIMAL): Full personalization, all features enabled
+ * - Level 1 (PARTIAL): Messages visible but no personal memory access by LLM
+ * - Level 2 (FULL): Completely invisible, cannot trigger bot
+ *
  * This setting applies across all servers where TomoriBot is present.
  * @param _client - Discord client instance
  * @param interaction - Command interaction
@@ -52,46 +97,81 @@ export async function execute(
 	userData: UserRow,
 	locale: string,
 ): Promise<void> {
+	// Declare modalSubmitInteraction outside try-catch for catch block access
+	let modalSubmitInteraction: import("discord.js").ModalSubmitInteraction | undefined;
+
 	try {
-		// 1. Get command options
-		const setting = interaction.options.getString("setting", true);
-		const requestedOptOut = setting === "opt_out";
+		// 1. Get current privacy level
+		const currentLevel = userData.privacy_level ?? PrivacyLevel.MINIMAL;
 
-		// 2. Check current privacy status
-		const currentlyOptedOut = await isPrivacyOptedOut(interaction.user.id);
+		// 2. Show the modal with privacy level selection
+		const modalResult = await promptWithRawModal(interaction, locale, {
+			modalCustomId: MODAL_CUSTOM_ID,
+			modalTitleKey: "commands.personal.privacy.modal_title",
+			components: [
+				{
+					customId: PRIVACY_SELECT_ID,
+					labelKey: "commands.personal.privacy.select_label",
+					descriptionKey: "commands.personal.privacy.select_description",
+					placeholder: "commands.personal.privacy.select_placeholder",
+					required: true,
+					options: createPrivacyOptions(locale),
+				},
+			],
+		});
 
-		// 3. Prevent setting the same state twice
-		if (requestedOptOut && currentlyOptedOut) {
-			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.personal.privacy.already_opted_out_title",
+		// 3. Handle modal outcome
+		if (modalResult.outcome !== "submit") {
+			log.info(
+				`Privacy level selection modal ${modalResult.outcome} for user ${userData.user_id}`,
+			);
+			return;
+		}
+
+		// Extract values from the modal
+		// biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
+		modalSubmitInteraction = modalResult.interaction!;
+		// biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
+		const selectedValue = modalResult.values![PRIVACY_SELECT_ID];
+		const requestedLevel = Number.parseInt(selectedValue, 10) as PrivacyLevel;
+
+		// 4. Validate the parsed value
+		if (
+			Number.isNaN(requestedLevel) ||
+			![PrivacyLevel.MINIMAL, PrivacyLevel.PARTIAL, PrivacyLevel.FULL].includes(
+				requestedLevel,
+			)
+		) {
+			await replyInfoEmbed(modalSubmitInteraction, locale, {
+				titleKey: "general.errors.operation_failed_title",
 				descriptionKey:
-					"commands.personal.privacy.already_opted_out_description",
-				color: ColorCode.WARN,
-				flags: MessageFlags.Ephemeral,
+					"commands.personal.privacy.invalid_value_description",
+				color: ColorCode.ERROR,
 			});
 			return;
 		}
 
-		if (!requestedOptOut && !currentlyOptedOut) {
-			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.personal.privacy.already_opted_in_title",
-				descriptionKey:
-					"commands.personal.privacy.already_opted_in_description",
+		// 5. Check if this is the same as the current level
+		if (requestedLevel === currentLevel) {
+			await replyInfoEmbed(modalSubmitInteraction, locale, {
+				titleKey: "commands.personal.privacy.already_set_title",
+				descriptionKey: "commands.personal.privacy.already_set_description",
+				descriptionVars: {
+					value: getPrivacyLevelLabel(locale, requestedLevel),
+				},
 				color: ColorCode.WARN,
-				flags: MessageFlags.Ephemeral,
 			});
 			return;
 		}
 
-		// 4. Update privacy setting in database
-		const updatedUser = await setPrivacyOptOut(
+		// 6. Update privacy level in database
+		const updatedUser = await setPrivacyLevel(
 			interaction.user.id,
-			requestedOptOut,
+			requestedLevel,
 		);
 
 		if (!updatedUser) {
-			// Failed to update - show error
-			await replyInfoEmbed(interaction, locale, {
+			await replyInfoEmbed(modalSubmitInteraction, locale, {
 				titleKey: "general.errors.unknown_error_title",
 				descriptionKey: "general.errors.unknown_error_description",
 				color: ColorCode.ERROR,
@@ -100,30 +180,22 @@ export async function execute(
 			return;
 		}
 
-		// 5. Send success confirmation message
-		if (requestedOptOut) {
-			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.personal.privacy.opted_out_title",
-				descriptionKey: "commands.personal.privacy.opted_out_description",
-				color: ColorCode.SUCCESS,
-				flags: MessageFlags.Ephemeral,
-			});
-			log.info(
-				`User ${interaction.user.id} (${userData.user_nickname}) has opted out of personalization`,
-			);
-		} else {
-			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.personal.privacy.opted_in_title",
-				descriptionKey: "commands.personal.privacy.opted_in_description",
-				color: ColorCode.SUCCESS,
-				flags: MessageFlags.Ephemeral,
-			});
-			log.info(
-				`User ${interaction.user.id} (${userData.user_nickname}) has opted into personalization`,
-			);
-		}
+		// 7. Send success confirmation message
+		await replyInfoEmbed(modalSubmitInteraction, locale, {
+			titleKey: "commands.personal.privacy.success_title",
+			descriptionKey: "commands.personal.privacy.success_description",
+			descriptionVars: {
+				value: getPrivacyLevelLabel(locale, requestedLevel),
+				previous_value: getPrivacyLevelLabel(locale, currentLevel),
+			},
+			color: ColorCode.SUCCESS,
+		});
+
+		log.info(
+			`User ${interaction.user.id} (${userData.user_nickname}) changed privacy level from ${currentLevel} to ${requestedLevel}`,
+		);
 	} catch (error) {
-		// 6. Log error with context
+		// 8. Log error with context
 		const context: ErrorContext = {
 			userId: userData.user_id,
 			errorType: "CommandExecutionError",
@@ -131,7 +203,6 @@ export async function execute(
 				command: "personal privacy",
 				guildId: interaction.guild?.id,
 				executorDiscordId: interaction.user.id,
-				setting: interaction.options.getString("setting", true),
 			},
 		};
 		await log.error(
@@ -140,17 +211,13 @@ export async function execute(
 			context,
 		);
 
-		// 7. Inform user of unknown error
-		if (!interaction.replied && !interaction.deferred) {
-			await interaction.reply({
-				content: localizer(locale, "general.errors.unknown_error_description"),
-				flags: MessageFlags.Ephemeral,
-			});
-		} else {
-			await interaction.followUp({
-				content: localizer(locale, "general.errors.unknown_error_description"),
-				flags: MessageFlags.Ephemeral,
-			});
-		}
+		// 9. Inform user of unknown error
+		const replyTarget = modalSubmitInteraction ?? interaction;
+		await replyInfoEmbed(replyTarget, locale, {
+			titleKey: "general.errors.unknown_error_title",
+			descriptionKey: "general.errors.unknown_error_description",
+			color: ColorCode.ERROR,
+			flags: MessageFlags.Ephemeral,
+		});
 	}
 }

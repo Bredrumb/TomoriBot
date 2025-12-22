@@ -17,7 +17,7 @@ import {
 export class MemoryTool extends BaseTool {
 	name = "remember_this_fact";
 	description =
-		"Use this function when you identify a new, distinct piece of information, fact, preference, or instruction during the conversation that seems important to remember for future interactions. This helps you learn and adapt. Specify if the information is a general server-wide fact or something specific about a user. Avoid saving information that is already known or redundant. IMPORTANT: Use {bot} instead of hardcoded bot names and {user} instead of hardcoded user names in your memory content to prevent confusion when names change.\n\nCRITICAL PRIVACY AND ACCURACY RULES:\n1. NEVER save personally identifiable information (PII) such as: real names, addresses, phone numbers, email addresses, social security numbers, financial information, or exact locations.\n2. ONLY save personal memories about a user when THAT SPECIFIC USER directly shared the information themselves in the conversation. DO NOT save memories about User A if User B is the one claiming the information (e.g., if User B says 'User A likes dogs', do not save this unless User A confirmed it themselves).\n3. If someone asks you to remember something about another user who hasn't shared that information directly, politely decline and explain that you only save information that users share about themselves.\n4. Focus on preferences, interests, and context that enhance conversation quality without compromising privacy or accuracy.";
+		"Use this function when you identify a new, distinct piece of information, fact, preference, or instruction during the conversation that seems important to remember for future interactions. This helps you learn and adapt. Specify if the information is a general server-wide fact or something specific about a user. Avoid saving information that is already known or redundant. IMPORTANT: Use {bot} instead of hardcoded bot names and {user} instead of hardcoded user names in your memory content to prevent confusion when names change.NEVER save personally identifiable information (PII) such as: real names, addresses, phone numbers, email addresses, social security numbers, financial information, or exact locations. Focus on preferences, interests, and context that enhance conversation quality without compromising privacy or accuracy.";
 	category = "memory" as const;
 	requiresFeatureFlag = "self_teaching";
 
@@ -435,22 +435,27 @@ export class MemoryTool extends BaseTool {
 				}
 
 				// Check if user has opted out of personalization (privacy setting)
-				const { isPrivacyOptedOut } = await import("../../utils/db/dbRead");
-				const userOptedOut = await isPrivacyOptedOut(targetUserDiscordIdArg);
+				const { getPrivacyLevel } = await import("../../utils/db/dbRead");
+				const { PrivacyLevel } = await import("../../types/db/schema");
+				const userPrivacyLevel = await getPrivacyLevel(targetUserDiscordIdArg);
 
-				if (userOptedOut) {
+				// Block self-teaching for PARTIAL and FULL privacy levels
+				if (
+					userPrivacyLevel === PrivacyLevel.PARTIAL ||
+					userPrivacyLevel === PrivacyLevel.FULL
+				) {
 					log.info(
-						`Self-teach blocked: User ${targetUserDiscordIdArg} (${targetUserNicknameArg}) has opted out of personalization`,
+						`Self-teach blocked: User ${targetUserDiscordIdArg} (${targetUserNicknameArg}) has privacy level ${userPrivacyLevel}`,
 					);
 					return {
 						success: false,
-						error: `Cannot save personal memory: User ${targetUserNicknameArg} has opted out of personalization.`,
+						error: `Cannot save personal memory: User ${targetUserNicknameArg} has privacy restrictions.`,
 						data: {
-							status: "memory_save_failed_privacy_opted_out",
+							status: "memory_save_failed_privacy_restricted",
 							scope: "target_user",
 							target_user_discord_id: targetUserDiscordIdArg,
 							target_user_nickname: targetUserNicknameArg,
-							reason: `The user ${targetUserNicknameArg} has chosen to opt out of personal memory storage for privacy reasons. I cannot save personal memories about them unless they opt back in using '/personal privacy'.`,
+							reason: `The user ${targetUserNicknameArg} has chosen to restrict personal memory storage. I cannot save personal memories about them unless they change their privacy settings using '/personal privacy'.`,
 						},
 					};
 				}

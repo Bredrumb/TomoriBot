@@ -88,6 +88,9 @@ export interface RequestSnapshot {
 	/** Whether the triggerer has opted out of personalization */
 	isTriggererOptedOut?: boolean;
 
+	/** Privacy level of the triggerer (for efficiency) */
+	triggererPrivacyLevel?: import("@/types/db/schema").PrivacyLevel;
+
 	/**
 	 * Preloaded GuildMember for the triggerer (for presence lookups).
 	 * Null for DM channels where member data doesn't apply.

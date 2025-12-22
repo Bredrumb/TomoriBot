@@ -88,37 +88,43 @@ export async function registerUser(
 }
 
 /**
- * Sets the privacy opt-out status for a user globally across all servers.
+ * Sets the privacy level for a user globally across all servers.
  * This function ensures the user exists in the database before updating their privacy setting.
  *
  * @param userDiscId - Discord user ID of the user
- * @param optedOut - True to opt out of personalization, false to opt in
+ * @param level - Privacy level to set (0=MINIMAL, 1=PARTIAL, 2=FULL)
  * @returns The updated UserRow object, or null if the operation failed
  */
-export async function setPrivacyOptOut(
+export async function setPrivacyLevel(
 	userDiscId: string,
-	optedOut: boolean,
+	level: import("@/types/db/schema").PrivacyLevel,
 ): Promise<UserRow | null> {
 	try {
-		log.info(`Setting privacy opt-out to ${optedOut} for user ${userDiscId}`);
+		log.info(`Setting privacy level to ${level} for user ${userDiscId}`);
 
-		// Use UPSERT pattern to ensure user exists, then update privacy setting
+		// 1. Validate level
+		if (![0, 1, 2].includes(level)) {
+			log.error(`Invalid privacy level ${level} for user ${userDiscId}`);
+			return null;
+		}
+
+		// 2. Update privacy level
 		const [userData] = await sql`
 			UPDATE users
-			SET privacy_opt_out = ${optedOut}
+			SET privacy_level = ${level}
 			WHERE user_disc_id = ${userDiscId}
 			RETURNING *
 		`;
 
-		// Check if user was found and updated
+		// 3. Check if user was found and updated
 		if (!userData) {
 			log.warn(
-				`Cannot set privacy opt-out: User ${userDiscId} not found in database`,
+				`Cannot set privacy level: User ${userDiscId} not found in database`,
 			);
 			return null;
 		}
 
-		// Validate with Zod schema
+		// 4. Validate with Zod schema
 		const validatedUser = userSchema.safeParse(userData);
 
 		if (!validatedUser.success) {
@@ -130,13 +136,26 @@ export async function setPrivacyOptOut(
 		}
 
 		log.success(
-			`Privacy opt-out successfully set to ${optedOut} for user ${userDiscId}`,
+			`Privacy level successfully set to ${level} for user ${userDiscId}`,
 		);
 		return validatedUser.data;
 	} catch (error) {
-		log.error(`Error setting privacy opt-out for user ${userDiscId}:`, error);
+		log.error(`Error setting privacy level for user ${userDiscId}:`, error);
 		return null;
 	}
+}
+
+/**
+ * Backward compatibility wrapper for setPrivacyOptOut
+ * @deprecated Use setPrivacyLevel() instead
+ */
+export async function setPrivacyOptOut(
+	userDiscId: string,
+	optedOut: boolean,
+): Promise<UserRow | null> {
+	const { PrivacyLevel } = await import("@/types/db/schema");
+	const level = optedOut ? PrivacyLevel.FULL : PrivacyLevel.MINIMAL; // optedOut=true maps to Level 2 (FULL privacy)
+	return setPrivacyLevel(userDiscId, level);
 }
 
 /**

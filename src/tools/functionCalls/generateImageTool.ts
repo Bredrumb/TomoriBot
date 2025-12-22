@@ -24,7 +24,7 @@ import { decryptApiKey } from "../../utils/security/crypto";
 export class GenerateImageTool extends BaseTool {
 	name = "generate_image";
 	description =
-		"Generate an AI image using Google's Gemini Imagen. Provide a detailed text prompt describing what image you want to create. Optionally reference a message_id to use existing images from that message for image-to-image generation, or pass a user_id to use a Discord profile picture as a reference. You can also specify an aspect ratio (default is 1:1). After generating, the image will be sent directly to the Discord channel.";
+		"Generate an AI image using Google's Gemini Imagen. Provide a detailed text prompt describing what image you want to create. If you provide a message_id or user_id reference, focus the prompt on edits or additions only and avoid re-describing the reference image. You can also specify an aspect ratio (default is 1:1). After generating, the image will be sent directly to the Discord channel.";
 	category = "utility" as const;
 	private static readonly DISCORD_ID_PATTERN = /^\d{17,19}$/;
 
@@ -34,7 +34,7 @@ export class GenerateImageTool extends BaseTool {
 			prompt: {
 				type: "string",
 				description:
-					"A detailed text description of the image you want to generate. Be specific about style, composition, colors, mood, and any important details. For image-to-image, describe the modifications you want to make to the reference image(s).",
+					"A detailed text description of the image you want to generate. Be specific about style, composition, colors, mood, and any important details. For image-to-image, describe only the modifications or additions you want and avoid re-describing the reference image.",
 			},
 			message_id: {
 				type: "string",

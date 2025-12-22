@@ -8,13 +8,19 @@ export enum HumanizerDegree {
 	HEAVY = 3,
 }
 
+export enum PrivacyLevel {
+	MINIMAL = 0, // Minimal privacy (full personalization features)
+	PARTIAL = 1, // Partial privacy (limited personalization)
+	FULL = 2, // Full privacy (maximum protection - completely invisible)
+}
+
 export const userSchema = z.object({
 	user_id: z.number().optional(),
 	user_disc_id: z.string(),
 	user_nickname: z.string(),
 	language_pref: z.string().default("en-US"),
 	registration_locale: z.string().nullable(), // Static locale captured at registration
-	privacy_opt_out: z.boolean().default(false),
+	privacy_level: z.nativeEnum(PrivacyLevel).default(PrivacyLevel.MINIMAL),
 	personal_memories: z.array(z.string()).default([]),
 	created_at: z.date().optional(),
 	updated_at: z.date().optional(),

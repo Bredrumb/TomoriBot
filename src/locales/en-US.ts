@@ -1540,32 +1540,35 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 			description: `Manage your personal settings`,
 			privacy: {
 				description: `Control personal memory storage and privacy settings`,
-				setting_description: `Choose your privacy preference`,
-				opted_out_title: `🔴 Privacy Protection Enabled`,
-				opted_out_description: `You have successfully opted out of personal memory storage.
 
-**What this means:**
-- I will not save any new personal memories about you
-- You cannot use \`/teach personalmemory\` while opted out
-- Existing personal memories remain in the database but won't be used
-- This setting applies across all servers where I'm present
-- Server-wide memories are not affected
+				// Modal UI
+				modal_title: `Privacy Settings`,
+				select_label: `Privacy Level`,
+				select_description: `Choose how much privacy protection you want`,
+				select_placeholder: `Select privacy level...`,
 
-To opt back in and allow personal memories again, use \`/personal privacy\` and select "Opt In".`,
-				opted_in_title: `🟢 Personalization Enabled`,
-				opted_in_description: `You have successfully opted into personal memory storage.
+				// Level 0 (MINIMAL privacy - full features)
+				choice_minimal: `None`,
+				desc_minimal: `Full personalization: memories, status, custom nickname, can trigger bot.`,
 
-**What this means:**
-- I can now save personal memories about you across servers
-- You can use \`/teach personalmemory\` to add your own memories
-- Any previously saved memories will be available again
-- I can learn new things about you through conversations
+				// Level 1 (PARTIAL privacy)
+				choice_partial: `Partial`,
+				desc_partial: `Messages visible but no personal memories/status shown to AI.`,
 
-To protect your privacy again, use \`/personal privacy\` and select "Opt Out".`,
-				already_opted_out_title: `Already Opted Out`,
-				already_opted_out_description: `You have already opted out of personal memory storage. Your privacy settings remain unchanged.`,
-				already_opted_in_title: `Already Opted In`,
-				already_opted_in_description: `You are already opted into personal memory storage. Your settings remain unchanged.`,
+				// Level 2 (FULL privacy - maximum protection)
+				choice_full: `Full`,
+				desc_full: `Maximum privacy: completely invisible, no messages, memories, or bot triggering.`,
+
+				// Success/error messages
+				success_title: `Privacy Settings Updated`,
+				success_description: `Your privacy level has been changed from \`{previous_value}\` to \`{value}\`.
+
+You can change this anytime using \`/personal privacy\`.`,
+
+				already_set_title: `No Changes Made`,
+				already_set_description: `Your privacy level is already set to \`{value}\`.`,
+
+				invalid_value_description: `Invalid privacy level selected. Please try again.`,
 			},
 
 			language: {

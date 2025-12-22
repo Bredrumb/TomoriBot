@@ -17,6 +17,7 @@ import {
 	getBlacklistedMemberIds,
 } from "../../utils/db/dbRead";
 import type { UserRow } from "../../types/db/schema";
+import { PrivacyLevel } from "../../types/db/schema";
 import { formatBooleanLocalized } from "@/utils/text/stringHelper";
 import { getMemoryLimits } from "@/utils/db/memoryLimits";
 
@@ -26,6 +27,25 @@ const MAX_MEMORIES_DISPLAY = 8; // Max number of memories to display (reduced to
 const MEMORY_TRUNCATE_LENGTH = 100; // Max length for memory snippets
 const MAX_ATTRIBUTES_DISPLAY = 3; // Max number of attributes to display (attributes can be very long)
 const ATTRIBUTE_TRUNCATE_LENGTH = 200; // Max length for attribute snippets
+
+/**
+ * Helper function to get a user-friendly label for privacy levels
+ * @param locale - The user's locale
+ * @param level - Privacy level value
+ * @returns Localized privacy label
+ */
+function getPrivacyLevelLabel(locale: string, level: PrivacyLevel): string {
+	switch (level) {
+		case PrivacyLevel.MINIMAL:
+			return localizer(locale, "commands.personal.privacy.choice_minimal");
+		case PrivacyLevel.PARTIAL:
+			return localizer(locale, "commands.personal.privacy.choice_partial");
+		case PrivacyLevel.FULL:
+			return localizer(locale, "commands.personal.privacy.choice_full");
+		default:
+			return localizer(locale, "commands.personal.privacy.choice_minimal");
+	}
+}
 
 /**
  * Formats an array of memories for display in an embed field.
@@ -163,7 +183,10 @@ export async function execute(
 					},
 					{
 						name: localizer(locale, "commands.tool.status.field_privacy"),
-						value: formatBooleanLocalized(userData.privacy_opt_out, locale),
+						value: getPrivacyLevelLabel(
+							locale,
+							userData.privacy_level ?? PrivacyLevel.MINIMAL,
+						),
 						inline: true,
 					},
 					{

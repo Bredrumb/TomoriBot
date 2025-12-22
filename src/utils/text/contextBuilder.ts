@@ -3,7 +3,7 @@ import { GatewayIntentBits } from "discord.js";
 import { sql } from "../db/client"; // Import SQL client for database queries
 import {
 	isBlacklisted, // Import blacklist checker
-	isPrivacyOptedOut, // Import privacy opt-out checker
+	getPrivacyLevel, // Import privacy level checker
 	loadTomoriState,
 	loadUserRow,
 	getPendingRemindersForUser,
@@ -25,7 +25,11 @@ import {
 	formatUTCOffset,
 	getTimeOfDayPhrase,
 } from "./timezoneHelper";
-import { HumanizerDegree, type TomoriConfigRow } from "@/types/db/schema";
+import {
+	HumanizerDegree,
+	PrivacyLevel,
+	type TomoriConfigRow,
+} from "@/types/db/schema";
 import { memoryGuard, MEDIA_LIMITS } from "../security/rateLimiter";
 // Import ServerEmojiRow if needed for emoji query result type
 // import type { ServerEmojiRow } from "../../types/db/schema";
@@ -48,6 +52,7 @@ type SimplifiedMessageForContext = {
 	authorId: string;
 	authorName: string;
 	content: string | null;
+	mediaSourceMessageId?: string;
 	imageAttachments: Array<{
 		url: string;
 		proxyUrl: string;
@@ -912,9 +917,9 @@ export async function buildContext({
 			const userIsBlacklisted = isTriggererId
 				? (snapshot?.isTriggererBlacklisted ?? false)
 				: await isBlacklisted(guildId, userRow.user_disc_id);
-			const userOptedOut = isTriggererId
-				? (snapshot?.isTriggererOptedOut ?? false)
-				: await isPrivacyOptedOut(userRow.user_disc_id);
+			const userPrivacyLevel = isTriggererId
+				? (snapshot?.triggererPrivacyLevel ?? PrivacyLevel.MINIMAL)
+				: await getPrivacyLevel(userRow.user_disc_id);
 
 			let displayName: string;
 			const customNickname = userRow.user_nickname;
@@ -925,7 +930,7 @@ export async function buildContext({
 				customNickname &&
 				serverPersonalizationEnabled &&
 				!userIsBlacklisted &&
-				!userOptedOut;
+				userPrivacyLevel !== PrivacyLevel.FULL; // Allow MINIMAL and PARTIAL
 			const shouldIncludeCustomNicknameAlias =
 				customNickname &&
 				serverPersonalizationEnabled &&
@@ -944,29 +949,35 @@ export async function buildContext({
 
 			const detailLines: string[] = [];
 
-			// 8. Add status (production: triggerer only, dev: all users)
-			const isProduction = process.env.RUN_ENV === "production";
-			const presenceInfo = isDMChannel
-				? "Online (Direct Message)"
-				: isTriggererId
-					? await getUserPresenceDetails(
-							client,
-							userRow.user_disc_id,
-							guildId,
-							snapshot?.preloadedMember,
-						)
-					: isProduction
-						? "Status unknown"
-						: await getUserPresenceDetails(
+			// 8. Add status (only for Level 0 MINIMAL privacy)
+			if (userPrivacyLevel === PrivacyLevel.MINIMAL) {
+				const isProduction = process.env.RUN_ENV === "production";
+				const presenceInfo = isDMChannel
+					? "Online (Direct Message)"
+					: isTriggererId
+						? await getUserPresenceDetails(
 								client,
 								userRow.user_disc_id,
 								guildId,
-							);
+								snapshot?.preloadedMember,
+							)
+						: isProduction
+							? "Status unknown"
+							: await getUserPresenceDetails(
+									client,
+									userRow.user_disc_id,
+									guildId,
+								);
 
-			detailLines.push(`- Status: ${presenceInfo}`);
+				detailLines.push(`- Status: ${presenceInfo}`);
+			}
 
-			// 9. Add personal memories (if personalization enabled and user not blacklisted/opted-out)
-			if (serverPersonalizationEnabled && !userIsBlacklisted && !userOptedOut) {
+			// 9. Add personal memories (only for Level 0 MINIMAL privacy)
+			if (
+				serverPersonalizationEnabled &&
+				!userIsBlacklisted &&
+				userPrivacyLevel === PrivacyLevel.MINIMAL
+			) {
 				if (userRow.personal_memories && userRow.personal_memories.length > 0) {
 					const processedMemories = await Promise.all(
 						userRow.personal_memories.map((memory) =>
@@ -1326,9 +1337,10 @@ export async function buildContext({
 
 		// Expose message ID for media messages so tools (generate_image, process_gif) can reference attachments
 		if (hasMedia && !mediaIdHintAdded) {
+			const mediaMessageId = msg.mediaSourceMessageId ?? msg.id;
 			parts.push({
 				type: "text",
-				text: `[System: Media message ID for tool use: ${msg.id}]`,
+				text: `[System: Media message ID for tool use: ${mediaMessageId}]`,
 			});
 		}
 

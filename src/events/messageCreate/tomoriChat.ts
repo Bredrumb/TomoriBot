@@ -22,7 +22,7 @@ import { ContextItemTag } from "../../types/misc/context";
 import type { FunctionCall } from "../../types/provider/interfaces";
 import {
 	isBlacklisted,
-	isPrivacyOptedOut,
+	getPrivacyLevel,
 	loadServerEmojis,
 	loadTomoriState,
 	loadUserRow,
@@ -48,6 +48,7 @@ import { escapeRegExp } from "../../utils/text/stringHelper";
 import { sql } from "@/utils/db/client";
 
 import type { TomoriState } from "@/types/db/schema";
+import { PrivacyLevel } from "@/types/db/schema";
 // Provider-specific function declarations moved to providers
 import { getProviderForTomori } from "../../utils/provider/providerFactory";
 import type {
@@ -186,6 +187,7 @@ type SimplifiedMessageForContext = {
 	authorId: string;
 	authorName: string; // Resolved name (Tomori's nickname or user's display name)
 	content: string | null; // Message text content
+	mediaSourceMessageId?: string; // Message ID that actually hosts the media, if different
 	imageAttachments: Array<{
 		url: string; // Original URL of the image
 		proxyUrl: string; // Discord's proxy URL, often more stable for fetching
@@ -451,6 +453,16 @@ export default async function tomoriChat(
 
 	// biome-ignore lint/style/noNonNullAssertion: Author is always present in non-system messages
 	const userDiscId = message.author!.id;
+
+	// Check if user is allowed to trigger bot (Level 2 FULL privacy users cannot trigger)
+	// Skip this check for manual triggers and reminders
+	if (!isManuallyTriggered && !reminderRecipientID) {
+		const userPrivacyLevel = await getPrivacyLevel(userDiscId);
+		if (userPrivacyLevel === PrivacyLevel.FULL) {
+			// Silently ignore - Level 2 users chose to be completely invisible
+			return;
+		}
+	}
 
 	// Handle different channel types - Guild channels vs DM channels
 	let guild: typeof message.guild;
@@ -842,8 +854,9 @@ export default async function tomoriChat(
 					: userRow.user_nickname;
 
 			// Create per-request snapshot to avoid redundant DB queries and ensure consistency
-			// Check if user opted out of personalization
-			const isUserOptedOut = await isPrivacyOptedOut(userDiscId);
+			// Get user's privacy level
+			const userPrivacyLevel = await getPrivacyLevel(userDiscId);
+			const isUserOptedOut = userPrivacyLevel === PrivacyLevel.FULL; // Backward compat: Level 2 is FULL privacy
 
 			// Preload guild member for presence lookups (only if not DM)
 			let preloadedMember = null;
@@ -859,6 +872,7 @@ export default async function tomoriChat(
 				triggererUserRow: userRow ?? null,
 				isTriggererBlacklisted: isUserBlacklisted,
 				isTriggererOptedOut: isUserOptedOut,
+				triggererPrivacyLevel: userPrivacyLevel, // NEW
 				preloadedMember: preloadedMember,
 			};
 
@@ -1334,6 +1348,15 @@ export default async function tomoriChat(
 				const authorId = msg.author.id;
 				//const isLastMessage = index === relevantMessagesArray.length - 1;
 
+				// Filter out Level 2 (FULL privacy) users from conversation history
+				const authorPrivacyLevel = await getPrivacyLevel(authorId);
+				if (authorPrivacyLevel === PrivacyLevel.FULL) {
+					log.info(
+						`Filtering message from user ${authorId} (privacy level FULL)`,
+					);
+					continue; // Skip this message entirely
+				}
+
 				// Variable to store referenced message data for later attachment extraction
 				let referencedMessageData: { message: Message } | undefined;
 
@@ -1434,13 +1457,17 @@ export default async function tomoriChat(
 					authorName = `<@${authorId}>`; // Format user as <@ID>, to be converted by convertMentions later to user's registered name (if existing)
 				}
 
+				// Add to user list (Level 2 FULL privacy users already filtered out above)
 				userListSet.add(authorId);
+
 				const imageAttachments: SimplifiedMessageForContext["imageAttachments"] =
 					[];
 				const videoAttachments: SimplifiedMessageForContext["videoAttachments"] =
 					[];
 				let messageContentForLlm: string | null = processedContent; // Use processed content (with reference context and "$:" removed if present)
 				let hasProcessedEmbed = false; // Track if this message contains a processed embed
+				let mediaSourceMessageId: string | null = null;
+				let hasLocalMedia = false;
 
 				// Extract attachments from referenced message if it exists (after arrays are declared)
 				// Check if this is the message that got reference context injection and we have stored reference message data
@@ -1448,6 +1475,9 @@ export default async function tomoriChat(
 					index === latestReferenceMessageIndex &&
 					typeof referencedMessageData !== "undefined"
 				) {
+					const preRefImageCount = imageAttachments.length;
+					const preRefVideoCount = videoAttachments.length;
+
 					if (referencedMessageData.message.attachments.size > 0) {
 						for (const attachment of referencedMessageData.message.attachments.values()) {
 							if (
@@ -1488,6 +1518,13 @@ export default async function tomoriChat(
 						if (referencedEmojiAttachments.length > 0) {
 							imageAttachments.push(...referencedEmojiAttachments);
 						}
+					}
+
+					if (
+						imageAttachments.length > preRefImageCount ||
+						videoAttachments.length > preRefVideoCount
+					) {
+						mediaSourceMessageId = referencedMessageData.message.id;
 					}
 
 					// Log attachment extraction for debugging
@@ -1559,6 +1596,7 @@ export default async function tomoriChat(
 										mimeType: linkEmbedData.imageInfo.mimeType,
 										filename: linkEmbedData.imageInfo.filename,
 									});
+									hasLocalMedia = true;
 									log.info(
 										`Added embed image from link preview: ${linkEmbedData.imageInfo.filename}`,
 									);
@@ -1572,6 +1610,7 @@ export default async function tomoriChat(
 										mimeType: linkEmbedData.thumbnailInfo.mimeType,
 										filename: linkEmbedData.thumbnailInfo.filename,
 									});
+									hasLocalMedia = true;
 									log.info(
 										`Added embed thumbnail from link preview: ${linkEmbedData.thumbnailInfo.filename}`,
 									);
@@ -1609,6 +1648,7 @@ export default async function tomoriChat(
 								mimeType: attachment.contentType,
 								filename: attachment.name,
 							});
+							hasLocalMedia = true;
 						}
 						// 1. Check for video attachments using supported MIME types
 						else if (
@@ -1624,6 +1664,7 @@ export default async function tomoriChat(
 								filename: attachment.name,
 								isYouTubeLink: false,
 							});
+							hasLocalMedia = true;
 							log.info(
 								`Processed video attachment: ${attachment.name} (${attachment.contentType})`,
 							);
@@ -1644,6 +1685,7 @@ export default async function tomoriChat(
 							mimeType: "image/png", // Discord serves PNG version for stickers
 							filename: `${sticker.name}.png`,
 						});
+						hasLocalMedia = true;
 						log.info(`Processed sticker: ${sticker.name} (${sticker.id})`);
 					}
 				}
@@ -1652,6 +1694,7 @@ export default async function tomoriChat(
 					const emojiAttachments = extractEmojiImageAttachments(msg.content);
 					if (emojiAttachments.length > 0) {
 						imageAttachments.push(...emojiAttachments);
+						hasLocalMedia = true;
 						log.info(
 							`Processed ${emojiAttachments.length} emoji(s) from message ${msg.id}`,
 						);
@@ -1672,6 +1715,7 @@ export default async function tomoriChat(
 								filename: `youtube_video_${videoId}.mp4`,
 								isYouTubeLink: true,
 							});
+							hasLocalMedia = true;
 							log.info(`Detected YouTube link: ${youtubeUrl} (ID: ${videoId})`);
 							break; // Only process the first YouTube link found to avoid duplicates
 						}
@@ -1722,6 +1766,7 @@ export default async function tomoriChat(
 								);
 
 								if (isGif) {
+									hasLocalMedia = true;
 									// Handle as GIF (image with keyframe extraction)
 									if (discordTenorProxyIndex !== -1) {
 										// Replace Discord's PNG preview with our resolved GIF
@@ -1747,6 +1792,7 @@ export default async function tomoriChat(
 										);
 									}
 								} else if (isVideo) {
+									hasLocalMedia = true;
 									// Handle as video (for providers that support video like Gemini)
 									// Remove Discord's preview if it exists since we're adding the actual video
 									if (discordTenorProxyIndex !== -1) {
@@ -1789,6 +1835,13 @@ export default async function tomoriChat(
 					}
 				}
 
+				const resolvedMediaSourceMessageId =
+					imageAttachments.length > 0 || videoAttachments.length > 0
+						? hasLocalMedia
+							? msg.id
+							: mediaSourceMessageId ?? undefined
+						: undefined;
+
 				// 5.c. Check if this message is from the same effective author as the previous one
 				const prevMessage = simplifiedMessages[simplifiedMessages.length - 1];
 
@@ -1827,6 +1880,9 @@ export default async function tomoriChat(
 							...videoAttachments,
 						];
 					}
+					if (resolvedMediaSourceMessageId) {
+						prevMessage.mediaSourceMessageId = resolvedMediaSourceMessageId;
+					}
 				} else if (
 					messageContentForLlm ||
 					imageAttachments.length > 0 ||
@@ -1838,6 +1894,7 @@ export default async function tomoriChat(
 						authorId: effectiveAuthorId,
 						authorName,
 						content: messageContentForLlm,
+						mediaSourceMessageId: resolvedMediaSourceMessageId,
 						imageAttachments,
 						videoAttachments,
 					});
@@ -3075,7 +3132,7 @@ export function shouldBotReply(
 	// biome-ignore lint/style/noNonNullAssertion: client.user is available in messageCreate event
 	const isBotMentioned = message.mentions.users.has(message.client.user!.id);
 
-	// 4. Check if the message content triggers the bot based on configured triggers
+	// 5. Check if the message content triggers the bot based on configured triggers
 	// Use 'trigger_words' from the config object
 	const triggersActive = config.trigger_words.some((trigger: string) => {
 		// Check if trigger is a mention (starts with <@)

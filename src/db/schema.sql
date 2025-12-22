@@ -406,14 +406,53 @@ BEFORE UPDATE ON users
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 
--- Migration: Add privacy_opt_out column if it doesn't exist (for existing databases)
+-- Migration: Convert privacy_opt_out (BOOLEAN) to privacy_level (INTEGER)
+-- Level 0 = MINIMAL privacy (full features, opted in), Level 1 = PARTIAL, Level 2 = FULL privacy (opted out)
 DO $$
 BEGIN
+    -- Step 1: Add privacy_level column if it doesn't exist
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'users' AND column_name = 'privacy_opt_out'
+        WHERE table_name = 'users' AND column_name = 'privacy_level'
     ) THEN
-        ALTER TABLE users ADD COLUMN privacy_opt_out BOOLEAN DEFAULT FALSE;
+        ALTER TABLE users ADD COLUMN privacy_level INTEGER DEFAULT 0;
+        RAISE NOTICE 'Added users.privacy_level column';
+
+        -- Step 2: Migrate existing data (false→0 MINIMAL, true→2 FULL)
+        UPDATE users
+        SET privacy_level = CASE
+            WHEN privacy_opt_out = true THEN 2  -- Opted out → FULL privacy
+            WHEN privacy_opt_out = false THEN 0  -- Opted in → MINIMAL privacy
+            ELSE 0  -- Default to MINIMAL for NULL values
+        END
+        WHERE privacy_opt_out IS NOT NULL;
+
+        RAISE NOTICE 'Migrated privacy_opt_out to privacy_level';
+
+        -- Step 3: Drop old column after successful migration
+        ALTER TABLE users DROP COLUMN IF EXISTS privacy_opt_out;
+        RAISE NOTICE 'Dropped deprecated privacy_opt_out column';
+    END IF;
+
+    -- Step 4: Ensure privacy_level has NOT NULL constraint and valid range
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'users'
+        AND column_name = 'privacy_level'
+        AND is_nullable = 'YES'
+    ) THEN
+        -- Set default for existing NULL values
+        UPDATE users SET privacy_level = 0 WHERE privacy_level IS NULL;
+
+        -- Add NOT NULL constraint
+        ALTER TABLE users ALTER COLUMN privacy_level SET NOT NULL;
+
+        -- Add CHECK constraint for valid levels (0, 1, 2)
+        ALTER TABLE users DROP CONSTRAINT IF EXISTS users_privacy_level_check;
+        ALTER TABLE users ADD CONSTRAINT users_privacy_level_check
+            CHECK (privacy_level IN (0, 1, 2));
+
+        RAISE NOTICE 'Applied constraints to privacy_level column';
     END IF;
 END $$;
 

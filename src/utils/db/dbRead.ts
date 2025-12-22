@@ -192,34 +192,66 @@ export async function isBlacklisted(
 }
 
 /**
- * Checks if a user has opted out of personal memory storage globally.
- * This is a user-level privacy setting that applies across all servers.
+ * Gets the privacy level for a user globally.
+ * This determines what personalization features are available to the user.
+ *
+ * Privacy levels:
+ * - Level 0 (MINIMAL): Full personalization, all features enabled
+ * - Level 1 (PARTIAL): Messages visible but no personal memory access by LLM
+ * - Level 2 (FULL): Completely invisible, cannot trigger bot
+ *
  * @param userDiscId - The Discord ID of the user to check
- * @returns True if the user has opted out, false otherwise
+ * @returns The user's privacy level (0, 1, or 2), defaults to 0 (MINIMAL) if user not found
  */
-export async function isPrivacyOptedOut(userDiscId: string): Promise<boolean> {
+export async function getPrivacyLevel(
+	userDiscId: string,
+): Promise<import("@/types/db/schema").PrivacyLevel> {
+	const { PrivacyLevel } = await import("@/types/db/schema");
+
 	try {
-		// Check the privacy_opt_out column in the users table
+		// 1. Query user's privacy level
 		const result = await sql`
-			SELECT privacy_opt_out
+			SELECT privacy_level
 			FROM users
 			WHERE user_disc_id = ${userDiscId}
+			LIMIT 1
 		`;
 
-		// If user doesn't exist in database yet, they haven't opted out
-		if (result.length === 0) {
-			return false;
+		// 2. If user doesn't exist, return MINIMAL (default - most permissive)
+		if (!result.length) {
+			log.info(
+				`User ${userDiscId} not found, defaulting to privacy level MINIMAL`,
+			);
+			return PrivacyLevel.MINIMAL;
 		}
 
+		// 3. Validate and return the privacy level
 		// biome-ignore lint/style/noNonNullAssertion: Query guarantees result[0] exists when length > 0
-		return result[0]!.privacy_opt_out ?? false;
+		const level = result[0]!.privacy_level;
+		if (![0, 1, 2].includes(level)) {
+			log.warn(
+				`Invalid privacy level ${level} for user ${userDiscId}, defaulting to MINIMAL`,
+			);
+			return PrivacyLevel.MINIMAL;
+		}
+
+		return level as import("@/types/db/schema").PrivacyLevel;
 	} catch (error) {
-		log.error(
-			`Error checking privacy opt-out status for user ${userDiscId}:`,
-			error,
-		);
-		return false; // Default to false on error to avoid blocking functionality unintentionally
+		log.error(`Error checking privacy level for user ${userDiscId}:`, error);
+		return PrivacyLevel.MINIMAL; // Default to most permissive on error
 	}
+}
+
+/**
+ * Backward compatibility helper: checks if user has opted out (Level 2 = FULL privacy)
+ * @deprecated Use getPrivacyLevel() instead for granular privacy checking
+ * @param userDiscId - The Discord ID of the user to check
+ * @returns True if user is at Level 2 (FULL privacy), false otherwise
+ */
+export async function isPrivacyOptedOut(userDiscId: string): Promise<boolean> {
+	const { PrivacyLevel } = await import("@/types/db/schema");
+	const level = await getPrivacyLevel(userDiscId);
+	return level === PrivacyLevel.FULL;
 }
 
 /**
