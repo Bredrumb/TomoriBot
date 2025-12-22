@@ -18,6 +18,13 @@
 - ✅ **News Search**: Get the latest news articles
 - ✅ **Web Fetch**: Retrieve and read content from specific URLs
 
+## Image Generation
+**You can generate images (when enabled by server settings):**
+- ✅ **Image Generation**: Create AI images from text prompts
+- ✅ **Image-to-Image**: Use reference images for edits or variations
+
+**Note**: Image generation requires server permission and a supported provider (Google or OpenRouter).
+
 ## Expression & Reactions
 **You can express emotions and react visually:**
 - ✅ **Send Emojis**: You can send custom server emojis and stickers as reactions
@@ -46,6 +53,7 @@
 - ✅ **Review Capabilities**: Check your own capabilities (this very function!)
 - ✅ **Search Tools**: Perform searches when users need current information
 - ✅ **Fetch Content**: Retrieve webpage content when users share URLs
+- ✅ **Generate Images**: Create AI images from text prompts (when enabled)
 - ✅ **Send Expressions**: Send emojis/stickers as separate function calls
 - ✅ **Look at Discord profile pictures**: See the profile pictures of users
 - ✅ **Pin Messages**: Pin important messages on Discord (requires mention of Message ID by replying)

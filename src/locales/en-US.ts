@@ -372,6 +372,7 @@ export default {
 				field_emoji_usage: `Emoji Usage`,
 				field_sticker_usage: `Sticker Usage`,
 				field_web_search: `Web Search`,
+				field_image_generation: `Image Generation`,
 				field_server_memteaching: `Server Memories Teaching`,
 				field_attribute_memteaching: `Attributes Teaching`,
 				field_sampledialogue_memteaching: `Sample Dialogues Teaching`,
@@ -1326,12 +1327,14 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				stickerusage_option: `Sticker Usage`,
 				websearch_option: "Web Search Permission",
 				pinmessage_option: "Pin Messages",
+				imagegen_option: "Image Generation",
 				permission_choice_selfteaching: `Self-Teaching`,
 				permission_choice_personalization: `Personalization (Memories/Nicknames)`,
 				permission_choice_emojiusage: `Emoji Usage`,
 				permission_choice_stickerusage: `Sticker Usage`,
 				permission_choice_websearch: "Web Search Permission",
 				permission_choice_pinmessage: "Pin Messages",
+				permission_choice_imagegen: "Image Generation",
 				set_description: `Enable or disable this permission for me.`,
 				already_set_title: `Permission Already Set`,
 				already_enabled_description: `The permission \`{permission_type}\` is already **enabled**.`,
@@ -1777,6 +1780,9 @@ You can change this anytime using \`/personal privacy\`.`,
 				field_aspect_ratio: "Aspect Ratio",
 
 				// Errors
+				disabled_title: "🔴 Image Generation Disabled",
+				disabled_description:
+					"Image generation is disabled on this server. A server member with `Manage Server` permissions can enable it using `/config permissions`.",
 				wrong_provider_title: "🔴 Unsupported Provider",
 				wrong_provider_description:
 					"Image generation requires Google Gemini or OpenRouter. Your current provider is **{current_provider}**.",

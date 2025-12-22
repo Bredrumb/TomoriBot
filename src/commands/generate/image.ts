@@ -258,7 +258,18 @@ export async function execute(
 		return;
 	}
 
-	// 4. Validate provider is Google or OpenRouter
+	// 4. Check if image generation is enabled for this server
+	if (!tomoriState.config.imagegen_enabled) {
+		await replyInfoEmbed(interaction, locale, {
+			titleKey: "commands.generate.image.disabled_title",
+			descriptionKey: "commands.generate.image.disabled_description",
+			color: ColorCode.ERROR,
+			flags: MessageFlags.Ephemeral,
+		});
+		return;
+	}
+
+	// 5. Validate provider is Google or OpenRouter
 	const provider = tomoriState.llm.llm_provider.toLowerCase();
 	if (provider !== "google" && provider !== "openrouter") {
 		await replyInfoEmbed(interaction, locale, {
@@ -273,7 +284,7 @@ export async function execute(
 		return;
 	}
 
-	// 5. Validate API key exists
+	// 6. Validate API key exists
 	const encryptedApiKey = tomoriState.config.api_key;
 	const keyVersion = tomoriState.config.key_version || 1;
 
@@ -287,7 +298,7 @@ export async function execute(
 		return;
 	}
 
-	// 6. Decrypt API key
+	// 7. Decrypt API key
 	const apiKey = await decryptApiKey(encryptedApiKey, keyVersion);
 
 	if (!apiKey) {
@@ -301,7 +312,7 @@ export async function execute(
 		return;
 	}
 
-	// 7. Validate diffusion model is configured
+	// 8. Validate diffusion model is configured
 	const diffusionModelId = tomoriState.config.diffusion_model_id;
 
 	if (!diffusionModelId) {
@@ -321,7 +332,7 @@ export async function execute(
 		| undefined;
 
 	try {
-		// 8. Build modal components
+		// 9. Build modal components
 		const modalComponents = [
 			{
 				customId: PROMPT_INPUT_ID,
@@ -363,7 +374,7 @@ export async function execute(
 			},
 		];
 
-		// 9. Show modal and wait for submission
+		// 10. Show modal and wait for submission
 		const modalResult = await promptWithRawModal(
 			interaction,
 			locale,
@@ -375,7 +386,7 @@ export async function execute(
 			true, // Auto-defer with public reply
 		);
 
-		// 10. Handle modal outcome
+		// 11. Handle modal outcome
 		if (modalResult.outcome !== "submit") {
 			log.info(`Generate image modal ${modalResult.outcome}`);
 			return;
@@ -386,13 +397,13 @@ export async function execute(
 		const aspectRatio = modalResult.values?.[ASPECT_RATIO_SELECT_ID];
 		const imageAttachments = modalResult.attachments?.[IMAGE_UPLOAD_ID];
 
-		// 11. Safety check for required values
+		// 12. Safety check for required values
 		if (!modalSubmitInteraction || !prompt || !aspectRatio) {
 			log.error("Modal result unexpectedly missing required values");
 			return;
 		}
 
-		// 12. Process reference image (if provided)
+		// 13. Process reference image (if provided)
 		const referenceImages: Array<{ mimeType: string; data: string }> = [];
 		let referenceImageUrl: string | undefined;
 
@@ -435,17 +446,17 @@ export async function execute(
 			}
 		}
 
-		// 13. Get model codename from database
+		// 14. Get model codename from database
 		const modelCodename = await getDiffusionModelCodename(diffusionModelId);
 
 		log.info(
 			`Generating image with ${provider} via ${modelCodename}: "${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}" (aspect ratio: ${aspectRatio}, references: ${referenceImages.length})`,
 		);
 
-		// 14. Start timer for generation time tracking
+		// 15. Start timer for generation time tracking
 		const startTime = performance.now();
 
-		// 15. Call provider API to generate image
+		// 16. Call provider API to generate image
 		let generatedImageData: string | null = null;
 		let generatedImageMimeType: string | null = null;
 
@@ -508,11 +519,11 @@ export async function execute(
 			}
 		}
 
-		// 16. Calculate generation time
+		// 17. Calculate generation time
 		const endTime = performance.now();
 		const generationTimeSeconds = ((endTime - startTime) / 1000).toFixed(1);
 
-		// 17. Validate image was generated
+		// 18. Validate image was generated
 		if (!generatedImageData) {
 			await modalSubmitInteraction.editReply({
 				embeds: [
@@ -538,7 +549,7 @@ export async function execute(
 			return;
 		}
 
-		// 18. Convert base64 to buffer and create attachment
+		// 19. Convert base64 to buffer and create attachment
 		const imageBuffer = Buffer.from(generatedImageData, "base64");
 
 		// Determine file extension from MIME type
@@ -552,7 +563,7 @@ export async function execute(
 		const filename = `generated_${Date.now()}.${extension}`;
 		const attachment = new AttachmentBuilder(imageBuffer, { name: filename });
 
-		// 19. Build success embed
+		// 20. Build success embed
 		const successEmbed = new EmbedBuilder()
 			.setTitle(localizer(locale, "commands.generate.image.success_title"))
 			.setColor(ColorCode.SUCCESS)
@@ -588,7 +599,7 @@ export async function execute(
 			successEmbed.setThumbnail(referenceImageUrl);
 		}
 
-		// 20. Send success embed with generated image
+		// 21. Send success embed with generated image
 		await modalSubmitInteraction.editReply({
 			embeds: [successEmbed],
 			files: [attachment],

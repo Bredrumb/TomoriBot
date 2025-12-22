@@ -972,6 +972,18 @@ export async function buildContext({
 				detailLines.push(`- Status: ${presenceInfo}`);
 			}
 
+			// 8.1. Add server roles (only for Level 0 MINIMAL privacy)
+			if (userPrivacyLevel === PrivacyLevel.MINIMAL && member) {
+				const roles = member.roles.cache
+					.filter((role) => role.id !== guild?.id && role.name !== "@everyone")
+					.sort((a, b) => b.position - a.position)
+					.map((role) => role.name);
+
+				if (roles.length > 0) {
+					detailLines.push(`- Server Roles: ${roles.join(", ")}`);
+				}
+			}
+
 			// 9. Add personal memories (only for Level 0 MINIMAL privacy)
 			if (
 				serverPersonalizationEnabled &&

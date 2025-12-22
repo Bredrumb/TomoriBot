@@ -46,6 +46,7 @@ export const serverConfigExportSchema = z.object({
 	personal_memories_enabled: z.boolean(),
 	emoji_usage_enabled: z.boolean(),
 	sticker_usage_enabled: z.boolean(),
+	imagegen_enabled: z.boolean().default(true),
 });
 
 export type ServerConfigExport = z.infer<typeof serverConfigExportSchema>;

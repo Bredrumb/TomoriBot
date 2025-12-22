@@ -129,12 +129,15 @@ export class ReviewCapabilitiesTool extends BaseTool {
 		try {
 			// 1. Extract capability flags from tomoriState
 			const llm = context.tomoriState.llm;
+			const config = context.tomoriState.config;
+			const provider = llm.llm_provider.toLowerCase();
 			const seesImages = llm.sees_images ?? false;
 			const seesVideos = llm.sees_videos ?? false;
 			const seesYouTube = llm.sees_youtube ?? false;
 			const hasTools = llm.has_tools ?? false;
 			const isReasoning = llm.is_reasoning ?? false;
 			const isUncensored = llm.is_uncensored ?? false;
+			const supportsImageGen = provider === "google" || provider === "openrouter";
 
 			// 2. Build dynamic capabilities markdown with model information
 			let capabilitiesContent = "# TomoriBot Chat Capabilities\n\n";
@@ -246,6 +249,12 @@ export class ReviewCapabilitiesTool extends BaseTool {
 				capabilitiesContent +=
 					"- **brave_web_search/image_search/video_search/news_search** (search the web)\n";
 				capabilitiesContent += "- **fetch** (retrieve content from URLs)\n";
+				const imageGenNote = supportsImageGen
+					? config.imagegen_enabled
+						? "create AI images from text prompts"
+						: "disabled by server configuration"
+					: "unavailable with current provider";
+				capabilitiesContent += `- **generate_image** (${imageGenNote})\n`;
 				if (seesYouTube) {
 					capabilitiesContent +=
 						"- **process_youtube_video** (analyze YouTube videos)\n";
@@ -300,7 +309,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
 			const braveApiKeySet = await getBraveApiKeyStatus(
 				context.tomoriState.server_id,
 			);
-			const config = context.tomoriState.config;
 
 			const unavailableReasons: string[] = [];
 
@@ -329,6 +337,11 @@ export class ReviewCapabilitiesTool extends BaseTool {
 				disabledFeatures.push({
 					feature: "web search",
 					command: "/config websearch",
+				});
+			if (!config.imagegen_enabled)
+				disabledFeatures.push({
+					feature: "image generation",
+					command: "/config permissions (permission: imagegen)",
 				});
 			if (!config.sticker_usage_enabled)
 				disabledFeatures.push({
@@ -497,6 +510,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
 						? " (No Brave API key - DuckDuckGo MCP used instead)"
 						: "",
 				},
+				{ name: "Image Generation", value: config.imagegen_enabled },
 				{ name: "Sticker Usage", value: config.sticker_usage_enabled },
 				{ name: "Emoji Usage", value: config.emoji_usage_enabled },
 				{ name: "Personal Memories", value: config.personal_memories_enabled },
@@ -545,6 +559,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
 							web_search_enabled: config.web_search_enabled,
 							self_teaching_enabled: config.self_teaching_enabled,
 							pin_message_enabled: config.pin_message_enabled,
+							imagegen_enabled: config.imagegen_enabled,
 						},
 					},
 				);
@@ -677,6 +692,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
 			// Check for disabled server features
 			const disabledFeatures: string[] = [];
 			if (!config.web_search_enabled) disabledFeatures.push("web search");
+			if (!config.imagegen_enabled) disabledFeatures.push("image generation");
 			if (!config.sticker_usage_enabled) disabledFeatures.push("sticker usage");
 			if (!config.emoji_usage_enabled) disabledFeatures.push("emoji usage");
 			if (!config.self_teaching_enabled) disabledFeatures.push("self teaching");

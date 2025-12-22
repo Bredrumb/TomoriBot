@@ -31,6 +31,7 @@ export interface ToolStateForContext {
 		web_search_enabled: boolean;
 		self_teaching_enabled: boolean;
 		pin_message_enabled: boolean;
+		imagegen_enabled: boolean;
 	};
 }
 

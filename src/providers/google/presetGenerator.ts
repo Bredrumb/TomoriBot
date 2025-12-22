@@ -1,10 +1,7 @@
 /**
  * AI-Powered Preset Generation for TomoriBot
- * Uses Google Gemini for structured personality generation with optional web search
- *
- * Two-stage approach:
- * 1. Search stage (optional): Gemini 2.5 Flash with Google Search tool
- * 2. Generation stage: Gemini 2.5 Pro with structured output
+ * Uses Google Gemini 3 Flash for structured personality generation with optional web search
+ * in a single API call.
  */
 
 import {
@@ -26,24 +23,7 @@ export interface GeneratePresetParams {
 	additionalInstructions?: string; // Extra generation instructions
 	imageBase64?: string; // Optional image for visual context
 	imageMimeType?: string; // MIME type of the image (e.g., "image/png")
-	searchInfo?: string; // Optional web search results to incorporate
-}
-
-/**
- * Result of character information search
- */
-export interface CharacterSearchResult {
-	characterInfo?: string; // Found character information
-	error?: string; // Error message if search failed
-	errorType?:
-		| "RATE_LIMIT"
-		| "BLOCKED_CONTENT"
-		| "API_KEY"
-		| "CONNECTION"
-		| "MODEL_ERROR"
-		| "TIMEOUT"
-		| "EMPTY_RESPONSE"
-		| "UNKNOWN";
+	useWebSearch?: boolean; // Enable Google Search + URL context tools
 }
 
 /**
@@ -184,315 +164,6 @@ function createGoogleErrorMessage(
 }
 
 /**
- * Additional context for character search
- */
-export interface CharacterSearchContext {
-	description?: string; // Character description from user
-	speechExamples?: string; // How the character should speak
-	additionalInstructions?: string; // Extra instructions
-}
-
-/**
- * Search for character information using Google Search
- * Uses Gemini 2.5 Flash with Google Search tool enabled
- *
- * @param apiKey - Decrypted Google API key
- * @param characterName - Name of the character to search for
- * @param locale - User's locale for error messages
- * @param context - Optional additional context for search
- * @param fallbackModel - Optional fallback model to use if primary model fails
- * @returns Promise<CharacterSearchResult> - Search results or error
- */
-export async function searchCharacterInfo(
-	apiKey: string,
-	characterName: string,
-	locale: string,
-	context?: CharacterSearchContext,
-	fallbackModel?: string,
-): Promise<CharacterSearchResult> {
-	// 1. Validate API key
-	if (!apiKey || apiKey.trim().length < 10) {
-		return {
-			error: createGoogleErrorMessage(
-				"API_KEY",
-				403,
-				"Invalid API key",
-				locale,
-			),
-			errorType: "API_KEY",
-		};
-	}
-
-	try {
-		// 2. Initialize Gemini client
-		const genAI = new GoogleGenAI({ apiKey });
-
-		// 3. Use Gemini 2.5 Flash for fast and cost-effective search
-		const PRIMARY_MODEL = "gemini-2.5-flash";
-		let MODEL_NAME = PRIMARY_MODEL;
-
-		// 4. Configure generation with Google Search tool
-		const generationConfig: GenerateContentConfig = {
-			temperature: 1.0,
-			topP: 0.9,
-			maxOutputTokens: 4096,
-			tools: [{ googleSearch: {} }], // Enable Google Search
-		};
-
-		// 5. Build search prompt with all available context
-		let prompt = `You are a character information researcher. Search for detailed information about the character "${characterName}".
-
-Search Instructions:
-- Use Google Search to find comprehensive information about this character and their franchise
-- Look for personality traits, background story, appearance, relationships, and speaking style
-- Include sample dialogue lines from actual scenes if available, incorporating their speech quirks and catchphrases if applicable
-- If you find the character, provide a detailed biography with sample dialogue examples from actual scenes of the character
-- If this character doesn't exist or you can't find reliable information, respond with exactly "None found, this is an original character from the user"
-
-Character Name: ${characterName}`;
-
-		// 6. Add user-provided context to help with search
-		if (context?.description?.trim()) {
-			prompt += `\n\nUser's Description: ${context.description.trim()}`;
-		}
-
-		if (context?.speechExamples?.trim()) {
-			prompt += `\n\nUser's Speech Examples: ${context.speechExamples.trim()}`;
-		}
-
-		if (context?.additionalInstructions?.trim()) {
-			prompt += `\n\nAdditional Context: ${context.additionalInstructions.trim()}`;
-		}
-
-		prompt += `\n\nProvide either:
-1. A detailed character biography with sample dialogue lines (if character exists)
-2. "None found, this is an original character from the user" (if character doesn't exist)
-
-Focus on gathering authentic information that would help create an accurate character representation.
-
-IMPORTANT: In any dialogue examples, use "{user}" as a placeholder when referring to other people or the conversation partner, and {bot} if referring to the self.`;
-
-		// 7. Prepare user prompt content
-		const userPromptContent: Content = {
-			role: "user",
-			parts: [{ text: prompt }],
-		};
-
-		log.info(`Searching for character: ${characterName}`);
-
-		// 8. Retry logic with fallback model
-		let lastError: CharacterSearchResult | null = null;
-		const modelsToTry = [PRIMARY_MODEL];
-		if (fallbackModel && fallbackModel !== PRIMARY_MODEL) {
-			modelsToTry.push(fallbackModel);
-		}
-
-		for (const currentModel of modelsToTry) {
-			MODEL_NAME = currentModel;
-			log.info(`Attempting character search with model: ${MODEL_NAME}`);
-
-			try {
-				// 9. Create timeout promise (60 seconds for search)
-				const timeoutPromise = new Promise<never>((_, reject) => {
-					setTimeout(
-						() =>
-							reject(new Error("Character search timed out after 45 seconds")),
-						60000,
-					);
-				});
-
-				// 10. Make API call with timeout
-				const result = await Promise.race([
-					genAI.models.generateContent({
-						model: MODEL_NAME,
-						contents: [userPromptContent],
-						config: generationConfig,
-					}),
-					timeoutPromise,
-				]);
-
-				log.info(`Character search completed with model: ${MODEL_NAME}`);
-
-				// 11. Check for blocked content
-				if (result.promptFeedback?.blockReason) {
-					lastError = {
-						error: createGoogleErrorMessage(
-							"BLOCKED_CONTENT",
-							"BLOCKED",
-							`Character search was blocked: ${result.promptFeedback.blockReason}`,
-							locale,
-						),
-						errorType: "BLOCKED_CONTENT",
-					};
-					continue; // Try fallback model if available
-				}
-
-				const responseText = result.text;
-
-				// 12. Check if response is empty
-				if (!responseText || responseText.trim() === "") {
-					lastError = {
-						error: createGoogleErrorMessage(
-							"EMPTY_RESPONSE",
-							undefined,
-							"Character search returned an empty response",
-							locale,
-						),
-						errorType: "EMPTY_RESPONSE",
-					};
-					continue; // Try fallback model if available
-				}
-
-				log.success(`Character search successful with model: ${MODEL_NAME}`);
-				return { characterInfo: responseText.trim() };
-			} catch (apiError: unknown) {
-				const errorMessage = getErrorMessage(apiError);
-
-				// Try to extract error code from Google API error
-				let errorCode: number | undefined;
-				try {
-					if (errorMessage.includes('{"error":')) {
-						const jsonMatch = errorMessage.match(/\{.*\}/s);
-						if (jsonMatch) {
-							const parsedError = JSON.parse(jsonMatch[0]);
-							errorCode = parsedError.error?.code || parsedError.code;
-						}
-					}
-				} catch {
-					// Ignore parsing errors
-				}
-
-				// 13. Handle specific API errors
-				if (errorMessage.includes("timed out")) {
-					lastError = {
-						error: createGoogleErrorMessage(
-							"TIMEOUT",
-							504,
-							errorMessage,
-							locale,
-						),
-						errorType: "TIMEOUT",
-					};
-					continue; // Try fallback model if available
-				}
-
-				if (
-					errorMessage.includes("RESOURCE_EXHAUSTED") ||
-					errorMessage.includes("rate limit")
-				) {
-					lastError = {
-						error: createGoogleErrorMessage(
-							"RATE_LIMIT",
-							errorCode || 429,
-							errorMessage,
-							locale,
-						),
-						errorType: "RATE_LIMIT",
-					};
-					// Don't retry on rate limit
-					return lastError;
-				}
-
-				if (
-					errorMessage.includes("INVALID_ARGUMENT") ||
-					errorMessage.includes("blocked")
-				) {
-					lastError = {
-						error: createGoogleErrorMessage(
-							"BLOCKED_CONTENT",
-							errorCode || 400,
-							errorMessage,
-							locale,
-						),
-						errorType: "BLOCKED_CONTENT",
-					};
-					continue; // Try fallback model if available
-				}
-
-				if (
-					errorMessage.includes("PERMISSION_DENIED") ||
-					errorMessage.includes("API key")
-				) {
-					lastError = {
-						error: createGoogleErrorMessage(
-							"API_KEY",
-							errorCode || 403,
-							errorMessage,
-							locale,
-						),
-						errorType: "API_KEY",
-					};
-					// Don't retry on auth error
-					return lastError;
-				}
-
-				if (
-					errorMessage.includes("model not found") ||
-					errorMessage.includes("MODEL_NOT_FOUND")
-				) {
-					lastError = {
-						error: createGoogleErrorMessage(
-							"MODEL_ERROR",
-							errorCode || 404,
-							errorMessage,
-							locale,
-						),
-						errorType: "MODEL_ERROR",
-					};
-					log.warn(`Model ${MODEL_NAME} not found, trying fallback...`);
-					continue; // Try fallback model if available
-				}
-
-				// Re-throw for outer catch
-				throw apiError;
-			}
-		}
-
-		// 14. If all models failed, return the last error
-		if (lastError) {
-			return lastError;
-		}
-
-		// 15. Fallback error if no lastError was set (should never happen)
-		return {
-			error: createGoogleErrorMessage(
-				"UNKNOWN",
-				undefined,
-				"Character search failed with no error details",
-				locale,
-			),
-			errorType: "UNKNOWN",
-		};
-	} catch (error) {
-		log.error("Character search error:", error);
-		const errorMessage = getErrorMessage(error);
-
-		// 13. Check for network errors
-		if (error instanceof TypeError && errorMessage.includes("network")) {
-			return {
-				error: createGoogleErrorMessage(
-					"CONNECTION",
-					503,
-					errorMessage,
-					locale,
-				),
-				errorType: "CONNECTION",
-			};
-		}
-
-		return {
-			error: createGoogleErrorMessage(
-				"UNKNOWN",
-				undefined,
-				errorMessage,
-				locale,
-			),
-			errorType: "UNKNOWN",
-		};
-	}
-}
-
-/**
  * Sanitize sample dialogue by removing speaker prefixes
  * Removes patterns like "User:", "Character:", "{{char}}:", etc.
  *
@@ -515,19 +186,17 @@ export function sanitizeSampleDialogueText(dialogue: string): string {
 }
 
 /**
- * Generate preset data from user prompts using Gemini 2.5 Pro with structured output
+ * Generate preset data from user prompts using Gemini 3 Flash with structured output
  *
  * @param apiKey - Decrypted Google API key
  * @param params - Generation parameters
  * @param locale - User's locale for error messages
- * @param fallbackModel - Optional fallback model to use if primary model fails
  * @returns Promise<PresetGenerationResult> - Generated preset or error
  */
 export async function generatePresetFromPrompt(
 	apiKey: string,
 	params: GeneratePresetParams,
 	locale: string,
-	fallbackModel?: string,
 ): Promise<PresetGenerationResult> {
 	// 1. Validate API key
 	if (!apiKey || apiKey.trim().length < 10) {
@@ -546,12 +215,13 @@ export async function generatePresetFromPrompt(
 		// 2. Initialize Gemini client
 		const genAI = new GoogleGenAI({ apiKey });
 
-		// 3. Use Gemini 2.5 Pro for best quality structured output
-		const PRIMARY_MODEL = "gemini-2.5-pro";
+		// 3. Use Gemini 3 Flash for structured output with optional web search
+		const PRIMARY_MODEL = "gemini-3-flash-preview";
+		const FALLBACK_MODEL = "gemini-3-flash";
 		let MODEL_NAME = PRIMARY_MODEL;
 
 		// 4. Define JSON schema for structured output with length constraints
-		const responseSchema = {
+		const responseJsonSchema = {
 			type: "object" as const,
 			properties: {
 				attribute_list: {
@@ -595,15 +265,18 @@ export async function generatePresetFromPrompt(
 			],
 		};
 
-		// 5. Configure generation with structured output (no search tool here)
+		// 5. Configure generation with structured output
 		const generationConfig: GenerateContentConfig = {
 			temperature: 1.5, // Creative but controlled
 			topP: 0.9,
 			maxOutputTokens: 8192, // Increased for longer descriptions
 			responseMimeType: "application/json",
-			responseSchema: responseSchema,
-			// No Google Search tool - search is done separately
+			responseJsonSchema: responseJsonSchema,
 		};
+
+		if (params.useWebSearch) {
+			generationConfig.tools = [{ googleSearch: {} }, { urlContext: {} }];
+		}
 
 		// 6. Build generation prompt
 		let prompt = `You are an expert character creator for a Discord chatbot. Create a detailed character profile based on the following information.
@@ -664,14 +337,12 @@ The sample_dialogues_in and sample_dialogues_out MUST follow this structure (exa
    - Avoid repeating patterns from previous dialogues
    - Could be humor, vulnerability, expertise, philosophical musings, or anything that adds dimension`;
 
-		// 7. Add web search information if available
-		if (params.searchInfo && !params.searchInfo.includes("None found")) {
-			prompt += `\n\nWeb Search Results from subagent (feel free to use this information to create an authentic character profile):
-${params.searchInfo}
-
-Use the web search information to accurately represent the character's personality, background, and speaking style from their source material.`;
-		} else if (params.searchInfo?.includes("None found")) {
-			prompt += `\n\nNote: This is an original character. Create a unique profile based on the provided description and image (if any).`;
+		// 7. Add web search instructions if enabled
+		if (params.useWebSearch) {
+			prompt += `\n\nWeb Search Instructions:
+- Use Google Search and URL context tools to gather accurate, up-to-date details when helpful
+- If you cannot find reliable information, treat the character as original and rely on the user's description and image
+- Do not include citations, URLs, or sources in the JSON output`;
 		}
 
 		// 8. Add additional instructions if provided
@@ -718,10 +389,7 @@ Use the web search information to accurately represent the character's personali
 
 		// 12. Retry logic with fallback model
 		let lastError: PresetGenerationResult | null = null;
-		const modelsToTry = [PRIMARY_MODEL];
-		if (fallbackModel && fallbackModel !== PRIMARY_MODEL) {
-			modelsToTry.push(fallbackModel);
-		}
+		const modelsToTry = [PRIMARY_MODEL, FALLBACK_MODEL];
 
 		for (const currentModel of modelsToTry) {
 			MODEL_NAME = currentModel;

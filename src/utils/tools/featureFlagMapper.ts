@@ -19,6 +19,9 @@ export const BUILTIN_TOOL_FEATURE_FLAGS: Record<string, string> = {
 	// Discord interaction tools
 	pin_selected_message: "pin_message",
 
+	// Image generation tools
+	generate_image: "image_gen",
+
 	// Brave Search tools (HTTP-based)
 	brave_web_search: "web_search",
 	brave_image_search: "web_search",
@@ -142,11 +145,13 @@ export function configToFeatureFlags(config: {
 	web_search_enabled: boolean;
 	self_teaching_enabled: boolean;
 	pin_message_enabled: boolean;
+	imagegen_enabled: boolean;
 }): Record<string, boolean> {
 	return {
 		sticker_usage: config.sticker_usage_enabled,
 		web_search: config.web_search_enabled,
 		self_teaching: config.self_teaching_enabled,
 		pin_message: config.pin_message_enabled,
+		image_gen: config.imagegen_enabled,
 	};
 }

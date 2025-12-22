@@ -26,7 +26,6 @@ import {
 } from "../../utils/security/rateLimiter";
 import { safeDownload } from "../../utils/security/safeDownload";
 import {
-	searchCharacterInfo,
 	generatePresetFromPrompt,
 	type GeneratePresetParams,
 } from "../../providers/google/presetGenerator";
@@ -99,6 +98,39 @@ function formatDialoguePreview(
 
 	// 5. Join all examples with line breaks
 	return previews.join("\n\n");
+}
+
+function buildGenerationInputAttachment(params: {
+	characterName: string;
+	characterInfo: string;
+	webSearch: string;
+	additionalInstructions?: string;
+	imageFilename?: string;
+	imageMimeType?: string;
+}): AttachmentBuilder {
+	const lines = [
+		"Preset Generation Inputs",
+		"",
+		`Character Name: ${params.characterName}`,
+		`Web Search: ${params.webSearch}`,
+		"",
+		"Character Info:",
+		params.characterInfo,
+		"",
+		"Additional Instructions:",
+		params.additionalInstructions?.trim() || "(none)",
+	];
+
+	if (params.imageFilename || params.imageMimeType) {
+		lines.push("", "Image Attachment:", params.imageFilename || "(unnamed)");
+		if (params.imageMimeType) {
+			lines.push(`Image MIME Type: ${params.imageMimeType}`);
+		}
+	}
+
+	return new AttachmentBuilder(Buffer.from(lines.join("\n"), "utf8"), {
+		name: "preset_generation_input.txt",
+	});
 }
 
 /**
@@ -272,6 +304,22 @@ export async function execute(
 			return;
 		}
 
+		// 8. Capture optional image attachment and prep snapshot attachment
+		const imageAttachment = modalResult.attachments?.[FILE_UPLOAD_ID];
+		let imageBase64: string | undefined;
+		let imageMimeType: string | undefined;
+		let imageBuffer: Buffer | undefined;
+
+		const getInputAttachment = () =>
+			buildGenerationInputAttachment({
+				characterName,
+				characterInfo,
+				webSearch,
+				additionalInstructions: additionalInst,
+				imageFilename: imageAttachment?.filename,
+				imageMimeType: imageMimeType ?? imageAttachment?.content_type,
+			});
+
 		// 8. Reserve persona operation quota (atomic check+increment for DDoS protection)
 		const quotaReserve = reservePersonaQuota(interaction.user.id);
 		if (!quotaReserve.allowed) {
@@ -292,6 +340,7 @@ export async function execute(
 						)
 						.setColor(ColorCode.ERROR),
 				],
+				files: [getInputAttachment()],
 			});
 			return;
 		}
@@ -301,12 +350,6 @@ export async function execute(
 		// We'll pass the full info as description and let the AI parse it intelligently
 		const characterDesc = characterInfo;
 		const speechExamples = characterInfo; // AI will extract speech patterns from context
-
-		// 9. Get optional image attachment from modal
-		const imageAttachment = modalResult.attachments?.[FILE_UPLOAD_ID];
-		let imageBase64: string | undefined;
-		let imageMimeType: string | undefined;
-		let imageBuffer: Buffer | undefined;
 
 		if (imageAttachment) {
 			// Early memory guard check
@@ -358,6 +401,7 @@ export async function execute(
 
 				await modalSubmitInteraction.editReply({
 					embeds: [embed],
+					files: [getInputAttachment()],
 				});
 				return;
 			}
@@ -381,6 +425,7 @@ export async function execute(
 							)
 							.setColor(ColorCode.ERROR),
 					],
+					files: [getInputAttachment()],
 				});
 				return;
 			}
@@ -409,6 +454,7 @@ export async function execute(
 							.setTitle(localizer(locale, errorKey))
 							.setColor(ColorCode.ERROR),
 					],
+					files: [getInputAttachment()],
 				});
 				return;
 			}
@@ -427,6 +473,7 @@ export async function execute(
 							)
 							.setColor(ColorCode.ERROR),
 					],
+					files: [getInputAttachment()],
 				});
 				return;
 			}
@@ -454,30 +501,7 @@ export async function execute(
 			],
 		});
 
-		// 10. Optionally perform web search with full context
-		let searchInfo: string | undefined;
-		if (webSearch.toLowerCase() === "yes") {
-			log.info("Performing web search for character information...");
-			const searchResult = await searchCharacterInfo(
-				decryptedApiKey,
-				characterName,
-				locale,
-				{
-					description: characterDesc,
-					speechExamples: speechExamples,
-					additionalInstructions: additionalInst,
-				},
-				tomoriState.llm.llm_codename, // Fallback to default model if primary fails
-			);
-
-			if (searchResult.error) {
-				log.warn(`Web search failed: ${searchResult.error}`);
-				// Continue anyway - generation can work without search
-			} else {
-				searchInfo = searchResult.characterInfo;
-				log.success("Web search completed successfully");
-			}
-		}
+		const useWebSearch = webSearch.trim().toLowerCase() === "yes";
 
 		// 11. Prepare generation parameters
 		const genParams: GeneratePresetParams = {
@@ -487,7 +511,7 @@ export async function execute(
 			additionalInstructions: additionalInst,
 			imageBase64,
 			imageMimeType,
-			searchInfo,
+			useWebSearch,
 		};
 
 		// 12. Generate preset data
@@ -496,7 +520,6 @@ export async function execute(
 			decryptedApiKey,
 			genParams,
 			locale,
-			tomoriState.llm.llm_codename, // Fallback to default model if primary fails
 		);
 
 		if (genResult.error || !genResult.preset) {
@@ -521,6 +544,7 @@ export async function execute(
 						)
 						.setColor(ColorCode.ERROR),
 				],
+				files: [getInputAttachment()],
 			});
 			return;
 		}
@@ -561,6 +585,7 @@ export async function execute(
 						)
 						.setColor(ColorCode.ERROR),
 				],
+				files: [getInputAttachment()],
 			});
 			return;
 		}
@@ -595,6 +620,7 @@ export async function execute(
 							)
 							.setColor(ColorCode.ERROR),
 					],
+					files: [getInputAttachment()],
 				});
 				return;
 			}
@@ -623,6 +649,7 @@ export async function execute(
 							)
 							.setColor(ColorCode.ERROR),
 					],
+					files: [getInputAttachment()],
 				});
 				return;
 			}
@@ -660,6 +687,7 @@ export async function execute(
 						)
 						.setColor(ColorCode.ERROR),
 				],
+				files: [getInputAttachment()],
 			});
 			return;
 		}

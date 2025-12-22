@@ -26,6 +26,7 @@ export class GenerateImageTool extends BaseTool {
 	description =
 		"Generate an AI image using Google's Gemini Imagen. Provide a detailed text prompt describing what image you want to create. If you provide a message_id or user_id reference, focus the prompt on edits or additions only and avoid re-describing the reference image. You can also specify an aspect ratio (default is 1:1). After generating, the image will be sent directly to the Discord channel.";
 	category = "utility" as const;
+	requiresFeatureFlag = "image_gen";
 	private static readonly DISCORD_ID_PATTERN = /^\d{17,19}$/;
 
 	parameters: ToolParameterSchema = {
@@ -75,6 +76,15 @@ export class GenerateImageTool extends BaseTool {
 	 */
 	isAvailableFor(provider: string): boolean {
 		return provider === "google" || provider === "openrouter";
+	}
+
+	/**
+	 * Check if image generation is enabled in Tomori config
+	 * @param context - Tool execution context
+	 * @returns True if image generation is enabled
+	 */
+	protected isEnabled(context: ToolContext): boolean {
+		return context.tomoriState.config.imagegen_enabled;
 	}
 
 	/**
@@ -392,6 +402,15 @@ export class GenerateImageTool extends BaseTool {
 			return {
 				success: false,
 				error: `Invalid parameters: ${validation.errors?.join(", ") || `Missing required parameters: ${validation.missingParams?.join(", ")}`}`,
+			};
+		}
+
+		// Check if tool is enabled
+		if (!this.isEnabled(context)) {
+			return {
+				success: false,
+				error: "Image generation is disabled for this server",
+				message: "Image generation is not enabled for this server.",
 			};
 		}
 

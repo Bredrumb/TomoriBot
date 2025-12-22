@@ -148,7 +148,8 @@ export async function importServerData(
 				web_search_enabled = ${importData.config.web_search_enabled},
 				personal_memories_enabled = ${importData.config.personal_memories_enabled},
 				emoji_usage_enabled = ${importData.config.emoji_usage_enabled},
-				sticker_usage_enabled = ${importData.config.sticker_usage_enabled}
+				sticker_usage_enabled = ${importData.config.sticker_usage_enabled},
+				imagegen_enabled = ${importData.config.imagegen_enabled}
 			WHERE tomori_id = ${tomoriId}
 		`;
 

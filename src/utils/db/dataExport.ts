@@ -113,7 +113,8 @@ export async function exportServerData(
 				tc.web_search_enabled,
 				tc.personal_memories_enabled,
 				tc.emoji_usage_enabled,
-				tc.sticker_usage_enabled
+				tc.sticker_usage_enabled,
+				tc.imagegen_enabled
 			FROM tomori_configs tc
 			JOIN tomoris t ON tc.tomori_id = t.tomori_id
 			WHERE t.server_id = ${serverId}
@@ -161,6 +162,7 @@ export async function exportServerData(
 					personal_memories_enabled: configData.personal_memories_enabled,
 					emoji_usage_enabled: configData.emoji_usage_enabled,
 					sticker_usage_enabled: configData.sticker_usage_enabled,
+					imagegen_enabled: configData.imagegen_enabled,
 				},
 				server_memories: serverMemories,
 			},

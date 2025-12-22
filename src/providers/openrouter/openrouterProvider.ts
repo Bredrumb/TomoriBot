@@ -225,6 +225,7 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 					web_search_enabled: tomoriState.config.web_search_enabled,
 					self_teaching_enabled: tomoriState.config.self_teaching_enabled,
 					pin_message_enabled: tomoriState.config.pin_message_enabled,
+					imagegen_enabled: tomoriState.config.imagegen_enabled,
 				},
 			};
 

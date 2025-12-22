@@ -112,16 +112,17 @@ function estimateChatHistoryTokens(
  */
 function estimateToolSchemaTokens(): number {
 	try {
-		const stateForContext = {
-			server_id: "0",
-			config: {
-				// Defaults match DB defaults in schema.sql (true)
-				sticker_usage_enabled: true,
-				web_search_enabled: true,
-				self_teaching_enabled: true,
-				pin_message_enabled: true,
-			},
-		};
+			const stateForContext = {
+				server_id: "0",
+				config: {
+					// Defaults match DB defaults in schema.sql (true)
+					sticker_usage_enabled: true,
+					web_search_enabled: true,
+					self_teaching_enabled: true,
+					pin_message_enabled: true,
+					imagegen_enabled: true,
+				},
+			};
 
 		// /help cost uses Gemini pricing as the example provider → estimate Google tool schemas.
 		const tools = getAvailableToolsForContext("google", stateForContext) ?? [];

@@ -111,7 +111,7 @@ const handler = async (client: Client): Promise<void> => {
 			// 5. Build normal status options with current server count
 			const normalStatus: ActivityOptions[] = [
 				{
-					name: `Running on version ${pkg.version}`,
+					name: `Image Generation Update! (v${pkg.version})`,
 					type: ActivityType.Playing,
 				},
 				{

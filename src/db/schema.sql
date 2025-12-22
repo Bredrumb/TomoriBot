@@ -183,9 +183,11 @@ CREATE TABLE IF NOT EXISTS tomori_configs (
   autoch_threshold INT DEFAULT 0, -- set to 0 for no autoch
 	server_memteaching_enabled BOOLEAN DEFAULT true,
 	attribute_memteaching_enabled BOOLEAN DEFAULT false,
-	sampledialogue_memteaching_enabled BOOLEAN DEFAULT false,
+  sampledialogue_memteaching_enabled BOOLEAN DEFAULT false,
   self_teaching_enabled BOOLEAN DEFAULT true,
   personal_memories_enabled BOOLEAN DEFAULT true,
+  imagegen_enabled BOOLEAN DEFAULT true,
+  videogen_enabled BOOLEAN DEFAULT true,
   humanizer_degree INT DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -205,6 +207,12 @@ SELECT add_column_if_not_exists('tomori_configs', 'web_search_enabled', 'BOOLEAN
 
 -- Add pin message permission (November 2025)
 SELECT add_column_if_not_exists('tomori_configs', 'pin_message_enabled', 'BOOLEAN', 'true');
+
+-- Add image generation permission
+SELECT add_column_if_not_exists('tomori_configs', 'imagegen_enabled', 'BOOLEAN', 'true');
+
+-- Add video generation permission (future use)
+SELECT add_column_if_not_exists('tomori_configs', 'videogen_enabled', 'BOOLEAN', 'true');
 
 -- Add diffusion model reference for image generation 
 SELECT add_column_if_not_exists('tomori_configs', 'diffusion_model_id', 'INTEGER');

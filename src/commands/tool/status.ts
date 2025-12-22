@@ -492,6 +492,14 @@ export async function execute(
 					{
 						name: localizer(
 							locale,
+							"commands.tool.status.field_image_generation",
+						),
+						value: formatBooleanLocalized(config.imagegen_enabled, locale),
+						inline: true,
+					},
+					{
+						name: localizer(
+							locale,
 							"commands.tool.status.field_server_memteaching",
 						),
 						value: formatBooleanLocalized(
