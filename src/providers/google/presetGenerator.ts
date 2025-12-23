@@ -14,6 +14,17 @@ import { log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 
 /**
+ * USE_HARDCODED_DUAL_AGENT_MODELS
+ *
+ * When TRUE: For non-Gemini-3 dual-agent approach, use hardcoded models:
+ *   - Search agent: gemini-2.5-flash (fast search)
+ *   - Generation agent: gemini-2.5-pro (high quality structured output)
+ *
+ * When FALSE: Use the user's configured model for both search and generation agents
+ */
+const USE_HARDCODED_DUAL_AGENT_MODELS = true;
+
+/**
  * Parameters for preset generation
  */
 export interface GeneratePresetParams {
@@ -509,17 +520,35 @@ export async function generatePresetFromPrompt(
 		const configuredModel = params.modelName || "gemini-3-flash-preview";
 		const isGemini3 = configuredModel.startsWith("gemini-3");
 
-		// 4. For non-Gemini 3 models with web search enabled, use dual-agent approach
+		// 4. Determine models to use for dual-agent approach
+		let searchAgentModel: string;
+		let generationAgentModel: string;
+
+		if (USE_HARDCODED_DUAL_AGENT_MODELS) {
+			// Hardcoded: Flash for search, Pro for generation
+			searchAgentModel = "gemini-2.5-flash";
+			generationAgentModel = "gemini-2.5-pro";
+		} else {
+			// User-configured: Same model for both agents
+			searchAgentModel = configuredModel;
+			generationAgentModel = configuredModel;
+		}
+
+		// 5. For non-Gemini 3 models with web search enabled, use dual-agent approach
 		let searchInfo: string | undefined;
 		if (!isGemini3 && params.useWebSearch) {
-			log.info(`🔍 Using dual-agent approach: Search with ${configuredModel}, then generate`);
+			if (USE_HARDCODED_DUAL_AGENT_MODELS) {
+				log.info(`🔍 Using dual-agent approach: Search with ${searchAgentModel}, generate with ${generationAgentModel}`);
+			} else {
+				log.info(`🔍 Using dual-agent approach: Search and generate with ${configuredModel}`);
+			}
 
-			// 4a. Call search agent first
+			// 5a. Call search agent first
 			const searchResult = await searchCharacterInfo(
 				apiKey,
 				params.characterName,
 				locale,
-				configuredModel,
+				searchAgentModel,
 				{
 					description: params.characterDescription,
 					speechExamples: params.speechExamples,
@@ -527,7 +556,7 @@ export async function generatePresetFromPrompt(
 				},
 			);
 
-			// 4b. Handle search errors
+			// 5b. Handle search errors
 			if (searchResult.error) {
 				return {
 					error: searchResult.error,
@@ -535,7 +564,7 @@ export async function generatePresetFromPrompt(
 				};
 			}
 
-			// 4c. Store search results for generation prompt
+			// 5c. Store search results for generation prompt
 			searchInfo = searchResult.characterInfo;
 			log.info(`✅ Search completed, proceeding to generation stage`);
 		} else if (isGemini3) {
@@ -544,7 +573,7 @@ export async function generatePresetFromPrompt(
 			log.info(`📝 Using configured model ${configuredModel} for generation (no web search)`);
 		}
 
-		// 5. Set up model with fallback for Gemini 3, or use configured model directly
+		// 6. Set up model with fallback for Gemini 3, or use appropriate model for dual/single agent
 		let MODEL_NAME: string;
 		let FALLBACK_MODEL: string | undefined;
 
@@ -552,13 +581,17 @@ export async function generatePresetFromPrompt(
 			// For Gemini 3, use flash-preview with fallback to flash
 			MODEL_NAME = "gemini-3-flash-preview";
 			FALLBACK_MODEL = "gemini-3-flash";
+		} else if (!isGemini3 && params.useWebSearch) {
+			// For dual-agent approach, use the generation agent model
+			MODEL_NAME = generationAgentModel;
+			FALLBACK_MODEL = undefined;
 		} else {
-			// For other models, use the configured model
+			// For single-agent non-Gemini-3 (no web search), use configured model
 			MODEL_NAME = configuredModel;
 			FALLBACK_MODEL = undefined;
 		}
 
-		// 6. Define JSON schema for structured output with length constraints
+		// 7. Define JSON schema for structured output with length constraints
 		const responseJsonSchema = {
 			type: "object" as const,
 			properties: {
@@ -603,7 +636,7 @@ export async function generatePresetFromPrompt(
 			],
 		};
 
-		// 7. Configure generation with structured output
+		// 8. Configure generation with structured output
 		const generationConfig: GenerateContentConfig = {
 			temperature: 1.5, // Creative but controlled
 			topP: 0.9,
@@ -612,12 +645,12 @@ export async function generatePresetFromPrompt(
 			responseJsonSchema: responseJsonSchema,
 		};
 
-		// 8. Only add web search tools for Gemini 3 models (dual-agent approach handles search separately)
+		// 9. Only add web search tools for Gemini 3 models (dual-agent approach handles search separately)
 		if (isGemini3 && params.useWebSearch) {
 			generationConfig.tools = [{ googleSearch: {} }, { urlContext: {} }];
 		}
 
-		// 6. Build generation prompt
+		// 10. Build generation prompt
 		let prompt = `You are an expert character creator for a Discord chatbot. Create a detailed character profile based on the following information.
 
 Character Name: ${params.characterName}
