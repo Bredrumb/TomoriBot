@@ -22,6 +22,8 @@ The following data is accessed temporarily during Trigger processing (as defined
 - **Discord messages:** Latest content (typically last 80 messages) in the triggered Discord text channel are read in-memory to build conversation context and sent to your configured Provider for AI responses. This data is immediately discarded after the response is generated.
 - **Attachments and media:** Images you upload for persona avatars, message video/image attachments, or profile picture analysis (e.g., `/peek profile_picture`) are processed in-memory and sent to your configured AI provider if needed, but are NOT stored by TomoriBot. Once processing completes, these files are discarded.
 - **Server asset URLs:** When emojis/stickers are used in AI responses, their image URLs are fetched fresh from Discord each time and may be sent to AI providers as conversation context. These URLs are not stored.
+- **Server and channel metadata:** Server names, descriptions, channel names, and channel descriptions are fetched in real-time during conversations to provide contextual understanding. This metadata is processed in-memory and is NOT stored in our database.
+- **User presence information:** Current user activities (e.g., what you're listening to, playing, or custom status) may be accessed during conversations to provide contextual awareness. This presence data is processed in-memory and is NOT stored.
 
 ## 2) How We Use Data
 - Operate and improve bot functionality, including localization, persona rendering, safety checks, and permission gating.

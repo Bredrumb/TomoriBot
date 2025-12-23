@@ -158,7 +158,7 @@ export default {
 				"禁止コンテンツが検出されたため、応答はブロックされました。",
 			prohibited_content_admin_notice_title: "管理者への通知",
 			prohibited_content_admin_notice_description:
-				"送信されたコンテンツ（メディア、会話メッセージ、記憶）がAIプロバイダーのコンテンツポリシーに準拠していることを確認してください。`/tool refresh`で会話コンテンツをクリアしてください。",
+				"確認: メッセージ(`/tool refresh`)、性格/記憶(`/data export`)、問題のあるメンバーをブラックリスト(`/server blacklist`)、またはプロバイダを変更(`/config model`)",
 			streaming_failed_description:
 				"応答をストリーミング中に問題が発生しました。",
 
@@ -177,7 +177,7 @@ export default {
 
 			content_blocked_title: "🔴️ コンテンツがブロックされました",
 			content_blocked_tip:
-				"コンテンツポリシーに準拠するようメッセージを言い換えてください",
+				"確認: メッセージ(`/tool refresh`)、性格/記憶(`/data export`)、問題のあるメンバーをブラックリスト(`/server blacklist`)、またはプロバイダを変更(`/config model`)",
 
 			timeout_title: "🟡️ リクエストタイムアウト",
 			timeout_tip: "メッセージを短くするか再度お試しください",
