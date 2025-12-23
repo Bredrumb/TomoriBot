@@ -590,6 +590,7 @@ export async function execute(
 			imageBase64,
 			imageMimeType,
 			useWebSearch,
+		modelName: isOpenrouterProvider ? undefined : tomoriState.llm.llm_codename, // Pass model for Google/Gemini
 		};
 
 		let openrouterTools: Array<Record<string, unknown>> | undefined;
