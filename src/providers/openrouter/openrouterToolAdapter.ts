@@ -357,7 +357,6 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
 										allTools.push({
 											type: "function",
 											function: openAIDeclaration,
-											function: openAIDeclaration,
 										});
 									}
 									addedMCPToolsCount++;
