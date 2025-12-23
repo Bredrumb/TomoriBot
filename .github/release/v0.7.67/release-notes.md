@@ -54,7 +54,7 @@ PS: Gemini Free Tiers are currently stricter than before, might be better to fin
 - More "LLM-friendly" format for TomoriBot (less numerical IDs prone to error) when she:
   - Uses emojis -> :emoji:
   - Uses stickers -> Call tool with sticker name
-  - Mentions users -> @user
+  - Mentions users -> @{user}
 
 
 
