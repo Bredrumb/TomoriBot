@@ -720,8 +720,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Check if GitHub release already exists
+        id: release-check
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          VERSION: ${{ needs.check-release-assets.outputs.version }}
+        run: |
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "Release v$VERSION already exists. Skipping release creation."
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Release v$VERSION does not exist. Proceeding."
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Prepare release notes and Discord notification
         id: release-notes
+        if: steps.release-check.outputs.exists != 'true'
         env:
           VERSION: ${{ needs.check-release-assets.outputs.version }}
           COMMIT_HASH: ${{ needs.verify-ecs-deployment.outputs.commit-hash }}
@@ -761,6 +776,7 @@ jobs:
           echo "image-name=$imageName" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release (Source Code Only)
+        if: steps.release-check.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
           VERSION: ${{ needs.check-release-assets.outputs.version }}
@@ -778,7 +794,7 @@ jobs:
           echo "Future releases may include installer packages (.exe, .app, etc.) for easier setup."
 
       - name: Send Discord notification
-        if: always()
+        if: steps.release-check.outputs.exists != 'true'
         env:
           STATUS: ${{ needs.verify-ecs-deployment.outputs.deployment-status }}
           VERSION: ${{ needs.check-release-assets.outputs.version }}
