@@ -84,7 +84,7 @@ After adding her to your server through either method above, run the `/config se
 ![Screenshots 4](img/scs/4th.png)
 
 <h3 align="center">...and much MORE!</h3>
-<p align="center">TomoriBot is currently in Beta, with new features currently in testing (please report through GitHub issues or the official Discord for any bugs!)</p>
+<p align="center">TomoriBot is currently in Beta, with new features such as Image Generation currently in testing (please report through GitHub issues or the official Discord for any bugs!)</p>
 
 
 <!-- GETTING STARTED -->
@@ -255,6 +255,27 @@ Simply mention the bot in a server or use the configured trigger words to start 
 
 Or slide into TomoriBot's DMs and say hi!
 
+### Updating TomoriBot
+
+Before updating, consider backing up your database (`bun run backup-db`) and reviewing the release notes.
+
+**Manual (non-Docker) update:**
+```sh
+# Stop your running bot process first (Ctrl+C / service stop / pm2 stop / etc.)
+git pull
+bun install
+
+# If you run from dist/ (bun run start), rebuild:
+bun run build
+```
+
+**Docker Compose update:**
+```sh
+git pull
+docker compose build
+docker compose up -d
+```
+
 ### Alternative: Docker Compose
 
 If you prefer containerized deployment, you can use Docker Compose instead of manual setup:
@@ -304,7 +325,8 @@ The PostgreSQL datasource is automatically configured and ready to create dashbo
 - [x] Multiple Provider Support
 - [ ] TomoriBot Wiki (for local set-up and locale contributions)
 - [ ] Replace AI-generated placeholder assets
-- [ ] Image/Video generation capabilities
+- [x] Image Generation Capabilities
+- [ ] Video Generation Capabilities
 - [ ] KoboldCPP integration (local only)
 - [ ] Voice channel integration
 - [ ] Web dashboard for configuration
@@ -315,7 +337,7 @@ See the [open issues](https://github.com/Bredrumb/TomoriBot/issues) for a full l
 <!-- CONTRIBUTING -->
 ## Contributing
 
-Since TomoriBot is still in Beta, any contributions made are **greatly appreciated**, especially for localization to help her become truly multilingual.
+Since TomoriBot is still in Beta, any contributions made are **greatly appreciated**, especially for localization.
 
 To contribute a new language translation:
 

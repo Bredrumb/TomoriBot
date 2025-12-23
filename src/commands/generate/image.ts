@@ -196,21 +196,48 @@ async function generateImageWithOpenRouter(
 
 	const result = await response.json();
 
-	// Extract image from response
-	if (result.choices?.[0]?.message?.images) {
-		const firstImage = result.choices[0].message.images[0];
+	// Extract image from response.
+	// OpenRouter may return images either in `message.images` or embedded in `message.content` parts.
+	const message = result.choices?.[0]?.message;
+
+	let imageUrl: string | null = null;
+
+	if (message?.images?.[0]) {
+		const firstImage = message.images[0];
 		// OpenRouter may return either snake_case (image_url) or camelCase (imageUrl)
-		const dataUrl =
-			firstImage?.image_url?.url || firstImage?.imageUrl?.url || null;
+		imageUrl = firstImage?.image_url?.url || firstImage?.imageUrl?.url || null;
+	} else if (Array.isArray(message?.content)) {
+		const firstImagePart = message.content.find(
+			(part: unknown) =>
+				typeof part === "object" &&
+				part !== null &&
+				"type" in part &&
+				(part as { type?: string }).type === "image_url",
+		) as { image_url?: { url?: string } } | undefined;
 
-		if (dataUrl) {
-			// OpenRouter returns data URLs like "data:image/png;base64,..."
-			const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+		imageUrl = firstImagePart?.image_url?.url || null;
+	}
 
-			if (matches) {
+	if (imageUrl) {
+		// OpenRouter may return data URLs like "data:image/png;base64,..." OR a normal URL.
+		const dataUrlMatches = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
+		if (dataUrlMatches) {
+			return {
+				imageData: dataUrlMatches[2],
+				mimeType: dataUrlMatches[1],
+			};
+		}
+
+		// Fallback: fetch remote URL and convert to base64.
+		if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+			const imageResponse = await fetch(imageUrl);
+			if (imageResponse.ok) {
+				const mimeType =
+					imageResponse.headers.get("content-type")?.split(";")[0] || null;
+				const arrayBuffer = await imageResponse.arrayBuffer();
 				return {
-					imageData: matches[2], // Base64 data
-					mimeType: matches[1], // MIME type
+					imageData: Buffer.from(arrayBuffer).toString("base64"),
+					mimeType,
 				};
 			}
 		}

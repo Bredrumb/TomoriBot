@@ -307,11 +307,11 @@ export default {
 			server_memory_footer:
 				"Server managers can manage this memory using `/teach` and `/forget` commands.",
 			personal_memory_footer_manage:
-				"You can manage your personal memories using `/teach` and `/forget` commands.",
+				"You can manage your personal memories using `/teach` and `/forget` commands. Opt out of personal memory storage with `/personal privacy`.",
 			personal_memory_footer_personalization_disabled:
-				"This memory was saved, but personalization features are currently disabled on this server, so it will not have an immediate effect here.",
+				"This memory was saved, but personalization features are currently disabled on this server, so it will not have an immediate effect here. Opt out of personal memory storage with `/personal privacy`.",
 			personal_memory_footer_user_blacklisted:
-				"This memory was saved, but the user in question is currently blacklisted from personalization features on this server, so it will not have an immediate effect here",
+				"This memory was saved, but the user in question is currently blacklisted from personalization features on this server, so it will not have an immediate effect here. Opt out of personal memory storage with `/personal privacy`.",
 		},
 	},
 
@@ -773,8 +773,9 @@ I have built-in features to help reduce costs from abusers or spammers in your s
 - Do **NOT** share this API key with anyone else`,
 				step2_title: `Step 2: Run the Setup Command`,
 				step2_description: `- Use {configSetup} to securely add your API key and initialize TomoriBot
-- Your API key is encrypted and stored safely
-- Each server has its own configuration`,
+- (Recommended) Run {serverInitializeExpressions} so I can properly use your server's emojis/stickers
+	- Your API key is encrypted and stored safely
+	- Each server has its own configuration`,
 				step3_title: `Step 3: Start Chatting!`,
 				step3_description: `- Just mention me or reply to my messages to chat
 - Change how I get triggered using {serverTrigger}
@@ -889,12 +890,13 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
 3. Copy this API key {configSetup} or {configApikeySet}`,
 				openrouter_model_selection_title: `Choosing Models:`,
 				openrouter_model_selection_description: `OpenRouter offers access to many different AI models.
-- Currently available models are based on popularity and performance, with tags for distinction:
-  - (TOOLS) = Supports tool usage (web search, self-learning, stickers, etc.)
-  - (IMAGES) = Sees images
-  - (FREE) = No cost, but may have rate limits
-- If you can't find what you want, try using the \`account-setting\` provider option
-- Suggest additional models in {supportServer}`,
+	- Currently available models are based on popularity and performance, with tags for distinction:
+	  - (TOOLS) = Supports tool usage (web search, self-learning, stickers, etc.)
+	  - (IMAGES) = Sees images
+	  - (STRUCT) = Supports structured output (needed for persona generation and expression initialization)
+	  - (FREE) = No cost, but may have rate limits
+	- If you can't find what you want, try using the \`account-setting\` provider option
+	- Suggest additional models in {supportServer}`,
 				openrouter_pricing_title: `Important Pricing Notes:`,
 				openrouter_pricing_description: `- **Free models have strict rate limits** - paid models are recommended for better reliability
 - **Always check pricing** on OpenRouter before selecting a model to avoid unexpected costs
@@ -1207,7 +1209,7 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 					// invalid_model_title: `Invalid Model`,
 					invalid_model_description: `The selected model name is not valid or available.`,
 					already_selected_title: `Model Already Selected`,
-					already_selected_description: `I'm is already using the \`{model_name}\` model.`,
+					already_selected_description: `I'm already using the \`{model_name}\` model.`,
 					validating_api_key_compatibility: `Validating API key compatibility with new provider...`,
 					api_key_incompatible_title: `API Key Incompatible`,
 					api_key_incompatible_description: `The current API key is not compatible with the {model_name} model from {provider}. Please set a valid API key for {provider} using \`/config apikey set\`.`,
@@ -1512,34 +1514,34 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				error_download_timeout: `Avatar download timed out after 15 seconds. Please try again.`,
 				error_api_timeout: `Discord API call timed out after 15 seconds. Please try again.`,
 			},
-		// Initialize subcommand group
-		initialize: {
-			description: `Initialize server features with AI analysis`,
-			expressions: {
-				description: `Analyze and classify all custom emojis and stickers using AI vision`,
-				// Success messages
-				success_title: `Expressions Initialized`,
-				success_description: `Successfully analyzed and classified {emoji_count} emojis and {sticker_count} stickers ({total} total).`,
-				// Error messages
-				model_incompatible_title: `Incompatible Model`,
-				model_incompatible_description: `Your current model ({model_name}) does not support {missing_capability}. Please switch to a model with both IMAGE VISION and STRUCTURED OUTPUT capabilities using \`/config model text\`.`,
-				already_initialized_title: `Nothing to Initialize`,
-				already_initialized_description: `All emojis and stickers have already been analyzed and classified.`,
-				partial_success_title: `Partially Successful`,
-				partial_success_description: `Analyzed {successful} of {total} expressions. {failed} expressions could not be processed.`,
-				no_matches_title: `No Matches Found`,
-				no_matches_description: `The AI analyzed the expressions but could not match any results to the database. This may be due to a processing error.`,
-				llm_error_title: `AI Analysis Failed`,
-				llm_error_description: `The AI model encountered an error while analyzing expressions. Please try again later.`,
-				validation_error_title: `Invalid AI Response`,
-				validation_error_description: `The AI returned an invalid response format. This may be a model issue.`,
-				// Progress messages
-				progress_fetching: `Fetching uninitialized expressions...`,
-				progress_building: `Found {emoji_count} emojis and {sticker_count} stickers to analyze...`,
-				progress_analyzing: `Analyzing {total} images...`,
-				progress_saving: `Saving results to database...`,
+			// Initialize subcommand group
+			initialize: {
+				description: `Initialize server features with AI analysis`,
+				expressions: {
+					description: `Analyze and classify all custom emojis and stickers using AI vision`,
+					// Success messages
+					success_title: `Expressions Initialized`,
+					success_description: `Successfully analyzed and classified {emoji_count} emojis and {sticker_count} stickers ({total} total).`,
+					// Error messages
+					model_incompatible_title: `Incompatible Model`,
+					model_incompatible_description: `Your current model ({model_name}) does not support {missing_capability}. Please switch to a model with both IMAGE VISION and STRUCTURED OUTPUT capabilities using \`/config model text\`.`,
+					already_initialized_title: `Nothing to Initialize`,
+					already_initialized_description: `All emojis and stickers have already been analyzed and classified.`,
+					partial_success_title: `Partially Successful`,
+					partial_success_description: `Analyzed {successful} of {total} expressions. {failed} expressions could not be processed.`,
+					no_matches_title: `No Matches Found`,
+					no_matches_description: `The AI analyzed the expressions but could not match any results to the database. This may be due to a processing error.`,
+					llm_error_title: `AI Analysis Failed`,
+					llm_error_description: `The AI model encountered an error while analyzing expressions. Please try again later.`,
+					validation_error_title: `Invalid AI Response`,
+					validation_error_description: `The AI returned an invalid response format. This may be a model issue.`,
+					// Progress messages
+					progress_fetching: `Fetching uninitialized expressions...`,
+					progress_building: `Found {emoji_count} emojis and {sticker_count} stickers to analyze...`,
+					progress_analyzing: `Analyzing {total} images...`,
+					progress_saving: `Saving results to database...`,
+				},
 			},
-		},
 		},
 
 		// Personal user configuration commands

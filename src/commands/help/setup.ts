@@ -46,6 +46,11 @@ export async function execute(
 			"config",
 			"setup",
 		);
+		const serverInitializeExpressionsMention = commandRegistry.getCommandMention(
+			"server",
+			"initialize",
+			"expressions",
+		);
 		const serverTriggerMention = commandRegistry.getCommandMention(
 			"server",
 			"trigger",
@@ -102,6 +107,7 @@ export async function execute(
 						nameKey: "commands.help.setup.step2_title",
 						value: localizer(locale, "commands.help.setup.step2_description", {
 							configSetup: configSetupMention,
+							serverInitializeExpressions: serverInitializeExpressionsMention,
 						}),
 						inline: false,
 					},

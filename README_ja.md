@@ -255,6 +255,27 @@ bun run dev
 
 または、TomoriBotのDMに入って挨拶してください！
 
+### TomoriBotの更新
+
+更新前に、データベースのバックアップ（`bun run backup-db`）を取り、リリースノートを確認することをおすすめします。
+
+**手動（Dockerなし）で更新する場合：**
+```sh
+# まず起動中のボットを停止します（Ctrl+C / service stop / pm2 stop など）
+git pull
+bun install
+
+# dist/ から起動している場合（bun run start）は再ビルド：
+bun run build
+```
+
+**Docker Composeで更新する場合：**
+```sh
+git pull
+docker compose build
+docker compose up -d
+```
+
 ### 代替方法：Docker Compose
 
 コンテナ化されたデプロイを希望する場合、手動セットアップの代わりにDocker Composeを使用できます：

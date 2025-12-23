@@ -31,7 +31,8 @@ VALUES
   ('novelai', 'kayra-v1', false, false, false, false, false, false, false, false, false, false, false, 'Legacy Kayra model for storytelling and roleplay', 'ストーリーテリングとロールプレイ向けのレガシーKayraモデル'),
   -- OpenRouter Models (structured output support varies by model, user configures manually)
   ('openrouter', 'stepfun-ai/step3', false, false, false, false, false, false, true, false, false, false, true, 'General-use model that can see images and is also great in role-play', '画像を見ることができ、ロールプレイにも優れた汎用モデル'),
-  ('openrouter', 'z-ai/glm-4.6', false, false, true, false, false, true, false, false, false, false, true, 'State-of-the-art human-aligned model that also performs natural role-play', '自然なロールプレイも可能な最先端の人間調整型モデル'),
+  ('openrouter', 'z-ai/glm-4.6', false, false, true, true, false, true, false, false, false, false, true, 'State-of-the-art human-aligned model that also performs natural role-play', '自然なロールプレイも可能な最先端の人間調整型モデル'),
+  ('openrouter', 'z-ai/glm-4.7', false, false, true, false, false, true, false, false, false, false, true, 'Latest State-of-the-art human-aligned model that also performs natural role-play', '最新の自然なロールプレイも可能な最先端の人間調整型モデル'),
   ('openrouter', 'thedrummer/cydonia-24b-v4.1', false, false, false, false, false, false, false, false, false, true, true, 'Uncensored model specializing in creative writing and role-play', '創作とロールプレイに特化した無検閲モデル'),
   ('openrouter', 'deepseek/deepseek-v3.2-exp', false, false, false, false, false, true, false, false, false, true, true, 'Cost-efficient Experimental Model that is also great in role-play', 'ロールプレイにも優れたコスト効率の良い実験モデル'),
   ('openrouter', 'tngtech/deepseek-r1t2-chimera', false, false, true, false, false, true, false, false, false, true, true, 'Advanced Chimera DeepSeek model that is great at role-playing', 'ロールプレイに優れた高度なChimera DeepSeekモデル'),
@@ -49,7 +50,7 @@ VALUES
   ('openrouter', 'mistralai/mistral-small-3.1-24b-instruct:free', false, true, false, false, true, true, true, false, false, false, false, 'Free multimodal model with enhanced reasoning and vision capabilities', '強化された推論とビジョン機能を備えた無料のマルチモーダルモデル'),
   ('openrouter', 'z-ai/glm-4.5-air:free', false, false, false, false, true, true, false, false, false, false, false, 'Free lightweight model with thinking mode for reasoning and agent tasks', '推論とエージェントタスク向けのシンキングモードを備えた無料軽量モデル'),
   ('openrouter', 'tngtech/tng-r1t-chimera:free', false, false, false, false, true, true, false, false, false, false, false, 'Free experimental model for creative storytelling and character interaction', '創作とキャラクター対話に特化した無料の実験モデル'),
-  ('openrouter', 'account-setting', false, false, false, false, false, false, false, false, false, false, false, 'For advanced users that cannot find the model they want, uses the set Default Model in your OpenRouter settings', '目的のモデルが見つからない上級者向け、OpenRouter設定のデフォルトモデルを使用')
+  ('openrouter', 'account-setting', false, false, false, false, false, true, true, true, true, false, true, 'For advanced users that cannot find the model they want, uses the set Default Model in your OpenRouter settings', '目的のモデルが見つからない上級者向け、OpenRouter設定のデフォルトモデルを使用')
 ON CONFLICT (llm_codename) DO UPDATE SET
   llm_description = EXCLUDED.llm_description,
   ja_description = EXCLUDED.ja_description,
@@ -91,7 +92,10 @@ VALUES
    'OpenRouter経由の品質と速度のバランスが取れた高速で効率的な画像生成'),
   ('openrouter', 'google/gemini-3-pro-image-preview', false, false, false, false,
    'Advanced image generation via OpenRouter with enhanced quality and resolution options',
-   'OpenRouter経由の強化された品質と解像度オプションを備えた高度な画像生成')
+   'OpenRouter経由の強化された品質と解像度オプションを備えた高度な画像生成'),
+  ('openrouter', 'openai/gpt-5-image-mini', false, false, false, false,
+   'Lightweight OpenAI image generation model via OpenRouter',
+   'OpenRouter経由の軽量なOpenAI画像生成モデル')
 ON CONFLICT (codename) DO UPDATE SET
   model_description = EXCLUDED.model_description,
   ja_description = EXCLUDED.ja_description,

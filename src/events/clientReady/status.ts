@@ -115,12 +115,8 @@ const handler = async (client: Client): Promise<void> => {
 					type: ActivityType.Playing,
 				},
 				{
-					name: "Listening for /help",
+					name: `Listening for /help in ${serverCount} servers`,
 					type: ActivityType.Listening,
-				},
-				{
-					name: `Watching over ${serverCount} servers`,
-					type: ActivityType.Watching,
 				},
 			];
 

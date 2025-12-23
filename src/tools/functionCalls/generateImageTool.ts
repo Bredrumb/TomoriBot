@@ -44,7 +44,7 @@ export class GenerateImageTool extends BaseTool {
 			user_id: {
 				type: "string",
 				description:
-					"Optional: Discord user ID whose profile picture should be used as a reference image. Useful for avatar-based edits. Can be combined with message_id references.",
+					"Optional: Discord user ID whose profile picture should be used as a reference image. Useful for avatar-based edits. Pass your own ID to edit your own avatar. Can be combined with message_id references.",
 			},
 			aspect_ratio: {
 				type: "string",
@@ -129,7 +129,11 @@ export class GenerateImageTool extends BaseTool {
 			}
 
 			// Array to collect all image URLs (from both attachments and embeds)
-			const imageUrls: Array<{ url: string; mimeType: string; source: string }> = [];
+			const imageUrls: Array<{
+				url: string;
+				mimeType: string;
+				source: string;
+			}> = [];
 
 			// 2. Extract images from direct attachments
 			const imageAttachments = message.attachments.filter((attachment) =>
@@ -363,20 +367,49 @@ export class GenerateImageTool extends BaseTool {
 
 		const result = await response.json();
 
-		// Extract image from response
-		if (result.choices?.[0]?.message?.images) {
-			const firstImage = result.choices[0].message.images[0];
-			// OpenRouter may return either snake_case (image_url) or camelCase (imageUrl)
-			const dataUrl =
-				firstImage?.image_url?.url || firstImage?.imageUrl?.url || null;
-			if (dataUrl) {
-				// OpenRouter returns data URLs like "data:image/png;base64,..."
-				const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+		// Extract image from response.
+		// OpenRouter may return images either in `message.images` or embedded in `message.content` parts.
+		const message = result.choices?.[0]?.message;
 
-				if (matches) {
+		let imageUrl: string | null = null;
+
+		if (message?.images?.[0]) {
+			const firstImage = message.images[0];
+			// OpenRouter may return either snake_case (image_url) or camelCase (imageUrl)
+			imageUrl =
+				firstImage?.image_url?.url || firstImage?.imageUrl?.url || null;
+		} else if (Array.isArray(message?.content)) {
+			const firstImagePart = message.content.find(
+				(part: unknown) =>
+					typeof part === "object" &&
+					part !== null &&
+					"type" in part &&
+					(part as { type?: string }).type === "image_url",
+			) as { image_url?: { url?: string } } | undefined;
+
+			imageUrl = firstImagePart?.image_url?.url || null;
+		}
+
+		if (imageUrl) {
+			// OpenRouter may return data URLs like "data:image/png;base64,..." OR a normal URL.
+			const dataUrlMatches = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
+			if (dataUrlMatches) {
+				return {
+					imageData: dataUrlMatches[2],
+					mimeType: dataUrlMatches[1],
+				};
+			}
+
+			// Fallback: fetch remote URL and convert to base64.
+			if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+				const imageResponse = await fetch(imageUrl);
+				if (imageResponse.ok) {
+					const mimeType =
+						imageResponse.headers.get("content-type")?.split(";")[0] || null;
+					const arrayBuffer = await imageResponse.arrayBuffer();
 					return {
-						imageData: matches[2], // Base64 data
-						mimeType: matches[1], // MIME type
+						imageData: Buffer.from(arrayBuffer).toString("base64"),
+						mimeType,
 					};
 				}
 			}
@@ -722,7 +755,9 @@ export class GenerateImageTool extends BaseTool {
 	/**
 	 * Fetch an image URL and convert to base64 (used for profile pictures)
 	 */
-	private async fetchAndConvertImageToBase64(imageUrl: string): Promise<string> {
+	private async fetchAndConvertImageToBase64(
+		imageUrl: string,
+	): Promise<string> {
 		const response = await fetch(imageUrl);
 		if (!response.ok) {
 			throw new Error(

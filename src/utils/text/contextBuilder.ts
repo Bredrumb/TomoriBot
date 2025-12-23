@@ -822,20 +822,8 @@ export async function buildContext({
 	// 7. Users in Conversation (ALL user-specific dynamic data)
 	// This section combines: time/date, channel, user status, memories, and reminders
 	if (userList.length > 0) {
-		// 1. Get timezone info
-		const timezoneOffset = tomoriConfig.timezone_offset ?? 0;
-		const currentTime = getCurrentTimeWithOffset(timezoneOffset);
-		const timezoneLabel = formatUTCOffset(timezoneOffset);
-		const timeOfDayPhrase = getTimeOfDayPhrase(timezoneOffset);
-
-		let usersInConversationText = "";
-
-		// 2. Header with time/channel info
-		if (isDMChannel) {
-			usersInConversationText = `[System: At ${currentTime} (${timezoneLabel}), ${timeOfDayPhrase}, the following users are having a Direct Message conversation:\n\n`;
-		} else {
-			usersInConversationText = `[System: In #${channelName} at ${currentTime} (${timezoneLabel}), ${timeOfDayPhrase}, the following users are having a conversation:\n\n`;
-		}
+		let usersInConversationText =
+			"[System: The following users are having a conversation:\n\n";
 
 		usersInConversationText +=
 			`If ${botName} wants to mention and ping any of these users, simply prepend an "@" symbol to their mention handle, like @{username} (case-insensitive). If a name is duplicated, use the handle with the user ID suffix (e.g., @{name|123456789012345678}). This ensures the user gets a notification from ${botName}'s message.\n\n`;
@@ -1092,7 +1080,17 @@ export async function buildContext({
 			usersInConversationText += "\n"; // Blank line between users
 		}
 
-		usersInConversationText += "]"; // Close [System: ...] block
+		// Append channel/time context last to keep more stable prompt content up front.
+		const timezoneOffset = tomoriConfig.timezone_offset ?? 0;
+		const currentTime = getCurrentTimeWithOffset(timezoneOffset);
+		const timezoneLabel = formatUTCOffset(timezoneOffset);
+		const timeOfDayPhrase = getTimeOfDayPhrase(timezoneOffset);
+		const conversationContext = isDMChannel
+			? "Conversation context: Direct Message."
+			: `Conversation context: #${channelName}.`;
+		const timeContext = `Current time: ${currentTime} (${timezoneLabel}), ${timeOfDayPhrase}.`;
+
+		usersInConversationText += `${conversationContext}\n${timeContext}\n]`; // Close [System: ...] block
 
 		// 11. Add as "user" role (goes in dialogue contents)
 		contextItems.push({
