@@ -2,7 +2,6 @@ import { type Client, type Guild, Sticker } from "discord.js";
 import { sql } from "@/utils/db/client";
 import type { EventFunction, EventArg } from "../../types/discord/global"; // Rule 14
 import type { ErrorContext } from "../../types/db/schema"; // Rule 14, Import ServerRow
-import { serverStickerSchema } from "../../types/db/schema"; // Rule 6
 import { log } from "../../utils/misc/logger"; // Rule 18
 // Removed loadServerState import
 
@@ -49,7 +48,10 @@ const handleGuildStickersUpdate: EventFunction = async (
 		serverId = serverRow.server_id!; // Assign the found server ID
 
 		// 3. Fetch the current complete list of stickers from the guild cache
-		// ... (rest of the code remains the same) ...
+		const currentStickers = Array.from(guild.stickers.cache.values());
+		log.info(
+			`Found ${currentStickers.length} stickers in cache for guild ${guild.id}. Refreshing DB...`,
+		);
 
 		// 4. Perform database update within a transaction (Rule 15)
 		await sql.transaction(async (tx) => {
@@ -69,18 +71,7 @@ const handleGuildStickersUpdate: EventFunction = async (
 				existingStickers.map((s) => [s.sticker_disc_id, s]),
 			);
 
-			// 4b. Delete all existing stickers for this server
-			const { rowCount: deletedCount } = await tx`
-                DELETE FROM server_stickers
-                WHERE server_id = ${serverId}
-            `;
-			log.info(
-				`Deleted ${deletedCount} existing sticker entries for server ${serverId}.`,
-			);
-
-			// 4c. Map current stickers to database format
-			// ... (mapping logic remains the same) ...
-			const currentStickers = Array.from(guild.stickers.cache.values());
+			// 4b. Map current stickers to database format for bulk upsert
 			const stickerValues = currentStickers.map((s) => {
 				const existing = existingStickerMetadata.get(s.id);
 				const emotionKey =
@@ -88,6 +79,7 @@ const handleGuildStickersUpdate: EventFunction = async (
 						? existing.emotion_key
 						: "unset";
 				return {
+					server_id: serverId,
 					sticker_disc_id: s.id,
 					sticker_name: s.name,
 					sticker_desc: existing?.sticker_desc ?? s.description ?? "",
@@ -96,43 +88,45 @@ const handleGuildStickersUpdate: EventFunction = async (
 				};
 			});
 
-			// 4d. Insert the current stickers (similar to setupServer logic)
-			// ... (insert loop remains the same) ...
-			let insertedCount = 0;
-			for (const {
-				sticker_disc_id,
-				sticker_name,
-				sticker_desc,
-				emotion_key,
-				sticker_format,
-			} of stickerValues) {
-				const [row] = await tx`
-                    INSERT INTO server_stickers (
-                        server_id,
-                        sticker_disc_id,
-                        sticker_name,
-                        sticker_desc,
-                        emotion_key,
-                        sticker_format
-                    ) VALUES (
-                        ${serverId},
-                        ${sticker_disc_id},
-                        ${sticker_name},
-                        ${sticker_desc},
-                        ${emotion_key},
-                        ${sticker_format}
-                    )
-                    ON CONFLICT (server_id, sticker_disc_id) DO NOTHING
-                    RETURNING *
-                `;
-				if (row) {
-					serverStickerSchema.parse(row); // Rule 6
-					insertedCount++;
-				}
+			// 4c. Bulk upsert all current stickers (single query instead of N queries)
+			if (stickerValues.length > 0) {
+				const upsertedRows = await tx`
+					INSERT INTO server_stickers ${tx(stickerValues, "server_id", "sticker_disc_id", "sticker_name", "sticker_desc", "emotion_key", "sticker_format")}
+					ON CONFLICT (server_id, sticker_disc_id) DO UPDATE SET
+						sticker_name = EXCLUDED.sticker_name,
+						sticker_desc = EXCLUDED.sticker_desc,
+						emotion_key = EXCLUDED.emotion_key,
+						sticker_format = EXCLUDED.sticker_format
+					RETURNING *
+				`;
+				log.info(
+					`Upserted ${upsertedRows.length} sticker entries for server ${serverId}.`,
+				);
 			}
-			log.info(
-				`Inserted ${insertedCount} current sticker entries for server ${serverId}.`,
-			);
+
+			// 4d. Delete stickers that no longer exist in Discord
+			const currentStickerIds = currentStickers.map((s) => s.id);
+			if (currentStickerIds.length > 0) {
+				const { rowCount: deletedCount } = await tx`
+					DELETE FROM server_stickers
+					WHERE server_id = ${serverId}
+					  AND sticker_disc_id != ALL(${currentStickerIds})
+				`;
+				if (deletedCount > 0) {
+					log.info(
+						`Removed ${deletedCount} stale sticker entries for server ${serverId}.`,
+					);
+				}
+			} else {
+				// If there are no current stickers, delete all
+				const { rowCount: deletedCount } = await tx`
+					DELETE FROM server_stickers
+					WHERE server_id = ${serverId}
+				`;
+				log.info(
+					`Removed all ${deletedCount} sticker entries for server ${serverId} (no stickers in guild).`,
+				);
+			}
 		});
 
 		log.success(

@@ -3,6 +3,12 @@ import { sql } from "@/utils/db/client";
 import pino from "pino";
 
 /**
+ * Feature flag to control database error logging
+ * Set to false to rely on CloudWatch instead and reduce RDS costs
+ */
+const ENABLE_ERROR_DB_LOGGING = false;
+
+/**
  * Standard color scheme for both console logs and Discord embeds
  */
 export enum ColorCode {
@@ -154,7 +160,12 @@ export const log = {
 			pinoLogger.error({ context }, coloredMsg);
 		}
 
-		// 2. Prepare data for database insertion
+		// 2. Skip database logging if disabled (relying on CloudWatch instead)
+		if (!ENABLE_ERROR_DB_LOGGING) {
+			return;
+		}
+
+		// 3. Prepare data for database insertion
 		const errorMessage = err instanceof Error ? err.message : String(err);
 		const stackTrace = err instanceof Error ? err.stack : null;
 
@@ -170,7 +181,7 @@ export const log = {
 				: null,
 		};
 
-		// 3. Attempt to insert into the database
+		// 4. Attempt to insert into the database
 		try {
 			await sql`
                 INSERT INTO error_logs (

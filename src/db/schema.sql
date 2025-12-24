@@ -139,12 +139,8 @@ SELECT add_column_if_not_exists('llms', 'llm_description', 'TEXT');
 SELECT add_column_if_not_exists('llms', 'ja_description', 'TEXT');
 
 
--- Create updated_at trigger for llms table
+-- Removed updated_at trigger for llms table (static metadata, rarely changes)
 DROP TRIGGER IF EXISTS update_llms_timestamp ON llms;
-CREATE TRIGGER update_llms_timestamp
-BEFORE UPDATE ON llms
-FOR EACH ROW
-EXECUTE FUNCTION update_timestamp();
 
 -- Image Diffusion Models table for image generation models 
 CREATE TABLE IF NOT EXISTS image_diffusion_models (
@@ -161,12 +157,8 @@ CREATE TABLE IF NOT EXISTS image_diffusion_models (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create updated_at trigger for image_diffusion_models table
+-- Removed updated_at trigger for image_diffusion_models table (static metadata, rarely changes)
 DROP TRIGGER IF EXISTS update_image_diffusion_models_timestamp ON image_diffusion_models;
-CREATE TRIGGER update_image_diffusion_models_timestamp
-BEFORE UPDATE ON image_diffusion_models
-FOR EACH ROW
-EXECUTE FUNCTION update_timestamp();
 
 -- Create indexes for faster lookups
 CREATE INDEX IF NOT EXISTS idx_image_diffusion_models_provider ON image_diffusion_models(provider);
@@ -269,12 +261,8 @@ CREATE TABLE IF NOT EXISTS tomori_presets (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create updated_at trigger for tomori_presets table
+-- Removed updated_at trigger for tomori_presets table (static metadata, rarely changes)
 DROP TRIGGER IF EXISTS update_tomori_presets_timestamp ON tomori_presets;
-CREATE TRIGGER update_tomori_presets_timestamp
-BEFORE UPDATE ON tomori_presets
-FOR EACH ROW
-EXECUTE FUNCTION update_timestamp();
 
 -- Add preset avatar path column for profile pictures 
 SELECT add_column_if_not_exists('tomori_presets', 'preset_avatar_path', 'TEXT');
@@ -291,12 +279,8 @@ CREATE TABLE IF NOT EXISTS system_prompt_presets (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create updated_at trigger for system_prompt_presets table
+-- Removed updated_at trigger for system_prompt_presets table (static metadata, rarely changes)
 DROP TRIGGER IF EXISTS update_system_prompt_presets_timestamp ON system_prompt_presets;
-CREATE TRIGGER update_system_prompt_presets_timestamp
-BEFORE UPDATE ON system_prompt_presets
-FOR EACH ROW
-EXECUTE FUNCTION update_timestamp();
 
 CREATE TABLE IF NOT EXISTS server_emojis (
   server_emoji_id SERIAL PRIMARY KEY,
@@ -342,12 +326,8 @@ BEGIN
     END IF;
 END $$;
 
--- Create updated_at trigger for server_emojis table
+-- Removed updated_at trigger for server_emojis table (uses DELETE+INSERT refresh pattern, not real updates)
 DROP TRIGGER IF EXISTS update_server_emojis_timestamp ON server_emojis;
-CREATE TRIGGER update_server_emojis_timestamp
-BEFORE UPDATE ON server_emojis
-FOR EACH ROW
-EXECUTE FUNCTION update_timestamp();
 
 CREATE TABLE IF NOT EXISTS server_stickers (
   server_sticker_id SERIAL PRIMARY KEY,
@@ -383,12 +363,8 @@ BEGIN
     END IF;
 END $$;
 
--- Create updated_at trigger for server_stickers table
+-- Removed updated_at trigger for server_stickers table (uses DELETE+INSERT refresh pattern, not real updates)
 DROP TRIGGER IF EXISTS update_server_stickers_timestamp ON server_stickers;
-CREATE TRIGGER update_server_stickers_timestamp
-BEFORE UPDATE ON server_stickers
-FOR EACH ROW
-EXECUTE FUNCTION update_timestamp();
 
 CREATE TABLE IF NOT EXISTS users (
   user_id SERIAL PRIMARY KEY,
@@ -475,12 +451,8 @@ CREATE TABLE IF NOT EXISTS server_memories (
   FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE
 );
 
--- Create updated_at trigger for server_memories table
+-- Removed updated_at trigger for server_memories table (never updated after creation, only INSERT/DELETE)
 DROP TRIGGER IF EXISTS update_server_memories_timestamp ON server_memories;
-CREATE TRIGGER update_server_memories_timestamp
-BEFORE UPDATE ON server_memories
-FOR EACH ROW
-EXECUTE FUNCTION update_timestamp();
 
 CREATE TABLE IF NOT EXISTS personalization_blacklist (
   server_id INT NOT NULL,
@@ -518,12 +490,8 @@ CREATE TABLE IF NOT EXISTS error_logs (
   FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE SET NULL
 );
 
--- Create updated_at trigger for error_logs table
+-- Removed updated_at trigger for error_logs table (error logging disabled, table no longer actively used)
 DROP TRIGGER IF EXISTS update_error_logs_timestamp ON error_logs;
-CREATE TRIGGER update_error_logs_timestamp
-BEFORE UPDATE ON error_logs
-FOR EACH ROW
-EXECUTE FUNCTION update_timestamp();
 
 -- Unlogged table for command cooldowns
 CREATE UNLOGGED TABLE IF NOT EXISTS cooldowns (
@@ -593,12 +561,8 @@ CREATE TABLE IF NOT EXISTS reminders (
 CREATE INDEX IF NOT EXISTS idx_reminders_time ON reminders(reminder_time);
 CREATE INDEX IF NOT EXISTS idx_reminders_server_id ON reminders(server_id);
 
--- Create updated_at trigger for reminders table
+-- Removed updated_at trigger for reminders table (never updated after creation, only INSERT/DELETE)
 DROP TRIGGER IF EXISTS update_reminders_timestamp ON reminders;
-CREATE TRIGGER update_reminders_timestamp
-BEFORE UPDATE ON reminders
-FOR EACH ROW
-EXECUTE FUNCTION update_timestamp();
 
 -- Drop deprecated columns 
 SELECT drop_column_if_exists('tomori_configs', 'teach_cost');

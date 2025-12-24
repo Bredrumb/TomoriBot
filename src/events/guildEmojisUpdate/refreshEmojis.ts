@@ -2,7 +2,6 @@ import { type Client, type Guild, GuildEmoji } from "discord.js"; // Import Guil
 import { sql } from "@/utils/db/client";
 import type { EventFunction, EventArg } from "../../types/discord/global"; // Rule 14
 import type { ErrorContext } from "../../types/db/schema"; // Rule 14
-import { serverEmojiSchema } from "../../types/db/schema"; // Rule 6, Use serverEmojiSchema
 import { log } from "../../utils/misc/logger"; // Rule 18
 
 /**
@@ -72,16 +71,7 @@ const handleGuildEmojisUpdate: EventFunction = async (
 				existingEmojis.map((e) => [e.emoji_disc_id, e]),
 			);
 
-			// 4b. Delete all existing emojis for this server
-			const { rowCount: deletedCount } = await tx`
-                DELETE FROM server_emojis
-                WHERE server_id = ${serverId}
-            `;
-			log.info(
-				`Deleted ${deletedCount} existing emoji entries for server ${serverId}.`,
-			);
-
-			// 4c. Map current emojis to database format
+			// 4b. Map current emojis to database format for bulk upsert
 			const emojiValues = currentEmojis.map((e) => {
 				const existing = existingEmojiMetadata.get(e.id);
 				const emotionKey =
@@ -89,6 +79,7 @@ const handleGuildEmojisUpdate: EventFunction = async (
 						? existing.emotion_key
 						: "unset";
 				return {
+					server_id: serverId,
 					emoji_disc_id: e.id,
 					emoji_name: e.name ?? "", // Use name, default to empty string if null
 					emoji_desc: existing?.emoji_desc ?? "",
@@ -97,43 +88,45 @@ const handleGuildEmojisUpdate: EventFunction = async (
 				};
 			});
 
-			// 4d. Insert the current emojis (similar to setupServer logic)
-			let insertedCount = 0;
-			for (const {
-				emoji_disc_id,
-				emoji_name,
-				emoji_desc,
-				emotion_key,
-				is_animated,
-			} of emojiValues) {
-				const [row] = await tx`
-                    INSERT INTO server_emojis (
-                        server_id,
-                        emoji_disc_id,
-                        emoji_name,
-                        emoji_desc,
-                        emotion_key,
-                        is_animated
-                        -- is_global defaults to false in DB schema
-                    ) VALUES (
-                        ${serverId},
-                        ${emoji_disc_id},
-                        ${emoji_name},
-                        ${emoji_desc},
-                        ${emotion_key},
-                        ${is_animated}
-                    )
-                    ON CONFLICT (server_id, emoji_disc_id) DO NOTHING -- Avoid errors if somehow exists
-                    RETURNING *
-                `;
-				if (row) {
-					serverEmojiSchema.parse(row); // Rule 6, Validate with serverEmojiSchema
-					insertedCount++;
-				}
+			// 4c. Bulk upsert all current emojis (single query instead of N queries)
+			if (emojiValues.length > 0) {
+				const upsertedRows = await tx`
+					INSERT INTO server_emojis ${tx(emojiValues, "server_id", "emoji_disc_id", "emoji_name", "emoji_desc", "emotion_key", "is_animated")}
+					ON CONFLICT (server_id, emoji_disc_id) DO UPDATE SET
+						emoji_name = EXCLUDED.emoji_name,
+						emoji_desc = EXCLUDED.emoji_desc,
+						emotion_key = EXCLUDED.emotion_key,
+						is_animated = EXCLUDED.is_animated
+					RETURNING *
+				`;
+				log.info(
+					`Upserted ${upsertedRows.length} emoji entries for server ${serverId}.`,
+				);
 			}
-			log.info(
-				`Inserted ${insertedCount} current emoji entries for server ${serverId}.`,
-			);
+
+			// 4d. Delete emojis that no longer exist in Discord
+			const currentEmojiIds = currentEmojis.map((e) => e.id);
+			if (currentEmojiIds.length > 0) {
+				const { rowCount: deletedCount } = await tx`
+					DELETE FROM server_emojis
+					WHERE server_id = ${serverId}
+					  AND emoji_disc_id != ALL(${currentEmojiIds})
+				`;
+				if (deletedCount > 0) {
+					log.info(
+						`Removed ${deletedCount} stale emoji entries for server ${serverId}.`,
+					);
+				}
+			} else {
+				// If there are no current emojis, delete all
+				const { rowCount: deletedCount } = await tx`
+					DELETE FROM server_emojis
+					WHERE server_id = ${serverId}
+				`;
+				log.info(
+					`Removed all ${deletedCount} emoji entries for server ${serverId} (no emojis in guild).`,
+				);
+			}
 		});
 
 		log.success(
