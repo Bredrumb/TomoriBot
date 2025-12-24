@@ -308,7 +308,9 @@ IMPORTANT: In any dialogue examples, use "{user}" as a placeholder when referrin
 			parts: [{ text: prompt }],
 		};
 
-		log.info(`Searching for character: ${characterName} using model: ${MODEL_NAME}`);
+		log.info(
+			`Searching for character: ${characterName} using model: ${MODEL_NAME}`,
+		);
 
 		try {
 			// 8. Create timeout promise (60 seconds for search)
@@ -382,12 +384,7 @@ IMPORTANT: In any dialogue examples, use "{user}" as a placeholder when referrin
 			// 12. Handle specific API errors
 			if (errorMessage.includes("timed out")) {
 				return {
-					error: createGoogleErrorMessage(
-						"TIMEOUT",
-						504,
-						errorMessage,
-						locale,
-					),
+					error: createGoogleErrorMessage("TIMEOUT", 504, errorMessage, locale),
 					errorType: "TIMEOUT",
 				};
 			}
@@ -538,9 +535,13 @@ export async function generatePresetFromPrompt(
 		let searchInfo: string | undefined;
 		if (!isGemini3 && params.useWebSearch) {
 			if (USE_HARDCODED_DUAL_AGENT_MODELS) {
-				log.info(`🔍 Using dual-agent approach: Search with ${searchAgentModel}, generate with ${generationAgentModel}`);
+				log.info(
+					`🔍 Using dual-agent approach: Search with ${searchAgentModel}, generate with ${generationAgentModel}`,
+				);
 			} else {
-				log.info(`🔍 Using dual-agent approach: Search and generate with ${configuredModel}`);
+				log.info(
+					`🔍 Using dual-agent approach: Search and generate with ${configuredModel}`,
+				);
 			}
 
 			// 5a. Call search agent first
@@ -566,11 +567,15 @@ export async function generatePresetFromPrompt(
 
 			// 5c. Store search results for generation prompt
 			searchInfo = searchResult.characterInfo;
-			log.info(`✅ Search completed, proceeding to generation stage`);
+			log.info(`Search completed, proceeding to generation stage`);
 		} else if (isGemini3) {
-			log.info(`⚡ Using single-agent approach with Gemini 3 (web search: ${params.useWebSearch ? 'enabled' : 'disabled'})`);
+			log.info(
+				`Using single-agent approach with Gemini 3 (web search: ${params.useWebSearch ? "enabled" : "disabled"})`,
+			);
 		} else {
-			log.info(`📝 Using configured model ${configuredModel} for generation (no web search)`);
+			log.info(
+				`Using configured model ${configuredModel} for generation (no web search)`,
+			);
 		}
 
 		// 6. Set up model with fallback for Gemini 3, or use appropriate model for dual/single agent
@@ -772,7 +777,9 @@ Use the web search information to accurately represent the character's personali
 
 		// 14. Retry logic with fallback model (only for Gemini 3)
 		let lastError: PresetGenerationResult | null = null;
-		const modelsToTry = FALLBACK_MODEL ? [MODEL_NAME, FALLBACK_MODEL] : [MODEL_NAME];
+		const modelsToTry = FALLBACK_MODEL
+			? [MODEL_NAME, FALLBACK_MODEL]
+			: [MODEL_NAME];
 
 		for (const currentModel of modelsToTry) {
 			MODEL_NAME = currentModel;
@@ -937,7 +944,9 @@ Use the web search information to accurately represent the character's personali
 					sample_dialogues_out: sanitizedDialoguesOut,
 				};
 
-				log.success(`✨ Preset generation successful with model: ${MODEL_NAME}`);
+				log.success(
+					`✨ Preset generation successful with model: ${MODEL_NAME}`,
+				);
 				return { preset };
 			} catch (apiError: unknown) {
 				const errorMessage = getErrorMessage(apiError);
