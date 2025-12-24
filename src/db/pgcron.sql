@@ -36,28 +36,33 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Schedule the cleanup function to run every hour using pg_cron
--- Use ON CONFLICT to make this command idempotent (safe to run multiple times)
-INSERT INTO cron.job (schedule, command, nodename, nodeport, database, username)
+-- Delete existing job first to ensure idempotency across all pg_cron versions
+DELETE FROM cron.job WHERE jobname = 'tomoribot_cooldown_cleanup';
+
+-- Insert the cleanup job
+INSERT INTO cron.job (jobname, schedule, command, nodename, nodeport, database, username)
 VALUES (
+    'tomoribot_cooldown_cleanup',
     '0 * * * *', -- Run at the start of every hour
     'SELECT cleanup_expired_cooldowns();',
     'localhost', -- Adjust if your DB host is different
     5432,        -- Adjust if your DB port is different
     current_database(),
     current_user
-)
-ON CONFLICT (command, database, username, nodename, nodeport)
-DO UPDATE SET schedule = EXCLUDED.schedule; -- Update schedule if job already exists
+);
 
 -- Schedule the reminder cleanup function to run every hour as well
-INSERT INTO cron.job (schedule, command, nodename, nodeport, database, username)
+-- Delete existing job first to ensure idempotency
+DELETE FROM cron.job WHERE jobname = 'tomoribot_reminder_cleanup';
+
+-- Insert the reminder cleanup job
+INSERT INTO cron.job (jobname, schedule, command, nodename, nodeport, database, username)
 VALUES (
+    'tomoribot_reminder_cleanup',
     '0 * * * *', -- Run at the start of every hour
     'SELECT cleanup_expired_reminders();',
     'localhost', -- Adjust if your DB host is different
     5432,        -- Adjust if your DB port is different
     current_database(),
     current_user
-)
-ON CONFLICT (command, database, username, nodename, nodeport)
-DO UPDATE SET schedule = EXCLUDED.schedule; -- Update schedule if job already exists
+);

@@ -1,6 +1,7 @@
 /**
  * Reminder Timer System
- * Fallback polling system for executing reminders when pg_cron is not available
+ * Polling-based system for executing reminders with 1-minute precision
+ * Note: pg_cron is only used for hourly cleanup of expired reminders, not execution
  */
 
 import type { Client, Message } from "discord.js";
@@ -34,7 +35,7 @@ export class ReminderTimer {
 			return;
 		}
 
-		log.info("Starting reminder timer (fallback polling mode)");
+		log.info("Starting reminder timer (polling every 60s)");
 		this.isRunning = true;
 
 		// Run immediately on start

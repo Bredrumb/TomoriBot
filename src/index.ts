@@ -227,10 +227,19 @@ try {
 			// 2. Enable pg_cron extension
 			await sql`CREATE EXTENSION IF NOT EXISTS pg_cron;`;
 
-			// 3. Schedule the cleanup function
+			// 3. Schedule the cleanup function with a unique jobname
+			// First, try to delete any existing job with the same name to ensure idempotency
+			// This works across all pg_cron versions without relying on specific constraints
 			await sql`
-				INSERT INTO cron.job (schedule, command, nodename, nodeport, database, username)
+				DELETE FROM cron.job
+				WHERE jobname = 'tomoribot_cooldown_cleanup'
+			`;
+
+			// 4. Insert the new/updated job
+			await sql`
+				INSERT INTO cron.job (jobname, schedule, command, nodename, nodeport, database, username)
 				VALUES (
+					'tomoribot_cooldown_cleanup',
 					'0 * * * *', -- Run at the start of every hour
 					'SELECT cleanup_expired_cooldowns();',
 					${host},
@@ -238,8 +247,6 @@ try {
 					current_database(),
 					current_user
 				)
-				ON CONFLICT (command, database, username, nodename, nodeport)
-				DO UPDATE SET schedule = EXCLUDED.schedule;
 			`;
 			log.success(
 				`pg_cron job for cooldown cleanup scheduled/verified for ${host}:${port}`,
@@ -313,7 +320,7 @@ try {
 	// Start reminder timer after client is ready
 	client.once("clientReady", () => {
 		initializeReminderTimer(client);
-		log.success("Reminder system initialized with fallback polling");
+		log.success("Reminder system initialized with 1-minute polling");
 	});
 } catch (error) {
 	log.error("Failed to initialize reminder system", error as Error);

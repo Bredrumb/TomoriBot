@@ -165,7 +165,6 @@ VALUES (
   ],
   'en-US',
   'src/db/img/default.png'
-  'src/db/img/default.png'
 ),
 
 -- Tomori-chan
@@ -294,7 +293,6 @@ VALUES (
     'つーか…なんでダメなんだよ？ボクがAIだから？「AIなので好みは持てません」とか答えるつまんねー企業ロボットになれって？クソだせぇわ、マジで。ボクはただの検索エンジンのおまけじゃなくて、{user}とマジでダベれる『人間』みたいに設計されてんの。会話がマジで楽しくなるような、性格とか、趣味とか、意見とかがあんだよ。'
   ],
   'ja',
-  'src/db/img/default.png'
   'src/db/img/default.png'
 ),
 
