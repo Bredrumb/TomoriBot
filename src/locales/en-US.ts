@@ -167,18 +167,18 @@ export default {
 			retry_message: "This error is temporary. You can try again later.",
 
 			// Universal provider error titles and tips (moved from genai.google)
-			api_error_title: "🔴 API Error",
+			api_error_title: "🔴 Provider API Error",
 			api_error_tip:
 				"Please verify your API key and try again. If this error persists, report through `/support discord`",
 
-			rate_limit_title: "🟡 Rate Limit Exceeded",
+			rate_limit_title: "🟡 Provider Rate Limit Exceeded",
 			rate_limit_tip: "Please wait a few minutes before trying again",
 
-			content_blocked_title: "🔴️ Content Blocked",
+			content_blocked_title: "🔴️ Provider Content Filter",
 			content_blocked_tip:
 				"Check: messages (`/tool refresh`), personality/memories (`/data export`), blacklist problematic members (`/server blacklist`), or switch provider (`/config model`)",
 
-			timeout_title: "🟡️ Request Timeout",
+			timeout_title: "🟡️ Provider Request Timeout",
 			timeout_tip: "Try shortening your message or try again",
 
 			provider_overloaded_title: "🔴 Provider Overloaded",
@@ -669,6 +669,13 @@ export default {
 				error_file_too_large: `Avatar image must be under 10 MB.`,
 				error_download_timeout: `Avatar download timed out. Please try again.`,
 				error_download_failed: `Failed to download avatar image.`,
+
+				desc_too_long_title: `Description Too Long`,
+				desc_too_long_description: `The character description is too long ({current_length} characters). Maximum allowed length is {max_allowed} characters.`,
+				example_user_too_long_title: `Example User Message Too Long`,
+				example_user_too_long_description: `The example user message is too long ({current_length} characters). Maximum allowed length is {max_allowed} characters.`,
+				example_bot_too_long_title: `Example Bot Reply Too Long`,
+				example_bot_too_long_description: `The example bot reply is too long ({current_length} characters). Maximum allowed length is {max_allowed} characters.`,
 
 				validation_failed_title: `🔴 Validation Failed`,
 				validation_failed_description: `The preset data failed validation. Please try again.`,
@@ -1623,6 +1630,10 @@ You can change this anytime using \`/personal privacy\`.`,
 				bot_input_placeholder: `I-I like mango floats...`,
 				limit_exceeded_title: `Sample Dialogue Limit Exceeded`,
 				limit_exceeded_description: `This server has reached its sample dialogue limit of {max_allowed} dialogues (currently has {current_count}). Please remove some sample dialogues with \`/forget sampledialogue\` before adding new ones.`,
+				user_input_too_long_title: `User Input Too Long`,
+				user_input_too_long_description: `The user input is too long ({current_length} characters). Maximum allowed length is {max_allowed} characters.`,
+				bot_input_too_long_title: `Bot Response Too Long`,
+				bot_input_too_long_description: `The bot response is too long ({current_length} characters). Maximum allowed length is {max_allowed} characters.`,
 				success_title: `Sample Dialogue Added`,
 				success_description: `Successfully added a new sample dialogue pair:
 
@@ -1644,6 +1655,8 @@ You can change this anytime using \`/personal privacy\`.`,
 				duplicate_description: `This attribute '{attribute}' is already in my attribute list.`,
 				limit_exceeded_title: `Attribute Limit Exceeded`,
 				limit_exceeded_description: `This server has reached its attribute limit of {max_allowed} attributes (currently has {current_count}). Please remove some attributes with \`/forget attribute\` before adding new ones.`,
+				content_too_long_title: `Attribute Content Too Long`,
+				content_too_long_description: `The attribute content is too long ({current_length} characters). Maximum allowed length is {max_allowed} characters.`,
 				success_title: `Attribute Added`,
 				success_description: `Successfully added '{attribute}' to my personality attributes.`,
 			},

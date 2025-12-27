@@ -22,6 +22,7 @@ import type { ModalResult } from "../../types/discord/modal";
 import {
 	checkAttributeLimit,
 	getMemoryLimits,
+	validateAttribute,
 } from "../../utils/db/memoryLimits";
 
 // Get memory limits from environment variables
@@ -155,7 +156,7 @@ export async function execute(
 					placeholder: "commands.teach.attribute.attribute_input_placeholder",
 					style: TextInputStyle.Paragraph, // Allow longer attributes
 					required: true,
-					maxLength: memoryLimits.maxMemoryLength,
+					maxLength: memoryLimits.maxAttributeLength, // Use correct limit for attributes (2000, not 256)
 				},
 			],
 		});
@@ -177,10 +178,25 @@ export async function execute(
 		// biome-ignore lint/style/noNonNullAssertion: Outcome 'submit' + required=true guarantees value
 		const newAttribute = modalResult.values![ATTRIBUTE_INPUT_ID];
 
-		// 11. Prepare updated array (Access directly from tomoriState)
+		// 11. Validate attribute content length (server-side validation, modal maxLength can be bypassed)
+		const attributeValidation = validateAttribute(newAttribute);
+		if (!attributeValidation.isValid) {
+			await replyInfoEmbed(modalSubmitInteraction, locale, {
+				titleKey: "commands.teach.attribute.content_too_long_title",
+				descriptionKey: "commands.teach.attribute.content_too_long_description",
+				descriptionVars: {
+					current_length: newAttribute.length.toString(),
+					max_allowed: (attributeValidation.maxAllowed || memoryLimits.maxAttributeLength).toString(),
+				},
+				color: ColorCode.ERROR,
+			});
+			return;
+		}
+
+		// 12. Prepare updated array (Access directly from tomoriState)
 		const currentAttributes = tomoriState.attribute_list || [];
 
-		// Optional: Check for duplicates before adding
+		// 13. Check for duplicates before adding
 		if (currentAttributes.includes(newAttribute)) {
 			await replyInfoEmbed(modalSubmitInteraction, locale, {
 				titleKey: "commands.teach.attribute.duplicate_title", // New locale key
@@ -192,7 +208,7 @@ export async function execute(
 			return;
 		}
 
-		// 12. Update Tomori row in the database using array_append (Rule 4, 15, 23)
+		// 14. Update Tomori row in the database using array_append (Rule 4, 15, 23)
 		const [updatedTomoriResult] = await sql`
 			UPDATE tomoris
 			SET attribute_list = array_append(attribute_list, ${newAttribute})
@@ -200,7 +216,7 @@ export async function execute(
 			RETURNING *
 		`;
 
-		// 13. Validate the result from the database (Rule 3, 5, 6)
+		// 15. Validate the result from the database (Rule 3, 5, 6)
 		const validationResult = tomoriSchema.safeParse(updatedTomoriResult);
 
 		if (!validationResult.success) {

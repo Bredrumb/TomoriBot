@@ -4,6 +4,12 @@
  */
 
 import { z } from "zod";
+import {
+	ABSOLUTE_MAX_STRING_LENGTH,
+	ABSOLUTE_MAX_ATTRIBUTES,
+	ABSOLUTE_MAX_SAMPLE_DIALOGUES,
+	ABSOLUTE_MAX_TRIGGER_WORDS,
+} from "@/utils/db/memoryLimits";
 
 /**
  * Current version of the preset export format
@@ -13,9 +19,11 @@ export const PRESET_EXPORT_VERSION = "1.0.0";
 
 /**
  * Maximum array sizes for validation (prevent DoS attacks)
+ * These use the absolute maximum values to ensure cross-server compatibility
+ * and prevent token waste from AI-generated presets that slightly exceed defaults
  */
-export const MAX_ARRAY_SIZE = 100;
-export const MAX_STRING_LENGTH = 2000; // Per item in arrays
+export const MAX_ARRAY_SIZE = ABSOLUTE_MAX_ATTRIBUTES; // 200 attributes max
+export const MAX_STRING_LENGTH = ABSOLUTE_MAX_STRING_LENGTH; // 5000 chars per item
 
 /**
  * Preset personality data structure
@@ -90,14 +98,16 @@ export const presetExportDataSchema = z.object({
 		.max(100, "Nickname too long"),
 	attribute_list: z
 		.array(z.string().max(MAX_STRING_LENGTH))
-		.max(MAX_ARRAY_SIZE),
+		.max(ABSOLUTE_MAX_ATTRIBUTES),
 	sample_dialogues_in: z
 		.array(z.string().max(MAX_STRING_LENGTH))
-		.max(MAX_ARRAY_SIZE),
+		.max(ABSOLUTE_MAX_SAMPLE_DIALOGUES),
 	sample_dialogues_out: z
 		.array(z.string().max(MAX_STRING_LENGTH))
-		.max(MAX_ARRAY_SIZE),
-	trigger_words: z.array(z.string().max(MAX_STRING_LENGTH)).max(MAX_ARRAY_SIZE),
+		.max(ABSOLUTE_MAX_SAMPLE_DIALOGUES),
+	trigger_words: z
+		.array(z.string().max(MAX_STRING_LENGTH))
+		.max(ABSOLUTE_MAX_TRIGGER_WORDS),
 });
 
 /**

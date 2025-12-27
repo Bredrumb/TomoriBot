@@ -21,6 +21,7 @@ import { loadTomoriState, isBlacklisted } from "../../utils/db/dbRead";
 import {
 	checkSampleDialogueLimit,
 	getMemoryLimits,
+	validateSampleDialogue,
 } from "../../utils/db/memoryLimits";
 
 // Get memory limits from environment variables
@@ -190,7 +191,36 @@ export async function execute(
 		// biome-ignore lint/style/noNonNullAssertion: Modal submit + required=true guarantees values exist
 		const botInput = modalResult.values![BOT_INPUT_ID];
 
-		// 11. Update Tomori row in the database using Bun SQL (Rule 4, 15, 23)
+		// 11. Validate sample dialogue content lengths (server-side validation, modal maxLength can be bypassed)
+		const userInputValidation = validateSampleDialogue(userInput);
+		if (!userInputValidation.isValid) {
+			await replyInfoEmbed(modalSubmitInteraction, locale, {
+				titleKey: "commands.teach.sampledialogue.user_input_too_long_title",
+				descriptionKey: "commands.teach.sampledialogue.user_input_too_long_description",
+				descriptionVars: {
+					current_length: userInput.length.toString(),
+					max_allowed: (userInputValidation.maxAllowed || memoryLimits.maxSampleDialogueLength).toString(),
+				},
+				color: ColorCode.ERROR,
+			});
+			return;
+		}
+
+		const botInputValidation = validateSampleDialogue(botInput);
+		if (!botInputValidation.isValid) {
+			await replyInfoEmbed(modalSubmitInteraction, locale, {
+				titleKey: "commands.teach.sampledialogue.bot_input_too_long_title",
+				descriptionKey: "commands.teach.sampledialogue.bot_input_too_long_description",
+				descriptionVars: {
+					current_length: botInput.length.toString(),
+					max_allowed: (botInputValidation.maxAllowed || memoryLimits.maxSampleDialogueLength).toString(),
+				},
+				color: ColorCode.ERROR,
+			});
+			return;
+		}
+
+		// 12. Update Tomori row in the database using Bun SQL (Rule 4, 15, 23)
 		// Use array_append for atomic array operations
 		const [updatedTomoriResult] = await sql`
 			UPDATE tomoris
@@ -201,7 +231,7 @@ export async function execute(
 			RETURNING *
 		`;
 
-		// 12. Validate the result from the database (Rule 3, 5, 6)
+		// 13. Validate the result from the database (Rule 3, 5, 6)
 		// Note: tomoriSchema validates a TomoriRow, not the full TomoriState
 		const validationResult = tomoriSchema.safeParse(updatedTomoriResult);
 

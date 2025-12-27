@@ -372,7 +372,6 @@ CREATE TABLE IF NOT EXISTS users (
   user_nickname TEXT NOT NULL,
   language_pref TEXT DEFAULT 'en',
   personal_memories TEXT[] DEFAULT '{}',
-  privacy_opt_out BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

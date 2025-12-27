@@ -22,6 +22,11 @@ import {
 	PERSONA_LIMITS,
 	reservePersonaQuota,
 } from "../../utils/security/rateLimiter";
+import {
+	getMemoryLimits,
+	validateAttribute,
+	validateSampleDialogue,
+} from "../../utils/db/memoryLimits";
 import { safeDownload } from "../../utils/security/safeDownload";
 import { getServerAvatar } from "../../utils/image/avatarHelper";
 import { centerCropToSquare } from "../../utils/image/imageProcessor";
@@ -35,6 +40,9 @@ import type {
 	PresetExportData,
 } from "../../types/preset/presetExport";
 import type { ModalComponent } from "../../types/discord/modal";
+
+// Get memory limits from environment variables
+const memoryLimits = getMemoryLimits();
 
 // Modal constants
 const MODAL_CUSTOM_ID = "preset_create_modal";
@@ -99,7 +107,7 @@ export async function execute(
 				placeholder: "commands.persona.create.modal.character_desc_placeholder",
 				required: true,
 				style: TextInputStyle.Paragraph,
-				maxLength: 1000,
+				maxLength: memoryLimits.maxAttributeLength, // Use runtime config limit (default: 2000)
 			},
 			{
 				customId: EXAMPLE_USER_ID,
@@ -109,7 +117,7 @@ export async function execute(
 				placeholder: "commands.persona.create.modal.example_user_placeholder",
 				required: false,
 				style: TextInputStyle.Paragraph,
-				maxLength: 500,
+				maxLength: memoryLimits.maxSampleDialogueLength, // Use runtime config limit (default: 2000)
 			},
 			{
 				customId: EXAMPLE_BOT_ID,
@@ -117,7 +125,7 @@ export async function execute(
 				placeholder: "commands.persona.create.modal.example_bot_placeholder",
 				required: false,
 				style: TextInputStyle.Paragraph,
-				maxLength: 500,
+				maxLength: memoryLimits.maxSampleDialogueLength, // Use runtime config limit (default: 2000)
 			},
 			{
 				customId: FILE_UPLOAD_ID,
@@ -158,7 +166,95 @@ export async function execute(
 			return;
 		}
 
-		// 5. Reserve persona operation quota (atomic check+increment for DDoS protection)
+		// 5. Validate content lengths (server-side validation, modal maxLength can be bypassed)
+		const descValidation = validateAttribute(characterDesc);
+		if (!descValidation.isValid) {
+			await modalSubmitInteraction.editReply({
+				embeds: [
+					new EmbedBuilder()
+						.setTitle(
+							localizer(
+								locale,
+								"commands.persona.create.desc_too_long_title",
+							),
+						)
+						.setDescription(
+							localizer(
+								locale,
+								"commands.persona.create.desc_too_long_description",
+								{
+									current_length: characterDesc.length.toString(),
+									max_allowed: (descValidation.maxAllowed || memoryLimits.maxAttributeLength).toString(),
+								},
+							),
+						)
+						.setColor(ColorCode.ERROR),
+				],
+			});
+			return;
+		}
+
+		// Validate optional example user dialogue
+		if (exampleUser) {
+			const userDialogueValidation = validateSampleDialogue(exampleUser);
+			if (!userDialogueValidation.isValid) {
+				await modalSubmitInteraction.editReply({
+					embeds: [
+						new EmbedBuilder()
+							.setTitle(
+								localizer(
+									locale,
+									"commands.persona.create.example_user_too_long_title",
+								),
+							)
+							.setDescription(
+								localizer(
+									locale,
+									"commands.persona.create.example_user_too_long_description",
+									{
+										current_length: exampleUser.length.toString(),
+										max_allowed: (userDialogueValidation.maxAllowed || memoryLimits.maxSampleDialogueLength).toString(),
+									},
+								),
+							)
+							.setColor(ColorCode.ERROR),
+					],
+				});
+				return;
+			}
+		}
+
+		// Validate optional example bot dialogue
+		if (exampleBot) {
+			const botDialogueValidation = validateSampleDialogue(exampleBot);
+			if (!botDialogueValidation.isValid) {
+				await modalSubmitInteraction.editReply({
+					embeds: [
+						new EmbedBuilder()
+							.setTitle(
+								localizer(
+									locale,
+									"commands.persona.create.example_bot_too_long_title",
+								),
+							)
+							.setDescription(
+								localizer(
+									locale,
+									"commands.persona.create.example_bot_too_long_description",
+									{
+										current_length: exampleBot.length.toString(),
+										max_allowed: (botDialogueValidation.maxAllowed || memoryLimits.maxSampleDialogueLength).toString(),
+									},
+								),
+							)
+							.setColor(ColorCode.ERROR),
+					],
+				});
+				return;
+			}
+		}
+
+		// 6. Reserve persona operation quota (atomic check+increment for DDoS protection)
 		const quotaReserve = reservePersonaQuota(interaction.user.id);
 		if (!quotaReserve.allowed) {
 			const resetTime = quotaReserve.resetAt

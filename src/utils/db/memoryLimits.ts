@@ -2,6 +2,18 @@ import { sql } from "@/utils/db/client";
 import { log } from "../misc/logger";
 
 /**
+ * Absolute maximum limits for preset data validation
+ * These represent the highest configurable values and serve as the single source of truth
+ * Used by both runtime validation and Zod schema validation for preset export/import
+ *
+ * These values match the upper bounds in the validation checks within getMemoryLimits()
+ */
+export const ABSOLUTE_MAX_STRING_LENGTH = 5000; // Max length for attributes and sample dialogues (line 139, 159)
+export const ABSOLUTE_MAX_ATTRIBUTES = 200; // Max number of attributes (line 219)
+export const ABSOLUTE_MAX_SAMPLE_DIALOGUES = 100; // Max number of sample dialogue pairs (line 199)
+export const ABSOLUTE_MAX_TRIGGER_WORDS = 100; // Max number of trigger words (line 179)
+
+/**
  * Memory limit configuration loaded from environment variables with defaults
  */
 export interface MemoryLimits {
