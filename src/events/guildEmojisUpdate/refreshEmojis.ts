@@ -110,7 +110,7 @@ const handleGuildEmojisUpdate: EventFunction = async (
 				const { rowCount: deletedCount } = await tx`
 					DELETE FROM server_emojis
 					WHERE server_id = ${serverId}
-					  AND NOT (emoji_disc_id = ANY(${currentEmojiIds}))
+					  AND emoji_disc_id NOT IN ${tx(currentEmojiIds)}
 				`;
 				if (deletedCount > 0) {
 					log.info(

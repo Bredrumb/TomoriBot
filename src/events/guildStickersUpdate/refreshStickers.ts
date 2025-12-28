@@ -110,7 +110,7 @@ const handleGuildStickersUpdate: EventFunction = async (
 				const { rowCount: deletedCount } = await tx`
 					DELETE FROM server_stickers
 					WHERE server_id = ${serverId}
-					  AND NOT (sticker_disc_id = ANY(${currentStickerIds}))
+					  AND sticker_disc_id NOT IN ${tx(currentStickerIds)}
 				`;
 				if (deletedCount > 0) {
 					log.info(
