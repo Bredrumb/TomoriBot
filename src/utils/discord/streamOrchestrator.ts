@@ -33,6 +33,7 @@ import {
 	replaceMentionHandles,
 	createSentenceSplitRegex,
 } from "../text/stringHelper";
+import { filterDuplicateCustomEmojis } from "../text/emojiPenalty";
 
 import type { StreamResult } from "../../types/provider/interfaces";
 import {
@@ -818,9 +819,15 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 			.sendTyping()
 			.catch((e) => log.warn("Stream Seg: sendTyping failed", e));
 
-		// Clean the segment
-		const cleanedSegment = cleanLLMOutput(
+		// Filter duplicate custom emojis BEFORE transformation (while still in :name: format)
+		const filteredSegment = filterDuplicateCustomEmojis(
 			segment,
+			context.contextItems,
+		);
+
+		// Clean the segment (transforms :emoji: to Discord format)
+		const cleanedSegment = cleanLLMOutput(
+			filteredSegment,
 			textConfig.botName,
 			textConfig.emojiStrings,
 			textConfig.emojiUsageEnabled,

@@ -825,8 +825,7 @@ export async function buildContext({
 		let usersInConversationText =
 			"[System: The following users are having a conversation:\n\n";
 
-		usersInConversationText +=
-			`If ${botName} wants to mention and ping any of these users, simply prepend an "@" symbol to their mention handle, like @{username} (case-insensitive). If a name is duplicated, use the handle with the user ID suffix (e.g., @{name|123456789012345678}). This ensures the user gets a notification from ${botName}'s message.\n\n`;
+		usersInConversationText += `If ${botName} wants to ping any of these users, simply prepend an "@" symbol to their mention handle, like @{username} (case-insensitive). If a name is duplicated, use the handle with the user ID suffix (e.g., @{name|123456789012345678}). This ensures the user gets a notification from ${botName}'s message. Use only if it's an important message, otherwise do not ping users.\n\n`;
 
 		type UserConversationEntry = {
 			userId: string;
@@ -913,7 +912,8 @@ export async function buildContext({
 			const customNickname = userRow.user_nickname;
 			const serverNickname = member?.nickname;
 			const username = member?.user.username ?? fallbackUser?.username ?? null;
-			const globalName = member?.user.globalName ?? fallbackUser?.globalName ?? null;
+			const globalName =
+				member?.user.globalName ?? fallbackUser?.globalName ?? null;
 			const canUseCustomNickname =
 				customNickname &&
 				serverPersonalizationEnabled &&

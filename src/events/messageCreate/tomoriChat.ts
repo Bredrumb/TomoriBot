@@ -35,6 +35,7 @@ import {
 import { StreamOrchestrator } from "../../utils/discord/streamOrchestrator";
 import { ColorCode, log } from "../../utils/misc/logger";
 import { buildContext } from "../../utils/text/contextBuilder";
+import { applyEmojiPenaltyIfNeeded } from "../../utils/text/emojiPenalty";
 import {
 	removeYouTubeUrls,
 	extractYouTubeVideoIds,
@@ -2047,7 +2048,13 @@ export default async function tomoriChat(
 					snapshot: requestSnapshot, // Pass per-request snapshot
 				});
 
-				// Inject system context for stop responses
+				// Apply emoji repetition penalty if bot has been using too many emojis
+			contextSegments = applyEmojiPenaltyIfNeeded(
+				contextSegments,
+				tomoriState?.tomori_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
+			);
+
+		// Inject system context for stop responses
 				if (isStopResponse) {
 					// Find the last user message in context and replace/supplement it with system context
 					let lastUserContextIndex = -1;
@@ -2820,6 +2827,14 @@ export default async function tomoriChat(
 										`Rebuilt context with expanded media window (${newWindow} messages). Total context items: ${contextSegments.length}`,
 									);
 
+
+									// Apply emoji repetition penalty after rebuilding context
+									contextSegments = applyEmojiPenaltyIfNeeded(
+										contextSegments,
+										tomoriState?.tomori_nickname ??
+											process.env.DEFAULT_BOTNAME ??
+											"Tomori",
+									);
 									// Continue to next iteration WITHOUT adding to function interaction history
 									// This will restart the streaming with enhanced context
 									continue;
