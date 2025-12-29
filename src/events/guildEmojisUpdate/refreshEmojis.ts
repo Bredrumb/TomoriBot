@@ -107,10 +107,14 @@ const handleGuildEmojisUpdate: EventFunction = async (
 			// 4d. Delete emojis that no longer exist in Discord
 			const currentEmojiIds = currentEmojis.map((e) => e.id);
 			if (currentEmojiIds.length > 0) {
+				// Use VALUES clause to avoid array serialization issues
+				const keepValues = currentEmojiIds.map((id) => ({ emoji_disc_id: id }));
 				const { rowCount: deletedCount } = await tx`
 					DELETE FROM server_emojis
 					WHERE server_id = ${serverId}
-					  AND emoji_disc_id NOT IN ${tx(currentEmojiIds)}
+					  AND emoji_disc_id NOT IN (
+						SELECT emoji_disc_id FROM (VALUES ${tx(keepValues, "emoji_disc_id")}) AS keep(emoji_disc_id)
+					  )
 				`;
 				if (deletedCount > 0) {
 					log.info(

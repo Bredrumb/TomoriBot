@@ -107,10 +107,14 @@ const handleGuildStickersUpdate: EventFunction = async (
 			// 4d. Delete stickers that no longer exist in Discord
 			const currentStickerIds = currentStickers.map((s) => s.id);
 			if (currentStickerIds.length > 0) {
+				// Use VALUES clause to avoid array serialization issues
+				const keepValues = currentStickerIds.map((id) => ({ sticker_disc_id: id }));
 				const { rowCount: deletedCount } = await tx`
 					DELETE FROM server_stickers
 					WHERE server_id = ${serverId}
-					  AND sticker_disc_id NOT IN ${tx(currentStickerIds)}
+					  AND sticker_disc_id NOT IN (
+						SELECT sticker_disc_id FROM (VALUES ${tx(keepValues, "sticker_disc_id")}) AS keep(sticker_disc_id)
+					  )
 				`;
 				if (deletedCount > 0) {
 					log.info(
