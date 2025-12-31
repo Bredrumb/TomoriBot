@@ -54,6 +54,11 @@ function getLocalizedDescription(model: LlmRow, locale: string): string {
 	const baseDescription =
 		description || model.llm_description || `${model.llm_provider} model`;
 
+	// Skip flags for account-setting (don't show TOOLS+IMAGES+etc. for this special model)
+	if (model.llm_codename === "account-setting") {
+		return baseDescription;
+	}
+
 	// Build flags array based on model capabilities
 	const flags: string[] = [];
 	if (model.is_free) flags.push("FREE");

@@ -186,10 +186,10 @@ export const STREAMING_LIMITS = {
 	 * Maximum number of message flushes per stream session
 	 * Prevents malicious prompts from causing excessive Discord API calls
 	 * Each flush = 1 Discord message sent (semantically complete chunks)
-	 * @default 20 in production, Infinity in development
+	 * @default 40 in production, Infinity in development
 	 */
 	MAX_FLUSH_COUNT: GUARDS_ENABLED
-		? Number.parseInt(process.env.MAX_FLUSH_COUNT || "20", 10)
+		? Number.parseInt(process.env.MAX_FLUSH_COUNT || "40", 10)
 		: Number.POSITIVE_INFINITY,
 } as const;
 

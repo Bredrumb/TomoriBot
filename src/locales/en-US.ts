@@ -273,6 +273,15 @@ export default {
 			"404_default_message":
 				"No endpoints found that support the requested features (tools/images). Try a different model.",
 
+			// 404 Privacy Policy Error
+			"404_privacy_policy_error":
+				"**Privacy Policy Restriction**\n\n" +
+				"The selected model requires allowing data for paid model training, but your OpenRouter account privacy settings currently block this.\n\n" +
+				"**To fix this:**\n" +
+				"1. Visit https://openrouter.ai/settings/privacy\n" +
+				"2. Adjust your \"Data Policy\" settings to allow this model\n" +
+				"3. Or select a different model that matches your privacy preferences",
+
 			// 408 REQUEST_TIMEOUT
 			"408_default_message": "Your request timed out",
 
@@ -291,6 +300,10 @@ export default {
 			// 503 SERVICE_UNAVAILABLE
 			"503_default_message":
 				"There is no available model provider that meets your routing requirements",
+
+			// invalid_type error (parameter type mismatch)
+			invalid_type_default_message:
+				"Request contains a parameter with an invalid type. This may be a compatibility issue with the selected model. Try using `/tool refresh` to clear context, or try a different model.",
 
 			// Generic fallback for unknown OpenRouter errors
 			unknown_default_message: "An unexpected error occurred",

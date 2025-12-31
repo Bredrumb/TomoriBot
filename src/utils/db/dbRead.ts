@@ -263,11 +263,14 @@ export async function loadServerEmojis(
 	internalServerId: number,
 ): Promise<ServerEmojiRow[] | null> {
 	try {
+		log.info(`[loadServerEmojis] Querying emojis for server_id: ${internalServerId}`);
 		const emojiRows = await sql`
 			SELECT *
 			FROM server_emojis
 			WHERE server_id = ${internalServerId}
 		`;
+
+		log.info(`[loadServerEmojis] Found ${emojiRows.length} emoji row(s) from query`);
 
 		if (!emojiRows || emojiRows.length === 0) {
 			log.info(`No custom emojis found for server ID ${internalServerId}.`);
@@ -285,6 +288,7 @@ export async function loadServerEmojis(
 			return null;
 		}
 
+		log.info(`[loadServerEmojis] Validated ${parsedEmojis.data.length} emoji(s) successfully`);
 		return parsedEmojis.data;
 	} catch (error) {
 		log.error(`Error loading emojis for server ID ${internalServerId}:`, error);

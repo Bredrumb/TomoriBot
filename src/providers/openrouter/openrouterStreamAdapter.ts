@@ -697,6 +697,27 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		let errorType: ProviderError["type"] = "unknown";
 		let retryable = false;
 
+		// Special case: Privacy policy / data policy error
+		// This occurs when the model requires allowing data for training but user's
+		// OpenRouter privacy settings block it
+		if (
+			finalMessage.includes("data policy") ||
+			finalMessage.includes("Paid model training") ||
+			finalMessage.includes("openrouter.ai/settings/privacy")
+		) {
+			errorType = "api_error";
+			retryable = false;
+			// Return enhanced error message with instructions
+			return {
+				type: errorType,
+				message: `OpenRouter Privacy Policy Error: The selected model requires allowing data for paid model training, but your account privacy settings block this.\n\nTo fix this:\n1. Go to https://openrouter.ai/settings/privacy\n2. Adjust your "Data Policy" settings to allow this model\n3. Or choose a different model that matches your privacy preferences\n\nOriginal error: ${finalMessage}`,
+				code: finalCode,
+				retryable,
+				originalError: error,
+				userMessage: extractedMessage,
+			};
+		}
+
 		// Status code mapping (from error messages or codes)
 		if (finalCode.includes("400") || finalMessage.includes("400")) {
 			errorType = "api_error";
@@ -743,6 +764,15 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 	 * Create a user-friendly error description from a ProviderError
 	 */
 	createErrorDescription(error: ProviderError, locale: string): string | null {
+		// Special case: Privacy policy error - use localized message
+		if (
+			error.message?.includes("Privacy Policy Error") ||
+			error.message?.includes("data policy") ||
+			error.message?.includes("Paid model training")
+		) {
+			return localizer(locale, "genai.openrouter.404_privacy_policy_error");
+		}
+
 		// Get OpenRouter-specific message based on error code and type
 		let openrouterMessage = error.userMessage;
 
@@ -776,10 +806,14 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 					break;
 			}
 
-			try {
-				openrouterMessage = localizer(locale, `genai.openrouter.${messageKey}`);
-			} catch {
-				// If locale key doesn't exist, use a generic fallback
+			// Try to get the specific error message
+			const localeKey = `genai.openrouter.${messageKey}`;
+			openrouterMessage = localizer(locale, localeKey);
+
+			// If localizer returns the key itself, it means the key doesn't exist
+			// (localizer returns the key when it can't find a translation)
+			if (openrouterMessage === localeKey) {
+				// Fallback to generic unknown message
 				openrouterMessage = localizer(
 					locale,
 					"genai.openrouter.unknown_default_message",

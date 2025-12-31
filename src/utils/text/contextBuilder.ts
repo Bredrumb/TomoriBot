@@ -29,10 +29,10 @@ import {
 	HumanizerDegree,
 	PrivacyLevel,
 	type TomoriConfigRow,
+	type ServerEmojiRow,
+	type ServerStickerRow,
 } from "@/types/db/schema";
 import { memoryGuard, MEDIA_LIMITS } from "../security/rateLimiter";
-// Import ServerEmojiRow if needed for emoji query result type
-// import type { ServerEmojiRow } from "../../types/db/schema";
 
 /**
  * Maps userId -> nickname for the current mention replacement operation.
@@ -337,6 +337,8 @@ export async function buildContext({
 	isDMChannel = false,
 	mediaContextWindow,
 	snapshot,
+	preloadedEmojis,
+	preloadedStickers,
 }: {
 	guildId: string;
 	serverName: string;
@@ -354,6 +356,8 @@ export async function buildContext({
 	isDMChannel?: boolean; // Added for DM support
 	mediaContextWindow?: number; // Optional override for media window size
 	snapshot?: import("../../types/misc/context").RequestSnapshot; // Optional per-request snapshot
+	preloadedEmojis?: ServerEmojiRow[] | null; // Pre-loaded emoji data to avoid redundant DB query
+	preloadedStickers?: ServerStickerRow[] | null; // Pre-loaded sticker data to avoid redundant DB query
 }): Promise<StructuredContextItem[]> {
 	const contextItems: StructuredContextItem[] = [];
 	const botName = tomoriNickname;
@@ -476,12 +480,11 @@ export async function buildContext({
 	// Kept in system instruction for better caching (deterministic ordering prevents frequent invalidation)
 	if (!isDMChannel) {
 		const guild = client.guilds.cache.get(guildId);
-		const serverEmojis = guild?.emojis.cache;
+		const guildEmojisCache = guild?.emojis.cache;
 
-		if (serverEmojis && serverEmojis.size > 0 && tomoriState) {
-			// 1. Load emoji metadata from database (with descriptions and emotion keys)
-			const serverId = tomoriState.server_id;
-			const emojiMetadata = await sql<
+		if (guildEmojisCache && guildEmojisCache.size > 0 && tomoriState) {
+			// 1. Use pre-loaded emoji metadata if provided, otherwise load from database
+			const emojiMetadata = (preloadedEmojis && preloadedEmojis.length > 0) ? preloadedEmojis : await sql<
 				Array<{
 					emoji_disc_id: string;
 					emoji_name: string;
@@ -494,7 +497,7 @@ export async function buildContext({
 			>`
 				SELECT emoji_disc_id, emoji_name, emoji_desc, emotion_key, is_animated, created_at, updated_at
 				FROM server_emojis
-				WHERE server_id = ${serverId}
+				WHERE server_id = ${tomoriState.server_id}
 				ORDER BY created_at ASC
 			`;
 
@@ -543,7 +546,7 @@ export async function buildContext({
 			}
 
 			// 3. Sort emojis by creation date (deterministic, oldest first for caching stability)
-			const sortedEmojis = Array.from(serverEmojis.values()).sort((a, b) => {
+			const sortedEmojis = Array.from(guildEmojisCache.values()).sort((a, b) => {
 				const aTime = a.createdTimestamp || 0;
 				const bTime = b.createdTimestamp || 0;
 				return aTime - bTime; // Ascending order (oldest first)
@@ -638,12 +641,11 @@ export async function buildContext({
 	// CRITICAL: Text-based format with LLM-generated descriptions and emotion keys for efficient caching
 	if (tomoriConfig.sticker_usage_enabled && !isDMChannel) {
 		const guild = client.guilds.cache.get(guildId);
-		const serverStickers = guild?.stickers.cache;
+		const guildStickersCache = guild?.stickers.cache;
 
-		if (serverStickers && serverStickers.size > 0 && tomoriState) {
-			// 1. Load sticker metadata from database (with descriptions and emotion keys)
-			const serverId = tomoriState.server_id;
-			const stickerMetadata = await sql<
+		if (guildStickersCache && guildStickersCache.size > 0 && tomoriState) {
+			// 1. Use pre-loaded sticker metadata if provided, otherwise load from database
+			const stickerMetadata = (preloadedStickers && preloadedStickers.length > 0) ? preloadedStickers : await sql<
 				Array<{
 					sticker_disc_id: string;
 					sticker_name: string;
@@ -655,7 +657,7 @@ export async function buildContext({
 			>`
 				SELECT sticker_disc_id, sticker_name, sticker_desc, emotion_key, created_at, updated_at
 				FROM server_stickers
-				WHERE server_id = ${serverId}
+				WHERE server_id = ${tomoriState.server_id}
 				ORDER BY created_at ASC
 			`;
 
@@ -706,7 +708,7 @@ export async function buildContext({
 			}
 
 			// 3. Sort stickers by creation date (deterministic, oldest first for caching stability)
-			const sortedStickers = Array.from(serverStickers.values()).sort(
+			const sortedStickers = Array.from(guildStickersCache.values()).sort(
 				(a, b) => {
 					const aTime = a.createdTimestamp || 0;
 					const bTime = b.createdTimestamp || 0;

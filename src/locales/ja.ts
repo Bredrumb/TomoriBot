@@ -273,6 +273,15 @@ export default {
 			"404_default_message":
 				"要求された機能（ツール/画像）をサポートするエンドポイントが見つかりません。別のモデルをお試しください。",
 
+			// 404 Privacy Policy Error
+			"404_privacy_policy_error":
+				"**プライバシーポリシー制限**\n\n" +
+				"選択したモデルは有料モデルトレーニングのためのデータ使用を許可する必要がありますが、OpenRouterアカウントのプライバシー設定で現在ブロックされています。\n\n" +
+				"**修正方法：**\n" +
+				"1. https://openrouter.ai/settings/privacy にアクセス\n" +
+				"2. 「Data Policy」設定を調整してこのモデルを許可\n" +
+				"3. またはプライバシー設定に一致する別のモデルを選択",
+
 			// 408 REQUEST_TIMEOUT
 			"408_default_message": "リクエストがタイムアウトしました",
 
@@ -291,6 +300,10 @@ export default {
 			// 503 SERVICE_UNAVAILABLE
 			"503_default_message":
 				"ルーティング要件を満たす利用可能なモデルプロバイダーがありません",
+
+			// invalid_type error (parameter type mismatch)
+			invalid_type_default_message:
+				"リクエストに無効な型のパラメータが含まれています。選択したモデルとの互換性の問題の可能性があります。`/tool refresh`でコンテキストをクリアするか、別のモデルをお試しください。",
 
 			// Generic fallback for unknown OpenRouter errors
 			unknown_default_message: "予期しないエラーが発生しました",

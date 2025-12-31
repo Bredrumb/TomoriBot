@@ -149,6 +149,7 @@ export const serverEmojiSchema = z.object({
 	server_id: z.number(),
 	emoji_disc_id: z.string(),
 	emoji_name: z.string(),
+	emoji_desc: z.string().default(""),
 	emotion_key: z.string(),
 	is_global: z.boolean().default(false),
 	is_animated: z.boolean().default(false),

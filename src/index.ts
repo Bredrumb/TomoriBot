@@ -286,6 +286,23 @@ try {
 	// Non-critical error - bot will fall back to database queries
 }
 
+// Initialize OpenRouter capability cache
+log.section("Initializing OpenRouter Capability Cache...");
+try {
+	const { initializeOpenRouterCapabilityCache } = await import(
+		"./utils/cache/openrouterCapabilityCache"
+	);
+	await initializeOpenRouterCapabilityCache();
+	log.success("OpenRouter capability cache initialized successfully");
+} catch (error) {
+	log.warn(
+		"Failed to initialize OpenRouter capability cache (non-critical) - " +
+			"will fall back to database flags",
+		error,
+	);
+	// Non-critical error - bot will use database flags as fallback
+}
+
 // Initialize preset avatar cache
 log.section("Initializing Preset Avatar Cache...");
 try {

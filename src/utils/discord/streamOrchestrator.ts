@@ -238,15 +238,30 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 					log.info(
 						`Stream loop breaking due to stop request for channel ${context.channel.id}.`,
 					);
+
+					// 1. Get stop request details before clearing to determine if this is a flush limit stop
+					const stopRequest = StreamOrchestrator.activeStopRequests.get(
+						context.channel.id,
+					);
+					const isFlushLimitStop =
+						stopRequest?.requesterId === "system" && !stopRequest?.stopContext;
+
+					// 2. Clear the stop request
 					StreamOrchestrator.clearStopRequest(context.channel.id);
 
-					// Flush any pending buffer before stopping
-					if (state.buffer.length > 0) {
+					// 3. Only flush buffer if this is NOT a flush limit stop
+					// Flush limit stops shouldn't try to send more messages as they'd just hit the limit again
+					// This prevents the duplicate "Response Length Limit Reached" embed
+					if (state.buffer.length > 0 && !isFlushLimitStop) {
 						await this.flushPendingBuffer(
 							state,
 							this.createTextProcessingConfig(config, context),
 							createTypingSimulationConfig(config.humanizerDegree),
 							context,
+						);
+					} else if (isFlushLimitStop) {
+						log.info(
+							"Stream: Skipping buffer flush due to flush limit stop to prevent duplicate embed",
 						);
 					}
 
@@ -1394,15 +1409,20 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 		// Use user's locale from context (prioritizes user language preference)
 		const locale = context.locale;
 
-		// Create localized error message for interactions
-		const errorMessage = localizer(
+		// Try to get provider-specific detailed error description first
+		const providerDescription = provider.createErrorDescription(
+			providerError,
 			locale,
-			"genai.stream.provider_error_interaction",
-			{
-				reason: providerError.type || "unknown",
-			},
 		);
-		log.warn(errorMessage, error);
+
+		// Fallback to generic localized error message if no provider description
+		const errorMessage =
+			providerDescription ||
+			localizer(locale, "genai.stream.provider_error_interaction", {
+				reason: providerError.type || "unknown",
+			});
+
+		log.warn(`Stream error: ${errorMessage}`, error);
 
 		if (context.initialInteraction) {
 			if (
@@ -1428,12 +1448,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 					);
 			}
 		} else {
-			// Get provider-specific error description
-			const providerDescription = provider.createErrorDescription(
-				providerError,
-				locale,
-			);
-
+			// Use provider-specific error description (already fetched above)
 			if (providerDescription) {
 				// Determine universal title and tip based on error type
 				let titleKey: string;

@@ -45,6 +45,10 @@ import {
 	isLLMCacheReady,
 } from "../../utils/cache/llmCache";
 import {
+	getOpenRouterCapabilities,
+	isOpenRouterCapabilityCacheReady,
+} from "../../utils/cache/openrouterCapabilityCache";
+import {
 	loadDefaultModelForProvider,
 	loadAvailableModelsForProvider,
 } from "../../utils/db/dbRead";
@@ -191,16 +195,12 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 			return true;
 		} catch (error) {
 			// Log the specific error during validation failure
-			await log.error(
-				"API key validation failed",
-				error,
-				{
-					errorType: "APIKeyValidationError",
-					metadata: {
-						provider: "openrouter",
-					},
+			await log.error("API key validation failed", error, {
+				errorType: "APIKeyValidationError",
+				metadata: {
+					provider: "openrouter",
 				},
-			);
+			});
 			return false;
 		}
 	}
@@ -312,6 +312,66 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 		log.info(`has_tools flag: ${tomoriState.llm.has_tools}`);
 		log.info(`sees_images flag: ${tomoriState.llm.sees_images}`);
 
+		// Override capabilities with OpenRouter API data
+		// This prevents routing errors caused by incorrect database flags
+		let effectiveHasTools = tomoriState.llm.has_tools;
+		let effectiveSeesImages = tomoriState.llm.sees_images;
+		let effectiveSeesVideos = tomoriState.llm.sees_videos;
+
+		// Special case: account-setting cannot be validated against API cache
+		// (we don't know which model the user has set as their OpenRouter default)
+		// So we respect database flags - conservative by default, but user-configurable
+		if (tomoriState.llm.llm_codename === "account-setting") {
+			log.info(
+				"[ACCOUNT-SETTING] Using database flags (cannot validate against API): " +
+					`tools=${effectiveHasTools}, images=${effectiveSeesImages}, videos=${effectiveSeesVideos}`,
+			);
+		}
+		// Override with OpenRouter API capabilities if available
+		else if (isOpenRouterCapabilityCacheReady()) {
+			const apiCapabilities = getOpenRouterCapabilities(
+				tomoriState.llm.llm_codename,
+			);
+
+			if (apiCapabilities) {
+				// Log and override each capability if different from database
+				if (apiCapabilities.hasTools !== effectiveHasTools) {
+					log.info(
+						`[API OVERRIDE] has_tools: ${effectiveHasTools} (DB) → ` +
+							`${apiCapabilities.hasTools} (OpenRouter API)`,
+					);
+					effectiveHasTools = apiCapabilities.hasTools;
+				}
+
+				if (apiCapabilities.seesImages !== effectiveSeesImages) {
+					log.info(
+						`[API OVERRIDE] sees_images: ${effectiveSeesImages} (DB) → ` +
+							`${apiCapabilities.seesImages} (OpenRouter API)`,
+					);
+					effectiveSeesImages = apiCapabilities.seesImages;
+				}
+
+				if (apiCapabilities.seesVideos !== effectiveSeesVideos) {
+					log.info(
+						`[API OVERRIDE] sees_videos: ${effectiveSeesVideos} (DB) → ` +
+							`${apiCapabilities.seesVideos} (OpenRouter API)`,
+					);
+					effectiveSeesVideos = apiCapabilities.seesVideos;
+				}
+			} else {
+				// Model not found in cache - use database flags
+				log.info(
+					`[DB FALLBACK] Model ${tomoriState.llm.llm_codename} not found in ` +
+						`OpenRouter API cache - using database flags`,
+				);
+			}
+		} else {
+			// Cache not ready - use database flags
+			log.info(
+				"[DB FALLBACK] OpenRouter capability cache not ready - using database flags",
+			);
+		}
+
 		// Build config object - only include tools if model supports them
 		// NOTE: OpenRouter models are more sensitive to temperature than other providers.
 		// Database stores temperature in range 1.0-2.0, but OpenRouter works best with 0.2-1.2.
@@ -326,7 +386,7 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 			apiKey: apiKey,
 			temperature: adjustedTemperature,
 			maxOutputTokens: 4096, // Default, can be adjusted per model
-			seesImages: tomoriState.llm.sees_images, // Pass image capability flag
+			seesImages: effectiveSeesImages, // Use effective value (may be overridden)
 			// Sampling parameters to reduce hallucinations and improve coherence
 			topP: 0.9, // Nucleus sampling - use top 90% probability mass
 			frequencyPenalty: 0.3, // Slightly penalize frequent tokens
@@ -334,9 +394,8 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 			repetitionPenalty: 1.1, // Penalize exact token repetition
 		};
 
-		// Only add tools field if the model supports them
-		if (tomoriState.llm.has_tools)
-			config.tools = await this.getTools(tomoriState);
+		// Only add tools field if the model supports them (use effective value)
+		if (effectiveHasTools) config.tools = await this.getTools(tomoriState);
 
 		return config;
 	}

@@ -1046,6 +1046,10 @@ export function cleanLLMOutput(
 	if (emojiUsageEnabled === false)
 		cleanedText = cleanedText.replace(/<(a?):[^:]+:[^>]+>/g, "");
 	else if (emojiStrings && emojiStrings.length > 0) {
+		// Debug: Log emoji conversion attempt
+		log.info(
+			`[cleanLLMOutput] Processing text with ${emojiStrings.length} emojis. Text: "${text.substring(0, 100)}..."`,
+		);
 		// 2.1 Build a set of exact valid emoji strings
 		const validEmojiSet = new Set(emojiStrings);
 
@@ -1068,6 +1072,19 @@ export function cleanLLMOutput(
 				const [, , name] = m;
 				emojiNameMap.set(name.toLowerCase(), emoji);
 			}
+		}
+
+		// 2.2.5 Fix malformed emoji codes missing trailing colons (e.g., ":sadcat" -> ":sadcat:")
+		// This needs to happen BEFORE we protect valid emojis
+		for (const [name] of emojiNameMap.entries()) {
+			// Match :name followed by non-colon character or end of string
+			// Use negative lookahead to ensure we don't match already-correct :name: patterns
+			// Use positive lookahead to ensure we're at a word boundary (space, punctuation, or end of string)
+			const malformedPattern = new RegExp(
+				`(:${escapeRegExp(name)})(?!:)(?=\\s|$|[^a-zA-Z0-9_])`,
+				"gi",
+			);
+			cleanedText = cleanedText.replace(malformedPattern, "$1:");
 		}
 
 		// 2.3 Protect valid emojis by replacing them with placeholders
@@ -1122,6 +1139,11 @@ export function cleanLLMOutput(
 				emoji,
 			);
 		}
+	} else {
+		// Debug: Log when emoji conversion is skipped
+		log.info(
+			`[cleanLLMOutput] Emoji conversion skipped. emojiUsageEnabled: ${emojiUsageEnabled}, emojiStrings length: ${emojiStrings?.length || 0}`,
+		);
 	}
 
 	// 3. Remove bot name prefix if present

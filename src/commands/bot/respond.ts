@@ -68,6 +68,9 @@ export async function execute(
 
 		// 5. Create a "passport" message that will trigger tomoriChat
 		// We need to ensure this message will pass the trigger checks
+		// NOTE: tomoriChat has built-in logic (lines 2004-2040) that injects a
+		// "[Continue your last message]" prompt when isManuallyTriggered=true
+		// and the last message in history is from the bot
 		const passportMessage = latestMessage;
 
 		// 6. Manually trigger tomoriChat with command flags
