@@ -36,11 +36,29 @@ export async function lazySyncGuildEmojis(
 		// 2. Determine if we need to fetch
 		const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 		const now = new Date();
-		// Sanity check: if cache has very few emojis but guild actually has many, force refresh
-		const guildEmojiCount = guild.emojis.cache.size;
 		const cachedEmojiCount = lastSync?.emoji_count || 0;
-		const hasCountMismatch = guildEmojiCount > 5 && cachedEmojiCount < 5;
 
+		// 3. Smart count mismatch detection
+		// Check if Discord.js has emojis cached (from GUILD_CREATE or previous fetch)
+		const discordCachePopulated = guild.emojis.cache.size > 0;
+		let hasCountMismatch = false;
+		let guildEmojiCount = guild.emojis.cache.size;
+
+		if (discordCachePopulated) {
+			// Discord cache is populated - use it for comparison
+			hasCountMismatch = Math.abs(guildEmojiCount - cachedEmojiCount) > 2;
+		} else if (lastSync && cachedEmojiCount > 0) {
+			// Discord cache is EMPTY but DB has emojis - suspicious!
+			// This indicates bot restart/rejoin - fetch to verify count
+			log.info(
+				`Discord emoji cache empty but DB has ${cachedEmojiCount} emojis for ${guild.name} - fetching to verify count`,
+			);
+			await guild.emojis.fetch();
+			guildEmojiCount = guild.emojis.cache.size;
+			hasCountMismatch = Math.abs(guildEmojiCount - cachedEmojiCount) > 2;
+		}
+
+		// 4. Check if sync is needed
 		const needsFetch = forceFetch ||
 			!lastSync ||
 			lastSync.emoji_count === 0 ||
@@ -55,7 +73,7 @@ export async function lazySyncGuildEmojis(
 			return false;
 		}
 
-		// 3. Fetch emojis from Discord API
+		// 5. Determine refresh reason for logging
 		const refreshReason = forceFetch
 			? "forced"
 			: hasCountMismatch
@@ -69,14 +87,17 @@ export async function lazySyncGuildEmojis(
 		);
 		log.info(`[Emoji Lazy Sync] Using server_id: ${serverId}`);
 
-		await guild.emojis.fetch();
+		// 6. Fetch emojis from Discord API (if not already fetched in step 3)
+		if (!discordCachePopulated || (discordCachePopulated && hasCountMismatch)) {
+			await guild.emojis.fetch();
+		}
 		const currentEmojis = Array.from(guild.emojis.cache.values());
 
 		log.info(
 			`Fetched ${currentEmojis.length} emoji(s) from Discord for guild ${guild.name}`,
 		);
 
-		// 4. Sync to database using shared helper
+		// 7. Sync to database using shared helper
 		await sql.transaction(async (tx) => {
 			await syncEmojisToDatabase(tx, serverId, currentEmojis);
 		});

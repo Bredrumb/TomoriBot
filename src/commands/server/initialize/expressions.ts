@@ -30,6 +30,8 @@ import {
 	type StructuredOutputResult,
 } from "@/providers/utils/structuredOutput";
 import { decryptApiKey } from "@/utils/security/crypto";
+import { lazySyncGuildEmojis } from "@/utils/cache/emojiLazySync";
+import { lazySyncGuildStickers } from "@/utils/cache/stickerLazySync";
 
 /**
  * Configure the subcommand
@@ -247,7 +249,23 @@ export async function execute(
 	await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
 	try {
-		// 4. Validate model capabilities
+		// 4. Force sync emojis and stickers from Discord to ensure DB is populated
+		// This handles scenarios where:
+		// - Bot was just added to server (empty DB)
+		// - Bot was kicked and re-added with new emojis/stickers
+		// - Existing servers before expression refresh feature was implemented
+		log.info(
+			`[Initialize Expressions] Force syncing emojis/stickers for guild ${interaction.guild.name}`,
+		);
+
+		await lazySyncGuildEmojis(interaction.guild, tomoriState.server_id, true);
+		await lazySyncGuildStickers(interaction.guild, tomoriState.server_id, true);
+
+		log.info(
+			`[Initialize Expressions] Sync complete for guild ${interaction.guild.name}`,
+		);
+
+		// 5. Validate model capabilities
 		// Model must support BOTH image vision AND structured output
 		const llm = tomoriState.llm;
 
@@ -279,7 +297,7 @@ export async function execute(
 			return;
 		}
 
-		// 5. Query database for uninitialized emojis
+		// 6. Query database for uninitialized emojis
 		const uninitializedEmojis = await sql<UninitializedEmoji[]>`
 			SELECT emoji_disc_id, emoji_name, is_animated
 			FROM server_emojis
@@ -292,7 +310,7 @@ export async function execute(
 				)
 		`;
 
-		// 6. Query database for uninitialized stickers
+		// 7. Query database for uninitialized stickers
 		const uninitializedStickers = await sql<UninitializedSticker[]>`
 			SELECT sticker_disc_id, sticker_name, sticker_format
 			FROM server_stickers
@@ -305,7 +323,7 @@ export async function execute(
 				)
 		`;
 
-		// 7. Check if there's anything to initialize
+		// 8. Check if there's anything to initialize
 		const totalUninitialized =
 			uninitializedEmojis.length + uninitializedStickers.length;
 
@@ -328,7 +346,7 @@ export async function execute(
 			return;
 		}
 
-		// 8. Build images array for LLM
+		// 9. Build images array for LLM
 		const images: Array<{ url: string; name: string }> = [];
 		const items: Array<{ name: string; type: "emoji" | "sticker" }> = [];
 
@@ -350,7 +368,7 @@ export async function execute(
 			items.push({ name: sticker.sticker_name, type: "sticker" });
 		}
 
-		// 9. Update progress: Analyzing with AI
+		// 10. Update progress: Analyzing with AI
 		await interaction.editReply({
 			embeds: [
 				{
@@ -366,7 +384,7 @@ export async function execute(
 			],
 		});
 
-		// 10. Decrypt API key
+		// 11. Decrypt API key
 		if (!tomoriState.config.api_key) {
 			await interaction.editReply({
 				embeds: [
@@ -389,7 +407,7 @@ export async function execute(
 			keyVersion,
 		);
 
-		// 11. Build prompts
+		// 12. Build prompts
 		const systemPrompt = buildSystemPrompt();
 		const userPrompt = buildUserPrompt(items);
 		const temperature = 1.0;
@@ -408,7 +426,7 @@ export async function execute(
 			)}`,
 		);
 
-		// 12. Call structured output for the current provider
+		// 13. Call structured output for the current provider
 		const provider = llm.llm_provider.toLowerCase();
 		let result: StructuredOutputResult<ExpressionBatchResult>;
 
@@ -456,7 +474,7 @@ export async function execute(
 			`LLM structured output response: ${JSON.stringify(result, null, 2)}`,
 		);
 
-		// 13. Check if LLM call was successful
+		// 14. Check if LLM call was successful
 		if (!result.success) {
 			log.error("LLM structured output failed", new Error(result.error), {
 				errorType: "LLMStructuredOutputError",
@@ -484,7 +502,7 @@ export async function execute(
 			return;
 		}
 
-		// 14. Validate LLM response with Zod
+		// 15. Validate LLM response with Zod
 		const validationResult = ExpressionBatchResultSchema.safeParse(result.data);
 
 		if (!validationResult.success) {
@@ -518,7 +536,7 @@ export async function execute(
 			return;
 		}
 
-		// 15. Update database with results
+		// 16. Update database with results
 		const { emojiCount, stickerCount } = await updateExpressionsInDB(
 			tomoriState.server_id,
 			validationResult.data.expressions,
@@ -526,7 +544,7 @@ export async function execute(
 
 		const totalProcessed = emojiCount + stickerCount;
 
-		// 16. Show result message
+		// 17. Show result message
 		if (totalProcessed === 0) {
 			// No expressions were updated (all failed to match)
 			await interaction.editReply({
@@ -591,7 +609,7 @@ export async function execute(
 			});
 		}
 	} catch (error) {
-		// 17. Log error with context
+		// 18. Log error with context
 		const context: ErrorContext = {
 			userId: userData.user_id,
 			serverId: tomoriState?.server_id ?? null,
@@ -609,7 +627,7 @@ export async function execute(
 			context,
 		);
 
-		// 18. Show error message to user
+		// 19. Show error message to user
 		await interaction.editReply({
 			embeds: [
 				{

@@ -24,6 +24,8 @@ import {
 	loadPresetOptionsByLocale,
 } from "@/utils/db/dbRead";
 import { getCachedPresetAvatar } from "@/utils/image/avatarHelper";
+import { lazySyncGuildEmojis } from "@/utils/cache/emojiLazySync";
+import { lazySyncGuildStickers } from "@/utils/cache/stickerLazySync";
 
 import type { HumanizerDegree } from "@/types/db/schema";
 
@@ -493,6 +495,41 @@ export async function execute(
 					color: ColorCode.ERROR,
 				});
 				return;
+			}
+
+			// Force sync emojis and stickers for guild context (skip for DMs)
+			// This populates the database with all current emojis/stickers from Discord
+			// Ensures emoji/sticker conversion works immediately without requiring an extra message
+			if (!isDMChannel && interaction.guild) {
+				try {
+					// 1. Load the newly created TomoriState to get server_id
+					const newTomoriState = await loadTomoriState(serverId);
+
+					if (newTomoriState) {
+						log.info(
+							`[Setup] Force syncing emojis/stickers for guild ${interaction.guild.name}`,
+						);
+
+						// 2. Force sync both emojis and stickers (ignore 24hr cache)
+						await Promise.all([
+							lazySyncGuildEmojis(interaction.guild, newTomoriState.server_id, true),
+							lazySyncGuildStickers(interaction.guild, newTomoriState.server_id, true),
+						]);
+
+						log.success(
+							`[Setup] Successfully synced expressions for guild ${interaction.guild.name}`,
+						);
+					} else {
+						log.warn(
+							`[Setup] Failed to load TomoriState after setup for guild ${interaction.guild.id}`,
+						);
+					}
+				} catch (syncError) {
+					// 3. Log error but don't fail setup - expressions will sync on first message anyway
+					log.warn(
+						`[Setup] Failed to sync expressions during setup (will sync on first message): ${syncError}`,
+					);
+				}
 			}
 
 			// Update guild avatar to match the selected preset (guild-only operation)

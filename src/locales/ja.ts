@@ -271,7 +271,7 @@ export default {
 
 			// 404 NOT_FOUND
 			"404_default_message":
-				"要求された機能（ツール/画像）をサポートするエンドポイントが見つかりません。別のモデルをお試しください。",
+				"要求された機能（ツール/画像）をサポートするエンドポイントが見つかりません。`/config model text`コマンドを使用して別のモデルをお試しください。",
 
 			// 404 Privacy Policy Error
 			"404_privacy_policy_error":

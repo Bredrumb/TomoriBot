@@ -271,7 +271,7 @@ export default {
 
 			// 404 NOT_FOUND
 			"404_default_message":
-				"No endpoints found that support the requested features (tools/images). Try a different model.",
+				"No endpoints found that support the requested features (tools/images). Try a different model using the `/config model text` command.",
 
 			// 404 Privacy Policy Error
 			"404_privacy_policy_error":

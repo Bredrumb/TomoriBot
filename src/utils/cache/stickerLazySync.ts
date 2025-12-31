@@ -36,11 +36,29 @@ export async function lazySyncGuildStickers(
 		// 2. Determine if we need to fetch
 		const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 		const now = new Date();
-		// Sanity check: if cache has very few stickers but guild actually has many, force refresh
-		const guildStickerCount = guild.stickers.cache.size;
 		const cachedStickerCount = lastSync?.sticker_count || 0;
-		const hasCountMismatch = guildStickerCount > 5 && cachedStickerCount < 5;
 
+		// 3. Smart count mismatch detection
+		// Check if Discord.js has stickers cached (from GUILD_CREATE or previous fetch)
+		const discordCachePopulated = guild.stickers.cache.size > 0;
+		let hasCountMismatch = false;
+		let guildStickerCount = guild.stickers.cache.size;
+
+		if (discordCachePopulated) {
+			// Discord cache is populated - use it for comparison
+			hasCountMismatch = Math.abs(guildStickerCount - cachedStickerCount) > 2;
+		} else if (lastSync && cachedStickerCount > 0) {
+			// Discord cache is EMPTY but DB has stickers - suspicious!
+			// This indicates bot restart/rejoin - fetch to verify count
+			log.info(
+				`Discord sticker cache empty but DB has ${cachedStickerCount} stickers for ${guild.name} - fetching to verify count`,
+			);
+			await guild.stickers.fetch();
+			guildStickerCount = guild.stickers.cache.size;
+			hasCountMismatch = Math.abs(guildStickerCount - cachedStickerCount) > 2;
+		}
+
+		// 4. Check if sync is needed
 		const needsFetch = forceFetch ||
 			!lastSync ||
 			lastSync.sticker_count === 0 ||
@@ -55,7 +73,7 @@ export async function lazySyncGuildStickers(
 			return false;
 		}
 
-		// 3. Fetch stickers from Discord API
+		// 5. Determine refresh reason for logging
 		const refreshReason = forceFetch
 			? "forced"
 			: hasCountMismatch
@@ -69,14 +87,17 @@ export async function lazySyncGuildStickers(
 		);
 		log.info(`[Sticker Lazy Sync] Using server_id: ${serverId}`);
 
-		await guild.stickers.fetch();
+		// 6. Fetch stickers from Discord API (if not already fetched in step 3)
+		if (!discordCachePopulated || (discordCachePopulated && hasCountMismatch)) {
+			await guild.stickers.fetch();
+		}
 		const currentStickers = Array.from(guild.stickers.cache.values());
 
 		log.info(
 			`Fetched ${currentStickers.length} sticker(s) from Discord for guild ${guild.name}`,
 		);
 
-		// 4. Sync to database using shared helper
+		// 7. Sync to database using shared helper
 		await sql.transaction(async (tx) => {
 			await syncStickersToDatabase(tx, serverId, currentStickers);
 		});
