@@ -3,6 +3,8 @@ import { sql } from "@/utils/db/client";
 import type { EventFunction, EventArg } from "../../types/discord/global"; // Rule 14
 import type { ErrorContext } from "../../types/db/schema"; // Rule 14
 import { log } from "../../utils/misc/logger"; // Rule 18
+import { syncEmojisToDatabase } from "../../utils/db/emojiStickerSync";
+import { invalidateEmojiStickerCache } from "../../utils/cache/emojiStickerCache";
 
 /**
  * Rule 1: JSDoc comment for exported function
@@ -55,108 +57,15 @@ const handleGuildEmojisUpdate: EventFunction = async (
 			`Fetched and cached ${currentEmojis.length} emojis for guild ${guild.id}. Refreshing DB...`,
 		);
 
-		// 4. Perform database update within a transaction (Rule 15)
+		// 4. Sync emojis to database using shared helper
 		await sql.transaction(async (tx) => {
-			// 4a. Load existing emoji metadata to preserve it across refresh
-			const existingEmojis = await tx<
-				Array<{
-					emoji_disc_id: string;
-					emoji_desc: string | null;
-					emotion_key: string | null;
-				}>
-			>`
-                SELECT emoji_disc_id, emoji_desc, emotion_key
-                FROM server_emojis
-                WHERE server_id = ${serverId}
-            `;
-			const existingEmojiMetadata = new Map(
-				existingEmojis.map((e) => [e.emoji_disc_id, e]),
-			);
-
-			// 4b. Map current emojis to database format for bulk upsert
-			const emojiValues = currentEmojis.map((e) => {
-				const existing = existingEmojiMetadata.get(e.id);
-				const emotionKey =
-					existing?.emotion_key && existing.emotion_key.trim().length > 0
-						? existing.emotion_key
-						: "unset";
-				return {
-					server_id: serverId,
-					emoji_disc_id: e.id,
-					emoji_name: e.name ?? "", // Use name, default to empty string if null
-					emoji_desc: existing?.emoji_desc ?? "",
-					emotion_key: emotionKey, // Preserve existing emotion key
-					is_animated: e.animated ?? false, // Use animated property
-				};
-			});
-
-			// 4c. Upsert all current emojis (individual inserts to avoid Postgres.js bulk syntax issues)
-			if (emojiValues.length > 0) {
-				let successCount = 0;
-				for (const emoji of emojiValues) {
-					await tx`
-						INSERT INTO server_emojis (server_id, emoji_disc_id, emoji_name, emoji_desc, emotion_key, is_animated)
-						VALUES (
-							${emoji.server_id},
-							${emoji.emoji_disc_id},
-							${emoji.emoji_name},
-							${emoji.emoji_desc},
-							${emoji.emotion_key},
-							${emoji.is_animated}
-						)
-						ON CONFLICT (server_id, emoji_disc_id) DO UPDATE SET
-							emoji_name = EXCLUDED.emoji_name,
-							emoji_desc = EXCLUDED.emoji_desc,
-							emotion_key = EXCLUDED.emotion_key,
-							is_animated = EXCLUDED.is_animated,
-							updated_at = CURRENT_TIMESTAMP
-					`;
-					successCount++;
-				}
-				log.info(
-					`Upserted ${successCount} emoji entries for server ${serverId}.`,
-				);
-			}
-
-			// 4d. Delete emojis that no longer exist in Discord
-			const currentEmojiIds = currentEmojis.map((e) => e.id);
-
-			// Get all existing emoji IDs from DB
-			const dbEmojis = await tx<Array<{ emoji_disc_id: string; emoji_name: string }>>`
-				SELECT emoji_disc_id, emoji_name
-				FROM server_emojis
-				WHERE server_id = ${serverId}
-			`;
-
-			// Find which ones to delete (exist in DB but not in Discord)
-			const currentIdSet = new Set(currentEmojiIds);
-			const toDelete = dbEmojis.filter(e => !currentIdSet.has(e.emoji_disc_id));
-
-			if (toDelete.length > 0) {
-				// Delete them one by one to avoid array syntax issues
-				for (const emoji of toDelete) {
-					await tx`
-						DELETE FROM server_emojis
-						WHERE server_id = ${serverId} AND emoji_disc_id = ${emoji.emoji_disc_id}
-					`;
-				}
-				log.info(
-					`Removed ${toDelete.length} stale emoji entries for server ${serverId}.`,
-				);
-			}
-
-			// Handle edge case: if Discord has no emojis, delete all
-			if (currentEmojiIds.length === 0) {
-				// If there are no current emojis, delete all
-				const { rowCount: deletedCount } = await tx`
-					DELETE FROM server_emojis
-					WHERE server_id = ${serverId}
-				`;
-				log.info(
-					`Removed all ${deletedCount} emoji entries for server ${serverId} (no emojis in guild).`,
-				);
-			}
+			// biome-ignore lint/style/noNonNullAssertion: serverId is guaranteed to exist after checks above
+			await syncEmojisToDatabase(tx, serverId!, currentEmojis);
 		});
+
+		// 5. Invalidate in-memory cache to force refresh on next message
+		// biome-ignore lint/style/noNonNullAssertion: serverId is guaranteed to exist after checks above
+		invalidateEmojiStickerCache(serverId!);
 
 		log.success(
 			`Successfully refreshed emojis for guild ${guild.id} (Server ID: ${serverId}).`,

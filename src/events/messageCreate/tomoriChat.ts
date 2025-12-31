@@ -23,8 +23,6 @@ import type { FunctionCall } from "../../types/provider/interfaces";
 import {
 	isBlacklisted,
 	getPrivacyLevel,
-	loadServerEmojis,
-	loadServerStickers,
 	loadTomoriState,
 	loadUserRow,
 } from "../../utils/db/dbRead";
@@ -48,10 +46,9 @@ import { decryptApiKey } from "@/utils/security/crypto";
 import { localizer, getSupportedLocales } from "../../utils/text/localizer";
 import { escapeRegExp } from "../../utils/text/stringHelper";
 import { sql } from "@/utils/db/client";
-import { lazySyncGuildEmojis } from "../../utils/cache/emojiLazySync";
-import { lazySyncGuildStickers } from "../../utils/cache/stickerLazySync";
+import { loadEmojiStickerCache } from "../../utils/cache/emojiStickerCache";
 
-import type { TomoriState } from "@/types/db/schema";
+import type { TomoriState, ServerEmojiRow, ServerStickerRow } from "@/types/db/schema";
 import { PrivacyLevel } from "@/types/db/schema";
 // Provider-specific function declarations moved to providers
 import { getProviderForTomori } from "../../utils/provider/providerFactory";
@@ -1927,21 +1924,24 @@ export default async function tomoriChat(
 			const serverDescription = isDMChannel ? null : guild?.description;
 
 			let emojiStrings: string[] = [];
-			let loadedEmojis: Awaited<ReturnType<typeof loadServerEmojis>> = null;
-			let loadedStickers: Awaited<ReturnType<typeof loadServerStickers>> = null;
+			let loadedEmojis: ServerEmojiRow[] | null = null;
+			let loadedStickers: ServerStickerRow[] | null = null;
 
-			if (tomoriState.config.emoji_usage_enabled) {
-				// Lazy sync emojis and stickers if needed (only for non-DM channels)
-				if (!isDMChannel && guild && tomoriState.server_id) {
-					await lazySyncGuildEmojis(guild, tomoriState.server_id);
-					await lazySyncGuildStickers(guild, tomoriState.server_id);
-				}
+			// Load emojis and stickers from 5-minute in-memory cache (lazy sync included)
+			if (!isDMChannel && guild && tomoriState.server_id) {
+				const { emojis, stickers } = await loadEmojiStickerCache(
+					tomoriState.server_id,
+					guild,
+					tomoriState.config.emoji_usage_enabled,
+					tomoriState.config.sticker_usage_enabled,
+				);
 
-				// biome-ignore lint/style/noNonNullAssertion: tomoriState check above guarantees server_id exists
-				const emojis = await loadServerEmojis(tomoriState.server_id!);
-				loadedEmojis = emojis; // Store for passing to buildContext
-				if (emojis && emojis.length > 0) {
-					// Initialize emojiStrings as an empty array of strings
+				loadedEmojis = emojis;
+				loadedStickers = stickers;
+
+				// Process emojis for conversion (if emoji usage is enabled)
+				if (tomoriState.config.emoji_usage_enabled && emojis && emojis.length > 0) {
+					// Sort emojis by created_at timestamp, then by ID
 					const sortedEmojis = [...emojis].sort((a, b) => {
 						const rawATime = a.created_at
 							? new Date(a.created_at).getTime()
@@ -1958,21 +1958,17 @@ export default async function tomoriChat(
 						return a.emoji_disc_id.localeCompare(b.emoji_disc_id);
 					});
 
+					// Convert to Discord emoji string format
 					emojiStrings = sortedEmojis.map(
 						(e) =>
 							`<${e.is_animated ? "a" : ""}:${e.emoji_name}:${e.emoji_disc_id}>`,
 					);
 
-				// Debug: Log loaded emoji count and sample
-				log.info(
-					`[Emoji Load] Loaded ${emojiStrings.length} emojis from DB. Sample: ${emojiStrings.slice(0, 5).map(e => e.match(/:[^:]+:/)?.[0]).join(", ")}`,
-				);
+					// Debug: Log loaded emoji count and sample
+					log.info(
+						`[Emoji Load] Loaded ${emojiStrings.length} emojis from cache. Sample: ${emojiStrings.slice(0, 5).map(e => e.match(/:[^:]+:/)?.[0]).join(", ")}`,
+					);
 				}
-			}
-
-			// Load stickers if enabled (for passing to buildContext)
-			if (tomoriState.config.sticker_usage_enabled && !isDMChannel && guild) {
-				loadedStickers = await loadServerStickers(guild.id);
 			}
 
 			// Inject reminder into conversation history if needed
