@@ -940,26 +940,33 @@ export async function buildContext({
 			const detailLines: string[] = [];
 
 			// 8. Add status (only for Level 0 MINIMAL privacy)
+			// Only include if GuildPresences intent is available (non-production)
 			if (userPrivacyLevel === PrivacyLevel.MINIMAL) {
-				const isProduction = process.env.RUN_ENV === "production";
-				const presenceInfo = isDMChannel
-					? "Online (Direct Message)"
-					: isTriggererId
+				const hasPresenceIntent = client.options.intents?.has(
+					GatewayIntentBits.GuildPresences,
+				);
+
+				if (isDMChannel) {
+					// DMs always show online
+					detailLines.push("- Status: Online (Direct Message)");
+				} else if (hasPresenceIntent) {
+					// Only fetch presence data if intent is available
+					const presenceInfo = isTriggererId
 						? await getUserPresenceDetails(
 								client,
 								userRow.user_disc_id,
 								guildId,
 								snapshot?.preloadedMember,
 							)
-						: isProduction
-							? "Status unknown"
-							: await getUserPresenceDetails(
-									client,
-									userRow.user_disc_id,
-									guildId,
-								);
+						: await getUserPresenceDetails(
+								client,
+								userRow.user_disc_id,
+								guildId,
+							);
 
-				detailLines.push(`- Status: ${presenceInfo}`);
+					detailLines.push(`- Status: ${presenceInfo}`);
+				}
+				// In production without presence intent: skip status entirely
 			}
 
 			// 8.1. Add server roles (only for Level 0 MINIMAL privacy)

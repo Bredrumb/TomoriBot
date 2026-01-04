@@ -57,19 +57,25 @@ log.success(
 // Database client is now initialized in @/utils/db/client.ts
 // SSL configuration and connection setup is handled there based on environment
 
+// Build intents array - conditionally include GuildPresences for non-production only
+const intents = [
+	GatewayIntentBits.Guilds,
+	GatewayIntentBits.GuildMembers,
+	GatewayIntentBits.GuildMessages,
+	GatewayIntentBits.MessageContent,
+	GatewayIntentBits.GuildVoiceStates,
+	GatewayIntentBits.DirectMessages,
+	GatewayIntentBits.GuildMessageReactions,
+	GatewayIntentBits.GuildExpressions,
+];
+
+// GuildPresences intent only available in non-production (rejected for production approval)
+if ((process.env.RUN_ENV || "development") !== "production") {
+	intents.push(GatewayIntentBits.GuildPresences);
+}
+
 const client = new Client({
-	intents: [
-		// Intents required by the Discord Bot
-		GatewayIntentBits.Guilds,
-		GatewayIntentBits.GuildMembers,
-		GatewayIntentBits.GuildMessages,
-		GatewayIntentBits.GuildPresences,
-		GatewayIntentBits.MessageContent,
-		GatewayIntentBits.GuildVoiceStates,
-		GatewayIntentBits.DirectMessages,
-		GatewayIntentBits.GuildMessageReactions,
-		GatewayIntentBits.GuildExpressions,
-	],
+	intents,
 	partials: [Partials.Channel, Partials.Message],
 	/**
 	 * Cache sweepers prevent unbounded memory growth by automatically removing old cached data.

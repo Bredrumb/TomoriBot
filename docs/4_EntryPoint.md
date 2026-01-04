@@ -136,32 +136,40 @@ const dbPort = parseInt(dbUrl.port || "5432", 10);
 ### 5. Create Discord Client
 
 ```typescript
+// Build intents array - conditionally include GuildPresences for non-production only
+const intents = [
+  GatewayIntentBits.Guilds,              // Access server info
+  GatewayIntentBits.GuildMembers,        // Access member list (privileged)
+  GatewayIntentBits.GuildMessages,       // Read server messages
+  GatewayIntentBits.MessageContent,      // Read message text (privileged)
+  GatewayIntentBits.GuildVoiceStates,    // Voice channel info
+  GatewayIntentBits.DirectMessages,      // DM support
+  GatewayIntentBits.GuildMessageReactions, // React to messages
+  GatewayIntentBits.GuildExpressions,    // Access emojis/stickers
+];
+
+// GuildPresences intent only available in non-production (rejected for production approval)
+if ((process.env.RUN_ENV || "development") !== "production") {
+  intents.push(GatewayIntentBits.GuildPresences);
+}
+
 const client = new Client({
-  intents: [
-    // Intents required by the Discord Bot
-    GatewayIntentBits.Guilds,              // Access server info
-    GatewayIntentBits.GuildMembers,        // Access member list
-    GatewayIntentBits.GuildMessages,       // Read server messages
-    GatewayIntentBits.GuildPresences,      // See user online status
-    GatewayIntentBits.MessageContent,      // Read message text (privileged)
-    GatewayIntentBits.GuildVoiceStates,    // Voice channel info
-    GatewayIntentBits.DirectMessages,      // DM support
-    GatewayIntentBits.GuildMessageReactions, // React to messages
-    GatewayIntentBits.GuildExpressions,    // Access emojis/stickers
-  ],
+  intents,
   partials: [Partials.Channel, Partials.Message], // Handle uncached data
 });
 ```
 
 **Intents Explained:**
 - **Intents** tell Discord which events you want to receive
-- **Privileged Intents** (MessageContent, GuildPresences, GuildMembers) must be enabled in Discord Developer Portal
+- **Privileged Intents** (MessageContent, GuildMembers, GuildPresences) must be enabled in Discord Developer Portal
 - **Partials** allow handling events for uncached channels/messages (like DMs)
+- **Environment-specific Intents**: GuildPresences is only loaded in development/testing environments
 
 **Why These Intents?**
-- `MessageContent` - Required to read message text for chat
+- `MessageContent` - Required to read message text for chat (privileged, approved)
+- `GuildMembers` - Required to access member info (privileged, approved)
 - `GuildExpressions` - Needed for emoji/sticker features
-- `GuildPresences` - Optional, for seeing user status
+- `GuildPresences` - Optional, for seeing user status (privileged, only available in non-production)
 
 ### 6. Error Handling Setup
 
