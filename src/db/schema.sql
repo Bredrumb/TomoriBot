@@ -400,8 +400,13 @@ BEGIN
     ) THEN
         ALTER TABLE users ADD COLUMN privacy_level INTEGER DEFAULT 0;
         RAISE NOTICE 'Added users.privacy_level column';
+    END IF;
 
-        -- Step 2: Migrate existing data (false→0 MINIMAL, true→2 FULL)
+    -- Step 2: Migrate existing data from privacy_opt_out (only if old column exists)
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'users' AND column_name = 'privacy_opt_out'
+    ) THEN
         UPDATE users
         SET privacy_level = CASE
             WHEN privacy_opt_out = true THEN 2  -- Opted out → FULL privacy
