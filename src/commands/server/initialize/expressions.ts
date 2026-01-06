@@ -368,23 +368,48 @@ export async function execute(
 			items.push({ name: sticker.sticker_name, type: "sticker" });
 		}
 
-		// 10. Update progress: Analyzing with AI
+		// 10. Apply batch size limit for Gemini free tier (8192 token limit)
+		// Gemini can only process ~50 expressions at a time due to maxOutputTokens constraint
+		// User should re-run the command to process remaining expressions
+		const provider = tomoriState.llm.llm_provider.toLowerCase();
+		const GEMINI_BATCH_SIZE = 50;
+		let isGeminiBatchLimited = false;
+
+		if (provider === "google" && images.length > GEMINI_BATCH_SIZE) {
+			images.splice(GEMINI_BATCH_SIZE);
+			items.splice(GEMINI_BATCH_SIZE);
+			isGeminiBatchLimited = true;
+			log.info(
+				`[Initialize Expressions] Limited batch to ${GEMINI_BATCH_SIZE} items for Gemini provider (was ${totalUninitialized})`,
+			);
+		}
+
+		// 11. Update progress: Analyzing with AI
 		await interaction.editReply({
 			embeds: [
 				{
-					description: localizer(
-						locale,
-						"commands.server.initialize.expressions.progress_analyzing",
-						{
-							total: totalUninitialized,
-						},
-					),
+					description: isGeminiBatchLimited
+						? localizer(
+								locale,
+								"commands.server.initialize.expressions.progress_analyzing_gemini_batch",
+								{
+									batch_size: images.length,
+									total_uninitialized: totalUninitialized,
+								},
+							)
+						: localizer(
+								locale,
+								"commands.server.initialize.expressions.progress_analyzing",
+								{
+									total: images.length,
+								},
+							),
 					color: hexToNumber(ColorCode.INFO),
 				},
 			],
 		});
 
-		// 11. Decrypt API key
+		// 12. Decrypt API key
 		if (!tomoriState.config.api_key) {
 			await interaction.editReply({
 				embeds: [
@@ -407,7 +432,7 @@ export async function execute(
 			keyVersion,
 		);
 
-		// 12. Build prompts
+		// 13. Build prompts
 		const systemPrompt = buildSystemPrompt();
 		const userPrompt = buildUserPrompt(items);
 		const temperature = 1.0;
@@ -426,8 +451,7 @@ export async function execute(
 			)}`,
 		);
 
-		// 13. Call structured output for the current provider
-		const provider = llm.llm_provider.toLowerCase();
+		// 14. Call structured output for the current provider
 		let result: StructuredOutputResult<ExpressionBatchResult>;
 
 		switch (provider) {
@@ -474,7 +498,7 @@ export async function execute(
 			`LLM structured output response: ${JSON.stringify(result, null, 2)}`,
 		);
 
-		// 14. Check if LLM call was successful
+		// 15. Check if LLM call was successful
 		if (!result.success) {
 			log.error("LLM structured output failed", new Error(result.error), {
 				errorType: "LLMStructuredOutputError",
@@ -502,7 +526,7 @@ export async function execute(
 			return;
 		}
 
-		// 15. Validate LLM response with Zod
+		// 16. Validate LLM response with Zod
 		const validationResult = ExpressionBatchResultSchema.safeParse(result.data);
 
 		if (!validationResult.success) {
@@ -536,7 +560,7 @@ export async function execute(
 			return;
 		}
 
-		// 16. Update database with results
+		// 17. Update database with results
 		const { emojiCount, stickerCount } = await updateExpressionsInDB(
 			tomoriState.server_id,
 			validationResult.data.expressions,
@@ -544,7 +568,7 @@ export async function execute(
 
 		const totalProcessed = emojiCount + stickerCount;
 
-		// 17. Show result message
+		// 18. Show result message
 		if (totalProcessed === 0) {
 			// No expressions were updated (all failed to match)
 			await interaction.editReply({
@@ -609,7 +633,7 @@ export async function execute(
 			});
 		}
 	} catch (error) {
-		// 18. Log error with context
+		// 19. Log error with context
 		const context: ErrorContext = {
 			userId: userData.user_id,
 			serverId: tomoriState?.server_id ?? null,

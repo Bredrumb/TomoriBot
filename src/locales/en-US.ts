@@ -279,7 +279,7 @@ export default {
 				"The selected model requires allowing data for paid model training, but your OpenRouter account privacy settings currently block this.\n\n" +
 				"**To fix this:**\n" +
 				"1. Visit https://openrouter.ai/settings/privacy\n" +
-				"2. Adjust your \"Data Policy\" settings to allow this model\n" +
+				'2. Adjust your "Data Policy" settings to allow this model\n' +
 				"3. Or select a different model that matches your privacy preferences",
 
 			// 408 REQUEST_TIMEOUT
@@ -1085,6 +1085,8 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				description: `Manually trigger response to the latest message in this channel.`,
 				success_title: `Manual Response Triggered`,
 				success_description: `Responding to the latest message in this channel...`,
+				missing_permissions_title: `Missing Permissions`,
+				missing_permissions_description: `I don't have permission to read message history in this channel. Please ensure I have the **View Channel** and **Read Message History** permissions.`,
 			},
 			reason: {
 				description: `Use current AI provider's smartest reasoning model to respond with optional query.`,
@@ -1548,7 +1550,7 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 					already_initialized_title: `Nothing to Initialize`,
 					already_initialized_description: `All emojis and stickers have already been analyzed and classified.`,
 					partial_success_title: `Partially Successful`,
-					partial_success_description: `Analyzed {successful} of {total} expressions. {failed} expressions could not be processed.`,
+					partial_success_description: `Analyzed {successful} of {total} expressions. {failed} expressions were not processed. Please re-run this command to process the remaining expressions.`,
 					no_matches_title: `No Matches Found`,
 					no_matches_description: `The AI analyzed the expressions but could not match any results to the database. This may be due to a processing error.`,
 					llm_error_title: `AI Analysis Failed`,
@@ -1559,6 +1561,7 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 					progress_fetching: `Fetching uninitialized expressions...`,
 					progress_building: `Found {emoji_count} emojis and {sticker_count} stickers to analyze...`,
 					progress_analyzing: `Analyzing {total} images...`,
+					progress_analyzing_gemini_batch: `Analyzing {batch_size} of {total_uninitialized} images (Gemini processes in batches, please re-run this command after to process remaining expressions)`,
 					progress_saving: `Saving results to database...`,
 				},
 			},

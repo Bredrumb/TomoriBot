@@ -1,6 +1,6 @@
 import type { SlashCommandSubcommandBuilder } from "discord.js";
 import type { ChatInputCommandInteraction, Client, Message } from "discord.js";
-import { MessageFlags } from "discord.js";
+import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
 import { ColorCode, log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
@@ -38,6 +38,43 @@ export async function execute(
 			titleKey: "general.errors.guild_only_title",
 			descriptionKey: "general.errors.guild_only_description",
 			color: ColorCode.ERROR,
+		});
+		return;
+	}
+
+	// 2. Check if bot has required permissions to read message history
+	const botMember = interaction.guild?.members.me;
+	if (!botMember || !interaction.guild) {
+		await replyInfoEmbed(interaction, locale, {
+			titleKey: "general.errors.unknown_error_title",
+			descriptionKey: "general.errors.unknown_error_description",
+			color: ColorCode.ERROR,
+		});
+		return;
+	}
+
+	// Get the guild channel (we know it exists from check above, but need type narrowing)
+	// Check both regular channels and threads
+	const guildChannel = interaction.guild.channels.cache.get(interaction.channel.id)
+		?? interaction.channel;
+
+	// Verify it's a guild-based channel with permissions
+	if (!("permissionsFor" in guildChannel)) {
+		await replyInfoEmbed(interaction, locale, {
+			titleKey: "general.errors.unknown_error_title",
+			descriptionKey: "general.errors.unknown_error_description",
+			color: ColorCode.ERROR,
+		});
+		return;
+	}
+
+	const permissions = guildChannel.permissionsFor(botMember);
+	if (!permissions?.has(PermissionFlagsBits.ViewChannel) || !permissions?.has(PermissionFlagsBits.ReadMessageHistory)) {
+		await replyInfoEmbed(interaction, locale, {
+			titleKey: "commands.bot.respond.missing_permissions_title",
+			descriptionKey: "commands.bot.respond.missing_permissions_description",
+			color: ColorCode.ERROR,
+			flags: MessageFlags.Ephemeral,
 		});
 		return;
 	}
