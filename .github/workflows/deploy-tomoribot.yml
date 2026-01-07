@@ -266,7 +266,8 @@ jobs:
         run: |
           echo "Running dependency vulnerability scan..."
           # Run bun audit and capture output
-          if ! bun audit --audit-level=high > audit-output.txt 2>&1; then
+          # TODO: Remove --ignore flag when @modelcontextprotocol/sdk >1.25.1 is released (CVE-2026-0621)
+          if ! bun audit --audit-level=high --ignore=GHSA-8r9q-7v3j-jr4g > audit-output.txt 2>&1; then
             echo "High or critical vulnerabilities found in dependencies:"
             cat audit-output.txt
             exit 1
