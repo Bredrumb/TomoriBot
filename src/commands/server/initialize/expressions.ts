@@ -368,19 +368,30 @@ export async function execute(
 			items.push({ name: sticker.sticker_name, type: "sticker" });
 		}
 
-		// 10. Apply batch size limit for Gemini free tier (8192 token limit)
-		// Gemini can only process ~50 expressions at a time due to maxOutputTokens constraint
+		// 10. Apply batch size limit based on provider
+		// Different providers have different token limits and cost constraints
 		// User should re-run the command to process remaining expressions
 		const provider = tomoriState.llm.llm_provider.toLowerCase();
 		const GEMINI_BATCH_SIZE = 50;
-		let isGeminiBatchLimited = false;
+		const OPENROUTER_BATCH_SIZE = 50;
+		let isBatchLimited = false;
+		let batchSize = images.length;
 
 		if (provider === "google" && images.length > GEMINI_BATCH_SIZE) {
+			batchSize = GEMINI_BATCH_SIZE;
 			images.splice(GEMINI_BATCH_SIZE);
 			items.splice(GEMINI_BATCH_SIZE);
-			isGeminiBatchLimited = true;
+			isBatchLimited = true;
 			log.info(
 				`[Initialize Expressions] Limited batch to ${GEMINI_BATCH_SIZE} items for Gemini provider (was ${totalUninitialized})`,
+			);
+		} else if (provider === "openrouter" && images.length > OPENROUTER_BATCH_SIZE) {
+			batchSize = OPENROUTER_BATCH_SIZE;
+			images.splice(OPENROUTER_BATCH_SIZE);
+			items.splice(OPENROUTER_BATCH_SIZE);
+			isBatchLimited = true;
+			log.info(
+				`[Initialize Expressions] Limited batch to ${OPENROUTER_BATCH_SIZE} items for OpenRouter provider (was ${totalUninitialized})`,
 			);
 		}
 
@@ -388,12 +399,12 @@ export async function execute(
 		await interaction.editReply({
 			embeds: [
 				{
-					description: isGeminiBatchLimited
+					description: isBatchLimited
 						? localizer(
 								locale,
-								"commands.server.initialize.expressions.progress_analyzing_gemini_batch",
+								"commands.server.initialize.expressions.progress_analyzing_batch",
 								{
-									batch_size: images.length,
+									batch_size: batchSize,
 									total_uninitialized: totalUninitialized,
 								},
 							)

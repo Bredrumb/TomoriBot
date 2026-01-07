@@ -64,8 +64,24 @@ export async function execute(
 		return;
 	}
 
+	// 2. Check permissions (ManageGuild required for default in guilds only)
+	if (interaction.guild) {
+		const hasPermission =
+			interaction.memberPermissions?.has("ManageGuild") ?? false;
+
+		if (!hasPermission) {
+			await replyInfoEmbed(interaction, locale, {
+				titleKey: "commands.persona.default.no_permission_title",
+				descriptionKey: "commands.persona.default.no_permission_description",
+				color: ColorCode.ERROR,
+				flags: MessageFlags.Ephemeral,
+			});
+			return;
+		}
+	}
+
 	try {
-		// 2. Load the Tomori state for this server
+		// 3. Load the Tomori state for this server
 		const tomoriState = await loadTomoriState(
 			interaction.guild?.id ?? interaction.user.id,
 		);

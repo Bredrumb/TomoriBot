@@ -574,6 +574,8 @@ export default {
 			},
 			default: {
 				description: `Apply a preset personality configuration`,
+				no_permission_title: `🔴 Permission Denied`,
+				no_permission_description: `You need the **Manage Server** permission to apply personality presets.`,
 				modal_title: `Apply Personality Preset`,
 				select_label: `Personality Preset`,
 				select_description: `Choose a preset to apply. This will overwrite current attributes and dialogues.`,
@@ -1561,6 +1563,7 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 					progress_fetching: `Fetching uninitialized expressions...`,
 					progress_building: `Found {emoji_count} emojis and {sticker_count} stickers to analyze...`,
 					progress_analyzing: `Analyzing {total} images...`,
+					progress_analyzing_batch: `Analyzing {batch_size} of {total_uninitialized} images (processing in batches, please re-run this command to process remaining expressions)`,
 					progress_analyzing_gemini_batch: `Analyzing {batch_size} of {total_uninitialized} images (Gemini processes in batches, please re-run this command after to process remaining expressions)`,
 					progress_saving: `Saving results to database...`,
 				},
