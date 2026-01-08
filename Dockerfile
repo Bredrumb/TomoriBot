@@ -10,9 +10,11 @@ WORKDIR /app
 # Alpine Linux is minimal, so we add some common tools
 # Include Python/pip and Node.js/npm for MCP server support
 # Pin Python 3.12 for consistency with pre-downloaded wheels
+# Include curl for health checks
 RUN apk add --no-cache \
     ca-certificates \
     tzdata \
+    curl \
     python3~=3.12 \
     py3-pip \
     nodejs \
@@ -108,9 +110,17 @@ COPY --chown=tomori:tomori docker/certs/ ./certs/
 ENV NODE_ENV=production
 ENV RUN_ENV=production
 
+# Expose health check port for AWS ECS monitoring
+# This port is only accessible from localhost inside the container
+EXPOSE 3000
+
 # Health check to ensure TomoriBot is running properly
+# Checks the HTTP health endpoint which verifies:
+# 1. Event loop is responsive (can handle HTTP requests)
+# 2. Discord client is connected (isReady() returns true)
+# If the bot enters a zombie state, this will timeout and trigger a restart
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD ps aux | grep -v grep | grep "bun.*src/index.ts" || exit 1
+    CMD curl -f http://127.0.0.1:3000/health || exit 1
 
 # Run TypeScript directly - just like your development setup
 CMD ["bun", "run", "src/index.ts"]

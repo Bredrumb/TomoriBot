@@ -3,6 +3,7 @@ import { config } from "dotenv";
 import { sql } from "@/utils/db/client";
 import { log } from "./utils/misc/logger";
 import path from "node:path";
+import { createServer } from "node:http";
 import eventHandler from "./handlers/eventHandler";
 import { initializeLocalizer } from "./utils/text/localizer";
 import { getAppSecrets } from "./utils/security/secretsManager";
@@ -377,6 +378,59 @@ try {
 } catch (error) {
 	log.error("Failed to initialize quota cleanup system", error as Error);
 	// Non-critical error - quota tracking won't work but bot can still function
+}
+
+// Initialize health check server (production only - for AWS ECS monitoring)
+if ((process.env.RUN_ENV || "development") === "production") {
+	log.section("Initializing Health Check Server...");
+
+	/**
+	 * Health check endpoint for AWS ECS to monitor bot responsiveness
+	 * Returns 200 OK only when:
+	 * 1. Event loop is responsive (HTTP server can answer)
+	 * 2. Discord client is in READY state (connected and functional)
+	 *
+	 * If event loop freezes (zombie state), this endpoint will timeout,
+	 * triggering AWS to kill and restart the container.
+	 */
+	const healthCheckServer = createServer((req, res) => {
+		// Only respond to GET /health
+		if (req.method === "GET" && req.url === "/health") {
+			// Check if Discord client is ready and connected
+			const isReady = client.isReady();
+
+			if (isReady) {
+				res.writeHead(200, { "Content-Type": "application/json" });
+				res.end(JSON.stringify({
+					status: "healthy",
+					discord: "connected",
+					timestamp: new Date().toISOString()
+				}));
+			} else {
+				// Client not ready - return 503 Service Unavailable
+				res.writeHead(503, { "Content-Type": "application/json" });
+				res.end(JSON.stringify({
+					status: "unhealthy",
+					discord: "disconnected",
+					timestamp: new Date().toISOString()
+				}));
+			}
+		} else {
+			// Invalid endpoint
+			res.writeHead(404, { "Content-Type": "text/plain" });
+			res.end("Not Found");
+		}
+	});
+
+	// Bind to localhost only (not externally accessible)
+	healthCheckServer.listen(3000, "127.0.0.1", () => {
+		log.success("Health check server listening on http://127.0.0.1:3000/health");
+	});
+
+	// Handle health check server errors
+	healthCheckServer.on("error", (error) => {
+		log.error("Health check server error", error);
+	});
 }
 
 // Login Bot using Discord Token
