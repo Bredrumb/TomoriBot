@@ -204,7 +204,7 @@ export default {
 
 			// 403 PERMISSION_DENIED
 			"403_default_message":
-				"Your API key doesn't have the required permissions",
+				"Your API key doesn't have the required permissions. Please ensure you're using your own legally obtained API key from Google AI Studio",
 
 			// 404 NOT_FOUND
 			"404_default_message": "A referenced resource could not be found",
@@ -1230,10 +1230,11 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 					no_api_key_description: `An API key must be configured before changing models. Please use \`/config apikey set\` to set an API key first.`,
 					no_models_title: `No Models Found`,
 					no_models_description: `Could not load available AI models from the database.`,
-					// invalid_model_title: `Invalid Model`,
+					invalid_model_title: `Invalid Model`,
 					invalid_model_description: `The selected model name is not valid or available.`,
 					already_selected_title: `Model Already Selected`,
 					already_selected_description: `I'm already using the \`{model_name}\` model.`,
+					validating_api_key_compatibility_title: `Validating API Key`,
 					validating_api_key_compatibility: `Validating API key compatibility with new provider...`,
 					api_key_incompatible_title: `API Key Incompatible`,
 					api_key_incompatible_description: `The current API key is not compatible with the {model_name} model from {provider}. Please set a valid API key for {provider} using \`/config apikey set\`.`,

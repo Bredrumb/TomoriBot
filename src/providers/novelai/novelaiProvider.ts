@@ -36,6 +36,7 @@ import {
 	type ProviderConfig,
 	type ProviderInfo,
 	type StreamResult,
+	type ApiKeyValidationResult,
 } from "@/types/provider/interfaces";
 import { getCachedDefaultLLM, isLLMCacheReady } from "@/utils/cache/llmCache";
 import {
@@ -137,26 +138,29 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
 	/**
 	 * Validate a NovelAI API key by making a test request
 	 * @param apiKey - The API key to validate
-	 * @returns Promise<boolean> - True if the key is valid, false otherwise
+	 * @returns Promise<ApiKeyValidationResult> - Validation result with detailed error info if failed
 	 */
-	async validateApiKey(apiKey: string): Promise<boolean> {
+	async validateApiKey(apiKey: string): Promise<ApiKeyValidationResult> {
 		if (!apiKey || apiKey.trim().length < 10) {
 			log.warn("NovelAI API key is too short or empty");
-			return false;
+			// Create a generic error for empty/short keys
+			const novelaiAdapter = new NovelaiStreamAdapter();
+			const error = new Error("API key is too short or empty");
+			const providerError = novelaiAdapter.handleProviderError(error);
+			return { valid: false, error: providerError };
 		}
 
 		try {
 			log.info("Validating NovelAI API key...");
-			const isValid = await validateNovelAIApiKey(apiKey);
+			await validateNovelAIApiKey(apiKey);
 
-			if (isValid) {
-				log.success("NovelAI API key validation successful");
-			} else {
-				log.warn("NovelAI API key validation failed");
-			}
-
-			return isValid;
+			log.success("NovelAI API key validation successful");
+			return { valid: true };
 		} catch (error) {
+			// Use NovelaiStreamAdapter to parse and format the error
+			const novelaiAdapter = new NovelaiStreamAdapter();
+			const providerError = novelaiAdapter.handleProviderError(error);
+
 			await log.error(
 				"API key validation failed",
 				error,
@@ -164,10 +168,12 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
 					errorType: "APIKeyValidationError",
 					metadata: {
 						provider: "novelai",
+						errorCode: providerError.code,
+						errorType: providerError.type,
 					},
 				},
 			);
-			return false;
+			return { valid: false, error: providerError };
 		}
 	}
 

@@ -681,46 +681,50 @@ export async function* novelaiGenerateStream(
 /**
  * Validate NovelAI API key by making a minimal request
  * @param apiKey - API key to validate
- * @returns Whether the API key is valid
+ * @returns True if valid, throws error with details if invalid
+ * @throws Error with statusCode and message on validation failure
  */
 export async function validateNovelAIApiKey(apiKey: string): Promise<boolean> {
-	try {
-		log.info("Validating NovelAI API key");
+	log.info("Validating NovelAI API key");
 
-		// Get proper parameters for kayra-v1 (use existing preset)
-		const parameters = getKayraParameters();
-		// Override to minimal generation for faster validation
-		parameters.max_length = 10;
-		parameters.min_length = 1;
+	// Get proper parameters for kayra-v1 (use existing preset)
+	const parameters = getKayraParameters();
+	// Override to minimal generation for faster validation
+	parameters.max_length = 10;
+	parameters.min_length = 1;
 
-		// Make a minimal request to test the key
-		const result = await makeNovelAIRequest<NovelAIGenerationResponse>(
-			"/ai/generate",
-			{
-				input: "Test",
-				model: "kayra-v1",
-				parameters,
-			},
-			{ apiKey, timeout: 10000 },
-		);
+	// Make a minimal request to test the key
+	const result = await makeNovelAIRequest<NovelAIGenerationResponse>(
+		"/ai/generate",
+		{
+			input: "Test",
+			model: "kayra-v1",
+			parameters,
+		},
+		{ apiKey, timeout: 10000 },
+	);
 
-		if (result.success) {
-			log.success("NovelAI API key is valid");
-			return true;
-		}
-
-		// 401 = invalid key, 402 = insufficient credits (but key is valid)
-		if (result.statusCode === 402) {
-			log.info("NovelAI API key is valid but has insufficient credits");
-			return true;
-		}
-
-		log.warn(`NovelAI API key validation failed: ${result.error}`);
-		return false;
-	} catch (error) {
-		log.error("NovelAI API key validation error:", error as Error);
-		return false;
+	if (result.success) {
+		log.success("NovelAI API key is valid");
+		return true;
 	}
+
+	// 401 = invalid key, 402 = insufficient credits (but key is valid)
+	if (result.statusCode === 402) {
+		log.info("NovelAI API key is valid but has insufficient credits");
+		return true;
+	}
+
+	// Create an error object with statusCode for proper error handling
+	const error: Error & { statusCode?: number } = new Error(
+		result.error || "API key validation failed",
+	);
+	error.statusCode = result.statusCode;
+
+	log.warn(
+		`NovelAI API key validation failed with status ${result.statusCode}: ${result.error}`,
+	);
+	throw error;
 }
 
 // =============================================

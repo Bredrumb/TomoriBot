@@ -129,7 +129,8 @@ export async function execute(
 	}
 
 	// 4. Load available models for the current provider from the database for modal options
-	const currentProvider = tomoriState.llm.llm_provider;
+	// Normalize provider name to lowercase to match database storage
+	const currentProvider = tomoriState.llm.llm_provider.toLowerCase();
 	const availableModels = await loadAvailableModelsForProvider(currentProvider);
 	if (!availableModels || availableModels.length === 0) {
 		await replyInfoEmbed(interaction, locale, {
@@ -219,11 +220,10 @@ export async function execute(
 				context,
 			);
 
-			await modalSubmitInteraction.editReply({
-				content: localizer(
-					locale,
-					"commands.config.model.text.invalid_model_description",
-				),
+			await replyInfoEmbed(modalSubmitInteraction, locale, {
+				titleKey: "commands.config.model.text.invalid_model_title",
+				descriptionKey: "commands.config.model.text.invalid_model_description",
+				color: ColorCode.ERROR,
 			});
 			return;
 		}
@@ -247,11 +247,10 @@ export async function execute(
 
 		if (currentModelProvider !== newModelProvider) {
 			// Show validation message
-			await modalSubmitInteraction.editReply({
-				content: localizer(
-					locale,
-					"commands.config.model.text.validating_api_key_compatibility",
-				),
+			await replyInfoEmbed(modalSubmitInteraction, locale, {
+				titleKey: "commands.config.model.text.validating_api_key_compatibility_title",
+				descriptionKey: "commands.config.model.text.validating_api_key_compatibility",
+				color: ColorCode.INFO,
 			});
 
 			try {
@@ -279,7 +278,8 @@ export async function execute(
 						// biome-ignore lint/suspicious/noExplicitAny: Minimal object structure needed for factory pattern
 					} as any);
 
-					isKeyCompatible = await provider.validateApiKey(decryptedApiKey);
+					const validationResult = await provider.validateApiKey(decryptedApiKey);
+					isKeyCompatible = validationResult.valid;
 				} catch (providerError) {
 					// Provider not found or other error
 					log.warn(

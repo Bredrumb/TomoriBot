@@ -42,6 +42,7 @@ import {
 	type ProviderConfig,
 	type ProviderInfo,
 	type StreamResult,
+	type ApiKeyValidationResult,
 } from "../../types/provider/interfaces";
 import { getGoogleToolAdapter } from "./googleToolAdapter";
 import {
@@ -152,12 +153,16 @@ export class GoogleProvider extends BaseLLMProvider implements LLMProvider {
 	/**
 	 * Validate a Google API key by making a test request
 	 * @param apiKey - The API key to validate
-	 * @returns Promise<boolean> - True if the key is valid, false otherwise
+	 * @returns Promise<ApiKeyValidationResult> - Validation result with detailed error info if failed
 	 */
-	async validateApiKey(apiKey: string): Promise<boolean> {
+	async validateApiKey(apiKey: string): Promise<ApiKeyValidationResult> {
 		if (!apiKey || apiKey.trim().length < 10) {
 			log.warn("API key is too short or empty");
-			return false;
+			// Create a generic error for empty/short keys
+			const googleAdapter = new GoogleStreamAdapter();
+			const error = new Error("API key is too short or empty");
+			const providerError = googleAdapter.handleProviderError(error);
+			return { valid: false, error: providerError };
 		}
 
 		try {
@@ -181,12 +186,20 @@ export class GoogleProvider extends BaseLLMProvider implements LLMProvider {
 
 			if (!responseText?.toLowerCase().includes("valid")) {
 				log.warn("API key validation response did not contain 'VALID'");
-				return false;
+				// Treat unexpected response as an error
+				const googleAdapter = new GoogleStreamAdapter();
+				const error = new Error("API key validation response did not contain expected confirmation");
+				const providerError = googleAdapter.handleProviderError(error);
+				return { valid: false, error: providerError };
 			}
 
 			log.success("API key validation successful");
-			return true;
+			return { valid: true };
 		} catch (error) {
+			// Use GoogleStreamAdapter to parse and format the error
+			const googleAdapter = new GoogleStreamAdapter();
+			const providerError = googleAdapter.handleProviderError(error);
+
 			// Log the specific error during validation failure
 			await log.error(
 				"API key validation failed",
@@ -195,10 +208,12 @@ export class GoogleProvider extends BaseLLMProvider implements LLMProvider {
 					errorType: "APIKeyValidationError",
 					metadata: {
 						provider: "google",
+						errorCode: providerError.code,
+						errorType: providerError.type,
 					},
 				},
 			);
-			return false;
+			return { valid: false, error: providerError };
 		}
 	}
 

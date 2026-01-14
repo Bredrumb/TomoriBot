@@ -21,6 +21,7 @@ import {
 	type ErrorContext,
 	tomoriConfigSchema,
 } from "../../../types/db/schema";
+import type { ProviderError } from "../../../types/stream/interfaces";
 import type {
 	SelectOption,
 	ModalComponent,
@@ -172,7 +173,7 @@ export async function execute(
 		}
 
 		// 9. Get provider instance and validate API key using factory
-		let isValid = false;
+		let validationResult: { valid: boolean; error?: ProviderError } = { valid: false };
 		try {
 			const providerName = selectedProvider.toLowerCase();
 
@@ -187,7 +188,7 @@ export async function execute(
 			} as any);
 
 			// Validate the API key with the provider
-			isValid = await provider.validateApiKey(apiKey);
+			validationResult = await provider.validateApiKey(apiKey);
 		} catch (error) {
 			log.error(
 				`Error validating API key for provider ${selectedProvider}`,
@@ -218,17 +219,48 @@ export async function execute(
 			return;
 		}
 
-		// 10. Handle validation failure with error embed (not reply)
-		if (!isValid) {
+		// 10. Handle validation failure with detailed error information
+		if (!validationResult.valid) {
+			// Get stream adapter to format the error message
+			let errorDescription = "API key validation failed";
+
+			if (validationResult.error) {
+				// Use provider-specific error description formatting
+				try {
+					// Dynamically get the appropriate stream adapter based on provider
+					let adapter: { createErrorDescription: (error: ProviderError, locale: string) => string | null } | undefined;
+					const normalizedProvider = selectedProvider.toLowerCase();
+
+					if (normalizedProvider === "google" || normalizedProvider === "gemini") {
+						const { GoogleStreamAdapter } = await import("../../../providers/google/googleStreamAdapter");
+						adapter = new GoogleStreamAdapter();
+					} else if (normalizedProvider === "novelai" || normalizedProvider === "nai") {
+						const { NovelaiStreamAdapter } = await import("../../../providers/novelai/novelaiStreamAdapter");
+						adapter = new NovelaiStreamAdapter();
+					} else if (normalizedProvider === "openrouter" || normalizedProvider === "or") {
+						const { OpenrouterStreamAdapter } = await import("../../../providers/openrouter/openrouterStreamAdapter");
+						adapter = new OpenrouterStreamAdapter();
+					}
+
+					if (adapter) {
+						const formattedError = adapter.createErrorDescription(validationResult.error, locale);
+						if (formattedError) {
+							errorDescription = formattedError;
+						}
+					} else {
+						// Fallback for unknown providers
+						errorDescription = `Error Code ${validationResult.error.code}: ${validationResult.error.message}`;
+					}
+				} catch (adapterError) {
+					// Fallback if adapter creation fails
+					log.warn("Failed to create stream adapter for error formatting", adapterError);
+					errorDescription = `Error Code ${validationResult.error.code}: ${validationResult.error.message}`;
+				}
+			}
+
 			await replyInfoEmbed(modalSubmitInteraction, locale, {
 				titleKey: "commands.config.apikey.set.key_validation_failed_title",
-				descriptionKey:
-					"commands.config.apikey.set.key_validation_failed_description",
-				descriptionVars: {
-					provider:
-						selectedProvider.charAt(0).toUpperCase() +
-						selectedProvider.slice(1),
-				},
+				description: errorDescription, // Use formatted error description
 				color: ColorCode.ERROR,
 			});
 			return;

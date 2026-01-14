@@ -13,7 +13,8 @@ import type {
 export interface StandardEmbedOptions {
 	titleKey: string;
 	titleVars?: Record<string, string | number | boolean>; // Added
-	descriptionKey: string;
+	descriptionKey?: string; // Made optional when description is provided
+	description?: string; // Added: raw description text (takes precedence over descriptionKey)
 	descriptionVars?: Record<string, string | number | boolean>; // Added
 	color?: ColorResolvable;
 	footerKey?: string;

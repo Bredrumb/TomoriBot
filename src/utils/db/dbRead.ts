@@ -366,7 +366,8 @@ export async function loadAvailableModelsForProvider(
 		return null;
 	}
 
-	const normalizedProviderName = providerName.trim();
+	// Normalize provider name to lowercase to match database storage (all providers stored as lowercase)
+	const normalizedProviderName = providerName.trim().toLowerCase();
 
 	try {
 		// 1. Query for models for the specific provider, filtering deprecated unless explicitly included
@@ -442,7 +443,8 @@ export async function loadDefaultModelForProvider(
 		return null;
 	}
 
-	const normalizedProviderName = providerName.trim();
+	// Normalize provider name to lowercase to match database storage (all providers stored as lowercase)
+	const normalizedProviderName = providerName.trim().toLowerCase();
 
 	try {
 		// 1. Single optimized query: prioritize default models, then fallback to any available model
@@ -532,7 +534,8 @@ export async function loadSmartestModel(
 		return null;
 	}
 
-	const normalizedProviderName = providerName.trim();
+	// Normalize provider name to lowercase to match database storage (all providers stored as lowercase)
+	const normalizedProviderName = providerName.trim().toLowerCase();
 
 	try {
 		// 1. Query for smartest model for the specific provider, filtering deprecated unless explicitly included

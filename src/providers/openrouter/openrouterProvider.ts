@@ -38,6 +38,7 @@ import {
 	type ProviderInfo,
 	type StreamResult,
 	type FunctionResponseImageMetadata,
+	type ApiKeyValidationResult,
 } from "../../types/provider/interfaces";
 import { getOpenrouterToolAdapter } from "./openrouterToolAdapter";
 import {
@@ -150,12 +151,16 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 	 * Validate an OpenRouter API key using the dedicated auth endpoint
 	 * This method doesn't require a specific model and is more reliable than making a test chat request
 	 * @param apiKey - The API key to validate
-	 * @returns Promise<boolean> - True if the key is valid, false otherwise
+	 * @returns Promise<ApiKeyValidationResult> - Validation result with detailed error info if failed
 	 */
-	async validateApiKey(apiKey: string): Promise<boolean> {
+	async validateApiKey(apiKey: string): Promise<ApiKeyValidationResult> {
 		if (!apiKey || apiKey.trim().length < 10) {
 			log.warn("API key is too short or empty");
-			return false;
+			// Create a generic error for empty/short keys
+			const openrouterAdapter = new OpenrouterStreamAdapter();
+			const error = new Error("API key is too short or empty");
+			const providerError = openrouterAdapter.handleProviderError(error);
+			return { valid: false, error: providerError };
 		}
 
 		try {
@@ -178,7 +183,57 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 				log.warn(
 					`API key validation failed with status ${response.status}: ${response.statusText}`,
 				);
-				return false;
+
+				// Handle auth endpoint errors directly (simpler than streaming errors)
+				let errorMessage = response.statusText;
+				try {
+					const errorData = await response.json();
+					if (errorData.error?.message) {
+						errorMessage = errorData.error.message;
+					}
+				} catch {
+					// If JSON parsing fails, use statusText
+					errorMessage = response.statusText;
+				}
+
+				// Create ProviderError directly based on HTTP status
+				let errorType: "api_error" | "rate_limit" | "timeout" = "api_error";
+				let retryable = false;
+
+				switch (response.status) {
+					case 401:
+					case 403:
+						errorType = "api_error";
+						retryable = false;
+						break;
+					case 429:
+						errorType = "rate_limit";
+						retryable = true;
+						break;
+					case 500:
+					case 502:
+					case 503:
+						errorType = "api_error";
+						retryable = true;
+						break;
+					case 504:
+						errorType = "timeout";
+						retryable = true;
+						break;
+					default:
+						errorType = "api_error";
+						retryable = false;
+				}
+
+				const providerError: import("../../types/stream/interfaces").ProviderError = {
+					type: errorType,
+					message: `OpenRouter auth error (${response.status}): ${errorMessage}`,
+					code: response.status.toString(),
+					retryable,
+					originalError: new Error(errorMessage),
+				};
+
+				return { valid: false, error: providerError };
 			}
 
 			// Parse the response to ensure it contains valid user data
@@ -188,20 +243,34 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 			// The response should contain user information and rate limits
 			if (!data || typeof data !== "object") {
 				log.warn("API key validation received invalid response structure");
-				return false;
+				const providerError: import("../../types/stream/interfaces").ProviderError = {
+					type: "api_error",
+					message: "OpenRouter auth endpoint returned invalid data structure",
+					code: "unknown",
+					retryable: false,
+					originalError: new Error("Invalid response structure"),
+				};
+				return { valid: false, error: providerError };
 			}
 
 			log.success("API key validation successful");
-			return true;
+			return { valid: true };
 		} catch (error) {
+			// Network errors or other exceptions - use stream adapter for these
+			// since they're not API-specific
+			const openrouterAdapter = new OpenrouterStreamAdapter();
+			const providerError = openrouterAdapter.handleProviderError(error);
+
 			// Log the specific error during validation failure
 			await log.error("API key validation failed", error, {
 				errorType: "APIKeyValidationError",
 				metadata: {
 					provider: "openrouter",
+					errorCode: providerError.code,
+					errorType: providerError.type,
 				},
 			});
-			return false;
+			return { valid: false, error: providerError };
 		}
 	}
 

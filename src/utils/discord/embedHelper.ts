@@ -62,6 +62,7 @@ export function createStandardEmbed(
 		titleKey,
 		titleVars = {},
 		descriptionKey,
+		description,
 		descriptionVars = {},
 		color = ColorCode.INFO,
 		footerKey,
@@ -69,10 +70,17 @@ export function createStandardEmbed(
 		thumbnailUrl,
 	} = options;
 
+	// Use raw description if provided, otherwise use descriptionKey with localization
+	const descriptionText = description
+		? description
+		: descriptionKey
+			? localizer(locale, descriptionKey, descriptionVars)
+			: "";
+
 	const embed = new EmbedBuilder()
 		.setColor(color)
 		.setTitle(localizer(locale, titleKey, titleVars))
-		.setDescription(localizer(locale, descriptionKey, descriptionVars));
+		.setDescription(descriptionText);
 
 	if (footerKey) {
 		embed.setFooter({
@@ -95,6 +103,7 @@ export function createSummaryEmbed(
 		titleKey,
 		titleVars = {},
 		descriptionKey,
+		description,
 		descriptionVars = {},
 		color = ColorCode.INFO,
 		footerKey,
@@ -104,10 +113,17 @@ export function createSummaryEmbed(
 		fields,
 	} = options;
 
+	// Use raw description if provided, otherwise use descriptionKey with localization
+	const descriptionText = description
+		? description
+		: descriptionKey
+			? localizer(locale, descriptionKey, descriptionVars)
+			: "";
+
 	const embed = new EmbedBuilder()
 		.setColor(color)
 		.setTitle(localizer(locale, titleKey, titleVars))
-		.setDescription(localizer(locale, descriptionKey, descriptionVars))
+		.setDescription(descriptionText)
 		.addFields(
 			// 1. Map over the fields provided in options
 			fields.map(

@@ -253,11 +253,20 @@ export class NovelaiStreamAdapter implements StreamProvider {
 	handleProviderError(error: unknown): ProviderError {
 		const errorMessage = error instanceof Error ? error.message : String(error);
 
-		// Try to extract status code from error message
+		// Try to extract status code from error object or message
 		let statusCode: number | undefined;
-		const statusMatch = errorMessage.match(/\((\d{3})\)/);
-		if (statusMatch) {
-			statusCode = Number.parseInt(statusMatch[1], 10);
+
+		// First, check if error has statusCode property (from validateNovelAIApiKey)
+		if (error && typeof error === "object" && "statusCode" in error) {
+			statusCode = error.statusCode as number;
+		}
+
+		// Fallback: try to extract from error message
+		if (!statusCode) {
+			const statusMatch = errorMessage.match(/\((\d{3})\)/);
+			if (statusMatch) {
+				statusCode = Number.parseInt(statusMatch[1], 10);
+			}
 		}
 
 		// Determine error type based on status code and message

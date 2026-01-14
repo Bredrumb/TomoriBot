@@ -16,6 +16,15 @@ import type {
 import type { TomoriState } from "../db/schema";
 import type { StructuredContextItem } from "../misc/context";
 import type { StreamingContext } from "../tool/interfaces";
+import type { ProviderError } from "../stream/interfaces";
+
+/**
+ * Result of API key validation with structured error information
+ */
+export interface ApiKeyValidationResult {
+	valid: boolean;
+	error?: ProviderError; // Detailed error info if validation failed
+}
 
 /**
  * Generic stream response result
@@ -110,9 +119,9 @@ export interface LLMProvider {
 	/**
 	 * Validate an API key by making a test request
 	 * @param apiKey - The API key to validate
-	 * @returns Promise<boolean> - True if the key is valid, false otherwise
+	 * @returns Promise<ApiKeyValidationResult> - Validation result with detailed error info if failed
 	 */
-	validateApiKey(apiKey: string): Promise<boolean>;
+	validateApiKey(apiKey: string): Promise<ApiKeyValidationResult>;
 
 	/**
 	 * Get available tools/functions based on Tomori's configuration
@@ -183,7 +192,7 @@ export interface LLMProvider {
  */
 export abstract class BaseLLMProvider implements LLMProvider {
 	abstract getInfo(): ProviderInfo;
-	abstract validateApiKey(apiKey: string): Promise<boolean>;
+	abstract validateApiKey(apiKey: string): Promise<ApiKeyValidationResult>;
 	abstract getTools(
 		tomoriState: TomoriState,
 	): Promise<Array<Record<string, unknown>>>;

@@ -103,8 +103,10 @@ export function getAllCachedLLMs(): LlmRow[] {
  * @returns Array of LLM configurations for the provider
  */
 export function getCachedLLMsByProvider(provider: string): LlmRow[] {
+	// Normalize provider name to lowercase for case-insensitive matching
+	const normalizedProvider = provider.toLowerCase();
 	return Array.from(llmCache.values()).filter(
-		(llm) => llm.llm_provider === provider,
+		(llm) => llm.llm_provider.toLowerCase() === normalizedProvider,
 	);
 }
 
@@ -114,8 +116,10 @@ export function getCachedLLMsByProvider(provider: string): LlmRow[] {
  * @returns Default LLM configuration or undefined
  */
 export function getCachedDefaultLLM(provider: string): LlmRow | undefined {
+	// Normalize provider name to lowercase for case-insensitive matching
+	const normalizedProvider = provider.toLowerCase();
 	return Array.from(llmCache.values()).find(
-		(llm) => llm.llm_provider === provider && llm.is_default,
+		(llm) => llm.llm_provider.toLowerCase() === normalizedProvider && llm.is_default,
 	);
 }
 
@@ -125,8 +129,10 @@ export function getCachedDefaultLLM(provider: string): LlmRow | undefined {
  * @returns Smartest LLM configuration or undefined
  */
 export function getCachedSmartestLLM(provider: string): LlmRow | undefined {
+	// Normalize provider name to lowercase for case-insensitive matching
+	const normalizedProvider = provider.toLowerCase();
 	return Array.from(llmCache.values()).find(
-		(llm) => llm.llm_provider === provider && llm.is_smartest,
+		(llm) => llm.llm_provider.toLowerCase() === normalizedProvider && llm.is_smartest,
 	);
 }
 
@@ -136,8 +142,10 @@ export function getCachedSmartestLLM(provider: string): LlmRow | undefined {
  * @returns Array of reasoning LLM configurations
  */
 export function getCachedReasoningLLMs(provider: string): LlmRow[] {
+	// Normalize provider name to lowercase for case-insensitive matching
+	const normalizedProvider = provider.toLowerCase();
 	return Array.from(llmCache.values()).filter(
-		(llm) => llm.llm_provider === provider && llm.is_reasoning,
+		(llm) => llm.llm_provider.toLowerCase() === normalizedProvider && llm.is_reasoning,
 	);
 }
 
