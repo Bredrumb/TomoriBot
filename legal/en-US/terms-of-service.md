@@ -1,5 +1,5 @@
 # TomoriBot Terms of Service
-Last updated: 2025-11-25
+Last updated: 2026-01-15
 
 By setting up or interacting with TomoriBot, you accept these Terms and Discord's Terms of Service and Community Guidelines. These Terms apply to the official hosted TomoriBot instance on Discord. If you run your own copy from TomoriBot's open-source repository, you are not bound by these Terms; your use is governed by the AGPLv3 license in `LICENSE` instead, and you alone control data handling in your self-hosted environment. 
 
@@ -31,6 +31,11 @@ For clarity, these terms are used throughout this document:
 
 ## 5) API Keys and Billing
 - If you supply API keys for AI/search providers, you authorize TomoriBot to store and use them to fulfill your requests. All provided keys are encrypted at rest.
+- You must only provide API keys that you are legally authorized to use. This means keys obtained directly from the provider under your own account, or keys explicitly authorized for your use by the account holder. The following are strictly prohibited:
+  - Stolen, leaked, or compromised API keys
+  - Keys purchased from unauthorized third parties or black markets
+  - Keys shared in violation of the provider's terms of service
+- You assume all legal responsibility for the legitimacy of API keys you provide.
 - We will only use your API keys to process your explicit interactions with TomoriBot. We do not pool API keys, use your keys to process other users' requests, or use them for testing, development, analytics, or any purpose other than fulfilling you and your server members' direct requests to TomoriBot.
 - You are responsible for all provider-side costs and account usage caused by each TomoriBot Trigger associated with your API key. Monitor your API key dashboards for usage and billing. The `/help cost` command provides a rough estimate of per-trigger costs.
 - We recommend using API keys with minimal required permissions and considering using provider-specific rate limits and spending caps where available.

@@ -14,6 +14,14 @@ export enum PrivacyLevel {
 	FULL = 2, // Full privacy (maximum protection - completely invisible)
 }
 
+export enum CooldownType {
+	OFF = 0, // No cooldown on message triggers (default)
+	PER_USER = 1, // Each user has their own cooldown per server
+	PER_CHANNEL = 2, // Each channel has its own cooldown
+	SERVER_WIDE = 3, // Everyone waits (server managers exempt)
+	STRICT_SERVER_WIDE = 4, // Everyone waits (no exceptions)
+}
+
 export const userSchema = z.object({
 	user_id: z.number().optional(),
 	user_disc_id: z.string(),
@@ -114,6 +122,8 @@ export const tomoriConfigSchema = z.object({
 	videogen_enabled: z.boolean().default(true), // Added January 2026 - Reserved for future video generation
 	timezone_offset: z.number().int().min(-12).max(14).default(0),
 	system_prompt: z.string().nullable(), // Added December 2025 - Custom system prompt for personality instructions
+	cooldown_type: z.nativeEnum(CooldownType).default(CooldownType.OFF), // Added January 2026 - Message trigger cooldown type
+	cooldown_length: z.number().int().min(1).max(86400).default(5), // Added January 2026 - Cooldown duration in seconds
 	created_at: z.date().optional(),
 	updated_at: z.date().optional(),
 });

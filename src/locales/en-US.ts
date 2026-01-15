@@ -9,9 +9,17 @@ export default {
 			base_trigger_words: ["tomori", "tomo"],
 		},
 
-		// Cooldown messages
+		// Cooldown messages (slash commands)
 		cooldown_title: `⌛ Please wait!`,
 		cooldown: `You need to wait {seconds} seconds before using a \`/{category}\` command again.`,
+
+		// Message trigger cooldown messages
+		message_cooldown_title: `⌛ Please wait!`,
+		message_cooldown: `You need to wait **{seconds}** seconds before triggering **{botName}** again.`,
+		message_cooldown_footer_per_user: `Cooldown: Per-User`,
+		message_cooldown_footer_per_channel: `Cooldown: Per-Channel`,
+		message_cooldown_footer_server_wide: `Cooldown: Server-Wide`,
+		message_cooldown_footer_strict: `Cooldown: Strict Server-Wide`,
 
 		// Standard interaction responses (buttons, selects)
 		interaction: {
@@ -1229,6 +1237,44 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				already_set_description: `The humanizer degree is already set to \`{value}\`.`,
 				success_title: `Humanizer Degree Updated`,
 				success_description: `Humanizer degree changed from \`{previous_value}\` to \`{value}\`.`,
+			},
+			cooldown: {
+				type: {
+					description: `Set the cooldown type for message triggers.`,
+					modal_title: `Cooldown Type`,
+					select_label: `Type`,
+					select_description: `Choose how cooldowns apply`,
+					select_placeholder: `Select cooldown type...`,
+					choice_off: `Off`,
+					choice_per_user: `Per-User`,
+					choice_per_channel: `Per-Channel`,
+					choice_server_wide: `Server-Wide`,
+					choice_strict_server_wide: `Strict Server-Wide`,
+					desc_off: `No cooldown on message triggers`,
+					desc_per_user: `Each user has their own cooldown`,
+					desc_per_channel: `Each channel has its own cooldown`,
+					desc_server_wide: `Everyone waits (managers exempt)`,
+					desc_strict_server_wide: `Everyone waits (no exceptions)`,
+					invalid_value_description: `Invalid cooldown type selected. Please choose a valid option.`,
+					success_title: `Cooldown Type Updated`,
+					success_description: `Cooldown type changed from **{previous_value}** to **{value}**.`,
+					success_disabled_title: `Cooldowns Disabled`,
+					success_disabled_description: `Cooldown type changed from **{previous_value}** to **{value}**. Message trigger cooldowns are now disabled.`,
+					already_set_title: `Already Set`,
+					already_set_description: `Cooldown type is already set to **{value}**.`,
+				},
+				length: {
+					description: `Set the cooldown duration for message triggers.`,
+					seconds_description: `Duration in seconds (1-86400)`,
+					success_title: `Cooldown Duration Updated`,
+					success_description: `Cooldown duration set to **{length}** seconds.`,
+					success_disabled_title: `Duration Set (Cooldowns Off)`,
+					success_disabled_description: `Duration set to **{length}** seconds, but cooldowns are currently **disabled**. Use \`/config cooldown type\` to enable.`,
+					already_set_title: `Already Set`,
+					already_set_description: `Cooldown duration is already **{length}** seconds.`,
+					invalid_range_title: `Invalid Duration`,
+					invalid_range_description: `Duration must be between {min} and {max} seconds (24 hours).`,
+				},
 			},
 			model: {
 				text: {

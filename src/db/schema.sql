@@ -212,6 +212,12 @@ SELECT add_column_if_not_exists('tomori_configs', 'diffusion_model_id', 'INTEGER
 -- Add custom system prompt column (December 2025)
 SELECT add_column_if_not_exists('tomori_configs', 'system_prompt', 'TEXT', 'NULL');
 
+-- Add message trigger cooldown columns (January 2026)
+-- cooldown_type: 0=off, 1=per-user, 2=per-channel, 3=server-wide (managers exempt), 4=strict server-wide
+SELECT add_column_if_not_exists('tomori_configs', 'cooldown_type', 'INTEGER', '0');
+-- cooldown_length: Duration in seconds (1-86400, default 5)
+SELECT add_column_if_not_exists('tomori_configs', 'cooldown_length', 'INTEGER', '5');
+
 -- Add foreign key constraint if the column was just created
 DO $$
 BEGIN

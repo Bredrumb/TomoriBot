@@ -62,6 +62,12 @@ import {
 	checkUserRateLimit,
 	checkServerRateLimit,
 } from "@/utils/security/rateLimiter";
+import {
+	checkMessageTriggerCooldown,
+	setMessageTriggerCooldown,
+	getCooldownTypeFooterKey,
+} from "@/utils/db/messageCooldown";
+import { CooldownType } from "@/types/db/schema";
 
 // Constants
 const MESSAGE_FETCH_LIMIT = Number.parseInt(
@@ -727,6 +733,37 @@ export default async function tomoriChat(
 					isManuallyTriggered ||
 					shouldBotReply(message, modifiedEarlyTomoriStateForCheck)
 				) {
+					// 2a. Check cooldown BEFORE queuing (skip for manual triggers)
+					if (!isManuallyTriggered && !isStopResponse) {
+						const preQueueCooldownResult = await checkMessageTriggerCooldown(
+							message,
+							earlyTomoriState.config,
+						);
+						if (preQueueCooldownResult.isOnCooldown) {
+							// Show cooldown warning and don't queue
+							const footerKey = getCooldownTypeFooterKey(
+								preQueueCooldownResult.cooldownType,
+							);
+							const tempUserRow = await loadUserRow(userDiscId);
+							const cooldownLocale =
+								tempUserRow?.language_pref ?? guild?.preferredLocale ?? "en-US";
+							await sendStandardEmbed(channel, cooldownLocale, {
+								color: ColorCode.WARN,
+								titleKey: "general.message_cooldown_title",
+								descriptionKey: "general.message_cooldown",
+								descriptionVars: {
+									seconds: preQueueCooldownResult.remainingSeconds.toString(),
+									botName: earlyTomoriState.tomori_nickname,
+								},
+								footerKey: footerKey,
+							});
+							log.info(
+								`Message ${message.id} rejected before queuing due to cooldown. ${preQueueCooldownResult.remainingSeconds}s remaining.`,
+							);
+							return;
+						}
+					}
+
 					// Rate limits already validated above, proceed with normal enqueueing
 					lockEntry.messageQueue.push({
 						message,
@@ -1258,9 +1295,47 @@ export default async function tomoriChat(
 				return;
 			}
 
+			// 7. Check message trigger cooldown (skip for manual triggers and stop responses)
+			if (!isManuallyTriggered && !isStopResponse) {
+				const cooldownResult = await checkMessageTriggerCooldown(
+					message,
+					tomoriState.config,
+				);
+				if (cooldownResult.isOnCooldown) {
+					// Send cooldown warning embed
+					const footerKey = getCooldownTypeFooterKey(cooldownResult.cooldownType);
+					await sendStandardEmbed(channel, locale, {
+						color: ColorCode.WARN,
+						titleKey: "general.message_cooldown_title",
+						descriptionKey: "general.message_cooldown",
+						descriptionVars: {
+							seconds: cooldownResult.remainingSeconds.toString(),
+							botName: tomoriState.tomori_nickname,
+						},
+						footerKey: footerKey,
+					});
+					log.info(
+						`Message trigger cooldown active for ${
+							cooldownResult.cooldownType === CooldownType.PER_USER
+								? `user ${message.author.id}`
+								: cooldownResult.cooldownType === CooldownType.PER_CHANNEL
+									? `channel ${message.channelId}`
+									: `server ${serverDiscId}`
+						}. ${cooldownResult.remainingSeconds}s remaining.`,
+					);
+					return;
+				}
+			}
+
 			log.info(`Conditions met for Gemini reply in server ${serverDiscId}`);
 
-			// 7. Prepare Data for buildContext
+			// 8. Set message trigger cooldown (skip for manual triggers and stop responses)
+			// Set early to prevent race conditions with concurrent triggers
+			if (!isManuallyTriggered && !isStopResponse) {
+				await setMessageTriggerCooldown(message, tomoriState.config);
+			}
+
+			// 9. Prepare Data for buildContext
 			await channel.sendTyping();
 
 			/**
