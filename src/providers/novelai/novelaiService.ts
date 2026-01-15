@@ -437,7 +437,7 @@ async function* novelaiGenerateStreamOpenAI(
 			);
 
 			yield {
-				error: `API request failed (${response.status}): ${response.statusText}`,
+				error: `NovelAI API request failed with status ${response.status}: ${errorText}`,
 			};
 			return;
 		}
@@ -573,7 +573,7 @@ async function* novelaiGenerateStreamNative(
 			);
 
 			yield {
-				error: `API request failed (${response.status}): ${response.statusText}`,
+				error: `NovelAI API request failed with status ${response.status}: ${errorText}`,
 			};
 			return;
 		}

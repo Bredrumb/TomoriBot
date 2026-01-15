@@ -307,6 +307,20 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 
 			// Check if stream timed out
 			if (this.isStreamTimedOut(state)) {
+				// Send user-facing embed to notify about the timeout
+				await sendStandardEmbed(context.channel, context.locale, {
+					titleKey: "genai.stream.inactivity_timeout_title",
+					descriptionKey: "genai.stream.inactivity_timeout_description",
+					color: ColorCode.WARN,
+				}).catch((embedError) => {
+					log.warn(
+						"Failed to send inactivity timeout embed",
+						embedError instanceof Error
+							? embedError
+							: new Error(String(embedError)),
+					);
+				});
+
 				return {
 					status: "timeout",
 					data: new Error("Stream timed out due to inactivity."),

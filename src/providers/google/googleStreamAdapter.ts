@@ -592,12 +592,30 @@ export class GoogleStreamAdapter implements StreamProvider {
 
 			try {
 				googleMessage = localizer(locale, `genai.google.${messageKey}`);
+
+				// If this is an unknown error, append the actual API response for debugging
+				if (messageKey === "unknown_default_message") {
+					// Truncate error message to avoid Discord embed limits
+					const maxErrorLength = 1000;
+					const apiErrorSnippet =
+						error.message.length > maxErrorLength
+							? `${error.message.substring(0, maxErrorLength)}...`
+							: error.message;
+					googleMessage += `\n\n**API Response:**\n${apiErrorSnippet}`;
+				}
 			} catch {
-				// If locale key doesn't exist, use a generic fallback
+				// If locale key doesn't exist, use a generic fallback with actual API error
 				googleMessage = localizer(
 					locale,
 					"genai.google.unknown_default_message",
 				);
+				// Append actual API error for unknown errors
+				const maxErrorLength = 1000;
+				const apiErrorSnippet =
+					error.message.length > maxErrorLength
+						? `${error.message.substring(0, maxErrorLength)}...`
+						: error.message;
+				googleMessage += `\n\n**API Response:**\n${apiErrorSnippet}`;
 			}
 		}
 

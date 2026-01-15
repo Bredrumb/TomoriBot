@@ -7,6 +7,7 @@ import type {
 import type { EventArg, EventFunction } from "../types/discord/global"; // Rule 14
 import getAllFiles from "../utils/misc/ioHelper";
 import { log } from "../utils/misc/logger"; // Rule 18
+import { healthTracker } from "../utils/misc/healthTracker";
 
 /**
  * Sets up all event listeners for the Discord client by dynamically importing event modules.
@@ -72,6 +73,9 @@ const setupEventListeners = (client: Client): void => {
 
 			// 7. Attach the listener using the actual Discord eventName
 			client.on(eventName, async (...args: EventArg[]) => {
+				// Record activity for health monitoring (any Discord event = bot is alive)
+				healthTracker.recordActivity();
+
 				// log.info(`Event triggered: ${eventName} -> Handling with ${handlerFolderName}`); // Optional debug log
 
 				// 8. Execute all handlers found in the mapped folder

@@ -983,6 +983,17 @@ export function replaceMentionHandles(
 		return `<@${ids[0]}>`;
 	});
 
+	// Handle @name|id format without curly braces (LLM sometimes omits braces)
+	processedText = processedText.replace(
+		/(^|[^\w<])@([A-Za-z0-9_][A-Za-z0-9_ -]*)\|(\d{17,20})/gi,
+		(match, prefix, _rawHandle, idPart) => {
+			if (mentionIdSet?.has(idPart)) {
+				return `${prefix}<@${idPart}>`;
+			}
+			return match;
+		},
+	);
+
 	processedText = processedText.replace(
 		/(^|[^\w<])@(?!(?:\{|everyone\b|here\b))([A-Za-z0-9_][A-Za-z0-9_-]{0,31})/gi,
 		(match, prefix, rawHandle) => {

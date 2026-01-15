@@ -193,6 +193,10 @@ export default {
 			flush_limit_title: "🟡️ 応答の長さ制限に達しました",
 			flush_limit_description:
 				"この応答はメッセージの最大長制限に達したため停止されました。必要に応じて `/bot respond` を使用して手動で応答を続けることができます。",
+
+			inactivity_timeout_title: "🟡️ 応答がタイムアウトしました",
+			inactivity_timeout_description:
+				"AIプロバイダーからの応答が停止し、接続がタイムアウトしました。プロバイダーが過負荷状態にあるか、問題が発生している可能性があります。もう一度お試しください。",
 		},
 
 		// Google固有のエラーメッセージ（プロバイダー固有のデフォルトメッセージのみ）
@@ -231,6 +235,13 @@ export default {
 
 		// NovelAI固有のエラーメッセージ（プロバイダー固有のデフォルトメッセージのみ）
 		novelai: {
+			// 400 BAD_REQUEST
+			"400_default_message": "無効なリクエスト形式またはパラメータ",
+
+			// 400 BAD_REQUEST - Trial account recaptcha requirement
+			"400_trial_message":
+				"トライアルアカウントでは生成にrecaptcha認証が必要です。API経由のアクセスには有料のNovelAIサブスクリプションが必要です。https://novelai.net/ でアカウントをアップグレードしてください",
+
 			// 401 UNAUTHORIZED
 			"401_default_message": "NovelAIのAPIキーが無効または期限切れです",
 

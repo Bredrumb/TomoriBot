@@ -192,6 +192,10 @@ export default {
 			flush_limit_title: "🟡️ Response Length Limit Reached",
 			flush_limit_description:
 				"This response has reached the maximum message length limit and has been stopped. You can use `/bot respond` to manually continue the response if needed.",
+
+			inactivity_timeout_title: "🟡️ Response Timed Out",
+			inactivity_timeout_description:
+				"The AI provider stopped responding and the connection timed out. This can happen when the provider is overloaded or experiencing issues. Please try again.",
 		},
 
 		// Google-specific error messages (provider-specific default messages only)
@@ -231,6 +235,13 @@ export default {
 
 		// NovelAI-specific error messages (provider-specific default messages only)
 		novelai: {
+			// 400 BAD_REQUEST
+			"400_default_message": "Invalid request format or parameters",
+
+			// 400 BAD_REQUEST - Trial account recaptcha requirement
+			"400_trial_message":
+				"Your trial account requires recaptcha verification for generations. API access requires a paid NovelAI subscription. Please upgrade your account at https://novelai.net/",
+
 			// 401 UNAUTHORIZED
 			"401_default_message": "Your NovelAI API key is invalid or expired",
 

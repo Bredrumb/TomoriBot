@@ -8,6 +8,7 @@ import eventHandler from "./handlers/eventHandler";
 import { initializeLocalizer } from "./utils/text/localizer";
 import { getAppSecrets } from "./utils/security/secretsManager";
 import { keyManager } from "./utils/security/keyManager";
+import { healthTracker } from "./utils/misc/healthTracker";
 
 config({ quiet: true });
 
@@ -336,6 +337,12 @@ try {
 // such as registering or updating of commands upon startup
 eventHandler(client);
 
+// Initialize health tracker after client is ready
+client.once("clientReady", () => {
+	healthTracker.initialize(client);
+	log.success("Health tracker initialized");
+});
+
 // Initialize reminder timer system (fallback for when pg_cron is not available)
 log.section("Initializing Reminder System...");
 try {
@@ -386,34 +393,51 @@ if ((process.env.RUN_ENV || "development") === "production") {
 
 	/**
 	 * Health check endpoint for AWS ECS to monitor bot responsiveness
-	 * Returns 200 OK only when:
+	 * Returns 200 OK only when ALL conditions are met:
 	 * 1. Event loop is responsive (HTTP server can answer)
 	 * 2. Discord client is in READY state (connected and functional)
+	 * 3. WebSocket heartbeat is healthy (ping < 5 seconds)
+	 * 4. Discord events are being received (activity within last 2 minutes)
 	 *
-	 * If event loop freezes (zombie state), this endpoint will timeout,
-	 * triggering AWS to kill and restart the container.
+	 * If any check fails (zombie state, frozen event loop, disconnected WebSocket),
+	 * this endpoint will return 503 or timeout, triggering AWS to kill and restart the container.
 	 */
 	const healthCheckServer = createServer((req, res) => {
 		// Only respond to GET /health
 		if (req.method === "GET" && req.url === "/health") {
-			// Check if Discord client is ready and connected
-			const isReady = client.isReady();
+			// Get comprehensive health status from health tracker
+			const healthStatus = healthTracker.getHealthStatus();
 
-			if (isReady) {
+			if (healthStatus.healthy) {
+				// All checks passed - return 200 OK
 				res.writeHead(200, { "Content-Type": "application/json" });
-				res.end(JSON.stringify({
-					status: "healthy",
-					discord: "connected",
-					timestamp: new Date().toISOString()
-				}));
+				res.end(
+					JSON.stringify({
+						status: "healthy",
+						reason: healthStatus.reason,
+						discord: {
+							connected: healthStatus.details.clientReady,
+							websocketPing: healthStatus.details.websocketPing,
+							timeSinceLastActivity: healthStatus.details.timeSinceLastActivity,
+						},
+						timestamp: new Date().toISOString(),
+					}),
+				);
 			} else {
-				// Client not ready - return 503 Service Unavailable
+				// Health check failed - return 503 Service Unavailable
 				res.writeHead(503, { "Content-Type": "application/json" });
-				res.end(JSON.stringify({
-					status: "unhealthy",
-					discord: "disconnected",
-					timestamp: new Date().toISOString()
-				}));
+				res.end(
+					JSON.stringify({
+						status: "unhealthy",
+						reason: healthStatus.reason,
+						discord: {
+							connected: healthStatus.details.clientReady,
+							websocketPing: healthStatus.details.websocketPing,
+							timeSinceLastActivity: healthStatus.details.timeSinceLastActivity,
+						},
+						timestamp: new Date().toISOString(),
+					}),
+				);
 			}
 		} else {
 			// Invalid endpoint

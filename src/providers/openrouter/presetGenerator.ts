@@ -308,10 +308,11 @@ export async function generatePresetFromPromptOpenrouter(
 				metadata: {
 					model: options.model,
 					status: response.status,
+					errorBody: errorBody, // Include in metadata for debugging
 				},
 			});
 			return {
-				error: `OpenRouter request failed: ${response.status} ${response.statusText}`,
+				error: `OpenRouter request failed (${response.status}): ${response.statusText}`,
 				errorType: "CONNECTION",
 			};
 		}

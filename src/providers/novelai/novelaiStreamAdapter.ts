@@ -273,7 +273,13 @@ export class NovelaiStreamAdapter implements StreamProvider {
 		let errorType: ProviderError["type"];
 		let retryable: boolean;
 
-		if (statusCode === 401 || isNovelAIApiKeyError(errorMessage, statusCode)) {
+		if (statusCode === 400) {
+			errorType = "api_error";
+			retryable = false;
+		} else if (
+			statusCode === 401 ||
+			isNovelAIApiKeyError(errorMessage, statusCode)
+		) {
 			errorType = "api_error";
 			retryable = false;
 		} else if (
@@ -322,34 +328,58 @@ export class NovelaiStreamAdapter implements StreamProvider {
 		const errorCode = error.code;
 		let messageKey: string;
 
-		// Map error types to locale keys
-		switch (error.type) {
-			case "rate_limit":
-				messageKey = "429_default_message";
-				break;
-			case "timeout":
-				messageKey = "504_default_message";
-				break;
-			case "provider_overloaded":
-				messageKey = "503_default_message";
-				break;
-			case "api_error":
-				// Check for specific error codes
-				if (errorCode === "401") {
-					messageKey = "401_default_message";
-				} else if (errorCode === "402") {
-					messageKey = "402_default_message";
-				} else {
+		// Check for specific trial account / recaptcha error
+		const errorMessage = error.message.toLowerCase();
+		if (
+			errorCode === "400" &&
+			(errorMessage.includes("recaptcha") ||
+				errorMessage.includes("trial generation"))
+		) {
+			messageKey = "400_trial_message";
+		} else {
+			// Map error types to locale keys
+			switch (error.type) {
+				case "rate_limit":
+					messageKey = "429_default_message";
+					break;
+				case "timeout":
+					messageKey = "504_default_message";
+					break;
+				case "provider_overloaded":
+					messageKey = "503_default_message";
+					break;
+				case "api_error":
+					// Check for specific error codes
+					if (errorCode === "400") {
+						messageKey = "400_default_message";
+					} else if (errorCode === "401") {
+						messageKey = "401_default_message";
+					} else if (errorCode === "402") {
+						messageKey = "402_default_message";
+					} else {
+						messageKey = "unknown_default_message";
+					}
+					break;
+				default:
 					messageKey = "unknown_default_message";
-				}
-				break;
-			default:
-				messageKey = "unknown_default_message";
-				break;
+					break;
+			}
 		}
 
 		try {
 			const novelaiMessage = localizer(locale, `genai.novelai.${messageKey}`);
+
+			// If this is an unknown error, append the actual API response for debugging
+			if (messageKey === "unknown_default_message") {
+				// Truncate error message to avoid Discord embed limits (max description is 4096, leave room for other text)
+				const maxErrorLength = 1000;
+				const apiErrorSnippet =
+					error.message.length > maxErrorLength
+						? `${error.message.substring(0, maxErrorLength)}...`
+						: error.message;
+				return `Error Code ${errorCode}: ${novelaiMessage}\n\n**API Response:**\n${apiErrorSnippet}`;
+			}
+
 			return `Error Code ${errorCode}: ${novelaiMessage}`;
 		} catch {
 			// Fallback if locale key doesn't exist

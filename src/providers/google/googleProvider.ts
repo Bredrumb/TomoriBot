@@ -10,6 +10,7 @@ import {
 	GoogleGenAI,
 	type HarmBlockThreshold,
 	type HarmCategory,
+	ThinkingLevel,
 } from "@google/genai";
 import type {
 	BaseGuildTextChannel,
@@ -430,6 +431,20 @@ export class GoogleProvider extends BaseLLMProvider implements LLMProvider {
 				forceReason: streamingContext?.forceReason,
 				isManuallyTriggered: streamingContext?.isManuallyTriggered,
 			};
+
+			// Enable thinking mode for Gemini 3 Flash models
+			// This allows the model to use internal reasoning before responding
+			const isGemini3Flash =
+				config.model?.startsWith("gemini-3") &&
+				config.model?.includes("flash");
+			if (isGemini3Flash) {
+				streamConfig.thinkingConfig = {
+					thinkingLevel: ThinkingLevel.LOW,
+				};
+				log.info(
+					`GoogleProvider: Enabled LOW thinking mode for Gemini 3 Flash model: ${config.model}`,
+				);
+			}
 
 			// Override tools with context-aware tools when streaming context is provided
 			if (streamingContext) {

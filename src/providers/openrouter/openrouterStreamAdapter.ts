@@ -818,6 +818,21 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 					locale,
 					"genai.openrouter.unknown_default_message",
 				);
+				// Append actual API error for unknown errors
+				const maxErrorLength = 1000;
+				const apiErrorSnippet =
+					error.message.length > maxErrorLength
+						? `${error.message.substring(0, maxErrorLength)}...`
+						: error.message;
+				openrouterMessage += `\n\n**API Response:**\n${apiErrorSnippet}`;
+			} else if (messageKey === "unknown_default_message") {
+				// Even if we found the key, if it's the unknown message, append API error
+				const maxErrorLength = 1000;
+				const apiErrorSnippet =
+					error.message.length > maxErrorLength
+						? `${error.message.substring(0, maxErrorLength)}...`
+						: error.message;
+				openrouterMessage += `\n\n**API Response:**\n${apiErrorSnippet}`;
 			}
 		}
 
