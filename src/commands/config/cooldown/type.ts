@@ -107,9 +107,9 @@ export const configureSubcommand = (
  * Configures the cooldown type setting for message triggers.
  * Available types:
  * 0 = Off (no cooldown)
- * 1 = Per-User (each user has their own cooldown per server)
- * 2 = Per-Channel (each channel has its own cooldown)
- * 3 = Server-Wide (everyone waits, server managers exempt)
+ * 1 = Per-User (each user has their own cooldown per server, managers exempt)
+ * 2 = Per-Channel (each channel has its own cooldown, managers exempt)
+ * 3 = Server-Wide (everyone waits, managers exempt)
  * 4 = Strict Server-Wide (everyone waits, no exceptions)
  * @param _client - Discord client instance
  * @param interaction - Command interaction

@@ -267,12 +267,54 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 
 		// Handle errors first (both pre-stream and mid-stream errors)
 		if ("error" in openrouterChunk && openrouterChunk.error) {
+			const errorCode = openrouterChunk.error.code;
+			const errorMessage = openrouterChunk.error.message || "OpenRouter API error";
+
+			// Check for malformed tool call errors (model produced invalid tool call structure)
+			// These occur when the model generates null/invalid values where strings are expected
+			// Common with some models (e.g., GLM 4.7) that don't format tool calls correctly
+			const isMalformedToolCallError =
+				errorCode === "invalid_type" &&
+				(errorMessage.includes("expected string, received null") ||
+					errorMessage.includes("expected string") ||
+					errorMessage.includes("invalid_type"));
+
+			// Check if we have accumulated tool call data (indicates this was a tool call attempt)
+			const hasPartialToolCall = this.toolCallAccumulator.size > 0;
+
+			if (isMalformedToolCallError && hasPartialToolCall) {
+				// Log the malformed tool call for debugging
+				const accumulatedData = this.toolCallAccumulator.get(0);
+				log.warn(
+					`OpenRouter: Malformed tool call detected from model. ` +
+						`Accumulated name: "${accumulatedData?.functionName || "none"}", ` +
+						`args: "${accumulatedData?.functionArguments?.substring(0, 100) || "none"}". ` +
+						`Error: ${errorMessage}`,
+				);
+
+				// Clear the invalid tool call accumulator
+				this.toolCallAccumulator.clear();
+				this.reasoningDetailsAccumulator = [];
+
+				// Return as "done" instead of "error" to end the stream gracefully
+				// This preserves any text the model generated before the malformed tool call
+				// and avoids showing a scary error message to the user
+				return {
+					type: "done",
+					metadata: {
+						malformedToolCall: true,
+						originalError: errorMessage,
+					},
+				};
+			}
+
+			// For other errors, return as error
 			return {
 				type: "error",
 				error: {
 					type: "api_error",
-					message: openrouterChunk.error.message || "OpenRouter API error",
-					code: openrouterChunk.error.code,
+					message: errorMessage,
+					code: errorCode,
 					retryable: false,
 					originalError: openrouterChunk.error,
 				} as ProviderError,

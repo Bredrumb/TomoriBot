@@ -124,6 +124,7 @@ export const tomoriConfigSchema = z.object({
 	system_prompt: z.string().nullable(), // Added December 2025 - Custom system prompt for personality instructions
 	cooldown_type: z.nativeEnum(CooldownType).default(CooldownType.OFF), // Added January 2026 - Message trigger cooldown type
 	cooldown_length: z.number().int().min(1).max(86400).default(5), // Added January 2026 - Cooldown duration in seconds
+	custom_endpoint_url: z.string().nullable().optional(), // Added January 2026 - Custom OpenAI-compatible endpoint URL (non-production only)
 	created_at: z.date().optional(),
 	updated_at: z.date().optional(),
 });

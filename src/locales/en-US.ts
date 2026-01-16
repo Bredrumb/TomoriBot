@@ -3,6 +3,14 @@
 // Export the entire locale structure as a default object
 export default {
 	general: {
+		// Common strings
+		yes: `Yes`,
+		no: `No`,
+		confirm: `Confirm`,
+		cancel: `Cancel`,
+		none: `None`,
+		unknown: `Unknown`,
+
 		// Default configuration values
 		defaults: {
 			bot_name: `Tomori`,
@@ -15,11 +23,11 @@ export default {
 
 		// Message trigger cooldown messages
 		message_cooldown_title: `⌛ Please wait!`,
-		message_cooldown: `You need to wait **{seconds}** seconds before triggering **{botName}** again.`,
-		message_cooldown_footer_per_user: `Cooldown: Per-User`,
-		message_cooldown_footer_per_channel: `Cooldown: Per-Channel`,
-		message_cooldown_footer_server_wide: `Cooldown: Server-Wide`,
-		message_cooldown_footer_strict: `Cooldown: Strict Server-Wide`,
+		message_cooldown: `This server's managers have configured a cooldown. Please wait **{seconds}** seconds before triggering **{botName}** again.`,
+		message_cooldown_footer_per_user: `Server Setting: Per-User Cooldown`,
+		message_cooldown_footer_per_channel: `Server Setting: Per-Channel Cooldown`,
+		message_cooldown_footer_server_wide: `Server Setting: Server-Wide Cooldown`,
+		message_cooldown_footer_strict: `Server Setting: Strict Server-Wide Cooldown`,
 
 		// Standard interaction responses (buttons, selects)
 		interaction: {
@@ -326,6 +334,42 @@ export default {
 
 			// Generic fallback for unknown OpenRouter errors
 			unknown_default_message: "An unexpected error occurred",
+		},
+
+		// Custom provider error messages (self-hosted OpenAI-compatible endpoints)
+		custom: {
+			// Connection errors
+			connection_refused:
+				"Could not connect to the custom endpoint. Please verify that your local LLM server is running and accessible at the configured URL.",
+
+			// HTTP status errors
+			"401_default_message":
+				"Authentication failed. If your endpoint requires an API key, please check that it's configured correctly.",
+
+			"403_default_message":
+				"Access denied by the custom endpoint. Please check your endpoint's access controls.",
+
+			"404_default_message":
+				"Endpoint not found. Please verify your endpoint URL is correct and includes the proper path (e.g., /v1/chat/completions).",
+
+			"408_default_message":
+				"Request timed out. The custom endpoint took too long to respond.",
+
+			"429_default_message":
+				"Rate limited by the custom endpoint. Please wait a moment and try again.",
+
+			"500_default_message":
+				"Internal server error from the custom endpoint. Please check your LLM server logs.",
+
+			"502_default_message":
+				"Bad gateway error. The custom endpoint returned an invalid response.",
+
+			"503_default_message":
+				"Custom endpoint is currently unavailable. Please ensure your LLM server is running.",
+
+			// Generic fallback
+			unknown_default_message:
+				"An unexpected error occurred while communicating with the custom endpoint.",
 		},
 
 		self_teach: {
@@ -1166,6 +1210,7 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 					provider_placeholder: `Select a provider...`,
 					api_key_label: `Provider API Key`,
 					api_key_description: `This key will be securely stored. Use the '/help apikey' command for instructions in getting one`,
+					api_key_description_with_custom: `API Key, or OpenAI endpoint URL if using Custom (e.g., http://localhost:11434/v1)`,
 					api_key_placeholder: `Do NOT share this key with anyone`,
 					no_providers_title: `No Providers Available`,
 					no_providers_description: `No AI providers are available in the database. Please report through \`/support discord\`.`,
@@ -1216,6 +1261,38 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 					success_description: `The Brave Search API key has been successfully removed.`,
 				},
 			},
+			// Custom provider configuration (non-production only)
+			custom: {
+				// Endpoint URL field help text (shown instead of API key for custom provider)
+				endpoint_url_label: `Endpoint URL`,
+				endpoint_url_description: `Enter your OpenAI-compatible endpoint URL (e.g., http://localhost:11434/v1)`,
+				endpoint_url_placeholder: `http://localhost:11434/v1`,
+				endpoint_url_invalid_title: `Invalid Endpoint URL`,
+				endpoint_url_invalid_description: `Please enter a valid HTTP or HTTPS URL for your custom endpoint.`,
+				// Capabilities modal
+				modal_capabilities_title: `Configure Model Capabilities`,
+				model_name_label: `Model Name (optional)`,
+				model_name_placeholder: `custom`,
+				capabilities_prompt: `Please configure the capabilities for your custom model.\n\nSelect what your model supports, then click **Confirm**:`,
+				capability_tools_label: `Function Calling (Tools)?`,
+				capability_tools_yes: `Supports Function Calling`,
+				capability_tools_no: `No Function Calling`,
+				capability_images_label: `Image Understanding?`,
+				capability_images_yes: `Supports Images`,
+				capability_images_no: `No Image Support`,
+				capability_videos_label: `Video Understanding?`,
+				capability_videos_yes: `Supports Videos`,
+				capability_videos_no: `No Video Support`,
+				capability_structoutput_label: `Structured Output?`,
+				capability_structoutput_yes: `Supports Structured Output`,
+				capability_structoutput_no: `No Structured Output`,
+				// Success/error messages
+				setup_success_title: `Custom Endpoint Configured`,
+				setup_success_description: `Your custom OpenAI-compatible endpoint has been configured successfully.`,
+				capabilities_timeout: `Model capabilities configuration timed out. Please try again.`,
+				// Provider description shown in select menus
+				provider_description: `Self-hosted OpenAI-compatible endpoint (non-production only)`,
+			},
 			humanizer: {
 				description: `Set how 'human-like' my responses should be. For custom prompts, use /config prompt change.`,
 				// value_description: `The level of humanization (0=None, 1=Prompt, 2=Typing/Chunking, 3=Lowercase/No Punctuation).`,
@@ -1251,8 +1328,8 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 					choice_server_wide: `Server-Wide`,
 					choice_strict_server_wide: `Strict Server-Wide`,
 					desc_off: `No cooldown on message triggers`,
-					desc_per_user: `Each user has their own cooldown`,
-					desc_per_channel: `Each channel has its own cooldown`,
+					desc_per_user: `Each user has their own cooldown (managers exempt)`,
+					desc_per_channel: `Each channel has its own cooldown (managers exempt)`,
 					desc_server_wide: `Everyone waits (managers exempt)`,
 					desc_strict_server_wide: `Everyone waits (no exceptions)`,
 					invalid_value_description: `Invalid cooldown type selected. Please choose a valid option.`,
@@ -1299,6 +1376,9 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 					validation_error_description: `An error occurred while validating API key compatibility. Please try again.`,
 					success_title: `Model Updated`,
 					success_description: `I will now use the \`{model_name}\` model (previously \`{previous_model}\`).`,
+					// Custom provider reconfiguration messages
+					custom_updated_title: `Custom Model Capabilities Updated`,
+					custom_updated_description: `Your custom model has been reconfigured.\n\n**Enabled Capabilities:** {capabilities}`,
 				},
 				image: {
 					description: `Change the image generation model for this server.`,
@@ -1343,6 +1423,7 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				api_provider_placeholder: `Choose a provider...`,
 				api_key_label: `API Key`,
 				api_key_description: `This key will be securely stored. Use the '/help apikey' command for instructions in getting one`,
+				api_key_description_with_custom: `API Key, or OpenAI endpoint URL if using Custom (e.g., http://localhost:11434/v1)`,
 				api_key_placeholder: `Do NOT share this key with anyone`,
 				preset_label: `Personality Preset`,
 				preset_description: `Choose a personality preset`,

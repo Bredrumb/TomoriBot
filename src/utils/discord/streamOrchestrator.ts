@@ -385,6 +385,20 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 		switch (chunk.type) {
 			case "error":
 				if (chunk.error) {
+					// Flush any pending buffer before handling error
+					// This preserves text the model generated before encountering the error
+					// (e.g., text generated before a malformed tool call)
+					if (state.buffer.length > 0) {
+						log.info(
+							`Stream: Flushing ${state.buffer.length} chars of buffered text before error handling`,
+						);
+						await this.flushPendingBuffer(
+							state,
+							textConfig,
+							typingConfig,
+							context,
+						);
+					}
 					await this.handleProviderError(chunk.error, _provider, context);
 					return { status: "error", data: new Error(chunk.error.message) };
 				}

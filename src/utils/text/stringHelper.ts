@@ -73,8 +73,8 @@ export function createSentenceSplitRegex(): RegExp {
 	// 13. Pattern for acronyms with periods (e.g., H.I.F., A.I.M.)
 	const acronymPattern = "(?:[A-Z]\\.[A-Z]\\.(?:[A-Z]\\.)*)";
 
-	// 14. Complete negative lookbehind pattern: abbreviations OR digits OR acronyms
-	const negativeLookbehind = `(?<!(?:${abbreviationsPattern}|\\d|${acronymPattern}))`;
+	// 14. Complete negative lookbehind pattern: abbreviations OR digits OR acronyms OR preceding period (ellipsis)
+	const negativeLookbehind = `(?<!(?:${abbreviationsPattern}|\\d|${acronymPattern}|\\.))`;
 
 	// 15. Split on regular periods (.) followed by whitespace/newline/end OR Japanese periods (。)
 	const sentenceEnd = "(?:\\.(?=\\s|\\n|$)|。)";

@@ -29,6 +29,14 @@ import type {
 import { ProviderFactory } from "../../../utils/provider/providerFactory";
 import { encryptApiKey } from "../../../utils/security/crypto";
 import { sql } from "@/utils/db/client";
+import {
+	isCustomProvider,
+	validateEndpointUrl,
+	promptCustomCapabilities,
+	deleteCustomLLMEntry,
+	CUSTOM_ENDPOINT_PLACEHOLDER_KEY,
+	type CustomCapabilitiesResult,
+} from "../../../utils/discord/customProviderModal";
 
 // Modal configuration constants
 const MODAL_CUSTOM_ID = "config_apikeyset_modal";
@@ -124,7 +132,10 @@ export async function execute(
 			{
 				customId: API_KEY_INPUT_ID,
 				labelKey: "commands.config.apikey.set.api_key_label",
-				descriptionKey: "commands.config.apikey.set.api_key_description",
+				// Show custom endpoint hint when not in production (custom provider available)
+				descriptionKey: process.env.RUN_ENV !== "production"
+					? "commands.config.apikey.set.api_key_description_with_custom"
+					: "commands.config.apikey.set.api_key_description",
 				placeholder: "commands.config.apikey.set.api_key_placeholder",
 				required: true,
 				style: TextInputStyle.Short,
@@ -162,144 +173,219 @@ export async function execute(
 			return;
 		}
 
-		// 7. Basic API key validation - let helper functions manage interaction state
-		if (apiKey.length < 10) {
-			await replyInfoEmbed(modalSubmitInteraction, locale, {
-				titleKey: "commands.config.apikey.set.invalid_key_title",
-				descriptionKey: "commands.config.apikey.set.invalid_key_description",
-				color: ColorCode.ERROR,
-			});
-			return;
-		}
+		// 7. Handle Custom Provider vs Regular Providers differently
+		let encrypted: Buffer;
+		let version: number;
+		let customCapabilitiesResult: CustomCapabilitiesResult | null = null;
+		let customEndpointUrl: string | null = null;
+		const normalizedProvider = selectedProvider.toLowerCase();
 
-		// 9. Get provider instance and validate API key using factory
-		let validationResult: { valid: boolean; error?: ProviderError } = { valid: false };
-		try {
-			const providerName = selectedProvider.toLowerCase();
+		if (isCustomProvider(normalizedProvider)) {
+			// Custom Provider Flow: apiKey field contains the endpoint URL
+			log.info(`Custom provider selected - treating api_key as endpoint URL`);
 
-			// Use factory to get provider instance (handles all providers and aliases)
-			// Partial TomoriState for validation only - provider doesn't use these fields during validateApiKey()
-			const provider = await ProviderFactory.getProvider({
-				llm: { llm_provider: providerName, llm_codename: "" },
-				server_id: tomoriState.server_id,
-				tomori_id: tomoriState.tomori_id,
-				config: tomoriState.config,
-				// biome-ignore lint/suspicious/noExplicitAny: Minimal object structure needed for factory pattern
-			} as any);
-
-			// Validate the API key with the provider
-			validationResult = await provider.validateApiKey(apiKey);
-		} catch (error) {
-			log.error(
-				`Error validating API key for provider ${selectedProvider}`,
-				error as Error,
-			);
-
-			// Check if error is due to unsupported provider
-			const errorMessage =
-				error instanceof Error ? error.message : String(error);
-			if (errorMessage.includes("Unsupported provider")) {
+			// Validate the endpoint URL format
+			if (!apiKey || !validateEndpointUrl(apiKey)) {
 				await replyInfoEmbed(modalSubmitInteraction, locale, {
-					titleKey: "commands.config.apikey.set.unsupported_provider_title",
-					descriptionKey:
-						"commands.config.apikey.set.unsupported_provider_description",
-					descriptionVars: {
-						provider: selectedProvider,
-					},
-					color: ColorCode.ERROR,
-				});
-			} else {
-				await replyInfoEmbed(modalSubmitInteraction, locale, {
-					titleKey: "commands.config.apikey.set.validation_error_title",
-					descriptionKey:
-						"commands.config.apikey.set.validation_error_description",
-					color: ColorCode.ERROR,
-				});
-			}
-			return;
-		}
-
-		// 10. Handle validation failure with detailed error information
-		if (!validationResult.valid) {
-			// Get stream adapter to format the error message
-			let errorDescription = "API key validation failed";
-
-			if (validationResult.error) {
-				// Use provider-specific error description formatting
-				try {
-					// Dynamically get the appropriate stream adapter based on provider
-					let adapter: { createErrorDescription: (error: ProviderError, locale: string) => string | null } | undefined;
-					const normalizedProvider = selectedProvider.toLowerCase();
-
-					if (normalizedProvider === "google" || normalizedProvider === "gemini") {
-						const { GoogleStreamAdapter } = await import("../../../providers/google/googleStreamAdapter");
-						adapter = new GoogleStreamAdapter();
-					} else if (normalizedProvider === "novelai" || normalizedProvider === "nai") {
-						const { NovelaiStreamAdapter } = await import("../../../providers/novelai/novelaiStreamAdapter");
-						adapter = new NovelaiStreamAdapter();
-					} else if (normalizedProvider === "openrouter" || normalizedProvider === "or") {
-						const { OpenrouterStreamAdapter } = await import("../../../providers/openrouter/openrouterStreamAdapter");
-						adapter = new OpenrouterStreamAdapter();
-					}
-
-					if (adapter) {
-						const formattedError = adapter.createErrorDescription(validationResult.error, locale);
-						if (formattedError) {
-							errorDescription = formattedError;
-						}
-					} else {
-						// Fallback for unknown providers
-						errorDescription = `Error Code ${validationResult.error.code}: ${validationResult.error.message}`;
-					}
-				} catch (adapterError) {
-					// Fallback if adapter creation fails
-					log.warn("Failed to create stream adapter for error formatting", adapterError);
-					errorDescription = `Error Code ${validationResult.error.code}: ${validationResult.error.message}`;
-				}
-			}
-
-			await replyInfoEmbed(modalSubmitInteraction, locale, {
-				titleKey: "commands.config.apikey.set.key_validation_failed_title",
-				description: errorDescription, // Use formatted error description
-				color: ColorCode.ERROR,
-			});
-			return;
-		}
-
-		// 11. Encrypt and store the API key
-		const { encrypted, version } = await encryptApiKey(apiKey);
-
-		// 11.5. Check if provider changed and load default model if needed
-		const currentProvider = tomoriState.llm.llm_provider.toLowerCase();
-		const newProvider = selectedProvider.toLowerCase();
-		let newLlmId = tomoriState.config.llm_id; // Default to current model
-		let newDiffusionModelId = tomoriState.config.diffusion_model_id; // Default to current diffusion model
-
-		if (currentProvider !== newProvider) {
-			// Provider changed, load default model for new provider
-			log.info(
-				`Provider changed from ${currentProvider} to ${newProvider}, loading default model`,
-			);
-			const defaultModel = await loadDefaultModelForProvider(newProvider);
-
-			if (!defaultModel || !defaultModel.llm_id) {
-				await replyInfoEmbed(modalSubmitInteraction, locale, {
-					titleKey: "commands.config.apikey.set.no_default_model_title",
-					descriptionKey:
-						"commands.config.apikey.set.no_default_model_description",
-					descriptionVars: {
-						provider:
-							newProvider.charAt(0).toUpperCase() + newProvider.slice(1),
-					},
+					titleKey: "commands.config.custom.endpoint_url_invalid_title",
+					descriptionKey: "commands.config.custom.endpoint_url_invalid_description",
 					color: ColorCode.ERROR,
 				});
 				return;
 			}
 
-			newLlmId = defaultModel.llm_id;
-			log.info(
-				`Switching to default model for ${newProvider}: ${defaultModel.llm_codename} (ID: ${newLlmId})`,
+			customEndpointUrl = apiKey;
+			log.info(`Custom endpoint URL validated: ${customEndpointUrl}`);
+
+			// Show capabilities selection for custom model
+			customCapabilitiesResult = await promptCustomCapabilities(
+				modalSubmitInteraction,
+				locale,
+				serverId,
 			);
+
+			if (!customCapabilitiesResult.success) {
+				await replyInfoEmbed(modalSubmitInteraction, locale, {
+					titleKey: "general.errors.operation_failed_title",
+					description: customCapabilitiesResult.error || localizer(locale, "commands.config.custom.capabilities_timeout"),
+					color: ColorCode.ERROR,
+				});
+				return;
+			}
+
+			log.info(`Custom model capabilities configured: tools=${customCapabilitiesResult.hasTools}, images=${customCapabilitiesResult.seesImages}, videos=${customCapabilitiesResult.seesVideos}, structOutput=${customCapabilitiesResult.supportsStructOutput}`);
+
+			// Use placeholder API key for custom provider
+			const placeholderResult = await encryptApiKey(CUSTOM_ENDPOINT_PLACEHOLDER_KEY);
+			encrypted = placeholderResult.encrypted;
+			version = placeholderResult.version;
+		} else {
+			// Regular Provider Flow
+			// Basic API key validation - let helper functions manage interaction state
+			if (apiKey.length < 10) {
+				await replyInfoEmbed(modalSubmitInteraction, locale, {
+					titleKey: "commands.config.apikey.set.invalid_key_title",
+					descriptionKey: "commands.config.apikey.set.invalid_key_description",
+					color: ColorCode.ERROR,
+				});
+				return;
+			}
+
+			// Get provider instance and validate API key using factory
+			let validationResult: { valid: boolean; error?: ProviderError } = { valid: false };
+			try {
+				const providerName = selectedProvider.toLowerCase();
+
+				// Use factory to get provider instance (handles all providers and aliases)
+				// Partial TomoriState for validation only - provider doesn't use these fields during validateApiKey()
+				const provider = await ProviderFactory.getProvider({
+					llm: { llm_provider: providerName, llm_codename: "" },
+					server_id: tomoriState.server_id,
+					tomori_id: tomoriState.tomori_id,
+					config: tomoriState.config,
+					// biome-ignore lint/suspicious/noExplicitAny: Minimal object structure needed for factory pattern
+				} as any);
+
+				// Validate the API key with the provider
+				validationResult = await provider.validateApiKey(apiKey);
+			} catch (error) {
+				log.error(
+					`Error validating API key for provider ${selectedProvider}`,
+					error as Error,
+				);
+
+				// Check if error is due to unsupported provider
+				const errorMessage =
+					error instanceof Error ? error.message : String(error);
+				if (errorMessage.includes("Unsupported provider")) {
+					await replyInfoEmbed(modalSubmitInteraction, locale, {
+						titleKey: "commands.config.apikey.set.unsupported_provider_title",
+						descriptionKey:
+							"commands.config.apikey.set.unsupported_provider_description",
+						descriptionVars: {
+							provider: selectedProvider,
+						},
+						color: ColorCode.ERROR,
+					});
+				} else {
+					await replyInfoEmbed(modalSubmitInteraction, locale, {
+						titleKey: "commands.config.apikey.set.validation_error_title",
+						descriptionKey:
+							"commands.config.apikey.set.validation_error_description",
+						color: ColorCode.ERROR,
+					});
+				}
+				return;
+			}
+
+			// Handle validation failure with detailed error information
+			if (!validationResult.valid) {
+				// Get stream adapter to format the error message
+				let errorDescription = "API key validation failed";
+
+				if (validationResult.error) {
+					// Use provider-specific error description formatting
+					try {
+						// Dynamically get the appropriate stream adapter based on provider
+						let adapter: { createErrorDescription: (error: ProviderError, locale: string) => string | null } | undefined;
+
+						if (normalizedProvider === "google" || normalizedProvider === "gemini") {
+							const { GoogleStreamAdapter } = await import("../../../providers/google/googleStreamAdapter");
+							adapter = new GoogleStreamAdapter();
+						} else if (normalizedProvider === "novelai" || normalizedProvider === "nai") {
+							const { NovelaiStreamAdapter } = await import("../../../providers/novelai/novelaiStreamAdapter");
+							adapter = new NovelaiStreamAdapter();
+						} else if (normalizedProvider === "openrouter" || normalizedProvider === "or") {
+							const { OpenrouterStreamAdapter } = await import("../../../providers/openrouter/openrouterStreamAdapter");
+							adapter = new OpenrouterStreamAdapter();
+						}
+
+						if (adapter) {
+							const formattedError = adapter.createErrorDescription(validationResult.error, locale);
+							if (formattedError) {
+								errorDescription = formattedError;
+							}
+						} else {
+							// Fallback for unknown providers
+							errorDescription = `Error Code ${validationResult.error.code}: ${validationResult.error.message}`;
+						}
+					} catch (adapterError) {
+						// Fallback if adapter creation fails
+						log.warn("Failed to create stream adapter for error formatting", adapterError);
+						errorDescription = `Error Code ${validationResult.error.code}: ${validationResult.error.message}`;
+					}
+				}
+
+				await replyInfoEmbed(modalSubmitInteraction, locale, {
+					titleKey: "commands.config.apikey.set.key_validation_failed_title",
+					description: errorDescription, // Use formatted error description
+					color: ColorCode.ERROR,
+				});
+				return;
+			}
+
+			// Encrypt and store the API key
+			const encryptionResult = await encryptApiKey(apiKey);
+			encrypted = encryptionResult.encrypted;
+			version = encryptionResult.version;
+		}
+
+		// 11.5. Check if provider changed and load default model if needed
+		const currentProvider = tomoriState.llm.llm_provider.toLowerCase();
+		const newProvider = normalizedProvider;
+		let newLlmId = tomoriState.config.llm_id; // Default to current model
+		let newDiffusionModelId = tomoriState.config.diffusion_model_id; // Default to current diffusion model
+
+		// Clean up old custom LLM entry if switching away from custom provider
+		if (isCustomProvider(currentProvider) && !isCustomProvider(newProvider)) {
+			log.info(`Switching away from custom provider - cleaning up old custom LLM entry`);
+			await deleteCustomLLMEntry(serverId);
+		}
+
+		if (currentProvider !== newProvider) {
+			// Provider changed - handle custom provider specially
+			if (isCustomProvider(newProvider)) {
+				// Custom provider: use the LLM ID from capabilities configuration
+				if (customCapabilitiesResult?.llmId) {
+					newLlmId = customCapabilitiesResult.llmId;
+					log.info(`Using custom LLM ID: ${newLlmId}`);
+				} else {
+					log.error(`Custom provider selected but no LLM ID available`);
+					await replyInfoEmbed(modalSubmitInteraction, locale, {
+						titleKey: "general.errors.operation_failed_title",
+						descriptionKey: "commands.config.custom.capabilities_timeout",
+						color: ColorCode.ERROR,
+					});
+					return;
+				}
+
+				// Custom provider doesn't have diffusion models
+				newDiffusionModelId = null;
+			} else {
+				// Regular provider: load default model for new provider
+				log.info(
+					`Provider changed from ${currentProvider} to ${newProvider}, loading default model`,
+				);
+				const defaultModel = await loadDefaultModelForProvider(newProvider);
+
+				if (!defaultModel || !defaultModel.llm_id) {
+					await replyInfoEmbed(modalSubmitInteraction, locale, {
+						titleKey: "commands.config.apikey.set.no_default_model_title",
+						descriptionKey:
+							"commands.config.apikey.set.no_default_model_description",
+						descriptionVars: {
+							provider:
+								newProvider.charAt(0).toUpperCase() + newProvider.slice(1),
+						},
+						color: ColorCode.ERROR,
+					});
+					return;
+				}
+
+				newLlmId = defaultModel.llm_id;
+				log.info(
+					`Switching to default model for ${newProvider}: ${defaultModel.llm_codename} (ID: ${newLlmId})`,
+				);
 
 			// Load default diffusion model for new provider (for image generation)
 			const defaultDiffusionModel = (
@@ -342,15 +428,17 @@ export async function execute(
 					`Switching to default diffusion model for ${newProvider}: ${defaultDiffusionModel.codename} (ID: ${newDiffusionModelId})`,
 				);
 			}
+			}
 		}
 
-		// 12. Update the config in the database (includes llm_id and diffusion_model_id if provider changed)
+		// 12. Update the config in the database (includes llm_id, diffusion_model_id, and custom_endpoint_url if provider changed)
 		const [updatedRow] = await sql`
 			UPDATE tomori_configs
 			SET api_key = ${encrypted},
 			    key_version = ${version},
 			    llm_id = ${newLlmId},
-			    diffusion_model_id = ${newDiffusionModelId}
+			    diffusion_model_id = ${newDiffusionModelId},
+			    custom_endpoint_url = ${customEndpointUrl}
 			WHERE tomori_id = ${tomoriState.tomori_id}
 			RETURNING *
 		`;

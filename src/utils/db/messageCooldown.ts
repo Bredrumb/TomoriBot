@@ -67,8 +67,9 @@ function getCooldownKeyPair(
 }
 
 /**
- * Checks if a user is exempt from server-wide cooldowns (type 3).
- * Server managers (users with ManageGuild permission) are exempt from non-strict server-wide cooldowns.
+ * Checks if a user is exempt from cooldowns based on type and permissions.
+ * Server managers (users with ManageGuild permission) are exempt from cooldown types 1-3.
+ * Only type 4 (STRICT_SERVER_WIDE) has no exemptions.
  * @param member - Guild member to check
  * @param cooldownType - The cooldown type configured
  * @returns True if the user is exempt from the cooldown
@@ -77,12 +78,16 @@ export function isExemptFromCooldown(
 	member: GuildMember | null,
 	cooldownType: CooldownType,
 ): boolean {
-	// Only type 3 (SERVER_WIDE) has exemptions; type 4 (STRICT) has no exemptions
-	if (cooldownType !== CooldownType.SERVER_WIDE) {
+	// Type 0 (OFF) has no cooldown, so exemption is irrelevant
+	// Type 4 (STRICT_SERVER_WIDE) has no exemptions - everyone must wait
+	if (
+		cooldownType === CooldownType.OFF ||
+		cooldownType === CooldownType.STRICT_SERVER_WIDE
+	) {
 		return false;
 	}
 
-	// Check if user has ManageGuild permission
+	// Types 1-3 (PER_USER, PER_CHANNEL, SERVER_WIDE) exempt server managers
 	if (member?.permissions.has(PermissionFlagsBits.ManageGuild)) {
 		return true;
 	}

@@ -218,6 +218,10 @@ SELECT add_column_if_not_exists('tomori_configs', 'cooldown_type', 'INTEGER', '0
 -- cooldown_length: Duration in seconds (1-86400, default 5)
 SELECT add_column_if_not_exists('tomori_configs', 'cooldown_length', 'INTEGER', '5');
 
+-- Add custom endpoint URL for self-hosted OpenAI-compatible LLM endpoints (January 2026)
+-- Only used when llm_provider is 'custom', blocked in production environment
+SELECT add_column_if_not_exists('tomori_configs', 'custom_endpoint_url', 'TEXT');
+
 -- Add foreign key constraint if the column was just created
 DO $$
 BEGIN

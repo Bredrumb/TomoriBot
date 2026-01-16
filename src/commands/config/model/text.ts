@@ -27,6 +27,11 @@ import {
 	type LlmRow,
 } from "../../../types/db/schema";
 import type { SelectOption } from "../../../types/discord/modal";
+import {
+	isCustomProvider,
+	promptCustomCapabilities,
+	DEFAULT_CUSTOM_MODEL_NAME,
+} from "../../../utils/discord/customProviderModal";
 
 // Modal configuration constants
 const MODAL_CUSTOM_ID = "config_model_text_modal";
@@ -128,9 +133,107 @@ export async function execute(
 		return;
 	}
 
-	// 4. Load available models for the current provider from the database for modal options
-	// Normalize provider name to lowercase to match database storage
+	// 3.5. Handle Custom Provider specially - show capabilities reconfiguration instead of model selection
 	const currentProvider = tomoriState.llm.llm_provider.toLowerCase();
+	const serverId = interaction.guild?.id ?? interaction.user.id;
+
+	if (isCustomProvider(currentProvider)) {
+		try {
+			// Defer the interaction first before showing capabilities UI
+			await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+			// Show capabilities selection for custom model reconfiguration
+			const capabilitiesResult = await promptCustomCapabilities(
+				// Use the deferred interaction - we need to cast since promptCustomCapabilities expects ModalSubmitInteraction | ButtonInteraction
+				// but the functionality works the same for deferred interactions
+				interaction as unknown as import("discord.js").ModalSubmitInteraction,
+				locale,
+				serverId,
+			);
+
+			if (!capabilitiesResult.success) {
+				await replyInfoEmbed(interaction, locale, {
+					titleKey: "general.errors.operation_failed_title",
+					description: capabilitiesResult.error || localizer(locale, "commands.config.custom.capabilities_timeout"),
+					color: ColorCode.ERROR,
+				});
+				return;
+			}
+
+			// Update the custom LLM row with new capabilities
+			if (capabilitiesResult.llmId) {
+				// Update tomori_configs to use the (potentially new) LLM ID
+				const [updatedRow] = await sql`
+					UPDATE tomori_configs
+					SET llm_id = ${capabilitiesResult.llmId}
+					WHERE tomori_id = ${tomoriState.tomori_id}
+					RETURNING *
+				`;
+
+				// Validate the returned data
+				const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
+				if (!validatedConfig.success || !updatedRow) {
+					await replyInfoEmbed(interaction, locale, {
+						titleKey: "general.errors.update_failed_title",
+						descriptionKey: "general.errors.update_failed_description",
+						color: ColorCode.ERROR,
+					});
+					return;
+				}
+			}
+
+			log.info(`Custom model capabilities updated: tools=${capabilitiesResult.hasTools}, images=${capabilitiesResult.seesImages}, videos=${capabilitiesResult.seesVideos}, structOutput=${capabilitiesResult.supportsStructOutput}`);
+
+			// Build capability flags for display
+			const enabledCapabilities: string[] = [];
+			if (capabilitiesResult.hasTools) enabledCapabilities.push(localizer(locale, "commands.config.custom.capability_tools_label"));
+			if (capabilitiesResult.seesImages) enabledCapabilities.push(localizer(locale, "commands.config.custom.capability_images_label"));
+			if (capabilitiesResult.seesVideos) enabledCapabilities.push(localizer(locale, "commands.config.custom.capability_videos_label"));
+			if (capabilitiesResult.supportsStructOutput) enabledCapabilities.push(localizer(locale, "commands.config.custom.capability_structoutput_label"));
+
+			const capabilitiesDisplay = enabledCapabilities.length > 0
+				? enabledCapabilities.join(", ")
+				: localizer(locale, "general.none");
+
+			await replyInfoEmbed(interaction, locale, {
+				titleKey: "commands.config.model.text.custom_updated_title",
+				descriptionKey: "commands.config.model.text.custom_updated_description",
+				descriptionVars: {
+					model_name: DEFAULT_CUSTOM_MODEL_NAME,
+					capabilities: capabilitiesDisplay,
+				},
+				color: ColorCode.SUCCESS,
+			});
+			return;
+		} catch (error) {
+			const context: ErrorContext = {
+				tomoriId: tomoriState.tomori_id,
+				serverId: tomoriState.server_id,
+				userId: userData.user_id,
+				errorType: "CommandExecutionError",
+				metadata: {
+					command: "config model text (custom)",
+					guildId: interaction.guild?.id ?? interaction.user.id,
+				},
+			};
+			await log.error(
+				`Error reconfiguring custom model for user ${userData.user_disc_id}`,
+				error as Error,
+				context,
+			);
+
+			await replyInfoEmbed(interaction, locale, {
+				titleKey: "general.errors.unknown_error_title",
+				descriptionKey: "general.errors.unknown_error_description",
+				color: ColorCode.ERROR,
+				flags: MessageFlags.Ephemeral,
+			});
+			return;
+		}
+	}
+
+	// 4. Load available models for the current provider from the database for modal options
+	// Provider name is already normalized to lowercase above
 	const availableModels = await loadAvailableModelsForProvider(currentProvider);
 	if (!availableModels || availableModels.length === 0) {
 		await replyInfoEmbed(interaction, locale, {

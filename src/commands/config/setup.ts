@@ -27,6 +27,14 @@ import {
 import { getCachedPresetAvatar } from "@/utils/image/avatarHelper";
 import { lazySyncGuildEmojis } from "@/utils/cache/emojiLazySync";
 import { lazySyncGuildStickers } from "@/utils/cache/stickerLazySync";
+import {
+	isCustomProvider,
+	validateEndpointUrl,
+	promptCustomCapabilities,
+	saveCustomEndpointConfig,
+	CUSTOM_ENDPOINT_PLACEHOLDER_KEY,
+	type CustomCapabilitiesResult,
+} from "@/utils/discord/customProviderModal";
 
 import type { HumanizerDegree } from "@/types/db/schema";
 
@@ -207,7 +215,10 @@ export async function execute(
 					{
 						customId: "api_key",
 						labelKey: "commands.config.setup.api_key_label",
-						descriptionKey: "commands.config.setup.api_key_description",
+						// Show custom endpoint hint when not in production (custom provider available)
+						descriptionKey: process.env.RUN_ENV !== "production"
+							? "commands.config.setup.api_key_description_with_custom"
+							: "commands.config.setup.api_key_description",
 						placeholder: "commands.config.setup.api_key_placeholder",
 						style: TextInputStyle.Short,
 						required: true,
@@ -301,96 +312,144 @@ export async function execute(
 				return;
 			}
 
-			// 2. Validate API Key with length check and actual API test
-			if (!apiKey || apiKey.length < 10) {
-				await replyInfoEmbed(modalSubmitInteraction, locale, {
-					titleKey: "general.errors.operation_failed_title",
-					descriptionKey: "commands.config.setup.api_key_invalid",
-					color: ColorCode.ERROR,
-				});
-				return;
-			}
+			// 2. Handle Custom Provider vs Regular Providers differently
+			let encryptedKey: Buffer;
+			let keyVersion: number;
+			let customCapabilitiesResult: CustomCapabilitiesResult | null = null;
+			let customEndpointUrl: string | null = null;
 
-			// Test the API key with a real API call using provider factory
-			await replyInfoEmbed(modalSubmitInteraction, locale, {
-				titleKey: "commands.config.setup.api_key_validating",
-				descriptionKey: "commands.config.setup.api_key_validating",
-				color: ColorCode.INFO,
-			});
+			if (isCustomProvider(normalizedProvider)) {
+				// Custom Provider Flow: apiKey field contains the endpoint URL
+				log.info(`Custom provider selected - treating api_key as endpoint URL`);
 
-			try {
-				// Use factory to get provider instance (handles all providers and aliases)
-				// Partial TomoriState for validation only - provider doesn't use these fields during validateApiKey()
-				const provider = await ProviderFactory.getProvider({
-					llm: { llm_provider: normalizedProvider, llm_codename: "" },
-					server_id: 0, // Temporary, not used for validation
-					tomori_id: 0, // Temporary, not used for validation
-					// biome-ignore lint/suspicious/noExplicitAny: Empty config object is sufficient for validation
-					config: {} as any,
-					// biome-ignore lint/suspicious/noExplicitAny: Minimal object structure needed for factory pattern
-				} as any);
-
-				const validationResult = await provider.validateApiKey(apiKey);
-				if (!validationResult.valid) {
-					// Get stream adapter to format the error message
-					let errorDescription = "API key validation failed";
-
-					if (validationResult.error) {
-						// Use provider-specific error description formatting
-						try {
-							// Dynamically get the appropriate stream adapter based on provider
-							let adapter: { createErrorDescription: (error: ProviderError, locale: string) => string | null } | undefined;
-
-							if (normalizedProvider === "google" || normalizedProvider === "gemini") {
-								const { GoogleStreamAdapter } = await import("../../providers/google/googleStreamAdapter");
-								adapter = new GoogleStreamAdapter();
-							} else if (normalizedProvider === "novelai" || normalizedProvider === "nai") {
-								const { NovelaiStreamAdapter } = await import("../../providers/novelai/novelaiStreamAdapter");
-								adapter = new NovelaiStreamAdapter();
-							} else if (normalizedProvider === "openrouter" || normalizedProvider === "or") {
-								const { OpenrouterStreamAdapter } = await import("../../providers/openrouter/openrouterStreamAdapter");
-								adapter = new OpenrouterStreamAdapter();
-							}
-
-							if (adapter) {
-								const formattedError = adapter.createErrorDescription(validationResult.error, locale);
-								if (formattedError) {
-									errorDescription = formattedError;
-								}
-							} else {
-								// Fallback for unknown providers
-								errorDescription = `Error Code ${validationResult.error.code}: ${validationResult.error.message}`;
-							}
-						} catch (adapterError) {
-							// Fallback if adapter creation fails
-							log.warn("Failed to create stream adapter for error formatting", adapterError);
-							errorDescription = `Error Code ${validationResult.error.code}: ${validationResult.error.message}`;
-						}
-					}
-
+				// Validate the endpoint URL format
+				if (!apiKey || !validateEndpointUrl(apiKey)) {
 					await replyInfoEmbed(modalSubmitInteraction, locale, {
-						titleKey: "general.errors.operation_failed_title",
-						description: errorDescription, // Use formatted error description
+						titleKey: "commands.config.custom.endpoint_url_invalid_title",
+						descriptionKey: "commands.config.custom.endpoint_url_invalid_description",
 						color: ColorCode.ERROR,
 					});
 					return;
 				}
-			} catch (providerError) {
-				log.error(
-					`Error validating API key for provider ${normalizedProvider}`,
-					providerError as Error,
-				);
-				await replyInfoEmbed(modalSubmitInteraction, locale, {
-					titleKey: "general.errors.operation_failed_title",
-					descriptionKey: "commands.config.setup.api_key_invalid_api",
-					color: ColorCode.ERROR,
-				});
-				return;
-			}
 
-			// API key is valid, proceed with encryption
-			const { encrypted: encryptedKey, version: keyVersion } =
-				await encryptApiKey(apiKey);
+				customEndpointUrl = apiKey;
+				log.info(`Custom endpoint URL validated: ${customEndpointUrl}`);
+
+				// Show capabilities selection for custom model
+				customCapabilitiesResult = await promptCustomCapabilities(
+					modalSubmitInteraction,
+					locale,
+					serverId,
+				);
+
+				if (!customCapabilitiesResult.success) {
+					await replyInfoEmbed(modalSubmitInteraction, locale, {
+						titleKey: "general.errors.operation_failed_title",
+						description: customCapabilitiesResult.error || localizer(locale, "commands.config.custom.capabilities_timeout"),
+						color: ColorCode.ERROR,
+					});
+					return;
+				}
+
+				log.info(`Custom model capabilities configured: tools=${customCapabilitiesResult.hasTools}, images=${customCapabilitiesResult.seesImages}, videos=${customCapabilitiesResult.seesVideos}, structOutput=${customCapabilitiesResult.supportsStructOutput}`);
+
+				// Use placeholder API key for custom provider (the endpoint URL is stored separately)
+				const placeholderResult = await encryptApiKey(CUSTOM_ENDPOINT_PLACEHOLDER_KEY);
+				encryptedKey = placeholderResult.encrypted;
+				keyVersion = placeholderResult.version;
+			} else {
+				// Regular Provider Flow: Validate API Key
+				if (!apiKey || apiKey.length < 10) {
+					await replyInfoEmbed(modalSubmitInteraction, locale, {
+						titleKey: "general.errors.operation_failed_title",
+						descriptionKey: "commands.config.setup.api_key_invalid",
+						color: ColorCode.ERROR,
+					});
+					return;
+				}
+
+				// Test the API key with a real API call using provider factory
+				await replyInfoEmbed(modalSubmitInteraction, locale, {
+					titleKey: "commands.config.setup.api_key_validating",
+					descriptionKey: "commands.config.setup.api_key_validating",
+					color: ColorCode.INFO,
+				});
+
+				try {
+					// Use factory to get provider instance (handles all providers and aliases)
+					// Partial TomoriState for validation only - provider doesn't use these fields during validateApiKey()
+					const provider = await ProviderFactory.getProvider({
+						llm: { llm_provider: normalizedProvider, llm_codename: "" },
+						server_id: 0, // Temporary, not used for validation
+						tomori_id: 0, // Temporary, not used for validation
+						// biome-ignore lint/suspicious/noExplicitAny: Empty config object is sufficient for validation
+						config: {} as any,
+						// biome-ignore lint/suspicious/noExplicitAny: Minimal object structure needed for factory pattern
+					} as any);
+
+					const validationResult = await provider.validateApiKey(apiKey);
+					if (!validationResult.valid) {
+						// Get stream adapter to format the error message
+						let errorDescription = "API key validation failed";
+
+						if (validationResult.error) {
+							// Use provider-specific error description formatting
+							try {
+								// Dynamically get the appropriate stream adapter based on provider
+								let adapter: { createErrorDescription: (error: ProviderError, locale: string) => string | null } | undefined;
+
+								if (normalizedProvider === "google" || normalizedProvider === "gemini") {
+									const { GoogleStreamAdapter } = await import("../../providers/google/googleStreamAdapter");
+									adapter = new GoogleStreamAdapter();
+								} else if (normalizedProvider === "novelai" || normalizedProvider === "nai") {
+									const { NovelaiStreamAdapter } = await import("../../providers/novelai/novelaiStreamAdapter");
+									adapter = new NovelaiStreamAdapter();
+								} else if (normalizedProvider === "openrouter" || normalizedProvider === "or") {
+									const { OpenrouterStreamAdapter } = await import("../../providers/openrouter/openrouterStreamAdapter");
+									adapter = new OpenrouterStreamAdapter();
+								}
+
+								if (adapter) {
+									const formattedError = adapter.createErrorDescription(validationResult.error, locale);
+									if (formattedError) {
+										errorDescription = formattedError;
+									}
+								} else {
+									// Fallback for unknown providers
+									errorDescription = `Error Code ${validationResult.error.code}: ${validationResult.error.message}`;
+								}
+							} catch (adapterError) {
+								// Fallback if adapter creation fails
+								log.warn("Failed to create stream adapter for error formatting", adapterError);
+								errorDescription = `Error Code ${validationResult.error.code}: ${validationResult.error.message}`;
+							}
+						}
+
+						await replyInfoEmbed(modalSubmitInteraction, locale, {
+							titleKey: "general.errors.operation_failed_title",
+							description: errorDescription, // Use formatted error description
+							color: ColorCode.ERROR,
+						});
+						return;
+					}
+				} catch (providerError) {
+					log.error(
+						`Error validating API key for provider ${normalizedProvider}`,
+						providerError as Error,
+					);
+					await replyInfoEmbed(modalSubmitInteraction, locale, {
+						titleKey: "general.errors.operation_failed_title",
+						descriptionKey: "commands.config.setup.api_key_invalid_api",
+						color: ColorCode.ERROR,
+					});
+					return;
+				}
+
+				// API key is valid, proceed with encryption
+				const encryptionResult = await encryptApiKey(apiKey);
+				encryptedKey = encryptionResult.encrypted;
+				keyVersion = encryptionResult.version;
+			}
 
 			// 4. Validate preset name against available presets
 			const selectedPresetOption = presetOptions.find(
@@ -532,6 +591,35 @@ export async function execute(
 					color: ColorCode.ERROR,
 				});
 				return;
+			}
+
+			// Custom provider post-processing: update config with endpoint URL and LLM ID
+			if (isCustomProvider(normalizedProvider) && customCapabilitiesResult && customCapabilitiesResult.llmId && customEndpointUrl) {
+				// Non-null assertion is safe here - we've verified llmId is truthy in the if condition
+				const customLlmId = customCapabilitiesResult.llmId as number;
+				try {
+					// Load the newly created TomoriState to get tomori_id
+					const newTomoriState = await loadTomoriState(serverId);
+					if (newTomoriState?.tomori_id) {
+						await saveCustomEndpointConfig(
+							newTomoriState.tomori_id,
+							customEndpointUrl,
+							customLlmId,
+						);
+						log.success(
+							`[Setup] Saved custom endpoint config for server ${serverId}: endpoint=${customEndpointUrl}, llmId=${customLlmId}`,
+						);
+					} else {
+						log.error(
+							`[Setup] Failed to load TomoriState after setup for custom provider config update`,
+						);
+					}
+				} catch (customConfigError) {
+					log.error(
+						`[Setup] Failed to save custom endpoint config: ${customConfigError}`,
+					);
+					// Don't fail setup, the server was created successfully
+				}
 			}
 
 			// Force sync emojis and stickers for guild context (skip for DMs)

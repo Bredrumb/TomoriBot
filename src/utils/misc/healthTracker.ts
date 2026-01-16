@@ -19,8 +19,9 @@ class HealthTracker {
 	/**
 	 * Maximum time (in milliseconds) without activity before considering unhealthy
 	 * Default: 2 minutes
+	 * NOTE: Currently unused - see "Lonely Bot" problem comment in getHealthStatus()
 	 */
-	private readonly activityTimeout: number = 2 * 60 * 1000;
+	// private readonly activityTimeout: number = 2 * 60 * 1000;
 
 	/**
 	 * Maximum WebSocket ping latency (in milliseconds) before considering unhealthy
@@ -95,7 +96,18 @@ class HealthTracker {
 			};
 		}
 
-		// 4. Check if we've received any Discord events recently
+		// 4. Activity timeout check (DISABLED)
+		// This check is intentionally commented out to prevent false positives during quiet hours.
+		// The "Lonely Bot" problem: During periods of low activity (e.g., 3 AM), no Discord events
+		// are received, causing the bot to report "unhealthy" despite being perfectly functional.
+		// This would trigger AWS ECS to kill and restart the container in an endless loop.
+		//
+		// The WebSocket ping and client ready state are sufficient indicators of connectivity health.
+		// If the event loop were frozen, the HTTP health check request itself would timeout.
+		//
+		// If you want to re-enable this check, ensure you're listening to 'raw' events via
+		// client.on('raw', () => healthTracker.recordActivity()) to catch all Discord activity.
+		/*
 		if (timeSinceLastActivity > this.activityTimeout) {
 			return {
 				healthy: false,
@@ -107,6 +119,7 @@ class HealthTracker {
 				},
 			};
 		}
+		*/
 
 		// All checks passed - bot is healthy
 		return {

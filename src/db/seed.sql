@@ -50,11 +50,14 @@ VALUES
   ('openrouter', 'mistralai/mistral-small-3.1-24b-instruct', false, false, false, false, false, true, true, false, false, false, true, 'Multimodal lightweight general-purpose model from Mistral', 'Mistralの軽量マルチモーダル汎用モデル'),
   ('openrouter', 'deepseek/deepseek-chat-v3-0324:free', false, false, false, true, true, false, false, false, false, true, false, 'Free general-purpose model that also performs good role-play', 'ロールプレイにも優れた無料の汎用モデル'),
   ('openrouter', 'mistralai/mistral-small-3.2-24b-instruct:free', false, false, false, true, true, false, false, false, false, false, false, 'Free general-purpose model', '無料の汎用モデル'),
-  ('openrouter', 'tngtech/deepseek-r1t2-chimera:free', false, false, true, true, true, false, false, false, false, true, false, 'Free model for solving complex tasks and problems', '複雑なタスクや問題の解決に適した無料モデル'),
-  ('openrouter', 'mistralai/mistral-small-3.1-24b-instruct:free', false, true, false, false, true, true, true, false, false, false, false, 'Free multimodal model with enhanced reasoning and vision capabilities', '強化された推論とビジョン機能を備えた無料のマルチモーダルモデル'),
+  ('openrouter', 'tngtech/deepseek-r1t2-chimera:free', false, true, true, false, true, true, false, false, false, true, false, 'Free model for solving complex tasks and problems', '複雑なタスクや問題の解決に適した無料モデル'),
+  ('openrouter', 'mistralai/mistral-small-3.1-24b-instruct:free', false, false, false, false, true, true, true, false, false, false, false, 'Free multimodal model with enhanced reasoning and vision capabilities', '強化された推論とビジョン機能を備えた無料のマルチモーダルモデル'),
   ('openrouter', 'z-ai/glm-4.5-air:free', false, false, false, false, true, true, false, false, false, false, false, 'Free lightweight model with thinking mode for reasoning and agent tasks', '推論とエージェントタスク向けのシンキングモードを備えた無料軽量モデル'),
   ('openrouter', 'tngtech/tng-r1t-chimera:free', false, false, false, false, true, true, false, false, false, false, false, 'Free experimental model for creative storytelling and character interaction', '創作とキャラクター対話に特化した無料の実験モデル'),
-  ('openrouter', 'account-setting', false, false, false, false, false, true, true, true, true, false, true, 'Advanced: Uses your OpenRouter account default model', '上級者向け：OpenRouterアカウントのデフォルトモデルを使用')
+  ('openrouter', 'account-setting', false, false, false, false, false, true, true, true, true, false, true, 'Advanced: Uses your OpenRouter account default model', '上級者向け：OpenRouterアカウントのデフォルトモデルを使用'),
+  -- Custom Provider Bootstrap Entry (allows "custom" to appear in provider dropdown)
+  -- Actual capabilities are configured per-server when users set up their custom endpoint
+  ('custom', 'custom/bootstrap', false, false, false, false, true, false, false, false, false, true, false, 'Self-hosted OpenAI-compatible endpoint (Ollama, KoboldCPP, vLLM, LocalAI)', 'セルフホスト型OpenAI互換エンドポイント（Ollama、KoboldCPP、vLLM、LocalAI）')
 ON CONFLICT (llm_codename) DO UPDATE SET
   llm_description = EXCLUDED.llm_description,
   ja_description = EXCLUDED.ja_description,
@@ -79,6 +82,26 @@ SELECT add_column_if_not_exists('image_diffusion_models', 'is_free', 'BOOLEAN', 
 SELECT add_column_if_not_exists('image_diffusion_models', 'is_uncensored', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('image_diffusion_models', 'model_description', 'TEXT');
 SELECT add_column_if_not_exists('image_diffusion_models', 'ja_description', 'TEXT');
+
+-- PART 1: Drop FK constraint and clean up orphaned references BEFORE inserting diffusion models
+-- This allows the INSERT to succeed, then we recreate the constraint after
+DO $$
+BEGIN
+    -- Drop existing constraint (may be pointing to wrong table or blocking updates)
+    ALTER TABLE tomori_configs DROP CONSTRAINT IF EXISTS tomori_configs_diffusion_model_id_fkey;
+
+    -- Clean up orphaned diffusion_model_id values that don't exist in image_diffusion_models
+    -- Set them to NULL so the FK constraint can be recreated successfully
+    UPDATE tomori_configs
+    SET diffusion_model_id = NULL
+    WHERE diffusion_model_id IS NOT NULL
+      AND diffusion_model_id NOT IN (SELECT diffusion_model_id FROM image_diffusion_models);
+EXCEPTION
+    WHEN undefined_table THEN
+        RAISE NOTICE 'Table not found during cleanup, skipping';
+    WHEN undefined_column THEN
+        RAISE NOTICE 'Column not found during cleanup, skipping';
+END $$;
 
 -- Insert Image Diffusion Models with conflict resolution
 INSERT INTO image_diffusion_models (provider, codename, is_default, is_deprecated, is_free, is_uncensored, model_description, ja_description)
@@ -109,6 +132,28 @@ ON CONFLICT (codename) DO UPDATE SET
   is_uncensored = EXCLUDED.is_uncensored,
   provider = EXCLUDED.provider,
   updated_at = CURRENT_TIMESTAMP;
+
+-- PART 2: Recreate FK constraint AFTER diffusion models are inserted
+-- Now that valid IDs exist in image_diffusion_models, the constraint can be created successfully
+DO $$
+BEGIN
+    -- Only add if constraint doesn't exist (it was dropped in Part 1)
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'tomori_configs_diffusion_model_id_fkey'
+    ) THEN
+        ALTER TABLE tomori_configs
+        ADD CONSTRAINT tomori_configs_diffusion_model_id_fkey
+        FOREIGN KEY (diffusion_model_id)
+        REFERENCES image_diffusion_models(diffusion_model_id)
+        ON DELETE SET NULL;
+    END IF;
+EXCEPTION
+    WHEN undefined_table THEN
+        RAISE NOTICE 'Table not found during FK creation, skipping';
+    WHEN undefined_column THEN
+        RAISE NOTICE 'Column not found during FK creation, skipping';
+END $$;
 
 -- Insert Tomori Presets (English)
 INSERT INTO tomori_presets (
