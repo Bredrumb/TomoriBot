@@ -497,12 +497,6 @@ variable "rds_deletion_protection" {
 	default     = false
 }
 
-variable "rds_prevent_destroy" {
-	description = "Prevent accidental RDS destroys/replacements via Terraform"
-	type        = bool
-	default     = true
-}
-
 variable "rds_skip_final_snapshot" {
 	description = "Skip final snapshot on deletion"
 	type        = bool

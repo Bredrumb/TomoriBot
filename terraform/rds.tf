@@ -74,7 +74,7 @@ resource "aws_db_instance" "tomoribot" {
 	apply_immediately   = var.rds_apply_immediately
 
 	lifecycle {
-		prevent_destroy = var.rds_prevent_destroy
+		prevent_destroy = true
 		# Avoid drift from password rotations managed outside Terraform.
 		ignore_changes = [password]
 	}
