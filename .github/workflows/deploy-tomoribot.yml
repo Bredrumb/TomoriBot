@@ -431,7 +431,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: security-gate
     outputs:
-      image-uri: ${{ steps.ecr-uri.outputs.uri }}
+      image_uri: ${{ steps.ecr-uri.outputs.uri }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -476,7 +476,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: push-to-ecr
     env:
-      TF_VAR_container_image: ${{ needs.push-to-ecr.outputs.image-uri }}
+      TF_VAR_container_image: ${{ needs['push-to-ecr'].outputs.image_uri }}
       TF_VAR_rds_master_password: ${{ secrets.RDS_MASTER_PASSWORD }}
       TF_IN_AUTOMATION: "1"
       TF_INPUT: "0"
@@ -489,6 +489,14 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Validate image URI
+        run: |
+          if [ -z "${TF_VAR_container_image}" ]; then
+            echo "TF_VAR_container_image is empty. Re-run from push-to-ecr or full workflow."
+            exit 1
+          fi
+          echo "Deploying image: ${TF_VAR_container_image}"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
