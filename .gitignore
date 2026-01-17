@@ -34,6 +34,7 @@ CLAUDE
 tmpclaude*
 *PLAN*.md
 *HANDOVER*.md
+crash*/
 .prompts/
 ACTIVECONTEXT.md
 GEMINI.md

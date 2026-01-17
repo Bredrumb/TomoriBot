@@ -200,6 +200,7 @@ type SimplifiedMessageForContext = {
 		proxyUrl: string; // Discord's proxy URL, often more stable for fetching
 		mimeType: string | null; // e.g., 'image/png', 'image/jpeg'
 		filename: string; // Original filename
+		isEmoji?: boolean; // True if this attachment is a custom Discord emoji
 	}>;
 	videoAttachments: Array<{
 		url: string; // Original URL of the video
@@ -244,6 +245,7 @@ function extractEmojiImageAttachments(
 			proxyUrl: emojiUrl,
 			mimeType: "image/png",
 			filename: `emoji_${emojiName}_${emojiId}.png`,
+			isEmoji: true,
 		});
 	}
 

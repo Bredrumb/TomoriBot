@@ -58,6 +58,7 @@ type SimplifiedMessageForContext = {
 		proxyUrl: string;
 		mimeType: string | null;
 		filename: string;
+		isEmoji?: boolean; // True if this attachment is a custom Discord emoji
 	}>;
 	videoAttachments: Array<{
 		url: string;
@@ -1232,13 +1233,21 @@ export async function buildContext({
 		// Determine if this message is within the media context window
 		const isWithinMediaWindow = index >= mediaWindowCutoff;
 
-		// Check if message has media (images or videos)
-		const hasMedia =
+		// Check if message has any media (for message ID exposure to tools)
+		const hasAnyMedia =
 			msg.imageAttachments.length > 0 || msg.videoAttachments.length > 0;
+
+		// Check if message has significant media (non-emoji images or videos)
+		// Emoji-only messages are excluded from "increase_media_context" flagging
+		// because emojis are common and the system flag message can flood context unnecessarily
+		const hasNonEmojiImages = msg.imageAttachments.some((att) => !att.isEmoji);
+		const hasVideos = msg.videoAttachments.length > 0;
+		const hasSignificantMedia = hasNonEmojiImages || hasVideos;
 		let mediaIdHintAdded = false;
 
-		// If message has media but is outside window, add placeholder
-		if (hasMedia && !isWithinMediaWindow) {
+		// If message has significant media but is outside window, add placeholder
+		// Messages with only emojis are not flagged, but messages with emojis + real media ARE flagged
+		if (hasSignificantMedia && !isWithinMediaWindow) {
 			// Calculate extend_by needed to reach this message, capped at maxExtendBy
 			const extendByNeeded = Math.min(mediaWindowCutoff - index, maxExtendBy);
 
@@ -1363,7 +1372,7 @@ export async function buildContext({
 		}
 
 		// Expose message ID for media messages so tools (generate_image, process_gif) can reference attachments
-		if (hasMedia && !mediaIdHintAdded) {
+		if (hasAnyMedia && !mediaIdHintAdded) {
 			const mediaMessageId = msg.mediaSourceMessageId ?? msg.id;
 			parts.push({
 				type: "text",

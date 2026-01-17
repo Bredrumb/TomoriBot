@@ -1,0 +1,64 @@
+# Example Terraform Variables File for TomoriBot
+# Copy to terraform.tfvars and fill in your actual values.
+# IMPORTANT: terraform.tfvars is ignored by git.
+
+# AWS Configuration
+aws_region  = "us-east-1"
+environment = "production"
+# aws_profile = "default" # Optional: use a named AWS CLI profile
+
+# VPC Configuration
+vpc_name = "tomoribot-vpc"
+vpc_cidr = "10.0.0.0/16"
+
+public_subnets = [
+	{
+		name = "tomoribot-subnet-public1-us-east-1a"
+		cidr = "10.0.0.0/20"
+		az   = "us-east-1a"
+	},
+	{
+		name = "tomoribot-subnet-public2-us-east-1b"
+		cidr = "10.0.16.0/20"
+		az   = "us-east-1b"
+	},
+]
+
+private_subnets = [
+	{
+		name = "tomoribot-subnet-private1-us-east-1a"
+		cidr = "10.0.128.0/20"
+		az   = "us-east-1a"
+	},
+	{
+		name = "tomoribot-subnet-private2-us-east-1b"
+		cidr = "10.0.144.0/20"
+		az   = "us-east-1b"
+	},
+]
+
+bastion_ssh_cidr = "119.95.20.218/32"
+
+# ECS Configuration
+container_image = "123456789012.dkr.ecr.us-east-1.amazonaws.com/tomoribot:latest"
+ecr_scan_on_push = false
+
+# GitHub Actions OIDC (set to current thumbprint for your account)
+github_actions_oidc_thumbprints = ["2b18947a6a9fc7764fd8b5fb18a863b0c6dac24f"]
+
+# Optional overrides
+# ecs_task_cpu    = "256"
+# ecs_task_memory = "512"
+# postgres_host_override = "tomoribot-db.example.us-east-1.rds.amazonaws.com"
+
+# RDS Configuration
+rds_master_password = "REPLACE_ME" # Minimum 8 chars; do not commit real values
+rds_skip_final_snapshot = true
+
+# Secrets Manager
+secrets_manager_secret_name = "tomoribot/production"
+secret_access_wildcard = true
+secrets_manager_recovery_window_days = 30
+
+# Secondary log group retention (null keeps AWS default/never expire)
+extra_log_retention_days = null
