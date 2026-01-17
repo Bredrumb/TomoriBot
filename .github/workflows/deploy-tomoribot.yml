@@ -490,6 +490,31 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Resolve image URI
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          ECR_REPOSITORY_NAME: ${{ secrets.ECR_REPOSITORY_NAME }}
+        run: |
+          if [ -z "${TF_VAR_container_image}" ]; then
+            ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+            IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}:${GITHUB_SHA}"
+            echo "TF_VAR_container_image=$IMAGE_URI" >> $GITHUB_ENV
+            TF_VAR_container_image="$IMAGE_URI"
+            echo "Resolved image URI from AWS account: ${TF_VAR_container_image}"
+          else
+            echo "Using image URI from push-to-ecr output: ${TF_VAR_container_image}"
+          fi
+
+      - name: Verify image exists in ECR
+        env:
+          ECR_REPOSITORY_NAME: ${{ secrets.ECR_REPOSITORY_NAME }}
+        run: |
+          aws ecr describe-images \
+            --repository-name "$ECR_REPOSITORY_NAME" \
+            --image-ids imageTag="$GITHUB_SHA" \
+            --query 'imageDetails[0].imageTags' \
+            --output text >/dev/null
+
       - name: Validate image URI
         run: |
           if [ -z "${TF_VAR_container_image}" ]; then
