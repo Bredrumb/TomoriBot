@@ -476,25 +476,31 @@ variable "rds_kms_key_id" {
 variable "rds_performance_insights_enabled" {
 	description = "Enable Performance Insights"
 	type        = bool
-	default     = true
+	default     = false
 }
 
 variable "rds_performance_insights_retention_period" {
 	description = "Performance Insights retention in days"
 	type        = number
-	default     = 7
+	default     = 0
 }
 
 variable "rds_performance_insights_kms_key_id" {
 	description = "KMS key ARN for Performance Insights"
 	type        = string
-	default     = "arn:aws:kms:us-east-1:907489583424:key/9832d007-27a9-470c-98de-27aac2629dc2"
+	default     = null
 }
 
 variable "rds_deletion_protection" {
 	description = "Enable deletion protection"
 	type        = bool
 	default     = false
+}
+
+variable "rds_prevent_destroy" {
+	description = "Prevent accidental RDS destroys/replacements via Terraform"
+	type        = bool
+	default     = true
 }
 
 variable "rds_skip_final_snapshot" {
@@ -507,6 +513,12 @@ variable "rds_auto_minor_version_upgrade" {
 	description = "Enable automatic minor version upgrades"
 	type        = bool
 	default     = true
+}
+
+variable "rds_copy_tags_to_snapshot" {
+	description = "Copy instance tags to RDS snapshots"
+	type        = bool
+	default     = false
 }
 
 variable "rds_apply_immediately" {

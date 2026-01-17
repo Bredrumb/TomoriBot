@@ -523,6 +523,35 @@ jobs:
           fi
           echo "Deploying image: ${TF_VAR_container_image}"
 
+      - name: Validate Secrets Manager database target
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          secret_json=$(aws secretsmanager get-secret-value \
+            --secret-id tomoribot/production \
+            --query SecretString \
+            --output text)
+
+          secret_host=$(echo "$secret_json" | jq -r '.POSTGRES_HOST // empty')
+          secret_db=$(echo "$secret_json" | jq -r '.POSTGRES_DB // empty')
+
+          if [ -z "$secret_host" ] || [ -z "$secret_db" ]; then
+            echo "Secrets Manager is missing POSTGRES_HOST or POSTGRES_DB. Aborting deploy."
+            exit 1
+          fi
+
+          if [ "$secret_host" != "tomoribot-db.cszuse2muutq.us-east-1.rds.amazonaws.com" ]; then
+            echo "POSTGRES_HOST does not match the expected RDS endpoint. Aborting deploy."
+            exit 1
+          fi
+
+          if [ "$secret_db" != "tomoribot" ]; then
+            echo "POSTGRES_DB does not match expected value. Aborting deploy."
+            exit 1
+          fi
+
+          echo "Secrets Manager database target validated."
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
@@ -543,6 +572,17 @@ jobs:
       - name: Terraform plan
         working-directory: terraform
         run: terraform plan -input=false -var-file=terraform.ci.tfvars -out=tfplan
+
+      - name: Guard against RDS destroy/replace
+        working-directory: terraform
+        run: |
+          echo "Checking plan for destructive RDS changes..."
+          if terraform show -json tfplan | jq -e '.resource_changes[]
+            | select(.type=="aws_db_instance")
+            | select(.change.actions | index("delete"))' >/dev/null; then
+            echo "RDS instance would be destroyed or replaced. Aborting deploy."
+            exit 1
+          fi
 
       - name: Terraform apply
         working-directory: terraform

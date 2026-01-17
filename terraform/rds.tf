@@ -60,12 +60,13 @@ resource "aws_db_instance" "tomoribot" {
 	publicly_accessible = var.rds_publicly_accessible
 
 	auto_minor_version_upgrade = var.rds_auto_minor_version_upgrade
-	copy_tags_to_snapshot      = true
+	copy_tags_to_snapshot      = var.rds_copy_tags_to_snapshot
 	monitoring_interval        = 0
 
-	performance_insights_enabled          = var.rds_performance_insights_enabled
-	performance_insights_retention_period = var.rds_performance_insights_retention_period
-	performance_insights_kms_key_id        = var.rds_performance_insights_kms_key_id
+	performance_insights_enabled = var.rds_performance_insights_enabled
+	# Only set these when Performance Insights is enabled to avoid unnecessary drift.
+	performance_insights_retention_period = var.rds_performance_insights_enabled ? var.rds_performance_insights_retention_period : null
+	performance_insights_kms_key_id        = var.rds_performance_insights_enabled ? var.rds_performance_insights_kms_key_id : null
 
 	deletion_protection = var.rds_deletion_protection
 	# Keep current deletion behavior; adjust deliberately in production.
@@ -73,6 +74,7 @@ resource "aws_db_instance" "tomoribot" {
 	apply_immediately   = var.rds_apply_immediately
 
 	lifecycle {
+		prevent_destroy = var.rds_prevent_destroy
 		# Avoid drift from password rotations managed outside Terraform.
 		ignore_changes = [password]
 	}
