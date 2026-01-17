@@ -6,6 +6,7 @@ import {
 } from "discord.js";
 import { sql } from "@/utils/db/client";
 import { loadTomoriState } from "../../utils/db/dbRead";
+import { invalidateUserBlacklistCache } from "../../utils/cache/userCache";
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
@@ -168,7 +169,10 @@ export async function execute(
 			);
 		}
 
-		// 9. Send success confirmation message (Rule #12, #19)
+		// 9. Invalidate blacklist cache so next message gets fresh data
+		invalidateUserBlacklistCache(interaction.guild.id, targetDiscordUser.id);
+
+		// 10. Send success confirmation message (Rule #12, #19)
 		if (action === "add") {
 			await replyInfoEmbed(interaction, locale, {
 				titleKey: "commands.server.blacklist.added_title",

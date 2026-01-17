@@ -4,7 +4,7 @@ import {
 	type Client,
 	type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { loadTomoriState } from "../../utils/db/dbRead";
+import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
@@ -84,7 +84,7 @@ export async function execute(
 		}
 
 		// 4. Load the Tomori state for this server - let helper functions manage interaction state
-		const tomoriState = await loadTomoriState(
+		const tomoriState = await getCachedTomoriState(
 			interaction.guild?.id ?? interaction.user.id,
 		);
 		if (!tomoriState) {
@@ -262,7 +262,10 @@ export async function execute(
 			}
 		}
 
-		// 14. Success! Show the nickname change (covers both nickname and trigger word update if applicable)
+		// 14. Invalidate cache so next message gets fresh config
+		invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
+
+		// 15. Success! Show the nickname change (covers both nickname and trigger word update if applicable)
 		await replyInfoEmbed(interaction, locale, {
 			titleKey: "commands.config.rename.success_title",
 			descriptionKey: nicknameUpdateSuccess
@@ -288,7 +291,7 @@ export async function execute(
 		let serverIdForError: number | null = null;
 		let tomoriIdForError: number | null = null;
 		if (interaction.guild?.id) {
-			const state = await loadTomoriState(interaction.guild.id);
+			const state = await getCachedTomoriState(interaction.guild.id);
 			serverIdForError = state?.server_id ?? null;
 			tomoriIdForError = state?.tomori_id ?? null;
 		}

@@ -20,12 +20,12 @@ import type {
 import { ContextItemTag } from "../../types/misc/context";
 // Provider-specific types moved to individual providers
 import type { FunctionCall } from "../../types/provider/interfaces";
+import { getCachedTomoriState } from "../../utils/cache/tomoriStateCache";
 import {
-	isBlacklisted,
-	getPrivacyLevel,
-	loadTomoriState,
-	loadUserRow,
-} from "../../utils/db/dbRead";
+	getCachedUserRow,
+	getCachedPrivacyLevel,
+	getCachedBlacklistStatus,
+} from "../../utils/cache/userCache";
 import { incrementTomoriCounter } from "@/utils/db/dbWrite";
 import {
 	createStandardEmbed,
@@ -464,7 +464,7 @@ export default async function tomoriChat(
 	// Check if user is allowed to trigger bot (Level 2 FULL privacy users cannot trigger)
 	// Skip this check for manual triggers and reminders
 	if (!isManuallyTriggered && !reminderRecipientID) {
-		const userPrivacyLevel = await getPrivacyLevel(userDiscId);
+		const userPrivacyLevel = await getCachedPrivacyLevel(userDiscId);
 		if (userPrivacyLevel === PrivacyLevel.FULL) {
 			// Silently ignore - Level 2 users chose to be completely invisible
 			return;
@@ -596,7 +596,7 @@ export default async function tomoriChat(
 	let earlyLoadAttempted = false;
 	if (!skipLock) {
 		try {
-			earlyTomoriState = await loadTomoriState(serverDiscId);
+			earlyTomoriState = await getCachedTomoriState(serverDiscId);
 			earlyLoadAttempted = true;
 		} catch (e) {
 			// Log the error but don't stop; the main logic will try to load it again
@@ -682,7 +682,7 @@ export default async function tomoriChat(
 					`User ${userDiscId} exceeded rate limit (${userRateCheck.currentCount}/${userRateCheck.maxLimit} active messages). Dropping message ${message.id}.`,
 				);
 
-				const tempUserRow = await loadUserRow(userDiscId);
+				const tempUserRow = await getCachedUserRow(userDiscId);
 				const userLocale =
 					tempUserRow?.language_pref ?? guild?.preferredLocale ?? "en-US";
 
@@ -744,7 +744,7 @@ export default async function tomoriChat(
 							const footerKey = getCooldownTypeFooterKey(
 								preQueueCooldownResult.cooldownType,
 							);
-							const tempUserRow = await loadUserRow(userDiscId);
+							const tempUserRow = await getCachedUserRow(userDiscId);
 							const cooldownLocale =
 								tempUserRow?.language_pref ?? guild?.preferredLocale ?? "en-US";
 							await sendStandardEmbed(channel, cooldownLocale, {
@@ -780,7 +780,7 @@ export default async function tomoriChat(
 					// biome-ignore lint/style/noNonNullAssertion: client.user is checked during startup
 					if (message.author.id !== client.user!.id) {
 						try {
-							const tempUserRow = await loadUserRow(userDiscId);
+							const tempUserRow = await getCachedUserRow(userDiscId);
 							const waitingLocale =
 								tempUserRow?.language_pref ?? guild?.preferredLocale ?? "en-US";
 							const currentMessageLink = lockEntry.currentMessageId
@@ -871,15 +871,15 @@ export default async function tomoriChat(
 	try {
 		try {
 			// Load Tomori configuration and user data early
-			// Only call loadTomoriState if we didn't already attempt it during early load
+			// Only call getCachedTomoriState if we didn't already attempt it during early load
 			const tomoriState = earlyLoadAttempted
 				? earlyTomoriState
-				: await loadTomoriState(serverDiscId);
-			const userRow = await loadUserRow(userDiscId);
+				: await getCachedTomoriState(serverDiscId);
+			const userRow = await getCachedUserRow(userDiscId);
 			locale = userRow?.language_pref ?? "en-US"; // Set locale based on user pref
 
 			// Determine triggererName based on blacklist and personalization settings
-			const isUserBlacklisted = await isBlacklisted(serverDiscId, userDiscId);
+			const isUserBlacklisted = await getCachedBlacklistStatus(serverDiscId, userDiscId);
 			const serverPersonalizationDisabled =
 				tomoriState?.config.personal_memories_enabled === false;
 
@@ -893,7 +893,7 @@ export default async function tomoriChat(
 
 			// Create per-request snapshot to avoid redundant DB queries and ensure consistency
 			// Get user's privacy level
-			const userPrivacyLevel = await getPrivacyLevel(userDiscId);
+			const userPrivacyLevel = await getCachedPrivacyLevel(userDiscId);
 			const isUserOptedOut = userPrivacyLevel === PrivacyLevel.FULL; // Backward compat: Level 2 is FULL privacy
 
 			// Preload guild member for presence lookups (only if not DM)
@@ -1425,7 +1425,7 @@ export default async function tomoriChat(
 				//const isLastMessage = index === relevantMessagesArray.length - 1;
 
 				// Filter out Level 2 (FULL privacy) users from conversation history
-				const authorPrivacyLevel = await getPrivacyLevel(authorId);
+				const authorPrivacyLevel = await getCachedPrivacyLevel(authorId);
 				if (authorPrivacyLevel === PrivacyLevel.FULL) {
 					log.info(
 						`Filtering message from user ${authorId} (privacy level FULL)`,

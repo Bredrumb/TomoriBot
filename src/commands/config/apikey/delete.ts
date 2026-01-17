@@ -4,7 +4,7 @@ import {
 	type Client,
 	type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { loadTomoriState } from "../../../utils/db/dbRead";
+import { getCachedTomoriState, invalidateTomoriStateCache } from "../../../utils/cache/tomoriStateCache";
 import { localizer } from "../../../utils/text/localizer";
 import { log, ColorCode } from "../../../utils/misc/logger";
 import { replyInfoEmbed } from "../../../utils/discord/interactionHelper";
@@ -50,7 +50,7 @@ export async function execute(
 
 	try {
 		// 2. Load the Tomori state for this server - let helper functions manage interaction state
-		const tomoriState = await loadTomoriState(
+		const tomoriState = await getCachedTomoriState(
 			interaction.guild?.id ?? interaction.user.id,
 		);
 		if (!tomoriState) {
@@ -114,7 +114,10 @@ export async function execute(
 			return;
 		}
 
-		// 7. Success message with embed
+		// 7. Invalidate cache so next message gets fresh config
+		invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
+
+		// 8. Success message with embed
 		await replyInfoEmbed(interaction, locale, {
 			titleKey: "commands.config.apikey.delete.success_title",
 			descriptionKey: "commands.config.apikey.delete.success_description",
@@ -125,7 +128,7 @@ export async function execute(
 		let serverIdForError: number | null = null;
 		let tomoriIdForError: number | null = null;
 		if (interaction.guild?.id) {
-			const state = await loadTomoriState(
+			const state = await getCachedTomoriState(
 				interaction.guild?.id ?? interaction.user.id,
 			);
 			serverIdForError = state?.server_id ?? null;

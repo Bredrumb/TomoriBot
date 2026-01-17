@@ -18,8 +18,11 @@ import {
 	replyInfoEmbed,
 	promptWithRawModal,
 } from "../../../utils/discord/interactionHelper";
-import { loadTomoriState } from "../../../utils/db/dbRead";
 import { isBlacklisted } from "../../../utils/db/dbRead";
+import {
+	getCachedTomoriState,
+	invalidateTomoriStateCache,
+} from "../../../utils/cache/tomoriStateCache";
 import type { ModalResult } from "../../../types/discord/modal";
 import {
 	validateMemoryContent,
@@ -98,7 +101,7 @@ export async function execute(
 		}
 
 		// 4. Load server's Tomori state (Rule 17) - Still needed for server_id and config checks
-		tomoriState = await loadTomoriState(
+		tomoriState = await getCachedTomoriState(
 			interaction.guild?.id ?? interaction.user.id,
 		);
 
@@ -240,7 +243,10 @@ export async function execute(
 			return;
 		}
 
-		// 15. Success! Confirm addition (Rule 12, 19)
+		// 15. Invalidate cache so next message gets fresh config
+		invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
+
+		// 16. Success! Confirm addition (Rule 12, 19)
 		await replyInfoEmbed(modalSubmitInteraction, locale, {
 			titleKey: "commands.teach.memory.server.success_title",
 			descriptionKey: "commands.teach.memory.server.success_description",

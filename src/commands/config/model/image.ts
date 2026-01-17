@@ -6,7 +6,10 @@ import type {
 import { MessageFlags } from "discord.js";
 // Import sql
 import { sql } from "@/utils/db/client";
-import { loadTomoriState } from "../../../utils/db/dbRead";
+import {
+	getCachedTomoriState,
+	invalidateTomoriStateCache,
+} from "../../../utils/cache/tomoriStateCache";
 import { localizer } from "../../../utils/text/localizer";
 import { log, ColorCode } from "../../../utils/misc/logger";
 import {
@@ -110,7 +113,7 @@ export async function execute(
 	}
 
 	// 2. Load the Tomori state for this server
-	const tomoriState = await loadTomoriState(
+	const tomoriState = await getCachedTomoriState(
 		interaction.guild?.id ?? interaction.user.id,
 	);
 	if (!tomoriState) {
@@ -308,7 +311,10 @@ export async function execute(
 			return;
 		}
 
-		// 12. Success message
+		// 12. Invalidate cache so next message gets fresh config
+		invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
+
+		// 13. Success message
 		// Find previous model name
 		const previousModel = availableModels.find(
 			(model) => model.diffusion_model_id === tomoriState.config.diffusion_model_id,
@@ -330,7 +336,7 @@ export async function execute(
 		let serverIdForError: number | null = null;
 		let tomoriIdForError: number | null = null;
 		if (interaction.guild?.id) {
-			const state = await loadTomoriState(interaction.guild.id);
+			const state = await getCachedTomoriState(interaction.guild.id);
 			serverIdForError = state?.server_id ?? null;
 			tomoriIdForError = state?.tomori_id ?? null;
 		}

@@ -14,7 +14,8 @@ import {
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
-import { loadTomoriState } from "../../utils/db/dbRead";
+import { getCachedTomoriState } from "../../utils/cache/tomoriStateCache";
+import { invalidateUserCache } from "../../utils/cache/userCache";
 
 // Rule 20: Constants for static values at the top
 const NICKNAME_MIN_LENGTH = 2;
@@ -91,7 +92,7 @@ export async function execute(
 		}
 
 		// 4. Load server's Tomori state to check personalization setting
-		tomoriState = await loadTomoriState(
+		tomoriState = await getCachedTomoriState(
 			interaction.guild?.id ?? interaction.user.id,
 		);
 
@@ -148,7 +149,10 @@ export async function execute(
 			return;
 		}
 
-		// 9. Check if personalization is disabled on this server and prepare message
+		// 9. Invalidate user cache so next message gets fresh data
+		invalidateUserCache(interaction.user.id);
+
+		// 10. Check if personalization is disabled on this server and prepare message
 		let descriptionKey = "commands.personal.nickname.success_description";
 		let embedColor = ColorCode.SUCCESS;
 

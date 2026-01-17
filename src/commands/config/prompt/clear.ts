@@ -7,7 +7,10 @@ import type { ChatInputCommandInteraction, Client } from "discord.js";
 import { MessageFlags, SlashCommandSubcommandBuilder } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
-import { loadTomoriState } from "@/utils/db/dbRead";
+import {
+	getCachedTomoriState,
+	invalidateTomoriStateCache,
+} from "@/utils/cache/tomoriStateCache";
 import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/contextBuilder";
@@ -43,7 +46,7 @@ export async function execute(
 	try {
 		// 1. Determine server context (guild or DM)
 		const serverId = interaction.guildId ?? interaction.user.id;
-		const tomoriState = await loadTomoriState(serverId);
+		const tomoriState = await getCachedTomoriState(serverId);
 
 		if (!tomoriState) {
 			await replyInfoEmbed(interaction, locale, {
@@ -75,7 +78,10 @@ export async function execute(
 			WHERE tomori_id = ${tomoriState.tomori_id}
 		`;
 
-		// 4. Success response
+		// 4. Invalidate cache so next message gets fresh config
+		invalidateTomoriStateCache(serverId);
+
+		// 5. Success response
 		await replyInfoEmbed(interaction, locale, {
 			titleKey: "commands.config.prompt.clear.success_title",
 			descriptionKey: "commands.config.prompt.clear.success_description",

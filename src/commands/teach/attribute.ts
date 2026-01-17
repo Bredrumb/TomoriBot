@@ -17,7 +17,11 @@ import {
 	replyInfoEmbed,
 	promptWithRawModal,
 } from "../../utils/discord/interactionHelper";
-import { loadTomoriState, isBlacklisted } from "../../utils/db/dbRead";
+import { isBlacklisted } from "../../utils/db/dbRead";
+import {
+	getCachedTomoriState,
+	invalidateTomoriStateCache,
+} from "../../utils/cache/tomoriStateCache";
 import type { ModalResult } from "../../types/discord/modal";
 import {
 	checkAttributeLimit,
@@ -92,7 +96,7 @@ export async function execute(
 		}
 
 		// 4. Load server's Tomori state (Rule 17)
-		tomoriState = await loadTomoriState(
+		tomoriState = await getCachedTomoriState(
 			interaction.guild?.id ?? interaction.user.id,
 		);
 
@@ -249,7 +253,10 @@ export async function execute(
 			return;
 		}
 
-		// 14. Success! Confirm addition (Rule 12, 19)
+		// 14. Invalidate cache so next message gets fresh config
+		invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
+
+		// 15. Success! Confirm addition (Rule 12, 19)
 		await replyInfoEmbed(modalSubmitInteraction, locale, {
 			titleKey: "commands.teach.attribute.success_title", // New locale key
 			descriptionKey: "commands.teach.attribute.success_description", // New locale key

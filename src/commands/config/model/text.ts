@@ -6,10 +6,11 @@ import type {
 import { MessageFlags } from "discord.js";
 // Import sql
 import { sql } from "@/utils/db/client";
+import { loadAvailableModelsForProvider } from "../../../utils/db/dbRead";
 import {
-	loadTomoriState,
-	loadAvailableModelsForProvider,
-} from "../../../utils/db/dbRead";
+	getCachedTomoriState,
+	invalidateTomoriStateCache,
+} from "../../../utils/cache/tomoriStateCache";
 // Remove updateTomoriConfig import
 // import { updateTomoriConfig } from "../../../utils/db/dbWrite";
 import { localizer } from "../../../utils/text/localizer";
@@ -109,7 +110,7 @@ export async function execute(
 	}
 
 	// 2. Load the Tomori state for this server
-	const tomoriState = await loadTomoriState(
+	const tomoriState = await getCachedTomoriState(
 		interaction.guild?.id ?? interaction.user.id,
 	);
 	if (!tomoriState) {
@@ -183,6 +184,9 @@ export async function execute(
 			}
 
 			log.info(`Custom model capabilities updated: tools=${capabilitiesResult.hasTools}, images=${capabilitiesResult.seesImages}, videos=${capabilitiesResult.seesVideos}, structOutput=${capabilitiesResult.supportsStructOutput}`);
+
+			// Invalidate cache so next message gets fresh config
+			invalidateTomoriStateCache(serverId);
 
 			// Build capability flags for display
 			const enabledCapabilities: string[] = [];
@@ -464,7 +468,10 @@ export async function execute(
 			return;
 		}
 
-		// 11. Success message
+		// 11. Invalidate cache so next message gets fresh config
+		invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
+
+		// 12. Success message
 		// Find previous model name
 		const previousModel = availableModels.find(
 			(model) => model.llm_id === tomoriState.config.llm_id,
@@ -485,7 +492,7 @@ export async function execute(
 		let serverIdForError: number | null = null;
 		let tomoriIdForError: number | null = null;
 		if (interaction.guild?.id) {
-			const state = await loadTomoriState(interaction.guild.id);
+			const state = await getCachedTomoriState(interaction.guild.id);
 			serverIdForError = state?.server_id ?? null;
 			tomoriIdForError = state?.tomori_id ?? null;
 		}

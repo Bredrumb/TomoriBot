@@ -21,6 +21,7 @@ import {
 	safeSelectOptionText,
 } from "../../../utils/discord/interactionHelper";
 import { loadTomoriState } from "../../../utils/db/dbRead";
+import { invalidateUserCache } from "../../../utils/cache/userCache";
 import type { SelectOption } from "../../../types/discord/modal";
 import { createStandardEmbed } from "../../../utils/discord/embedHelper";
 
@@ -89,6 +90,9 @@ async function performPersonalMemoryRemoval(
 		});
 		return;
 	}
+
+	// Invalidate user cache so next message gets fresh data
+	invalidateUserCache(userData.user_disc_id);
 
 	// Log success and show success message
 	log.success(

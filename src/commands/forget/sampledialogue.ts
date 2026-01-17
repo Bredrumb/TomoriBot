@@ -13,7 +13,10 @@ import {
 	promptWithPaginatedModal,
 	safeSelectOptionText,
 } from "../../utils/discord/interactionHelper";
-import { loadTomoriState } from "../../utils/db/dbRead";
+import {
+	getCachedTomoriState,
+	invalidateTomoriStateCache,
+} from "../../utils/cache/tomoriStateCache";
 import {
 	type UserRow,
 	type ErrorContext,
@@ -98,6 +101,11 @@ async function performSampleDialogueRemoval(
 		return;
 	}
 
+	// Invalidate cache so next message gets fresh config
+	if (replyInteraction.guildId) {
+		invalidateTomoriStateCache(replyInteraction.guildId);
+	}
+
 	// Log success and show success message
 	log.success(
 		`Removed sample dialogue pair at index ${selectedIndex} for tomori ${tomoriState.tomori_id} by user ${userData.user_disc_id}`,
@@ -160,7 +168,7 @@ export async function execute(
 
 	try {
 		// 2. Load server's Tomori state (Rule 17)
-		tomoriState = await loadTomoriState(
+		tomoriState = await getCachedTomoriState(
 			interaction.guild?.id ?? interaction.user.id,
 		);
 		if (!tomoriState) {

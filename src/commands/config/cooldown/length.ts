@@ -4,7 +4,10 @@ import type {
 	SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { sql } from "@/utils/db/client";
-import { loadTomoriState } from "../../../utils/db/dbRead";
+import {
+	getCachedTomoriState,
+	invalidateTomoriStateCache,
+} from "../../../utils/cache/tomoriStateCache";
 import { tomoriConfigSchema, CooldownType } from "../../../types/db/schema";
 import { localizer } from "../../../utils/text/localizer";
 import { log, ColorCode } from "../../../utils/misc/logger";
@@ -87,7 +90,7 @@ export async function execute(
 		}
 
 		// 4. Load the Tomori state for this server
-		const tomoriState = await loadTomoriState(interaction.guild.id);
+		const tomoriState = await getCachedTomoriState(interaction.guild.id);
 		if (!tomoriState) {
 			await replyInfoEmbed(interaction, locale, {
 				titleKey: "general.errors.tomori_not_setup_title",
@@ -172,7 +175,10 @@ export async function execute(
 			return;
 		}
 
-		// 8. Success message - check if cooldowns are enabled to show appropriate message
+		// 8. Invalidate cache so next message gets fresh config
+		invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
+
+		// 9. Success message - check if cooldowns are enabled to show appropriate message
 		const cooldownType = tomoriState.config.cooldown_type ?? CooldownType.OFF;
 		const isCooldownEnabled = cooldownType !== CooldownType.OFF;
 
@@ -191,7 +197,7 @@ export async function execute(
 	} catch (error) {
 		const context: ErrorContext = {
 			userId: userData.user_id,
-			serverId: (await loadTomoriState(interaction.guild.id))?.server_id,
+			serverId: (await getCachedTomoriState(interaction.guild.id))?.server_id,
 			errorType: "CommandExecutionError",
 			metadata: {
 				command: "config cooldown length",

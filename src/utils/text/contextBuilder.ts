@@ -484,17 +484,20 @@ export async function buildContext({
 
 		if (guildEmojisCache && guildEmojisCache.size > 0 && tomoriState) {
 			// 1. Use pre-loaded emoji metadata if provided, otherwise load from database
-			const emojiMetadata = (preloadedEmojis && preloadedEmojis.length > 0) ? preloadedEmojis : await sql<
-				Array<{
-					emoji_disc_id: string;
-					emoji_name: string;
-					emoji_desc: string | null;
-					emotion_key: string | null;
-					is_animated: boolean;
-					created_at: Date | null;
-					updated_at: Date | null;
-				}>
-			>`
+			const emojiMetadata =
+				preloadedEmojis && preloadedEmojis.length > 0
+					? preloadedEmojis
+					: await sql<
+							Array<{
+								emoji_disc_id: string;
+								emoji_name: string;
+								emoji_desc: string | null;
+								emotion_key: string | null;
+								is_animated: boolean;
+								created_at: Date | null;
+								updated_at: Date | null;
+							}>
+						>`
 				SELECT emoji_disc_id, emoji_name, emoji_desc, emotion_key, is_animated, created_at, updated_at
 				FROM server_emojis
 				WHERE server_id = ${tomoriState.server_id}
@@ -546,11 +549,13 @@ export async function buildContext({
 			}
 
 			// 3. Sort emojis by creation date (deterministic, oldest first for caching stability)
-			const sortedEmojis = Array.from(guildEmojisCache.values()).sort((a, b) => {
-				const aTime = a.createdTimestamp || 0;
-				const bTime = b.createdTimestamp || 0;
-				return aTime - bTime; // Ascending order (oldest first)
-			});
+			const sortedEmojis = Array.from(guildEmojisCache.values()).sort(
+				(a, b) => {
+					const aTime = a.createdTimestamp || 0;
+					const bTime = b.createdTimestamp || 0;
+					return aTime - bTime; // Ascending order (oldest first)
+				},
+			);
 
 			// 4. Deduplicate by name (case-insensitive) while keeping latest
 			const latestEmojiByName = new Map<
@@ -645,16 +650,19 @@ export async function buildContext({
 
 		if (guildStickersCache && guildStickersCache.size > 0 && tomoriState) {
 			// 1. Use pre-loaded sticker metadata if provided, otherwise load from database
-			const stickerMetadata = (preloadedStickers && preloadedStickers.length > 0) ? preloadedStickers : await sql<
-				Array<{
-					sticker_disc_id: string;
-					sticker_name: string;
-					sticker_desc: string | null;
-					emotion_key: string | null;
-					created_at: Date | null;
-					updated_at: Date | null;
-				}>
-			>`
+			const stickerMetadata =
+				preloadedStickers && preloadedStickers.length > 0
+					? preloadedStickers
+					: await sql<
+							Array<{
+								sticker_disc_id: string;
+								sticker_name: string;
+								sticker_desc: string | null;
+								emotion_key: string | null;
+								created_at: Date | null;
+								updated_at: Date | null;
+							}>
+						>`
 				SELECT sticker_disc_id, sticker_name, sticker_desc, emotion_key, created_at, updated_at
 				FROM server_stickers
 				WHERE server_id = ${tomoriState.server_id}
@@ -1240,7 +1248,7 @@ export async function buildContext({
 			// Add placeholder text
 			parts.push({
 				type: "text",
-				text: `[This message (ID: ${msg.id}) contained ${mediaDescription} - use increase_media_context with extend_by=${extendByNeeded} to view]`,
+				text: `[System: This message (ID: ${msg.id}) contained ${mediaDescription} - use increase_media_context with extend_by=${extendByNeeded} to view]`,
 			});
 			mediaIdHintAdded = true;
 		} else if (isWithinMediaWindow) {

@@ -4,7 +4,7 @@ import {
 	type Client,
 	type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { loadTomoriState } from "../../../utils/db/dbRead";
+import { getCachedTomoriState, invalidateTomoriStateCache } from "../../../utils/cache/tomoriStateCache";
 import { localizer } from "../../../utils/text/localizer";
 import { log, ColorCode } from "../../../utils/misc/logger";
 import { replyInfoEmbed } from "../../../utils/discord/interactionHelper";
@@ -80,7 +80,7 @@ export async function execute(
 		}
 
 		// 5. Load the Tomori state for this server
-		tomoriState = await loadTomoriState(
+		tomoriState = await getCachedTomoriState(
 			interaction.guild?.id ?? interaction.user.id,
 		);
 		if (!tomoriState) {
@@ -161,7 +161,10 @@ export async function execute(
 			return;
 		}
 
-		// 10. Success message
+		// 10. Invalidate cache so next message gets fresh config
+		invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
+
+		// 11. Success message
 		await replyInfoEmbed(interaction, locale, {
 			titleKey: "commands.config.braveapi.set.success_title",
 			descriptionKey: "commands.config.braveapi.set.success_description",

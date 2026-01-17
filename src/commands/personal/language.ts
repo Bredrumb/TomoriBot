@@ -13,6 +13,7 @@ import {
 	userSchema,
 } from "../../types/db/schema";
 import { sql } from "@/utils/db/client";
+import { invalidateUserCache } from "../../utils/cache/userCache";
 
 // Define constants at the top (Rule #20)
 const SUPPORTED_LANGUAGES = ["en-US", "ja"] as const;
@@ -149,7 +150,10 @@ export async function execute(
 			return;
 		}
 
-		// 8. Success message with explanation of the language change
+		// 8. Invalidate user cache so next message gets fresh data
+		invalidateUserCache(userData.user_disc_id);
+
+		// 9. Success message with explanation of the language change
 		await replyInfoEmbed(interaction, languageValue, {
 			titleKey: "commands.personal.language.success_title",
 			descriptionKey: "commands.personal.language.success_description",

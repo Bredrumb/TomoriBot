@@ -23,10 +23,11 @@ interface EmojiStickerCacheEntry {
 const cache = new Map<number, EmojiStickerCacheEntry>();
 
 /**
- * Cache duration: 5 minutes
+ * Cache duration: configurable via env, default 10 minutes.
  * Balances freshness vs performance (99% of messages should hit cache)
  */
-const MEMORY_CACHE_DURATION_MS = 5 * 60 * 1000;
+const MEMORY_CACHE_DURATION_MS =
+	(Number(process.env.EMOJI_STICKER_CACHE_TTL_MINUTES) || 10) * 60 * 1000;
 
 /**
  * Cache statistics for monitoring
@@ -35,12 +36,12 @@ let cacheHits = 0;
 let cacheMisses = 0;
 
 /**
- * Loads emoji/sticker data with 5-minute in-memory cache
+ * Loads emoji/sticker data with configurable in-memory cache (default 10 min)
  * Falls back to DB query and lazy sync if cache miss or stale
  *
  * Cache flow:
  * 1. Check in-memory cache
- *    - HIT & FRESH (<5 min) → Return immediately (0 DB queries)
+ *    - HIT & FRESH (within TTL) → Return immediately (0 DB queries)
  *    - MISS or STALE → Continue to step 2
  * 2. Lazy sync from Discord if needed (24hr cache check)
  * 3. Load from DB

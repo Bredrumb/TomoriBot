@@ -6,10 +6,10 @@ import {
 	type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import {
-	loadTomoriState,
 	loadUniqueProviders,
 	loadDefaultModelForProvider,
 } from "../../../utils/db/dbRead";
+import { getCachedTomoriState, invalidateTomoriStateCache } from "../../../utils/cache/tomoriStateCache";
 import { localizer } from "../../../utils/text/localizer";
 import { log, ColorCode } from "../../../utils/misc/logger";
 import {
@@ -80,7 +80,7 @@ export async function execute(
 	// 2. Load the Tomori state for this server/user
 	// Use user ID for DM context, guild ID for server context
 	const serverId = interaction.guild?.id ?? interaction.user.id;
-	const tomoriState = await loadTomoriState(serverId);
+	const tomoriState = await getCachedTomoriState(serverId);
 	if (!tomoriState) {
 		await replyInfoEmbed(interaction, locale, {
 			titleKey: "general.errors.tomori_not_setup_title",
@@ -476,7 +476,10 @@ export async function execute(
 			return;
 		}
 
-		// 14. Success message (include model info if provider changed)
+		// 14. Invalidate cache so next message gets fresh config
+		invalidateTomoriStateCache(serverId);
+
+		// 15. Success message (include model info if provider changed)
 		const successDescriptionKey =
 			currentProvider !== newProvider
 				? "commands.config.apikey.set.success_with_model_description"
@@ -506,7 +509,7 @@ export async function execute(
 		let serverIdForError: number | null = null;
 		let tomoriIdForError: number | null = null;
 		const errorServerId = interaction.guild?.id ?? interaction.user.id;
-		const state = await loadTomoriState(errorServerId);
+		const state = await getCachedTomoriState(errorServerId);
 		serverIdForError = state?.server_id ?? null;
 		tomoriIdForError = state?.tomori_id ?? null;
 

@@ -19,6 +19,7 @@ import {
 	promptWithRawModal,
 } from "../../../utils/discord/interactionHelper";
 import { loadTomoriState, isBlacklisted } from "../../../utils/db/dbRead";
+import { invalidateUserCache } from "../../../utils/cache/userCache";
 import type { ModalResult } from "../../../types/discord/modal";
 import {
 	validateMemoryContent,
@@ -260,7 +261,10 @@ export async function execute(
 			embedColor = ColorCode.WARN;
 		}
 
-		// 15. Success! Confirm addition (with potential warning) (Rule 12, 19)
+		// 15. Invalidate user cache so next message gets fresh data
+		invalidateUserCache(interaction.user.id);
+
+		// 16. Success! Confirm addition (with potential warning) (Rule 12, 19)
 		await replyInfoEmbed(modalSubmitInteraction, locale, {
 			titleKey: "commands.teach.memory.personal.success_title",
 			descriptionKey: descriptionKey, // Use the determined description key

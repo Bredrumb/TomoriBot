@@ -4,7 +4,7 @@ import {
 	type Client,
 	type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { loadTomoriState } from "../../utils/db/dbRead";
+import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import {
@@ -98,7 +98,7 @@ export async function execute(
 
 	try {
 		// 2. Load the Tomori state for this server (Rule #17)
-		const tomoriState = await loadTomoriState(
+		const tomoriState = await getCachedTomoriState(
 			interaction.guild?.id ?? interaction.user.id,
 		);
 		if (!tomoriState) {
@@ -214,7 +214,10 @@ export async function execute(
 			return;
 		}
 
-		// 9. Success message with explanation of the humanizer effect
+		// 9. Invalidate cache so next message gets fresh config
+		invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
+
+		// 10. Success message with explanation of the humanizer effect
 		await replyInfoEmbed(modalSubmitInteraction, locale, {
 			titleKey: "commands.config.humanizer.success_title",
 			descriptionKey: "commands.config.humanizer.success_description",
@@ -225,12 +228,12 @@ export async function execute(
 			color: ColorCode.SUCCESS,
 		});
 	} catch (error) {
-		// 10. Log error with context (Rule #22)
+		// 11. Log error with context (Rule #22)
 		// Attempt to get server/tomori IDs only once if needed
 		let serverIdForError: number | null = null;
 		let tomoriIdForError: number | null = null;
 		if (interaction.guild?.id) {
-			const state = await loadTomoriState(interaction.guild.id);
+			const state = await getCachedTomoriState(interaction.guild.id);
 			serverIdForError = state?.server_id ?? null;
 			tomoriIdForError = state?.tomori_id ?? null;
 		}

@@ -11,7 +11,10 @@ import {
 	promptWithPaginatedModal,
 	safeSelectOptionText,
 } from "../../../utils/discord/interactionHelper";
-import { loadTomoriState } from "../../../utils/db/dbRead";
+import {
+	getCachedTomoriState,
+	invalidateTomoriStateCache,
+} from "../../../utils/cache/tomoriStateCache";
 import {
 	type UserRow,
 	type ErrorContext,
@@ -61,7 +64,7 @@ export async function execute(
 		// 2. Note: Modal will be the first response, so no early defer needed
 
 		// 3. Load the Tomori state for this server (Rule #17)
-		const tomoriState = await loadTomoriState(interaction.guild.id);
+		const tomoriState = await getCachedTomoriState(interaction.guild.id);
 		if (!tomoriState) {
 			await replyInfoEmbed(
 				interaction,
@@ -187,7 +190,10 @@ export async function execute(
 			return;
 		}
 
-		// 13. Log success and show success message
+		// 13. Invalidate cache so next message gets fresh config
+		invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
+
+		// 14. Log success and show success message
 		log.success(
 			`Removed trigger word "${wordToRemove}" for tomori ${tomoriState.tomori_id} by user ${userData.user_disc_id}`,
 		);
@@ -207,7 +213,7 @@ export async function execute(
 		if (interaction.guild?.id) {
 			// Avoid reloading state if possible, but reload if needed for context
 			const state =
-				(await loadTomoriState(interaction.guild.id).catch(() => null)) ?? null;
+				(await getCachedTomoriState(interaction.guild.id).catch(() => null)) ?? null;
 			serverIdForError = state?.server_id ?? null;
 			tomoriIdForError = state?.tomori_id ?? null;
 		}

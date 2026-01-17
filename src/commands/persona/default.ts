@@ -4,7 +4,11 @@ import {
 	type Client,
 	type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { loadTomoriState, loadPresetRowsByLocale } from "../../utils/db/dbRead";
+import { loadPresetRowsByLocale } from "../../utils/db/dbRead";
+import {
+	getCachedTomoriState,
+	invalidateTomoriStateCache,
+} from "../../utils/cache/tomoriStateCache";
 import {
 	localizer,
 	getBaseTriggerWords,
@@ -82,7 +86,7 @@ export async function execute(
 
 	try {
 		// 3. Load the Tomori state for this server
-		const tomoriState = await loadTomoriState(
+		const tomoriState = await getCachedTomoriState(
 			interaction.guild?.id ?? interaction.user.id,
 		);
 		if (!tomoriState) {
@@ -247,7 +251,10 @@ export async function execute(
 			return;
 		}
 
-		// 18. Detect DM context and set guild avatar/nickname (guild-only operations)
+		// 18. Invalidate cache so next message gets fresh config
+		invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
+
+		// 19. Detect DM context and set guild avatar/nickname (guild-only operations)
 		const isDM = !interaction.guild;
 		let avatarUpdateFailed = false;
 
@@ -329,7 +336,7 @@ export async function execute(
 		let serverIdForError: number | null = null;
 		let tomoriIdForError: number | null = null;
 		if (interaction.guild?.id) {
-			const state = await loadTomoriState(interaction.guild.id);
+			const state = await getCachedTomoriState(interaction.guild.id);
 			serverIdForError = state?.server_id ?? null;
 			tomoriIdForError = state?.tomori_id ?? null;
 		}

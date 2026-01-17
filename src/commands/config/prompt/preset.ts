@@ -14,7 +14,11 @@ import {
 import type { UserRow, SystemPromptPresetRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { sql } from "@/utils/db/client";
-import { loadTomoriState, loadSystemPromptPresets } from "@/utils/db/dbRead";
+import { loadSystemPromptPresets } from "@/utils/db/dbRead";
+import {
+	getCachedTomoriState,
+	invalidateTomoriStateCache,
+} from "@/utils/cache/tomoriStateCache";
 import {
 	replyInfoEmbed,
 	promptWithRawModal,
@@ -65,7 +69,7 @@ export async function execute(
 
 	// 2. Determine server context (guild or DM)
 	const serverId = interaction.guildId ?? interaction.user.id;
-	const tomoriState = await loadTomoriState(serverId);
+	const tomoriState = await getCachedTomoriState(serverId);
 
 	// 3. Validate tomoriState exists (before try-catch)
 	if (!tomoriState) {
@@ -167,7 +171,10 @@ export async function execute(
 			WHERE tomori_id = ${tomoriState.tomori_id}
 		`;
 
-		// 13. Success response with preview
+		// 13. Invalidate cache so next message gets fresh config
+		invalidateTomoriStateCache(serverId);
+
+		// 14. Success response with preview
 		const preview = selectedPreset.preset_prompt_text.substring(0, 200);
 		await replyInfoEmbed(modalSubmitInteraction, locale, {
 			titleKey: "commands.config.prompt.preset.success_title",

@@ -4,7 +4,10 @@ import type {
 	SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { sql } from "@/utils/db/client";
-import { loadTomoriState } from "../../../utils/db/dbRead";
+import {
+	getCachedTomoriState,
+	invalidateTomoriStateCache,
+} from "../../../utils/cache/tomoriStateCache";
 import { tomoriConfigSchema } from "../../../types/db/schema";
 import { localizer } from "../../../utils/text/localizer";
 import { log, ColorCode } from "../../../utils/misc/logger";
@@ -87,7 +90,7 @@ Setting to '0' will disable auto-chat
 		}
 
 		// Load the Tomori state for this server - let helper functions manage interaction state
-		const tomoriState = await loadTomoriState(interaction.guild.id);
+		const tomoriState = await getCachedTomoriState(interaction.guild.id);
 		if (!tomoriState) {
 			await replyInfoEmbed(interaction, locale, {
 				titleKey: "general.errors.tomori_not_setup_title",
@@ -157,6 +160,9 @@ Setting to '0' will disable auto-chat
 			return;
 		}
 
+		// Invalidate cache so next message gets fresh config
+		invalidateTomoriStateCache(interaction.guild.id);
+
 		// Success message based on auto-chat state
 		const isAutoTriggerEnabled = threshold > 0;
 		await replyInfoEmbed(interaction, locale, {
@@ -174,7 +180,7 @@ Setting to '0' will disable auto-chat
 	} catch (error) {
 		const context: ErrorContext = {
 			userId: userData.user_id,
-			serverId: (await loadTomoriState(interaction.guild.id))?.server_id,
+			serverId: (await getCachedTomoriState(interaction.guild.id))?.server_id,
 			errorType: "CommandExecutionError",
 			metadata: {
 				command: "config autochthreshold",

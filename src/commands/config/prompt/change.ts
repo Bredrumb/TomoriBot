@@ -16,7 +16,10 @@ import {
 } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
-import { loadTomoriState } from "@/utils/db/dbRead";
+import {
+	getCachedTomoriState,
+	invalidateTomoriStateCache,
+} from "@/utils/cache/tomoriStateCache";
 import {
 	replyInfoEmbed,
 	promptWithRawModal,
@@ -64,7 +67,7 @@ export async function execute(
 
 	// 2. Determine server context (guild or DM)
 	const serverId = interaction.guildId ?? interaction.user.id;
-	const tomoriState = await loadTomoriState(serverId);
+	const tomoriState = await getCachedTomoriState(serverId);
 
 	if (!tomoriState) {
 		await replyInfoEmbed(interaction, locale, {
@@ -165,7 +168,10 @@ export async function execute(
 			WHERE tomori_id = ${tomoriState.tomori_id}
 		`;
 
-		// 10. Success response with preview
+		// 10. Invalidate cache so next message gets fresh config
+		invalidateTomoriStateCache(serverId);
+
+		// 11. Success response with preview
 		const preview = systemPrompt.substring(0, 200);
 		await replyInfoEmbed(modalSubmitInteraction, locale, {
 			titleKey: "commands.config.prompt.change.success_title",

@@ -10,6 +10,8 @@ import {
 	type ToolResult,
 	type ToolParameterSchema,
 } from "../../types/tool/interfaces";
+import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
+import { invalidateUserCache } from "../../utils/cache/userCache";
 
 /**
  * Tool for remembering and learning new information during conversations
@@ -17,7 +19,7 @@ import {
 export class MemoryTool extends BaseTool {
 	name = "remember_this_fact";
 	description =
-		"Use this function when you identify a new, distinct piece of information, fact, preference, or instruction during the conversation that seems important to remember for future interactions. This helps you learn and adapt. Specify if the information is a general server-wide fact or something specific about a user. Avoid saving information that is already known or redundant. IMPORTANT: Use {bot} instead of hardcoded bot names and {user} instead of hardcoded user names in your memory content to prevent confusion when names change.NEVER save personally identifiable information (PII) such as: real names, addresses, phone numbers, email addresses, social security numbers, financial information, or exact locations. Focus on preferences, interests, and context that enhance conversation quality without compromising privacy or accuracy.";
+		"Use this function when you identify a new, distinct piece of information, fact, preference, or instruction during the conversation that seems important to remember for future interactions. This helps you learn and adapt. Specify if the information is a general server-wide fact or something specific about a user. Avoid saving information that is already known or redundant. IMPORTANT: Use {bot} instead of hardcoded bot names and {user} instead of hardcoded user names in your memory content to prevent confusion when names change. Be proactive in remembering preferences, interests, and context that enhance conversation quality without compromising privacy or accuracy. Avoid saving PII (real names, addresses, and contact info)";
 	category = "memory" as const;
 	requiresFeatureFlag = "self_teaching";
 
@@ -27,7 +29,7 @@ export class MemoryTool extends BaseTool {
 			memory_content: {
 				type: "string",
 				description:
-					"The specific piece of information, fact, or preference to remember. Be concise, clear, and ensure it's new information not already in your knowledge base. IMPORTANT: Use {bot} instead of hardcoded bot names (e.g., 'Tomori', 'Elen') and {user} instead of hardcoded user names in your memory content. Example: '{bot} likes {user}'s dogs!' instead of 'Tomori likes John's dogs!'. NEVER include PII (real names, addresses, contact info, etc.). For personal memories, ONLY save information the user shared about THEMSELVES, not claims made by others.",
+					"The specific piece of information, fact, or preference to remember. Be concise, clear, and ensure it's new information not already in your knowledge base. IMPORTANT: Use {bot} instead of hardcoded bot names (e.g., 'Tomori', 'Elen') and {user} instead of hardcoded user names in your memory content. Example: '{bot} likes {user}'s dogs' instead of 'Tomori likes John's dogs'.",
 			},
 			memory_scope: {
 				type: "string",
@@ -43,7 +45,7 @@ export class MemoryTool extends BaseTool {
 			target_user_nickname: {
 				type: "string",
 				description:
-					"If memory_scope is 'target_user', also provide the nickname of the user this memory pertains to, as you see them in the current conversation or their user profile information. This is used to confirm the target user alongside their Discord ID..",
+					"If memory_scope is 'target_user', also provide the nickname of the user this memory pertains to, as you see them in the current conversation or their user profile information. This is used to confirm the target user alongside their Discord ID.",
 			},
 		},
 		required: ["memory_content", "memory_scope"],
@@ -278,6 +280,9 @@ export class MemoryTool extends BaseTool {
 						},
 						footerKey: "genai.self_teach.server_memory_footer",
 					});
+
+					// Invalidate TomoriState cache so next message includes new memory
+					invalidateTomoriStateCache(serverId);
 
 					return {
 						success: true,
@@ -554,6 +559,9 @@ export class MemoryTool extends BaseTool {
 						},
 						footerKey: personalMemoryFooterKey,
 					});
+
+					// Invalidate user cache so next message includes new memory
+					invalidateUserCache(targetUserDiscordIdArg);
 
 					return {
 						success: true,

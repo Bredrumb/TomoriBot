@@ -5,7 +5,10 @@ import {
 	type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { sql } from "@/utils/db/client";
-import { loadTomoriState } from "../../../utils/db/dbRead";
+import {
+	getCachedTomoriState,
+	invalidateTomoriStateCache,
+} from "../../../utils/cache/tomoriStateCache";
 import { tomoriConfigSchema } from "../../../types/db/schema";
 import { localizer } from "../../../utils/text/localizer";
 import { log, ColorCode } from "../../../utils/misc/logger";
@@ -95,7 +98,7 @@ export async function execute(
 		}
 
 		// Load the Tomori state for this server
-		const tomoriState = await loadTomoriState(interaction.guild.id);
+		const tomoriState = await getCachedTomoriState(interaction.guild.id);
 		if (!tomoriState) {
 			await replyInfoEmbed(interaction, locale, {
 				titleKey: "general.errors.tomori_not_setup_title",
@@ -204,6 +207,9 @@ export async function execute(
 			});
 			return;
 		}
+
+		// Invalidate cache so next message gets fresh config
+		invalidateTomoriStateCache(interaction.guild.id);
 
 		// Success message based on the action
 		await replyInfoEmbed(interaction, locale, {

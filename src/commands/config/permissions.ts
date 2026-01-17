@@ -4,7 +4,7 @@ import {
 	type Client,
 	type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { loadTomoriState } from "../../utils/db/dbRead"; // Rule 17
+import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache"; // Rule 17
 import { localizer } from "../../utils/text/localizer"; // Rule 9
 import { log, ColorCode } from "../../utils/misc/logger"; // Rule 18
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper"; // Rule 12, 19
@@ -134,7 +134,7 @@ export async function execute(
 		const isEnabled = setAction === "enable";
 
 		// 3. Load the Tomori state for this server - let helper functions manage interaction state
-		const tomoriState = await loadTomoriState(
+		const tomoriState = await getCachedTomoriState(
 			interaction.guild?.id ?? interaction.user.id,
 		);
 		if (!tomoriState) {
@@ -264,7 +264,10 @@ export async function execute(
 			return;
 		}
 
-		// 9. Success! Show the permission change
+		// 9. Invalidate cache so next message gets fresh config
+		invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
+
+		// 10. Success! Show the permission change
 		await replyInfoEmbed(interaction, locale, {
 			titleKey: "commands.config.permissions.success_title",
 			descriptionKey: isEnabled
@@ -280,7 +283,7 @@ export async function execute(
 		let serverIdForError: number | null = null;
 		let tomoriIdForError: number | null = null;
 		if (interaction.guild?.id) {
-			const state = await loadTomoriState(interaction.guild.id);
+			const state = await getCachedTomoriState(interaction.guild.id);
 			serverIdForError = state?.server_id ?? null;
 			tomoriIdForError = state?.tomori_id ?? null;
 		}

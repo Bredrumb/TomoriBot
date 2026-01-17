@@ -17,6 +17,7 @@ import {
 	PrivacyLevel,
 } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
+import { invalidateUserCache } from "../../utils/cache/userCache";
 
 // Modal configuration constants
 const MODAL_CUSTOM_ID = "personal_privacy_modal";
@@ -180,7 +181,10 @@ export async function execute(
 			return;
 		}
 
-		// 7. Send success confirmation message
+		// 7. Invalidate user cache so next message gets fresh data
+		invalidateUserCache(interaction.user.id);
+
+		// 8. Send success confirmation message
 		await replyInfoEmbed(modalSubmitInteraction, locale, {
 			titleKey: "commands.personal.privacy.success_title",
 			descriptionKey: "commands.personal.privacy.success_description",
