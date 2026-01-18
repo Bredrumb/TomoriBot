@@ -2,8 +2,8 @@ import { sql } from "@/utils/db/client";
 import { log } from "../misc/logger";
 import {
 	EXPORT_VERSION,
-	personalExportSchema,
-	serverExportSchema,
+	getPersonalExportSchema,
+	getServerExportSchema,
 	type PersonalExportData,
 	type ServerExportData,
 	type ImportResult,
@@ -252,7 +252,7 @@ export function validateImportFile(jsonData: unknown): {
 	const type = (jsonData as { type?: string }).type;
 
 	if (type === "personal") {
-		const validated = personalExportSchema.safeParse(jsonData);
+		const validated = getPersonalExportSchema().safeParse(jsonData);
 		if (!validated.success) {
 			log.error("Personal import validation failed:", validated.error);
 			return {
@@ -268,7 +268,7 @@ export function validateImportFile(jsonData: unknown): {
 	}
 
 	if (type === "server") {
-		const validated = serverExportSchema.safeParse(jsonData);
+		const validated = getServerExportSchema().safeParse(jsonData);
 		if (!validated.success) {
 			log.error("Server import validation failed:", validated.error);
 			return {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getMemoryLimits } from "@/utils/db/memoryLimits";
 
 /**
  * Version identifier for export/import format
@@ -7,28 +8,35 @@ import { z } from "zod";
 export const EXPORT_VERSION = "1.0";
 
 /**
- * Personal data export schema
+ * Get personal data export schema with dynamic memory limits from environment
  * Validates the structure of exported personal user data
  */
-export const personalExportDataSchema = z.object({
-	user_nickname: z.string().min(1).max(100),
-	language_pref: z.string().min(2).max(10),
-	personal_memories: z.array(z.string()).max(50),
-});
+export function getPersonalExportDataSchema() {
+	const limits = getMemoryLimits();
+	return z.object({
+		user_nickname: z.string().min(1).max(100),
+		language_pref: z.string().min(2).max(10),
+		personal_memories: z.array(z.string()).max(limits.maxPersonalMemories),
+	});
+}
 
-export type PersonalExportData = z.infer<typeof personalExportDataSchema>;
+export type PersonalExportData = z.infer<
+	ReturnType<typeof getPersonalExportDataSchema>
+>;
 
 /**
- * Complete personal export file schema
+ * Get complete personal export file schema with dynamic limits
  */
-export const personalExportSchema = z.object({
-	version: z.literal(EXPORT_VERSION),
-	type: z.literal("personal"),
-	exported_at: z.string(),
-	data: personalExportDataSchema,
-});
+export function getPersonalExportSchema() {
+	return z.object({
+		version: z.literal(EXPORT_VERSION),
+		type: z.literal("personal"),
+		exported_at: z.string(),
+		data: getPersonalExportDataSchema(),
+	});
+}
 
-export type PersonalExport = z.infer<typeof personalExportSchema>;
+export type PersonalExport = z.infer<ReturnType<typeof getPersonalExportSchema>>;
 
 /**
  * Server configuration export schema
@@ -52,27 +60,34 @@ export const serverConfigExportSchema = z.object({
 export type ServerConfigExport = z.infer<typeof serverConfigExportSchema>;
 
 /**
- * Server data export schema
+ * Get server data export schema with dynamic memory limits from environment
  * Includes configuration and server memories
  */
-export const serverExportDataSchema = z.object({
-	config: serverConfigExportSchema,
-	server_memories: z.array(z.string()).max(50),
-});
+export function getServerExportDataSchema() {
+	const limits = getMemoryLimits();
+	return z.object({
+		config: serverConfigExportSchema,
+		server_memories: z.array(z.string()).max(limits.maxServerMemories),
+	});
+}
 
-export type ServerExportData = z.infer<typeof serverExportDataSchema>;
+export type ServerExportData = z.infer<
+	ReturnType<typeof getServerExportDataSchema>
+>;
 
 /**
- * Complete server export file schema
+ * Get complete server export file schema with dynamic limits
  */
-export const serverExportSchema = z.object({
-	version: z.literal(EXPORT_VERSION),
-	type: z.literal("server"),
-	exported_at: z.string(),
-	data: serverExportDataSchema,
-});
+export function getServerExportSchema() {
+	return z.object({
+		version: z.literal(EXPORT_VERSION),
+		type: z.literal("server"),
+		exported_at: z.string(),
+		data: getServerExportDataSchema(),
+	});
+}
 
-export type ServerExport = z.infer<typeof serverExportSchema>;
+export type ServerExport = z.infer<ReturnType<typeof getServerExportSchema>>;
 
 /**
  * Union type for all export formats

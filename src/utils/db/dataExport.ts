@@ -2,13 +2,65 @@ import { sql } from "@/utils/db/client";
 import { log } from "../misc/logger";
 import {
 	EXPORT_VERSION,
-	personalExportSchema,
-	serverExportSchema,
+	getPersonalExportSchema,
+	getServerExportSchema,
 	type PersonalExport,
 	type ServerExport,
 	type ExportResult,
 	type PersonalityExportResult,
 } from "../../types/db/dataExport";
+
+/**
+ * Sanitizes a string for safe JSON serialization
+ * Removes control characters (except newlines and tabs) that could break JSON
+ * @param content - The content to sanitize
+ * @returns Object with sanitized content and flag indicating if sanitization occurred
+ */
+function sanitizeForJson(content: string): {
+	sanitized: string;
+	wasSanitized: boolean;
+} {
+	// 1. Remove null bytes and control characters except \n (0x0A) and \t (0x09)
+	// Regex matches control chars (0x00-0x1F) except newline and tab
+	// biome-ignore lint/suspicious/noControlCharactersInRegex: Intentionally matching control characters for sanitization
+	const cleaned = content.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F]/g, "");
+
+	// 2. Check if sanitization occurred
+	const wasSanitized = cleaned !== content;
+
+	return { sanitized: cleaned, wasSanitized };
+}
+
+/**
+ * Sanitizes an array of memory strings for safe JSON export
+ * @param memories - Array of memory strings to sanitize
+ * @param contextLabel - Label for logging (e.g., "personal memories", "server memories")
+ * @returns Object with sanitized memories and count of sanitized items
+ */
+function sanitizeMemories(
+	memories: string[],
+	contextLabel: string,
+): { sanitized: string[]; sanitizedCount: number } {
+	// 1. Track how many memories were sanitized
+	let sanitizedCount = 0;
+
+	// 2. Sanitize each memory string
+	const sanitized = memories.map((memory, index) => {
+		const { sanitized: cleanMemory, wasSanitized } = sanitizeForJson(memory);
+
+		// 3. Log warning if sanitization occurred
+		if (wasSanitized) {
+			sanitizedCount++;
+			log.warn(
+				`Sanitized ${contextLabel} at index ${index}: removed control characters`,
+			);
+		}
+
+		return cleanMemory;
+	});
+
+	return { sanitized, sanitizedCount };
+}
 
 /**
  * Exports personal user data (nickname, language preference, memories)
@@ -36,7 +88,13 @@ export async function exportPersonalData(
 
 		const userData = rows[0];
 
-		// 2. Build export object
+		// 2. Sanitize memories for safe JSON export
+		const { sanitized: sanitizedMemories } = sanitizeMemories(
+			userData.personal_memories || [],
+			"personal memories",
+		);
+
+		// 3. Build export object
 		const exportData: PersonalExport = {
 			version: EXPORT_VERSION,
 			type: "personal",
@@ -44,12 +102,12 @@ export async function exportPersonalData(
 			data: {
 				user_nickname: userData.user_nickname,
 				language_pref: userData.language_pref,
-				personal_memories: userData.personal_memories || [],
+				personal_memories: sanitizedMemories,
 			},
 		};
 
-		// 3. Validate export data structure
-		const validated = personalExportSchema.safeParse(exportData);
+		// 4. Validate export data structure
+		const validated = getPersonalExportSchema().safeParse(exportData);
 		if (!validated.success) {
 			log.error(
 				`Personal export validation failed for user ${userDiscId}:`,
@@ -142,7 +200,13 @@ export async function exportServerData(
 			(row: { content: string }) => row.content,
 		);
 
-		// 4. Build export object
+		// 4. Sanitize memories for safe JSON export
+		const { sanitized: sanitizedServerMemories } = sanitizeMemories(
+			serverMemories,
+			"server memories",
+		);
+
+		// 5. Build export object
 		const exportData: ServerExport = {
 			version: EXPORT_VERSION,
 			type: "server",
@@ -164,12 +228,12 @@ export async function exportServerData(
 					sticker_usage_enabled: configData.sticker_usage_enabled,
 					imagegen_enabled: configData.imagegen_enabled,
 				},
-				server_memories: serverMemories,
+				server_memories: sanitizedServerMemories,
 			},
 		};
 
-		// 5. Validate export data structure
-		const validated = serverExportSchema.safeParse(exportData);
+		// 6. Validate export data structure
+		const validated = getServerExportSchema().safeParse(exportData);
 		if (!validated.success) {
 			log.error(
 				`Server export validation failed for server ${serverDiscId}:`,
