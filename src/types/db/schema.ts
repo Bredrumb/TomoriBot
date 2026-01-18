@@ -268,12 +268,44 @@ export const reminderSchema = z.object({
 export type ReminderRow = z.infer<typeof reminderSchema>;
 
 /**
+ * API Key Rotation error types for cooldown logic
+ * - rate_limit: 429 errors, 60-second cooldown
+ * - api_error: Other API errors (401, 403, etc.), 5-minute cooldown
+ */
+export const ApiKeyRotationErrorType = z.enum(["rate_limit", "api_error"]);
+export type ApiKeyRotationErrorType = z.infer<typeof ApiKeyRotationErrorType>;
+
+/**
+ * Schema for API key rotation table entries
+ * Used for load balancing (round-robin) and failover across multiple API keys
+ */
+export const apiKeyRotationSchema = z.object({
+	rotation_key_id: z.number().optional(), // Primary key, auto-generated
+	server_id: z.number(), // Foreign key to servers table
+	provider: z.string(), // Must match current provider in tomori_configs
+	api_key: z.instanceof(Buffer).nullable(), // NULL if is_main_key_pointer = true
+	key_version: z.number().int().default(1), // Encryption key version
+	is_main_key_pointer: z.boolean().default(false), // true = use tomori_configs.api_key
+	is_enabled: z.boolean().default(true), // Manual or auto-disabled after errors
+	usage_count: z.number().default(0), // For round-robin tracking
+	error_count: z.number().int().default(0), // Consecutive errors
+	last_used_at: z.date().nullable().optional(), // Last successful use
+	last_error_at: z.date().nullable().optional(), // For cooldown logic
+	last_error_type: ApiKeyRotationErrorType.nullable().optional(), // Error category for cooldown
+	last_error_message: z.string().nullable().optional(), // Human-readable error
+	created_at: z.date().optional(), // Handled by DB default
+	updated_at: z.date().optional(), // Handled by DB default/trigger
+});
+export type ApiKeyRotationRow = z.infer<typeof apiKeyRotationSchema>;
+
+/**
  * Tomori's combined state (base config + LLM settings + LLM info)
  */
 export type TomoriState = TomoriRow & {
 	config: TomoriConfigRow;
 	llm: LlmRow; // Added LLM information
 	server_memories: string[]; // Changed to string array to match implementation
+	rotation_keys?: ApiKeyRotationRow[]; // Optional: API key rotation pool for load balancing/failover
 };
 
 /**
@@ -283,6 +315,7 @@ export const tomoriStateSchema = tomoriSchema.extend({
 	config: tomoriConfigSchema,
 	llm: llmSchema, // Added LLM schema validation
 	server_memories: z.array(z.string()).default([]), // Changed to array of strings
+	rotation_keys: z.array(apiKeyRotationSchema).optional(), // API key rotation pool
 });
 
 /**

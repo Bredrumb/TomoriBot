@@ -14,6 +14,8 @@ import {
 	type ReminderRow,
 	type TomoriPresetRow,
 	type SystemPromptPresetRow,
+	type ApiKeyRotationRow,
+	apiKeyRotationSchema,
 } from "../../types/db/schema"; // Import base schemas and types
 import { log } from "../misc/logger";
 import { getCachedLLM } from "../cache/llmCache";
@@ -94,12 +96,34 @@ export async function loadTomoriState(
 			(row: { content: string }) => row.content,
 		);
 
-		// 5. Combine and validate the full state
+		// 5. Load API key rotation pool for this server (if any)
+		const rotationKeysRows = await sql`
+			SELECT * FROM api_key_rotation
+			WHERE server_id = ${tomoriData.server_id}
+			ORDER BY usage_count ASC, rotation_key_id ASC
+		`;
+
+		// Validate rotation keys
+		const rotationKeys: ApiKeyRotationRow[] = [];
+		for (const row of rotationKeysRows) {
+			const parsed = apiKeyRotationSchema.safeParse(row);
+			if (parsed.success) {
+				rotationKeys.push(parsed.data);
+			} else {
+				log.warn(
+					`Invalid rotation key row for server ${serverDiscId}:`,
+					parsed.error.flatten(),
+				);
+			}
+		}
+
+		// 6. Combine and validate the full state
 		const combinedState = {
 			...tomoriData,
 			config: configData,
 			llm: llmData, // Add the LLM data to match schema
 			server_memories: serverMemories, // Add server memories to the state
+			rotation_keys: rotationKeys.length > 0 ? rotationKeys : undefined, // Add rotation keys if any
 		};
 
 		// Use Zod to parse and validate the combined structure

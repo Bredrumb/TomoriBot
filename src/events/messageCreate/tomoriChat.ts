@@ -43,6 +43,12 @@ import { resolveTenorUrl } from "../../utils/media/tenorResolver";
 import { PeekProfilePictureTool } from "../../tools/functionCalls/peekProfilePictureTool";
 import { ProcessGifTool } from "../../tools/functionCalls/processGifTool";
 import { decryptApiKey } from "@/utils/security/crypto";
+import {
+	selectApiKey,
+	recordKeySuccess,
+	recordKeyError,
+	type SelectedKeyResult,
+} from "@/utils/security/keyRotation";
 import { localizer, getSupportedLocales } from "../../utils/text/localizer";
 import { escapeRegExp } from "../../utils/text/stringHelper";
 import { sql } from "@/utils/db/client";
@@ -2240,13 +2246,87 @@ export default async function tomoriChat(
 				});
 				return;
 			}
-			// biome-ignore lint/style/noNonNullAssertion: API key presence was validated earlier for triggered messages, tomoriState is checked
-			const keyVersion = tomoriState!.config.key_version || 1; // Default to V1 for backward compatibility
-			const decryptedApiKey = await decryptApiKey(
+			// API Key Selection with Rotation Support
+			// 1. Check if rotation is active (2+ keys in pool)
+			// 2. If active, use round-robin selection with cooldown filtering
+			// 3. If not active or all keys exhausted, fall back to main key
+			let decryptedApiKey: string;
+			let selectedKeyResult: SelectedKeyResult | null = null;
+
+			// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
+			const rotationActive = (tomoriState!.rotation_keys?.length ?? 0) >= 2;
+
+			if (rotationActive) {
+				// Try to select a key from the rotation pool
+				// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
+				selectedKeyResult = await selectApiKey(tomoriState!, []);
+
+				if (selectedKeyResult) {
+					decryptedApiKey = selectedKeyResult.apiKey;
+					log.info(
+						`Using rotation key ${selectedKeyResult.rotationKeyId} (main: ${selectedKeyResult.isMainKey}) for server ${tomoriState?.server_id}`,
+					);
+				} else {
+					// All rotation keys exhausted or in cooldown, fall back to main key
+					log.warn(
+						`All rotation keys exhausted for server ${tomoriState?.server_id}, falling back to main key`,
+					);
+					// biome-ignore lint/style/noNonNullAssertion: API key presence was validated earlier
+					const keyVersion = tomoriState!.config.key_version || 1;
+					decryptedApiKey = await decryptApiKey(
+						// biome-ignore lint/style/noNonNullAssertion: API key presence was validated earlier
+						tomoriState!.config.api_key!,
+						keyVersion,
+					);
+				}
+			} else {
+				// No rotation active, use main key directly
 				// biome-ignore lint/style/noNonNullAssertion: API key presence was validated earlier for triggered messages, tomoriState is checked
-				tomoriState!.config.api_key!,
-				keyVersion,
-			);
+				const keyVersion = tomoriState!.config.key_version || 1; // Default to V1 for backward compatibility
+				decryptedApiKey = await decryptApiKey(
+					// biome-ignore lint/style/noNonNullAssertion: API key presence was validated earlier for triggered messages, tomoriState is checked
+					tomoriState!.config.api_key!,
+					keyVersion,
+				);
+
+				// LAZY ROTATION: If using old key version, re-encrypt with current version
+				const currentVersion = keyManager.getCurrentVersion();
+				if (keyVersion !== currentVersion) {
+					log.info(
+						`Rotating main API key from version ${keyVersion} to ${currentVersion} for server ${tomoriState?.server_id}`,
+					);
+
+					try {
+						const { encryptApiKey } = await import("@/utils/security/crypto");
+						const { encrypted, version } = await encryptApiKey(decryptedApiKey);
+
+						await sql`
+							UPDATE tomori_configs
+							SET api_key = ${encrypted},
+							    key_version = ${version},
+							    updated_at = CURRENT_TIMESTAMP
+							WHERE tomori_id = ${tomoriState?.tomori_id}
+						`;
+
+						log.success(
+							`Main API key rotation completed for server ${tomoriState?.server_id}`,
+						);
+
+						// Update in-memory state to reflect the new version
+						// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
+						tomoriState!.config.api_key = encrypted;
+						// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
+						tomoriState!.config.key_version = version;
+					} catch (error) {
+						log.warn(
+							"Failed to rotate main API key (non-critical - will retry on next message)",
+							error,
+						);
+						// Continue execution - the old key still works
+					}
+				}
+			}
+
 			if (!decryptedApiKey) {
 				log.error("API Key is not set or failed to decrypt.", undefined, {
 					serverId: tomoriState?.server_id,
@@ -2258,43 +2338,6 @@ export default async function tomoriChat(
 					descriptionKey: "general.errors.api_key_error_description",
 				});
 				return;
-			}
-
-			// LAZY ROTATION: If using old key version, re-encrypt with current version
-			const currentVersion = keyManager.getCurrentVersion();
-			if (keyVersion !== currentVersion) {
-				log.info(
-					`Rotating main API key from version ${keyVersion} to ${currentVersion} for server ${tomoriState?.server_id}`,
-				);
-
-				try {
-					const { encryptApiKey } = await import("@/utils/security/crypto");
-					const { encrypted, version } = await encryptApiKey(decryptedApiKey);
-
-					await sql`
-						UPDATE tomori_configs
-						SET api_key = ${encrypted},
-						    key_version = ${version},
-						    updated_at = CURRENT_TIMESTAMP
-						WHERE tomori_id = ${tomoriState?.tomori_id}
-					`;
-
-					log.success(
-						`Main API key rotation completed for server ${tomoriState?.server_id}`,
-					);
-
-					// Update in-memory state to reflect the new version
-					// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
-					tomoriState!.config.api_key = encrypted;
-					// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
-					tomoriState!.config.key_version = version;
-				} catch (error) {
-					log.warn(
-						"Failed to rotate main API key (non-critical - will retry on next message)",
-						error,
-					);
-					// Continue execution - the old key still works
-				}
 			}
 
 			// 12. Generate Response - Get provider instance
@@ -2467,10 +2510,14 @@ export default async function tomoriChat(
 					switch (streamResult.status) {
 						case "completed":
 							log.success("Streaming to Discord completed successfully.");
+							// Record success for rotation key if one was used
+							if (selectedKeyResult?.rotationKeyId) {
+								await recordKeySuccess(selectedKeyResult.rotationKeyId);
+							}
 							finalStreamCompleted = true;
 							break; // Exit loop, final text stream was handled by streamGeminiToDiscord
 
-						case "error":
+						case "error": {
 							log.error(
 								"Streaming to Discord reported an error.",
 								streamResult.data,
@@ -2479,9 +2526,32 @@ export default async function tomoriChat(
 									errorType: "StreamingError",
 								},
 							);
+							// Record error for rotation key if one was used and error is key-related
+							if (selectedKeyResult?.rotationKeyId && streamResult.data) {
+								// Check if error is API key related (rate limit or auth error)
+								const errorData = streamResult.data as { type?: string; message?: string; code?: string };
+								if (errorData.type === "rate_limit") {
+									await recordKeyError(
+										selectedKeyResult.rotationKeyId,
+										"rate_limit",
+										errorData.message || "Rate limit exceeded",
+									);
+								} else if (
+									errorData.type === "api_error" ||
+									errorData.code === "401" ||
+									errorData.code === "403"
+								) {
+									await recordKeyError(
+										selectedKeyResult.rotationKeyId,
+										"api_error",
+										errorData.message || "API authentication error",
+									);
+								}
+							}
 							// streamGeminiToDiscord already attempts to send an error message.
 							finalStreamCompleted = true; // Consider it "completed" to break loop, error handled.
 							break;
+						}
 
 						case "empty_response": {
 							// Handle empty response with fresh context retry

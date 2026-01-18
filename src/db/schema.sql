@@ -592,6 +592,42 @@ CREATE INDEX IF NOT EXISTS idx_opt_api_keys_version ON opt_api_keys(key_version)
 SELECT add_column_if_not_exists('tomori_configs', 'key_version', 'INTEGER', '1');
 CREATE INDEX IF NOT EXISTS idx_tomori_configs_key_version ON tomori_configs(key_version);
 
+-- API Key Rotation table for load balancing and failover (January 2026)
+-- Stores additional API keys for round-robin distribution and automatic failover
+CREATE TABLE IF NOT EXISTS api_key_rotation (
+  rotation_key_id SERIAL PRIMARY KEY,
+  server_id INT NOT NULL,
+  provider TEXT NOT NULL,                           -- Must match current provider in tomori_configs
+  api_key BYTEA,                                    -- NULL if is_main_key_pointer = true
+  key_version INTEGER DEFAULT 1,                    -- Encryption key version
+  is_main_key_pointer BOOLEAN DEFAULT false,        -- true = use tomori_configs.api_key instead
+  is_enabled BOOLEAN DEFAULT true,                  -- Manual or auto-disabled after errors
+  usage_count BIGINT DEFAULT 0,                     -- For round-robin tracking
+  error_count INTEGER DEFAULT 0,                    -- Consecutive errors
+  last_used_at TIMESTAMP,
+  last_error_at TIMESTAMP,                          -- For cooldown logic
+  last_error_type TEXT,                             -- 'rate_limit' (60s) or 'api_error' (5min)
+  last_error_message TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE
+);
+
+-- Only one main key pointer per server (unique partial index)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_api_key_rotation_main_pointer
+  ON api_key_rotation(server_id) WHERE is_main_key_pointer = true;
+
+-- Index for efficient key selection queries
+CREATE INDEX IF NOT EXISTS idx_api_key_rotation_server_provider
+  ON api_key_rotation(server_id, provider, is_enabled);
+
+-- Create updated_at trigger for api_key_rotation table
+DROP TRIGGER IF EXISTS update_api_key_rotation_timestamp ON api_key_rotation;
+CREATE TRIGGER update_api_key_rotation_timestamp
+BEFORE UPDATE ON api_key_rotation
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
 -- Example usage - This shows how to add columns to existing tables
 -- You can add these calls whenever you need to introduce schema changes
 -- SELECT add_column_if_not_exists('tomori_configs', 'new_feature_flag', 'BOOLEAN', 'false');

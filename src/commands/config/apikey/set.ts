@@ -343,6 +343,15 @@ export async function execute(
 		}
 
 		if (currentProvider !== newProvider) {
+			// Purge rotation keys when provider changes (keys are provider-specific)
+			const { purgeRotationKeys } = await import("../../../utils/security/keyRotation");
+			const purgedCount = await purgeRotationKeys(tomoriState.server_id);
+			if (purgedCount > 0) {
+				log.info(
+					`Purged ${purgedCount} rotation key(s) due to provider change from ${currentProvider} to ${newProvider}`,
+				);
+			}
+
 			// Provider changed - handle custom provider specially
 			if (isCustomProvider(newProvider)) {
 				// Custom provider: use the LLM ID from capabilities configuration

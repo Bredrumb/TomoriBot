@@ -1236,6 +1236,28 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 					success_title: `API Key Removed`,
 					success_description: `The AI provider API key has been successfully removed. My chat functions are disabled until a new key is set.`,
 				},
+				rotation: {
+					description: `Manage API key rotation for load balancing and failover.`,
+					action_description: `Choose an action: add a key or purge all keys`,
+					action_add: `Add Key`,
+					action_purge: `Purge All Keys`,
+					key_description: `The API key to add to the rotation pool (required for add action)`,
+					// Validation errors
+					no_main_key_title: `No Main API Key`,
+					no_main_key_description: `You must set a main API key using \`/config apikey set\` before adding rotation keys.`,
+					custom_provider_title: `Not Supported`,
+					custom_provider_description: `API key rotation is not supported for custom providers.`,
+					key_required_title: `Key Required`,
+					key_required_description: `Please provide an API key when using the "add" action.`,
+					// Success messages
+					add_success_title: `Rotation Key Added`,
+					add_success_description: `Successfully added a new API key to the rotation pool. You now have **{count}** rotation key(s) for {provider}. Keys will be used in round-robin order with automatic failover.`,
+					purge_success_title: `Rotation Keys Purged`,
+					purge_success_description: `Successfully removed **{count}** key(s) from the rotation pool. Only your main API key will be used.`,
+					// Info messages
+					no_keys_title: `No Rotation Keys`,
+					no_keys_description: `There are no rotation keys to purge. Only your main API key is configured.`,
+				},
 			},
 			// Brave Search API key management (subcommand group)
 			braveapi: {
