@@ -9,6 +9,8 @@ import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
 import type { UserRow } from "../../types/db/schema";
 import { memoryGuard, IMPORT_LIMITS } from "../../utils/security/rateLimiter";
+import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
+import { invalidateUserCache } from "../../utils/cache/userCache";
 import {
 	validateImportFile,
 	importPersonalData,
@@ -326,6 +328,14 @@ export async function execute(
 				],
 			});
 			return;
+		}
+
+		// Invalidate caches so next message gets fresh data
+		if (validation.type === "personal") {
+			invalidateUserCache(interaction.user.id);
+		} else if (validation.type === "server") {
+			const serverDiscId = interaction.guild?.id ?? interaction.user.id;
+			invalidateTomoriStateCache(serverDiscId);
 		}
 
 		// 10. Send success message with import summary

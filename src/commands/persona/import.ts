@@ -18,6 +18,7 @@ import {
 	IMPORT_LIMITS,
 	reserveImportQuota,
 } from "../../utils/security/rateLimiter";
+import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import {
 	validatePresetFile,
 	importPresetData,
@@ -387,6 +388,9 @@ export async function execute(
 			});
 			return;
 		}
+
+		// Invalidate cache so next message gets fresh persona/config
+		invalidateTomoriStateCache(serverDiscId);
 
 		// 12. Try to set TomoriBot's server-specific avatar and nickname (guild-only, non-fatal if fails)
 		const isDM = !interaction.guild;
