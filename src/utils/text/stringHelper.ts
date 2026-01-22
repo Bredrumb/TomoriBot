@@ -1041,8 +1041,15 @@ export function cleanLLMOutput(
 	mentionIdSet?: Set<string>,
 ): string {
 	// 1. Basic whitespace and separator cleanup
-	if (text.startsWith("```") || text.endsWith("```")) return text;
 	let cleanedText = text
+		// Remove any leaked [System: ...] blocks before other processing
+		.replace(/\[system:[\s\S]*?\]/gi, "")
+		.replace(/\[system:[\s\S]*$/gi, "");
+
+	if (cleanedText.startsWith("```") || cleanedText.endsWith("```"))
+		return cleanedText;
+
+	cleanedText = cleanedText
 		.replace(/\n{3,}/g, "\n\n")
 		.replace(/<\|im_end\|>(\s*)$/, "")
 		.replace(/<\|file_separator\|>(\s*)$/, "") // Old Gemini bug when using inline markers

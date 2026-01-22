@@ -14,7 +14,6 @@
  * - Handle mid-stream errors with unified error format
  */
 
-import { OpenRouter } from "@openrouter/sdk";
 import type {
 	FunctionCall,
 	FunctionResponseImageMetadata,
@@ -74,24 +73,44 @@ interface OpenrouterStreamChunk {
 					arguments?: string;
 				};
 			}>;
+			// OpenAI-style snake_case tool calls (raw OpenRouter API)
+			tool_calls?: Array<{
+				index?: number;
+				id?: string;
+				type?: string;
+				thought_signature?: string;
+				function?: {
+					name?: string;
+					arguments?: string;
+				};
+			}>;
 			// Reasoning details for preserving reasoning continuity (required for Gemini models)
 			// biome-ignore lint/suspicious/noExplicitAny: reasoning_details has complex nested structure that varies by provider
 			reasoning_details?: any[];
+			// Some providers may send camelCase reasoningDetails
+			// biome-ignore lint/suspicious/noExplicitAny: reasoningDetails has complex nested structure that varies by provider
+			reasoningDetails?: any[];
 		};
 		// OpenRouter SDK uses camelCase finishReason, not snake_case finish_reason!
 		finishReason?: string | null;
+		// OpenAI-style snake_case finish reason (raw OpenRouter API)
+		finish_reason?: string | null;
 		logprobs?: unknown | null;
 	}>;
 	usage?: {
 		promptTokens?: number;
+		prompt_tokens?: number;
 		completionTokens?: number;
+		completion_tokens?: number;
 		totalTokens?: number;
+		total_tokens?: number;
 		completionTokensDetails?: unknown;
+		completion_tokens_details?: unknown;
 	};
 	error?: {
-		code: string;
-		message: string;
-	};
+		code?: string | number;
+		message?: string;
+	} | ProviderError;
 }
 
 /**
@@ -139,9 +158,6 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		this.toolCallAccumulator.clear();
 		this.reasoningDetailsAccumulator = [];
 
-		// Initialize OpenRouter client
-		const openRouter = new OpenRouter({ apiKey: config.apiKey });
-
 		// Cast config to OpenrouterStreamConfig to access provider-specific fields
 		const openrouterConfig = config as OpenrouterStreamConfig;
 
@@ -180,72 +196,205 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		// Log sanitized request for debugging
 		this.logSanitizedRequest(messages);
 
-		try {
-			// Cast config to access OpenRouter-specific fields
-			const openrouterConfig = config as OpenrouterStreamConfig;
+		let controller: AbortController | null = null;
 
-			// Build SDK request - conditionally include tools
-			const requestParams = {
+		try {
+			// Build request body (OpenAI-compatible)
+			const requestBody: Record<string, unknown> = {
 				// Only include model if it's not "account-setting" (which signals to use the user's OpenRouter account default)
 				...(config.model !== "account-setting" && { model: config.model }),
-				// biome-ignore lint/suspicious/noExplicitAny: SDK types don't match our internal format
-				messages: messages as any,
+				messages,
 				temperature: config.temperature,
-				// OpenRouter follows OpenAI's snake_case for max_tokens
-				...(config.maxOutputTokens !== undefined && {
-					max_tokens: config.maxOutputTokens,
-				}),
 				stream: true,
 				stream_options: { include_usage: true },
-				// Only include tools if defined and has items
-				...(config.tools && config.tools.length > 0
-					? {
-							// biome-ignore lint/suspicious/noExplicitAny: SDK types don't match our internal format
-							tools: config.tools as any,
-						}
-					: {}),
-				// Add OpenRouter-specific sampling parameters if provided
-				...(openrouterConfig.topP !== undefined && {
-					top_p: openrouterConfig.topP,
-				}),
-				...(openrouterConfig.topK !== undefined && {
-					top_k: openrouterConfig.topK,
-				}),
-				...(openrouterConfig.frequencyPenalty !== undefined && {
-					frequency_penalty: openrouterConfig.frequencyPenalty,
-				}),
-				...(openrouterConfig.presencePenalty !== undefined && {
-					presence_penalty: openrouterConfig.presencePenalty,
-				}),
-				...(openrouterConfig.repetitionPenalty !== undefined && {
-					repetition_penalty: openrouterConfig.repetitionPenalty,
-				}),
 			};
+
+			// OpenRouter follows OpenAI's snake_case for max_tokens
+			if (config.maxOutputTokens !== undefined) {
+				requestBody.max_tokens = config.maxOutputTokens;
+			}
+
+			// Only include tools if defined and has items
+			if (config.tools && config.tools.length > 0) {
+				requestBody.tools = config.tools;
+			}
+
+			// Add OpenRouter-specific sampling parameters if provided
+			if (openrouterConfig.topP !== undefined) {
+				requestBody.top_p = openrouterConfig.topP;
+			}
+			if (openrouterConfig.topK !== undefined) {
+				requestBody.top_k = openrouterConfig.topK;
+			}
+			if (openrouterConfig.frequencyPenalty !== undefined) {
+				requestBody.frequency_penalty = openrouterConfig.frequencyPenalty;
+			}
+			if (openrouterConfig.presencePenalty !== undefined) {
+				requestBody.presence_penalty = openrouterConfig.presencePenalty;
+			}
+			if (openrouterConfig.repetitionPenalty !== undefined) {
+				requestBody.repetition_penalty = openrouterConfig.repetitionPenalty;
+			}
 
 			log.info(
 				`Sampling params - temp: ${config.temperature}, top_p: ${openrouterConfig.topP ?? "default"}, freq_penalty: ${openrouterConfig.frequencyPenalty ?? "default"}, pres_penalty: ${openrouterConfig.presencePenalty ?? "default"}, rep_penalty: ${openrouterConfig.repetitionPenalty ?? "default"}`,
 			);
 
-			// Start the streaming
-			// biome-ignore lint/suspicious/noExplicitAny: SDK streaming response needs async iterator cast
-			const stream = (await openRouter.chat.send(requestParams)) as any;
+			// Build headers
+			const headers: Record<string, string> = {
+				"Content-Type": "application/json",
+				Accept: "text/event-stream",
+			};
 
-			// Yield each chunk
-			for await (const chunkResponse of stream) {
-				// Note: OpenRouter occasionally sends ": OPENROUTER PROCESSING" comments
-				// These are keepalive messages per SSE spec and should be ignored
-				// The SDK handles this automatically
+			if (config.apiKey && config.apiKey.trim() !== "") {
+				headers.Authorization = `Bearer ${config.apiKey}`;
+			}
 
-				yield {
-					data: chunkResponse,
-					provider: "openrouter",
-					metadata: {
-						timestamp: Date.now(),
-						model: config.model,
-					},
+			controller = new AbortController();
+			const inactivityTimeoutMs = config.inactivityTimeoutMs ?? 120000;
+
+			const response = await fetch(
+				"https://openrouter.ai/api/v1/chat/completions",
+				{
+					method: "POST",
+					headers,
+					body: JSON.stringify(requestBody),
+					signal: controller.signal,
+				},
+			);
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				let errorMessage = response.statusText;
+				try {
+					const errorData = JSON.parse(errorText) as {
+						error?: { message?: string };
+						message?: string;
+					};
+					errorMessage =
+						errorData?.error?.message ||
+						errorData?.message ||
+						errorText ||
+						response.statusText;
+				} catch {
+					errorMessage = errorText || response.statusText;
+				}
+
+				throw new Error(`HTTP ${response.status}: ${errorMessage}`);
+			}
+
+			if (!response.body) {
+				throw new Error("Response body is null");
+			}
+
+			const reader = response.body.getReader();
+			const decoder = new TextDecoder();
+			let buffer = "";
+			let lastMeaningfulAt = Date.now();
+
+			const readWithTimeout = async () => {
+				let timeoutId: NodeJS.Timeout | null = null;
+				const timeoutPromise = new Promise<never>((_, reject) => {
+					timeoutId = setTimeout(() => {
+						reject(
+							new Error(
+								"OpenRouter stream timed out while waiting for data",
+							),
+						);
+					}, inactivityTimeoutMs);
+				});
+
+				try {
+					return await Promise.race([reader.read(), timeoutPromise]);
+				} finally {
+					if (timeoutId) clearTimeout(timeoutId);
+				}
+			};
+
+			while (true) {
+				const readResult = (await readWithTimeout()) as {
+					done: boolean;
+					value?: Uint8Array;
 				};
+
+				if (readResult.done) break;
+
+				if (!readResult.value) continue;
+
+				buffer += decoder.decode(readResult.value, { stream: true });
+
+				// Process complete SSE lines
+				const lines = buffer.split("\n");
+				buffer = lines.pop() || "";
+
+				for (const line of lines) {
+					const trimmedLine = line.trim();
+
+					// Skip empty lines and SSE comments
+					if (!trimmedLine || trimmedLine.startsWith(":")) continue;
+
+					if (!trimmedLine.startsWith("data:")) continue;
+
+					const data = trimmedLine.slice(5).trim();
+
+					if (!data) continue;
+
+					if (data === "[DONE]") {
+						log.info("OpenrouterStreamAdapter: Stream completed [DONE]");
+						// Continue reading until stream closes naturally
+						continue;
+					}
+
+					let parsed: unknown;
+					try {
+						parsed = JSON.parse(data);
+					} catch (parseError) {
+						log.warn(
+							`OpenrouterStreamAdapter: Failed to parse SSE data: ${data}`,
+							{
+								error:
+									parseError instanceof Error
+										? parseError.message
+										: String(parseError),
+							},
+						);
+						continue;
+					}
+
+					const normalizedChunk = this.normalizeOpenrouterChunk(parsed);
+					if (!normalizedChunk) continue;
+
+					const hasMeaningfulData = Boolean(
+						normalizedChunk.error ||
+							normalizedChunk.usage ||
+							(normalizedChunk.choices &&
+								normalizedChunk.choices.length > 0),
+					);
+
+					if (!hasMeaningfulData) continue;
+
+					lastMeaningfulAt = Date.now();
+
+					yield {
+						data: normalizedChunk,
+						provider: "openrouter",
+						metadata: {
+							timestamp: Date.now(),
+							model: config.model,
+						},
+					};
+				}
+
+				// Timeout based on meaningful chunks, even if keepalives are flowing
+				if (Date.now() - lastMeaningfulAt > inactivityTimeoutMs) {
+					controller.abort();
+					throw new Error("OpenRouter stream timed out due to inactivity");
+				}
 			}
 		} catch (error) {
+			if (controller) {
+				controller.abort();
+			}
 			// Convert OpenRouter API errors to our format
 			const providerError = this.handleProviderError(error);
 			yield {
@@ -260,6 +409,208 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 	}
 
 	/**
+	 * Normalize raw OpenRouter streaming data into the expected chunk format
+	 * Handles both SDK-style camelCase and raw OpenAI-style snake_case fields.
+	 */
+	private normalizeOpenrouterChunk(raw: unknown): OpenrouterStreamChunk | null {
+		if (!raw || typeof raw !== "object") return null;
+
+		const rawObj = raw as Record<string, unknown>;
+
+		// Some wrappers may include a `data` field that contains the real payload
+		if ("data" in rawObj) {
+			const dataValue = rawObj.data;
+			if (typeof dataValue === "string") {
+				try {
+					return this.normalizeOpenrouterChunk(JSON.parse(dataValue));
+				} catch {
+					return null;
+				}
+			}
+			if (typeof dataValue === "object" && dataValue !== null) {
+				return this.normalizeOpenrouterChunk(dataValue);
+			}
+		}
+
+		// Handle error-only payloads
+		if (rawObj.error && typeof rawObj.error === "object") {
+			const errorObj = rawObj.error as Record<string, unknown>;
+
+			// If it's already a ProviderError, pass through
+			if (this.isProviderError(rawObj.error)) {
+				return { error: rawObj.error };
+			}
+
+			const message =
+				typeof errorObj.message === "string"
+					? errorObj.message
+					: "OpenRouter API error";
+			const codeValue = errorObj.code;
+			return {
+				error: {
+					code:
+						typeof codeValue === "string" || typeof codeValue === "number"
+							? codeValue
+							: "unknown",
+					message,
+				},
+			};
+		}
+
+		// Handle flat error payloads (non-standard)
+		if (
+			typeof rawObj.message === "string" &&
+			("code" in rawObj || "type" in rawObj)
+		) {
+			const codeValue = rawObj.code as string | number | undefined;
+			return {
+				error: {
+					code:
+						typeof codeValue === "string" || typeof codeValue === "number"
+							? codeValue
+							: "unknown",
+					message: rawObj.message,
+				},
+			};
+		}
+
+		const rawChoices = Array.isArray(rawObj.choices) ? rawObj.choices : undefined;
+		const normalizedChoices = rawChoices?.map((choice, index) => {
+			const choiceObj = choice as Record<string, unknown>;
+			const deltaObj =
+				choiceObj.delta && typeof choiceObj.delta === "object"
+					? (choiceObj.delta as Record<string, unknown>)
+					: undefined;
+
+			const rawToolCalls =
+				deltaObj?.toolCalls ?? (deltaObj?.tool_calls as unknown);
+
+			const normalizedToolCalls = Array.isArray(rawToolCalls)
+				? rawToolCalls.map((toolCall) => {
+						const toolObj = toolCall as Record<string, unknown>;
+						const functionObj =
+							toolObj.function && typeof toolObj.function === "object"
+								? (toolObj.function as Record<string, unknown>)
+								: undefined;
+
+						return {
+							index:
+								typeof toolObj.index === "number" ? toolObj.index : undefined,
+							id: typeof toolObj.id === "string" ? toolObj.id : undefined,
+							type: typeof toolObj.type === "string" ? toolObj.type : undefined,
+							thought_signature:
+								typeof toolObj.thought_signature === "string"
+									? toolObj.thought_signature
+									: undefined,
+							function: functionObj
+								? {
+										name:
+											typeof functionObj.name === "string"
+												? functionObj.name
+												: undefined,
+										arguments:
+											typeof functionObj.arguments === "string"
+												? functionObj.arguments
+												: undefined,
+									}
+								: undefined,
+						};
+					})
+				: undefined;
+
+			const reasoningDetails = Array.isArray(deltaObj?.reasoning_details)
+				? deltaObj?.reasoning_details
+				: Array.isArray(deltaObj?.reasoningDetails)
+					? deltaObj?.reasoningDetails
+					: undefined;
+
+			const finishReason =
+				(typeof choiceObj.finishReason === "string" ||
+				choiceObj.finishReason === null
+					? choiceObj.finishReason
+					: undefined) ??
+				(typeof choiceObj.finish_reason === "string" ||
+				choiceObj.finish_reason === null
+					? choiceObj.finish_reason
+					: undefined);
+
+			return {
+				index: typeof choiceObj.index === "number" ? choiceObj.index : index,
+				delta: deltaObj
+					? {
+							role:
+								typeof deltaObj.role === "string" ? deltaObj.role : undefined,
+							content:
+								typeof deltaObj.content === "string" ||
+								deltaObj.content === null
+									? (deltaObj.content as string | null)
+									: undefined,
+							reasoning:
+								typeof deltaObj.reasoning === "string" ||
+								deltaObj.reasoning === null
+									? (deltaObj.reasoning as string | null)
+									: undefined,
+							toolCalls: normalizedToolCalls,
+							reasoning_details: reasoningDetails,
+						}
+					: undefined,
+				finishReason,
+				logprobs: (choiceObj.logprobs ?? null) as unknown,
+			};
+		});
+
+		const rawUsage =
+			rawObj.usage && typeof rawObj.usage === "object"
+				? (rawObj.usage as Record<string, unknown>)
+				: undefined;
+
+		const normalizedUsage = rawUsage
+			? {
+					promptTokens:
+						typeof rawUsage.promptTokens === "number"
+							? rawUsage.promptTokens
+							: typeof rawUsage.prompt_tokens === "number"
+								? rawUsage.prompt_tokens
+								: undefined,
+					completionTokens:
+						typeof rawUsage.completionTokens === "number"
+							? rawUsage.completionTokens
+							: typeof rawUsage.completion_tokens === "number"
+								? rawUsage.completion_tokens
+								: undefined,
+					totalTokens:
+						typeof rawUsage.totalTokens === "number"
+							? rawUsage.totalTokens
+							: typeof rawUsage.total_tokens === "number"
+								? rawUsage.total_tokens
+								: undefined,
+					completionTokensDetails:
+						rawUsage.completionTokensDetails ??
+						rawUsage.completion_tokens_details,
+				}
+			: undefined;
+
+		const hasUsage =
+			normalizedUsage &&
+			Object.values(normalizedUsage).some((value) => value !== undefined);
+
+		if (!normalizedChoices && !hasUsage) return null;
+
+		const normalizedChunk: OpenrouterStreamChunk = {};
+
+		if (typeof rawObj.id === "string") normalizedChunk.id = rawObj.id;
+		if (typeof rawObj.object === "string") normalizedChunk.object = rawObj.object;
+		if (typeof rawObj.created === "number") normalizedChunk.created = rawObj.created;
+		if (typeof rawObj.model === "string") normalizedChunk.model = rawObj.model;
+		if (typeof rawObj.provider === "string")
+			normalizedChunk.provider = rawObj.provider;
+		if (normalizedChoices) normalizedChunk.choices = normalizedChoices;
+		if (hasUsage && normalizedUsage) normalizedChunk.usage = normalizedUsage;
+
+		return normalizedChunk;
+	}
+
+	/**
 	 * Process a raw OpenRouter chunk into normalized format
 	 */
 	processChunk(chunk: RawStreamChunk): ProcessedChunk {
@@ -267,8 +618,22 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 
 		// Handle errors first (both pre-stream and mid-stream errors)
 		if ("error" in openrouterChunk && openrouterChunk.error) {
-			const errorCode = openrouterChunk.error.code;
-			const errorMessage = openrouterChunk.error.message || "OpenRouter API error";
+			const providerErrorCandidate = openrouterChunk.error as ProviderError;
+			if (
+				typeof providerErrorCandidate.type === "string" &&
+				typeof providerErrorCandidate.retryable === "boolean"
+			) {
+				return {
+					type: "error",
+					error: providerErrorCandidate,
+				};
+			}
+
+			const errorCode =
+				(openrouterChunk.error as { code?: string | number }).code;
+			const errorMessage =
+				(openrouterChunk.error as { message?: string }).message ||
+				"OpenRouter API error";
 
 			// Check for malformed tool call errors (model produced invalid tool call structure)
 			// These occur when the model generates null/invalid values where strings are expected
@@ -314,7 +679,10 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 				error: {
 					type: "api_error",
 					message: errorMessage,
-					code: errorCode,
+					code:
+						typeof errorCode === "string" || typeof errorCode === "number"
+							? String(errorCode)
+							: "unknown",
 					retryable: false,
 					originalError: openrouterChunk.error,
 				} as ProviderError,
@@ -330,20 +698,24 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 			};
 		}
 
+		const finishReason = choice.finishReason ?? choice.finish_reason ?? null;
+		const deltaToolCalls =
+			choice.delta?.toolCalls ?? choice.delta?.tool_calls;
+
 		// Log full chunk when we have tool calls to debug thought_signature location
-		if (choice.delta?.toolCalls || choice.finishReason === "tool_calls") {
+		if (deltaToolCalls || finishReason === "tool_calls") {
 			log.info(
 				`OpenRouter: FULL CHUNK with tool calls: ${JSON.stringify(openrouterChunk, null, 2)}`,
 			);
 		}
 
-		if (choice.finishReason !== null)
+		if (finishReason !== null && finishReason !== undefined)
 			log.info(
-				`Choice - finishReason: ${choice.finishReason}, has delta: ${!!choice.delta}, delta.content: ${!!choice.delta?.content}, delta.toolCalls: ${!!choice.delta?.toolCalls}`,
+				`Choice - finishReason: ${finishReason}, has delta: ${!!choice.delta}, delta.content: ${!!choice.delta?.content}, delta.toolCalls: ${!!deltaToolCalls}`,
 			);
 
 		// Check for finishReason "error" (mid-stream error in unified format)
-		if (choice.finishReason === "error") {
+		if (finishReason === "error") {
 			return {
 				type: "error",
 				error: {
@@ -358,9 +730,18 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		// Check for usage stats (final chunk)
 		const metadata: Record<string, unknown> = {};
 		if (openrouterChunk.usage) {
-			metadata.usage = openrouterChunk.usage;
+			const usage = openrouterChunk.usage;
+			const normalizedUsage = {
+				promptTokens: usage.promptTokens ?? usage.prompt_tokens,
+				completionTokens: usage.completionTokens ?? usage.completion_tokens,
+				totalTokens: usage.totalTokens ?? usage.total_tokens,
+				completionTokensDetails:
+					usage.completionTokensDetails ?? usage.completion_tokens_details,
+			};
+
+			metadata.usage = normalizedUsage;
 			log.info(
-				`OpenRouter usage: ${openrouterChunk.usage.totalTokens} total tokens`,
+				`OpenRouter usage: ${normalizedUsage.totalTokens ?? "unknown"} total tokens`,
 			);
 		}
 
@@ -368,12 +749,12 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		// This ensures that when a chunk has BOTH finishReason and delta (common in OpenRouter),
 		// we prioritize the finishReason to return the correct chunk type
 		// OpenRouter normalizes finishReason to: tool_calls, stop, length, content_filter, error
-		if (choice.finishReason === "tool_calls") {
+		if (finishReason === "tool_calls") {
 			// Handle finishReason "tool_calls" (model wants to use a tool)
 			// This signals the end of tool call streaming - parse accumulated data
 			// BUT FIRST, if this chunk also has delta.toolCalls, accumulate it before parsing
-			if (choice.delta?.toolCalls && choice.delta.toolCalls.length > 0) {
-				for (const deltaToolCall of choice.delta.toolCalls) {
+			if (deltaToolCalls && deltaToolCalls.length > 0) {
+				for (const deltaToolCall of deltaToolCalls) {
 					const index = deltaToolCall.index ?? 0;
 
 					// Get or create accumulator for this tool call index
@@ -429,10 +810,12 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 
 			// Accumulate reasoning_details if present in this final chunk
 			// This is critical for Gemini models which require reasoning_details preservation
-			if (choice.delta?.reasoning_details && choice.delta.reasoning_details.length > 0) {
-				this.reasoningDetailsAccumulator.push(...choice.delta.reasoning_details);
+			const finalReasoningDetails =
+				choice.delta?.reasoning_details ?? choice.delta?.reasoningDetails;
+			if (finalReasoningDetails && finalReasoningDetails.length > 0) {
+				this.reasoningDetailsAccumulator.push(...finalReasoningDetails);
 				log.info(
-					`OpenRouter: Accumulated ${choice.delta.reasoning_details.length} reasoning_details (total: ${this.reasoningDetailsAccumulator.length})`,
+					`OpenRouter: Accumulated ${finalReasoningDetails.length} reasoning_details (total: ${this.reasoningDetailsAccumulator.length})`,
 				);
 			}
 
@@ -518,7 +901,7 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		}
 
 		// Handle finishReason "stop" (normal completion)
-		if (choice.finishReason === "stop") {
+		if (finishReason === "stop") {
 			return {
 				type: "done",
 				metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
@@ -532,8 +915,8 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		// - Later chunks: { index: 0, function: { arguments: '{"query' } }
 		// - More chunks: { index: 0, function: { arguments: '":"test"}' } }
 		// We need to accumulate all chunks before parsing the complete JSON arguments
-		if (choice.delta?.toolCalls && choice.delta.toolCalls.length > 0) {
-			for (const deltaToolCall of choice.delta.toolCalls) {
+		if (deltaToolCalls && deltaToolCalls.length > 0) {
+			for (const deltaToolCall of deltaToolCalls) {
 				const index = deltaToolCall.index ?? 0;
 
 				// Get or create accumulator for this tool call index
@@ -597,10 +980,12 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 
 		// Accumulate reasoning_details from delta (required for Gemini models)
 		// These can arrive in any chunk, not just the final one
-		if (choice.delta?.reasoning_details && choice.delta.reasoning_details.length > 0) {
-			this.reasoningDetailsAccumulator.push(...choice.delta.reasoning_details);
+		const reasoningDetails =
+			choice.delta?.reasoning_details ?? choice.delta?.reasoningDetails;
+		if (reasoningDetails && reasoningDetails.length > 0) {
+			this.reasoningDetailsAccumulator.push(...reasoningDetails);
 			log.info(
-				`OpenRouter: Accumulated ${choice.delta.reasoning_details.length} reasoning_details from delta (total: ${this.reasoningDetailsAccumulator.length})`,
+				`OpenRouter: Accumulated ${reasoningDetails.length} reasoning_details from delta (total: ${this.reasoningDetailsAccumulator.length})`,
 			);
 			// Return empty text to continue processing
 			return {
@@ -627,6 +1012,16 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		};
 	}
 
+	private isProviderError(value: unknown): value is ProviderError {
+		if (!value || typeof value !== "object") return false;
+		const candidate = value as Record<string, unknown>;
+		return (
+			typeof candidate.type === "string" &&
+			typeof candidate.message === "string" &&
+			typeof candidate.retryable === "boolean"
+		);
+	}
+
 	/**
 	 * Extract function call from raw OpenRouter chunk
 	 */
@@ -634,8 +1029,10 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		const openrouterChunk = chunk.data as OpenrouterStreamChunk;
 
 		const choice = openrouterChunk.choices?.[0];
-		if (choice?.delta?.toolCalls && choice.delta.toolCalls.length > 0) {
-			const toolCall = choice.delta.toolCalls[0];
+		const toolCalls =
+			choice?.delta?.toolCalls ?? choice?.delta?.tool_calls;
+		if (toolCalls && toolCalls.length > 0) {
+			const toolCall = toolCalls[0];
 			if (toolCall.function) {
 				return {
 					name: toolCall.function.name || "",
@@ -711,6 +1108,14 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 			}
 		}
 
+		// Extract HTTP status code from error message if present
+		if (!errorCode) {
+			const httpMatch = errorMessage.match(/HTTP\s+(\d{3})/i);
+			if (httpMatch) {
+				errorCode = httpMatch[1];
+			}
+		}
+
 		// Fallback: try to parse from error message string
 		if (!errorCode || !extractedMessage) {
 			try {
@@ -773,6 +1178,12 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		} else if (finalCode.includes("413") || finalMessage.includes("413")) {
 			errorType = "api_error"; // Payload too large
 			retryable = false;
+		} else if (finalCode.includes("404") || finalMessage.includes("404")) {
+			errorType = "api_error";
+			retryable = false;
+		} else if (finalCode.includes("408") || finalMessage.includes("408")) {
+			errorType = "timeout";
+			retryable = true;
 		} else if (finalCode.includes("429") || finalMessage.includes("429")) {
 			errorType = "rate_limit";
 			retryable = true;
