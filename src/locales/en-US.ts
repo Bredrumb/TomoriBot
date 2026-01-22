@@ -1241,6 +1241,7 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 					action_description: `Choose an action: add a key or purge all keys`,
 					action_add: `Add Key`,
 					action_purge: `Purge All Keys`,
+					action_choice_purge: `Purge All Keys`,
 					key_description: `The API key to add to the rotation pool (required for add action)`,
 					// Validation errors
 					no_main_key_title: `No Main API Key`,

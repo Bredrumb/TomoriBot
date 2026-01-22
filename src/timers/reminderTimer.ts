@@ -4,7 +4,7 @@
  * Note: pg_cron is only used for hourly cleanup of expired reminders, not execution
  */
 
-import type { Client, Message } from "discord.js";
+import type { Client, Message, TextBasedChannel } from "discord.js";
 import { log } from "../utils/misc/logger";
 import { getDueReminders, deleteReminderById } from "../utils/db/dbRead";
 import type { ReminderRow } from "../types/db/schema";
@@ -171,6 +171,8 @@ export class ReminderTimer {
 			log.info(`- Reminder purpose: "${reminder.reminder_purpose}"`);
 			log.info(`- Lateness: ${lateness || "none"}`);
 
+			const reminderStartTime = Date.now();
+
 			// Call tomoriChat with manual trigger and reminder recipient ID
 			await tomoriChat(
 				this.client,
@@ -194,6 +196,13 @@ export class ReminderTimer {
 				`tomoriChat call completed for reminder ${reminder.reminder_id}`,
 			);
 
+			await this.ensureReminderRecipientMention(
+				channel,
+				reminder,
+				lastMessage.id,
+				reminderStartTime,
+			);
+
 			// Successfully executed, delete the reminder
 			if (reminder.reminder_id) {
 				await deleteReminderById(reminder.reminder_id);
@@ -208,6 +217,95 @@ export class ReminderTimer {
 			await this.handleReminderExecutionFailure(
 				reminder,
 				error instanceof Error ? error.message : "Unknown error",
+			);
+		}
+	}
+
+	/**
+	 * Ensures reminder responses include a mention for the target user.
+	 * If the LLM response doesn't mention the user, send a final mention message.
+	 */
+	private async ensureReminderRecipientMention(
+		channel: TextBasedChannel,
+		reminder: ReminderRow,
+		afterMessageId: string,
+		reminderStartTime: number,
+	): Promise<void> {
+		type SendableChannel = TextBasedChannel & {
+			send: (options: {
+				content: string;
+				allowedMentions: { users: string[]; roles: string[]; parse: string[] };
+			}) => Promise<unknown>;
+		};
+
+		const botUserId = this.client.user?.id;
+		if (!botUserId) {
+			log.warn(
+				`Cannot verify reminder mention for reminder ${reminder.reminder_id}: bot user not available`,
+			);
+			return;
+		}
+
+		if (!("messages" in channel)) {
+			log.warn(
+				`Cannot verify reminder mention for reminder ${reminder.reminder_id}: channel does not support message fetching`,
+			);
+			return;
+		}
+
+		try {
+			const recentMessages = await channel.messages.fetch({
+				after: afterMessageId,
+				limit: 100,
+			});
+
+			const botMessages = recentMessages.filter(
+				(message) =>
+					message.author.id === botUserId &&
+					message.createdTimestamp >= reminderStartTime - 1000,
+			);
+
+			if (botMessages.size === 0) {
+				log.warn(
+					`No bot messages found after reminder ${reminder.reminder_id} to verify mention`,
+				);
+				return;
+			}
+
+			const mentionToken = `<@${reminder.user_discord_id}>`;
+			const mentionTokenAlt = `<@!${reminder.user_discord_id}>`;
+
+			const hasMention = botMessages.some(
+				(message) =>
+					message.mentions.users.has(reminder.user_discord_id) ||
+					message.content.includes(mentionToken) ||
+					message.content.includes(mentionTokenAlt),
+			);
+
+			if (!hasMention) {
+				if (!("send" in channel)) {
+					log.warn(
+						`Cannot send fallback mention for reminder ${reminder.reminder_id}: channel does not support sending`,
+					);
+					return;
+				}
+
+				await (channel as SendableChannel).send({
+					content: mentionToken,
+					allowedMentions: {
+						users: [reminder.user_discord_id],
+						roles: [],
+						parse: [],
+					},
+				});
+				log.info(
+					`Added fallback mention for reminder ${reminder.reminder_id} to ensure recipient is pinged`,
+				);
+			}
+		} catch (error) {
+			log.warn(
+				`Failed to verify reminder mention for reminder ${reminder.reminder_id}:`,
+				error,
 			);
 		}
 	}
