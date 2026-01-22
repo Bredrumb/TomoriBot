@@ -1,13 +1,15 @@
 import type { TomoriState } from "@/types/db/schema";
-import { loadTomoriState } from "../db/dbRead";
+import { loadAllPersonasForServer } from "../db/dbRead";
 import { log } from "../misc/logger";
 
 /**
  * Cache entry structure for TomoriState data per server.
+ * Now holds arrays of personas (main + alters) for multi-persona support.
  * Includes timestamp for TTL (Time To Live) expiration tracking.
  */
 interface TomoriStateCacheEntry {
-	state: TomoriState;
+	personas: TomoriState[]; // Array of all personas (main first, then alters)
+	mainPersona: TomoriState; // Quick reference to main persona (is_alter=false)
 	cachedAt: number; // Timestamp in milliseconds
 }
 
@@ -31,22 +33,22 @@ let cacheHits = 0;
 let cacheMisses = 0;
 
 /**
- * Loads TomoriState with 10-minute in-memory cache.
+ * Loads ALL personas (main + alters) with 10-minute in-memory cache.
  * Falls back to DB query on cache miss or stale.
  *
  * Cache flow:
  * 1. Check in-memory cache
  *    - HIT & FRESH (<10 min) -> Return immediately (0 DB queries)
  *    - MISS or STALE -> Continue to step 2
- * 2. Load from DB via loadTomoriState()
+ * 2. Load from DB via loadAllPersonasForServer()
  * 3. Cache in memory for next requests
  *
  * @param serverDiscId - Discord server ID
- * @returns TomoriState or null if not found
+ * @returns Array of TomoriState objects (main first, then alters), or empty array if not found
  */
-export async function getCachedTomoriState(
+export async function getCachedAllPersonas(
 	serverDiscId: string,
-): Promise<TomoriState | null> {
+): Promise<TomoriState[]> {
 	// 1. Check in-memory cache
 	const now = Date.now();
 	const cachedEntry = cache.get(serverDiscId);
@@ -58,9 +60,9 @@ export async function getCachedTomoriState(
 			// Cache hit - return immediately
 			cacheHits++;
 			log.info(
-				`[TomoriState Cache] HIT for server ${serverDiscId} (age: ${Math.round(cacheAge / 1000)}s)`,
+				`[TomoriState Cache] HIT for server ${serverDiscId} (age: ${Math.round(cacheAge / 1000)}s, ${cachedEntry.personas.length} personas)`,
 			);
-			return cachedEntry.state;
+			return cachedEntry.personas;
 		}
 
 		// Cache stale - fall through to refresh
@@ -71,28 +73,40 @@ export async function getCachedTomoriState(
 
 	// 2. Cache miss or stale - refresh from DB
 	cacheMisses++;
-	log.info(`[TomoriState Cache] MISS for server ${serverDiscId} - loading from DB`);
+	log.info(
+		`[TomoriState Cache] MISS for server ${serverDiscId} - loading all personas from DB`,
+	);
 
 	try {
-		// 3. Load fresh data from database
-		const state = await loadTomoriState(serverDiscId);
+		// 3. Load fresh data from database (all personas)
+		const personas = await loadAllPersonasForServer(serverDiscId);
 
-		if (state) {
+		if (personas.length > 0) {
+			// Find main persona (is_alter=false)
+			const mainPersona = personas.find((p) => !p.is_alter);
+			if (!mainPersona) {
+				log.error(
+					`[TomoriState Cache] No main persona found for server ${serverDiscId}`,
+				);
+				return personas; // Return alters anyway, but log error
+			}
+
 			// 4. Cache the loaded data
 			cache.set(serverDiscId, {
-				state,
+				personas,
+				mainPersona,
 				cachedAt: now,
 			});
 
 			log.success(
-				`[TomoriState Cache] Cached state for server ${serverDiscId} (tomori: ${state.tomori_nickname})`,
+				`[TomoriState Cache] Cached ${personas.length} persona(s) for server ${serverDiscId} (main: ${mainPersona.tomori_nickname})`,
 			);
 		}
 
-		return state;
+		return personas;
 	} catch (error) {
 		log.error(
-			`[TomoriState Cache] Error loading state for server ${serverDiscId}:`,
+			`[TomoriState Cache] Error loading personas for server ${serverDiscId}:`,
 			error,
 		);
 
@@ -101,12 +115,57 @@ export async function getCachedTomoriState(
 			log.warn(
 				`[TomoriState Cache] Returning stale cache for server ${serverDiscId} due to error`,
 			);
-			return cachedEntry.state;
+			return cachedEntry.personas;
 		}
 
-		// No cache available, return null
+		// No cache available, return empty array
+		return [];
+	}
+}
+
+/**
+ * Loads ONLY the main persona with 10-minute in-memory cache.
+ * Backward compatibility wrapper for getCachedAllPersonas().
+ *
+ * @param serverDiscId - Discord server ID
+ * @returns Main TomoriState or null if not found
+ */
+export async function getCachedMainPersona(
+	serverDiscId: string,
+): Promise<TomoriState | null> {
+	// 1. Check in-memory cache first for quick lookup
+	const cachedEntry = cache.get(serverDiscId);
+	if (cachedEntry) {
+		const cacheAge = Date.now() - cachedEntry.cachedAt;
+		if (cacheAge < TOMORI_STATE_CACHE_DURATION_MS) {
+			// Cache hit - return main persona immediately
+			cacheHits++;
+			return cachedEntry.mainPersona;
+		}
+	}
+
+	// 2. Cache miss or stale - load all personas
+	const personas = await getCachedAllPersonas(serverDiscId);
+
+	if (personas.length === 0) {
 		return null;
 	}
+
+	// Return main persona (is_alter=false)
+	const mainPersona = personas.find((p) => !p.is_alter);
+	return mainPersona || null;
+}
+
+/**
+ * DEPRECATED: Use getCachedMainPersona() or getCachedAllPersonas() instead.
+ * Kept for backward compatibility during transition.
+ *
+ * @deprecated Use getCachedMainPersona() for main persona only, or getCachedAllPersonas() for all personas.
+ */
+export async function getCachedTomoriState(
+	serverDiscId: string,
+): Promise<TomoriState | null> {
+	return getCachedMainPersona(serverDiscId);
 }
 
 /**

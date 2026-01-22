@@ -53,6 +53,9 @@ export const tomoriSchema = z.object({
 	sample_dialogues_in: z.array(z.string()).default([]),
 	sample_dialogues_out: z.array(z.string()).default([]),
 	autoch_counter: z.number().default(0),
+	is_alter: z.boolean().default(false), // Added January 2026 - Distinguishes main persona (false) from alter personas (true)
+	webhook_avatar_url: z.string().nullable().optional(), // Added January 2026 - Discord CDN URL for alter persona avatars from import embed
+	alter_triggers: z.array(z.string()).default([]), // Added January 2026 - Trigger words for alter personas (main personas use tomori_configs.trigger_words)
 	created_at: z.date().optional(),
 	updated_at: z.date().optional(),
 });

@@ -98,7 +98,7 @@ EXECUTE FUNCTION update_timestamp();
 
 CREATE TABLE IF NOT EXISTS tomoris (
   tomori_id SERIAL PRIMARY KEY,
-  server_id INT NOT NULL UNIQUE,
+  server_id INT NOT NULL,
   tomori_nickname TEXT NOT NULL,
   attribute_list TEXT[] DEFAULT '{}',
   sample_dialogues_in TEXT[] DEFAULT '{}', -- array index is soft id of sample dialogue pairs
@@ -115,6 +115,17 @@ CREATE TRIGGER update_tomoris_timestamp
 BEFORE UPDATE ON tomoris
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
+
+-- Add multi-persona support columns (January 2026)
+-- is_alter: Distinguishes main persona (false) from alter personas (true)
+SELECT add_column_if_not_exists('tomoris', 'is_alter', 'BOOLEAN', 'false');
+-- webhook_avatar_url: Stores Discord CDN URL for alter persona avatars from import embed
+SELECT add_column_if_not_exists('tomoris', 'webhook_avatar_url', 'TEXT');
+-- alter_triggers: Trigger words for alter personas (main personas use tomori_configs.trigger_words)
+SELECT add_column_if_not_exists('tomoris', 'alter_triggers', 'TEXT[]', 'ARRAY[]::TEXT[]');
+
+-- Create index for efficient multi-persona queries (main persona is queried frequently)
+CREATE INDEX IF NOT EXISTS idx_tomoris_server_is_alter ON tomoris(server_id, is_alter);
 
 CREATE TABLE IF NOT EXISTS llms (
   llm_id SERIAL PRIMARY KEY,

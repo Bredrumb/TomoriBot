@@ -146,6 +146,143 @@ export async function loadTomoriState(
 }
 
 /**
+ * Loads ALL personas (main + alters) for a server.
+ * Returns array of TomoriState objects, with main persona first (is_alter=false).
+ * Used for trigger matching to check all personas.
+ *
+ * @param serverDiscId - The Discord ID of the server.
+ * @returns Array of validated TomoriState objects (main first, then alters), or empty array if error/not found.
+ */
+export async function loadAllPersonasForServer(
+	serverDiscId: string,
+): Promise<TomoriState[]> {
+	try {
+		// 1. Load all Tomori persona rows for this server (main first, then alters)
+		const tomoriRows = await sql`
+			SELECT t.*
+			FROM tomoris t
+			JOIN servers s ON t.server_id = s.server_id
+			WHERE s.server_disc_id = ${serverDiscId}
+			ORDER BY t.is_alter ASC
+		`;
+
+		if (!tomoriRows.length) {
+			log.warn(`No personas found for server ${serverDiscId}`);
+			return [];
+		}
+
+		// 2. Load shared server memories once (all personas share the same server memories)
+		const serverId = tomoriRows[0].server_id;
+		const serverMemoriesRows = await sql`
+			SELECT content
+			FROM server_memories
+			WHERE server_id = ${serverId}
+			ORDER BY created_at DESC
+		`;
+		const serverMemories = serverMemoriesRows.map(
+			(row: { content: string }) => row.content,
+		);
+
+		// 3. Load configs, LLMs, and rotation keys for all personas in parallel
+		const personas: TomoriState[] = [];
+
+		for (const tomoriRow of tomoriRows) {
+			// biome-ignore lint/style/noNonNullAssertion: Row existence checked above, ID is guaranteed by DB schema.
+			const tomoriId = tomoriRow.tomori_id!;
+
+			// Load config, LLM, and rotation keys in parallel
+			const [configRows, rotationKeysRows] = await Promise.all([
+				sql`
+					SELECT * FROM tomori_configs
+					WHERE tomori_id = ${tomoriId}
+					LIMIT 1
+				`,
+				sql`
+					SELECT * FROM api_key_rotation
+					WHERE server_id = ${serverId}
+					ORDER BY usage_count ASC, rotation_key_id ASC
+				`,
+			]);
+
+			// Validate config
+			if (!configRows.length) {
+				log.error(
+					`Found persona (${tomoriId}) but no config for server ${serverDiscId}`,
+				);
+				continue; // Skip this persona
+			}
+			const configData = configRows[0];
+
+			// Load LLM data (with cache fallback)
+			let llmData = getCachedLLM(configData.llm_id);
+			if (!llmData) {
+				log.info(
+					`Cache miss for LLM ID ${configData.llm_id}, querying database`,
+				);
+				const llmRows = await sql`
+					SELECT * FROM llms
+					WHERE llm_id = ${configData.llm_id}
+					LIMIT 1
+				`;
+
+				if (!llmRows.length) {
+					log.error(
+						`Found persona config but no LLM data for server ${serverDiscId}, llm_id: ${configData.llm_id}`,
+					);
+					continue; // Skip this persona
+				}
+				llmData = llmRows[0] as LlmRow;
+			}
+
+			// Validate rotation keys
+			const rotationKeys: ApiKeyRotationRow[] = [];
+			for (const row of rotationKeysRows) {
+				const parsed = apiKeyRotationSchema.safeParse(row);
+				if (parsed.success) {
+					rotationKeys.push(parsed.data);
+				} else {
+					log.warn(
+						`Invalid rotation key row for server ${serverDiscId}:`,
+						parsed.error.flatten(),
+					);
+				}
+			}
+
+			// 4. Combine and validate the full state for this persona
+			const combinedState = {
+				...tomoriRow,
+				config: configData,
+				llm: llmData,
+				server_memories: serverMemories, // Shared across all personas
+				rotation_keys: rotationKeys.length > 0 ? rotationKeys : undefined,
+			};
+
+			// Validate using Zod schema
+			const parsedState = tomoriStateSchema.safeParse(combinedState);
+			if (!parsedState.success) {
+				log.error(
+					`Failed to validate persona state for server ${serverDiscId}, tomori_id ${tomoriId}:`,
+					parsedState.error.flatten(),
+				);
+				continue; // Skip this persona
+			}
+
+			personas.push(parsedState.data);
+		}
+
+		if (personas.length === 0) {
+			log.warn(`No valid personas found for server ${serverDiscId}`);
+			return [];
+		}
+
+		return personas;
+	} catch (error) {
+		log.error(`Error loading all personas for server ${serverDiscId}:`, error);
+		return [];
+	}
+}
+
+/**
  * Loads a user's state (UserRow) from the database.
  * @param userDiscId - Discord user ID.
  * @returns UserRow object or null if not found or invalid.
