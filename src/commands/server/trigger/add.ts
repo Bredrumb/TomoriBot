@@ -189,7 +189,7 @@ export async function execute(
 			: selectedPersona.config?.trigger_words ?? [];
 
 		const parsedTriggers = triggerInput
-			.split(",")
+			.split(/[,\u3001]/)
 			.map((trigger) => trigger.trim().toLowerCase())
 			.filter((trigger) => trigger.length > 0);
 

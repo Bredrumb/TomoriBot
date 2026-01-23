@@ -136,7 +136,9 @@ export function extractMetadataFromPNG(pngBuffer: Buffer): PresetExport | null {
 		// 3. Start reading chunks after PNG signature
 		let offset = PNG_SIGNATURE.length;
 
-		// 4. Parse PNG chunks until we find our metadata or reach the end
+		// 4. Parse PNG chunks until we reach the end
+		let lastPreset: PresetExport | null = null;
+		let presetCount = 0;
 		while (offset < data.length) {
 			// Read chunk length (4 bytes)
 			const length = readUint32(data, offset);
@@ -175,16 +177,13 @@ export function extractMetadataFromPNG(pngBuffer: Buffer): PresetExport | null {
 					// 7. Parse and return the JSON data
 					try {
 						const parsed = JSON.parse(value) as PresetExport;
-						log.success(
-							"Successfully extracted TomoriPreset metadata from PNG",
-						);
-						return parsed;
+						lastPreset = parsed;
+						presetCount += 1;
 					} catch (error) {
 						log.error(
 							"Failed to parse TomoriPreset JSON metadata:",
 							error as Error,
 						);
-						return null;
 					}
 				}
 			}
@@ -192,6 +191,17 @@ export function extractMetadataFromPNG(pngBuffer: Buffer): PresetExport | null {
 			// 8. Move to the next chunk
 			offset += length; // Skip chunk data
 			offset += 4; // Skip CRC
+		}
+
+		if (lastPreset) {
+			if (presetCount > 1) {
+				log.warn(
+					`Multiple TomoriPreset metadata chunks found (${presetCount}); using the last one.`,
+				);
+			} else {
+				log.success("Successfully extracted TomoriPreset metadata from PNG");
+			}
+			return lastPreset;
 		}
 
 		// No metadata found

@@ -98,11 +98,6 @@ export async function execute(
 			(persona, index) => ({
 				label: safeSelectOptionText(persona.tomori_nickname),
 				value: index.toString(), // Use index to avoid truncation issues
-				description: safeSelectOptionText(
-					localizer(locale, "commands.persona.remove.select_description", {
-						trigger_count: persona.alter_triggers?.length ?? 0,
-					}),
-				),
 			}),
 		);
 

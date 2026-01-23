@@ -37,34 +37,71 @@ export async function exportPresetData(
 			};
 		}
 
-		const serverId = serverRows[0].server_id;
+	const serverId = serverRows[0].server_id;
 
-		// 2. Query personality data from tomoris and tomori_configs tables (main persona only)
-		const presetRows = await sql`
+		// 2. Query main persona row deterministically (most recently updated)
+		const mainCountRows = await sql`
+			SELECT COUNT(*)::int AS count
+			FROM tomoris
+			WHERE server_id = ${serverId}
+			AND is_alter = false
+		`;
+		const mainCount = Number(mainCountRows[0]?.count ?? 0);
+		if (mainCount > 1) {
+			log.warn(
+				`Multiple main personas found for server ${serverDiscId} (${mainCount}). Export will use the most recently updated.`,
+			);
+		}
+
+		const mainRows = await sql`
 			SELECT
-				t.tomori_nickname,
-				t.attribute_list,
-				t.sample_dialogues_in,
-				t.sample_dialogues_out,
-				COALESCE(tc_server.trigger_words, tc_legacy.trigger_words) as trigger_words
-			FROM tomoris t
-			LEFT JOIN tomori_configs tc_server ON tc_server.server_id = t.server_id
-			LEFT JOIN tomori_configs tc_legacy ON tc_legacy.tomori_id = t.tomori_id
-			WHERE t.server_id = ${serverId}
-			AND t.is_alter = false
+				tomori_id,
+				tomori_nickname,
+				attribute_list,
+				sample_dialogues_in,
+				sample_dialogues_out
+			FROM tomoris
+			WHERE server_id = ${serverId}
+			AND is_alter = false
+			ORDER BY updated_at DESC NULLS LAST, tomori_id DESC
 			LIMIT 1
 		`;
 
-		if (!presetRows.length) {
+		if (!mainRows.length) {
 			return {
 				success: false,
 				error: "commands.persona.export.error_no_preset_data",
 			};
 		}
 
-		const presetData = presetRows[0];
+		const presetData = mainRows[0];
 
-		// 3. Build export object with metadata
+		// 3. Load trigger words from server-scoped config (fallback to legacy tomori_id config)
+		let triggerWords: string[] | null = null;
+		const configRows = await sql`
+			SELECT trigger_words
+			FROM tomori_configs
+			WHERE server_id = ${serverId}
+			ORDER BY updated_at DESC NULLS LAST, tomori_config_id DESC
+			LIMIT 1
+		`;
+
+		if (configRows.length) {
+			triggerWords = configRows[0].trigger_words ?? null;
+		} else if (presetData.tomori_id) {
+			const legacyRows = await sql`
+				SELECT trigger_words
+				FROM tomori_configs
+				WHERE tomori_id = ${presetData.tomori_id}
+				ORDER BY updated_at DESC NULLS LAST, tomori_config_id DESC
+				LIMIT 1
+			`;
+			if (legacyRows.length) {
+				triggerWords = legacyRows[0].trigger_words ?? null;
+			}
+		}
+
+		// 4. Build export object with metadata
 		const exportData: PresetExport = {
 			version: PRESET_EXPORT_VERSION,
 			type: "preset",
@@ -74,11 +111,11 @@ export async function exportPresetData(
 				attribute_list: presetData.attribute_list || [],
 				sample_dialogues_in: presetData.sample_dialogues_in || [],
 				sample_dialogues_out: presetData.sample_dialogues_out || [],
-				trigger_words: presetData.trigger_words || [],
+				trigger_words: triggerWords || [],
 			},
 		};
 
-		// 4. Validate export data structure
+		// 5. Validate export data structure
 		const validated = presetExportSchema.safeParse(exportData);
 		if (!validated.success) {
 			log.error(
