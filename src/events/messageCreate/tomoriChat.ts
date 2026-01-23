@@ -434,6 +434,7 @@ async function sendServerRateLimitEmbed(
  * @param isStopResponse - Whether this is a stop response (cannot be stopped).
  * @param retryCount - Number of retry attempts for empty responses (internal use).
  * @param skipLock - Whether to skip semaphore lock acquisition (for recursive calls).
+ * @param selectedPersonaId - Optional persona ID to use instead of main persona (for manual triggers).
  */
 export default async function tomoriChat(
 	client: Client,
@@ -451,6 +452,7 @@ export default async function tomoriChat(
 		reminder_purpose: string;
 		reminder_lateness?: string | null;
 	},
+	selectedPersonaId?: number,
 ): Promise<void> {
 	// 1. Initial Checks & State Loading
 	const channel = message.channel;
@@ -899,11 +901,10 @@ export default async function tomoriChat(
 			// Load all personas (main + alters) for multi-persona support
 			// For backward compatibility, we also get the main persona separately
 			const allPersonas = await getCachedAllPersonas(serverDiscId);
-			let tomoriState = earlyLoadAttempted
-				? earlyTomoriState
-				: allPersonas.length > 0
-					? allPersonas.find((p) => !p.is_alter) || allPersonas[0]
-					: null;
+			const mainPersona = allPersonas.find((p) => !p.is_alter) || null;
+			const fallbackPersona =
+				mainPersona ?? (allPersonas.length > 0 ? allPersonas[0] : null);
+			let tomoriState = earlyLoadAttempted ? earlyTomoriState : fallbackPersona;
 			const userRow = await getCachedUserRow(userDiscId);
 			locale = userRow?.language_pref ?? "en-US"; // Set locale based on user pref
 
@@ -950,7 +951,10 @@ export default async function tomoriChat(
 				`[Snapshot] Created per-request snapshot for message ${message.id} in ${isDMChannel ? "DM" : `server ${serverDiscId}`}`,
 			);
 
-			const mainPersona = allPersonas.find((p) => !p.is_alter) || null;
+			const selectedPersona = selectedPersonaId
+				? allPersonas.find((p) => p.tomori_id === selectedPersonaId) ??
+					fallbackPersona
+				: fallbackPersona;
 			const personaByNickname = new Map<string, TomoriState>();
 			for (const persona of allPersonas) {
 				const nicknameKey = persona.tomori_nickname?.toLowerCase();
@@ -1379,10 +1383,13 @@ export default async function tomoriChat(
 			}
 
 			// 8.5. Multi-Persona: Determine which personas should respond
-			// For manual triggers and reminders, only the main persona responds
+			// For manual triggers, respond with the selected persona (if provided)
+			// For reminders/stop responses, only the main persona responds
 			let personasToRespond: TomoriState[];
-			if (isManuallyTriggered || reminderRecipientID || isStopResponse) {
-				// Only main persona for manual triggers, reminders, and stop responses
+			if (isManuallyTriggered) {
+				personasToRespond = selectedPersona ? [selectedPersona] : [];
+			} else if (reminderRecipientID || isStopResponse) {
+				// Only main persona for reminders and stop responses
 				personasToRespond = tomoriState ? [tomoriState] : [];
 			} else {
 				// Check if auto-message threshold is hit for this message
@@ -2256,9 +2263,9 @@ export default async function tomoriChat(
 						);
 					}
 
-					// Inject continuation prompt for manual triggers when Tomori is the last speaker
+					// Inject continuation prompt for manual triggers when the selected persona is the last speaker
 					// This fixes the UX issue where manual /bot respond or /bot reason commands
-					// don't work if Tomori was the last one to speak in the conversation
+					// don't work if the selected persona was the last one to speak in the conversation
 					// IMPORTANT: Skip this for reasoning queries - they have their own system message
 					if (
 						isManuallyTriggered &&
@@ -2268,15 +2275,34 @@ export default async function tomoriChat(
 						const lastMessage =
 							simplifiedMessages[simplifiedMessages.length - 1];
 
-						// 1. Check if the last message in history is from Tomori
-						// 2. If yes, inject a fake user message to prompt continuation
-						// 3. This ensures the conversation pattern remains User->Tomori->User->Tomori
-						if (lastMessage.authorType === "persona") {
+						// 1. Check if the last message is from a persona
+						const isFromPersona = lastMessage.authorType === "persona";
+
+						// 2. Check if the last message is from the SELECTED persona (for alter support)
+						const selectedPersonaNickname =
+							selectedPersona?.tomori_nickname?.toLowerCase();
+						const lastMessagePersonaNickname =
+							lastMessage.personaName?.toLowerCase();
+						const isFromSelectedPersona =
+							isFromPersona &&
+							selectedPersonaNickname &&
+							lastMessagePersonaNickname === selectedPersonaNickname;
+
+						// 3. Check if the last message contains embeds (skip continuation for embeds)
+						const isEmbedMessage =
+							lastMessage.content?.includes(
+								"[The following is a system-produced embed]",
+							) ?? false;
+
+						// 4. Only inject continuation if:
+						//    - Last message is from the selected persona
+						//    - Last message is NOT an embed
+						if (isFromSelectedPersona && !isEmbedMessage) {
 							log.info(
-								`Manual trigger detected with Tomori as last speaker - injecting continuation prompt for UX`,
+								`Manual trigger detected with ${selectedPersona?.tomori_nickname} as last speaker - injecting continuation prompt for UX`,
 							);
 
-							// Create a fake user message prompting Tomori to continue
+							// Create a fake user message prompting the persona to continue
 							// Use "0" as authorId to ensure it's not the bot's ID (will be labeled as "user" role)
 							const continuationPrompt: SimplifiedMessageForContext = {
 								id: `synthetic-continuation-${Date.now()}`, // Synthetic ID for system-generated continuation
@@ -2292,7 +2318,7 @@ export default async function tomoriChat(
 							// Add the continuation prompt to the conversation history
 							simplifiedMessages.push(continuationPrompt);
 							log.info(
-								`Injected continuation prompt as System user to allow Tomori to respond`,
+								`Injected continuation prompt as System user to allow ${selectedPersona?.tomori_nickname} to respond`,
 							);
 						}
 					}
@@ -2318,8 +2344,9 @@ export default async function tomoriChat(
 							client,
 							triggererName,
 							emojiStrings,
-							// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked
-							tomoriNickname: tomoriState!.tomori_nickname,
+							// Use the current persona nickname so role mapping and samples match the responding persona
+							tomoriNickname: // biome-ignore lint/style/noNonNullAssertion: tomoriState is checked
+								currentPersona.tomori_nickname ?? tomoriState!.tomori_nickname,
 							// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked
 							tomoriAttributes: tomoriState!.attribute_list,
 							// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked
@@ -3202,8 +3229,9 @@ export default async function tomoriChat(
 												client,
 												triggererName,
 												emojiStrings,
-												// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
-												tomoriNickname: tomoriState!.tomori_nickname,
+												// Use the current persona nickname so role mapping and samples match the responding persona
+												tomoriNickname: // biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
+													currentPersona.tomori_nickname ?? tomoriState!.tomori_nickname,
 												// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
 												tomoriAttributes: tomoriState!.attribute_list,
 												// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above

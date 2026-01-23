@@ -82,6 +82,13 @@ export const configureSubcommand = (
 						),
 						value: "imagegen",
 					},
+					{
+						name: localizer(
+							"en-US",
+							"commands.config.permissions.hiderespondembed_option",
+						),
+						value: "hiderespondembed",
+					},
 				),
 		)
 		.addStringOption((option) =>
@@ -189,6 +196,11 @@ export async function execute(
 				dbColumnName = "imagegen_enabled";
 				permissionTypeKey = "commands.config.permissions.imagegen_option";
 				currentSetting = tomoriState.config.imagegen_enabled;
+				break;
+			case "hiderespondembed":
+				dbColumnName = "hide_respond_embed";
+				permissionTypeKey = "commands.config.permissions.hiderespondembed_option";
+				currentSetting = tomoriState.config.hide_respond_embed;
 				break;
 			default:
 				// This should not happen due to Discord's option validation

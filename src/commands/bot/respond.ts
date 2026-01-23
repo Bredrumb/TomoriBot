@@ -1,11 +1,20 @@
 import type { SlashCommandSubcommandBuilder } from "discord.js";
 import type { ChatInputCommandInteraction, Client, Message } from "discord.js";
-import { MessageFlags, PermissionFlagsBits } from "discord.js";
-import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
+import { EmbedBuilder, MessageFlags, PermissionFlagsBits } from "discord.js";
+import {
+	promptWithPaginatedModal,
+	replyInfoEmbed,
+	safeSelectOptionText,
+} from "../../utils/discord/interactionHelper";
 import { ColorCode, log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import type { UserRow } from "../../types/db/schema";
+import type { SelectOption } from "../../types/discord/modal";
 import tomoriChat from "../../events/messageCreate/tomoriChat";
+import {
+	loadAllPersonasForServer,
+	loadTomoriState,
+} from "../../utils/db/dbRead";
 
 /**
  * Configure the respond subcommand
@@ -79,20 +88,113 @@ export async function execute(
 		return;
 	}
 
-	try {
-		// 3. Send immediate non-ephemeral response to user
-		await replyInfoEmbed(
-			interaction,
-			locale,
-			{
-				titleKey: "commands.bot.respond.success_title",
-				descriptionKey: "commands.bot.respond.success_description",
-				color: ColorCode.SUCCESS,
-			},
-			MessageFlags.SuppressNotifications,
-		);
+	// 3. Load tomori state for this server
+	const tomoriState = await loadTomoriState(interaction.guild.id);
+	if (!tomoriState) {
+		await replyInfoEmbed(interaction, locale, {
+			titleKey: "general.errors.unknown_error_title",
+			descriptionKey: "general.errors.unknown_error_description",
+			color: ColorCode.ERROR,
+		});
+		return;
+	}
 
-		// 4. Get the latest message in the channel (excluding the interaction itself)
+	// 4. Load all personas and check if alters exist
+	const allPersonas = await loadAllPersonasForServer(interaction.guild.id);
+	const alterPersonas = allPersonas.filter((p) => p.is_alter);
+	const mainPersona = allPersonas.find((p) => !p.is_alter);
+
+	let selectedPersona = mainPersona;
+	let replyInteraction:
+		| ChatInputCommandInteraction
+		| import("discord.js").ModalSubmitInteraction = interaction;
+
+	// If alters exist, show selection modal
+	if (alterPersonas.length > 0 && mainPersona) {
+		// Build select options: main first, then alters
+		const personaOptions: SelectOption[] = [
+			{
+				label: safeSelectOptionText(
+					mainPersona.tomori_nickname +
+						localizer(locale, "commands.bot.respond.main_persona_suffix"),
+				),
+				value: "0", // main is index 0
+			},
+			...alterPersonas.map((persona, index) => ({
+				label: safeSelectOptionText(persona.tomori_nickname),
+				value: (index + 1).toString(), // alters start at index 1
+			})),
+		];
+
+		// Show modal
+		const modalResult = await promptWithPaginatedModal(interaction, locale, {
+			modalCustomId: "respond_persona_select",
+			modalTitleKey: "commands.bot.respond.select_persona_title",
+			components: [
+				{
+					customId: "persona_choice",
+					labelKey: "commands.bot.respond.select_persona_label",
+					placeholder: "commands.bot.respond.select_persona_placeholder",
+					required: true,
+					options: personaOptions,
+				},
+			],
+		});
+
+		// Handle modal result
+		if (modalResult.outcome !== "submit") {
+			log.info(
+				`Respond persona selection ${modalResult.outcome} for user ${interaction.user.id}`,
+			);
+			return;
+		}
+
+		// Update the interaction to use for replying
+		if (modalResult.interaction) {
+			replyInteraction = modalResult.interaction;
+		}
+
+		// Extract selected persona
+		const selectedIndex = Number.parseInt(
+			modalResult.values?.persona_choice ?? "0",
+			10,
+		);
+		selectedPersona =
+			selectedIndex === 0 ? mainPersona : alterPersonas[selectedIndex - 1];
+
+		log.info(
+			`User ${interaction.user.id} selected persona ${selectedPersona.tomori_nickname} (ID: ${selectedPersona.tomori_id}) for manual respond`,
+		);
+	}
+
+	try {
+		// 5. Get embed visibility setting
+		const hideEmbed = tomoriState.config.hide_respond_embed;
+
+		// 6. Build success embed
+		const successEmbed = new EmbedBuilder()
+			.setTitle(localizer(locale, "commands.bot.respond.success_title"))
+			.setDescription(
+				localizer(locale, "commands.bot.respond.success_description"),
+			)
+			.setColor(ColorCode.SUCCESS);
+
+		// Add footer notice if embed is visible
+		if (!hideEmbed) {
+			successEmbed.setFooter({
+				text: localizer(locale, "commands.bot.respond.embed_hide_notice"),
+			});
+		}
+
+		// 7. Send response (ephemeral if hide_respond_embed is true)
+		await replyInteraction.reply({
+			embeds: [successEmbed],
+			flags: hideEmbed
+				? MessageFlags.Ephemeral | MessageFlags.SuppressNotifications
+				: MessageFlags.SuppressNotifications,
+		});
+
+		// 8. Get the latest message in the channel (excluding the interaction itself)
 		const messages = await interaction.channel.messages.fetch({ limit: 1 });
 		const latestMessage = messages.first();
 
@@ -120,6 +222,15 @@ export async function execute(
 			passportMessage as Message,
 			false, // isFromQueue
 			true, // isManuallyTriggered - this bypasses normal trigger logic
+			undefined, // forceReason
+			undefined, // reasoningQuery
+			undefined, // llmOverrideCodename
+			undefined, // isStopResponse
+			0, // retryCount
+			false, // skipLock
+			undefined, // reminderRecipientID
+			undefined, // reminderData
+			selectedPersona?.tomori_id, // selectedPersonaId
 		);
 	} catch (error) {
 		log.error("Error in bot respond command:", error, {
@@ -133,7 +244,7 @@ export async function execute(
 
 		// Try to send error feedback if possible
 		try {
-			await interaction.followUp({
+			await replyInteraction.followUp({
 				content: localizer(locale, "general.errors.unknown_error_description"),
 				flags: MessageFlags.Ephemeral,
 			});

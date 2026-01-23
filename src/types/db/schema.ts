@@ -123,6 +123,7 @@ export const tomoriConfigSchema = z.object({
 	sticker_usage_enabled: z.boolean().default(true), // Added May 5, 2025
 	pin_message_enabled: z.boolean().default(true), // Added November 5, 2025 - Permission for pin message tool
 	imagegen_enabled: z.boolean().default(true), // Added January 2026 - Permission for image generation
+	hide_respond_embed: z.boolean().default(false), // Added January 2026 - Hide respond command success embed
 	videogen_enabled: z.boolean().default(true), // Added January 2026 - Reserved for future video generation
 	timezone_offset: z.number().int().min(-12).max(14).default(0),
 	system_prompt: z.string().nullable(), // Added December 2025 - Custom system prompt for personality instructions

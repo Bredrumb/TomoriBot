@@ -317,6 +317,9 @@ SELECT add_column_if_not_exists('tomori_configs', 'pin_message_enabled', 'BOOLEA
 -- Add image generation permission
 SELECT add_column_if_not_exists('tomori_configs', 'imagegen_enabled', 'BOOLEAN', 'true');
 
+-- Add hide respond embed permission (January 2026)
+SELECT add_column_if_not_exists('tomori_configs', 'hide_respond_embed', 'BOOLEAN', 'false');
+
 -- Add video generation permission (future use)
 SELECT add_column_if_not_exists('tomori_configs', 'videogen_enabled', 'BOOLEAN', 'true');
 
