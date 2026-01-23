@@ -3370,20 +3370,18 @@ export default async function tomoriChat(
 						},
 					);
 
-					// Send error message for this persona (only if it's the only persona or the last one)
-					if (
-						personasToRespond.length === 1 ||
-						personaIndex === personasToRespond.length - 1
-					) {
-						await sendStandardEmbed(channel, locale, {
-							color: ColorCode.ERROR,
-							titleKey: "general.errors.critical_error_title",
-							descriptionKey: "general.errors.critical_error_description",
-							footerKey: "genai.generic_error_footer",
-						}).catch((embedError) =>
-							log.warn("Failed to send persona error embed", embedError),
-						);
-					}
+					// Always send error embed for failed persona
+					await sendStandardEmbed(channel, locale, {
+						color: ColorCode.ERROR,
+						titleKey: "general.errors.persona_response_failed_title",
+						descriptionKey: "general.errors.persona_response_failed_description",
+						descriptionVars: {
+							personaName: currentPersona.tomori_nickname,
+						},
+						footerKey: "genai.generic_error_footer",
+					}).catch((embedError) =>
+						log.warn("Failed to send persona error embed", embedError),
+					);
 				}
 			} // END OF MULTI-PERSONA RESPONSE LOOP
 		} catch (error) {

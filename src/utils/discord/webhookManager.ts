@@ -44,11 +44,20 @@ export async function getOrCreateWebhook(
 		// 1. Check in-memory cache
 		const cachedWebhook = webhookCache.get(channelId);
 		if (cachedWebhook) {
-			// Return cached webhook (if deleted, send will fail and we'll handle it)
-			log.info(
-				`[Webhook Manager] Cache HIT for channel ${channelId} (${channel.name})`,
-			);
-			return cachedWebhook;
+			// Verify cached webhook still has a valid token (not deleted)
+			if (!cachedWebhook.token) {
+				log.warn(
+					`[Webhook Manager] Cached webhook for channel ${channelId} has no token (likely deleted), invalidating cache`,
+				);
+				webhookCache.delete(channelId);
+				// Continue to fetch/create a new webhook
+			} else {
+				// Return cached webhook
+				log.info(
+					`[Webhook Manager] Cache HIT for channel ${channelId} (${channel.name})`,
+				);
+				return cachedWebhook;
+			}
 		}
 
 		// 2. Fetch existing webhook by name
@@ -184,9 +193,45 @@ export function resolvePersonaAvatarURL(
 	persona: TomoriState,
 	guild: Guild,
 ): string | undefined {
+	// Helper function to validate avatar URL
+	const validateAvatarURL = (url: string): string | undefined => {
+		try {
+			const parsedURL = new URL(url);
+			// Only allow http and https protocols for security
+			if (parsedURL.protocol !== "http:" && parsedURL.protocol !== "https:") {
+				log.warn(
+					`[Webhook Manager] Invalid avatar URL protocol for persona ${persona.tomori_nickname}: ${parsedURL.protocol}`,
+					{
+						metadata: {
+							personaId: persona.tomori_id,
+							protocol: parsedURL.protocol,
+						},
+					},
+				);
+				return undefined;
+			}
+			return url;
+		} catch (error) {
+			log.warn(
+				`[Webhook Manager] Invalid avatar URL for persona ${persona.tomori_nickname}`,
+				{
+					metadata: {
+						personaId: persona.tomori_id,
+						url,
+						error,
+					},
+				},
+			);
+			return undefined;
+		}
+	};
+
 	// 1. Alter personas: Use webhook_avatar_url from database
 	if (persona.is_alter && persona.webhook_avatar_url) {
-		return persona.webhook_avatar_url;
+		const validatedURL = validateAvatarURL(persona.webhook_avatar_url);
+		if (validatedURL) {
+			return validatedURL;
+		}
 	}
 
 	// 2. Main persona: Try guild avatar first
@@ -198,7 +243,10 @@ export function resolvePersonaAvatarURL(
 
 		// Fallback to webhook_avatar_url if guild has no icon
 		if (persona.webhook_avatar_url) {
-			return persona.webhook_avatar_url;
+			const validatedURL = validateAvatarURL(persona.webhook_avatar_url);
+			if (validatedURL) {
+				return validatedURL;
+			}
 		}
 	}
 

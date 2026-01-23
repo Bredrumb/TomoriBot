@@ -26,6 +26,8 @@ import {
 import type { PresetExportData } from "../../types/preset/presetExport";
 import { extractMetadataFromPNG } from "../../utils/image/pngMetadata";
 import { validatePNGBuffer } from "../../utils/image/avatarHelper";
+import { loadAllPersonasForServer } from "../../utils/db/dbRead";
+import { sql } from "../../utils/db/client";
 
 /**
  * Maximum file size for imports (uses centralized constant)
@@ -91,6 +93,27 @@ export const configureSubcommand = (
 		)
 		.addStringOption((option) =>
 			option
+				.setName("type")
+				.setDescription(
+					localizer("en-US", "commands.persona.import.type_description"),
+				)
+				.setRequired(true)
+				.addChoices(
+					{
+						name: localizer("en-US", "commands.persona.import.type_option_main"),
+						value: "main",
+					},
+					{
+						name: localizer(
+							"en-US",
+							"commands.persona.import.type_option_alter",
+						),
+						value: "alter",
+					},
+				),
+		)
+		.addStringOption((option) =>
+			option
 				.setName("confirmation")
 				.setDescription(
 					localizer(
@@ -140,6 +163,21 @@ export async function execute(
 				titleKey: "commands.persona.import.cancelled_title",
 				descriptionKey: "commands.persona.import.cancelled_description",
 				color: ColorCode.INFO,
+				flags: MessageFlags.Ephemeral,
+			});
+			return;
+		}
+
+		// 1.5. Get import type (main or alter)
+		const importType = interaction.options.getString("type", true);
+
+		// Alter personas can only be imported in guilds (not DMs)
+		if (importType === "alter" && !interaction.guild) {
+			await replyInfoEmbed(interaction, locale, {
+				titleKey: "commands.persona.import.alter_dm_not_allowed_title",
+				descriptionKey:
+					"commands.persona.import.alter_dm_not_allowed_description",
+				color: ColorCode.ERROR,
 				flags: MessageFlags.Ephemeral,
 			});
 			return;
@@ -363,39 +401,43 @@ export async function execute(
 			return;
 		}
 
-		// 11. Import preset data (works for both guilds and DMs)
+		// 11. Branch logic based on import type
 		const serverDiscId = interaction.guild?.id ?? interaction.user.id;
-		const importResult = await importPresetData(
-			serverDiscId,
-			validation.data as PresetExportData,
-		);
-
-		if (!importResult.success) {
-			await interaction.editReply({
-				embeds: [
-					new EmbedBuilder()
-						.setTitle(localizer(locale, "commands.persona.import.failed_title"))
-						.setDescription(
-							importResult.error
-								? localizeError(locale, importResult.error)
-								: localizer(
-										locale,
-										"commands.persona.import.failed_description",
-									),
-						)
-						.setColor(ColorCode.ERROR),
-				],
-			});
-			return;
-		}
-
-		// Invalidate cache so next message gets fresh persona/config
-		invalidateTomoriStateCache(serverDiscId);
-
-		// 12. Try to set TomoriBot's server-specific avatar and nickname (guild-only, non-fatal if fails)
 		const isDM = !interaction.guild;
 
-		if (!isDM) {
+		if (importType === "main") {
+			// Main persona import: replace existing main persona
+			const importResult = await importPresetData(
+				serverDiscId,
+				validation.data as PresetExportData,
+			);
+
+			if (!importResult.success) {
+				await interaction.editReply({
+					embeds: [
+						new EmbedBuilder()
+							.setTitle(
+								localizer(locale, "commands.persona.import.failed_title"),
+							)
+							.setDescription(
+								importResult.error
+									? localizeError(locale, importResult.error)
+									: localizer(
+											locale,
+											"commands.persona.import.failed_description",
+										),
+							)
+							.setColor(ColorCode.ERROR),
+					],
+				});
+				return;
+			}
+
+			// Invalidate cache so next message gets fresh persona/config
+			invalidateTomoriStateCache(serverDiscId);
+
+			// 12. Try to set TomoriBot's server-specific avatar and nickname (guild-only, non-fatal if fails)
+			if (!isDM) {
 			try {
 				// Convert PNG buffer to base64 data URI
 				const base64 = pngBuffer.toString("base64");
@@ -436,55 +478,274 @@ export async function execute(
 			}
 		}
 
-		// 13. Send success message with import summary
-		const itemsImported = importResult.itemsImported;
+			// 13. Send success message with import summary
+			const itemsImported = importResult.itemsImported;
 
-		if (!itemsImported) {
-			log.error("Import result missing itemsImported data");
+			if (!itemsImported) {
+				log.error("Import result missing itemsImported data");
+				await interaction.editReply({
+					embeds: [
+						new EmbedBuilder()
+							.setTitle(
+								localizer(locale, "general.errors.unknown_error_title"),
+							)
+							.setDescription(
+								localizer(locale, "general.errors.unknown_error_description"),
+							)
+							.setColor(ColorCode.ERROR),
+					],
+				});
+				return;
+			}
+
+			// Build success embed with DM-aware messaging
+			const successEmbed = new EmbedBuilder()
+				.setTitle(localizer(locale, "commands.persona.import.success_title"))
+				.setDescription(
+					localizer(locale, "commands.persona.import.success_description", {
+						nickname: itemsImported.nickname,
+						attribute_count: itemsImported.attributeCount,
+						dialogue_count: itemsImported.dialogueCount,
+						trigger_word_count: itemsImported.triggerWordCount,
+					}),
+				)
+				.setColor(isDM ? ColorCode.WARN : ColorCode.SUCCESS);
+
+			// Add DM-specific footer if in DM
+			if (isDM) {
+				successEmbed.setFooter({
+					text: localizer(
+						locale,
+						"commands.persona.import.avatar_update_skipped_dm",
+					),
+				});
+			}
+
+			// Attach avatar as thumbnail (aesthetic improvement + consistency with alter import)
+			// Convert PNG buffer to base64 data URI for thumbnail
+			const base64 = pngBuffer.toString("base64");
+			const avatarDataUri = `data:image/png;base64,${base64}`;
+			successEmbed.setThumbnail(avatarDataUri);
+
 			await interaction.editReply({
-				embeds: [
-					new EmbedBuilder()
-						.setTitle(localizer(locale, "general.errors.unknown_error_title"))
-						.setDescription(
-							localizer(locale, "general.errors.unknown_error_description"),
-						)
-						.setColor(ColorCode.ERROR),
-				],
+				embeds: [successEmbed],
 			});
-			return;
-		}
 
-		// Build success embed with DM-aware messaging
-		const successEmbed = new EmbedBuilder()
-			.setTitle(localizer(locale, "commands.persona.import.success_title"))
-			.setDescription(
-				localizer(locale, "commands.persona.import.success_description", {
-					nickname: itemsImported.nickname,
-					attribute_count: itemsImported.attributeCount,
-					dialogue_count: itemsImported.dialogueCount,
-					trigger_word_count: itemsImported.triggerWordCount,
-				}),
-			)
-			.setColor(isDM ? ColorCode.WARN : ColorCode.SUCCESS);
+			// Quota already reserved at step 6.25 - no increment needed
+			log.success(
+				`Successfully imported main persona for ${isDM ? "DM" : "guild"} ${serverDiscId}: ${itemsImported.nickname}`,
+			);
+		} else {
+			// Alter persona import: add new alter persona
+			const presetData = validation.data as PresetExportData;
 
-		// Add DM-specific footer if in DM
-		if (isDM) {
-			successEmbed.setFooter({
-				text: localizer(
-					locale,
-					"commands.persona.import.avatar_update_skipped_dm",
-				),
+			// 11a. Load all existing personas and collect their trigger words
+			const allPersonas = await loadAllPersonasForServer(serverDiscId);
+
+			// Collect all trigger words (main persona uses config.trigger_words, alters use alter_triggers)
+			const allTriggerWords = new Set<string>();
+			for (const persona of allPersonas) {
+				if (persona.is_alter) {
+					// Alter personas store triggers in alter_triggers
+					for (const trigger of persona.alter_triggers ?? []) {
+						allTriggerWords.add(trigger.toLowerCase());
+					}
+				} else {
+					// Main persona stores triggers in config.trigger_words
+					for (const trigger of persona.config.trigger_words ?? []) {
+						allTriggerWords.add(trigger.toLowerCase());
+					}
+				}
+			}
+
+			// 11b. Remove overlapping triggers from the import
+			const importTriggers = presetData.trigger_words ?? [];
+			const uniqueTriggers = importTriggers.filter(
+				(trigger) => !allTriggerWords.has(trigger.toLowerCase()),
+			);
+
+			// 11c. Error if no unique triggers remain
+			if (uniqueTriggers.length === 0) {
+				await interaction.editReply({
+					embeds: [
+						new EmbedBuilder()
+							.setTitle(
+								localizer(
+									locale,
+									"commands.persona.import.alter_no_triggers_error_title",
+								),
+							)
+							.setDescription(
+								localizer(
+									locale,
+									"commands.persona.import.alter_no_triggers_error_description",
+									{
+										overlap: importTriggers.join(", "),
+									},
+								),
+							)
+							.setColor(ColorCode.ERROR),
+					],
+				});
+				return;
+			}
+
+			// 11d. Get the main persona to copy config from
+			const mainPersona = allPersonas.find((p) => !p.is_alter);
+			if (!mainPersona) {
+				await interaction.editReply({
+					embeds: [
+						new EmbedBuilder()
+							.setTitle(
+								localizer(locale, "general.errors.tomori_not_setup_title"),
+							)
+							.setDescription(
+								localizer(
+									locale,
+									"general.errors.tomori_not_setup_description",
+								),
+							)
+							.setColor(ColorCode.ERROR),
+					],
+				});
+				return;
+			}
+
+			// 11e. Insert new tomoris row with is_alter=true
+			const [newAlterRow] = await sql`
+				INSERT INTO tomoris (
+					server_id,
+					tomori_nickname,
+					attribute_list,
+					sample_dialogues_in,
+					sample_dialogues_out,
+					is_alter,
+					alter_triggers
+				) VALUES (
+					${mainPersona.server_id},
+					${presetData.tomori_nickname},
+					${presetData.attribute_list},
+					${presetData.sample_dialogues_in},
+					${presetData.sample_dialogues_out},
+					true,
+					${uniqueTriggers}
+				)
+				RETURNING tomori_id
+			`;
+
+			if (!newAlterRow?.tomori_id) {
+				log.error("Failed to insert alter persona row");
+				await interaction.editReply({
+					embeds: [
+						new EmbedBuilder()
+							.setTitle(
+								localizer(locale, "general.errors.unknown_error_title"),
+							)
+							.setDescription(
+								localizer(locale, "general.errors.unknown_error_description"),
+							)
+							.setColor(ColorCode.ERROR),
+					],
+				});
+				return;
+			}
+
+			const newTomoriId = newAlterRow.tomori_id;
+
+			// 11f. Copy config from main persona (empty trigger_words for alters)
+			await sql`
+				INSERT INTO tomori_configs (
+					tomori_id,
+					llm_id,
+					llm_temperature,
+					trigger_words,
+					autoch_disc_ids,
+					autoch_threshold,
+					server_memteaching_enabled,
+					attribute_memteaching_enabled,
+					sampledialogue_memteaching_enabled,
+					self_teaching_enabled,
+					personal_memories_enabled,
+					imagegen_enabled,
+					videogen_enabled,
+					humanizer_degree
+				)
+				SELECT
+					${newTomoriId},
+					llm_id,
+					llm_temperature,
+					ARRAY[]::TEXT[],
+					autoch_disc_ids,
+					autoch_threshold,
+					server_memteaching_enabled,
+					attribute_memteaching_enabled,
+					sampledialogue_memteaching_enabled,
+					self_teaching_enabled,
+					personal_memories_enabled,
+					imagegen_enabled,
+					videogen_enabled,
+					humanizer_degree
+				FROM tomori_configs
+				WHERE tomori_id = ${mainPersona.tomori_id}
+			`;
+
+			// 11g. Send success embed with avatar thumbnail
+			const base64 = pngBuffer.toString("base64");
+			const avatarDataUri = `data:image/png;base64,${base64}`;
+
+			const alterSuccessEmbed = new EmbedBuilder()
+				.setTitle(
+					localizer(locale, "commands.persona.import.alter_success_title"),
+				)
+				.setDescription(
+					localizer(
+						locale,
+						"commands.persona.import.alter_success_description",
+						{
+							nickname: presetData.tomori_nickname,
+							trigger_count: uniqueTriggers.length,
+							triggers: uniqueTriggers.join(", "),
+						},
+					),
+				)
+				.setColor(ColorCode.SUCCESS)
+				.setThumbnail(avatarDataUri)
+				.setFooter({
+					text: localizer(
+						locale,
+						"commands.persona.import.alter_avatar_warning",
+					),
+				});
+
+			const reply = await interaction.editReply({
+				embeds: [alterSuccessEmbed],
 			});
+
+			// 11h. Extract avatar URL from the sent message
+			// The thumbnail URL is accessible from the sent message's embed
+			const sentEmbed = reply.embeds[0];
+			const avatarUrl = sentEmbed?.thumbnail?.url ?? null;
+
+			// 11i. Store avatar URL in webhook_avatar_url column
+			if (avatarUrl) {
+				await sql`
+					UPDATE tomoris
+					SET webhook_avatar_url = ${avatarUrl}
+					WHERE tomori_id = ${newTomoriId}
+				`;
+			} else {
+				log.warn(
+					`Failed to extract avatar URL from embed for alter persona ${newTomoriId}`,
+				);
+			}
+
+			// 11j. Invalidate cache
+			invalidateTomoriStateCache(serverDiscId);
+
+			log.success(
+				`Successfully imported alter persona "${presetData.tomori_nickname}" with ${uniqueTriggers.length} triggers for guild ${serverDiscId}`,
+			);
 		}
-
-		await interaction.editReply({
-			embeds: [successEmbed],
-		});
-
-		// Quota already reserved at step 6.25 - no increment needed
-		log.success(
-			`Successfully imported preset for ${isDM ? "DM" : "guild"} ${serverDiscId}: ${itemsImported.nickname}`,
-		);
 	} catch (error) {
 		log.error("Error executing preset import command:", error, {
 			errorType: "CommandExecutionError",
