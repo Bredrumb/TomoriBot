@@ -298,6 +298,9 @@ export class CustomProvider extends BaseLLMProvider implements LLMProvider {
 		replyToMessage?: Message,
 		streamingContext?: StreamingContext,
 		userLocale?: string,
+		webhook?: import("discord.js").Webhook,
+		personaAvatarUrl?: string,
+		personaUsername?: string,
 	): Promise<StreamResult> {
 		log.info(
 			`CustomProvider: Starting streaming for server ${tomoriState.server_id}, model ${config.model}`,
@@ -358,6 +361,11 @@ export class CustomProvider extends BaseLLMProvider implements LLMProvider {
 				functionInteractionHistory,
 				provider: "custom",
 				locale: userLocale ?? "en-US",
+
+				// Multi-persona webhook support
+				webhook,
+				personaAvatarUrl,
+				personaUsername,
 			};
 
 			// Create the modular streaming components

@@ -1190,6 +1190,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 
 	/**
 	 * Send a single message to Discord with proper error handling
+	 * Supports webhook-based sending for alter personas with custom avatars/usernames
 	 * @param content - The message content to send
 	 * @param context - The stream context containing Discord channel and reply information
 	 * @param state - The current stream state to track message count
@@ -1234,15 +1235,36 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 		}
 
 		try {
-			// Check if we need to reply or send normally
-			if (!state.hasRepliedToOriginalMessage && context.replyToMessage) {
-				await context.replyToMessage.reply({
+			// 1. Use webhook for alter personas (if webhook and persona info provided)
+			// Only require webhook and username - avatarUrl is optional
+			if (context.webhook && context.personaUsername) {
+				log.info(
+					`Stream Send: Using webhook for persona "${context.personaUsername}"${context.personaAvatarUrl ? " with custom avatar" : " (default avatar)"}`,
+				);
+
+				// Webhooks cannot reply to messages, so always send as new message
+				await context.webhook.send({
 					content,
-					allowedMentions: { repliedUser: false },
+					username: context.personaUsername,
+					avatarURL: context.personaAvatarUrl, // Can be undefined - Discord handles this
+					allowedMentions: { parse: ["users", "roles"], repliedUser: false },
 				});
+
+				// Mark as replied since webhook messages can't reply to the original
 				state.hasRepliedToOriginalMessage = true;
-			} else {
-				await context.channel.send({ content });
+			}
+			// 2. Regular bot message for main persona or fallback
+			else {
+				// Check if we need to reply or send normally
+				if (!state.hasRepliedToOriginalMessage && context.replyToMessage) {
+					await context.replyToMessage.reply({
+						content,
+						allowedMentions: { repliedUser: false },
+					});
+					state.hasRepliedToOriginalMessage = true;
+				} else {
+					await context.channel.send({ content });
+				}
 			}
 
 			state.messageSentCount++;
@@ -1250,6 +1272,54 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 				`Stream Send: Sent message (${state.messageSentCount}): "${content.length > 100 ? `${content.substring(0, 100)}...` : content}"`,
 			);
 		} catch (discordError) {
+			// If webhook send fails, try fallback to regular bot message (only on first message)
+			if (
+				context.webhook &&
+				context.personaUsername &&
+				!state.hasRepliedToOriginalMessage
+			) {
+				log.warn(
+					"Stream Send: Webhook send failed, falling back to regular bot message",
+					discordError,
+				);
+
+				try {
+					// Try fallback to regular message
+					if (context.replyToMessage) {
+						await context.replyToMessage.reply({
+							content,
+							allowedMentions: { repliedUser: false },
+						});
+					} else {
+						await context.channel.send({ content });
+					}
+
+					state.hasRepliedToOriginalMessage = true;
+					state.messageSentCount++;
+
+					log.info(
+						"Stream Send: Successfully sent message via fallback after webhook failure",
+					);
+					return;
+				} catch (fallbackError) {
+					// Log both errors
+					log.error(
+						"Stream Send: Both webhook and fallback failed",
+						fallbackError,
+						{
+							serverId: context.tomoriState?.server_id,
+							errorType: "StreamOrchestrator",
+							metadata: {
+								channelId: context.channel.id,
+								webhookError: String(discordError),
+								fallbackError: String(fallbackError),
+							},
+						},
+					);
+				}
+			}
+
+			// Original error logging and re-throw
 			log.error(
 				"Stream Send: Discord API error when sending message",
 				discordError,
@@ -1260,6 +1330,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 						channelId: context.channel.id,
 						contentLength: content.length,
 						contentPreview: content.substring(0, 200),
+						usingWebhook: !!context.webhook,
 					},
 				},
 			);

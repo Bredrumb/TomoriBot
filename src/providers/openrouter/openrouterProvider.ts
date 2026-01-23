@@ -494,6 +494,9 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 		replyToMessage?: Message,
 		streamingContext?: StreamingContext,
 		userLocale?: string,
+		webhook?: import("discord.js").Webhook,
+		personaAvatarUrl?: string,
+		personaUsername?: string,
 	): Promise<StreamResult> {
 		log.info(
 			`OpenrouterProvider: Starting modular streaming for server ${tomoriState.server_id}, model ${config.model}`,
@@ -562,6 +565,11 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 				// Provider context
 				provider: "openrouter",
 				locale: userLocale ?? "en-US", // Use user's preferred locale, fallback to en-US
+
+				// Multi-persona webhook support
+				webhook,
+				personaAvatarUrl,
+				personaUsername,
 			};
 
 			// Create the modular streaming components

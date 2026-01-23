@@ -118,6 +118,11 @@ export interface StreamContext {
 
 	// Tool availability flags
 	disableYouTubeProcessing?: boolean; // Temporarily disable YouTube function during enhanced context restart
+
+	// Multi-persona webhook support
+	webhook?: import("discord.js").Webhook; // Webhook for alter persona responses
+	personaAvatarUrl?: string; // Avatar URL for current persona
+	personaUsername?: string; // Username override for current persona
 }
 
 /**

@@ -384,6 +384,9 @@ export class GoogleProvider extends BaseLLMProvider implements LLMProvider {
 		replyToMessage?: Message,
 		streamingContext?: StreamingContext,
 		userLocale?: string,
+		webhook?: import("discord.js").Webhook,
+		personaAvatarUrl?: string,
+		personaUsername?: string,
 	): Promise<StreamResult> {
 		log.info(
 			`GoogleProvider: Starting modular streaming for server ${tomoriState.server_id}, model ${config.model}`,
@@ -476,6 +479,11 @@ export class GoogleProvider extends BaseLLMProvider implements LLMProvider {
 				// Provider context
 				provider: "google",
 				locale: userLocale ?? "en-US", // Use user's preferred locale, fallback to en-US
+
+				// Multi-persona webhook support
+				webhook,
+				personaAvatarUrl,
+				personaUsername,
 			};
 
 			// Create the modular streaming components

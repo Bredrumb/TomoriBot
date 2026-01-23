@@ -5,6 +5,7 @@ import type {
 	Message,
 	Sticker,
 	Embed,
+	Webhook,
 } from "discord.js";
 import {
 	BaseGuildTextChannel,
@@ -20,7 +21,10 @@ import type {
 import { ContextItemTag } from "../../types/misc/context";
 // Provider-specific types moved to individual providers
 import type { FunctionCall } from "../../types/provider/interfaces";
-import { getCachedTomoriState } from "../../utils/cache/tomoriStateCache";
+import {
+	getCachedAllPersonas,
+	getCachedMainPersona,
+} from "../../utils/cache/tomoriStateCache";
 import {
 	getCachedUserRow,
 	getCachedPrivacyLevel,
@@ -32,6 +36,10 @@ import {
 	sendStandardEmbed,
 } from "../../utils/discord/embedHelper";
 import { StreamOrchestrator } from "../../utils/discord/streamOrchestrator";
+import {
+	getOrCreateWebhook,
+	resolvePersonaAvatarURL,
+} from "../../utils/discord/webhookManager";
 import { ColorCode, log } from "../../utils/misc/logger";
 import { buildContext } from "../../utils/text/contextBuilder";
 import { applyEmojiPenaltyIfNeeded } from "../../utils/text/emojiPenalty";
@@ -54,7 +62,11 @@ import { escapeRegExp } from "../../utils/text/stringHelper";
 import { sql } from "@/utils/db/client";
 import { loadEmojiStickerCache } from "../../utils/cache/emojiStickerCache";
 
-import type { TomoriState, ServerEmojiRow, ServerStickerRow } from "@/types/db/schema";
+import type {
+	TomoriState,
+	ServerEmojiRow,
+	ServerStickerRow,
+} from "@/types/db/schema";
 import { PrivacyLevel } from "@/types/db/schema";
 // Provider-specific function declarations moved to providers
 import { getProviderForTomori } from "../../utils/provider/providerFactory";
@@ -491,7 +503,11 @@ export default async function tomoriChat(
 		channel.type === ChannelType.GuildVoice ||
 		channel.type === ChannelType.GuildStageVoice;
 
-	if (channel instanceof BaseGuildTextChannel || isThreadChannel || isVoiceChannel) {
+	if (
+		channel instanceof BaseGuildTextChannel ||
+		isThreadChannel ||
+		isVoiceChannel
+	) {
 		// Standard guild text channel, thread, or voice/stage text
 		// biome-ignore lint/style/noNonNullAssertion: Guild is always present in guild message events
 		guild = message.guild!;
@@ -600,11 +616,12 @@ export default async function tomoriChat(
 	// --- Pre-Semaphore Tomori State Loading for shouldBotReply check ---
 	// Attempt to load Tomori state early to determine if a reply would even be considered.
 	// This helps decide if a "busy" message is warranted.
+	// For multi-persona support, we load the main persona early for initial checks
 	let earlyTomoriState: TomoriState | null = null;
 	let earlyLoadAttempted = false;
 	if (!skipLock) {
 		try {
-			earlyTomoriState = await getCachedTomoriState(serverDiscId);
+			earlyTomoriState = await getCachedMainPersona(serverDiscId);
 			earlyLoadAttempted = true;
 		} catch (e) {
 			// Log the error but don't stop; the main logic will try to load it again
@@ -878,16 +895,22 @@ export default async function tomoriChat(
 	// 2. Load critical state data early to use throughout function
 	try {
 		try {
-			// Load Tomori configuration and user data early
-			// Only call getCachedTomoriState if we didn't already attempt it during early load
-			const tomoriState = earlyLoadAttempted
+			// Load all personas (main + alters) for multi-persona support
+			// For backward compatibility, we also get the main persona separately
+			const allPersonas = await getCachedAllPersonas(serverDiscId);
+			let tomoriState = earlyLoadAttempted
 				? earlyTomoriState
-				: await getCachedTomoriState(serverDiscId);
+				: allPersonas.length > 0
+					? allPersonas.find((p) => !p.is_alter) || allPersonas[0]
+					: null;
 			const userRow = await getCachedUserRow(userDiscId);
 			locale = userRow?.language_pref ?? "en-US"; // Set locale based on user pref
 
 			// Determine triggererName based on blacklist and personalization settings
-			const isUserBlacklisted = await getCachedBlacklistStatus(serverDiscId, userDiscId);
+			const isUserBlacklisted = await getCachedBlacklistStatus(
+				serverDiscId,
+				userDiscId,
+			);
 			const serverPersonalizationDisabled =
 				tomoriState?.config.personal_memories_enabled === false;
 
@@ -1203,8 +1226,9 @@ export default async function tomoriChat(
 			isBaseTriggerWord = checkForBaseTriggerWords(message.content);
 
 			// Check if bot was mentioned
-			const isBotMentioned =
-				client.user && message.mentions.users.has(client.user.id);
+			const isBotMentioned = !!(
+				client.user && message.mentions.users.has(client.user.id)
+			);
 
 			// 4. Early validation for directly triggered messages or manual triggers (including DMs)
 			// For DMs, always validate regardless of content since all DM messages should trigger responses
@@ -1311,7 +1335,9 @@ export default async function tomoriChat(
 				);
 				if (cooldownResult.isOnCooldown) {
 					// Send cooldown warning embed
-					const footerKey = getCooldownTypeFooterKey(cooldownResult.cooldownType);
+					const footerKey = getCooldownTypeFooterKey(
+						cooldownResult.cooldownType,
+					);
 					await sendStandardEmbed(channel, locale, {
 						color: ColorCode.WARN,
 						titleKey: "general.message_cooldown_title",
@@ -1341,6 +1367,71 @@ export default async function tomoriChat(
 			// Set early to prevent race conditions with concurrent triggers
 			if (!isManuallyTriggered && !isStopResponse) {
 				await setMessageTriggerCooldown(message, tomoriState.config);
+			}
+
+			// 8.5. Multi-Persona: Determine which personas should respond
+			// For manual triggers and reminders, only the main persona responds
+			let personasToRespond: TomoriState[];
+			if (isManuallyTriggered || reminderRecipientID || isStopResponse) {
+				// Only main persona for manual triggers, reminders, and stop responses
+				personasToRespond = tomoriState ? [tomoriState] : [];
+			} else {
+				// Check if auto-message threshold is hit for this message
+				const config = tomoriState?.config;
+				const isAutoMsgHit =
+					config &&
+					config.autoch_threshold > 0 &&
+					config.autoch_disc_ids.length > 0 &&
+					config.autoch_disc_ids.includes(message.channel.id) &&
+					tomoriState.autoch_counter > 0 &&
+					tomoriState.autoch_counter % config.autoch_threshold === 0;
+
+				// Determine matching personas using the helper function
+				personasToRespond = determineMatchingPersonas(
+					message,
+					allPersonas,
+					client,
+					isReplyToBot,
+					isBotMentioned,
+					!!isAutoMsgHit, // Convert to boolean
+				);
+			}
+
+			// If no personas match, return early
+			if (personasToRespond.length === 0) {
+				log.info(
+					`No personas matched trigger for message ${message.id} in server ${serverDiscId}`,
+				);
+				return;
+			}
+
+			log.info(
+				`${personasToRespond.length} persona(s) will respond to message ${message.id}: ${personasToRespond.map((p) => p.tomori_nickname).join(", ")}`,
+			);
+
+			// 8.6. Multi-Persona: Get/create webhook for multi-avatar responses
+			// Only create webhook if we have alters responding (main persona uses regular bot messages)
+			const hasAlters = personasToRespond.some((p) => p.is_alter);
+			let channelWebhook: Webhook | null = null;
+			// Support both text channels and threads
+			const supportsWebhooks =
+				channel.type === ChannelType.GuildText ||
+				channel.type === ChannelType.PublicThread ||
+				channel.type === ChannelType.PrivateThread ||
+				channel.type === ChannelType.AnnouncementThread;
+
+			if (hasAlters && supportsWebhooks) {
+				try {
+					channelWebhook = await getOrCreateWebhook(channel as TextChannel);
+					log.info(
+						`Webhook ready for multi-persona responses in ${channel.type} ${channel.id}`,
+					);
+				} catch (webhookError) {
+					log.warn(
+						`Failed to create webhook for multi-persona responses in ${channel.type} ${channel.id}. Alters will use regular bot messages.`,
+						webhookError,
+					);
+				}
 			}
 
 			// 9. Prepare Data for buildContext
@@ -1595,7 +1686,10 @@ export default async function tomoriChat(
 						}
 					}
 
-					if (shouldExtractEmojiImages && referencedMessageData.message.content) {
+					if (
+						shouldExtractEmojiImages &&
+						referencedMessageData.message.content
+					) {
 						const referencedEmojiAttachments = extractEmojiImageAttachments(
 							referencedMessageData.message.content,
 						);
@@ -1923,7 +2017,7 @@ export default async function tomoriChat(
 					imageAttachments.length > 0 || videoAttachments.length > 0
 						? hasLocalMedia
 							? msg.id
-							: mediaSourceMessageId ?? undefined
+							: (mediaSourceMessageId ?? undefined)
 						: undefined;
 
 				// 5.c. Check if this message is from the same effective author as the previous one
@@ -2006,301 +2100,339 @@ export default async function tomoriChat(
 				: guild?.name || "Unknown Server";
 			const serverDescription = isDMChannel ? null : guild?.description;
 
-			let emojiStrings: string[] = [];
-			let loadedEmojis: ServerEmojiRow[] | null = null;
-			let loadedStickers: ServerStickerRow[] | null = null;
-
-			// Load emojis and stickers from 5-minute in-memory cache (lazy sync included)
-			if (!isDMChannel && guild && tomoriState.server_id) {
-				const { emojis, stickers } = await loadEmojiStickerCache(
-					tomoriState.server_id,
-					guild,
-					tomoriState.config.emoji_usage_enabled,
-					tomoriState.config.sticker_usage_enabled,
-				);
-
-				loadedEmojis = emojis;
-				loadedStickers = stickers;
-
-				// Process emojis for conversion (if emoji usage is enabled)
-				if (tomoriState.config.emoji_usage_enabled && emojis && emojis.length > 0) {
-					// Sort emojis by created_at timestamp, then by ID
-					const sortedEmojis = [...emojis].sort((a, b) => {
-						const rawATime = a.created_at
-							? new Date(a.created_at).getTime()
-							: 0;
-						const rawBTime = b.created_at
-							? new Date(b.created_at).getTime()
-							: 0;
-						const aTime = Number.isNaN(rawATime) ? 0 : rawATime;
-						const bTime = Number.isNaN(rawBTime) ? 0 : rawBTime;
-						if (aTime !== bTime) return aTime - bTime;
-						const aId = a.server_emoji_id ?? 0;
-						const bId = b.server_emoji_id ?? 0;
-						if (aId !== bId) return aId - bId;
-						return a.emoji_disc_id.localeCompare(b.emoji_disc_id);
-					});
-
-					// Convert to Discord emoji string format
-					emojiStrings = sortedEmojis.map(
-						(e) =>
-							`<${e.is_animated ? "a" : ""}:${e.emoji_name}:${e.emoji_disc_id}>`,
-					);
-
-					// Debug: Log loaded emoji count and sample
-					log.info(
-						`[Emoji Load] Loaded ${emojiStrings.length} emojis from cache. Sample: ${emojiStrings.slice(0, 5).map(e => e.match(/:[^:]+:/)?.[0]).join(", ")}`,
-					);
-				}
-			}
-
-			// Inject reminder into conversation history if needed
-			// This makes the reminder part of the natural conversation flow rather than system injection
-			if (reminderRecipientID && reminderData) {
-				let reminderContent = `[A reminder you have set before for <@${reminderRecipientID}> (Mention ID: ${reminderRecipientID}) has been triggered. The reminder is about: "${reminderData.reminder_purpose}"]`;
-
-				if (reminderData.reminder_lateness) {
-					reminderContent += ` [You are also ${reminderData.reminder_lateness} to remind the user.]`;
-				}
-
-				// Create synthetic simplified message for the reminder
-				const reminderMessage: SimplifiedMessageForContext = {
-					id: `synthetic-reminder-${Date.now()}`, // Synthetic ID for system-generated reminder
-					authorId: reminderRecipientID,
-					authorName: "System", // Use bot's nickname
-					content: reminderContent,
-					imageAttachments: [],
-					videoAttachments: [],
-				};
-
-				// Add to end of conversation history so it gets processed naturally
-				simplifiedMessages.push(reminderMessage);
-				log.info(
-					`Injected reminder into conversation history for user ${reminderRecipientID} - will be processed by buildContext`,
-				);
-			}
-
-			// Inject continuation prompt for manual triggers when Tomori is the last speaker
-			// This fixes the UX issue where manual /bot respond or /bot reason commands
-			// don't work if Tomori was the last one to speak in the conversation
-			// IMPORTANT: Skip this for reasoning queries - they have their own system message
-			if (
-				isManuallyTriggered &&
-				!reasoningQuery &&
-				simplifiedMessages.length > 0
+			// ========== MULTI-PERSONA RESPONSE LOOP START ==========
+			// Each persona will generate a response sequentially using the same message history
+			// but with their own personality, config, and (for alters) webhook avatar
+			for (
+				let personaIndex = 0;
+				personaIndex < personasToRespond.length;
+				personaIndex++
 			) {
-				const lastMessage = simplifiedMessages[simplifiedMessages.length - 1];
+				const currentPersona = personasToRespond[personaIndex];
+				log.info(
+					`Starting response ${personaIndex + 1}/${personasToRespond.length} from persona "${currentPersona.tomori_nickname}" (${currentPersona.is_alter ? "alter" : "main"})`,
+				);
 
-				// 1. Check if the last message in history is from Tomori
-				// 2. If yes, inject a fake user message to prompt continuation
-				// 3. This ensures the conversation pattern remains User->Tomori->User->Tomori
-				if (lastMessage.authorId === client.user?.id) {
-					log.info(
-						`Manual trigger detected with Tomori as last speaker - injecting continuation prompt for UX`,
-					);
+				// Assign currentPersona to tomoriState for this iteration
+				// This allows all existing code to work without modification
+				tomoriState = currentPersona;
 
-					// Create a fake user message prompting Tomori to continue
-					// Use "0" as authorId to ensure it's not the bot's ID (will be labeled as "user" role)
-					const continuationPrompt: SimplifiedMessageForContext = {
-						id: `synthetic-continuation-${Date.now()}`, // Synthetic ID for system-generated continuation
-						authorId: "0", // Placeholder ID that's definitely not the bot's ID
-						authorName: "System",
-						content: "[Continue your last message]",
-						imageAttachments: [],
-						videoAttachments: [],
-					};
-
-					// Add the continuation prompt to the conversation history
-					simplifiedMessages.push(continuationPrompt);
-					log.info(
-						`Injected continuation prompt as System user to allow Tomori to respond`,
-					);
+				// Send typing indicator for each persona response
+				if (personaIndex > 0) {
+					await channel.sendTyping();
 				}
-			}
 
-			// 11. Build Context
-			// The `buildContext` function will be refactored in a subsequent step to accept
-			// `simplifiedMessages` and produce `StructuredContextItem[]`.
-			// For now, its signature and output type (ContextSegment[]) remain, but we pass the new data.
-			let contextSegments: StructuredContextItem[] = [];
-			try {
-				// NOTE: The `buildContext` call signature will change.
-				// It will take `simplifiedMessageHistory: simplifiedMessages` instead of `conversationHistory`.
-				// It will also need `tomoriNickname`, `tomoriAttributes`, and `tomoriConfig` to build system instructions.
-				contextSegments = await buildContext({
-					guildId: serverDiscId,
-					serverName,
-					serverDescription: serverDescription ?? null,
-					// conversationHistory: conversationHistory, // This parameter will be removed
-					simplifiedMessageHistory: simplifiedMessages, // New parameter for structured history
-					userList,
-					channelDesc,
-					channelName,
-					client,
-					triggererName,
-					emojiStrings,
-					// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked
-					tomoriNickname: tomoriState!.tomori_nickname,
-					// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked
-					tomoriAttributes: tomoriState!.attribute_list,
-					// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked
-					tomoriConfig: tomoriState!.config,
-					isDMChannel, // Pass DM channel flag for proper context building
-					snapshot: requestSnapshot, // Pass per-request snapshot
-					preloadedEmojis: loadedEmojis, // Pass pre-loaded emoji data to avoid redundant DB query
-					preloadedStickers: loadedStickers, // Pass pre-loaded sticker data to avoid redundant DB query
-				});
+				try {
+					// Persona-specific response generation starts here
 
-				// Apply emoji repetition penalty if bot has been using too many emojis
-			contextSegments = applyEmojiPenaltyIfNeeded(
-				contextSegments,
-				tomoriState?.tomori_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
-			);
+					let emojiStrings: string[] = [];
+					let loadedEmojis: ServerEmojiRow[] | null = null;
+					let loadedStickers: ServerStickerRow[] | null = null;
 
-		// Inject system context for stop responses
-				if (isStopResponse) {
-					// Find the last user message in context and replace/supplement it with system context
-					let lastUserContextIndex = -1;
-					for (let i = contextSegments.length - 1; i >= 0; i--) {
-						if (contextSegments[i].role === "user") {
-							lastUserContextIndex = i;
-							break;
+					// Load emojis and stickers from 5-minute in-memory cache (lazy sync included)
+					if (!isDMChannel && guild && currentPersona.server_id) {
+						const { emojis, stickers } = await loadEmojiStickerCache(
+							tomoriState.server_id,
+							guild,
+							tomoriState.config.emoji_usage_enabled,
+							tomoriState.config.sticker_usage_enabled,
+						);
+
+						loadedEmojis = emojis;
+						loadedStickers = stickers;
+
+						// Process emojis for conversion (if emoji usage is enabled)
+						if (
+							tomoriState.config.emoji_usage_enabled &&
+							emojis &&
+							emojis.length > 0
+						) {
+							// Sort emojis by created_at timestamp, then by ID
+							const sortedEmojis = [...emojis].sort((a, b) => {
+								const rawATime = a.created_at
+									? new Date(a.created_at).getTime()
+									: 0;
+								const rawBTime = b.created_at
+									? new Date(b.created_at).getTime()
+									: 0;
+								const aTime = Number.isNaN(rawATime) ? 0 : rawATime;
+								const bTime = Number.isNaN(rawBTime) ? 0 : rawBTime;
+								if (aTime !== bTime) return aTime - bTime;
+								const aId = a.server_emoji_id ?? 0;
+								const bId = b.server_emoji_id ?? 0;
+								if (aId !== bId) return aId - bId;
+								return a.emoji_disc_id.localeCompare(b.emoji_disc_id);
+							});
+
+							// Convert to Discord emoji string format
+							emojiStrings = sortedEmojis.map(
+								(e) =>
+									`<${e.is_animated ? "a" : ""}:${e.emoji_name}:${e.emoji_disc_id}>`,
+							);
+
+							// Debug: Log loaded emoji count and sample
+							log.info(
+								`[Emoji Load] Loaded ${emojiStrings.length} emojis from cache. Sample: ${emojiStrings
+									.slice(0, 5)
+									.map((e) => e.match(/:[^:]+:/)?.[0])
+									.join(", ")}`,
+							);
 						}
 					}
 
-					if (lastUserContextIndex !== -1) {
-						// Replace the last user message content with system context
-						const lastUserContext = contextSegments[lastUserContextIndex];
-						const originalContent = lastUserContext.parts
-							.filter((part) => part.type === "text")
-							.map((part) => (part as { type: "text"; text: string }).text)
-							.join(" ");
+					// Inject reminder into conversation history if needed
+					// This makes the reminder part of the natural conversation flow rather than system injection
+					if (reminderRecipientID && reminderData) {
+						let reminderContent = `[A reminder you have set before for <@${reminderRecipientID}> (Mention ID: ${reminderRecipientID}) has been triggered. The reminder is about: "${reminderData.reminder_purpose}"]`;
 
-						// Replace text parts with system context, preserve other parts (images, etc.)
-						const nonTextParts = lastUserContext.parts.filter(
-							(part) => part.type !== "text",
-						);
-						lastUserContext.parts = [
-							{
-								type: "text",
-								text: `[System: The user has requested you to stop your current generation. Original message: "${originalContent}"]`,
-							},
-							...nonTextParts,
-						];
+						if (reminderData.reminder_lateness) {
+							reminderContent += ` [You are also ${reminderData.reminder_lateness} to remind the user.]`;
+						}
 
-						log.info(
-							`Replaced last user message with system stop context. Original content: "${originalContent}"`,
-						);
-					} else {
-						// Fallback: add as new context item if no user message found
-						const systemStopContext: StructuredContextItem = {
-							role: "user",
-							parts: [
-								{
-									type: "text",
-									text: "[System: The user has requested you to stop your current generation]",
-								},
-							],
-							metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+						// Create synthetic simplified message for the reminder
+						const reminderMessage: SimplifiedMessageForContext = {
+							id: `synthetic-reminder-${Date.now()}`, // Synthetic ID for system-generated reminder
+							authorId: reminderRecipientID,
+							authorName: "System", // Use bot's nickname
+							content: reminderContent,
+							imageAttachments: [],
+							videoAttachments: [],
 						};
-						contextSegments.push(systemStopContext);
+
+						// Add to end of conversation history so it gets processed naturally
+						simplifiedMessages.push(reminderMessage);
 						log.info(
-							"Added system stop context as new message (no user context found)",
+							`Injected reminder into conversation history for user ${reminderRecipientID} - will be processed by buildContext`,
 						);
 					}
-				}
 
-				// Inject reasoning query as user message in dialogue if provided
-				if (reasoningQuery) {
-					// Add reasoning query as a user message in the conversation dialogue
-					const reasoningUserMessage: StructuredContextItem = {
-						role: "user",
-						parts: [
-							{
-								type: "text",
-								text: `[System: The user has activated reasoning mode with the following query: "${reasoningQuery}". Please provide a thoughtful, well-reasoned response to this query.]`,
-							},
-						],
-						metadataTag: ContextItemTag.DIALOGUE_HISTORY,
-					};
-					contextSegments.push(reasoningUserMessage);
-					log.info(
-						`Injected reasoning query as user message in dialogue: "${reasoningQuery}"`,
-					);
-				}
-			} catch (error) {
-				log.error("Error building context for LLM API Call:", error, {
-					serverId: tomoriState?.server_id, // Use internal DB ID if available
-					errorType: "ContextBuildingError",
-					metadata: {
-						guildId: serverDiscId,
-						channelName: channelName, // Use the channelName variable we already calculated
-						userCountInContext: userList.length,
-					},
-				});
-				await sendStandardEmbed(channel, locale, {
-					color: ColorCode.ERROR,
-					titleKey: "general.errors.context_error_title",
-					descriptionKey: "general.errors.context_error_description",
-					footerKey: "genai.generic_error_footer",
-				});
-				return;
-			}
-			// API Key Selection with Rotation Support
-			// 1. Check if rotation is active (2+ keys in pool)
-			// 2. If active, use round-robin selection with cooldown filtering
-			// 3. If not active or all keys exhausted, fall back to main key
-			let decryptedApiKey: string;
-			let selectedKeyResult: SelectedKeyResult | null = null;
+					// Inject continuation prompt for manual triggers when Tomori is the last speaker
+					// This fixes the UX issue where manual /bot respond or /bot reason commands
+					// don't work if Tomori was the last one to speak in the conversation
+					// IMPORTANT: Skip this for reasoning queries - they have their own system message
+					if (
+						isManuallyTriggered &&
+						!reasoningQuery &&
+						simplifiedMessages.length > 0
+					) {
+						const lastMessage =
+							simplifiedMessages[simplifiedMessages.length - 1];
 
-			// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
-			const rotationActive = (tomoriState!.rotation_keys?.length ?? 0) >= 2;
+						// 1. Check if the last message in history is from Tomori
+						// 2. If yes, inject a fake user message to prompt continuation
+						// 3. This ensures the conversation pattern remains User->Tomori->User->Tomori
+						if (lastMessage.authorId === client.user?.id) {
+							log.info(
+								`Manual trigger detected with Tomori as last speaker - injecting continuation prompt for UX`,
+							);
 
-			if (rotationActive) {
-				// Try to select a key from the rotation pool
-				// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
-				selectedKeyResult = await selectApiKey(tomoriState!, []);
+							// Create a fake user message prompting Tomori to continue
+							// Use "0" as authorId to ensure it's not the bot's ID (will be labeled as "user" role)
+							const continuationPrompt: SimplifiedMessageForContext = {
+								id: `synthetic-continuation-${Date.now()}`, // Synthetic ID for system-generated continuation
+								authorId: "0", // Placeholder ID that's definitely not the bot's ID
+								authorName: "System",
+								content: "[Continue your last message]",
+								imageAttachments: [],
+								videoAttachments: [],
+							};
 
-				if (selectedKeyResult) {
-					decryptedApiKey = selectedKeyResult.apiKey;
-					log.info(
-						`Using rotation key ${selectedKeyResult.rotationKeyId} (main: ${selectedKeyResult.isMainKey}) for server ${tomoriState?.server_id}`,
-					);
-				} else {
-					// All rotation keys exhausted or in cooldown, fall back to main key
-					log.warn(
-						`All rotation keys exhausted for server ${tomoriState?.server_id}, falling back to main key`,
-					);
-					// biome-ignore lint/style/noNonNullAssertion: API key presence was validated earlier
-					const keyVersion = tomoriState!.config.key_version || 1;
-					decryptedApiKey = await decryptApiKey(
-						// biome-ignore lint/style/noNonNullAssertion: API key presence was validated earlier
-						tomoriState!.config.api_key!,
-						keyVersion,
-					);
-				}
-			} else {
-				// No rotation active, use main key directly
-				// biome-ignore lint/style/noNonNullAssertion: API key presence was validated earlier for triggered messages, tomoriState is checked
-				const keyVersion = tomoriState!.config.key_version || 1; // Default to V1 for backward compatibility
-				decryptedApiKey = await decryptApiKey(
-					// biome-ignore lint/style/noNonNullAssertion: API key presence was validated earlier for triggered messages, tomoriState is checked
-					tomoriState!.config.api_key!,
-					keyVersion,
-				);
+							// Add the continuation prompt to the conversation history
+							simplifiedMessages.push(continuationPrompt);
+							log.info(
+								`Injected continuation prompt as System user to allow Tomori to respond`,
+							);
+						}
+					}
 
-				// LAZY ROTATION: If using old key version, re-encrypt with current version
-				const currentVersion = keyManager.getCurrentVersion();
-				if (keyVersion !== currentVersion) {
-					log.info(
-						`Rotating main API key from version ${keyVersion} to ${currentVersion} for server ${tomoriState?.server_id}`,
-					);
-
+					// 11. Build Context
+					// The `buildContext` function will be refactored in a subsequent step to accept
+					// `simplifiedMessages` and produce `StructuredContextItem[]`.
+					// For now, its signature and output type (ContextSegment[]) remain, but we pass the new data.
+					let contextSegments: StructuredContextItem[] = [];
 					try {
-						const { encryptApiKey } = await import("@/utils/security/crypto");
-						const { encrypted, version } = await encryptApiKey(decryptedApiKey);
+						// NOTE: The `buildContext` call signature will change.
+						// It will take `simplifiedMessageHistory: simplifiedMessages` instead of `conversationHistory`.
+						// It will also need `tomoriNickname`, `tomoriAttributes`, and `tomoriConfig` to build system instructions.
+						contextSegments = await buildContext({
+							guildId: serverDiscId,
+							serverName,
+							serverDescription: serverDescription ?? null,
+							// conversationHistory: conversationHistory, // This parameter will be removed
+							simplifiedMessageHistory: simplifiedMessages, // New parameter for structured history
+							userList,
+							channelDesc,
+							channelName,
+							client,
+							triggererName,
+							emojiStrings,
+							// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked
+							tomoriNickname: tomoriState!.tomori_nickname,
+							// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked
+							tomoriAttributes: tomoriState!.attribute_list,
+							// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked
+							tomoriConfig: tomoriState!.config,
+							isDMChannel, // Pass DM channel flag for proper context building
+							snapshot: requestSnapshot, // Pass per-request snapshot
+							preloadedEmojis: loadedEmojis, // Pass pre-loaded emoji data to avoid redundant DB query
+							preloadedStickers: loadedStickers, // Pass pre-loaded sticker data to avoid redundant DB query
+						});
 
-						await sql`
+						// Apply emoji repetition penalty if bot has been using too many emojis
+						contextSegments = applyEmojiPenaltyIfNeeded(
+							contextSegments,
+							tomoriState?.tomori_nickname ??
+								process.env.DEFAULT_BOTNAME ??
+								"Tomori",
+						);
+
+						// Inject system context for stop responses
+						if (isStopResponse) {
+							// Find the last user message in context and replace/supplement it with system context
+							let lastUserContextIndex = -1;
+							for (let i = contextSegments.length - 1; i >= 0; i--) {
+								if (contextSegments[i].role === "user") {
+									lastUserContextIndex = i;
+									break;
+								}
+							}
+
+							if (lastUserContextIndex !== -1) {
+								// Replace the last user message content with system context
+								const lastUserContext = contextSegments[lastUserContextIndex];
+								const originalContent = lastUserContext.parts
+									.filter((part) => part.type === "text")
+									.map((part) => (part as { type: "text"; text: string }).text)
+									.join(" ");
+
+								// Replace text parts with system context, preserve other parts (images, etc.)
+								const nonTextParts = lastUserContext.parts.filter(
+									(part) => part.type !== "text",
+								);
+								lastUserContext.parts = [
+									{
+										type: "text",
+										text: `[System: The user has requested you to stop your current generation. Original message: "${originalContent}"]`,
+									},
+									...nonTextParts,
+								];
+
+								log.info(
+									`Replaced last user message with system stop context. Original content: "${originalContent}"`,
+								);
+							} else {
+								// Fallback: add as new context item if no user message found
+								const systemStopContext: StructuredContextItem = {
+									role: "user",
+									parts: [
+										{
+											type: "text",
+											text: "[System: The user has requested you to stop your current generation]",
+										},
+									],
+									metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+								};
+								contextSegments.push(systemStopContext);
+								log.info(
+									"Added system stop context as new message (no user context found)",
+								);
+							}
+						}
+
+						// Inject reasoning query as user message in dialogue if provided
+						if (reasoningQuery) {
+							// Add reasoning query as a user message in the conversation dialogue
+							const reasoningUserMessage: StructuredContextItem = {
+								role: "user",
+								parts: [
+									{
+										type: "text",
+										text: `[System: The user has activated reasoning mode with the following query: "${reasoningQuery}". Please provide a thoughtful, well-reasoned response to this query.]`,
+									},
+								],
+								metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+							};
+							contextSegments.push(reasoningUserMessage);
+							log.info(
+								`Injected reasoning query as user message in dialogue: "${reasoningQuery}"`,
+							);
+						}
+					} catch (error) {
+						log.error("Error building context for LLM API Call:", error, {
+							serverId: tomoriState?.server_id, // Use internal DB ID if available
+							errorType: "ContextBuildingError",
+							metadata: {
+								guildId: serverDiscId,
+								channelName: channelName, // Use the channelName variable we already calculated
+								userCountInContext: userList.length,
+							},
+						});
+						await sendStandardEmbed(channel, locale, {
+							color: ColorCode.ERROR,
+							titleKey: "general.errors.context_error_title",
+							descriptionKey: "general.errors.context_error_description",
+							footerKey: "genai.generic_error_footer",
+						});
+						return;
+					}
+					// API Key Selection with Rotation Support
+					// 1. Check if rotation is active (2+ keys in pool)
+					// 2. If active, use round-robin selection with cooldown filtering
+					// 3. If not active or all keys exhausted, fall back to main key
+					let decryptedApiKey: string;
+					let selectedKeyResult: SelectedKeyResult | null = null;
+
+					// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
+					const rotationActive = (tomoriState!.rotation_keys?.length ?? 0) >= 2;
+
+					if (rotationActive) {
+						// Try to select a key from the rotation pool
+						// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
+						selectedKeyResult = await selectApiKey(tomoriState!, []);
+
+						if (selectedKeyResult) {
+							decryptedApiKey = selectedKeyResult.apiKey;
+							log.info(
+								`Using rotation key ${selectedKeyResult.rotationKeyId} (main: ${selectedKeyResult.isMainKey}) for server ${tomoriState?.server_id}`,
+							);
+						} else {
+							// All rotation keys exhausted or in cooldown, fall back to main key
+							log.warn(
+								`All rotation keys exhausted for server ${tomoriState?.server_id}, falling back to main key`,
+							);
+							// biome-ignore lint/style/noNonNullAssertion: API key presence was validated earlier
+							const keyVersion = tomoriState!.config.key_version || 1;
+							decryptedApiKey = await decryptApiKey(
+								// biome-ignore lint/style/noNonNullAssertion: API key presence was validated earlier
+								tomoriState!.config.api_key!,
+								keyVersion,
+							);
+						}
+					} else {
+						// No rotation active, use main key directly
+						// biome-ignore lint/style/noNonNullAssertion: API key presence was validated earlier for triggered messages, tomoriState is checked
+						const keyVersion = tomoriState!.config.key_version || 1; // Default to V1 for backward compatibility
+						decryptedApiKey = await decryptApiKey(
+							// biome-ignore lint/style/noNonNullAssertion: API key presence was validated earlier for triggered messages, tomoriState is checked
+							tomoriState!.config.api_key!,
+							keyVersion,
+						);
+
+						// LAZY ROTATION: If using old key version, re-encrypt with current version
+						const currentVersion = keyManager.getCurrentVersion();
+						if (keyVersion !== currentVersion) {
+							log.info(
+								`Rotating main API key from version ${keyVersion} to ${currentVersion} for server ${tomoriState?.server_id}`,
+							);
+
+							try {
+								const { encryptApiKey } = await import(
+									"@/utils/security/crypto"
+								);
+								const { encrypted, version } =
+									await encryptApiKey(decryptedApiKey);
+
+								await sql`
 							UPDATE tomori_configs
 							SET api_key = ${encrypted},
 							    key_version = ${version},
@@ -2308,869 +2440,952 @@ export default async function tomoriChat(
 							WHERE tomori_id = ${tomoriState?.tomori_id}
 						`;
 
-						log.success(
-							`Main API key rotation completed for server ${tomoriState?.server_id}`,
-						);
-
-						// Update in-memory state to reflect the new version
-						// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
-						tomoriState!.config.api_key = encrypted;
-						// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
-						tomoriState!.config.key_version = version;
-					} catch (error) {
-						log.warn(
-							"Failed to rotate main API key (non-critical - will retry on next message)",
-							error,
-						);
-						// Continue execution - the old key still works
-					}
-				}
-			}
-
-			if (!decryptedApiKey) {
-				log.error("API Key is not set or failed to decrypt.", undefined, {
-					serverId: tomoriState?.server_id,
-					errorType: "ApiKeyError",
-				});
-				await sendStandardEmbed(channel, locale, {
-					color: ColorCode.ERROR,
-					titleKey: "general.errors.api_key_error_title",
-					descriptionKey: "general.errors.api_key_error_description",
-				});
-				return;
-			}
-
-			// 12. Generate Response - Get provider instance
-
-			// Get the appropriate provider based on TomoriState configuration
-			let provider: LLMProvider;
-			try {
-				provider = await getProviderForTomori(tomoriState);
-			} catch (error) {
-				log.error(
-					`Failed to get LLM provider: ${error instanceof Error ? error.message : String(error)}`,
-					error as Error,
-					{
-						serverId: tomoriState?.server_id,
-						errorType: "ProviderError",
-						metadata: {
-							configuredProvider: tomoriState?.llm.llm_provider,
-							configuredModel: tomoriState?.llm.llm_codename,
-						},
-					},
-				);
-				await sendStandardEmbed(channel, locale, {
-					color: ColorCode.ERROR,
-					titleKey: "general.errors.provider_not_supported_title",
-					descriptionKey: "general.errors.provider_not_supported_description",
-					descriptionVars: {
-						provider: tomoriState?.llm.llm_provider || "unknown",
-					},
-				});
-				return;
-			}
-
-			// Create provider-specific configuration
-			// If model override is specified, temporarily modify tomoriState
-			let originalModelCodename: string | undefined;
-			if (llmOverrideCodename) {
-				originalModelCodename = tomoriState.llm.llm_codename;
-				tomoriState.llm.llm_codename = llmOverrideCodename;
-				log.info(
-					`Overriding model from ${originalModelCodename} to ${llmOverrideCodename} for manual command`,
-				);
-			}
-
-			const providerConfig = await provider.createConfig(
-				tomoriState,
-				decryptedApiKey,
-			);
-
-			// Restore original model if it was overridden
-			if (originalModelCodename) {
-				tomoriState.llm.llm_codename = originalModelCodename;
-			}
-
-			log.info(
-				"Streaming mode enabled. Attempting to stream response to Discord.",
-			);
-
-			// 1. Initialize variables for the function calling loop in streaming mode
-			let selectedStickerToSend: Sticker | null = null;
-			const functionInteractionHistory: {
-				functionCall: FunctionCall;
-				functionResponse: Record<string, unknown>;
-			}[] = [];
-			let finalStreamCompleted = false;
-			const accumulatedStreamedModelParts: Array<Record<string, unknown>> = [];
-
-			for (let i = 0; i < MAX_FUNCTION_CALL_ITERATIONS; i++) {
-				log.info(
-					`Streaming LLM Call Iteration: ${i + 1}/${MAX_FUNCTION_CALL_ITERATIONS}. History items: ${functionInteractionHistory.length}`,
-				);
-
-				try {
-					// Debug: Log final context right before sending to LLM
-					if (reminderRecipientID) {
-						for (
-							let i = Math.max(0, contextSegments.length - 3);
-							i < contextSegments.length;
-							i++
-						) {
-							const segment = contextSegments[i];
-							const textParts = segment.parts
-								.filter((p) => p.type === "text")
-								.map((p) => (p as { type: "text"; text: string }).text)
-								.join(" ");
-							log.info(
-								`  [${i}] ${segment.role}: ${textParts.substring(0, 100)}${textParts.length > 100 ? "..." : ""}`,
-							);
-						}
-						// Show the complete last segment if it's the system message
-						const lastSegment = contextSegments[contextSegments.length - 1];
-						if (lastSegment.role === "user") {
-							const fullText = lastSegment.parts
-								.filter((p) => p.type === "text")
-								.map((p) => (p as { type: "text"; text: string }).text)
-								.join(" ");
-							if (fullText.includes("[System:")) {
-								log.info(`Complete system message: ${fullText}`);
-							}
-						}
-					}
-
-					const streamProviderPromise = await provider.streamToDiscord(
-						channel,
-						client,
-						// biome-ignore lint/style/noNonNullAssertion: Missing Tomoristate handled at start of TomoriChat
-						tomoriState!,
-						providerConfig,
-						contextSegments, // Original full prompt context
-						accumulatedStreamedModelParts, // MODIFIED: Pass the accumulator (Rule 26)
-						emojiStrings,
-						functionInteractionHistory.length > 0
-							? functionInteractionHistory
-							: undefined, // Pass history if it exists
-						undefined,
-						isFromQueue ? message : undefined,
-						streamingContext, // Pass streaming context for context-aware tool availability
-						locale, // Pass user's preferred locale for error messages
-					);
-					const timeoutPromise = new Promise<never>(
-						(
-							_,
-							reject, // Promise<never> indicates it only rejects
-						) =>
-							setTimeout(
-								() =>
-									reject(
-										new Error(
-											"SDK_CALL_TIMEOUT: provider streamToDiscord call timed out.",
-										),
-									),
-								STREAM_SDK_CALL_TIMEOUT_MS,
-							),
-					);
-
-					let streamResult: StreamResult;
-					try {
-						// Promise.race will settle as soon as one of the promises settles
-						streamResult = await Promise.race([
-							streamProviderPromise,
-							timeoutPromise,
-						]);
-					} catch (raceError) {
-						// This catch block will execute if timeoutPromise rejects first,
-						// or if streamProviderPromise itself rejects *before* the timeout.
-						if (
-							raceError instanceof Error &&
-							raceError.message.startsWith("SDK_CALL_TIMEOUT:")
-						) {
-							log.error(
-								`Provider streamToDiscord call timed out for channel ${channel.id}.`,
-								raceError, // Log the timeout error
-								{
-									serverId: tomoriState?.server_id,
-									errorType: "SDKTimeoutError",
-								},
-							);
-							await sendStandardEmbed(channel, locale, {
-								color: ColorCode.ERROR, // Using ERROR as it's a more critical failure
-								titleKey: "genai.error_stream_timeout_title", // New locale key
-								descriptionKey: "genai.error_stream_timeout_description", // New locale key
-							});
-							finalStreamCompleted = true; // Consider it "completed" to break the loop
-							break;
-						}
-						// If it's not our specific timeout error, re-throw to be caught by the outer catch
-						throw raceError;
-					}
-
-					// Use switch statement for exhaustive status checking
-					switch (streamResult.status) {
-						case "completed":
-							log.success("Streaming to Discord completed successfully.");
-							// Record success for rotation key if one was used
-							if (selectedKeyResult?.rotationKeyId) {
-								await recordKeySuccess(selectedKeyResult.rotationKeyId);
-							}
-							finalStreamCompleted = true;
-							break; // Exit loop, final text stream was handled by streamGeminiToDiscord
-
-						case "error": {
-							log.error(
-								"Streaming to Discord reported an error.",
-								streamResult.data,
-								{
-									serverId: tomoriState?.server_id,
-									errorType: "StreamingError",
-								},
-							);
-							// Record error for rotation key if one was used and error is key-related
-							if (selectedKeyResult?.rotationKeyId && streamResult.data) {
-								// Check if error is API key related (rate limit or auth error)
-								const errorData = streamResult.data as { type?: string; message?: string; code?: string };
-								if (errorData.type === "rate_limit") {
-									await recordKeyError(
-										selectedKeyResult.rotationKeyId,
-										"rate_limit",
-										errorData.message || "Rate limit exceeded",
-									);
-								} else if (
-									errorData.type === "api_error" ||
-									errorData.code === "401" ||
-									errorData.code === "403"
-								) {
-									await recordKeyError(
-										selectedKeyResult.rotationKeyId,
-										"api_error",
-										errorData.message || "API authentication error",
-									);
-								}
-							}
-							// streamGeminiToDiscord already attempts to send an error message.
-							finalStreamCompleted = true; // Consider it "completed" to break loop, error handled.
-							break;
-						}
-
-						case "empty_response": {
-							// Handle empty response with fresh context retry
-							const MAX_EMPTY_RESPONSE_RETRIES = 2;
-							const RETRY_DELAY_MS = 1000;
-
-							if (retryCount < MAX_EMPTY_RESPONSE_RETRIES) {
-								log.info(
-									`Empty response detected (attempt ${retryCount + 1}/${MAX_EMPTY_RESPONSE_RETRIES + 1}). Retrying with fresh context in ${RETRY_DELAY_MS}ms...`,
+								log.success(
+									`Main API key rotation completed for server ${tomoriState?.server_id}`,
 								);
 
-								// Wait before retry
-								await new Promise((resolve) =>
-									setTimeout(resolve, RETRY_DELAY_MS),
-								);
-
-								// Recursive call with fresh context (skipLock=true to avoid semaphore issues)
-								return await tomoriChat(
-									client,
-									message,
-									isFromQueue,
-									true, // isManuallyTriggered - bypass trigger checks for retry
-									forceReason,
-									reasoningQuery,
-									llmOverrideCodename,
-									isStopResponse,
-									retryCount + 1, // Increment retry count
-									true, // skipLock - parent already holds the lock
-								);
-							} else {
-								// Max retries reached, show error embed
+								// Update in-memory state to reflect the new version
+								// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
+								tomoriState!.config.api_key = encrypted;
+								// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
+								tomoriState!.config.key_version = version;
+							} catch (error) {
 								log.warn(
-									`Empty response after ${MAX_EMPTY_RESPONSE_RETRIES} retries. Showing error embed.`,
+									"Failed to rotate main API key (non-critical - will retry on next message)",
+									error,
 								);
-
-								await sendStandardEmbed(channel, locale, {
-									titleKey: "genai.empty_response_title",
-									descriptionKey: "genai.empty_response_description",
-									color: ColorCode.WARN,
-									footerKey: "genai.generic_error_footer",
-								}).catch((e) =>
-									log.warn("Failed to send empty response embed to channel", e),
-								);
-
-								finalStreamCompleted = true; // Mark as completed to exit
-								break;
+								// Continue execution - the old key still works
 							}
 						}
+					}
 
-						case "timeout":
-							// This is the internal stream inactivity timeout from streamGeminiToDiscord
-							log.warn(
-								`Streaming to Discord timed out due to inactivity for channel ${channel.id}.`,
-								streamResult.data,
-							);
-							await sendStandardEmbed(channel, locale, {
-								color: ColorCode.WARN,
-								titleKey: "genai.error_stream_timeout_title",
-								descriptionKey: "genai.error_stream_timeout_description",
-							});
-							finalStreamCompleted = true;
-							break;
+					if (!decryptedApiKey) {
+						log.error("API Key is not set or failed to decrypt.", undefined, {
+							serverId: tomoriState?.server_id,
+							errorType: "ApiKeyError",
+						});
+						await sendStandardEmbed(channel, locale, {
+							color: ColorCode.ERROR,
+							titleKey: "general.errors.api_key_error_title",
+							descriptionKey: "general.errors.api_key_error_description",
+						});
+						return;
+					}
 
-						case "stopped_by_user": {
-							// Handle user-requested stop (natural stop triggers)
-							log.info(
-								`Streaming was stopped by user request for channel ${channel.id}.`,
-							);
-							finalStreamCompleted = true;
+					// 12. Generate Response - Get provider instance
 
-							// Check if we have stop context to create a response
-							const stopContext = StreamOrchestrator.getAndClearStopContext(
-								channel.id,
-							);
+					// Get the appropriate provider based on TomoriState configuration
+					let provider: LLMProvider;
+					try {
+						provider = await getProviderForTomori(tomoriState);
+					} catch (error) {
+						log.error(
+							`Failed to get LLM provider: ${error instanceof Error ? error.message : String(error)}`,
+							error as Error,
+							{
+								serverId: tomoriState?.server_id,
+								errorType: "ProviderError",
+								metadata: {
+									configuredProvider: tomoriState?.llm.llm_provider,
+									configuredModel: tomoriState?.llm.llm_codename,
+								},
+							},
+						);
+						await sendStandardEmbed(channel, locale, {
+							color: ColorCode.ERROR,
+							titleKey: "general.errors.provider_not_supported_title",
+							descriptionKey:
+								"general.errors.provider_not_supported_description",
+							descriptionVars: {
+								provider: tomoriState?.llm.llm_provider || "unknown",
+							},
+						});
+						return;
+					}
 
-							if (stopContext) {
-								// Get the current lock entry to queue the stop response
-								const currentLockEntry = channelLocks.get(channel.id);
-								if (currentLockEntry) {
-									// Queue the original stop message as a "passport" for stop response
-									currentLockEntry.messageQueue.unshift({
-										message: stopContext.originalStopMessage,
-										isManuallyTriggered: true, // This bypasses normal trigger logic
-										forceReason: false,
-										llmOverrideCodename,
-										isStopResponse: true, // This response cannot be stopped
-									});
+					// Create provider-specific configuration
+					// If model override is specified, temporarily modify tomoriState
+					let originalModelCodename: string | undefined;
+					if (llmOverrideCodename) {
+						originalModelCodename = tomoriState.llm.llm_codename;
+						tomoriState.llm.llm_codename = llmOverrideCodename;
+						log.info(
+							`Overriding model from ${originalModelCodename} to ${llmOverrideCodename} for manual command`,
+						);
+					}
 
+					const providerConfig = await provider.createConfig(
+						tomoriState,
+						decryptedApiKey,
+					);
+
+					// Restore original model if it was overridden
+					if (originalModelCodename) {
+						tomoriState.llm.llm_codename = originalModelCodename;
+					}
+
+					log.info(
+						"Streaming mode enabled. Attempting to stream response to Discord.",
+					);
+
+					// 1. Initialize variables for the function calling loop in streaming mode
+					let selectedStickerToSend: Sticker | null = null;
+					const functionInteractionHistory: {
+						functionCall: FunctionCall;
+						functionResponse: Record<string, unknown>;
+					}[] = [];
+					let finalStreamCompleted = false;
+					const accumulatedStreamedModelParts: Array<Record<string, unknown>> =
+						[];
+
+					for (let i = 0; i < MAX_FUNCTION_CALL_ITERATIONS; i++) {
+						log.info(
+							`Streaming LLM Call Iteration: ${i + 1}/${MAX_FUNCTION_CALL_ITERATIONS}. History items: ${functionInteractionHistory.length}`,
+						);
+
+						try {
+							// Debug: Log final context right before sending to LLM
+							if (reminderRecipientID) {
+								for (
+									let i = Math.max(0, contextSegments.length - 3);
+									i < contextSegments.length;
+									i++
+								) {
+									const segment = contextSegments[i];
+									const textParts = segment.parts
+										.filter((p) => p.type === "text")
+										.map((p) => (p as { type: "text"; text: string }).text)
+										.join(" ");
 									log.info(
-										`Stop response queued after stream completion for channel ${channel.id}. Queue size: ${currentLockEntry.messageQueue.length}`,
+										`  [${i}] ${segment.role}: ${textParts.substring(0, 100)}${textParts.length > 100 ? "..." : ""}`,
 									);
+								}
+								// Show the complete last segment if it's the system message
+								const lastSegment = contextSegments[contextSegments.length - 1];
+								if (lastSegment.role === "user") {
+									const fullText = lastSegment.parts
+										.filter((p) => p.type === "text")
+										.map((p) => (p as { type: "text"; text: string }).text)
+										.join(" ");
+									if (fullText.includes("[System:")) {
+										log.info(`Complete system message: ${fullText}`);
+									}
 								}
 							}
 
-							break; // Exit the loop gracefully, stop response will be handled by queue
-						}
+							// Resolve persona avatar URL and username for webhook-based sending
+							// Only use webhook for alter personas (not main) in guild channels (not DMs)
+							const personaAvatarUrl =
+								channelWebhook && guild && currentPersona.is_alter
+									? resolvePersonaAvatarURL(currentPersona, guild)
+									: undefined;
 
-						case "function_call": {
-							if (!streamResult.data) {
-								// Function call without data - log error and break
-								log.error(
-									"Function call status received without data:",
-									streamResult,
-								);
-								finalStreamCompleted = true;
-								break;
-							}
-							const funcCall = streamResult.data as FunctionCall; // Type assertion
-							const funcName = funcCall.name?.trim() ?? "";
-							log.info(
-								`Stream LLM wants to call function: ${funcName} with args: ${JSON.stringify(funcCall.args)}`,
-							);
+							const personaUsername =
+								channelWebhook && currentPersona.is_alter
+									? currentPersona.tomori_nickname
+									: undefined;
 
-							// 2. Execute function using modular tool system
-							log.info(
-								`Executing tool: ${funcName} with args: ${JSON.stringify(funcCall.args)}`,
-							);
+							// Create isolated copies for each persona to prevent context pollution
+							const personaAccumulatedParts = [
+								...accumulatedStreamedModelParts,
+							];
+							const personaFunctionHistory = [...functionInteractionHistory];
 
-							// Build tool execution context
-							const toolContext = {
+							const streamProviderPromise = await provider.streamToDiscord(
 								channel,
 								client,
-								message,
-								userId: userRow?.user_id?.toString() || userDiscId,
-								guildId: message.guild?.id, // Pass guild ID for guild-specific features (e.g., server avatars)
-								tomoriState,
-								locale,
-								provider: provider.getInfo().name,
-								streamContext: streamingContext, // Pass streaming context to tools
-							};
-
-							// Execute tool using ToolRegistry (handles both built-in and MCP tools seamlessly)
-							// Check for stop request before executing function call
-							if (StreamOrchestrator.hasStopRequest(channel.id)) {
-								log.info(
-									`Function call execution cancelled due to stop request: ${funcName}`,
-								);
-								finalStreamCompleted = true;
-								break;
-							}
-
-							const functionCallStart = Date.now();
-							const toolResult = await ToolRegistry.executeTool(
-								funcName,
-								funcCall.args || {},
-								toolContext,
+								// biome-ignore lint/style/noNonNullAssertion: Missing Tomoristate handled at start of TomoriChat
+								tomoriState!,
+								providerConfig,
+								contextSegments, // Can be shared (read-only message history)
+								personaAccumulatedParts, // Isolated per persona
+								emojiStrings,
+								personaFunctionHistory.length > 0
+									? personaFunctionHistory
+									: undefined, // Isolated per persona
+								undefined,
+								isFromQueue ? message : undefined,
+								streamingContext, // Pass streaming context for context-aware tool availability
+								locale, // Pass user's preferred locale for error messages
+								channelWebhook ?? undefined, // Pass webhook for alter persona avatar support
+								personaAvatarUrl, // Pass resolved avatar URL
+								personaUsername, // Pass persona username
 							);
-							const functionCallDuration = Date.now() - functionCallStart;
+							const timeoutPromise = new Promise<never>(
+								(
+									_,
+									reject, // Promise<never> indicates it only rejects
+								) =>
+									setTimeout(
+										() =>
+											reject(
+												new Error(
+													"SDK_CALL_TIMEOUT: provider streamToDiscord call timed out.",
+												),
+											),
+										STREAM_SDK_CALL_TIMEOUT_MS,
+									),
+							);
 
-							// Log function call timing (especially long-running ones)
-							if (functionCallDuration > 5000) {
-								log.warn(
-									`Long-running function call: ${funcName} took ${functionCallDuration}ms`,
-								);
-							} else {
-								log.info(
-									`Function call completed: ${funcName} (${functionCallDuration}ms)`,
-								);
-							}
-
-							// Convert tool result to function execution result format
-							let functionExecutionResult: Record<string, unknown>;
-
-							if (toolResult.success) {
-								functionExecutionResult = (toolResult.data as Record<
-									string,
-									unknown
-								>) || { status: "completed" };
-
-								// Handle sticker selection specifically (extract sticker for later sending)
+							let streamResult: StreamResult;
+							try {
+								// Promise.race will settle as soon as one of the promises settles
+								streamResult = await Promise.race([
+									streamProviderPromise,
+									timeoutPromise,
+								]);
+							} catch (raceError) {
+								// This catch block will execute if timeoutPromise rejects first,
+								// or if streamProviderPromise itself rejects *before* the timeout.
 								if (
-									funcName === "select_sticker_for_response" &&
-									toolResult.data
+									raceError instanceof Error &&
+									raceError.message.startsWith("SDK_CALL_TIMEOUT:")
 								) {
-									const stickerData = toolResult.data as Record<
-										string,
-										unknown
-									>;
-									if (stickerData.status === "sticker_selected_successfully") {
-										// Find the sticker in guild cache to send later
-										const discordSticker = guild?.stickers.cache.get(
-											stickerData.sticker_id as string,
-										);
-										selectedStickerToSend = discordSticker || null;
-										log.success(
-											`Sticker '${stickerData.sticker_name}' selected for sending`,
-										);
-									} else {
-										selectedStickerToSend = null;
-									}
-								}
-
-								// Handle YouTube video restart signal (enhanced context restart)
-								if (
-									funcName === "process_youtube_video" &&
-									toolResult.data &&
-									(toolResult.data as Record<string, unknown>).type ===
-										"context_restart_with_video"
-								) {
-									const restartData = toolResult.data as Record<
-										string,
-										unknown
-									>;
-									const enhancedContextItem =
-										restartData.enhanced_context_item as StructuredContextItem;
-									const videoUrl = restartData.video_url as string;
-									const videoId = restartData.video_id as string;
-
-									log.info(
-										`YouTube video restart signal detected for: ${videoUrl}. Cleaning URLs and enhancing context.`,
+									log.error(
+										`Provider streamToDiscord call timed out for channel ${channel.id}.`,
+										raceError, // Log the timeout error
+										{
+											serverId: tomoriState?.server_id,
+											errorType: "SDKTimeoutError",
+										},
 									);
-
-									// Set flag to disable YouTube processing during enhanced context restart
-									// This prevents TomoriBot from making additional YouTube function calls while processing
-									streamingContext.disableYouTubeProcessing = true;
-									log.info(
-										"Temporarily disabled YouTube processing function during enhanced context restart",
-									);
-
-									// Clean YouTube URLs from all existing context text parts FIRST to prevent false duplication detection
-									for (const contextItem of contextSegments) {
-										for (const part of contextItem.parts) {
-											if (part.type === "text") {
-												const originalText = part.text;
-												part.text = removeYouTubeUrls(part.text, "");
-												if (originalText !== part.text) {
-													log.info(
-														`Cleaned YouTube URLs from context text during duplication check. Original length: ${originalText.length}, cleaned length: ${part.text.length}`,
-													);
-												}
-											}
-										}
-									}
-
-									// Check for existing video parts with same video ID to prevent duplication
-									// Only check actual video Parts, not text mentions (which are now cleaned)
-									const existingVideoIds = new Set<string>();
-									for (const contextItem of contextSegments) {
-										for (const part of contextItem.parts) {
-											// Check for enhanced context YouTube video parts specifically
-											if (
-												part.type === "video" &&
-												part.uri &&
-												"isYouTubeLink" in part &&
-												(part as { isYouTubeLink: boolean }).isYouTubeLink &&
-												"enhancedContext" in part &&
-												(part as { enhancedContext: boolean }).enhancedContext
-											) {
-												const existingIds = extractYouTubeVideoIds(part.uri);
-												for (const id of existingIds) {
-													existingVideoIds.add(id);
-												}
-											}
-										}
-									}
-
-									// Only add video part if not already present
-									if (!existingVideoIds.has(videoId)) {
-										// Add the video context item to existing context
-										contextSegments.push(enhancedContextItem);
-										log.success(
-											`Enhanced context with YouTube video Part (ID: ${videoId}). Total context items: ${contextSegments.length}`,
-										);
-									} else {
-										log.warn(
-											`YouTube video ${videoId} already exists in context. Skipping duplication.`,
-										);
-									}
-
-									// Continue to next iteration WITHOUT adding to function interaction history
-									// This will restart the streaming with enhanced context
-									continue;
-								}
-
-								// Handle profile picture restart signal (enhanced context restart)
-								if (
-									funcName === "peek_profile_picture" &&
-									toolResult.data &&
-									(toolResult.data as Record<string, unknown>).type ===
-										"context_restart_with_image"
-								) {
-									const restartData = toolResult.data as Record<
-										string,
-										unknown
-									>;
-									const userId = restartData.user_id as string;
-									const username = restartData.username as string;
-
-									log.info(
-										`Profile picture restart signal detected for user: ${username} (${userId}). Enhancing context with avatar image.`,
-									);
-
-									// Get the enhanced context item from external storage
-									const enhancedContextItem =
-										PeekProfilePictureTool.getPendingEnhancedContext(userId);
-
-									if (!enhancedContextItem) {
-										log.warn(
-											`No pending enhanced context found for user ${userId}. Profile picture restart failed.`,
-										);
-										continue;
-									}
-
-									// Set flag to disable profile picture processing during enhanced context restart
-									// This prevents TomoriBot from making additional profile picture function calls while processing
-									streamingContext.disableProfilePictureProcessing = true;
-									log.info(
-										"Temporarily disabled profile picture processing function during enhanced context restart",
-									);
-
-									// Check for existing profile picture parts for this user to prevent duplication
-									let hasExistingProfilePicture = false;
-									for (const contextItem of contextSegments) {
-										for (const part of contextItem.parts) {
-											// Check for enhanced context profile picture parts specifically
-											if (
-												part.type === "image" &&
-												"isProfilePicture" in part &&
-												(part as { isProfilePicture: boolean })
-													.isProfilePicture &&
-												"enhancedContext" in part &&
-												(part as { enhancedContext: boolean }).enhancedContext
-											) {
-												hasExistingProfilePicture = true;
-												break;
-											}
-										}
-										if (hasExistingProfilePicture) break;
-									}
-
-									// Only add profile picture part if not already present
-									if (!hasExistingProfilePicture) {
-										// Add the profile picture context item to existing context
-										contextSegments.push(enhancedContextItem);
-										log.success(
-											`Enhanced context with profile picture for user: ${username}. Total context items: ${contextSegments.length}`,
-										);
-									} else {
-										log.warn(
-											`Profile picture for user ${username} already exists in context. Skipping duplication.`,
-										);
-									}
-
-									// Continue to next iteration WITHOUT adding to function interaction history
-									// This will restart the streaming with enhanced context
-									continue;
-								}
-
-								// Handle GIF processing restart signal (enhanced context restart)
-								if (
-									funcName === "process_gif" &&
-									toolResult.data &&
-									(toolResult.data as Record<string, unknown>).type ===
-										"context_restart_with_gif"
-								) {
-									const restartData = toolResult.data as Record<
-										string,
-										unknown
-									>;
-									const messageId = restartData.message_id as string;
-									const frameCount = restartData.frame_count as number;
-
-									log.info(
-										`GIF processing restart signal detected for message: ${messageId} (${frameCount} frames). Enhancing context with GIF keyframes.`,
-									);
-
-									// Get the enhanced context item from external storage
-									const enhancedContextItem =
-										ProcessGifTool.getPendingEnhancedContext(messageId);
-
-									if (!enhancedContextItem) {
-										log.warn(
-											`No pending enhanced context found for message ${messageId}. GIF restart failed.`,
-										);
-										continue;
-									}
-
-									// Set flag to disable GIF processing during enhanced context restart
-									// This prevents TomoriBot from making additional GIF function calls while processing
-									streamingContext.disableGifProcessing = true;
-									log.info(
-										"Temporarily disabled GIF processing function during enhanced context restart",
-									);
-
-									// Add the GIF frames context item to existing context
-									contextSegments.push(enhancedContextItem);
-									log.success(
-										`Enhanced context with ${frameCount} GIF keyframes for message: ${messageId}. Total context items: ${contextSegments.length}`,
-									);
-
-									// Continue to next iteration WITHOUT adding to function interaction history
-									// This will restart the streaming with enhanced context
-									continue;
-								}
-
-								// Handle media context expansion restart signal (enhanced context restart)
-								if (
-									funcName === "increase_media_context" &&
-									toolResult.data &&
-									(toolResult.data as Record<string, unknown>).type ===
-										"context_restart_with_media"
-								) {
-									const restartData = toolResult.data as Record<
-										string,
-										unknown
-									>;
-									const extendBy = restartData.extend_by as number;
-									const oldWindow = restartData.old_window as number;
-									const newWindow = restartData.new_window as number;
-
-									log.info(
-										`Media context expansion restart signal detected. Expanding window from ${oldWindow} to ${newWindow} messages (extend_by=${extendBy}).`,
-									);
-
-									// Rebuild context with expanded media window
-									// This uses the same simplifiedMessages array that's already been mushed
-									contextSegments = await buildContext({
-										guildId: serverDiscId,
-										serverName,
-										serverDescription: serverDescription ?? null,
-										simplifiedMessageHistory: simplifiedMessages,
-										userList,
-										channelDesc,
-										channelName,
-										client,
-										triggererName,
-										emojiStrings,
-										// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
-										tomoriNickname: tomoriState!.tomori_nickname,
-										// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
-										tomoriAttributes: tomoriState!.attribute_list,
-										// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
-										tomoriConfig: tomoriState!.config,
-										isDMChannel,
-										mediaContextWindow: newWindow, // Pass the expanded window
-										snapshot: requestSnapshot, // Reuse snapshot for context rebuild
-										preloadedEmojis: loadedEmojis, // Pass pre-loaded emoji data to avoid redundant DB query
-										preloadedStickers: loadedStickers, // Pass pre-loaded sticker data to avoid redundant DB query
+									await sendStandardEmbed(channel, locale, {
+										color: ColorCode.ERROR, // Using ERROR as it's a more critical failure
+										titleKey: "genai.error_stream_timeout_title", // New locale key
+										descriptionKey: "genai.error_stream_timeout_description", // New locale key
 									});
-
-									log.success(
-										`Rebuilt context with expanded media window (${newWindow} messages). Total context items: ${contextSegments.length}`,
-									);
-
-
-									// Apply emoji repetition penalty after rebuilding context
-									contextSegments = applyEmojiPenaltyIfNeeded(
-										contextSegments,
-										tomoriState?.tomori_nickname ??
-											process.env.DEFAULT_BOTNAME ??
-											"Tomori",
-									);
-									// Continue to next iteration WITHOUT adding to function interaction history
-									// This will restart the streaming with enhanced context
-									continue;
+									finalStreamCompleted = true; // Consider it "completed" to break the loop
+									break;
 								}
-							} else {
-								// Tool execution failed
-								functionExecutionResult = {
-									status: "tool_execution_failed",
-									reason:
-										toolResult.error ||
-										"Tool execution failed without specific error",
-									tool_name: funcName,
-								};
-								log.error(
-									`Tool execution failed for ${funcName}: ${toolResult.error}`,
-								);
+								// If it's not our specific timeout error, re-throw to be caught by the outer catch
+								throw raceError;
 							}
 
-							// 3. Add the model's function call and our function's result to the history
-							const historyEntry: {
-								functionCall: FunctionCall;
-								functionResponse: Record<string, unknown>;
-								imageMetadata?: typeof toolResult.imageMetadata;
-							} = {
-								functionCall: funcCall,
-								functionResponse: {
-									functionResponse: {
-										name: funcName,
-										response: { result: functionExecutionResult },
-									},
-								},
-							};
+							// Use switch statement for exhaustive status checking
+							switch (streamResult.status) {
+								case "completed":
+									log.success("Streaming to Discord completed successfully.");
+									// Record success for rotation key if one was used
+									if (selectedKeyResult?.rotationKeyId) {
+										await recordKeySuccess(selectedKeyResult.rotationKeyId);
+									}
+									finalStreamCompleted = true;
+									break; // Exit loop, final text stream was handled by streamGeminiToDiscord
 
-							// Add imageMetadata if present (for tools that send images like brave_image_search)
-							if (toolResult.imageMetadata) {
-								historyEntry.imageMetadata = toolResult.imageMetadata;
-								log.info(
-									`Including ${toolResult.imageMetadata.totalSent} image(s) in function response history for LLM visibility`,
-								);
+								case "error": {
+									log.error(
+										"Streaming to Discord reported an error.",
+										streamResult.data,
+										{
+											serverId: tomoriState?.server_id,
+											errorType: "StreamingError",
+										},
+									);
+									// Record error for rotation key if one was used and error is key-related
+									if (selectedKeyResult?.rotationKeyId && streamResult.data) {
+										// Check if error is API key related (rate limit or auth error)
+										const errorData = streamResult.data as {
+											type?: string;
+											message?: string;
+											code?: string;
+										};
+										if (errorData.type === "rate_limit") {
+											await recordKeyError(
+												selectedKeyResult.rotationKeyId,
+												"rate_limit",
+												errorData.message || "Rate limit exceeded",
+											);
+										} else if (
+											errorData.type === "api_error" ||
+											errorData.code === "401" ||
+											errorData.code === "403"
+										) {
+											await recordKeyError(
+												selectedKeyResult.rotationKeyId,
+												"api_error",
+												errorData.message || "API authentication error",
+											);
+										}
+									}
+									// streamGeminiToDiscord already attempts to send an error message.
+									finalStreamCompleted = true; // Consider it "completed" to break loop, error handled.
+									break;
+								}
+
+								case "empty_response": {
+									// Handle empty response with fresh context retry
+									const MAX_EMPTY_RESPONSE_RETRIES = 2;
+									const RETRY_DELAY_MS = 1000;
+
+									if (retryCount < MAX_EMPTY_RESPONSE_RETRIES) {
+										log.info(
+											`Empty response detected (attempt ${retryCount + 1}/${MAX_EMPTY_RESPONSE_RETRIES + 1}). Retrying with fresh context in ${RETRY_DELAY_MS}ms...`,
+										);
+
+										// Wait before retry
+										await new Promise((resolve) =>
+											setTimeout(resolve, RETRY_DELAY_MS),
+										);
+
+										// Recursive call with fresh context (skipLock=true to avoid semaphore issues)
+										return await tomoriChat(
+											client,
+											message,
+											isFromQueue,
+											true, // isManuallyTriggered - bypass trigger checks for retry
+											forceReason,
+											reasoningQuery,
+											llmOverrideCodename,
+											isStopResponse,
+											retryCount + 1, // Increment retry count
+											true, // skipLock - parent already holds the lock
+										);
+									} else {
+										// Max retries reached, show error embed
+										log.warn(
+											`Empty response after ${MAX_EMPTY_RESPONSE_RETRIES} retries. Showing error embed.`,
+										);
+
+										await sendStandardEmbed(channel, locale, {
+											titleKey: "genai.empty_response_title",
+											descriptionKey: "genai.empty_response_description",
+											color: ColorCode.WARN,
+											footerKey: "genai.generic_error_footer",
+										}).catch((e) =>
+											log.warn(
+												"Failed to send empty response embed to channel",
+												e,
+											),
+										);
+
+										finalStreamCompleted = true; // Mark as completed to exit
+										break;
+									}
+								}
+
+								case "timeout":
+									// This is the internal stream inactivity timeout from streamGeminiToDiscord
+									log.warn(
+										`Streaming to Discord timed out due to inactivity for channel ${channel.id}.`,
+										streamResult.data,
+									);
+									await sendStandardEmbed(channel, locale, {
+										color: ColorCode.WARN,
+										titleKey: "genai.error_stream_timeout_title",
+										descriptionKey: "genai.error_stream_timeout_description",
+									});
+									finalStreamCompleted = true;
+									break;
+
+								case "stopped_by_user": {
+									// Handle user-requested stop (natural stop triggers)
+									log.info(
+										`Streaming was stopped by user request for channel ${channel.id}.`,
+									);
+									finalStreamCompleted = true;
+
+									// Check if we have stop context to create a response
+									const stopContext = StreamOrchestrator.getAndClearStopContext(
+										channel.id,
+									);
+
+									if (stopContext) {
+										// Get the current lock entry to queue the stop response
+										const currentLockEntry = channelLocks.get(channel.id);
+										if (currentLockEntry) {
+											// Queue the original stop message as a "passport" for stop response
+											currentLockEntry.messageQueue.unshift({
+												message: stopContext.originalStopMessage,
+												isManuallyTriggered: true, // This bypasses normal trigger logic
+												forceReason: false,
+												llmOverrideCodename,
+												isStopResponse: true, // This response cannot be stopped
+											});
+
+											log.info(
+												`Stop response queued after stream completion for channel ${channel.id}. Queue size: ${currentLockEntry.messageQueue.length}`,
+											);
+										}
+									}
+
+									break; // Exit the loop gracefully, stop response will be handled by queue
+								}
+
+								case "function_call": {
+									if (!streamResult.data) {
+										// Function call without data - log error and break
+										log.error(
+											"Function call status received without data:",
+											streamResult,
+										);
+										finalStreamCompleted = true;
+										break;
+									}
+									const funcCall = streamResult.data as FunctionCall; // Type assertion
+									const funcName = funcCall.name?.trim() ?? "";
+									log.info(
+										`Stream LLM wants to call function: ${funcName} with args: ${JSON.stringify(funcCall.args)}`,
+									);
+
+									// 2. Execute function using modular tool system
+									log.info(
+										`Executing tool: ${funcName} with args: ${JSON.stringify(funcCall.args)}`,
+									);
+
+									// Build tool execution context
+									const toolContext = {
+										channel,
+										client,
+										message,
+										userId: userRow?.user_id?.toString() || userDiscId,
+										guildId: message.guild?.id, // Pass guild ID for guild-specific features (e.g., server avatars)
+										tomoriState,
+										locale,
+										provider: provider.getInfo().name,
+										streamContext: streamingContext, // Pass streaming context to tools
+									};
+
+									// Execute tool using ToolRegistry (handles both built-in and MCP tools seamlessly)
+									// Check for stop request before executing function call
+									if (StreamOrchestrator.hasStopRequest(channel.id)) {
+										log.info(
+											`Function call execution cancelled due to stop request: ${funcName}`,
+										);
+										finalStreamCompleted = true;
+										break;
+									}
+
+									const functionCallStart = Date.now();
+									const toolResult = await ToolRegistry.executeTool(
+										funcName,
+										funcCall.args || {},
+										toolContext,
+									);
+									const functionCallDuration = Date.now() - functionCallStart;
+
+									// Log function call timing (especially long-running ones)
+									if (functionCallDuration > 5000) {
+										log.warn(
+											`Long-running function call: ${funcName} took ${functionCallDuration}ms`,
+										);
+									} else {
+										log.info(
+											`Function call completed: ${funcName} (${functionCallDuration}ms)`,
+										);
+									}
+
+									// Convert tool result to function execution result format
+									let functionExecutionResult: Record<string, unknown>;
+
+									if (toolResult.success) {
+										functionExecutionResult = (toolResult.data as Record<
+											string,
+											unknown
+										>) || { status: "completed" };
+
+										// Handle sticker selection specifically (extract sticker for later sending)
+										if (
+											funcName === "select_sticker_for_response" &&
+											toolResult.data
+										) {
+											const stickerData = toolResult.data as Record<
+												string,
+												unknown
+											>;
+											if (
+												stickerData.status === "sticker_selected_successfully"
+											) {
+												// Find the sticker in guild cache to send later
+												const discordSticker = guild?.stickers.cache.get(
+													stickerData.sticker_id as string,
+												);
+												selectedStickerToSend = discordSticker || null;
+												log.success(
+													`Sticker '${stickerData.sticker_name}' selected for sending`,
+												);
+											} else {
+												selectedStickerToSend = null;
+											}
+										}
+
+										// Handle YouTube video restart signal (enhanced context restart)
+										if (
+											funcName === "process_youtube_video" &&
+											toolResult.data &&
+											(toolResult.data as Record<string, unknown>).type ===
+												"context_restart_with_video"
+										) {
+											const restartData = toolResult.data as Record<
+												string,
+												unknown
+											>;
+											const enhancedContextItem =
+												restartData.enhanced_context_item as StructuredContextItem;
+											const videoUrl = restartData.video_url as string;
+											const videoId = restartData.video_id as string;
+
+											log.info(
+												`YouTube video restart signal detected for: ${videoUrl}. Cleaning URLs and enhancing context.`,
+											);
+
+											// Set flag to disable YouTube processing during enhanced context restart
+											// This prevents TomoriBot from making additional YouTube function calls while processing
+											streamingContext.disableYouTubeProcessing = true;
+											log.info(
+												"Temporarily disabled YouTube processing function during enhanced context restart",
+											);
+
+											// Clean YouTube URLs from all existing context text parts FIRST to prevent false duplication detection
+											for (const contextItem of contextSegments) {
+												for (const part of contextItem.parts) {
+													if (part.type === "text") {
+														const originalText = part.text;
+														part.text = removeYouTubeUrls(part.text, "");
+														if (originalText !== part.text) {
+															log.info(
+																`Cleaned YouTube URLs from context text during duplication check. Original length: ${originalText.length}, cleaned length: ${part.text.length}`,
+															);
+														}
+													}
+												}
+											}
+
+											// Check for existing video parts with same video ID to prevent duplication
+											// Only check actual video Parts, not text mentions (which are now cleaned)
+											const existingVideoIds = new Set<string>();
+											for (const contextItem of contextSegments) {
+												for (const part of contextItem.parts) {
+													// Check for enhanced context YouTube video parts specifically
+													if (
+														part.type === "video" &&
+														part.uri &&
+														"isYouTubeLink" in part &&
+														(part as { isYouTubeLink: boolean })
+															.isYouTubeLink &&
+														"enhancedContext" in part &&
+														(part as { enhancedContext: boolean })
+															.enhancedContext
+													) {
+														const existingIds = extractYouTubeVideoIds(
+															part.uri,
+														);
+														for (const id of existingIds) {
+															existingVideoIds.add(id);
+														}
+													}
+												}
+											}
+
+											// Only add video part if not already present
+											if (!existingVideoIds.has(videoId)) {
+												// Add the video context item to existing context
+												contextSegments.push(enhancedContextItem);
+												log.success(
+													`Enhanced context with YouTube video Part (ID: ${videoId}). Total context items: ${contextSegments.length}`,
+												);
+											} else {
+												log.warn(
+													`YouTube video ${videoId} already exists in context. Skipping duplication.`,
+												);
+											}
+
+											// Continue to next iteration WITHOUT adding to function interaction history
+											// This will restart the streaming with enhanced context
+											continue;
+										}
+
+										// Handle profile picture restart signal (enhanced context restart)
+										if (
+											funcName === "peek_profile_picture" &&
+											toolResult.data &&
+											(toolResult.data as Record<string, unknown>).type ===
+												"context_restart_with_image"
+										) {
+											const restartData = toolResult.data as Record<
+												string,
+												unknown
+											>;
+											const userId = restartData.user_id as string;
+											const username = restartData.username as string;
+
+											log.info(
+												`Profile picture restart signal detected for user: ${username} (${userId}). Enhancing context with avatar image.`,
+											);
+
+											// Get the enhanced context item from external storage
+											const enhancedContextItem =
+												PeekProfilePictureTool.getPendingEnhancedContext(
+													userId,
+												);
+
+											if (!enhancedContextItem) {
+												log.warn(
+													`No pending enhanced context found for user ${userId}. Profile picture restart failed.`,
+												);
+												continue;
+											}
+
+											// Set flag to disable profile picture processing during enhanced context restart
+											// This prevents TomoriBot from making additional profile picture function calls while processing
+											streamingContext.disableProfilePictureProcessing = true;
+											log.info(
+												"Temporarily disabled profile picture processing function during enhanced context restart",
+											);
+
+											// Check for existing profile picture parts for this user to prevent duplication
+											let hasExistingProfilePicture = false;
+											for (const contextItem of contextSegments) {
+												for (const part of contextItem.parts) {
+													// Check for enhanced context profile picture parts specifically
+													if (
+														part.type === "image" &&
+														"isProfilePicture" in part &&
+														(part as { isProfilePicture: boolean })
+															.isProfilePicture &&
+														"enhancedContext" in part &&
+														(part as { enhancedContext: boolean })
+															.enhancedContext
+													) {
+														hasExistingProfilePicture = true;
+														break;
+													}
+												}
+												if (hasExistingProfilePicture) break;
+											}
+
+											// Only add profile picture part if not already present
+											if (!hasExistingProfilePicture) {
+												// Add the profile picture context item to existing context
+												contextSegments.push(enhancedContextItem);
+												log.success(
+													`Enhanced context with profile picture for user: ${username}. Total context items: ${contextSegments.length}`,
+												);
+											} else {
+												log.warn(
+													`Profile picture for user ${username} already exists in context. Skipping duplication.`,
+												);
+											}
+
+											// Continue to next iteration WITHOUT adding to function interaction history
+											// This will restart the streaming with enhanced context
+											continue;
+										}
+
+										// Handle GIF processing restart signal (enhanced context restart)
+										if (
+											funcName === "process_gif" &&
+											toolResult.data &&
+											(toolResult.data as Record<string, unknown>).type ===
+												"context_restart_with_gif"
+										) {
+											const restartData = toolResult.data as Record<
+												string,
+												unknown
+											>;
+											const messageId = restartData.message_id as string;
+											const frameCount = restartData.frame_count as number;
+
+											log.info(
+												`GIF processing restart signal detected for message: ${messageId} (${frameCount} frames). Enhancing context with GIF keyframes.`,
+											);
+
+											// Get the enhanced context item from external storage
+											const enhancedContextItem =
+												ProcessGifTool.getPendingEnhancedContext(messageId);
+
+											if (!enhancedContextItem) {
+												log.warn(
+													`No pending enhanced context found for message ${messageId}. GIF restart failed.`,
+												);
+												continue;
+											}
+
+											// Set flag to disable GIF processing during enhanced context restart
+											// This prevents TomoriBot from making additional GIF function calls while processing
+											streamingContext.disableGifProcessing = true;
+											log.info(
+												"Temporarily disabled GIF processing function during enhanced context restart",
+											);
+
+											// Add the GIF frames context item to existing context
+											contextSegments.push(enhancedContextItem);
+											log.success(
+												`Enhanced context with ${frameCount} GIF keyframes for message: ${messageId}. Total context items: ${contextSegments.length}`,
+											);
+
+											// Continue to next iteration WITHOUT adding to function interaction history
+											// This will restart the streaming with enhanced context
+											continue;
+										}
+
+										// Handle media context expansion restart signal (enhanced context restart)
+										if (
+											funcName === "increase_media_context" &&
+											toolResult.data &&
+											(toolResult.data as Record<string, unknown>).type ===
+												"context_restart_with_media"
+										) {
+											const restartData = toolResult.data as Record<
+												string,
+												unknown
+											>;
+											const extendBy = restartData.extend_by as number;
+											const oldWindow = restartData.old_window as number;
+											const newWindow = restartData.new_window as number;
+
+											log.info(
+												`Media context expansion restart signal detected. Expanding window from ${oldWindow} to ${newWindow} messages (extend_by=${extendBy}).`,
+											);
+
+											// Rebuild context with expanded media window
+											// This uses the same simplifiedMessages array that's already been mushed
+											contextSegments = await buildContext({
+												guildId: serverDiscId,
+												serverName,
+												serverDescription: serverDescription ?? null,
+												simplifiedMessageHistory: simplifiedMessages,
+												userList,
+												channelDesc,
+												channelName,
+												client,
+												triggererName,
+												emojiStrings,
+												// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
+												tomoriNickname: tomoriState!.tomori_nickname,
+												// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
+												tomoriAttributes: tomoriState!.attribute_list,
+												// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
+												tomoriConfig: tomoriState!.config,
+												isDMChannel,
+												mediaContextWindow: newWindow, // Pass the expanded window
+												snapshot: requestSnapshot, // Reuse snapshot for context rebuild
+												preloadedEmojis: loadedEmojis, // Pass pre-loaded emoji data to avoid redundant DB query
+												preloadedStickers: loadedStickers, // Pass pre-loaded sticker data to avoid redundant DB query
+											});
+
+											log.success(
+												`Rebuilt context with expanded media window (${newWindow} messages). Total context items: ${contextSegments.length}`,
+											);
+
+											// Apply emoji repetition penalty after rebuilding context
+											contextSegments = applyEmojiPenaltyIfNeeded(
+												contextSegments,
+												tomoriState?.tomori_nickname ??
+													process.env.DEFAULT_BOTNAME ??
+													"Tomori",
+											);
+											// Continue to next iteration WITHOUT adding to function interaction history
+											// This will restart the streaming with enhanced context
+											continue;
+										}
+									} else {
+										// Tool execution failed
+										functionExecutionResult = {
+											status: "tool_execution_failed",
+											reason:
+												toolResult.error ||
+												"Tool execution failed without specific error",
+											tool_name: funcName,
+										};
+										log.error(
+											`Tool execution failed for ${funcName}: ${toolResult.error}`,
+										);
+									}
+
+									// 3. Add the model's function call and our function's result to the history
+									const historyEntry: {
+										functionCall: FunctionCall;
+										functionResponse: Record<string, unknown>;
+										imageMetadata?: typeof toolResult.imageMetadata;
+									} = {
+										functionCall: funcCall,
+										functionResponse: {
+											functionResponse: {
+												name: funcName,
+												response: { result: functionExecutionResult },
+											},
+										},
+									};
+
+									// Add imageMetadata if present (for tools that send images like brave_image_search)
+									if (toolResult.imageMetadata) {
+										historyEntry.imageMetadata = toolResult.imageMetadata;
+										log.info(
+											`Including ${toolResult.imageMetadata.totalSent} image(s) in function response history for LLM visibility`,
+										);
+									}
+
+									functionInteractionHistory.push(historyEntry);
+
+									// 4. Safety break if max iterations reached
+									if (i === MAX_FUNCTION_CALL_ITERATIONS - 1) {
+										log.warn(
+											"Max function call iterations reached in streaming mode. LLM did not provide a final text stream.",
+										);
+										// Send a fallback message if no stream occurred.
+										// If some text was streamed before this, this might be redundant.
+										// For now, assume streamGeminiToDiscord handles its own errors if it starts streaming.
+										// If it returns function_call repeatedly, this is the fallback.
+										await sendStandardEmbed(channel, locale, {
+											color: ColorCode.WARN,
+											titleKey: "genai.max_iterations_title", // New locale key
+											descriptionKey:
+												"genai.max_iterations_streaming_description", // New locale key
+											footerKey: "genai.generic_error_footer",
+										});
+										finalStreamCompleted = true; // Mark as "completed" to exit loop
+										selectedStickerToSend = null; // Clear sticker
+										break;
+									}
+									// Continue to the next iteration of the loop to call streamGeminiToDiscord again with updated history
+									break;
+								}
+
+								default: {
+									// Exhaustive check - TypeScript will error if a new status is added but not handled
+									const _exhaustive: never = streamResult.status;
+									log.error(
+										`Unhandled stream status in streaming loop: ${_exhaustive}`,
+										new Error(
+											`Unknown status: ${JSON.stringify(streamResult)}`,
+										),
+									);
+
+									// Show user-facing error for unknown status
+									await sendStandardEmbed(channel, locale, {
+										titleKey: "genai.no_response_title",
+										descriptionKey: "genai.no_response_description",
+										color: ColorCode.WARN,
+										footerKey: "genai.generic_error_footer",
+									}).catch((e) =>
+										log.warn(
+											"Failed to send unhandled status embed to channel",
+											e,
+										),
+									);
+
+									finalStreamCompleted = true; // Break loop on unexpected status
+									break;
+								}
+							} // End of switch statement
+
+							// Check if we should exit the loop after switch statement
+							if (finalStreamCompleted) {
+								break; // Exit the for loop
 							}
-
-							functionInteractionHistory.push(historyEntry);
-
-							// 4. Safety break if max iterations reached
-							if (i === MAX_FUNCTION_CALL_ITERATIONS - 1) {
-								log.warn(
-									"Max function call iterations reached in streaming mode. LLM did not provide a final text stream.",
-								);
-								// Send a fallback message if no stream occurred.
-								// If some text was streamed before this, this might be redundant.
-								// For now, assume streamGeminiToDiscord handles its own errors if it starts streaming.
-								// If it returns function_call repeatedly, this is the fallback.
-								await sendStandardEmbed(channel, locale, {
-									color: ColorCode.WARN,
-									titleKey: "genai.max_iterations_title", // New locale key
-									descriptionKey: "genai.max_iterations_streaming_description", // New locale key
-									footerKey: "genai.generic_error_footer",
-								});
-								finalStreamCompleted = true; // Mark as "completed" to exit loop
-								selectedStickerToSend = null; // Clear sticker
-								break;
-							}
-							// Continue to the next iteration of the loop to call streamGeminiToDiscord again with updated history
-							break;
-						}
-
-						default: {
-							// Exhaustive check - TypeScript will error if a new status is added but not handled
-							const _exhaustive: never = streamResult.status;
+						} catch (streamingError) {
 							log.error(
-								`Unhandled stream status in streaming loop: ${_exhaustive}`,
-								new Error(`Unknown status: ${JSON.stringify(streamResult)}`),
+								"Critical error during streamGeminiToDiscord call within streaming loop:",
+								streamingError,
+								{
+									serverId: tomoriState?.server_id,
+									errorType: "StreamingInvocationError",
+									metadata: { channelId: channel.id, iteration: i + 1 },
+								},
 							);
-
-							// Show user-facing error for unknown status
 							await sendStandardEmbed(channel, locale, {
-								titleKey: "genai.no_response_title",
-								descriptionKey: "genai.no_response_description",
-								color: ColorCode.WARN,
+								color: ColorCode.ERROR,
+								titleKey: "genai.generic_error_title",
+								descriptionKey: "genai.stream.streaming_failed_description",
+								descriptionVars: {
+									error_message:
+										streamingError instanceof Error
+											? streamingError.message
+											: "Unknown Error",
+								},
 								footerKey: "genai.generic_error_footer",
-							}).catch((e) =>
-								log.warn("Failed to send unhandled status embed to channel", e),
-							);
-
-							finalStreamCompleted = true; // Break loop on unexpected status
+							});
+							finalStreamCompleted = true; // Break loop on critical error
 							break;
 						}
-					} // End of switch statement
+					} // End of for loop for function call iterations
 
-					// Check if we should exit the loop after switch statement
-					if (finalStreamCompleted) {
-						break; // Exit the for loop
+					// Clear YouTube processing disable flag after streaming completes
+					if (streamingContext.disableYouTubeProcessing) {
+						streamingContext.disableYouTubeProcessing = false;
+						log.info(
+							"Re-enabled YouTube processing function after enhanced context restart completion",
+						);
 					}
-				} catch (streamingError) {
-					log.error(
-						"Critical error during streamGeminiToDiscord call within streaming loop:",
-						streamingError,
-						{
-							serverId: tomoriState?.server_id,
-							errorType: "StreamingInvocationError",
-							metadata: { channelId: channel.id, iteration: i + 1 },
-						},
-					);
-					await sendStandardEmbed(channel, locale, {
-						color: ColorCode.ERROR,
-						titleKey: "genai.generic_error_title",
-						descriptionKey: "genai.stream.streaming_failed_description",
-						descriptionVars: {
-							error_message:
-								streamingError instanceof Error
-									? streamingError.message
-									: "Unknown Error",
-						},
-						footerKey: "genai.generic_error_footer",
-					});
-					finalStreamCompleted = true; // Break loop on critical error
-					break;
-				}
-			} // End of for loop for function call iterations
 
-			// Clear YouTube processing disable flag after streaming completes
-			if (streamingContext.disableYouTubeProcessing) {
-				streamingContext.disableYouTubeProcessing = false;
-				log.info(
-					"Re-enabled YouTube processing function after enhanced context restart completion",
-				);
-			}
-
-			// Clear profile picture processing disable flag after streaming completes
-			if (streamingContext.disableProfilePictureProcessing) {
-				streamingContext.disableProfilePictureProcessing = false;
-				log.info(
-					"Re-enabled profile picture processing function after enhanced context restart completion",
-				);
-			}
-
-			// 5. After the loop, if a sticker was selected and a stream completed, send the sticker.
-			// This is a simple approach; sticker will appear after the streamed text.
-			if (selectedStickerToSend && finalStreamCompleted) {
-				try {
-					// If the last interaction was a reply (isFromQueue), try to reply with sticker too.
-					// Otherwise, just send to channel.
-					if (isFromQueue) {
-						await message.reply({ stickers: [selectedStickerToSend.id] });
-					} else {
-						await channel.send({ stickers: [selectedStickerToSend.id] });
+					// Clear profile picture processing disable flag after streaming completes
+					if (streamingContext.disableProfilePictureProcessing) {
+						streamingContext.disableProfilePictureProcessing = false;
+						log.info(
+							"Re-enabled profile picture processing function after enhanced context restart completion",
+						);
 					}
-					log.info(
-						`Sent selected sticker '${selectedStickerToSend.name}' after stream.`,
+
+					// 5. After the loop, if a sticker was selected and a stream completed, send the sticker.
+					// This is a simple approach; sticker will appear after the streamed text.
+					if (selectedStickerToSend && finalStreamCompleted) {
+						try {
+							// If the last interaction was a reply (isFromQueue), try to reply with sticker too.
+							// Otherwise, just send to channel.
+							if (isFromQueue) {
+								await message.reply({ stickers: [selectedStickerToSend.id] });
+							} else {
+								await channel.send({ stickers: [selectedStickerToSend.id] });
+							}
+							log.info(
+								`Sent selected sticker '${selectedStickerToSend.name}' after stream.`,
+							);
+						} catch (stickerError) {
+							log.error(
+								"Failed to send selected sticker after stream:",
+								stickerError,
+								{
+									serverId: tomoriState?.server_id,
+									errorType: "StickerSendError",
+									metadata: { stickerId: selectedStickerToSend.id },
+								},
+							);
+						}
+					} else if (!finalStreamCompleted) {
+						log.warn(
+							"Streaming process did not complete successfully, final response might be missing.",
+						);
+						// Potentially send a message indicating an issue if no error was already sent.
+					}
+
+					// Persona response completed
+					log.success(
+						`Completed response ${personaIndex + 1}/${personasToRespond.length} from persona "${currentPersona.tomori_nickname}"`,
 					);
-				} catch (stickerError) {
+				} catch (personaError) {
+					// Handle errors for this specific persona and continue with remaining personas
 					log.error(
-						"Failed to send selected sticker after stream:",
-						stickerError,
+						`Error generating response for persona "${currentPersona.tomori_nickname}" (${personaIndex + 1}/${personasToRespond.length}). Continuing with remaining personas.`,
+						personaError as Error,
 						{
-							serverId: tomoriState?.server_id,
-							errorType: "StickerSendError",
-							metadata: { stickerId: selectedStickerToSend.id },
+							serverId: currentPersona.server_id,
+							errorType: "PersonaResponseError",
+							metadata: {
+								personaId: currentPersona.tomori_id,
+								personaNickname: currentPersona.tomori_nickname,
+								isAlter: currentPersona.is_alter,
+								personaIndex,
+								totalPersonas: personasToRespond.length,
+							},
 						},
 					);
+
+					// Send error message for this persona (only if it's the only persona or the last one)
+					if (
+						personasToRespond.length === 1 ||
+						personaIndex === personasToRespond.length - 1
+					) {
+						await sendStandardEmbed(channel, locale, {
+							color: ColorCode.ERROR,
+							titleKey: "general.errors.critical_error_title",
+							descriptionKey: "general.errors.critical_error_description",
+							footerKey: "genai.generic_error_footer",
+						}).catch((embedError) =>
+							log.warn("Failed to send persona error embed", embedError),
+						);
+					}
 				}
-			} else if (!finalStreamCompleted) {
-				log.warn(
-					"Streaming process did not complete successfully, final response might be missing.",
-				);
-				// Potentially send a message indicating an issue if no error was already sent.
-			}
+			} // END OF MULTI-PERSONA RESPONSE LOOP
 		} catch (error) {
 			// 14. Global error handler for entire function
 			log.error("Unhandled error in tomoriChat handler:", error);
@@ -3265,6 +3480,86 @@ export default async function tomoriChat(
 		}
 		// --- End Semaphore Logic in finally ---
 	}
+}
+
+/**
+ * Determines which personas should respond to a message based on trigger matching.
+ * All matching personas respond, but in randomized order for variety.
+ * @param message - The incoming Discord message
+ * @param allPersonas - Array of all personas (main + alters)
+ * @param client - Discord client for mention checks
+ * @param isReplyToBot - Whether message is a reply to the bot
+ * @param isBotMentioned - Whether bot is mentioned in the message
+ * @param isAutoMsgHit - Whether auto-message threshold is hit
+ * @returns Array of matching personas in randomized order
+ */
+export function determineMatchingPersonas(
+	message: Message,
+	allPersonas: TomoriState[],
+	_client: Client,
+	isReplyToBot: boolean,
+	isBotMentioned: boolean,
+	isAutoMsgHit: boolean,
+): TomoriState[] {
+	// 1. Special cases: Only main persona responds
+	// (reply to bot, bot mentioned, auto-message hit)
+	if (isReplyToBot || isBotMentioned || isAutoMsgHit) {
+		// Find main persona (is_alter = false)
+		const mainPersona = allPersonas.find((p) => !p.is_alter);
+		return mainPersona ? [mainPersona] : [];
+	}
+
+	// 2. Trigger word matching: Check all personas
+	const matchingPersonas: TomoriState[] = [];
+
+	for (const persona of allPersonas) {
+		const config = persona.config;
+		if (!config) continue;
+
+		// Determine which trigger list to use
+		const triggers = persona.is_alter
+			? persona.alter_triggers || []
+			: config.trigger_words;
+
+		// Check if any trigger matches the message content
+		const triggersActive = triggers.some((trigger: string) => {
+			// 1. Check if trigger is a mention (starts with <@)
+			if (trigger.startsWith("<@")) {
+				const userId = trigger.replace(/[<@!>]/g, ""); // Extract user ID
+				return message.mentions.users.has(userId);
+			}
+
+			// 2. Check if trigger contains Japanese characters
+			const isJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(
+				trigger,
+			);
+			if (isJapanese) {
+				return message.content.includes(trigger);
+			}
+
+			// 3. Use word boundaries for English triggers (case-insensitive)
+			const regex = new RegExp(`\\b${escapeRegExp(trigger)}\\b`, "i");
+			return regex.test(message.content);
+		});
+
+		if (triggersActive) {
+			matchingPersonas.push(persona);
+		}
+	}
+
+	// 3. Randomize order: All matching personas respond, but in random order
+	// Fisher-Yates shuffle for fair randomization
+	if (matchingPersonas.length > 1) {
+		for (let i = matchingPersonas.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[matchingPersonas[i], matchingPersonas[j]] = [
+				matchingPersonas[j],
+				matchingPersonas[i],
+			];
+		}
+	}
+
+	return matchingPersonas;
 }
 
 /**

@@ -144,6 +144,9 @@ export interface LLMProvider {
 	 * @param replyToMessage - Optional message to reply to
 	 * @param streamingContext - Optional streaming context for context-aware tool availability
 	 * @param userLocale - User's preferred locale for error messages (defaults to en-US)
+	 * @param webhook - Optional webhook for alter persona responses with custom avatars
+	 * @param personaAvatarUrl - Optional avatar URL for current persona (used with webhook)
+	 * @param personaUsername - Optional username override for current persona (used with webhook)
 	 * @returns Promise<StreamResult> - The outcome of the streaming operation
 	 */
 	streamToDiscord(
@@ -167,6 +170,9 @@ export interface LLMProvider {
 		replyToMessage?: Message,
 		streamingContext?: StreamingContext,
 		userLocale?: string,
+		webhook?: import("discord.js").Webhook,
+		personaAvatarUrl?: string,
+		personaUsername?: string,
 	): Promise<StreamResult>;
 
 	/**
