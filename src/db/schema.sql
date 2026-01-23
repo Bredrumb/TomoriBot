@@ -124,6 +124,19 @@ SELECT add_column_if_not_exists('tomoris', 'webhook_avatar_url', 'TEXT');
 -- alter_triggers: Trigger words for alter personas (main personas use tomori_configs.trigger_words)
 SELECT add_column_if_not_exists('tomoris', 'alter_triggers', 'TEXT[]', 'ARRAY[]::TEXT[]');
 
+-- Drop old unique constraint on server_id (allows multiple personas per server)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'tomoris_server_id_key'
+    ) THEN
+        ALTER TABLE tomoris DROP CONSTRAINT tomoris_server_id_key;
+        RAISE NOTICE 'Dropped unique constraint tomoris_server_id_key to allow multiple personas per server';
+    END IF;
+END $$;
+
 -- Create index for efficient multi-persona queries (main persona is queried frequently)
 CREATE INDEX IF NOT EXISTS idx_tomoris_server_is_alter ON tomoris(server_id, is_alter);
 

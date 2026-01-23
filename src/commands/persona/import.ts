@@ -8,7 +8,7 @@ import type {
 	Client,
 	SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { MessageFlags, EmbedBuilder } from "discord.js";
+import { MessageFlags, EmbedBuilder, AttachmentBuilder } from "discord.js";
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
@@ -74,6 +74,53 @@ function localizeError(locale: string, errorString: string): string {
 	return localizer(locale, key);
 }
 
+type DiscordApiErrorPayload = {
+	message?: string;
+	code?: number | string;
+	errors?: {
+		avatar?: { _errors?: Array<{ code?: string; message?: string }> };
+		nick?: { _errors?: Array<{ code?: string; message?: string }> };
+	};
+};
+
+function isAvatarUpdateRateLimited(
+	status: number,
+	errorText: string,
+): boolean {
+	if (status === 429) {
+		return true;
+	}
+
+	if (!errorText) {
+		return false;
+	}
+
+	try {
+		const parsed = JSON.parse(errorText) as DiscordApiErrorPayload;
+		const avatarErrors = parsed.errors?.avatar?._errors ?? [];
+		const nickErrors = parsed.errors?.nick?._errors ?? [];
+		const hasRateLimitCode = [...avatarErrors, ...nickErrors].some((error) =>
+			(error.code ?? "").toString().toUpperCase().includes("RATE_LIMIT"),
+		);
+
+		if (hasRateLimitCode) {
+			return true;
+		}
+
+		if (parsed.message?.toLowerCase().includes("rate limit")) {
+			return true;
+		}
+	} catch {
+		// Fall through to text matching below
+	}
+
+	return (
+		/AVATAR_RATE_LIMIT/i.test(errorText) ||
+		/RATE_LIMIT/i.test(errorText) ||
+		/too fast/i.test(errorText)
+	);
+}
+
 /**
  * Configure the 'import' subcommand
  */
@@ -100,42 +147,15 @@ export const configureSubcommand = (
 				.setRequired(true)
 				.addChoices(
 					{
-						name: localizer("en-US", "commands.persona.import.type_option_main"),
+						name: localizer("en-US", "commands.persona.import.type_choice_main"),
 						value: "main",
 					},
 					{
 						name: localizer(
 							"en-US",
-							"commands.persona.import.type_option_alter",
+							"commands.persona.import.type_choice_alter",
 						),
 						value: "alter",
-					},
-				),
-		)
-		.addStringOption((option) =>
-			option
-				.setName("confirmation")
-				.setDescription(
-					localizer(
-						"en-US",
-						"commands.persona.import.confirmation_description",
-					),
-				)
-				.setRequired(true)
-				.addChoices(
-					{
-						name: localizer(
-							"en-US",
-							"commands.persona.import.confirmation_choice_yes",
-						),
-						value: "yes",
-					},
-					{
-						name: localizer(
-							"en-US",
-							"commands.persona.import.confirmation_choice_no",
-						),
-						value: "no",
 					},
 				),
 		);
@@ -155,20 +175,7 @@ export async function execute(
 	locale: string,
 ): Promise<void> {
 	try {
-		// 1. Check confirmation
-		const confirmation = interaction.options.getString("confirmation", true);
-
-		if (confirmation !== "yes") {
-			await replyInfoEmbed(interaction, locale, {
-				titleKey: "commands.persona.import.cancelled_title",
-				descriptionKey: "commands.persona.import.cancelled_description",
-				color: ColorCode.INFO,
-				flags: MessageFlags.Ephemeral,
-			});
-			return;
-		}
-
-		// 1.5. Get import type (main or alter)
+		// 1. Get import type (main or alter)
 		const importType = interaction.options.getString("type", true);
 
 		// Alter personas can only be imported in guilds (not DMs)
@@ -178,8 +185,7 @@ export async function execute(
 				descriptionKey:
 					"commands.persona.import.alter_dm_not_allowed_description",
 				color: ColorCode.ERROR,
-				flags: MessageFlags.Ephemeral,
-			});
+			}, MessageFlags.SuppressNotifications);
 			return;
 		}
 
@@ -193,8 +199,7 @@ export async function execute(
 					titleKey: "commands.persona.import.no_permission_title",
 					descriptionKey: "commands.persona.import.no_permission_description",
 					color: ColorCode.ERROR,
-					flags: MessageFlags.Ephemeral,
-				});
+				}, MessageFlags.SuppressNotifications);
 				return;
 			}
 		}
@@ -208,8 +213,7 @@ export async function execute(
 				titleKey: "commands.persona.import.invalid_file_type_title",
 				descriptionKey: "commands.persona.import.invalid_file_type_description",
 				color: ColorCode.ERROR,
-				flags: MessageFlags.Ephemeral,
-			});
+			}, MessageFlags.SuppressNotifications);
 			return;
 		}
 
@@ -218,13 +222,12 @@ export async function execute(
 				titleKey: "commands.persona.import.file_too_large_title",
 				descriptionKey: "commands.persona.import.file_too_large_description",
 				color: ColorCode.ERROR,
-				flags: MessageFlags.Ephemeral,
-			});
+			}, MessageFlags.SuppressNotifications);
 			return;
 		}
 
 		// 6. Defer reply while we process
-		await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+		await interaction.deferReply();
 
 		// 6.25. Reserve import operation quota (atomic check+increment for DDoS protection)
 		const quotaReserve = reserveImportQuota(interaction.user.id);
@@ -437,46 +440,97 @@ export async function execute(
 			invalidateTomoriStateCache(serverDiscId);
 
 			// 12. Try to set TomoriBot's server-specific avatar and nickname (guild-only, non-fatal if fails)
+			let avatarUpdateSucceeded = false;
+			let avatarUpdateRateLimited = false;
+			let avatarUpdateFailed = false;
+			let nicknameUpdateSucceeded = false;
+			let nicknameUpdateRateLimited = false;
+			let nicknameUpdateFailed = false;
 			if (!isDM) {
-			try {
-				// Convert PNG buffer to base64 data URI
-				const base64 = pngBuffer.toString("base64");
-				const avatarDataUri = `data:image/png;base64,${base64}`;
+				const endpoint = `https://discord.com/api/v10/guilds/${interaction.guild.id}/members/@me`;
 
 				// Get the imported nickname for the bot
 				const importedNickname = importResult.itemsImported?.nickname;
 
-				// Use Discord API to set bot's guild avatar and nickname
-				const endpoint = `https://discord.com/api/v10/guilds/${interaction.guild.id}/members/@me`;
-				const response = await fetch(endpoint, {
-					method: "PATCH",
-					headers: {
-						Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						avatar: avatarDataUri,
-						nick: importedNickname, // Set bot's server nickname to match personality
-					}),
-				});
+				// Update nickname separately so avatar rate limits don't block it
+				if (importedNickname) {
+					try {
+						const nicknameResponse = await fetch(endpoint, {
+							method: "PATCH",
+							headers: {
+								Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
+								"Content-Type": "application/json",
+							},
+							body: JSON.stringify({
+								nick: importedNickname,
+							}),
+						});
 
-				if (response.ok) {
-					log.success(
-						`Successfully updated TomoriBot's server avatar and nickname to "${importedNickname}" for ${serverDiscId} during preset import`,
-					);
-				} else {
-					const errorText = await response.text();
+						if (nicknameResponse.ok) {
+							nicknameUpdateSucceeded = true;
+						} else {
+							const errorText = await nicknameResponse.text();
+							if (
+								isAvatarUpdateRateLimited(
+									nicknameResponse.status,
+									errorText,
+								)
+							) {
+								nicknameUpdateRateLimited = true;
+							}
+							nicknameUpdateFailed = true;
+							log.warn(
+								`Failed to update bot's server nickname (non-fatal): ${nicknameResponse.status} ${nicknameResponse.statusText} - ${errorText}`,
+							);
+						}
+					} catch (nicknameError) {
+						nicknameUpdateFailed = true;
+						log.warn(
+							`Failed to update bot's server nickname (non-fatal): ${nicknameError instanceof Error ? nicknameError.message : "Unknown error"}`,
+						);
+					}
+				}
+
+				try {
+					// Convert PNG buffer to base64 data URI
+					const base64 = pngBuffer.toString("base64");
+					const avatarDataUri = `data:image/png;base64,${base64}`;
+
+					// Use Discord API to set bot's guild avatar
+					const avatarResponse = await fetch(endpoint, {
+						method: "PATCH",
+						headers: {
+							Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify({
+							avatar: avatarDataUri,
+						}),
+					});
+
+					if (avatarResponse.ok) {
+						avatarUpdateSucceeded = true;
+						log.success(
+							`Successfully updated TomoriBot's server avatar for ${serverDiscId} during preset import`,
+						);
+					} else {
+						const errorText = await avatarResponse.text();
+						if (isAvatarUpdateRateLimited(avatarResponse.status, errorText)) {
+							avatarUpdateRateLimited = true;
+						}
+						avatarUpdateFailed = true;
+						log.warn(
+							`Failed to update bot's server avatar (non-fatal): ${avatarResponse.status} ${avatarResponse.statusText} - ${errorText}`,
+						);
+					}
+				} catch (avatarError) {
+					// Non-fatal error - personality was imported successfully
+					avatarUpdateFailed = true;
 					log.warn(
-						`Failed to update bot's server avatar/nickname (non-fatal): ${response.status} ${response.statusText} - ${errorText}`,
+						`Failed to update bot's server avatar during preset import (non-fatal): ${avatarError instanceof Error ? avatarError.message : "Unknown error"}`,
 					);
 				}
-			} catch (avatarError) {
-				// Non-fatal error - personality was imported successfully
-				log.warn(
-					`Failed to update bot's server avatar/nickname during preset import (non-fatal): ${avatarError instanceof Error ? avatarError.message : "Unknown error"}`,
-				);
 			}
-		}
 
 			// 13. Send success message with import summary
 			const itemsImported = importResult.itemsImported;
@@ -499,17 +553,60 @@ export async function execute(
 			}
 
 			// Build success embed with DM-aware messaging
+			const descriptionLines = [
+				localizer(locale, "commands.persona.import.success_description", {
+					nickname: itemsImported.nickname,
+					attribute_count: itemsImported.attributeCount,
+					dialogue_count: itemsImported.dialogueCount,
+					trigger_word_count: itemsImported.triggerWordCount,
+				}),
+			];
+
+			if (nicknameUpdateRateLimited || nicknameUpdateFailed) {
+				descriptionLines.push(
+					localizer(
+						locale,
+						"commands.persona.import.nickname_update_failed",
+					),
+				);
+			} else if (nicknameUpdateSucceeded) {
+				descriptionLines.push(
+					localizer(
+						locale,
+						"commands.persona.import.nickname_update_success",
+					),
+				);
+			}
+
+			if (avatarUpdateRateLimited) {
+				descriptionLines.push(
+					localizer(
+						locale,
+						"commands.persona.import.avatar_update_rate_limited",
+					),
+				);
+			} else if (avatarUpdateSucceeded) {
+				descriptionLines.push(
+					localizer(locale, "commands.persona.import.avatar_update_success"),
+				);
+			} else if (avatarUpdateFailed) {
+				descriptionLines.push(
+					localizer(locale, "commands.persona.import.avatar_update_failed"),
+				);
+			}
+
 			const successEmbed = new EmbedBuilder()
 				.setTitle(localizer(locale, "commands.persona.import.success_title"))
-				.setDescription(
-					localizer(locale, "commands.persona.import.success_description", {
-						nickname: itemsImported.nickname,
-						attribute_count: itemsImported.attributeCount,
-						dialogue_count: itemsImported.dialogueCount,
-						trigger_word_count: itemsImported.triggerWordCount,
-					}),
-				)
-				.setColor(isDM ? ColorCode.WARN : ColorCode.SUCCESS);
+				.setDescription(descriptionLines.join("\n\n"))
+				.setColor(
+					isDM ||
+						avatarUpdateRateLimited ||
+						avatarUpdateFailed ||
+						nicknameUpdateRateLimited ||
+						nicknameUpdateFailed
+						? ColorCode.WARN
+						: ColorCode.SUCCESS,
+				);
 
 			// Add DM-specific footer if in DM
 			if (isDM) {
@@ -521,14 +618,22 @@ export async function execute(
 				});
 			}
 
-			// Attach avatar as thumbnail (aesthetic improvement + consistency with alter import)
-			// Convert PNG buffer to base64 data URI for thumbnail
-			const base64 = pngBuffer.toString("base64");
-			const avatarDataUri = `data:image/png;base64,${base64}`;
-			successEmbed.setThumbnail(avatarDataUri);
+			const sanitizedNickname = itemsImported.nickname
+				.replace(/[^a-zA-Z0-9-_]/g, "_")
+				.slice(0, 50);
+			const timestamp = Date.now();
+			const avatarFilename = `persona-import-${sanitizedNickname}-${timestamp}.png`;
 
-			await interaction.editReply({
+			// Attach avatar as image (higher quality than thumbnail)
+			const avatarAttachment = new AttachmentBuilder(pngBuffer, {
+				name: avatarFilename,
+			});
+			successEmbed.setImage(`attachment://${avatarFilename}`);
+
+			await interaction.followUp({
 				embeds: [successEmbed],
+				files: [avatarAttachment],
+				flags: MessageFlags.SuppressNotifications,
 			});
 
 			// Quota already reserved at step 6.25 - no increment needed
@@ -611,7 +716,24 @@ export async function execute(
 				return;
 			}
 
-			// 11e. Insert new tomoris row with is_alter=true
+			// 11e. Format arrays as PostgreSQL array literals for safe insertion
+			const attributeArrayLiteral = `{${presetData.attribute_list
+				.map((item: string) => `"${item.replace(/(["\\])/g, "\\$1")}"`)
+				.join(",")}}`;
+
+			const dialoguesInArrayLiteral = `{${presetData.sample_dialogues_in
+				.map((item: string) => `"${item.replace(/(["\\])/g, "\\$1")}"`)
+				.join(",")}}`;
+
+			const dialoguesOutArrayLiteral = `{${presetData.sample_dialogues_out
+				.map((item: string) => `"${item.replace(/(["\\])/g, "\\$1")}"`)
+				.join(",")}}`;
+
+			const alterTriggersArrayLiteral = `{${uniqueTriggers
+				.map((item: string) => `"${item.replace(/(["\\])/g, "\\$1")}"`)
+				.join(",")}}`;
+
+			// 11f. Insert new tomoris row with is_alter=true
 			const [newAlterRow] = await sql`
 				INSERT INTO tomoris (
 					server_id,
@@ -624,11 +746,11 @@ export async function execute(
 				) VALUES (
 					${mainPersona.server_id},
 					${presetData.tomori_nickname},
-					${presetData.attribute_list},
-					${presetData.sample_dialogues_in},
-					${presetData.sample_dialogues_out},
+					${attributeArrayLiteral}::text[],
+					${dialoguesInArrayLiteral}::text[],
+					${dialoguesOutArrayLiteral}::text[],
 					true,
-					${uniqueTriggers}
+					${alterTriggersArrayLiteral}::text[]
 				)
 				RETURNING tomori_id
 			`;
@@ -652,7 +774,7 @@ export async function execute(
 
 			const newTomoriId = newAlterRow.tomori_id;
 
-			// 11f. Copy config from main persona (empty trigger_words for alters)
+			// 11g. Copy config from main persona (empty trigger_words for alters)
 			await sql`
 				INSERT INTO tomori_configs (
 					tomori_id,
@@ -689,9 +811,16 @@ export async function execute(
 				WHERE tomori_id = ${mainPersona.tomori_id}
 			`;
 
-			// 11g. Send success embed with avatar thumbnail
-			const base64 = pngBuffer.toString("base64");
-			const avatarDataUri = `data:image/png;base64,${base64}`;
+			const sanitizedNickname = presetData.tomori_nickname
+				.replace(/[^a-zA-Z0-9-_]/g, "_")
+				.slice(0, 50);
+			const timestamp = Date.now();
+			const avatarFilename = `persona-import-alter-${sanitizedNickname}-${timestamp}.png`;
+
+			// 11h. Send success embed with avatar image
+			const alterAvatarAttachment = new AttachmentBuilder(pngBuffer, {
+				name: avatarFilename,
+			});
 
 			const alterSuccessEmbed = new EmbedBuilder()
 				.setTitle(
@@ -709,7 +838,7 @@ export async function execute(
 					),
 				)
 				.setColor(ColorCode.SUCCESS)
-				.setThumbnail(avatarDataUri)
+				.setImage(`attachment://${avatarFilename}`)
 				.setFooter({
 					text: localizer(
 						locale,
@@ -717,16 +846,18 @@ export async function execute(
 					),
 				});
 
-			const reply = await interaction.editReply({
+			const reply = await interaction.followUp({
 				embeds: [alterSuccessEmbed],
+				files: [alterAvatarAttachment],
+				flags: MessageFlags.SuppressNotifications,
 			});
 
-			// 11h. Extract avatar URL from the sent message
-			// The thumbnail URL is accessible from the sent message's embed
+			// 11i. Extract avatar URL from the sent message
+			// The image URL is accessible from the sent message's embed
 			const sentEmbed = reply.embeds[0];
-			const avatarUrl = sentEmbed?.thumbnail?.url ?? null;
+			const avatarUrl = sentEmbed?.image?.url ?? null;
 
-			// 11i. Store avatar URL in webhook_avatar_url column
+			// 11j. Store avatar URL in webhook_avatar_url column
 			if (avatarUrl) {
 				await sql`
 					UPDATE tomoris
@@ -739,7 +870,7 @@ export async function execute(
 				);
 			}
 
-			// 11j. Invalidate cache
+			// 11k. Invalidate cache
 			invalidateTomoriStateCache(serverDiscId);
 
 			log.success(
@@ -758,8 +889,7 @@ export async function execute(
 				titleKey: "general.errors.unknown_error_title",
 				descriptionKey: "general.errors.unknown_error_description",
 				color: ColorCode.ERROR,
-				flags: MessageFlags.Ephemeral,
-			});
+			}, MessageFlags.SuppressNotifications);
 		} else {
 			await interaction.editReply({
 				embeds: [

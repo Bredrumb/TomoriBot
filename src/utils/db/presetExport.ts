@@ -39,7 +39,7 @@ export async function exportPresetData(
 
 		const serverId = serverRows[0].server_id;
 
-		// 2. Query personality data from tomoris and tomori_configs tables
+		// 2. Query personality data from tomoris and tomori_configs tables (main persona only)
 		const presetRows = await sql`
 			SELECT
 				t.tomori_nickname,
@@ -50,6 +50,7 @@ export async function exportPresetData(
 			FROM tomoris t
 			JOIN tomori_configs tc ON t.tomori_id = tc.tomori_id
 			WHERE t.server_id = ${serverId}
+			AND t.is_alter = false
 			LIMIT 1
 		`;
 

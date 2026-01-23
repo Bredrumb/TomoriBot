@@ -176,6 +176,7 @@ export async function exportServerData(
 			FROM tomori_configs tc
 			JOIN tomoris t ON tc.tomori_id = t.tomori_id
 			WHERE t.server_id = ${serverId}
+			AND t.is_alter = false
 			LIMIT 1
 		`;
 
@@ -277,6 +278,7 @@ export async function exportPersonalityData(
 			FROM tomoris t
 			JOIN servers s ON t.server_id = s.server_id
 			WHERE s.server_disc_id = ${serverDiscId}
+			AND t.is_alter = false
 			LIMIT 1
 		`;
 

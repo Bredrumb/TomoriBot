@@ -51,6 +51,8 @@ type SimplifiedMessageForContext = {
 	id: string; // Discord message ID
 	authorId: string;
 	authorName: string;
+	authorType: "user" | "persona";
+	personaName?: string | null;
 	content: string | null;
 	mediaSourceMessageId?: string;
 	imageAttachments: Array<{
@@ -1226,8 +1228,13 @@ export async function buildContext({
 	const maxExtendBy = MEDIA_LIMITS.MESSAGE_FETCH_LIMIT - effectiveMediaWindow;
 	const mediaWindowCutoff = totalMessages - effectiveMediaWindow;
 
+	const botNameLower = botName.toLowerCase();
 	for (const [index, msg] of simplifiedMessageHistory.entries()) {
-		const role = msg.authorId === client.user?.id ? "model" : "user";
+		const isPersonaMessage = msg.authorType === "persona" && !!msg.personaName;
+		const isCurrentPersonaMessage =
+			isPersonaMessage &&
+			msg.personaName?.toLowerCase() === botNameLower;
+		const role = isCurrentPersonaMessage ? "model" : "user";
 		const parts: ContextPart[] = [];
 
 		// Determine if this message is within the media context window

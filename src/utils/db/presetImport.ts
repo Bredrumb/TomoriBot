@@ -101,12 +101,13 @@ export async function importPresetData(
 			};
 		}
 
-		// 4. Get internal server ID and tomori ID
+		// 4. Get internal server ID and tomori ID (main persona only)
 		const serverRows = await sql`
 			SELECT s.server_id, t.tomori_id
 			FROM servers s
 			JOIN tomoris t ON s.server_id = t.server_id
 			WHERE s.server_disc_id = ${serverDiscId}
+			AND t.is_alter = false
 			LIMIT 1
 		`;
 
@@ -137,7 +138,7 @@ export async function importPresetData(
 			.map((item: string) => `"${item.replace(/(["\\])/g, "\\$1")}"`)
 			.join(",")}}`;
 
-		// 6. Update tomoris table with personality data
+		// 6. Update tomoris table with personality data (main persona only)
 		await sql`
 			UPDATE tomoris
 			SET
@@ -146,6 +147,7 @@ export async function importPresetData(
 				sample_dialogues_in = ${dialoguesInArrayLiteral}::text[],
 				sample_dialogues_out = ${dialoguesOutArrayLiteral}::text[]
 			WHERE server_id = ${serverId}
+			AND is_alter = false
 		`;
 
 		// 7. Update tomori_configs table with trigger words

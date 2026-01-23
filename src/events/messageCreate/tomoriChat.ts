@@ -21,10 +21,7 @@ import type {
 import { ContextItemTag } from "../../types/misc/context";
 // Provider-specific types moved to individual providers
 import type { FunctionCall } from "../../types/provider/interfaces";
-import {
-	getCachedAllPersonas,
-	getCachedMainPersona,
-} from "../../utils/cache/tomoriStateCache";
+import { getCachedAllPersonas } from "../../utils/cache/tomoriStateCache";
 import {
 	getCachedUserRow,
 	getCachedPrivacyLevel,
@@ -211,6 +208,8 @@ type SimplifiedMessageForContext = {
 	id: string; // Discord message ID
 	authorId: string;
 	authorName: string; // Resolved name (Tomori's nickname or user's display name)
+	authorType: "user" | "persona"; // Whether this message is from a user or a persona
+	personaName?: string | null; // Persona nickname if authorType is "persona"
 	content: string | null; // Message text content
 	mediaSourceMessageId?: string; // Message ID that actually hosts the media, if different
 	imageAttachments: Array<{
@@ -616,12 +615,14 @@ export default async function tomoriChat(
 	// --- Pre-Semaphore Tomori State Loading for shouldBotReply check ---
 	// Attempt to load Tomori state early to determine if a reply would even be considered.
 	// This helps decide if a "busy" message is warranted.
-	// For multi-persona support, we load the main persona early for initial checks
+	// For multi-persona support, we load ALL personas early to check alter triggers
 	let earlyTomoriState: TomoriState | null = null;
+	let earlyAllPersonas: TomoriState[] = [];
 	let earlyLoadAttempted = false;
 	if (!skipLock) {
 		try {
-			earlyTomoriState = await getCachedMainPersona(serverDiscId);
+			earlyAllPersonas = await getCachedAllPersonas(serverDiscId);
+			earlyTomoriState = earlyAllPersonas.find((p) => !p.is_alter) || null;
 			earlyLoadAttempted = true;
 		} catch (e) {
 			// Log the error but don't stop; the main logic will try to load it again
@@ -756,7 +757,7 @@ export default async function tomoriChat(
 				// Always enqueue if it's a manual command, otherwise use shouldBotReply logic
 				if (
 					isManuallyTriggered ||
-					shouldBotReply(message, modifiedEarlyTomoriStateForCheck)
+					shouldBotReply(message, modifiedEarlyTomoriStateForCheck, earlyAllPersonas)
 				) {
 					// 2a. Check cooldown BEFORE queuing (skip for manual triggers)
 					if (!isManuallyTriggered && !isStopResponse) {
@@ -948,6 +949,14 @@ export default async function tomoriChat(
 			log.info(
 				`[Snapshot] Created per-request snapshot for message ${message.id} in ${isDMChannel ? "DM" : `server ${serverDiscId}`}`,
 			);
+
+			const mainPersona = allPersonas.find((p) => !p.is_alter) || null;
+			const personaByNickname = new Map<string, TomoriState>();
+			for (const persona of allPersonas) {
+				const nicknameKey = persona.tomori_nickname?.toLowerCase();
+				if (!nicknameKey || personaByNickname.has(nicknameKey)) continue;
+				personaByNickname.set(nicknameKey, persona);
+			}
 
 			// Function to check for base trigger words - stays contained within the try block
 			function checkForBaseTriggerWords(content: string): boolean {
@@ -1323,7 +1332,7 @@ export default async function tomoriChat(
 
 			// 6. Determine if Bot Should Reply using shouldBotReply helper
 			// Skip check if this is a manual command trigger
-			if (!isManuallyTriggered && !shouldBotReply(message, tomoriState)) {
+			if (!isManuallyTriggered && !shouldBotReply(message, tomoriState, allPersonas)) {
 				return;
 			}
 
@@ -1625,9 +1634,32 @@ export default async function tomoriChat(
 				// 4. Determine author name and ID based on message type
 				let effectiveAuthorId = authorId;
 				let authorName: string;
+				let authorType: "user" | "persona" = "user";
+				let personaName: string | null = null;
+				const isWebhookMessage = Boolean(msg.webhookId);
 
 				if (msg.author.id === client.user?.id || isDebugMessage) {
-					authorName = tomoriState?.tomori_nickname; // Use Tomori's nickname for bot messages or debug messages
+					const mainNickname =
+						mainPersona?.tomori_nickname ??
+						tomoriState?.tomori_nickname ??
+						msg.author.username;
+					authorName = mainNickname; // Use main persona nickname for bot/debug messages
+					authorType = "persona";
+					personaName = mainNickname;
+				} else if (isWebhookMessage) {
+					const webhookName = msg.author.username;
+					const matchedPersona = webhookName
+						? personaByNickname.get(webhookName.toLowerCase())
+						: undefined;
+
+					if (matchedPersona) {
+						authorName = matchedPersona.tomori_nickname;
+						authorType = "persona";
+						personaName = matchedPersona.tomori_nickname;
+						effectiveAuthorId = `persona:${matchedPersona.tomori_id ?? matchedPersona.tomori_nickname}`;
+					} else {
+						authorName = webhookName || `<@${authorId}>`;
+					}
 				} else {
 					authorName = `<@${authorId}>`; // Format user as <@ID>, to be converted by convertMentions later to user's registered name (if existing)
 				}
@@ -1803,10 +1835,20 @@ export default async function tomoriChat(
 					// Processed embeds should appear as system/user messages
 					effectiveAuthorId = "system-embed"; // Use a special system ID to prevent combination
 					authorName = "System"; // Use "System" as the author name for processed embeds
+					authorType = "user";
+					personaName = null;
 				} else if (isDebugMessage) {
 					// Debug messages ($:) should appear as coming from the bot (model role)
 					effectiveAuthorId = client.user?.id || "bot"; // Use bot's actual ID for debug messages
-					authorName = tomoriState?.tomori_nickname || "Bot"; // Keep bot nickname
+					authorName =
+						mainPersona?.tomori_nickname ??
+						tomoriState?.tomori_nickname ??
+						"Bot"; // Keep bot nickname
+					authorType = "persona";
+					personaName =
+						mainPersona?.tomori_nickname ??
+						tomoriState?.tomori_nickname ??
+						null;
 				}
 
 				// 5.a. Process direct image attachments and stickers
@@ -2071,6 +2113,8 @@ export default async function tomoriChat(
 						id: msg.id,
 						authorId: effectiveAuthorId,
 						authorName,
+						authorType,
+						personaName,
 						content: messageContentForLlm,
 						mediaSourceMessageId: resolvedMediaSourceMessageId,
 						imageAttachments,
@@ -2109,6 +2153,10 @@ export default async function tomoriChat(
 				personaIndex++
 			) {
 				const currentPersona = personasToRespond[personaIndex];
+				const personaSnapshot: RequestSnapshot = {
+					...requestSnapshot,
+					tomoriState: currentPersona,
+				};
 				log.info(
 					`Starting response ${personaIndex + 1}/${personasToRespond.length} from persona "${currentPersona.tomori_nickname}" (${currentPersona.is_alter ? "alter" : "main"})`,
 				);
@@ -2194,6 +2242,8 @@ export default async function tomoriChat(
 							id: `synthetic-reminder-${Date.now()}`, // Synthetic ID for system-generated reminder
 							authorId: reminderRecipientID,
 							authorName: "System", // Use bot's nickname
+							authorType: "user",
+							personaName: null,
 							content: reminderContent,
 							imageAttachments: [],
 							videoAttachments: [],
@@ -2221,7 +2271,7 @@ export default async function tomoriChat(
 						// 1. Check if the last message in history is from Tomori
 						// 2. If yes, inject a fake user message to prompt continuation
 						// 3. This ensures the conversation pattern remains User->Tomori->User->Tomori
-						if (lastMessage.authorId === client.user?.id) {
+						if (lastMessage.authorType === "persona") {
 							log.info(
 								`Manual trigger detected with Tomori as last speaker - injecting continuation prompt for UX`,
 							);
@@ -2232,6 +2282,8 @@ export default async function tomoriChat(
 								id: `synthetic-continuation-${Date.now()}`, // Synthetic ID for system-generated continuation
 								authorId: "0", // Placeholder ID that's definitely not the bot's ID
 								authorName: "System",
+								authorType: "user",
+								personaName: null,
 								content: "[Continue your last message]",
 								imageAttachments: [],
 								videoAttachments: [],
@@ -2273,7 +2325,7 @@ export default async function tomoriChat(
 							// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked
 							tomoriConfig: tomoriState!.config,
 							isDMChannel, // Pass DM channel flag for proper context building
-							snapshot: requestSnapshot, // Pass per-request snapshot
+							snapshot: personaSnapshot, // Use persona-specific snapshot for correct context
 							preloadedEmojis: loadedEmojis, // Pass pre-loaded emoji data to avoid redundant DB query
 							preloadedStickers: loadedStickers, // Pass pre-loaded sticker data to avoid redundant DB query
 						});
@@ -3158,7 +3210,7 @@ export default async function tomoriChat(
 												tomoriConfig: tomoriState!.config,
 												isDMChannel,
 												mediaContextWindow: newWindow, // Pass the expanded window
-												snapshot: requestSnapshot, // Reuse snapshot for context rebuild
+												snapshot: personaSnapshot, // Use persona-specific snapshot for rebuild
 												preloadedEmojis: loadedEmojis, // Pass pre-loaded emoji data to avoid redundant DB query
 												preloadedStickers: loadedStickers, // Pass pre-loaded sticker data to avoid redundant DB query
 											});
@@ -3569,6 +3621,7 @@ export function determineMatchingPersonas(
 export function shouldBotReply(
 	message: Message,
 	tomoriState: TomoriState,
+	allPersonas: TomoriState[],
 ): boolean {
 	// 1. Basic checks: Ignore bots, commands, non-text channels, and messages with no content
 	const isThreadChannel =
@@ -3609,24 +3662,30 @@ export function shouldBotReply(
 	// biome-ignore lint/style/noNonNullAssertion: client.user is available in messageCreate event
 	const isBotMentioned = message.mentions.users.has(message.client.user!.id);
 
-	// 5. Check if the message content triggers the bot based on configured triggers
-	// Use 'trigger_words' from the config object
-	const triggersActive = config.trigger_words.some((trigger: string) => {
-		// Check if trigger is a mention (starts with <@)
-		if (trigger.startsWith("<@")) {
-			const userId = trigger.replace(/[<@!>]/g, ""); // Extract user ID
-			return message.mentions.users.has(userId);
-		}
-		// Check if trigger contains Japanese characters
-		const isJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(
-			trigger,
-		);
-		if (isJapanese) {
-			return message.content.includes(trigger);
-		}
-		// Use word boundaries for English triggers (case-insensitive)
-		const regex = new RegExp(`\\b${escapeRegExp(trigger)}\\b`, "i");
-		return regex.test(message.content);
+	// 4. Check if the message content triggers ANY persona (main or alters)
+	const triggersActive = allPersonas.some((persona) => {
+		// Determine which trigger list to use
+		const triggers = persona.is_alter
+			? persona.alter_triggers || []
+			: persona.config?.trigger_words || [];
+
+		return triggers.some((trigger: string) => {
+			// Check if trigger is a mention (starts with <@)
+			if (trigger.startsWith("<@")) {
+				const userId = trigger.replace(/[<@!>]/g, ""); // Extract user ID
+				return message.mentions.users.has(userId);
+			}
+			// Check if trigger contains Japanese characters
+			const isJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(
+				trigger,
+			);
+			if (isJapanese) {
+				return message.content.includes(trigger);
+			}
+			// Use word boundaries for English triggers (case-insensitive)
+			const regex = new RegExp(`\\b${escapeRegExp(trigger)}\\b`, "i");
+			return regex.test(message.content);
+		});
 	});
 
 	// 5. Check if the auto-message counter threshold is met
