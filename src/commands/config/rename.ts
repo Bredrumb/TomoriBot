@@ -188,7 +188,7 @@ export async function execute(
 			const [updatedConfigRow] = await sql`
             UPDATE tomori_configs
             SET trigger_words = array_append(trigger_words, ${newNickname})
-            WHERE tomori_id = ${tomoriState.tomori_id}
+            WHERE server_id = ${tomoriState.server_id}
             RETURNING *
         `;
 

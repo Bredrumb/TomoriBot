@@ -46,9 +46,10 @@ export async function exportPresetData(
 				t.attribute_list,
 				t.sample_dialogues_in,
 				t.sample_dialogues_out,
-				tc.trigger_words
+				COALESCE(tc_server.trigger_words, tc_legacy.trigger_words) as trigger_words
 			FROM tomoris t
-			JOIN tomori_configs tc ON t.tomori_id = tc.tomori_id
+			LEFT JOIN tomori_configs tc_server ON tc_server.server_id = t.server_id
+			LEFT JOIN tomori_configs tc_legacy ON tc_legacy.tomori_id = t.tomori_id
 			WHERE t.server_id = ${serverId}
 			AND t.is_alter = false
 			LIMIT 1

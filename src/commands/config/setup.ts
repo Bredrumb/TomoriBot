@@ -598,11 +598,11 @@ export async function execute(
 				// Non-null assertion is safe here - we've verified llmId is truthy in the if condition
 				const customLlmId = customCapabilitiesResult.llmId as number;
 				try {
-					// Load the newly created TomoriState to get tomori_id
+					// Load the newly created TomoriState to get server_id
 					const newTomoriState = await loadTomoriState(serverId);
-					if (newTomoriState?.tomori_id) {
+					if (newTomoriState?.server_id) {
 						await saveCustomEndpointConfig(
-							newTomoriState.tomori_id,
+							newTomoriState.server_id,
 							customEndpointUrl,
 							customLlmId,
 						);

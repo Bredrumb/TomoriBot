@@ -168,7 +168,7 @@ export async function execute(
 		await sql`
 			UPDATE tomori_configs
 			SET system_prompt = ${selectedPreset.preset_prompt_text}
-			WHERE tomori_id = ${tomoriState.tomori_id}
+			WHERE server_id = ${tomoriState.server_id}
 		`;
 
 		// 13. Invalidate cache so next message gets fresh config

@@ -4,6 +4,7 @@ import {
 	userSchema,
 	serverEmojiSchema,
 	type TomoriState,
+	type TomoriRow,
 	type UserRow,
 	type ServerEmojiRow,
 	type LlmRow,
@@ -45,14 +46,27 @@ export async function loadTomoriState(
 		}
 		const tomoriData = tomoriRows[0];
 
-		// 2. Load associated config using tomori_id
+		// 2. Load associated config using server_id (server-scoped config)
 		// biome-ignore lint/style/noNonNullAssertion: Row existence checked above, ID is guaranteed by DB schema.
 		const tomoriId = tomoriData.tomori_id!;
-		const configRows = await sql`
+		const serverId = tomoriData.server_id;
+		let configRows = await sql`
 			SELECT * FROM tomori_configs
-			WHERE tomori_id = ${tomoriId}
+			WHERE server_id = ${serverId}
 			LIMIT 1
 		`;
+
+		// Backward compatibility: fall back to tomori_id if server_id config missing
+		if (!configRows.length) {
+			log.warn(
+				`No server-scoped config found for server ${serverDiscId}; falling back to tomori_id ${tomoriId}`,
+			);
+			configRows = await sql`
+				SELECT * FROM tomori_configs
+				WHERE tomori_id = ${tomoriId}
+				LIMIT 1
+			`;
+		}
 
 		if (!configRows.length) {
 			log.error(
@@ -183,72 +197,83 @@ export async function loadAllPersonasForServer(
 			(row: { content: string }) => row.content,
 		);
 
-		// 3. Load configs, LLMs, and rotation keys for all personas in parallel
+		// 3. Load server-scoped config once (fallback to main persona config)
+		let configRows = await sql`
+			SELECT * FROM tomori_configs
+			WHERE server_id = ${serverId}
+			LIMIT 1
+		`;
+
+		if (!configRows.length) {
+			const mainTomoriRow =
+				tomoriRows.find((row: TomoriRow) => row.is_alter === false) ??
+				tomoriRows[0];
+			const fallbackTomoriId = mainTomoriRow?.tomori_id;
+			if (fallbackTomoriId) {
+				log.warn(
+					`No server-scoped config found for server ${serverDiscId}; falling back to tomori_id ${fallbackTomoriId}`,
+				);
+				configRows = await sql`
+					SELECT * FROM tomori_configs
+					WHERE tomori_id = ${fallbackTomoriId}
+					LIMIT 1
+				`;
+			}
+		}
+
+		if (!configRows.length) {
+			log.error(
+				`No config found for server ${serverDiscId}; cannot build persona states`,
+			);
+			return [];
+		}
+		const configData = configRows[0];
+
+		// Load LLM data once (with cache fallback)
+		let llmData = getCachedLLM(configData.llm_id);
+		if (!llmData) {
+			log.info(`Cache miss for LLM ID ${configData.llm_id}, querying database`);
+			const llmRows = await sql`
+				SELECT * FROM llms
+				WHERE llm_id = ${configData.llm_id}
+				LIMIT 1
+			`;
+
+			if (!llmRows.length) {
+				log.error(
+					`Found persona config but no LLM data for server ${serverDiscId}, llm_id: ${configData.llm_id}`,
+				);
+				return [];
+			}
+			llmData = llmRows[0] as LlmRow;
+		}
+
+		// Load rotation keys once (server-scoped)
+		const rotationKeysRows = await sql`
+			SELECT * FROM api_key_rotation
+			WHERE server_id = ${serverId}
+			ORDER BY usage_count ASC, rotation_key_id ASC
+		`;
+
+		const rotationKeys: ApiKeyRotationRow[] = [];
+		for (const row of rotationKeysRows) {
+			const parsed = apiKeyRotationSchema.safeParse(row);
+			if (parsed.success) {
+				rotationKeys.push(parsed.data);
+			} else {
+				const errorDetails = JSON.stringify(parsed.error.flatten(), null, 2);
+				log.warn(
+					`Invalid rotation key row for server ${serverDiscId}:\n${errorDetails}`,
+				);
+			}
+		}
+
+		// 4. Build persona states using shared config and rotation keys
 		const personas: TomoriState[] = [];
 
 		for (const tomoriRow of tomoriRows) {
-			// biome-ignore lint/style/noNonNullAssertion: Row existence checked above, ID is guaranteed by DB schema.
-			const tomoriId = tomoriRow.tomori_id!;
-
-			// Load config, LLM, and rotation keys in parallel
-			const [configRows, rotationKeysRows] = await Promise.all([
-				sql`
-					SELECT * FROM tomori_configs
-					WHERE tomori_id = ${tomoriId}
-					LIMIT 1
-				`,
-				sql`
-					SELECT * FROM api_key_rotation
-					WHERE server_id = ${serverId}
-					ORDER BY usage_count ASC, rotation_key_id ASC
-				`,
-			]);
-
-			// Validate config
-			if (!configRows.length) {
-				log.error(
-					`Found persona (${tomoriId}) but no config for server ${serverDiscId}`,
-				);
-				continue; // Skip this persona
-			}
-			const configData = configRows[0];
-
-			// Load LLM data (with cache fallback)
-			let llmData = getCachedLLM(configData.llm_id);
-			if (!llmData) {
-				log.info(
-					`Cache miss for LLM ID ${configData.llm_id}, querying database`,
-				);
-				const llmRows = await sql`
-					SELECT * FROM llms
-					WHERE llm_id = ${configData.llm_id}
-					LIMIT 1
-				`;
-
-				if (!llmRows.length) {
-					log.error(
-						`Found persona config but no LLM data for server ${serverDiscId}, llm_id: ${configData.llm_id}`,
-					);
-					continue; // Skip this persona
-				}
-				llmData = llmRows[0] as LlmRow;
-			}
-
-			// Validate rotation keys
-			const rotationKeys: ApiKeyRotationRow[] = [];
-			for (const row of rotationKeysRows) {
-				const parsed = apiKeyRotationSchema.safeParse(row);
-				if (parsed.success) {
-					rotationKeys.push(parsed.data);
-				} else {
-					const errorDetails = JSON.stringify(parsed.error.flatten(), null, 2);
-					log.warn(
-						`Invalid rotation key row for server ${serverDiscId}:\n${errorDetails}`,
-					);
-				}
-			}
-
-			// 4. Combine and validate the full state for this persona
+			const tomoriId = tomoriRow.tomori_id ?? "unknown";
+			// 4a. Combine and validate the full state for this persona
 			const combinedState = {
 				...tomoriRow,
 				config: configData,

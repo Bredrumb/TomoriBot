@@ -309,12 +309,12 @@ export async function deleteCustomLLMEntry(serverId: string | number): Promise<v
 /**
  * Save custom endpoint configuration to tomori_configs
  *
- * @param tomoriId - The tomori_id to update
+ * @param serverId - The internal server_id to update
  * @param endpointUrl - The custom endpoint URL
  * @param llmId - The llm_id of the custom model
  */
 export async function saveCustomEndpointConfig(
-	tomoriId: number,
+	serverId: number,
 	endpointUrl: string,
 	llmId: number,
 ): Promise<void> {
@@ -324,10 +324,10 @@ export async function saveCustomEndpointConfig(
 			custom_endpoint_url = ${endpointUrl},
 			llm_id = ${llmId},
 			updated_at = CURRENT_TIMESTAMP
-		WHERE tomori_id = ${tomoriId}
+		WHERE server_id = ${serverId}
 	`;
 
-	log.info(`Saved custom endpoint config for tomori ${tomoriId}`);
+	log.info(`Saved custom endpoint config for server ${serverId}`);
 }
 
 /**

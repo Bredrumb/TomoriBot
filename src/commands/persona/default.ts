@@ -214,7 +214,7 @@ export async function execute(
 		await sql`
 			UPDATE tomori_configs
 			SET trigger_words = ${triggerWordsArrayLiteral}::text[]
-			WHERE tomori_id = ${tomoriState.tomori_id}
+			WHERE server_id = ${tomoriState.server_id}
 		`;
 
 		// 17. Validate the result

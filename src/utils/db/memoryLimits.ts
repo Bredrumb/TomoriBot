@@ -459,11 +459,11 @@ export async function checkServerMemoryLimit(
 
 /**
  * Check if a server has reached its trigger word limit
- * @param tomoriId - Internal tomori ID
+ * @param serverId - Internal server ID
  * @returns MemoryValidationResult indicating if server can add more trigger words
  */
 export async function checkTriggerWordLimit(
-	tomoriId: number,
+	serverId: number,
 ): Promise<MemoryValidationResult> {
 	const limits = getMemoryLimits();
 
@@ -472,7 +472,7 @@ export async function checkTriggerWordLimit(
 		const [configResult] = await sql`
 			SELECT array_length(trigger_words, 1) as trigger_count
 			FROM tomori_configs
-			WHERE tomori_id = ${tomoriId}
+			WHERE server_id = ${serverId}
 		`;
 
 		// Handle case where server has no trigger words yet (array_length returns null for empty arrays)
@@ -494,7 +494,7 @@ export async function checkTriggerWordLimit(
 		};
 	} catch (error) {
 		log.error(
-			`Error checking trigger word limit for tomori ${tomoriId}:`,
+			`Error checking trigger word limit for server ${serverId}:`,
 			error,
 		);
 		// Fail safe - if we can't check the limit, assume it's exceeded

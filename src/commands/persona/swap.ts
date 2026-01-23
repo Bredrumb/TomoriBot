@@ -219,124 +219,24 @@ export async function execute(
 				extension: "png",
 				forceStatic: true,
 			});
-
-		// 10. Swap is_alter flags, preserve main config settings, and move trigger locations in database
-		await sql.transaction(async (tx) => {
-			// Ensure main config exists before copying
-			const mainConfigRows = await tx`
-				SELECT tomori_config_id
-				FROM tomori_configs
-				WHERE tomori_id = ${mainPersona.tomori_id}
-				LIMIT 1
-			`;
-
-			if (mainConfigRows.length === 0) {
-				throw new Error(
-					`Main persona config missing for tomori_id ${mainPersona.tomori_id}`,
+		let formerMainAvatarBuffer: Buffer | null = null;
+		if (formerMainAvatarUrl) {
+			try {
+				formerMainAvatarBuffer = await downloadImage(formerMainAvatarUrl);
+			} catch (downloadError) {
+				log.warn(
+					`Failed to prefetch former main avatar for embed (non-fatal): ${downloadError instanceof Error ? downloadError.message : "Unknown error"}`,
 				);
 			}
+		}
 
-			// Copy the main config settings to the selected alter's config (upsert)
-			// This keeps server-level settings intact when the main persona changes.
-			await tx`
-				INSERT INTO tomori_configs (
-					tomori_id,
-					llm_id,
-					diffusion_model_id,
-					llm_temperature,
-					api_key,
-					key_version,
-					trigger_words,
-					autoch_disc_ids,
-					autoch_threshold,
-					server_memteaching_enabled,
-					attribute_memteaching_enabled,
-					sampledialogue_memteaching_enabled,
-					self_teaching_enabled,
-					web_search_enabled,
-					personal_memories_enabled,
-					humanizer_degree,
-					emoji_usage_enabled,
-					sticker_usage_enabled,
-					pin_message_enabled,
-					imagegen_enabled,
-					videogen_enabled,
-					timezone_offset,
-					system_prompt,
-					cooldown_type,
-					cooldown_length,
-					custom_endpoint_url
-				)
-				SELECT
-					${selectedAlter.tomori_id},
-					llm_id,
-					diffusion_model_id,
-					llm_temperature,
-					api_key,
-					key_version,
-					trigger_words,
-					autoch_disc_ids,
-					autoch_threshold,
-					server_memteaching_enabled,
-					attribute_memteaching_enabled,
-					sampledialogue_memteaching_enabled,
-					self_teaching_enabled,
-					web_search_enabled,
-					personal_memories_enabled,
-					humanizer_degree,
-					emoji_usage_enabled,
-					sticker_usage_enabled,
-					pin_message_enabled,
-					imagegen_enabled,
-					videogen_enabled,
-					timezone_offset,
-					system_prompt,
-					cooldown_type,
-					cooldown_length,
-					custom_endpoint_url
-				FROM tomori_configs
-				WHERE tomori_id = ${mainPersona.tomori_id}
-				ON CONFLICT (tomori_id) DO UPDATE SET
-					llm_id = EXCLUDED.llm_id,
-					diffusion_model_id = EXCLUDED.diffusion_model_id,
-					llm_temperature = EXCLUDED.llm_temperature,
-					api_key = EXCLUDED.api_key,
-					key_version = EXCLUDED.key_version,
-					trigger_words = EXCLUDED.trigger_words,
-					autoch_disc_ids = EXCLUDED.autoch_disc_ids,
-					autoch_threshold = EXCLUDED.autoch_threshold,
-					server_memteaching_enabled = EXCLUDED.server_memteaching_enabled,
-					attribute_memteaching_enabled = EXCLUDED.attribute_memteaching_enabled,
-					sampledialogue_memteaching_enabled =
-						EXCLUDED.sampledialogue_memteaching_enabled,
-					self_teaching_enabled = EXCLUDED.self_teaching_enabled,
-					web_search_enabled = EXCLUDED.web_search_enabled,
-					personal_memories_enabled = EXCLUDED.personal_memories_enabled,
-					humanizer_degree = EXCLUDED.humanizer_degree,
-					emoji_usage_enabled = EXCLUDED.emoji_usage_enabled,
-					sticker_usage_enabled = EXCLUDED.sticker_usage_enabled,
-					pin_message_enabled = EXCLUDED.pin_message_enabled,
-					imagegen_enabled = EXCLUDED.imagegen_enabled,
-					videogen_enabled = EXCLUDED.videogen_enabled,
-					timezone_offset = EXCLUDED.timezone_offset,
-					system_prompt = EXCLUDED.system_prompt,
-					cooldown_type = EXCLUDED.cooldown_type,
-					cooldown_length = EXCLUDED.cooldown_length,
-					custom_endpoint_url = EXCLUDED.custom_endpoint_url
-			`;
-
+		// 10. Swap is_alter flags and move trigger locations in database (config is server-scoped)
+		await sql.transaction(async (tx) => {
 			// Demote current main to alter (move triggers from config to tomoris.alter_triggers)
 			await tx`
 				UPDATE tomoris
 				SET is_alter = true,
 					alter_triggers = ${mainTriggersArrayLiteral}::text[]
-				WHERE tomori_id = ${mainPersona.tomori_id}
-			`;
-
-			// Clear main persona's triggers from config
-			await tx`
-				UPDATE tomori_configs
-				SET trigger_words = ARRAY[]::TEXT[]
 				WHERE tomori_id = ${mainPersona.tomori_id}
 			`;
 
@@ -351,7 +251,7 @@ export async function execute(
 			await tx`
 				UPDATE tomori_configs
 				SET trigger_words = ${alterTriggersArrayLiteral}::text[]
-				WHERE tomori_id = ${selectedAlter.tomori_id}
+				WHERE server_id = ${mainPersona.server_id}
 			`;
 		});
 
@@ -502,24 +402,18 @@ export async function execute(
 			);
 
 		let formerMainAvatarAttachment: AttachmentBuilder | null = null;
-		if (formerMainAvatarUrl) {
-			try {
-				const avatarBuffer = await downloadImage(formerMainAvatarUrl);
-				const sanitizedNickname = mainPersona.tomori_nickname
-					.replace(/[^a-zA-Z0-9-_]/g, "_")
-					.slice(0, 50);
-				const timestamp = Date.now();
-				const avatarFilename = `persona-swap-${sanitizedNickname}-${timestamp}.png`;
-				formerMainAvatarAttachment = new AttachmentBuilder(avatarBuffer, {
-					name: avatarFilename,
-				});
-				successEmbed.setImage(`attachment://${avatarFilename}`);
-			} catch (downloadError) {
-				log.warn(
-					`Failed to download former main avatar for embed (non-fatal): ${downloadError instanceof Error ? downloadError.message : "Unknown error"}`,
-				);
-				successEmbed.setImage(formerMainAvatarUrl);
-			}
+		if (formerMainAvatarBuffer) {
+			const sanitizedNickname = mainPersona.tomori_nickname
+				.replace(/[^a-zA-Z0-9-_]/g, "_")
+				.slice(0, 50);
+			const timestamp = Date.now();
+			const avatarFilename = `persona-swap-${sanitizedNickname}-${timestamp}.png`;
+			formerMainAvatarAttachment = new AttachmentBuilder(formerMainAvatarBuffer, {
+				name: avatarFilename,
+			});
+			successEmbed.setImage(`attachment://${avatarFilename}`);
+		} else if (formerMainAvatarUrl) {
+			successEmbed.setImage(formerMainAvatarUrl);
 		}
 
 		// Add footer warning to keep embed (used for avatar URL storage)

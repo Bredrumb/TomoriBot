@@ -175,7 +175,7 @@ export async function execute(
 		const [updatedRow] = await sql`
             UPDATE tomori_configs
             SET humanizer_degree = ${humanizerValue}
-            WHERE tomori_id = ${tomoriState.tomori_id}
+            WHERE server_id = ${tomoriState.server_id}
             RETURNING *
         `;
 

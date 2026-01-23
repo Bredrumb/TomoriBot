@@ -190,7 +190,8 @@ CREATE INDEX IF NOT EXISTS idx_image_diffusion_models_default ON image_diffusion
 
 CREATE TABLE IF NOT EXISTS tomori_configs (
   tomori_config_id SERIAL PRIMARY KEY,
-  tomori_id INT NOT NULL UNIQUE,
+  tomori_id INT UNIQUE, -- Legacy pointer (nullable; server_id is the primary linkage)
+  server_id INT, -- Server-scoped config (nullable for legacy rows)
   llm_id INT NOT NULL,
   llm_temperature REAL NOT NULL DEFAULT 1.5 CHECK (llm_temperature >= 1.0 AND llm_temperature <= 2.0),
   api_key BYTEA, -- encrypted
@@ -207,9 +208,98 @@ CREATE TABLE IF NOT EXISTS tomori_configs (
   humanizer_degree INT DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (tomori_id) REFERENCES tomoris(tomori_id) ON DELETE CASCADE,
+  FOREIGN KEY (tomori_id) REFERENCES tomoris(tomori_id) ON DELETE SET NULL,
   FOREIGN KEY (llm_id) REFERENCES llms(llm_id) ON DELETE RESTRICT
 );
+
+-- Add server_id column for server-scoped configs (January 2026)
+SELECT add_column_if_not_exists('tomori_configs', 'server_id', 'INTEGER');
+
+-- Allow tomori_id to be nullable and prevent cascade deletes from removing server-scoped config
+DO $$
+DECLARE
+    fk_delete_action CHAR;
+BEGIN
+    -- Drop NOT NULL if present
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'tomori_configs'
+        AND column_name = 'tomori_id'
+        AND is_nullable = 'NO'
+    ) THEN
+        ALTER TABLE tomori_configs ALTER COLUMN tomori_id DROP NOT NULL;
+    END IF;
+
+    -- Detect current FK delete action (if any)
+    SELECT confdeltype INTO fk_delete_action
+    FROM pg_constraint
+    WHERE conname = 'tomori_configs_tomori_id_fkey';
+
+    -- Recreate FK with ON DELETE SET NULL if needed
+    IF fk_delete_action IS NULL OR fk_delete_action <> 'n' THEN
+        ALTER TABLE tomori_configs DROP CONSTRAINT IF EXISTS tomori_configs_tomori_id_fkey;
+        ALTER TABLE tomori_configs
+        ADD CONSTRAINT tomori_configs_tomori_id_fkey
+        FOREIGN KEY (tomori_id)
+        REFERENCES tomoris(tomori_id)
+        ON DELETE SET NULL;
+    END IF;
+END $$;
+
+-- Backfill server_id for main persona configs (legacy rows)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'tomori_configs' AND column_name = 'server_id'
+    ) THEN
+        UPDATE tomori_configs tc
+        SET server_id = t.server_id
+        FROM tomoris t
+        WHERE tc.server_id IS NULL
+          AND tc.tomori_id = t.tomori_id
+          AND t.is_alter = false;
+    END IF;
+END $$;
+
+-- Add foreign key to servers for server-scoped config
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'tomori_configs_server_id_fkey'
+    ) THEN
+        ALTER TABLE tomori_configs
+        ADD CONSTRAINT tomori_configs_server_id_fkey
+        FOREIGN KEY (server_id)
+        REFERENCES servers(server_id)
+        ON DELETE CASCADE;
+    END IF;
+END $$;
+
+-- Create unique index on server_id if no duplicates (NULLs allowed)
+DO $$
+DECLARE
+    duplicate_count INTEGER;
+BEGIN
+    SELECT COUNT(*) INTO duplicate_count
+    FROM (
+        SELECT server_id
+        FROM tomori_configs
+        WHERE server_id IS NOT NULL
+        GROUP BY server_id
+        HAVING COUNT(*) > 1
+    ) duplicates;
+
+    IF duplicate_count = 0 THEN
+        EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS idx_tomori_configs_server_id_unique ON tomori_configs(server_id) WHERE server_id IS NOT NULL';
+    ELSE
+        RAISE NOTICE 'Skipped unique index on tomori_configs.server_id due to duplicates';
+    END IF;
+END $$;
+
+-- Non-unique index for server_id lookups (fallback if unique index skipped)
+CREATE INDEX IF NOT EXISTS idx_tomori_configs_server_id ON tomori_configs(server_id);
 
 -- Add columns for emoji and sticker usage permissions (May 5, 2025)
 SELECT add_column_if_not_exists('tomori_configs', 'emoji_usage_enabled', 'BOOLEAN', 'true');

@@ -100,7 +100,8 @@ export type DiffusionModelRow = z.infer<typeof diffusionModelSchema>;
 
 export const tomoriConfigSchema = z.object({
 	tomori_config_id: z.number().optional(),
-	tomori_id: z.number(),
+	tomori_id: z.number().nullable().optional(), // Legacy pointer (server-scoped configs use server_id)
+	server_id: z.number().nullable().optional(), // Added January 2026 - Server-scoped config (nullable for legacy rows)
 	llm_id: z.number(),
 	diffusion_model_id: z.number().int().nullable().optional(), // Added December 2025 - Image generation model
 	llm_temperature: z.number().min(1.0).max(2.0).default(1.5),

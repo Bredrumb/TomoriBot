@@ -2484,12 +2484,12 @@ export default async function tomoriChat(
 								const { encrypted, version } =
 									await encryptApiKey(decryptedApiKey);
 
-								await sql`
+						await sql`
 							UPDATE tomori_configs
 							SET api_key = ${encrypted},
 							    key_version = ${version},
 							    updated_at = CURRENT_TIMESTAMP
-							WHERE tomori_id = ${tomoriState?.tomori_id}
+							WHERE server_id = ${tomoriState?.server_id}
 						`;
 
 								log.success(

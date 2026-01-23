@@ -161,20 +161,21 @@ export async function exportServerData(
 		// 2. Get tomori configuration
 		const configRows = await sql`
 			SELECT
-				tc.llm_temperature,
-				tc.humanizer_degree,
-				tc.timezone_offset,
-				tc.server_memteaching_enabled,
-				tc.attribute_memteaching_enabled,
-				tc.sampledialogue_memteaching_enabled,
-				tc.self_teaching_enabled,
-				tc.web_search_enabled,
-				tc.personal_memories_enabled,
-				tc.emoji_usage_enabled,
-				tc.sticker_usage_enabled,
-				tc.imagegen_enabled
-			FROM tomori_configs tc
-			JOIN tomoris t ON tc.tomori_id = t.tomori_id
+				COALESCE(tc_server.llm_temperature, tc_legacy.llm_temperature) as llm_temperature,
+				COALESCE(tc_server.humanizer_degree, tc_legacy.humanizer_degree) as humanizer_degree,
+				COALESCE(tc_server.timezone_offset, tc_legacy.timezone_offset) as timezone_offset,
+				COALESCE(tc_server.server_memteaching_enabled, tc_legacy.server_memteaching_enabled) as server_memteaching_enabled,
+				COALESCE(tc_server.attribute_memteaching_enabled, tc_legacy.attribute_memteaching_enabled) as attribute_memteaching_enabled,
+				COALESCE(tc_server.sampledialogue_memteaching_enabled, tc_legacy.sampledialogue_memteaching_enabled) as sampledialogue_memteaching_enabled,
+				COALESCE(tc_server.self_teaching_enabled, tc_legacy.self_teaching_enabled) as self_teaching_enabled,
+				COALESCE(tc_server.web_search_enabled, tc_legacy.web_search_enabled) as web_search_enabled,
+				COALESCE(tc_server.personal_memories_enabled, tc_legacy.personal_memories_enabled) as personal_memories_enabled,
+				COALESCE(tc_server.emoji_usage_enabled, tc_legacy.emoji_usage_enabled) as emoji_usage_enabled,
+				COALESCE(tc_server.sticker_usage_enabled, tc_legacy.sticker_usage_enabled) as sticker_usage_enabled,
+				COALESCE(tc_server.imagegen_enabled, tc_legacy.imagegen_enabled) as imagegen_enabled
+			FROM tomoris t
+			LEFT JOIN tomori_configs tc_server ON tc_server.server_id = t.server_id
+			LEFT JOIN tomori_configs tc_legacy ON tc_legacy.tomori_id = t.tomori_id
 			WHERE t.server_id = ${serverId}
 			AND t.is_alter = false
 			LIMIT 1

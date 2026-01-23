@@ -109,7 +109,6 @@ export async function importServerData(
 		}
 
 		const serverId = serverRows[0].server_id;
-		const tomoriId = serverRows[0].tomori_id;
 
 		// 2. Validate all server memories
 		for (const memory of importData.server_memories) {
@@ -150,7 +149,7 @@ export async function importServerData(
 				emoji_usage_enabled = ${importData.config.emoji_usage_enabled},
 				sticker_usage_enabled = ${importData.config.sticker_usage_enabled},
 				imagegen_enabled = ${importData.config.imagegen_enabled}
-			WHERE tomori_id = ${tomoriId}
+			WHERE server_id = ${serverId}
 		`;
 
 		// 5. Replace server memories

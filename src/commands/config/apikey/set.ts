@@ -448,7 +448,7 @@ export async function execute(
 			    llm_id = ${newLlmId},
 			    diffusion_model_id = ${newDiffusionModelId},
 			    custom_endpoint_url = ${customEndpointUrl}
-			WHERE tomori_id = ${tomoriState.tomori_id}
+			WHERE server_id = ${tomoriState.server_id}
 			RETURNING *
 		`;
 

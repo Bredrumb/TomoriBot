@@ -774,50 +774,13 @@ export async function execute(
 
 			const newTomoriId = newAlterRow.tomori_id;
 
-			// 11g. Copy config from main persona (empty trigger_words for alters)
-			await sql`
-				INSERT INTO tomori_configs (
-					tomori_id,
-					llm_id,
-					llm_temperature,
-					trigger_words,
-					autoch_disc_ids,
-					autoch_threshold,
-					server_memteaching_enabled,
-					attribute_memteaching_enabled,
-					sampledialogue_memteaching_enabled,
-					self_teaching_enabled,
-					personal_memories_enabled,
-					imagegen_enabled,
-					videogen_enabled,
-					humanizer_degree
-				)
-				SELECT
-					${newTomoriId},
-					llm_id,
-					llm_temperature,
-					ARRAY[]::TEXT[],
-					autoch_disc_ids,
-					autoch_threshold,
-					server_memteaching_enabled,
-					attribute_memteaching_enabled,
-					sampledialogue_memteaching_enabled,
-					self_teaching_enabled,
-					personal_memories_enabled,
-					imagegen_enabled,
-					videogen_enabled,
-					humanizer_degree
-				FROM tomori_configs
-				WHERE tomori_id = ${mainPersona.tomori_id}
-			`;
-
 			const sanitizedNickname = presetData.tomori_nickname
 				.replace(/[^a-zA-Z0-9-_]/g, "_")
 				.slice(0, 50);
 			const timestamp = Date.now();
 			const avatarFilename = `persona-import-alter-${sanitizedNickname}-${timestamp}.png`;
 
-			// 11h. Send success embed with avatar image
+			// 11g. Send success embed with avatar image
 			const alterAvatarAttachment = new AttachmentBuilder(pngBuffer, {
 				name: avatarFilename,
 			});
@@ -852,12 +815,12 @@ export async function execute(
 				flags: MessageFlags.SuppressNotifications,
 			});
 
-			// 11i. Extract avatar URL from the sent message
+			// 11h. Extract avatar URL from the sent message
 			// The image URL is accessible from the sent message's embed
 			const sentEmbed = reply.embeds[0];
 			const avatarUrl = sentEmbed?.image?.url ?? null;
 
-			// 11j. Store avatar URL in webhook_avatar_url column
+			// 11i. Store avatar URL in webhook_avatar_url column
 			if (avatarUrl) {
 				await sql`
 					UPDATE tomoris
@@ -870,7 +833,7 @@ export async function execute(
 				);
 			}
 
-			// 11k. Invalidate cache
+			// 11j. Invalidate cache
 			invalidateTomoriStateCache(serverDiscId);
 
 			log.success(

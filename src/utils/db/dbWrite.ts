@@ -414,6 +414,7 @@ export async function setupServer(
 			const [config] = await tx`
 				INSERT INTO tomori_configs (
 					tomori_id,
+					server_id,
 					llm_id,
 					api_key,
 					key_version,
@@ -427,6 +428,7 @@ export async function setupServer(
 				)
 				VALUES (
 					${tomori.tomori_id},
+					${server.server_id},
 					${selectedLlm.llm_id},
 					${validConfig.encryptedApiKey},
 					${validConfig.keyVersion},
@@ -569,12 +571,12 @@ export async function setupServer(
  * Updates a TomoriConfig record with partial data.
  * Uses zod's .partial() schema for validation and SQL RETURNING for atomicity.
  *
- * @param tomoriId - The tomori_id of the config to update
+ * @param serverId - The server_id of the config to update
  * @param configData - Partial data to update (only specified fields will be changed)
  * @returns The updated TomoriConfigRow or null if update failed
  */
 export async function updateTomoriConfig(
-	tomoriId: number,
+	serverId: number,
 	configData: Partial<TomoriConfigRow>,
 ): Promise<TomoriConfigRow | null> {
 	try {
@@ -587,7 +589,7 @@ export async function updateTomoriConfig(
 		);
 
 		if (fields.length === 0) {
-			log.warn(`No fields provided to update for tomori_id: ${tomoriId}`);
+			log.warn(`No fields provided to update for server_id: ${serverId}`);
 			return null;
 		}
 
@@ -612,7 +614,7 @@ export async function updateTomoriConfig(
 
 		// 4. Add the tomoriId as the last parameter for the WHERE clause
 		const finalPlaceholderIndex = values.length + 1;
-		values.push(tomoriId);
+		values.push(serverId);
 
 		// 5. Execute the UPDATE using sql.unsafe() but with proper placeholders and arguments
 		// Bun's sql will correctly handle parameterization for different types (including arrays) here.
@@ -620,7 +622,7 @@ export async function updateTomoriConfig(
 			`
 			UPDATE tomori_configs
 			SET ${setClause}
-			WHERE tomori_id = $${finalPlaceholderIndex}
+			WHERE server_id = $${finalPlaceholderIndex}
 			RETURNING *
 		`,
 			...values, // Pass the values array directly with spreading
@@ -628,7 +630,7 @@ export async function updateTomoriConfig(
 
 		if (!result.length) {
 			const context: ErrorContext = {
-				tomoriId,
+				serverId,
 				errorType: "DatabaseUpdateError",
 				metadata: {
 					operation: "updateTomoriConfig",
@@ -636,7 +638,7 @@ export async function updateTomoriConfig(
 				},
 			};
 			await log.error(
-				`No tomori_config found with tomori_id: ${tomoriId}`,
+				`No tomori_config found with server_id: ${serverId}`,
 				new Error("Config not found"),
 				context,
 			);
@@ -647,7 +649,7 @@ export async function updateTomoriConfig(
 		const updatedConfig = tomoriConfigSchema.safeParse(result[0]);
 		if (!updatedConfig.success) {
 			const context: ErrorContext = {
-				tomoriId,
+				serverId,
 				errorType: "SchemaValidationError",
 				metadata: {
 					operation: "updateTomoriConfig",
@@ -655,7 +657,7 @@ export async function updateTomoriConfig(
 				},
 			};
 			await log.error(
-				`Failed to validate updated config for tomori_id: ${tomoriId}`,
+				`Failed to validate updated config for server_id: ${serverId}`,
 				updatedConfig.error,
 				context,
 			);
@@ -665,14 +667,14 @@ export async function updateTomoriConfig(
 		return updatedConfig.data;
 	} catch (error) {
 		const context: ErrorContext = {
-			tomoriId,
+			serverId,
 			errorType: "DatabaseUpdateError",
 			metadata: {
 				operation: "updateTomoriConfig",
 			},
 		};
 		await log.error(
-			`Error updating tomori_config for tomori_id: ${tomoriId}`,
+			`Error updating tomori_config for server_id: ${serverId}`,
 			error,
 			context,
 		);

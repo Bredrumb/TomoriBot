@@ -325,7 +325,7 @@ export async function execute(
 			const [updatedConfig] = await sql`
 				UPDATE tomori_configs
 				SET trigger_words = array_cat(trigger_words, ${triggerArrayLiteral}::text[])
-				WHERE tomori_id = ${personaId}
+				WHERE server_id = ${selectedPersona.server_id}
 				RETURNING *
 			`;
 

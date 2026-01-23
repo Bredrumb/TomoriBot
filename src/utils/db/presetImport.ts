@@ -119,7 +119,6 @@ export async function importPresetData(
 		}
 
 		const serverId = serverRows[0].server_id;
-		const tomoriId = serverRows[0].tomori_id;
 
 		// 5. Format arrays as PostgreSQL array literals for safe insertion
 		const attributeArrayLiteral = `{${importData.attribute_list
@@ -150,12 +149,12 @@ export async function importPresetData(
 			AND is_alter = false
 		`;
 
-		// 7. Update tomori_configs table with trigger words
+		// 7. Update tomori_configs table with trigger words (server-scoped)
 		await sql`
 			UPDATE tomori_configs
 			SET
 				trigger_words = ${triggerWordsArrayLiteral}::text[]
-			WHERE tomori_id = ${tomoriId}
+			WHERE server_id = ${serverId}
 		`;
 
 		log.success(

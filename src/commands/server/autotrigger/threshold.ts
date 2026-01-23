@@ -101,10 +101,10 @@ Setting to '0' will disable auto-chat
 		}
 
 		// Update the threshold in the database with direct SQL (Rule #4, #15)
-		const [updatedRow] = await sql`
+const [updatedRow] = await sql`
   UPDATE tomori_configs
   SET autoch_threshold = ${threshold}
-  WHERE tomori_id = ${tomoriState.tomori_id}
+  WHERE server_id = ${tomoriState.server_id}
   RETURNING *
 `;
 
