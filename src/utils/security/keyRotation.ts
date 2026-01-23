@@ -108,9 +108,9 @@ export async function selectApiKey(
 			// Validate the row
 			const parsed = apiKeyRotationSchema.safeParse(row);
 			if (!parsed.success) {
+				const errorDetails = JSON.stringify(parsed.error.flatten(), null, 2);
 				log.warn(
-					`Invalid rotation key row for server ${serverId}:`,
-					parsed.error.flatten(),
+					`Invalid rotation key row for server ${serverId}:\n${errorDetails}`,
 				);
 				continue;
 			}
@@ -371,9 +371,9 @@ export async function loadRotationKeys(
 			if (parsed.success) {
 				validatedKeys.push(parsed.data);
 			} else {
+				const errorDetails = JSON.stringify(parsed.error.flatten(), null, 2);
 				log.warn(
-					`Invalid rotation key row for server ${serverId}:`,
-					parsed.error.flatten(),
+					`Invalid rotation key row for server ${serverId}:\n${errorDetails}`,
 				);
 			}
 		}

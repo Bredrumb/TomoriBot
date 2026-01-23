@@ -110,9 +110,9 @@ export async function loadTomoriState(
 			if (parsed.success) {
 				rotationKeys.push(parsed.data);
 			} else {
+				const errorDetails = JSON.stringify(parsed.error.flatten(), null, 2);
 				log.warn(
-					`Invalid rotation key row for server ${serverDiscId}:`,
-					parsed.error.flatten(),
+					`Invalid rotation key row for server ${serverDiscId}:\n${errorDetails}`,
 				);
 			}
 		}
@@ -241,9 +241,9 @@ export async function loadAllPersonasForServer(
 				if (parsed.success) {
 					rotationKeys.push(parsed.data);
 				} else {
+					const errorDetails = JSON.stringify(parsed.error.flatten(), null, 2);
 					log.warn(
-						`Invalid rotation key row for server ${serverDiscId}:`,
-						parsed.error.flatten(),
+						`Invalid rotation key row for server ${serverDiscId}:\n${errorDetails}`,
 					);
 				}
 			}

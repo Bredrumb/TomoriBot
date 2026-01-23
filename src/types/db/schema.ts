@@ -278,6 +278,26 @@ export type ReminderRow = z.infer<typeof reminderSchema>;
 export const ApiKeyRotationErrorType = z.enum(["rate_limit", "api_error"]);
 export type ApiKeyRotationErrorType = z.infer<typeof ApiKeyRotationErrorType>;
 
+const coerceNumber = z.preprocess((value) => {
+	if (typeof value === "bigint") {
+		return Number(value);
+	}
+	if (typeof value === "string" && value.trim() !== "") {
+		return Number(value);
+	}
+	return value;
+}, z.number());
+
+const coerceIntNumber = z.preprocess((value) => {
+	if (typeof value === "bigint") {
+		return Number(value);
+	}
+	if (typeof value === "string" && value.trim() !== "") {
+		return Number(value);
+	}
+	return value;
+}, z.number().int());
+
 /**
  * Schema for API key rotation table entries
  * Used for load balancing (round-robin) and failover across multiple API keys
@@ -290,8 +310,8 @@ export const apiKeyRotationSchema = z.object({
 	key_version: z.number().int().default(1), // Encryption key version
 	is_main_key_pointer: z.boolean().default(false), // true = use tomori_configs.api_key
 	is_enabled: z.boolean().default(true), // Manual or auto-disabled after errors
-	usage_count: z.number().default(0), // For round-robin tracking
-	error_count: z.number().int().default(0), // Consecutive errors
+	usage_count: coerceNumber.default(0), // For round-robin tracking
+	error_count: coerceIntNumber.default(0), // Consecutive errors
 	last_used_at: z.date().nullable().optional(), // Last successful use
 	last_error_at: z.date().nullable().optional(), // For cooldown logic
 	last_error_type: ApiKeyRotationErrorType.nullable().optional(), // Error category for cooldown
