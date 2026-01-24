@@ -2742,6 +2742,42 @@ export default async function tomoriChat(
 						"Streaming mode enabled. Attempting to stream response to Discord.",
 					);
 
+					// Resolve persona webhook and avatar/username for webhook-based sending
+					// Only use webhook for alter personas (not main) in guild channels (not DMs)
+					let personaWebhook = channelWebhook;
+					if (usePersonaWebhooks && supportsWebhooks && currentPersona.is_alter) {
+						const webhookResult = await getOrCreatePersonaWebhook(
+							channel as TextChannel,
+							currentPersona,
+						);
+						personaWebhook = webhookResult.webhook;
+						if (
+							!personaWebhook &&
+							webhookResult.errorReason &&
+							!webhookErrorNotified
+						) {
+							await sendWebhookErrorEmbed(
+								channel,
+								locale,
+								webhookResult.errorReason,
+							);
+							webhookErrorNotified = true;
+						}
+					}
+
+					const personaAvatarUrl =
+						personaWebhook &&
+						guild &&
+						currentPersona.is_alter &&
+						!usePersonaWebhooks
+							? resolvePersonaAvatarURL(currentPersona, guild)
+							: undefined;
+
+					const personaUsername =
+						personaWebhook && currentPersona.is_alter
+							? currentPersona.tomori_nickname
+							: undefined;
+
 					// 1. Initialize variables for the function calling loop in streaming mode
 					let selectedStickerToSend: Sticker | null = null;
 					const functionInteractionHistory: {
@@ -2786,46 +2822,6 @@ export default async function tomoriChat(
 									}
 								}
 							}
-
-							// Resolve persona webhook and avatar/username for webhook-based sending
-							// Only use webhook for alter personas (not main) in guild channels (not DMs)
-							let personaWebhook = channelWebhook;
-							if (
-								usePersonaWebhooks &&
-								supportsWebhooks &&
-								currentPersona.is_alter
-							) {
-								const webhookResult = await getOrCreatePersonaWebhook(
-									channel as TextChannel,
-									currentPersona,
-								);
-								personaWebhook = webhookResult.webhook;
-								if (
-									!personaWebhook &&
-									webhookResult.errorReason &&
-									!webhookErrorNotified
-								) {
-									await sendWebhookErrorEmbed(
-										channel,
-										locale,
-										webhookResult.errorReason,
-									);
-									webhookErrorNotified = true;
-								}
-							}
-
-							const personaAvatarUrl =
-								personaWebhook &&
-								guild &&
-								currentPersona.is_alter &&
-								!usePersonaWebhooks
-									? resolvePersonaAvatarURL(currentPersona, guild)
-									: undefined;
-
-							const personaUsername =
-								personaWebhook && currentPersona.is_alter
-									? currentPersona.tomori_nickname
-									: undefined;
 
 							// Create isolated copies for each persona to prevent context pollution
 							const personaAccumulatedParts = [
@@ -3089,6 +3085,9 @@ export default async function tomoriChat(
 										locale,
 										provider: provider.getInfo().name,
 										streamContext: streamingContext, // Pass streaming context to tools
+										webhook: personaWebhook ?? undefined,
+										personaUsername,
+										personaAvatarUrl,
 									};
 
 									// Execute tool using ToolRegistry (handles both built-in and MCP tools seamlessly)
@@ -3566,27 +3565,59 @@ export default async function tomoriChat(
 					// 5. After the loop, if a sticker was selected and a stream completed, send the sticker.
 					// This is a simple approach; sticker will appear after the streamed text.
 					if (selectedStickerToSend && finalStreamCompleted) {
-						try {
-							// If the last interaction was a reply (isFromQueue), try to reply with sticker too.
-							// Otherwise, just send to channel.
-							if (isFromQueue) {
-								await message.reply({ stickers: [selectedStickerToSend.id] });
-							} else {
-								await channel.send({ stickers: [selectedStickerToSend.id] });
+						let stickerSent = false;
+
+						if (currentPersona.is_alter && personaWebhook && personaUsername) {
+							const stickerUrl = selectedStickerToSend.url;
+							const threadId =
+								"isThread" in channel &&
+								typeof channel.isThread === "function" &&
+								channel.isThread()
+									? channel.id
+									: undefined;
+							try {
+								await personaWebhook.send({
+									content: stickerUrl,
+									username: personaUsername,
+									avatarURL: personaAvatarUrl,
+									...(threadId ? { threadId } : {}),
+								});
+								stickerSent = true;
+								log.info(
+									`Sent sticker URL for '${selectedStickerToSend.name}' via webhook.`,
+								);
+							} catch (stickerError) {
+								log.warn(
+									"Failed to send sticker URL via webhook, falling back to bot sticker send",
+									stickerError,
+								);
 							}
-							log.info(
-								`Sent selected sticker '${selectedStickerToSend.name}' after stream.`,
-							);
-						} catch (stickerError) {
-							log.error(
-								"Failed to send selected sticker after stream:",
-								stickerError,
-								{
-									serverId: tomoriState?.server_id,
-									errorType: "StickerSendError",
-									metadata: { stickerId: selectedStickerToSend.id },
-								},
-							);
+						}
+
+						if (!stickerSent) {
+							try {
+								// If the last interaction was a reply (isFromQueue), try to reply with sticker too.
+								// Otherwise, just send to channel.
+								if (isFromQueue) {
+									await message.reply({ stickers: [selectedStickerToSend.id] });
+								} else {
+									await channel.send({ stickers: [selectedStickerToSend.id] });
+								}
+								stickerSent = true;
+								log.info(
+									`Sent selected sticker '${selectedStickerToSend.name}' after stream.`,
+								);
+							} catch (stickerError) {
+								log.error(
+									"Failed to send selected sticker after stream:",
+									stickerError,
+									{
+										serverId: tomoriState?.server_id,
+										errorType: "StickerSendError",
+										metadata: { stickerId: selectedStickerToSend.id },
+									},
+								);
+							}
 						}
 					} else if (!finalStreamCompleted) {
 						log.warn(

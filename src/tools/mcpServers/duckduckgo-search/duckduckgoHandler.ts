@@ -103,19 +103,38 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
 	): Promise<TypedMCPToolResult> {
 		try {
 			// Send search status embed to Discord (consistent with Brave Search UX)
-			await sendStandardEmbed(context.channel, context.locale, {
-				titleKey: "genai.search.web_search_title",
-				titleVars: { query: String(args.query || args.q || "your search") },
-				descriptionKey: "genai.search.disclaimer_description",
-			});
+			await sendStandardEmbed(
+				context.channel,
+				context.locale,
+				{
+					titleKey: "genai.search.web_search_title",
+					titleVars: { query: String(args.query || args.q || "your search") },
+					descriptionKey: "genai.search.disclaimer_description",
+				},
+				{
+					webhook: context.webhook,
+					personaUsername: context.personaUsername,
+					personaAvatarUrl: context.personaAvatarUrl,
+				},
+			);
 
 			// Check for errors or rate limits before processing
 			if (mcpResult.isError || this.isRateLimitError(mcpResult)) {
-				await sendStandardEmbed(context.channel, context.locale, {
-					titleKey: "general.errors.duckduckgo_rate_limit.title",
-					descriptionKey: "general.errors.duckduckgo_rate_limit.description",
-					footerKey: "general.errors.duckduckgo_rate_limit.footer",
-				});
+				await sendStandardEmbed(
+					context.channel,
+					context.locale,
+					{
+						titleKey: "general.errors.duckduckgo_rate_limit.title",
+						descriptionKey:
+							"general.errors.duckduckgo_rate_limit.description",
+						footerKey: "general.errors.duckduckgo_rate_limit.footer",
+					},
+					{
+						webhook: context.webhook,
+						personaUsername: context.personaUsername,
+						personaAvatarUrl: context.personaAvatarUrl,
+					},
+				);
 				return {
 					success: false,
 					message:

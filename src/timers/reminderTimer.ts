@@ -190,6 +190,7 @@ export class ReminderTimer {
 					reminder_purpose: reminder.reminder_purpose,
 					reminder_lateness: lateness,
 				},
+				reminder.persona_id ?? undefined, // selectedPersonaId (fallback to main)
 			);
 
 			log.info(
@@ -259,15 +260,15 @@ export class ReminderTimer {
 				limit: 100,
 			});
 
-			const botMessages = recentMessages.filter(
+			const relevantMessages = recentMessages.filter(
 				(message) =>
-					message.author.id === botUserId &&
+					(message.author.id === botUserId || message.webhookId) &&
 					message.createdTimestamp >= reminderStartTime - 1000,
 			);
 
-			if (botMessages.size === 0) {
+			if (relevantMessages.size === 0) {
 				log.warn(
-					`No bot messages found after reminder ${reminder.reminder_id} to verify mention`,
+					`No bot or webhook messages found after reminder ${reminder.reminder_id} to verify mention`,
 				);
 				return;
 			}
@@ -275,7 +276,7 @@ export class ReminderTimer {
 			const mentionToken = `<@${reminder.user_discord_id}>`;
 			const mentionTokenAlt = `<@!${reminder.user_discord_id}>`;
 
-			const hasMention = botMessages.some(
+			const hasMention = relevantMessages.some(
 				(message) =>
 					message.mentions.users.has(reminder.user_discord_id) ||
 					message.content.includes(mentionToken) ||

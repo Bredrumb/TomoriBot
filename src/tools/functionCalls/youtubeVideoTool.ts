@@ -152,13 +152,22 @@ export class YouTubeVideoTool extends BaseTool {
 
 		// Send notification embed to user about YouTube processing
 		try {
-			await sendStandardEmbed(context.channel, context.locale, {
-				titleKey: "genai.video.youtube_processing_title",
-				descriptionKey: "genai.video.youtube_processing_description",
-				descriptionVars: { video_url: youtubeUrl },
-				footerKey: "genai.video.youtube_processing_footer",
-				color: ColorCode.INFO,
-			});
+			await sendStandardEmbed(
+				context.channel,
+				context.locale,
+				{
+					titleKey: "genai.video.youtube_processing_title",
+					descriptionKey: "genai.video.youtube_processing_description",
+					descriptionVars: { video_url: youtubeUrl },
+					footerKey: "genai.video.youtube_processing_footer",
+					color: ColorCode.INFO,
+				},
+				{
+					webhook: context.webhook,
+					personaUsername: context.personaUsername,
+					personaAvatarUrl: context.personaAvatarUrl,
+				},
+			);
 		} catch (embedError) {
 			// Log but don't fail the tool execution if embed fails
 			log.warn(

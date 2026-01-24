@@ -267,19 +267,28 @@ export class MemoryTool extends BaseTool {
 					);
 
 					// Send notification embed to the channel
-					await sendStandardEmbed(context.channel, context.locale, {
-						color: ColorCode.SUCCESS,
-						titleKey: "genai.self_teach.server_memory_learned_title",
-						descriptionKey:
-							"genai.self_teach.server_memory_learned_description",
-						descriptionVars: {
-							memory_content:
-								processedMemoryContent.length > 200
-									? `${processedMemoryContent.substring(0, 197)}...`
-									: processedMemoryContent,
+					await sendStandardEmbed(
+						context.channel,
+						context.locale,
+						{
+							color: ColorCode.SUCCESS,
+							titleKey: "genai.self_teach.server_memory_learned_title",
+							descriptionKey:
+								"genai.self_teach.server_memory_learned_description",
+							descriptionVars: {
+								memory_content:
+									processedMemoryContent.length > 200
+										? `${processedMemoryContent.substring(0, 197)}...`
+										: processedMemoryContent,
+							},
+							footerKey: "genai.self_teach.server_memory_footer",
 						},
-						footerKey: "genai.self_teach.server_memory_footer",
-					});
+						{
+							webhook: context.webhook,
+							personaUsername: context.personaUsername,
+							personaAvatarUrl: context.personaAvatarUrl,
+						},
+					);
 
 					// Invalidate TomoriState cache so next message includes new memory
 					invalidateTomoriStateCache(serverId);
@@ -545,20 +554,29 @@ export class MemoryTool extends BaseTool {
 					}
 
 					// Send notification embed
-					await sendStandardEmbed(context.channel, context.locale, {
-						color: ColorCode.SUCCESS,
-						titleKey: "genai.self_teach.personal_memory_learned_title",
-						descriptionKey:
-							"genai.self_teach.personal_memory_learned_description",
-						descriptionVars: {
-							user_nickname: targetUserNicknameArg,
-							memory_content:
-								processedMemoryContent.length > 200
-									? `${processedMemoryContent.substring(0, 197)}...`
-									: processedMemoryContent,
+					await sendStandardEmbed(
+						context.channel,
+						context.locale,
+						{
+							color: ColorCode.SUCCESS,
+							titleKey: "genai.self_teach.personal_memory_learned_title",
+							descriptionKey:
+								"genai.self_teach.personal_memory_learned_description",
+							descriptionVars: {
+								user_nickname: targetUserNicknameArg,
+								memory_content:
+									processedMemoryContent.length > 200
+										? `${processedMemoryContent.substring(0, 197)}...`
+										: processedMemoryContent,
+							},
+							footerKey: personalMemoryFooterKey,
 						},
-						footerKey: personalMemoryFooterKey,
-					});
+						{
+							webhook: context.webhook,
+							personaUsername: context.personaUsername,
+							personaAvatarUrl: context.personaAvatarUrl,
+						},
+					);
 
 					// Invalidate user cache so next message includes new memory
 					invalidateUserCache(targetUserDiscordIdArg);

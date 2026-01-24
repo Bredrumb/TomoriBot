@@ -131,11 +131,20 @@ export class BraveWebSearchTool extends BaseBraveSearchTool {
 			log.info(`Executing ${this.name} with query: ${args.query}`);
 
 			// Send search status embed to Discord
-			await sendStandardEmbed(context.channel, context.locale, {
-				titleKey: "genai.search.web_search_title",
-				titleVars: { query: args.query as string },
-				descriptionKey: "genai.search.disclaimer_description",
-			});
+			await sendStandardEmbed(
+				context.channel,
+				context.locale,
+				{
+					titleKey: "genai.search.web_search_title",
+					titleVars: { query: args.query as string },
+					descriptionKey: "genai.search.disclaimer_description",
+				},
+				{
+					webhook: context.webhook,
+					personaUsername: context.personaUsername,
+					personaAvatarUrl: context.personaAvatarUrl,
+				},
+			);
 
 			// Add server ID from context
 			const enhancedContext = {
@@ -213,11 +222,20 @@ export class BraveImageSearchTool extends BaseBraveSearchTool {
 			log.info(`Executing ${this.name} with query: ${args.query}`);
 
 			// Send search status embed to Discord
-			await sendStandardEmbed(context.channel, context.locale, {
-				titleKey: "genai.search.image_search_title",
-				titleVars: { query: args.query as string },
-				descriptionKey: "genai.search.disclaimer_description",
-			});
+			await sendStandardEmbed(
+				context.channel,
+				context.locale,
+				{
+					titleKey: "genai.search.image_search_title",
+					titleVars: { query: args.query as string },
+					descriptionKey: "genai.search.disclaimer_description",
+				},
+				{
+					webhook: context.webhook,
+					personaUsername: context.personaUsername,
+					personaAvatarUrl: context.personaAvatarUrl,
+				},
+			);
 
 			// Add server ID from context
 			const enhancedContext = {
@@ -304,11 +322,20 @@ export class BraveVideoSearchTool extends BaseBraveSearchTool {
 			log.info(`Executing ${this.name} with query: ${args.query}`);
 
 			// Send search status embed to Discord
-			await sendStandardEmbed(context.channel, context.locale, {
-				titleKey: "genai.search.video_search_title",
-				titleVars: { query: args.query as string },
-				descriptionKey: "genai.search.disclaimer_description",
-			});
+			await sendStandardEmbed(
+				context.channel,
+				context.locale,
+				{
+					titleKey: "genai.search.video_search_title",
+					titleVars: { query: args.query as string },
+					descriptionKey: "genai.search.disclaimer_description",
+				},
+				{
+					webhook: context.webhook,
+					personaUsername: context.personaUsername,
+					personaAvatarUrl: context.personaAvatarUrl,
+				},
+			);
 
 			// Add server ID from context
 			const enhancedContext = {
@@ -395,11 +422,20 @@ export class BraveNewsSearchTool extends BaseBraveSearchTool {
 			log.info(`Executing ${this.name} with query: ${args.query}`);
 
 			// Send search status embed to Discord
-			await sendStandardEmbed(context.channel, context.locale, {
-				titleKey: "genai.search.news_search_title",
-				titleVars: { query: args.query as string },
-				descriptionKey: "genai.search.disclaimer_description",
-			});
+			await sendStandardEmbed(
+				context.channel,
+				context.locale,
+				{
+					titleKey: "genai.search.news_search_title",
+					titleVars: { query: args.query as string },
+					descriptionKey: "genai.search.disclaimer_description",
+				},
+				{
+					webhook: context.webhook,
+					personaUsername: context.personaUsername,
+					personaAvatarUrl: context.personaAvatarUrl,
+				},
+			);
 
 			// Add server ID from context
 			const enhancedContext = {

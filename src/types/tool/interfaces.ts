@@ -13,6 +13,7 @@ import type {
 	NewsChannel,
 	TextChannel,
 	AnyThreadChannel,
+	Webhook,
 } from "discord.js";
 import type {
 	MCPServerResponse,
@@ -79,6 +80,11 @@ export interface ToolContext {
 	userId?: string;
 	guildId?: string;
 	streamContext?: StreamingContext; // Optional streaming context for enhanced functionality
+
+	// Optional persona webhook context (for alter persona embeds/tools)
+	webhook?: Webhook;
+	personaUsername?: string;
+	personaAvatarUrl?: string;
 }
 
 /**

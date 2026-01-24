@@ -267,6 +267,7 @@ export const reminderSchema = z.object({
 	reminder_purpose: z.string(), // What the reminder is for
 	reminder_time: z.date(), // When to trigger the reminder (TIMESTAMP WITH TIME ZONE)
 	created_by_user_id: z.number().nullable(), // Who requested the reminder (nullable - set to NULL if user deleted)
+	persona_id: z.number().nullable().optional(), // Persona that created the reminder (nullable - fallback to main)
 	created_at: z.date().optional(), // Handled by DB default
 	updated_at: z.date().optional(), // Handled by DB default/trigger
 });

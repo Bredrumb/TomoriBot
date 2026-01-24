@@ -12,8 +12,9 @@ import {
 	type BaseGuildTextChannel,
 	type BaseGuildVoiceChannel,
 	type AnyThreadChannel,
+	type Webhook,
 } from "discord.js";
-import { ColorCode } from "../misc/logger";
+import { ColorCode, log } from "../misc/logger";
 import { localizer } from "../text/localizer";
 import type {
 	StandardEmbedOptions,
@@ -32,6 +33,12 @@ type Provider = keyof typeof TRANSLATOR_COLORS;
  * Discord's maximum field value length for embeds
  */
 const MAX_FIELD_VALUE_LENGTH = 1024;
+
+export type WebhookEmbedContext = {
+	webhook?: Webhook;
+	personaUsername?: string;
+	personaAvatarUrl?: string;
+};
 
 /**
  * Truncates a field value to Discord's maximum allowed length.
@@ -187,8 +194,32 @@ export async function sendStandardEmbed(
 		| BaseGuildVoiceChannel,
 	locale: string,
 	options: StandardEmbedOptions,
+	webhookContext?: WebhookEmbedContext,
 ): Promise<void> {
 	const embed = createStandardEmbed(locale, options);
+	if (webhookContext?.webhook && webhookContext.personaUsername) {
+		const threadId =
+			"isThread" in channel &&
+			typeof channel.isThread === "function" &&
+			channel.isThread()
+				? channel.id
+				: undefined;
+		try {
+			await webhookContext.webhook.send({
+				embeds: [embed],
+				username: webhookContext.personaUsername,
+				avatarURL: webhookContext.personaAvatarUrl,
+				...(threadId ? { threadId } : {}),
+			});
+			return;
+		} catch (error) {
+			log.warn(
+				"Failed to send embed via webhook, falling back to bot message",
+				error as Error,
+			);
+		}
+	}
+
 	await channel.send({ embeds: [embed] });
 }
 

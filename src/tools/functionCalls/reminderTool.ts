@@ -376,6 +376,7 @@ export class ReminderTool extends BaseTool {
 				reminder_purpose: reminderPurpose,
 				reminder_time: finalReminderTime,
 				created_by_user_id: requestingUserRow.user_id,
+				persona_id: context.tomoriState.tomori_id ?? null,
 			});
 
 			if (dbResult) {
@@ -401,23 +402,32 @@ export class ReminderTool extends BaseTool {
 					},
 				);
 
-				await sendStandardEmbed(context.channel, context.locale, {
-					color: ColorCode.SUCCESS,
-					titleKey: "reminders.reminder_set_title",
-					descriptionKey: "reminders.reminder_set_description",
-					descriptionVars: {
-						user_nickname: actualNicknameInDB,
-						reminder_purpose:
-							reminderPurpose.length > 200
-								? `${reminderPurpose.substring(0, 197)}...`
-								: reminderPurpose,
-						reminder_time: `${formattedReminderTime} (${formatUTCOffset(timezoneOffset)})`,
+				await sendStandardEmbed(
+					context.channel,
+					context.locale,
+					{
+						color: ColorCode.SUCCESS,
+						titleKey: "reminders.reminder_set_title",
+						descriptionKey: "reminders.reminder_set_description",
+						descriptionVars: {
+							user_nickname: actualNicknameInDB,
+							reminder_purpose:
+								reminderPurpose.length > 200
+									? `${reminderPurpose.substring(0, 197)}...`
+									: reminderPurpose,
+							reminder_time: `${formattedReminderTime} (${formatUTCOffset(timezoneOffset)})`,
+						},
+						footerKey: "reminders.reminder_set_footer",
+						footerVars: {
+							time_remaining: timeRemainingStr,
+						},
 					},
-					footerKey: "reminders.reminder_set_footer",
-					footerVars: {
-						time_remaining: timeRemainingStr,
+					{
+						webhook: context.webhook,
+						personaUsername: context.personaUsername,
+						personaAvatarUrl: context.personaAvatarUrl,
 					},
-				});
+				);
 
 				return {
 					success: true,

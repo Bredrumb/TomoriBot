@@ -688,6 +688,22 @@ CREATE TABLE IF NOT EXISTS reminders (
   FOREIGN KEY (created_by_user_id) REFERENCES users(user_id) ON DELETE SET NULL
 );
 
+-- Track which persona created the reminder (January 2026)
+SELECT add_column_if_not_exists('reminders', 'persona_id', 'INTEGER');
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'reminders_persona_id_fkey'
+    ) THEN
+        ALTER TABLE reminders
+        ADD CONSTRAINT reminders_persona_id_fkey
+        FOREIGN KEY (persona_id)
+        REFERENCES tomoris(tomori_id)
+        ON DELETE SET NULL;
+    END IF;
+END $$;
+
 -- Create index for efficient reminder queries
 CREATE INDEX IF NOT EXISTS idx_reminders_time ON reminders(reminder_time);
 CREATE INDEX IF NOT EXISTS idx_reminders_server_id ON reminders(server_id);

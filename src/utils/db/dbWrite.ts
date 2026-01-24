@@ -1104,6 +1104,7 @@ export async function addReminder(reminderData: {
 	reminder_purpose: string;
 	reminder_time: Date;
 	created_by_user_id: number;
+	persona_id?: number | null;
 }): Promise<ReminderRow | null> {
 	try {
 		log.info(
@@ -1120,7 +1121,8 @@ export async function addReminder(reminderData: {
 				user_nickname,
 				reminder_purpose,
 				reminder_time,
-				created_by_user_id
+				created_by_user_id,
+				persona_id
 			) VALUES (
 				${reminderData.server_id},
 				${reminderData.channel_disc_id},
@@ -1128,7 +1130,8 @@ export async function addReminder(reminderData: {
 				${reminderData.user_nickname},
 				${reminderData.reminder_purpose},
 				${reminderData.reminder_time},
-				${reminderData.created_by_user_id}
+				${reminderData.created_by_user_id},
+				${reminderData.persona_id ?? null}
 			)
 			RETURNING *
 		`;
