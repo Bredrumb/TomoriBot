@@ -326,6 +326,7 @@ interface ChannelLockEntry {
 	currentMessageId?: string; // Discord ID of the message currently being processed
 	serverDiscId: string; // Server/DM channel Discord ID for rate limiting
 	userDiscId?: string; // Discord ID of user whose message is currently being processed
+	currentIsPersonaJob?: boolean; // Skip user rate limits for internal persona jobs
 	messageQueue: Array<{
 		message: Message;
 		isManuallyTriggered?: boolean;
@@ -333,6 +334,8 @@ interface ChannelLockEntry {
 		reasoningQuery?: string; // Query to inject as system message for reasoning mode
 		llmOverrideCodename?: string;
 		isStopResponse?: boolean; // Flag to prevent stopping stop responses
+		selectedPersonaId?: number;
+		isPersonaJob?: boolean;
 	}>;
 }
 const channelLocks = new Map<string, ChannelLockEntry>(); // Key: channel.id
@@ -361,13 +364,18 @@ function getUserActiveMessageCount(userDiscId: string): number {
 	// Iterate through all channel locks
 	for (const lockEntry of channelLocks.values()) {
 		// 1. Count if user's message is currently being processed
-		if (lockEntry.isLocked && lockEntry.userDiscId === userDiscId) {
+		if (
+			lockEntry.isLocked &&
+			lockEntry.userDiscId === userDiscId &&
+			!lockEntry.currentIsPersonaJob
+		) {
 			count++;
 		}
 
 		// 2. Count queued messages from this user
 		count += lockEntry.messageQueue.filter(
-			(queuedMsg) => queuedMsg.message.author.id === userDiscId,
+			(queuedMsg) =>
+				queuedMsg.message.author.id === userDiscId && !queuedMsg.isPersonaJob,
 		).length;
 	}
 
@@ -482,6 +490,7 @@ async function sendServerRateLimitEmbed(
  * @param retryCount - Number of retry attempts for empty responses (internal use).
  * @param skipLock - Whether to skip semaphore lock acquisition (for recursive calls).
  * @param selectedPersonaId - Optional persona ID to use instead of main persona (for manual triggers).
+ * @param isPersonaJob - Whether this invocation is an internal queued persona job.
  */
 export default async function tomoriChat(
 	client: Client,
@@ -500,6 +509,7 @@ export default async function tomoriChat(
 		reminder_lateness?: string | null;
 	},
 	selectedPersonaId?: number,
+	isPersonaJob = false,
 ): Promise<void> {
 	// 1. Initial Checks & State Loading
 	const channel = message.channel;
@@ -704,6 +714,7 @@ export default async function tomoriChat(
 				currentMessageId: undefined,
 				serverDiscId: serverDiscId, // Track server for rate limiting
 				userDiscId: undefined, // Set when lock is acquired
+				currentIsPersonaJob: false,
 				messageQueue: [],
 			};
 			channelLocks.set(channelLockId, lockEntry);
@@ -719,6 +730,7 @@ export default async function tomoriChat(
 			);
 			lockEntry.isLocked = false; // Release stale lock
 			lockEntry.userDiscId = undefined; // Clear user tracking
+			lockEntry.currentIsPersonaJob = false;
 			lockEntry.messageQueue = []; // Clear queue as well, as context might be very old
 			// The current message will now attempt to acquire the lock.
 		}
@@ -749,7 +761,7 @@ export default async function tomoriChat(
 		}
 
 		// Global rate limit guard (applies before both immediate processing and enqueueing)
-		if (!isStopResponse) {
+		if (!isStopResponse && !isPersonaJob) {
 			const userActiveCount = getUserActiveMessageCount(userDiscId);
 			const userRateCheck = checkUserRateLimit(userActiveCount);
 			if (!userRateCheck.allowed) {
@@ -846,6 +858,8 @@ export default async function tomoriChat(
 						forceReason,
 						reasoningQuery,
 						llmOverrideCodename,
+						selectedPersonaId,
+						isPersonaJob,
 					});
 					log.info(
 						`Channel ${channelLockId} is busy (msg ${lockEntry.currentMessageId}). Enqueued message ${message.id}. Queue: ${lockEntry.messageQueue.length}. Tomori would reply (autoch_counter simulated as 0 for this check).`,
@@ -939,6 +953,7 @@ export default async function tomoriChat(
 		lockEntry.lockedAt = Date.now();
 		lockEntry.currentMessageId = message.id;
 		lockEntry.userDiscId = userDiscId; // Track user for rate limiting
+		lockEntry.currentIsPersonaJob = isPersonaJob;
 	}
 	// --- End Semaphore Logic ---
 
@@ -1471,6 +1486,61 @@ export default async function tomoriChat(
 			log.info(
 				`${personasToRespond.length} persona(s) will respond to message ${message.id}: ${personasToRespond.map((p) => p.tomori_nickname).join(", ")}`,
 			);
+
+			// 8.55. Multi-Persona Queueing: enqueue additional personas as jobs
+			// Use the existing queue to process personas sequentially so later personas can see earlier responses.
+			if (
+				!isManuallyTriggered &&
+				!reminderRecipientID &&
+				!isStopResponse &&
+				personasToRespond.length > 1 &&
+				lockEntry
+			) {
+				const [firstPersona, ...remainingPersonas] = personasToRespond;
+				const personasToQueue: Array<{
+					persona: TomoriState;
+					selectedPersonaId: number;
+				}> = [];
+				const personasToHandleNow: TomoriState[] = [firstPersona];
+
+				for (const persona of remainingPersonas) {
+					if (persona.tomori_id) {
+						personasToQueue.push({
+							persona,
+							selectedPersonaId: persona.tomori_id,
+						});
+					} else {
+						log.warn(
+							`Persona "${persona.tomori_nickname}" is missing tomori_id; handling in current pass instead of queueing.`,
+						);
+						personasToHandleNow.push(persona);
+					}
+				}
+
+				if (personasToQueue.length > 0) {
+					// Insert queued persona jobs at the front so they run before other queued messages.
+					for (let i = personasToQueue.length - 1; i >= 0; i--) {
+						const queuedPersona = personasToQueue[i];
+						lockEntry.messageQueue.unshift({
+							message,
+							isManuallyTriggered: true,
+							forceReason,
+							reasoningQuery,
+							llmOverrideCodename,
+							selectedPersonaId: queuedPersona.selectedPersonaId,
+							isPersonaJob: true,
+						});
+					}
+
+					log.info(
+						`Queued ${personasToQueue.length} persona job(s) for message ${message.id}: ${personasToQueue
+							.map((p) => p.persona.tomori_nickname)
+							.join(", ")}`,
+					);
+				}
+
+				personasToRespond = personasToHandleNow;
+			}
 
 			// 8.6. Multi-Persona: Get/create webhook for multi-avatar responses
 			// Only create webhook if we have alters responding (main persona uses regular bot messages)
@@ -2897,6 +2967,10 @@ export default async function tomoriChat(
 											isStopResponse,
 											retryCount + 1, // Increment retry count
 											true, // skipLock - parent already holds the lock
+											reminderRecipientID,
+											reminderData,
+											selectedPersonaId,
+											isPersonaJob,
 										);
 									} else {
 										// Max retries reached, show error embed
@@ -3563,6 +3637,7 @@ export default async function tomoriChat(
 			lockEntry.lockedAt = 0;
 			lockEntry.currentMessageId = undefined;
 			lockEntry.userDiscId = undefined; // Clear user tracking for rate limiting
+			lockEntry.currentIsPersonaJob = false;
 			log.info(
 				`Channel ${channelLockId} lock released for message ${message.id}.`,
 			);
@@ -3616,6 +3691,10 @@ export default async function tomoriChat(
 							nextMessageData.isStopResponse, // Pass through the stop response flag
 							0, // retryCount - start fresh for queued messages
 							false, // skipLock - queued messages should acquire lock normally
+							undefined, // reminderRecipientID
+							undefined, // reminderData
+							nextMessageData.selectedPersonaId,
+							nextMessageData.isPersonaJob ?? false,
 						).catch((e) => {
 							log.error(
 								`Error processing queued message ${nextMessageData.message.id}:`,

@@ -28,6 +28,10 @@ export interface TomoriSecrets {
 	CRYPTO_SECRET_V2?: string; // Optional: Key rotation support
 	CRYPTO_SECRET_V3?: string; // Optional: Key rotation support
 	DISCORD_WEBHOOK_URL?: string; // Optional: Error logging webhook
+	AVATAR_S3_BUCKET?: string;
+	AVATAR_S3_REGION?: string;
+	AVATAR_S3_PREFIX?: string;
+	AVATAR_PUBLIC_BASE_URL?: string;
 	[key: string]: string | undefined; // Allow dynamic CRYPTO_SECRET_V* keys
 }
 
@@ -109,6 +113,19 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
 			secrets.DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 		}
 
+		if (process.env.AVATAR_S3_BUCKET) {
+			secrets.AVATAR_S3_BUCKET = process.env.AVATAR_S3_BUCKET;
+		}
+		if (process.env.AVATAR_S3_REGION) {
+			secrets.AVATAR_S3_REGION = process.env.AVATAR_S3_REGION;
+		}
+		if (process.env.AVATAR_S3_PREFIX) {
+			secrets.AVATAR_S3_PREFIX = process.env.AVATAR_S3_PREFIX;
+		}
+		if (process.env.AVATAR_PUBLIC_BASE_URL) {
+			secrets.AVATAR_PUBLIC_BASE_URL = process.env.AVATAR_PUBLIC_BASE_URL;
+		}
+
 		// Validate required fields
 		validateRequiredSecrets(secrets);
 
@@ -164,6 +181,19 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
 		// 6. Optional webhook URL
 		if (rawSecrets.DISCORD_WEBHOOK_URL) {
 			secrets.DISCORD_WEBHOOK_URL = rawSecrets.DISCORD_WEBHOOK_URL;
+		}
+
+		if (rawSecrets.AVATAR_S3_BUCKET) {
+			secrets.AVATAR_S3_BUCKET = rawSecrets.AVATAR_S3_BUCKET;
+		}
+		if (rawSecrets.AVATAR_S3_REGION) {
+			secrets.AVATAR_S3_REGION = rawSecrets.AVATAR_S3_REGION;
+		}
+		if (rawSecrets.AVATAR_S3_PREFIX) {
+			secrets.AVATAR_S3_PREFIX = rawSecrets.AVATAR_S3_PREFIX;
+		}
+		if (rawSecrets.AVATAR_PUBLIC_BASE_URL) {
+			secrets.AVATAR_PUBLIC_BASE_URL = rawSecrets.AVATAR_PUBLIC_BASE_URL;
 		}
 
 		// 7. Validate required fields

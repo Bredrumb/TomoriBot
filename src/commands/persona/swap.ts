@@ -22,6 +22,11 @@ import type { SelectOption } from "../../types/discord/modal";
 import { loadAllPersonasForServer } from "../../utils/db/dbRead";
 import { downloadImage } from "../../utils/image/avatarHelper";
 import { sql } from "../../utils/db/client";
+import { updatePersonaWebhooksAvatar } from "../../utils/discord/webhookManager";
+import {
+	uploadPersonaAvatarToS3,
+	deletePersonaAvatarFromS3,
+} from "../../utils/storage/avatarStorage";
 
 type DiscordApiErrorPayload = {
 	message?: string;
@@ -195,6 +200,8 @@ export async function execute(
 			10,
 		);
 		const selectedAlter = alterPersonas[selectedIndex];
+		const previousSelectedAlterAvatarUrl = selectedAlter.webhook_avatar_url;
+		const previousMainAvatarUrl = mainPersona.webhook_avatar_url;
 
 		// 8. Get main persona's trigger words and alter's triggers
 		const mainTriggers = mainPersona.config.trigger_words ?? [];
@@ -257,6 +264,9 @@ export async function execute(
 		let nicknameSwapSuccess = false;
 		let nicknameSwapRateLimited = false;
 		let nicknameSwapFailed = false;
+		let selectedAlterAvatarBuffer: Buffer | null = null;
+		let newFormerMainAvatarUrl: string | null = null;
+		let newFormerMainS3Url: string | null = null;
 		const avatarUrl = selectedAlter.webhook_avatar_url;
 		const avatarSwapAttempted = Boolean(avatarUrl);
 		const endpoint = `https://discord.com/api/v10/guilds/${interaction.guild.id}/members/@me`;
@@ -306,6 +316,7 @@ export async function execute(
 				if (avatarResponse.ok) {
 					const avatarArrayBuffer = await avatarResponse.arrayBuffer();
 					const avatarBuffer = Buffer.from(avatarArrayBuffer);
+					selectedAlterAvatarBuffer = avatarBuffer;
 
 					// Set as guild avatar using Discord API (same as /server avatar)
 					const response = await fetch(endpoint, {
@@ -435,7 +446,18 @@ export async function execute(
 		if (formerMainAvatarUrl) {
 			try {
 				const sentEmbed = reply.embeds[0];
-				const storedAvatarUrl = sentEmbed?.image?.url ?? null;
+				const s3StoredUrl =
+					formerMainAvatarBuffer && mainPersona.tomori_id
+						? await uploadPersonaAvatarToS3({
+								personaId: mainPersona.tomori_id,
+								serverDiscId: interaction.guild.id,
+								label: "former main swap",
+								buffer: formerMainAvatarBuffer,
+							})
+						: null;
+				newFormerMainS3Url = s3StoredUrl;
+				const storedAvatarUrl = s3StoredUrl ?? sentEmbed?.image?.url ?? null;
+				newFormerMainAvatarUrl = storedAvatarUrl;
 
 				if (storedAvatarUrl) {
 					// Store in former main's webhook_avatar_url
@@ -457,6 +479,58 @@ export async function execute(
 				// Non-fatal error - persona swap was successful, avatar storage failed
 				log.warn(
 					`Failed to store former main persona avatar (non-fatal): ${storageError instanceof Error ? storageError.message : "Unknown error"}`,
+				);
+			}
+		}
+
+		// 14b. Ensure selected alter has a stable avatar URL stored (optional)
+		if (selectedAlterAvatarBuffer && selectedAlter.tomori_id) {
+			const selectedAlterS3Url = await uploadPersonaAvatarToS3({
+				personaId: selectedAlter.tomori_id,
+				serverDiscId: interaction.guild.id,
+				label: "selected alter swap",
+				buffer: selectedAlterAvatarBuffer,
+			});
+
+			if (selectedAlterS3Url) {
+				await sql`
+					UPDATE tomoris
+					SET webhook_avatar_url = ${selectedAlterS3Url}
+					WHERE tomori_id = ${selectedAlter.tomori_id}
+				`;
+				if (
+					previousSelectedAlterAvatarUrl &&
+					previousSelectedAlterAvatarUrl !== selectedAlterS3Url
+				) {
+					await deletePersonaAvatarFromS3(previousSelectedAlterAvatarUrl);
+				}
+			}
+		}
+
+		if (
+			previousMainAvatarUrl &&
+			newFormerMainAvatarUrl &&
+			newFormerMainS3Url &&
+			previousMainAvatarUrl !== newFormerMainAvatarUrl
+		) {
+			await deletePersonaAvatarFromS3(previousMainAvatarUrl);
+		}
+
+		// 15. Refresh persona webhooks in non-production to keep avatars in sync
+		if (interaction.guild) {
+			if (selectedAlterAvatarBuffer && selectedAlter.tomori_id) {
+				await updatePersonaWebhooksAvatar(
+					interaction.guild,
+					selectedAlter.tomori_id,
+					selectedAlterAvatarBuffer,
+				);
+			}
+
+			if (formerMainAvatarBuffer && mainPersona.tomori_id) {
+				await updatePersonaWebhooksAvatar(
+					interaction.guild,
+					mainPersona.tomori_id,
+					formerMainAvatarBuffer,
 				);
 			}
 		}

@@ -29,6 +29,8 @@ import { validatePNGBuffer } from "../../utils/image/avatarHelper";
 import { loadAllPersonasForServer } from "../../utils/db/dbRead";
 import { getMemoryLimits } from "../../utils/db/memoryLimits";
 import { sql } from "../../utils/db/client";
+import { updatePersonaWebhooksAvatar } from "../../utils/discord/webhookManager";
+import { uploadPersonaAvatarToS3 } from "../../utils/storage/avatarStorage";
 
 /**
  * Maximum file size for imports (uses centralized constant)
@@ -846,7 +848,14 @@ export async function execute(
 			// 11h. Extract avatar URL from the sent message
 			// The image URL is accessible from the sent message's embed
 			const sentEmbed = reply.embeds[0];
-			const avatarUrl = sentEmbed?.image?.url ?? null;
+			const embedAvatarUrl = sentEmbed?.image?.url ?? null;
+			const s3AvatarUrl = await uploadPersonaAvatarToS3({
+				personaId: newTomoriId,
+				serverDiscId: serverDiscId,
+				label: "alter import",
+				buffer: pngBuffer,
+			});
+			const avatarUrl = s3AvatarUrl ?? embedAvatarUrl;
 
 			// 11i. Store avatar URL in webhook_avatar_url column
 			if (avatarUrl) {
@@ -855,6 +864,13 @@ export async function execute(
 					SET webhook_avatar_url = ${avatarUrl}
 					WHERE tomori_id = ${newTomoriId}
 				`;
+				if (interaction.guild) {
+					await updatePersonaWebhooksAvatar(
+						interaction.guild,
+						newTomoriId,
+						pngBuffer,
+					);
+				}
 			} else {
 				log.warn(
 					`Failed to extract avatar URL from embed for alter persona ${newTomoriId}`,

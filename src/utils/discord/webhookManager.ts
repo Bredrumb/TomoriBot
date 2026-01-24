@@ -30,6 +30,7 @@ const personaWebhookCache = new Map<string, Webhook>();
  */
 const WEBHOOK_NAME = "TomoriBot Multi-Persona";
 const PERSONA_WEBHOOK_PREFIX = "TomoriBot Persona";
+const IS_PRODUCTION = process.env.RUN_ENV === "production";
 
 export type WebhookCreateErrorReason =
 	| "missing_permissions"
@@ -43,6 +44,34 @@ export type WebhookCreateResult = {
 
 const MAX_AVATAR_SIZE_BYTES =
 	PERSONA_LIMITS.MAX_AVATAR_SIZE_MB * 1024 * 1024;
+
+function toWebhookAvatarData(
+	avatar?: Buffer | string | null,
+): string | null {
+	if (!avatar) {
+		return null;
+	}
+
+	if (typeof avatar === "string") {
+		if (avatar.startsWith("data:image/")) {
+			return avatar;
+		}
+		log.warn(
+			"[Webhook Manager] Ignoring avatar string that is not a data URI",
+		);
+		return null;
+	}
+
+	if (avatar.length > MAX_AVATAR_SIZE_BYTES) {
+		log.warn(
+			`[Webhook Manager] Avatar buffer exceeds max size (${avatar.length} bytes)`,
+		);
+		return null;
+	}
+
+	const base64 = avatar.toString("base64");
+	return `data:image/png;base64,${base64}`;
+}
 
 function getPersonaWebhookName(personaId: number): string {
 	return `${PERSONA_WEBHOOK_PREFIX} ${personaId}`;
@@ -267,6 +296,74 @@ export async function getOrCreatePersonaWebhook(
 		);
 		return { webhook: null, errorReason };
 	}
+}
+
+/**
+ * Updates existing persona webhooks across a guild to use the latest avatar.
+ * Only used in non-production environments.
+ *
+ * @param guild - Guild to scan for webhooks
+ * @param personaId - Persona ID to update webhooks for
+ * @param avatar - Avatar data (Buffer or data URI)
+ * @returns Number of webhooks updated
+ */
+export async function updatePersonaWebhooksAvatar(
+	guild: Guild,
+	personaId: number,
+	avatar?: Buffer | string | null,
+): Promise<number> {
+	if (IS_PRODUCTION) {
+		return 0;
+	}
+
+	const avatarData = toWebhookAvatarData(avatar);
+	if (!avatarData) {
+		log.warn(
+			`[Webhook Manager] Skipping persona webhook update for persona ${personaId} due to missing avatar data`,
+		);
+		return 0;
+	}
+
+	const personaWebhookName = getPersonaWebhookName(personaId);
+	let updatedCount = 0;
+
+	for (const channel of guild.channels.cache.values()) {
+		if (!channel.isTextBased()) {
+			continue;
+		}
+
+		if (!("fetchWebhooks" in channel)) {
+			continue;
+		}
+
+		try {
+			const webhooks = await (channel as TextChannel).fetchWebhooks();
+			const matching = webhooks.filter((wh) => wh.name === personaWebhookName);
+
+			for (const webhook of matching.values()) {
+				await webhook.edit({
+					avatar: avatarData,
+					reason: "TomoriBot persona avatar updated",
+				});
+				updatedCount++;
+				const cacheKey = getPersonaWebhookCacheKey(channel.id, personaId);
+				personaWebhookCache.set(cacheKey, webhook);
+			}
+		} catch (error) {
+			log.warn(
+				`[Webhook Manager] Failed to update persona webhook in channel ${channel.id}`,
+				error,
+			);
+		}
+	}
+
+	if (updatedCount > 0) {
+		log.info(
+			`[Webhook Manager] Updated ${updatedCount} persona webhook(s) for persona ${personaId}`,
+		);
+	}
+
+	return updatedCount;
 }
 
 /**

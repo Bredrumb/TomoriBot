@@ -41,6 +41,19 @@ if (secrets.DISCORD_WEBHOOK_URL) {
 	process.env.DISCORD_WEBHOOK_URL = secrets.DISCORD_WEBHOOK_URL;
 }
 
+if (secrets.AVATAR_S3_BUCKET) {
+	process.env.AVATAR_S3_BUCKET = secrets.AVATAR_S3_BUCKET;
+}
+if (secrets.AVATAR_S3_REGION) {
+	process.env.AVATAR_S3_REGION = secrets.AVATAR_S3_REGION;
+}
+if (secrets.AVATAR_S3_PREFIX) {
+	process.env.AVATAR_S3_PREFIX = secrets.AVATAR_S3_PREFIX;
+}
+if (secrets.AVATAR_PUBLIC_BASE_URL) {
+	process.env.AVATAR_PUBLIC_BASE_URL = secrets.AVATAR_PUBLIC_BASE_URL;
+}
+
 log.success(
 	`Secrets loaded successfully from ${(process.env.RUN_ENV || "development") === "production" && process.env.TEST_PRODUCTION !== "true" ? "AWS Secrets Manager" : ".env file"}`,
 );

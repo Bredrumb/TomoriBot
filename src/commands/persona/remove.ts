@@ -22,6 +22,7 @@ import type { SelectOption } from "../../types/discord/modal";
 import { loadAllPersonasForServer } from "../../utils/db/dbRead";
 import { sql } from "../../utils/db/client";
 import { deletePersonaWebhooks } from "../../utils/discord/webhookManager";
+import { deletePersonaAvatarFromS3 } from "../../utils/storage/avatarStorage";
 
 // Constants for modal configuration
 const MODAL_CUSTOM_ID = "persona_remove_modal";
@@ -128,6 +129,9 @@ export async function execute(
 		// Extract selected persona from modal
 		// biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
 		const modalSubmitInteraction = modalResult.interaction!;
+		if (!modalSubmitInteraction.deferred && !modalSubmitInteraction.replied) {
+			await modalSubmitInteraction.deferReply({ ephemeral: true });
+		}
 		const selectedIndex = Number.parseInt(
 			// biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
 			modalResult.values![PERSONA_SELECT_ID],
@@ -171,6 +175,10 @@ export async function execute(
 				`Failed to delete persona webhooks for ${personaToRemove.tomori_nickname}`,
 				error,
 			);
+		}
+
+		if (personaToRemove.webhook_avatar_url) {
+			await deletePersonaAvatarFromS3(personaToRemove.webhook_avatar_url);
 		}
 
 		// 9. Invalidate cache
