@@ -103,7 +103,5 @@ output "avatars_cloudfront_domain" {
 
 output "avatars_public_base_url" {
 	description = "Public base URL for avatar objects"
-	value = var.enable_avatar_cloudfront
-		? "https://${aws_cloudfront_distribution.avatars[0].domain_name}"
-		: "https://${aws_s3_bucket.avatars.bucket_regional_domain_name}"
+	value = var.enable_avatar_cloudfront ? "https://${aws_cloudfront_distribution.avatars[0].domain_name}" : "https://${aws_s3_bucket.avatars.bucket_regional_domain_name}"
 }
