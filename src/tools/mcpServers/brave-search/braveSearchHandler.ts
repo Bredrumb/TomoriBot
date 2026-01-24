@@ -146,13 +146,27 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
 					}
 				}
 
-				// Send attachments to Discord channel
+				// Send attachments to Discord channel (prefer webhook if available)
 				if (attachments.length > 0 && context.channel) {
 					try {
-						const sentMessage = await context.channel.send({
-							files: attachments,
-							// content: `Found ${imageCount} image${imageCount !== 1 ? "s" : ""}:`,
-						});
+						const threadId =
+							"isThread" in context.channel &&
+							typeof context.channel.isThread === "function" &&
+							context.channel.isThread()
+								? context.channel.id
+								: undefined;
+						const sentMessage =
+							context.webhook && context.personaUsername
+								? await context.webhook.send({
+										files: attachments,
+										username: context.personaUsername,
+										avatarURL: context.personaAvatarUrl,
+										...(threadId ? { threadId } : {}),
+									})
+								: await context.channel.send({
+										files: attachments,
+										// content: `Found ${imageCount} image${imageCount !== 1 ? "s" : ""}:`,
+									});
 						sentMessageId = sentMessage.id;
 						sentAttachments = Array.from(sentMessage.attachments.values());
 						log.success(

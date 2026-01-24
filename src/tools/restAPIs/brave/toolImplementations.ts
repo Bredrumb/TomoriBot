@@ -651,12 +651,26 @@ export async function brave_image_search(
 				}
 			}
 
-			// Send attachments to Discord channel
+			// Send attachments to Discord channel (prefer webhook if available)
 			if (attachments.length > 0) {
 				try {
-					const sentMessage = await context.channel.send({
-						files: attachments,
-					});
+					const threadId =
+						"isThread" in context.channel &&
+						typeof context.channel.isThread === "function" &&
+						context.channel.isThread()
+							? context.channel.id
+							: undefined;
+					const sentMessage =
+						context.webhook && context.personaUsername
+							? await context.webhook.send({
+									files: attachments,
+									username: context.personaUsername,
+									avatarURL: context.personaAvatarUrl,
+									...(threadId ? { threadId } : {}),
+								})
+							: await context.channel.send({
+									files: attachments,
+								});
 					log.success(
 						`Sent ${attachments.length} validated image attachments to Discord`,
 					);

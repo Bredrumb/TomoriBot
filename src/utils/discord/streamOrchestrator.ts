@@ -944,7 +944,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 		});
 
 		processedText.replace(
-			/(^|[^\w<])@(?!(?:\{|everyone\b|here\b))([A-Za-z0-9_][A-Za-z0-9_-]{0,31})/gi,
+			/(^|[^\p{L}\p{N}_<])@(?!(?:\{|everyone\b|here\b))([\p{L}\p{N}_][\p{L}\p{N}_-]{0,31})/giu,
 			(_match, _prefix, rawHandle) => {
 				const handle = (rawHandle as string).trim();
 				if (handle) handles.add(handle);

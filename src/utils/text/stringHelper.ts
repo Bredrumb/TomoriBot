@@ -985,7 +985,7 @@ export function replaceMentionHandles(
 
 	// Handle @name|id format without curly braces (LLM sometimes omits braces)
 	processedText = processedText.replace(
-		/(^|[^\w<])@([A-Za-z0-9_][A-Za-z0-9_ -]*)\|(\d{17,20})/gi,
+		/(^|[^\p{L}\p{N}_<])@([\p{L}\p{N}_][\p{L}\p{N}_ -]*)\|(\d{17,20})/giu,
 		(match, prefix, _rawHandle, idPart) => {
 			if (mentionIdSet?.has(idPart)) {
 				return `${prefix}<@${idPart}>`;
@@ -995,7 +995,7 @@ export function replaceMentionHandles(
 	);
 
 	processedText = processedText.replace(
-		/(^|[^\w<])@(?!(?:\{|everyone\b|here\b))([A-Za-z0-9_][A-Za-z0-9_-]{0,31})/gi,
+		/(^|[^\p{L}\p{N}_<])@(?!(?:\{|everyone\b|here\b))([\p{L}\p{N}_][\p{L}\p{N}_-]{0,31})/giu,
 		(match, prefix, rawHandle) => {
 			const handle = (rawHandle as string).trim();
 			if (!handle) return match;
