@@ -361,6 +361,7 @@ export class CustomProvider extends BaseLLMProvider implements LLMProvider {
 				functionInteractionHistory,
 				provider: "custom",
 				locale: userLocale ?? "en-US",
+				suppressUserErrors: streamingContext?.suppressUserErrors,
 
 				// Multi-persona webhook support
 				webhook,

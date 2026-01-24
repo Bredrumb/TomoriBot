@@ -54,6 +54,7 @@ import { ProcessGifTool } from "../../tools/functionCalls/processGifTool";
 import { decryptApiKey } from "@/utils/security/crypto";
 import {
 	selectApiKey,
+	hasAvailableRotationKey,
 	recordKeySuccess,
 	recordKeyError,
 	type SelectedKeyResult,
@@ -622,7 +623,9 @@ export default async function tomoriChat(
 	const isBotAuthor = message.author.bot;
 	const isWebhookMessage = Boolean(message.webhookId);
 	const isInteractionResponse = Boolean(message.interaction);
-	const isFromClientUser = Boolean(client.user && message.author.id === client.user.id);
+	const isFromClientUser = Boolean(
+		client.user && message.author.id === client.user.id,
+	);
 	const isLikelySelfMessage = isFromClientUser || isWebhookMessage;
 
 	if (!isBotAuthor && !isWebhookMessage) {
@@ -945,7 +948,11 @@ export default async function tomoriChat(
 				// Always enqueue if it's a manual command, otherwise use shouldBotReply logic
 				if (
 					isManuallyTriggered ||
-					shouldBotReply(message, modifiedEarlyTomoriStateForCheck, earlyAllPersonas)
+					shouldBotReply(
+						message,
+						modifiedEarlyTomoriStateForCheck,
+						earlyAllPersonas,
+					)
 				) {
 					// 2a. Check cooldown BEFORE queuing (skip for manual triggers)
 					if (
@@ -1157,8 +1164,8 @@ export default async function tomoriChat(
 			}
 
 			const selectedPersona = selectedPersonaId
-				? allPersonas.find((p) => p.tomori_id === selectedPersonaId) ??
-					fallbackPersona
+				? (allPersonas.find((p) => p.tomori_id === selectedPersonaId) ??
+					fallbackPersona)
 				: fallbackPersona;
 			const isSelfMessage = isSelfTriggerMessage(message, allPersonas);
 			const rawSelfReplyLimit =
@@ -1168,7 +1175,11 @@ export default async function tomoriChat(
 				MAX_SELF_REPLY_LIMIT,
 			);
 
-			if ((message.author.bot || message.webhookId) && !isSelfMessage && !isManuallyTriggered) {
+			if (
+				(message.author.bot || message.webhookId) &&
+				!isSelfMessage &&
+				!isManuallyTriggered
+			) {
 				return;
 			}
 
@@ -1566,7 +1577,10 @@ export default async function tomoriChat(
 
 			// 6. Determine if Bot Should Reply using shouldBotReply helper
 			// Skip check if this is a manual command trigger
-			if (!isManuallyTriggered && !shouldBotReply(message, tomoriState, allPersonas)) {
+			if (
+				!isManuallyTriggered &&
+				!shouldBotReply(message, tomoriState, allPersonas)
+			) {
 				return;
 			}
 
@@ -1652,7 +1666,12 @@ export default async function tomoriChat(
 				return;
 			}
 
-			if (isSelfMessage && !isManuallyTriggered && !reminderRecipientID && !isStopResponse) {
+			if (
+				isSelfMessage &&
+				!isManuallyTriggered &&
+				!reminderRecipientID &&
+				!isStopResponse
+			) {
 				if (selfReplyLimit <= 0) {
 					log.info(
 						`Self-reply chain disabled (limit=0). Skipping self-triggered message ${message.id} in channel ${channel.id}.`,
@@ -2770,80 +2789,102 @@ export default async function tomoriChat(
 
 					// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
 					const rotationActive = (tomoriState!.rotation_keys?.length ?? 0) >= 2;
+					const excludedRotationKeyIds = new Set<number>();
 
-					if (rotationActive) {
-						// Try to select a key from the rotation pool
-						// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
-						selectedKeyResult = await selectApiKey(tomoriState!, []);
-
-						if (selectedKeyResult) {
-							decryptedApiKey = selectedKeyResult.apiKey;
-							log.info(
-								`Using rotation key ${selectedKeyResult.rotationKeyId} (main: ${selectedKeyResult.isMainKey}) for server ${tomoriState?.server_id}`,
-							);
-						} else {
-							// All rotation keys exhausted or in cooldown, fall back to main key
-							log.warn(
-								`All rotation keys exhausted for server ${tomoriState?.server_id}, falling back to main key`,
-							);
-							// biome-ignore lint/style/noNonNullAssertion: API key presence was validated earlier
-							const keyVersion = tomoriState!.config.key_version || 1;
-							decryptedApiKey = await decryptApiKey(
-								// biome-ignore lint/style/noNonNullAssertion: API key presence was validated earlier
-								tomoriState!.config.api_key!,
-								keyVersion,
-							);
-						}
-					} else {
-						// No rotation active, use main key directly
-						// biome-ignore lint/style/noNonNullAssertion: API key presence was validated earlier for triggered messages, tomoriState is checked
+					const decryptMainKey = async (allowLazyRotation: boolean) => {
+						// biome-ignore lint/style/noNonNullAssertion: API key presence was validated earlier
 						const keyVersion = tomoriState!.config.key_version || 1; // Default to V1 for backward compatibility
-						decryptedApiKey = await decryptApiKey(
-							// biome-ignore lint/style/noNonNullAssertion: API key presence was validated earlier for triggered messages, tomoriState is checked
+						const decryptedKey = await decryptApiKey(
+							// biome-ignore lint/style/noNonNullAssertion: API key presence was validated earlier
 							tomoriState!.config.api_key!,
 							keyVersion,
 						);
 
-						// LAZY ROTATION: If using old key version, re-encrypt with current version
-						const currentVersion = keyManager.getCurrentVersion();
-						if (keyVersion !== currentVersion) {
-							log.info(
-								`Rotating main API key from version ${keyVersion} to ${currentVersion} for server ${tomoriState?.server_id}`,
-							);
-
-							try {
-								const { encryptApiKey } = await import(
-									"@/utils/security/crypto"
-								);
-								const { encrypted, version } =
-									await encryptApiKey(decryptedApiKey);
-
-						await sql`
-							UPDATE tomori_configs
-							SET api_key = ${encrypted},
-							    key_version = ${version},
-							    updated_at = CURRENT_TIMESTAMP
-							WHERE server_id = ${tomoriState?.server_id}
-						`;
-
-								log.success(
-									`Main API key rotation completed for server ${tomoriState?.server_id}`,
+						if (allowLazyRotation) {
+							// LAZY ROTATION: If using old key version, re-encrypt with current version
+							const currentVersion = keyManager.getCurrentVersion();
+							if (keyVersion !== currentVersion) {
+								log.info(
+									`Rotating main API key from version ${keyVersion} to ${currentVersion} for server ${tomoriState?.server_id}`,
 								);
 
-								// Update in-memory state to reflect the new version
-								// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
-								tomoriState!.config.api_key = encrypted;
-								// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
-								tomoriState!.config.key_version = version;
-							} catch (error) {
-								log.warn(
-									"Failed to rotate main API key (non-critical - will retry on next message)",
-									error,
-								);
-								// Continue execution - the old key still works
+								try {
+									const { encryptApiKey } = await import(
+										"@/utils/security/crypto"
+									);
+									const { encrypted, version } =
+										await encryptApiKey(decryptedKey);
+
+									await sql`
+										UPDATE tomori_configs
+										SET api_key = ${encrypted},
+										    key_version = ${version},
+										    updated_at = CURRENT_TIMESTAMP
+										WHERE server_id = ${tomoriState?.server_id}
+									`;
+
+									log.success(
+										`Main API key rotation completed for server ${tomoriState?.server_id}`,
+									);
+
+									// Update in-memory state to reflect the new version
+									// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
+									tomoriState!.config.api_key = encrypted;
+									// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
+									tomoriState!.config.key_version = version;
+								} catch (error) {
+									log.warn(
+										"Failed to rotate main API key (non-critical - will retry on next message)",
+										error,
+									);
+									// Continue execution - the old key still works
+								}
 							}
 						}
-					}
+
+						return decryptedKey;
+					};
+
+					const selectApiKeyForAttempt = async (): Promise<{
+						apiKey: string;
+						selectedKeyResult: SelectedKeyResult | null;
+					}> => {
+						if (rotationActive) {
+							// Try to select a key from the rotation pool
+
+							const selected = await selectApiKey(
+								// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked earlier
+								tomoriState!,
+								Array.from(excludedRotationKeyIds),
+							);
+
+							if (selected) {
+								log.info(
+									`Using rotation key ${selected.rotationKeyId} (main: ${selected.isMainKey}) for server ${tomoriState?.server_id}`,
+								);
+								return { apiKey: selected.apiKey, selectedKeyResult: selected };
+							}
+
+							// All rotation keys exhausted or in cooldown, fall back to main key
+							log.warn(
+								`All rotation keys exhausted for server ${tomoriState?.server_id}, falling back to main key`,
+							);
+							return {
+								apiKey: await decryptMainKey(false),
+								selectedKeyResult: null,
+							};
+						}
+
+						// No rotation active, use main key directly
+						return {
+							apiKey: await decryptMainKey(true),
+							selectedKeyResult: null,
+						};
+					};
+
+					const initialKeySelection = await selectApiKeyForAttempt();
+					decryptedApiKey = initialKeySelection.apiKey;
+					selectedKeyResult = initialKeySelection.selectedKeyResult;
 
 					if (!decryptedApiKey) {
 						log.error("API Key is not set or failed to decrypt.", undefined, {
@@ -2917,7 +2958,11 @@ export default async function tomoriChat(
 					// Resolve persona webhook and avatar/username for webhook-based sending
 					// Only use webhook for alter personas (not main) in guild channels (not DMs)
 					let personaWebhook = channelWebhook;
-					if (usePersonaWebhooks && supportsWebhooks && currentPersona.is_alter) {
+					if (
+						usePersonaWebhooks &&
+						supportsWebhooks &&
+						currentPersona.is_alter
+					) {
 						const webhookResult = await getOrCreatePersonaWebhook(
 							channel as TextChannel,
 							currentPersona,
@@ -3000,75 +3045,193 @@ export default async function tomoriChat(
 								...accumulatedStreamedModelParts,
 							];
 							const personaFunctionHistory = [...functionInteractionHistory];
-
-							const streamProviderPromise = await provider.streamToDiscord(
-								channel,
-								client,
-								// biome-ignore lint/style/noNonNullAssertion: Missing Tomoristate handled at start of TomoriChat
-								tomoriState!,
-								providerConfig,
-								contextSegments, // Can be shared (read-only message history)
-								personaAccumulatedParts, // Isolated per persona
-								emojiStrings,
-								personaFunctionHistory.length > 0
-									? personaFunctionHistory
-									: undefined, // Isolated per persona
-								undefined,
-								isFromQueue ? message : undefined,
-								streamingContext, // Pass streaming context for context-aware tool availability
-								locale, // Pass user's preferred locale for error messages
-								personaWebhook ?? undefined, // Pass webhook for alter persona avatar support
-								personaAvatarUrl, // Pass resolved avatar URL
-								personaUsername, // Pass persona username
-							);
-							const timeoutPromise = new Promise<never>(
-								(
-									_,
-									reject, // Promise<never> indicates it only rejects
-								) =>
-									setTimeout(
-										() =>
-											reject(
-												new Error(
-													"SDK_CALL_TIMEOUT: provider streamToDiscord call timed out.",
-												),
-											),
-										STREAM_SDK_CALL_TIMEOUT_MS,
-									),
-							);
-
-							let streamResult: StreamResult;
-							try {
-								// Promise.race will settle as soon as one of the promises settles
-								streamResult = await Promise.race([
-									streamProviderPromise,
-									timeoutPromise,
-								]);
-							} catch (raceError) {
-								// This catch block will execute if timeoutPromise rejects first,
-								// or if streamProviderPromise itself rejects *before* the timeout.
-								if (
-									raceError instanceof Error &&
-									raceError.message.startsWith("SDK_CALL_TIMEOUT:")
-								) {
+							const runStreamWithKeyRetry = async (): Promise<{
+								streamResult: StreamResult | null;
+								abort: boolean;
+							}> => {
+								if (!tomoriState) {
 									log.error(
-										`Provider streamToDiscord call timed out for channel ${channel.id}.`,
-										raceError, // Log the timeout error
+										"TomoriState missing during stream retry loop.",
+										undefined,
 										{
-											serverId: tomoriState?.server_id,
-											errorType: "SDKTimeoutError",
+											errorType: "TomoriStateMissing",
+											metadata: {
+												channelId: channel.id,
+											},
 										},
 									);
-									await sendStandardEmbed(channel, locale, {
-										color: ColorCode.ERROR, // Using ERROR as it's a more critical failure
-										titleKey: "genai.error_stream_timeout_title", // New locale key
-										descriptionKey: "genai.error_stream_timeout_description", // New locale key
-									});
-									finalStreamCompleted = true; // Consider it "completed" to break the loop
-									break;
+									return { streamResult: null, abort: true };
 								}
-								// If it's not our specific timeout error, re-throw to be caught by the outer catch
-								throw raceError;
+
+								const activeTomoriState = tomoriState;
+
+								while (true) {
+									const hasFallbackKey =
+										rotationActive &&
+										selectedKeyResult?.rotationKeyId != null &&
+										(await hasAvailableRotationKey(activeTomoriState, [
+											...Array.from(excludedRotationKeyIds),
+											selectedKeyResult.rotationKeyId,
+										]));
+
+									streamingContext.suppressUserErrors = hasFallbackKey;
+
+									// Keep provider config in sync with the selected key
+									if (providerConfig.apiKey !== decryptedApiKey) {
+										providerConfig.apiKey = decryptedApiKey;
+									}
+
+									const streamProviderPromise = await provider.streamToDiscord(
+										channel,
+										client,
+										activeTomoriState,
+										providerConfig,
+										contextSegments, // Can be shared (read-only message history)
+										personaAccumulatedParts, // Isolated per persona
+										emojiStrings,
+										personaFunctionHistory.length > 0
+											? personaFunctionHistory
+											: undefined, // Isolated per persona
+										undefined,
+										isFromQueue ? message : undefined,
+										streamingContext, // Pass streaming context for context-aware tool availability
+										locale, // Pass user's preferred locale for error messages
+										personaWebhook ?? undefined, // Pass webhook for alter persona avatar support
+										personaAvatarUrl, // Pass resolved avatar URL
+										personaUsername, // Pass persona username
+									);
+									const timeoutPromise = new Promise<never>(
+										(
+											_,
+											reject, // Promise<never> indicates it only rejects
+										) =>
+											setTimeout(
+												() =>
+													reject(
+														new Error(
+															"SDK_CALL_TIMEOUT: provider streamToDiscord call timed out.",
+														),
+													),
+												STREAM_SDK_CALL_TIMEOUT_MS,
+											),
+									);
+
+									let streamResult: StreamResult;
+									try {
+										// Promise.race will settle as soon as one of the promises settles
+										streamResult = await Promise.race([
+											streamProviderPromise,
+											timeoutPromise,
+										]);
+									} catch (raceError) {
+										// This catch block will execute if timeoutPromise rejects first,
+										// or if streamProviderPromise itself rejects *before* the timeout.
+										if (
+											raceError instanceof Error &&
+											raceError.message.startsWith("SDK_CALL_TIMEOUT:")
+										) {
+											log.error(
+												`Provider streamToDiscord call timed out for channel ${channel.id}.`,
+												raceError, // Log the timeout error
+												{
+													serverId: tomoriState?.server_id,
+													errorType: "SDKTimeoutError",
+												},
+											);
+											await sendStandardEmbed(channel, locale, {
+												color: ColorCode.ERROR, // Using ERROR as it's a more critical failure
+												titleKey: "genai.error_stream_timeout_title", // New locale key
+												descriptionKey:
+													"genai.error_stream_timeout_description", // New locale key
+											});
+											return { streamResult: null, abort: true };
+										}
+										// If it's not our specific timeout error, re-throw to be caught by the outer catch
+										throw raceError;
+									}
+
+									if (streamResult.status === "error" && hasFallbackKey) {
+										log.warn(
+											`Streaming failed with rotation key ${selectedKeyResult?.rotationKeyId}. Retrying with another key.`,
+										);
+
+										// Record error for rotation key if one was used and error is key-related
+										if (selectedKeyResult?.rotationKeyId && streamResult.data) {
+											const errorData = streamResult.data as {
+												type?: string;
+												message?: string;
+												code?: string;
+											};
+											const errorMessage =
+												errorData.message ||
+												(streamResult.data instanceof Error
+													? streamResult.data.message
+													: "Unknown error");
+
+											if (errorData.type === "rate_limit") {
+												await recordKeyError(
+													selectedKeyResult.rotationKeyId,
+													"rate_limit",
+													errorMessage || "Rate limit exceeded",
+												);
+											} else if (
+												errorData.type === "api_error" ||
+												errorData.code === "401" ||
+												errorData.code === "403"
+											) {
+												await recordKeyError(
+													selectedKeyResult.rotationKeyId,
+													"api_error",
+													errorMessage || "API authentication error",
+												);
+											}
+										}
+
+										if (selectedKeyResult?.rotationKeyId) {
+											excludedRotationKeyIds.add(
+												selectedKeyResult.rotationKeyId,
+											);
+										}
+
+										const nextKeySelection = await selectApiKeyForAttempt();
+										decryptedApiKey = nextKeySelection.apiKey;
+										selectedKeyResult = nextKeySelection.selectedKeyResult;
+
+										if (!decryptedApiKey) {
+											log.error(
+												"API Key is not set or failed to decrypt during retry.",
+												undefined,
+												{
+													serverId: tomoriState?.server_id,
+													errorType: "ApiKeyError",
+												},
+											);
+											await sendStandardEmbed(channel, locale, {
+												color: ColorCode.ERROR,
+												titleKey: "general.errors.api_key_error_title",
+												descriptionKey:
+													"general.errors.api_key_error_description",
+											});
+											return { streamResult: null, abort: true };
+										}
+
+										continue;
+									}
+
+									return { streamResult, abort: false };
+								}
+							};
+
+							let streamResult: StreamResult | null = null;
+							const retryOutcome = await runStreamWithKeyRetry();
+							if (retryOutcome.abort) {
+								finalStreamCompleted = true;
+								break;
+							}
+							streamResult = retryOutcome.streamResult;
+							if (!streamResult) {
+								finalStreamCompleted = true;
+								break;
 							}
 
 							// Use switch statement for exhaustive status checking
@@ -3099,11 +3262,16 @@ export default async function tomoriChat(
 											message?: string;
 											code?: string;
 										};
+										const errorMessage =
+											errorData.message ||
+											(streamResult.data instanceof Error
+												? streamResult.data.message
+												: "Unknown error");
 										if (errorData.type === "rate_limit") {
 											await recordKeyError(
 												selectedKeyResult.rotationKeyId,
 												"rate_limit",
-												errorData.message || "Rate limit exceeded",
+												errorMessage || "Rate limit exceeded",
 											);
 										} else if (
 											errorData.type === "api_error" ||
@@ -3113,7 +3281,7 @@ export default async function tomoriChat(
 											await recordKeyError(
 												selectedKeyResult.rotationKeyId,
 												"api_error",
-												errorData.message || "API authentication error",
+												errorMessage || "API authentication error",
 											);
 										}
 									}
@@ -3568,8 +3736,10 @@ export default async function tomoriChat(
 												triggererName,
 												emojiStrings,
 												// Use the current persona nickname so role mapping and samples match the responding persona
-												tomoriNickname: // biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
-													currentPersona.tomori_nickname ?? tomoriState!.tomori_nickname,
+												tomoriNickname:
+													currentPersona.tomori_nickname ??
+													// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
+													tomoriState!.tomori_nickname,
 												// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
 												tomoriAttributes: tomoriState!.attribute_list,
 												// biome-ignore lint/style/noNonNullAssertion: tomoriState is checked above
@@ -3824,7 +3994,8 @@ export default async function tomoriChat(
 					await sendStandardEmbed(channel, locale, {
 						color: ColorCode.ERROR,
 						titleKey: "general.errors.persona_response_failed_title",
-						descriptionKey: "general.errors.persona_response_failed_description",
+						descriptionKey:
+							"general.errors.persona_response_failed_description",
 						descriptionVars: {
 							personaName: currentPersona.tomori_nickname,
 						},
@@ -4177,7 +4348,13 @@ export function shouldBotReply(
 
 	// 6. Determine if bot should reply:
 	// Reply if (it's a reply to the bot OR bot is mentioned OR triggers are active) OR if the auto-message threshold is hit
-	return isReplyToBot || isReplyToPersona || isBotMentioned || triggersActive || isAutoMsgHit;
+	return (
+		isReplyToBot ||
+		isReplyToPersona ||
+		isBotMentioned ||
+		triggersActive ||
+		isAutoMsgHit
+	);
 }
 
 /**

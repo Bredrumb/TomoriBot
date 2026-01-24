@@ -479,6 +479,7 @@ export class GoogleProvider extends BaseLLMProvider implements LLMProvider {
 				// Provider context
 				provider: "google",
 				locale: userLocale ?? "en-US", // Use user's preferred locale, fallback to en-US
+				suppressUserErrors: streamingContext?.suppressUserErrors,
 
 				// Multi-persona webhook support
 				webhook,

@@ -188,6 +188,74 @@ export async function selectApiKey(
 }
 
 /**
+ * Checks if there is at least one available rotation key (excluding provided IDs).
+ * This avoids decrypting keys and skips user-facing logging for peek checks.
+ *
+ * @param tomoriState - The Tomori state containing server_id and config
+ * @param excludeKeyIds - Array of rotation_key_ids to exclude (already tried and failed)
+ * @returns True if another usable rotation key exists
+ */
+export async function hasAvailableRotationKey(
+	tomoriState: TomoriState,
+	excludeKeyIds: number[] = [],
+): Promise<boolean> {
+	const serverId = tomoriState.server_id;
+	const provider = tomoriState.llm.llm_provider.toLowerCase();
+
+	try {
+		const rotationKeys = await sql`
+			SELECT * FROM api_key_rotation
+			WHERE server_id = ${serverId}
+			AND provider = ${provider}
+			ORDER BY usage_count ASC, rotation_key_id ASC
+		`;
+
+		if (!rotationKeys || rotationKeys.length < 2) {
+			return false;
+		}
+
+		for (const row of rotationKeys) {
+			const parsed = apiKeyRotationSchema.safeParse(row);
+			if (!parsed.success) {
+				const errorDetails = JSON.stringify(parsed.error.flatten(), null, 2);
+				log.warn(
+					`Invalid rotation key row for server ${serverId}:\n${errorDetails}`,
+				);
+				continue;
+			}
+			const key = parsed.data;
+
+			if (!key.is_enabled) {
+				continue;
+			}
+
+			if (key.rotation_key_id && excludeKeyIds.includes(key.rotation_key_id)) {
+				continue;
+			}
+
+			if (isKeyInCooldown(key.last_error_at, key.last_error_type)) {
+				continue;
+			}
+
+			if (key.is_main_key_pointer && !tomoriState.config.api_key) {
+				continue;
+			}
+
+			if (!key.is_main_key_pointer && !key.api_key) {
+				continue;
+			}
+
+			return true;
+		}
+
+		return false;
+	} catch (error) {
+		log.error(`Error checking available rotation keys for server ${serverId}:`, error);
+		return false;
+	}
+}
+
+/**
  * Records a successful API call for a rotation key.
  * Increments usage_count, resets error_count, and updates last_used_at.
  *

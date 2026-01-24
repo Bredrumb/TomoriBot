@@ -362,8 +362,15 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 				errorContext,
 			);
 
-			// Send error to Discord
-			await this.handleStreamError(lastError, context);
+			// Send error to Discord unless suppressed for key-rotation retries
+			if (!context.suppressUserErrors) {
+				await this.handleStreamError(lastError, context);
+			} else {
+				log.warn(
+					"Stream: Suppressing stream error embed due to retryable failure",
+					lastError,
+				);
+			}
 
 			return { status: "error", data: lastError };
 		}
@@ -399,8 +406,15 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 							context,
 						);
 					}
-					await this.handleProviderError(chunk.error, _provider, context);
-					return { status: "error", data: new Error(chunk.error.message) };
+					if (!context.suppressUserErrors) {
+						await this.handleProviderError(chunk.error, _provider, context);
+					} else {
+						log.warn(
+							"Stream: Suppressing provider error embed due to retryable failure",
+							chunk.error,
+						);
+					}
+					return { status: "error", data: chunk.error };
 				}
 				break;
 

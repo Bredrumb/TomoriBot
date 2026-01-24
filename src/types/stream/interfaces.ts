@@ -115,6 +115,7 @@ export interface StreamContext {
 	// Provider context
 	provider: string;
 	locale: string;
+	suppressUserErrors?: boolean; // Suppress user-facing error embeds during key-rotation retries
 
 	// Tool availability flags
 	disableYouTubeProcessing?: boolean; // Temporarily disable YouTube function during enhanced context restart
