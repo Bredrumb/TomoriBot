@@ -109,6 +109,36 @@ export class GenerateImageTool extends BaseTool {
 		return result[0][0] as string;
 	}
 
+	private async sendGeneratedImage(
+		context: ToolContext,
+		attachment: AttachmentBuilder,
+	): Promise<import("discord.js").Message> {
+		const threadId =
+			"isThread" in context.channel &&
+			typeof context.channel.isThread === "function" &&
+			context.channel.isThread()
+				? context.channel.id
+				: undefined;
+
+		if (context.webhook && context.personaUsername) {
+			try {
+				return await context.webhook.send({
+					files: [attachment],
+					username: context.personaUsername,
+					avatarURL: context.personaAvatarUrl,
+					...(threadId ? { threadId } : {}),
+				});
+			} catch (error) {
+				log.warn(
+					"Failed to send generated image via webhook, falling back to bot message",
+					error as Error,
+				);
+			}
+		}
+
+		return await context.channel.send({ files: [attachment] });
+	}
+
 	/**
 	 * Extract images from a Discord message and convert to base64 format
 	 * Supports both direct attachments and embedded images (from links like Twitter/X)
@@ -621,9 +651,7 @@ export class GenerateImageTool extends BaseTool {
 			});
 
 			// Send image to Discord channel and capture the sent message for metadata
-			const sentMessage = await context.channel.send({
-				files: [attachment],
-			});
+			const sentMessage = await this.sendGeneratedImage(context, attachment);
 
 			log.success("Successfully generated and sent image to Discord");
 

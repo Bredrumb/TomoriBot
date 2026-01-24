@@ -105,6 +105,9 @@ const webhookErrorCooldowns = new Map<string, number>();
 
 const MAX_FUNCTION_CALL_ITERATIONS = 8; // Safety break for function call loops
 const STREAM_SDK_CALL_TIMEOUT_MS = 35000; // Slightly longer than internal stream inactivity, 35 seconds
+const DEFAULT_SELF_REPLY_LIMIT = 3;
+const MAX_SELF_REPLY_LIMIT = 10;
+const SELF_REPLY_CHAIN_TTL_MS = 30 * 60 * 1000; // Reset self-reply chain after 30 minutes of inactivity
 
 function shouldSendWebhookError(channelId: string): boolean {
 	const now = Date.now();
@@ -388,6 +391,59 @@ interface ChannelLockEntry {
 }
 const channelLocks = new Map<string, ChannelLockEntry>(); // Key: channel.id
 
+interface SelfReplyChainState {
+	depth: number; // Number of self replies already generated in this chain
+	lastWasSelf: boolean;
+	updatedAt: number;
+}
+
+const selfReplyChainStates = new Map<string, SelfReplyChainState>();
+
+function getSelfReplyChainState(channelId: string): SelfReplyChainState {
+	const now = Date.now();
+	const existing = selfReplyChainStates.get(channelId);
+
+	if (existing && now - existing.updatedAt < SELF_REPLY_CHAIN_TTL_MS) {
+		return existing;
+	}
+
+	const fresh: SelfReplyChainState = {
+		depth: 0,
+		lastWasSelf: false,
+		updatedAt: now,
+	};
+	selfReplyChainStates.set(channelId, fresh);
+	return fresh;
+}
+
+function updateSelfReplyChainState(
+	channelId: string,
+	isSelfMessage: boolean,
+): SelfReplyChainState {
+	const state = getSelfReplyChainState(channelId);
+	state.updatedAt = Date.now();
+
+	if (!isSelfMessage) {
+		state.depth = 0;
+		state.lastWasSelf = false;
+		return state;
+	}
+
+	if (!state.lastWasSelf) {
+		state.lastWasSelf = true;
+	}
+
+	return state;
+}
+
+function incrementSelfReplyChainDepth(channelId: string): number {
+	const state = getSelfReplyChainState(channelId);
+	state.depth += 1;
+	state.lastWasSelf = true;
+	state.updatedAt = Date.now();
+	return state.depth;
+}
+
 /**
  * Checks if a message contains natural stop patterns
  * @param content - The message content to check
@@ -563,9 +619,30 @@ export default async function tomoriChat(
 	const channel = message.channel;
 	let locale = "en-US";
 
-	// Early return for bot messages (including TomoriBot's own messages)
-	if (message.author.bot && !isManuallyTriggered) {
-		return;
+	const isBotAuthor = message.author.bot;
+	const isWebhookMessage = Boolean(message.webhookId);
+	const isInteractionResponse = Boolean(message.interaction);
+	const isFromClientUser = Boolean(client.user && message.author.id === client.user.id);
+	const isLikelySelfMessage = isFromClientUser || isWebhookMessage;
+
+	if (!isBotAuthor && !isWebhookMessage) {
+		updateSelfReplyChainState(channel.id, false);
+	}
+
+	// Early return for non-self bot messages and interaction responses
+	if (isBotAuthor && !isManuallyTriggered) {
+		if (isInteractionResponse) {
+			updateSelfReplyChainState(channel.id, false);
+			return;
+		}
+		if (!isFromClientUser && !isWebhookMessage) {
+			updateSelfReplyChainState(channel.id, false);
+			return;
+		}
+	}
+
+	if (isLikelySelfMessage) {
+		isPersonaJob = true;
 	}
 
 	// Debug logging for stop response
@@ -787,6 +864,8 @@ export default async function tomoriChat(
 		if (
 			lockEntry.isLocked &&
 			!isStopResponse &&
+			!message.author.bot &&
+			!message.webhookId &&
 			isNaturalStopMessage(message.content)
 		) {
 			log.info(
@@ -869,7 +948,12 @@ export default async function tomoriChat(
 					shouldBotReply(message, modifiedEarlyTomoriStateForCheck, earlyAllPersonas)
 				) {
 					// 2a. Check cooldown BEFORE queuing (skip for manual triggers)
-					if (!isManuallyTriggered && !isStopResponse) {
+					if (
+						!isManuallyTriggered &&
+						!isStopResponse &&
+						!message.author.bot &&
+						!message.webhookId
+					) {
 						const preQueueCooldownResult = await checkMessageTriggerCooldown(
 							message,
 							earlyTomoriState.config,
@@ -1076,6 +1160,18 @@ export default async function tomoriChat(
 				? allPersonas.find((p) => p.tomori_id === selectedPersonaId) ??
 					fallbackPersona
 				: fallbackPersona;
+			const isSelfMessage = isSelfTriggerMessage(message, allPersonas);
+			const rawSelfReplyLimit =
+				tomoriState?.config.self_reply_limit ?? DEFAULT_SELF_REPLY_LIMIT;
+			const selfReplyLimit = Math.min(
+				Math.max(rawSelfReplyLimit, 0),
+				MAX_SELF_REPLY_LIMIT,
+			);
+
+			if ((message.author.bot || message.webhookId) && !isSelfMessage && !isManuallyTriggered) {
+				return;
+			}
+
 			const personaByNickname = new Map<string, TomoriState>();
 			for (const persona of allPersonas) {
 				const nicknameKey = persona.tomori_nickname?.toLowerCase();
@@ -1475,7 +1571,7 @@ export default async function tomoriChat(
 			}
 
 			// 7. Check message trigger cooldown (skip for manual triggers and stop responses)
-			if (!isManuallyTriggered && !isStopResponse) {
+			if (!isManuallyTriggered && !isStopResponse && !isSelfMessage) {
 				const cooldownResult = await checkMessageTriggerCooldown(
 					message,
 					tomoriState.config,
@@ -1512,7 +1608,7 @@ export default async function tomoriChat(
 
 			// 8. Set message trigger cooldown (skip for manual triggers and stop responses)
 			// Set early to prevent race conditions with concurrent triggers
-			if (!isManuallyTriggered && !isStopResponse) {
+			if (!isManuallyTriggered && !isStopResponse && !isSelfMessage) {
 				await setMessageTriggerCooldown(message, tomoriState.config);
 			}
 
@@ -1554,6 +1650,23 @@ export default async function tomoriChat(
 					`No personas matched trigger for message ${message.id} in server ${serverDiscId}`,
 				);
 				return;
+			}
+
+			if (isSelfMessage && !isManuallyTriggered && !reminderRecipientID && !isStopResponse) {
+				if (selfReplyLimit <= 0) {
+					log.info(
+						`Self-reply chain disabled (limit=0). Skipping self-triggered message ${message.id} in channel ${channel.id}.`,
+					);
+					return;
+				}
+
+				const depth = incrementSelfReplyChainDepth(channel.id);
+				if (depth > selfReplyLimit) {
+					log.info(
+						`Self-reply chain limit reached (${selfReplyLimit}). Skipping self-triggered message ${message.id} in channel ${channel.id}.`,
+					);
+					return;
+				}
 			}
 
 			log.info(
@@ -3822,6 +3935,29 @@ export default async function tomoriChat(
 	}
 }
 
+function isSelfTriggerMessage(
+	message: Message,
+	allPersonas: TomoriState[],
+): boolean {
+	if (message.interaction) return false;
+
+	const clientUserId = message.client.user?.id;
+	if (clientUserId && message.author.id === clientUserId) {
+		return true;
+	}
+
+	if (!message.webhookId) {
+		return false;
+	}
+
+	const authorName = message.author.username?.toLowerCase();
+	if (!authorName) return false;
+
+	return allPersonas.some(
+		(persona) => persona.tomori_nickname?.toLowerCase() === authorName,
+	);
+}
+
 /**
  * Determines which personas should respond to a message based on trigger matching.
  * All matching personas respond, but in randomized order for variety.
@@ -3918,6 +4054,21 @@ export function shouldBotReply(
 	tomoriState: TomoriState,
 	allPersonas: TomoriState[],
 ): boolean {
+	const isSelfMessage = isSelfTriggerMessage(message, allPersonas);
+	const rawSelfReplyLimit =
+		tomoriState.config.self_reply_limit ?? DEFAULT_SELF_REPLY_LIMIT;
+	const selfReplyLimit = Math.min(
+		Math.max(rawSelfReplyLimit, 0),
+		MAX_SELF_REPLY_LIMIT,
+	);
+
+	if (message.webhookId && !isSelfMessage) {
+		return false;
+	}
+	if (isSelfMessage && selfReplyLimit <= 0) {
+		return false;
+	}
+
 	// 1. Basic checks: Ignore bots, commands, non-text channels, and messages with no content
 	const isThreadChannel =
 		message.channel.type === ChannelType.PublicThread ||
@@ -3927,7 +4078,7 @@ export function shouldBotReply(
 		message.channel.type === ChannelType.GuildVoice ||
 		message.channel.type === ChannelType.GuildStageVoice;
 	if (
-		message.author.bot ||
+		(message.author.bot && (!isSelfMessage || selfReplyLimit <= 0)) ||
 		message.content.startsWith("!") || // Basic command prefix check
 		!(
 			message.channel instanceof TextChannel ||
@@ -3937,6 +4088,14 @@ export function shouldBotReply(
 		) // Support TextChannel, DMChannel, thread, and voice/stage channels
 	) {
 		return false;
+	}
+
+	// Self-reply chain guard: stop if we've already hit the limit
+	if (isSelfMessage && selfReplyLimit > 0) {
+		const chainState = getSelfReplyChainState(message.channel.id);
+		if (chainState.depth >= selfReplyLimit) {
+			return false;
+		}
 	}
 
 	// Config is guaranteed to exist by loadTomoriState structure

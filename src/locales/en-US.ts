@@ -1437,6 +1437,21 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 					invalid_range_description: `Duration must be between {min} and {max} seconds (24 hours).`,
 				},
 			},
+			selfreply: {
+				description: `Manage self-reply chain behavior for persona triggering.`,
+				limit: {
+					description: `Set the maximum number of self replies in a chain.`,
+					limit_description: `Number of self replies allowed (0-10, 0 disables).`,
+					invalid_range_title: `Invalid Limit`,
+					invalid_range_description: `Limit must be between {min} and {max}.`,
+					already_set_title: `Already Set`,
+					already_set_description: `Self-reply limit is already set to **{limit}**.`,
+					success_title: `Self-Reply Limit Updated`,
+					success_description: `Self-reply chain limit set to **{limit}**.`,
+					success_disabled_title: `Self-Reply Disabled`,
+					success_disabled_description: `Self-reply chain is now disabled.`,
+				},
+			},
 			model: {
 				text: {
 					description: `Change the underlying AI model that I use.`,

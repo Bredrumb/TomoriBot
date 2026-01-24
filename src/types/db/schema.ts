@@ -110,6 +110,7 @@ export const tomoriConfigSchema = z.object({
 	trigger_words: z.array(z.string()).default([]),
 	autoch_disc_ids: z.array(z.string()).default([]),
 	autoch_threshold: z.number().default(0),
+	self_reply_limit: z.number().int().min(0).max(10).default(3), // Added January 2026 - Self-reply chain limit for persona-to-persona triggering
 	server_memteaching_enabled: z.boolean().default(true),
 	attribute_memteaching_enabled: z.boolean().default(false),
 	sampledialogue_memteaching_enabled: z.boolean().default(false),
