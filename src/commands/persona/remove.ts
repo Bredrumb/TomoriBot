@@ -21,6 +21,7 @@ import type { UserRow } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
 import { loadAllPersonasForServer } from "../../utils/db/dbRead";
 import { sql } from "../../utils/db/client";
+import { deletePersonaWebhooks } from "../../utils/discord/webhookManager";
 
 // Constants for modal configuration
 const MODAL_CUSTOM_ID = "persona_remove_modal";
@@ -133,13 +134,44 @@ export async function execute(
 			10,
 		);
 		const personaToRemove = alterPersonas[selectedIndex];
+		if (!personaToRemove || !personaToRemove.tomori_id) {
+			await replyInfoEmbed(modalSubmitInteraction, locale, {
+				titleKey: "general.errors.unknown_error_title",
+				descriptionKey: "general.errors.unknown_error_description",
+				color: ColorCode.ERROR,
+				flags: MessageFlags.Ephemeral,
+			});
+			log.warn(
+				"Persona removal failed due to missing tomori_id for selected alter.",
+			);
+			return;
+		}
+		const personaId = personaToRemove.tomori_id;
 
 		// 8. Delete selected alter from database
 		await sql`
 			DELETE FROM tomoris
-			WHERE tomori_id = ${personaToRemove.tomori_id}
+			WHERE tomori_id = ${personaId}
 			AND is_alter = true
 		`;
+
+		// 8.5. Delete persona webhooks (non-production uses per-persona webhooks)
+		try {
+			const deletedCount = await deletePersonaWebhooks(
+				interaction.guild,
+				personaId,
+			);
+			if (deletedCount > 0) {
+				log.info(
+					`Deleted ${deletedCount} persona webhook(s) for ${personaToRemove.tomori_nickname}`,
+				);
+			}
+		} catch (error) {
+			log.warn(
+				`Failed to delete persona webhooks for ${personaToRemove.tomori_nickname}`,
+				error,
+			);
+		}
 
 		// 9. Invalidate cache
 		invalidateTomoriStateCache(interaction.guild.id);
@@ -155,7 +187,7 @@ export async function execute(
 		});
 
 		log.success(
-			`Removed alter persona "${personaToRemove.tomori_nickname}" (ID: ${personaToRemove.tomori_id}) from guild ${interaction.guild.id}`,
+			`Removed alter persona "${personaToRemove.tomori_nickname}" (ID: ${personaId}) from guild ${interaction.guild.id}`,
 		);
 	} catch (error) {
 		log.error("Error executing persona remove command:", error, {

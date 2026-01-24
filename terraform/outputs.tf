@@ -85,3 +85,25 @@ output "health_check_configuration" {
 		endpoint     = "http://127.0.0.1:3000/health"
 	}
 }
+
+output "avatars_bucket_name" {
+	description = "S3 bucket name for persona avatars"
+	value       = aws_s3_bucket.avatars.bucket
+}
+
+output "avatars_bucket_regional_domain" {
+	description = "Regional S3 domain for the avatar bucket"
+	value       = aws_s3_bucket.avatars.bucket_regional_domain_name
+}
+
+output "avatars_cloudfront_domain" {
+	description = "CloudFront domain for avatar distribution (null if disabled)"
+	value       = try(aws_cloudfront_distribution.avatars[0].domain_name, null)
+}
+
+output "avatars_public_base_url" {
+	description = "Public base URL for avatar objects"
+	value = var.enable_avatar_cloudfront
+		? "https://${aws_cloudfront_distribution.avatars[0].domain_name}"
+		: "https://${aws_s3_bucket.avatars.bucket_regional_domain_name}"
+}

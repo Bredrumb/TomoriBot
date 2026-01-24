@@ -27,6 +27,7 @@ import type { PresetExportData } from "../../types/preset/presetExport";
 import { extractMetadataFromPNG } from "../../utils/image/pngMetadata";
 import { validatePNGBuffer } from "../../utils/image/avatarHelper";
 import { loadAllPersonasForServer } from "../../utils/db/dbRead";
+import { getMemoryLimits } from "../../utils/db/memoryLimits";
 import { sql } from "../../utils/db/client";
 
 /**
@@ -646,6 +647,33 @@ export async function execute(
 
 			// 11a. Load all existing personas and collect their trigger words
 			const allPersonas = await loadAllPersonasForServer(serverDiscId);
+			const personaLimits = getMemoryLimits();
+
+			if (allPersonas.length >= personaLimits.maxPersonasPerServer) {
+				await interaction.editReply({
+					embeds: [
+						new EmbedBuilder()
+							.setTitle(
+								localizer(
+									locale,
+									"commands.persona.import.alter_limit_title",
+								),
+							)
+							.setDescription(
+								localizer(
+									locale,
+									"commands.persona.import.alter_limit_description",
+									{
+										current: allPersonas.length,
+										max: personaLimits.maxPersonasPerServer,
+									},
+								),
+							)
+							.setColor(ColorCode.ERROR),
+					],
+				});
+				return;
+			}
 
 			// Collect all trigger words (main persona uses config.trigger_words, alters use alter_triggers)
 			const allTriggerWords = new Set<string>();

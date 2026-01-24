@@ -35,7 +35,9 @@ import {
 import { StreamOrchestrator } from "../../utils/discord/streamOrchestrator";
 import {
 	getOrCreateWebhook,
+	getOrCreatePersonaWebhook,
 	resolvePersonaAvatarURL,
+	type WebhookCreateErrorReason,
 } from "../../utils/discord/webhookManager";
 import { ColorCode, log } from "../../utils/misc/logger";
 import { buildContext } from "../../utils/text/contextBuilder";
@@ -95,8 +97,53 @@ const BASE_TRIGGER_WORDS = process.env.BASE_TRIGGER_WORDS?.split(",").map(
 	(word) => word.trim(),
 ) || ["tomori", "tomo", "トモリ", "ともり"];
 
+const IS_PRODUCTION = process.env.RUN_ENV === "production";
+const WEBHOOK_ERROR_COOLDOWN_MS = 10 * 60 * 1000;
+const webhookErrorCooldowns = new Map<string, number>();
+
 const MAX_FUNCTION_CALL_ITERATIONS = 8; // Safety break for function call loops
 const STREAM_SDK_CALL_TIMEOUT_MS = 35000; // Slightly longer than internal stream inactivity, 35 seconds
+
+function shouldSendWebhookError(channelId: string): boolean {
+	const now = Date.now();
+	const lastSent = webhookErrorCooldowns.get(channelId) ?? 0;
+
+	if (now - lastSent < WEBHOOK_ERROR_COOLDOWN_MS) {
+		return false;
+	}
+
+	webhookErrorCooldowns.set(channelId, now);
+	return true;
+}
+
+async function sendWebhookErrorEmbed(
+	channel: BaseGuildTextChannel | AnyThreadChannel,
+	locale: string,
+	reason: WebhookCreateErrorReason,
+): Promise<void> {
+	if (!shouldSendWebhookError(channel.id)) {
+		return;
+	}
+
+	const titleKey =
+		reason === "missing_permissions"
+			? "general.errors.webhook_missing_permissions_title"
+			: reason === "max_webhooks"
+				? "general.errors.webhook_limit_title"
+				: "general.errors.webhook_unknown_error_title";
+	const descriptionKey =
+		reason === "missing_permissions"
+			? "general.errors.webhook_missing_permissions_description"
+			: reason === "max_webhooks"
+				? "general.errors.webhook_limit_description"
+				: "general.errors.webhook_unknown_error_description";
+
+	await sendStandardEmbed(channel, locale, {
+		color: ColorCode.WARN,
+		titleKey,
+		descriptionKey,
+	});
+}
 
 /**
  * Creates comprehensive natural stop patterns for graceful stream interruption
@@ -1429,6 +1476,9 @@ export default async function tomoriChat(
 			// Only create webhook if we have alters responding (main persona uses regular bot messages)
 			const hasAlters = personasToRespond.some((p) => p.is_alter);
 			let channelWebhook: Webhook | null = null;
+			let webhookErrorReason: WebhookCreateErrorReason | undefined;
+			let webhookErrorNotified = false;
+			const usePersonaWebhooks = !IS_PRODUCTION;
 			// Support both text channels and threads
 			const supportsWebhooks =
 				channel.type === ChannelType.GuildText ||
@@ -1436,17 +1486,18 @@ export default async function tomoriChat(
 				channel.type === ChannelType.PrivateThread ||
 				channel.type === ChannelType.AnnouncementThread;
 
-			if (hasAlters && supportsWebhooks) {
-				try {
-					channelWebhook = await getOrCreateWebhook(channel as TextChannel);
+			if (hasAlters && supportsWebhooks && !usePersonaWebhooks) {
+				const webhookResult = await getOrCreateWebhook(channel as TextChannel);
+				channelWebhook = webhookResult.webhook;
+				webhookErrorReason = webhookResult.errorReason;
+
+				if (channelWebhook) {
 					log.info(
 						`Webhook ready for multi-persona responses in ${channel.type} ${channel.id}`,
 					);
-				} catch (webhookError) {
-					log.warn(
-						`Failed to create webhook for multi-persona responses in ${channel.type} ${channel.id}. Alters will use regular bot messages.`,
-						webhookError,
-					);
+				} else if (webhookErrorReason) {
+					await sendWebhookErrorEmbed(channel, locale, webhookErrorReason);
+					webhookErrorNotified = true;
 				}
 			}
 
@@ -2652,15 +2703,43 @@ export default async function tomoriChat(
 								}
 							}
 
-							// Resolve persona avatar URL and username for webhook-based sending
+							// Resolve persona webhook and avatar/username for webhook-based sending
 							// Only use webhook for alter personas (not main) in guild channels (not DMs)
+							let personaWebhook = channelWebhook;
+							if (
+								usePersonaWebhooks &&
+								supportsWebhooks &&
+								currentPersona.is_alter
+							) {
+								const webhookResult = await getOrCreatePersonaWebhook(
+									channel as TextChannel,
+									currentPersona,
+								);
+								personaWebhook = webhookResult.webhook;
+								if (
+									!personaWebhook &&
+									webhookResult.errorReason &&
+									!webhookErrorNotified
+								) {
+									await sendWebhookErrorEmbed(
+										channel,
+										locale,
+										webhookResult.errorReason,
+									);
+									webhookErrorNotified = true;
+								}
+							}
+
 							const personaAvatarUrl =
-								channelWebhook && guild && currentPersona.is_alter
+								personaWebhook &&
+								guild &&
+								currentPersona.is_alter &&
+								!usePersonaWebhooks
 									? resolvePersonaAvatarURL(currentPersona, guild)
 									: undefined;
 
 							const personaUsername =
-								channelWebhook && currentPersona.is_alter
+								personaWebhook && currentPersona.is_alter
 									? currentPersona.tomori_nickname
 									: undefined;
 
@@ -2686,7 +2765,7 @@ export default async function tomoriChat(
 								isFromQueue ? message : undefined,
 								streamingContext, // Pass streaming context for context-aware tool availability
 								locale, // Pass user's preferred locale for error messages
-								channelWebhook ?? undefined, // Pass webhook for alter persona avatar support
+								personaWebhook ?? undefined, // Pass webhook for alter persona avatar support
 								personaAvatarUrl, // Pass resolved avatar URL
 								personaUsername, // Pass persona username
 							);

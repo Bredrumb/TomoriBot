@@ -51,6 +51,14 @@ github_actions_oidc_thumbprints = ["2b18947a6a9fc7764fd8b5fb18a863b0c6dac24f"]
 # ecs_task_memory = "512"
 # postgres_host_override = "tomoribot-db.example.us-east-1.rds.amazonaws.com"
 
+# Avatar storage (S3 + optional CloudFront)
+# avatars_bucket_name = "tomoribot-avatars-production-123456789012" # Optional override
+# enable_avatar_cloudfront = false
+# avatar_bucket_public_read = true # Set false when CloudFront is enabled
+# avatar_bucket_force_destroy = false
+# avatar_bucket_versioning = false
+# avatar_cloudfront_price_class = "PriceClass_100"
+
 # RDS Configuration
 rds_master_password = "REPLACE_ME" # Minimum 8 chars; do not commit real values
 rds_skip_final_snapshot = true

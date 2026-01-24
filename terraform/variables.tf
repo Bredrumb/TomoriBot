@@ -27,6 +27,46 @@ variable "name_prefix" {
 	default     = "tomoribot"
 }
 
+variable "avatars_bucket_name" {
+	description = "S3 bucket name for persona avatars (null uses default naming)"
+	type        = string
+	default     = null
+}
+
+variable "avatar_bucket_force_destroy" {
+	description = "Force destroy the avatar bucket (useful for non-production)"
+	type        = bool
+	default     = false
+}
+
+variable "avatar_bucket_versioning" {
+	description = "Enable S3 versioning for avatar bucket"
+	type        = bool
+	default     = false
+}
+
+variable "avatar_bucket_public_read" {
+	description = "Allow public read access to avatar objects when CloudFront is disabled"
+	type        = bool
+	default     = true
+	validation {
+		condition     = var.enable_avatar_cloudfront || var.avatar_bucket_public_read
+		error_message = "Either enable_avatar_cloudfront must be true or avatar_bucket_public_read must be true so avatars are publicly reachable."
+	}
+}
+
+variable "enable_avatar_cloudfront" {
+	description = "Enable CloudFront distribution for avatar bucket"
+	type        = bool
+	default     = false
+}
+
+variable "avatar_cloudfront_price_class" {
+	description = "CloudFront price class for avatar distribution"
+	type        = string
+	default     = "PriceClass_100"
+}
+
 variable "vpc_name" {
 	description = "Name tag for the VPC"
 	type        = string

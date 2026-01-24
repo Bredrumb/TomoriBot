@@ -12,6 +12,7 @@ export const ABSOLUTE_MAX_STRING_LENGTH = 5000; // Max length for attributes and
 export const ABSOLUTE_MAX_ATTRIBUTES = 200; // Max number of attributes (line 219)
 export const ABSOLUTE_MAX_SAMPLE_DIALOGUES = 100; // Max number of sample dialogue pairs (line 199)
 export const ABSOLUTE_MAX_TRIGGER_WORDS = 100; // Max number of trigger words (line 179)
+export const ABSOLUTE_MAX_PERSONAS_PER_SERVER = 200; // Max number of personas per server
 
 /**
  * Memory limit configuration loaded from environment variables with defaults
@@ -25,6 +26,7 @@ export interface MemoryLimits {
 	maxTriggerWords: number;
 	maxSampleDialogues: number;
 	maxAttributes: number;
+	maxPersonasPerServer: number;
 }
 
 /**
@@ -47,6 +49,7 @@ export type MemoryValidationError =
 	| "TRIGGER_WORD_LIMIT_EXCEEDED"
 	| "SAMPLE_DIALOGUE_LIMIT_EXCEEDED"
 	| "ATTRIBUTE_LIMIT_EXCEEDED"
+	| "PERSONA_LIMIT_EXCEEDED"
 	| "CONTENT_EMPTY";
 
 /**
@@ -83,6 +86,10 @@ export function getMemoryLimits(): MemoryLimits {
 		10,
 	);
 	const maxAttributes = Number.parseInt(process.env.MAX_ATTRIBUTES || "10", 10);
+	const maxPersonasPerServer = Number.parseInt(
+		process.env.MAX_PERSONAS_PER_SERVER || "20",
+		10,
+	);
 
 	// Validate that environment variables are reasonable numbers
 	if (
@@ -102,6 +109,7 @@ export function getMemoryLimits(): MemoryLimits {
 			maxTriggerWords,
 			maxSampleDialogues,
 			maxAttributes,
+			maxPersonasPerServer,
 		};
 	}
 
@@ -122,6 +130,7 @@ export function getMemoryLimits(): MemoryLimits {
 			maxTriggerWords,
 			maxSampleDialogues,
 			maxAttributes,
+			maxPersonasPerServer,
 		};
 	}
 
@@ -142,6 +151,7 @@ export function getMemoryLimits(): MemoryLimits {
 			maxTriggerWords,
 			maxSampleDialogues,
 			maxAttributes,
+			maxPersonasPerServer,
 		};
 	}
 
@@ -162,6 +172,7 @@ export function getMemoryLimits(): MemoryLimits {
 			maxTriggerWords,
 			maxSampleDialogues,
 			maxAttributes,
+			maxPersonasPerServer,
 		};
 	}
 
@@ -182,6 +193,7 @@ export function getMemoryLimits(): MemoryLimits {
 			maxTriggerWords,
 			maxSampleDialogues,
 			maxAttributes,
+			maxPersonasPerServer,
 		};
 	}
 
@@ -202,6 +214,7 @@ export function getMemoryLimits(): MemoryLimits {
 			maxTriggerWords: 10,
 			maxSampleDialogues,
 			maxAttributes,
+			maxPersonasPerServer,
 		};
 	}
 
@@ -222,6 +235,7 @@ export function getMemoryLimits(): MemoryLimits {
 			maxTriggerWords,
 			maxSampleDialogues: 10,
 			maxAttributes,
+			maxPersonasPerServer,
 		};
 	}
 
@@ -242,6 +256,28 @@ export function getMemoryLimits(): MemoryLimits {
 			maxTriggerWords,
 			maxSampleDialogues,
 			maxAttributes: 10,
+			maxPersonasPerServer,
+		};
+	}
+
+	if (
+		!Number.isInteger(maxPersonasPerServer) ||
+		maxPersonasPerServer <= 0 ||
+		maxPersonasPerServer > ABSOLUTE_MAX_PERSONAS_PER_SERVER
+	) {
+		log.warn(
+			`Invalid MAX_PERSONAS_PER_SERVER value: ${process.env.MAX_PERSONAS_PER_SERVER}. Using default: 20`,
+		);
+		return {
+			maxPersonalMemories,
+			maxServerMemories,
+			maxMemoryLength,
+			maxSampleDialogueLength,
+			maxAttributeLength,
+			maxTriggerWords,
+			maxSampleDialogues,
+			maxAttributes,
+			maxPersonasPerServer: 20,
 		};
 	}
 
@@ -254,6 +290,7 @@ export function getMemoryLimits(): MemoryLimits {
 		maxTriggerWords,
 		maxSampleDialogues,
 		maxAttributes,
+		maxPersonasPerServer,
 	};
 }
 
@@ -624,6 +661,8 @@ export function getMemoryLimitErrorMessage(
 			return `Sample dialogue limit reached. This server can have up to ${maxAllowed} sample dialogues (currently: ${currentCount}).`;
 		case "ATTRIBUTE_LIMIT_EXCEEDED":
 			return `Attribute limit reached. This server can have up to ${maxAllowed} attributes (currently: ${currentCount}).`;
+		case "PERSONA_LIMIT_EXCEEDED":
+			return `Persona limit reached. This server can have up to ${maxAllowed} personas (currently: ${currentCount}).`;
 		case "CONTENT_EMPTY":
 			return "Memory content cannot be empty.";
 		default:
