@@ -50,6 +50,10 @@ export interface StreamingContext {
 	disableGifProcessing?: boolean; // Flag to temporarily disable GIF processing during enhanced context restart
 	forceReason?: boolean; // Flag to indicate reasoning mode for enhanced AI responses
 	isManuallyTriggered?: boolean; // Flag to indicate this stream was triggered by a manual command
+	forcedMentions?: Array<{
+		handle: string;
+		userId: string;
+	}>; // Additional mention handles to force-resolve (e.g., reminder recipients)
 }
 
 /**

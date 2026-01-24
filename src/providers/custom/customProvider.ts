@@ -366,6 +366,9 @@ export class CustomProvider extends BaseLLMProvider implements LLMProvider {
 				webhook,
 				personaAvatarUrl,
 				personaUsername,
+
+				// Forced mentions (e.g., reminder recipients)
+				forcedMentions: streamingContext?.forcedMentions,
 			};
 
 			// Create the modular streaming components

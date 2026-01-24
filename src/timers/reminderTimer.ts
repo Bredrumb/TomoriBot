@@ -4,7 +4,13 @@
  * Note: pg_cron is only used for hourly cleanup of expired reminders, not execution
  */
 
-import type { Client, Message, TextBasedChannel } from "discord.js";
+import type {
+	Client,
+	Message,
+	TextBasedChannel,
+	TextChannel,
+} from "discord.js";
+import { ChannelType } from "discord.js";
 import { log } from "../utils/misc/logger";
 import { getDueReminders, deleteReminderById } from "../utils/db/dbRead";
 import type { ReminderRow } from "../types/db/schema";
@@ -12,6 +18,12 @@ import { calculateLateness } from "../utils/text/stringHelper";
 import tomoriChat from "../events/messageCreate/tomoriChat";
 import { sendStandardEmbed } from "../utils/discord/embedHelper";
 import { ColorCode } from "../utils/misc/logger";
+import { getCachedAllPersonas } from "../utils/cache/tomoriStateCache";
+import {
+	getOrCreatePersonaWebhook,
+	getOrCreateWebhook,
+	resolvePersonaAvatarURL,
+} from "../utils/discord/webhookManager";
 
 /**
  * Class to manage the fallback reminder timer system
@@ -291,14 +303,22 @@ export class ReminderTimer {
 					return;
 				}
 
-				await (channel as SendableChannel).send({
-					content: mentionToken,
-					allowedMentions: {
-						users: [reminder.user_discord_id],
-						roles: [],
-						parse: [],
-					},
-				});
+				const sentViaPersona = await this.trySendPersonaFallbackMention(
+					channel,
+					reminder,
+					mentionToken,
+				);
+
+				if (!sentViaPersona) {
+					await (channel as SendableChannel).send({
+						content: mentionToken,
+						allowedMentions: {
+							users: [reminder.user_discord_id],
+							roles: [],
+							parse: [],
+						},
+					});
+				}
 				log.info(
 					`Added fallback mention for reminder ${reminder.reminder_id} to ensure recipient is pinged`,
 				);
@@ -308,6 +328,73 @@ export class ReminderTimer {
 				`Failed to verify reminder mention for reminder ${reminder.reminder_id}:`,
 				error,
 			);
+		}
+	}
+
+	private async trySendPersonaFallbackMention(
+		channel: TextBasedChannel,
+		reminder: ReminderRow,
+		content: string,
+	): Promise<boolean> {
+		if (!reminder.persona_id) return false;
+		if (!("guild" in channel) || !channel.guild) return false;
+
+		const supportsWebhooks =
+			channel.type === ChannelType.GuildText ||
+			channel.type === ChannelType.PublicThread ||
+			channel.type === ChannelType.PrivateThread ||
+			channel.type === ChannelType.AnnouncementThread;
+		if (!supportsWebhooks) return false;
+
+		try {
+			const personas = await getCachedAllPersonas(channel.guild.id);
+			const persona = personas.find(
+				(p) => p.tomori_id === reminder.persona_id,
+			);
+			if (!persona || !persona.is_alter) return false;
+
+			const isThread =
+				"isThread" in channel &&
+				typeof channel.isThread === "function" &&
+				channel.isThread();
+			if (isThread && !channel.parent) {
+				return false;
+			}
+			const webhookChannel =
+				isThread && channel.parent ? channel.parent : channel;
+
+			const usePersonaWebhooks = process.env.RUN_ENV !== "production";
+			const webhookResult = usePersonaWebhooks
+				? await getOrCreatePersonaWebhook(
+						webhookChannel as TextChannel,
+						persona,
+					)
+				: await getOrCreateWebhook(webhookChannel as TextChannel);
+			const webhook = webhookResult.webhook;
+			if (!webhook) return false;
+
+			const avatarURL = !usePersonaWebhooks
+				? resolvePersonaAvatarURL(persona, channel.guild)
+				: undefined;
+
+			await webhook.send({
+				content,
+				username: persona.tomori_nickname,
+				avatarURL,
+				allowedMentions: {
+					users: [reminder.user_discord_id],
+					roles: [],
+					parse: [],
+				},
+				...(isThread ? { threadId: channel.id } : {}),
+			});
+			return true;
+		} catch (error) {
+			log.warn(
+				`Failed to send persona fallback mention for reminder ${reminder.reminder_id}:`,
+				error,
+			);
+			return false;
 		}
 	}
 

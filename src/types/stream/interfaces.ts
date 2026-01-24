@@ -123,6 +123,12 @@ export interface StreamContext {
 	webhook?: import("discord.js").Webhook; // Webhook for alter persona responses
 	personaAvatarUrl?: string; // Avatar URL for current persona
 	personaUsername?: string; // Username override for current persona
+
+	// Optional forced mention handles (e.g., reminder recipients)
+	forcedMentions?: Array<{
+		handle: string;
+		userId: string;
+	}>;
 }
 
 /**

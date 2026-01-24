@@ -1726,6 +1726,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 		const { mentionMap, mentionIdSet } = this.buildMentionLookup(
 			context.contextItems,
 		);
+		this.applyForcedMentions(mentionMap, mentionIdSet, context.forcedMentions);
 
 		return {
 			humanizerDegree: config.humanizerDegree,
@@ -1736,6 +1737,28 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 			botName: context.tomoriState.tomori_nickname,
 			maxMessageLength: config.maxMessageLength,
 		};
+	}
+
+	private applyForcedMentions(
+		mentionMap: Map<string, string[]>,
+		mentionIdSet: Set<string>,
+		forcedMentions?: Array<{ handle: string; userId: string }>,
+	): void {
+		if (!forcedMentions || forcedMentions.length === 0) return;
+
+		for (const mention of forcedMentions) {
+			const handle = mention.handle?.trim();
+			const userId = mention.userId?.trim();
+			if (!handle || !userId) continue;
+
+			mentionIdSet.add(userId);
+			const normalizedHandle = handle.toLowerCase();
+			const existing = mentionMap.get(normalizedHandle) ?? [];
+			if (!existing.includes(userId)) {
+				existing.push(userId);
+				mentionMap.set(normalizedHandle, existing);
+			}
+		}
 	}
 
 	private buildMentionLookup(

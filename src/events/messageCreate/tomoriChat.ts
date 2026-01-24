@@ -2,6 +2,7 @@ import type {
 	AnyThreadChannel,
 	BaseGuildVoiceChannel,
 	Client,
+	Guild,
 	Message,
 	Sticker,
 	Embed,
@@ -21,6 +22,7 @@ import type {
 import { ContextItemTag } from "../../types/misc/context";
 // Provider-specific types moved to individual providers
 import type { FunctionCall } from "../../types/provider/interfaces";
+import type { StreamingContext } from "../../types/tool/interfaces";
 import { getCachedAllPersonas } from "../../utils/cache/tomoriStateCache";
 import {
 	getCachedUserRow,
@@ -316,6 +318,52 @@ function extractEmojiImageAttachments(
 	return attachments;
 }
 
+type ForcedMention = { handle: string; userId: string };
+
+function normalizeMentionHandle(value?: string | null): string | null {
+	if (!value) return null;
+	let handle = value.trim();
+	if (!handle) return null;
+	if (handle.startsWith("<@")) return null;
+	if (handle.startsWith("@")) {
+		handle = handle.slice(1).trim();
+	}
+	return handle || null;
+}
+
+async function buildForcedMentionsForReminder(
+	recipientId: string,
+	client: Client,
+	guild?: Guild | null,
+): Promise<ForcedMention[]> {
+	const handles = new Set<string>();
+	const addHandle = (value?: string | null) => {
+		const normalized = normalizeMentionHandle(value);
+		if (normalized) handles.add(normalized);
+	};
+
+	const userRow = await getCachedUserRow(recipientId);
+	addHandle(userRow?.user_nickname);
+
+	let member = null;
+	if (guild) {
+		member = await guild.members.fetch(recipientId).catch(() => null);
+	}
+
+	const fallbackUser = member
+		? null
+		: await client.users.fetch(recipientId).catch(() => null);
+
+	addHandle(member?.nickname);
+	addHandle(member?.user.globalName ?? fallbackUser?.globalName);
+	addHandle(member?.user.username ?? fallbackUser?.username);
+
+	return Array.from(handles).map((handle) => ({
+		handle,
+		userId: recipientId,
+	}));
+}
+
 // New: Constants for the semaphore/locking mechanism
 const CHANNEL_LOCK_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes for a lock to be considered stale
 
@@ -528,7 +576,7 @@ export default async function tomoriChat(
 	}
 
 	// Initialize streaming context for context-aware tool availability
-	const streamingContext = {
+	const streamingContext: StreamingContext = {
 		disableYouTubeProcessing: false, // Will be set to true during enhanced context restart
 		disableProfilePictureProcessing: false, // Will be set to true during enhanced context restart
 		disableGifProcessing: false, // Will be set to true during enhanced context restart
@@ -1012,6 +1060,17 @@ export default async function tomoriChat(
 			log.info(
 				`[Snapshot] Created per-request snapshot for message ${message.id} in ${isDMChannel ? "DM" : `server ${serverDiscId}`}`,
 			);
+
+			if (reminderRecipientID) {
+				const forcedMentions = await buildForcedMentionsForReminder(
+					reminderRecipientID,
+					client,
+					guild ?? null,
+				);
+				if (forcedMentions.length > 0) {
+					streamingContext.forcedMentions = forcedMentions;
+				}
+			}
 
 			const selectedPersona = selectedPersonaId
 				? allPersonas.find((p) => p.tomori_id === selectedPersonaId) ??

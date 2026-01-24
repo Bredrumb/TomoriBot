@@ -245,7 +245,7 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
 		}>,
 		initialInteraction?: CommandInteraction,
 		replyToMessage?: Message,
-		_streamingContext?: StreamingContext,
+		streamingContext?: StreamingContext,
 		userLocale?: string,
 		webhook?: import("discord.js").Webhook,
 		personaAvatarUrl?: string,
@@ -297,6 +297,9 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
 				webhook,
 				personaAvatarUrl,
 				personaUsername,
+
+				// Forced mentions (e.g., reminder recipients)
+				forcedMentions: streamingContext?.forcedMentions,
 			};
 
 			// Create the modular streaming components
