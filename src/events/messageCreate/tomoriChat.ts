@@ -1278,6 +1278,7 @@ export default async function tomoriChat(
 
 			// 3. Enhanced direct trigger checks (base words or direct reply)
 			let isReplyToBot = false;
+			let replyPersona: TomoriState | null = null;
 			let isBaseTriggerWord = false;
 
 			// Check if message is a reply to the bot
@@ -1287,7 +1288,17 @@ export default async function tomoriChat(
 						message.reference.messageId,
 					);
 					if (referenceMessage) {
-						isReplyToBot = referenceMessage.author.id === client.user?.id;
+						if (referenceMessage.author.id === client.user?.id) {
+							isReplyToBot = true;
+						} else if (referenceMessage.webhookId) {
+							const webhookName = referenceMessage.author.username;
+							const matchedPersona = webhookName
+								? personaByNickname.get(webhookName.toLowerCase())
+								: undefined;
+							if (matchedPersona) {
+								replyPersona = matchedPersona;
+							}
+						}
 					}
 				} catch (fetchError) {
 					log.warn(
@@ -1296,6 +1307,8 @@ export default async function tomoriChat(
 					);
 				}
 			}
+
+			const isReplyToPersona = isReplyToBot || !!replyPersona;
 
 			// Check for base trigger words
 			isBaseTriggerWord = checkForBaseTriggerWords(message.content);
@@ -1309,7 +1322,7 @@ export default async function tomoriChat(
 			// For DMs, always validate regardless of content since all DM messages should trigger responses
 			if (
 				isBaseTriggerWord ||
-				isReplyToBot ||
+				isReplyToPersona ||
 				isBotMentioned ||
 				isManuallyTriggered ||
 				(isDMChannel && message.author.id !== client.user?.id)
@@ -1470,6 +1483,7 @@ export default async function tomoriChat(
 					allPersonas,
 					client,
 					isReplyToBot,
+					replyPersona,
 					isBotMentioned,
 					!!isAutoMsgHit, // Convert to boolean
 				);
@@ -3725,6 +3739,7 @@ export default async function tomoriChat(
  * @param allPersonas - Array of all personas (main + alters)
  * @param client - Discord client for mention checks
  * @param isReplyToBot - Whether message is a reply to the bot
+ * @param replyPersona - Persona that the message is replying to (if any)
  * @param isBotMentioned - Whether bot is mentioned in the message
  * @param isAutoMsgHit - Whether auto-message threshold is hit
  * @returns Array of matching personas in randomized order
@@ -3734,11 +3749,15 @@ export function determineMatchingPersonas(
 	allPersonas: TomoriState[],
 	_client: Client,
 	isReplyToBot: boolean,
+	replyPersona: TomoriState | null,
 	isBotMentioned: boolean,
 	isAutoMsgHit: boolean,
 ): TomoriState[] {
 	// 1. Special cases: Only main persona responds
-	// (reply to bot, bot mentioned, auto-message hit)
+	// (reply to a persona, reply to bot, bot mentioned, auto-message hit)
+	if (replyPersona) {
+		return [replyPersona];
+	}
 	if (isReplyToBot || isBotMentioned || isAutoMsgHit) {
 		// Find main persona (is_alter = false)
 		const mainPersona = allPersonas.find((p) => !p.is_alter);
@@ -3836,12 +3855,30 @@ export function shouldBotReply(
 
 	// 2. Check if the message is a reply to the bot
 	let isReplyToBot = false;
+	let isReplyToPersona = false;
+	const personaByNickname = new Map<string, TomoriState>();
+	for (const persona of allPersonas) {
+		const nicknameKey = persona.tomori_nickname?.toLowerCase();
+		if (!nicknameKey || personaByNickname.has(nicknameKey)) continue;
+		personaByNickname.set(nicknameKey, persona);
+	}
 	if (message.reference?.messageId) {
 		const referenceMessage = message.channel.messages.cache.get(
 			message.reference.messageId,
 		);
 		// biome-ignore lint/style/noNonNullAssertion: client.user is available in messageCreate event
-		isReplyToBot = referenceMessage?.author.id === message.client.user!.id;
+		if (referenceMessage?.author.id === message.client.user!.id) {
+			isReplyToBot = true;
+			isReplyToPersona = true;
+		} else if (referenceMessage?.webhookId) {
+			const webhookName = referenceMessage.author.username;
+			const matchedPersona = webhookName
+				? personaByNickname.get(webhookName.toLowerCase())
+				: undefined;
+			if (matchedPersona) {
+				isReplyToPersona = true;
+			}
+		}
 	}
 
 	// 3. Check if the bot is mentioned directly
@@ -3891,7 +3928,7 @@ export function shouldBotReply(
 
 	// 6. Determine if bot should reply:
 	// Reply if (it's a reply to the bot OR bot is mentioned OR triggers are active) OR if the auto-message threshold is hit
-	return isReplyToBot || isBotMentioned || triggersActive || isAutoMsgHit;
+	return isReplyToBot || isReplyToPersona || isBotMentioned || triggersActive || isAutoMsgHit;
 }
 
 /**
