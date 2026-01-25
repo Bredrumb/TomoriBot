@@ -123,6 +123,33 @@ function shouldSendWebhookError(channelId: string): boolean {
 	return true;
 }
 
+/**
+ * Creates a regex that matches a trigger word with "screaming" support.
+ * Allows repeated vowels/consonants, e.g., "Lilja" matches "Liiiljaaaa".
+ * For example: "Lilja" becomes /\bL+i+l+j+a+\b/i
+ *
+ * @param trigger - The trigger word to convert
+ * @returns A RegExp that matches the trigger with screaming variations
+ */
+function createScreamingRegex(trigger: string): RegExp {
+	let pattern = "";
+
+	// Build pattern by allowing each letter to repeat with +
+	for (const char of trigger) {
+		if (/[a-zA-Z]/.test(char)) {
+			// Alphabetic character: allow repetition
+			pattern += `${char}+`;
+		} else {
+			// Non-alphabetic: escape special regex characters
+			pattern += char.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+		}
+	}
+
+	// Add word boundaries and create case-insensitive regex
+	const fullPattern = `\\b${pattern}\\b`;
+	return new RegExp(fullPattern, "i");
+}
+
 async function sendWebhookErrorEmbed(
 	channel: BaseGuildTextChannel | AnyThreadChannel,
 	locale: string,
@@ -962,49 +989,52 @@ export default async function tomoriChat(
 						!message.author.bot &&
 						!message.webhookId
 					) {
-					// Check whitelist status
-					const whitelistStatus = await getCachedWhitelistStatus(
-						guild?.id ?? message.author.id,
-						message.channelId,
-					);
+						// Check whitelist status
+						const whitelistStatus = await getCachedWhitelistStatus(
+							guild?.id ?? message.author.id,
+							message.channelId,
+						);
 
-					// If active whitelist exists but channel NOT whitelisted, silently ignore
-					if (whitelistStatus.hasActiveWhitelist && !whitelistStatus.isChannelWhitelisted) {
-						log.info(
-							`Message ${message.id} in channel ${message.channelId} rejected - channel not whitelisted`,
-						);
-						return; // Silent rejection
-					}
+						// If active whitelist exists but channel NOT whitelisted, silently ignore
+						if (
+							whitelistStatus.hasActiveWhitelist &&
+							!whitelistStatus.isChannelWhitelisted
+						) {
+							log.info(
+								`Message ${message.id} in channel ${message.channelId} rejected - channel not whitelisted`,
+							);
+							return; // Silent rejection
+						}
 
-					// Continue with cooldown check
-					const preQueueCooldownResult = await checkMessageTriggerCooldown(
-						message,
-						earlyTomoriState.config,
-					);
-					if (preQueueCooldownResult.isOnCooldown) {
-						// Show cooldown warning and don't queue
-						const footerKey = getCooldownTypeFooterKey(
-							preQueueCooldownResult.cooldownType,
+						// Continue with cooldown check
+						const preQueueCooldownResult = await checkMessageTriggerCooldown(
+							message,
+							earlyTomoriState.config,
 						);
-						const tempUserRow = await getCachedUserRow(userDiscId);
-						const cooldownLocale =
-							tempUserRow?.language_pref ?? guild?.preferredLocale ?? "en-US";
-						await sendStandardEmbed(channel, cooldownLocale, {
-							color: ColorCode.WARN,
-							titleKey: "general.message_cooldown_title",
-							descriptionKey: "general.message_cooldown",
-							descriptionVars: {
-								seconds: preQueueCooldownResult.remainingSeconds.toString(),
-								botName: earlyTomoriState.tomori_nickname,
-							},
-							footerKey: footerKey,
-						});
-						log.info(
-							`Message ${message.id} rejected before queuing due to cooldown. ${preQueueCooldownResult.remainingSeconds}s remaining.`,
-						);
-						return;
+						if (preQueueCooldownResult.isOnCooldown) {
+							// Show cooldown warning and don't queue
+							const footerKey = getCooldownTypeFooterKey(
+								preQueueCooldownResult.cooldownType,
+							);
+							const tempUserRow = await getCachedUserRow(userDiscId);
+							const cooldownLocale =
+								tempUserRow?.language_pref ?? guild?.preferredLocale ?? "en-US";
+							await sendStandardEmbed(channel, cooldownLocale, {
+								color: ColorCode.WARN,
+								titleKey: "general.message_cooldown_title",
+								descriptionKey: "general.message_cooldown",
+								descriptionVars: {
+									seconds: preQueueCooldownResult.remainingSeconds.toString(),
+									botName: earlyTomoriState.tomori_nickname,
+								},
+								footerKey: footerKey,
+							});
+							log.info(
+								`Message ${message.id} rejected before queuing due to cooldown. ${preQueueCooldownResult.remainingSeconds}s remaining.`,
+							);
+							return;
+						}
 					}
-				}
 
 					// Rate limits already validated above, proceed with normal enqueueing
 					lockEntry.messageQueue.push({
@@ -1608,7 +1638,10 @@ export default async function tomoriChat(
 				);
 
 				// If active whitelist exists but channel NOT whitelisted, silently ignore
-				if (whitelistStatus.hasActiveWhitelist && !whitelistStatus.isChannelWhitelisted) {
+				if (
+					whitelistStatus.hasActiveWhitelist &&
+					!whitelistStatus.isChannelWhitelisted
+				) {
 					log.info(
 						`Message ${message.id} in channel ${message.channelId} rejected - channel not whitelisted`,
 					);
@@ -4189,10 +4222,34 @@ export function determineMatchingPersonas(
 		return mainPersona ? [mainPersona] : [];
 	}
 
+	// Determine which persona (if any) sent this message for self-trigger prevention
+	let senderPersona: TomoriState | undefined;
+	// Build nickname map for webhook lookup
+	const personaByNickname = new Map<string, TomoriState>();
+	for (const persona of allPersonas) {
+		const nicknameKey = persona.tomori_nickname?.toLowerCase();
+		if (!nicknameKey || personaByNickname.has(nicknameKey)) continue;
+		personaByNickname.set(nicknameKey, persona);
+	}
+	if (message.webhookId) {
+		// Message from a webhook - identify the persona by webhook username
+		const webhookName = message.author.username.toLowerCase();
+		senderPersona = personaByNickname.get(webhookName);
+		// biome-ignore lint/style/noNonNullAssertion: client.user is available in messageCreate event
+	} else if (message.author.id === _client.user!.id) {
+		// Message from the main bot - find the main persona (not an alter)
+		senderPersona = allPersonas.find((p) => !p.is_alter);
+	}
+
 	// 2. Trigger word matching: Check all personas
 	const matchingPersonas: TomoriState[] = [];
 
 	for (const persona of allPersonas) {
+		// Prevent self-triggers: skip if this persona sent the message
+		if (senderPersona && persona.tomori_id === senderPersona.tomori_id) {
+			continue;
+		}
+
 		const config = persona.config;
 		if (!config) continue;
 
@@ -4217,8 +4274,8 @@ export function determineMatchingPersonas(
 				return message.content.includes(trigger);
 			}
 
-			// 3. Use word boundaries for English triggers (case-insensitive)
-			const regex = new RegExp(`\\b${escapeRegExp(trigger)}\\b`, "i");
+			// 3. English triggers: use screaming-aware regex with word boundaries (case-insensitive)
+			const regex = createScreamingRegex(trigger);
 			return regex.test(message.content);
 		});
 
@@ -4333,8 +4390,25 @@ export function shouldBotReply(
 	// biome-ignore lint/style/noNonNullAssertion: client.user is available in messageCreate event
 	const isBotMentioned = message.mentions.users.has(message.client.user!.id);
 
+	// Determine which persona (if any) sent this message for self-trigger prevention
+	let senderPersona: TomoriState | undefined;
+	if (message.webhookId) {
+		// Message from a webhook - identify the persona by webhook username
+		const webhookName = message.author.username.toLowerCase();
+		senderPersona = personaByNickname.get(webhookName);
+		// biome-ignore lint/style/noNonNullAssertion: client.user is available in messageCreate event
+	} else if (message.author.id === message.client.user!.id) {
+		// Message from the main bot - find the main persona (not an alter)
+		senderPersona = allPersonas.find((p) => !p.is_alter);
+	}
+
 	// 4. Check if the message content triggers ANY persona (main or alters)
 	const triggersActive = allPersonas.some((persona) => {
+		// Prevent self-triggers: skip if this persona sent the message
+		if (senderPersona && persona.tomori_id === senderPersona.tomori_id) {
+			return false;
+		}
+
 		// Determine which trigger list to use
 		const triggers = persona.is_alter
 			? persona.alter_triggers || []
@@ -4351,10 +4425,11 @@ export function shouldBotReply(
 				trigger,
 			);
 			if (isJapanese) {
+				// Japanese triggers: direct substring match (no screaming support)
 				return message.content.includes(trigger);
 			}
-			// Use word boundaries for English triggers (case-insensitive)
-			const regex = new RegExp(`\\b${escapeRegExp(trigger)}\\b`, "i");
+			// English triggers: use screaming-aware regex with word boundaries (case-insensitive)
+			const regex = createScreamingRegex(trigger);
 			return regex.test(message.content);
 		});
 	});

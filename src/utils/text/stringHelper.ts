@@ -924,10 +924,7 @@ export function normalizeCustomEmojisForLlm(text: string): string {
 	}
 
 	for (let i = codeBlocks.length - 1; i >= 0; i--) {
-		processedText = processedText.replace(
-			`__CODE_BLOCK_${i}__`,
-			codeBlocks[i],
-		);
+		processedText = processedText.replace(`__CODE_BLOCK_${i}__`, codeBlocks[i]);
 	}
 
 	return processedText;
@@ -979,18 +976,18 @@ export function replaceMentionHandles(
 
 		const normalizedHandle = handle.toLowerCase();
 		const ids = mentionMap.get(normalizedHandle);
-		if (!ids || ids.length !== 1) return match;
+		if (!ids || ids.length !== 1) return `{${handle}}`;
 		return `<@${ids[0]}>`;
 	});
 
 	// Handle @name|id format without curly braces (LLM sometimes omits braces)
 	processedText = processedText.replace(
 		/(^|[^\p{L}\p{N}_<])@([\p{L}\p{N}_][\p{L}\p{N}_ -]*)\|(\d{17,20})/giu,
-		(match, prefix, _rawHandle, idPart) => {
+		(_match, prefix, rawHandle, idPart) => {
 			if (mentionIdSet?.has(idPart)) {
 				return `${prefix}<@${idPart}>`;
 			}
-			return match;
+			return `${prefix}${rawHandle}|${idPart}`;
 		},
 	);
 
@@ -1001,7 +998,7 @@ export function replaceMentionHandles(
 			if (!handle) return match;
 			const normalizedHandle = handle.toLowerCase();
 			const ids = mentionMap.get(normalizedHandle);
-			if (!ids || ids.length !== 1) return match;
+			if (!ids || ids.length !== 1) return `${prefix}${handle}`;
 			return `${prefix}<@${ids[0]}>`;
 		},
 	);
@@ -1014,10 +1011,7 @@ export function replaceMentionHandles(
 	}
 
 	for (let i = codeBlocks.length - 1; i >= 0; i--) {
-		processedText = processedText.replace(
-			`__CODE_BLOCK_${i}__`,
-			codeBlocks[i],
-		);
+		processedText = processedText.replace(`__CODE_BLOCK_${i}__`, codeBlocks[i]);
 	}
 
 	return processedText;
