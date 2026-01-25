@@ -107,10 +107,12 @@ interface OpenrouterStreamChunk {
 		completionTokensDetails?: unknown;
 		completion_tokens_details?: unknown;
 	};
-	error?: {
-		code?: string | number;
-		message?: string;
-	} | ProviderError;
+	error?:
+		| {
+				code?: string | number;
+				message?: string;
+		  }
+		| ProviderError;
 }
 
 /**
@@ -297,9 +299,7 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 				const timeoutPromise = new Promise<never>((_, reject) => {
 					timeoutId = setTimeout(() => {
 						reject(
-							new Error(
-								"OpenRouter stream timed out while waiting for data",
-							),
+							new Error("OpenRouter stream timed out while waiting for data"),
 						);
 					}, inactivityTimeoutMs);
 				});
@@ -367,8 +367,7 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 					const hasMeaningfulData = Boolean(
 						normalizedChunk.error ||
 							normalizedChunk.usage ||
-							(normalizedChunk.choices &&
-								normalizedChunk.choices.length > 0),
+							(normalizedChunk.choices && normalizedChunk.choices.length > 0),
 					);
 
 					if (!hasMeaningfulData) continue;
@@ -474,7 +473,9 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 			};
 		}
 
-		const rawChoices = Array.isArray(rawObj.choices) ? rawObj.choices : undefined;
+		const rawChoices = Array.isArray(rawObj.choices)
+			? rawObj.choices
+			: undefined;
 		const normalizedChoices = rawChoices?.map((choice, index) => {
 			const choiceObj = choice as Record<string, unknown>;
 			const deltaObj =
@@ -599,8 +600,10 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		const normalizedChunk: OpenrouterStreamChunk = {};
 
 		if (typeof rawObj.id === "string") normalizedChunk.id = rawObj.id;
-		if (typeof rawObj.object === "string") normalizedChunk.object = rawObj.object;
-		if (typeof rawObj.created === "number") normalizedChunk.created = rawObj.created;
+		if (typeof rawObj.object === "string")
+			normalizedChunk.object = rawObj.object;
+		if (typeof rawObj.created === "number")
+			normalizedChunk.created = rawObj.created;
 		if (typeof rawObj.model === "string") normalizedChunk.model = rawObj.model;
 		if (typeof rawObj.provider === "string")
 			normalizedChunk.provider = rawObj.provider;
@@ -629,8 +632,8 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 				};
 			}
 
-			const errorCode =
-				(openrouterChunk.error as { code?: string | number }).code;
+			const errorCode = (openrouterChunk.error as { code?: string | number })
+				.code;
 			const errorMessage =
 				(openrouterChunk.error as { message?: string }).message ||
 				"OpenRouter API error";
@@ -699,8 +702,7 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		}
 
 		const finishReason = choice.finishReason ?? choice.finish_reason ?? null;
-		const deltaToolCalls =
-			choice.delta?.toolCalls ?? choice.delta?.tool_calls;
+		const deltaToolCalls = choice.delta?.toolCalls ?? choice.delta?.tool_calls;
 
 		// Log full chunk when we have tool calls to debug thought_signature location
 		if (deltaToolCalls || finishReason === "tool_calls") {
@@ -779,7 +781,9 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 					}
 					if (deltaToolCall.type) {
 						accumulated.type = deltaToolCall.type;
-						log.info(`OpenRouter: Captured tool call type: ${deltaToolCall.type}`);
+						log.info(
+							`OpenRouter: Captured tool call type: ${deltaToolCall.type}`,
+						);
 					}
 					if (deltaToolCall.thought_signature) {
 						accumulated.thought_signature = deltaToolCall.thought_signature;
@@ -937,11 +941,15 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 				// Accumulate id, type, and thought_signature (usually only in first chunk)
 				if (deltaToolCall.id) {
 					accumulated.id = deltaToolCall.id;
-					log.info(`OpenRouter: [INTERMEDIATE] Captured id: ${deltaToolCall.id}`);
+					log.info(
+						`OpenRouter: [INTERMEDIATE] Captured id: ${deltaToolCall.id}`,
+					);
 				}
 				if (deltaToolCall.type) {
 					accumulated.type = deltaToolCall.type;
-					log.info(`OpenRouter: [INTERMEDIATE] Captured type: ${deltaToolCall.type}`);
+					log.info(
+						`OpenRouter: [INTERMEDIATE] Captured type: ${deltaToolCall.type}`,
+					);
 				}
 				if (deltaToolCall.thought_signature) {
 					accumulated.thought_signature = deltaToolCall.thought_signature;
@@ -984,9 +992,6 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 			choice.delta?.reasoning_details ?? choice.delta?.reasoningDetails;
 		if (reasoningDetails && reasoningDetails.length > 0) {
 			this.reasoningDetailsAccumulator.push(...reasoningDetails);
-			log.info(
-				`OpenRouter: Accumulated ${reasoningDetails.length} reasoning_details from delta (total: ${this.reasoningDetailsAccumulator.length})`,
-			);
 			// Return empty text to continue processing
 			return {
 				type: "text",
@@ -1029,8 +1034,7 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		const openrouterChunk = chunk.data as OpenrouterStreamChunk;
 
 		const choice = openrouterChunk.choices?.[0];
-		const toolCalls =
-			choice?.delta?.toolCalls ?? choice?.delta?.tool_calls;
+		const toolCalls = choice?.delta?.toolCalls ?? choice?.delta?.tool_calls;
 		if (toolCalls && toolCalls.length > 0) {
 			const toolCall = toolCalls[0];
 			if (toolCall.function) {
@@ -1594,7 +1598,8 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 
 				// Include thought_signature if present (required for Gemini models)
 				if (interaction.functionCall.thoughtSignature) {
-					toolCallObject.thought_signature = interaction.functionCall.thoughtSignature;
+					toolCallObject.thought_signature =
+						interaction.functionCall.thoughtSignature;
 					log.info(
 						`OpenRouter: ✓ PRESERVING thought_signature in assistant message for tool '${interaction.functionCall.name}': ${interaction.functionCall.thoughtSignature}`,
 					);
@@ -1614,8 +1619,12 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 
 				// Preserve reasoning_details if present (critical for Gemini models)
 				// See: https://openrouter.ai/docs/guides/best-practices/reasoning-tokens#preserving-reasoning-blocks
-				if (interaction.functionCall.reasoning_details && interaction.functionCall.reasoning_details.length > 0) {
-					assistantMessage.reasoning_details = interaction.functionCall.reasoning_details;
+				if (
+					interaction.functionCall.reasoning_details &&
+					interaction.functionCall.reasoning_details.length > 0
+				) {
+					assistantMessage.reasoning_details =
+						interaction.functionCall.reasoning_details;
 					log.info(
 						`OpenRouter: Preserving ${interaction.functionCall.reasoning_details.length} reasoning_details in assistant message for tool '${interaction.functionCall.name}'`,
 					);

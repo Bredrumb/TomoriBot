@@ -129,8 +129,16 @@ export async function checkMessageTriggerCooldown(
 		? (whitelistStatus.channelCooldownType ?? config.cooldown_type ?? CooldownType.OFF)
 		: (config.cooldown_type ?? CooldownType.OFF);
 
+	// Diagnostic logging for whitelist-based cooldowns
+	if (whitelistStatus.isChannelWhitelisted) {
+		log.info(`[Cooldown Check] Channel ${message.channelId} is whitelisted - using channel-specific cooldown type ${cooldownType}, length ${whitelistStatus.channelCooldownLength}s`);
+	} else {
+		log.info(`[Cooldown Check] Channel ${message.channelId} NOT whitelisted - using global cooldown type ${cooldownType}`);
+	}
+
 	// If cooldowns are off, not on cooldown
 	if (cooldownType === CooldownType.OFF) {
+		log.info(`[Cooldown Check] Cooldown type is OFF - skipping cooldown check`);
 		return {
 			isOnCooldown: false,
 			remainingSeconds: 0,
@@ -139,14 +147,36 @@ export async function checkMessageTriggerCooldown(
 	}
 
 	// Check if user is exempt from this cooldown type
+	// Can be disabled for testing with DISABLE_COOLDOWN_EXEMPTIONS=true
+	const disableExemptions = process.env.DISABLE_COOLDOWN_EXEMPTIONS === "true";
+
+	log.info(
+		`[Cooldown Check] DISABLE_COOLDOWN_EXEMPTIONS = ${process.env.DISABLE_COOLDOWN_EXEMPTIONS} (parsed as: ${disableExemptions})`,
+	);
+
 	const member = message.member;
-	if (isExemptFromCooldown(member, cooldownType)) {
+	const isExempt = !disableExemptions && isExemptFromCooldown(member, cooldownType);
+
+	if (isExempt) {
+		log.info(
+			`[Cooldown Check] User ${message.author.id} is EXEMPT from cooldown type ${cooldownType} (has ManageGuild permission)`,
+		);
 		return {
 			isOnCooldown: false,
 			remainingSeconds: 0,
 			cooldownType,
 		};
 	}
+
+	if (disableExemptions && member?.permissions.has(PermissionFlagsBits.ManageGuild)) {
+		log.warn(
+			`[Cooldown Check] User ${message.author.id} WOULD BE EXEMPT but exemptions are DISABLED for testing`,
+		);
+	}
+
+	log.info(
+		`[Cooldown Check] User ${message.author.id} is NOT exempt - proceeding to database check`,
+	);
 
 	// Get the appropriate keys for this cooldown type
 	const { entityId, category } = getCooldownKeyPair(
@@ -159,6 +189,11 @@ export async function checkMessageTriggerCooldown(
 	try {
 		// Check if cooldown exists and is still active
 		const now = Date.now();
+
+		log.info(
+			`[Cooldown Check] Querying database - entityId: ${entityId}, category: ${category}, now: ${now}`,
+		);
+
 		const [cooldown] = await sql`
 			SELECT expiry_time
 			FROM cooldowns
@@ -168,6 +203,9 @@ export async function checkMessageTriggerCooldown(
 		`;
 
 		if (!cooldown) {
+			log.info(
+				`[Cooldown Check] No active cooldown found for ${entityId} in ${category}`,
+			);
 			return {
 				isOnCooldown: false,
 				remainingSeconds: 0,
@@ -177,6 +215,10 @@ export async function checkMessageTriggerCooldown(
 
 		const remainingMs = Number(cooldown.expiry_time) - now;
 		const remainingSeconds = Math.ceil(remainingMs / 1000);
+
+		log.info(
+			`[Cooldown Check] FOUND active cooldown for ${entityId} - ${remainingSeconds}s remaining (expires: ${cooldown.expiry_time})`,
+		);
 
 		return {
 			isOnCooldown: true,
@@ -225,6 +267,11 @@ export async function setMessageTriggerCooldown(
 		? (whitelistStatus.channelCooldownLength ?? config.cooldown_length ?? 5)
 		: (config.cooldown_length ?? 5);
 
+	// Diagnostic logging for whitelist-based cooldowns
+	if (whitelistStatus.isChannelWhitelisted) {
+		log.info(`[Cooldown Set] Channel ${message.channelId} is whitelisted - setting cooldown type ${cooldownType}, length ${cooldownLengthSeconds}s`);
+	}
+
 	// If cooldowns are off, nothing to set
 	if (cooldownType === CooldownType.OFF) {
 		return;
@@ -250,6 +297,27 @@ export async function setMessageTriggerCooldown(
 			ON CONFLICT (user_disc_id, command_category) DO UPDATE
 			SET expiry_time = ${expiryTime}
 		`;
+
+		log.info(
+			`[Cooldown Set] Successfully set cooldown for ${entityId} in category ${category}, expires in ${cooldownLengthSeconds}s (type: ${cooldownType}, expiryTime: ${expiryTime})`,
+		);
+
+		// Verify the cooldown was written by reading it back
+		const [verification] = await sql`
+			SELECT expiry_time FROM cooldowns
+			WHERE user_disc_id = ${entityId}
+			AND command_category = ${category}
+		`;
+
+		if (verification) {
+			log.info(
+				`[Cooldown Set] VERIFIED - Cooldown exists in database with expiry_time: ${verification.expiry_time}`,
+			);
+		} else {
+			log.error(
+				`[Cooldown Set] VERIFICATION FAILED - Cooldown not found in database after insert!`,
+			);
+		}
 	} catch (error) {
 		// Log but don't throw - cooldown failures shouldn't break message handling
 		log.warn("Failed to set message trigger cooldown", {

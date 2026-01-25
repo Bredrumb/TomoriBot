@@ -977,34 +977,34 @@ export default async function tomoriChat(
 					}
 
 					// Continue with cooldown check
-						const preQueueCooldownResult = await checkMessageTriggerCooldown(
-							message,
-							earlyTomoriState.config,
+					const preQueueCooldownResult = await checkMessageTriggerCooldown(
+						message,
+						earlyTomoriState.config,
+					);
+					if (preQueueCooldownResult.isOnCooldown) {
+						// Show cooldown warning and don't queue
+						const footerKey = getCooldownTypeFooterKey(
+							preQueueCooldownResult.cooldownType,
 						);
-						if (preQueueCooldownResult.isOnCooldown) {
-							// Show cooldown warning and don't queue
-							const footerKey = getCooldownTypeFooterKey(
-								preQueueCooldownResult.cooldownType,
-							);
-							const tempUserRow = await getCachedUserRow(userDiscId);
-							const cooldownLocale =
-								tempUserRow?.language_pref ?? guild?.preferredLocale ?? "en-US";
-							await sendStandardEmbed(channel, cooldownLocale, {
-								color: ColorCode.WARN,
-								titleKey: "general.message_cooldown_title",
-								descriptionKey: "general.message_cooldown",
-								descriptionVars: {
-									seconds: preQueueCooldownResult.remainingSeconds.toString(),
-									botName: earlyTomoriState.tomori_nickname,
-								},
-								footerKey: footerKey,
-							});
-							log.info(
-								`Message ${message.id} rejected before queuing due to cooldown. ${preQueueCooldownResult.remainingSeconds}s remaining.`,
-							);
-							return;
-						}
+						const tempUserRow = await getCachedUserRow(userDiscId);
+						const cooldownLocale =
+							tempUserRow?.language_pref ?? guild?.preferredLocale ?? "en-US";
+						await sendStandardEmbed(channel, cooldownLocale, {
+							color: ColorCode.WARN,
+							titleKey: "general.message_cooldown_title",
+							descriptionKey: "general.message_cooldown",
+							descriptionVars: {
+								seconds: preQueueCooldownResult.remainingSeconds.toString(),
+								botName: earlyTomoriState.tomori_nickname,
+							},
+							footerKey: footerKey,
+						});
+						log.info(
+							`Message ${message.id} rejected before queuing due to cooldown. ${preQueueCooldownResult.remainingSeconds}s remaining.`,
+						);
+						return;
 					}
+				}
 
 					// Rate limits already validated above, proceed with normal enqueueing
 					lockEntry.messageQueue.push({
