@@ -62,6 +62,9 @@ export async function execute(
 		return;
 	}
 
+	// 1.5. Defer the interaction before async work to prevent timeout
+	await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
 	try {
 		// 2. Get the new nickname from the command options
 		const newNickname = interaction.options.getString("name", true);

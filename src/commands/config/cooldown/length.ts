@@ -3,6 +3,7 @@ import type {
 	Client,
 	SlashCommandSubcommandBuilder,
 } from "discord.js";
+import { MessageFlags } from "discord.js";
 import { sql } from "@/utils/db/client";
 import {
 	getCachedTomoriState,
@@ -69,6 +70,9 @@ export async function execute(
 		});
 		return;
 	}
+
+	// 1.5. Defer the interaction before async work to prevent timeout
+	await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
 	try {
 		// 2. Get the length value from options

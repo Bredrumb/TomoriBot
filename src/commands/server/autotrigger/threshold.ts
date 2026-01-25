@@ -1,7 +1,8 @@
-import type {
-	ChatInputCommandInteraction,
-	Client,
-	SlashCommandSubcommandBuilder,
+import {
+	MessageFlags,
+	type ChatInputCommandInteraction,
+	type Client,
+	type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { sql } from "@/utils/db/client";
 import {
@@ -65,6 +66,10 @@ Setting to '0' will disable auto-chat
 		});
 		return;
 	}
+
+	// 1.5. Defer the interaction before async work to prevent timeout
+	await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
 	try {
 		// Get the threshold value from options
 		const threshold = interaction.options.getInteger("threshold", true);

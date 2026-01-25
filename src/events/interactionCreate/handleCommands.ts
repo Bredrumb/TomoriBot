@@ -7,7 +7,6 @@ import {
 	type UserRow,
 	type ErrorContext,
 } from "../../types/db/schema";
-import { localizer } from "../../utils/text/localizer";
 import { registerUser } from "../../utils/db/dbWrite";
 import {
 	loadCommandData,
@@ -16,65 +15,14 @@ import {
 } from "../../utils/discord/commandLoader";
 
 // Define constants at the top (Rule #20)
-const TIMEOUT_DURATION = 100000; // 100 Seconds
-const MODAL_COMMAND_TIMEOUT = 700000; // 700 Seconds (11.67 minutes) for modal commands - Must exceed modal submission timeout (600s)
 const DEFAULT_COOLDOWN = 1600; // 1.6 second default cooldown for all commands
-
-// Commands that use modals and need longer timeout
-// Format: "category.subcommand" for flat commands, "category.group.subcommand" for grouped commands
-const MODAL_COMMANDS = new Set([
-	// Config commands
-	"config.setup",
-	"config.model.text",
-	"config.model.image",
-	"config.humanizer",
-	"config.apikey.set",
-	// Teach commands
-	"teach.attribute",
-	"teach.sampledialogue",
-	"teach.memory.server",
-	"teach.memory.personal",
-	// Forget commands
-	"forget.attribute",
-	"forget.sampledialogue",
-	"forget.memory.server",
-	"forget.memory.personal",
-	// Persona commands
-	"persona.default",
-	"persona.generate",
-	"persona.create",
-	// Server commands
-	"server.trigger.delete",
-]);
-
-/**
- * Determines if a command uses modals and needs longer timeout
- * @param commandName - The command category
- * @param groupName - The subcommand group name (null for flat commands)
- * @param subcommandName - The subcommand name
- * @returns boolean indicating if command uses modals
- */
-function isModalCommand(
-	commandName: string,
-	groupName: string | null,
-	subcommandName: string | null,
-): boolean {
-	if (!subcommandName) return false;
-
-	// Build the full command path
-	const commandPath = groupName
-		? `${commandName}.${groupName}.${subcommandName}`
-		: `${commandName}.${subcommandName}`;
-
-	return MODAL_COMMANDS.has(commandPath);
-}
 
 const COOLDOWN_MAP = new Map<string, number>([
 	["config", 3000],
 	["teach", 3000],
 	["data", 3000],
 	["forget", 3000],
-	["persona", 30000],
+	["persona", 10000],
 	["server", 3000],
 	["personal", 3000],
 ]);
@@ -336,41 +284,10 @@ const handler = async (
 			}
 		};
 
-		// Race main logic against timeout (use longer timeout for modal commands)
-		const isModal = isModalCommand(commandName, groupName, subcommandName);
-		const timeoutDuration = isModal ? MODAL_COMMAND_TIMEOUT : TIMEOUT_DURATION;
-
-		// Create timeout with proper cleanup
-		let timeoutId: NodeJS.Timeout | null = null;
-
-		const timeoutPromise = new Promise<never>((_, reject) => {
-			timeoutId = setTimeout(() => {
-				// Log timeout context before rejecting
-				const timeoutContext = {
-					commandName,
-					groupName: groupName ?? "none",
-					subcommandName,
-					isModalCommand: isModal,
-					timeoutDuration: `${timeoutDuration / 1000}s`,
-					userId: interaction.user.id,
-					guildId: interaction.guild?.id ?? "DM",
-				};
-				log.warn(`Command execution timeout fired:`, timeoutContext);
-
-				reject(
-					new Error(localizer(initialLocale, "general.errors.command_timeout")),
-				);
-			}, timeoutDuration);
-		});
-
-		try {
-			await Promise.race([mainLogicPromise(), timeoutPromise]);
-		} finally {
-			// Always clear the timeout when Promise.race completes (success or failure)
-			if (timeoutId) {
-				clearTimeout(timeoutId);
-			}
-		}
+		// Execute main command logic
+		// Discord handles interaction timeouts natively, and helper functions
+		// (awaitModalSubmit, awaitMessageComponent) have their own timeouts
+		await mainLogicPromise();
 	} catch (error) {
 		// Log error with structured context (Rule #22)
 		const context: ErrorContext = {

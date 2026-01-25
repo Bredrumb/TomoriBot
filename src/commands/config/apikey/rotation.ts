@@ -87,6 +87,9 @@ export async function execute(
 		return;
 	}
 
+	// 1.5. Defer the interaction before async work to prevent timeout
+	await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
 	// 2. Get command options
 	const action = interaction.options.getString("action", true);
 	const apiKey = interaction.options.getString("key", false);

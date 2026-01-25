@@ -1,6 +1,6 @@
 import type { SlashCommandSubcommandBuilder } from "discord.js";
 import type { ChatInputCommandInteraction, Client } from "discord.js";
-import { AttachmentBuilder, EmbedBuilder, MessageFlags } from "discord.js";
+import { AttachmentBuilder, EmbedBuilder } from "discord.js";
 import { ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { UserRow } from "@/types/db/schema";
@@ -32,6 +32,9 @@ export async function execute(
 	_userData: UserRow,
 	locale: string,
 ): Promise<void> {
+	// 0. Defer the interaction before async file I/O to prevent timeout
+	await interaction.deferReply();
+
 	// 1. Load gitbanner.png image as attachment
 	const bannerFile = Bun.file("img/gitbanner.png");
 	const bannerBuffer = await bannerFile.arrayBuffer();
@@ -48,10 +51,9 @@ export async function execute(
 		.setColor(ColorCode.INFO)
 		.setImage("attachment://gitbanner.png");
 
-	// 3. Reply with embed and attachment (suppress notifications)
-	await interaction.reply({
+	// 3. Reply with embed and attachment
+	await interaction.editReply({
 		embeds: [embed],
 		files: [attachment],
-		flags: MessageFlags.SuppressNotifications,
 	});
 }

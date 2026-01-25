@@ -103,6 +103,9 @@ export async function execute(
 		return;
 	}
 
+	// 1.5. Defer the interaction before async work to prevent timeout
+	await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
 	try {
 		// 2. Get command options
 		const permissionType = interaction.options.getString("permission", true);

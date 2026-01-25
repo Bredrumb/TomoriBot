@@ -1,5 +1,6 @@
 import {
 	ChannelType,
+	MessageFlags,
 	type ChatInputCommandInteraction,
 	type Client,
 	type SlashCommandSubcommandBuilder,
@@ -103,6 +104,9 @@ export async function execute(
 			});
 			return;
 		}
+
+		// 1.5. Defer the interaction before async work to prevent timeout
+		await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
 		// 2. Get Tomori state for server
 		const tomoriState = await getCachedTomoriState(interaction.guildId);
