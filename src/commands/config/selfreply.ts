@@ -23,7 +23,7 @@ export const configureSubcommand = (
 	subcommand: SlashCommandSubcommandBuilder,
 ) =>
 	subcommand
-		.setName("limit")
+		.setName("selfreply")
 		.setDescription(
 			localizer("en-US", "commands.config.selfreply.limit.description"),
 		)
