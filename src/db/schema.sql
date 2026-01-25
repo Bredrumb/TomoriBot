@@ -605,6 +605,31 @@ BEFORE UPDATE ON personalization_blacklist
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 
+-- Channel Whitelist Table
+-- Stores per-channel cooldown overrides for server-wide whitelist system
+-- When ANY channel is whitelisted, ONLY whitelisted channels can trigger the bot
+CREATE TABLE IF NOT EXISTS channel_whitelist (
+	server_id INT NOT NULL,
+	channel_disc_id TEXT NOT NULL,
+	cooldown_type INT NOT NULL DEFAULT 0,
+	cooldown_length INT NOT NULL DEFAULT 0,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	PRIMARY KEY (server_id, channel_disc_id),
+	FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE
+);
+
+-- Create indexes for channel_whitelist
+CREATE INDEX IF NOT EXISTS idx_channel_whitelist_server ON channel_whitelist(server_id);
+CREATE INDEX IF NOT EXISTS idx_channel_whitelist_active ON channel_whitelist(server_id, cooldown_length) WHERE cooldown_length > 0;
+
+-- Create updated_at trigger for channel_whitelist table
+DROP TRIGGER IF EXISTS update_channel_whitelist_timestamp ON channel_whitelist;
+CREATE TRIGGER update_channel_whitelist_timestamp
+BEFORE UPDATE ON channel_whitelist
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
 CREATE TABLE IF NOT EXISTS error_logs (
   error_log_id SERIAL PRIMARY KEY,
   -- Context IDs - Made nullable as errors can happen outside these contexts

@@ -1,5 +1,5 @@
 # TomoriBot Privacy Policy
-Last updated: 2025-11-27
+Last updated: 2026-01-25
 
 This Privacy Policy explains how the official hosted TomoriBot instance handles data. If you self-host TomoriBot from this repository, you control your own data; this document is a reference template and does not govern your self-hosted deployment. 
 
@@ -15,12 +15,13 @@ The following data is stored in our database until you delete it using TomoriBot
 - **Memories and content you provide through commands:** Personal memories, server memories, and text you submit via commands. These may reference Discord users and message content you supply.
 - **Reminders:** Reminder text, target user/channel, scheduled time, recurrence settings, and timezone information stored when you create reminders via bot commands.
 - **API keys:** Provider keys (e.g., AI or search) you choose to store. Keys are encrypted at rest.
+- **Persona avatar images:** Images you upload for persona avatars are stored in cloud storage to enable the bot to use them when rendering personas across conversations.
 - **Operational logs:** Error logs containing interaction IDs, user/server IDs, command names, error types, and stack traces for debugging. No message content or personal conversations are logged. Routine successful operations are not logged.
 
 ### 1.2) Data Processed Ephemerally (Not Stored)
 The following data is accessed temporarily during Trigger processing (as defined in the Terms of Service) and is NOT stored in our database:
 - **Discord messages:** Latest content (typically last 80 messages) in the triggered Discord text channel are read in-memory to build conversation context and sent to your configured Provider for AI responses. This data is immediately discarded after the response is generated.
-- **Attachments and media:** Images you upload for persona avatars, message video/image attachments, or profile picture analysis (e.g., `/peek profile_picture`) are processed in-memory and sent to your configured AI provider if needed, but are NOT stored by TomoriBot. Once processing completes, these files are discarded.
+- **Attachments and media:** Message video/image attachments or profile picture analysis (e.g., `/peek profile_picture`) are processed in-memory and sent to your configured AI provider if needed, but are NOT stored by TomoriBot. Once processing completes, these files are discarded. Note: Persona avatar images are stored persistently (see Section 1.1).
 - **Server asset URLs:** When emojis/stickers are used in AI responses, their image URLs are fetched fresh from Discord each time and may be sent to AI providers as conversation context. These URLs are not stored.
 - **Server and channel metadata:** Server names, descriptions, channel names, and channel descriptions are fetched in real-time during conversations to provide contextual understanding. This metadata is processed in-memory and is NOT stored in our database.
 - **User presence information:** Current user activities (e.g., what you're listening to, playing, or custom status) may be accessed during conversations to provide contextual awareness. This presence data is processed in-memory and is NOT stored.

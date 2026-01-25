@@ -29,6 +29,7 @@ import {
 	getCachedPrivacyLevel,
 	getCachedBlacklistStatus,
 } from "../../utils/cache/userCache";
+import { getCachedWhitelistStatus } from "../../utils/cache/channelWhitelistCache";
 import { incrementTomoriCounter } from "@/utils/db/dbWrite";
 import {
 	createStandardEmbed,
@@ -961,6 +962,21 @@ export default async function tomoriChat(
 						!message.author.bot &&
 						!message.webhookId
 					) {
+					// Check whitelist status
+					const whitelistStatus = await getCachedWhitelistStatus(
+						guild?.id ?? message.author.id,
+						message.channelId,
+					);
+
+					// If active whitelist exists but channel NOT whitelisted, silently ignore
+					if (whitelistStatus.hasActiveWhitelist && !whitelistStatus.isChannelWhitelisted) {
+						log.info(
+							`Message ${message.id} in channel ${message.channelId} rejected - channel not whitelisted`,
+						);
+						return; // Silent rejection
+					}
+
+					// Continue with cooldown check
 						const preQueueCooldownResult = await checkMessageTriggerCooldown(
 							message,
 							earlyTomoriState.config,
@@ -1584,6 +1600,22 @@ export default async function tomoriChat(
 				return;
 			}
 
+			// 6.5. Check whitelist status (skip for manual triggers, stop responses, and self messages)
+			if (!isManuallyTriggered && !isStopResponse && !isSelfMessage) {
+				const whitelistStatus = await getCachedWhitelistStatus(
+					guild?.id ?? message.author.id,
+					message.channelId,
+				);
+
+				// If active whitelist exists but channel NOT whitelisted, silently ignore
+				if (whitelistStatus.hasActiveWhitelist && !whitelistStatus.isChannelWhitelisted) {
+					log.info(
+						`Message ${message.id} in channel ${message.channelId} rejected - channel not whitelisted`,
+					);
+					return; // Silent rejection
+				}
+			}
+
 			// 7. Check message trigger cooldown (skip for manual triggers and stop responses)
 			if (!isManuallyTriggered && !isStopResponse && !isSelfMessage) {
 				const cooldownResult = await checkMessageTriggerCooldown(
@@ -1800,15 +1832,11 @@ export default async function tomoriChat(
 
 			if (isFromQueue) {
 				if (indexOfQueuedMessage !== -1) {
-					// 1. Remove the queued message from its current position in the fetched history
-					const [queuedMessageInHistory] = messagesArray.splice(
-						indexOfQueuedMessage,
-						1,
-					);
-					// 2. Add it (or the current message object, which should be identical) to the very end
-					messagesArray.push(queuedMessageInHistory); // Using the one from history ensures it's the exact same object reference
+					// The queued message is already in its correct chronological position
+					// Discord message IDs (snowflakes) are chronologically ordered by design
+					// We respect the natural order to maintain proper conversation flow
 					log.info(
-						`Queued message ${queuedMessageId} was found in fetched history and moved to the end for context building.`,
+						`Queued message ${queuedMessageId} found in history at index ${indexOfQueuedMessage}. Respecting natural chronological order.`,
 					);
 				} else {
 					// 3. If not found (e.g., older than MESSAGE_FETCH_LIMIT or deleted), append the current 'message' object.

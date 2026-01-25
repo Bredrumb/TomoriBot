@@ -2,6 +2,7 @@ import { PermissionFlagsBits, type Message, type GuildMember } from "discord.js"
 import { sql } from "@/utils/db/client";
 import { CooldownType, type TomoriConfigRow } from "@/types/db/schema";
 import { log } from "@/utils/misc/logger";
+import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 
 /**
  * Cooldown category prefixes for message triggers.
@@ -105,7 +106,28 @@ export async function checkMessageTriggerCooldown(
 	message: Message,
 	config: TomoriConfigRow,
 ): Promise<CooldownCheckResult> {
-	const cooldownType = config.cooldown_type ?? CooldownType.OFF;
+	// 1. Check whitelist status FIRST (before checking cooldown type)
+	const serverDiscId = message.guildId ?? message.author.id;
+	const whitelistStatus = await getCachedWhitelistStatus(
+		serverDiscId,
+		message.channelId,
+	);
+
+	// 2. Block non-whitelisted channels if ANY whitelist exists
+	if (whitelistStatus.hasActiveWhitelist && !whitelistStatus.isChannelWhitelisted) {
+		// Channel not whitelisted - effectively "on permanent cooldown"
+		return {
+			isOnCooldown: true,
+			remainingSeconds: 999999,
+			cooldownType: CooldownType.OFF,
+		};
+	}
+
+	// 3. Determine which cooldown settings to use
+	// If channel is whitelisted, use channel-specific settings; otherwise use global settings
+	const cooldownType = whitelistStatus.isChannelWhitelisted
+		? (whitelistStatus.channelCooldownType ?? config.cooldown_type ?? CooldownType.OFF)
+		: (config.cooldown_type ?? CooldownType.OFF);
 
 	// If cooldowns are off, not on cooldown
 	if (cooldownType === CooldownType.OFF) {
@@ -127,7 +149,6 @@ export async function checkMessageTriggerCooldown(
 	}
 
 	// Get the appropriate keys for this cooldown type
-	const serverDiscId = message.guildId ?? message.author.id;
 	const { entityId, category } = getCooldownKeyPair(
 		cooldownType,
 		message.author.id,
@@ -187,7 +208,22 @@ export async function setMessageTriggerCooldown(
 	message: Message,
 	config: TomoriConfigRow,
 ): Promise<void> {
-	const cooldownType = config.cooldown_type ?? CooldownType.OFF;
+	// 1. Check whitelist status FIRST to determine which settings to use
+	const serverDiscId = message.guildId ?? message.author.id;
+	const whitelistStatus = await getCachedWhitelistStatus(
+		serverDiscId,
+		message.channelId,
+	);
+
+	// 2. Determine which cooldown settings to use
+	// If channel is whitelisted, use channel-specific settings; otherwise use global settings
+	const cooldownType = whitelistStatus.isChannelWhitelisted
+		? (whitelistStatus.channelCooldownType ?? config.cooldown_type ?? CooldownType.OFF)
+		: (config.cooldown_type ?? CooldownType.OFF);
+
+	const cooldownLengthSeconds = whitelistStatus.isChannelWhitelisted
+		? (whitelistStatus.channelCooldownLength ?? config.cooldown_length ?? 5)
+		: (config.cooldown_length ?? 5);
 
 	// If cooldowns are off, nothing to set
 	if (cooldownType === CooldownType.OFF) {
@@ -195,11 +231,9 @@ export async function setMessageTriggerCooldown(
 	}
 
 	// Get cooldown duration in milliseconds
-	const cooldownLengthSeconds = config.cooldown_length ?? 5;
 	const cooldownDurationMs = cooldownLengthSeconds * 1000;
 
 	// Get the appropriate keys for this cooldown type
-	const serverDiscId = message.guildId ?? message.author.id;
 	const { entityId, category } = getCooldownKeyPair(
 		cooldownType,
 		message.author.id,

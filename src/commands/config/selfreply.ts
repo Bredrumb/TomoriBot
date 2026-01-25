@@ -7,12 +7,12 @@ import { sql } from "@/utils/db/client";
 import {
 	getCachedTomoriState,
 	invalidateTomoriStateCache,
-} from "../../../utils/cache/tomoriStateCache";
-import { tomoriConfigSchema } from "../../../types/db/schema";
-import { localizer } from "../../../utils/text/localizer";
-import { log, ColorCode } from "../../../utils/misc/logger";
-import { replyInfoEmbed } from "../../../utils/discord/interactionHelper";
-import type { UserRow, ErrorContext } from "../../../types/db/schema";
+} from "../../utils/cache/tomoriStateCache";
+import { tomoriConfigSchema } from "../../types/db/schema";
+import { localizer } from "../../utils/text/localizer";
+import { log, ColorCode } from "../../utils/misc/logger";
+import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
+import type { UserRow, ErrorContext } from "../../types/db/schema";
 
 const MIN_LIMIT = 0;
 const MAX_LIMIT = 10;
@@ -73,7 +73,8 @@ export async function execute(
 		if (limit < MIN_LIMIT || limit > MAX_LIMIT) {
 			await replyInfoEmbed(interaction, locale, {
 				titleKey: "commands.config.selfreply.limit.invalid_range_title",
-				descriptionKey: "commands.config.selfreply.limit.invalid_range_description",
+				descriptionKey:
+					"commands.config.selfreply.limit.invalid_range_description",
 				descriptionVars: {
 					min: MIN_LIMIT.toString(),
 					max: MAX_LIMIT.toString(),
@@ -95,12 +96,12 @@ export async function execute(
 		}
 
 		// 5. Check if this is the same as the current limit
-		const currentLimit =
-			tomoriState.config.self_reply_limit ?? DEFAULT_LIMIT;
+		const currentLimit = tomoriState.config.self_reply_limit ?? DEFAULT_LIMIT;
 		if (limit === currentLimit) {
 			await replyInfoEmbed(interaction, locale, {
 				titleKey: "commands.config.selfreply.limit.already_set_title",
-				descriptionKey: "commands.config.selfreply.limit.already_set_description",
+				descriptionKey:
+					"commands.config.selfreply.limit.already_set_description",
 				descriptionVars: {
 					limit: limit.toString(),
 				},

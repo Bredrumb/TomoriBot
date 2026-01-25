@@ -212,6 +212,21 @@ export type PersonalizationBlacklistRow = z.infer<
 	typeof personalizationBlacklistSchema
 >;
 
+/**
+ * Channel Whitelist Schema
+ * Defines per-channel cooldown overrides for server-wide whitelist system.
+ * When ANY channel is whitelisted, ONLY whitelisted channels can trigger the bot.
+ */
+export const channelWhitelistSchema = z.object({
+	server_id: z.number(),
+	channel_disc_id: z.string(),
+	cooldown_type: z.nativeEnum(CooldownType).default(CooldownType.OFF),
+	cooldown_length: z.number().int().min(0).max(86400).default(0),
+	created_at: z.date().optional(),
+	updated_at: z.date().optional(),
+});
+export type ChannelWhitelistRow = z.infer<typeof channelWhitelistSchema>;
+
 export const errorLogSchema = z.object({
 	error_log_id: z.number().optional(), // Primary key, optional as it's generated
 	// Context IDs - Optional because errors can occur outside specific contexts
