@@ -1,7 +1,18 @@
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
 import { Glob } from "bun";
-import { log } from "../src/utils/misc/logger";
+
+/**
+ * Lightweight logger that doesn't require database connection
+ * Avoids circular dependency issues with the main logger
+ */
+const log = {
+	info: (msg: string) => console.log(`ℹ️  ${msg}`),
+	warn: (msg: string, error?: unknown) =>
+		console.warn(`⚠️  ${msg}`, error ? `| ${error}` : ""),
+	error: (msg: string, error?: unknown) =>
+		console.error(`❌ ${msg}`, error ? `| ${error}` : ""),
+};
 
 /**
  * Interface for tracking key usage statistics
