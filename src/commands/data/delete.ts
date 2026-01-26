@@ -9,6 +9,11 @@ import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
 import type { UserRow, ErrorContext } from "../../types/db/schema";
+import {
+	invalidateTomoriStateCache,
+} from "../../utils/cache/tomoriStateCache";
+import { invalidateEmojiStickerCache } from "../../utils/cache/emojiStickerCache";
+import { invalidateWhitelistCache } from "../../utils/cache/channelWhitelistCache";
 
 /**
  * Configure the 'delete' subcommand
@@ -167,9 +172,16 @@ export async function execute(
 				return;
 			}
 
+			// 6. Invalidate all server-related caches
+			// Cache invalidation is critical to ensure the bot doesn't continue using stale data
+			const serverId = deletedRows[0].server_id;
+			invalidateTomoriStateCache(serverDiscId); // Personas cache
+			invalidateEmojiStickerCache(serverId); // Emoji/sticker cache (uses database ID)
+			invalidateWhitelistCache(serverDiscId); // Channel whitelist cache
+
 			// Log successful deletion
 			log.success(
-				`Server data deleted for server ${serverDiscId} (server_id: ${deletedRows[0].server_id})`,
+				`Server data deleted for server ${serverDiscId} (server_id: ${serverId})`,
 			);
 
 			// Show success message

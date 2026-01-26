@@ -14,6 +14,7 @@ import {
 	tomoriConfigSchema,
 } from "../../types/db/schema";
 import { sql } from "@/utils/db/client";
+import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 
 // Configure the subcommand
 export const configureSubcommand = (
@@ -224,7 +225,10 @@ export async function execute(
 			return;
 		}
 
-		// 9. Success! Show the permission change
+		// 9. Invalidate cache so next message gets fresh config
+		invalidateTomoriStateCache(interaction.guild.id);
+
+		// 10. Success! Show the permission change
 		await replyInfoEmbed(interaction, locale, {
 			titleKey: "commands.server.memberpermissions.success_title",
 			descriptionKey: isEnabled
