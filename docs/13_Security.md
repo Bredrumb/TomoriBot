@@ -431,7 +431,7 @@ TomoriBot only stores what's necessary:
 if (!interaction.memberPermissions?.has("ManageGuild")) {
   await interaction.reply({
     content: t("errors.permission_denied"),
-    ephemeral: true
+    flags: MessageFlags.Ephemeral
   });
   return;
 }

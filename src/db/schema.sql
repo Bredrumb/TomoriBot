@@ -343,6 +343,11 @@ SELECT add_column_if_not_exists('tomori_configs', 'self_reply_limit', 'INTEGER',
 -- Only used when llm_provider is 'custom', blocked in production environment
 SELECT add_column_if_not_exists('tomori_configs', 'custom_endpoint_url', 'TEXT');
 
+-- Add custom model name for custom endpoints (January 2026)
+-- Stores the actual model name for endpoints that require exact model names (e.g., Ollama's "gemma3:latest")
+-- Optional field - if empty, provider will fall back to llm_codename
+SELECT add_column_if_not_exists('tomori_configs', 'custom_model_name', 'TEXT');
+
 -- Add foreign key constraint if the column was just created
 DO $$
 BEGIN

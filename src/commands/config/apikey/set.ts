@@ -440,14 +440,16 @@ export async function execute(
 			}
 		}
 
-		// 12. Update the config in the database (includes llm_id, diffusion_model_id, and custom_endpoint_url if provider changed)
+		// 12. Update the config in the database (includes llm_id, diffusion_model_id, custom_endpoint_url, and custom_model_name if provider changed)
+		const customModelName = customCapabilitiesResult?.modelName || null;
 		const [updatedRow] = await sql`
 			UPDATE tomori_configs
 			SET api_key = ${encrypted},
 			    key_version = ${version},
 			    llm_id = ${newLlmId},
 			    diffusion_model_id = ${newDiffusionModelId},
-			    custom_endpoint_url = ${customEndpointUrl}
+			    custom_endpoint_url = ${customEndpointUrl},
+			    custom_model_name = ${customModelName}
 			WHERE server_id = ${tomoriState.server_id}
 			RETURNING *
 		`;

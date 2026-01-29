@@ -356,6 +356,7 @@ touch src/commands/config/group/subcommand.ts
 
 ```typescript
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
+import { MessageFlags } from "discord.js";
 import type { UserRow } from "../../types/db/schema";
 import { localizer } from "../../utils/text/localizer";
 import { log } from "../../utils/misc/logger";
@@ -386,13 +387,13 @@ export async function execute(
 
     await interaction.reply({
       content: localizer(userData.language_pref, "commands.newfeature.success"),
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   } catch (error) {
     log.error("Command failed", error as Error);
     await interaction.reply({
       content: "An error occurred!",
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   }
 }
@@ -480,7 +481,7 @@ If commands don't appear:
 if (!interaction.guild) {
   await interaction.reply({
     content: "This command only works in servers!",
-    ephemeral: true
+    flags: MessageFlags.Ephemeral
   });
   return;
 }
@@ -492,7 +493,7 @@ if (!interaction.guild) {
 if (!interaction.memberPermissions?.has("ManageGuild")) {
   await interaction.reply({
     content: "You need Manage Server permission!",
-    ephemeral: true
+    flags: MessageFlags.Ephemeral
   });
   return;
 }
@@ -510,7 +511,7 @@ const cooldownMs = 3000; // 3 seconds
 if (await isOnCooldown(cooldownKey)) {
   await interaction.reply({
     content: "You're using commands too quickly!",
-    ephemeral: true
+    flags: MessageFlags.Ephemeral
   });
   return;
 }
