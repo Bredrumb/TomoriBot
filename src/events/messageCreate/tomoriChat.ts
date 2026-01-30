@@ -2240,13 +2240,20 @@ export default async function tomoriChat(
 								embedCheck.type === "compact_refresh") &&
 							embed.description
 						) {
-							// Wrap system_injection embeds in [System: ...] wrapper
-							if (
-								embedCheck.type === "system_injection" ||
+						// Wrap system_injection embeds in [System: ...] wrapper
+						if (
+							embedCheck.type === "system_injection" ||
+							embedCheck.type === "compact_summary" ||
+							embedCheck.type === "compact_refresh"
+						) {
+							const titleLine =
 								embedCheck.type === "compact_summary" ||
 								embedCheck.type === "compact_refresh"
-							) {
-								const systemContent = `[System: ${embed.description}]`;
+									? embed.title
+										? `## ${embed.title}\n`
+										: ""
+									: "";
+							const systemContent = `[System: ${titleLine}${embed.description}]`;
 								messageContentForLlm = messageContentForLlm
 									? `${messageContentForLlm}\n${systemContent}`
 									: systemContent;

@@ -7,11 +7,7 @@ import type {
 	Embed,
 	Message,
 } from "discord.js";
-import {
-	EmbedBuilder,
-	MessageFlags,
-	TextInputStyle,
-} from "discord.js";
+import { EmbedBuilder, MessageFlags, TextInputStyle } from "discord.js";
 import { localizer, getSupportedLocales } from "@/utils/text/localizer";
 import { ColorCode, log } from "@/utils/misc/logger";
 import {
@@ -22,7 +18,11 @@ import type { UserRow } from "@/types/db/schema";
 import { PrivacyLevel } from "@/types/db/schema";
 import { loadTomoriState, loadAllPersonasForServer } from "@/utils/db/dbRead";
 import { decryptApiKey } from "@/utils/security/crypto";
-import { getCachedUserRow, getCachedPrivacyLevel, getCachedBlacklistStatus } from "@/utils/cache/userCache";
+import {
+	getCachedUserRow,
+	getCachedPrivacyLevel,
+	getCachedBlacklistStatus,
+} from "@/utils/cache/userCache";
 import { resolvePersonaAvatarURL } from "@/utils/discord/webhookManager";
 import type { ModalComponent } from "@/types/discord/modal";
 import {
@@ -79,7 +79,9 @@ type ImageReference = {
 	source: string;
 };
 
-function extractCustomEmojiImages(content: string): Array<{ url: string; name: string }> {
+function extractCustomEmojiImages(
+	content: string,
+): Array<{ url: string; name: string }> {
 	const results: Array<{ url: string; name: string }> = [];
 	if (!content) return results;
 
@@ -203,14 +205,15 @@ function classifyEmbedTitle(embedTitle: string | null): {
 	};
 }
 
-function appendEmbedContent(
-	baseContent: string,
-	embed: Embed,
-): string {
+function appendEmbedContent(baseContent: string, embed: Embed): string {
 	if (!embed.description || !embed.title) return baseContent;
 
 	const classification = classifyEmbedTitle(embed.title);
-	if (!classification.isSystemInjection && !classification.isMemoryLearning && !classification.isReminderSet) {
+	if (
+		!classification.isSystemInjection &&
+		!classification.isMemoryLearning &&
+		!classification.isReminderSet
+	) {
 		return baseContent;
 	}
 
@@ -233,6 +236,14 @@ function isValidHttpUrl(url: string): boolean {
 	} catch {
 		return false;
 	}
+}
+
+function normalizeNameForMatch(value: string): string {
+	return value
+		.replace(/\([^)]*\)/g, " ")
+		.replace(/[^\p{L}\p{N}]+/gu, " ")
+		.trim()
+		.toLowerCase();
 }
 
 async function buildPersonaAvatarMap(
@@ -276,7 +287,9 @@ async function buildUserAvatarMap(params: {
 			member = await params.guild.members.fetch(userId).catch(() => null);
 		}
 
-		const user = member?.user ?? (await params.client.users.fetch(userId).catch(() => null));
+		const user =
+			member?.user ??
+			(await params.client.users.fetch(userId).catch(() => null));
 		if (!user) continue;
 
 		const avatarUrl =
@@ -444,7 +457,11 @@ async function buildSupplementaryContext(params: {
 			if (userPrivacyLevel !== PrivacyLevel.MINIMAL) continue;
 
 			const userRow = await getCachedUserRow(userId);
-			if (!userRow || !userRow.personal_memories || userRow.personal_memories.length === 0) {
+			if (
+				!userRow ||
+				!userRow.personal_memories ||
+				userRow.personal_memories.length === 0
+			) {
 				continue;
 			}
 
@@ -490,10 +507,11 @@ function buildConversationPrompt(params: {
 	additionalInstructions?: string;
 }): { systemPrompt: string; userPrompt: string } {
 	const systemPrompt =
-		"You are an expert conversation summarizer for a Discord chatbot. " +
-		"Summarize the conversation into a compact, factual summary suitable to be injected as system context. " +
-		"Focus on key facts, relationships, decisions, and ongoing tasks. " +
-		"Keep it concise and avoid fluff. Output plain text only.";
+		"You are a skilled conversation analyst who creates clear, readable summaries of Discord conversations. " +
+		"Your goal is to distill the conversation into a well-written, human-readable narrative that captures the essential elements: " +
+		"key facts, relationships between participants, important decisions, ongoing tasks, and the overall flow of discussion. " +
+		"Write in natural prose that's easy to understand, avoiding unnecessary jargon or robotic phrasing. " +
+		"Be concise but thorough—every sentence should add value. Output plain text only.";
 
 	const sections: string[] = [];
 	sections.push("MAIN CONTEXT (chronological):");
@@ -533,10 +551,20 @@ function buildRoleplayPrompt(params: {
 	additionalInstructions?: string;
 }): { systemPrompt: string; userPrompt: string } {
 	const systemPrompt =
-		"You are an expert roleplay continuity summarizer. " +
-		"Produce a structured JSON summary of the scene and each character. " +
-		"Use only information supported by the context; if something is unknown, say 'Unknown' or 'Not specified'. " +
-		"Keep each field concise (short phrases or 1-2 sentences).";
+		"You are a skilled storyteller who crafts clear, engaging summaries of roleplay scenes. " +
+		"Analyze the roleplay narrative and produce a structured JSON summary that captures the scene and each character's current state. " +
+		"Write with clarity and literary quality—your descriptions should paint a vivid picture while remaining concise. " +
+		"Base every detail on what's actually present in the context; if something isn't shown, mark it as 'Unknown' or 'Not specified'. " +
+		"Keep each field brief but evocative—think short phrases or 2-3 well-crafted sentences that tell the story.\n\n" +
+		"The JSON structure should contain:\n" +
+		"- overall_scene_summary: A narrative overview of the current scene, setting, atmosphere, and what's happening\n" +
+		"- characters: An array where each character has:\n" +
+		"  - name: The character's name\n" +
+		"  - current_goals: What the character is trying to accomplish or their immediate intentions\n" +
+		"  - emotional_status: The character's current feelings, mood, and emotional state\n" +
+		"  - physical_status: The character's physical condition, location, pose, health, or any injuries/ailments\n" +
+		"  - appearance_clothing: How the character currently looks and what they're wearing\n" +
+		"  - inventory: Notable items the character has on them or is currently using";
 
 	const sections: string[] = [];
 	sections.push("MAIN CONTEXT (chronological):");
@@ -583,7 +611,7 @@ function buildRoleplayEmbeds(
 		locale,
 		"commands.tool.compact.roleplay_scene_synopsis_header",
 	);
-	const sceneDescription = `${synopsisHeader}\n${summary.overall_scene_summary}`;
+	const sceneDescription = `## ${synopsisHeader}\n${summary.overall_scene_summary}`;
 
 	const sceneEmbed = new EmbedBuilder()
 		.setTitle(sceneTitle)
@@ -601,10 +629,6 @@ function buildRoleplayEmbeds(
 	const characterPrefix = localizer(
 		locale,
 		"commands.tool.compact.roleplay_character_title_prefix",
-	);
-	const labelCharacter = localizer(
-		locale,
-		"commands.tool.compact.roleplay_labels.character",
 	);
 	const labelCurrentGoals = localizer(
 		locale,
@@ -626,15 +650,22 @@ function buildRoleplayEmbeds(
 		locale,
 		"commands.tool.compact.roleplay_labels.inventory",
 	);
+	const fuzzyAvatarMap = new Map<string, string>();
+	if (avatarMap) {
+		for (const [nameKey, url] of avatarMap) {
+			const normalized = normalizeNameForMatch(nameKey);
+			if (!normalized || fuzzyAvatarMap.has(normalized)) continue;
+			fuzzyAvatarMap.set(normalized, url);
+		}
+	}
 
 	for (const character of summary.characters) {
 		const lines = [
-			`${labelCharacter} ${character.name || "Unknown"}`,
-			`${labelCurrentGoals} ${character.current_goals || "Unknown"}`,
-			`${labelEmotionalStatus} ${character.emotional_status || "Unknown"}`,
-			`${labelPhysicalStatus} ${character.physical_status || "Unknown"}`,
-			`${labelAppearance} ${character.appearance_clothing || "Unknown"}`,
-			`${labelInventory} ${character.inventory || "Unknown"}`,
+			`**${labelCurrentGoals} ${character.name || "Unknown"}**: ${character.current_goals || "Unknown"}`,
+			`**${labelEmotionalStatus} ${character.name || "Unknown"}**: ${character.emotional_status || "Unknown"}`,
+			`**${labelPhysicalStatus} ${character.name || "Unknown"}**: ${character.physical_status || "Unknown"}`,
+			`**${labelAppearance} ${character.name || "Unknown"}**: ${character.appearance_clothing || "Unknown"}`,
+			`**${labelInventory} ${character.name || "Unknown"}**: ${character.inventory || "Unknown"}`,
 		];
 
 		const description = truncateEmbedDescription(lines.join("\n"));
@@ -643,9 +674,31 @@ function buildRoleplayEmbeds(
 			.setDescription(description)
 			.setColor(ColorCode.SECTION);
 
-		const avatarUrl = character.name
+		let avatarUrl = character.name
 			? avatarMap?.get(character.name.trim().toLowerCase())
 			: undefined;
+		if (!avatarUrl && character.name) {
+			const normalized = normalizeNameForMatch(character.name);
+			avatarUrl = normalized ? fuzzyAvatarMap.get(normalized) : undefined;
+		}
+		if (!avatarUrl && character.name) {
+			const normalized = normalizeNameForMatch(character.name);
+			if (normalized && normalized.length >= 3) {
+				let bestMatchKey = "";
+				for (const [key, url] of fuzzyAvatarMap.entries()) {
+					if (key.length < 3) continue;
+					if (
+						normalized.includes(key) ||
+						key.includes(normalized)
+					) {
+						if (key.length > bestMatchKey.length) {
+							bestMatchKey = key;
+							avatarUrl = url;
+						}
+					}
+				}
+			}
+		}
 		if (avatarUrl) {
 			embed.setThumbnail(avatarUrl);
 		}
@@ -800,13 +853,13 @@ export async function execute(
 		return;
 	}
 
-	const summaryType = (modalResult.values[TYPE_FIELD_ID] || "conversation") as CompactSummaryMode;
+	const summaryType = (modalResult.values[TYPE_FIELD_ID] ||
+		"conversation") as CompactSummaryMode;
 	const refresh = (modalResult.values[REFRESH_FIELD_ID] || "no") === "yes";
 	const analyzeImages =
 		(modalResult.values[ANALYZE_IMAGES_FIELD_ID] || "no") === "yes";
-	const additionalInstructions = modalResult.values[
-		ADDITIONAL_INST_FIELD_ID
-	]?.trim();
+	const additionalInstructions =
+		modalResult.values[ADDITIONAL_INST_FIELD_ID]?.trim();
 
 	const serverDiscId = interaction.guild?.id ?? interaction.user.id;
 	const tomoriState = await loadTomoriState(serverDiscId);
@@ -833,7 +886,10 @@ export async function execute(
 			embeds: [
 				new EmbedBuilder()
 					.setTitle(
-						localizer(locale, "commands.tool.compact.provider_unsupported_title"),
+						localizer(
+							locale,
+							"commands.tool.compact.provider_unsupported_title",
+						),
 					)
 					.setDescription(
 						localizer(
@@ -853,10 +909,7 @@ export async function execute(
 			embeds: [
 				new EmbedBuilder()
 					.setTitle(
-						localizer(
-							locale,
-							"commands.tool.compact.model_incompatible_title",
-						),
+						localizer(locale, "commands.tool.compact.model_incompatible_title"),
 					)
 					.setDescription(
 						localizer(
@@ -982,39 +1035,38 @@ export async function execute(
 				additionalInstructions,
 			});
 
+			log.info(
+				`[Compact] Conversation system prompt:\n${prompt.systemPrompt}`,
+			);
+			log.info(`[Compact] Conversation user prompt:\n${prompt.userPrompt}`);
+
 			const result = isGoogle
 				? await generateConversationSummaryGoogle({
 					apiKey,
 					model: tomoriState.llm.llm_codename,
 					systemPrompt: prompt.systemPrompt,
-					userPrompt: prompt.userPrompt,
-					images: analyzeImages
-						? imagePayload
-						: undefined,
-				})
+						userPrompt: prompt.userPrompt,
+						images: analyzeImages ? imagePayload : undefined,
+					})
 				: await generateConversationSummaryOpenrouter({
-					apiKey,
-					model: tomoriState.llm.llm_codename,
-					systemPrompt: prompt.systemPrompt,
-					userPrompt: prompt.userPrompt,
-					images: analyzeImages
-						? imageReferences.map((img) => ({ url: img.url }))
-						: undefined,
-				});
+						apiKey,
+						model: tomoriState.llm.llm_codename,
+						systemPrompt: prompt.systemPrompt,
+						userPrompt: prompt.userPrompt,
+						images: analyzeImages
+							? imageReferences.map((img) => ({ url: img.url }))
+							: undefined,
+					});
 
 			if (result.error || !result.summary) {
 				await submitInteraction.editReply({
 					embeds: [
 						new EmbedBuilder()
-							.setTitle(
-								localizer(locale, "commands.tool.compact.failed_title"),
-							)
+							.setTitle(localizer(locale, "commands.tool.compact.failed_title"))
 							.setDescription(
-								localizer(
-									locale,
-									"commands.tool.compact.failed_description",
-									{ error: result.error || "Unknown error" },
-								),
+								localizer(locale, "commands.tool.compact.failed_description", {
+									error: result.error || "Unknown error",
+								}),
 							)
 							.setColor(ColorCode.ERROR),
 					],
@@ -1037,6 +1089,9 @@ export async function execute(
 				additionalInstructions,
 			});
 
+			log.info(`[Compact] Roleplay system prompt:\n${prompt.systemPrompt}`);
+			log.info(`[Compact] Roleplay user prompt:\n${prompt.userPrompt}`);
+
 			const userAvatarMap = await buildUserAvatarMap({
 				userIds,
 				client,
@@ -1054,37 +1109,31 @@ export async function execute(
 
 			const result = isGoogle
 				? await generateRoleplaySummaryGoogle({
-					apiKey,
-					model: tomoriState.llm.llm_codename,
-					systemPrompt: prompt.systemPrompt,
-					userPrompt: prompt.userPrompt,
-					images: analyzeImages
-						? imagePayload
-						: undefined,
-				})
+						apiKey,
+						model: tomoriState.llm.llm_codename,
+						systemPrompt: prompt.systemPrompt,
+						userPrompt: prompt.userPrompt,
+						images: analyzeImages ? imagePayload : undefined,
+					})
 				: await generateRoleplaySummaryOpenrouter({
-					apiKey,
-					model: tomoriState.llm.llm_codename,
-					systemPrompt: prompt.systemPrompt,
-					userPrompt: prompt.userPrompt,
-					images: analyzeImages
-						? imageReferences.map((img) => ({ url: img.url }))
-						: undefined,
-				});
+						apiKey,
+						model: tomoriState.llm.llm_codename,
+						systemPrompt: prompt.systemPrompt,
+						userPrompt: prompt.userPrompt,
+						images: analyzeImages
+							? imageReferences.map((img) => ({ url: img.url }))
+							: undefined,
+					});
 
 			if (result.error || !result.summary) {
 				await submitInteraction.editReply({
 					embeds: [
 						new EmbedBuilder()
-							.setTitle(
-								localizer(locale, "commands.tool.compact.failed_title"),
-							)
+							.setTitle(localizer(locale, "commands.tool.compact.failed_title"))
 							.setDescription(
-								localizer(
-									locale,
-									"commands.tool.compact.failed_description",
-									{ error: result.error || "Unknown error" },
-								),
+								localizer(locale, "commands.tool.compact.failed_description", {
+									error: result.error || "Unknown error",
+								}),
 							)
 							.setColor(ColorCode.ERROR),
 					],
@@ -1118,11 +1167,9 @@ export async function execute(
 				new EmbedBuilder()
 					.setTitle(localizer(locale, "commands.tool.compact.failed_title"))
 					.setDescription(
-						localizer(
-							locale,
-							"commands.tool.compact.failed_description",
-							{ error: error instanceof Error ? error.message : "Unknown error" },
-						),
+						localizer(locale, "commands.tool.compact.failed_description", {
+							error: error instanceof Error ? error.message : "Unknown error",
+						}),
 					)
 					.setColor(ColorCode.ERROR),
 			],
