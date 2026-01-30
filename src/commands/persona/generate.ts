@@ -195,22 +195,15 @@ export async function execute(
 			return;
 		}
 
-		const missingCapabilities: string[] = [];
-		if (!tomoriState.llm.sees_images) {
-			missingCapabilities.push("IMAGE VISION");
-		}
+		// Only check for structured output before modal (always required)
+		// Image vision and tools will be validated after modal based on user selections
 		if (!tomoriState.llm.supports_structoutput) {
-			missingCapabilities.push("STRUCTURED OUTPUT");
-		}
-
-		if (missingCapabilities.length > 0) {
 			await replyInfoEmbed(interaction, locale, {
 				titleKey: "commands.persona.generate.model_incompatible_title",
 				descriptionKey:
 					"commands.persona.generate.model_incompatible_description",
 				descriptionVars: {
 					model_name: tomoriState.llm.llm_codename,
-					missing_capability: missingCapabilities.join(" and "),
 				},
 				color: ColorCode.ERROR,
 				flags: MessageFlags.Ephemeral,
@@ -361,7 +354,7 @@ export async function execute(
 				imageMimeType: imageMimeType ?? imageAttachment?.content_type,
 			});
 
-		// 8. Reserve persona operation quota (atomic check+increment for DDoS protection)
+		// 9. Reserve persona operation quota (atomic check+increment for DDoS protection)
 		const quotaReserve = reservePersonaQuota(interaction.user.id);
 		if (!quotaReserve.allowed) {
 			const resetTime = quotaReserve.resetAt
@@ -523,25 +516,36 @@ export async function execute(
 			imageBase64 = imageBuffer.toString("base64");
 			imageMimeType = imageAttachment.content_type || "image/png";
 			log.info("Image attachment downloaded and converted to base64");
+
+			// Validate that model supports image vision
+			if (!tomoriState.llm.sees_images) {
+				await modalSubmitInteraction.editReply({
+					embeds: [
+						new EmbedBuilder()
+							.setTitle(
+								localizer(
+									locale,
+									"commands.persona.generate.image_vision_required_title",
+								),
+							)
+							.setDescription(
+								localizer(
+									locale,
+									"commands.persona.generate.image_vision_required_description",
+									{
+										model_name: tomoriState.llm.llm_codename,
+									},
+								),
+							)
+							.setColor(ColorCode.ERROR),
+					],
+					files: [getInputAttachment()],
+				});
+				return;
+			}
 		}
 
-		// 8. Show processing embed
-		await modalSubmitInteraction.editReply({
-			embeds: [
-				new EmbedBuilder()
-					.setTitle(
-						localizer(locale, "commands.persona.generate.processing_title"),
-					)
-					.setDescription(
-						localizer(
-							locale,
-							"commands.persona.generate.processing_description",
-						),
-					)
-					.setColor(ColorCode.INFO),
-			],
-		});
-
+		// 10. Validate web search capability before processing
 		const webSearchRequested = webSearch.trim().toLowerCase() === "yes";
 		const useWebSearch =
 			webSearchRequested && tomoriState.config.web_search_enabled;
@@ -581,7 +585,24 @@ export async function execute(
 			return;
 		}
 
-		// 11. Prepare generation parameters
+		// 11. Show processing embed
+		await modalSubmitInteraction.editReply({
+			embeds: [
+				new EmbedBuilder()
+					.setTitle(
+						localizer(locale, "commands.persona.generate.processing_title"),
+					)
+					.setDescription(
+						localizer(
+							locale,
+							"commands.persona.generate.processing_description",
+						),
+					)
+					.setColor(ColorCode.INFO),
+			],
+		});
+
+		// 12. Prepare generation parameters
 		const genParams: GeneratePresetParams = {
 			characterName,
 			characterDescription: characterDesc,
@@ -655,7 +676,7 @@ export async function execute(
 			}
 		}
 
-		// 12. Generate preset data
+		// 13. Generate preset data
 		const providerLabel = isOpenrouterProvider ? "OpenRouter" : "Gemini";
 		log.info(`Generating preset data with ${providerLabel}...`);
 
@@ -707,7 +728,7 @@ export async function execute(
 			return;
 		}
 
-		// 13. Validate generated data against schema
+		// 14. Validate generated data against schema
 		const validationResult = presetExportDataSchema.safeParse(genResult.preset);
 		if (!validationResult.success) {
 			// Log detailed validation errors
@@ -750,7 +771,7 @@ export async function execute(
 
 		log.success("Generated preset passed validation");
 
-		// 14. Get image for export (uploaded image or server avatar)
+		// 15. Get image for export (uploaded image or server avatar)
 		let pngBuffer: Buffer;
 
 		if (imageBuffer) {
@@ -813,7 +834,7 @@ export async function execute(
 			}
 		}
 
-		// 15. Create preset export structure with metadata
+		// 16. Create preset export structure with metadata
 		const presetExport: PresetExport = {
 			version: PRESET_EXPORT_VERSION,
 			type: "preset",
@@ -821,7 +842,7 @@ export async function execute(
 			data: genResult.preset,
 		};
 
-		// 16. Embed metadata in PNG
+		// 17. Embed metadata in PNG
 		let finalPngBuffer: Buffer;
 		try {
 			finalPngBuffer = await embedMetadataInPNG(pngBuffer, presetExport);
@@ -850,13 +871,13 @@ export async function execute(
 			return;
 		}
 
-		// 17. Create attachment
+		// 18. Create attachment
 		const filename = `${characterName.replace(/[^a-zA-Z0-9]/g, "_")}_preset.png`;
 		const attachment = new AttachmentBuilder(finalPngBuffer, {
 			name: filename,
 		});
 
-		// 18. Detect DM context and create success embed with main image
+		// 19. Detect DM context and create success embed with main image
 		const isDM = !interaction.guild;
 
 		// Format attribute preview (first attribute, truncated to 200 chars)
@@ -911,7 +932,7 @@ export async function execute(
 			});
 		}
 
-		// 19. Send success embed with attachment
+		// 20. Send success embed with attachment
 		await modalSubmitInteraction.editReply({
 			embeds: [successEmbed],
 			files: [attachment],

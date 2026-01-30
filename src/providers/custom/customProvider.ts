@@ -306,6 +306,7 @@ export class CustomProvider extends BaseLLMProvider implements LLMProvider {
 		webhook?: import("discord.js").Webhook,
 		personaAvatarUrl?: string,
 		personaUsername?: string,
+		prefixStrippingName?: string,
 	): Promise<StreamResult> {
 		log.info(
 			`CustomProvider: Starting streaming for server ${tomoriState.server_id}, model ${config.model}`,
@@ -372,6 +373,7 @@ export class CustomProvider extends BaseLLMProvider implements LLMProvider {
 				webhook,
 				personaAvatarUrl,
 				personaUsername,
+				prefixStrippingName,
 
 				// Forced mentions (e.g., reminder recipients)
 				forcedMentions: streamingContext?.forcedMentions,

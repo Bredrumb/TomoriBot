@@ -54,7 +54,7 @@ type SimplifiedMessageForContext = {
 	authorType: "user" | "persona";
 	personaName?: string | null;
 	content: string | null;
-	mediaSourceMessageId?: string;
+	mediaSourceMessageIds?: string[]; // Array of message IDs that host media (for combined messages)
 	imageAttachments: Array<{
 		url: string;
 		proxyUrl: string;
@@ -342,6 +342,9 @@ export async function buildContext({
 	snapshot,
 	preloadedEmojis,
 	preloadedStickers,
+	isUserImpersonation = false,
+	impersonatedUserId,
+	impersonatedUserNickname,
 }: {
 	guildId: string;
 	serverName: string;
@@ -361,6 +364,9 @@ export async function buildContext({
 	snapshot?: import("../../types/misc/context").RequestSnapshot; // Optional per-request snapshot
 	preloadedEmojis?: ServerEmojiRow[] | null; // Pre-loaded emoji data to avoid redundant DB query
 	preloadedStickers?: ServerStickerRow[] | null; // Pre-loaded sticker data to avoid redundant DB query
+	isUserImpersonation?: boolean; // Added February 2026 - Flag for user impersonation mode
+	impersonatedUserId?: string; // Added February 2026 - User ID being impersonated
+	impersonatedUserNickname?: string; // Added February 2026 - Database nickname for impersonated user (optional)
 }): Promise<StructuredContextItem[]> {
 	const contextItems: StructuredContextItem[] = [];
 	const botName = tomoriNickname;
@@ -1132,7 +1138,9 @@ export async function buildContext({
 		});
 	}
 
+	// Skip sample dialogues for user impersonation (users don't need examples of bot's speech)
 	if (
+		!isUserImpersonation &&
 		tomoriState &&
 		tomoriState.sample_dialogues_in.length > 0 &&
 		tomoriState.sample_dialogues_out.length > 0 &&
@@ -1234,7 +1242,23 @@ export async function buildContext({
 		const isCurrentPersonaMessage =
 			isPersonaMessage &&
 			msg.personaName?.toLowerCase() === botNameLower;
-		const role = isCurrentPersonaMessage ? "model" : "user";
+
+		// Role reversal for user impersonation (February 2026)
+		let role: "user" | "model";
+		if (isUserImpersonation) {
+			// Reverse roles: user messages become "model", bot messages become "user"
+			if (msg.authorType === "user" && msg.authorId === impersonatedUserId) {
+				role = "model"; // This user's messages are treated as model output
+			} else if (isCurrentPersonaMessage) {
+				role = "user"; // Bot messages are treated as user input
+			} else {
+				role = "user"; // Other messages stay as user
+			}
+		} else {
+			// Normal role assignment
+			role = isCurrentPersonaMessage ? "model" : "user";
+		}
+
 		const parts: ContextPart[] = [];
 
 		// Determine if this message is within the media context window
@@ -1357,7 +1381,14 @@ export async function buildContext({
 		if (msg.content) {
 			// Request 4: Prepend speaker name to content
 			const normalizedContent = normalizeCustomEmojisForLlm(msg.content);
-			let processedContent = `${msg.authorName}: ${normalizedContent}`;
+
+			// Skip author name prefix if content already starts with [System: (e.g., system injection embeds)
+			let processedContent: string;
+			if (normalizedContent.startsWith("[System:")) {
+				processedContent = normalizedContent; // Use as-is, no author prefix
+			} else {
+				processedContent = `${msg.authorName}: ${normalizedContent}`; // Add author prefix
+			}
 
 			if (
 				tomoriConfig.humanizer_degree >= HumanizerDegree.HEAVY &&
@@ -1378,12 +1409,16 @@ export async function buildContext({
 			parts.push({ type: "text", text: processedContent });
 		}
 
-		// Expose message ID for media messages so tools (generate_image, process_gif) can reference attachments
+		// Expose message ID(s) for media messages so tools (generate_image, process_gif) can reference attachments
 		if (hasAnyMedia && !mediaIdHintAdded) {
-			const mediaMessageId = msg.mediaSourceMessageId ?? msg.id;
+			const mediaMessageIds = msg.mediaSourceMessageIds ?? [msg.id];
+			const hintText =
+				mediaMessageIds.length === 1
+					? `[System: Media message ID for tool use: ${mediaMessageIds[0]}]`
+					: `[System: Media message IDs for tool use: ${mediaMessageIds.join(", ")}]`;
 			parts.push({
 				type: "text",
-				text: `[System: Media message ID for tool use: ${mediaMessageId}]`,
+				text: hintText,
 			});
 		}
 
@@ -1395,6 +1430,33 @@ export async function buildContext({
 				messageId: msg.id, // Include Discord message ID for tools
 			});
 		}
+	}
+
+	// Inject user impersonation system prompt as the LAST message (February 2026)
+	if (isUserImpersonation && impersonatedUserId) {
+		// Prioritize database nickname over Discord display name for context/messages
+		// But webhook will still use Discord display name
+		let nameToUse: string;
+		if (impersonatedUserNickname) {
+			// Use database nickname if available (e.g., "bred")
+			nameToUse = impersonatedUserNickname;
+		} else {
+			// Fall back to Discord display name
+			const guild = client.guilds.cache.get(guildId);
+			const member = guild?.members.cache.get(impersonatedUserId);
+			nameToUse = member?.displayName || member?.user.displayName || "User";
+		}
+
+		contextItems.push({
+			role: "user",
+			parts: [
+				{
+					type: "text",
+					text: `[System: Imitate ${nameToUse}, start your message with ${nameToUse}:]`,
+				},
+			],
+			metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+		});
 	}
 
 	log.info(

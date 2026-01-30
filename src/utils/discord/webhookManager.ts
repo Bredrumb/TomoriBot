@@ -10,6 +10,8 @@ import { log } from "../misc/logger";
 import { safeDownload } from "../security/safeDownload";
 import { PERSONA_LIMITS } from "../security/rateLimiter";
 import { convertToPNG } from "../image/imageProcessor";
+import { sql } from "../db/client";
+import { invalidateTomoriStateCache } from "../cache/tomoriStateCache";
 
 /**
  * In-memory webhook cache: channelId -> Webhook
@@ -197,7 +199,16 @@ export async function getOrCreateWebhook(
 		const webhooks = await channel.fetchWebhooks();
 		let webhook = webhooks.find((wh) => wh.name === WEBHOOK_NAME);
 
-		// 3. Create new webhook if none exists
+		// 3. Check if webhook has a token (webhooks from fetchWebhooks don't have tokens)
+		if (webhook && !webhook.token) {
+			log.warn(
+				`[Webhook Manager] Found webhook for channel ${channelId} but it has no token (fetched webhook). Deleting and recreating.`,
+			);
+			await webhook.delete("Recreating webhook to get token");
+			webhook = undefined;
+		}
+
+		// 4. Create new webhook if none exists or token missing
 		if (!webhook) {
 			log.info(
 				`[Webhook Manager] No webhook found for channel ${channelId}, creating new one`,
@@ -211,7 +222,7 @@ export async function getOrCreateWebhook(
 			);
 		}
 
-		// 4. Cache the webhook
+		// 5. Cache the webhook
 		webhookCache.set(channelId, webhook);
 		return { webhook };
 	} catch (error) {
@@ -268,6 +279,15 @@ export async function getOrCreatePersonaWebhook(
 		const personaWebhookName = getPersonaWebhookName(persona.tomori_id);
 		let webhook = webhooks.find((wh) => wh.name === personaWebhookName);
 
+		// Check if webhook has a token (webhooks from fetchWebhooks don't have tokens)
+		if (webhook && !webhook.token) {
+			log.warn(
+				`[Webhook Manager] Found persona webhook for channel ${channelId} but it has no token (fetched webhook). Deleting and recreating.`,
+			);
+			await webhook.delete("Recreating webhook to get token");
+			webhook = undefined;
+		}
+
 		if (!webhook) {
 			const avatar = await resolvePersonaWebhookAvatar(persona);
 			log.info(
@@ -281,6 +301,31 @@ export async function getOrCreatePersonaWebhook(
 			log.success(
 				`[Webhook Manager] Created persona webhook for channel ${channelId} (${channel.name})`,
 			);
+
+			// Update stored URL to webhook's permanent avatar URL (replaces temporary Discord CDN attachment URLs)
+			// This ensures future webhook recreations use a permanent URL that doesn't expire
+			const webhookAvatarUrl = webhook.avatarURL({ extension: "png", size: 256 });
+			if (webhookAvatarUrl && webhookAvatarUrl !== persona.webhook_avatar_url) {
+				try {
+					await sql`
+						UPDATE tomoris
+						SET webhook_avatar_url = ${webhookAvatarUrl}
+						WHERE tomori_id = ${persona.tomori_id}
+					`;
+					// Invalidate cache so updated URL is used immediately
+					if (channel.guild) {
+						invalidateTomoriStateCache(channel.guild.id);
+					}
+					log.success(
+						`[Webhook Manager] Updated stored avatar URL to permanent webhook URL for persona ${persona.tomori_id}`,
+					);
+				} catch (error) {
+					log.warn(
+						`[Webhook Manager] Failed to update stored avatar URL for persona ${persona.tomori_id}`,
+						error,
+					);
+				}
+			}
 		}
 
 		personaWebhookCache.set(cacheKey, webhook);
@@ -348,6 +393,29 @@ export async function updatePersonaWebhooksAvatar(
 				updatedCount++;
 				const cacheKey = getPersonaWebhookCacheKey(channel.id, personaId);
 				personaWebhookCache.set(cacheKey, webhook);
+
+				// Store permanent webhook avatar URL (first channel only, all webhooks have same avatar)
+				if (updatedCount === 1) {
+					const webhookAvatarUrl = webhook.avatarURL({ extension: "png", size: 256 });
+					if (webhookAvatarUrl) {
+						try {
+							await sql`
+								UPDATE tomoris
+								SET webhook_avatar_url = ${webhookAvatarUrl}
+								WHERE tomori_id = ${personaId}
+							`;
+							invalidateTomoriStateCache(guild.id);
+							log.info(
+								`[Webhook Manager] Stored permanent webhook avatar URL for persona ${personaId}`,
+							);
+						} catch (dbError) {
+							log.warn(
+								`[Webhook Manager] Failed to store permanent webhook avatar URL for persona ${personaId}`,
+								dbError,
+							);
+						}
+					}
+				}
 			}
 		} catch (error) {
 			log.warn(

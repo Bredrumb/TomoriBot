@@ -114,15 +114,14 @@ export async function execute(
 		// Build select options: main first, then alters
 		const personaOptions: SelectOption[] = [
 			{
-				label: safeSelectOptionText(
-					mainPersona.tomori_nickname +
-						localizer(locale, "commands.bot.respond.main_persona_suffix"),
-				),
+				label: safeSelectOptionText(mainPersona.tomori_nickname),
 				value: "0", // main is index 0
+				description: localizer(locale, "commands.bot.respond.main_persona_description"),
 			},
 			...alterPersonas.map((persona, index) => ({
 				label: safeSelectOptionText(persona.tomori_nickname),
 				value: (index + 1).toString(), // alters start at index 1
+				description: localizer(locale, "commands.bot.respond.alter_persona_description"),
 			})),
 		];
 

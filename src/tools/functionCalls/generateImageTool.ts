@@ -140,6 +140,56 @@ export class GenerateImageTool extends BaseTool {
 	}
 
 	/**
+	 * Build Discord CDN URL for custom emoji
+	 * @param emojiId - Discord emoji ID
+	 * @returns CDN URL for the emoji as PNG
+	 */
+	private buildEmojiCdnUrl(emojiId: string): string {
+		// Always use PNG so animated emojis fall back to their first frame
+		return `https://cdn.discordapp.com/emojis/${emojiId}.png`;
+	}
+
+	/**
+	 * Extract custom emoji URLs from message content
+	 * @param content - Message text content
+	 * @returns Array of image URLs for custom emojis found in the content
+	 */
+	private extractCustomEmojis(content: string): Array<{
+		url: string;
+		mimeType: string;
+		source: string;
+	}> {
+		const emojiUrls: Array<{ url: string; mimeType: string; source: string }> =
+			[];
+		if (!content) return emojiUrls;
+
+		const emojiPattern = /<(a?):([^:]+):(\d{17,20})>/g;
+		const seenEmojiIds = new Set<string>();
+		let match: RegExpExecArray | null;
+
+		// biome-ignore lint/suspicious/noAssignInExpressions: Separate match assignment from null check
+		while ((match = emojiPattern.exec(content)) !== null) {
+			const emojiName = match[2];
+			const emojiId = match[3];
+
+			if (seenEmojiIds.has(emojiId)) {
+				continue;
+			}
+
+			seenEmojiIds.add(emojiId);
+			const emojiUrl = this.buildEmojiCdnUrl(emojiId);
+
+			emojiUrls.push({
+				url: emojiUrl,
+				mimeType: "image/png",
+				source: `emoji: ${emojiName}`,
+			});
+		}
+
+		return emojiUrls;
+	}
+
+	/**
 	 * Extract images from a Discord message and convert to base64 format
 	 * Supports both direct attachments and embedded images (from links like Twitter/X)
 	 * @param messageId - Discord message ID to fetch images from
@@ -199,10 +249,27 @@ export class GenerateImageTool extends BaseTool {
 				}
 			}
 
+		// 3.5. Extract images from Discord stickers
+		if (message.stickers.size > 0) {
+			for (const sticker of message.stickers.values()) {
+				imageUrls.push({
+					url: sticker.url,
+					mimeType: "image/png", // Discord serves PNG version for stickers
+					source: `sticker: ${sticker.name}`,
+				});
+			}
+		}
+
+		// 3.6. Extract custom emojis from message content
+		if (message.content) {
+			const customEmojis = this.extractCustomEmojis(message.content);
+			imageUrls.push(...customEmojis);
+		}
+
 			// 4. Validate we found at least one image
 			if (imageUrls.length === 0) {
 				throw new Error(
-					`No images found in message ${messageId} (checked both attachments and embeds)`,
+					`No images found in message ${messageId} (checked attachments, embeds, stickers, and custom emojis)`,
 				);
 			}
 

@@ -147,6 +147,7 @@ export interface LLMProvider {
 	 * @param webhook - Optional webhook for alter persona responses with custom avatars
 	 * @param personaAvatarUrl - Optional avatar URL for current persona (used with webhook)
 	 * @param personaUsername - Optional username override for current persona (used with webhook)
+	 * @param prefixStrippingName - Optional name used for prefix stripping (may differ from personaUsername for user impersonation)
 	 * @returns Promise<StreamResult> - The outcome of the streaming operation
 	 */
 	streamToDiscord(
@@ -173,6 +174,7 @@ export interface LLMProvider {
 		webhook?: import("discord.js").Webhook,
 		personaAvatarUrl?: string,
 		personaUsername?: string,
+		prefixStrippingName?: string,
 	): Promise<StreamResult>;
 
 	/**

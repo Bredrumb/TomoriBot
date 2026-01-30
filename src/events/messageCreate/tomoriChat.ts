@@ -292,7 +292,7 @@ type SimplifiedMessageForContext = {
 	authorType: "user" | "persona"; // Whether this message is from a user or a persona
 	personaName?: string | null; // Persona nickname if authorType is "persona"
 	content: string | null; // Message text content
-	mediaSourceMessageId?: string; // Message ID that actually hosts the media, if different
+	mediaSourceMessageIds?: string[]; // Array of message IDs that host media (for combined messages)
 	imageAttachments: Array<{
 		url: string; // Original URL of the image
 		proxyUrl: string; // Discord's proxy URL, often more stable for fetching
@@ -643,6 +643,8 @@ export default async function tomoriChat(
 	},
 	selectedPersonaId?: number,
 	isPersonaJob = false,
+	isUserImpersonation = false,
+	impersonatedUserId?: string,
 ): Promise<void> {
 	// 1. Initial Checks & State Loading
 	const channel = message.channel;
@@ -690,6 +692,7 @@ export default async function tomoriChat(
 		disableGifProcessing: false, // Will be set to true during enhanced context restart
 		forceReason, // Pass reasoning flag for enhanced AI responses
 		isManuallyTriggered, // Pass command flag to indicate manual triggering
+		disableAllTools: isUserImpersonation, // Disable tools for user impersonation
 	};
 
 	// biome-ignore lint/style/noNonNullAssertion: Author is always present in non-system messages
@@ -1264,7 +1267,7 @@ export default async function tomoriChat(
 			 */
 			function checkTargetEmbedTitle(embedTitle: string | null): {
 				isTarget: boolean;
-				type: "memory_learning" | "reset" | "reminder_set" | null;
+				type: "memory_learning" | "reset" | "reminder_set" | "system_injection" | null;
 			} {
 				if (!embedTitle) return { isTarget: false, type: null };
 
@@ -1294,6 +1297,11 @@ export default async function tomoriChat(
 						supportedLocale,
 						"reminders.reminder_set_title",
 					);
+					// Target localizer key for system message injection
+					const systemInjectionTitle = localizer(
+						supportedLocale,
+						"commands.bot.impersonate.system_title",
+					);
 
 					// Check for memory learning embeds
 					if (memoryLearningTitles.some((title) => embedTitle === title)) {
@@ -1303,6 +1311,10 @@ export default async function tomoriChat(
 					// Check for reset embed
 					if (embedTitle === resetTitle) {
 						return { isTarget: true, type: "reset" };
+					}
+					// Check for system injection embed
+					if (embedTitle === systemInjectionTitle) {
+						return { isTarget: true, type: "system_injection" };
 					}
 
 					// Check for reminder set confirmation embed
@@ -2067,7 +2079,7 @@ export default async function tomoriChat(
 					[];
 				let messageContentForLlm: string | null = processedContent; // Use processed content (with reference context and "$:" removed if present)
 				let hasProcessedEmbed = false; // Track if this message contains a processed embed
-				let mediaSourceMessageId: string | null = null;
+				const mediaSourceMessageIds: string[] = []; // Array to collect all message IDs with media
 				let hasLocalMedia = false;
 
 				// Extract attachments from referenced message if it exists (after arrays are declared)
@@ -2128,7 +2140,7 @@ export default async function tomoriChat(
 						imageAttachments.length > preRefImageCount ||
 						videoAttachments.length > preRefVideoCount
 					) {
-						mediaSourceMessageId = referencedMessageData.message.id;
+						mediaSourceMessageIds.push(referencedMessageData.message.id);
 					}
 
 					// Log attachment extraction for debugging
@@ -2151,9 +2163,18 @@ export default async function tomoriChat(
 						if (
 							embedCheck.isTarget &&
 							(embedCheck.type === "memory_learning" ||
-								embedCheck.type === "reminder_set") &&
+								embedCheck.type === "reminder_set" ||
+								embedCheck.type === "system_injection") &&
 							embed.description
 						) {
+							// Wrap system_injection embeds in [System: ...] wrapper
+							if (embedCheck.type === "system_injection") {
+								const systemContent = `[System: ${embed.description}]`;
+								messageContentForLlm = messageContentForLlm
+									? `${messageContentForLlm}\n${systemContent}`
+									: systemContent;
+								hasProcessedEmbed = true;
+							} else {
 							// Remove bot name prefix from embed description if present
 							let cleanedDescription = embed.description;
 							if (tomoriState?.tomori_nickname) {
@@ -2179,6 +2200,7 @@ export default async function tomoriChat(
 								? `${messageContentForLlm}\n${embedContent}`
 								: embedContent;
 							hasProcessedEmbed = true;
+							}
 						}
 
 						// 2. Process link preview embeds (new logic) - ONLY for non-bot messages
@@ -2449,11 +2471,11 @@ export default async function tomoriChat(
 					}
 				}
 
-				const resolvedMediaSourceMessageId =
+				const resolvedMediaSourceMessageIds: string[] | undefined =
 					imageAttachments.length > 0 || videoAttachments.length > 0
 						? hasLocalMedia
-							? msg.id
-							: (mediaSourceMessageId ?? undefined)
+							? [msg.id, ...mediaSourceMessageIds]
+							: mediaSourceMessageIds.length > 0 ? mediaSourceMessageIds : undefined
 						: undefined;
 
 				// 5.c. Check if this message is from the same effective author as the previous one
@@ -2494,8 +2516,11 @@ export default async function tomoriChat(
 							...videoAttachments,
 						];
 					}
-					if (resolvedMediaSourceMessageId) {
-						prevMessage.mediaSourceMessageId = resolvedMediaSourceMessageId;
+					if (resolvedMediaSourceMessageIds && resolvedMediaSourceMessageIds.length > 0) {
+							// Merge media source message IDs, avoiding duplicates
+						const existingIds = prevMessage.mediaSourceMessageIds ?? [];
+						const combinedIds = [...existingIds, ...resolvedMediaSourceMessageIds];
+						prevMessage.mediaSourceMessageIds = [...new Set(combinedIds)]; // Remove duplicates
 					}
 				} else if (
 					messageContentForLlm ||
@@ -2510,7 +2535,7 @@ export default async function tomoriChat(
 						authorType,
 						personaName,
 						content: messageContentForLlm,
-						mediaSourceMessageId: resolvedMediaSourceMessageId,
+						mediaSourceMessageIds: resolvedMediaSourceMessageIds,
 						imageAttachments,
 						videoAttachments,
 					});
@@ -2716,6 +2741,13 @@ export default async function tomoriChat(
 					// For now, its signature and output type (ContextSegment[]) remain, but we pass the new data.
 					let contextSegments: StructuredContextItem[] = [];
 					try {
+						// Query database nickname for user impersonation
+						let impersonatedUserNickname: string | undefined;
+						if (isUserImpersonation && impersonatedUserId) {
+							const impersonatedUserRow = await getCachedUserRow(impersonatedUserId);
+							impersonatedUserNickname = impersonatedUserRow?.user_nickname;
+						}
+
 						// NOTE: The `buildContext` call signature will change.
 						// It will take `simplifiedMessageHistory: simplifiedMessages` instead of `conversationHistory`.
 						// It will also need `tomoriNickname`, `tomoriAttributes`, and `tomoriConfig` to build system instructions.
@@ -2742,6 +2774,9 @@ export default async function tomoriChat(
 							snapshot: personaSnapshot, // Use persona-specific snapshot for correct context
 							preloadedEmojis: loadedEmojis, // Pass pre-loaded emoji data to avoid redundant DB query
 							preloadedStickers: loadedStickers, // Pass pre-loaded sticker data to avoid redundant DB query
+							isUserImpersonation, // Pass user impersonation flag (February 2026)
+							impersonatedUserId, // Pass impersonated user ID (February 2026)
+							impersonatedUserNickname, // Pass database nickname for context (February 2026)
 						});
 
 						// Apply emoji repetition penalty if bot has been using too many emojis
@@ -3043,18 +3078,75 @@ export default async function tomoriChat(
 						}
 					}
 
-					const personaAvatarUrl =
-						personaWebhook &&
-						guild &&
-						currentPersona.is_alter &&
-						!usePersonaWebhooks
+					// Query user data for impersonation (used for both webhook and prefix stripping)
+					let impersonatedUserDbNickname: string | undefined;
+					if (isUserImpersonation && impersonatedUserId) {
+						const userRow = await getCachedUserRow(impersonatedUserId);
+						impersonatedUserDbNickname = userRow?.user_nickname;
+					}
+
+					// Create temporary webhook for user impersonation
+					if (isUserImpersonation && impersonatedUserId && supportsWebhooks) {
+						try {
+							const impersonatedMember =
+								guild?.members.cache.get(impersonatedUserId);
+							const impersonatedUserAvatar =
+								impersonatedMember?.avatarURL({ extension: "png" }) ||
+								impersonatedMember?.user.avatarURL({ extension: "png" });
+							// Use Discord display name for webhook (what shows in Discord UI)
+							const impersonatedUserDiscordName =
+								impersonatedMember?.displayName ||
+								impersonatedMember?.user.displayName ||
+								"User";
+
+							// Create temporary webhook with impersonated user's Discord identity
+							const tempWebhook = await (channel as TextChannel).createWebhook({
+								name: impersonatedUserDiscordName,
+								avatar: impersonatedUserAvatar || undefined,
+								reason: "TomoriBot user impersonation",
+							});
+
+							personaWebhook = tempWebhook;
+							log.info(
+								`Created temporary webhook for user impersonation: ${impersonatedUserDiscordName}`,
+							);
+						} catch (error) {
+							log.error("Failed to create temporary webhook for user impersonation", {
+								error,
+								impersonatedUserId,
+							});
+						}
+					}
+
+					const personaAvatarUrl = isUserImpersonation
+						? undefined // Webhook already has user's avatar
+						: personaWebhook &&
+							  guild &&
+							  currentPersona.is_alter &&
+							  !usePersonaWebhooks
 							? resolvePersonaAvatarURL(currentPersona, guild)
 							: undefined;
 
-					const personaUsername =
-						personaWebhook && currentPersona.is_alter
-							? currentPersona.tomori_nickname
-							: undefined;
+					// For user impersonation: separate webhook display name from prefix stripping name
+					let personaUsername: string | undefined;
+					let prefixStrippingName: string | undefined;
+
+					if (isUserImpersonation && impersonatedUserId) {
+						// Webhook display: use Discord display name (e.g., "bredrumb")
+						personaUsername =
+							guild?.members.cache.get(impersonatedUserId)?.displayName ||
+							guild?.members.cache.get(impersonatedUserId)?.user.displayName ||
+							"User";
+						// Prefix stripping: use database nickname if available (e.g., "bred")
+						prefixStrippingName = impersonatedUserDbNickname || personaUsername;
+					} else if (personaWebhook && currentPersona.is_alter) {
+						// For alter personas, use persona nickname for both
+						personaUsername = currentPersona.tomori_nickname;
+						prefixStrippingName = undefined; // Will fall back to personaUsername
+					} else {
+						personaUsername = undefined;
+						prefixStrippingName = undefined;
+					}
 
 					// 1. Initialize variables for the function calling loop in streaming mode
 					let selectedStickerToSend: Sticker | null = null;
@@ -3160,6 +3252,7 @@ export default async function tomoriChat(
 										personaWebhook ?? undefined, // Pass webhook for alter persona avatar support
 										personaAvatarUrl, // Pass resolved avatar URL
 										personaUsername, // Pass persona username
+										prefixStrippingName, // Pass prefix stripping name for user impersonation
 									);
 									const timeoutPromise = new Promise<never>(
 										(
@@ -3810,6 +3903,8 @@ export default async function tomoriChat(
 												snapshot: personaSnapshot, // Use persona-specific snapshot for rebuild
 												preloadedEmojis: loadedEmojis, // Pass pre-loaded emoji data to avoid redundant DB query
 												preloadedStickers: loadedStickers, // Pass pre-loaded sticker data to avoid redundant DB query
+												isUserImpersonation, // Pass user impersonation flag (February 2026)
+												impersonatedUserId, // Pass impersonated user ID (February 2026)
 											});
 
 											log.success(
@@ -4033,6 +4128,21 @@ export default async function tomoriChat(
 					log.success(
 						`Completed response ${personaIndex + 1}/${personasToRespond.length} from persona "${currentPersona.tomori_nickname}"`,
 					);
+
+					// Clean up temporary webhook for user impersonation
+					if (isUserImpersonation && personaWebhook) {
+						try {
+							await personaWebhook.delete("User impersonation complete");
+							log.info(
+								`Deleted temporary user impersonation webhook for user ${impersonatedUserId}`,
+							);
+						} catch (error) {
+							log.warn(
+								"Failed to delete temporary user impersonation webhook",
+								error,
+							);
+						}
+					}
 				} catch (personaError) {
 					// Handle errors for this specific persona and continue with remaining personas
 					log.error(
@@ -4241,12 +4351,34 @@ export function determineMatchingPersonas(
 		senderPersona = allPersonas.find((p) => !p.is_alter);
 	}
 
+	// Determine which persona (if any) is being replied to for self-trigger prevention
+	let repliedToPersona: TomoriState | undefined;
+	if (message.reference?.messageId) {
+		const referenceMessage = message.channel.messages.cache.get(
+			message.reference.messageId,
+		);
+		if (referenceMessage) {
+			// biome-ignore lint/style/noNonNullAssertion: client.user is available in messageCreate event
+			if (referenceMessage.author.id === _client.user!.id) {
+				// Reply to main bot - find the main persona (not an alter)
+				repliedToPersona = allPersonas.find((p) => !p.is_alter);
+			} else if (referenceMessage.webhookId) {
+				// Reply to webhook - identify the persona by webhook username
+				const webhookName = referenceMessage.author.username.toLowerCase();
+				repliedToPersona = personaByNickname.get(webhookName);
+			}
+		}
+	}
+
 	// 2. Trigger word matching: Check all personas
 	const matchingPersonas: TomoriState[] = [];
 
 	for (const persona of allPersonas) {
-		// Prevent self-triggers: skip if this persona sent the message
+		// Prevent self-triggers: skip if this persona sent the message OR is being replied to
 		if (senderPersona && persona.tomori_id === senderPersona.tomori_id) {
+			continue;
+		}
+		if (repliedToPersona && persona.tomori_id === repliedToPersona.tomori_id) {
 			continue;
 		}
 

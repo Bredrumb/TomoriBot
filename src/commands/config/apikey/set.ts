@@ -336,11 +336,8 @@ export async function execute(
 		let newLlmId = tomoriState.config.llm_id; // Default to current model
 		let newDiffusionModelId = tomoriState.config.diffusion_model_id; // Default to current diffusion model
 
-		// Clean up old custom LLM entry if switching away from custom provider
-		if (isCustomProvider(currentProvider) && !isCustomProvider(newProvider)) {
-			log.info(`Switching away from custom provider - cleaning up old custom LLM entry`);
-			await deleteCustomLLMEntry(serverId);
-		}
+		// Track if we need to clean up custom LLM entry (AFTER updating llm_id reference)
+		const shouldCleanupCustomLLM = isCustomProvider(currentProvider) && !isCustomProvider(newProvider);
 
 		if (currentProvider !== newProvider) {
 			// Purge rotation keys when provider changes (keys are provider-specific)
@@ -489,6 +486,13 @@ export async function execute(
 
 		// 14. Invalidate cache so next message gets fresh config
 		invalidateTomoriStateCache(serverId);
+
+		// 14.5. Clean up old custom LLM entry if switching away from custom provider
+		// IMPORTANT: This must happen AFTER updating llm_id to avoid foreign key constraint violation
+		if (shouldCleanupCustomLLM) {
+			log.info(`Switching away from custom provider - cleaning up old custom LLM entry`);
+			await deleteCustomLLMEntry(serverId);
+		}
 
 		// 15. Success message (include model info if provider changed)
 		const successDescriptionKey =

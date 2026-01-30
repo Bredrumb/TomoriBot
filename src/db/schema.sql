@@ -215,6 +215,9 @@ CREATE TABLE IF NOT EXISTS tomori_configs (
 -- Add server_id column for server-scoped configs (January 2026)
 SELECT add_column_if_not_exists('tomori_configs', 'server_id', 'INTEGER');
 
+-- Add hide_impersonation_embeds permission (February 2026)
+SELECT add_column_if_not_exists('tomori_configs', 'hide_impersonation_embeds', 'BOOLEAN', 'false');
+
 -- Allow tomori_id to be nullable and prevent cascade deletes from removing server-scoped config
 DO $$
 DECLARE

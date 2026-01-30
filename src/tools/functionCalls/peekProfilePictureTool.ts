@@ -331,7 +331,7 @@ export class PeekProfilePictureTool extends BaseTool {
 							avatarUrl = member.displayAvatarURL({
 								size: 1024,
 								extension: "png",
-								forceStatic: false, // Allow animated avatars if present
+								forceStatic: true, // Always get static PNG for analysis
 							});
 							serverNickname = member.nickname ?? undefined;
 							log.info(
@@ -342,7 +342,7 @@ export class PeekProfilePictureTool extends BaseTool {
 							avatarUrl = user.displayAvatarURL({
 								size: 1024,
 								extension: "png",
-								forceStatic: false,
+								forceStatic: true,
 							});
 						}
 					} else {
@@ -350,7 +350,7 @@ export class PeekProfilePictureTool extends BaseTool {
 						avatarUrl = user.displayAvatarURL({
 							size: 1024,
 							extension: "png",
-							forceStatic: false,
+							forceStatic: true,
 						});
 					}
 				} catch (error) {
@@ -361,7 +361,7 @@ export class PeekProfilePictureTool extends BaseTool {
 					avatarUrl = user.displayAvatarURL({
 						size: 1024,
 						extension: "png",
-						forceStatic: false,
+						forceStatic: true,
 					});
 				}
 			} else {
@@ -369,7 +369,7 @@ export class PeekProfilePictureTool extends BaseTool {
 				avatarUrl = user.displayAvatarURL({
 					size: 1024,
 					extension: "png",
-					forceStatic: false,
+					forceStatic: true,
 				});
 			}
 

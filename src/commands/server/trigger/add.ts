@@ -95,21 +95,15 @@ export async function execute(
 			return;
 		}
 
-		const mainSuffix = localizer(
-			locale,
-			"commands.server.trigger.add.main_suffix",
-		);
 		const personaSelectOptions: SelectOption[] = allPersonas
 			.filter((persona) => persona.tomori_id !== undefined)
-			.map((persona) => {
-				const personaLabel = persona.is_alter
-					? persona.tomori_nickname
-					: `${persona.tomori_nickname} ${mainSuffix}`;
-				return {
-					label: safeSelectOptionText(personaLabel),
-					value: persona.tomori_id?.toString() ?? "",
-				};
-			})
+			.map((persona) => ({
+				label: safeSelectOptionText(persona.tomori_nickname),
+				value: persona.tomori_id?.toString() ?? "",
+				description: persona.is_alter
+					? localizer(locale, "commands.server.trigger.add.alter_persona_description")
+					: localizer(locale, "commands.server.trigger.add.main_persona_description"),
+			}))
 			.filter((option) => option.value !== "");
 		if (personaSelectOptions.length === 0) {
 			log.error(
@@ -367,15 +361,11 @@ export async function execute(
 		// Invalidate cache so next message gets fresh config
 		invalidateTomoriStateCache(interaction.guild.id);
 
-		const personaDisplayName = selectedPersona.is_alter
-			? selectedPersona.tomori_nickname
-			: `${selectedPersona.tomori_nickname} ${mainSuffix}`;
-
 		await replyInfoEmbed(modalSubmitInteraction, locale, {
 			titleKey: "commands.server.trigger.add.success_title",
 			descriptionKey: "commands.server.trigger.add.success_description",
 			descriptionVars: {
-				persona_name: personaDisplayName,
+				persona_name: selectedPersona.tomori_nickname,
 				added_words: formatTriggerList(newTriggers),
 				added_count: newTriggers.length.toString(),
 				word_count: updatedTriggerCount.toString(),

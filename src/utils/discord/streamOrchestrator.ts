@@ -1748,7 +1748,12 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 			emojiStrings: context.emojiStrings || [],
 			mentionMap,
 			mentionIdSet,
-			botName: context.tomoriState.tomori_nickname,
+			// Use prefixStrippingName for prefix stripping if provided (e.g., database nickname for user impersonation)
+			// Falls back to personaUsername (webhook display name), then bot's nickname
+			botName:
+				context.prefixStrippingName ??
+				context.personaUsername ??
+				context.tomoriState.tomori_nickname,
 			maxMessageLength: config.maxMessageLength,
 		};
 	}
