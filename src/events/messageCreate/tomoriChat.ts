@@ -1267,7 +1267,14 @@ export default async function tomoriChat(
 			 */
 			function checkTargetEmbedTitle(embedTitle: string | null): {
 				isTarget: boolean;
-				type: "memory_learning" | "reset" | "reminder_set" | "system_injection" | null;
+				type:
+					| "memory_learning"
+					| "reset"
+					| "reminder_set"
+					| "system_injection"
+					| "compact_summary"
+					| "compact_refresh"
+					| null;
 			} {
 				if (!embedTitle) return { isTarget: false, type: null };
 
@@ -1302,6 +1309,26 @@ export default async function tomoriChat(
 						supportedLocale,
 						"commands.bot.impersonate.system_title",
 					);
+					const compactSummaryTitle = localizer(
+						supportedLocale,
+						"commands.tool.compact.summary_title",
+					);
+					const compactSummaryTitleRefreshed = localizer(
+						supportedLocale,
+						"commands.tool.compact.summary_title_refreshed",
+					);
+					const compactSceneTitle = localizer(
+						supportedLocale,
+						"commands.tool.compact.roleplay_scene_title",
+					);
+					const compactSceneTitleRefreshed = localizer(
+						supportedLocale,
+						"commands.tool.compact.roleplay_scene_title_refreshed",
+					);
+					const compactCharacterTitlePrefix = localizer(
+						supportedLocale,
+						"commands.tool.compact.roleplay_character_title_prefix",
+					);
 
 					// Check for memory learning embeds
 					if (memoryLearningTitles.some((title) => embedTitle === title)) {
@@ -1315,6 +1342,29 @@ export default async function tomoriChat(
 					// Check for system injection embed
 					if (embedTitle === systemInjectionTitle) {
 						return { isTarget: true, type: "system_injection" };
+					}
+					// Check for compact summary embeds (conversation/scene)
+					if (
+						embedTitle === compactSummaryTitle ||
+						embedTitle === compactSceneTitle
+					) {
+						return { isTarget: true, type: "compact_summary" };
+					}
+
+					// Check for compact refresh embeds (reset marker)
+					if (
+						embedTitle === compactSummaryTitleRefreshed ||
+						embedTitle === compactSceneTitleRefreshed
+					) {
+						return { isTarget: true, type: "compact_refresh" };
+					}
+
+					// Check for compact roleplay character embeds by prefix match
+					if (
+						compactCharacterTitlePrefix &&
+						embedTitle.startsWith(compactCharacterTitlePrefix)
+					) {
+						return { isTarget: true, type: "compact_summary" };
 					}
 
 					// Check for reminder set confirmation embed
@@ -1896,20 +1946,36 @@ export default async function tomoriChat(
 			// 8. Find the index of the *last* reset message (most recent)
 			// This message could be from the bot (confirmation embed) or a user command
 			let resetIndex = -1;
+			let resetType: "reset" | "compact_refresh" | null = null;
 			for (let i = messagesArray.length - 1; i >= 0; i--) {
 				const msg = messagesArray[i];
 
 				// Check if *any* embed in the message contains a reset title using localizer
-				const embedContainsReset = msg.embeds.some((embed) => {
+				let embedContainsReset = false;
+				for (const embed of msg.embeds) {
 					const embedCheck = checkTargetEmbedTitle(embed.title);
-					return embedCheck.isTarget && embedCheck.type === "reset";
-				});
+					if (
+						embedCheck.isTarget &&
+						(embedCheck.type === "reset" ||
+							embedCheck.type === "compact_refresh")
+					) {
+						embedContainsReset = true;
+						resetType = embedCheck.type === "compact_refresh"
+							? "compact_refresh"
+							: "reset";
+						break;
+					}
+				}
 
 				// If an embed contains the marker, this is our reset point
 				if (embedContainsReset) {
 					resetIndex = i;
+					const resetNote =
+						resetType === "compact_refresh"
+							? "History will start from this message."
+							: "History will start after this message.";
 					log.info(
-						`Reset marker detected in message content or embed at index ${i} from ${msg.author.username}. History will start after this message.`,
+						`Reset marker detected in message content or embed at index ${i} from ${msg.author.username}. ${resetNote}`,
 					);
 					// Found the most recent reset marker, stop searching
 					break;
@@ -1917,7 +1983,12 @@ export default async function tomoriChat(
 			}
 
 			// 9. Determine the messages to include in the history
-			const startIndex = resetIndex === -1 ? 0 : resetIndex + 1;
+			const startIndex =
+				resetIndex === -1
+					? 0
+					: resetType === "compact_refresh"
+						? resetIndex
+						: resetIndex + 1;
 			const relevantMessagesArray = messagesArray.slice(startIndex);
 			// 10. Build the `SimplifiedMessageForContext` array and user list from relevant messages
 			const simplifiedMessages: SimplifiedMessageForContext[] = []; // Array for structured messages
@@ -2164,11 +2235,17 @@ export default async function tomoriChat(
 							embedCheck.isTarget &&
 							(embedCheck.type === "memory_learning" ||
 								embedCheck.type === "reminder_set" ||
-								embedCheck.type === "system_injection") &&
+								embedCheck.type === "system_injection" ||
+								embedCheck.type === "compact_summary" ||
+								embedCheck.type === "compact_refresh") &&
 							embed.description
 						) {
 							// Wrap system_injection embeds in [System: ...] wrapper
-							if (embedCheck.type === "system_injection") {
+							if (
+								embedCheck.type === "system_injection" ||
+								embedCheck.type === "compact_summary" ||
+								embedCheck.type === "compact_refresh"
+							) {
 								const systemContent = `[System: ${embed.description}]`;
 								messageContentForLlm = messageContentForLlm
 									? `${messageContentForLlm}\n${systemContent}`
