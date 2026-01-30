@@ -460,6 +460,14 @@ export default {
 				roleplay_scene_title_refreshed: `🧹 Roleplay Scene Summary (Refreshed)`,
 				roleplay_scene_synopsis_header: `Synopsis of the current story:`,
 				roleplay_character_title_prefix: `🎭 Character Summary:`,
+				roleplay_labels: {
+					character: `Character:`,
+					current_goals: `Current Goals:`,
+					emotional_status: `Emotional Status:`,
+					physical_status: `Physical Status:`,
+					appearance_clothing: `Appearance/Clothing:`,
+					inventory: `Inventory:`,
+				},
 				refresh_footer: `Context refreshed starting with this embed.`,
 			},
 			refresh: {

@@ -461,6 +461,14 @@ export default {
 				roleplay_scene_title_refreshed: `🧹 ロールプレイのシーン要約 (リフレッシュ)`,
 				roleplay_scene_synopsis_header: `現在のストーリーのあらすじ:`,
 				roleplay_character_title_prefix: `🎭 キャラクター要約:`,
+				roleplay_labels: {
+					character: `キャラクター:`,
+					current_goals: `現在の目標:`,
+					emotional_status: `感情状態:`,
+					physical_status: `身体の状態:`,
+					appearance_clothing: `外見/服装:`,
+					inventory: `所持品:`,
+				},
 				refresh_footer: `この埋め込みからコンテキストがリフレッシュされました。`,
 			},
 			refresh: {

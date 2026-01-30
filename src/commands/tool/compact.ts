@@ -1,6 +1,7 @@
 import type {
 	ChatInputCommandInteraction,
 	Client,
+	Guild,
 	SlashCommandSubcommandBuilder,
 	TextBasedChannel,
 	Embed,
@@ -22,6 +23,7 @@ import { PrivacyLevel } from "@/types/db/schema";
 import { loadTomoriState, loadAllPersonasForServer } from "@/utils/db/dbRead";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { getCachedUserRow, getCachedPrivacyLevel, getCachedBlacklistStatus } from "@/utils/cache/userCache";
+import { resolvePersonaAvatarURL } from "@/utils/discord/webhookManager";
 import type { ModalComponent } from "@/types/discord/modal";
 import {
 	generateConversationSummaryGoogle,
@@ -222,6 +224,94 @@ function appendEmbedContent(
 
 	const embedContent = `[The following is a system-produced embed]\n${description}`;
 	return baseContent ? `${baseContent}\n${embedContent}` : embedContent;
+}
+
+function isValidHttpUrl(url: string): boolean {
+	try {
+		const parsed = new URL(url);
+		return parsed.protocol === "http:" || parsed.protocol === "https:";
+	} catch {
+		return false;
+	}
+}
+
+async function buildPersonaAvatarMap(
+	serverDiscId: string,
+	guild?: Guild | null,
+): Promise<Map<string, string>> {
+	const personas = await loadAllPersonasForServer(serverDiscId);
+	const avatarMap = new Map<string, string>();
+
+	for (const persona of personas) {
+		let avatarUrl: string | undefined;
+		if (guild) {
+			avatarUrl = resolvePersonaAvatarURL(persona, guild);
+		} else if (
+			persona.webhook_avatar_url &&
+			isValidHttpUrl(persona.webhook_avatar_url)
+		) {
+			avatarUrl = persona.webhook_avatar_url;
+		}
+
+		if (!avatarUrl) continue;
+		const nameKey = persona.tomori_nickname?.trim().toLowerCase();
+		if (!nameKey) continue;
+		avatarMap.set(nameKey, avatarUrl);
+	}
+
+	return avatarMap;
+}
+
+async function buildUserAvatarMap(params: {
+	userIds: string[];
+	client: Client;
+	guild?: Guild | null;
+	serverDiscId: string;
+}): Promise<Map<string, string>> {
+	const avatarMap = new Map<string, string>();
+
+	for (const userId of params.userIds) {
+		let member = null;
+		if (params.guild) {
+			member = await params.guild.members.fetch(userId).catch(() => null);
+		}
+
+		const user = member?.user ?? (await params.client.users.fetch(userId).catch(() => null));
+		if (!user) continue;
+
+		const avatarUrl =
+			member?.displayAvatarURL({
+				extension: "png",
+				size: 256,
+				forceStatic: true,
+			}) ??
+			user.displayAvatarURL({
+				extension: "png",
+				size: 256,
+				forceStatic: true,
+			});
+
+		if (!avatarUrl || !isValidHttpUrl(avatarUrl)) continue;
+
+		const userRow = await getCachedUserRow(userId);
+		const nameCandidates = [
+			member?.displayName,
+			member?.nickname,
+			user.globalName,
+			user.username,
+			userRow?.user_nickname,
+		]
+			.filter((value): value is string => Boolean(value?.trim()))
+			.map((value) => value.trim().toLowerCase());
+
+		for (const name of nameCandidates) {
+			if (!avatarMap.has(name)) {
+				avatarMap.set(name, avatarUrl);
+			}
+		}
+	}
+
+	return avatarMap;
 }
 
 async function buildConversationContext(params: {
@@ -481,6 +571,7 @@ function buildRoleplayEmbeds(
 	locale: string,
 	summary: CompactRoleplaySummary,
 	refresh: boolean,
+	avatarMap?: Map<string, string>,
 ): EmbedBuilder[] {
 	const embeds: EmbedBuilder[] = [];
 
@@ -511,15 +602,39 @@ function buildRoleplayEmbeds(
 		locale,
 		"commands.tool.compact.roleplay_character_title_prefix",
 	);
+	const labelCharacter = localizer(
+		locale,
+		"commands.tool.compact.roleplay_labels.character",
+	);
+	const labelCurrentGoals = localizer(
+		locale,
+		"commands.tool.compact.roleplay_labels.current_goals",
+	);
+	const labelEmotionalStatus = localizer(
+		locale,
+		"commands.tool.compact.roleplay_labels.emotional_status",
+	);
+	const labelPhysicalStatus = localizer(
+		locale,
+		"commands.tool.compact.roleplay_labels.physical_status",
+	);
+	const labelAppearance = localizer(
+		locale,
+		"commands.tool.compact.roleplay_labels.appearance_clothing",
+	);
+	const labelInventory = localizer(
+		locale,
+		"commands.tool.compact.roleplay_labels.inventory",
+	);
 
 	for (const character of summary.characters) {
 		const lines = [
-			`Character: ${character.name || "Unknown"}`,
-			`Current Goals: ${character.current_goals || "Unknown"}`,
-			`Emotional Status: ${character.emotional_status || "Unknown"}`,
-			`Physical Status: ${character.physical_status || "Unknown"}`,
-			`Appearance/Clothing: ${character.appearance_clothing || "Unknown"}`,
-			`Inventory: ${character.inventory || "Unknown"}`,
+			`${labelCharacter} ${character.name || "Unknown"}`,
+			`${labelCurrentGoals} ${character.current_goals || "Unknown"}`,
+			`${labelEmotionalStatus} ${character.emotional_status || "Unknown"}`,
+			`${labelPhysicalStatus} ${character.physical_status || "Unknown"}`,
+			`${labelAppearance} ${character.appearance_clothing || "Unknown"}`,
+			`${labelInventory} ${character.inventory || "Unknown"}`,
 		];
 
 		const description = truncateEmbedDescription(lines.join("\n"));
@@ -527,6 +642,13 @@ function buildRoleplayEmbeds(
 			.setTitle(`${characterPrefix} ${character.name || "Unknown"}`)
 			.setDescription(description)
 			.setColor(ColorCode.SECTION);
+
+		const avatarUrl = character.name
+			? avatarMap?.get(character.name.trim().toLowerCase())
+			: undefined;
+		if (avatarUrl) {
+			embed.setThumbnail(avatarUrl);
+		}
 
 		embeds.push(embed);
 	}
@@ -576,7 +698,7 @@ async function sendEmbedsInChunks(
  * Execute /tool compact command
  */
 export async function execute(
-	_client: Client,
+	client: Client,
 	interaction: ChatInputCommandInteraction,
 	_userData: UserRow,
 	locale: string,
@@ -853,12 +975,12 @@ export async function execute(
 
 	try {
 		if (summaryType === "conversation") {
-		const prompt = buildConversationPrompt({
-			conversationText,
-			imageReferences,
-			supplementaryContext,
-			additionalInstructions,
-		});
+			const prompt = buildConversationPrompt({
+				conversationText,
+				imageReferences,
+				supplementaryContext,
+				additionalInstructions,
+			});
 
 			const result = isGoogle
 				? await generateConversationSummaryGoogle({
@@ -915,6 +1037,21 @@ export async function execute(
 				additionalInstructions,
 			});
 
+			const userAvatarMap = await buildUserAvatarMap({
+				userIds,
+				client,
+				guild: interaction.guild ?? null,
+				serverDiscId,
+			});
+			const personaAvatarMap = await buildPersonaAvatarMap(
+				serverDiscId,
+				interaction.guild ?? null,
+			);
+			const avatarMap = new Map(userAvatarMap);
+			for (const [key, value] of personaAvatarMap) {
+				avatarMap.set(key, value);
+			}
+
 			const result = isGoogle
 				? await generateRoleplaySummaryGoogle({
 					apiKey,
@@ -955,7 +1092,12 @@ export async function execute(
 				return;
 			}
 
-			const embeds = buildRoleplayEmbeds(locale, result.summary, refresh);
+			const embeds = buildRoleplayEmbeds(
+				locale,
+				result.summary,
+				refresh,
+				avatarMap,
+			);
 			await sendEmbedsInChunks(sendableChannel, embeds);
 		}
 
