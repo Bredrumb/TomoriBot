@@ -1147,6 +1147,7 @@ export async function addReminder(reminderData: {
 	reminder_purpose: string;
 	reminder_time: Date;
 	repetition_interval_hours?: number | null;
+	self_reminder?: boolean | null;
 	created_by_user_id: number;
 	persona_id?: number | null;
 }): Promise<ReminderRow | null> {
@@ -1166,6 +1167,7 @@ export async function addReminder(reminderData: {
 				reminder_purpose,
 				reminder_time,
 				repetition_interval_hours,
+				self_reminder,
 				created_by_user_id,
 				persona_id
 			) VALUES (
@@ -1176,6 +1178,7 @@ export async function addReminder(reminderData: {
 				${reminderData.reminder_purpose},
 				${reminderData.reminder_time},
 				${reminderData.repetition_interval_hours ?? null},
+				${reminderData.self_reminder ?? false},
 				${reminderData.created_by_user_id},
 				${reminderData.persona_id ?? null}
 			)

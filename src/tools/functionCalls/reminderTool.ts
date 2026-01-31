@@ -26,7 +26,7 @@ import {
 export class ReminderTool extends BaseTool {
 	name = "set_reminder_for_user";
 	description =
-		"Set a reminder for a Discord user. TomoriBot will mention the user in the selected channel at the specified time with the reminder purpose. You can specify time in two ways: (1) Use relative time parameters like 'minutes_from_now', 'hours_from_now', 'days_from_now', 'months_from_now' - these are much easier for natural requests like 'remind me in 2 hours' or 'remind me tomorrow' (1 day from now). Multiple relative parameters add up. (2) Use absolute 'reminder_time' in YYYY-MM-DD_HH:MM format using the server's configured timezone (set via /config timezone) for specific dates/times. If both are provided, absolute time takes priority. You must provide either absolute time OR at least one relative time parameter.";
+		"Set a reminder for a Discord user. TomoriBot will mention the user in the selected channel at the specified time with the reminder purpose. Use 'self_reminder' for reminders that are tasks for Tomori to execute (especially for recurring tasks like daily summaries) — in that case the reminder targets Tomori herself and does not mention a user. You can specify time in two ways: (1) Use relative time parameters like 'minutes_from_now', 'hours_from_now', 'days_from_now', 'months_from_now' - these are much easier for natural requests like 'remind me in 2 hours' or 'remind me tomorrow' (1 day from now). Multiple relative parameters add up. (2) Use absolute 'reminder_time' in YYYY-MM-DD_HH:MM format using the server's configured timezone (set via /config timezone) for specific dates/times. If both are provided, absolute time takes priority. You must provide either absolute time OR at least one relative time parameter.";
 	category = "utility" as const;
 
 	parameters: ToolParameterSchema = {
@@ -76,6 +76,11 @@ export class ReminderTool extends BaseTool {
 				type: "number",
 				description:
 					"OPTIONAL: If provided, the reminder becomes recurring after the first trigger and repeats every X hours. Minimum 1 hour.",
+			},
+			self_reminder: {
+				type: "boolean",
+				description:
+					"OPTIONAL: Set to true when the reminder is a task for Tomori to execute herself. This disables user mentions and focuses the prompt on the task.",
 			},
 			channel_id: {
 				type: "string",
@@ -135,6 +140,7 @@ export class ReminderTool extends BaseTool {
 		const repetitionIntervalHoursArg = args.repetition_interval_hours as
 			| number
 			| undefined;
+		const selfReminderArg = args.self_reminder as boolean | undefined;
 		const requestedChannelIdArg = args.channel_id as string | undefined;
 
 		// Import database functions and utilities
@@ -186,35 +192,53 @@ export class ReminderTool extends BaseTool {
 		}
 
 		// Validate target user nickname
-		if (
-			typeof targetUserNicknameArg !== "string" ||
-			!targetUserNicknameArg.trim()
-		) {
-			return {
-				success: false,
-				error:
-					"The 'target_user_nickname' argument was missing, empty, or not a string",
-				data: {
-					status: "reminder_creation_failed_invalid_args",
-					reason:
-						"The 'target_user_nickname' argument was missing, empty, or not a string",
-				},
-			};
-		}
+		const botUserId = context.client.user?.id;
+		const isSelfReminder =
+			selfReminderArg === true ||
+			(typeof targetUserDiscordIdArg === "string" &&
+				!!botUserId &&
+				targetUserDiscordIdArg.trim() === botUserId);
 
-		// Validate target user Discord ID
-		if (
-			typeof targetUserDiscordIdArg !== "string" ||
-			!targetUserDiscordIdArg.trim()
-		) {
+		if (!isSelfReminder) {
+			if (
+				typeof targetUserNicknameArg !== "string" ||
+				!targetUserNicknameArg.trim()
+			) {
+				return {
+					success: false,
+					error:
+						"The 'target_user_nickname' argument was missing, empty, or not a string",
+					data: {
+						status: "reminder_creation_failed_invalid_args",
+						reason:
+							"The 'target_user_nickname' argument was missing, empty, or not a string",
+					},
+				};
+			}
+
+			// Validate target user Discord ID
+			if (
+				typeof targetUserDiscordIdArg !== "string" ||
+				!targetUserDiscordIdArg.trim()
+			) {
+				return {
+					success: false,
+					error:
+						"The 'target_user_discord_id' argument was missing, empty, or not a string",
+					data: {
+						status: "reminder_creation_failed_invalid_args",
+						reason:
+							"The 'target_user_discord_id' argument was missing, empty, or not a string",
+					},
+				};
+			}
+		} else if (!botUserId) {
 			return {
 				success: false,
-				error:
-					"The 'target_user_discord_id' argument was missing, empty, or not a string",
+				error: "Tomori bot user ID is not available to create a self reminder",
 				data: {
-					status: "reminder_creation_failed_invalid_args",
-					reason:
-						"The 'target_user_discord_id' argument was missing, empty, or not a string",
+					status: "reminder_creation_failed_internal_error",
+					reason: "Tomori bot user ID is missing.",
 				},
 			};
 		}
@@ -389,8 +413,8 @@ export class ReminderTool extends BaseTool {
 		}
 
 		const reminderPurpose = reminderPurposeArg.trim();
-		const targetUserNickname = targetUserNicknameArg.trim();
-		const targetUserDiscordId = targetUserDiscordIdArg.trim();
+		const targetUserNickname = targetUserNicknameArg?.trim();
+		const targetUserDiscordId = targetUserDiscordIdArg?.trim();
 
 		// Validate that the calculated time is in the future (both absolute and relative times)
 		if (!finalReminderTime || !validateFutureTime(finalReminderTime)) {
@@ -420,78 +444,90 @@ export class ReminderTool extends BaseTool {
 		}
 
 		try {
-			// Load target user to verify they exist
-			const targetUserRow = await loadUserRow(targetUserDiscordId);
+			let actualNicknameInDB = targetUserNickname || "Tomori";
+			let resolvedTargetUserId = targetUserDiscordId || "";
 
-			if (!targetUserRow || !targetUserRow.user_id) {
-				log.warn(
-					`Reminder: Target user with Discord ID ${targetUserDiscordId} not found`,
-				);
-				return {
-					success: false,
-					error: `The user with Discord ID '${targetUserDiscordId}' was not found in TomoriBot's records`,
-					data: {
-						status: "reminder_creation_failed_user_not_found",
-						target_user_discord_id: targetUserDiscordId,
-						reason: `The user with Discord ID '${targetUserDiscordId}' was not found in TomoriBot's records. TomoriBot can only create reminders for users she knows.`,
-					},
-				};
-			}
+			if (isSelfReminder) {
+				resolvedTargetUserId = botUserId as string;
+				actualNicknameInDB =
+					tomoriState.tomori_nickname ||
+					context.client.user?.username ||
+					"Tomori";
+			} else {
+				// Load target user to verify they exist
+				const targetUserRow = await loadUserRow(resolvedTargetUserId);
 
-			// Verify nickname as "two-factor" check
-			const actualNicknameInDB = targetUserRow.user_nickname;
-			const guildMember =
-				context.message?.guild?.members.cache.get(targetUserDiscordId);
-			const guildDisplayName = guildMember?.displayName?.toLowerCase();
-			const discordUsername = guildMember?.user?.username?.toLowerCase();
+				if (!targetUserRow || !targetUserRow.user_id) {
+					log.warn(
+						`Reminder: Target user with Discord ID ${resolvedTargetUserId} not found`,
+					);
+					return {
+						success: false,
+						error: `The user with Discord ID '${resolvedTargetUserId}' was not found in TomoriBot's records`,
+						data: {
+							status: "reminder_creation_failed_user_not_found",
+							target_user_discord_id: resolvedTargetUserId,
+							reason: `The user with Discord ID '${resolvedTargetUserId}' was not found in TomoriBot's records. TomoriBot can only create reminders for users she knows.`,
+						},
+					};
+				}
 
-			// Allow if LLM-provided nickname matches ANY of:
-			// 1. Database nickname
-			// 2. Current guild display name
-			// 3. Discord username (bulletproof fallback)
-			const providedNicknameLower = targetUserNickname.toLowerCase();
-			const dbNicknameLower = actualNicknameInDB.toLowerCase();
-			const nicknameValid =
-				dbNicknameLower === providedNicknameLower ||
-				providedNicknameLower === guildDisplayName ||
-				dbNicknameLower === guildDisplayName ||
-				providedNicknameLower === discordUsername;
+				// Verify nickname as "two-factor" check
+				actualNicknameInDB = targetUserRow.user_nickname;
+				const guildMember =
+					context.message?.guild?.members.cache.get(resolvedTargetUserId);
+				const guildDisplayName = guildMember?.displayName?.toLowerCase();
+				const discordUsername = guildMember?.user?.username?.toLowerCase();
 
-			if (!nicknameValid) {
-				log.warn(
-					`Reminder: Nickname mismatch for target user ${targetUserDiscordId}. LLM provided: '${targetUserNickname}', DB has: '${actualNicknameInDB}', Guild display: '${guildMember?.displayName}', Discord username: '${guildMember?.user?.username}'.`,
-				);
-				return {
-					success: false,
-					error: `The provided nickname '${targetUserNickname}' does not match the records for user ID '${targetUserDiscordId}'`,
-					data: {
-						status: "reminder_creation_failed_nickname_mismatch",
-						target_user_discord_id: targetUserDiscordId,
-						provided_nickname: targetUserNickname,
-						actual_nickname: actualNicknameInDB,
-						guild_display_name: guildMember?.displayName,
-						discord_username: guildMember?.user?.username,
-						reason: `The provided nickname '${targetUserNickname}' does not match the records for user ID '${targetUserDiscordId}' (TomoriBot knows them as '${actualNicknameInDB}', guild shows '${guildMember?.displayName}', Discord username '${guildMember?.user?.username}'). Please ensure the Discord ID and nickname correspond to the same user.`,
-					},
-				};
+				// Allow if LLM-provided nickname matches ANY of:
+				// 1. Database nickname
+				// 2. Current guild display name
+				// 3. Discord username (bulletproof fallback)
+				const providedNicknameLower = (targetUserNickname || "").toLowerCase();
+				const dbNicknameLower = actualNicknameInDB.toLowerCase();
+				const nicknameValid =
+					dbNicknameLower === providedNicknameLower ||
+					providedNicknameLower === guildDisplayName ||
+					dbNicknameLower === guildDisplayName ||
+					providedNicknameLower === discordUsername;
+
+				if (!nicknameValid) {
+					log.warn(
+						`Reminder: Nickname mismatch for target user ${resolvedTargetUserId}. LLM provided: '${targetUserNickname}', DB has: '${actualNicknameInDB}', Guild display: '${guildMember?.displayName}', Discord username '${guildMember?.user?.username}'.`,
+					);
+					return {
+						success: false,
+						error: `The provided nickname '${targetUserNickname}' does not match the records for user ID '${resolvedTargetUserId}'`,
+						data: {
+							status: "reminder_creation_failed_nickname_mismatch",
+							target_user_discord_id: resolvedTargetUserId,
+							provided_nickname: targetUserNickname,
+							actual_nickname: actualNicknameInDB,
+							guild_display_name: guildMember?.displayName,
+							discord_username: guildMember?.user?.username,
+							reason: `The provided nickname '${targetUserNickname}' does not match the records for user ID '${resolvedTargetUserId}' (TomoriBot knows them as '${actualNicknameInDB}', guild shows '${guildMember?.displayName}', Discord username '${guildMember?.user?.username}'). Please ensure the Discord ID and nickname correspond to the same user.`,
+						},
+					};
+				}
 			}
 
 			// Create the reminder in the database
 			const dbResult = await addReminder({
 				server_id: tomoriState.server_id,
 				channel_disc_id: resolvedChannelId,
-				user_discord_id: targetUserDiscordId,
+				user_discord_id: resolvedTargetUserId,
 				user_nickname: actualNicknameInDB, // Use the verified nickname from DB
 				reminder_purpose: reminderPurpose,
 				reminder_time: finalReminderTime,
 				repetition_interval_hours: repetitionIntervalHours,
+				self_reminder: isSelfReminder,
 				created_by_user_id: requestingUserRow.user_id,
 				persona_id: context.tomoriState.tomori_id ?? null,
 			});
 
 			if (dbResult) {
 				log.success(
-					`Reminder created (ID: ${dbResult.reminder_id}): "${reminderPurpose}" for ${actualNicknameInDB} (${targetUserDiscordId}) at ${finalReminderTime.toISOString()}`,
+					`Reminder created (ID: ${dbResult.reminder_id}): "${reminderPurpose}" for ${actualNicknameInDB} (${resolvedTargetUserId}) at ${finalReminderTime.toISOString()}`,
 				);
 
 				// Calculate time remaining for user-friendly display
@@ -512,24 +548,44 @@ export class ReminderTool extends BaseTool {
 					},
 				);
 
+				const useRecurringTaskEmbed =
+					isSelfReminder && repetitionIntervalHours !== null;
+				const reminderPurposeText =
+					reminderPurpose.length > 200
+						? `${reminderPurpose.substring(0, 197)}...`
+						: reminderPurpose;
+				const reminderTimeText = `${formattedReminderTime} (${formatUTCOffset(timezoneOffset)})`;
+				const baseDescriptionVars = {
+					user_nickname: actualNicknameInDB,
+					reminder_purpose: reminderPurposeText,
+					reminder_time: reminderTimeText,
+				};
+				const descriptionVars = useRecurringTaskEmbed
+					? {
+							...baseDescriptionVars,
+							repetition_interval_hours: repetitionIntervalHours as number,
+						}
+					: baseDescriptionVars;
+
 				await sendStandardEmbed(
 					context.channel,
 					context.locale,
 					{
-						color: ColorCode.SUCCESS,
-						titleKey: "reminders.reminder_set_title",
-						descriptionKey: "reminders.reminder_set_description",
-						descriptionVars: {
-							user_nickname: actualNicknameInDB,
-							reminder_purpose:
-								reminderPurpose.length > 200
-									? `${reminderPurpose.substring(0, 197)}...`
-									: reminderPurpose,
-							reminder_time: `${formattedReminderTime} (${formatUTCOffset(timezoneOffset)})`,
-						},
-						footerKey: repetitionIntervalHours
-							? "reminders.reminder_set_footer_recurring"
-							: "reminders.reminder_set_footer",
+						color: useRecurringTaskEmbed
+							? ColorCode.INFO
+							: ColorCode.SUCCESS,
+						titleKey: useRecurringTaskEmbed
+							? "reminders.recurring_task_set_title"
+							: "reminders.reminder_set_title",
+						descriptionKey: useRecurringTaskEmbed
+							? "reminders.recurring_task_set_description"
+							: "reminders.reminder_set_description",
+						descriptionVars,
+						footerKey: useRecurringTaskEmbed
+							? "reminders.recurring_task_set_footer"
+							: repetitionIntervalHours
+								? "reminders.reminder_set_footer_recurring"
+								: "reminders.reminder_set_footer",
 						footerVars: repetitionIntervalHours
 							? {
 									time_remaining: timeRemainingStr,
@@ -553,11 +609,12 @@ export class ReminderTool extends BaseTool {
 						status: "reminder_created_successfully",
 						reminder_id: dbResult.reminder_id,
 						target_user_nickname: actualNicknameInDB,
-						target_user_discord_id: targetUserDiscordId,
+						target_user_discord_id: resolvedTargetUserId,
 						reminder_purpose: reminderPurpose,
 						reminder_time: finalReminderTime.toISOString(),
 						repetition_interval_hours: repetitionIntervalHours,
 						channel_id: resolvedChannelId,
+						self_reminder: isSelfReminder,
 						time_remaining_ms: timeRemainingMs,
 						time_remaining_text: timeRemainingStr,
 					},

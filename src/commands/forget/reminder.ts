@@ -117,7 +117,7 @@ export async function execute(
 		const reminders = await sql`
 			SELECT reminder_id, reminder_purpose, reminder_time, repetition_interval_hours, channel_disc_id
 			FROM reminders
-			WHERE user_discord_id = ${userData.user_disc_id}
+			WHERE created_by_user_id = ${userData.user_id}
 			AND server_id = ${tomoriState.server_id}
 			ORDER BY reminder_time ASC
 		`;

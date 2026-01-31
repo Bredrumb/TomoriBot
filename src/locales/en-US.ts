@@ -2331,10 +2331,10 @@ You can change this anytime using \`/personal privacy\`.`,
 		reminder_set_footer: `A mention will be sent after {time_remaining} from now. Delete reminders with \`/forget reminder\`.`,
 		reminder_set_footer_recurring: `First mention in {time_remaining}. Repeats every {repetition_interval_hours} hour(s). Delete reminders with \`/forget reminder\`.`,
 
-		// Recurring reminder info (sent after a recurring reminder triggers)
-		reminder_recurring_title: `🔁 Recurring Reminder`,
-		reminder_recurring_description: `This reminder will repeat every {repetition_interval_hours} hour(s).`,
-		reminder_recurring_footer: `You can delete reminders using \`/forget reminder\`.`,
+		// Recurring task setup (self reminders)
+		recurring_task_set_title: `🔁 Recurrent Task Setup Successfully`,
+		recurring_task_set_description: `I’ll run "**{reminder_purpose}**" starting at \`{reminder_time}\`, then repeat every {repetition_interval_hours} hour(s).`,
+		recurring_task_set_footer: `You can delete reminders using \`/forget reminder\`.`,
 
 		// Error embed when reminder delivery fails (only user-facing embed during execution)
 		reminder_error_title: `Reminder Delivery Failed`,

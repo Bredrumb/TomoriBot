@@ -644,6 +644,7 @@ export default async function tomoriChat(
 	reminderData?: {
 		reminder_purpose: string;
 		reminder_lateness?: string | null;
+		self_reminder?: boolean;
 	},
 	selectedPersonaId?: number,
 	isPersonaJob = false,
@@ -662,6 +663,38 @@ export default async function tomoriChat(
 		client.user && message.author.id === client.user.id,
 	);
 	const isLikelySelfMessage = isFromClientUser || isWebhookMessage;
+
+	const isSeedPlaceholderMessage =
+		isFromClientUser &&
+		!isWebhookMessage &&
+		message.content === "\u2800" &&
+		message.embeds.length === 0 &&
+		message.attachments.size === 0;
+	if (isSeedPlaceholderMessage) {
+		updateSelfReplyChainState(channel.id, false);
+		return;
+	}
+
+	if (isFromClientUser && message.reference?.messageId) {
+		let referencedMessage = message.channel.messages.cache.get(
+			message.reference.messageId,
+		);
+
+		if (!referencedMessage && "messages" in channel) {
+			try {
+				referencedMessage = await channel.messages.fetch(
+					message.reference.messageId,
+				);
+			} catch {
+				referencedMessage = undefined;
+			}
+		}
+
+		if (referencedMessage?.author.id === client.user?.id) {
+			updateSelfReplyChainState(channel.id, false);
+			return;
+		}
+	}
 
 	if (!isBotAuthor && !isWebhookMessage) {
 		updateSelfReplyChainState(channel.id, false);
@@ -705,7 +738,7 @@ export default async function tomoriChat(
 
 	// Check if user is allowed to trigger bot (Level 2 FULL privacy users cannot trigger)
 	// Skip this check for manual triggers and reminders
-	if (!isManuallyTriggered && !reminderRecipientID) {
+	if (!isManuallyTriggered && !reminderRecipientID && !reminderData?.self_reminder) {
 		const userPrivacyLevel = await getCachedPrivacyLevel(userDiscId);
 		if (userPrivacyLevel === PrivacyLevel.FULL) {
 			// Silently ignore - Level 2 users chose to be completely invisible
@@ -1207,7 +1240,7 @@ export default async function tomoriChat(
 				`[Snapshot] Created per-request snapshot for message ${message.id} in ${isDMChannel ? "DM" : `server ${serverDiscId}`}`,
 			);
 
-			if (reminderRecipientID) {
+			if (reminderRecipientID && !reminderData?.self_reminder) {
 				const forcedMentions = await buildForcedMentionsForReminder(
 					reminderRecipientID,
 					client,
@@ -1782,7 +1815,7 @@ export default async function tomoriChat(
 			let personasToRespond: TomoriState[];
 			if (isManuallyTriggered) {
 				personasToRespond = selectedPersona ? [selectedPersona] : [];
-			} else if (reminderRecipientID || isStopResponse) {
+			} else if (reminderRecipientID || reminderData?.self_reminder || isStopResponse) {
 				// Only main persona for reminders and stop responses
 				personasToRespond = tomoriState ? [tomoriState] : [];
 			} else {
@@ -1820,6 +1853,7 @@ export default async function tomoriChat(
 				isSelfMessage &&
 				!isManuallyTriggered &&
 				!reminderRecipientID &&
+				!reminderData?.self_reminder &&
 				!isStopResponse
 			) {
 				if (selfReplyLimit <= 0) {
@@ -2764,17 +2798,29 @@ export default async function tomoriChat(
 
 					// Inject reminder into conversation history if needed
 					// This makes the reminder part of the natural conversation flow rather than system injection
-					if (reminderRecipientID && reminderData) {
-						let reminderContent = `[A reminder you have set before for <@${reminderRecipientID}> (Mention ID: ${reminderRecipientID}) has been triggered. The reminder is about: "${reminderData.reminder_purpose}"]`;
+					if (reminderData && (reminderRecipientID || reminderData.self_reminder)) {
+						const isSelfReminder = reminderData.self_reminder === true;
+						let reminderContent = "";
 
-						if (reminderData.reminder_lateness) {
-							reminderContent += ` [You are also ${reminderData.reminder_lateness} to remind the user.]`;
+						if (isSelfReminder) {
+							reminderContent = `[System: A task reminder you set for yourself has triggered. Task: "${reminderData.reminder_purpose}". Please execute this task now.]`;
+							if (reminderData.reminder_lateness) {
+								reminderContent += ` [This task is ${reminderData.reminder_lateness} overdue.]`;
+							}
+						} else {
+							reminderContent = `[A reminder you have set before for <@${reminderRecipientID}> (Mention ID: ${reminderRecipientID}) has been triggered. The reminder is about: "${reminderData.reminder_purpose}"]`;
+							if (reminderData.reminder_lateness) {
+								reminderContent += ` [You are also ${reminderData.reminder_lateness} to remind the user.]`;
+							}
 						}
+
+						const fallbackAuthorId =
+							client.user?.id ?? reminderRecipientID ?? "system";
 
 						// Create synthetic simplified message for the reminder
 						const reminderMessage: SimplifiedMessageForContext = {
 							id: `synthetic-reminder-${Date.now()}`, // Synthetic ID for system-generated reminder
-							authorId: reminderRecipientID,
+							authorId: fallbackAuthorId,
 							authorName: "System", // Use bot's nickname
 							authorType: "user",
 							personaName: null,
@@ -2786,7 +2832,7 @@ export default async function tomoriChat(
 						// Add to end of conversation history so it gets processed naturally
 						simplifiedMessages.push(reminderMessage);
 						log.info(
-							`Injected reminder into conversation history for user ${reminderRecipientID} - will be processed by buildContext`,
+							`Injected reminder into conversation history for ${isSelfReminder ? "self task" : `user ${reminderRecipientID}`} - will be processed by buildContext`,
 						);
 					}
 
