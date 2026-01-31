@@ -136,6 +136,17 @@ export const IMPORT_RATE_LIMITS = {
 		: Number.POSITIVE_INFINITY,
 } as const;
 
+export const DOCUMENT_RATE_LIMITS = {
+	/**
+	 * Maximum document upload operations per user per 24 hours
+	 * Prevents volume-based DDoS via rapid successive document uploads
+	 * @default 20 in production, Infinity in development
+	 */
+	MAX_OPERATIONS_PER_DAY: GUARDS_ENABLED
+		? Number.parseInt(process.env.MAX_DOCUMENT_OPERATIONS_PER_DAY || "20", 10)
+		: Number.POSITIVE_INFINITY,
+} as const;
+
 export const AVATAR_RATE_LIMITS = {
 	/**
 	 * Maximum avatar changes per server (guild) per 24 hours
@@ -489,6 +500,7 @@ interface QuotaCheckResult {
 // In-memory quota storage (resets on bot restart, which is acceptable)
 const personaQuotaMap = new Map<string, QuotaEntry>(); // Key: userId
 const importQuotaMap = new Map<string, QuotaEntry>(); // Key: userId
+const documentQuotaMap = new Map<string, QuotaEntry>(); // Key: userId
 const avatarQuotaMap = new Map<string, QuotaEntry>(); // Key: guildId (server-level)
 
 /**
@@ -643,6 +655,46 @@ export function reserveImportQuota(userId: string): QuotaCheckResult {
 }
 
 /**
+ * Atomically checks and reserves a document upload quota slot
+ * Combines check and increment into a single operation to prevent race conditions
+ * @param userId - Discord user ID
+ * @returns Quota check result - if allowed, quota is already reserved
+ */
+export function reserveDocumentQuota(userId: string): QuotaCheckResult {
+	// Disabled in development
+	if (!GUARDS_ENABLED) {
+		return { allowed: true };
+	}
+
+	const now = Date.now();
+	const quota = documentQuotaMap.get(userId);
+	const limit = DOCUMENT_RATE_LIMITS.MAX_OPERATIONS_PER_DAY;
+
+	// First operation or expired quota - create with count 1 (atomically reserve)
+	if (!quota || now >= quota.resetAt) {
+		documentQuotaMap.set(userId, {
+			count: 1,
+			resetAt: now + 24 * 60 * 60 * 1000,
+		});
+		return { allowed: true };
+	}
+
+	// Check if quota would exceed limit BEFORE incrementing
+	if (quota.count >= limit) {
+		return {
+			allowed: false,
+			resetAt: quota.resetAt,
+			current: quota.count,
+			max: limit,
+		};
+	}
+
+	// Atomically increment and return success
+	quota.count++;
+	return { allowed: true };
+}
+
+/**
  * Atomically checks and reserves an avatar change quota slot
  * Combines check and increment into a single operation to prevent race conditions
  * Note: This is a guild-level quota, not user-level
@@ -725,6 +777,9 @@ export function logGuardConfiguration(): void {
 		`Max Import Operations: ${IMPORT_RATE_LIMITS.MAX_OPERATIONS_PER_DAY} per user`,
 	);
 	log.info(
+		`Max Document Operations: ${DOCUMENT_RATE_LIMITS.MAX_OPERATIONS_PER_DAY} per user`,
+	);
+	log.info(
 		`Max Avatar Operations: ${AVATAR_RATE_LIMITS.MAX_OPERATIONS_PER_DAY} per server`,
 	);
 	log.info("\n--- Fetch Tool Limits ---");
@@ -784,6 +839,14 @@ export function initializeQuotaCleanup(): void {
 		for (const [userId, quota] of importQuotaMap.entries()) {
 			if (now >= quota.resetAt) {
 				importQuotaMap.delete(userId);
+				cleanedCount++;
+			}
+		}
+
+		// Clean document quotas
+		for (const [userId, quota] of documentQuotaMap.entries()) {
+			if (now >= quota.resetAt) {
+				documentQuotaMap.delete(userId);
 				cleanedCount++;
 			}
 		}

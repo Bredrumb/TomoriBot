@@ -188,11 +188,34 @@ DROP TRIGGER IF EXISTS update_image_diffusion_models_timestamp ON image_diffusio
 CREATE INDEX IF NOT EXISTS idx_image_diffusion_models_provider ON image_diffusion_models(provider);
 CREATE INDEX IF NOT EXISTS idx_image_diffusion_models_default ON image_diffusion_models(is_default, is_deprecated);
 
+-- Embedding Models table for document embedding/search
+CREATE TABLE IF NOT EXISTS embedding_models (
+  embedding_model_id SERIAL PRIMARY KEY,
+  provider TEXT NOT NULL,
+  codename TEXT NOT NULL UNIQUE,
+  model_family TEXT NOT NULL,
+  model_description TEXT,
+  ja_description TEXT,
+  is_default BOOLEAN DEFAULT false,
+  is_deprecated BOOLEAN DEFAULT false,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Removed updated_at trigger for embedding_models table (static metadata, rarely changes)
+DROP TRIGGER IF EXISTS update_embedding_models_timestamp ON embedding_models;
+
+-- Create indexes for faster lookups
+CREATE INDEX IF NOT EXISTS idx_embedding_models_provider ON embedding_models(provider);
+CREATE INDEX IF NOT EXISTS idx_embedding_models_default ON embedding_models(is_default, is_deprecated);
+CREATE INDEX IF NOT EXISTS idx_embedding_models_family ON embedding_models(model_family);
+
 CREATE TABLE IF NOT EXISTS tomori_configs (
   tomori_config_id SERIAL PRIMARY KEY,
   tomori_id INT UNIQUE, -- Legacy pointer (nullable; server_id is the primary linkage)
   server_id INT, -- Server-scoped config (nullable for legacy rows)
   llm_id INT NOT NULL,
+  embedding_model_id INT,
   llm_temperature REAL NOT NULL DEFAULT 1.5 CHECK (llm_temperature >= 1.0 AND llm_temperature <= 2.0),
   api_key BYTEA, -- encrypted
   trigger_words TEXT[] DEFAULT '{}',
@@ -334,6 +357,9 @@ SELECT add_column_if_not_exists('tomori_configs', 'videogen_enabled', 'BOOLEAN',
 -- Add diffusion model reference for image generation 
 SELECT add_column_if_not_exists('tomori_configs', 'diffusion_model_id', 'INTEGER');
 
+-- Add embedding model reference for document embedding
+SELECT add_column_if_not_exists('tomori_configs', 'embedding_model_id', 'INTEGER');
+
 -- Add custom system prompt column (December 2025)
 SELECT add_column_if_not_exists('tomori_configs', 'system_prompt', 'TEXT', 'NULL');
 
@@ -367,6 +393,21 @@ BEGIN
         ADD CONSTRAINT tomori_configs_diffusion_model_id_fkey
         FOREIGN KEY (diffusion_model_id)
         REFERENCES image_diffusion_models(diffusion_model_id)
+        ON DELETE SET NULL;
+    END IF;
+END $$;
+
+-- Add foreign key constraint for embedding model if not exists
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'tomori_configs_embedding_model_id_fkey'
+    ) THEN
+        ALTER TABLE tomori_configs
+        ADD CONSTRAINT tomori_configs_embedding_model_id_fkey
+        FOREIGN KEY (embedding_model_id)
+        REFERENCES embedding_models(embedding_model_id)
         ON DELETE SET NULL;
     END IF;
 END $$;
@@ -604,6 +645,54 @@ CREATE TABLE IF NOT EXISTS server_memories (
 
 -- Removed updated_at trigger for server_memories table (never updated after creation, only INSERT/DELETE)
 DROP TRIGGER IF EXISTS update_server_memories_timestamp ON server_memories;
+
+-- Documents table for server knowledge base
+-- Make sure pgvector extension is enabled for embeddings
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE IF NOT EXISTS documents (
+  document_id SERIAL PRIMARY KEY,
+  server_id INT NOT NULL,
+  uploader_user_id INT NULL,
+  document_name TEXT NOT NULL,
+  file_name TEXT,
+  mime_type TEXT,
+  file_size_bytes INT,
+  text_content TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (server_id, document_name),
+  FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE,
+  FOREIGN KEY (uploader_user_id) REFERENCES users(user_id) ON DELETE SET NULL
+);
+
+-- Create updated_at trigger for documents table
+DROP TRIGGER IF EXISTS update_documents_timestamp ON documents;
+CREATE TRIGGER update_documents_timestamp
+BEFORE UPDATE ON documents
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
+-- Document chunks table with embeddings
+CREATE TABLE IF NOT EXISTS document_chunks (
+  document_chunk_id SERIAL PRIMARY KEY,
+  document_id INT NOT NULL,
+  server_id INT NOT NULL,
+  embedding_model_id INT NOT NULL,
+  embedding_family TEXT NOT NULL,
+  chunk_index INT NOT NULL,
+  content TEXT NOT NULL,
+  embedding VECTOR,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (document_id) REFERENCES documents(document_id) ON DELETE CASCADE,
+  FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE,
+  FOREIGN KEY (embedding_model_id) REFERENCES embedding_models(embedding_model_id) ON DELETE RESTRICT
+);
+
+-- Create indexes for document chunks
+CREATE INDEX IF NOT EXISTS idx_document_chunks_document_id ON document_chunks(document_id);
+CREATE INDEX IF NOT EXISTS idx_document_chunks_server_family ON document_chunks(server_id, embedding_family);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_document_chunks_unique_idx ON document_chunks(document_id, chunk_index);
 
 CREATE TABLE IF NOT EXISTS personalization_blacklist (
   server_id INT NOT NULL,

@@ -99,11 +99,26 @@ export const diffusionModelSchema = z.object({
 });
 export type DiffusionModelRow = z.infer<typeof diffusionModelSchema>;
 
+export const embeddingModelSchema = z.object({
+	embedding_model_id: z.number().optional(),
+	provider: z.string(),
+	codename: z.string(),
+	model_family: z.string(),
+	model_description: z.string().nullable().optional(),
+	ja_description: z.string().nullable().optional(),
+	is_default: z.boolean().default(false),
+	is_deprecated: z.boolean().default(false),
+	created_at: z.date().optional(),
+	updated_at: z.date().optional(),
+});
+export type EmbeddingModelRow = z.infer<typeof embeddingModelSchema>;
+
 export const tomoriConfigSchema = z.object({
 	tomori_config_id: z.number().optional(),
 	tomori_id: z.number().nullable().optional(), // Legacy pointer (server-scoped configs use server_id)
 	server_id: z.number().nullable().optional(), // Added January 2026 - Server-scoped config (nullable for legacy rows)
 	llm_id: z.number(),
+	embedding_model_id: z.number().int().nullable().optional(), // Added February 2026 - Embedding model for document retrieval
 	diffusion_model_id: z.number().int().nullable().optional(), // Added December 2025 - Image generation model
 	llm_temperature: z.number().min(1.0).max(2.0).default(1.5),
 	api_key: z.instanceof(Buffer).nullable(),
@@ -207,6 +222,33 @@ export const serverMemorySchema = z.object({
 	updated_at: z.date().optional(),
 });
 export type ServerMemoryRow = z.infer<typeof serverMemorySchema>;
+
+export const documentSchema = z.object({
+	document_id: z.number().optional(),
+	server_id: z.number(),
+	uploader_user_id: z.number().nullable().optional(),
+	document_name: z.string(),
+	file_name: z.string().nullable().optional(),
+	mime_type: z.string().nullable().optional(),
+	file_size_bytes: z.number().int().nullable().optional(),
+	text_content: z.string(),
+	created_at: z.date().optional(),
+	updated_at: z.date().optional(),
+});
+export type DocumentRow = z.infer<typeof documentSchema>;
+
+export const documentChunkSchema = z.object({
+	document_chunk_id: z.number().optional(),
+	document_id: z.number(),
+	server_id: z.number(),
+	embedding_model_id: z.number(),
+	embedding_family: z.string(),
+	chunk_index: z.number().int(),
+	content: z.string(),
+	embedding: z.unknown().optional(),
+	created_at: z.date().optional(),
+});
+export type DocumentChunkRow = z.infer<typeof documentChunkSchema>;
 
 export const personalizationBlacklistSchema = z.object({
 	server_id: z.number(),

@@ -155,6 +155,78 @@ EXCEPTION
         RAISE NOTICE 'Column not found during FK creation, skipping';
 END $$;
 
+-- Ensure all required columns exist in embedding_models table
+SELECT add_column_if_not_exists('embedding_models', 'model_family', 'TEXT');
+SELECT add_column_if_not_exists('embedding_models', 'model_description', 'TEXT');
+SELECT add_column_if_not_exists('embedding_models', 'ja_description', 'TEXT');
+SELECT add_column_if_not_exists('embedding_models', 'is_default', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('embedding_models', 'is_deprecated', 'BOOLEAN', 'false');
+
+-- PART 1: Drop FK constraint and clean up orphaned references BEFORE inserting embedding models
+DO $$
+BEGIN
+    -- Drop existing constraint
+    ALTER TABLE tomori_configs DROP CONSTRAINT IF EXISTS tomori_configs_embedding_model_id_fkey;
+
+    -- Clean up orphaned embedding_model_id values that don't exist in embedding_models
+    UPDATE tomori_configs
+    SET embedding_model_id = NULL
+    WHERE embedding_model_id IS NOT NULL
+      AND embedding_model_id NOT IN (SELECT embedding_model_id FROM embedding_models);
+EXCEPTION
+    WHEN undefined_table THEN
+        RAISE NOTICE 'Table not found during cleanup, skipping';
+    WHEN undefined_column THEN
+        RAISE NOTICE 'Column not found during cleanup, skipping';
+END $$;
+
+-- Insert Embedding Models with conflict resolution
+INSERT INTO embedding_models (provider, codename, model_family, is_default, is_deprecated, model_description, ja_description)
+VALUES
+  -- Google Gemini Embedding Models
+  ('google', 'gemini-embedding-001', 'gemini-embedding-001', true, false,
+   'Default Gemini embedding model for document retrieval',
+   '文書検索向けのGeminiデフォルト埋め込みモデル'),
+  -- OpenRouter Embedding Models (via OpenRouter API)
+  ('openrouter', 'google/gemini-embedding-001', 'gemini-embedding-001', true, false,
+   'Gemini embedding model via OpenRouter (same family as Google)',
+   'OpenRouter経由のGemini埋め込みモデル（Googleと同一ファミリー）'),
+  ('openrouter', 'qwen/qwen3-embedding-8b', 'qwen3-embedding-8b', false, true,
+   'Deprecated embedding model (not selectable)',
+   '非推奨の埋め込みモデル（選択不可）'),
+  ('openrouter', 'openai/text-embedding-3-small', 'text-embedding-3-small', false, true,
+   'Deprecated embedding model (not selectable)',
+   '非推奨の埋め込みモデル（選択不可）')
+ON CONFLICT (codename) DO UPDATE SET
+  model_family = EXCLUDED.model_family,
+  model_description = EXCLUDED.model_description,
+  ja_description = EXCLUDED.ja_description,
+  is_default = EXCLUDED.is_default,
+  is_deprecated = EXCLUDED.is_deprecated,
+  provider = EXCLUDED.provider,
+  updated_at = CURRENT_TIMESTAMP;
+
+-- PART 2: Recreate FK constraint AFTER embedding models are inserted
+DO $$
+BEGIN
+    -- Only add if constraint doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'tomori_configs_embedding_model_id_fkey'
+    ) THEN
+        ALTER TABLE tomori_configs
+        ADD CONSTRAINT tomori_configs_embedding_model_id_fkey
+        FOREIGN KEY (embedding_model_id)
+        REFERENCES embedding_models(embedding_model_id)
+        ON DELETE SET NULL;
+    END IF;
+EXCEPTION
+    WHEN undefined_table THEN
+        RAISE NOTICE 'Table not found during FK creation, skipping';
+    WHEN undefined_column THEN
+        RAISE NOTICE 'Column not found during FK creation, skipping';
+END $$;
+
 -- Insert Tomori Presets (English)
 INSERT INTO tomori_presets (
   tomori_preset_name,

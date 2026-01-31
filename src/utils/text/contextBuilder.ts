@@ -7,6 +7,7 @@ import {
 	loadTomoriState,
 	loadUserRow,
 	getPendingRemindersForUser,
+	loadEmbeddingModelById,
 } from "../db/dbRead"; // Import session helpers
 import {
 	ContextItemTag,
@@ -37,6 +38,11 @@ import {
 	type ServerStickerRow,
 } from "@/types/db/schema";
 import { memoryGuard, MEDIA_LIMITS } from "../security/rateLimiter";
+import { decryptApiKey } from "../security/crypto";
+import {
+	formatRetrievedChunksForPrompt,
+	retrieveRelevantDocumentChunks,
+} from "../documents/documentService";
 import {
 	getShortTermMemoriesForUser,
 	getShortTermMemoryForChannel,
@@ -60,6 +66,12 @@ const MAX_OTHER_CHANNEL_MEMORIES = Number.parseInt(
 	process.env.SHORT_TERM_MEMORY_MAX_OTHER_CHANNELS || "3",
 	10,
 );
+
+const DOCUMENT_CONTEXT_MAX_CHARS = 2000;
+const DOCUMENT_QUERY_MAX_LENGTH = 1000;
+const DOCUMENT_QUERY_MIN_LENGTH = 3;
+const DOCUMENT_MAX_RESULTS = 6;
+const DOCUMENT_MIN_SIMILARITY = 0.2;
 
 export const DEFAULT_SYSTEM_PROMPT =
 	"\n{bot} limits themselves to only 0 to 2 emojis per response ({bot} prefers to use available server emojis than normal emojis) and makes sure to respond short and concisely, as {bot} is aware that no one really likes to read walls of text. {bot} only makes lengthy responses if and only if people are asking for assistance or an explanation that warrants it.";
@@ -342,6 +354,23 @@ function buildMediaDescription(msg: SimplifiedMessageForContext): string {
 	}
 
 	return mediaParts.join(" and ");
+}
+
+function getLatestUserQuery(
+	messages: SimplifiedMessageForContext[],
+): string | null {
+	for (let i = messages.length - 1; i >= 0; i -= 1) {
+		const msg = messages[i];
+		if (msg.authorType !== "user") continue;
+		if (!msg.content) continue;
+		if (msg.authorId === "0") continue; // Skip synthetic continuation prompts
+		const trimmed = msg.content.trim();
+		if (!trimmed) continue;
+		if (trimmed.startsWith("[System:")) continue;
+		return trimmed.slice(0, DOCUMENT_QUERY_MAX_LENGTH);
+	}
+
+	return null;
 }
 
 /**
@@ -742,6 +771,63 @@ export async function buildContext({
 				metadataTag: ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
 			});
 		}
+	}
+
+	// 4.5 Server Documents (RAG)
+	try {
+		if (
+			memoryGuard.getStatus() !== "critical" &&
+			tomoriState &&
+			tomoriState.server_id &&
+			tomoriState.config.embedding_model_id &&
+			tomoriState.config.api_key
+		) {
+			const queryText = getLatestUserQuery(simplifiedMessageHistory);
+			if (queryText && queryText.length >= DOCUMENT_QUERY_MIN_LENGTH) {
+				const [documentRow] = await sql`
+					SELECT document_id
+					FROM documents
+					WHERE server_id = ${tomoriState.server_id}
+					LIMIT 1
+				`;
+
+				if (documentRow?.document_id) {
+					const embeddingModel = await loadEmbeddingModelById(
+						tomoriState.config.embedding_model_id,
+					);
+					if (embeddingModel) {
+						const decryptedKey = await decryptApiKey(
+							tomoriState.config.api_key,
+							tomoriState.config.key_version || 1,
+						);
+
+						const chunks = await retrieveRelevantDocumentChunks({
+							serverId: tomoriState.server_id,
+							query: queryText,
+							embeddingModel,
+							apiKey: decryptedKey,
+							maxResults: DOCUMENT_MAX_RESULTS,
+							minSimilarity: DOCUMENT_MIN_SIMILARITY,
+						});
+
+						const documentContext = formatRetrievedChunksForPrompt(
+							chunks,
+							DOCUMENT_CONTEXT_MAX_CHARS,
+						);
+
+						if (documentContext) {
+							contextItems.push({
+								role: "system",
+								parts: [{ type: "text", text: documentContext }],
+								metadataTag: ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
+							});
+						}
+					}
+				}
+			}
+		}
+	} catch (error) {
+		log.warn("Failed to add server document context", error);
 	}
 
 	// 5. Emojis with Semantic Metadata (only available in guild channels, not DMs)

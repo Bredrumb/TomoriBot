@@ -407,9 +407,51 @@ export async function setupServer(
 				);
 			}
 
+			// Find the default embedding model for the selected provider (for document retrieval)
+			let selectedEmbeddingModel = (
+				await tx`
+					SELECT * FROM embedding_models
+					WHERE provider = ${validConfig.provider}
+					  AND is_default = true
+					  AND is_deprecated = false
+					ORDER BY embedding_model_id ASC
+					LIMIT 1
+				`
+			)[0];
+
+			// Fallback: if no default embedding model found, get the first available non-deprecated model
+			if (!selectedEmbeddingModel) {
+				selectedEmbeddingModel = (
+					await tx`
+						SELECT * FROM embedding_models
+						WHERE provider = ${validConfig.provider}
+						  AND is_deprecated = false
+						ORDER BY embedding_model_id ASC
+						LIMIT 1
+					`
+				)[0];
+
+				if (selectedEmbeddingModel) {
+					log.warn(
+						`No default embedding model found for provider ${validConfig.provider}, using fallback: ${selectedEmbeddingModel.codename}`,
+					);
+				} else {
+					log.info(
+						`No embedding models available for provider ${validConfig.provider} (document retrieval not supported)`,
+					);
+				}
+			} else {
+				log.info(
+					`Using default embedding model for ${validConfig.provider}: ${selectedEmbeddingModel.codename}`,
+				);
+			}
+
 			// Extract diffusion_model_id (null if no model found)
 			const selectedDiffusionModelId = selectedDiffusionModel
 				? selectedDiffusionModel.diffusion_model_id
+				: null;
+			const selectedEmbeddingModelId = selectedEmbeddingModel
+				? selectedEmbeddingModel.embedding_model_id
 				: null;
 
 			const defaultTriggers = getBaseTriggerWords(validConfig.locale);
@@ -459,6 +501,7 @@ export async function setupServer(
 					tomori_id,
 					server_id,
 					llm_id,
+					embedding_model_id,
 					api_key,
 					key_version,
 					trigger_words,
@@ -473,6 +516,7 @@ export async function setupServer(
 					${tomori.tomori_id},
 					${server.server_id},
 					${selectedLlm.llm_id},
+					${selectedEmbeddingModelId},
 					${validConfig.encryptedApiKey},
 					${validConfig.keyVersion},
 					${triggerWordsArrayLiteral}::text[],

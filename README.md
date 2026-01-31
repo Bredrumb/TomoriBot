@@ -153,6 +153,25 @@ Before running TomoriBot, ensure you have the following installed:
 
   **Note:** The database schema (including required extensions like `pgcrypto`) is automatically initialized when you first run TomoriBot.
 
+  **pgvector (required for RAG/document memory):**
+  - If you see `extension "vector" is not available`, you need pgvector installed.
+  - Easiest option (Docker):
+  ```sh
+  docker run --name tomori-postgres \
+    -e POSTGRES_PASSWORD=postgres \
+    -e POSTGRES_USER=postgres \
+    -e POSTGRES_DB=tomori \
+    -p 5432:5432 \
+    -d pgvector/pgvector:pg17
+  ```
+  - Native Postgres (Windows): install pgvector for your Postgres version, then ensure these files exist:
+    - `C:\Program Files\PostgreSQL\17\share\extension\vector.control`
+    - `C:\Program Files\PostgreSQL\17\lib\vector.dll`
+  - Then run:
+  ```sql
+  CREATE EXTENSION vector;
+  ```
+
 * **Python 3** (Optional but recommended) - Required for URL Fetching MCP server tool
   ```sh
   # Windows (using Chocolatey)

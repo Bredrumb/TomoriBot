@@ -28,6 +28,7 @@ export enum ContextItemTag {
 	KNOWLEDGE_SERVER_EMOJIS = "knowledge_server_emojis",
 	KNOWLEDGE_SERVER_STICKERS = "knowledge_server_stickers",
 	KNOWLEDGE_SERVER_MEMORIES = "knowledge_server_memories",
+	KNOWLEDGE_SERVER_DOCUMENTS = "knowledge_server_documents",
 	KNOWLEDGE_USER_MEMORIES = "knowledge_user_memories", // For a block of multiple users' memories
 	KNOWLEDGE_USER_STATUS = "knowledge_user_status", // For a block of multiple users' statuses
 	KNOWLEDGE_CURRENT_CONTEXT = "knowledge_current_context", // Time, channel info
