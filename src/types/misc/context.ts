@@ -32,6 +32,7 @@ export enum ContextItemTag {
 	KNOWLEDGE_USER_STATUS = "knowledge_user_status", // For a block of multiple users' statuses
 	KNOWLEDGE_CURRENT_CONTEXT = "knowledge_current_context", // Time, channel info
 	KNOWLEDGE_USERS_IN_CONVERSATION = "knowledge_users_in_conversation", // Combined: time, channel, user status, memories, reminders
+	KNOWLEDGE_SHORT_TERM_MEMORY = "knowledge_short_term_memory", // Short-term memory for recent conversations (goes to dialogue history)
 
 	// Dialogue examples and history
 	DIALOGUE_SAMPLE = "dialogue_sample", // For individual sample user/model turns

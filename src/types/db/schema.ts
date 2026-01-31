@@ -30,6 +30,7 @@ export const userSchema = z.object({
 	registration_locale: z.string().nullable(), // Static locale captured at registration
 	privacy_level: z.nativeEnum(PrivacyLevel).default(PrivacyLevel.MINIMAL),
 	personal_memories: z.array(z.string()).default([]),
+	shortterm_cache_crossserver_opt_in: z.boolean().default(false), // Short-term memory cross-server sharing
 	created_at: z.date().optional(),
 	updated_at: z.date().optional(),
 });

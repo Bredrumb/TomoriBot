@@ -2029,6 +2029,19 @@ You can change this anytime using \`/personal privacy\`.`,
 
 **Warning:** Personalization is currently disabled on this server, so I won't use this nickname here. I'll still use it on other servers where personalization is enabled.`, // Natural line break
 			},
+
+			cache: {
+				description: `Configure short-term memory settings`,
+				crossserver: {
+					title: `Cross-Server Memory Sharing`,
+					enabled: `Cross-server memory sharing is now **enabled**. I can now reference conversations from other servers when talking to you.`,
+					disabled: `Cross-server memory sharing is now **disabled**. I will only reference conversations from the same server.`,
+				},
+				clear: {
+					title: `Short-Term Memory Cleared`,
+					success: `All your short-term memories have been cleared across all channels.`,
+				},
+			},
 		},
 
 		// Commands for teaching Tomori

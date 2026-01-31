@@ -30,6 +30,7 @@ import {
 	getCachedBlacklistStatus,
 } from "../../utils/cache/userCache";
 import { getCachedWhitelistStatus } from "../../utils/cache/channelWhitelistCache";
+import { storeShortTermMemory } from "../../utils/cache/shortTermMemoryCache";
 import { incrementTomoriCounter } from "@/utils/db/dbWrite";
 import {
 	createStandardEmbed,
@@ -2844,6 +2845,7 @@ export default async function tomoriChat(
 							userList,
 							channelDesc,
 							channelName,
+							channelId: channel.id, // For short-term memory context
 							client,
 							triggererName,
 							emojiStrings,
@@ -3657,7 +3659,7 @@ export default async function tomoriChat(
 										channel,
 										client,
 										message,
-										userId: userRow?.user_id?.toString() || userDiscId,
+										userId: userRow?.user_disc_id || userDiscId, // Use Discord user ID (not database ID) for cache consistency
 										guildId: message.guild?.id, // Pass guild ID for guild-specific features (e.g., server avatars)
 										tomoriState,
 										locale,
@@ -3970,6 +3972,7 @@ export default async function tomoriChat(
 												userList,
 												channelDesc,
 												channelName,
+												channelId: channel.id, // For short-term memory context
 												client,
 												triggererName,
 												emojiStrings,
@@ -4260,6 +4263,58 @@ export default async function tomoriChat(
 					);
 				}
 			} // END OF MULTI-PERSONA RESPONSE LOOP
+
+			// === SHORT-TERM MEMORY STORAGE (Phase 2) ===
+			// Store conversation in short-term memory cache after successful response
+			// Only store if:
+			// 1. User privacy level allows (not FULL privacy)
+			// 2. Conversation has messages
+			// 3. This is not a stop response or other special case
+			try {
+				if (
+					!isStopResponse &&
+					simplifiedMessages.length > 0 &&
+					userRow &&
+					requestSnapshot.triggererPrivacyLevel !== PrivacyLevel.FULL
+				) {
+					// Extract last 10 messages (user + model only) with timestamps
+					const messagesToStore = simplifiedMessages
+						.slice(-10)
+						.filter((msg) => msg.authorType === "user" || msg.authorType === "persona")
+						.map((msg) => ({
+							role: msg.authorType === "user" ? ("user" as const) : ("model" as const),
+							content: msg.content || "",
+							timestamp: Date.now(), // Use current time as approximation
+						}));
+
+					// Store in cache
+					if (messagesToStore.length > 0) {
+						const cacheKey = `shortterm:${userDiscId}:${channel.id}`;
+						log.info(
+							`[tomoriChat] [CONVERSATION_STORAGE] Calling storeShortTermMemory - cacheKey=${cacheKey}, messageCount=${messagesToStore.length}`,
+						);
+
+						storeShortTermMemory(
+							userDiscId,
+							channel.id,
+							messagesToStore,
+							isDMChannel ? "DM" : serverDiscId,
+							serverName,
+							channelName,
+						);
+
+						log.info(
+							`[tomoriChat] [CONVERSATION_STORAGE] Finished storeShortTermMemory - cacheKey=${cacheKey}`,
+						);
+					}
+				}
+			} catch (storageError) {
+				// Don't fail the conversation if storage fails
+				log.warn(
+					"Failed to store short-term memory, but conversation completed successfully",
+					storageError,
+				);
+			}
 		} catch (error) {
 			// 14. Global error handler for entire function
 			log.error("Unhandled error in tomoriChat handler:", error);

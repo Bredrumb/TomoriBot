@@ -518,8 +518,11 @@ CREATE TABLE IF NOT EXISTS users (
 -- Create index for faster lookups
 CREATE INDEX IF NOT EXISTS idx_users_disc_id ON users(user_disc_id);
 
--- Add registration_locale column for user region analytics 
+-- Add registration_locale column for user region analytics
 SELECT add_column_if_not_exists('users', 'registration_locale', 'TEXT');
+
+-- Add cross-server short-term memory sharing opt-in (Phase 1: Short-term memory system)
+SELECT add_column_if_not_exists('users', 'shortterm_cache_crossserver_opt_in', 'BOOLEAN', 'false');
 
 -- Create updated_at trigger for users table
 DROP TRIGGER IF EXISTS update_users_timestamp ON users;

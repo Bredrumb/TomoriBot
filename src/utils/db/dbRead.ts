@@ -441,6 +441,42 @@ export async function isPrivacyOptedOut(userDiscId: string): Promise<boolean> {
 }
 
 /**
+ * Get user's cross-server short-term memory sharing preference
+ *
+ * Phase 4: User Controls & Privacy
+ *
+ * @param userDiscId - Discord user ID
+ * @returns True if user has opted in to cross-server sharing, false otherwise
+ */
+export async function getCrossServerShortTermMemoryOptIn(
+	userDiscId: string,
+): Promise<boolean> {
+	try {
+		// 1. Try to get from user cache
+		const { getCachedUserRow } = await import("@/utils/cache/userCache");
+		const cached = await getCachedUserRow(userDiscId);
+		if (cached) {
+			return cached.shortterm_cache_crossserver_opt_in;
+		}
+
+		// 2. Query database if not in cache
+		const [user] = await sql`
+			SELECT shortterm_cache_crossserver_opt_in
+			FROM users
+			WHERE user_disc_id = ${userDiscId}
+		`;
+
+		return user?.shortterm_cache_crossserver_opt_in ?? false;
+	} catch (error) {
+		log.error(
+			`Error checking cross-server short-term memory opt-in for user ${userDiscId}:`,
+			error,
+		);
+		return false; // Default to disabled on error
+	}
+}
+
+/**
  * Loads all custom emojis for a given server.
  * @param internalServerId - The internal database ID of the server.
  * @returns An array of validated ServerEmojiRow objects, or null if none found or error.

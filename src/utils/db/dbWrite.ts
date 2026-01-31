@@ -159,6 +159,49 @@ export async function setPrivacyOptOut(
 }
 
 /**
+ * Toggle user's cross-server short-term memory sharing preference
+ *
+ * Phase 4: User Controls & Privacy
+ *
+ * @param userDiscId - Discord user ID
+ * @returns New opt-in value (true if enabled, false if disabled)
+ */
+export async function toggleCrossServerShortTermMemoryOptIn(
+	userDiscId: string,
+): Promise<boolean> {
+	try {
+		const { userSchema } = await import("@/types/db/schema");
+
+		// Toggle the setting
+		const [updated] = await sql`
+			UPDATE users
+			SET shortterm_cache_crossserver_opt_in = NOT shortterm_cache_crossserver_opt_in
+			WHERE user_disc_id = ${userDiscId}
+			RETURNING shortterm_cache_crossserver_opt_in
+		`;
+
+		// Validate with Zod
+		const validated = userSchema.safeParse(updated);
+		if (!validated.success) {
+			log.error(
+				`Schema validation failed for user ${userDiscId} after toggling cross-server opt-in`,
+				validated.error,
+			);
+			throw new Error("Schema validation failed");
+		}
+
+		return validated.data.shortterm_cache_crossserver_opt_in;
+	} catch (error) {
+		log.error(
+			`Error toggling cross-server short-term memory opt-in for user ${userDiscId}:`,
+			error,
+		);
+		// Re-throw to allow caller to handle
+		throw error;
+	}
+}
+
+/**
  * Increments the autoch_counter for a Tomori instance.
  * When the counter reaches the threshold, it resets to 0.
  * @param tomoriId - The ID of the Tomori instance.

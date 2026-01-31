@@ -33,12 +33,28 @@ import {
 	type ServerStickerRow,
 } from "@/types/db/schema";
 import { memoryGuard, MEDIA_LIMITS } from "../security/rateLimiter";
+import {
+	getShortTermMemoriesForUser,
+	getShortTermMemoryForChannel,
+	getRelativeTimestamp,
+} from "../cache/shortTermMemoryCache";
+import { getCachedUserRow } from "../cache/userCache";
 
 /**
  * Maps userId -> nickname for the current mention replacement operation.
  * @remarks This cache is cleared after each text processing run to avoid stale data.
  */
 const mentionCache = new Map<string, string>();
+
+// Environment variables for short-term memory configuration
+const MIN_MESSAGES_FOR_SUMMARY = Number.parseInt(
+	process.env.SHORT_TERM_MEMORY_MIN_MESSAGES_FOR_SUMMARY || "6",
+	10,
+);
+const MAX_OTHER_CHANNEL_MEMORIES = Number.parseInt(
+	process.env.SHORT_TERM_MEMORY_MAX_OTHER_CHANNELS || "3",
+	10,
+);
 
 export const DEFAULT_SYSTEM_PROMPT =
 	"\n{bot} limits themselves to only 0 to 2 emojis per response ({bot} prefers to use available server emojis than normal emojis) and makes sure to respond short and concisely, as {bot} is aware that no one really likes to read walls of text. {bot} only makes lengthy responses if and only if people are asking for assistance or an explanation that warrants it.";
@@ -323,6 +339,181 @@ function buildMediaDescription(msg: SimplifiedMessageForContext): string {
 	return mediaParts.join(" and ");
 }
 
+/**
+ * Build short-term memory context for cross-channel and same-channel awareness
+ *
+ * Phase 2: Loads other-channel crude conversations or summaries (fallback to crude if no summary)
+ * Phase 3: Loads same-channel summary with HINT (tool-calling models only)
+ *
+ * @param triggeringUserId - Discord user ID of the message author
+ * @param currentChannelId - Current channel ID
+ * @param currentServerId - Current server ID (or "DM")
+ * @param tomoriState - Tomori configuration state
+ * @param locale - User's preferred locale
+ * @param triggererName - Display name of the triggering user
+ * @param botName - Bot's display name
+ * @param personalMemoriesEnabled - Whether personalization is enabled
+ * @param client - Discord client for mention conversion
+ * @returns Object with other-channel items and optional same-channel prompt
+ */
+async function buildShortTermMemoryContext(
+	triggeringUserId: string,
+	currentChannelId: string,
+	currentServerId: string,
+	tomoriState: import("@/types/db/schema").TomoriState | null,
+	_locale: string,
+	triggererName: string,
+	botName: string,
+	personalMemoriesEnabled: boolean,
+	client: Client,
+): Promise<{
+	otherChannelItems: StructuredContextItem[];
+	sameChannelPrompt?: StructuredContextItem;
+}> {
+	const otherChannelItems: StructuredContextItem[] = [];
+	let sameChannelPrompt: StructuredContextItem | undefined;
+
+	try {
+		// 1. Check if user has cross-server opt-in enabled
+		const userRow = await getCachedUserRow(triggeringUserId);
+		const crossServerOptIn =
+			userRow?.shortterm_cache_crossserver_opt_in ?? false;
+
+		// 2. Get short-term memories for user (excluding current channel for other-channel section)
+		const otherChannelMemories = getShortTermMemoriesForUser(
+			triggeringUserId,
+			currentChannelId,
+		);
+
+		// 3. Filter based on cross-server setting
+		const filteredMemories = otherChannelMemories.filter((memory) => {
+			// If cross-server disabled, only include memories from same server
+			if (!crossServerOptIn && memory.serverId !== currentServerId) {
+				return false;
+			}
+			return true;
+		});
+
+		// 4. Limit to max number of other-channel memories (most recent first)
+		const limitedMemories = filteredMemories.slice(
+			0,
+			MAX_OTHER_CHANNEL_MEMORIES,
+		);
+
+		// 5. Build OTHER-CHANNEL MEMORIES context (Phase 2)
+		// Show summaries when available, fall back to crude conversations
+		if (limitedMemories.length > 0) {
+			let otherChannelText = "";
+
+			for (const memory of limitedMemories) {
+				const relativeTime = getRelativeTimestamp(memory.lastUpdated);
+
+				// Determine channel reference (privacy-safe)
+				let channelReference: string;
+				if (memory.serverId === currentServerId && memory.channelName) {
+					// Same server: use channel mention
+					channelReference = `#${memory.channelName}`;
+				} else {
+					// Different server: generic reference
+					channelReference = "a channel in another server";
+				}
+
+				// Show summary if available, otherwise show crude conversation
+				if (memory.summary) {
+					// SUMMARY FORMAT (preferred)
+					otherChannelText += `[System: ${botName} remembers a recent conversation with ${triggererName} in ${channelReference} (${relativeTime}):\n${memory.summary}]\n\n`;
+				} else {
+					// CRUDE CONVERSATION FORMAT (fallback)
+					otherChannelText += `[System: ${botName} remembers a recent conversation with ${triggererName} in ${channelReference} (${relativeTime}):\n`;
+
+					for (const msg of memory.messages) {
+						const speaker = msg.role === "user" ? triggererName : botName;
+						otherChannelText += `${speaker}: "${msg.content}"\n`;
+					}
+
+					otherChannelText += "]\n\n";
+				}
+			}
+
+			if (otherChannelText) {
+				otherChannelItems.push({
+					role: "user",
+					parts: [
+						{
+							type: "text",
+							text: await convertMentions(
+								otherChannelText.trim(),
+								client,
+								currentServerId,
+								triggererName,
+								botName,
+								personalMemoriesEnabled,
+							),
+						},
+					],
+					metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
+				});
+			}
+		}
+
+		// 5. Build SAME-CHANNEL SUMMARY context (Phase 3)
+		// Only shown for tool-calling models
+		// This will be placed at the very end of the context
+		if (tomoriState?.llm?.has_tools) {
+			const sameChannelMemory = getShortTermMemoryForChannel(
+				triggeringUserId,
+				currentChannelId,
+			);
+
+			let sameChannelText = "";
+
+			if (sameChannelMemory?.summary) {
+				// EXISTING SUMMARY with HINT
+				sameChannelText = `[System: ${botName}'s short term memory for this ongoing conversation:\n${sameChannelMemory.summary}\n\nHINT: Use the update_short_term_memory tool to update this memory BEFORE you respond if there is information you need to remember right now or the conversation has greatly changed its topic, but do not need to store long-term through the remember_this_fact tool]`;
+			} else if (
+				sameChannelMemory &&
+				sameChannelMemory.messages.length >= MIN_MESSAGES_FOR_SUMMARY
+			) {
+				// NO SUMMARY but enough messages - Prompt to create one
+				sameChannelText = `[System: You currently do not have short term memory saved for this conversation. Use the update_short_term_memory tool to create a short term memory about the current conversation's topic BEFORE you respond, especially if there is information you need to remember right now, but do not need to store long-term through remember_this_fact tool]`;
+			}
+			// If less than MIN_MESSAGES_FOR_SUMMARY, don't show any prompt (conversation too short)
+
+			if (sameChannelText) {
+				sameChannelPrompt = {
+					role: "user",
+					parts: [
+						{
+							type: "text",
+							text: await convertMentions(
+								sameChannelText,
+								client,
+								currentServerId,
+								triggererName,
+								botName,
+								personalMemoriesEnabled,
+							),
+						},
+					],
+					metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
+				};
+			}
+		}
+
+		return { otherChannelItems, sameChannelPrompt };
+	} catch (error) {
+		await log.error(
+			`[buildShortTermMemoryContext] Failed to build short-term memory context - triggeringUserId=${triggeringUserId}, currentChannelId=${currentChannelId}`,
+			error,
+			{
+				errorType: "SHORT_TERM_MEMORY_CONTEXT_ERROR",
+				metadata: { userDiscId: triggeringUserId, currentChannelId },
+			},
+		);
+		return { otherChannelItems: [], sameChannelPrompt: undefined };
+	}
+}
+
 export async function buildContext({
 	guildId,
 	serverName,
@@ -331,6 +522,7 @@ export async function buildContext({
 	userList,
 	channelDesc: _channelDesc, // Unused after Phase 1 optimization (channel info now in Users in Conversation section)
 	channelName,
+	channelId, // Added for short-term memory context
 	client,
 	triggererName,
 	emojiStrings: _emojiStrings, // Unused after Phase 1 optimization (emojis fetched directly from guild cache)
@@ -353,6 +545,7 @@ export async function buildContext({
 	userList: string[];
 	channelDesc: string | null;
 	channelName: string;
+	channelId: string; // Added for short-term memory context
 	client: Client;
 	triggererName: string;
 	emojiStrings?: string[];
@@ -1138,6 +1331,43 @@ export async function buildContext({
 		});
 	}
 
+	// === SHORT-TERM MEMORY CONTEXT (Phase 2 & 3) ===
+	// Load recent conversations from other channels (other-channel awareness)
+	// and current channel summary (same-channel working memory)
+	// Store same-channel prompt separately to be added at the very end
+	let sameChannelMemoryPrompt: StructuredContextItem | undefined;
+	try {
+		// Determine the triggering user ID (impersonation takes precedence)
+		const actualTriggeringUserId =
+			impersonatedUserId ?? snapshot?.triggererUserRow?.user_disc_id;
+
+		// Determine locale (from snapshot if available)
+		const actualLocale = snapshot?.triggererUserRow?.language_pref ?? "en-US";
+
+		// Only build short-term memory context if we have a valid user ID
+		if (actualTriggeringUserId) {
+			const { otherChannelItems, sameChannelPrompt } =
+				await buildShortTermMemoryContext(
+					actualTriggeringUserId,
+					channelId,
+					guildId,
+					tomoriState,
+					actualLocale,
+					triggererName,
+					botName,
+					tomoriConfig.personal_memories_enabled,
+					client,
+				);
+			// Push other-channel items now (goes in middle of context)
+			contextItems.push(...otherChannelItems);
+			// Store same-channel prompt for later (goes at very end)
+			sameChannelMemoryPrompt = sameChannelPrompt;
+		}
+	} catch (error) {
+		// Don't fail context building if short-term memory loading fails
+		log.warn("Failed to build short-term memory context", error);
+	}
+
 	// Skip sample dialogues for user impersonation (users don't need examples of bot's speech)
 	if (
 		!isUserImpersonation &&
@@ -1240,8 +1470,7 @@ export async function buildContext({
 	for (const [index, msg] of simplifiedMessageHistory.entries()) {
 		const isPersonaMessage = msg.authorType === "persona" && !!msg.personaName;
 		const isCurrentPersonaMessage =
-			isPersonaMessage &&
-			msg.personaName?.toLowerCase() === botNameLower;
+			isPersonaMessage && msg.personaName?.toLowerCase() === botNameLower;
 
 		// Role reversal for user impersonation (February 2026)
 		let role: "user" | "model";
@@ -1457,6 +1686,12 @@ export async function buildContext({
 			],
 			metadataTag: ContextItemTag.DIALOGUE_HISTORY,
 		});
+	}
+
+	// Add same-channel memory prompt at the very end (if it exists)
+	// This ensures the prompt is the last thing the model sees before responding
+	if (sameChannelMemoryPrompt) {
+		contextItems.push(sameChannelMemoryPrompt);
 	}
 
 	log.info(
