@@ -26,7 +26,7 @@ import {
 export class ReminderTool extends BaseTool {
 	name = "set_reminder_for_user";
 	description =
-		"Set a reminder for a Discord user. TomoriBot will mention the user in the channel where this reminder was set at the specified time with the reminder purpose. You can specify time in two ways: (1) Use relative time parameters like 'minutes_from_now', 'hours_from_now', 'days_from_now', 'months_from_now' - these are much easier for natural requests like 'remind me in 2 hours' or 'remind me tomorrow' (1 day from now). Multiple relative parameters add up. (2) Use absolute 'reminder_time' in YYYY-MM-DD_HH:MM format using the server's configured timezone (set via /config timezone) for specific dates/times. If both are provided, absolute time takes priority. You must provide either absolute time OR at least one relative time parameter.";
+		"Set a reminder for a Discord user. TomoriBot will mention the user in the selected channel at the specified time with the reminder purpose. You can specify time in two ways: (1) Use relative time parameters like 'minutes_from_now', 'hours_from_now', 'days_from_now', 'months_from_now' - these are much easier for natural requests like 'remind me in 2 hours' or 'remind me tomorrow' (1 day from now). Multiple relative parameters add up. (2) Use absolute 'reminder_time' in YYYY-MM-DD_HH:MM format using the server's configured timezone (set via /config timezone) for specific dates/times. If both are provided, absolute time takes priority. You must provide either absolute time OR at least one relative time parameter.";
 	category = "utility" as const;
 
 	parameters: ToolParameterSchema = {
@@ -71,6 +71,16 @@ export class ReminderTool extends BaseTool {
 				type: "number",
 				description:
 					"OPTIONAL: Months from the current time to set the reminder. Can be combined with other 'from now' parameters. Uses calendar months (30.44 days average).",
+			},
+			repetition_interval_hours: {
+				type: "number",
+				description:
+					"OPTIONAL: If provided, the reminder becomes recurring after the first trigger and repeats every X hours. Minimum 1 hour.",
+			},
+			channel_id: {
+				type: "string",
+				description:
+					"OPTIONAL: Discord channel ID to send the reminder in. The channel must exist in the current server. If omitted, the current channel is used.",
 			},
 		},
 		required: [
@@ -122,6 +132,10 @@ export class ReminderTool extends BaseTool {
 		const hoursFromNowArg = args.hours_from_now as number | undefined;
 		const daysFromNowArg = args.days_from_now as number | undefined;
 		const monthsFromNowArg = args.months_from_now as number | undefined;
+		const repetitionIntervalHoursArg = args.repetition_interval_hours as
+			| number
+			| undefined;
+		const requestedChannelIdArg = args.channel_id as string | undefined;
 
 		// Import database functions and utilities
 		const { loadUserRow } = await import("../../utils/db/dbRead");
@@ -203,6 +217,101 @@ export class ReminderTool extends BaseTool {
 						"The 'target_user_discord_id' argument was missing, empty, or not a string",
 				},
 			};
+		}
+
+		// Validate repetition interval (recurring reminders)
+		let repetitionIntervalHours: number | null = null;
+		if (typeof repetitionIntervalHoursArg === "number") {
+			if (
+				!Number.isFinite(repetitionIntervalHoursArg) ||
+				!Number.isInteger(repetitionIntervalHoursArg) ||
+				repetitionIntervalHoursArg < 1
+			) {
+				return {
+					success: false,
+					error:
+						"The 'repetition_interval_hours' must be an integer number of hours and at least 1",
+					data: {
+						status: "reminder_creation_failed_invalid_repeat_interval",
+						reason: "The 'repetition_interval_hours' must be an integer >= 1.",
+					},
+				};
+			}
+			repetitionIntervalHours = repetitionIntervalHoursArg;
+		}
+
+		// Resolve and validate target channel (optional override)
+		let resolvedChannelId = channelId;
+		if (typeof requestedChannelIdArg === "string") {
+			const trimmedChannelId = requestedChannelIdArg.trim();
+			if (!trimmedChannelId) {
+				return {
+					success: false,
+					error: "The 'channel_id' argument was empty or invalid",
+					data: {
+						status: "reminder_creation_failed_invalid_channel",
+						reason: "The 'channel_id' argument was empty or invalid.",
+					},
+				};
+			}
+
+			// If channel_id is provided in a DM context, only allow the current channel
+			if (!context.guildId) {
+				if (trimmedChannelId !== channelId) {
+					return {
+						success: false,
+						error: "Channel overrides are not supported in DMs",
+						data: {
+							status: "reminder_creation_failed_invalid_channel",
+							reason:
+								"Channel overrides are not supported in DMs. Use the current channel.",
+						},
+					};
+				}
+			} else {
+				const targetChannel = await context.client.channels
+					.fetch(trimmedChannelId)
+					.catch(() => null);
+
+				if (!targetChannel || targetChannel.isDMBased()) {
+					return {
+						success: false,
+						error: `Channel with ID '${trimmedChannelId}' was not found in this server`,
+						data: {
+							status: "reminder_creation_failed_invalid_channel",
+							reason: `Channel not found in server: ${trimmedChannelId}`,
+						},
+					};
+				}
+
+				if (
+					!("guildId" in targetChannel) ||
+					targetChannel.guildId !== context.guildId
+				) {
+					return {
+						success: false,
+						error: `Channel with ID '${trimmedChannelId}' was not found in this server`,
+						data: {
+							status: "reminder_creation_failed_invalid_channel",
+							reason: `Channel not found in server: ${trimmedChannelId}`,
+						},
+					};
+				}
+
+				if (!targetChannel.isTextBased()) {
+					return {
+						success: false,
+						error: "The specified channel is not a text-based server channel",
+						data: {
+							status: "reminder_creation_failed_invalid_channel",
+							reason:
+								"The specified channel is not a text-based server channel.",
+						},
+					};
+				}
+			}
+
+			resolvedChannelId = trimmedChannelId;
 		}
 
 		// Determine which time method to use and calculate the final reminder time
@@ -370,11 +479,12 @@ export class ReminderTool extends BaseTool {
 			// Create the reminder in the database
 			const dbResult = await addReminder({
 				server_id: tomoriState.server_id,
-				channel_disc_id: channelId,
+				channel_disc_id: resolvedChannelId,
 				user_discord_id: targetUserDiscordId,
 				user_nickname: actualNicknameInDB, // Use the verified nickname from DB
 				reminder_purpose: reminderPurpose,
 				reminder_time: finalReminderTime,
+				repetition_interval_hours: repetitionIntervalHours,
 				created_by_user_id: requestingUserRow.user_id,
 				persona_id: context.tomoriState.tomori_id ?? null,
 			});
@@ -417,10 +527,17 @@ export class ReminderTool extends BaseTool {
 									: reminderPurpose,
 							reminder_time: `${formattedReminderTime} (${formatUTCOffset(timezoneOffset)})`,
 						},
-						footerKey: "reminders.reminder_set_footer",
-						footerVars: {
-							time_remaining: timeRemainingStr,
-						},
+						footerKey: repetitionIntervalHours
+							? "reminders.reminder_set_footer_recurring"
+							: "reminders.reminder_set_footer",
+						footerVars: repetitionIntervalHours
+							? {
+									time_remaining: timeRemainingStr,
+									repetition_interval_hours: repetitionIntervalHours,
+								}
+							: {
+									time_remaining: timeRemainingStr,
+								},
 					},
 					{
 						webhook: context.webhook,
@@ -439,6 +556,8 @@ export class ReminderTool extends BaseTool {
 						target_user_discord_id: targetUserDiscordId,
 						reminder_purpose: reminderPurpose,
 						reminder_time: finalReminderTime.toISOString(),
+						repetition_interval_hours: repetitionIntervalHours,
+						channel_id: resolvedChannelId,
 						time_remaining_ms: timeRemainingMs,
 						time_remaining_text: timeRemainingStr,
 					},

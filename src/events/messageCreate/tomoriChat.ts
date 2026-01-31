@@ -417,6 +417,7 @@ interface ChannelLockEntry {
 		isStopResponse?: boolean; // Flag to prevent stopping stop responses
 		selectedPersonaId?: number;
 		isPersonaJob?: boolean;
+		manualSystemPrompt?: string;
 	}>;
 }
 const channelLocks = new Map<string, ChannelLockEntry>(); // Key: channel.id
@@ -625,6 +626,7 @@ async function sendServerRateLimitEmbed(
  * @param skipLock - Whether to skip semaphore lock acquisition (for recursive calls).
  * @param selectedPersonaId - Optional persona ID to use instead of main persona (for manual triggers).
  * @param isPersonaJob - Whether this invocation is an internal queued persona job.
+ * @param manualSystemPrompt - Optional system prompt to append at the end of context.
  */
 export default async function tomoriChat(
 	client: Client,
@@ -646,6 +648,7 @@ export default async function tomoriChat(
 	isPersonaJob = false,
 	isUserImpersonation = false,
 	impersonatedUserId?: string,
+	manualSystemPrompt?: string,
 ): Promise<void> {
 	// 1. Initial Checks & State Loading
 	const channel = message.channel;
@@ -1049,6 +1052,7 @@ export default async function tomoriChat(
 						llmOverrideCodename,
 						selectedPersonaId,
 						isPersonaJob,
+						manualSystemPrompt,
 					});
 					log.info(
 						`Channel ${channelLockId} is busy (msg ${lockEntry.currentMessageId}). Enqueued message ${message.id}. Queue: ${lockEntry.messageQueue.length}. Tomori would reply (autoch_counter simulated as 0 for this check).`,
@@ -1275,6 +1279,7 @@ export default async function tomoriChat(
 					| "system_injection"
 					| "compact_summary"
 					| "compact_refresh"
+					| "reward_headpat"
 					| null;
 			} {
 				if (!embedTitle) return { isTarget: false, type: null };
@@ -1318,6 +1323,10 @@ export default async function tomoriChat(
 						supportedLocale,
 						"commands.bot.impersonate.system_title",
 					);
+					const rewardHeadpatTitle = localizer(
+						supportedLocale,
+						"commands.reward.headpat.embed_title",
+					);
 					const compactSummaryTitle = localizer(
 						supportedLocale,
 						"commands.tool.compact.summary_title",
@@ -1351,6 +1360,10 @@ export default async function tomoriChat(
 					// Check for system injection embed
 					if (embedTitle === systemInjectionTitle) {
 						return { isTarget: true, type: "system_injection" };
+					}
+					// Check for reward headpat embed
+					if (embedTitle === rewardHeadpatTitle) {
+						return { isTarget: true, type: "reward_headpat" };
 					}
 					// Check for compact summary embeds (conversation/scene)
 					if (
@@ -2246,55 +2259,57 @@ export default async function tomoriChat(
 								embedCheck.type === "reminder_set" ||
 								embedCheck.type === "system_injection" ||
 								embedCheck.type === "compact_summary" ||
-								embedCheck.type === "compact_refresh") &&
+								embedCheck.type === "compact_refresh" ||
+								embedCheck.type === "reward_headpat") &&
 							embed.description
 						) {
-						// Wrap system_injection embeds in [System: ...] wrapper
-						if (
-							embedCheck.type === "system_injection" ||
-							embedCheck.type === "compact_summary" ||
-							embedCheck.type === "compact_refresh"
-						) {
-							const titleLine =
+							// Wrap system_injection embeds in [System: ...] wrapper
+							if (
+								embedCheck.type === "system_injection" ||
 								embedCheck.type === "compact_summary" ||
 								embedCheck.type === "compact_refresh"
-									? embed.title
-										? `## ${embed.title}\n`
-										: ""
-									: "";
-							const systemContent = `[System: ${titleLine}${embed.description}]`;
+							) {
+								const titleLine =
+									embedCheck.type === "compact_summary" ||
+									embedCheck.type === "compact_refresh"
+										? embed.title
+											? `## ${embed.title}\n`
+											: ""
+										: "";
+								const systemContent = `[System: ${titleLine}${embed.description}]`;
 								messageContentForLlm = messageContentForLlm
 									? `${messageContentForLlm}\n${systemContent}`
 									: systemContent;
 								hasProcessedEmbed = true;
 							} else {
-							// Remove bot name prefix from embed description if present
-							let cleanedDescription = embed.description;
-							if (tomoriState?.tomori_nickname) {
-								// Escape special regex characters in the bot nickname
-								const escapedNickname = tomoriState.tomori_nickname.replace(
-									/[.*+?^${}()|[\]\\]/g,
-									"\\$&",
-								);
-								const botNamePattern = new RegExp(
-									`^${escapedNickname}:\\s*`,
-									"i",
-								);
-								if (botNamePattern.test(cleanedDescription)) {
-									cleanedDescription = cleanedDescription
-										.replace(botNamePattern, "")
-										.trim();
+								// Remove bot name prefix from embed description if present
+								let cleanedDescription = embed.description;
+								if (tomoriState?.tomori_nickname) {
+									// Escape special regex characters in the bot nickname
+									const escapedNickname = tomoriState.tomori_nickname.replace(
+										/[.*+?^${}()|[\]\\]/g,
+										"\\$&",
+									);
+									const botNamePattern = new RegExp(
+										`^${escapedNickname}:\\s*`,
+										"i",
+									);
+									if (botNamePattern.test(cleanedDescription)) {
+										cleanedDescription = cleanedDescription
+											.replace(botNamePattern, "")
+											.trim();
+									}
 								}
-							}
 
-							const embedContent =
-								embedCheck.type === "memory_learning"
-									? `[System: ${cleanedDescription}]`
-									: `[The following is a system-produced embed]\n${cleanedDescription}`;
-							messageContentForLlm = messageContentForLlm
-								? `${messageContentForLlm}\n${embedContent}`
-								: embedContent;
-							hasProcessedEmbed = true;
+								const embedContent =
+									embedCheck.type === "memory_learning" ||
+									embedCheck.type === "reward_headpat"
+										? `[System: ${cleanedDescription}]`
+										: `[The following is a system-produced embed]\n${cleanedDescription}`;
+								messageContentForLlm = messageContentForLlm
+									? `${messageContentForLlm}\n${embedContent}`
+									: embedContent;
+								hasProcessedEmbed = true;
 							}
 						}
 
@@ -2954,6 +2969,21 @@ export default async function tomoriChat(
 								`Injected reasoning query as user message in dialogue: "${reasoningQuery}"`,
 							);
 						}
+
+						// Inject manual system prompt at the end (for manual commands)
+						if (manualSystemPrompt?.trim()) {
+							const trimmedPrompt = manualSystemPrompt.trim();
+							const systemText = trimmedPrompt.startsWith("[System:")
+								? trimmedPrompt
+								: `[System: ${trimmedPrompt}]`;
+							const manualPromptMessage: StructuredContextItem = {
+								role: "user",
+								parts: [{ type: "text", text: systemText }],
+								metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+							};
+							contextSegments.push(manualPromptMessage);
+							log.info(`Injected manual system prompt: "${trimmedPrompt}"`);
+						}
 					} catch (error) {
 						log.error("Error building context for LLM API Call:", error, {
 							serverId: tomoriState?.server_id, // Use internal DB ID if available
@@ -3571,6 +3601,9 @@ export default async function tomoriChat(
 											reminderData,
 											selectedPersonaId,
 											isPersonaJob,
+											isUserImpersonation,
+											impersonatedUserId,
+											manualSystemPrompt,
 										);
 									} else {
 										// Max retries reached, show error embed
@@ -4403,6 +4436,9 @@ export default async function tomoriChat(
 							undefined, // reminderData
 							nextMessageData.selectedPersonaId,
 							nextMessageData.isPersonaJob ?? false,
+							undefined, // isUserImpersonation
+							undefined, // impersonatedUserId
+							nextMessageData.manualSystemPrompt, // manualSystemPrompt
 						).catch((e) => {
 							log.error(
 								`Error processing queued message ${nextMessageData.message.id}:`,

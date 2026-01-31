@@ -17,7 +17,7 @@ import {
 } from "../../utils/db/dbRead";
 
 /**
- * Configure the respond subcommand
+ * Configure the headpat subcommand
  * @param subcommand - The slash command subcommand builder
  * @returns The configured subcommand
  */
@@ -25,19 +25,11 @@ export const configureSubcommand = (
 	subcommand: SlashCommandSubcommandBuilder,
 ) =>
 	subcommand
-		.setName("respond")
-		.setDescription(localizer("en-US", "commands.bot.respond.description"))
-		.addStringOption((option) =>
-			option
-				.setName("prompt")
-				.setDescription(
-					localizer("en-US", "commands.bot.respond.prompt_description"),
-				)
-				.setRequired(false),
-		);
+		.setName("headpat")
+		.setDescription(localizer("en-US", "commands.reward.headpat.description"));
 
 /**
- * Execute the respond command - manually trigger Tomori to respond to the latest message
+ * Execute the headpat command - reward the bot and trigger a response
  * @param client - Discord client instance
  * @param interaction - Command interaction
  * @param _userData - User data from database (not used)
@@ -116,8 +108,6 @@ export async function execute(
 	let replyInteraction:
 		| ChatInputCommandInteraction
 		| import("discord.js").ModalSubmitInteraction = interaction;
-	const manualPromptRaw = interaction.options.getString("prompt", false);
-	const manualPrompt = manualPromptRaw?.trim();
 
 	// If alters exist, show selection modal
 	if (alterPersonas.length > 0 && mainPersona) {
@@ -137,7 +127,7 @@ export async function execute(
 
 		// Show modal
 		const modalResult = await promptWithPaginatedModal(interaction, locale, {
-			modalCustomId: "respond_persona_select",
+			modalCustomId: "reward_headpat_persona_select",
 			modalTitleKey: "commands.bot.respond.select_persona_title",
 			components: [
 				{
@@ -153,7 +143,7 @@ export async function execute(
 		// Handle modal result
 		if (modalResult.outcome !== "submit") {
 			log.info(
-				`Respond persona selection ${modalResult.outcome} for user ${interaction.user.id}`,
+				`Headpat persona selection ${modalResult.outcome} for user ${interaction.user.id}`,
 			);
 			return;
 		}
@@ -172,63 +162,53 @@ export async function execute(
 			selectedIndex === 0 ? mainPersona : alterPersonas[selectedIndex - 1];
 
 		log.info(
-			`User ${interaction.user.id} selected persona ${selectedPersona.tomori_nickname} (ID: ${selectedPersona.tomori_id}) for manual respond`,
+			`User ${interaction.user.id} selected persona ${selectedPersona.tomori_nickname} (ID: ${selectedPersona.tomori_id}) for headpat reward`,
 		);
 	}
 
 	try {
-		// 5. Get embed visibility setting
-		const hideEmbed = tomoriState.config.hide_respond_embed;
+		const botName =
+			selectedPersona?.tomori_nickname ??
+			tomoriState.tomori_nickname ??
+			process.env.DEFAULT_BOTNAME ??
+			"Tomori";
 
-		// 6. Build success embed
-		const successEmbed = new EmbedBuilder()
-			.setTitle(localizer(locale, "commands.bot.respond.success_title"))
+		// 5. Build headpat embed (always public)
+		const headpatEmbed = new EmbedBuilder()
+			.setTitle(localizer(locale, "commands.reward.headpat.embed_title"))
 			.setDescription(
-				localizer(locale, "commands.bot.respond.success_description"),
+				localizer(locale, "commands.reward.headpat.embed_description", {
+					user: `<@${interaction.user.id}>`,
+					bot: botName,
+				}),
 			)
 			.setColor(ColorCode.SUCCESS);
 
-		// Add footer notice if embed is visible
-		if (!hideEmbed) {
-			successEmbed.setFooter({
-				text: localizer(locale, "commands.bot.respond.embed_hide_notice"),
-			});
-		}
-
-		// 7. Send response (ephemeral if hide_respond_embed is true)
+		// 6. Send response (always public, suppress notifications)
 		await replyInteraction.reply({
-			embeds: [successEmbed],
-			flags: hideEmbed
-				? MessageFlags.Ephemeral | MessageFlags.SuppressNotifications
-				: MessageFlags.SuppressNotifications,
+			embeds: [headpatEmbed],
+			flags: MessageFlags.SuppressNotifications,
 		});
 
-		// 8. Get the latest message in the channel (excluding the interaction itself)
+		// 7. Get the latest message in the channel (includes the headpat embed)
 		const messages = await interaction.channel.messages.fetch({ limit: 1 });
 		const latestMessage = messages.first();
 
 		if (!latestMessage) {
 			log.warn(
-				`No messages found in channel ${interaction.channel.id} for manual respond command.`,
+				`No messages found in channel ${interaction.channel.id} for headpat reward command.`,
 			);
 			return;
 		}
 
-		// 5. Create a "passport" message that will trigger tomoriChat
-		// We need to ensure this message will pass the trigger checks
-		// NOTE: tomoriChat has built-in logic (lines 2004-2040) that injects a
-		// "[Continue your last message]" prompt when isManuallyTriggered=true
-		// and the last message in history is from the bot
-		const passportMessage = latestMessage;
-
-		// 6. Manually trigger tomoriChat with command flags
+		// 8. Manually trigger tomoriChat (embed already injects headpat context)
 		log.info(
-			`Manual respond command triggered by ${interaction.user.id} in channel ${interaction.channel.id} for message ${latestMessage.id}`,
+			`Headpat reward triggered by ${interaction.user.id} in channel ${interaction.channel.id} for message ${latestMessage.id}`,
 		);
 
 		await tomoriChat(
 			client,
-			passportMessage as Message,
+			latestMessage as Message,
 			false, // isFromQueue
 			true, // isManuallyTriggered - this bypasses normal trigger logic
 			undefined, // forceReason
@@ -243,11 +223,11 @@ export async function execute(
 			undefined, // isPersonaJob
 			undefined, // isUserImpersonation
 			undefined, // impersonatedUserId
-			manualPrompt || undefined, // manualSystemPrompt
+			undefined, // manualSystemPrompt
 		);
 	} catch (error) {
-		log.error("Error in bot respond command:", error, {
-			errorType: "BotRespondCommandError",
+		log.error("Error in reward headpat command:", error, {
+			errorType: "RewardHeadpatCommandError",
 			metadata: {
 				userId: interaction.user.id,
 				guildId: interaction.guild?.id ?? interaction.user.id,
@@ -263,7 +243,7 @@ export async function execute(
 			});
 		} catch (followUpError) {
 			log.error(
-				"Failed to send error followup for bot respond command:",
+				"Failed to send error followup for reward headpat command:",
 				followUpError,
 			);
 		}

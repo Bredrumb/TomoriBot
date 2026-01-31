@@ -220,7 +220,7 @@ export async function convertMentions(
 							guild?.channels.cache.get(id) ||
 							(await client.channels.fetch(id).catch(() => null));
 						if (channel?.isTextBased() && !channel.isDMBased()) {
-							return `#${channel.name}`;
+							return `#${channel.name} (ID: ${id})`;
 						}
 					} catch (error) {
 						log.error(

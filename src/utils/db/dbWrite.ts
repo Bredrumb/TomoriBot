@@ -1146,6 +1146,7 @@ export async function addReminder(reminderData: {
 	user_nickname: string;
 	reminder_purpose: string;
 	reminder_time: Date;
+	repetition_interval_hours?: number | null;
 	created_by_user_id: number;
 	persona_id?: number | null;
 }): Promise<ReminderRow | null> {
@@ -1164,6 +1165,7 @@ export async function addReminder(reminderData: {
 				user_nickname,
 				reminder_purpose,
 				reminder_time,
+				repetition_interval_hours,
 				created_by_user_id,
 				persona_id
 			) VALUES (
@@ -1173,6 +1175,7 @@ export async function addReminder(reminderData: {
 				${reminderData.user_nickname},
 				${reminderData.reminder_purpose},
 				${reminderData.reminder_time},
+				${reminderData.repetition_interval_hours ?? null},
 				${reminderData.created_by_user_id},
 				${reminderData.persona_id ?? null}
 			)
@@ -1227,6 +1230,70 @@ export async function addReminder(reminderData: {
 		};
 		await log.error(
 			`Error creating reminder for user ${reminderData.user_discord_id}`,
+			error,
+			context,
+		);
+		return null;
+	}
+}
+
+/**
+ * Reschedules an existing reminder to a new time (used for recurring reminders).
+ * @param reminderId - The reminder ID to update
+ * @param nextReminderTime - The next scheduled reminder time
+ * @returns The updated ReminderRow object, or null if update failed
+ */
+export async function rescheduleReminder(
+	reminderId: number,
+	nextReminderTime: Date,
+): Promise<ReminderRow | null> {
+	try {
+		const [updatedReminder] = await sql`
+			UPDATE reminders
+			SET reminder_time = ${nextReminderTime},
+				updated_at = CURRENT_TIMESTAMP
+			WHERE reminder_id = ${reminderId}
+			RETURNING *
+		`;
+
+		if (!updatedReminder) {
+			log.warn(`Failed to reschedule reminder ${reminderId} (no row returned)`);
+			return null;
+		}
+
+		const validatedReminder = reminderSchema.safeParse(updatedReminder);
+		if (!validatedReminder.success) {
+			const context: ErrorContext = {
+				errorType: "SchemaValidationError",
+				metadata: {
+					operation: "rescheduleReminder",
+					reminderId,
+					validationErrors: validatedReminder.error.flatten(),
+				},
+			};
+			await log.error(
+				`Failed to validate reminder after reschedule (ID: ${reminderId})`,
+				validatedReminder.error,
+				context,
+			);
+			return null;
+		}
+
+		log.success(
+			`Reminder rescheduled (ID: ${reminderId}) to ${nextReminderTime.toISOString()}`,
+		);
+		return validatedReminder.data;
+	} catch (error) {
+		const context: ErrorContext = {
+			errorType: "DatabaseUpdateError",
+			metadata: {
+				operation: "rescheduleReminder",
+				reminderId,
+				nextReminderTime: nextReminderTime.toISOString(),
+			},
+		};
+		await log.error(
+			`Error rescheduling reminder ${reminderId}`,
 			error,
 			context,
 		);

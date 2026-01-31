@@ -1260,6 +1260,7 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 		bot: {
 			respond: {
 				description: `Manually trigger response to the latest message in this channel.`,
+				prompt_description: `Optional system prompt to append at the end of context.`,
 				success_title: `Manual Response Triggered`,
 				success_description: `Responding to the latest message in this channel...`,
 				missing_permissions_title: `Missing Permissions`,
@@ -1319,6 +1320,16 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				webhook_error_description: `Failed to create webhook for impersonation. Error: {error}`,
 				no_personas_title: `No Personas Found`,
 				no_personas_description: `No personas are configured for this server. Use \`/config setup\` first.`,
+			},
+		},
+
+		// Reward commands
+		reward: {
+			description: `Reward me with fun interactions.`,
+			headpat: {
+				description: `Give me a headpat!`,
+				embed_title: `Headpat Time!`,
+				embed_description: `{user} is currently headpatting {bot}.`,
 			},
 		},
 
@@ -2168,6 +2179,17 @@ You can change this anytime using \`/personal privacy\`.`,
 				success_title: `Attribute Removed`,
 				success_description: `Successfully removed the attribute: "{attribute}"`,
 			},
+			reminder: {
+				description: `Remove one of your reminders.`,
+				modal_title: `Remove Reminder`,
+				select_label: `Reminder to Remove`,
+				select_description: `Choose which reminder to remove`,
+				select_placeholder: `Select a reminder...`,
+				no_reminders_title: `No Reminders`,
+				no_reminders: `You don't have any reminders to remove. Set one by asking me to remind you.`,
+				success_title: `Reminder Removed`,
+				success_description: `Successfully removed the reminder: "{reminder_purpose}"`,
+			},
 			memory: {
 				description: `Manage my memories`,
 				personal: {
@@ -2288,7 +2310,13 @@ You can change this anytime using \`/personal privacy\`.`,
 		// Confirmation embed when reminder is set
 		reminder_set_title: `⏰ Reminder Set`,
 		reminder_set_description: `I'll remind {user_nickname} about "**{reminder_purpose}**" at \`{reminder_time}\``,
-		reminder_set_footer: `A mention will be sent after {time_remaining} from now.`,
+		reminder_set_footer: `A mention will be sent after {time_remaining} from now. Delete reminders with \`/forget reminder\`.`,
+		reminder_set_footer_recurring: `First mention in {time_remaining}. Repeats every {repetition_interval_hours} hour(s). Delete reminders with \`/forget reminder\`.`,
+
+		// Recurring reminder info (sent after a recurring reminder triggers)
+		reminder_recurring_title: `🔁 Recurring Reminder`,
+		reminder_recurring_description: `This reminder will repeat every {repetition_interval_hours} hours.`,
+		reminder_recurring_footer: `You can delete reminders using \`/forget reminder\`.`,
 
 		// Error embed when reminder delivery fails (only user-facing embed during execution)
 		reminder_error_title: `Reminder Delivery Failed`,

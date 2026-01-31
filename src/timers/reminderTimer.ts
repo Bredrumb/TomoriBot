@@ -13,6 +13,7 @@ import type {
 import { ChannelType } from "discord.js";
 import { log } from "../utils/misc/logger";
 import { getDueReminders, deleteReminderById } from "../utils/db/dbRead";
+import { rescheduleReminder } from "../utils/db/dbWrite";
 import type { ReminderRow } from "../types/db/schema";
 import { calculateLateness } from "../utils/text/stringHelper";
 import tomoriChat from "../events/messageCreate/tomoriChat";
@@ -216,8 +217,54 @@ export class ReminderTimer {
 				reminderStartTime,
 			);
 
-			// Successfully executed, delete the reminder
-			if (reminder.reminder_id) {
+			const repetitionIntervalHours =
+				typeof reminder.repetition_interval_hours === "number"
+					? reminder.repetition_interval_hours
+					: null;
+			const isRecurring =
+				repetitionIntervalHours !== null && repetitionIntervalHours >= 1;
+
+			if (isRecurring && reminder.reminder_id) {
+				const nextTriggerTime = new Date(
+					Date.now() + repetitionIntervalHours * 60 * 60 * 1000,
+				);
+				const rescheduled = await rescheduleReminder(
+					reminder.reminder_id,
+					nextTriggerTime,
+				);
+
+				if (rescheduled) {
+					log.success(
+						`Reminder ${reminder.reminder_id} executed and rescheduled for ${nextTriggerTime.toISOString()}`,
+					);
+					try {
+						await sendStandardEmbed(
+							channel as import("discord.js").TextChannel,
+							"en-US",
+							{
+								color: ColorCode.INFO,
+								titleKey: "reminders.reminder_recurring_title",
+								descriptionKey: "reminders.reminder_recurring_description",
+									descriptionVars: {
+										repetition_interval_hours: repetitionIntervalHours,
+									},
+								footerKey: "reminders.reminder_recurring_footer",
+							},
+						);
+					} catch (embedError) {
+						log.warn(
+							`Failed to send recurring reminder info embed for reminder ${reminder.reminder_id}:`,
+							embedError,
+						);
+					}
+				} else {
+					log.error(
+						`Failed to reschedule recurring reminder ${reminder.reminder_id}; deleting to prevent duplicates`,
+					);
+					await deleteReminderById(reminder.reminder_id);
+				}
+			} else if (reminder.reminder_id) {
+				// Successfully executed one-time reminder, delete it
 				await deleteReminderById(reminder.reminder_id);
 				log.success(
 					`Reminder ${reminder.reminder_id} executed and deleted successfully`,
