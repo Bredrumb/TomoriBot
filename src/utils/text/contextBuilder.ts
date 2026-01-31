@@ -21,6 +21,10 @@ import {
 	normalizeCustomEmojisForLlm,
 } from "./stringHelper";
 import {
+	applyUncensorInputTransforms,
+	buildUncensorInjectionText,
+} from "./uncensor";
+import {
 	getCurrentTimeWithOffset,
 	formatUTCOffset,
 	getTimeOfDayPhrase,
@@ -602,6 +606,10 @@ export async function buildContext({
 	const botName = tomoriNickname;
 	let missingEmojiMetadataCount = 0;
 	let missingStickerMetadataCount = 0;
+	const uncensorInputOptions = {
+		unicodeSpacesEnabled: tomoriConfig.uncensor_unicode_space_enabled,
+		sanitizeEnabled: tomoriConfig.uncensor_sanitize_enabled,
+	};
 
 	// 1. System prompt + Humanizer rules (comes FIRST for prompt optimization)
 	if (tomoriConfig.humanizer_degree >= HumanizerDegree.LIGHT) {
@@ -1467,13 +1475,16 @@ export async function buildContext({
 				parts: [
 					{
 						type: "text",
-						text: await convertMentions(
-							userSampleText,
-							client,
-							guildId,
-							triggererName, // triggererName for {user} if it appears in sample
-							botName,
-							tomoriConfig.personal_memories_enabled,
+						text: applyUncensorInputTransforms(
+							await convertMentions(
+								userSampleText,
+								client,
+								guildId,
+								triggererName, // triggererName for {user} if it appears in sample
+								botName,
+								tomoriConfig.personal_memories_enabled,
+							),
+							uncensorInputOptions,
 						),
 					},
 				],
@@ -1492,13 +1503,16 @@ export async function buildContext({
 				parts: [
 					{
 						type: "text",
-						text: await convertMentions(
-							modelSampleText,
-							client,
-							guildId,
-							triggererName,
-							botName, // botName for {bot} if it appears in sample
-							tomoriConfig.personal_memories_enabled,
+						text: applyUncensorInputTransforms(
+							await convertMentions(
+								modelSampleText,
+								client,
+								guildId,
+								triggererName,
+								botName, // botName for {bot} if it appears in sample
+								tomoriConfig.personal_memories_enabled,
+							),
+							uncensorInputOptions,
 						),
 					},
 				],
@@ -1697,6 +1711,12 @@ export async function buildContext({
 				botName,
 				tomoriConfig.personal_memories_enabled,
 			);
+			if (!processedContent.startsWith("[System:")) {
+				processedContent = applyUncensorInputTransforms(
+					processedContent,
+					uncensorInputOptions,
+				);
+			}
 			parts.push({ type: "text", text: processedContent });
 		}
 
@@ -1754,6 +1774,19 @@ export async function buildContext({
 	// This ensures the prompt is the last thing the model sees before responding
 	if (sameChannelMemoryPrompt) {
 		contextItems.push(sameChannelMemoryPrompt);
+	}
+
+	// Add optional uncensor prompt injection as the final context item (if enabled)
+	const uncensorInjectionText = buildUncensorInjectionText({
+		injectionEnabled: tomoriConfig.uncensor_injection_enabled,
+		unicodeSpacesEnabled: tomoriConfig.uncensor_unicode_space_enabled,
+	});
+	if (uncensorInjectionText) {
+		contextItems.push({
+			role: "user",
+			parts: [{ type: "text", text: uncensorInjectionText }],
+			metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+		});
 	}
 
 	log.info(

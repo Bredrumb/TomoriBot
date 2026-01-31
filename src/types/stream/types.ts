@@ -68,6 +68,8 @@ export interface TextProcessingConfig {
 	mentionIdSet?: Set<string>;
 	botName: string;
 	maxMessageLength: number;
+	uncensorUnicodeSpacesEnabled?: boolean;
+	uncensorSanitizeEnabled?: boolean;
 }
 
 /**

@@ -323,6 +323,11 @@ SELECT add_column_if_not_exists('tomori_configs', 'imagegen_enabled', 'BOOLEAN',
 -- Add hide respond embed permission (January 2026)
 SELECT add_column_if_not_exists('tomori_configs', 'hide_respond_embed', 'BOOLEAN', 'false');
 
+-- Add uncensor feature toggles (February 2026)
+SELECT add_column_if_not_exists('tomori_configs', 'uncensor_injection_enabled', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('tomori_configs', 'uncensor_unicode_space_enabled', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('tomori_configs', 'uncensor_sanitize_enabled', 'BOOLEAN', 'false');
+
 -- Add video generation permission (future use)
 SELECT add_column_if_not_exists('tomori_configs', 'videogen_enabled', 'BOOLEAN', 'true');
 

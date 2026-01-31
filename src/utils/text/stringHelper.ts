@@ -1,6 +1,7 @@
 import { HumanizerDegree } from "@/types/db/schema";
 import { log } from "../misc/logger";
 import { localizer } from "./localizer";
+import { applyUncensorOutputTransforms } from "./uncensor";
 /**
  * Creates a regex pattern for splitting sentences while preserving common abbreviations.
  *
@@ -1024,6 +1025,7 @@ export function replaceMentionHandles(
  * @param emojiStrings - Array of properly formatted Discord emoji strings
  * @param mentionMap - Map of mention handles to user IDs
  * @param mentionIdSet - Set of known user IDs for disambiguation
+ * @param uncensorOptions - Optional uncensor cleanup flags (output side)
  * @returns Cleaned text suitable for Discord messages
  */
 export function cleanLLMOutput(
@@ -1033,13 +1035,18 @@ export function cleanLLMOutput(
 	emojiUsageEnabled = true, // New parameter, defaults to true
 	mentionMap?: Map<string, string[]>,
 	mentionIdSet?: Set<string>,
+	uncensorOptions?: {
+		unicodeSpacesEnabled?: boolean;
+		sanitizeEnabled?: boolean;
+	},
 ): string {
-	// 1. Basic whitespace and separator cleanup
-	let cleanedText = text
+	// 1. Optional uncensor output cleanup (only if enabled)
+	let cleanedText = applyUncensorOutputTransforms(text, uncensorOptions)
 		// Remove any leaked [System: ...] blocks before other processing
 		.replace(/\[system:[\s\S]*?\]/gi, "")
 		.replace(/\[system:[\s\S]*$/gi, "");
 
+	// 2. Basic whitespace and separator cleanup
 	if (cleanedText.startsWith("```") || cleanedText.endsWith("```"))
 		return cleanedText;
 

@@ -27,8 +27,8 @@
 	"author": "Bredrumb",
 	"license": "ISC",
 	"dependencies": {
-		"@aws-sdk/client-secrets-manager": "^3.975.0",
 		"@aws-sdk/client-s3": "^3.975.0",
+		"@aws-sdk/client-secrets-manager": "^3.975.0",
 		"@google/genai": "^1.38.0",
 		"@modelcontextprotocol/sdk": "^1.25.3",
 		"@openrouter/sdk": "^0.1.27",
@@ -47,6 +47,7 @@
 		"libsodium-wrappers": "^0.7.16",
 		"pg": "^8.17.2",
 		"pino": "^10.3.0",
+		"profane-words": "^2.1.0",
 		"sharp": "^0.34.5",
 		"zod": "^4.3.6"
 	},

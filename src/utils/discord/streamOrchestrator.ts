@@ -890,6 +890,10 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 			textConfig.emojiUsageEnabled,
 			textConfig.mentionMap,
 			textConfig.mentionIdSet,
+			{
+				unicodeSpacesEnabled: textConfig.uncensorUnicodeSpacesEnabled,
+				sanitizeEnabled: textConfig.uncensorSanitizeEnabled,
+			},
 		);
 
 		const resolvedSegment = await this.resolveGuildMentions(
@@ -1755,6 +1759,10 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 				context.personaUsername ??
 				context.tomoriState.tomori_nickname,
 			maxMessageLength: config.maxMessageLength,
+			uncensorUnicodeSpacesEnabled:
+				context.tomoriState.config.uncensor_unicode_space_enabled ?? false,
+			uncensorSanitizeEnabled:
+				context.tomoriState.config.uncensor_sanitize_enabled ?? false,
 		};
 	}
 

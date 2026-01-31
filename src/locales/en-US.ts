@@ -1743,6 +1743,21 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				enabled_success: `My permission for \`{permission_type}\` is now **enabled**.`,
 				disabled_success: `My permission for \`{permission_type}\` is now **disabled**.`,
 			},
+			uncensors: {
+				description: `Configure optional uncensor behaviors for my prompts on this server.`,
+				option_description: `Which uncensor setting to configure.`,
+				injection_option: `Prompt Injection (18+ acknowledgement)`,
+				unicode_spaces_option: `Unicode Space Replacement`,
+				sanitize_option: `Sensitive Word Sanitization`,
+				set_description: `Enable or disable this uncensor setting.`,
+				already_set_title: `Uncensor Setting Already Set`,
+				already_enabled_description: `The uncensor setting \`{uncensor_type}\` is already **enabled**.`,
+				already_disabled_description: `The uncensor setting \`{uncensor_type}\` is already **disabled**.`,
+				success_title: `Uncensor Setting Updated`,
+				enabled_success: `My uncensor setting \`{uncensor_type}\` is now **enabled**.`,
+				disabled_success: `My uncensor setting \`{uncensor_type}\` is now **disabled**.`,
+				injection_ack_notice: `Note: By enabling this, you acknowledge that all server members are of legal age.`,
+			},
 
 			// System prompt management
 			prompt: {
