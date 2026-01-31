@@ -196,11 +196,12 @@ export default {
 				"Please verify your API key and try again. If this error persists, report through `/support discord`",
 
 			rate_limit_title: "🟡 Provider Rate Limit Exceeded",
-			rate_limit_tip: "Please wait a few minutes before trying again",
+			rate_limit_tip:
+				"Please wait a few minutes before trying again. If you have multiple personal keys, consider `/config apikey rotation`.",
 
 			content_blocked_title: "🔴️ Provider Content Filter",
 			content_blocked_tip:
-				"Check: messages (`/tool refresh`), personality/memories (`/data export`), blacklist problematic members (`/server blacklist`), or switch provider (`/config model`)",
+				"Tip: You can turn on `/config uncensors` options to help prevent this error. You may also check messages (`/tool refresh`), personality/memories (`/data export`), blacklist problematic members (`/server blacklist`), or switch provider (`/config model`)",
 
 			timeout_title: "🟡️ Provider Request Timeout",
 			timeout_tip: "Try shortening your message or try again",
@@ -2330,7 +2331,7 @@ You can change this anytime using \`/personal privacy\`.`,
 
 		// Recurring reminder info (sent after a recurring reminder triggers)
 		reminder_recurring_title: `🔁 Recurring Reminder`,
-		reminder_recurring_description: `This reminder will repeat every {repetition_interval_hours} hours.`,
+		reminder_recurring_description: `This reminder will repeat every {repetition_interval_hours} hour(s).`,
 		reminder_recurring_footer: `You can delete reminders using \`/forget reminder\`.`,
 
 		// Error embed when reminder delivery fails (only user-facing embed during execution)

@@ -197,11 +197,12 @@ export default {
 				"APIキーを確認して再度お試しください。このエラーが解決しない場合は、`/support discord`で報告してください。",
 
 			rate_limit_title: "🟡 プロバイダーレート制限を超過",
-			rate_limit_tip: "数分お待ちいただいてから再度お試しください",
+			rate_limit_tip:
+				"数分お待ちいただいてから再度お試しください。複数の個人キーをお持ちなら、`/config apikey rotation` の利用も検討してください。",
 
 			content_blocked_title: "🔴️ プロバイダーコンテンツフィルター",
 			content_blocked_tip:
-				"確認: メッセージ(`/tool refresh`)、性格/記憶(`/data export`)、問題のあるメンバーをブラックリスト(`/server blacklist`)、またはプロバイダを変更(`/config model`)",
+				"ヒント: `/config uncensors` でこのエラーの回避を試すか、メッセージ(`/tool refresh`)、性格/記憶(`/data export`)、問題のあるメンバーをブラックリスト(`/server blacklist`)、またはプロバイダを変更(`/config model`)を確認してください。",
 
 			timeout_title: "🟡️ プロバイダーリクエストタイムアウト",
 			timeout_tip: "メッセージを短くするか再度お試しください",

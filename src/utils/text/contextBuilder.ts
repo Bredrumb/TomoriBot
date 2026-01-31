@@ -493,10 +493,10 @@ async function buildShortTermMemoryContext(
 					metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
 				});
 
-				// Also add the HINT as a separate create prompt at the end
+				// Add the HINT immediately after the summary (not at the end)
 				const hintText = `[System: HINT: Use the update_short_term_memory tool to update this information BEFORE you respond if the conversation has greatly changed its topic]`;
 
-				createPrompt = {
+				memoryItems.push({
 					role: "user",
 					parts: [
 						{
@@ -512,7 +512,7 @@ async function buildShortTermMemoryContext(
 						},
 					],
 					metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
-				};
+				});
 			} else if (
 				sameChannelMemory &&
 				sameChannelMemory.messages.length >= MIN_MESSAGES_FOR_SUMMARY

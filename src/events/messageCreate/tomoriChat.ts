@@ -2676,6 +2676,10 @@ export default async function tomoriChat(
 			// ========== MULTI-PERSONA RESPONSE LOOP START ==========
 			// Each persona will generate a response sequentially using the same message history
 			// but with their own personality, config, and (for alters) webhook avatar
+
+			// Track persona responses for short-term memory storage
+			const personaResponses: Array<{ personaName: string; text: string }> = [];
+
 			for (
 				let personaIndex = 0;
 				personaIndex < personasToRespond.length;
@@ -4254,6 +4258,24 @@ export default async function tomoriChat(
 						// Potentially send a message indicating an issue if no error was already sent.
 					}
 
+					// Capture persona response text for short-term memory storage
+					if (finalStreamCompleted && accumulatedStreamedModelParts.length > 0) {
+						const responseText = accumulatedStreamedModelParts
+							.filter((p) => p.type === "text")
+							.map((p) => (p as { type: "text"; text: string }).text)
+							.join("");
+
+						if (responseText.trim()) {
+							personaResponses.push({
+								personaName: currentPersona.tomori_nickname,
+								text: responseText.trim(),
+							});
+							log.info(
+								`[SHORT_TERM_MEMORY] Captured response from ${currentPersona.tomori_nickname} - length=${responseText.trim().length}`,
+							);
+						}
+					}
+
 					// Persona response completed
 					log.success(
 						`Completed response ${personaIndex + 1}/${personasToRespond.length} from persona "${currentPersona.tomori_nickname}"`,
@@ -4329,6 +4351,15 @@ export default async function tomoriChat(
 							content: msg.content || "",
 							timestamp: Date.now(), // Use current time as approximation
 						}));
+
+					// Add persona responses from this turn (bot's responses just sent)
+					for (const response of personaResponses) {
+						messagesToStore.push({
+							role: "model",
+							content: response.text,
+							timestamp: Date.now(),
+						});
+					}
 
 					// Store in cache
 					if (messagesToStore.length > 0) {
