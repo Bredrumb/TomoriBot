@@ -39,6 +39,7 @@ import {
 	getRelativeTimestamp,
 } from "../cache/shortTermMemoryCache";
 import { getCachedUserRow } from "../cache/userCache";
+import { formatMemoryWithId } from "../memory/memoryId";
 
 /**
  * Maps userId -> nickname for the current mention replacement operation.
@@ -367,11 +368,11 @@ async function buildShortTermMemoryContext(
 	personalMemoriesEnabled: boolean,
 	client: Client,
 ): Promise<{
-	otherChannelItems: StructuredContextItem[];
-	sameChannelPrompt?: StructuredContextItem;
+	memoryItems: StructuredContextItem[];
+	createPrompt?: StructuredContextItem;
 }> {
-	const otherChannelItems: StructuredContextItem[] = [];
-	let sameChannelPrompt: StructuredContextItem | undefined;
+	const memoryItems: StructuredContextItem[] = [];
+	let createPrompt: StructuredContextItem | undefined;
 
 	try {
 		// 1. Check if user has cross-server opt-in enabled
@@ -436,7 +437,7 @@ async function buildShortTermMemoryContext(
 			}
 
 			if (otherChannelText) {
-				otherChannelItems.push({
+				memoryItems.push({
 					role: "user",
 					parts: [
 						{
@@ -456,37 +457,72 @@ async function buildShortTermMemoryContext(
 			}
 		}
 
-		// 5. Build SAME-CHANNEL SUMMARY context (Phase 3)
+		// 5. Build SAME-CHANNEL context (Phase 3)
 		// Only shown for tool-calling models
-		// This will be placed at the very end of the context
+		// - Summary (if exists): Goes with other memories (middle of context)
+		// - Create prompt (if no summary): Goes at end as instruction
 		if (tomoriState?.llm?.has_tools) {
 			const sameChannelMemory = getShortTermMemoryForChannel(
 				triggeringUserId,
 				currentChannelId,
 			);
 
-			let sameChannelText = "";
-
 			if (sameChannelMemory?.summary) {
-				// EXISTING SUMMARY with HINT
-				sameChannelText = `[System: ${botName}'s short term memory for this ongoing conversation:\n${sameChannelMemory.summary}\n\nHINT: Use the update_short_term_memory tool to update this memory BEFORE you respond if there is information you need to remember right now or the conversation has greatly changed its topic, but do not need to store long-term through the remember_this_fact tool]`;
-			} else if (
-				sameChannelMemory &&
-				sameChannelMemory.messages.length >= MIN_MESSAGES_FOR_SUMMARY
-			) {
-				// NO SUMMARY but enough messages - Prompt to create one
-				sameChannelText = `[System: You currently do not have short term memory saved for this conversation. Use the update_short_term_memory tool to create a short term memory about the current conversation's topic BEFORE you respond, especially if there is information you need to remember right now, but do not need to store long-term through remember_this_fact tool]`;
-			}
-			// If less than MIN_MESSAGES_FOR_SUMMARY, don't show any prompt (conversation too short)
+				// EXISTING SUMMARY - Add to memoryItems (middle of context, with other memories)
+				const summaryText = `[System: ${botName}'s short term memory for this ongoing conversation:\n${sameChannelMemory.summary}]`;
 
-			if (sameChannelText) {
-				sameChannelPrompt = {
+				memoryItems.push({
 					role: "user",
 					parts: [
 						{
 							type: "text",
 							text: await convertMentions(
-								sameChannelText,
+								summaryText,
+								client,
+								currentServerId,
+								triggererName,
+								botName,
+								personalMemoriesEnabled,
+							),
+						},
+					],
+					metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
+				});
+
+				// Also add the HINT as a separate create prompt at the end
+				const hintText = `[System: HINT: Use the update_short_term_memory tool to update this information BEFORE you respond if the conversation has greatly changed its topic]`;
+
+				createPrompt = {
+					role: "user",
+					parts: [
+						{
+							type: "text",
+							text: await convertMentions(
+								hintText,
+								client,
+								currentServerId,
+								triggererName,
+								botName,
+								personalMemoriesEnabled,
+							),
+						},
+					],
+					metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
+				};
+			} else if (
+				sameChannelMemory &&
+				sameChannelMemory.messages.length >= MIN_MESSAGES_FOR_SUMMARY
+			) {
+				// NO SUMMARY but enough messages - Create prompt at end
+				const createText = `[System: You currently do not have short term memory saved for this conversation. Use the update_short_term_memory tool to create a short term memory about the current story or conversation's topic BEFORE you respond in order to help you cross-reference this in different channels]`;
+
+				createPrompt = {
+					role: "user",
+					parts: [
+						{
+							type: "text",
+							text: await convertMentions(
+								createText,
 								client,
 								currentServerId,
 								triggererName,
@@ -498,9 +534,10 @@ async function buildShortTermMemoryContext(
 					metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
 				};
 			}
+			// If less than MIN_MESSAGES_FOR_SUMMARY, don't show any prompt (conversation too short)
 		}
 
-		return { otherChannelItems, sameChannelPrompt };
+		return { memoryItems, createPrompt };
 	} catch (error) {
 		await log.error(
 			`[buildShortTermMemoryContext] Failed to build short-term memory context - triggeringUserId=${triggeringUserId}, currentChannelId=${currentChannelId}`,
@@ -510,7 +547,7 @@ async function buildShortTermMemoryContext(
 				metadata: { userDiscId: triggeringUserId, currentChannelId },
 			},
 		);
-		return { otherChannelItems: [], sameChannelPrompt: undefined };
+		return { memoryItems: [], createPrompt: undefined };
 	}
 }
 
@@ -657,24 +694,46 @@ export async function buildContext({
 		const memoryLabel = isDMChannel
 			? `\n## ${botName}'s Memories about this conversation with User\n`
 			: `\n## ${botName}'s Memories about ${serverName}\n`;
-		const serverMemoriesText = `${memoryLabel}${tomoriState.server_memories.join("\n")}\n`;
-		contextItems.push({
-			role: "system",
-			parts: [
-				{
-					type: "text",
-					text: await convertMentions(
-						serverMemoriesText,
-						client,
-						guildId,
-						"User", // Stable placeholder instead of triggererName
-						botName,
-						tomoriConfig.personal_memories_enabled,
-					),
-				},
-			],
-			metadataTag: ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
-		});
+
+		let serverMemoryLines: string[] = [];
+		try {
+			const serverMemoryRows = await sql<
+				Array<{ server_memory_id: number; content: string }>
+			>`
+				SELECT server_memory_id, content
+				FROM server_memories
+				WHERE server_id = ${tomoriState.server_id}
+				ORDER BY created_at DESC
+			`;
+
+			serverMemoryLines = serverMemoryRows.map((row) =>
+				formatMemoryWithId(row.server_memory_id, row.content),
+			);
+		} catch (error) {
+			log.warn("Failed to load server memories with IDs for context", error);
+			serverMemoryLines = tomoriState.server_memories;
+		}
+
+		if (serverMemoryLines.length > 0) {
+			const serverMemoriesText = `${memoryLabel}${serverMemoryLines.join("\n")}\n`;
+			contextItems.push({
+				role: "system",
+				parts: [
+					{
+						type: "text",
+						text: await convertMentions(
+							serverMemoriesText,
+							client,
+							guildId,
+							"User", // Stable placeholder instead of triggererName
+							botName,
+							tomoriConfig.personal_memories_enabled,
+						),
+					},
+				],
+				metadataTag: ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
+			});
+		}
 	}
 
 	// 5. Emojis with Semantic Metadata (only available in guild channels, not DMs)
@@ -1199,18 +1258,20 @@ export async function buildContext({
 			) {
 				if (userRow.personal_memories && userRow.personal_memories.length > 0) {
 					const processedMemories = await Promise.all(
-						userRow.personal_memories.map((memory) =>
-							convertMentions(
+						userRow.personal_memories.map(async (memory, index) => {
+							const processedMemory = await convertMentions(
 								memory,
 								client,
 								guildId,
 								displayName, // Use memory owner's name for {user} token
 								botName,
 								tomoriConfig.personal_memories_enabled,
-							),
-						),
+							);
+							const memoryId = index + 1;
+							return formatMemoryWithId(memoryId, processedMemory);
+						}),
 					);
-					detailLines.push(`- Memories: ${processedMemories.join(", ")}`);
+					detailLines.push(`- Memories: ${processedMemories.join("; ")}`);
 				}
 			}
 
@@ -1346,22 +1407,23 @@ export async function buildContext({
 
 		// Only build short-term memory context if we have a valid user ID
 		if (actualTriggeringUserId) {
-			const { otherChannelItems, sameChannelPrompt } =
-				await buildShortTermMemoryContext(
-					actualTriggeringUserId,
-					channelId,
-					guildId,
-					tomoriState,
-					actualLocale,
-					triggererName,
-					botName,
-					tomoriConfig.personal_memories_enabled,
-					client,
-				);
-			// Push other-channel items now (goes in middle of context)
-			contextItems.push(...otherChannelItems);
-			// Store same-channel prompt for later (goes at very end)
-			sameChannelMemoryPrompt = sameChannelPrompt;
+			const { memoryItems, createPrompt } = await buildShortTermMemoryContext(
+				actualTriggeringUserId,
+				channelId,
+				guildId,
+				tomoriState,
+				actualLocale,
+				triggererName,
+				botName,
+				tomoriConfig.personal_memories_enabled,
+				client,
+			);
+			// Push memory items now (goes in middle of context)
+			// Includes: other-channel memories + same-channel summary (if exists)
+			contextItems.push(...memoryItems);
+			// Store create prompt for later (goes at very end)
+			// This is the HINT or "create summary" instruction
+			sameChannelMemoryPrompt = createPrompt;
 		}
 	} catch (error) {
 		// Don't fail context building if short-term memory loading fails

@@ -1292,6 +1292,14 @@ export default async function tomoriChat(
 							supportedLocale,
 							"genai.self_teach.personal_memory_learned_title",
 						),
+						localizer(
+							supportedLocale,
+							"genai.self_teach.server_memory_updated_title",
+						),
+						localizer(
+							supportedLocale,
+							"genai.self_teach.personal_memory_updated_title",
+						),
 					];
 
 					// Target localizer key for conversation reset
@@ -2279,8 +2287,10 @@ export default async function tomoriChat(
 								}
 							}
 
-							// Add embed content to message text with special marker
-							const embedContent = `[The following is a system-produced embed]\n${cleanedDescription}`;
+							const embedContent =
+								embedCheck.type === "memory_learning"
+									? `[System: ${cleanedDescription}]`
+									: `[The following is a system-produced embed]\n${cleanedDescription}`;
 							messageContentForLlm = messageContentForLlm
 								? `${messageContentForLlm}\n${embedContent}`
 								: embedContent;

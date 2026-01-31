@@ -384,10 +384,16 @@ export default {
 			server_memory_learned_title: "🧠 I Learned Something New! (Server-Wide)",
 			server_memory_learned_description:
 				'I\'ve just learned this about our server: "{memory_content}"',
+			server_memory_updated_title: "📝 Memory Updated! (Server-Wide)",
+			server_memory_updated_description:
+				'Updated server memory: "{memory_content}"',
 			personal_memory_learned_title:
 				"💡 I Learned Something New! (User-Specific)",
 			personal_memory_learned_description:
 				'I\'ve just learned this about {user_nickname}: "{memory_content}"',
+			personal_memory_updated_title: "📝 Memory Updated! (User-Specific)",
+			personal_memory_updated_description:
+				'Updated memory about {user_nickname}: "{memory_content}"',
 			server_memory_footer:
 				"Server managers can manage this memory using `/teach` and `/forget` commands.",
 			personal_memory_footer_manage:

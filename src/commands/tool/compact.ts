@@ -129,6 +129,14 @@ function classifyEmbedTitle(embedTitle: string | null): {
 				supportedLocale,
 				"genai.self_teach.personal_memory_learned_title",
 			),
+			localizer(
+				supportedLocale,
+				"genai.self_teach.server_memory_updated_title",
+			),
+			localizer(
+				supportedLocale,
+				"genai.self_teach.personal_memory_updated_title",
+			),
 		];
 
 		const reminderSetTitle = localizer(
@@ -221,6 +229,11 @@ function appendEmbedContent(baseContent: string, embed: Embed): string {
 	if (!description) return baseContent;
 
 	if (classification.isSystemInjection) {
+		const systemContent = `[System: ${description}]`;
+		return baseContent ? `${baseContent}\n${systemContent}` : systemContent;
+	}
+
+	if (classification.isMemoryLearning) {
 		const systemContent = `[System: ${description}]`;
 		return baseContent ? `${baseContent}\n${systemContent}` : systemContent;
 	}

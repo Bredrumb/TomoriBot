@@ -14,6 +14,7 @@ const ENABLE_ERROR_DB_LOGGING = false;
 export enum ColorCode {
 	INFO = "#3498DB", // Cyan color
 	SUCCESS = "#2ECC71", // Green color
+	MEMORY_UPDATE = "#C7E75A", // Greenish-yellow color
 	WARN = "#F1C40F", // Yellow color
 	ERROR = "#E74C3C", // Red color
 	SECTION = "#E066FF", // Purple color

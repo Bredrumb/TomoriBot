@@ -29,7 +29,7 @@ import { log } from "../../utils/misc/logger";
 export class UpdateShortTermMemoryTool extends BaseTool {
 	name = "update_short_term_memory";
 	description =
-		"Update your short-term working memory for the current conversation. Use this to remember key topics, user preferences, or important context from this ongoing conversation that you might need later, but don't need to store permanently.";
+		"Update your short-term working memory for the current story or conversation. Use this to remember important context from this ongoing conversation that you might need later, but don't need to store permanently. For long term memory that you need to store for a longer time, use update_long_term_memory or remember_this_fact";
 	category = "memory" as const;
 
 	parameters: ToolParameterSchema = {
@@ -38,7 +38,7 @@ export class UpdateShortTermMemoryTool extends BaseTool {
 			summary: {
 				type: "string",
 				description:
-					"A concise summary of the current conversation's key points, topics, or context to remember. Focus on what's relevant for potential future messages in this conversation.",
+					"A comprehensive summary of the current story or conversation's key points, topics, or context. Focus on what's relevant for potential future messages in this conversation, but add enough helphful details.",
 			},
 		},
 		required: ["summary"],
@@ -120,7 +120,8 @@ export class UpdateShortTermMemoryTool extends BaseTool {
 			const serverId = context.guildId || "DM";
 			const serverName =
 				"guild" in context.channel ? context.channel.guild?.name : undefined;
-			const channelName = "name" in context.channel ? context.channel.name : undefined;
+			const channelName =
+				"name" in context.channel ? context.channel.name : undefined;
 
 			// 5. Update short-term memory summary
 			const cacheKey = `shortterm:${triggeringUserId}:${channelId}`;
@@ -144,7 +145,8 @@ export class UpdateShortTermMemoryTool extends BaseTool {
 			// 6. Return success with no user-facing message (silent operation)
 			return {
 				success: true,
-				message: "Short-term memory updated successfully (no user notification)",
+				message:
+					"Short-term memory updated successfully (no user notification)",
 			};
 		} catch (error) {
 			await log.error(

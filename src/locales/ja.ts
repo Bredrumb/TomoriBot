@@ -385,10 +385,16 @@ export default {
 			server_memory_learned_title: "🧠 新しいことを学びました！ (サーバー全体)",
 			server_memory_learned_description:
 				'このサーバーについて、次のことを学びました: "{memory_content}"',
+			server_memory_updated_title: "📝 記憶を更新しました！ (サーバー全体)",
+			server_memory_updated_description:
+				'サーバーの記憶を更新しました: "{memory_content}"',
 			personal_memory_learned_title:
 				"💡 新しいことを学びました！ (ユーザー固有)",
 			personal_memory_learned_description:
 				'{user_nickname}さんについて、次のことを学びました: "{memory_content}"',
+			personal_memory_updated_title: "📝 記憶を更新しました！ (ユーザー固有)",
+			personal_memory_updated_description:
+				'{user_nickname}さんについての記憶を更新しました: "{memory_content}"',
 			server_memory_footer:
 				"サーバー管理者は`/teach`と`/forget`コマンドでこの記憶を管理できます。",
 			personal_memory_footer_manage:
