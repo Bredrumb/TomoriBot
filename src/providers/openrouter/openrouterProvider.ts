@@ -567,6 +567,7 @@ export class OpenrouterProvider extends BaseLLMProvider implements LLMProvider {
 				provider: "openrouter",
 				locale: userLocale ?? "en-US", // Use user's preferred locale, fallback to en-US
 				suppressUserErrors: streamingContext?.suppressUserErrors,
+				rotationKeyRetriesUsed: streamingContext?.rotationKeyRetriesUsed,
 
 				// Multi-persona webhook support
 				webhook,

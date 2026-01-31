@@ -196,6 +196,8 @@ export default {
 				"Please verify your API key and try again. If this error persists, report through `/support discord`",
 
 			rate_limit_title: "🟡 Provider Rate Limit Exceeded",
+			rate_limit_title_all_rotation_keys:
+				"🟡 Provider Rate Limit Exceeded (All Rotation Keys)",
 			rate_limit_tip:
 				"Please wait a few minutes before trying again. If you have multiple personal keys, consider `/config apikey rotation`.",
 

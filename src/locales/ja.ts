@@ -197,6 +197,8 @@ export default {
 				"APIキーを確認して再度お試しください。このエラーが解決しない場合は、`/support discord`で報告してください。",
 
 			rate_limit_title: "🟡 プロバイダーレート制限を超過",
+			rate_limit_title_all_rotation_keys:
+				"🟡 全ローテーションキーがレート制限中",
 			rate_limit_tip:
 				"数分お待ちいただいてから再度お試しください。複数の個人キーをお持ちなら、`/config apikey rotation` の利用も検討してください。",
 

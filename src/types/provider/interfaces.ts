@@ -38,6 +38,7 @@ export interface StreamResult {
 		| "stopped_by_user"
 		| "empty_response";
 	data?: unknown | Error; // Function call data or error details
+	accumulatedText?: string; // Text sent to Discord (for short-term memory storage)
 }
 
 /**

@@ -57,6 +57,7 @@ import { decryptApiKey } from "@/utils/security/crypto";
 import {
 	selectApiKey,
 	hasAvailableRotationKey,
+	MAX_KEY_ATTEMPTS,
 	recordKeySuccess,
 	recordKeyError,
 	type SelectedKeyResult,
@@ -3285,6 +3286,7 @@ export default async function tomoriChat(
 						functionResponse: Record<string, unknown>;
 					}[] = [];
 					let finalStreamCompleted = false;
+					let finalAccumulatedText = ""; // Track accumulated text from successful stream
 					const accumulatedStreamedModelParts: Array<Record<string, unknown>> =
 						[];
 
@@ -3347,15 +3349,34 @@ export default async function tomoriChat(
 								}
 
 								const activeTomoriState = tomoriState;
+								let attemptCount = 0;
+								let lastStreamResult: StreamResult | null = null;
 
 								while (true) {
+									attemptCount += 1;
+									if (attemptCount > MAX_KEY_ATTEMPTS) {
+										log.warn(
+											`Exceeded MAX_KEY_ATTEMPTS (${MAX_KEY_ATTEMPTS}) for server ${activeTomoriState.server_id}. Returning last stream result.`,
+										);
+										return {
+											streamResult: lastStreamResult,
+											abort: !lastStreamResult,
+										};
+									}
+
+									const fallbackExcludeIds = [
+										...Array.from(excludedRotationKeyIds),
+									];
+									if (selectedKeyResult?.rotationKeyId != null) {
+										fallbackExcludeIds.push(selectedKeyResult.rotationKeyId);
+									}
+
 									const hasFallbackKey =
 										rotationActive &&
-										selectedKeyResult?.rotationKeyId != null &&
-										(await hasAvailableRotationKey(activeTomoriState, [
-											...Array.from(excludedRotationKeyIds),
-											selectedKeyResult.rotationKeyId,
-										]));
+										(await hasAvailableRotationKey(
+											activeTomoriState,
+											fallbackExcludeIds,
+										));
 
 									streamingContext.suppressUserErrors = hasFallbackKey;
 
@@ -3434,10 +3455,13 @@ export default async function tomoriChat(
 										throw raceError;
 									}
 
+									lastStreamResult = streamResult;
+
 									if (streamResult.status === "error" && hasFallbackKey) {
 										log.warn(
 											`Streaming failed with rotation key ${selectedKeyResult?.rotationKeyId}. Retrying with another key.`,
 										);
+										streamingContext.rotationKeyRetriesUsed = true;
 
 										// Record error for rotation key if one was used and error is key-related
 										if (selectedKeyResult?.rotationKeyId && streamResult.data) {
@@ -3527,6 +3551,10 @@ export default async function tomoriChat(
 										await recordKeySuccess(selectedKeyResult.rotationKeyId);
 									}
 									finalStreamCompleted = true;
+									// Capture accumulated text for short-term memory storage
+									if (streamResult.accumulatedText) {
+										finalAccumulatedText = streamResult.accumulatedText;
+									}
 									break; // Exit loop, final text stream was handled by streamGeminiToDiscord
 
 								case "error": {
@@ -4259,21 +4287,22 @@ export default async function tomoriChat(
 					}
 
 					// Capture persona response text for short-term memory storage
-					if (finalStreamCompleted && accumulatedStreamedModelParts.length > 0) {
-						const responseText = accumulatedStreamedModelParts
-							.filter((p) => p.type === "text")
-							.map((p) => (p as { type: "text"; text: string }).text)
-							.join("");
+					log.info(
+						`[SHORT_TERM_MEMORY] Debug - finalStreamCompleted=${finalStreamCompleted}, accumulatedTextLength=${finalAccumulatedText.length}`,
+					);
 
-						if (responseText.trim()) {
-							personaResponses.push({
-								personaName: currentPersona.tomori_nickname,
-								text: responseText.trim(),
-							});
-							log.info(
-								`[SHORT_TERM_MEMORY] Captured response from ${currentPersona.tomori_nickname} - length=${responseText.trim().length}`,
-							);
-						}
+					if (finalStreamCompleted && finalAccumulatedText.trim()) {
+						personaResponses.push({
+							personaName: currentPersona.tomori_nickname,
+							text: finalAccumulatedText.trim(),
+						});
+						log.info(
+							`[SHORT_TERM_MEMORY] Captured response from ${currentPersona.tomori_nickname} - length=${finalAccumulatedText.trim().length}`,
+						);
+					} else {
+						log.warn(
+							`[SHORT_TERM_MEMORY] Skipping capture - finalStreamCompleted=${finalStreamCompleted}, accumulatedTextLength=${finalAccumulatedText.length}`,
+						);
 					}
 
 					// Persona response completed

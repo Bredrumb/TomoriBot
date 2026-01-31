@@ -45,6 +45,7 @@ export interface StreamState {
 	hasRepliedToOriginalMessage: boolean;
 	lastChunkTime: number;
 	inactivityTimer: NodeJS.Timeout | null;
+	accumulatedText: string; // Track all text sent to Discord for short-term memory
 }
 
 /**
@@ -201,6 +202,7 @@ export function createDefaultStreamState(): StreamState {
 		hasRepliedToOriginalMessage: false,
 		lastChunkTime: Date.now(),
 		inactivityTimer: null,
+		accumulatedText: "", // Initialize empty for short-term memory tracking
 	};
 }
 

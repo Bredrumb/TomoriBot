@@ -338,7 +338,11 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 				`Stream to channel ${context.channel.id} completed. Messages sent: ${state.messageSentCount}, Duration: ${metrics.endTime - metrics.startTime}ms`,
 			);
 
-			return { status: "completed", messageSentCount: state.messageSentCount };
+			return {
+				status: "completed",
+				messageSentCount: state.messageSentCount,
+				accumulatedText: state.accumulatedText, // Return accumulated text for short-term memory
+			};
 		} catch (error) {
 			this.clearInactivityTimer(state);
 			lastError = error as Error;
@@ -1286,6 +1290,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 			}
 
 			state.messageSentCount++;
+			state.accumulatedText += content; // Track all sent text for short-term memory
 			log.info(
 				`Stream Send: Sent message (${state.messageSentCount}): "${content.length > 100 ? `${content.substring(0, 100)}...` : content}"`,
 			);
@@ -1314,6 +1319,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 
 					state.hasRepliedToOriginalMessage = true;
 					state.messageSentCount++;
+					state.accumulatedText += content; // Track fallback sent text too
 
 					log.info(
 						"Stream Send: Successfully sent message via fallback after webhook failure",
@@ -1572,12 +1578,14 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 				let tipKey: string;
 				let color: ColorResolvable;
 
-				switch (providerError.type) {
-					case "rate_limit":
-						titleKey = "genai.stream.rate_limit_title";
-						tipKey = "genai.stream.rate_limit_tip";
-						color = ColorCode.WARN;
-						break;
+					switch (providerError.type) {
+						case "rate_limit":
+							titleKey = context.rotationKeyRetriesUsed
+								? "genai.stream.rate_limit_title_all_rotation_keys"
+								: "genai.stream.rate_limit_title";
+							tipKey = "genai.stream.rate_limit_tip";
+							color = ColorCode.WARN;
+							break;
 					case "content_blocked":
 						titleKey = "genai.stream.content_blocked_title";
 						tipKey = "genai.stream.content_blocked_tip";

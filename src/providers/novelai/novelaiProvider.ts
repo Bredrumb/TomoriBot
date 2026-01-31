@@ -294,6 +294,7 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
 				provider: "novelai",
 				locale: userLocale ?? "en-US", // Use user's preferred locale, fallback to en-US
 				suppressUserErrors: streamingContext?.suppressUserErrors,
+				rotationKeyRetriesUsed: streamingContext?.rotationKeyRetriesUsed,
 
 				// Multi-persona webhook support
 				webhook,
