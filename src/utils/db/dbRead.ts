@@ -1335,10 +1335,10 @@ export async function deleteReminderById(reminderId: number): Promise<boolean> {
 		const result = await sql`
 			DELETE FROM reminders
 			WHERE reminder_id = ${reminderId}
+			RETURNING reminder_id
 		`;
 
-		const deletedCount = result.affectedRows || 0;
-		if (deletedCount > 0) {
+		if (result && result.length > 0) {
 			log.success(`Reminder deleted successfully (ID: ${reminderId})`);
 			return true;
 		} else {
