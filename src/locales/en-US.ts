@@ -1328,7 +1328,7 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 			description: `Reward me with fun interactions.`,
 			headpat: {
 				description: `Give me a headpat!`,
-				embed_title: `Headpat Time!`,
+				embed_title: `🫳 Headpat Time!`,
 				embed_description: `{user} is currently headpatting {bot}.`,
 			},
 		},

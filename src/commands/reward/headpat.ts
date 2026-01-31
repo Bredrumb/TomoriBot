@@ -64,8 +64,9 @@ export async function execute(
 
 	// Get the guild channel (we know it exists from check above, but need type narrowing)
 	// Check both regular channels and threads
-	const guildChannel = interaction.guild.channels.cache.get(interaction.channel.id)
-		?? interaction.channel;
+	const guildChannel =
+		interaction.guild.channels.cache.get(interaction.channel.id) ??
+		interaction.channel;
 
 	// Verify it's a guild-based channel with permissions
 	if (!("permissionsFor" in guildChannel)) {
@@ -78,7 +79,10 @@ export async function execute(
 	}
 
 	const permissions = guildChannel.permissionsFor(botMember);
-	if (!permissions?.has(PermissionFlagsBits.ViewChannel) || !permissions?.has(PermissionFlagsBits.ReadMessageHistory)) {
+	if (
+		!permissions?.has(PermissionFlagsBits.ViewChannel) ||
+		!permissions?.has(PermissionFlagsBits.ReadMessageHistory)
+	) {
 		await replyInfoEmbed(interaction, locale, {
 			titleKey: "commands.bot.respond.missing_permissions_title",
 			descriptionKey: "commands.bot.respond.missing_permissions_description",
@@ -116,12 +120,18 @@ export async function execute(
 			{
 				label: safeSelectOptionText(mainPersona.tomori_nickname),
 				value: "0", // main is index 0
-				description: localizer(locale, "commands.bot.respond.main_persona_description"),
+				description: localizer(
+					locale,
+					"commands.bot.respond.main_persona_description",
+				),
 			},
 			...alterPersonas.map((persona, index) => ({
 				label: safeSelectOptionText(persona.tomori_nickname),
 				value: (index + 1).toString(), // alters start at index 1
-				description: localizer(locale, "commands.bot.respond.alter_persona_description"),
+				description: localizer(
+					locale,
+					"commands.bot.respond.alter_persona_description",
+				),
 			})),
 		];
 
@@ -182,7 +192,7 @@ export async function execute(
 					bot: botName,
 				}),
 			)
-			.setColor(ColorCode.SUCCESS);
+			.setColor(ColorCode.AFFECTION);
 
 		// 6. Send response (always public, suppress notifications)
 		await replyInteraction.reply({
