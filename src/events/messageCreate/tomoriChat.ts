@@ -638,7 +638,7 @@ async function sendServerRateLimitEmbed(
  * @param selectedPersonaId - Optional persona ID to use instead of main persona (for manual triggers).
  * @param isPersonaJob - Whether this invocation is an internal queued persona job.
  * @param manualSystemPrompt - Optional system prompt to append at the end of context.
- * @param manualPrefill - Optional assistant prefill used for hybrid prefix output.
+ * @param manualPrefill - Optional assistant prefill used for hybrid prefix output and final context item.
  */
 export default async function tomoriChat(
 	client: Client,
@@ -3086,7 +3086,21 @@ export default async function tomoriChat(
 							log.info(`Injected manual system prompt: "${trimmedPrompt}"`);
 						}
 
-						// Manual prefill is handled via hybrid prefix output, not injected into context
+						// Inject assistant prefill as the final context item (for manual commands)
+						if (trimmedPrefill) {
+							const botName =
+								currentPersona?.tomori_nickname ??
+								tomoriState?.tomori_nickname ??
+								process.env.DEFAULT_BOTNAME ??
+								"Tomori";
+							const prefillMessage: StructuredContextItem = {
+								role: "model",
+								parts: [{ type: "text", text: `${botName}: ${trimmedPrefill}` }],
+								metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+							};
+							contextSegments.push(prefillMessage);
+							log.info(`Injected manual prefill: "${trimmedPrefill}"`);
+						}
 
 					} catch (error) {
 						log.error("Error building context for LLM API Call:", error, {

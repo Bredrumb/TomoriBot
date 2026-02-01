@@ -228,13 +228,8 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 				.sendTyping()
 				.catch((e) => log.warn("Stream: Initial sendTyping failed", e));
 
-			// Send optional prefill before streaming (hybrid prefix)
-			await this.sendOutputPrefillIfNeeded(
-				context,
-				textConfig,
-				typingConfig,
-				state,
-			);
+			// Prepare optional prefill before streaming (hybrid prefix)
+			await this.sendOutputPrefillIfNeeded(context, textConfig, state);
 
 			// Begin provider streaming
 			const streamGenerator = provider.startStream(config, context);
@@ -915,11 +910,16 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 		);
 
 		const strippedSegment = this.stripPrefillFromSegment(resolvedSegment, state);
-		if (!strippedSegment.trim()) return;
+		const prefixedSegment = this.applyPrefillToSegment(
+			strippedSegment,
+			state,
+			context,
+		);
+		if (!prefixedSegment.trim()) return;
 
 		// Send the processed segment
 		await this.sendSegment(
-			strippedSegment,
+			prefixedSegment,
 			textConfig,
 			typingConfig,
 			context,
@@ -930,7 +930,6 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 	private async sendOutputPrefillIfNeeded(
 		context: StreamContext,
 		textConfig: TextProcessingConfig,
-		typingConfig: TypingSimulationConfig,
 		state: StreamState,
 	): Promise<void> {
 		const rawPrefill = context.outputPrefill?.trim();
@@ -967,28 +966,31 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 		// Track prefix for stripping from subsequent streamed output
 		state.prefillTarget = resolvedPrefill;
 		state.prefillMatched = 0;
-
-		if (context.outputPrefillState?.sent) {
-			log.info("Stream Prefill: Skipping send (already sent).");
-			return;
-		}
-
-		// Send prefill without stripping (this is the prefix we want to show)
-		await this.sendSegment(
-			resolvedPrefill,
-			textConfig,
-			typingConfig,
-			context,
-			state,
-		);
-
-		if (context.outputPrefillState) {
-			context.outputPrefillState.sent = true;
-		}
+		state.prefillMatchFailed = false;
+		state.prefillInjected = Boolean(context.outputPrefillState?.sent);
 
 		log.info(
-			`Stream Prefill: Sent output prefill (${resolvedPrefill.length} chars).`,
+			`Stream Prefill: Prepared output prefill (${resolvedPrefill.length} chars).`,
 		);
+	}
+
+	private applyPrefillToSegment(
+		segment: string,
+		state: StreamState,
+		context: StreamContext,
+	): string {
+		if (!state.prefillTarget) return segment;
+
+		if (!state.prefillInjected) {
+			if (!segment.trim()) return "";
+			state.prefillInjected = true;
+			if (context.outputPrefillState) {
+				context.outputPrefillState.sent = true;
+			}
+			return state.prefillTarget + segment;
+		}
+
+		return segment;
 	}
 
 	private stripPrefillFromSegment(
@@ -996,7 +998,11 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 		state: StreamState,
 	): string {
 		const target = state.prefillTarget;
-		if (!target || state.prefillMatched >= target.length) {
+		if (
+			!target ||
+			state.prefillMatchFailed ||
+			state.prefillMatched >= target.length
+		) {
 			return segment;
 		}
 
@@ -1010,10 +1016,9 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 				index += 1;
 				continue;
 			}
-
-			const matchedPrefix = target.slice(0, state.prefillMatched);
+			state.prefillMatchFailed = true;
 			state.prefillMatched = target.length;
-			return matchedPrefix + segment.slice(index);
+			return segment;
 		}
 
 		if (state.prefillMatched >= target.length) {

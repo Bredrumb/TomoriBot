@@ -31,7 +31,10 @@ export function chunkDocumentText(
 		return chunks;
 	}
 
-	const safeOverlap = Math.max(0, Math.min(overlap, Math.max(0, chunkSize - 1)));
+	const safeOverlap = Math.max(
+		0,
+		Math.min(overlap, Math.max(0, chunkSize - 1)),
+	);
 	let start = 0;
 
 	while (start < text.length) {
@@ -232,7 +235,7 @@ export function formatRetrievedChunksForPrompt(
 		return null;
 	}
 
-	let output = "# Server Documents (reference only)\n";
+	let output = "# Server Documents (chunks referenced through RAG)\n";
 	let currentDoc = "";
 
 	for (const chunk of chunks) {
@@ -287,7 +290,9 @@ export async function reembedServerDocuments(params: {
 		const chunks = chunkDocumentText(normalized, chunkSize, chunkOverlap);
 
 		if (chunks.length === 0) {
-			log.warn(`Skipping empty document during re-embed: ${document.document_id}`);
+			log.warn(
+				`Skipping empty document during re-embed: ${document.document_id}`,
+			);
 			continue;
 		}
 
@@ -297,9 +302,7 @@ export async function reembedServerDocuments(params: {
 			model: embeddingModel.codename,
 			inputs: chunks,
 			taskType:
-				embeddingModel.provider === "google"
-					? "RETRIEVAL_DOCUMENT"
-					: undefined,
+				embeddingModel.provider === "google" ? "RETRIEVAL_DOCUMENT" : undefined,
 			batchSize: 16,
 		});
 
