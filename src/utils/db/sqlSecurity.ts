@@ -39,6 +39,7 @@ const ALLOWED_TOMORI_FIELDS = new Set<keyof TomoriRow>([
 
 const ALLOWED_TOMORI_CONFIG_FIELDS = new Set<keyof TomoriConfigRow>([
 	"llm_id",
+	"embedding_model_id",
 	"llm_temperature",
 	"api_key",
 	"trigger_words",

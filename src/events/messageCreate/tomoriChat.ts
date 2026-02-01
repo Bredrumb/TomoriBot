@@ -30,6 +30,7 @@ import {
 	getCachedBlacklistStatus,
 } from "../../utils/cache/userCache";
 import { getCachedWhitelistStatus } from "../../utils/cache/channelWhitelistCache";
+import { storeShortTermMemory } from "../../utils/cache/shortTermMemoryCache";
 import { incrementTomoriCounter } from "@/utils/db/dbWrite";
 import {
 	createStandardEmbed,
@@ -56,6 +57,7 @@ import { decryptApiKey } from "@/utils/security/crypto";
 import {
 	selectApiKey,
 	hasAvailableRotationKey,
+	MAX_KEY_ATTEMPTS,
 	recordKeySuccess,
 	recordKeyError,
 	type SelectedKeyResult,
@@ -110,6 +112,15 @@ const STREAM_SDK_CALL_TIMEOUT_MS = 35000; // Slightly longer than internal strea
 const DEFAULT_SELF_REPLY_LIMIT = 3;
 const MAX_SELF_REPLY_LIMIT = 10;
 const SELF_REPLY_CHAIN_TTL_MS = 30 * 60 * 1000; // Reset self-reply chain after 30 minutes of inactivity
+const SELF_REPLY_SUPPRESSION_TTL_MS = 5000;
+const selfReplySuppressionUntil = new Map<string, number>();
+
+export function suppressNextSelfReply(
+	channelId: string,
+	ttlMs = SELF_REPLY_SUPPRESSION_TTL_MS,
+): void {
+	selfReplySuppressionUntil.set(channelId, Date.now() + ttlMs);
+}
 
 function shouldSendWebhookError(channelId: string): boolean {
 	const now = Date.now();
@@ -292,7 +303,7 @@ type SimplifiedMessageForContext = {
 	authorType: "user" | "persona"; // Whether this message is from a user or a persona
 	personaName?: string | null; // Persona nickname if authorType is "persona"
 	content: string | null; // Message text content
-	mediaSourceMessageId?: string; // Message ID that actually hosts the media, if different
+	mediaSourceMessageIds?: string[]; // Array of message IDs that host media (for combined messages)
 	imageAttachments: Array<{
 		url: string; // Original URL of the image
 		proxyUrl: string; // Discord's proxy URL, often more stable for fetching
@@ -416,6 +427,8 @@ interface ChannelLockEntry {
 		isStopResponse?: boolean; // Flag to prevent stopping stop responses
 		selectedPersonaId?: number;
 		isPersonaJob?: boolean;
+		manualSystemPrompt?: string;
+		manualPrefill?: string;
 	}>;
 }
 const channelLocks = new Map<string, ChannelLockEntry>(); // Key: channel.id
@@ -624,6 +637,8 @@ async function sendServerRateLimitEmbed(
  * @param skipLock - Whether to skip semaphore lock acquisition (for recursive calls).
  * @param selectedPersonaId - Optional persona ID to use instead of main persona (for manual triggers).
  * @param isPersonaJob - Whether this invocation is an internal queued persona job.
+ * @param manualSystemPrompt - Optional system prompt to append at the end of context.
+ * @param manualPrefill - Optional assistant prefill used for hybrid prefix output and final context item.
  */
 export default async function tomoriChat(
 	client: Client,
@@ -640,9 +655,14 @@ export default async function tomoriChat(
 	reminderData?: {
 		reminder_purpose: string;
 		reminder_lateness?: string | null;
+		self_reminder?: boolean;
 	},
 	selectedPersonaId?: number,
 	isPersonaJob = false,
+	isUserImpersonation = false,
+	impersonatedUserId?: string,
+	manualSystemPrompt?: string,
+	manualPrefill?: string,
 ): Promise<void> {
 	// 1. Initial Checks & State Loading
 	const channel = message.channel;
@@ -655,6 +675,54 @@ export default async function tomoriChat(
 		client.user && message.author.id === client.user.id,
 	);
 	const isLikelySelfMessage = isFromClientUser || isWebhookMessage;
+
+	const isSeedPlaceholderMessage =
+		isFromClientUser &&
+		!isWebhookMessage &&
+		message.content === "\u2800" &&
+		message.embeds.length === 0 &&
+		message.attachments.size === 0;
+	if (isSeedPlaceholderMessage && !isManuallyTriggered) {
+		updateSelfReplyChainState(channel.id, false);
+		return;
+	}
+
+	const suppressionUntil = selfReplySuppressionUntil.get(channel.id);
+	if (
+		!isManuallyTriggered &&
+		isLikelySelfMessage &&
+		typeof suppressionUntil === "number" &&
+		Date.now() < suppressionUntil
+	) {
+		selfReplySuppressionUntil.delete(channel.id);
+		updateSelfReplyChainState(channel.id, false);
+		return;
+	}
+
+	if (isLikelySelfMessage && message.reference?.messageId) {
+		let referencedMessage = message.channel.messages.cache.get(
+			message.reference.messageId,
+		);
+
+		if (!referencedMessage && "messages" in channel) {
+			try {
+				referencedMessage = await channel.messages.fetch(
+					message.reference.messageId,
+				);
+			} catch {
+				referencedMessage = undefined;
+			}
+		}
+
+		if (
+			referencedMessage &&
+			(referencedMessage.author.id === client.user?.id ||
+				referencedMessage.webhookId)
+		) {
+			updateSelfReplyChainState(channel.id, false);
+			return;
+		}
+	}
 
 	if (!isBotAuthor && !isWebhookMessage) {
 		updateSelfReplyChainState(channel.id, false);
@@ -690,6 +758,7 @@ export default async function tomoriChat(
 		disableGifProcessing: false, // Will be set to true during enhanced context restart
 		forceReason, // Pass reasoning flag for enhanced AI responses
 		isManuallyTriggered, // Pass command flag to indicate manual triggering
+		disableAllTools: isUserImpersonation, // Disable tools for user impersonation
 	};
 
 	// biome-ignore lint/style/noNonNullAssertion: Author is always present in non-system messages
@@ -697,7 +766,7 @@ export default async function tomoriChat(
 
 	// Check if user is allowed to trigger bot (Level 2 FULL privacy users cannot trigger)
 	// Skip this check for manual triggers and reminders
-	if (!isManuallyTriggered && !reminderRecipientID) {
+	if (!isManuallyTriggered && !reminderRecipientID && !reminderData?.self_reminder) {
 		const userPrivacyLevel = await getCachedPrivacyLevel(userDiscId);
 		if (userPrivacyLevel === PrivacyLevel.FULL) {
 			// Silently ignore - Level 2 users chose to be completely invisible
@@ -1045,6 +1114,8 @@ export default async function tomoriChat(
 						llmOverrideCodename,
 						selectedPersonaId,
 						isPersonaJob,
+						manualSystemPrompt,
+						manualPrefill,
 					});
 					log.info(
 						`Channel ${channelLockId} is busy (msg ${lockEntry.currentMessageId}). Enqueued message ${message.id}. Queue: ${lockEntry.messageQueue.length}. Tomori would reply (autoch_counter simulated as 0 for this check).`,
@@ -1198,7 +1269,7 @@ export default async function tomoriChat(
 				`[Snapshot] Created per-request snapshot for message ${message.id} in ${isDMChannel ? "DM" : `server ${serverDiscId}`}`,
 			);
 
-			if (reminderRecipientID) {
+			if (reminderRecipientID && !reminderData?.self_reminder) {
 				const forcedMentions = await buildForcedMentionsForReminder(
 					reminderRecipientID,
 					client,
@@ -1264,7 +1335,15 @@ export default async function tomoriChat(
 			 */
 			function checkTargetEmbedTitle(embedTitle: string | null): {
 				isTarget: boolean;
-				type: "memory_learning" | "reset" | "reminder_set" | null;
+				type:
+					| "memory_learning"
+					| "reset"
+					| "reminder_set"
+					| "system_injection"
+					| "compact_summary"
+					| "compact_refresh"
+					| "reward_headpat"
+					| null;
 			} {
 				if (!embedTitle) return { isTarget: false, type: null };
 
@@ -1281,6 +1360,14 @@ export default async function tomoriChat(
 							supportedLocale,
 							"genai.self_teach.personal_memory_learned_title",
 						),
+						localizer(
+							supportedLocale,
+							"genai.self_teach.server_memory_updated_title",
+						),
+						localizer(
+							supportedLocale,
+							"genai.self_teach.personal_memory_updated_title",
+						),
 					];
 
 					// Target localizer key for conversation reset
@@ -1294,6 +1381,35 @@ export default async function tomoriChat(
 						supportedLocale,
 						"reminders.reminder_set_title",
 					);
+					// Target localizer key for system message injection
+					const systemInjectionTitle = localizer(
+						supportedLocale,
+						"commands.bot.impersonate.system_title",
+					);
+					const rewardHeadpatTitle = localizer(
+						supportedLocale,
+						"commands.reward.headpat.embed_title",
+					);
+					const compactSummaryTitle = localizer(
+						supportedLocale,
+						"commands.tool.compact.summary_title",
+					);
+					const compactSummaryTitleRefreshed = localizer(
+						supportedLocale,
+						"commands.tool.compact.summary_title_refreshed",
+					);
+					const compactSceneTitle = localizer(
+						supportedLocale,
+						"commands.tool.compact.roleplay_scene_title",
+					);
+					const compactSceneTitleRefreshed = localizer(
+						supportedLocale,
+						"commands.tool.compact.roleplay_scene_title_refreshed",
+					);
+					const compactCharacterTitlePrefix = localizer(
+						supportedLocale,
+						"commands.tool.compact.roleplay_character_title_prefix",
+					);
 
 					// Check for memory learning embeds
 					if (memoryLearningTitles.some((title) => embedTitle === title)) {
@@ -1303,6 +1419,37 @@ export default async function tomoriChat(
 					// Check for reset embed
 					if (embedTitle === resetTitle) {
 						return { isTarget: true, type: "reset" };
+					}
+					// Check for system injection embed
+					if (embedTitle === systemInjectionTitle) {
+						return { isTarget: true, type: "system_injection" };
+					}
+					// Check for reward headpat embed
+					if (embedTitle === rewardHeadpatTitle) {
+						return { isTarget: true, type: "reward_headpat" };
+					}
+					// Check for compact summary embeds (conversation/scene)
+					if (
+						embedTitle === compactSummaryTitle ||
+						embedTitle === compactSceneTitle
+					) {
+						return { isTarget: true, type: "compact_summary" };
+					}
+
+					// Check for compact refresh embeds (reset marker)
+					if (
+						embedTitle === compactSummaryTitleRefreshed ||
+						embedTitle === compactSceneTitleRefreshed
+					) {
+						return { isTarget: true, type: "compact_refresh" };
+					}
+
+					// Check for compact roleplay character embeds by prefix match
+					if (
+						compactCharacterTitlePrefix &&
+						embedTitle.startsWith(compactCharacterTitlePrefix)
+					) {
+						return { isTarget: true, type: "compact_summary" };
 					}
 
 					// Check for reminder set confirmation embed
@@ -1697,7 +1844,7 @@ export default async function tomoriChat(
 			let personasToRespond: TomoriState[];
 			if (isManuallyTriggered) {
 				personasToRespond = selectedPersona ? [selectedPersona] : [];
-			} else if (reminderRecipientID || isStopResponse) {
+			} else if (reminderRecipientID || reminderData?.self_reminder || isStopResponse) {
 				// Only main persona for reminders and stop responses
 				personasToRespond = tomoriState ? [tomoriState] : [];
 			} else {
@@ -1735,6 +1882,7 @@ export default async function tomoriChat(
 				isSelfMessage &&
 				!isManuallyTriggered &&
 				!reminderRecipientID &&
+				!reminderData?.self_reminder &&
 				!isStopResponse
 			) {
 				if (selfReplyLimit <= 0) {
@@ -1884,20 +2032,36 @@ export default async function tomoriChat(
 			// 8. Find the index of the *last* reset message (most recent)
 			// This message could be from the bot (confirmation embed) or a user command
 			let resetIndex = -1;
+			let resetType: "reset" | "compact_refresh" | null = null;
 			for (let i = messagesArray.length - 1; i >= 0; i--) {
 				const msg = messagesArray[i];
 
 				// Check if *any* embed in the message contains a reset title using localizer
-				const embedContainsReset = msg.embeds.some((embed) => {
+				let embedContainsReset = false;
+				for (const embed of msg.embeds) {
 					const embedCheck = checkTargetEmbedTitle(embed.title);
-					return embedCheck.isTarget && embedCheck.type === "reset";
-				});
+					if (
+						embedCheck.isTarget &&
+						(embedCheck.type === "reset" ||
+							embedCheck.type === "compact_refresh")
+					) {
+						embedContainsReset = true;
+						resetType = embedCheck.type === "compact_refresh"
+							? "compact_refresh"
+							: "reset";
+						break;
+					}
+				}
 
 				// If an embed contains the marker, this is our reset point
 				if (embedContainsReset) {
 					resetIndex = i;
+					const resetNote =
+						resetType === "compact_refresh"
+							? "History will start from this message."
+							: "History will start after this message.";
 					log.info(
-						`Reset marker detected in message content or embed at index ${i} from ${msg.author.username}. History will start after this message.`,
+						`Reset marker detected in message content or embed at index ${i} from ${msg.author.username}. ${resetNote}`,
 					);
 					// Found the most recent reset marker, stop searching
 					break;
@@ -1905,7 +2069,12 @@ export default async function tomoriChat(
 			}
 
 			// 9. Determine the messages to include in the history
-			const startIndex = resetIndex === -1 ? 0 : resetIndex + 1;
+			const startIndex =
+				resetIndex === -1
+					? 0
+					: resetType === "compact_refresh"
+						? resetIndex
+						: resetIndex + 1;
 			const relevantMessagesArray = messagesArray.slice(startIndex);
 			// 10. Build the `SimplifiedMessageForContext` array and user list from relevant messages
 			const simplifiedMessages: SimplifiedMessageForContext[] = []; // Array for structured messages
@@ -1966,7 +2135,7 @@ export default async function tomoriChat(
 
 							// Get the referenced message content (truncate if too long)
 							let referencedContent =
-								msgReferencedMessage.content || "[No text content]";
+								(msgReferencedMessage.content || "[No text content]").replace(/\n/g, " ");
 							if (referencedContent.length > 200) {
 								referencedContent = `${referencedContent.substring(0, 197)}...`;
 							}
@@ -2067,7 +2236,7 @@ export default async function tomoriChat(
 					[];
 				let messageContentForLlm: string | null = processedContent; // Use processed content (with reference context and "$:" removed if present)
 				let hasProcessedEmbed = false; // Track if this message contains a processed embed
-				let mediaSourceMessageId: string | null = null;
+				const mediaSourceMessageIds: string[] = []; // Array to collect all message IDs with media
 				let hasLocalMedia = false;
 
 				// Extract attachments from referenced message if it exists (after arrays are declared)
@@ -2128,7 +2297,7 @@ export default async function tomoriChat(
 						imageAttachments.length > preRefImageCount ||
 						videoAttachments.length > preRefVideoCount
 					) {
-						mediaSourceMessageId = referencedMessageData.message.id;
+						mediaSourceMessageIds.push(referencedMessageData.message.id);
 					}
 
 					// Log attachment extraction for debugging
@@ -2151,34 +2320,61 @@ export default async function tomoriChat(
 						if (
 							embedCheck.isTarget &&
 							(embedCheck.type === "memory_learning" ||
-								embedCheck.type === "reminder_set") &&
+								embedCheck.type === "reminder_set" ||
+								embedCheck.type === "system_injection" ||
+								embedCheck.type === "compact_summary" ||
+								embedCheck.type === "compact_refresh" ||
+								embedCheck.type === "reward_headpat") &&
 							embed.description
 						) {
-							// Remove bot name prefix from embed description if present
-							let cleanedDescription = embed.description;
-							if (tomoriState?.tomori_nickname) {
-								// Escape special regex characters in the bot nickname
-								const escapedNickname = tomoriState.tomori_nickname.replace(
-									/[.*+?^${}()|[\]\\]/g,
-									"\\$&",
-								);
-								const botNamePattern = new RegExp(
-									`^${escapedNickname}:\\s*`,
-									"i",
-								);
-								if (botNamePattern.test(cleanedDescription)) {
-									cleanedDescription = cleanedDescription
-										.replace(botNamePattern, "")
-										.trim();
+							// Wrap system_injection embeds in [System: ...] wrapper
+							if (
+								embedCheck.type === "system_injection" ||
+								embedCheck.type === "compact_summary" ||
+								embedCheck.type === "compact_refresh"
+							) {
+								const titleLine =
+									embedCheck.type === "compact_summary" ||
+									embedCheck.type === "compact_refresh"
+										? embed.title
+											? `## ${embed.title}\n`
+											: ""
+										: "";
+								const systemContent = `[System: ${titleLine}${embed.description}]`;
+								messageContentForLlm = messageContentForLlm
+									? `${messageContentForLlm}\n${systemContent}`
+									: systemContent;
+								hasProcessedEmbed = true;
+							} else {
+								// Remove bot name prefix from embed description if present
+								let cleanedDescription = embed.description;
+								if (tomoriState?.tomori_nickname) {
+									// Escape special regex characters in the bot nickname
+									const escapedNickname = tomoriState.tomori_nickname.replace(
+										/[.*+?^${}()|[\]\\]/g,
+										"\\$&",
+									);
+									const botNamePattern = new RegExp(
+										`^${escapedNickname}:\\s*`,
+										"i",
+									);
+									if (botNamePattern.test(cleanedDescription)) {
+										cleanedDescription = cleanedDescription
+											.replace(botNamePattern, "")
+											.trim();
+									}
 								}
-							}
 
-							// Add embed content to message text with special marker
-							const embedContent = `[The following is a system-produced embed]\n${cleanedDescription}`;
-							messageContentForLlm = messageContentForLlm
-								? `${messageContentForLlm}\n${embedContent}`
-								: embedContent;
-							hasProcessedEmbed = true;
+								const embedContent =
+									embedCheck.type === "memory_learning" ||
+									embedCheck.type === "reward_headpat"
+										? `[System: ${cleanedDescription}]`
+										: `[The following is a system-produced embed]\n${cleanedDescription}`;
+								messageContentForLlm = messageContentForLlm
+									? `${messageContentForLlm}\n${embedContent}`
+									: embedContent;
+								hasProcessedEmbed = true;
+							}
 						}
 
 						// 2. Process link preview embeds (new logic) - ONLY for non-bot messages
@@ -2449,11 +2645,11 @@ export default async function tomoriChat(
 					}
 				}
 
-				const resolvedMediaSourceMessageId =
+				const resolvedMediaSourceMessageIds: string[] | undefined =
 					imageAttachments.length > 0 || videoAttachments.length > 0
 						? hasLocalMedia
-							? msg.id
-							: (mediaSourceMessageId ?? undefined)
+							? [msg.id, ...mediaSourceMessageIds]
+							: mediaSourceMessageIds.length > 0 ? mediaSourceMessageIds : undefined
 						: undefined;
 
 				// 5.c. Check if this message is from the same effective author as the previous one
@@ -2494,8 +2690,11 @@ export default async function tomoriChat(
 							...videoAttachments,
 						];
 					}
-					if (resolvedMediaSourceMessageId) {
-						prevMessage.mediaSourceMessageId = resolvedMediaSourceMessageId;
+					if (resolvedMediaSourceMessageIds && resolvedMediaSourceMessageIds.length > 0) {
+							// Merge media source message IDs, avoiding duplicates
+						const existingIds = prevMessage.mediaSourceMessageIds ?? [];
+						const combinedIds = [...existingIds, ...resolvedMediaSourceMessageIds];
+						prevMessage.mediaSourceMessageIds = [...new Set(combinedIds)]; // Remove duplicates
 					}
 				} else if (
 					messageContentForLlm ||
@@ -2510,7 +2709,7 @@ export default async function tomoriChat(
 						authorType,
 						personaName,
 						content: messageContentForLlm,
-						mediaSourceMessageId: resolvedMediaSourceMessageId,
+						mediaSourceMessageIds: resolvedMediaSourceMessageIds,
 						imageAttachments,
 						videoAttachments,
 					});
@@ -2541,12 +2740,17 @@ export default async function tomoriChat(
 			// ========== MULTI-PERSONA RESPONSE LOOP START ==========
 			// Each persona will generate a response sequentially using the same message history
 			// but with their own personality, config, and (for alters) webhook avatar
+
+			// Track persona responses for short-term memory storage
+			const personaResponses: Array<{ personaName: string; text: string }> = [];
+
 			for (
 				let personaIndex = 0;
 				personaIndex < personasToRespond.length;
 				personaIndex++
 			) {
 				const currentPersona = personasToRespond[personaIndex];
+				const trimmedPrefill = manualPrefill?.trim();
 				const personaSnapshot: RequestSnapshot = {
 					...requestSnapshot,
 					tomoriState: currentPersona,
@@ -2624,17 +2828,29 @@ export default async function tomoriChat(
 
 					// Inject reminder into conversation history if needed
 					// This makes the reminder part of the natural conversation flow rather than system injection
-					if (reminderRecipientID && reminderData) {
-						let reminderContent = `[A reminder you have set before for <@${reminderRecipientID}> (Mention ID: ${reminderRecipientID}) has been triggered. The reminder is about: "${reminderData.reminder_purpose}"]`;
+					if (reminderData && (reminderRecipientID || reminderData.self_reminder)) {
+						const isSelfReminder = reminderData.self_reminder === true;
+						let reminderContent = "";
 
-						if (reminderData.reminder_lateness) {
-							reminderContent += ` [You are also ${reminderData.reminder_lateness} to remind the user.]`;
+						if (isSelfReminder) {
+							reminderContent = `[System: A task reminder you set for yourself has triggered. Task: "${reminderData.reminder_purpose}". Please execute this task now.]`;
+							if (reminderData.reminder_lateness) {
+								reminderContent += ` [This task is ${reminderData.reminder_lateness} overdue.]`;
+							}
+						} else {
+							reminderContent = `[A reminder you have set before for <@${reminderRecipientID}> (Mention ID: ${reminderRecipientID}) has been triggered. The reminder is about: "${reminderData.reminder_purpose}"]`;
+							if (reminderData.reminder_lateness) {
+								reminderContent += ` [You are also ${reminderData.reminder_lateness} to remind the user.]`;
+							}
 						}
+
+						const fallbackAuthorId =
+							client.user?.id ?? reminderRecipientID ?? "system";
 
 						// Create synthetic simplified message for the reminder
 						const reminderMessage: SimplifiedMessageForContext = {
 							id: `synthetic-reminder-${Date.now()}`, // Synthetic ID for system-generated reminder
-							authorId: reminderRecipientID,
+							authorId: fallbackAuthorId,
 							authorName: "System", // Use bot's nickname
 							authorType: "user",
 							personaName: null,
@@ -2646,17 +2862,19 @@ export default async function tomoriChat(
 						// Add to end of conversation history so it gets processed naturally
 						simplifiedMessages.push(reminderMessage);
 						log.info(
-							`Injected reminder into conversation history for user ${reminderRecipientID} - will be processed by buildContext`,
+							`Injected reminder into conversation history for ${isSelfReminder ? "self task" : `user ${reminderRecipientID}`} - will be processed by buildContext`,
 						);
 					}
 
 					// Inject continuation prompt for manual triggers when the selected persona is the last speaker
-					// This fixes the UX issue where manual /bot respond or /bot reason commands
+					// This fixes the UX issue where manual /bot respond commands
 					// don't work if the selected persona was the last one to speak in the conversation
 					// IMPORTANT: Skip this for reasoning queries - they have their own system message
 					if (
 						isManuallyTriggered &&
 						!reasoningQuery &&
+						!reminderRecipientID &&
+						!reminderData?.self_reminder &&
 						simplifiedMessages.length > 0
 					) {
 						const lastMessage =
@@ -2681,13 +2899,31 @@ export default async function tomoriChat(
 								"[The following is a system-produced embed]",
 							) ?? false;
 
+						const shouldInjectContinuation =
+							(isFromSelectedPersona && !isEmbedMessage) ||
+							Boolean(trimmedPrefill);
+
 						// 4. Only inject continuation if:
-						//    - Last message is from the selected persona
-						//    - Last message is NOT an embed
-						if (isFromSelectedPersona && !isEmbedMessage) {
+						//    - Last message is from the selected persona (and not an embed), OR
+						//    - A manual prefill is provided (hybrid prefix)
+						if (shouldInjectContinuation) {
+							const continuationReason = trimmedPrefill
+								? "manual prefill"
+								: `${selectedPersona?.tomori_nickname} as last speaker`;
 							log.info(
-								`Manual trigger detected with ${selectedPersona?.tomori_nickname} as last speaker - injecting continuation prompt for UX`,
+								`Manual trigger detected (${continuationReason}) - injecting continuation prompt for UX`,
 							);
+
+							const botName =
+								currentPersona?.tomori_nickname ??
+								tomoriState?.tomori_nickname ??
+								process.env.DEFAULT_BOTNAME ??
+								"Tomori";
+							const continuationText = trimmedPrefill
+								? isFromSelectedPersona && !isEmbedMessage
+									? `[Continue your last message. Begin exactly with: "${botName}: ${trimmedPrefill}". Continue directly after it without repeating the prefix.]`
+									: `[Begin your next reply with: "${botName}: ${trimmedPrefill}". Continue directly after it without repeating the prefix.]`
+								: "[Continue your last message]";
 
 							// Create a fake user message prompting the persona to continue
 							// Use "0" as authorId to ensure it's not the bot's ID (will be labeled as "user" role)
@@ -2697,7 +2933,7 @@ export default async function tomoriChat(
 								authorName: "System",
 								authorType: "user",
 								personaName: null,
-								content: "[Continue your last message]",
+								content: continuationText,
 								imageAttachments: [],
 								videoAttachments: [],
 							};
@@ -2716,6 +2952,13 @@ export default async function tomoriChat(
 					// For now, its signature and output type (ContextSegment[]) remain, but we pass the new data.
 					let contextSegments: StructuredContextItem[] = [];
 					try {
+						// Query database nickname for user impersonation
+						let impersonatedUserNickname: string | undefined;
+						if (isUserImpersonation && impersonatedUserId) {
+							const impersonatedUserRow = await getCachedUserRow(impersonatedUserId);
+							impersonatedUserNickname = impersonatedUserRow?.user_nickname;
+						}
+
 						// NOTE: The `buildContext` call signature will change.
 						// It will take `simplifiedMessageHistory: simplifiedMessages` instead of `conversationHistory`.
 						// It will also need `tomoriNickname`, `tomoriAttributes`, and `tomoriConfig` to build system instructions.
@@ -2728,6 +2971,7 @@ export default async function tomoriChat(
 							userList,
 							channelDesc,
 							channelName,
+							channelId: channel.id, // For short-term memory context
 							client,
 							triggererName,
 							emojiStrings,
@@ -2742,6 +2986,9 @@ export default async function tomoriChat(
 							snapshot: personaSnapshot, // Use persona-specific snapshot for correct context
 							preloadedEmojis: loadedEmojis, // Pass pre-loaded emoji data to avoid redundant DB query
 							preloadedStickers: loadedStickers, // Pass pre-loaded sticker data to avoid redundant DB query
+							isUserImpersonation, // Pass user impersonation flag (February 2026)
+							impersonatedUserId, // Pass impersonated user ID (February 2026)
+							impersonatedUserNickname, // Pass database nickname for context (February 2026)
 						});
 
 						// Apply emoji repetition penalty if bot has been using too many emojis
@@ -2823,6 +3070,38 @@ export default async function tomoriChat(
 								`Injected reasoning query as user message in dialogue: "${reasoningQuery}"`,
 							);
 						}
+
+						// Inject manual system prompt at the end (for manual commands)
+						if (manualSystemPrompt?.trim()) {
+							const trimmedPrompt = manualSystemPrompt.trim();
+							const systemText = trimmedPrompt.startsWith("[System:")
+								? trimmedPrompt
+								: `[System: ${trimmedPrompt}]`;
+							const manualPromptMessage: StructuredContextItem = {
+								role: "user",
+								parts: [{ type: "text", text: systemText }],
+								metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+							};
+							contextSegments.push(manualPromptMessage);
+							log.info(`Injected manual system prompt: "${trimmedPrompt}"`);
+						}
+
+						// Inject assistant prefill as the final context item (for manual commands)
+						if (trimmedPrefill) {
+							const botName =
+								currentPersona?.tomori_nickname ??
+								tomoriState?.tomori_nickname ??
+								process.env.DEFAULT_BOTNAME ??
+								"Tomori";
+							const prefillMessage: StructuredContextItem = {
+								role: "model",
+								parts: [{ type: "text", text: `${botName}: ${trimmedPrefill}` }],
+								metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+							};
+							contextSegments.push(prefillMessage);
+							log.info(`Injected manual prefill: "${trimmedPrefill}"`);
+						}
+
 					} catch (error) {
 						log.error("Error building context for LLM API Call:", error, {
 							serverId: tomoriState?.server_id, // Use internal DB ID if available
@@ -3043,18 +3322,91 @@ export default async function tomoriChat(
 						}
 					}
 
-					const personaAvatarUrl =
-						personaWebhook &&
-						guild &&
-						currentPersona.is_alter &&
-						!usePersonaWebhooks
+					// Query user data for impersonation (used for both webhook and prefix stripping)
+					let impersonatedUserDbNickname: string | undefined;
+					if (isUserImpersonation && impersonatedUserId) {
+						const userRow = await getCachedUserRow(impersonatedUserId);
+						impersonatedUserDbNickname = userRow?.user_nickname;
+					}
+
+					// Create temporary webhook for user impersonation
+					if (isUserImpersonation && impersonatedUserId && supportsWebhooks) {
+						try {
+							const impersonatedMember =
+								guild?.members.cache.get(impersonatedUserId);
+							const impersonatedUserAvatar =
+								impersonatedMember?.avatarURL({ extension: "png" }) ||
+								impersonatedMember?.user.avatarURL({ extension: "png" });
+							// Use Discord display name for webhook (what shows in Discord UI)
+							const impersonatedUserDiscordName =
+								impersonatedMember?.displayName ||
+								impersonatedMember?.user.displayName ||
+								"User";
+
+							// Create temporary webhook with impersonated user's Discord identity
+							const tempWebhook = await (channel as TextChannel).createWebhook({
+								name: impersonatedUserDiscordName,
+								avatar: impersonatedUserAvatar || undefined,
+								reason: "TomoriBot user impersonation",
+							});
+
+							personaWebhook = tempWebhook;
+							log.info(
+								`Created temporary webhook for user impersonation: ${impersonatedUserDiscordName}`,
+							);
+						} catch (error) {
+							log.error("Failed to create temporary webhook for user impersonation", {
+								error,
+								impersonatedUserId,
+							});
+						}
+					}
+
+					const personaAvatarUrl = isUserImpersonation
+						? undefined // Webhook already has user's avatar
+						: personaWebhook &&
+							  guild &&
+							  currentPersona.is_alter &&
+							  !usePersonaWebhooks
 							? resolvePersonaAvatarURL(currentPersona, guild)
 							: undefined;
 
-					const personaUsername =
-						personaWebhook && currentPersona.is_alter
-							? currentPersona.tomori_nickname
-							: undefined;
+					// For user impersonation: separate webhook display name from prefix stripping name
+					let personaUsername: string | undefined;
+					let prefixStrippingName: string | undefined;
+
+					if (isUserImpersonation && impersonatedUserId) {
+						// Webhook display: use Discord display name (e.g., "bredrumb")
+						personaUsername =
+							guild?.members.cache.get(impersonatedUserId)?.displayName ||
+							guild?.members.cache.get(impersonatedUserId)?.user.displayName ||
+							"User";
+						// Prefix stripping: use database nickname if available (e.g., "bred")
+						prefixStrippingName = impersonatedUserDbNickname || personaUsername;
+					} else if (personaWebhook && currentPersona.is_alter) {
+						// For alter personas, use persona nickname for both
+						personaUsername = currentPersona.tomori_nickname;
+						prefixStrippingName = undefined; // Will fall back to personaUsername
+					} else {
+						personaUsername = undefined;
+						prefixStrippingName = undefined;
+					}
+
+					const outputPrefill = trimmedPrefill
+						? `${currentPersona?.tomori_nickname ?? tomoriState?.tomori_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori"}: ${trimmedPrefill}`
+						: undefined;
+
+					if (outputPrefill) {
+						if (streamingContext.outputPrefill !== outputPrefill) {
+							streamingContext.outputPrefill = outputPrefill;
+							streamingContext.outputPrefillState = { sent: false };
+						} else if (!streamingContext.outputPrefillState) {
+							streamingContext.outputPrefillState = { sent: false };
+						}
+					} else {
+						streamingContext.outputPrefill = undefined;
+						streamingContext.outputPrefillState = undefined;
+					}
 
 					// 1. Initialize variables for the function calling loop in streaming mode
 					let selectedStickerToSend: Sticker | null = null;
@@ -3063,6 +3415,7 @@ export default async function tomoriChat(
 						functionResponse: Record<string, unknown>;
 					}[] = [];
 					let finalStreamCompleted = false;
+					let finalAccumulatedText = ""; // Track accumulated text from successful stream
 					const accumulatedStreamedModelParts: Array<Record<string, unknown>> =
 						[];
 
@@ -3125,15 +3478,34 @@ export default async function tomoriChat(
 								}
 
 								const activeTomoriState = tomoriState;
+								let attemptCount = 0;
+								let lastStreamResult: StreamResult | null = null;
 
 								while (true) {
+									attemptCount += 1;
+									if (attemptCount > MAX_KEY_ATTEMPTS) {
+										log.warn(
+											`Exceeded MAX_KEY_ATTEMPTS (${MAX_KEY_ATTEMPTS}) for server ${activeTomoriState.server_id}. Returning last stream result.`,
+										);
+										return {
+											streamResult: lastStreamResult,
+											abort: !lastStreamResult,
+										};
+									}
+
+									const fallbackExcludeIds = [
+										...Array.from(excludedRotationKeyIds),
+									];
+									if (selectedKeyResult?.rotationKeyId != null) {
+										fallbackExcludeIds.push(selectedKeyResult.rotationKeyId);
+									}
+
 									const hasFallbackKey =
 										rotationActive &&
-										selectedKeyResult?.rotationKeyId != null &&
-										(await hasAvailableRotationKey(activeTomoriState, [
-											...Array.from(excludedRotationKeyIds),
-											selectedKeyResult.rotationKeyId,
-										]));
+										(await hasAvailableRotationKey(
+											activeTomoriState,
+											fallbackExcludeIds,
+										));
 
 									streamingContext.suppressUserErrors = hasFallbackKey;
 
@@ -3160,6 +3532,7 @@ export default async function tomoriChat(
 										personaWebhook ?? undefined, // Pass webhook for alter persona avatar support
 										personaAvatarUrl, // Pass resolved avatar URL
 										personaUsername, // Pass persona username
+										prefixStrippingName, // Pass prefix stripping name for user impersonation
 									);
 									const timeoutPromise = new Promise<never>(
 										(
@@ -3211,10 +3584,13 @@ export default async function tomoriChat(
 										throw raceError;
 									}
 
+									lastStreamResult = streamResult;
+
 									if (streamResult.status === "error" && hasFallbackKey) {
 										log.warn(
 											`Streaming failed with rotation key ${selectedKeyResult?.rotationKeyId}. Retrying with another key.`,
 										);
+										streamingContext.rotationKeyRetriesUsed = true;
 
 										// Record error for rotation key if one was used and error is key-related
 										if (selectedKeyResult?.rotationKeyId && streamResult.data) {
@@ -3304,6 +3680,10 @@ export default async function tomoriChat(
 										await recordKeySuccess(selectedKeyResult.rotationKeyId);
 									}
 									finalStreamCompleted = true;
+									// Capture accumulated text for short-term memory storage
+									if (streamResult.accumulatedText) {
+										finalAccumulatedText = streamResult.accumulatedText;
+									}
 									break; // Exit loop, final text stream was handled by streamGeminiToDiscord
 
 								case "error": {
@@ -3382,6 +3762,10 @@ export default async function tomoriChat(
 											reminderData,
 											selectedPersonaId,
 											isPersonaJob,
+											isUserImpersonation,
+											impersonatedUserId,
+											manualSystemPrompt,
+											manualPrefill,
 										);
 									} else {
 										// Max retries reached, show error embed
@@ -3480,7 +3864,7 @@ export default async function tomoriChat(
 										channel,
 										client,
 										message,
-										userId: userRow?.user_id?.toString() || userDiscId,
+										userId: userRow?.user_disc_id || userDiscId, // Use Discord user ID (not database ID) for cache consistency
 										guildId: message.guild?.id, // Pass guild ID for guild-specific features (e.g., server avatars)
 										tomoriState,
 										locale,
@@ -3793,6 +4177,7 @@ export default async function tomoriChat(
 												userList,
 												channelDesc,
 												channelName,
+												channelId: channel.id, // For short-term memory context
 												client,
 												triggererName,
 												emojiStrings,
@@ -3810,6 +4195,8 @@ export default async function tomoriChat(
 												snapshot: personaSnapshot, // Use persona-specific snapshot for rebuild
 												preloadedEmojis: loadedEmojis, // Pass pre-loaded emoji data to avoid redundant DB query
 												preloadedStickers: loadedStickers, // Pass pre-loaded sticker data to avoid redundant DB query
+												isUserImpersonation, // Pass user impersonation flag (February 2026)
+												impersonatedUserId, // Pass impersonated user ID (February 2026)
 											});
 
 											log.success(
@@ -4029,10 +4416,44 @@ export default async function tomoriChat(
 						// Potentially send a message indicating an issue if no error was already sent.
 					}
 
+					// Capture persona response text for short-term memory storage
+					log.info(
+						`[SHORT_TERM_MEMORY] Debug - finalStreamCompleted=${finalStreamCompleted}, accumulatedTextLength=${finalAccumulatedText.length}`,
+					);
+
+					if (finalStreamCompleted && finalAccumulatedText.trim()) {
+						personaResponses.push({
+							personaName: currentPersona.tomori_nickname,
+							text: finalAccumulatedText.trim(),
+						});
+						log.info(
+							`[SHORT_TERM_MEMORY] Captured response from ${currentPersona.tomori_nickname} - length=${finalAccumulatedText.trim().length}`,
+						);
+					} else {
+						log.warn(
+							`[SHORT_TERM_MEMORY] Skipping capture - finalStreamCompleted=${finalStreamCompleted}, accumulatedTextLength=${finalAccumulatedText.length}`,
+						);
+					}
+
 					// Persona response completed
 					log.success(
 						`Completed response ${personaIndex + 1}/${personasToRespond.length} from persona "${currentPersona.tomori_nickname}"`,
 					);
+
+					// Clean up temporary webhook for user impersonation
+					if (isUserImpersonation && personaWebhook) {
+						try {
+							await personaWebhook.delete("User impersonation complete");
+							log.info(
+								`Deleted temporary user impersonation webhook for user ${impersonatedUserId}`,
+							);
+						} catch (error) {
+							log.warn(
+								"Failed to delete temporary user impersonation webhook",
+								error,
+							);
+						}
+					}
 				} catch (personaError) {
 					// Handle errors for this specific persona and continue with remaining personas
 					log.error(
@@ -4066,6 +4487,67 @@ export default async function tomoriChat(
 					);
 				}
 			} // END OF MULTI-PERSONA RESPONSE LOOP
+
+			// === SHORT-TERM MEMORY STORAGE (Phase 2) ===
+			// Store conversation in short-term memory cache after successful response
+			// Only store if:
+			// 1. User privacy level allows (not FULL privacy)
+			// 2. Conversation has messages
+			// 3. This is not a stop response or other special case
+			try {
+				if (
+					!isStopResponse &&
+					simplifiedMessages.length > 0 &&
+					userRow &&
+					requestSnapshot.triggererPrivacyLevel !== PrivacyLevel.FULL
+				) {
+					// Extract last 10 messages (user + model only) with timestamps
+					const messagesToStore = simplifiedMessages
+						.slice(-10)
+						.filter((msg) => msg.authorType === "user" || msg.authorType === "persona")
+						.map((msg) => ({
+							role: msg.authorType === "user" ? ("user" as const) : ("model" as const),
+							content: msg.content || "",
+							timestamp: Date.now(), // Use current time as approximation
+						}));
+
+					// Add persona responses from this turn (bot's responses just sent)
+					for (const response of personaResponses) {
+						messagesToStore.push({
+							role: "model",
+							content: response.text,
+							timestamp: Date.now(),
+						});
+					}
+
+					// Store in cache
+					if (messagesToStore.length > 0) {
+						const cacheKey = `shortterm:${userDiscId}:${channel.id}`;
+						log.info(
+							`[tomoriChat] [CONVERSATION_STORAGE] Calling storeShortTermMemory - cacheKey=${cacheKey}, messageCount=${messagesToStore.length}`,
+						);
+
+						storeShortTermMemory(
+							userDiscId,
+							channel.id,
+							messagesToStore,
+							isDMChannel ? "DM" : serverDiscId,
+							serverName,
+							channelName,
+						);
+
+						log.info(
+							`[tomoriChat] [CONVERSATION_STORAGE] Finished storeShortTermMemory - cacheKey=${cacheKey}`,
+						);
+					}
+				}
+			} catch (storageError) {
+				// Don't fail the conversation if storage fails
+				log.warn(
+					"Failed to store short-term memory, but conversation completed successfully",
+					storageError,
+				);
+			}
 		} catch (error) {
 			// 14. Global error handler for entire function
 			log.error("Unhandled error in tomoriChat handler:", error);
@@ -4144,6 +4626,10 @@ export default async function tomoriChat(
 							undefined, // reminderData
 							nextMessageData.selectedPersonaId,
 							nextMessageData.isPersonaJob ?? false,
+							undefined, // isUserImpersonation
+							undefined, // impersonatedUserId
+							nextMessageData.manualSystemPrompt, // manualSystemPrompt
+							nextMessageData.manualPrefill, // manualPrefill
 						).catch((e) => {
 							log.error(
 								`Error processing queued message ${nextMessageData.message.id}:`,
@@ -4241,12 +4727,34 @@ export function determineMatchingPersonas(
 		senderPersona = allPersonas.find((p) => !p.is_alter);
 	}
 
+	// Determine which persona (if any) is being replied to for self-trigger prevention
+	let repliedToPersona: TomoriState | undefined;
+	if (message.reference?.messageId) {
+		const referenceMessage = message.channel.messages.cache.get(
+			message.reference.messageId,
+		);
+		if (referenceMessage) {
+			// biome-ignore lint/style/noNonNullAssertion: client.user is available in messageCreate event
+			if (referenceMessage.author.id === _client.user!.id) {
+				// Reply to main bot - find the main persona (not an alter)
+				repliedToPersona = allPersonas.find((p) => !p.is_alter);
+			} else if (referenceMessage.webhookId) {
+				// Reply to webhook - identify the persona by webhook username
+				const webhookName = referenceMessage.author.username.toLowerCase();
+				repliedToPersona = personaByNickname.get(webhookName);
+			}
+		}
+	}
+
 	// 2. Trigger word matching: Check all personas
 	const matchingPersonas: TomoriState[] = [];
 
 	for (const persona of allPersonas) {
-		// Prevent self-triggers: skip if this persona sent the message
+		// Prevent self-triggers: skip if this persona sent the message OR is being replied to
 		if (senderPersona && persona.tomori_id === senderPersona.tomori_id) {
+			continue;
+		}
+		if (repliedToPersona && persona.tomori_id === repliedToPersona.tomori_id) {
 			continue;
 		}
 

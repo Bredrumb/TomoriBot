@@ -15,6 +15,7 @@ export const BUILTIN_TOOL_FEATURE_FLAGS: Record<string, string> = {
 
 	// Memory/learning tools
 	remember_this_fact: "self_teaching",
+	update_long_term_memory: "self_teaching",
 
 	// Discord interaction tools
 	pin_selected_message: "pin_message",

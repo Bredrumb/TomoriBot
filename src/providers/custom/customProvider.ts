@@ -234,8 +234,13 @@ export class CustomProvider extends BaseLLMProvider implements LLMProvider {
 			);
 		}
 
+		// Determine which model name to use:
+		// 1. If custom_model_name is set, use it (for Ollama, etc. that require exact model names)
+		// 2. Otherwise, fall back to llm_codename (for KoboldCpp, etc. that don't care)
+		const modelName = tomoriState.config.custom_model_name || tomoriState.llm.llm_codename;
+
 		log.info(`Custom provider: Using endpoint URL: ${endpointUrl}`);
-		log.info(`Custom provider: Model codename: ${tomoriState.llm.llm_codename}`);
+		log.info(`Custom provider: Model name: ${modelName}${tomoriState.config.custom_model_name ? " (custom)" : " (default)"}`);
 		log.info(`Custom provider: has_tools: ${tomoriState.llm.has_tools}`);
 		log.info(`Custom provider: sees_images: ${tomoriState.llm.sees_images}`);
 		log.info(`Custom provider: sees_videos: ${tomoriState.llm.sees_videos}`);
@@ -251,7 +256,7 @@ export class CustomProvider extends BaseLLMProvider implements LLMProvider {
 		);
 
 		const config: CustomProviderConfig = {
-			model: tomoriState.llm.llm_codename,
+			model: modelName, // Use custom_model_name if set, otherwise llm_codename
 			apiKey: apiKey, // May be used for Bearer auth if endpoint requires it
 			temperature: adjustedTemperature,
 			maxOutputTokens: 4096,
@@ -301,6 +306,7 @@ export class CustomProvider extends BaseLLMProvider implements LLMProvider {
 		webhook?: import("discord.js").Webhook,
 		personaAvatarUrl?: string,
 		personaUsername?: string,
+		prefixStrippingName?: string,
 	): Promise<StreamResult> {
 		log.info(
 			`CustomProvider: Starting streaming for server ${tomoriState.server_id}, model ${config.model}`,
@@ -362,11 +368,15 @@ export class CustomProvider extends BaseLLMProvider implements LLMProvider {
 				provider: "custom",
 				locale: userLocale ?? "en-US",
 				suppressUserErrors: streamingContext?.suppressUserErrors,
+				rotationKeyRetriesUsed: streamingContext?.rotationKeyRetriesUsed,
+				outputPrefill: streamingContext?.outputPrefill,
+				outputPrefillState: streamingContext?.outputPrefillState,
 
 				// Multi-persona webhook support
 				webhook,
 				personaAvatarUrl,
 				personaUsername,
+				prefixStrippingName,
 
 				// Forced mentions (e.g., reminder recipients)
 				forcedMentions: streamingContext?.forcedMentions,

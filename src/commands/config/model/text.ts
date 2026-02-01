@@ -163,10 +163,11 @@ export async function execute(
 
 			// Update the custom LLM row with new capabilities
 			if (capabilitiesResult.llmId) {
-				// Update tomori_configs to use the (potentially new) LLM ID
+				// Update tomori_configs to use the (potentially new) LLM ID and custom model name
 				const [updatedRow] = await sql`
 					UPDATE tomori_configs
-					SET llm_id = ${capabilitiesResult.llmId}
+					SET llm_id = ${capabilitiesResult.llmId},
+					    custom_model_name = ${capabilitiesResult.modelName || null}
 					WHERE server_id = ${tomoriState.server_id}
 					RETURNING *
 				`;
@@ -199,11 +200,14 @@ export async function execute(
 				? enabledCapabilities.join(", ")
 				: localizer(locale, "general.none");
 
+			// Show the actual model name if provided, otherwise show placeholder
+			const displayModelName = capabilitiesResult.modelName || DEFAULT_CUSTOM_MODEL_NAME;
+
 			await replyInfoEmbed(interaction, locale, {
 				titleKey: "commands.config.model.text.custom_updated_title",
 				descriptionKey: "commands.config.model.text.custom_updated_description",
 				descriptionVars: {
-					model_name: DEFAULT_CUSTOM_MODEL_NAME,
+					model_name: displayModelName,
 					capabilities: capabilitiesDisplay,
 				},
 				color: ColorCode.SUCCESS,
@@ -426,9 +430,11 @@ export async function execute(
 		}
 
 		// 9. Update the config in the database using direct SQL (Rule #4, #15)
+		// Clear custom_model_name when switching to a non-custom provider
 		const [updatedRow] = await sql`
             UPDATE tomori_configs
-            SET llm_id = ${selectedModel.llm_id}
+            SET llm_id = ${selectedModel.llm_id},
+                custom_model_name = NULL
             WHERE server_id = ${tomoriState.server_id}
             RETURNING *
         `;

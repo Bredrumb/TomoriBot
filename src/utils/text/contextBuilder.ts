@@ -7,6 +7,7 @@ import {
 	loadTomoriState,
 	loadUserRow,
 	getPendingRemindersForUser,
+	loadEmbeddingModelById,
 } from "../db/dbRead"; // Import session helpers
 import {
 	ContextItemTag,
@@ -21,6 +22,10 @@ import {
 	normalizeCustomEmojisForLlm,
 } from "./stringHelper";
 import {
+	applyUncensorInputTransforms,
+	buildUncensorInjectionText,
+} from "./uncensor";
+import {
 	getCurrentTimeWithOffset,
 	formatUTCOffset,
 	getTimeOfDayPhrase,
@@ -33,12 +38,42 @@ import {
 	type ServerStickerRow,
 } from "@/types/db/schema";
 import { memoryGuard, MEDIA_LIMITS } from "../security/rateLimiter";
+import { decryptApiKey } from "../security/crypto";
+import {
+	formatRetrievedChunksForPrompt,
+	retrieveRelevantDocumentChunks,
+} from "../documents/documentService";
+import {
+	getShortTermMemoriesForUser,
+	getShortTermMemoryForChannel,
+	getRelativeTimestamp,
+} from "../cache/shortTermMemoryCache";
+import { getCachedUserRow } from "../cache/userCache";
+import { formatMemoryWithId } from "../memory/memoryId";
 
 /**
  * Maps userId -> nickname for the current mention replacement operation.
  * @remarks This cache is cleared after each text processing run to avoid stale data.
  */
 const mentionCache = new Map<string, string>();
+
+// Environment variables for short-term memory configuration
+const MIN_MESSAGES_FOR_SUMMARY = Number.parseInt(
+	process.env.SHORT_TERM_MEMORY_MIN_MESSAGES_FOR_SUMMARY || "6",
+	10,
+);
+const MAX_OTHER_CHANNEL_MEMORIES = Number.parseInt(
+	process.env.SHORT_TERM_MEMORY_MAX_OTHER_CHANNELS || "3",
+	10,
+);
+
+const DOCUMENT_CONTEXT_MAX_CHARS = 2000;
+const DOCUMENT_QUERY_MAX_LENGTH = 1000;
+const DOCUMENT_QUERY_MIN_LENGTH = 3;
+const DOCUMENT_MAX_RESULTS = 6;
+const DOCUMENT_MIN_SIMILARITY = 0.2;
+const IS_PRODUCTION = process.env.RUN_ENV === "production";
+const ENABLE_LOCAL_RAG = process.env.ACTIVATE_LOCAL_RAG === "true";
 
 export const DEFAULT_SYSTEM_PROMPT =
 	"\n{bot} limits themselves to only 0 to 2 emojis per response ({bot} prefers to use available server emojis than normal emojis) and makes sure to respond short and concisely, as {bot} is aware that no one really likes to read walls of text. {bot} only makes lengthy responses if and only if people are asking for assistance or an explanation that warrants it.";
@@ -54,7 +89,7 @@ type SimplifiedMessageForContext = {
 	authorType: "user" | "persona";
 	personaName?: string | null;
 	content: string | null;
-	mediaSourceMessageId?: string;
+	mediaSourceMessageIds?: string[]; // Array of message IDs that host media (for combined messages)
 	imageAttachments: Array<{
 		url: string;
 		proxyUrl: string;
@@ -203,7 +238,7 @@ export async function convertMentions(
 							guild?.channels.cache.get(id) ||
 							(await client.channels.fetch(id).catch(() => null));
 						if (channel?.isTextBased() && !channel.isDMBased()) {
-							return `#${channel.name}`;
+							return `#${channel.name} (ID: ${id})`;
 						}
 					} catch (error) {
 						log.error(
@@ -323,6 +358,234 @@ function buildMediaDescription(msg: SimplifiedMessageForContext): string {
 	return mediaParts.join(" and ");
 }
 
+function getLatestUserQuery(
+	messages: SimplifiedMessageForContext[],
+): string | null {
+	for (let i = messages.length - 1; i >= 0; i -= 1) {
+		const msg = messages[i];
+		if (msg.authorType !== "user") continue;
+		if (!msg.content) continue;
+		if (msg.authorId === "0") continue; // Skip synthetic continuation prompts
+		const trimmed = msg.content.trim();
+		if (!trimmed) continue;
+		if (trimmed.startsWith("[System:")) continue;
+		return trimmed.slice(0, DOCUMENT_QUERY_MAX_LENGTH);
+	}
+
+	return null;
+}
+
+/**
+ * Build short-term memory context for cross-channel and same-channel awareness
+ *
+ * Phase 2: Loads other-channel crude conversations or summaries (fallback to crude if no summary)
+ * Phase 3: Loads same-channel summary with HINT (tool-calling models only)
+ *
+ * @param triggeringUserId - Discord user ID of the message author
+ * @param currentChannelId - Current channel ID
+ * @param currentServerId - Current server ID (or "DM")
+ * @param tomoriState - Tomori configuration state
+ * @param locale - User's preferred locale
+ * @param triggererName - Display name of the triggering user
+ * @param botName - Bot's display name
+ * @param personalMemoriesEnabled - Whether personalization is enabled
+ * @param client - Discord client for mention conversion
+ * @returns Object with other-channel items and optional same-channel prompt
+ */
+async function buildShortTermMemoryContext(
+	triggeringUserId: string,
+	currentChannelId: string,
+	currentServerId: string,
+	tomoriState: import("@/types/db/schema").TomoriState | null,
+	_locale: string,
+	triggererName: string,
+	botName: string,
+	personalMemoriesEnabled: boolean,
+	client: Client,
+): Promise<{
+	memoryItems: StructuredContextItem[];
+	createPrompt?: StructuredContextItem;
+}> {
+	const memoryItems: StructuredContextItem[] = [];
+	let createPrompt: StructuredContextItem | undefined;
+
+	try {
+		// 1. Check if user has cross-server opt-in enabled
+		const userRow = await getCachedUserRow(triggeringUserId);
+		const crossServerOptIn =
+			userRow?.shortterm_cache_crossserver_opt_in ?? false;
+
+		// 2. Get short-term memories for user (excluding current channel for other-channel section)
+		const otherChannelMemories = getShortTermMemoriesForUser(
+			triggeringUserId,
+			currentChannelId,
+		);
+
+		// 3. Filter based on cross-server setting
+		const filteredMemories = otherChannelMemories.filter((memory) => {
+			// If cross-server disabled, only include memories from same server
+			if (!crossServerOptIn && memory.serverId !== currentServerId) {
+				return false;
+			}
+			return true;
+		});
+
+		// 4. Limit to max number of other-channel memories (most recent first)
+		const limitedMemories = filteredMemories.slice(
+			0,
+			MAX_OTHER_CHANNEL_MEMORIES,
+		);
+
+		// 5. Build OTHER-CHANNEL MEMORIES context (Phase 2)
+		// Show summaries when available, fall back to crude conversations
+		if (limitedMemories.length > 0) {
+			let otherChannelText = "";
+
+			for (const memory of limitedMemories) {
+				const relativeTime = getRelativeTimestamp(memory.lastUpdated);
+
+				// Determine channel reference (privacy-safe)
+				let channelReference: string;
+				if (memory.serverId === currentServerId && memory.channelName) {
+					// Same server: use channel mention
+					channelReference = `#${memory.channelName}`;
+				} else {
+					// Different server: generic reference
+					channelReference = "a channel in another server";
+				}
+
+				// Show summary if available, otherwise show crude conversation
+				if (memory.summary) {
+					// SUMMARY FORMAT (preferred)
+					otherChannelText += `[System: ${botName} remembers a recent conversation with ${triggererName} in ${channelReference} (${relativeTime}):\n${memory.summary}]\n\n`;
+				} else {
+					// CRUDE CONVERSATION FORMAT (fallback)
+					otherChannelText += `[System: ${botName} remembers a recent conversation with ${triggererName} in ${channelReference} (${relativeTime}):\n`;
+
+					for (const msg of memory.messages) {
+						const speaker = msg.role === "user" ? triggererName : botName;
+						otherChannelText += `${speaker}: "${msg.content}"\n`;
+					}
+
+					otherChannelText += "]\n\n";
+				}
+			}
+
+			if (otherChannelText) {
+				memoryItems.push({
+					role: "user",
+					parts: [
+						{
+							type: "text",
+							text: await convertMentions(
+								otherChannelText.trim(),
+								client,
+								currentServerId,
+								triggererName,
+								botName,
+								personalMemoriesEnabled,
+							),
+						},
+					],
+					metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
+				});
+			}
+		}
+
+		// 5. Build SAME-CHANNEL context (Phase 3)
+		// Only shown for tool-calling models
+		// - Summary (if exists): Goes with other memories (middle of context)
+		// - Create prompt (if no summary): Goes at end as instruction
+		if (tomoriState?.llm?.has_tools) {
+			const sameChannelMemory = getShortTermMemoryForChannel(
+				triggeringUserId,
+				currentChannelId,
+			);
+
+			if (sameChannelMemory?.summary) {
+				// EXISTING SUMMARY - Add to memoryItems (middle of context, with other memories)
+				const summaryText = `[System: ${botName}'s short term memory for this ongoing conversation:\n${sameChannelMemory.summary}]`;
+
+				memoryItems.push({
+					role: "user",
+					parts: [
+						{
+							type: "text",
+							text: await convertMentions(
+								summaryText,
+								client,
+								currentServerId,
+								triggererName,
+								botName,
+								personalMemoriesEnabled,
+							),
+						},
+					],
+					metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
+				});
+
+				// Add the HINT immediately after the summary (not at the end)
+				const hintText = `[System: HINT: Use the update_short_term_memory tool to update this information BEFORE you respond if the conversation has greatly changed its topic]`;
+
+				memoryItems.push({
+					role: "user",
+					parts: [
+						{
+							type: "text",
+							text: await convertMentions(
+								hintText,
+								client,
+								currentServerId,
+								triggererName,
+								botName,
+								personalMemoriesEnabled,
+							),
+						},
+					],
+					metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
+				});
+			} else if (
+				sameChannelMemory &&
+				sameChannelMemory.messages.length >= MIN_MESSAGES_FOR_SUMMARY
+			) {
+				// NO SUMMARY but enough messages - Create prompt at end
+				const createText = `[System: You currently do not have short term memory saved for this conversation. Use the update_short_term_memory tool to create a short term memory about the current story or conversation's topic BEFORE you respond in order to help you cross-reference this in different channels]`;
+
+				createPrompt = {
+					role: "user",
+					parts: [
+						{
+							type: "text",
+							text: await convertMentions(
+								createText,
+								client,
+								currentServerId,
+								triggererName,
+								botName,
+								personalMemoriesEnabled,
+							),
+						},
+					],
+					metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
+				};
+			}
+			// If less than MIN_MESSAGES_FOR_SUMMARY, don't show any prompt (conversation too short)
+		}
+
+		return { memoryItems, createPrompt };
+	} catch (error) {
+		await log.error(
+			`[buildShortTermMemoryContext] Failed to build short-term memory context - triggeringUserId=${triggeringUserId}, currentChannelId=${currentChannelId}`,
+			error,
+			{
+				errorType: "SHORT_TERM_MEMORY_CONTEXT_ERROR",
+				metadata: { userDiscId: triggeringUserId, currentChannelId },
+			},
+		);
+		return { memoryItems: [], createPrompt: undefined };
+	}
+}
+
 export async function buildContext({
 	guildId,
 	serverName,
@@ -331,6 +594,7 @@ export async function buildContext({
 	userList,
 	channelDesc: _channelDesc, // Unused after Phase 1 optimization (channel info now in Users in Conversation section)
 	channelName,
+	channelId, // Added for short-term memory context
 	client,
 	triggererName,
 	emojiStrings: _emojiStrings, // Unused after Phase 1 optimization (emojis fetched directly from guild cache)
@@ -342,6 +606,9 @@ export async function buildContext({
 	snapshot,
 	preloadedEmojis,
 	preloadedStickers,
+	isUserImpersonation = false,
+	impersonatedUserId,
+	impersonatedUserNickname,
 }: {
 	guildId: string;
 	serverName: string;
@@ -350,6 +617,7 @@ export async function buildContext({
 	userList: string[];
 	channelDesc: string | null;
 	channelName: string;
+	channelId: string; // Added for short-term memory context
 	client: Client;
 	triggererName: string;
 	emojiStrings?: string[];
@@ -361,11 +629,18 @@ export async function buildContext({
 	snapshot?: import("../../types/misc/context").RequestSnapshot; // Optional per-request snapshot
 	preloadedEmojis?: ServerEmojiRow[] | null; // Pre-loaded emoji data to avoid redundant DB query
 	preloadedStickers?: ServerStickerRow[] | null; // Pre-loaded sticker data to avoid redundant DB query
+	isUserImpersonation?: boolean; // Added February 2026 - Flag for user impersonation mode
+	impersonatedUserId?: string; // Added February 2026 - User ID being impersonated
+	impersonatedUserNickname?: string; // Added February 2026 - Database nickname for impersonated user (optional)
 }): Promise<StructuredContextItem[]> {
 	const contextItems: StructuredContextItem[] = [];
 	const botName = tomoriNickname;
 	let missingEmojiMetadataCount = 0;
 	let missingStickerMetadataCount = 0;
+	const uncensorInputOptions = {
+		unicodeSpacesEnabled: tomoriConfig.uncensor_unicode_space_enabled,
+		sanitizeEnabled: tomoriConfig.uncensor_sanitize_enabled,
+	};
 
 	// 1. System prompt + Humanizer rules (comes FIRST for prompt optimization)
 	if (tomoriConfig.humanizer_degree >= HumanizerDegree.LIGHT) {
@@ -458,24 +733,46 @@ export async function buildContext({
 		const memoryLabel = isDMChannel
 			? `\n## ${botName}'s Memories about this conversation with User\n`
 			: `\n## ${botName}'s Memories about ${serverName}\n`;
-		const serverMemoriesText = `${memoryLabel}${tomoriState.server_memories.join("\n")}\n`;
-		contextItems.push({
-			role: "system",
-			parts: [
-				{
-					type: "text",
-					text: await convertMentions(
-						serverMemoriesText,
-						client,
-						guildId,
-						"User", // Stable placeholder instead of triggererName
-						botName,
-						tomoriConfig.personal_memories_enabled,
-					),
-				},
-			],
-			metadataTag: ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
-		});
+
+		let serverMemoryLines: string[] = [];
+		try {
+			const serverMemoryRows = await sql<
+				Array<{ server_memory_id: number; content: string }>
+			>`
+				SELECT server_memory_id, content
+				FROM server_memories
+				WHERE server_id = ${tomoriState.server_id}
+				ORDER BY created_at DESC
+			`;
+
+			serverMemoryLines = serverMemoryRows.map((row) =>
+				formatMemoryWithId(row.server_memory_id, row.content),
+			);
+		} catch (error) {
+			log.warn("Failed to load server memories with IDs for context", error);
+			serverMemoryLines = tomoriState.server_memories;
+		}
+
+		if (serverMemoryLines.length > 0) {
+			const serverMemoriesText = `${memoryLabel}${serverMemoryLines.join("\n")}\n`;
+			contextItems.push({
+				role: "system",
+				parts: [
+					{
+						type: "text",
+						text: await convertMentions(
+							serverMemoriesText,
+							client,
+							guildId,
+							"User", // Stable placeholder instead of triggererName
+							botName,
+							tomoriConfig.personal_memories_enabled,
+						),
+					},
+				],
+				metadataTag: ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
+			});
+		}
 	}
 
 	// 5. Emojis with Semantic Metadata (only available in guild channels, not DMs)
@@ -832,6 +1129,67 @@ export async function buildContext({
 		});
 	}
 
+	// 6.75 Server Documents (RAG)
+	// Placed after all static system content (personality, memories, emojis, stickers) so that
+	// the stable prefix stays cache-friendly — RAG results change per query and would invalidate
+	// everything that follows if left higher in the prompt.
+	try {
+		if (
+			(IS_PRODUCTION || ENABLE_LOCAL_RAG) &&
+			memoryGuard.getStatus() !== "critical" &&
+			tomoriState &&
+			tomoriState.server_id &&
+			tomoriState.config.embedding_model_id &&
+			tomoriState.config.api_key
+		) {
+			const queryText = getLatestUserQuery(simplifiedMessageHistory);
+			if (queryText && queryText.length >= DOCUMENT_QUERY_MIN_LENGTH) {
+				const [documentRow] = await sql`
+					SELECT document_id
+					FROM documents
+					WHERE server_id = ${tomoriState.server_id}
+					LIMIT 1
+				`;
+
+				if (documentRow?.document_id) {
+					const embeddingModel = await loadEmbeddingModelById(
+						tomoriState.config.embedding_model_id,
+					);
+					if (embeddingModel) {
+						const decryptedKey = await decryptApiKey(
+							tomoriState.config.api_key,
+							tomoriState.config.key_version || 1,
+						);
+
+						const chunks = await retrieveRelevantDocumentChunks({
+							serverId: tomoriState.server_id,
+							query: queryText,
+							embeddingModel,
+							apiKey: decryptedKey,
+							maxResults: DOCUMENT_MAX_RESULTS,
+							minSimilarity: DOCUMENT_MIN_SIMILARITY,
+						});
+
+						const documentContext = formatRetrievedChunksForPrompt(
+							chunks,
+							DOCUMENT_CONTEXT_MAX_CHARS,
+						);
+
+						if (documentContext) {
+							contextItems.push({
+								role: "system",
+								parts: [{ type: "text", text: documentContext }],
+								metadataTag: ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
+							});
+						}
+					}
+				}
+			}
+		}
+	} catch (error) {
+		log.warn("Failed to add server document context", error);
+	}
+
 	// 7. Users in Conversation (ALL user-specific dynamic data)
 	// This section combines: time/date, channel, user status, memories, and reminders
 	if (userList.length > 0) {
@@ -1000,18 +1358,20 @@ export async function buildContext({
 			) {
 				if (userRow.personal_memories && userRow.personal_memories.length > 0) {
 					const processedMemories = await Promise.all(
-						userRow.personal_memories.map((memory) =>
-							convertMentions(
+						userRow.personal_memories.map(async (memory, index) => {
+							const processedMemory = await convertMentions(
 								memory,
 								client,
 								guildId,
 								displayName, // Use memory owner's name for {user} token
 								botName,
 								tomoriConfig.personal_memories_enabled,
-							),
-						),
+							);
+							const memoryId = index + 1;
+							return formatMemoryWithId(memoryId, processedMemory);
+						}),
 					);
-					detailLines.push(`- Memories: ${processedMemories.join(", ")}`);
+					detailLines.push(`- Memories: ${processedMemories.join("; ")}`);
 				}
 			}
 
@@ -1132,7 +1492,47 @@ export async function buildContext({
 		});
 	}
 
+	// === SHORT-TERM MEMORY CONTEXT (Phase 2 & 3) ===
+	// Load recent conversations from other channels (other-channel awareness)
+	// and current channel summary (same-channel working memory)
+	// Store same-channel prompt separately to be added at the very end
+	let sameChannelMemoryPrompt: StructuredContextItem | undefined;
+	try {
+		// Determine the triggering user ID (impersonation takes precedence)
+		const actualTriggeringUserId =
+			impersonatedUserId ?? snapshot?.triggererUserRow?.user_disc_id;
+
+		// Determine locale (from snapshot if available)
+		const actualLocale = snapshot?.triggererUserRow?.language_pref ?? "en-US";
+
+		// Only build short-term memory context if we have a valid user ID
+		if (actualTriggeringUserId) {
+			const { memoryItems, createPrompt } = await buildShortTermMemoryContext(
+				actualTriggeringUserId,
+				channelId,
+				guildId,
+				tomoriState,
+				actualLocale,
+				triggererName,
+				botName,
+				tomoriConfig.personal_memories_enabled,
+				client,
+			);
+			// Push memory items now (goes in middle of context)
+			// Includes: other-channel memories + same-channel summary (if exists)
+			contextItems.push(...memoryItems);
+			// Store create prompt for later (goes at very end)
+			// This is the HINT or "create summary" instruction
+			sameChannelMemoryPrompt = createPrompt;
+		}
+	} catch (error) {
+		// Don't fail context building if short-term memory loading fails
+		log.warn("Failed to build short-term memory context", error);
+	}
+
+	// Skip sample dialogues for user impersonation (users don't need examples of bot's speech)
 	if (
+		!isUserImpersonation &&
 		tomoriState &&
 		tomoriState.sample_dialogues_in.length > 0 &&
 		tomoriState.sample_dialogues_out.length > 0 &&
@@ -1167,13 +1567,16 @@ export async function buildContext({
 				parts: [
 					{
 						type: "text",
-						text: await convertMentions(
-							userSampleText,
-							client,
-							guildId,
-							triggererName, // triggererName for {user} if it appears in sample
-							botName,
-							tomoriConfig.personal_memories_enabled,
+						text: applyUncensorInputTransforms(
+							await convertMentions(
+								userSampleText,
+								client,
+								guildId,
+								triggererName, // triggererName for {user} if it appears in sample
+								botName,
+								tomoriConfig.personal_memories_enabled,
+							),
+							uncensorInputOptions,
 						),
 					},
 				],
@@ -1192,13 +1595,16 @@ export async function buildContext({
 				parts: [
 					{
 						type: "text",
-						text: await convertMentions(
-							modelSampleText,
-							client,
-							guildId,
-							triggererName,
-							botName, // botName for {bot} if it appears in sample
-							tomoriConfig.personal_memories_enabled,
+						text: applyUncensorInputTransforms(
+							await convertMentions(
+								modelSampleText,
+								client,
+								guildId,
+								triggererName,
+								botName, // botName for {bot} if it appears in sample
+								tomoriConfig.personal_memories_enabled,
+							),
+							uncensorInputOptions,
 						),
 					},
 				],
@@ -1232,9 +1638,24 @@ export async function buildContext({
 	for (const [index, msg] of simplifiedMessageHistory.entries()) {
 		const isPersonaMessage = msg.authorType === "persona" && !!msg.personaName;
 		const isCurrentPersonaMessage =
-			isPersonaMessage &&
-			msg.personaName?.toLowerCase() === botNameLower;
-		const role = isCurrentPersonaMessage ? "model" : "user";
+			isPersonaMessage && msg.personaName?.toLowerCase() === botNameLower;
+
+		// Role reversal for user impersonation (February 2026)
+		let role: "user" | "model";
+		if (isUserImpersonation) {
+			// Reverse roles: user messages become "model", bot messages become "user"
+			if (msg.authorType === "user" && msg.authorId === impersonatedUserId) {
+				role = "model"; // This user's messages are treated as model output
+			} else if (isCurrentPersonaMessage) {
+				role = "user"; // Bot messages are treated as user input
+			} else {
+				role = "user"; // Other messages stay as user
+			}
+		} else {
+			// Normal role assignment
+			role = isCurrentPersonaMessage ? "model" : "user";
+		}
+
 		const parts: ContextPart[] = [];
 
 		// Determine if this message is within the media context window
@@ -1357,7 +1778,24 @@ export async function buildContext({
 		if (msg.content) {
 			// Request 4: Prepend speaker name to content
 			const normalizedContent = normalizeCustomEmojisForLlm(msg.content);
-			let processedContent = `${msg.authorName}: ${normalizedContent}`;
+
+			// Prepend author name, with special handling for [System:] content:
+			// - Pure system injections (embeds, reminders, etc.) are standalone "[System: ...]" — no prefix needed.
+			// - Reply references have "[System: ...]\n<user message>" — the user part needs the prefix.
+			let processedContent: string;
+			if (normalizedContent.startsWith("[System:")) {
+				const replyBoundaryIndex = normalizedContent.indexOf("]\n");
+				if (replyBoundaryIndex !== -1 && replyBoundaryIndex + 2 < normalizedContent.length) {
+					// Reply reference: insert author prefix after the [System: ...] block
+					const systemBlock = normalizedContent.slice(0, replyBoundaryIndex + 2);
+					const userContent = normalizedContent.slice(replyBoundaryIndex + 2);
+					processedContent = `${systemBlock}${msg.authorName}: ${userContent}`;
+				} else {
+					processedContent = normalizedContent; // Pure system injection, no author prefix
+				}
+			} else {
+				processedContent = `${msg.authorName}: ${normalizedContent}`; // Add author prefix
+			}
 
 			if (
 				tomoriConfig.humanizer_degree >= HumanizerDegree.HEAVY &&
@@ -1375,15 +1813,25 @@ export async function buildContext({
 				botName,
 				tomoriConfig.personal_memories_enabled,
 			);
+			if (!processedContent.startsWith("[System:")) {
+				processedContent = applyUncensorInputTransforms(
+					processedContent,
+					uncensorInputOptions,
+				);
+			}
 			parts.push({ type: "text", text: processedContent });
 		}
 
-		// Expose message ID for media messages so tools (generate_image, process_gif) can reference attachments
+		// Expose message ID(s) for media messages so tools (generate_image, process_gif) can reference attachments
 		if (hasAnyMedia && !mediaIdHintAdded) {
-			const mediaMessageId = msg.mediaSourceMessageId ?? msg.id;
+			const mediaMessageIds = msg.mediaSourceMessageIds ?? [msg.id];
+			const hintText =
+				mediaMessageIds.length === 1
+					? `[System: Media message ID for tool use: ${mediaMessageIds[0]}]`
+					: `[System: Media message IDs for tool use: ${mediaMessageIds.join(", ")}]`;
 			parts.push({
 				type: "text",
-				text: `[System: Media message ID for tool use: ${mediaMessageId}]`,
+				text: hintText,
 			});
 		}
 
@@ -1395,6 +1843,52 @@ export async function buildContext({
 				messageId: msg.id, // Include Discord message ID for tools
 			});
 		}
+	}
+
+	// Inject user impersonation system prompt as the LAST message (February 2026)
+	if (isUserImpersonation && impersonatedUserId) {
+		// Prioritize database nickname over Discord display name for context/messages
+		// But webhook will still use Discord display name
+		let nameToUse: string;
+		if (impersonatedUserNickname) {
+			// Use database nickname if available (e.g., "bred")
+			nameToUse = impersonatedUserNickname;
+		} else {
+			// Fall back to Discord display name
+			const guild = client.guilds.cache.get(guildId);
+			const member = guild?.members.cache.get(impersonatedUserId);
+			nameToUse = member?.displayName || member?.user.displayName || "User";
+		}
+
+		contextItems.push({
+			role: "user",
+			parts: [
+				{
+					type: "text",
+					text: `[System: Imitate ${nameToUse}, start your message with ${nameToUse}:]`,
+				},
+			],
+			metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+		});
+	}
+
+	// Add same-channel memory prompt at the very end (if it exists)
+	// This ensures the prompt is the last thing the model sees before responding
+	if (sameChannelMemoryPrompt) {
+		contextItems.push(sameChannelMemoryPrompt);
+	}
+
+	// Add optional uncensor prompt injection as the final context item (if enabled)
+	const uncensorInjectionText = buildUncensorInjectionText({
+		injectionEnabled: tomoriConfig.uncensor_injection_enabled,
+		unicodeSpacesEnabled: tomoriConfig.uncensor_unicode_space_enabled,
+	});
+	if (uncensorInjectionText) {
+		contextItems.push({
+			role: "user",
+			parts: [{ type: "text", text: uncensorInjectionText }],
+			metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+		});
 	}
 
 	log.info(

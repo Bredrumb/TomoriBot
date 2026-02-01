@@ -1,9 +1,10 @@
 import { MessageFlags, type SlashCommandSubcommandBuilder } from "discord.js";
 import type { ChatInputCommandInteraction, Client } from "discord.js";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
-import { ColorCode } from "../../utils/misc/logger";
+import { ColorCode, log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import type { UserRow } from "../../types/db/schema";
+import { clearShortTermMemoryForChannel } from "../../utils/cache/shortTermMemoryCache";
 
 /**
  * Configures the 'refresh' subcommand.
@@ -29,6 +30,14 @@ export async function execute(
 	_userData: UserRow,
 	locale: string,
 ): Promise<void> {
+	// Clear all short-term memories for this channel (for all users)
+	if (interaction.channel) {
+		clearShortTermMemoryForChannel(interaction.channel.id);
+		log.info(
+			`[refreshCommand] Cleared short-term memories for channel - channelId=${interaction.channel.id}`,
+		);
+	}
+
 	// Send an embed that includes the keyword "refresh" in the description
 	// This keyword is detected by the tomoriChat handler to reset context.
 	// Let helper functions manage interaction state

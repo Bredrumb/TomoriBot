@@ -116,6 +116,7 @@ export interface StreamContext {
 	provider: string;
 	locale: string;
 	suppressUserErrors?: boolean; // Suppress user-facing error embeds during key-rotation retries
+	rotationKeyRetriesUsed?: boolean; // True if one or more rotation-key retries were attempted
 
 	// Tool availability flags
 	disableYouTubeProcessing?: boolean; // Temporarily disable YouTube function during enhanced context restart
@@ -123,13 +124,18 @@ export interface StreamContext {
 	// Multi-persona webhook support
 	webhook?: import("discord.js").Webhook; // Webhook for alter persona responses
 	personaAvatarUrl?: string; // Avatar URL for current persona
-	personaUsername?: string; // Username override for current persona
+	personaUsername?: string; // Username override for current persona (shown in Discord UI)
+	prefixStrippingName?: string; // Name used for prefix stripping (may differ from personaUsername for user impersonation)
 
 	// Optional forced mention handles (e.g., reminder recipients)
 	forcedMentions?: Array<{
 		handle: string;
 		userId: string;
 	}>;
+
+	// Optional output prefill for hybrid prefix streaming
+	outputPrefill?: string;
+	outputPrefillState?: { sent: boolean };
 }
 
 /**

@@ -159,6 +159,80 @@ export async function execute(
 			"config",
 			"permissions",
 		);
+		const personaRemoveMention = commandRegistry.getCommandMention(
+			"persona",
+			"remove",
+		);
+		const serverWhitelistAddMention = commandRegistry.getCommandMention(
+			"server",
+			"whitelist",
+			"add",
+		);
+		const serverWhitelistRemoveMention = commandRegistry.getCommandMention(
+			"server",
+			"whitelist",
+			"remove",
+		);
+		const teachDocumentMention = commandRegistry.getCommandMention(
+			"teach",
+			"document",
+		);
+		const forgetDocumentMention = commandRegistry.getCommandMention(
+			"forget",
+			"document",
+		);
+		const configApikeyRotationMention = commandRegistry.getCommandMention(
+			"config",
+			"apikey",
+			"rotation",
+		);
+		const configUncensorsMention = commandRegistry.getCommandMention(
+			"config",
+			"uncensors",
+		);
+		const configModelEmbeddingMention = commandRegistry.getCommandMention(
+			"config",
+			"model",
+			"embedding",
+		);
+		const configModelImageMention = commandRegistry.getCommandMention(
+			"config",
+			"model",
+			"image",
+		);
+		const configPromptChangeMention = commandRegistry.getCommandMention(
+			"config",
+			"prompt",
+			"change",
+		);
+		const configPromptPresetMention = commandRegistry.getCommandMention(
+			"config",
+			"prompt",
+			"preset",
+		);
+		const configPromptClearMention = commandRegistry.getCommandMention(
+			"config",
+			"prompt",
+			"clear",
+		);
+		const serverInitializeExpressionsMention =
+			commandRegistry.getCommandMention(
+				"server",
+				"initialize",
+				"expressions",
+			);
+		const personalPrivacyMention = commandRegistry.getCommandMention(
+			"personal",
+			"privacy",
+		);
+		const configCooldownMention = commandRegistry.getCommandMention(
+			"config",
+			"cooldown",
+		);
+		const generateImageMention = commandRegistry.getCommandMention(
+			"generate",
+			"image",
+		);
 
 		// EMBED 1: Overview + Personality Personas (reply with first embed)
 		await replySummaryEmbed(
@@ -183,6 +257,7 @@ export async function execute(
 								personaDefault: personaDefaultMention,
 								personaExport: personaExportMention,
 								personaImport: personaImportMention,
+								personaRemove: personaRemoveMention,
 								teach: teachMention,
 								serverAvatar: serverAvatarMention,
 							},
@@ -244,6 +319,11 @@ export async function execute(
 				serverTriggerAdd: serverTriggerAddMention,
 				serverTriggerDelete: serverTriggerDeleteMention,
 				serverAvatar: serverAvatarMention,
+				serverWhitelistAdd: serverWhitelistAddMention,
+				serverWhitelistRemove: serverWhitelistRemoveMention,
+				teachDocument: teachDocumentMention,
+				forgetDocument: forgetDocumentMention,
+				configCooldown: configCooldownMention,
 			},
 			color: ColorCode.INFO,
 			footerKey: "commands.help.customization.embed3_footer",
@@ -264,6 +344,16 @@ export async function execute(
 				configRename: configRenameMention,
 				configTimezone: configTimezoneMention,
 				configPermissions: configPermissionsMention,
+				configApikeyRotation: configApikeyRotationMention,
+				configUncensors: configUncensorsMention,
+				configModelEmbedding: configModelEmbeddingMention,
+				generateImage: generateImageMention,
+				configModelImage: configModelImageMention,
+				configPromptChange: configPromptChangeMention,
+				configPromptPreset: configPromptPresetMention,
+				configPromptClear: configPromptClearMention,
+				serverInitializeExpressions: serverInitializeExpressionsMention,
+				personalPrivacy: personalPrivacyMention,
 			},
 			color: ColorCode.INFO,
 			footerKey: "commands.help.customization.embed4_footer",

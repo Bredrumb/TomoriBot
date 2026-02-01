@@ -594,7 +594,7 @@ variable "rds_parameter_cron_database_name" {
 variable "rds_parameter_allowed_extensions" {
 	description = "rds.allowed_extensions value"
 	type        = string
-	default     = "pg_cron,pgcrypto"
+	default     = "pg_cron,pgcrypto,vector"
 }
 
 variable "rds_parameter_shared_preload_libraries" {

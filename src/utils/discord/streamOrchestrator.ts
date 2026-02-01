@@ -228,6 +228,9 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 				.sendTyping()
 				.catch((e) => log.warn("Stream: Initial sendTyping failed", e));
 
+			// Prepare optional prefill before streaming (hybrid prefix)
+			await this.sendOutputPrefillIfNeeded(context, textConfig, state);
+
 			// Begin provider streaming
 			const streamGenerator = provider.startStream(config, context);
 
@@ -338,7 +341,11 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 				`Stream to channel ${context.channel.id} completed. Messages sent: ${state.messageSentCount}, Duration: ${metrics.endTime - metrics.startTime}ms`,
 			);
 
-			return { status: "completed", messageSentCount: state.messageSentCount };
+			return {
+				status: "completed",
+				messageSentCount: state.messageSentCount,
+				accumulatedText: state.accumulatedText, // Return accumulated text for short-term memory
+			};
 		} catch (error) {
 			this.clearInactivityTimer(state);
 			lastError = error as Error;
@@ -890,6 +897,10 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 			textConfig.emojiUsageEnabled,
 			textConfig.mentionMap,
 			textConfig.mentionIdSet,
+			{
+				unicodeSpacesEnabled: textConfig.uncensorUnicodeSpacesEnabled,
+				sanitizeEnabled: textConfig.uncensorSanitizeEnabled,
+			},
 		);
 
 		const resolvedSegment = await this.resolveGuildMentions(
@@ -898,14 +909,124 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 			textConfig,
 		);
 
+		const strippedSegment = this.stripPrefillFromSegment(resolvedSegment, state);
+		const prefixedSegment = this.applyPrefillToSegment(
+			strippedSegment,
+			state,
+			context,
+		);
+		if (!prefixedSegment.trim()) return;
+
 		// Send the processed segment
 		await this.sendSegment(
-			resolvedSegment,
+			prefixedSegment,
 			textConfig,
 			typingConfig,
 			context,
 			state,
 		);
+	}
+
+	private async sendOutputPrefillIfNeeded(
+		context: StreamContext,
+		textConfig: TextProcessingConfig,
+		state: StreamState,
+	): Promise<void> {
+		const rawPrefill = context.outputPrefill?.trim();
+		if (!rawPrefill) return;
+
+		// Filter duplicate custom emojis BEFORE transformation (while still in :name: format)
+		const filteredPrefill = filterDuplicateCustomEmojis(
+			rawPrefill,
+			context.contextItems,
+		);
+
+		// Clean prefill (same pipeline as streamed output)
+		const cleanedPrefill = cleanLLMOutput(
+			filteredPrefill,
+			textConfig.botName,
+			textConfig.emojiStrings,
+			textConfig.emojiUsageEnabled,
+			textConfig.mentionMap,
+			textConfig.mentionIdSet,
+			{
+				unicodeSpacesEnabled: textConfig.uncensorUnicodeSpacesEnabled,
+				sanitizeEnabled: textConfig.uncensorSanitizeEnabled,
+			},
+		);
+
+		const resolvedPrefill = await this.resolveGuildMentions(
+			cleanedPrefill,
+			context,
+			textConfig,
+		);
+
+		if (!resolvedPrefill.trim()) return;
+
+		// Track prefix for stripping from subsequent streamed output
+		state.prefillTarget = resolvedPrefill;
+		state.prefillMatched = 0;
+		state.prefillMatchFailed = false;
+		state.prefillInjected = Boolean(context.outputPrefillState?.sent);
+
+		log.info(
+			`Stream Prefill: Prepared output prefill (${resolvedPrefill.length} chars).`,
+		);
+	}
+
+	private applyPrefillToSegment(
+		segment: string,
+		state: StreamState,
+		context: StreamContext,
+	): string {
+		if (!state.prefillTarget) return segment;
+
+		if (!state.prefillInjected) {
+			if (!segment.trim()) return "";
+			state.prefillInjected = true;
+			if (context.outputPrefillState) {
+				context.outputPrefillState.sent = true;
+			}
+			return state.prefillTarget + segment;
+		}
+
+		return segment;
+	}
+
+	private stripPrefillFromSegment(
+		segment: string,
+		state: StreamState,
+	): string {
+		const target = state.prefillTarget;
+		if (
+			!target ||
+			state.prefillMatchFailed ||
+			state.prefillMatched >= target.length
+		) {
+			return segment;
+		}
+
+		let index = 0;
+		while (index < segment.length && state.prefillMatched < target.length) {
+			const expected = target[state.prefillMatched];
+			const actual = segment[index];
+
+			if (actual === expected) {
+				state.prefillMatched += 1;
+				index += 1;
+				continue;
+			}
+			state.prefillMatchFailed = true;
+			state.prefillMatched = target.length;
+			return segment;
+		}
+
+		if (state.prefillMatched >= target.length) {
+			return segment.slice(index);
+		}
+
+		// Still matching prefix; wait for more text
+		return "";
 	}
 
 	private extractMentionCandidates(text: string): {
@@ -1282,6 +1403,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 			}
 
 			state.messageSentCount++;
+			state.accumulatedText += content; // Track all sent text for short-term memory
 			log.info(
 				`Stream Send: Sent message (${state.messageSentCount}): "${content.length > 100 ? `${content.substring(0, 100)}...` : content}"`,
 			);
@@ -1310,6 +1432,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 
 					state.hasRepliedToOriginalMessage = true;
 					state.messageSentCount++;
+					state.accumulatedText += content; // Track fallback sent text too
 
 					log.info(
 						"Stream Send: Successfully sent message via fallback after webhook failure",
@@ -1568,12 +1691,14 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 				let tipKey: string;
 				let color: ColorResolvable;
 
-				switch (providerError.type) {
-					case "rate_limit":
-						titleKey = "genai.stream.rate_limit_title";
-						tipKey = "genai.stream.rate_limit_tip";
-						color = ColorCode.WARN;
-						break;
+					switch (providerError.type) {
+						case "rate_limit":
+							titleKey = context.rotationKeyRetriesUsed
+								? "genai.stream.rate_limit_title_all_rotation_keys"
+								: "genai.stream.rate_limit_title";
+							tipKey = "genai.stream.rate_limit_tip";
+							color = ColorCode.WARN;
+							break;
 					case "content_blocked":
 						titleKey = "genai.stream.content_blocked_title";
 						tipKey = "genai.stream.content_blocked_tip";
@@ -1748,8 +1873,17 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 			emojiStrings: context.emojiStrings || [],
 			mentionMap,
 			mentionIdSet,
-			botName: context.tomoriState.tomori_nickname,
+			// Use prefixStrippingName for prefix stripping if provided (e.g., database nickname for user impersonation)
+			// Falls back to personaUsername (webhook display name), then bot's nickname
+			botName:
+				context.prefixStrippingName ??
+				context.personaUsername ??
+				context.tomoriState.tomori_nickname,
 			maxMessageLength: config.maxMessageLength,
+			uncensorUnicodeSpacesEnabled:
+				context.tomoriState.config.uncensor_unicode_space_enabled ?? false,
+			uncensorSanitizeEnabled:
+				context.tomoriState.config.uncensor_sanitize_enabled ?? false,
 		};
 	}
 

@@ -9,10 +9,11 @@ import {
 import { ColorCode, log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import type { UserRow } from "../../types/db/schema";
-import type { SelectOption } from "../../types/discord/modal";
+import type { ModalComponent, SelectOption } from "../../types/discord/modal";
 import tomoriChat from "../../events/messageCreate/tomoriChat";
 import {
 	loadAllPersonasForServer,
+	loadSmartestModel,
 	loadTomoriState,
 } from "../../utils/db/dbRead";
 
@@ -108,69 +109,146 @@ export async function execute(
 	let replyInteraction:
 		| ChatInputCommandInteraction
 		| import("discord.js").ModalSubmitInteraction = interaction;
+	let manualPrompt: string | undefined;
 
-	// If alters exist, show selection modal
+	// Build modal components (persona select if alters exist, plus optional prompt)
+	const modalComponents: ModalComponent[] = [];
+
 	if (alterPersonas.length > 0 && mainPersona) {
-		// Build select options: main first, then alters
 		const personaOptions: SelectOption[] = [
 			{
-				label: safeSelectOptionText(
-					mainPersona.tomori_nickname +
-						localizer(locale, "commands.bot.respond.main_persona_suffix"),
-				),
+				label: safeSelectOptionText(mainPersona.tomori_nickname),
 				value: "0", // main is index 0
+				description: localizer(locale, "commands.bot.respond.main_persona_description"),
 			},
 			...alterPersonas.map((persona, index) => ({
 				label: safeSelectOptionText(persona.tomori_nickname),
 				value: (index + 1).toString(), // alters start at index 1
+				description: localizer(locale, "commands.bot.respond.alter_persona_description"),
 			})),
 		];
-
-		// Show modal
-		const modalResult = await promptWithPaginatedModal(interaction, locale, {
-			modalCustomId: "respond_persona_select",
-			modalTitleKey: "commands.bot.respond.select_persona_title",
-			components: [
-				{
-					customId: "persona_choice",
-					labelKey: "commands.bot.respond.select_persona_label",
-					placeholder: "commands.bot.respond.select_persona_placeholder",
-					required: true,
-					options: personaOptions,
-				},
-			],
+		modalComponents.push({
+			customId: "persona_choice",
+			labelKey: "commands.bot.respond.select_persona_label",
+			descriptionKey: "commands.bot.respond.select_persona_description",
+			placeholder: "commands.bot.respond.select_persona_placeholder",
+			required: true,
+			options: personaOptions,
 		});
+	}
 
-		// Handle modal result
-		if (modalResult.outcome !== "submit") {
-			log.info(
-				`Respond persona selection ${modalResult.outcome} for user ${interaction.user.id}`,
-			);
-			return;
-		}
+	// Add "Use Reasoning" Yes/No string select to toggle reasoning mode
+	const reasoningOptions: SelectOption[] = [
+		{
+			label: localizer(locale, "commands.bot.respond.use_reasoning_no"),
+			value: "no",
+			description: localizer(locale, "commands.bot.respond.use_reasoning_no_description"),
+		},
+		{
+			label: localizer(locale, "commands.bot.respond.use_reasoning_yes"),
+			value: "yes",
+			description: localizer(locale, "commands.bot.respond.use_reasoning_yes_description"),
+		},
+	];
+	modalComponents.push({
+		customId: "use_reasoning",
+		labelKey: "commands.bot.respond.use_reasoning_label",
+		descriptionKey: "commands.bot.respond.use_reasoning_description",
+		placeholder: "commands.bot.respond.use_reasoning_placeholder",
+		required: false,
+		options: reasoningOptions,
+	});
 
-		// Update the interaction to use for replying
-		if (modalResult.interaction) {
-			replyInteraction = modalResult.interaction;
-		}
+	modalComponents.push({
+		customId: "prompt",
+		labelKey: "commands.bot.respond.prompt_label",
+		descriptionKey: "commands.bot.respond.prompt_description",
+		placeholder: localizer(locale, "commands.bot.respond.prompt_placeholder"),
+		required: false,
+		maxLength: 2000,
+		style: 2, // TextInputStyle.Paragraph
+	});
+	modalComponents.push({
+		customId: "prefill",
+		labelKey: "commands.bot.respond.prefill_label",
+		descriptionKey: "commands.bot.respond.prefill_description",
+		placeholder: localizer(locale, "commands.bot.respond.prefill_placeholder"),
+		required: false,
+		maxLength: 2000,
+		style: 2, // TextInputStyle.Paragraph
+	});
 
-		// Extract selected persona
-		const selectedIndex = Number.parseInt(
-			modalResult.values?.persona_choice ?? "0",
-			10,
+	// Show modal (always, to allow prompt input)
+	const modalResult = await promptWithPaginatedModal(interaction, locale, {
+		modalCustomId: "respond_persona_select",
+		modalTitleKey: "commands.bot.respond.select_persona_title",
+		components: modalComponents,
+	});
+
+	if (modalResult.outcome !== "submit") {
+		log.info(
+			`Respond modal ${modalResult.outcome} for user ${interaction.user.id}`,
 		);
+		return;
+	}
+
+	if (modalResult.interaction) {
+		replyInteraction = modalResult.interaction;
+	}
+
+	// 5. Defer the modal submission immediately — it opens a new 3-second window
+	// and async work (e.g. loadSmartestModel) must not run before acknowledgment
+	const hideEmbed = tomoriState.config.hide_respond_embed;
+	await replyInteraction.deferReply({
+		flags: hideEmbed
+			? MessageFlags.Ephemeral | MessageFlags.SuppressNotifications
+			: MessageFlags.SuppressNotifications,
+	});
+
+	const selectedIndex = Number.parseInt(
+		modalResult.values?.persona_choice ?? "0",
+		10,
+	);
+	if (alterPersonas.length > 0 && mainPersona) {
 		selectedPersona =
 			selectedIndex === 0 ? mainPersona : alterPersonas[selectedIndex - 1];
-
 		log.info(
 			`User ${interaction.user.id} selected persona ${selectedPersona.tomori_nickname} (ID: ${selectedPersona.tomori_id}) for manual respond`,
 		);
 	}
 
-	try {
-		// 5. Get embed visibility setting
-		const hideEmbed = tomoriState.config.hide_respond_embed;
+	const manualPromptRaw = modalResult.values?.prompt;
+	manualPrompt = manualPromptRaw?.trim() || undefined;
+	const manualPrefillRaw = modalResult.values?.prefill;
+	const manualPrefill = manualPrefillRaw?.trim() || undefined;
 
+	// Determine if reasoning mode was requested
+	const useReasoning = modalResult.values?.use_reasoning === "yes";
+	let forceReason: boolean | undefined;
+	let llmOverrideCodename: string | undefined;
+
+	if (useReasoning) {
+		// Load the smartest reasoning model for the current provider
+		const currentProvider = tomoriState.llm.llm_provider;
+		const smartestModel = await loadSmartestModel(currentProvider);
+
+		if (!smartestModel) {
+			await replyInteraction.editReply({
+				embeds: [
+					new EmbedBuilder()
+						.setTitle(localizer(locale, "commands.bot.respond.no_smart_model_title"))
+						.setDescription(localizer(locale, "commands.bot.respond.no_smart_model_description"))
+						.setColor(ColorCode.ERROR),
+				],
+			});
+			return;
+		}
+
+		forceReason = true;
+		llmOverrideCodename = smartestModel.llm_codename;
+	}
+
+	try {
 		// 6. Build success embed
 		const successEmbed = new EmbedBuilder()
 			.setTitle(localizer(locale, "commands.bot.respond.success_title"))
@@ -186,12 +264,9 @@ export async function execute(
 			});
 		}
 
-		// 7. Send response (ephemeral if hide_respond_embed is true)
-		await replyInteraction.reply({
+		// 7. Send success response (interaction already deferred above)
+		await replyInteraction.editReply({
 			embeds: [successEmbed],
-			flags: hideEmbed
-				? MessageFlags.Ephemeral | MessageFlags.SuppressNotifications
-				: MessageFlags.SuppressNotifications,
 		});
 
 		// 8. Get the latest message in the channel (excluding the interaction itself)
@@ -222,15 +297,20 @@ export async function execute(
 			passportMessage as Message,
 			false, // isFromQueue
 			true, // isManuallyTriggered - this bypasses normal trigger logic
-			undefined, // forceReason
-			undefined, // reasoningQuery
-			undefined, // llmOverrideCodename
+			forceReason, // forceReason - enabled when "Use Reasoning" is Yes
+			useReasoning ? manualPrompt : undefined, // reasoningQuery - prompt doubles as reasoning query when reasoning is enabled
+			llmOverrideCodename, // llmOverrideCodename - smartest model when reasoning is enabled
 			undefined, // isStopResponse
 			0, // retryCount
 			false, // skipLock
 			undefined, // reminderRecipientID
 			undefined, // reminderData
 			selectedPersona?.tomori_id, // selectedPersonaId
+			undefined, // isPersonaJob
+			undefined, // isUserImpersonation
+			undefined, // impersonatedUserId
+			manualPrompt || undefined, // manualSystemPrompt
+			manualPrefill, // manualPrefill
 		);
 	} catch (error) {
 		log.error("Error in bot respond command:", error, {

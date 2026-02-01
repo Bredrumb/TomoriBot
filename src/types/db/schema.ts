@@ -30,6 +30,7 @@ export const userSchema = z.object({
 	registration_locale: z.string().nullable(), // Static locale captured at registration
 	privacy_level: z.nativeEnum(PrivacyLevel).default(PrivacyLevel.MINIMAL),
 	personal_memories: z.array(z.string()).default([]),
+	shortterm_cache_crossserver_opt_in: z.boolean().default(false), // Short-term memory cross-server sharing
 	created_at: z.date().optional(),
 	updated_at: z.date().optional(),
 });
@@ -98,11 +99,26 @@ export const diffusionModelSchema = z.object({
 });
 export type DiffusionModelRow = z.infer<typeof diffusionModelSchema>;
 
+export const embeddingModelSchema = z.object({
+	embedding_model_id: z.number().optional(),
+	provider: z.string(),
+	codename: z.string(),
+	model_family: z.string(),
+	model_description: z.string().nullable().optional(),
+	ja_description: z.string().nullable().optional(),
+	is_default: z.boolean().default(false),
+	is_deprecated: z.boolean().default(false),
+	created_at: z.date().optional(),
+	updated_at: z.date().optional(),
+});
+export type EmbeddingModelRow = z.infer<typeof embeddingModelSchema>;
+
 export const tomoriConfigSchema = z.object({
 	tomori_config_id: z.number().optional(),
 	tomori_id: z.number().nullable().optional(), // Legacy pointer (server-scoped configs use server_id)
 	server_id: z.number().nullable().optional(), // Added January 2026 - Server-scoped config (nullable for legacy rows)
 	llm_id: z.number(),
+	embedding_model_id: z.number().int().nullable().optional(), // Added February 2026 - Embedding model for document retrieval
 	diffusion_model_id: z.number().int().nullable().optional(), // Added December 2025 - Image generation model
 	llm_temperature: z.number().min(1.0).max(2.0).default(1.5),
 	api_key: z.instanceof(Buffer).nullable(),
@@ -125,12 +141,17 @@ export const tomoriConfigSchema = z.object({
 	pin_message_enabled: z.boolean().default(true), // Added November 5, 2025 - Permission for pin message tool
 	imagegen_enabled: z.boolean().default(true), // Added January 2026 - Permission for image generation
 	hide_respond_embed: z.boolean().default(false), // Added January 2026 - Hide respond command success embed
+	hide_impersonation_embeds: z.boolean().default(false), // Added February 2026 - Hide impersonation confirmation embeds
+	uncensor_injection_enabled: z.boolean().default(false), // Added February 2026 - Prompt injection mitigation toggle
+	uncensor_unicode_space_enabled: z.boolean().default(false), // Added February 2026 - Unicode space replacement toggle
+	uncensor_sanitize_enabled: z.boolean().default(false), // Added February 2026 - Sensitive word sanitization toggle
 	videogen_enabled: z.boolean().default(true), // Added January 2026 - Reserved for future video generation
 	timezone_offset: z.number().int().min(-12).max(14).default(0),
 	system_prompt: z.string().nullable(), // Added December 2025 - Custom system prompt for personality instructions
 	cooldown_type: z.nativeEnum(CooldownType).default(CooldownType.OFF), // Added January 2026 - Message trigger cooldown type
 	cooldown_length: z.number().int().min(1).max(86400).default(5), // Added January 2026 - Cooldown duration in seconds
 	custom_endpoint_url: z.string().nullable().optional(), // Added January 2026 - Custom OpenAI-compatible endpoint URL (non-production only)
+	custom_model_name: z.string().nullable().optional(), // Added January 2026 - Actual model name for custom endpoints (e.g., "gemma3:latest" for Ollama)
 	created_at: z.date().optional(),
 	updated_at: z.date().optional(),
 });
@@ -201,6 +222,33 @@ export const serverMemorySchema = z.object({
 	updated_at: z.date().optional(),
 });
 export type ServerMemoryRow = z.infer<typeof serverMemorySchema>;
+
+export const documentSchema = z.object({
+	document_id: z.number().optional(),
+	server_id: z.number(),
+	uploader_user_id: z.number().nullable().optional(),
+	document_name: z.string(),
+	file_name: z.string().nullable().optional(),
+	mime_type: z.string().nullable().optional(),
+	file_size_bytes: z.number().int().nullable().optional(),
+	text_content: z.string(),
+	created_at: z.date().optional(),
+	updated_at: z.date().optional(),
+});
+export type DocumentRow = z.infer<typeof documentSchema>;
+
+export const documentChunkSchema = z.object({
+	document_chunk_id: z.number().optional(),
+	document_id: z.number(),
+	server_id: z.number(),
+	embedding_model_id: z.number(),
+	embedding_family: z.string(),
+	chunk_index: z.number().int(),
+	content: z.string(),
+	embedding: z.unknown().optional(),
+	created_at: z.date().optional(),
+});
+export type DocumentChunkRow = z.infer<typeof documentChunkSchema>;
 
 export const personalizationBlacklistSchema = z.object({
 	server_id: z.number(),
@@ -282,6 +330,8 @@ export const reminderSchema = z.object({
 	user_nickname: z.string(), // Target user's nickname for display
 	reminder_purpose: z.string(), // What the reminder is for
 	reminder_time: z.date(), // When to trigger the reminder (TIMESTAMP WITH TIME ZONE)
+	repetition_interval_hours: z.number().int().nullable().optional(), // Optional: repeat interval in hours
+	self_reminder: z.boolean().nullable().optional(), // Optional: reminder targets the bot itself
 	created_by_user_id: z.number().nullable(), // Who requested the reminder (nullable - set to NULL if user deleted)
 	persona_id: z.number().nullable().optional(), // Persona that created the reminder (nullable - fallback to main)
 	created_at: z.date().optional(), // Handled by DB default

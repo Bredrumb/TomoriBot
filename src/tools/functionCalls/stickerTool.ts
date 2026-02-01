@@ -115,35 +115,70 @@ export class StickerTool extends BaseTool {
 			// Get the guild from channel context
 			const guild = context.channel.guild;
 
-			let selectedSticker = null;
+			/**
+			 * Helper function to lookup sticker from cache
+			 * @returns Sticker if found, null otherwise
+			 */
+			const lookupSticker = () => {
+				if (normalizedStickerName) {
+					const nameKey = normalizedStickerName.toLowerCase();
+					const matchingStickers = guild.stickers.cache.filter(
+						(sticker) => sticker.name?.toLowerCase() === nameKey,
+					);
 
-			if (normalizedStickerName) {
-				const nameKey = normalizedStickerName.toLowerCase();
-				const matchingStickers = guild.stickers.cache.filter(
-					(sticker) => sticker.name?.toLowerCase() === nameKey,
+					if (matchingStickers.size > 0) {
+						return matchingStickers
+							.sort((a, b) => {
+								const aTime = a.createdTimestamp ?? 0;
+								const bTime = b.createdTimestamp ?? 0;
+								if (aTime !== bTime) return bTime - aTime;
+								return a.id.localeCompare(b.id);
+							})
+							.first();
+					}
+				} else {
+					// Legacy path: select by sticker ID
+					return guild.stickers.cache.get(stickerId) ?? null;
+				}
+				return null;
+			};
+
+			// 1. First attempt: lookup in current cache
+			let selectedSticker = lookupSticker();
+
+			// 2. If not found, fetch fresh from Discord API and retry (handles race conditions)
+			if (!selectedSticker) {
+				log.info(
+					`Sticker '${normalizedStickerName || stickerId}' not in cache. Fetching fresh from Discord API...`,
 				);
 
-				if (matchingStickers.size > 0) {
-					selectedSticker = matchingStickers
-						.sort((a, b) => {
-							const aTime = a.createdTimestamp ?? 0;
-							const bTime = b.createdTimestamp ?? 0;
-							if (aTime !== bTime) return bTime - aTime;
-							return a.id.localeCompare(b.id);
-						})
-						.first();
+				try {
+					// Refresh cache from Discord API
+					await guild.stickers.fetch();
+					log.info("Sticker cache refreshed from Discord API");
+
+					// Retry lookup with refreshed cache
+					selectedSticker = lookupSticker();
+
+					if (selectedSticker) {
+						log.success(
+							`Sticker '${selectedSticker.name}' (${selectedSticker.id}) found after cache refresh`,
+						);
+					}
+				} catch (fetchError) {
+					log.warn(
+						`Failed to refresh sticker cache from Discord API: ${(fetchError as Error).message}`,
+					);
+					// Continue to "not found" logic below
 				}
 			} else {
-				// Legacy path: select by sticker ID
-				selectedSticker = guild.stickers.cache.get(stickerId) ?? null;
+				log.success(
+					`Sticker '${selectedSticker.name}' (${selectedSticker.id}) found in local cache`,
+				);
 			}
 
+			// 3. Success case - sticker found
 			if (selectedSticker) {
-				// Success case - sticker found (from tomoriChat.ts:947-957)
-				log.success(
-					`Sticker '${selectedSticker.name}' (${selectedSticker.id}) found locally`,
-				);
-
 				return {
 					success: true,
 					message: "Sticker selected successfully",
@@ -160,9 +195,9 @@ export class StickerTool extends BaseTool {
 				};
 			}
 
-			// Sticker not found case (from tomoriChat.ts:958-969)
+			// 4. Sticker not found even after refresh - inform LLM
 			log.warn(
-				`Sticker '${normalizedStickerName || stickerId}' not found in server cache. Informing LLM.`,
+				`Sticker '${normalizedStickerName || stickerId}' not found even after cache refresh. Sticker does not exist.`,
 			);
 
 			// Get available stickers for error message

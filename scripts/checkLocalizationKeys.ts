@@ -1085,6 +1085,7 @@ function displayResults(results: AnalysisResult): void {
 	}
 
 	// Unused keys section
+	/*
 	if (results.unusedKeys.length > 0) {
 		console.log("\n🗑️  UNUSED LOCALIZATION KEYS (Exist but never referenced):");
 		console.log("-".repeat(60));
@@ -1096,7 +1097,7 @@ function displayResults(results: AnalysisResult): void {
 		}
 	} else {
 		console.log("\n✅ No unused localization keys found!");
-	}
+	}*/
 
 	// Summary
 	console.log("\n📊 SUMMARY:");

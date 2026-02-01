@@ -69,6 +69,10 @@ export async function execute(
 			"help",
 			"customization",
 		);
+		const personalCacheMention = commandRegistry.getCommandMention(
+			"personal",
+			"cache",
+		);
 
 		// Use replySummaryEmbed to show structured memory guide
 		await replySummaryEmbed(
@@ -124,8 +128,29 @@ export async function execute(
 						}),
 						inline: false,
 					},
+					{
+						nameKey: "commands.help.memory.documents_title",
+						value: localizer(
+							locale,
+							"commands.help.memory.documents_description",
+						),
+						inline: false,
+					},
+					{
+						nameKey: "commands.help.memory.shortterm_title",
+						value: localizer(
+							locale,
+							"commands.help.memory.shortterm_description",
+							{
+								personalCache: personalCacheMention,
+								personalCacheClear: personalCacheMention,
+							},
+						),
+						inline: false,
+					},
 				],
 			},
+
 			MessageFlags.Ephemeral,
 		);
 	} catch (error) {

@@ -130,7 +130,7 @@ export async function execute(
 		// biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
 		const modalSubmitInteraction = modalResult.interaction!;
 		if (!modalSubmitInteraction.deferred && !modalSubmitInteraction.replied) {
-			await modalSubmitInteraction.deferReply({ ephemeral: true });
+			await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
 		}
 		const selectedIndex = Number.parseInt(
 			// biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist

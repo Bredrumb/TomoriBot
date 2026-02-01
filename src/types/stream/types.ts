@@ -45,6 +45,11 @@ export interface StreamState {
 	hasRepliedToOriginalMessage: boolean;
 	lastChunkTime: number;
 	inactivityTimer: NodeJS.Timeout | null;
+	accumulatedText: string; // Track all text sent to Discord for short-term memory
+	prefillTarget?: string; // Prefill text to strip from streamed output (hybrid prefix)
+	prefillMatched: number; // Number of prefill chars matched/stripped so far
+	prefillInjected: boolean; // Whether the prefill has been injected into output
+	prefillMatchFailed: boolean; // Whether prefill matching failed (no stripping)
 }
 
 /**
@@ -68,6 +73,8 @@ export interface TextProcessingConfig {
 	mentionIdSet?: Set<string>;
 	botName: string;
 	maxMessageLength: number;
+	uncensorUnicodeSpacesEnabled?: boolean;
+	uncensorSanitizeEnabled?: boolean;
 }
 
 /**
@@ -199,6 +206,11 @@ export function createDefaultStreamState(): StreamState {
 		hasRepliedToOriginalMessage: false,
 		lastChunkTime: Date.now(),
 		inactivityTimer: null,
+		accumulatedText: "", // Initialize empty for short-term memory tracking
+		prefillTarget: undefined,
+		prefillMatched: 0,
+		prefillInjected: false,
+		prefillMatchFailed: false,
 	};
 }
 

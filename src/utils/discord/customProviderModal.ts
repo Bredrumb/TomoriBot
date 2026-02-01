@@ -20,6 +20,9 @@ import {
 	type StringSelectMenuInteraction,
 	ButtonBuilder,
 	ButtonStyle,
+	ModalBuilder,
+	TextInputBuilder,
+	TextInputStyle,
 } from "discord.js";
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
@@ -103,7 +106,12 @@ export async function promptCustomCapabilities(
 				{ label: localizer(locale, "commands.config.custom.capability_structoutput_no"), value: "false", default: true },
 			]);
 
-		// Create confirm button
+		// Create buttons: model name input and confirm
+		const modelNameButton = new ButtonBuilder()
+			.setCustomId("set_model_name")
+			.setLabel(localizer(locale, "commands.config.custom.model_name_label"))
+			.setStyle(ButtonStyle.Secondary);
+
 		const confirmButton = new ButtonBuilder()
 			.setCustomId("confirm_capabilities")
 			.setLabel(localizer(locale, "general.confirm"))
@@ -114,21 +122,26 @@ export async function promptCustomCapabilities(
 		const imagesRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(imagesSelect);
 		const videosRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(videosSelect);
 		const structOutputRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(structOutputSelect);
-		const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(confirmButton);
-
-		// Edit the deferred reply with the capabilities selection
-		const message = await interaction.editReply({
-			content: localizer(locale, "commands.config.custom.capabilities_prompt", {
-				model_name: DEFAULT_CUSTOM_MODEL_NAME,
-			}),
-			components: [toolsRow, imagesRow, videosRow, structOutputRow, buttonRow],
-		});
+		const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(modelNameButton, confirmButton);
 
 		// Track selected values (defaults match the select menu defaults)
 		let hasTools = true;
 		let seesImages = true;
 		let seesVideos = false;
 		let supportsStructOutput = false;
+		let customModelName = ""; // Empty string means use default (llm_codename)
+
+		// Helper function to update the message content with current model name
+		const updateMessageContent = () => {
+			const modelNameDisplay = customModelName || localizer(locale, "commands.config.custom.model_name_placeholder");
+			return `${localizer(locale, "commands.config.custom.capabilities_prompt")}\n\n**${localizer(locale, "commands.config.custom.model_name_label")}:** \`${modelNameDisplay}\``;
+		};
+
+		// Edit the deferred reply with the capabilities selection
+		const message = await interaction.editReply({
+			content: updateMessageContent(),
+			components: [toolsRow, imagesRow, videosRow, structOutputRow, buttonRow],
+		});
 
 		// Create collector for both select menus and button
 		const collector = message.createMessageComponentCollector({
@@ -159,6 +172,52 @@ export async function promptCustomCapabilities(
 
 					// Acknowledge the selection without sending a new message
 					await selectInteraction.deferUpdate();
+				} else if (i.isButton() && i.customId === "set_model_name") {
+					// Show modal for model name input
+					const modal = new ModalBuilder()
+						.setCustomId("model_name_modal")
+						.setTitle(localizer(locale, "commands.config.custom.model_name_label"));
+
+					const modelNameInput = new TextInputBuilder()
+						.setCustomId("model_name_input")
+						.setLabel(localizer(locale, "commands.config.custom.model_name_label"))
+						.setPlaceholder(localizer(locale, "commands.config.custom.model_name_placeholder"))
+						.setStyle(TextInputStyle.Short)
+						.setRequired(false)
+						.setMaxLength(100);
+
+					// Set current value if exists
+					if (customModelName) {
+						modelNameInput.setValue(customModelName);
+					}
+
+					const row = new ActionRowBuilder<TextInputBuilder>().addComponents(modelNameInput);
+					modal.addComponents(row);
+
+					await i.showModal(modal);
+
+					// Wait for modal submission (with timeout)
+					try {
+						const modalSubmit = await i.awaitModalSubmit({
+							filter: (modalI) => modalI.customId === "model_name_modal" && modalI.user.id === i.user.id,
+							time: 300000, // 5 minutes
+						});
+
+						// Update the model name
+						customModelName = modalSubmit.fields.getTextInputValue("model_name_input").trim();
+
+						// Acknowledge the modal submission
+						await modalSubmit.deferUpdate();
+
+						// Update the message to show the new model name
+						await interaction.editReply({
+							content: updateMessageContent(),
+							components: [toolsRow, imagesRow, videosRow, structOutputRow, buttonRow],
+						});
+					} catch (modalError) {
+						// Timeout or error - just log and continue
+						log.warn("Model name modal timed out or errored:", modalError);
+					}
 				} else if (i.isButton() && i.customId === "confirm_capabilities") {
 					collector.stop("confirmed");
 
@@ -176,7 +235,7 @@ export async function promptCustomCapabilities(
 
 					resolve({
 						success: true,
-						modelName: DEFAULT_CUSTOM_MODEL_NAME,
+						modelName: customModelName, // Return the custom model name (or empty string for default)
 						hasTools,
 						seesImages,
 						seesVideos,
@@ -312,22 +371,25 @@ export async function deleteCustomLLMEntry(serverId: string | number): Promise<v
  * @param serverId - The internal server_id to update
  * @param endpointUrl - The custom endpoint URL
  * @param llmId - The llm_id of the custom model
+ * @param customModelName - Optional custom model name (e.g., "gemma3:latest" for Ollama)
  */
 export async function saveCustomEndpointConfig(
 	serverId: number,
 	endpointUrl: string,
 	llmId: number,
+	customModelName?: string,
 ): Promise<void> {
 	await sql`
 		UPDATE tomori_configs
 		SET
 			custom_endpoint_url = ${endpointUrl},
+			custom_model_name = ${customModelName || null},
 			llm_id = ${llmId},
 			updated_at = CURRENT_TIMESTAMP
 		WHERE server_id = ${serverId}
 	`;
 
-	log.info(`Saved custom endpoint config for server ${serverId}`);
+	log.info(`Saved custom endpoint config for server ${serverId}${customModelName ? ` with model name: ${customModelName}` : ""}`);
 }
 
 /**

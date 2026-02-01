@@ -159,6 +159,49 @@ export async function setPrivacyOptOut(
 }
 
 /**
+ * Toggle user's cross-server short-term memory sharing preference
+ *
+ * Phase 4: User Controls & Privacy
+ *
+ * @param userDiscId - Discord user ID
+ * @returns New opt-in value (true if enabled, false if disabled)
+ */
+export async function toggleCrossServerShortTermMemoryOptIn(
+	userDiscId: string,
+): Promise<boolean> {
+	try {
+		const { userSchema } = await import("@/types/db/schema");
+
+		// Toggle the setting
+		const [updated] = await sql`
+			UPDATE users
+			SET shortterm_cache_crossserver_opt_in = NOT shortterm_cache_crossserver_opt_in
+			WHERE user_disc_id = ${userDiscId}
+			RETURNING shortterm_cache_crossserver_opt_in
+		`;
+
+		// Validate with Zod
+		const validated = userSchema.safeParse(updated);
+		if (!validated.success) {
+			log.error(
+				`Schema validation failed for user ${userDiscId} after toggling cross-server opt-in`,
+				validated.error,
+			);
+			throw new Error("Schema validation failed");
+		}
+
+		return validated.data.shortterm_cache_crossserver_opt_in;
+	} catch (error) {
+		log.error(
+			`Error toggling cross-server short-term memory opt-in for user ${userDiscId}:`,
+			error,
+		);
+		// Re-throw to allow caller to handle
+		throw error;
+	}
+}
+
+/**
  * Increments the autoch_counter for a Tomori instance.
  * When the counter reaches the threshold, it resets to 0.
  * @param tomoriId - The ID of the Tomori instance.
@@ -364,9 +407,51 @@ export async function setupServer(
 				);
 			}
 
+			// Find the default embedding model for the selected provider (for document retrieval)
+			let selectedEmbeddingModel = (
+				await tx`
+					SELECT * FROM embedding_models
+					WHERE provider = ${validConfig.provider}
+					  AND is_default = true
+					  AND is_deprecated = false
+					ORDER BY embedding_model_id ASC
+					LIMIT 1
+				`
+			)[0];
+
+			// Fallback: if no default embedding model found, get the first available non-deprecated model
+			if (!selectedEmbeddingModel) {
+				selectedEmbeddingModel = (
+					await tx`
+						SELECT * FROM embedding_models
+						WHERE provider = ${validConfig.provider}
+						  AND is_deprecated = false
+						ORDER BY embedding_model_id ASC
+						LIMIT 1
+					`
+				)[0];
+
+				if (selectedEmbeddingModel) {
+					log.warn(
+						`No default embedding model found for provider ${validConfig.provider}, using fallback: ${selectedEmbeddingModel.codename}`,
+					);
+				} else {
+					log.info(
+						`No embedding models available for provider ${validConfig.provider} (document retrieval not supported)`,
+					);
+				}
+			} else {
+				log.info(
+					`Using default embedding model for ${validConfig.provider}: ${selectedEmbeddingModel.codename}`,
+				);
+			}
+
 			// Extract diffusion_model_id (null if no model found)
 			const selectedDiffusionModelId = selectedDiffusionModel
 				? selectedDiffusionModel.diffusion_model_id
+				: null;
+			const selectedEmbeddingModelId = selectedEmbeddingModel
+				? selectedEmbeddingModel.embedding_model_id
 				: null;
 
 			const defaultTriggers = getBaseTriggerWords(validConfig.locale);
@@ -416,6 +501,7 @@ export async function setupServer(
 					tomori_id,
 					server_id,
 					llm_id,
+					embedding_model_id,
 					api_key,
 					key_version,
 					trigger_words,
@@ -430,6 +516,7 @@ export async function setupServer(
 					${tomori.tomori_id},
 					${server.server_id},
 					${selectedLlm.llm_id},
+					${selectedEmbeddingModelId},
 					${validConfig.encryptedApiKey},
 					${validConfig.keyVersion},
 					${triggerWordsArrayLiteral}::text[],
@@ -1103,6 +1190,8 @@ export async function addReminder(reminderData: {
 	user_nickname: string;
 	reminder_purpose: string;
 	reminder_time: Date;
+	repetition_interval_hours?: number | null;
+	self_reminder?: boolean | null;
 	created_by_user_id: number;
 	persona_id?: number | null;
 }): Promise<ReminderRow | null> {
@@ -1121,6 +1210,8 @@ export async function addReminder(reminderData: {
 				user_nickname,
 				reminder_purpose,
 				reminder_time,
+				repetition_interval_hours,
+				self_reminder,
 				created_by_user_id,
 				persona_id
 			) VALUES (
@@ -1130,6 +1221,8 @@ export async function addReminder(reminderData: {
 				${reminderData.user_nickname},
 				${reminderData.reminder_purpose},
 				${reminderData.reminder_time},
+				${reminderData.repetition_interval_hours ?? null},
+				${reminderData.self_reminder ?? false},
 				${reminderData.created_by_user_id},
 				${reminderData.persona_id ?? null}
 			)
@@ -1184,6 +1277,70 @@ export async function addReminder(reminderData: {
 		};
 		await log.error(
 			`Error creating reminder for user ${reminderData.user_discord_id}`,
+			error,
+			context,
+		);
+		return null;
+	}
+}
+
+/**
+ * Reschedules an existing reminder to a new time (used for recurring reminders).
+ * @param reminderId - The reminder ID to update
+ * @param nextReminderTime - The next scheduled reminder time
+ * @returns The updated ReminderRow object, or null if update failed
+ */
+export async function rescheduleReminder(
+	reminderId: number,
+	nextReminderTime: Date,
+): Promise<ReminderRow | null> {
+	try {
+		const [updatedReminder] = await sql`
+			UPDATE reminders
+			SET reminder_time = ${nextReminderTime},
+				updated_at = CURRENT_TIMESTAMP
+			WHERE reminder_id = ${reminderId}
+			RETURNING *
+		`;
+
+		if (!updatedReminder) {
+			log.warn(`Failed to reschedule reminder ${reminderId} (no row returned)`);
+			return null;
+		}
+
+		const validatedReminder = reminderSchema.safeParse(updatedReminder);
+		if (!validatedReminder.success) {
+			const context: ErrorContext = {
+				errorType: "SchemaValidationError",
+				metadata: {
+					operation: "rescheduleReminder",
+					reminderId,
+					validationErrors: validatedReminder.error.flatten(),
+				},
+			};
+			await log.error(
+				`Failed to validate reminder after reschedule (ID: ${reminderId})`,
+				validatedReminder.error,
+				context,
+			);
+			return null;
+		}
+
+		log.success(
+			`Reminder rescheduled (ID: ${reminderId}) to ${nextReminderTime.toISOString()}`,
+		);
+		return validatedReminder.data;
+	} catch (error) {
+		const context: ErrorContext = {
+			errorType: "DatabaseUpdateError",
+			metadata: {
+				operation: "rescheduleReminder",
+				reminderId,
+				nextReminderTime: nextReminderTime.toISOString(),
+			},
+		};
+		await log.error(
+			`Error rescheduling reminder ${reminderId}`,
 			error,
 			context,
 		);

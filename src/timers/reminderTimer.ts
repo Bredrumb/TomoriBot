@@ -11,13 +11,15 @@ import type {
 	TextChannel,
 } from "discord.js";
 import { ChannelType } from "discord.js";
-import { log } from "../utils/misc/logger";
+import { log, ColorCode } from "../utils/misc/logger";
 import { getDueReminders, deleteReminderById } from "../utils/db/dbRead";
+import { rescheduleReminder } from "../utils/db/dbWrite";
 import type { ReminderRow } from "../types/db/schema";
 import { calculateLateness } from "../utils/text/stringHelper";
-import tomoriChat from "../events/messageCreate/tomoriChat";
+import tomoriChat, {
+	suppressNextSelfReply,
+} from "../events/messageCreate/tomoriChat";
 import { sendStandardEmbed } from "../utils/discord/embedHelper";
-import { ColorCode } from "../utils/misc/logger";
 import { getCachedAllPersonas } from "../utils/cache/tomoriStateCache";
 import {
 	getOrCreatePersonaWebhook,
@@ -156,7 +158,26 @@ export class ReminderTimer {
 				);
 			}
 
-			// If no message found, we can't trigger tomoriChat directly
+			// If no message found, try to seed a placeholder message so we can proceed
+			if (!lastMessage) {
+				if ("send" in channel) {
+					try {
+						lastMessage = await channel.send({
+							content: "\u2800", // Braille blank: invisible but counts as content
+						});
+						log.info(
+							`Seeded placeholder message in channel ${reminder.channel_disc_id} for reminder ${reminder.reminder_id}`,
+						);
+					} catch (sendError) {
+						log.warn(
+							`Failed to seed placeholder message in channel ${reminder.channel_disc_id} for reminder ${reminder.reminder_id}:`,
+							sendError,
+						);
+					}
+				}
+			}
+
+			// If still no message found, we can't trigger tomoriChat directly
 			if (!lastMessage) {
 				log.warn(
 					`No messages found in channel ${reminder.channel_disc_id} for reminder ${reminder.reminder_id}, sending error embed instead`,
@@ -185,6 +206,10 @@ export class ReminderTimer {
 
 			const reminderStartTime = Date.now();
 
+			const isSelfReminder = reminder.self_reminder === true;
+
+			suppressNextSelfReply(channel.id);
+
 			// Call tomoriChat with manual trigger and reminder recipient ID
 			await tomoriChat(
 				this.client,
@@ -201,6 +226,7 @@ export class ReminderTimer {
 				{
 					reminder_purpose: reminder.reminder_purpose,
 					reminder_lateness: lateness,
+					self_reminder: isSelfReminder,
 				},
 				reminder.persona_id ?? undefined, // selectedPersonaId (fallback to main)
 			);
@@ -209,15 +235,43 @@ export class ReminderTimer {
 				`tomoriChat call completed for reminder ${reminder.reminder_id}`,
 			);
 
-			await this.ensureReminderRecipientMention(
-				channel,
-				reminder,
-				lastMessage.id,
-				reminderStartTime,
-			);
+			if (!isSelfReminder) {
+				await this.ensureReminderRecipientMention(
+					channel,
+					reminder,
+					lastMessage.id,
+					reminderStartTime,
+				);
+			}
 
-			// Successfully executed, delete the reminder
-			if (reminder.reminder_id) {
+			const repetitionIntervalHours =
+				typeof reminder.repetition_interval_hours === "number"
+					? reminder.repetition_interval_hours
+					: null;
+			const isRecurring =
+				repetitionIntervalHours !== null && repetitionIntervalHours >= 1;
+
+			if (isRecurring && reminder.reminder_id) {
+				const nextTriggerTime = new Date(
+					Date.now() + repetitionIntervalHours * 60 * 60 * 1000,
+				);
+				const rescheduled = await rescheduleReminder(
+					reminder.reminder_id,
+					nextTriggerTime,
+				);
+
+				if (rescheduled) {
+					log.success(
+						`Reminder ${reminder.reminder_id} executed and rescheduled for ${nextTriggerTime.toISOString()}`,
+					);
+				} else {
+					log.error(
+						`Failed to reschedule recurring reminder ${reminder.reminder_id}; deleting to prevent duplicates`,
+					);
+					await deleteReminderById(reminder.reminder_id);
+				}
+			} else if (reminder.reminder_id) {
+				// Successfully executed one-time reminder, delete it
 				await deleteReminderById(reminder.reminder_id);
 				log.success(
 					`Reminder ${reminder.reminder_id} executed and deleted successfully`,

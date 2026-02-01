@@ -9,6 +9,8 @@ import {
 	type ServerEmojiRow,
 	type LlmRow,
 	llmSchema,
+	type EmbeddingModelRow,
+	embeddingModelSchema,
 	type ServerStickerRow,
 	serverStickerSchema,
 	reminderSchema,
@@ -441,6 +443,42 @@ export async function isPrivacyOptedOut(userDiscId: string): Promise<boolean> {
 }
 
 /**
+ * Get user's cross-server short-term memory sharing preference
+ *
+ * Phase 4: User Controls & Privacy
+ *
+ * @param userDiscId - Discord user ID
+ * @returns True if user has opted in to cross-server sharing, false otherwise
+ */
+export async function getCrossServerShortTermMemoryOptIn(
+	userDiscId: string,
+): Promise<boolean> {
+	try {
+		// 1. Try to get from user cache
+		const { getCachedUserRow } = await import("@/utils/cache/userCache");
+		const cached = await getCachedUserRow(userDiscId);
+		if (cached) {
+			return cached.shortterm_cache_crossserver_opt_in;
+		}
+
+		// 2. Query database if not in cache
+		const [user] = await sql`
+			SELECT shortterm_cache_crossserver_opt_in
+			FROM users
+			WHERE user_disc_id = ${userDiscId}
+		`;
+
+		return user?.shortterm_cache_crossserver_opt_in ?? false;
+	} catch (error) {
+		log.error(
+			`Error checking cross-server short-term memory opt-in for user ${userDiscId}:`,
+			error,
+		);
+		return false; // Default to disabled on error
+	}
+}
+
+/**
  * Loads all custom emojis for a given server.
  * @param internalServerId - The internal database ID of the server.
  * @returns An array of validated ServerEmojiRow objects, or null if none found or error.
@@ -694,6 +732,186 @@ export async function loadDefaultModelForProvider(
 			`Error loading default model for provider ${normalizedProviderName}:`,
 			error,
 		);
+		return null;
+	}
+}
+
+/**
+ * Loads available embedding models for a specific provider with deprecation filtering.
+ * @param providerName - The name of the embedding provider (e.g., 'google', 'openrouter').
+ * @param includeDeprecated - Whether to include deprecated models (default: false).
+ * @returns An array of validated EmbeddingModelRow objects for the provider, or null if none found.
+ */
+export async function loadAvailableEmbeddingModelsForProvider(
+	providerName: string,
+	includeDeprecated = false,
+): Promise<EmbeddingModelRow[] | null> {
+	if (!providerName || providerName.trim().length === 0) {
+		log.error("Provider name cannot be empty");
+		return null;
+	}
+
+	if (!/^[a-zA-Z0-9-_]+$/.test(providerName.trim())) {
+		log.error(`Invalid provider name format: ${providerName}`);
+		return null;
+	}
+
+	const normalizedProviderName = providerName.trim().toLowerCase();
+
+	try {
+		const modelRows = includeDeprecated
+			? await sql`
+				SELECT * FROM embedding_models
+				WHERE provider = ${normalizedProviderName}
+				ORDER BY embedding_model_id ASC
+			`
+			: await sql`
+				SELECT * FROM embedding_models
+				WHERE provider = ${normalizedProviderName} AND is_deprecated = false
+				ORDER BY embedding_model_id ASC
+			`;
+
+		if (!modelRows || modelRows.length === 0) {
+			log.warn(
+				`No available embedding models found for provider: ${normalizedProviderName}`,
+			);
+			return null;
+		}
+
+		const parsedModels = embeddingModelSchema.array().safeParse(modelRows);
+		if (!parsedModels.success) {
+			log.error(
+				`Failed to validate embedding model data for provider ${normalizedProviderName}:`,
+				parsedModels.error.flatten(),
+			);
+			return null;
+		}
+
+		log.info(
+			`Found ${parsedModels.data.length} embedding models for ${normalizedProviderName}`,
+		);
+		return parsedModels.data;
+	} catch (error) {
+		log.error(
+			`Error loading embedding models for provider ${normalizedProviderName}:`,
+			error,
+		);
+		return null;
+	}
+}
+
+/**
+ * Loads the default embedding model for a provider, with fallback logic.
+ * @param providerName - The name of the embedding provider (e.g., 'google', 'openrouter').
+ * @param includeDeprecated - Whether to include deprecated models in fallback (default: false).
+ * @returns The default or first available EmbeddingModelRow for the provider, or null if none found.
+ */
+export async function loadDefaultEmbeddingModelForProvider(
+	providerName: string,
+	includeDeprecated = false,
+): Promise<EmbeddingModelRow | null> {
+	if (!providerName || providerName.trim().length === 0) {
+		log.error("Provider name cannot be empty");
+		return null;
+	}
+
+	if (!/^[a-zA-Z0-9-_]+$/.test(providerName.trim())) {
+		log.error(`Invalid provider name format: ${providerName}`);
+		return null;
+	}
+
+	const normalizedProviderName = providerName.trim().toLowerCase();
+
+	try {
+		const modelQuery = includeDeprecated
+			? sql`
+				SELECT *,
+					CASE WHEN is_default = true THEN 1 ELSE 2 END as priority
+				FROM embedding_models
+				WHERE provider = ${normalizedProviderName}
+				ORDER BY priority ASC, embedding_model_id ASC
+				LIMIT 1
+			`
+			: sql`
+				SELECT *,
+					CASE WHEN is_default = true THEN 1 ELSE 2 END as priority
+				FROM embedding_models
+				WHERE provider = ${normalizedProviderName} AND is_deprecated = false
+				ORDER BY priority ASC, embedding_model_id ASC
+				LIMIT 1
+			`;
+
+		const modelRows = await modelQuery;
+		if (!modelRows || modelRows.length === 0) {
+			log.error(
+				`No available embedding models found for provider: ${normalizedProviderName}`,
+			);
+			return null;
+		}
+
+		const selectedModel = modelRows[0];
+		const parsedModel = embeddingModelSchema.safeParse(selectedModel);
+		if (!parsedModel.success) {
+			log.error(
+				`Failed to validate embedding model data for provider ${normalizedProviderName}:`,
+				parsedModel.error.flatten(),
+			);
+			return null;
+		}
+
+		const isDefaultModel = selectedModel.is_default === true;
+		if (isDefaultModel) {
+			log.info(
+				`Found default embedding model for ${normalizedProviderName}: ${parsedModel.data.codename}`,
+			);
+		} else {
+			log.warn(
+				`No default embedding model found for provider ${normalizedProviderName}, using fallback: ${parsedModel.data.codename}`,
+			);
+		}
+
+		return parsedModel.data;
+	} catch (error) {
+		log.error(
+			`Error loading default embedding model for provider ${normalizedProviderName}:`,
+			error,
+		);
+		return null;
+	}
+}
+
+/**
+ * Load a specific embedding model by ID.
+ * @param embeddingModelId - The embedding model ID to load.
+ * @returns The EmbeddingModelRow if found and valid, otherwise null.
+ */
+export async function loadEmbeddingModelById(
+	embeddingModelId: number,
+): Promise<EmbeddingModelRow | null> {
+	try {
+		const rows = await sql`
+			SELECT * FROM embedding_models
+			WHERE embedding_model_id = ${embeddingModelId}
+			LIMIT 1
+		`;
+
+		if (!rows || rows.length === 0) {
+			log.warn(`No embedding model found with ID: ${embeddingModelId}`);
+			return null;
+		}
+
+		const parsed = embeddingModelSchema.safeParse(rows[0]);
+		if (!parsed.success) {
+			log.error(
+				`Failed to validate embedding model data for ID ${embeddingModelId}:`,
+				parsed.error.flatten(),
+			);
+			return null;
+		}
+
+		return parsed.data;
+	} catch (error) {
+		log.error(`Error loading embedding model ${embeddingModelId}:`, error);
 		return null;
 	}
 }
@@ -1299,10 +1517,10 @@ export async function deleteReminderById(reminderId: number): Promise<boolean> {
 		const result = await sql`
 			DELETE FROM reminders
 			WHERE reminder_id = ${reminderId}
+			RETURNING reminder_id
 		`;
 
-		const deletedCount = result.affectedRows || 0;
-		if (deletedCount > 0) {
+		if (result && result.length > 0) {
 			log.success(`Reminder deleted successfully (ID: ${reminderId})`);
 			return true;
 		} else {

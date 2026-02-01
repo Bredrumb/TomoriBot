@@ -153,6 +153,13 @@ Before running TomoriBot, ensure you have the following installed:
 
   **Note:** The database schema (including required extensions like `pgcrypto`) is automatically initialized when you first run TomoriBot.
 
+  **pgvector (Optional for RAG/document memory):**
+  - If you want RAG features locally, install pgvector then run:
+  ```sql
+  CREATE EXTENSION vector;
+  ```
+  - Don't forget to set `ACTIVATE_LOCAL_RAG` as true in your .env
+
 * **Python 3** (Optional but recommended) - Required for URL Fetching MCP server tool
   ```sh
   # Windows (using Chocolatey)

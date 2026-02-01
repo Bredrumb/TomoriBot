@@ -335,12 +335,10 @@ export async function execute(
 		const newProvider = normalizedProvider;
 		let newLlmId = tomoriState.config.llm_id; // Default to current model
 		let newDiffusionModelId = tomoriState.config.diffusion_model_id; // Default to current diffusion model
+		let newEmbeddingModelId = tomoriState.config.embedding_model_id; // Default to current embedding model
 
-		// Clean up old custom LLM entry if switching away from custom provider
-		if (isCustomProvider(currentProvider) && !isCustomProvider(newProvider)) {
-			log.info(`Switching away from custom provider - cleaning up old custom LLM entry`);
-			await deleteCustomLLMEntry(serverId);
-		}
+		// Track if we need to clean up custom LLM entry (AFTER updating llm_id reference)
+		const shouldCleanupCustomLLM = isCustomProvider(currentProvider) && !isCustomProvider(newProvider);
 
 		if (currentProvider !== newProvider) {
 			// Purge rotation keys when provider changes (keys are provider-specific)
@@ -370,6 +368,8 @@ export async function execute(
 
 				// Custom provider doesn't have diffusion models
 				newDiffusionModelId = null;
+				// Custom provider doesn't have embedding models
+				newEmbeddingModelId = null;
 			} else {
 				// Regular provider: load default model for new provider
 				log.info(
@@ -396,58 +396,102 @@ export async function execute(
 					`Switching to default model for ${newProvider}: ${defaultModel.llm_codename} (ID: ${newLlmId})`,
 				);
 
-			// Load default diffusion model for new provider (for image generation)
-			const defaultDiffusionModel = (
-				await sql`
-					SELECT * FROM image_diffusion_models
-					WHERE provider = ${newProvider}
-					  AND is_default = true
-					  AND is_deprecated = false
-					ORDER BY diffusion_model_id ASC
-					LIMIT 1
-				`
-			)[0];
-
-			// Fallback: if no default diffusion model found, get the first available non-deprecated model
-			if (!defaultDiffusionModel) {
-				const fallbackDiffusionModel = (
+				// Load default diffusion model for new provider (for image generation)
+				const defaultDiffusionModel = (
 					await sql`
 						SELECT * FROM image_diffusion_models
 						WHERE provider = ${newProvider}
+						  AND is_default = true
 						  AND is_deprecated = false
 						ORDER BY diffusion_model_id ASC
 						LIMIT 1
 					`
 				)[0];
 
-				if (fallbackDiffusionModel) {
-					newDiffusionModelId = fallbackDiffusionModel.diffusion_model_id;
-					log.warn(
-						`No default diffusion model found for ${newProvider}, using fallback: ${fallbackDiffusionModel.codename}`,
-					);
+				// Fallback: if no default diffusion model found, get the first available non-deprecated model
+				if (!defaultDiffusionModel) {
+					const fallbackDiffusionModel = (
+						await sql`
+							SELECT * FROM image_diffusion_models
+							WHERE provider = ${newProvider}
+							  AND is_deprecated = false
+							ORDER BY diffusion_model_id ASC
+							LIMIT 1
+						`
+					)[0];
+
+					if (fallbackDiffusionModel) {
+						newDiffusionModelId = fallbackDiffusionModel.diffusion_model_id;
+						log.warn(
+							`No default diffusion model found for ${newProvider}, using fallback: ${fallbackDiffusionModel.codename}`,
+						);
+					} else {
+						newDiffusionModelId = null;
+						log.info(
+							`No diffusion models available for ${newProvider} (image generation not supported)`,
+						);
+					}
 				} else {
-					newDiffusionModelId = null;
+					newDiffusionModelId = defaultDiffusionModel.diffusion_model_id;
 					log.info(
-						`No diffusion models available for ${newProvider} (image generation not supported)`,
+						`Switching to default diffusion model for ${newProvider}: ${defaultDiffusionModel.codename} (ID: ${newDiffusionModelId})`,
 					);
 				}
-			} else {
-				newDiffusionModelId = defaultDiffusionModel.diffusion_model_id;
-				log.info(
-					`Switching to default diffusion model for ${newProvider}: ${defaultDiffusionModel.codename} (ID: ${newDiffusionModelId})`,
-				);
-			}
+
+				// Load default embedding model for new provider (for document retrieval)
+				const defaultEmbeddingModel = (
+					await sql`
+						SELECT * FROM embedding_models
+						WHERE provider = ${newProvider}
+						  AND is_default = true
+						  AND is_deprecated = false
+						ORDER BY embedding_model_id ASC
+						LIMIT 1
+					`
+				)[0];
+
+				if (!defaultEmbeddingModel) {
+					const fallbackEmbeddingModel = (
+						await sql`
+							SELECT * FROM embedding_models
+							WHERE provider = ${newProvider}
+							  AND is_deprecated = false
+							ORDER BY embedding_model_id ASC
+							LIMIT 1
+						`
+					)[0];
+
+					if (fallbackEmbeddingModel) {
+						newEmbeddingModelId = fallbackEmbeddingModel.embedding_model_id;
+						log.warn(
+							`No default embedding model found for ${newProvider}, using fallback: ${fallbackEmbeddingModel.codename}`,
+						);
+					} else {
+						newEmbeddingModelId = null;
+						log.info(
+							`No embedding models available for ${newProvider} (document retrieval not supported)`,
+						);
+					}
+				} else {
+					newEmbeddingModelId = defaultEmbeddingModel.embedding_model_id;
+					log.info(
+						`Switching to default embedding model for ${newProvider}: ${defaultEmbeddingModel.codename} (ID: ${newEmbeddingModelId})`,
+					);
+				}
 			}
 		}
 
-		// 12. Update the config in the database (includes llm_id, diffusion_model_id, and custom_endpoint_url if provider changed)
+		// 12. Update the config in the database (includes llm_id, diffusion_model_id, embedding_model_id, custom_endpoint_url, and custom_model_name if provider changed)
+		const customModelName = customCapabilitiesResult?.modelName || null;
 		const [updatedRow] = await sql`
 			UPDATE tomori_configs
 			SET api_key = ${encrypted},
 			    key_version = ${version},
 			    llm_id = ${newLlmId},
 			    diffusion_model_id = ${newDiffusionModelId},
-			    custom_endpoint_url = ${customEndpointUrl}
+			    embedding_model_id = ${newEmbeddingModelId},
+			    custom_endpoint_url = ${customEndpointUrl},
+			    custom_model_name = ${customModelName}
 			WHERE server_id = ${tomoriState.server_id}
 			RETURNING *
 		`;
@@ -487,6 +531,13 @@ export async function execute(
 
 		// 14. Invalidate cache so next message gets fresh config
 		invalidateTomoriStateCache(serverId);
+
+		// 14.5. Clean up old custom LLM entry if switching away from custom provider
+		// IMPORTANT: This must happen AFTER updating llm_id to avoid foreign key constraint violation
+		if (shouldCleanupCustomLLM) {
+			log.info(`Switching away from custom provider - cleaning up old custom LLM entry`);
+			await deleteCustomLLMEntry(serverId);
+		}
 
 		// 15. Success message (include model info if provider changed)
 		const successDescriptionKey =

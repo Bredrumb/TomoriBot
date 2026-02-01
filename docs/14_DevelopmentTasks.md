@@ -36,6 +36,7 @@ import type {
   Client,
   SlashCommandSubcommandBuilder,
 } from "discord.js";
+import { MessageFlags } from "discord.js";
 import type { UserRow } from "../../types/db/schema";
 import { localizer } from "../../utils/text/localizer";
 import { log } from "../../utils/misc/logger";
@@ -69,7 +70,6 @@ export async function execute(
 
     await interaction.reply({
       content: t("commands.greet.hello.success", { name }),
-      ephemeral: false,
     });
 
     log.success(`Greeted ${name} in ${interaction.guild?.name || "DM"}`);
@@ -77,7 +77,7 @@ export async function execute(
     log.error("Greet command failed", error as Error);
     await interaction.reply({
       content: localizer(userData.language_pref, "general.errors.operation_failed"),
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 }

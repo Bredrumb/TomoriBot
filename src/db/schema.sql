@@ -188,11 +188,34 @@ DROP TRIGGER IF EXISTS update_image_diffusion_models_timestamp ON image_diffusio
 CREATE INDEX IF NOT EXISTS idx_image_diffusion_models_provider ON image_diffusion_models(provider);
 CREATE INDEX IF NOT EXISTS idx_image_diffusion_models_default ON image_diffusion_models(is_default, is_deprecated);
 
+-- Embedding Models table for document embedding/search
+CREATE TABLE IF NOT EXISTS embedding_models (
+  embedding_model_id SERIAL PRIMARY KEY,
+  provider TEXT NOT NULL,
+  codename TEXT NOT NULL UNIQUE,
+  model_family TEXT NOT NULL,
+  model_description TEXT,
+  ja_description TEXT,
+  is_default BOOLEAN DEFAULT false,
+  is_deprecated BOOLEAN DEFAULT false,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Removed updated_at trigger for embedding_models table (static metadata, rarely changes)
+DROP TRIGGER IF EXISTS update_embedding_models_timestamp ON embedding_models;
+
+-- Create indexes for faster lookups
+CREATE INDEX IF NOT EXISTS idx_embedding_models_provider ON embedding_models(provider);
+CREATE INDEX IF NOT EXISTS idx_embedding_models_default ON embedding_models(is_default, is_deprecated);
+CREATE INDEX IF NOT EXISTS idx_embedding_models_family ON embedding_models(model_family);
+
 CREATE TABLE IF NOT EXISTS tomori_configs (
   tomori_config_id SERIAL PRIMARY KEY,
   tomori_id INT UNIQUE, -- Legacy pointer (nullable; server_id is the primary linkage)
   server_id INT, -- Server-scoped config (nullable for legacy rows)
   llm_id INT NOT NULL,
+  embedding_model_id INT,
   llm_temperature REAL NOT NULL DEFAULT 1.5 CHECK (llm_temperature >= 1.0 AND llm_temperature <= 2.0),
   api_key BYTEA, -- encrypted
   trigger_words TEXT[] DEFAULT '{}',
@@ -214,6 +237,9 @@ CREATE TABLE IF NOT EXISTS tomori_configs (
 
 -- Add server_id column for server-scoped configs (January 2026)
 SELECT add_column_if_not_exists('tomori_configs', 'server_id', 'INTEGER');
+
+-- Add hide_impersonation_embeds permission (February 2026)
+SELECT add_column_if_not_exists('tomori_configs', 'hide_impersonation_embeds', 'BOOLEAN', 'false');
 
 -- Allow tomori_id to be nullable and prevent cascade deletes from removing server-scoped config
 DO $$
@@ -320,11 +346,19 @@ SELECT add_column_if_not_exists('tomori_configs', 'imagegen_enabled', 'BOOLEAN',
 -- Add hide respond embed permission (January 2026)
 SELECT add_column_if_not_exists('tomori_configs', 'hide_respond_embed', 'BOOLEAN', 'false');
 
+-- Add uncensor feature toggles (February 2026)
+SELECT add_column_if_not_exists('tomori_configs', 'uncensor_injection_enabled', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('tomori_configs', 'uncensor_unicode_space_enabled', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('tomori_configs', 'uncensor_sanitize_enabled', 'BOOLEAN', 'false');
+
 -- Add video generation permission (future use)
 SELECT add_column_if_not_exists('tomori_configs', 'videogen_enabled', 'BOOLEAN', 'true');
 
 -- Add diffusion model reference for image generation 
 SELECT add_column_if_not_exists('tomori_configs', 'diffusion_model_id', 'INTEGER');
+
+-- Add embedding model reference for document embedding
+SELECT add_column_if_not_exists('tomori_configs', 'embedding_model_id', 'INTEGER');
 
 -- Add custom system prompt column (December 2025)
 SELECT add_column_if_not_exists('tomori_configs', 'system_prompt', 'TEXT', 'NULL');
@@ -343,6 +377,11 @@ SELECT add_column_if_not_exists('tomori_configs', 'self_reply_limit', 'INTEGER',
 -- Only used when llm_provider is 'custom', blocked in production environment
 SELECT add_column_if_not_exists('tomori_configs', 'custom_endpoint_url', 'TEXT');
 
+-- Add custom model name for custom endpoints (January 2026)
+-- Stores the actual model name for endpoints that require exact model names (e.g., Ollama's "gemma3:latest")
+-- Optional field - if empty, provider will fall back to llm_codename
+SELECT add_column_if_not_exists('tomori_configs', 'custom_model_name', 'TEXT');
+
 -- Add foreign key constraint if the column was just created
 DO $$
 BEGIN
@@ -354,6 +393,21 @@ BEGIN
         ADD CONSTRAINT tomori_configs_diffusion_model_id_fkey
         FOREIGN KEY (diffusion_model_id)
         REFERENCES image_diffusion_models(diffusion_model_id)
+        ON DELETE SET NULL;
+    END IF;
+END $$;
+
+-- Add foreign key constraint for embedding model if not exists
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'tomori_configs_embedding_model_id_fkey'
+    ) THEN
+        ALTER TABLE tomori_configs
+        ADD CONSTRAINT tomori_configs_embedding_model_id_fkey
+        FOREIGN KEY (embedding_model_id)
+        REFERENCES embedding_models(embedding_model_id)
         ON DELETE SET NULL;
     END IF;
 END $$;
@@ -510,8 +564,11 @@ CREATE TABLE IF NOT EXISTS users (
 -- Create index for faster lookups
 CREATE INDEX IF NOT EXISTS idx_users_disc_id ON users(user_disc_id);
 
--- Add registration_locale column for user region analytics 
+-- Add registration_locale column for user region analytics
 SELECT add_column_if_not_exists('users', 'registration_locale', 'TEXT');
+
+-- Add cross-server short-term memory sharing opt-in (Phase 1: Short-term memory system)
+SELECT add_column_if_not_exists('users', 'shortterm_cache_crossserver_opt_in', 'BOOLEAN', 'false');
 
 -- Create updated_at trigger for users table
 DROP TRIGGER IF EXISTS update_users_timestamp ON users;
@@ -588,6 +645,8 @@ CREATE TABLE IF NOT EXISTS server_memories (
 
 -- Removed updated_at trigger for server_memories table (never updated after creation, only INSERT/DELETE)
 DROP TRIGGER IF EXISTS update_server_memories_timestamp ON server_memories;
+
+-- Document/RAG schema is loaded separately when RAG is enabled
 
 CREATE TABLE IF NOT EXISTS personalization_blacklist (
   server_id INT NOT NULL,
@@ -710,6 +769,8 @@ CREATE TABLE IF NOT EXISTS reminders (
   user_nickname TEXT NOT NULL,                         -- Target user's nickname for display
   reminder_purpose TEXT NOT NULL,                      -- What the reminder is for
   reminder_time TIMESTAMP WITH TIME ZONE NOT NULL,     -- When to trigger the reminder
+  repetition_interval_hours INTEGER,                   -- Optional: repeat interval in hours for recurring reminders
+  self_reminder BOOLEAN DEFAULT false,                 -- Optional: reminder targets the bot itself
   created_by_user_id INT,                              -- User who created this reminder (nullable - set to NULL if user deleted)
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -719,6 +780,10 @@ CREATE TABLE IF NOT EXISTS reminders (
 
 -- Track which persona created the reminder (January 2026)
 SELECT add_column_if_not_exists('reminders', 'persona_id', 'INTEGER');
+-- Recurring reminders: optional repeat interval in hours (January 2026)
+SELECT add_column_if_not_exists('reminders', 'repetition_interval_hours', 'INTEGER');
+-- Self reminders (January 2026)
+SELECT add_column_if_not_exists('reminders', 'self_reminder', 'BOOLEAN', 'false');
 DO $$
 BEGIN
     IF NOT EXISTS (

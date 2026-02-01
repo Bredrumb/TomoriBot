@@ -37,6 +37,9 @@ export const configureSubcommand = (
 							"commands.config.permissions.selfteaching_option",
 						),
 						value: "selfteaching",
+						name_localizations: {
+							ja: localizer("ja", "commands.config.permissions.selfteaching_option"),
+						},
 					},
 					{
 						name: localizer(
@@ -44,6 +47,9 @@ export const configureSubcommand = (
 							"commands.config.permissions.personalization_option",
 						),
 						value: "personalization",
+						name_localizations: {
+							ja: localizer("ja", "commands.config.permissions.personalization_option"),
+						},
 					},
 					{
 						name: localizer(
@@ -51,6 +57,9 @@ export const configureSubcommand = (
 							"commands.config.permissions.emojiusage_option",
 						),
 						value: "emojiusage",
+						name_localizations: {
+							ja: localizer("ja", "commands.config.permissions.emojiusage_option"),
+						},
 					},
 					{
 						name: localizer(
@@ -58,6 +67,9 @@ export const configureSubcommand = (
 							"commands.config.permissions.stickerusage_option",
 						),
 						value: "stickerusage",
+						name_localizations: {
+							ja: localizer("ja", "commands.config.permissions.stickerusage_option"),
+						},
 					},
 					// New: Added Google Search permission choice
 					{
@@ -66,6 +78,9 @@ export const configureSubcommand = (
 							"commands.config.permissions.websearch_option",
 						),
 						value: "websearch",
+						name_localizations: {
+							ja: localizer("ja", "commands.config.permissions.websearch_option"),
+						},
 					},
 					// New: Added Pin Message permission choice
 					{
@@ -74,6 +89,9 @@ export const configureSubcommand = (
 							"commands.config.permissions.pinmessage_option",
 						),
 						value: "pinmessage",
+						name_localizations: {
+							ja: localizer("ja", "commands.config.permissions.pinmessage_option"),
+						},
 					},
 					{
 						name: localizer(
@@ -81,6 +99,9 @@ export const configureSubcommand = (
 							"commands.config.permissions.imagegen_option",
 						),
 						value: "imagegen",
+						name_localizations: {
+							ja: localizer("ja", "commands.config.permissions.imagegen_option"),
+						},
 					},
 					{
 						name: localizer(
@@ -88,6 +109,19 @@ export const configureSubcommand = (
 							"commands.config.permissions.hiderespondembed_option",
 						),
 						value: "hiderespondembed",
+						name_localizations: {
+							ja: localizer("ja", "commands.config.permissions.hiderespondembed_option"),
+						},
+					},
+					{
+						name: localizer(
+							"en-US",
+							"commands.config.permissions.hideimpersonationembeds_option",
+						),
+						value: "hideimpersonationembeds",
+						name_localizations: {
+							ja: localizer("ja", "commands.config.permissions.hideimpersonationembeds_option"),
+						},
 					},
 				),
 		)
@@ -204,6 +238,11 @@ export async function execute(
 				dbColumnName = "hide_respond_embed";
 				permissionTypeKey = "commands.config.permissions.hiderespondembed_option";
 				currentSetting = tomoriState.config.hide_respond_embed;
+				break;
+			case "hideimpersonationembeds":
+				dbColumnName = "hide_impersonation_embeds";
+				permissionTypeKey = "commands.config.permissions.hideimpersonationembeds_option";
+				currentSetting = tomoriState.config.hide_impersonation_embeds;
 				break;
 			default:
 				// This should not happen due to Discord's option validation

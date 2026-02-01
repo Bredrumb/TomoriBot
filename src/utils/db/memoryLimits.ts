@@ -13,6 +13,10 @@ export const ABSOLUTE_MAX_ATTRIBUTES = 200; // Max number of attributes (line 21
 export const ABSOLUTE_MAX_SAMPLE_DIALOGUES = 100; // Max number of sample dialogue pairs (line 199)
 export const ABSOLUTE_MAX_TRIGGER_WORDS = 100; // Max number of trigger words (line 179)
 export const ABSOLUTE_MAX_PERSONAS_PER_SERVER = 200; // Max number of personas per server
+export const ABSOLUTE_MAX_DOCUMENT_TEXT_LENGTH = 500000; // Max raw document text length
+export const ABSOLUTE_MAX_DOCUMENT_CHUNKS = 2000; // Max chunks per document
+export const ABSOLUTE_MAX_DOCUMENTS_PER_SERVER = 200; // Max documents per server
+export const ABSOLUTE_MAX_DOCUMENT_CHUNKS_PER_SERVER = 10000; // Max total chunks per server
 
 /**
  * Memory limit configuration loaded from environment variables with defaults
@@ -27,6 +31,13 @@ export interface MemoryLimits {
 	maxSampleDialogues: number;
 	maxAttributes: number;
 	maxPersonasPerServer: number;
+	maxDocumentSizeMB: number;
+	maxDocumentTextLength: number;
+	documentChunkSize: number;
+	documentChunkOverlap: number;
+	maxDocumentChunks: number;
+	maxDocumentsPerServer: number;
+	maxDocumentChunksPerServer: number;
 }
 
 /**
@@ -90,6 +101,34 @@ export function getMemoryLimits(): MemoryLimits {
 		process.env.MAX_PERSONAS_PER_SERVER || "20",
 		10,
 	);
+	const maxDocumentSizeMB = Number.parseInt(
+		process.env.MAX_DOCUMENT_SIZE_MB || "4",
+		10,
+	);
+	const maxDocumentTextLength = Number.parseInt(
+		process.env.MAX_DOCUMENT_TEXT_LENGTH || "120000",
+		10,
+	);
+	const documentChunkSize = Number.parseInt(
+		process.env.DOCUMENT_CHUNK_SIZE || "1000",
+		10,
+	);
+	const documentChunkOverlap = Number.parseInt(
+		process.env.DOCUMENT_CHUNK_OVERLAP || "200",
+		10,
+	);
+	const maxDocumentChunks = Number.parseInt(
+		process.env.MAX_DOCUMENT_CHUNKS || "150",
+		10,
+	);
+	const maxDocumentsPerServer = Number.parseInt(
+		process.env.MAX_DOCUMENTS_PER_SERVER || "20",
+		10,
+	);
+	const maxDocumentChunksPerServer = Number.parseInt(
+		process.env.MAX_DOCUMENT_CHUNKS_PER_SERVER || "1000",
+		10,
+	);
 
 	// Validate that environment variables are reasonable numbers
 	if (
@@ -110,6 +149,13 @@ export function getMemoryLimits(): MemoryLimits {
 			maxSampleDialogues,
 			maxAttributes,
 			maxPersonasPerServer,
+			maxDocumentSizeMB,
+			maxDocumentTextLength,
+			documentChunkSize,
+			documentChunkOverlap,
+			maxDocumentChunks,
+			maxDocumentsPerServer,
+			maxDocumentChunksPerServer,
 		};
 	}
 
@@ -131,6 +177,13 @@ export function getMemoryLimits(): MemoryLimits {
 			maxSampleDialogues,
 			maxAttributes,
 			maxPersonasPerServer,
+			maxDocumentSizeMB,
+			maxDocumentTextLength,
+			documentChunkSize,
+			documentChunkOverlap,
+			maxDocumentChunks,
+			maxDocumentsPerServer,
+			maxDocumentChunksPerServer,
 		};
 	}
 
@@ -152,6 +205,13 @@ export function getMemoryLimits(): MemoryLimits {
 			maxSampleDialogues,
 			maxAttributes,
 			maxPersonasPerServer,
+			maxDocumentSizeMB,
+			maxDocumentTextLength,
+			documentChunkSize,
+			documentChunkOverlap,
+			maxDocumentChunks,
+			maxDocumentsPerServer,
+			maxDocumentChunksPerServer,
 		};
 	}
 
@@ -173,6 +233,13 @@ export function getMemoryLimits(): MemoryLimits {
 			maxSampleDialogues,
 			maxAttributes,
 			maxPersonasPerServer,
+			maxDocumentSizeMB,
+			maxDocumentTextLength,
+			documentChunkSize,
+			documentChunkOverlap,
+			maxDocumentChunks,
+			maxDocumentsPerServer,
+			maxDocumentChunksPerServer,
 		};
 	}
 
@@ -194,6 +261,13 @@ export function getMemoryLimits(): MemoryLimits {
 			maxSampleDialogues,
 			maxAttributes,
 			maxPersonasPerServer,
+			maxDocumentSizeMB,
+			maxDocumentTextLength,
+			documentChunkSize,
+			documentChunkOverlap,
+			maxDocumentChunks,
+			maxDocumentsPerServer,
+			maxDocumentChunksPerServer,
 		};
 	}
 
@@ -215,6 +289,13 @@ export function getMemoryLimits(): MemoryLimits {
 			maxSampleDialogues,
 			maxAttributes,
 			maxPersonasPerServer,
+			maxDocumentSizeMB,
+			maxDocumentTextLength,
+			documentChunkSize,
+			documentChunkOverlap,
+			maxDocumentChunks,
+			maxDocumentsPerServer,
+			maxDocumentChunksPerServer,
 		};
 	}
 
@@ -236,6 +317,13 @@ export function getMemoryLimits(): MemoryLimits {
 			maxSampleDialogues: 10,
 			maxAttributes,
 			maxPersonasPerServer,
+			maxDocumentSizeMB,
+			maxDocumentTextLength,
+			documentChunkSize,
+			documentChunkOverlap,
+			maxDocumentChunks,
+			maxDocumentsPerServer,
+			maxDocumentChunksPerServer,
 		};
 	}
 
@@ -257,6 +345,13 @@ export function getMemoryLimits(): MemoryLimits {
 			maxSampleDialogues,
 			maxAttributes: 10,
 			maxPersonasPerServer,
+			maxDocumentSizeMB,
+			maxDocumentTextLength,
+			documentChunkSize,
+			documentChunkOverlap,
+			maxDocumentChunks,
+			maxDocumentsPerServer,
+			maxDocumentChunksPerServer,
 		};
 	}
 
@@ -278,6 +373,209 @@ export function getMemoryLimits(): MemoryLimits {
 			maxSampleDialogues,
 			maxAttributes,
 			maxPersonasPerServer: 20,
+			maxDocumentSizeMB,
+			maxDocumentTextLength,
+			documentChunkSize,
+			documentChunkOverlap,
+			maxDocumentChunks,
+			maxDocumentsPerServer,
+			maxDocumentChunksPerServer,
+		};
+	}
+
+	if (
+		!Number.isInteger(maxDocumentSizeMB) ||
+		maxDocumentSizeMB <= 0 ||
+		maxDocumentSizeMB > 100
+	) {
+		log.warn(
+			`Invalid MAX_DOCUMENT_SIZE_MB value: ${process.env.MAX_DOCUMENT_SIZE_MB}. Using default: 4`,
+		);
+		return {
+			maxPersonalMemories,
+			maxServerMemories,
+			maxMemoryLength,
+			maxSampleDialogueLength,
+			maxAttributeLength,
+			maxTriggerWords,
+			maxSampleDialogues,
+			maxAttributes,
+			maxPersonasPerServer,
+			maxDocumentSizeMB: 4,
+			maxDocumentTextLength,
+			documentChunkSize,
+			documentChunkOverlap,
+			maxDocumentChunks,
+			maxDocumentsPerServer,
+			maxDocumentChunksPerServer,
+		};
+	}
+
+	if (
+		!Number.isInteger(maxDocumentTextLength) ||
+		maxDocumentTextLength <= 0 ||
+		maxDocumentTextLength > ABSOLUTE_MAX_DOCUMENT_TEXT_LENGTH
+	) {
+		log.warn(
+			`Invalid MAX_DOCUMENT_TEXT_LENGTH value: ${process.env.MAX_DOCUMENT_TEXT_LENGTH}. Using default: 120000`,
+		);
+		return {
+			maxPersonalMemories,
+			maxServerMemories,
+			maxMemoryLength,
+			maxSampleDialogueLength,
+			maxAttributeLength,
+			maxTriggerWords,
+			maxSampleDialogues,
+			maxAttributes,
+			maxPersonasPerServer,
+			maxDocumentSizeMB,
+			maxDocumentTextLength: 120000,
+			documentChunkSize,
+			documentChunkOverlap,
+			maxDocumentChunks,
+			maxDocumentsPerServer,
+			maxDocumentChunksPerServer,
+		};
+	}
+
+	if (
+		!Number.isInteger(documentChunkSize) ||
+		documentChunkSize <= 200 ||
+		documentChunkSize > 5000
+	) {
+		log.warn(
+			`Invalid DOCUMENT_CHUNK_SIZE value: ${process.env.DOCUMENT_CHUNK_SIZE}. Using default: 1000`,
+		);
+		return {
+			maxPersonalMemories,
+			maxServerMemories,
+			maxMemoryLength,
+			maxSampleDialogueLength,
+			maxAttributeLength,
+			maxTriggerWords,
+			maxSampleDialogues,
+			maxAttributes,
+			maxPersonasPerServer,
+			maxDocumentSizeMB,
+			maxDocumentTextLength,
+			documentChunkSize: 1000,
+			documentChunkOverlap,
+			maxDocumentChunks,
+			maxDocumentsPerServer,
+			maxDocumentChunksPerServer,
+		};
+	}
+
+	if (
+		!Number.isInteger(documentChunkOverlap) ||
+		documentChunkOverlap < 0 ||
+		documentChunkOverlap >= documentChunkSize
+	) {
+		log.warn(
+			`Invalid DOCUMENT_CHUNK_OVERLAP value: ${process.env.DOCUMENT_CHUNK_OVERLAP}. Using default: 200`,
+		);
+		return {
+			maxPersonalMemories,
+			maxServerMemories,
+			maxMemoryLength,
+			maxSampleDialogueLength,
+			maxAttributeLength,
+			maxTriggerWords,
+			maxSampleDialogues,
+			maxAttributes,
+			maxPersonasPerServer,
+			maxDocumentSizeMB,
+			maxDocumentTextLength,
+			documentChunkSize,
+			documentChunkOverlap: 200,
+			maxDocumentChunks,
+			maxDocumentsPerServer,
+			maxDocumentChunksPerServer,
+		};
+	}
+
+	if (
+		!Number.isInteger(maxDocumentChunks) ||
+		maxDocumentChunks <= 0 ||
+		maxDocumentChunks > ABSOLUTE_MAX_DOCUMENT_CHUNKS
+	) {
+		log.warn(
+			`Invalid MAX_DOCUMENT_CHUNKS value: ${process.env.MAX_DOCUMENT_CHUNKS}. Using default: 150`,
+		);
+		return {
+			maxPersonalMemories,
+			maxServerMemories,
+			maxMemoryLength,
+			maxSampleDialogueLength,
+			maxAttributeLength,
+			maxTriggerWords,
+			maxSampleDialogues,
+			maxAttributes,
+			maxPersonasPerServer,
+			maxDocumentSizeMB,
+			maxDocumentTextLength,
+			documentChunkSize,
+			documentChunkOverlap,
+			maxDocumentChunks: 150,
+			maxDocumentsPerServer,
+			maxDocumentChunksPerServer,
+		};
+	}
+
+	if (
+		!Number.isInteger(maxDocumentsPerServer) ||
+		maxDocumentsPerServer <= 0 ||
+		maxDocumentsPerServer > ABSOLUTE_MAX_DOCUMENTS_PER_SERVER
+	) {
+		log.warn(
+			`Invalid MAX_DOCUMENTS_PER_SERVER value: ${process.env.MAX_DOCUMENTS_PER_SERVER}. Using default: 20`,
+		);
+		return {
+			maxPersonalMemories,
+			maxServerMemories,
+			maxMemoryLength,
+			maxSampleDialogueLength,
+			maxAttributeLength,
+			maxTriggerWords,
+			maxSampleDialogues,
+			maxAttributes,
+			maxPersonasPerServer,
+			maxDocumentSizeMB,
+			maxDocumentTextLength,
+			documentChunkSize,
+			documentChunkOverlap,
+			maxDocumentChunks,
+			maxDocumentsPerServer: 20,
+			maxDocumentChunksPerServer,
+		};
+	}
+
+	if (
+		!Number.isInteger(maxDocumentChunksPerServer) ||
+		maxDocumentChunksPerServer <= 0 ||
+		maxDocumentChunksPerServer > ABSOLUTE_MAX_DOCUMENT_CHUNKS_PER_SERVER
+	) {
+		log.warn(
+			`Invalid MAX_DOCUMENT_CHUNKS_PER_SERVER value: ${process.env.MAX_DOCUMENT_CHUNKS_PER_SERVER}. Using default: 1000`,
+		);
+		return {
+			maxPersonalMemories,
+			maxServerMemories,
+			maxMemoryLength,
+			maxSampleDialogueLength,
+			maxAttributeLength,
+			maxTriggerWords,
+			maxSampleDialogues,
+			maxAttributes,
+			maxPersonasPerServer,
+			maxDocumentSizeMB,
+			maxDocumentTextLength,
+			documentChunkSize,
+			documentChunkOverlap,
+			maxDocumentChunks,
+			maxDocumentsPerServer,
+			maxDocumentChunksPerServer: 1000,
 		};
 	}
 
@@ -291,6 +589,13 @@ export function getMemoryLimits(): MemoryLimits {
 		maxSampleDialogues,
 		maxAttributes,
 		maxPersonasPerServer,
+		maxDocumentSizeMB,
+		maxDocumentTextLength,
+		documentChunkSize,
+		documentChunkOverlap,
+		maxDocumentChunks,
+		maxDocumentsPerServer,
+		maxDocumentChunksPerServer,
 	};
 }
 

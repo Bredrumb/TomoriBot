@@ -1,5 +1,6 @@
 import { type ActivityOptions, ActivityType, type Client } from "discord.js";
-import pkg from "../../../package.json";
+// biome-ignore lint/correctness/noUnusedImports: For package version tagging in status
+import _pkg from "../../../package.json";
 import { log } from "../../utils/misc/logger";
 import { getMCPManager } from "../../utils/mcp/mcpManager";
 import { sql } from "@/utils/db/client";
@@ -111,7 +112,7 @@ const handler = async (client: Client): Promise<void> => {
 			// 5. Build normal status options with current server count
 			const normalStatus: ActivityOptions[] = [
 				{
-					name: `Image Generation Update! (v${pkg.version})`,
+					name: `Multi-Persona Update! /help updates`,
 					type: ActivityType.Playing,
 				},
 				{

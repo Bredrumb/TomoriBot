@@ -217,6 +217,48 @@ export class ReviewCapabilitiesTool extends BaseTool {
 			capabilitiesContent +=
 				"- **Standard emojis** (Unicode emojis in text)\n\n";
 
+			// 5b. Alter Personas section (multi-character webhook support)
+			capabilitiesContent += "## Alter Personas\n\n";
+			capabilitiesContent +=
+				"This server may have multiple personas (alter personas) active:\n";
+			capabilitiesContent +=
+				"- Each alter persona has its own personality, trigger words, and webhook avatar\n";
+			capabilitiesContent +=
+				"- Alter personas are triggered when their keywords appear in messages\n";
+			capabilitiesContent +=
+				"- Multiple personas can be triggered sequentially from a single message\n";
+			capabilitiesContent +=
+				"- Replying to a webhook message continues the conversation as that persona\n";
+			capabilitiesContent +=
+				"- Self-triggers are prevented (a persona will not trigger itself)\n\n";
+
+			// 5c. Image Generation section (conditional on provider and configuration)
+			capabilitiesContent += "## Image Generation\n\n";
+			if (supportsImageGen && config.imagegen_enabled && config.diffusion_model_id) {
+				capabilitiesContent += "You CAN generate images:\n";
+				capabilitiesContent +=
+					"- **Text-to-Image**: Generate images from detailed text prompts\n";
+				capabilitiesContent +=
+					"- **Image-to-Image**: Edit or transform reference images using a prompt\n";
+				capabilitiesContent +=
+					"- **Aspect Ratios**: 1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9\n";
+				capabilitiesContent +=
+					"- **Reference Sources**: Message attachments, embedded images, Discord stickers, custom emojis, or user profile pictures\n";
+				capabilitiesContent +=
+					"- Users can ask you to generate an image (triggers the generate_image tool), or use `/generate image` directly\n";
+				capabilitiesContent +=
+					"- When generating, describe in detail: style, composition, colors, mood, and important details\n\n";
+			} else if (supportsImageGen && config.imagegen_enabled && !config.diffusion_model_id) {
+				capabilitiesContent +=
+					"Image generation is enabled but no diffusion model is configured. An admin needs to set one with `/config model image`.\n\n";
+			} else if (supportsImageGen && !config.imagegen_enabled) {
+				capabilitiesContent +=
+					"Image generation is available for this provider but **disabled** by server configuration.\n\n";
+			} else {
+				capabilitiesContent +=
+					"Image generation is not available with the current provider (requires Google or OpenRouter).\n\n";
+			}
+
 			// 6. Memory & Personalization section (always available)
 			capabilitiesContent += "## Memory & Personalization\n\n";
 			capabilitiesContent += "You HAVE access to:\n";
@@ -227,7 +269,31 @@ export class ReviewCapabilitiesTool extends BaseTool {
 			capabilitiesContent +=
 				"- **User preferences** (language, timezone, custom nicknames)\n";
 			capabilitiesContent +=
-				"- **Conversation history** (previous messages in context)\n\n";
+				"- **Conversation history** (previous messages in context)\n";
+			capabilitiesContent +=
+				"- **Short-term memory** (recent conversations cached per channel for cross-channel context awareness)\n";
+			capabilitiesContent +=
+				"- Short-term memories expire automatically and can be summarized by you for efficiency\n";
+			capabilitiesContent +=
+				"- Cross-server short-term memory sharing is available when the user opts in via `/personal cache`\n\n";
+
+			// 6b. Document Knowledge Base section (conditional on embedding model)
+			capabilitiesContent += "## Document Knowledge Base\n\n";
+			if (config.embedding_model_id) {
+				capabilitiesContent +=
+					"You have access to a document knowledge base (RAG):\n";
+				capabilitiesContent +=
+					"- Server administrators can upload documents (text, PDF, Markdown)\n";
+				capabilitiesContent +=
+					"- Relevant document content is retrieved and included in your context based on the conversation\n";
+				capabilitiesContent +=
+					"- Use this knowledge to answer questions about server-specific topics\n\n";
+			} else {
+				capabilitiesContent +=
+					"The document knowledge base is not configured. An embedding model is required.\n";
+				capabilitiesContent +=
+					"- Configure with `/config model embedding` to enable document uploads\n\n";
+			}
 
 			// 7. Personality & Configuration section (always available)
 			capabilitiesContent += "## Personality & Configuration\n\n";
@@ -270,7 +336,11 @@ export class ReviewCapabilitiesTool extends BaseTool {
 			}
 
 			// 9. Model-specific characteristics section
-			if (isReasoning || isUncensored) {
+			const hasUncensorConfig =
+				config.uncensor_unicode_space_enabled ||
+				config.uncensor_injection_enabled ||
+				config.uncensor_sanitize_enabled;
+			if (isReasoning || isUncensored || hasUncensorConfig) {
 				capabilitiesContent += "## Model Characteristics\n\n";
 				if (isReasoning) {
 					capabilitiesContent +=
@@ -279,6 +349,22 @@ export class ReviewCapabilitiesTool extends BaseTool {
 				if (isUncensored) {
 					capabilitiesContent +=
 						"- **Uncensored**: This model has reduced content restrictions\n";
+				}
+				if (hasUncensorConfig) {
+					capabilitiesContent +=
+						"- **Uncensored Output Processing**: Active output modifications:\n";
+					if (config.uncensor_unicode_space_enabled) {
+						capabilitiesContent +=
+							"  - Unicode space replacement is active in responses\n";
+					}
+					if (config.uncensor_injection_enabled) {
+						capabilitiesContent +=
+							"  - Prompt injection mitigation is active\n";
+					}
+					if (config.uncensor_sanitize_enabled) {
+						capabilitiesContent +=
+							"  - Sensitive word sanitization is active\n";
+					}
 				}
 				capabilitiesContent += "\n";
 			}
@@ -366,6 +452,13 @@ export class ReviewCapabilitiesTool extends BaseTool {
 					disabledText += `  - ${feature} (enable with \`${command}\`)\n`;
 				}
 				unavailableReasons.push(disabledText);
+			}
+
+			// Check for missing embedding model (needed for document knowledge base)
+			if (!config.embedding_model_id) {
+				unavailableReasons.push(
+					"**Document Knowledge Base**: No embedding model configured. Enable with `/config model embedding` to upload and search documents.",
+				);
 			}
 
 			// Check for missing API keys
@@ -528,6 +621,17 @@ export class ReviewCapabilitiesTool extends BaseTool {
 					value: config.sampledialogue_memteaching_enabled,
 				},
 				{ name: "Pin Message Tool", value: config.pin_message_enabled },
+				{
+					name: "Uncensored Unicode Space",
+					value: config.uncensor_unicode_space_enabled,
+				},
+				{
+					name: "Document Knowledge Base (RAG)",
+					value: !!config.embedding_model_id,
+					note: !config.embedding_model_id
+						? " (configure with `/config model embedding`)"
+						: "",
+				},
 			];
 
 			for (const feature of featureFlags) {
@@ -535,6 +639,43 @@ export class ReviewCapabilitiesTool extends BaseTool {
 				settingsContent += `- **${feature.name}**: ${status}${feature.note || ""}\n`;
 			}
 			settingsContent += "\n";
+
+			// 6b. Image Generation Configuration
+			settingsContent += "## Image Generation\n\n";
+			if (config.imagegen_enabled && config.diffusion_model_id) {
+				settingsContent += "Image generation is **enabled** and configured.\n";
+				settingsContent +=
+					"- Supports Text2Image and Image2Image with multiple aspect ratios\n";
+				settingsContent +=
+					"- Users can ask you to generate images, or use `/generate image` directly\n\n";
+			} else if (config.imagegen_enabled && !config.diffusion_model_id) {
+				settingsContent +=
+					"Image generation is enabled but no diffusion model is set.\n";
+				settingsContent +=
+					"- Configure with `/config model image` to activate\n\n";
+			} else {
+				settingsContent +=
+					"Image generation is **disabled**. Enable with `/config permissions`.\n\n";
+			}
+
+			// 6c. System Prompt Configuration
+			settingsContent += "## System Prompt\n\n";
+			if (config.system_prompt) {
+				settingsContent += `A custom system prompt is active (${config.system_prompt.length} characters).\n`;
+				settingsContent +=
+					"- Modify with `/config prompt change`\n";
+				settingsContent +=
+					"- Switch to a preset with `/config prompt preset`\n";
+				settingsContent +=
+					"- Reset to default with `/config prompt clear`\n\n";
+			} else {
+				settingsContent +=
+					"No custom system prompt is set. Using the default built-in prompt.\n";
+				settingsContent +=
+					"- Set a custom prompt with `/config prompt change`\n";
+				settingsContent +=
+					"- Or choose a preset with `/config prompt preset`\n\n";
+			}
 
 			// 7. API Keys Section
 			settingsContent += "## API Keys\n\n";
@@ -544,6 +685,21 @@ export class ReviewCapabilitiesTool extends BaseTool {
 			if (!braveApiKeySet) {
 				settingsContent +=
 					"*Note: Without Brave API key, DuckDuckGo MCP search is used as fallback (if available)*\n\n";
+			}
+
+			// 7b. API Key Rotation Section
+			settingsContent += "## API Key Rotation\n\n";
+			const rotationKeys = context.tomoriState.rotation_keys;
+			if (rotationKeys && rotationKeys.length > 0) {
+				const enabledKeys = rotationKeys.filter((k) => k.is_enabled);
+				settingsContent += `**Active rotation pool**: ${enabledKeys.length} of ${rotationKeys.length} keys enabled\n`;
+				settingsContent +=
+					"- Keys are automatically rotated on rate limits or API errors\n";
+				settingsContent +=
+					"- If one key fails, the next available key is tried silently\n\n";
+			} else {
+				settingsContent +=
+					"No rotation keys configured. Use `/config apikey rotation` to add backup keys for automatic failover.\n\n";
 			}
 
 			// 8. Available Tools Section (Dynamic Query)

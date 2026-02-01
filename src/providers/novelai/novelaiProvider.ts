@@ -250,6 +250,7 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
 		webhook?: import("discord.js").Webhook,
 		personaAvatarUrl?: string,
 		personaUsername?: string,
+		prefixStrippingName?: string,
 	): Promise<StreamResult> {
 		log.info(
 			`NovelAIProvider: Starting streaming for server ${tomoriState.server_id}, model ${config.model}`,
@@ -293,11 +294,15 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
 				provider: "novelai",
 				locale: userLocale ?? "en-US", // Use user's preferred locale, fallback to en-US
 				suppressUserErrors: streamingContext?.suppressUserErrors,
+				rotationKeyRetriesUsed: streamingContext?.rotationKeyRetriesUsed,
+				outputPrefill: streamingContext?.outputPrefill,
+				outputPrefillState: streamingContext?.outputPrefillState,
 
 				// Multi-persona webhook support
 				webhook,
 				personaAvatarUrl,
 				personaUsername,
+				prefixStrippingName,
 
 				// Forced mentions (e.g., reminder recipients)
 				forcedMentions: streamingContext?.forcedMentions,
