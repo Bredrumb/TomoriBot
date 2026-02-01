@@ -228,6 +228,14 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 				.sendTyping()
 				.catch((e) => log.warn("Stream: Initial sendTyping failed", e));
 
+			// Send optional prefill before streaming (hybrid prefix)
+			await this.sendOutputPrefillIfNeeded(
+				context,
+				textConfig,
+				typingConfig,
+				state,
+			);
+
 			// Begin provider streaming
 			const streamGenerator = provider.startStream(config, context);
 
@@ -906,14 +914,114 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 			textConfig,
 		);
 
+		const strippedSegment = this.stripPrefillFromSegment(resolvedSegment, state);
+		if (!strippedSegment.trim()) return;
+
 		// Send the processed segment
 		await this.sendSegment(
-			resolvedSegment,
+			strippedSegment,
 			textConfig,
 			typingConfig,
 			context,
 			state,
 		);
+	}
+
+	private async sendOutputPrefillIfNeeded(
+		context: StreamContext,
+		textConfig: TextProcessingConfig,
+		typingConfig: TypingSimulationConfig,
+		state: StreamState,
+	): Promise<void> {
+		const rawPrefill = context.outputPrefill?.trim();
+		if (!rawPrefill) return;
+
+		// Filter duplicate custom emojis BEFORE transformation (while still in :name: format)
+		const filteredPrefill = filterDuplicateCustomEmojis(
+			rawPrefill,
+			context.contextItems,
+		);
+
+		// Clean prefill (same pipeline as streamed output)
+		const cleanedPrefill = cleanLLMOutput(
+			filteredPrefill,
+			textConfig.botName,
+			textConfig.emojiStrings,
+			textConfig.emojiUsageEnabled,
+			textConfig.mentionMap,
+			textConfig.mentionIdSet,
+			{
+				unicodeSpacesEnabled: textConfig.uncensorUnicodeSpacesEnabled,
+				sanitizeEnabled: textConfig.uncensorSanitizeEnabled,
+			},
+		);
+
+		const resolvedPrefill = await this.resolveGuildMentions(
+			cleanedPrefill,
+			context,
+			textConfig,
+		);
+
+		if (!resolvedPrefill.trim()) return;
+
+		// Track prefix for stripping from subsequent streamed output
+		state.prefillTarget = resolvedPrefill;
+		state.prefillMatched = 0;
+
+		if (context.outputPrefillState?.sent) {
+			log.info("Stream Prefill: Skipping send (already sent).");
+			return;
+		}
+
+		// Send prefill without stripping (this is the prefix we want to show)
+		await this.sendSegment(
+			resolvedPrefill,
+			textConfig,
+			typingConfig,
+			context,
+			state,
+		);
+
+		if (context.outputPrefillState) {
+			context.outputPrefillState.sent = true;
+		}
+
+		log.info(
+			`Stream Prefill: Sent output prefill (${resolvedPrefill.length} chars).`,
+		);
+	}
+
+	private stripPrefillFromSegment(
+		segment: string,
+		state: StreamState,
+	): string {
+		const target = state.prefillTarget;
+		if (!target || state.prefillMatched >= target.length) {
+			return segment;
+		}
+
+		let index = 0;
+		while (index < segment.length && state.prefillMatched < target.length) {
+			const expected = target[state.prefillMatched];
+			const actual = segment[index];
+
+			if (actual === expected) {
+				state.prefillMatched += 1;
+				index += 1;
+				continue;
+			}
+
+			const matchedPrefix = target.slice(0, state.prefillMatched);
+			state.prefillMatched = target.length;
+			return matchedPrefix + segment.slice(index);
+		}
+
+		if (state.prefillMatched >= target.length) {
+			return segment.slice(index);
+		}
+
+		// Still matching prefix; wait for more text
+		return "";
 	}
 
 	private extractMentionCandidates(text: string): {

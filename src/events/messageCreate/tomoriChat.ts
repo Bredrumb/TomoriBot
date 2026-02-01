@@ -638,7 +638,7 @@ async function sendServerRateLimitEmbed(
  * @param selectedPersonaId - Optional persona ID to use instead of main persona (for manual triggers).
  * @param isPersonaJob - Whether this invocation is an internal queued persona job.
  * @param manualSystemPrompt - Optional system prompt to append at the end of context.
- * @param manualPrefill - Optional assistant prefill to append as the final context item.
+ * @param manualPrefill - Optional assistant prefill used for hybrid prefix output.
  */
 export default async function tomoriChat(
 	client: Client,
@@ -2135,7 +2135,7 @@ export default async function tomoriChat(
 
 							// Get the referenced message content (truncate if too long)
 							let referencedContent =
-								msgReferencedMessage.content || "[No text content]";
+								(msgReferencedMessage.content || "[No text content]").replace(/\n/g, " ");
 							if (referencedContent.length > 200) {
 								referencedContent = `${referencedContent.substring(0, 197)}...`;
 							}
@@ -2750,6 +2750,7 @@ export default async function tomoriChat(
 				personaIndex++
 			) {
 				const currentPersona = personasToRespond[personaIndex];
+				const trimmedPrefill = manualPrefill?.trim();
 				const personaSnapshot: RequestSnapshot = {
 					...requestSnapshot,
 					tomoriState: currentPersona,
@@ -2898,13 +2899,31 @@ export default async function tomoriChat(
 								"[The following is a system-produced embed]",
 							) ?? false;
 
+						const shouldInjectContinuation =
+							(isFromSelectedPersona && !isEmbedMessage) ||
+							Boolean(trimmedPrefill);
+
 						// 4. Only inject continuation if:
-						//    - Last message is from the selected persona
-						//    - Last message is NOT an embed
-						if (isFromSelectedPersona && !isEmbedMessage) {
+						//    - Last message is from the selected persona (and not an embed), OR
+						//    - A manual prefill is provided (hybrid prefix)
+						if (shouldInjectContinuation) {
+							const continuationReason = trimmedPrefill
+								? "manual prefill"
+								: `${selectedPersona?.tomori_nickname} as last speaker`;
 							log.info(
-								`Manual trigger detected with ${selectedPersona?.tomori_nickname} as last speaker - injecting continuation prompt for UX`,
+								`Manual trigger detected (${continuationReason}) - injecting continuation prompt for UX`,
 							);
+
+							const botName =
+								currentPersona?.tomori_nickname ??
+								tomoriState?.tomori_nickname ??
+								process.env.DEFAULT_BOTNAME ??
+								"Tomori";
+							const continuationText = trimmedPrefill
+								? isFromSelectedPersona && !isEmbedMessage
+									? `[Continue your last message. Begin exactly with: "${botName}: ${trimmedPrefill}". Continue directly after it without repeating the prefix.]`
+									: `[Begin your next reply with: "${botName}: ${trimmedPrefill}". Continue directly after it without repeating the prefix.]`
+								: "[Continue your last message]";
 
 							// Create a fake user message prompting the persona to continue
 							// Use "0" as authorId to ensure it's not the bot's ID (will be labeled as "user" role)
@@ -2914,7 +2933,7 @@ export default async function tomoriChat(
 								authorName: "System",
 								authorType: "user",
 								personaName: null,
-								content: "[Continue your last message]",
+								content: continuationText,
 								imageAttachments: [],
 								videoAttachments: [],
 							};
@@ -3066,6 +3085,8 @@ export default async function tomoriChat(
 							contextSegments.push(manualPromptMessage);
 							log.info(`Injected manual system prompt: "${trimmedPrompt}"`);
 						}
+
+						// Manual prefill is handled via hybrid prefix output, not injected into context
 
 					} catch (error) {
 						log.error("Error building context for LLM API Call:", error, {
@@ -3357,6 +3378,22 @@ export default async function tomoriChat(
 						prefixStrippingName = undefined;
 					}
 
+					const outputPrefill = trimmedPrefill
+						? `${currentPersona?.tomori_nickname ?? tomoriState?.tomori_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori"}: ${trimmedPrefill}`
+						: undefined;
+
+					if (outputPrefill) {
+						if (streamingContext.outputPrefill !== outputPrefill) {
+							streamingContext.outputPrefill = outputPrefill;
+							streamingContext.outputPrefillState = { sent: false };
+						} else if (!streamingContext.outputPrefillState) {
+							streamingContext.outputPrefillState = { sent: false };
+						}
+					} else {
+						streamingContext.outputPrefill = undefined;
+						streamingContext.outputPrefillState = undefined;
+					}
+
 					// 1. Initialize variables for the function calling loop in streaming mode
 					let selectedStickerToSend: Sticker | null = null;
 					const functionInteractionHistory: {
@@ -3367,18 +3404,6 @@ export default async function tomoriChat(
 					let finalAccumulatedText = ""; // Track accumulated text from successful stream
 					const accumulatedStreamedModelParts: Array<Record<string, unknown>> =
 						[];
-					if (manualPrefill?.trim()) {
-						const trimmedPrefill = manualPrefill.trim();
-						const botName =
-							currentPersona?.tomori_nickname ??
-							tomoriState?.tomori_nickname ??
-							process.env.DEFAULT_BOTNAME ??
-							"Tomori";
-						accumulatedStreamedModelParts.push({
-							text: `${botName}: ${trimmedPrefill}`,
-						});
-						log.info(`Seeded manual prefill for stream: "${trimmedPrefill}"`);
-					}
 
 					for (let i = 0; i < MAX_FUNCTION_CALL_ITERATIONS; i++) {
 						log.info(

@@ -132,6 +132,10 @@ export interface StreamContext {
 		handle: string;
 		userId: string;
 	}>;
+
+	// Optional output prefill for hybrid prefix streaming
+	outputPrefill?: string;
+	outputPrefillState?: { sent: boolean };
 }
 
 /**

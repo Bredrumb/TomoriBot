@@ -369,6 +369,8 @@ export class CustomProvider extends BaseLLMProvider implements LLMProvider {
 				locale: userLocale ?? "en-US",
 				suppressUserErrors: streamingContext?.suppressUserErrors,
 				rotationKeyRetriesUsed: streamingContext?.rotationKeyRetriesUsed,
+				outputPrefill: streamingContext?.outputPrefill,
+				outputPrefillState: streamingContext?.outputPrefillState,
 
 				// Multi-persona webhook support
 				webhook,

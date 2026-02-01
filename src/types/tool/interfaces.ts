@@ -53,6 +53,8 @@ export interface StreamingContext {
 	suppressUserErrors?: boolean; // Suppress user-facing error embeds during key-rotation retries
 	rotationKeyRetriesUsed?: boolean; // True if one or more rotation-key retries were attempted
 	disableAllTools?: boolean; // Flag to disable all tool calling (e.g., during user impersonation)
+	outputPrefill?: string; // Optional prefill to output before streaming (hybrid prefix)
+	outputPrefillState?: { sent: boolean }; // Tracks if prefill was already output (avoid duplicates on retry)
 	forcedMentions?: Array<{
 		handle: string;
 		userId: string;

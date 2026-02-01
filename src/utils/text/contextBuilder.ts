@@ -1776,10 +1776,20 @@ export async function buildContext({
 			// Request 4: Prepend speaker name to content
 			const normalizedContent = normalizeCustomEmojisForLlm(msg.content);
 
-			// Skip author name prefix if content already starts with [System: (e.g., system injection embeds)
+			// Prepend author name, with special handling for [System:] content:
+			// - Pure system injections (embeds, reminders, etc.) are standalone "[System: ...]" — no prefix needed.
+			// - Reply references have "[System: ...]\n<user message>" — the user part needs the prefix.
 			let processedContent: string;
 			if (normalizedContent.startsWith("[System:")) {
-				processedContent = normalizedContent; // Use as-is, no author prefix
+				const replyBoundaryIndex = normalizedContent.indexOf("]\n");
+				if (replyBoundaryIndex !== -1 && replyBoundaryIndex + 2 < normalizedContent.length) {
+					// Reply reference: insert author prefix after the [System: ...] block
+					const systemBlock = normalizedContent.slice(0, replyBoundaryIndex + 2);
+					const userContent = normalizedContent.slice(replyBoundaryIndex + 2);
+					processedContent = `${systemBlock}${msg.authorName}: ${userContent}`;
+				} else {
+					processedContent = normalizedContent; // Pure system injection, no author prefix
+				}
 			} else {
 				processedContent = `${msg.authorName}: ${normalizedContent}`; // Add author prefix
 			}

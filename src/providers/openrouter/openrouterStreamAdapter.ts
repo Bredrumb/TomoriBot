@@ -166,6 +166,7 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 		// Assemble context for OpenAI message format
 		const messages = await this.assembleOpenrouterContext(
 			context.contextItems,
+			context.currentTurnModelParts,
 			context.functionInteractionHistory,
 			openrouterConfig.seesImages ?? true, // Default to true for backward compatibility
 		);
@@ -1320,6 +1321,7 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 	 */
 	private async assembleOpenrouterContext(
 		contextItems: StructuredContextItem[],
+		currentTurnModelParts: Array<Record<string, unknown>>,
 		functionInteractionHistory?: Array<{
 			functionCall: FunctionCall;
 			functionResponse: Record<string, unknown>;
@@ -1700,6 +1702,23 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 						content: responseParts,
 					});
 				}
+			}
+		}
+
+		// Append current turn model parts as final assistant message (prefill)
+		if (currentTurnModelParts.length > 0) {
+			const prefillText = currentTurnModelParts
+				.map((part) => (part as { text?: string }).text)
+				.filter((text): text is string => typeof text === "string" && text.length > 0)
+				.join("");
+			if (prefillText) {
+				messages.push({
+					role: "assistant",
+					content: prefillText,
+				});
+				log.info(
+					`OpenrouterStreamAdapter: Appended prefill assistant message (${prefillText.length} chars)`,
+				);
 			}
 		}
 
