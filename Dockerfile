@@ -11,7 +11,9 @@ WORKDIR /app
 # Include Python/pip and Node.js/npm for MCP server support
 # Pin Python 3.12 for consistency with pre-downloaded wheels
 # Include curl for health checks
-RUN apk add --no-cache \
+# --- SECURITY FIX: Added 'apk update && apk upgrade' to patch OpenSSL CVEs ---
+RUN apk update && apk upgrade && \
+    apk add --no-cache \
     ca-certificates \
     tzdata \
     curl \

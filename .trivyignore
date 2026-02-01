@@ -1,0 +1,4 @@
+# Known issue: fast-xml-parser
+# Required by AWS SDK v3. Upgrade to v5 breaks functionality.
+# Risk is low as input comes from trusted AWS endpoints.
+CVE-2026-25128
