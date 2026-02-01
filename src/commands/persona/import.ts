@@ -621,15 +621,17 @@ export async function execute(
 						: ColorCode.SUCCESS,
 				);
 
-			// Add DM-specific footer if in DM
+			// Build footer: always include refresh reminder; in DM, prepend avatar skip note
+			const footerParts: string[] = [];
 			if (isDM) {
-				successEmbed.setFooter({
-					text: localizer(
-						locale,
-						"commands.persona.import.avatar_update_skipped_dm",
-					),
-				});
+				footerParts.push(
+					localizer(locale, "commands.persona.import.avatar_update_skipped_dm"),
+				);
 			}
+			footerParts.push(
+				localizer(locale, "commands.persona.import.refresh_reminder"),
+			);
+			successEmbed.setFooter({ text: footerParts.join(" • ") });
 
 			const sanitizedNickname = itemsImported.nickname
 				.replace(/[^a-zA-Z0-9-_]/g, "_")

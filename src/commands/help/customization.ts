@@ -159,6 +159,42 @@ export async function execute(
 			"config",
 			"permissions",
 		);
+		const personaRemoveMention = commandRegistry.getCommandMention(
+			"persona",
+			"remove",
+		);
+		const serverWhitelistAddMention = commandRegistry.getCommandMention(
+			"server",
+			"whitelist",
+			"add",
+		);
+		const serverWhitelistRemoveMention = commandRegistry.getCommandMention(
+			"server",
+			"whitelist",
+			"remove",
+		);
+		const teachDocumentMention = commandRegistry.getCommandMention(
+			"teach",
+			"document",
+		);
+		const forgetDocumentMention = commandRegistry.getCommandMention(
+			"forget",
+			"document",
+		);
+		const configApikeyRotationMention = commandRegistry.getCommandMention(
+			"config",
+			"apikey",
+			"rotation",
+		);
+		const configUncensorsMention = commandRegistry.getCommandMention(
+			"config",
+			"uncensors",
+		);
+		const configModelEmbeddingMention = commandRegistry.getCommandMention(
+			"config",
+			"model",
+			"embedding",
+		);
 
 		// EMBED 1: Overview + Personality Personas (reply with first embed)
 		await replySummaryEmbed(
@@ -183,6 +219,7 @@ export async function execute(
 								personaDefault: personaDefaultMention,
 								personaExport: personaExportMention,
 								personaImport: personaImportMention,
+								personaRemove: personaRemoveMention,
 								teach: teachMention,
 								serverAvatar: serverAvatarMention,
 							},
@@ -244,6 +281,10 @@ export async function execute(
 				serverTriggerAdd: serverTriggerAddMention,
 				serverTriggerDelete: serverTriggerDeleteMention,
 				serverAvatar: serverAvatarMention,
+				serverWhitelistAdd: serverWhitelistAddMention,
+				serverWhitelistRemove: serverWhitelistRemoveMention,
+				teachDocument: teachDocumentMention,
+				forgetDocument: forgetDocumentMention,
 			},
 			color: ColorCode.INFO,
 			footerKey: "commands.help.customization.embed3_footer",
@@ -264,6 +305,9 @@ export async function execute(
 				configRename: configRenameMention,
 				configTimezone: configTimezoneMention,
 				configPermissions: configPermissionsMention,
+				configApikeyRotation: configApikeyRotationMention,
+				configUncensors: configUncensorsMention,
+				configModelEmbedding: configModelEmbeddingMention,
 			},
 			color: ColorCode.INFO,
 			footerKey: "commands.help.customization.embed4_footer",

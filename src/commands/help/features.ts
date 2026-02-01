@@ -84,6 +84,30 @@ export async function execute(
 						value: localizer(locale, "commands.help.features.time_description"),
 						inline: false,
 					},
+					{
+						nameKey: "commands.help.features.alter_title",
+						value: localizer(
+							locale,
+							"commands.help.features.alter_description",
+						),
+						inline: false,
+					},
+					{
+						nameKey: "commands.help.features.documents_title",
+						value: localizer(
+							locale,
+							"commands.help.features.documents_description",
+						),
+						inline: false,
+					},
+					{
+						nameKey: "commands.help.features.impersonation_title",
+						value: localizer(
+							locale,
+							"commands.help.features.impersonation_description",
+						),
+						inline: false,
+					},
 				],
 				footerKey: "commands.help.features.footer",
 			},

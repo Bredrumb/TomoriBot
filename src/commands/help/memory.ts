@@ -124,6 +124,14 @@ export async function execute(
 						}),
 						inline: false,
 					},
+					{
+						nameKey: "commands.help.memory.documents_title",
+						value: localizer(
+							locale,
+							"commands.help.memory.documents_description",
+						),
+						inline: false,
+					},
 				],
 			},
 			MessageFlags.Ephemeral,

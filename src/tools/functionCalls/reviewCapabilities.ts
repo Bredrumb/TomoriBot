@@ -217,6 +217,21 @@ export class ReviewCapabilitiesTool extends BaseTool {
 			capabilitiesContent +=
 				"- **Standard emojis** (Unicode emojis in text)\n\n";
 
+			// 5b. Alter Personas section (multi-character webhook support)
+			capabilitiesContent += "## Alter Personas\n\n";
+			capabilitiesContent +=
+				"This server may have multiple personas (alter personas) active:\n";
+			capabilitiesContent +=
+				"- Each alter persona has its own personality, trigger words, and webhook avatar\n";
+			capabilitiesContent +=
+				"- Alter personas are triggered when their keywords appear in messages\n";
+			capabilitiesContent +=
+				"- Multiple personas can be triggered sequentially from a single message\n";
+			capabilitiesContent +=
+				"- Replying to a webhook message continues the conversation as that persona\n";
+			capabilitiesContent +=
+				"- Self-triggers are prevented (a persona will not trigger itself)\n\n";
+
 			// 6. Memory & Personalization section (always available)
 			capabilitiesContent += "## Memory & Personalization\n\n";
 			capabilitiesContent += "You HAVE access to:\n";
@@ -228,6 +243,24 @@ export class ReviewCapabilitiesTool extends BaseTool {
 				"- **User preferences** (language, timezone, custom nicknames)\n";
 			capabilitiesContent +=
 				"- **Conversation history** (previous messages in context)\n\n";
+
+			// 6b. Document Knowledge Base section (conditional on embedding model)
+			capabilitiesContent += "## Document Knowledge Base\n\n";
+			if (config.embedding_model_id) {
+				capabilitiesContent +=
+					"You have access to a document knowledge base (RAG):\n";
+				capabilitiesContent +=
+					"- Server administrators can upload documents (text, PDF, Markdown)\n";
+				capabilitiesContent +=
+					"- Relevant document content is retrieved and included in your context based on the conversation\n";
+				capabilitiesContent +=
+					"- Use this knowledge to answer questions about server-specific topics\n\n";
+			} else {
+				capabilitiesContent +=
+					"The document knowledge base is not configured. An embedding model is required.\n";
+				capabilitiesContent +=
+					"- Configure with `/config model embedding` to enable document uploads\n\n";
+			}
 
 			// 7. Personality & Configuration section (always available)
 			capabilitiesContent += "## Personality & Configuration\n\n";
@@ -270,7 +303,11 @@ export class ReviewCapabilitiesTool extends BaseTool {
 			}
 
 			// 9. Model-specific characteristics section
-			if (isReasoning || isUncensored) {
+			const hasUncensorConfig =
+				config.uncensor_unicode_space_enabled ||
+				config.uncensor_injection_enabled ||
+				config.uncensor_sanitize_enabled;
+			if (isReasoning || isUncensored || hasUncensorConfig) {
 				capabilitiesContent += "## Model Characteristics\n\n";
 				if (isReasoning) {
 					capabilitiesContent +=
@@ -279,6 +316,22 @@ export class ReviewCapabilitiesTool extends BaseTool {
 				if (isUncensored) {
 					capabilitiesContent +=
 						"- **Uncensored**: This model has reduced content restrictions\n";
+				}
+				if (hasUncensorConfig) {
+					capabilitiesContent +=
+						"- **Uncensored Output Processing**: Active output modifications:\n";
+					if (config.uncensor_unicode_space_enabled) {
+						capabilitiesContent +=
+							"  - Unicode space replacement is active in responses\n";
+					}
+					if (config.uncensor_injection_enabled) {
+						capabilitiesContent +=
+							"  - Prompt injection mitigation is active\n";
+					}
+					if (config.uncensor_sanitize_enabled) {
+						capabilitiesContent +=
+							"  - Sensitive word sanitization is active\n";
+					}
 				}
 				capabilitiesContent += "\n";
 			}
@@ -366,6 +419,13 @@ export class ReviewCapabilitiesTool extends BaseTool {
 					disabledText += `  - ${feature} (enable with \`${command}\`)\n`;
 				}
 				unavailableReasons.push(disabledText);
+			}
+
+			// Check for missing embedding model (needed for document knowledge base)
+			if (!config.embedding_model_id) {
+				unavailableReasons.push(
+					"**Document Knowledge Base**: No embedding model configured. Enable with `/config model embedding` to upload and search documents.",
+				);
 			}
 
 			// Check for missing API keys
@@ -528,6 +588,17 @@ export class ReviewCapabilitiesTool extends BaseTool {
 					value: config.sampledialogue_memteaching_enabled,
 				},
 				{ name: "Pin Message Tool", value: config.pin_message_enabled },
+				{
+					name: "Uncensored Unicode Space",
+					value: config.uncensor_unicode_space_enabled,
+				},
+				{
+					name: "Document Knowledge Base (RAG)",
+					value: !!config.embedding_model_id,
+					note: !config.embedding_model_id
+						? " (configure with `/config model embedding`)"
+						: "",
+				},
 			];
 
 			for (const feature of featureFlags) {
@@ -544,6 +615,21 @@ export class ReviewCapabilitiesTool extends BaseTool {
 			if (!braveApiKeySet) {
 				settingsContent +=
 					"*Note: Without Brave API key, DuckDuckGo MCP search is used as fallback (if available)*\n\n";
+			}
+
+			// 7b. API Key Rotation Section
+			settingsContent += "## API Key Rotation\n\n";
+			const rotationKeys = context.tomoriState.rotation_keys;
+			if (rotationKeys && rotationKeys.length > 0) {
+				const enabledKeys = rotationKeys.filter((k) => k.is_enabled);
+				settingsContent += `**Active rotation pool**: ${enabledKeys.length} of ${rotationKeys.length} keys enabled\n`;
+				settingsContent +=
+					"- Keys are automatically rotated on rate limits or API errors\n";
+				settingsContent +=
+					"- If one key fails, the next available key is tried silently\n\n";
+			} else {
+				settingsContent +=
+					"No rotation keys configured. Use `/config apikey rotation` to add backup keys for automatic failover.\n\n";
 			}
 
 			// 8. Available Tools Section (Dynamic Query)

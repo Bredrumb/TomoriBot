@@ -716,6 +716,7 @@ export default {
 				error_invalid_format: `Invalid persona file format`,
 				error_invalid_type: `Invalid persona type: {type}. Expected "persona"`,
 				avatar_update_skipped_dm: `Preset was imported successfully, except avatar and nickname updates which are not available in Direct Messages`,
+				refresh_reminder: `Run \`/tool refresh\` to apply persona update in this chat`,
 			},
 			remove: {
 				description: `Remove an alter persona from the server`,
@@ -906,6 +907,7 @@ export default {
 				personality_title: `Personality & Customization`,
 				personality_description: `- I can change my name and avatar using \`/config rename\` and \`/server avatar\`
 - I can switch between different personas using \`/persona\` (you can also share and save personas using \`/persona export\`!)
+- Multiple characters can coexist as alter personas, each with their own triggers and webhook avatar
 - My behavior and tone can be tweaked with \`/teach\`
 - Learn more with \`/help customization\``,
 				memory_title: `Memory & Personalization`,
@@ -916,7 +918,22 @@ export default {
 - Learn more with \`/help memory\``,
 				time_title: `Time Awareness`,
 				time_description: `- I know what time it currently is in the server (via \`/config timezone\`)
-- I can set up reminders for you (try asking me to remind you about something!)`,
+- I can set up reminders for you (try asking me to remind you about something!)
+- Recurrent reminders are supported and are persona-specific`,
+				alter_title: `Alter Personas`,
+				alter_description: `- Multiple characters can coexist in one server via alter personas
+- Each alter has its own personality and is triggered by specific keywords
+- Alter personas use webhooks for distinct avatars
+- Manage alters with \`/persona import\` (alter option) and \`/persona remove\``,
+				documents_title: `Document Knowledge Base`,
+				documents_description: `- Upload text, PDF, or Markdown files as server knowledge using \`/teach document\`
+- I retrieve and reference relevant document content when answering questions
+- Requires an embedding model (configure with \`/config model embedding\`)
+- Remove documents with \`/forget document\``,
+				impersonation_title: `Impersonation & Tools`,
+				impersonation_description: `- Use \`/bot impersonate\` to send messages as yourself, a persona, or inject system messages
+- \`/tools compact\` can summarize or roleplay-compress conversation history
+- \`/reward headpat\` for interactive reward moments`,
 				footer: `Not all features are available for all AI providers. It is recommended to use Google's Gemini`,
 			},
 
@@ -982,9 +999,10 @@ I have built-in features to help reduce costs from abusers or spammers in your s
 - I'll remember our conversations with my memory system (which you can disable using {configPermissions}!)
 - Set up auto-trigger with {serverAutotrigger} to chat without mentioning me`,
 				step4_title: `Optional: Customize Me`,
-				step4_description: `- Use {persona} commands to completely change my personality
+				step4_description: `- Use {persona} commands to completely change my personality (including alter personas!)
 - Configure my settings with {server}, {personal}, and {config} commands
-- You can also manually teach me things with {teach}`,
+- You can also manually teach me things with {teach}
+- Explore advanced features like document uploads, API key rotation, and uncensored mode`,
 				need_help_title: `Need Help?`,
 				need_help_description: `- {helpFeatures} - See what I can do
 - {helpMemory} - Learn about my memory system
@@ -1132,6 +1150,13 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
 - Keep memories concise and clear for best results
 
 **Privacy:** See \`/legal privacy\` for full data handling details`,
+				documents_title: `Document Knowledge Base`,
+				documents_description: `Server administrators can upload documents for me to reference:
+- Use \`/teach document\` to upload text, PDF, or Markdown files
+- Documents are chunked and stored as searchable embeddings
+- I automatically retrieve relevant content based on the conversation
+- Use \`/forget document\` to remove uploaded documents
+- Requires an embedding model configured via \`/config model embedding\``,
 			},
 
 			// /help customization
@@ -1148,14 +1173,16 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
 - {personaGenerate} - AI-generate a personality based on a description and image (Requires a vision + structured output model like Gemini or OpenRouter)
 - {personaDefault} - Switch to a default personality
 - {personaExport} - Export your persona to share or backup
-- {personaImport} - Import a persona from a file
+- {personaImport} - Import a persona from a file (supports importing as an alter persona with its own triggers and webhook avatar)
+- {personaRemove} - Remove an alter persona
 - {teach} - Teach me on how I should talk and act
 - {serverAvatar} - Change my profile picture`,
 				embed1_what_personas_include_title: `What Personas Include:`,
 				embed1_what_personas_include_description: `- Personality attributes (traits, characteristics, and quirks)
 - Sample dialogues (example conversations that teach me on how I should speak)
 - Custom server avatar for that personality
-- Behavior and tone settings`,
+- Behavior and tone settings
+- Alter personas: separate characters with their own triggers, webhook avatar, and personality`,
 				embed1_footer: `Next: Teaching Commands`,
 				// Embed 2: Teaching System
 				embed2_title: `Teaching Commands`,
@@ -1200,9 +1227,18 @@ Auto-Trigger Behavior:
 - {serverAutotriggerThreshold} - Set message threshold for auto-responses
 
 Triggers & Appearance:
-- {serverTriggerAdd} - Add custom trigger words I respond to
+- {serverTriggerAdd} - Add custom trigger words I respond to (also works with alter personas)
 - {serverTriggerDelete} - Remove trigger words
-- {serverAvatar} - Set my custom profile picture for this server`,
+- {serverAvatar} - Set my custom profile picture for this server
+
+Channel Whitelist & Cooldowns:
+- {serverWhitelistAdd} - Add a channel to the whitelist (only whitelisted channels can trigger me)
+- {serverWhitelistRemove} - Remove a channel from the whitelist
+- Whitelisted channels support per-channel cooldown overrides
+
+Documents:
+- {teachDocument} - Upload a document for me to reference
+- {forgetDocument} - Remove an uploaded document`,
 				embed3_footer: `Next: Bot Settings`,
 				// Embed 4: Advanced Settings
 				embed4_title: `Advanced Settings`,
@@ -1215,13 +1251,18 @@ AI Settings:
 API Keys:
 - {configApikeySet} - Set your AI provider API key
 - {configApikeyDelete} - Remove your API key
+- {configApikeyRotation} - Manage backup API keys for automatic failover and load balancing
 - {configBraveapiSet} - Set Brave Search API key (optional)
 - {configBraveapiDelete} - Remove Brave Search API key
 
 Personalization:
 - {configRename} - Change what I refer to myself as
 - {configTimezone} - Set timezone for time-aware responses and reminders
-- {configPermissions} - Configure what I'm allowed to do`,
+- {configPermissions} - Configure what I'm allowed to do
+- {configUncensors} - Configure uncensored output options
+
+Document Knowledge Base:
+- {configModelEmbedding} - Configure an embedding model for document uploads and RAG`,
 				embed4_footer: `If you have any more questions, join the support server with /support discord`,
 				// Embed 5: Pro Tips
 				embed5_title: `Pro Tips`,
