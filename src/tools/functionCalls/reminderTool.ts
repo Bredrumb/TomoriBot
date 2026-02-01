@@ -35,7 +35,7 @@ export class ReminderTool extends BaseTool {
 			reminder_purpose: {
 				type: "string",
 				description:
-					'What the reminder is for. IMPORTANT: Be very descriptive and detailed (2-4 sentences) because you might not remember the context after a long time. Include WHAT they want to be reminded about, WHY it was set, and any relevant details from the conversation. Bad example: "dinner" or "meeting". Good example: "User wants to be reminded to have dinner with their family at the new Italian restaurant they mentioned. They made a reservation for 7pm and need to leave home by 6:30pm to arrive on time." The more context you provide now, the more helpful the reminder will be later.',
+					'What the reminder is for. IMPORTANT: Be very descriptive and detailed (2-4 sentences) because you might not remember the context after a long time. Include WHAT they want to be reminded about, WHY it was set, and any relevant details from the conversation. Bad example: "dinner" or "meeting". Good example: "User wants to be reminded to have dinner with their family at the new Italian restaurant they mentioned. They made a reservation for 7pm and need to leave home by 6:30pm to arrive on time." The more context you provide now, the more helpful the reminder will be later. Do NOT include user/channel IDs or any meta information in your reminder purpose content.',
 			},
 			target_user_nickname: {
 				type: "string",
@@ -571,9 +571,7 @@ export class ReminderTool extends BaseTool {
 					context.channel,
 					context.locale,
 					{
-						color: useRecurringTaskEmbed
-							? ColorCode.INFO
-							: ColorCode.SUCCESS,
+						color: useRecurringTaskEmbed ? ColorCode.INFO : ColorCode.SUCCESS,
 						titleKey: useRecurringTaskEmbed
 							? "reminders.recurring_task_set_title"
 							: "reminders.reminder_set_title",

@@ -9,6 +9,7 @@ TomoriBot can store large text files as server-scoped documents and retrieve rel
 Key points:
 - Documents are scoped to a single server (or DM server).
 - Retrieval is automatic once documents exist for the server.
+- In non-production environments, retrieval is disabled unless `ACTIVATE_LOCAL_RAG=true`.
 - Embeddings are stored in PostgreSQL using pgvector.
 - Only text inputs are sent to embedding providers (PDFs are parsed locally first).
 
@@ -68,10 +69,14 @@ Limits are controlled by environment variables (see `.env.example`):
 - `MAX_DOCUMENTS_PER_SERVER`
 - `MAX_DOCUMENT_CHUNKS_PER_SERVER`
 - `MAX_DOCUMENT_OPERATIONS_PER_DAY`
+- `ACTIVATE_LOCAL_RAG` (non-production only)
 
 The memory guard can disable retrieval under critical memory pressure.
 
 ## Database Schema
+
+- Base schema lives in `src/db/schema.sql`.
+- RAG tables + pgvector extension live in `src/db/schema_rag.sql` and are only initialized when RAG is enabled.
 
 - `documents`
   - `server_id`, `document_name`, `text_content`, file metadata

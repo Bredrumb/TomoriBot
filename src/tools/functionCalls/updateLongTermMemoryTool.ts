@@ -24,7 +24,7 @@ import { isBlacklisted, loadUserRow, getPrivacyLevel } from "@/utils/db/dbRead";
 export class UpdateLongTermMemoryTool extends BaseTool {
 	name = "update_long_term_memory";
 	description =
-		"Replace an existing long-term memory (server or personal) by ID. Use this when an existing memory needs revision. For server memories, provide the memory ID shown in context (e.g., ID:24). For personal memories, also provide the target user's Discord ID and nickname, and use the ID shown next to that user's memory. Use {bot} and {user} placeholders for names when relevant.";
+		"Replace an existing long-term memory (server or personal) by ID. Use this when an existing memory needs revision. For server memories, provide the memory ID shown in context (e.g., ID:24). For personal memories, also provide the target user's Discord ID and nickname, and use the ID shown next to that user's memory.";
 	category = "memory" as const;
 	requiresFeatureFlag = "self_teaching";
 
@@ -39,7 +39,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
 			memory_content: {
 				type: "string",
 				description:
-					"The full replacement memory content. This completely replaces the existing memory. Use {bot} and {user} placeholders for names when relevant.",
+					"The full replacement memory content. This completely replaces the existing memory. Do NOT insert user IDs or any meta information here.",
 			},
 			target_user_discord_id: {
 				type: "string",

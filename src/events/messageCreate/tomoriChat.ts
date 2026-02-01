@@ -112,6 +112,15 @@ const STREAM_SDK_CALL_TIMEOUT_MS = 35000; // Slightly longer than internal strea
 const DEFAULT_SELF_REPLY_LIMIT = 3;
 const MAX_SELF_REPLY_LIMIT = 10;
 const SELF_REPLY_CHAIN_TTL_MS = 30 * 60 * 1000; // Reset self-reply chain after 30 minutes of inactivity
+const SELF_REPLY_SUPPRESSION_TTL_MS = 5000;
+const selfReplySuppressionUntil = new Map<string, number>();
+
+export function suppressNextSelfReply(
+	channelId: string,
+	ttlMs = SELF_REPLY_SUPPRESSION_TTL_MS,
+): void {
+	selfReplySuppressionUntil.set(channelId, Date.now() + ttlMs);
+}
 
 function shouldSendWebhookError(channelId: string): boolean {
 	const now = Date.now();
@@ -419,6 +428,7 @@ interface ChannelLockEntry {
 		selectedPersonaId?: number;
 		isPersonaJob?: boolean;
 		manualSystemPrompt?: string;
+		manualPrefill?: string;
 	}>;
 }
 const channelLocks = new Map<string, ChannelLockEntry>(); // Key: channel.id
@@ -628,6 +638,7 @@ async function sendServerRateLimitEmbed(
  * @param selectedPersonaId - Optional persona ID to use instead of main persona (for manual triggers).
  * @param isPersonaJob - Whether this invocation is an internal queued persona job.
  * @param manualSystemPrompt - Optional system prompt to append at the end of context.
+ * @param manualPrefill - Optional assistant prefill to append as the final context item.
  */
 export default async function tomoriChat(
 	client: Client,
@@ -651,6 +662,7 @@ export default async function tomoriChat(
 	isUserImpersonation = false,
 	impersonatedUserId?: string,
 	manualSystemPrompt?: string,
+	manualPrefill?: string,
 ): Promise<void> {
 	// 1. Initial Checks & State Loading
 	const channel = message.channel;
@@ -670,12 +682,24 @@ export default async function tomoriChat(
 		message.content === "\u2800" &&
 		message.embeds.length === 0 &&
 		message.attachments.size === 0;
-	if (isSeedPlaceholderMessage) {
+	if (isSeedPlaceholderMessage && !isManuallyTriggered) {
 		updateSelfReplyChainState(channel.id, false);
 		return;
 	}
 
-	if (isFromClientUser && message.reference?.messageId) {
+	const suppressionUntil = selfReplySuppressionUntil.get(channel.id);
+	if (
+		!isManuallyTriggered &&
+		isLikelySelfMessage &&
+		typeof suppressionUntil === "number" &&
+		Date.now() < suppressionUntil
+	) {
+		selfReplySuppressionUntil.delete(channel.id);
+		updateSelfReplyChainState(channel.id, false);
+		return;
+	}
+
+	if (isLikelySelfMessage && message.reference?.messageId) {
 		let referencedMessage = message.channel.messages.cache.get(
 			message.reference.messageId,
 		);
@@ -690,7 +714,11 @@ export default async function tomoriChat(
 			}
 		}
 
-		if (referencedMessage?.author.id === client.user?.id) {
+		if (
+			referencedMessage &&
+			(referencedMessage.author.id === client.user?.id ||
+				referencedMessage.webhookId)
+		) {
 			updateSelfReplyChainState(channel.id, false);
 			return;
 		}
@@ -1087,6 +1115,7 @@ export default async function tomoriChat(
 						selectedPersonaId,
 						isPersonaJob,
 						manualSystemPrompt,
+						manualPrefill,
 					});
 					log.info(
 						`Channel ${channelLockId} is busy (msg ${lockEntry.currentMessageId}). Enqueued message ${message.id}. Queue: ${lockEntry.messageQueue.length}. Tomori would reply (autoch_counter simulated as 0 for this check).`,
@@ -2843,6 +2872,8 @@ export default async function tomoriChat(
 					if (
 						isManuallyTriggered &&
 						!reasoningQuery &&
+						!reminderRecipientID &&
+						!reminderData?.self_reminder &&
 						simplifiedMessages.length > 0
 					) {
 						const lastMessage =
@@ -3035,6 +3066,7 @@ export default async function tomoriChat(
 							contextSegments.push(manualPromptMessage);
 							log.info(`Injected manual system prompt: "${trimmedPrompt}"`);
 						}
+
 					} catch (error) {
 						log.error("Error building context for LLM API Call:", error, {
 							serverId: tomoriState?.server_id, // Use internal DB ID if available
@@ -3335,6 +3367,18 @@ export default async function tomoriChat(
 					let finalAccumulatedText = ""; // Track accumulated text from successful stream
 					const accumulatedStreamedModelParts: Array<Record<string, unknown>> =
 						[];
+					if (manualPrefill?.trim()) {
+						const trimmedPrefill = manualPrefill.trim();
+						const botName =
+							currentPersona?.tomori_nickname ??
+							tomoriState?.tomori_nickname ??
+							process.env.DEFAULT_BOTNAME ??
+							"Tomori";
+						accumulatedStreamedModelParts.push({
+							text: `${botName}: ${trimmedPrefill}`,
+						});
+						log.info(`Seeded manual prefill for stream: "${trimmedPrefill}"`);
+					}
 
 					for (let i = 0; i < MAX_FUNCTION_CALL_ITERATIONS; i++) {
 						log.info(
@@ -3682,6 +3726,7 @@ export default async function tomoriChat(
 											isUserImpersonation,
 											impersonatedUserId,
 											manualSystemPrompt,
+											manualPrefill,
 										);
 									} else {
 										// Max retries reached, show error embed
@@ -4545,6 +4590,7 @@ export default async function tomoriChat(
 							undefined, // isUserImpersonation
 							undefined, // impersonatedUserId
 							nextMessageData.manualSystemPrompt, // manualSystemPrompt
+							nextMessageData.manualPrefill, // manualPrefill
 						).catch((e) => {
 							log.error(
 								`Error processing queued message ${nextMessageData.message.id}:`,

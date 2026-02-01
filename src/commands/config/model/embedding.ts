@@ -64,6 +64,10 @@ export async function execute(
 	userData: UserRow,
 	locale: string,
 ): Promise<void> {
+	const ragEnabled =
+		process.env.RUN_ENV === "production" ||
+		process.env.ACTIVATE_LOCAL_RAG === "true";
+
 	if (!interaction.channel) {
 		await replyInfoEmbed(interaction, userData.language_pref, {
 			titleKey: "general.errors.channel_only_title",
@@ -250,7 +254,7 @@ export async function execute(
 			currentEmbeddingModel?.model_family &&
 			currentEmbeddingModel.model_family !== selectedModel.model_family;
 
-		if (shouldReembed) {
+		if (shouldReembed && ragEnabled) {
 			const [docCountRow] = await sql`
 				SELECT COUNT(*) as doc_count
 				FROM documents

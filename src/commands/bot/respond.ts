@@ -9,7 +9,7 @@ import {
 import { ColorCode, log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import type { UserRow } from "../../types/db/schema";
-import type { SelectOption } from "../../types/discord/modal";
+import type { ModalComponent, SelectOption } from "../../types/discord/modal";
 import tomoriChat from "../../events/messageCreate/tomoriChat";
 import {
 	loadAllPersonasForServer,
@@ -26,15 +26,7 @@ export const configureSubcommand = (
 ) =>
 	subcommand
 		.setName("respond")
-		.setDescription(localizer("en-US", "commands.bot.respond.description"))
-		.addStringOption((option) =>
-			option
-				.setName("prompt")
-				.setDescription(
-					localizer("en-US", "commands.bot.respond.prompt_description"),
-				)
-				.setRequired(false),
-		);
+		.setDescription(localizer("en-US", "commands.bot.respond.description"));
 
 /**
  * Execute the respond command - manually trigger Tomori to respond to the latest message
@@ -116,12 +108,12 @@ export async function execute(
 	let replyInteraction:
 		| ChatInputCommandInteraction
 		| import("discord.js").ModalSubmitInteraction = interaction;
-	const manualPromptRaw = interaction.options.getString("prompt", false);
-	const manualPrompt = manualPromptRaw?.trim();
+	let manualPrompt: string | undefined;
 
-	// If alters exist, show selection modal
+	// Build modal components (persona select if alters exist, plus optional prompt)
+	const modalComponents: ModalComponent[] = [];
+
 	if (alterPersonas.length > 0 && mainPersona) {
-		// Build select options: main first, then alters
 		const personaOptions: SelectOption[] = [
 			{
 				label: safeSelectOptionText(mainPersona.tomori_nickname),
@@ -134,47 +126,69 @@ export async function execute(
 				description: localizer(locale, "commands.bot.respond.alter_persona_description"),
 			})),
 		];
-
-		// Show modal
-		const modalResult = await promptWithPaginatedModal(interaction, locale, {
-			modalCustomId: "respond_persona_select",
-			modalTitleKey: "commands.bot.respond.select_persona_title",
-			components: [
-				{
-					customId: "persona_choice",
-					labelKey: "commands.bot.respond.select_persona_label",
-					placeholder: "commands.bot.respond.select_persona_placeholder",
-					required: true,
-					options: personaOptions,
-				},
-			],
+		modalComponents.push({
+			customId: "persona_choice",
+			labelKey: "commands.bot.respond.select_persona_label",
+			descriptionKey: "commands.bot.respond.select_persona_description",
+			placeholder: "commands.bot.respond.select_persona_placeholder",
+			required: true,
+			options: personaOptions,
 		});
+	}
 
-		// Handle modal result
-		if (modalResult.outcome !== "submit") {
-			log.info(
-				`Respond persona selection ${modalResult.outcome} for user ${interaction.user.id}`,
-			);
-			return;
-		}
+	modalComponents.push({
+		customId: "prompt",
+		labelKey: "commands.bot.respond.prompt_label",
+		descriptionKey: "commands.bot.respond.prompt_description",
+		placeholder: localizer(locale, "commands.bot.respond.prompt_placeholder"),
+		required: false,
+		maxLength: 2000,
+		style: 2, // TextInputStyle.Paragraph
+	});
+	modalComponents.push({
+		customId: "prefill",
+		labelKey: "commands.bot.respond.prefill_label",
+		descriptionKey: "commands.bot.respond.prefill_description",
+		placeholder: localizer(locale, "commands.bot.respond.prefill_placeholder"),
+		required: false,
+		maxLength: 2000,
+		style: 2, // TextInputStyle.Paragraph
+	});
 
-		// Update the interaction to use for replying
-		if (modalResult.interaction) {
-			replyInteraction = modalResult.interaction;
-		}
+	// Show modal (always, to allow prompt input)
+	const modalResult = await promptWithPaginatedModal(interaction, locale, {
+		modalCustomId: "respond_persona_select",
+		modalTitleKey: "commands.bot.respond.select_persona_title",
+		components: modalComponents,
+	});
 
-		// Extract selected persona
-		const selectedIndex = Number.parseInt(
-			modalResult.values?.persona_choice ?? "0",
-			10,
+	if (modalResult.outcome !== "submit") {
+		log.info(
+			`Respond modal ${modalResult.outcome} for user ${interaction.user.id}`,
 		);
+		return;
+	}
+
+	if (modalResult.interaction) {
+		replyInteraction = modalResult.interaction;
+	}
+
+	const selectedIndex = Number.parseInt(
+		modalResult.values?.persona_choice ?? "0",
+		10,
+	);
+	if (alterPersonas.length > 0 && mainPersona) {
 		selectedPersona =
 			selectedIndex === 0 ? mainPersona : alterPersonas[selectedIndex - 1];
-
 		log.info(
 			`User ${interaction.user.id} selected persona ${selectedPersona.tomori_nickname} (ID: ${selectedPersona.tomori_id}) for manual respond`,
 		);
 	}
+
+	const manualPromptRaw = modalResult.values?.prompt;
+	manualPrompt = manualPromptRaw?.trim() || undefined;
+	const manualPrefillRaw = modalResult.values?.prefill;
+	const manualPrefill = manualPrefillRaw?.trim() || undefined;
 
 	try {
 		// 5. Get embed visibility setting
@@ -244,6 +258,7 @@ export async function execute(
 			undefined, // isUserImpersonation
 			undefined, // impersonatedUserId
 			manualPrompt || undefined, // manualSystemPrompt
+			manualPrefill, // manualPrefill
 		);
 	} catch (error) {
 		log.error("Error in bot respond command:", error, {

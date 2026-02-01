@@ -164,13 +164,26 @@ async function initializeDatabase(
 	delayMs = 1000,
 ): Promise<void> {
 	const schemaPath = path.join(import.meta.dir, "db", "schema.sql");
+	const ragSchemaPath = path.join(import.meta.dir, "db", "schema_rag.sql");
 	const seedPath = path.join(import.meta.dir, "db", "seed.sql");
+	const ragEnabled =
+		process.env.RUN_ENV === "production" ||
+		process.env.ACTIVATE_LOCAL_RAG === "true";
 
 	for (let attempt = 1; attempt <= maxRetries; attempt++) {
 		try {
 			// Initialize schema
 			await sql.file(schemaPath);
 			log.success("PostgreSQL database schema verified");
+
+			if (ragEnabled) {
+				await sql.file(ragSchemaPath);
+				log.success("PostgreSQL RAG schema verified");
+			} else {
+				log.info(
+					"Skipping RAG schema init (set ACTIVATE_LOCAL_RAG=true to enable in non-production).",
+				);
+			}
 
 			// Initialize seed data
 			await sql.file(seedPath);

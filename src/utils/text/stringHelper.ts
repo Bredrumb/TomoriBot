@@ -541,8 +541,22 @@ export function chunkMessage(
 
 	// 4. Process all blocks in order
 	let currentChunk = "";
+	// Accumulates consecutive emoji blocks so they are sent as a single chunk
+	let emojiRun = "";
 
 	for (const block of mergedBlocks) {
+		// Flush any accumulated emoji run before processing a non-emoji block.
+		// Whitespace-only text blocks (left over from cleanLLMOutput padding around
+		// converted emojis) must not break the run — the text case skips them anyway.
+		if (block.type !== "emoji" && emojiRun.length > 0) {
+			const isWhitespaceText =
+				block.type === "text" && block.content.trim().length === 0;
+			if (!isWhitespaceText) {
+				chunkedMessages.push(emojiRun);
+				emojiRun = "";
+			}
+		}
+
 		// Handle each block type appropriately
 		switch (block.type) {
 			case "code":
@@ -568,15 +582,14 @@ export function chunkMessage(
 				break;
 
 			case "emoji":
-				// 3b. Handle Emojis - always treated as their own chunk
-				// First, save any current chunk
+				// 3b. Handle Emojis - flush pending text, then accumulate into emoji run
+				// Consecutive emojis are grouped into a single chunk so they render together
 				if (currentChunk.length > 0) {
 					chunkedMessages.push(currentChunk);
 					currentChunk = "";
 				}
 
-				// Add emoji as its own standalone chunk
-				chunkedMessages.push(block.content);
+				emojiRun += block.content;
 				break;
 
 			case "url":
@@ -702,7 +715,10 @@ export function chunkMessage(
 		}
 	}
 
-	// 4. Add the final remaining chunk if not empty
+	// 4. Flush any remaining emoji run or text chunk
+	if (emojiRun.length > 0) {
+		chunkedMessages.push(emojiRun);
+	}
 	if (currentChunk.length > 0) {
 		chunkedMessages.push(currentChunk);
 	}
@@ -1058,7 +1074,8 @@ export function cleanLLMOutput(
 		.replace(/\*\*<(.*?)>\*\*/g, "<$1>") // Bold **<emoji>**
 		.replace(/\*<(.*?)>\*/g, "<$1>") // Italic *<emoji>*
 		.replace(/<([a-zA-Z0-9_]+)>[\s\S]*?<\/\1>/g, "")
-		.replace(new RegExp(`^${botName ? botName : "Tomori"}:\\s*`, "i"), "") // Remove bot name prefix from start of text
+		// Remove bot name prefix (plain or bolded) from start of text — e.g. "Tomori:" or "**Tomori**:"
+		.replace(new RegExp(`^(\\*\\*)?${escapeRegExp(botName || "Tomori")}\\1:\\s*`, "i"), "")
 		.trim();
 
 	// 2. Emoji handling, only if we have a list of valid emojis
@@ -1165,12 +1182,10 @@ export function cleanLLMOutput(
 		);
 	}
 
-	// 3. Remove bot name prefix if present
+	// 3. Remove bot name prefix if present (plain or bolded, e.g. "Name:" or "**Name**:")
 	if (botName) {
-		const prefix = `${botName}:`;
-		if (cleanedText.startsWith(prefix)) {
-			cleanedText = cleanedText.slice(prefix.length);
-		}
+		const prefixPattern = new RegExp(`^(\\*\\*)?${escapeRegExp(botName)}\\1:\\s*`, "i");
+		cleanedText = cleanedText.replace(prefixPattern, "");
 	}
 
 	// 4. Final generic cleanup for any stray :name: patterns

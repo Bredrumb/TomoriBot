@@ -16,7 +16,9 @@ import { getDueReminders, deleteReminderById } from "../utils/db/dbRead";
 import { rescheduleReminder } from "../utils/db/dbWrite";
 import type { ReminderRow } from "../types/db/schema";
 import { calculateLateness } from "../utils/text/stringHelper";
-import tomoriChat from "../events/messageCreate/tomoriChat";
+import tomoriChat, {
+	suppressNextSelfReply,
+} from "../events/messageCreate/tomoriChat";
 import { sendStandardEmbed } from "../utils/discord/embedHelper";
 import { getCachedAllPersonas } from "../utils/cache/tomoriStateCache";
 import {
@@ -205,6 +207,8 @@ export class ReminderTimer {
 			const reminderStartTime = Date.now();
 
 			const isSelfReminder = reminder.self_reminder === true;
+
+			suppressNextSelfReply(channel.id);
 
 			// Call tomoriChat with manual trigger and reminder recipient ID
 			await tomoriChat(

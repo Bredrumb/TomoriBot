@@ -91,6 +91,10 @@ export async function execute(
 	userData: UserRow,
 	locale: string,
 ): Promise<void> {
+	const ragEnabled =
+		process.env.RUN_ENV === "production" ||
+		process.env.ACTIVATE_LOCAL_RAG === "true";
+
 	if (!interaction.channel) {
 		await replyInfoEmbed(interaction, locale, {
 			titleKey: "general.errors.channel_only_title",
@@ -104,6 +108,16 @@ export async function execute(
 	let tomoriState: TomoriState | null = null;
 
 	try {
+		if (!ragEnabled) {
+			await replyInfoEmbed(interaction, locale, {
+				titleKey: "commands.forget.document.rag_disabled_title",
+				descriptionKey: "commands.forget.document.rag_disabled_description",
+				color: ColorCode.ERROR,
+				flags: MessageFlags.Ephemeral,
+			});
+			return;
+		}
+
 		tomoriState = await getCachedTomoriState(
 			interaction.guild?.id ?? interaction.user.id,
 		);

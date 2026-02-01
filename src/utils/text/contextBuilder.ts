@@ -72,6 +72,8 @@ const DOCUMENT_QUERY_MAX_LENGTH = 1000;
 const DOCUMENT_QUERY_MIN_LENGTH = 3;
 const DOCUMENT_MAX_RESULTS = 6;
 const DOCUMENT_MIN_SIMILARITY = 0.2;
+const IS_PRODUCTION = process.env.RUN_ENV === "production";
+const ENABLE_LOCAL_RAG = process.env.ACTIVATE_LOCAL_RAG === "true";
 
 export const DEFAULT_SYSTEM_PROMPT =
 	"\n{bot} limits themselves to only 0 to 2 emojis per response ({bot} prefers to use available server emojis than normal emojis) and makes sure to respond short and concisely, as {bot} is aware that no one really likes to read walls of text. {bot} only makes lengthy responses if and only if people are asking for assistance or an explanation that warrants it.";
@@ -776,6 +778,7 @@ export async function buildContext({
 	// 4.5 Server Documents (RAG)
 	try {
 		if (
+			(IS_PRODUCTION || ENABLE_LOCAL_RAG) &&
 			memoryGuard.getStatus() !== "critical" &&
 			tomoriState &&
 			tomoriState.server_id &&

@@ -111,6 +111,10 @@ export async function execute(
 	userData: UserRow,
 	locale: string,
 ): Promise<void> {
+	const ragEnabled =
+		process.env.RUN_ENV === "production" ||
+		process.env.ACTIVATE_LOCAL_RAG === "true";
+
 	// 1. Ensure command is run in a valid channel context
 	if (!interaction.channel) {
 		await replyInfoEmbed(interaction, locale, {
@@ -126,6 +130,16 @@ export async function execute(
 	let tomoriState: TomoriState | null = null;
 
 	try {
+		if (!ragEnabled) {
+			await replyInfoEmbed(interaction, locale, {
+				titleKey: "commands.teach.document.rag_disabled_title",
+				descriptionKey: "commands.teach.document.rag_disabled_description",
+				color: ColorCode.ERROR,
+				flags: MessageFlags.Ephemeral,
+			});
+			return;
+		}
+
 		// 2. Check memory guard
 		const memCheck = memoryGuard.checkMemory();
 		if (memCheck.status === "critical") {
