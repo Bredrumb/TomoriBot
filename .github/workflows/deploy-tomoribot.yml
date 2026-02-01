@@ -351,6 +351,7 @@ jobs:
           exit-code: 1
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+          trivyignores: .trivyignore
         continue-on-error: true
         id: trivy
 
