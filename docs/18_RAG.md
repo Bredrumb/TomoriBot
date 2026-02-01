@@ -97,7 +97,7 @@ PostgreSQL finds closest chunks by vector distance:
 The retrieved chunks are formatted as:
 
 ```
-# Server Documents (reference only)
+# Server Documents
 
 ## document_name
 - [Chunk 4, score 0.47] ...

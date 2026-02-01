@@ -909,17 +909,21 @@ export default {
 - I can switch between different personas using \`/persona\` (you can also share and save personas using \`/persona export\`!)
 - Multiple characters can coexist as alter personas, each with their own triggers and webhook avatar
 - My behavior and tone can be tweaked with \`/teach\`
+- A custom system prompt can be set with \`/config prompt\` to further shape my behavior
 - Learn more with \`/help customization\``,
 				memory_title: `Memory & Personalization`,
 				memory_description: `- I can remember personal facts about you and server-wide information, persisting across conversations
 - Personal memories persist across servers (try talking to me in another server!)
+- I also keep short-term memory of recent conversations for cross-channel awareness (opt into cross-server sharing with \`/personal cache\`)
 - Change what I call you using \`/personal nickname\`
 - Use \`/teach\` to manually help me remember things, \`/forget\` to remove them
+- I can use server emojis and stickers more accurately after registration with \`/server initialize expressions\`
+- Full invisibility is available via \`/personal privacy\` if you want to be completely unseen by me
 - Learn more with \`/help memory\``,
 				time_title: `Time Awareness`,
 				time_description: `- I know what time it currently is in the server (via \`/config timezone\`)
 - I can set up reminders for you (try asking me to remind you about something!)
-- Recurrent reminders are supported and are persona-specific`,
+- Recurrent reminders and tasks are supported and are persona-specific, just tell me to do something`,
 				alter_title: `Alter Personas`,
 				alter_description: `- Multiple characters can coexist in one server via alter personas
 - Each alter has its own personality and is triggered by specific keywords
@@ -933,7 +937,13 @@ export default {
 				impersonation_title: `Impersonation & Tools`,
 				impersonation_description: `- Use \`/bot impersonate\` to send messages as yourself, a persona, or inject system messages
 - \`/tools compact\` can summarize or roleplay-compress conversation history
-- \`/reward headpat\` for interactive reward moments`,
+- \`/bot respond\` to trigger prefilled or guided messages from the bot`,
+				imagegen_title: `Image Generation`,
+				imagegen_description: `- I can generate images from text prompts or by editing reference images
+- Supports Text2Image and Image2Image with customizable aspect ratios
+- Use \`/generate image\` or just ask me to generate an image
+- Reference images can come from message attachments, stickers, emojis, or user avatars
+- Available on Google and OpenRouter providers (configure with \`/config model image\`)`,
 				footer: `Not all features are available for all AI providers. It is recommended to use Google's Gemini`,
 			},
 
@@ -1157,6 +1167,13 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
 - I automatically retrieve relevant content based on the conversation
 - Use \`/forget document\` to remove uploaded documents
 - Requires an embedding model configured via \`/config model embedding\``,
+				shortterm_title: `Short-Term Memory`,
+				shortterm_description: `In addition to persistent memories, I keep short-term memory of recent conversations:
+- Recent messages are cached per channel so I stay aware of context across channels
+- I can automatically summarize older conversations to keep context efficient
+- **Cross-server sharing** is opt-in: use {personalCache} with the \`crossserver\` option to let me reference your conversations from other servers
+- Clear all short-term memories with {personalCacheClear}
+- Short-term memories expire automatically over time`,
 			},
 
 			// /help customization
@@ -1232,9 +1249,10 @@ Triggers & Appearance:
 - {serverAvatar} - Set my custom profile picture for this server
 
 Channel Whitelist & Cooldowns:
+- {configCooldown} - Set global cooldown between my responses
 - {serverWhitelistAdd} - Add a channel to the whitelist (only whitelisted channels can trigger me)
 - {serverWhitelistRemove} - Remove a channel from the whitelist
-- Whitelisted channels support per-channel cooldown overrides
+- Whitelisted channels completely override the global cooldown with per-channel settings
 
 Documents:
 - {teachDocument} - Upload a document for me to reference
@@ -1248,6 +1266,15 @@ AI Settings:
 - {configTemperature} - Adjust creativity/randomness. The higher, the more varied the responses (1.0-2.0)
 - {configHumanizer} - Change how humanlike my responses should be
 
+Image Generation:
+- {generateImage} - Generate an image from a prompt or by editing a reference image
+- {configModelImage} - Choose which image generation model to use (supports Text2Image and Image2Image)
+
+System Prompt:
+- {configPromptChange} - Add a custom system instruction (up to 8000 characters)
+- {configPromptPreset} - Choose from preset system prompts
+- {configPromptClear} - Reset to the default system prompt
+
 API Keys:
 - {configApikeySet} - Set your AI provider API key
 - {configApikeyDelete} - Remove your API key
@@ -1258,8 +1285,10 @@ API Keys:
 Personalization:
 - {configRename} - Change what I refer to myself as
 - {configTimezone} - Set timezone for time-aware responses and reminders
-- {configPermissions} - Configure what I'm allowed to do
+- {configPermissions} - Toggle my features on/off (including image generation)
 - {configUncensors} - Configure uncensored output options
+- {personalPrivacy} - Control your visibility to me (full invisibility option available)
+- {serverInitializeExpressions} - Register server emoji and sticker appearances so I use them correctly
 
 Document Knowledge Base:
 - {configModelEmbedding} - Configure an embedding model for document uploads and RAG`,
@@ -2144,6 +2173,9 @@ You can change this anytime using \`/personal privacy\`.`,
 
 			cache: {
 				description: `Configure short-term memory settings`,
+				option_description: `Which setting to configure`,
+				crossserver_option: `Cross-server memory sharing`,
+				clear_option: `Clear all short-term memories`,
 				crossserver: {
 					title: `Cross-Server Memory Sharing`,
 					enabled: `Cross-server memory sharing is now **enabled**. I can now reference conversations from other servers when talking to you.`,

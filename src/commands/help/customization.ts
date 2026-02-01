@@ -195,6 +195,44 @@ export async function execute(
 			"model",
 			"embedding",
 		);
+		const configModelImageMention = commandRegistry.getCommandMention(
+			"config",
+			"model",
+			"image",
+		);
+		const configPromptChangeMention = commandRegistry.getCommandMention(
+			"config",
+			"prompt",
+			"change",
+		);
+		const configPromptPresetMention = commandRegistry.getCommandMention(
+			"config",
+			"prompt",
+			"preset",
+		);
+		const configPromptClearMention = commandRegistry.getCommandMention(
+			"config",
+			"prompt",
+			"clear",
+		);
+		const serverInitializeExpressionsMention =
+			commandRegistry.getCommandMention(
+				"server",
+				"initialize",
+				"expressions",
+			);
+		const personalPrivacyMention = commandRegistry.getCommandMention(
+			"personal",
+			"privacy",
+		);
+		const configCooldownMention = commandRegistry.getCommandMention(
+			"config",
+			"cooldown",
+		);
+		const generateImageMention = commandRegistry.getCommandMention(
+			"generate",
+			"image",
+		);
 
 		// EMBED 1: Overview + Personality Personas (reply with first embed)
 		await replySummaryEmbed(
@@ -285,6 +323,7 @@ export async function execute(
 				serverWhitelistRemove: serverWhitelistRemoveMention,
 				teachDocument: teachDocumentMention,
 				forgetDocument: forgetDocumentMention,
+				configCooldown: configCooldownMention,
 			},
 			color: ColorCode.INFO,
 			footerKey: "commands.help.customization.embed3_footer",
@@ -308,6 +347,13 @@ export async function execute(
 				configApikeyRotation: configApikeyRotationMention,
 				configUncensors: configUncensorsMention,
 				configModelEmbedding: configModelEmbeddingMention,
+				generateImage: generateImageMention,
+				configModelImage: configModelImageMention,
+				configPromptChange: configPromptChangeMention,
+				configPromptPreset: configPromptPresetMention,
+				configPromptClear: configPromptClearMention,
+				serverInitializeExpressions: serverInitializeExpressionsMention,
+				personalPrivacy: personalPrivacyMention,
 			},
 			color: ColorCode.INFO,
 			footerKey: "commands.help.customization.embed4_footer",

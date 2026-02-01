@@ -20,6 +20,7 @@ import { invalidateUserCache } from "@/utils/cache/userCache";
 import { clearShortTermMemoryForUser } from "@/utils/cache/shortTermMemoryCache";
 import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
 import { ColorCode, log } from "@/utils/misc/logger";
+import { localizer } from "@/utils/text/localizer";
 
 /**
  * Configure the subcommand structure
@@ -29,18 +30,43 @@ export const configureSubcommand = (
 ) =>
 	subcommand
 		.setName("cache")
-		.setDescription("Configure short-term memory settings")
+		.setDescription(
+			localizer("en-US", "commands.personal.cache.description"),
+		)
 		.addStringOption((option) =>
 			option
 				.setName("setting")
-				.setDescription("Which setting to configure")
+				.setDescription(
+					localizer("en-US", "commands.personal.cache.option_description"),
+				)
 				.setRequired(true)
 				.addChoices(
 					{
-						name: "Cross-server memory sharing",
+						name: localizer(
+							"en-US",
+							"commands.personal.cache.crossserver_option",
+						),
 						value: "crossserver",
+						name_localizations: {
+							ja: localizer(
+								"ja",
+								"commands.personal.cache.crossserver_option",
+							),
+						},
 					},
-					{ name: "Clear all short-term memories", value: "clear" },
+					{
+						name: localizer(
+							"en-US",
+							"commands.personal.cache.clear_option",
+						),
+						value: "clear",
+						name_localizations: {
+							ja: localizer(
+								"ja",
+								"commands.personal.cache.clear_option",
+							),
+						},
+					},
 				),
 		);
 

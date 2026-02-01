@@ -232,6 +232,33 @@ export class ReviewCapabilitiesTool extends BaseTool {
 			capabilitiesContent +=
 				"- Self-triggers are prevented (a persona will not trigger itself)\n\n";
 
+			// 5c. Image Generation section (conditional on provider and configuration)
+			capabilitiesContent += "## Image Generation\n\n";
+			if (supportsImageGen && config.imagegen_enabled && config.diffusion_model_id) {
+				capabilitiesContent += "You CAN generate images:\n";
+				capabilitiesContent +=
+					"- **Text-to-Image**: Generate images from detailed text prompts\n";
+				capabilitiesContent +=
+					"- **Image-to-Image**: Edit or transform reference images using a prompt\n";
+				capabilitiesContent +=
+					"- **Aspect Ratios**: 1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9\n";
+				capabilitiesContent +=
+					"- **Reference Sources**: Message attachments, embedded images, Discord stickers, custom emojis, or user profile pictures\n";
+				capabilitiesContent +=
+					"- Users can ask you to generate an image (triggers the generate_image tool), or use `/generate image` directly\n";
+				capabilitiesContent +=
+					"- When generating, describe in detail: style, composition, colors, mood, and important details\n\n";
+			} else if (supportsImageGen && config.imagegen_enabled && !config.diffusion_model_id) {
+				capabilitiesContent +=
+					"Image generation is enabled but no diffusion model is configured. An admin needs to set one with `/config model image`.\n\n";
+			} else if (supportsImageGen && !config.imagegen_enabled) {
+				capabilitiesContent +=
+					"Image generation is available for this provider but **disabled** by server configuration.\n\n";
+			} else {
+				capabilitiesContent +=
+					"Image generation is not available with the current provider (requires Google or OpenRouter).\n\n";
+			}
+
 			// 6. Memory & Personalization section (always available)
 			capabilitiesContent += "## Memory & Personalization\n\n";
 			capabilitiesContent += "You HAVE access to:\n";
@@ -242,7 +269,13 @@ export class ReviewCapabilitiesTool extends BaseTool {
 			capabilitiesContent +=
 				"- **User preferences** (language, timezone, custom nicknames)\n";
 			capabilitiesContent +=
-				"- **Conversation history** (previous messages in context)\n\n";
+				"- **Conversation history** (previous messages in context)\n";
+			capabilitiesContent +=
+				"- **Short-term memory** (recent conversations cached per channel for cross-channel context awareness)\n";
+			capabilitiesContent +=
+				"- Short-term memories expire automatically and can be summarized by you for efficiency\n";
+			capabilitiesContent +=
+				"- Cross-server short-term memory sharing is available when the user opts in via `/personal cache`\n\n";
 
 			// 6b. Document Knowledge Base section (conditional on embedding model)
 			capabilitiesContent += "## Document Knowledge Base\n\n";
@@ -606,6 +639,43 @@ export class ReviewCapabilitiesTool extends BaseTool {
 				settingsContent += `- **${feature.name}**: ${status}${feature.note || ""}\n`;
 			}
 			settingsContent += "\n";
+
+			// 6b. Image Generation Configuration
+			settingsContent += "## Image Generation\n\n";
+			if (config.imagegen_enabled && config.diffusion_model_id) {
+				settingsContent += "Image generation is **enabled** and configured.\n";
+				settingsContent +=
+					"- Supports Text2Image and Image2Image with multiple aspect ratios\n";
+				settingsContent +=
+					"- Users can ask you to generate images, or use `/generate image` directly\n\n";
+			} else if (config.imagegen_enabled && !config.diffusion_model_id) {
+				settingsContent +=
+					"Image generation is enabled but no diffusion model is set.\n";
+				settingsContent +=
+					"- Configure with `/config model image` to activate\n\n";
+			} else {
+				settingsContent +=
+					"Image generation is **disabled**. Enable with `/config permissions`.\n\n";
+			}
+
+			// 6c. System Prompt Configuration
+			settingsContent += "## System Prompt\n\n";
+			if (config.system_prompt) {
+				settingsContent += `A custom system prompt is active (${config.system_prompt.length} characters).\n`;
+				settingsContent +=
+					"- Modify with `/config prompt change`\n";
+				settingsContent +=
+					"- Switch to a preset with `/config prompt preset`\n";
+				settingsContent +=
+					"- Reset to default with `/config prompt clear`\n\n";
+			} else {
+				settingsContent +=
+					"No custom system prompt is set. Using the default built-in prompt.\n";
+				settingsContent +=
+					"- Set a custom prompt with `/config prompt change`\n";
+				settingsContent +=
+					"- Or choose a preset with `/config prompt preset`\n\n";
+			}
 
 			// 7. API Keys Section
 			settingsContent += "## API Keys\n\n";

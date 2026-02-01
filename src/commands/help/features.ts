@@ -108,6 +108,14 @@ export async function execute(
 						),
 						inline: false,
 					},
+					{
+						nameKey: "commands.help.features.imagegen_title",
+						value: localizer(
+							locale,
+							"commands.help.features.imagegen_description",
+						),
+						inline: false,
+					},
 				],
 				footerKey: "commands.help.features.footer",
 			},
