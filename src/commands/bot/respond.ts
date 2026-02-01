@@ -13,6 +13,7 @@ import type { ModalComponent, SelectOption } from "../../types/discord/modal";
 import tomoriChat from "../../events/messageCreate/tomoriChat";
 import {
 	loadAllPersonasForServer,
+	loadSmartestModel,
 	loadTomoriState,
 } from "../../utils/db/dbRead";
 
@@ -136,6 +137,28 @@ export async function execute(
 		});
 	}
 
+	// Add "Use Reasoning" Yes/No string select to toggle reasoning mode
+	const reasoningOptions: SelectOption[] = [
+		{
+			label: localizer(locale, "commands.bot.respond.use_reasoning_no"),
+			value: "no",
+			description: localizer(locale, "commands.bot.respond.use_reasoning_no_description"),
+		},
+		{
+			label: localizer(locale, "commands.bot.respond.use_reasoning_yes"),
+			value: "yes",
+			description: localizer(locale, "commands.bot.respond.use_reasoning_yes_description"),
+		},
+	];
+	modalComponents.push({
+		customId: "use_reasoning",
+		labelKey: "commands.bot.respond.use_reasoning_label",
+		descriptionKey: "commands.bot.respond.use_reasoning_description",
+		placeholder: "commands.bot.respond.use_reasoning_placeholder",
+		required: false,
+		options: reasoningOptions,
+	});
+
 	modalComponents.push({
 		customId: "prompt",
 		labelKey: "commands.bot.respond.prompt_label",
@@ -173,6 +196,15 @@ export async function execute(
 		replyInteraction = modalResult.interaction;
 	}
 
+	// 5. Defer the modal submission immediately — it opens a new 3-second window
+	// and async work (e.g. loadSmartestModel) must not run before acknowledgment
+	const hideEmbed = tomoriState.config.hide_respond_embed;
+	await replyInteraction.deferReply({
+		flags: hideEmbed
+			? MessageFlags.Ephemeral | MessageFlags.SuppressNotifications
+			: MessageFlags.SuppressNotifications,
+	});
+
 	const selectedIndex = Number.parseInt(
 		modalResult.values?.persona_choice ?? "0",
 		10,
@@ -190,10 +222,33 @@ export async function execute(
 	const manualPrefillRaw = modalResult.values?.prefill;
 	const manualPrefill = manualPrefillRaw?.trim() || undefined;
 
-	try {
-		// 5. Get embed visibility setting
-		const hideEmbed = tomoriState.config.hide_respond_embed;
+	// Determine if reasoning mode was requested
+	const useReasoning = modalResult.values?.use_reasoning === "yes";
+	let forceReason: boolean | undefined;
+	let llmOverrideCodename: string | undefined;
 
+	if (useReasoning) {
+		// Load the smartest reasoning model for the current provider
+		const currentProvider = tomoriState.llm.llm_provider;
+		const smartestModel = await loadSmartestModel(currentProvider);
+
+		if (!smartestModel) {
+			await replyInteraction.editReply({
+				embeds: [
+					new EmbedBuilder()
+						.setTitle(localizer(locale, "commands.bot.respond.no_smart_model_title"))
+						.setDescription(localizer(locale, "commands.bot.respond.no_smart_model_description"))
+						.setColor(ColorCode.ERROR),
+				],
+			});
+			return;
+		}
+
+		forceReason = true;
+		llmOverrideCodename = smartestModel.llm_codename;
+	}
+
+	try {
 		// 6. Build success embed
 		const successEmbed = new EmbedBuilder()
 			.setTitle(localizer(locale, "commands.bot.respond.success_title"))
@@ -209,12 +264,9 @@ export async function execute(
 			});
 		}
 
-		// 7. Send response (ephemeral if hide_respond_embed is true)
-		await replyInteraction.reply({
+		// 7. Send success response (interaction already deferred above)
+		await replyInteraction.editReply({
 			embeds: [successEmbed],
-			flags: hideEmbed
-				? MessageFlags.Ephemeral | MessageFlags.SuppressNotifications
-				: MessageFlags.SuppressNotifications,
 		});
 
 		// 8. Get the latest message in the channel (excluding the interaction itself)
@@ -245,9 +297,9 @@ export async function execute(
 			passportMessage as Message,
 			false, // isFromQueue
 			true, // isManuallyTriggered - this bypasses normal trigger logic
-			undefined, // forceReason
-			undefined, // reasoningQuery
-			undefined, // llmOverrideCodename
+			forceReason, // forceReason - enabled when "Use Reasoning" is Yes
+			useReasoning ? manualPrompt : undefined, // reasoningQuery - prompt doubles as reasoning query when reasoning is enabled
+			llmOverrideCodename, // llmOverrideCodename - smartest model when reasoning is enabled
 			undefined, // isStopResponse
 			0, // retryCount
 			false, // skipLock

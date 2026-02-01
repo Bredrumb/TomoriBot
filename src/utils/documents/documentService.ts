@@ -235,7 +235,7 @@ export function formatRetrievedChunksForPrompt(
 		return null;
 	}
 
-	let output = "# Server Documents (chunks referenced through RAG)\n";
+	let output = "# Server Documents (Chunks referenced through RAG)\n";
 	let currentDoc = "";
 
 	for (const chunk of chunks) {

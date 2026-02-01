@@ -2867,7 +2867,7 @@ export default async function tomoriChat(
 					}
 
 					// Inject continuation prompt for manual triggers when the selected persona is the last speaker
-					// This fixes the UX issue where manual /bot respond or /bot reason commands
+					// This fixes the UX issue where manual /bot respond commands
 					// don't work if the selected persona was the last one to speak in the conversation
 					// IMPORTANT: Skip this for reasoning queries - they have their own system message
 					if (

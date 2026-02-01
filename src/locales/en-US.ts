@@ -1235,6 +1235,15 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 - Test changes by chatting, iterate until it feels right
 - Export your persona to back it up or share with other servers!`,
 			},
+
+			// /help updates
+			updates: {
+				description: `View the latest TomoriBot release notes`,
+				title: `TomoriBot {version} Released!`,
+				no_notes: `No release notes available for this version.`,
+				fetch_error_title: `Unable to Fetch Latest Release`,
+				fetch_error_description: `Something went wrong while fetching the latest release information from GitHub. Please try again later or check the [GitHub Releases](https://github.com/Bredrumb/TomoriBot/releases) page directly.`,
+			},
 		},
 
 		// Legal commands
@@ -1266,7 +1275,7 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				prompt_description: `Optional system prompt to append at the end of context.`,
 				prompt_label: `Prompt (Optional)`,
 				prompt_placeholder: `Add system instructions (optional)...`,
-				prefill_description: `Optional assistant prefill appended as the final context item.`,
+				prefill_description: `Optional assistant prefill you want me to continue.`,
 				prefill_label: `Prefill (Optional)`,
 				prefill_placeholder: `Add assistant prefill (optional)...`,
 				success_title: `Manual Response Triggered`,
@@ -1280,12 +1289,13 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 				main_persona_description: `Main Persona`,
 				alter_persona_description: `Alter Persona`,
 				embed_hide_notice: `Tip: You can hide this embed by enabling the "Hide Response Embeds" permission via \`/config permissions\`.`,
-			},
-			reason: {
-				description: `Use current AI provider's smartest reasoning model to respond with optional query.`,
-				query_description: `Optional query to focus reasoning on.`,
-				success_title: `Reasoning Mode Activated`,
-				success_description: `Using advanced reasoning to respond{query}`,
+				use_reasoning_label: `Use Reasoning`,
+				use_reasoning_description: `Toggle advanced reasoning mode using the smartest available model.`,
+				use_reasoning_placeholder: `Select reasoning mode...`,
+				use_reasoning_yes: `Yes`,
+				use_reasoning_yes_description: `Use the smartest reasoning model for a more thorough response.`,
+				use_reasoning_no: `No`,
+				use_reasoning_no_description: `Use the standard model for a normal response.`,
 				no_smart_model_title: `No Reasoning Model Found`,
 				no_smart_model_description: `No reasoning model found for your current AI provider. Please switch to a provider that supports reasoning models using \`/config apikey set\`.`,
 			},

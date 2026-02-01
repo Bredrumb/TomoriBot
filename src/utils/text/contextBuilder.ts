@@ -775,64 +775,6 @@ export async function buildContext({
 		}
 	}
 
-	// 4.5 Server Documents (RAG)
-	try {
-		if (
-			(IS_PRODUCTION || ENABLE_LOCAL_RAG) &&
-			memoryGuard.getStatus() !== "critical" &&
-			tomoriState &&
-			tomoriState.server_id &&
-			tomoriState.config.embedding_model_id &&
-			tomoriState.config.api_key
-		) {
-			const queryText = getLatestUserQuery(simplifiedMessageHistory);
-			if (queryText && queryText.length >= DOCUMENT_QUERY_MIN_LENGTH) {
-				const [documentRow] = await sql`
-					SELECT document_id
-					FROM documents
-					WHERE server_id = ${tomoriState.server_id}
-					LIMIT 1
-				`;
-
-				if (documentRow?.document_id) {
-					const embeddingModel = await loadEmbeddingModelById(
-						tomoriState.config.embedding_model_id,
-					);
-					if (embeddingModel) {
-						const decryptedKey = await decryptApiKey(
-							tomoriState.config.api_key,
-							tomoriState.config.key_version || 1,
-						);
-
-						const chunks = await retrieveRelevantDocumentChunks({
-							serverId: tomoriState.server_id,
-							query: queryText,
-							embeddingModel,
-							apiKey: decryptedKey,
-							maxResults: DOCUMENT_MAX_RESULTS,
-							minSimilarity: DOCUMENT_MIN_SIMILARITY,
-						});
-
-						const documentContext = formatRetrievedChunksForPrompt(
-							chunks,
-							DOCUMENT_CONTEXT_MAX_CHARS,
-						);
-
-						if (documentContext) {
-							contextItems.push({
-								role: "system",
-								parts: [{ type: "text", text: documentContext }],
-								metadataTag: ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
-							});
-						}
-					}
-				}
-			}
-		}
-	} catch (error) {
-		log.warn("Failed to add server document context", error);
-	}
-
 	// 5. Emojis with Semantic Metadata (only available in guild channels, not DMs)
 	// CRITICAL: Text-based format with LLM-generated descriptions and emotion keys
 	// Kept in system instruction for better caching (deterministic ordering prevents frequent invalidation)
@@ -1185,6 +1127,67 @@ export async function buildContext({
 			parts: [{ type: "text", text: reminderText }],
 			metadataTag: ContextItemTag.KNOWLEDGE_SERVER_INFO,
 		});
+	}
+
+	// 6.75 Server Documents (RAG)
+	// Placed after all static system content (personality, memories, emojis, stickers) so that
+	// the stable prefix stays cache-friendly — RAG results change per query and would invalidate
+	// everything that follows if left higher in the prompt.
+	try {
+		if (
+			(IS_PRODUCTION || ENABLE_LOCAL_RAG) &&
+			memoryGuard.getStatus() !== "critical" &&
+			tomoriState &&
+			tomoriState.server_id &&
+			tomoriState.config.embedding_model_id &&
+			tomoriState.config.api_key
+		) {
+			const queryText = getLatestUserQuery(simplifiedMessageHistory);
+			if (queryText && queryText.length >= DOCUMENT_QUERY_MIN_LENGTH) {
+				const [documentRow] = await sql`
+					SELECT document_id
+					FROM documents
+					WHERE server_id = ${tomoriState.server_id}
+					LIMIT 1
+				`;
+
+				if (documentRow?.document_id) {
+					const embeddingModel = await loadEmbeddingModelById(
+						tomoriState.config.embedding_model_id,
+					);
+					if (embeddingModel) {
+						const decryptedKey = await decryptApiKey(
+							tomoriState.config.api_key,
+							tomoriState.config.key_version || 1,
+						);
+
+						const chunks = await retrieveRelevantDocumentChunks({
+							serverId: tomoriState.server_id,
+							query: queryText,
+							embeddingModel,
+							apiKey: decryptedKey,
+							maxResults: DOCUMENT_MAX_RESULTS,
+							minSimilarity: DOCUMENT_MIN_SIMILARITY,
+						});
+
+						const documentContext = formatRetrievedChunksForPrompt(
+							chunks,
+							DOCUMENT_CONTEXT_MAX_CHARS,
+						);
+
+						if (documentContext) {
+							contextItems.push({
+								role: "system",
+								parts: [{ type: "text", text: documentContext }],
+								metadataTag: ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
+							});
+						}
+					}
+				}
+			}
+		}
+	} catch (error) {
+		log.warn("Failed to add server document context", error);
 	}
 
 	// 7. Users in Conversation (ALL user-specific dynamic data)
