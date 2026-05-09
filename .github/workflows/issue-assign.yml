@@ -1,19 +1,52 @@
 name: Issue Assignment
 
 on:
-  schedule:
-    - cron: "0 0 * * *" # daily stale assignment check
   issue_comment:
     types: [created]
-  workflow_dispatch:
 
 jobs:
   assign:
+    if: github.event.issue.pull_request == null
     runs-on: ubuntu-latest
     permissions:
       issues: write
     steps:
-      - uses: takanome-dev/assign-issue-action@v3.1.0
+      - uses: actions/github-script@v7
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          maintainers: "Bredrumb"
+          script: |
+            const body = context.payload.comment.body.trim();
+            if (body !== "/assign-me") return;
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.issue.number;
+            const commenter = context.payload.comment.user.login;
+            const issue = context.payload.issue;
+
+            if (issue.state === "closed") {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number,
+                body: `@${commenter} This issue is closed and cannot be assigned.`,
+              });
+              return;
+            }
+
+            const alreadyAssigned = issue.assignees.find(
+              (a) => a.login !== commenter,
+            );
+            if (alreadyAssigned) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number,
+                body: `@${commenter} This issue is already assigned to @${alreadyAssigned.login}.`,
+              });
+              return;
+            }
+
+            await github.rest.issues.addAssignees({
+              owner, repo, issue_number,
+              assignees: [commenter],
+            });
+
+            await github.rest.issues.createComment({
+              owner, repo, issue_number,
+              body: `@${commenter} You've been assigned! Feel free to open a draft PR early to show the direction you're heading.`,
+            });
