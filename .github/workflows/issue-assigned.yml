@@ -16,7 +16,6 @@ jobs:
             const statusFieldId = "PVTSSF_lAHOA-NKoc4BW2OzzhSHQbE";
             const inProgressOptionId = "61e4505c";
 
-            // 1. Find the board item for this issue
             const result = await github.graphql(`
               query($issueId: ID!) {
                 node(id: $issueId) {
@@ -30,18 +29,14 @@ jobs:
                   }
                 }
               }
-            `, {
-              issueId: context.payload.issue.node_id,
-            });
+            `, { issueId: context.payload.issue.node_id });
 
             const projectItem = result.node.projectItems.nodes.find(
               (item) => item.project.id === projectId,
             );
 
-            // Issue may not be on the board yet if auto-add hasn't fired
             if (!projectItem) return;
 
-            // 2. Set status to In-Progress
             await github.graphql(`
               mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
                 updateProjectV2ItemFieldValue(input: {
