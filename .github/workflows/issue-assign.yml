@@ -11,10 +11,10 @@ jobs:
     permissions:
       issues: write
     steps:
-      - name: Assign commenter and move to In-Progress
+      - name: Assign commenter
+        id: assign
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.PROJECTS_TOKEN }}
           script: |
             const body = context.payload.comment.body.trim();
             if (body !== "/assign-me") return;
@@ -43,13 +43,19 @@ jobs:
               return;
             }
 
-            // 1. Assign the commenter
             await github.rest.issues.addAssignees({
               owner, repo, issue_number,
               assignees: [commenter],
             });
 
-            // 2. Find this issue's item on the project board
+            core.setOutput("assigned", "true");
+
+      - name: Move to In-Progress
+        if: steps.assign.outputs.assigned == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROJECTS_TOKEN }}
+          script: |
             const projectId = "PVT_kwHOA-NKoc4BW2Oz";
             const statusFieldId = "PVTSSF_lAHOA-NKoc4BW2OzzhSHQbE";
             const inProgressOptionId = "61e4505c";
@@ -67,29 +73,28 @@ jobs:
                   }
                 }
               }
-            `, { issueId: issue.node_id });
+            `, { issueId: context.payload.issue.node_id });
 
             const projectItem = result.node.projectItems.nodes.find(
               (item) => item.project.id === projectId,
             );
 
-            // 3. Move to In-Progress if the issue is on the board
-            if (projectItem) {
-              await github.graphql(`
-                mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
-                  updateProjectV2ItemFieldValue(input: {
-                    projectId: $projectId,
-                    itemId: $itemId,
-                    fieldId: $fieldId,
-                    value: { singleSelectOptionId: $optionId }
-                  }) {
-                    projectV2Item { id }
-                  }
+            if (!projectItem) return;
+
+            await github.graphql(`
+              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $projectId,
+                  itemId: $itemId,
+                  fieldId: $fieldId,
+                  value: { singleSelectOptionId: $optionId }
+                }) {
+                  projectV2Item { id }
                 }
-              `, {
-                projectId,
-                itemId: projectItem.id,
-                fieldId: statusFieldId,
-                optionId: inProgressOptionId,
-              });
-            }
+              }
+            `, {
+              projectId,
+              itemId: projectItem.id,
+              fieldId: statusFieldId,
+              optionId: inProgressOptionId,
+            });
