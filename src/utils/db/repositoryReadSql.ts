@@ -800,7 +800,7 @@ export async function loadUserRowsByNormalizedNickname(normalizedNickname: strin
   return (
     (await withCachedPlanRetry(async () => {
       try {
-        const nickname = normalizedNickname.trim().toLowerCase();
+        const nickname = normalizedNickname.trim().toLowerCase().replace(/\s+/g, " ");
         if (!nickname) {
           return [];
         }
@@ -808,7 +808,7 @@ export async function loadUserRowsByNormalizedNickname(normalizedNickname: strin
         const rows = await sql`
 				SELECT *
 				FROM users
-				WHERE regexp_replace(lower(trim(user_nickname)), '\s+', ' ', 'g') = ${nickname}
+				WHERE regexp_replace(lower(trim(user_nickname)), '[[:space:]]+', ' ', 'g') = ${nickname}
 			`;
 
         const parsedUsers: UserRow[] = [];

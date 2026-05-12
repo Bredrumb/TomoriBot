@@ -105,8 +105,8 @@ export class MemoryTool extends BaseTool {
       targetUserArg?.trim() || legacyTargetUserNicknameArg?.trim() || legacyTargetUserDiscordIdArg?.trim();
 
     // Import database functions
-    const { addPersonalMemoryByTomori, addServerMemoryByTomori } = await import("../../utils/db/dbWrite");
-    const { isBlacklisted, loadUserRow } = await import("../../utils/db/dbRead");
+    const { addPersonalMemoryByTomori, addServerMemoryByTomori } = await import("../../utils/db/repositories");
+    const { isBlacklisted, loadUserRow } = await import("../../utils/db/repositories");
     const { sendStandardEmbed } = await import("../../utils/discord/embedHelper");
     const { ColorCode } = await import("../../utils/misc/logger");
     const { convertMentions } = await import("../../utils/text/contextBuilder");
@@ -410,7 +410,7 @@ export class MemoryTool extends BaseTool {
         const targetUserDisplayName = resolvedTargetUserLabel || targetUserRow.user_nickname;
 
         // Check if user has opted out of personalization (privacy setting)
-        const { getPrivacyLevel } = await import("../../utils/db/dbRead");
+        const { getPrivacyLevel } = await import("../../utils/db/repositories");
         const { PrivacyLevel } = await import("../../types/db/schema");
         const userPrivacyLevel = await getPrivacyLevel(resolvedTargetUserId as string);
 

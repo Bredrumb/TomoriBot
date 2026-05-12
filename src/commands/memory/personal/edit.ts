@@ -28,7 +28,7 @@ import {
   loadPersonalMemoriesForUserLineage,
   loadTomoriState,
   getPrivacyLevel,
-} from "@/utils/db/dbRead";
+} from "@/utils/db/repositories";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import { getMemoryLimits, validateMemoryContent } from "@/utils/db/memoryLimits";
 import type { SelectOption } from "@/types/discord/modal";

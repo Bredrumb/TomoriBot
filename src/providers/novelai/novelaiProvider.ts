@@ -37,7 +37,7 @@ import {
   type ApiKeyValidationResult,
 } from "@/types/provider/interfaces";
 import { getCachedDefaultLLM, isLLMCacheReady } from "@/utils/cache/llmCache";
-import { loadDefaultModelForProvider, loadAvailableModelsForProvider } from "@/utils/db/dbRead";
+import { loadDefaultModelForProvider, loadAvailableModelsForProvider } from "@/utils/db/repositories";
 import { getNovelaiToolAdapter } from "./novelaiToolAdapter";
 import { usesOpenAIEndpoint, validateNovelAIApiKey } from "./novelaiService";
 import { novelaiProviderInfo } from "./providerInfo";

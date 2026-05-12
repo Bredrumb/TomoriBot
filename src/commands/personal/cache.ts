@@ -11,7 +11,7 @@
 import type { Client, ChatInputCommandInteraction, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
-import { toggleCrossServerShortTermMemoryOptIn } from "@/utils/db/dbWrite";
+import { toggleCrossServerShortTermMemoryOptIn } from "@/utils/db/repositories";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import { clearShortTermMemoryForUser } from "@/utils/cache/shortTermMemoryCache";
 import { replyInfoEmbed } from "@/utils/discord/interactionHelper";

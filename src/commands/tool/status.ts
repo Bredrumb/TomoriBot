@@ -26,7 +26,7 @@ import {
   loadCustomEndpointsForServer,
   loadCustomEndpointsForUser,
   loadUserSavedProviderConfigs,
-} from "../../utils/db/dbRead";
+} from "../../utils/db/repositories";
 import { getDiffusionModelById } from "@/utils/image/naiDiffusionModels";
 import { sql } from "@/utils/db/client";
 import { getAllWhitelistChannels } from "../../utils/db/channelWhitelist";

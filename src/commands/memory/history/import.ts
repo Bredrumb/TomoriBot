@@ -26,7 +26,7 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/interactionHelper";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadAllPersonasForServer, loadEmbeddingModelById } from "@/utils/db/dbRead";
+import { loadAllPersonasForServer, loadEmbeddingModelById } from "@/utils/db/repositories";
 import { getMemoryLimits } from "@/utils/db/memoryLimits";
 import { memoryGuard, reserveDocumentQuota } from "@/utils/security/rateLimiter";
 import { insertDocumentWithChunks } from "@/utils/documents/documentService";

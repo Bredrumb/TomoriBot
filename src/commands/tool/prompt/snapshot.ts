@@ -11,7 +11,7 @@ import {
 } from "@/utils/discord/embedClassifier";
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { getCachedChannelLlm } from "@/utils/cache/channelLlmCache";
-import { loadSavedProviderConfig } from "@/utils/db/dbRead";
+import { loadSavedProviderConfig } from "@/utils/db/repositories";
 import { buildContext } from "@/utils/text/contextBuilder";
 import { getCachedActivePreset } from "@/utils/cache/stPresetCache";
 import { getCachedPrivacyLevel } from "@/utils/cache/userCache";

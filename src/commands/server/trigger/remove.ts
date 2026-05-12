@@ -23,7 +23,7 @@ import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { type UserRow, type ErrorContext, personaConfigSchema, type TomoriState } from "@/types/db/schema";
 import type { CheckboxGroupOption, ModalCheckboxGroupField, SelectOption } from "@/types/discord/modal";
 import { sql } from "@/utils/db/client";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { loadAllPersonasForServer } from "@/utils/db/repositories";
 
 const TRIGGER_MODAL_CUSTOM_ID = "server_triggerremove_trigger_modal";
 const TRIGGER_SELECT_ID = "trigger_select";

@@ -11,7 +11,7 @@ import getAllFiles from "../../utils/misc/ioHelper";
 import { localizer } from "../../utils/text/localizer";
 import type { SlashCommandSubcommandBuilder } from "discord.js";
 import { ToolRegistry } from "../toolRegistry";
-import { getBraveApiKeyStatus } from "../../utils/db/dbRead";
+import { getBraveApiKeyStatus } from "../../utils/db/repositories";
 import { getLlmDisplayName } from "@/utils/provider/modelDisplay";
 import { getCachedActivePreset } from "@/utils/cache/stPresetCache";
 

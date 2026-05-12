@@ -1,6 +1,6 @@
 import type { Client } from "discord.js";
 import { log } from "../utils/misc/logger";
-import { getNextRandomTriggerTime, getNextReminderTime } from "../utils/db/dbRead";
+import { getNextRandomTriggerTime, getNextReminderTime } from "../utils/db/repositories";
 import { RandomTriggerProcessor } from "./randomTriggerProcessor";
 import { ReminderProcessor } from "./reminderProcessor";
 import {

@@ -21,8 +21,8 @@ import {
   safeSelectOptionText,
 } from "@/utils/discord/interactionHelper";
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { getServerRandomTriggers } from "@/utils/db/dbRead";
-import { deleteRandomTrigger } from "@/utils/db/dbWrite";
+import { getServerRandomTriggers } from "@/utils/db/repositories";
+import { deleteRandomTrigger } from "@/utils/db/repositories";
 import type { UserRow, ErrorContext, RandomTriggerRow } from "@/types/db/schema";
 import type { CheckboxGroupOption, ModalCheckboxGroupField, SelectOption } from "@/types/discord/modal";
 

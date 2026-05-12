@@ -7,7 +7,7 @@ import type { TomoriState } from "@/types/db/schema";
 import { ContextItemTag } from "@/types/misc/context";
 import tomoriChat, { suppressNextSelfReply } from "@/events/messageCreate/tomoriChat";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { registerUser } from "@/utils/db/dbWrite";
+import { registerUser } from "@/utils/db/repositories";
 import { buildForcedMentionsForUser, ensureDiscordUserMention } from "@/utils/discord/mentionHelper";
 import {
   getOrCreateWebhook,

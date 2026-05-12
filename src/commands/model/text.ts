@@ -1,8 +1,8 @@
 import type { ChatInputCommandInteraction, ButtonInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import { sql } from "@/utils/db/client";
-import { loadAvailableModelsForProvider, loadLlmById, loadNaiPresetsForModel } from "@/utils/db/dbRead";
-import { setChannelLlmOverride, setPersonaLlmOverride, applyNaiPreset } from "@/utils/db/dbWrite";
+import { loadAvailableModelsForProvider, loadLlmById, loadNaiPresetsForModel } from "@/utils/db/repositories";
+import { setChannelLlmOverride, setPersonaLlmOverride, applyNaiPreset } from "@/utils/db/repositories";
 import { getCachedTomoriState, getCachedAllPersonas, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { setChannelLlmCache } from "@/utils/cache/channelLlmCache";
 import { localizer } from "@/utils/text/localizer";

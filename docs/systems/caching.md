@@ -1,3 +1,5 @@
+<!-- ARCH-ALIGNMENT: prereq-phase-2 -->
+
 # 16. In-Memory Caching System
 
 This document reflects current cache layers in `src/utils/cache/` and related modules.
@@ -130,6 +132,8 @@ while (true) {
 ## Cache Invalidation Rules (Critical)
 
 Invalidate after successful DB writes that affect cached reads.
+
+Repository methods are the preferred owner for DB-write invalidation. During the Phase 2 repository migration, caller-side invalidation should only be removed after the corresponding repository method performs the same invalidation after a successful write. The migration audit lives at [`../refactor/phase4-cache-audit.md`](../refactor/phase4-cache-audit.md).
 
 Common examples:
 

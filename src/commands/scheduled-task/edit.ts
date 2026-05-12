@@ -19,7 +19,7 @@ import {
   safeSelectOptionText,
 } from "@/utils/discord/interactionHelper";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { updateReminder } from "@/utils/db/dbWrite";
+import { updateReminder } from "@/utils/db/repositories";
 import { isBridgeUserId } from "@/utils/bridge";
 import { validateFutureTime } from "@/utils/text/stringHelper";
 import { formatTimeWithOffset, formatUTCOffset } from "@/utils/text/timezoneHelper";

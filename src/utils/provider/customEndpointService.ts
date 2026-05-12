@@ -16,14 +16,14 @@ import {
   upsertCustomEndpoint,
   upsertSavedProviderConfig,
   upsertUserSavedProviderConfig,
-} from "@/utils/db/dbWrite";
+} from "@/utils/db/repositories";
 import {
   loadCustomEndpoint,
   loadCustomEndpointsForServer,
   loadCustomEndpointsForUser,
   loadSavedProviderConfig,
   loadUserSavedProviderConfig,
-} from "@/utils/db/dbRead";
+} from "@/utils/db/repositories";
 import { CUSTOM_ENDPOINT_PLACEHOLDER_KEY } from "@/utils/discord/customProviderModal";
 import {
   buildSavedProviderConfigFromExistingOrDefaults,

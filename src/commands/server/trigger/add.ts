@@ -14,7 +14,7 @@ import { personaConfigSchema } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
 import { validateMemoryContent, getMemoryLimits } from "@/utils/db/memoryLimits";
 import type { SelectOption } from "@/types/discord/modal";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { loadAllPersonasForServer } from "@/utils/db/repositories";
 
 // Get memory limits from environment variables
 const memoryLimits = getMemoryLimits();

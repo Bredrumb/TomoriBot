@@ -3,8 +3,8 @@ import type {
   UserSavedProviderConfigRow,
   UserSavedProviderConfigUpsert,
 } from "@/types/db/schema";
-import { loadUserSavedProviderConfig, loadUserSavedProviderConfigs } from "@/utils/db/dbRead";
-import { upsertUserSavedProviderConfig } from "@/utils/db/dbWrite";
+import { loadUserSavedProviderConfig, loadUserSavedProviderConfigs } from "@/utils/db/repositories";
+import { upsertUserSavedProviderConfig } from "@/utils/db/repositories";
 
 function sortProviderRows(rows: UserSavedProviderConfigRow[]): UserSavedProviderConfigRow[] {
   return [...rows].sort((left, right) => left.provider.localeCompare(right.provider));

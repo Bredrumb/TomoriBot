@@ -5,7 +5,7 @@ import type { UserRow, ErrorContext } from "../../../types/db/schema";
 import { localizer } from "../../../utils/text/localizer";
 import { log, ColorCode } from "../../../utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal } from "../../../utils/discord/interactionHelper";
-import { isBlacklisted } from "../../../utils/db/dbRead";
+import { isBlacklisted } from "../../../utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "../../../utils/cache/tomoriStateCache";
 import type { ModalResult } from "../../../types/discord/modal";
 

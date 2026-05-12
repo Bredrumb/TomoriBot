@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Command: /config system-prompt preset
  * Allows users to apply a preset system prompt from pre-made options
  */
@@ -8,7 +8,7 @@ import { MessageFlags, SlashCommandSubcommandBuilder } from "discord.js";
 import type { UserRow, SystemPromptPresetRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { sql } from "@/utils/db/client";
-import { loadSystemPromptPresets } from "@/utils/db/dbRead";
+import { loadSystemPromptPresets } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
 import { log, ColorCode } from "@/utils/misc/logger";

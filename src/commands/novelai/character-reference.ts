@@ -8,7 +8,7 @@ import {
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import { sql } from "@/utils/db/client";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { loadAllPersonasForServer } from "@/utils/db/repositories";
 import { replyInfoEmbed, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/interactionHelper";
 import { convertToPNG } from "@/utils/image/imageProcessor";
 import { ColorCode, log } from "@/utils/misc/logger";

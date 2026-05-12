@@ -1,8 +1,8 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadNaiPresetsForModel } from "@/utils/db/dbRead";
-import { applyNaiPreset } from "@/utils/db/dbWrite";
+import { loadNaiPresetsForModel } from "@/utils/db/repositories";
+import { applyNaiPreset } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";

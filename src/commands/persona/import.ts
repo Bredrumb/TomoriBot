@@ -20,7 +20,7 @@ import {
 } from "../../utils/db/sillyTavernImport";
 import { extractMetadataFromPNG, extractSillyTavernMetadataFromPNG } from "../../utils/image/pngMetadata";
 import { validatePNGBuffer } from "../../utils/image/avatarHelper";
-import { loadAllPersonasForServer } from "../../utils/db/dbRead";
+import { loadAllPersonasForServer } from "../../utils/db/repositories";
 import { getMemoryLimits } from "../../utils/db/memoryLimits";
 import { sql } from "../../utils/db/client";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";

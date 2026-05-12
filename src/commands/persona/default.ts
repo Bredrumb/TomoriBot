@@ -8,7 +8,7 @@ import {
 } from "discord.js";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
-import { loadAllPersonasForServer, loadPresetRowsByLocale } from "../../utils/db/dbRead";
+import { loadAllPersonasForServer, loadPresetRowsByLocale } from "../../utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { localizer, getBaseTriggerWords, getDefaultBotName } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";

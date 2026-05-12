@@ -10,7 +10,7 @@ import {
   loadScopedOpenRouterModels,
   loadScopedOpenRouterVideoGenerationModels,
   loadVideoGenerationModelByProviderAndCodename,
-} from "@/utils/db/dbRead";
+} from "@/utils/db/repositories";
 import {
   deleteOpenRouterEmbeddingModelRegistration,
   deleteOpenRouterImageModelRegistration,
@@ -20,7 +20,7 @@ import {
   upsertOpenRouterImageModelRegistration,
   upsertOpenRouterModelRegistration,
   upsertOpenRouterVideoModelRegistration,
-} from "@/utils/db/dbWrite";
+} from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { isOpenRouterGeminiModelCodename } from "@/utils/provider/openrouterModelCapabilities";
 

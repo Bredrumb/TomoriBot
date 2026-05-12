@@ -11,7 +11,7 @@ import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "
 import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import type { UserRow } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
-import { loadAllPersonasForServer } from "../../utils/db/dbRead";
+import { loadAllPersonasForServer } from "../../utils/db/repositories";
 import { downloadImage } from "../../utils/image/avatarHelper";
 import { convertToPNG } from "../../utils/image/imageProcessor";
 import { sql } from "../../utils/db/client";

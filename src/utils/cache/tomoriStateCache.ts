@@ -1,6 +1,6 @@
 import type { TomoriState } from "@/types/db/schema";
 import { DatabaseUnavailableError } from "@/types/errors";
-import { loadAllPersonasForServer } from "../db/dbRead";
+import { loadAllPersonasForServer } from "../db/repositories";
 import { log } from "../misc/logger";
 
 /**

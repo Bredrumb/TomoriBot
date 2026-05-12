@@ -6,8 +6,8 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { loadUserSavedProviderConfig, loadUserSavedProviderConfigs } from "@/utils/db/dbRead";
-import { upsertUserSavedProviderConfig } from "@/utils/db/dbWrite";
+import { loadUserSavedProviderConfig, loadUserSavedProviderConfigs } from "@/utils/db/repositories";
+import { upsertUserSavedProviderConfig } from "@/utils/db/repositories";
 import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionHelper";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { ProviderFactory } from "@/utils/provider/providerFactory";

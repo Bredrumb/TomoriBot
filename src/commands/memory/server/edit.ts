@@ -22,7 +22,7 @@ import {
   updateButtonComponentsV2Status,
 } from "@/utils/discord/interactionHelper";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { isBlacklisted, loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { isBlacklisted, loadAllPersonasForServer } from "@/utils/db/repositories";
 import { getMemoryLimits, validateMemoryContent } from "@/utils/db/memoryLimits";
 import type { SelectOption } from "@/types/discord/modal";
 import {

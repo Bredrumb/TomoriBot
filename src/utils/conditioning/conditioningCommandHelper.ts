@@ -2,7 +2,7 @@ import { MessageFlags, type ButtonInteraction, type ChatInputCommandInteraction 
 import type { ConditioningType, TomoriState } from "@/types/db/schema";
 import { replyInfoEmbed, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/interactionHelper";
 import { ColorCode } from "@/utils/misc/logger";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { loadAllPersonasForServer } from "@/utils/db/repositories";
 
 export type PersonaSelectionResult = {
   persona: TomoriState;

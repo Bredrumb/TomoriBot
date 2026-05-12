@@ -158,8 +158,8 @@ export class ReminderTool extends BaseTool {
     }
 
     // Import database functions and utilities
-    const { loadUserRow } = await import("../../utils/db/dbRead");
-    const { addReminder } = await import("../../utils/db/dbWrite");
+    const { loadUserRow } = await import("../../utils/db/repositories");
+    const { addReminder } = await import("../../utils/db/repositories");
     const { sendStandardEmbed } = await import("../../utils/discord/embedHelper");
     const { ColorCode } = await import("../../utils/misc/logger");
 

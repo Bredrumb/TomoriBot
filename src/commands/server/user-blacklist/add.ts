@@ -5,7 +5,7 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { sql } from "@/utils/db/client";
-import { loadTomoriState } from "@/utils/db/dbRead";
+import { loadTomoriState } from "@/utils/db/repositories";
 import { invalidateUserBlacklistCache } from "@/utils/cache/userCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";

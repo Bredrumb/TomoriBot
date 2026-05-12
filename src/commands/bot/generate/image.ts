@@ -14,7 +14,7 @@ import {
 } from "@/utils/db/cooldownManager";
 import { sendCooldownDM } from "@/utils/discord/cooldownDM";
 import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
-import { loadTomoriState } from "@/utils/db/dbRead";
+import { loadTomoriState } from "@/utils/db/repositories";
 import { sql } from "@/utils/db/client";
 import { getOrCreateWebhook, resolvePersonaWebhookIdentity } from "@/utils/discord/webhookManager";
 import { getCooldownTypeFooterKey } from "@/utils/db/messageCooldown";

@@ -40,7 +40,7 @@ import {
   type NaiGenerationCharacterPayload,
 } from "@/utils/image/naiImageGeneration";
 import { loadCharRefAsBase64 } from "@/utils/storage/charrefStorage";
-import { loadSavedProviderConfig } from "@/utils/db/dbRead";
+import { loadSavedProviderConfig } from "@/utils/db/repositories";
 import {
   CredentialUnavailableError,
   getResolvedCapabilityModelId,

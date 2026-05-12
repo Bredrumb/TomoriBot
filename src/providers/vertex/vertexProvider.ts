@@ -62,7 +62,7 @@ import type {
 import { getVertexToolAdapter } from "./vertexToolAdapter";
 import { parseVertexCompositeKey, createVertexClient } from "./vertexClient";
 import { getCachedDefaultLLM, isLLMCacheReady } from "../../utils/cache/llmCache";
-import { loadDefaultModelForProvider, loadAvailableModelsForProvider } from "../../utils/db/dbRead";
+import { loadDefaultModelForProvider, loadAvailableModelsForProvider } from "../../utils/db/repositories";
 import { vertexProviderInfo } from "./providerInfo";
 import { callGoogleStructuredJSON } from "../google/googleStructuredOutput";
 import { generateConversationSummaryGoogle, generateRoleplaySummaryGoogle } from "../google/compactGenerator";

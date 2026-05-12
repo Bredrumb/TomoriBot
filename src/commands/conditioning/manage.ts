@@ -18,7 +18,7 @@ import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { deleteConditioningGroupsForPersona, loadConditioningGroupsForPersona } from "@/utils/db/conditioningDb";
 import { hasManageGuildPermission } from "@/utils/conditioning/conditioningCommandHelper";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { loadAllPersonasForServer } from "@/utils/db/repositories";
 
 const CHECKBOX_GROUP_PREFIX = "conditioning_manage_group";
 const PAGE_BUTTON_PREFIX = "conditioning_manage_page_";

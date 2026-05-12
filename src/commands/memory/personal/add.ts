@@ -15,11 +15,11 @@ import {
   isBlacklisted,
   loadAllPersonasForServer,
   loadPersonalMemoriesForUserLineage,
-} from "@/utils/db/dbRead";
+} from "@/utils/db/repositories";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import type { ModalResult, SelectOption } from "@/types/discord/modal";
 import { validateMemoryContent, checkPersonalMemoryLimit, getMemoryLimits } from "@/utils/db/memoryLimits";
-import { addPersonalMemoryByTomori } from "@/utils/db/dbWrite";
+import { addPersonalMemoryByTomori } from "@/utils/db/repositories";
 import type { ModalComponent } from "@/types/discord/modal";
 import { dedupeCaseInsensitive, getNonEmptyNumberedLines, readTxtUpload } from "@/utils/teach/batchUploadUtils";
 
@@ -297,7 +297,7 @@ export async function execute(
     }
 
     // 11. Check if user has opted out of personalization (privacy setting)
-    const { getPrivacyLevel } = await import("@/utils/db/dbRead");
+    const { getPrivacyLevel } = await import("@/utils/db/repositories");
     const { PrivacyLevel } = await import("../../../types/db/schema");
     const userPrivacyLevel = await getPrivacyLevel(interaction.user.id);
 

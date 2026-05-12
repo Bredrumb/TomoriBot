@@ -18,7 +18,7 @@ import { exportPresetData } from "../../utils/db/presetExport";
 import { getServerAvatar } from "../../utils/image/avatarHelper";
 import { embedMetadataInPNG } from "../../utils/image/pngMetadata";
 import type { SelectOption } from "../../types/discord/modal";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { loadAllPersonasForServer } from "@/utils/db/repositories";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 import { convertToPNG } from "@/utils/image/imageProcessor";
 import { loadStoredPersonaAvatarBuffer } from "@/utils/storage/avatarStorage";

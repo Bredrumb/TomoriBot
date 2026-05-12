@@ -11,13 +11,13 @@ import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { ProviderFactory } from "../../utils/provider/providerFactory";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { encryptApiKey } from "../../utils/security/crypto";
-import { setupServer } from "../../utils/db/dbWrite";
+import { setupServer } from "../../utils/db/repositories";
 import {
   loadTomoriState,
   loadUniqueProviders,
   loadPresetOptionsByLocale,
   loadDefaultModelForProvider,
-} from "@/utils/db/dbRead";
+} from "@/utils/db/repositories";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { getCachedPresetAvatar } from "@/utils/image/avatarHelper";
 import { lazySyncGuildEmojis } from "@/utils/cache/emojiLazySync";

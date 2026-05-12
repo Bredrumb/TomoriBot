@@ -31,8 +31,8 @@ import { getCachedWhitelistStatus } from "../../utils/cache/channelWhitelistCach
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
 import { getCachedChannelLlm } from "../../utils/cache/channelLlmCache";
 import { storeShortTermMemory } from "../../utils/cache/shortTermMemoryCache";
-import { incrementTomoriCounter, registerUser } from "@/utils/db/dbWrite";
-import { loadSavedProviderConfig } from "@/utils/db/dbRead";
+import { incrementTomoriCounter, registerUser } from "@/utils/db/repositories";
+import { loadSavedProviderConfig } from "@/utils/db/repositories";
 import { createStandardEmbed, sendStandardEmbed } from "../../utils/discord/embedHelper";
 import { resolvePreferredDiscordDisplayName } from "../../utils/discord/displayName";
 import { sendCooldownDM } from "../../utils/discord/cooldownDM";

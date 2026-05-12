@@ -20,7 +20,7 @@ import {
   promptWithPaginatedModal,
   safeSelectOptionText,
 } from "@/utils/discord/interactionHelper";
-import { loadTomoriState, loadAllPersonasForServer, loadPersonalMemoriesForUserLineage } from "@/utils/db/dbRead";
+import { loadTomoriState, loadAllPersonasForServer, loadPersonalMemoriesForUserLineage } from "@/utils/db/repositories";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import type { SelectOption } from "@/types/discord/modal";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";

@@ -4,7 +4,7 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { setPrivacyLevel } from "../../utils/db/dbWrite";
+import { setPrivacyLevel } from "../../utils/db/repositories";
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";

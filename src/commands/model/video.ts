@@ -15,7 +15,7 @@ import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/util
 import { type UserRow, type ErrorContext, tomoriConfigSchema } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";
-import { loadAvailableVideoGenerationModelsForProvider } from "@/utils/db/dbRead";
+import { loadAvailableVideoGenerationModelsForProvider } from "@/utils/db/repositories";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";

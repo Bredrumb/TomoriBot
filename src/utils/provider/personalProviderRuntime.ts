@@ -1,5 +1,5 @@
 import type { PersonalProviderCapability, TomoriState, UserSavedProviderConfigRow } from "@/types/db/schema";
-import { loadLlmById, loadUserSavedProviderConfigs } from "@/utils/db/dbRead";
+import { loadLlmById, loadUserSavedProviderConfigs } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 
 export interface PersonalProviderOverlayResult {

@@ -55,7 +55,7 @@ import {
 import { getGoogleToolAdapter } from "./googleToolAdapter";
 import { callGoogleStructuredJSON } from "./googleStructuredOutput";
 import { getCachedDefaultLLM, isLLMCacheReady } from "../../utils/cache/llmCache";
-import { loadDefaultModelForProvider, loadAvailableModelsForProvider } from "../../utils/db/dbRead";
+import { loadDefaultModelForProvider, loadAvailableModelsForProvider } from "../../utils/db/repositories";
 import { googleProviderInfo } from "./providerInfo";
 import { getActiveTemperature, isParamDisabled } from "@/utils/provider/samplingControl";
 

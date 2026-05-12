@@ -134,15 +134,15 @@ When a phase touches code that affects a doc not listed here, add the doc to thi
 - **Why split:** Just as #12a ships harness-first to provide value across any chat-adjacent refactor, #4a ships harness-first so #4b can be tackled with confidence — and so the harness catches regressions in any DB-touching work that happens *before* #4b lands.
 
 **Subtasks:**
-- [ ] Inventory the highest-risk queries: tomori state load, persona resolution, memory aggregation, server config read, RAG chunk retrieval, import/export round-trips
-- [ ] Decide harness shape: seeded test DB + snapshot tests on query results? Recorded fixtures + comparison? Whichever is least flaky.
-- [ ] Build the harness in `tests/regression/db/` (or equivalent)
-- [ ] Cover at least one read and one write per intended repository (UserRepo, MemoryRepo, ConfigRepo, PersonaRepo, ServerRepo, LlmRepo, ToolRepo, RagRepo)
-- [ ] Add at least one cache-invalidation assertion (write → cache cleared → next read goes to DB)
-- [ ] Verify the harness catches a deliberately introduced regression (e.g., remove a JOIN, confirm test fails)
-- [ ] Wire into `bun run test` so it runs in CI
-- [ ] Document the harness in `docs/guides/testing-db-changes.md`
-- [ ] `bun run check && bun run lint` pass
+- [x] Inventory the highest-risk queries: tomori state load, persona resolution, memory aggregation, server config read, RAG chunk retrieval, import/export round-trips
+- [x] Decide harness shape: seeded test DB + snapshot tests on query results? Recorded fixtures + comparison? Whichever is least flaky.
+- [x] Build the harness in `tests/regression/db/` (or equivalent)
+- [x] Cover at least one read and one write per intended repository (UserRepo, MemoryRepo, ConfigRepo, PersonaRepo, ServerRepo, LlmRepo, ToolRepo, RagRepo)
+- [x] Add at least one cache-invalidation assertion (write → cache cleared → next read goes to DB)
+- [x] Verify the harness catches a deliberately introduced regression (e.g., remove a JOIN, confirm test fails)
+- [x] Wire into `bun run test` so it runs in CI
+- [x] Document the harness in `docs/guides/testing-db-changes.md`
+- [x] `bun run check && bun run lint` pass
 
 ### 4b. Refactor Database God Files (`dbRead.ts` & `dbWrite.ts`)
 - **What:** Break down `dbRead.ts` (134KB, 73 exports) and `dbWrite.ts` (105KB, 42 exports) into a Repository Pattern. Also fold `dataExport.ts` (30KB) and `dataImportV2.ts` (29KB) into appropriate repositories.
@@ -151,26 +151,31 @@ When a phase touches code that affects a doc not listed here, add the doc to thi
 - **Export contract:** Repository interface MUST require `toExportShape()` / `fromExportShape()` methods from day one. No repository lands without them. (Phase 6 #16.7 depends on every repo exposing these; backfilling later means touching every repo twice.)
 
 **Subtasks (per repository — group exports by domain):**
-- [ ] Inventory all exports in `dbRead.ts` + `dbWrite.ts`; classify by domain (user, memory variants, config, persona, server, tools, RAG, etc.)
-- [ ] Create `src/utils/db/repositories/` directory
-- [ ] Implement `UserRepository` (user reads/writes)
-- [ ] Implement `ServerMemoryRepository` (server-scoped long-term memories)
-- [ ] Implement `PersonalMemoryRepository` (per-user long-term memories)
-- [ ] Implement `ConditioningMemoryRepository` (conditioning/persona-shaping memories)
-- [ ] Implement `ShortTermMemoryRepository` (conversation-recency memories — split out per OD-R-2 to support anticipated future expansion)
-- [ ] Implement `ConfigRepository` (tomori_configs, server settings)
-- [ ] Implement `PersonaRepository` (tomoris, alter personas)
-- [ ] Implement `ServerRepository` (servers, channel whitelist, whitelists)
-- [ ] Implement `LlmRepository` (llms, fallback configs)
-- [ ] Implement `ToolRepository` (tool config, MCP servers)
-- [ ] Implement `RagRepository` (documents, chunks, embeddings)
-- [ ] Implement `ImportExportRepository` (subsumes `dataExport.ts` + `dataImportV2.ts`)
-- [ ] Migrate callers in `contextBuilder.ts`, `tomoriChat.ts`, and commands to use repositories
-- [ ] Delete `dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, `dataImportV2.ts` once unused
-- [ ] Update cache invalidation patterns to live in repository methods (per CLAUDE.md rule)
-- [ ] **Cache invalidation audit (mandatory):** grep the pre-refactor codebase for every existing `cacheInvalidate*`, `cache.invalidate*`, and equivalent call site. Produce a checklist of (call site → which repository method should now own this invalidation). Confirm every entry lands in the corresponding repository method post-migration. CLAUDE.md mandates invalidation-after-write in the same code path; with 115+ DB exports moving into repositories, it's easy to lose one in the shuffle and end up with a stale-cache bug that surfaces weeks later.
-- [ ] Run #4a regression harness; investigate any deltas
-- [ ] `bun run check && bun run lint` pass
+- [x] Inventory all exports in `dbRead.ts` + `dbWrite.ts`; classify by domain (user, memory variants, config, persona, server, tools, RAG, etc.)
+- [x] Create `src/utils/db/repositories/` directory
+- [x] Implement `UserRepository` (user reads/writes)
+- [x] Implement `ServerMemoryRepository` (server-scoped long-term memories)
+- [x] Implement `PersonalMemoryRepository` (per-user long-term memories)
+- [x] Implement `ConditioningMemoryRepository` (conditioning/persona-shaping memories)
+- [x] Implement `ShortTermMemoryRepository` (conversation-recency memories — split out per OD-R-2 to support anticipated future expansion)
+- [x] Implement `ConfigRepository` (tomori_configs, server settings)
+- [x] Implement `PersonaRepository` (tomoris, alter personas)
+- [x] Implement `ServerRepository` (servers, channel whitelist, whitelists)
+- [x] Implement `LlmRepository` (llms, fallback configs)
+- [x] Implement `ToolRepository` (tool config, MCP servers)
+- [x] Implement `RagRepository` (documents, chunks, embeddings)
+- [x] Implement `ImportExportRepository` (subsumes `dataExport.ts` + `dataImportV2.ts`)
+- [x] Migrate callers in `contextBuilder.ts`, `tomoriChat.ts`, and commands to use repositories
+- [x] Delete `dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, `dataImportV2.ts` once unused
+- [ ] Finish cache invalidation ownership cleanup in repository methods (per CLAUDE.md rule)
+  - [x] User, config, persona, server-memory, and MCP repository writes own their core cache invalidation paths
+  - [ ] Move remaining LLM/provider/channel-override invalidations from callers into `LlmRepository` method variants that accept the server Discord ID / channel cache key
+  - [ ] Move remaining import/export invalidations from command callers into `ImportExportRepository` methods where the import method owns the write
+  - [ ] Re-audit personal memory/server memory edit/remove/import paths and either move invalidation into repositories or document why the command/tool remains the cache owner
+- [x] **Cache invalidation audit (mandatory):** grep the pre-refactor codebase for every existing `cacheInvalidate*`, `cache.invalidate*`, and equivalent call site. Produce a checklist of (call site → which repository method should now own this invalidation). Confirm every entry lands in the corresponding repository method post-migration. CLAUDE.md mandates invalidation-after-write in the same code path; with 115+ DB exports moving into repositories, it's easy to lose one in the shuffle and end up with a stale-cache bug that surfaces weeks later. Audit committed as `docs/refactor/phase4-cache-audit.md`; repository ownership still needs final confirmation during caller migration.
+- [x] Run #4a regression harness; investigate any deltas
+- [x] Update docs per Documentation Alignment Tracker; bump ARCH-ALIGNMENT markers
+- [x] `bun run check && bun run lint` pass
 
 ### 5. Refactor `src/commands/tool/status.ts` and `compact.ts`
 - **What:** Extract monolithic logic from `status.ts` (96KB) into `src/utils/metrics/` and from `compact.ts` (40KB) into a dedicated module.

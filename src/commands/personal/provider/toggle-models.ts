@@ -4,7 +4,7 @@ import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionH
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { ErrorContext, PersonalProviderCapability, UserRow } from "@/types/db/schema";
-import { loadUserSavedProviderConfigs } from "@/utils/db/dbRead";
+import { loadUserSavedProviderConfigs } from "@/utils/db/repositories";
 import {
   getActivePersonalProviderForCapability,
   getStoredPersonalProviderForCapability,

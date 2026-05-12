@@ -13,7 +13,7 @@ import { ColorCode, log } from "@/utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionHelper";
 import type { UserRow } from "@/types/db/schema";
 import { PrivacyLevel } from "@/types/db/schema";
-import { loadTomoriState, loadAllPersonasForServer, loadPersonalMemoriesForUserLineage } from "@/utils/db/dbRead";
+import { loadTomoriState, loadAllPersonasForServer, loadPersonalMemoriesForUserLineage } from "@/utils/db/repositories";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { getCachedUserRow, getCachedPrivacyLevel, getCachedBlacklistStatus } from "@/utils/cache/userCache";
 import { resolvePersonaAvatarURL } from "@/utils/discord/webhookManager";

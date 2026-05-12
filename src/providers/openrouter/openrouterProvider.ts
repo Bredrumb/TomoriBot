@@ -62,7 +62,7 @@ import {
   getOpenRouterTokenLimits,
   isOpenRouterCapabilityCacheReady,
 } from "../../utils/cache/openrouterCapabilityCache";
-import { loadDefaultModelForProvider, loadAvailableModelsForProvider } from "../../utils/db/dbRead";
+import { loadDefaultModelForProvider, loadAvailableModelsForProvider } from "../../utils/db/repositories";
 import { getMCPManager } from "../../utils/mcp/mcpManager";
 import { isBraveSearchAvailable } from "../../tools/restAPIs/brave/braveSearchService";
 import { openrouterProviderInfo } from "./providerInfo";

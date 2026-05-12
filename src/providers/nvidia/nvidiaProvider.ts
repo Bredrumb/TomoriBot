@@ -63,7 +63,7 @@ import { DISCORD_STREAMING_CONSTANTS } from "@/types/stream/types";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "@/tools/toolRegistry";
 import { getCachedDefaultLLM, isLLMCacheReady } from "@/utils/cache/llmCache";
-import { loadAvailableModelsForProvider, loadDefaultModelForProvider } from "@/utils/db/dbRead";
+import { loadAvailableModelsForProvider, loadDefaultModelForProvider } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { buildRuntimeLogitBiasMapForLlm } from "@/utils/provider/logitBiasResolver";
 

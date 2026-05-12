@@ -8,6 +8,7 @@ __pycache__/
 # Script outputs
 backups/*
 .env.bak
+.env.test
 
 # Tokenizers (assets ignored; manifest tracked)
 tokenizers/*

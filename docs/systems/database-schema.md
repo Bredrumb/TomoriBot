@@ -1,4 +1,6 @@
-﻿# 5. Database Schema and Data Model
+<!-- ARCH-ALIGNMENT: prereq-phase-2 -->
+
+# 5. Database Schema and Data Model
 
 This document summarizes the current PostgreSQL schema used by TomoriBot.
 
@@ -6,6 +8,12 @@ This document summarizes the current PostgreSQL schema used by TomoriBot.
 
 - Main schema: `src/db/schema.sql`
 - RAG schema: `src/db/schema_rag.sql` (loaded only when RAG is enabled)
+
+## Data Access Boundary
+
+The Phase 2 repository layer lives under `src/utils/db/repositories/`. Repositories group reads/writes by domain (`UserRepository`, memory repositories, `ConfigRepository`, `PersonaRepository`, `ServerRepository`, `LlmRepository`, `ToolRepository`, `RagRepository`, and `ImportExportRepository`) and implement the shared `IRepository<TExport>` contract.
+
+Application code imports the repository facade rather than raw DB entry points. The former public DB god files (`dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, and `dataImportV2.ts`) have been removed; remaining large SQL bodies are internal repository-owned modules pending deeper domain cleanup.
 
 ## Main Tables (Current)
 

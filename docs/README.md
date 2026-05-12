@@ -67,3 +67,8 @@ This folder is organized by topic instead of numeric filenames.
 - [`guides/openai-compatible-provider-family.md`](./guides/openai-compatible-provider-family.md)
 - [`guides/coding-standards.md`](./guides/coding-standards.md)
 - [`guides/local-grafana-setup.md`](./guides/local-grafana-setup.md)
+- [`guides/testing-db-changes.md`](./guides/testing-db-changes.md)
+
+## Refactor Notes
+
+- [`refactor/phase4-cache-audit.md`](./refactor/phase4-cache-audit.md)

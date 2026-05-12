@@ -1,6 +1,6 @@
 import type { Guild } from "discord.js";
 import type { ServerEmojiRow, ServerStickerRow } from "../../types/db/schema";
-import { loadServerEmojis } from "../db/dbRead";
+import { loadServerEmojis } from "../db/repositories";
 import { log } from "../misc/logger";
 import { sql } from "../db/client";
 import { lazySyncGuildEmojis } from "./emojiLazySync";

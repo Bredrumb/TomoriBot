@@ -42,7 +42,7 @@ import type {
   SupportsStructuredOutput,
 } from "@/types/provider/featureInterfaces";
 import { getCachedDefaultLLM, isLLMCacheReady } from "@/utils/cache/llmCache";
-import { loadAvailableModelsForProvider, loadDefaultModelForProvider } from "@/utils/db/dbRead";
+import { loadAvailableModelsForProvider, loadDefaultModelForProvider } from "@/utils/db/repositories";
 import { callGoogleStructuredJSON } from "@/providers/google/googleStructuredOutput";
 import { generateConversationSummaryGoogle, generateRoleplaySummaryGoogle } from "@/providers/google/compactGenerator";
 import { generatePresetFromPrompt } from "@/providers/google/presetGenerator";

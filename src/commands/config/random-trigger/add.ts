@@ -17,8 +17,8 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { getServerRandomTriggerCount, getRandomTriggerByPersonaAndChannel } from "@/utils/db/dbRead";
-import { insertRandomTrigger, upsertRandomTrigger } from "@/utils/db/dbWrite";
+import { getServerRandomTriggerCount, getRandomTriggerByPersonaAndChannel } from "@/utils/db/repositories";
+import { insertRandomTrigger, upsertRandomTrigger } from "@/utils/db/repositories";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 

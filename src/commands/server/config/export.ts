@@ -4,7 +4,7 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
 import type { UserRow } from "@/types/db/schema";
-import { exportServerConfig } from "@/utils/db/dataExport";
+import { exportServerConfig } from "@/utils/db/repositories";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("export").setDescription(localizer("en-US", "commands.server.config.export.description"));

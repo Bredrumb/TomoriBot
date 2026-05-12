@@ -13,7 +13,7 @@ import {
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { formatTextArrayLiteral } from "@/utils/discord/channelChecklistManager";
-import { getBlacklistedMemberIds, loadTomoriState } from "@/utils/db/dbRead";
+import { getBlacklistedMemberIds, loadTomoriState } from "@/utils/db/repositories";
 import { sql } from "@/utils/db/client";
 import { invalidateUserBlacklistCache } from "@/utils/cache/userCache";
 import { promptWithRawModal, replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/interactionHelper";

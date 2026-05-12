@@ -7,7 +7,7 @@ import type {
 } from "@/types/db/schema";
 import { personalProviderCapabilitySchema, tomoriConfigSchema } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
-import { loadSavedProviderConfig, loadUserSavedProviderConfigs } from "@/utils/db/dbRead";
+import { loadSavedProviderConfig, loadUserSavedProviderConfigs } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { resolveCustomEndpointForProvider } from "@/utils/provider/customEndpointService";
 import { decryptApiKey } from "@/utils/security/crypto";

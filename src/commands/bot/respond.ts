@@ -8,7 +8,7 @@ import { localizer } from "../../utils/text/localizer";
 import type { UserRow } from "../../types/db/schema";
 import type { ModalComponent, SelectOption } from "../../types/discord/modal";
 import tomoriChat from "../../events/messageCreate/tomoriChat";
-import { loadAllPersonasForServer, loadSmartestModel, loadTomoriState } from "../../utils/db/dbRead";
+import { loadAllPersonasForServer, loadSmartestModel, loadTomoriState } from "../../utils/db/repositories";
 import {
   checkMessageTriggerCooldownWithWhitelist,
   setMessageTriggerCooldownWithWhitelist,

@@ -50,7 +50,7 @@ export async function initLoaders(client: Client): Promise<void> {
 
   log.section("Initializing Preset Avatar Cache...");
   try {
-    const { loadAllPresets } = await import("@/utils/db/dbRead");
+    const { loadAllPresets } = await import("@/utils/db/repositories");
     const { initializePresetAvatarCache } = await import("@/utils/image/avatarHelper");
 
     const presets = await loadAllPresets();

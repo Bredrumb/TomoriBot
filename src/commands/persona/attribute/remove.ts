@@ -22,7 +22,7 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/
 import { type UserRow, type ErrorContext, tomoriSchema, type TomoriState } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { sql } from "@/utils/db/client";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { loadAllPersonasForServer } from "@/utils/db/repositories";
 
 // Rule 20: Constants for static values at the top
 const MODAL_CUSTOM_ID = "forget_attribute_modal";

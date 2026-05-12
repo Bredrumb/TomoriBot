@@ -1,7 +1,7 @@
 import { ChannelType, type Guild, type GuildMember, type GuildTextBasedChannel } from "discord.js";
 import { ContextItemTag, type ConversationUserReference, type StructuredContextItem } from "@/types/misc/context";
 import type { ToolContext } from "@/types/tool/interfaces";
-import { loadUserRowsByNormalizedNickname } from "@/utils/db/dbRead";
+import { loadUserRowsByNormalizedNickname } from "@/utils/db/repositories";
 import { isBridgeUserId } from "@/utils/bridge";
 
 export type ResolvedUserTarget = {

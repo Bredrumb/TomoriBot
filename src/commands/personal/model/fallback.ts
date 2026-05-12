@@ -9,7 +9,7 @@ import {
   loadCustomEndpointsForUser,
   getLlmsByIds,
   loadCustomEndpointsByIds,
-} from "@/utils/db/dbRead";
+} from "@/utils/db/repositories";
 import type {
   ErrorContext,
   LlmRow,
@@ -20,7 +20,7 @@ import type {
   CustomEndpointRow,
 } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
-import { upsertUserSavedProviderConfig } from "@/utils/db/dbWrite";
+import { upsertUserSavedProviderConfig } from "@/utils/db/repositories";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { replyLegacyOpenRouterOtherModelMoved } from "@/utils/discord/openrouterModelMigrationNotice";
 import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";

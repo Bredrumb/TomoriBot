@@ -7,8 +7,8 @@ import {
 } from "discord.js";
 import { sql } from "@/utils/db/client";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
-import { updateTomori } from "@/utils/db/dbWrite";
+import { loadAllPersonasForServer } from "@/utils/db/repositories";
+import { updateTomori } from "@/utils/db/repositories";
 import {
   acknowledgeModalSubmitForRefresh,
   promptWithPaginatedModal,

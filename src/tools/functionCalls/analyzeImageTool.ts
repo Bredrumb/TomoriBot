@@ -11,7 +11,7 @@ import type { ToolContext, ToolResult, ToolParameterSchema } from "@/types/tool/
 import { log, ColorCode } from "@/utils/misc/logger";
 import { sendToolProgressNotice } from "@/utils/discord/toolProgressNotice";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
-import { loadLlmById } from "@/utils/db/dbRead";
+import { loadLlmById } from "@/utils/db/repositories";
 import {
   toZaiApiModelName,
   ZAI_CODING_CHAT_COMPLETIONS_URL,

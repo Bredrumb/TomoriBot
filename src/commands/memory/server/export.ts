@@ -9,8 +9,8 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
 import type { UserRow } from "@/types/db/schema";
-import { exportPersonaServerMemories } from "@/utils/db/dataExport";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { exportPersonaServerMemories } from "@/utils/db/repositories";
+import { loadAllPersonasForServer } from "@/utils/db/repositories";
 import type { SelectOption } from "@/types/discord/modal";
 
 const PERSONA_MODAL_ID = "memory_server_export_persona_modal";

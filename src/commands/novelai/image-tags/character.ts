@@ -1,4 +1,4 @@
-﻿import {
+import {
   TextInputStyle,
   type ChatInputCommandInteraction,
   type Client,
@@ -19,7 +19,7 @@ import {
   TAGS_MODAL_MAX_LENGTH,
 } from "@/utils/novelai/tagHelpers";
 import type { SelectOption } from "@/types/discord/modal";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { loadAllPersonasForServer } from "@/utils/db/repositories";
 
 // Modal field IDs
 const MODAL_CUSTOM_ID = "novelai_tags_character_modal";

@@ -10,11 +10,11 @@ import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
-import { isBlacklisted, loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { isBlacklisted, loadAllPersonasForServer } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import type { ModalResult, SelectOption } from "@/types/discord/modal";
 import { validateMemoryContent, checkServerMemoryLimit, getMemoryLimits } from "@/utils/db/memoryLimits";
-import { addServerMemoryByTomori } from "@/utils/db/dbWrite";
+import { addServerMemoryByTomori } from "@/utils/db/repositories";
 import { dedupeCaseInsensitive, getNonEmptyNumberedLines, readTxtUpload } from "@/utils/teach/batchUploadUtils";
 
 // Rule 20: Constants for modal and input IDs

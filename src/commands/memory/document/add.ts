@@ -12,7 +12,7 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { isBlacklisted, loadAllPersonasForServer, loadEmbeddingModelById } from "@/utils/db/dbRead";
+import { isBlacklisted, loadAllPersonasForServer, loadEmbeddingModelById } from "@/utils/db/repositories";
 import { getMemoryLimits } from "@/utils/db/memoryLimits";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { memoryGuard, reserveDocumentQuota } from "@/utils/security/rateLimiter";

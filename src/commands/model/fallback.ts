@@ -1,8 +1,8 @@
 import type { ChatInputCommandInteraction, ButtonInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder } from "discord.js";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadAvailableModelsForProvider, loadCustomEndpointsForServer } from "@/utils/db/dbRead";
-import { setFallbackModelRefs } from "@/utils/db/dbWrite";
+import { loadAvailableModelsForProvider, loadCustomEndpointsForServer } from "@/utils/db/repositories";
+import { setFallbackModelRefs } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";

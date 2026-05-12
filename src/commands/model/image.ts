@@ -10,7 +10,7 @@ import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/util
 import { type UserRow, type ErrorContext, tomoriConfigSchema } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";
-import { loadAvailableDiffusionModelsForProvider } from "@/utils/db/dbRead";
+import { loadAvailableDiffusionModelsForProvider } from "@/utils/db/repositories";
 import { getDiffusionModelById } from "@/utils/image/naiDiffusionModels";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { getProviderDisplayName, getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";

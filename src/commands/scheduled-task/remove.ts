@@ -19,7 +19,7 @@ import {
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
-import { deleteReminderById } from "@/utils/db/dbRead";
+import { deleteReminderById } from "@/utils/db/repositories";
 import { formatTimeWithOffset, formatUTCOffset } from "@/utils/text/timezoneHelper";
 import { isBridgeUserId } from "@/utils/bridge";
 

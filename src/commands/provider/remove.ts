@@ -4,8 +4,8 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { loadSavedProviderConfigs } from "@/utils/db/dbRead";
-import { deleteSavedProviderConfig } from "@/utils/db/dbWrite";
+import { loadSavedProviderConfigs } from "@/utils/db/repositories";
+import { deleteSavedProviderConfig } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";

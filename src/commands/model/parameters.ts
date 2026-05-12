@@ -4,7 +4,7 @@ import { THINKING_LEVEL_VALUES, type ThinkingLevelValue, isThinkingLevelValue } 
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { sql } from "@/utils/db/client";
-import { upsertSavedProviderConfig } from "@/utils/db/dbWrite";
+import { upsertSavedProviderConfig } from "@/utils/db/repositories";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
 import { log, ColorCode } from "@/utils/misc/logger";

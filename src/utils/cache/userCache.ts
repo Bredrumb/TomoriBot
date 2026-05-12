@@ -1,5 +1,5 @@
 import { PrivacyLevel, type UserRow } from "@/types/db/schema";
-import { loadUserRow, getPrivacyLevel, isBlacklisted } from "../db/dbRead";
+import { loadUserRow, getPrivacyLevel, isBlacklisted } from "../db/repositories";
 import { log } from "../misc/logger";
 
 /**

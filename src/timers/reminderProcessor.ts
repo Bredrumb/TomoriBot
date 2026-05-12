@@ -1,8 +1,8 @@
 import type { Client, Message, TextBasedChannel, TextChannel } from "discord.js";
 import { ChannelType } from "discord.js";
 import { log, ColorCode } from "../utils/misc/logger";
-import { deleteReminderById, getDueReminders } from "../utils/db/dbRead";
-import { rescheduleReminder } from "../utils/db/dbWrite";
+import { deleteReminderById, getDueReminders } from "../utils/db/repositories";
+import { rescheduleReminder } from "../utils/db/repositories";
 import type { ReminderRow } from "../types/db/schema";
 import { calculateLateness } from "../utils/text/stringHelper";
 import tomoriChat, { suppressNextSelfReply } from "../events/messageCreate/tomoriChat";

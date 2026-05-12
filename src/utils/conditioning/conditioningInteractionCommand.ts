@@ -11,7 +11,7 @@ import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { ConditioningType, UserRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
-import { loadAllPersonasForServer, loadTomoriState } from "@/utils/db/dbRead";
+import { loadAllPersonasForServer, loadTomoriState } from "@/utils/db/repositories";
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
 import tomoriChat from "@/events/messageCreate/tomoriChat";

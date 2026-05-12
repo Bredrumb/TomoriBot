@@ -74,7 +74,7 @@ import {
   type FunctionResponseImageMetadata,
   type ApiKeyValidationResult,
 } from "../../types/provider/interfaces";
-import { loadSavedProviderConfig } from "@/utils/db/dbRead";
+import { loadSavedProviderConfig } from "@/utils/db/repositories";
 import { getCustomToolAdapter } from "./customToolAdapter";
 import { customProviderInfo } from "./providerInfo";
 import { resolveCustomEndpointForProvider } from "@/utils/provider/customEndpointService";

@@ -3,7 +3,7 @@ import { sql } from "@/utils/db/client";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
 import { ColorCode, log } from "../../utils/misc/logger";
 import { CooldownType, userSchema, type UserRow, type ErrorContext } from "../../types/db/schema";
-import { registerUser } from "../../utils/db/dbWrite";
+import { registerUser } from "../../utils/db/repositories";
 import { loadCommandData, type CommandExecutionMap, type CommandCooldownMap } from "../../utils/discord/commandLoader";
 import { resolvePreferredDiscordDisplayName } from "../../utils/discord/displayName";
 

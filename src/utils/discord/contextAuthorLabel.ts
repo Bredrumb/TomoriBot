@@ -1,6 +1,6 @@
 import type { GuildMember, Message } from "discord.js";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { loadUserRow, isBlacklisted } from "@/utils/db/dbRead";
+import { loadUserRow, isBlacklisted } from "@/utils/db/repositories";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { stripBridgePrefix } from "@/utils/bridge";
 import { log } from "@/utils/misc/logger";

@@ -18,7 +18,7 @@ import {
   loadCustomEndpointsForUser,
   loadSavedProviderConfigs,
   loadUserSavedProviderConfigs,
-} from "@/utils/db/dbRead";
+} from "@/utils/db/repositories";
 import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import {
   getStaticProviderInfo,

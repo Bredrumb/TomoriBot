@@ -10,7 +10,7 @@
  */
 
 import type { LlmRow } from "@/types/db/schema";
-import { getChannelLlmOverride } from "@/utils/db/dbRead";
+import { getChannelLlmOverride } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 
 /**

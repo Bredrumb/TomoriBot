@@ -16,7 +16,7 @@ import { MessageFlags, TextInputStyle } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { loadAllPersonasForServer } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/interactionHelper";

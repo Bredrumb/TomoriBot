@@ -16,8 +16,8 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionHelper";
 import { getCachedTomoriState, getCachedAllPersonas, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { invalidateChannelLlmCache } from "@/utils/cache/channelLlmCache";
-import { getAllChannelLlmOverridesForServer } from "@/utils/db/dbRead";
-import { deleteChannelLlmOverride, setPersonaLlmOverride } from "@/utils/db/dbWrite";
+import { getAllChannelLlmOverridesForServer } from "@/utils/db/repositories";
+import { deleteChannelLlmOverride, setPersonaLlmOverride } from "@/utils/db/repositories";
 import type { UserRow, ErrorContext, TomoriState, LlmRow } from "@/types/db/schema";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
 

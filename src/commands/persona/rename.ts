@@ -19,7 +19,7 @@ import {
   type TomoriState,
 } from "../../types/db/schema";
 import type { ModalResult, SelectOption } from "../../types/discord/modal";
-import { loadAllPersonasForServer } from "../../utils/db/dbRead";
+import { loadAllPersonasForServer } from "../../utils/db/repositories";
 import { sql } from "@/utils/db/client";
 
 // Constants for validation

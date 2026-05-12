@@ -1,8 +1,8 @@
 import type { Client, Message } from "discord.js";
 import { ChannelType } from "discord.js";
 import { log } from "../utils/misc/logger";
-import { getDueRandomTriggers } from "../utils/db/dbRead";
-import { rescheduleRandomTrigger } from "../utils/db/dbWrite";
+import { getDueRandomTriggers } from "../utils/db/repositories";
+import { rescheduleRandomTrigger } from "../utils/db/repositories";
 import type { RandomTriggerRow, TomoriState } from "../types/db/schema";
 import tomoriChat, { suppressNextSelfReply } from "../events/messageCreate/tomoriChat";
 import { getCachedAllPersonas } from "../utils/cache/tomoriStateCache";

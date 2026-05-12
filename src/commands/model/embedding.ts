@@ -9,7 +9,7 @@ import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/util
 import type { ErrorContext, UserRow, EmbeddingModelRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { getMemoryLimits } from "@/utils/db/memoryLimits";
-import { loadEmbeddingModelById, loadAvailableEmbeddingModelsForProvider } from "@/utils/db/dbRead";
+import { loadEmbeddingModelById, loadAvailableEmbeddingModelsForProvider } from "@/utils/db/repositories";
 import { reembedServerDocuments } from "@/utils/documents/documentService";
 import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";

@@ -5,8 +5,8 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import type { SavedProviderConfigRow, UserRow, ErrorContext } from "@/types/db/schema";
-import { loadUserSavedProviderConfigs } from "@/utils/db/dbRead";
-import { deleteUserSavedProviderConfig } from "@/utils/db/dbWrite";
+import { loadUserSavedProviderConfigs } from "@/utils/db/repositories";
+import { deleteUserSavedProviderConfig } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";

@@ -1,6 +1,6 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { loadAvailableVideoGenerationModelsForProvider } from "@/utils/db/dbRead";
+import { loadAvailableVideoGenerationModelsForProvider } from "@/utils/db/repositories";
 import { promptForSavedProvider } from "@/commands/model/providerPicker";
 import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
 import { log, ColorCode } from "@/utils/misc/logger";
