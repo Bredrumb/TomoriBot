@@ -51,7 +51,7 @@ Message Handler (tomoriChat.ts)
 | **Sticker Event Handler** | `src/events/guildStickersUpdate/refreshStickers.ts` | Handles sticker changes + cache invalidation |
 | **Context Builder** | `src/utils/text/contextBuilder.ts` | Adds emoji/sticker metadata to LLM prompts |
 | **String Helper** | `src/utils/text/stringHelper.ts` | Converts `:name:` → `<:name:id>` format |
-| **DB Read** | `src/utils/db/dbRead.ts` | Loads emojis/stickers from database |
+| **DB Read** | `src/utils/db/repositories/ServerRepository.ts` | Loads emojis/stickers from database |
 
 ---
 

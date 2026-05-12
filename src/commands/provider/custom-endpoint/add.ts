@@ -1,7 +1,7 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import type { CustomEndpointApiStyle, CustomEndpointCapability, ErrorContext, UserRow } from "@/types/db/schema";
-import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
@@ -218,7 +218,12 @@ export async function execute(
       }
 
       const registered = await registerCustomEndpoint({
-        scope: { kind: "server", ownerId: tomoriState.server_id, baseConfig: tomoriState.config },
+        scope: {
+          kind: "server",
+          ownerId: tomoriState.server_id,
+          baseConfig: tomoriState.config,
+          serverDiscId: interaction.guild?.id ?? interaction.user.id,
+        },
         label,
         capability,
         apiStyle,
@@ -241,8 +246,6 @@ export async function execute(
         });
         return;
       }
-
-      invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
       const isTtsCloneSpeech = capability === "speech" && apiStyle === "tts-clone";
       const isVoiceDesignSpeech = isTtsCloneSpeech && parsed.voiceMode === "voice-design";
@@ -349,7 +352,12 @@ export async function execute(
     const workflow = workflowAttachment ? await loadWorkflowJson(workflowAttachment.url) : null;
 
     const registered = await registerCustomEndpoint({
-      scope: { kind: "server", ownerId: tomoriState.server_id, baseConfig: tomoriState.config },
+      scope: {
+        kind: "server",
+        ownerId: tomoriState.server_id,
+        baseConfig: tomoriState.config,
+        serverDiscId: interaction.guild?.id ?? interaction.user.id,
+      },
       label,
       capability,
       apiStyle,
@@ -368,8 +376,6 @@ export async function execute(
       });
       return;
     }
-
-    invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
     await replyInfoEmbed(modalSubmit, locale, {
       titleKey: "commands.config.custom_models.add.success_title",

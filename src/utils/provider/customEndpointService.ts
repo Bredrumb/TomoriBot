@@ -43,6 +43,7 @@ type RegistrationScope =
       kind: "server";
       ownerId: number;
       baseConfig: TomoriConfigRow;
+      serverDiscId?: string;
     }
   | {
       kind: "personal";
@@ -492,68 +493,75 @@ export async function registerCustomEndpoint(
   const trimmedAuthToken = input.authToken?.trim();
   const requiresAuth =
     trimmedAuthToken && trimmedAuthToken.length > 0 ? true : (existingEndpoint?.requires_auth ?? false);
+  const serverScope = input.scope.kind === "server" ? input.scope : null;
 
-  const customEndpoint = await upsertCustomEndpoint({
-    serverId: input.scope.kind === "server" ? input.scope.ownerId : null,
-    userId: input.scope.kind === "personal" ? input.scope.ownerId : null,
-    label: input.label,
-    capability: input.capability,
-    apiStyle: input.apiStyle,
-    endpointUrl: input.endpointUrl,
-    modelName: input.modelName ?? null,
-    displayName: input.displayName,
-    numCtx: input.numCtx ?? null,
-    requiresAuth,
-    extraConfig: input.extraConfig ?? {},
-    hasTools: input.hasTools ?? false,
-    seesImages: input.seesImages ?? false,
-    seesVideos: input.seesVideos ?? false,
-    supportsStructOutput: input.supportsStructOutput ?? false,
-    isDefault: shouldBeDefault,
-  });
+  const customEndpoint = await upsertCustomEndpoint(
+    {
+      serverId: input.scope.kind === "server" ? input.scope.ownerId : null,
+      userId: input.scope.kind === "personal" ? input.scope.ownerId : null,
+      label: input.label,
+      capability: input.capability,
+      apiStyle: input.apiStyle,
+      endpointUrl: input.endpointUrl,
+      modelName: input.modelName ?? null,
+      displayName: input.displayName,
+      numCtx: input.numCtx ?? null,
+      requiresAuth,
+      extraConfig: input.extraConfig ?? {},
+      hasTools: input.hasTools ?? false,
+      seesImages: input.seesImages ?? false,
+      seesVideos: input.seesVideos ?? false,
+      supportsStructOutput: input.supportsStructOutput ?? false,
+      isDefault: shouldBeDefault,
+    },
+    serverScope ? { serverDiscId: serverScope.serverDiscId } : {},
+  );
 
   if (!customEndpoint) {
     return null;
   }
 
-  const writeOk =
-    input.scope.kind === "server"
-      ? await (async () => {
-          const savedConfig = (await buildSavedConfigForCustomEndpoint(
-            input.scope,
-            provider,
-            existingConfig,
-            input,
-            modelId,
-          )) as SavedProviderConfigUpsert;
+  const writeOk = serverScope
+    ? await (async () => {
+        const savedConfig = (await buildSavedConfigForCustomEndpoint(
+          input.scope,
+          provider,
+          existingConfig,
+          input,
+          modelId,
+        )) as SavedProviderConfigUpsert;
 
-          return await upsertSavedProviderConfig(input.scope.ownerId, {
+        return await upsertSavedProviderConfig(
+          serverScope.ownerId,
+          {
             ...savedConfig,
             llm_id: input.capability === "text" ? modelId : savedConfig.llm_id,
             vision_llm_id: input.capability === "text" && input.seesImages ? modelId : savedConfig.vision_llm_id,
             embedding_model_id: input.capability === "embedding" ? modelId : savedConfig.embedding_model_id,
             diffusion_model_id: input.capability === "image" ? modelId : savedConfig.diffusion_model_id,
             video_model_id: input.capability === "video" ? modelId : savedConfig.video_model_id,
-          });
-        })()
-      : await (async () => {
-          const savedConfig = (await buildSavedConfigForCustomEndpoint(
-            input.scope,
-            provider,
-            existingConfig,
-            input,
-            modelId,
-          )) as UserSavedProviderConfigUpsert;
+          },
+          { serverDiscId: serverScope.serverDiscId },
+        );
+      })()
+    : await (async () => {
+        const savedConfig = (await buildSavedConfigForCustomEndpoint(
+          input.scope,
+          provider,
+          existingConfig,
+          input,
+          modelId,
+        )) as UserSavedProviderConfigUpsert;
 
-          return await upsertUserSavedProviderConfig(input.scope.ownerId, {
-            ...savedConfig,
-            llm_id: input.capability === "text" ? modelId : savedConfig.llm_id,
-            vision_llm_id: input.capability === "text" && input.seesImages ? modelId : savedConfig.vision_llm_id,
-            embedding_model_id: input.capability === "embedding" ? modelId : savedConfig.embedding_model_id,
-            diffusion_model_id: input.capability === "image" ? modelId : savedConfig.diffusion_model_id,
-            video_model_id: input.capability === "video" ? modelId : savedConfig.video_model_id,
-          });
-        })();
+        return await upsertUserSavedProviderConfig(input.scope.ownerId, {
+          ...savedConfig,
+          llm_id: input.capability === "text" ? modelId : savedConfig.llm_id,
+          vision_llm_id: input.capability === "text" && input.seesImages ? modelId : savedConfig.vision_llm_id,
+          embedding_model_id: input.capability === "embedding" ? modelId : savedConfig.embedding_model_id,
+          diffusion_model_id: input.capability === "image" ? modelId : savedConfig.diffusion_model_id,
+          video_model_id: input.capability === "video" ? modelId : savedConfig.video_model_id,
+        });
+      })();
 
   if (!writeOk) {
     return null;
@@ -648,11 +656,14 @@ export async function removeCustomEndpointRegistration(params: {
 
   const deleted =
     params.scope.kind === "server"
-      ? await deleteCustomEndpoint({
-          serverId: params.scope.ownerId,
-          label: params.label,
-          capability: params.capability,
-        })
+      ? await deleteCustomEndpoint(
+          {
+            serverId: params.scope.ownerId,
+            label: params.label,
+            capability: params.capability,
+          },
+          { serverDiscId: params.scope.serverDiscId },
+        )
       : await deleteCustomEndpoint({
           userId: params.scope.ownerId,
           label: params.label,
@@ -677,7 +688,7 @@ export async function removeCustomEndpointRegistration(params: {
 
   if (sameProviderRemaining.length === 0) {
     if (params.scope.kind === "server") {
-      await deleteSavedProviderConfig(params.scope.ownerId, provider);
+      await deleteSavedProviderConfig(params.scope.ownerId, provider, { serverDiscId: params.scope.serverDiscId });
     } else {
       await deleteUserSavedProviderConfig(params.scope.ownerId, provider);
     }
@@ -710,7 +721,9 @@ export async function removeCustomEndpointRegistration(params: {
         };
 
   if (params.scope.kind === "server") {
-    await upsertSavedProviderConfig(params.scope.ownerId, nextConfig as SavedProviderConfigRow);
+    await upsertSavedProviderConfig(params.scope.ownerId, nextConfig as SavedProviderConfigRow, {
+      serverDiscId: params.scope.serverDiscId,
+    });
   } else {
     await upsertUserSavedProviderConfig(params.scope.ownerId, nextConfig as UserSavedProviderConfigRow);
   }

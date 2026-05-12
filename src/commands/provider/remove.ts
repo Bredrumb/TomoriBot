@@ -6,7 +6,7 @@ import {
 } from "discord.js";
 import { loadSavedProviderConfigs } from "@/utils/db/repositories";
 import { deleteSavedProviderConfig } from "@/utils/db/repositories";
-import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
@@ -281,7 +281,9 @@ export async function execute(
       `;
     }
 
-    const deleted = await deleteSavedProviderConfig(tomoriState.server_id, selectedProvider);
+    const deleted = await deleteSavedProviderConfig(tomoriState.server_id, selectedProvider, {
+      serverDiscId: serverId,
+    });
 
     if (!deleted) {
       await replyInfoEmbed(resultTarget, locale, {
@@ -309,8 +311,6 @@ export async function execute(
       );
       await cleanupCustomProviderArtifacts(selectedProvider);
     }
-
-    invalidateTomoriStateCache(serverId);
 
     // 10. Success message — update the picker embed or reply to the interaction
     await replyInfoEmbed(resultTarget, locale, {

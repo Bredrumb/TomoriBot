@@ -4,7 +4,6 @@ import { sql } from "@/utils/db/client";
 import { loadAvailableModelsForProvider, loadLlmById, loadNaiPresetsForModel } from "@/utils/db/repositories";
 import { setChannelLlmOverride, setPersonaLlmOverride, applyNaiPreset } from "@/utils/db/repositories";
 import { getCachedTomoriState, getCachedAllPersonas, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { setChannelLlmCache } from "@/utils/cache/channelLlmCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
@@ -178,6 +177,7 @@ export async function execute(
         tomoriState.server_id,
         interaction.channelId,
         selectedChannelModel.llm_id,
+        { serverDiscId: serverId },
       );
       if (!channelWriteOk) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -188,7 +188,6 @@ export async function execute(
         return;
       }
 
-      setChannelLlmCache(tomoriState.server_id, interaction.channelId, selectedChannelModel);
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.model.text.success_title",
         descriptionKey: "commands.model.text.scope_set_channel_success",
@@ -312,7 +311,9 @@ export async function execute(
           return;
         }
 
-        const personaWriteOk = await setPersonaLlmOverride(selectedPersona.tomori_id, selectedPersonaModel.llm_id);
+        const personaWriteOk = await setPersonaLlmOverride(selectedPersona.tomori_id, selectedPersonaModel.llm_id, {
+          serverDiscId: serverId,
+        });
         if (!personaWriteOk) {
           await replyInfoEmbed(personaModalInteraction, locale, {
             titleKey: "general.errors.update_failed_title",
@@ -322,7 +323,6 @@ export async function execute(
           return;
         }
 
-        invalidateTomoriStateCache(serverId);
         await acknowledgeModalSubmitForRefresh(personaModalInteraction);
         await replyComponentsV2Status(
           interaction,

@@ -2,7 +2,7 @@ import type { ButtonInteraction, ChatInputCommandInteraction, Client, SlashComma
 import { MessageFlags } from "discord.js";
 import { THINKING_LEVEL_VALUES, type ThinkingLevelValue, isThinkingLevelValue } from "@/constants/thinkingLevels";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
-import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { sql } from "@/utils/db/client";
 import { upsertSavedProviderConfig } from "@/utils/db/repositories";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
@@ -276,7 +276,7 @@ export async function execute(
     }
 
     // 7. Persist the updated sampler config
-    const upserted = await upsertSavedProviderConfig(tomoriState.server_id, nextConfig);
+    const upserted = await upsertSavedProviderConfig(tomoriState.server_id, nextConfig, { serverDiscId: serverId });
     if (!upserted) {
       await replyWithResult({
         titleKey: "general.errors.update_failed_title",
@@ -302,8 +302,6 @@ export async function execute(
         WHERE server_id = ${tomoriState.server_id}
       `;
     }
-
-    invalidateTomoriStateCache(serverId);
 
     await replyWithResult({
       titleKey: "commands.model.parameters.success_title",

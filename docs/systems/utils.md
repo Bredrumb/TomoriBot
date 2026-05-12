@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-1 -->
+<!-- ARCH-ALIGNMENT: prereq-phase-2 -->
 
 # 11. Utils and Helpers
 
@@ -29,10 +29,11 @@ This is a current map of shared utility modules under `src/utils/`.
 ### `utils/db`
 
 - `client.ts`: DB client wiring
-- `dbRead.ts`: read queries and model/provider/preset loading
-- `dbWrite.ts`: writes and setup helpers
+- `repositories/`: public data-access facade and domain repositories
+- `repositoryReadSql.ts`, `repositoryWriteSql.ts`: repository-internal SQL bodies retained after Phase 2 for deeper domain cleanup
+- `repositoryExportSql.ts`, `repositoryImportSql.ts`: repository-internal import/export SQL helpers
 - `cooldownManager.ts`, `messageCooldown.ts`, `cooldownsCleanup.ts`
-- `channelWhitelist.ts`, `dataExport.ts`, `dataImportV2.ts`
+- feature-specific DB modules such as `channelWhitelist.ts`, `personalSpotlight.ts`, `stPresetDb.ts`, and `managedWebhookDb.ts`
 
 ### `utils/discord`
 
@@ -63,6 +64,7 @@ This is a current map of shared utility modules under `src/utils/`.
 - `tomoriStateCache.ts`
 - `userCache.ts`
 - `emojiStickerCache.ts`
+- `channelLlmCache.ts`, `channelLlmCacheStore.ts`
 - `channelWhitelistCache.ts`
 - `shortTermMemoryCache.ts`
 - `llmCache.ts`

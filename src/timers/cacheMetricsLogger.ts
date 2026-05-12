@@ -14,7 +14,7 @@
  */
 
 import type { Client } from "discord.js";
-import { getChannelLlmCacheSize } from "@/utils/cache/channelLlmCache";
+import { getChannelLlmCacheSize } from "@/utils/cache/channelLlmCacheStore";
 import { getWhitelistCacheStats } from "@/utils/cache/channelWhitelistCache";
 import { getEmojiStickerCacheStats } from "@/utils/cache/emojiStickerCache";
 import { getGuildMcpConfigCacheStats } from "@/utils/cache/guildMcpConfigCache";

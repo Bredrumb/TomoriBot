@@ -9,7 +9,6 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
 import type { UserRow } from "@/types/db/schema";
-import { invalidateUserCache } from "@/utils/cache/userCache";
 import { validateImportFile, importPersonalMemories } from "@/utils/db/repositories";
 import type { PersonalMemoriesExportData } from "@/types/db/dataExport";
 import { loadAllPersonasForServer } from "@/utils/db/repositories";
@@ -192,8 +191,6 @@ export async function execute(
       });
       return;
     }
-
-    invalidateUserCache(interaction.user.id);
 
     await responseInteraction.editReply({
       embeds: [

@@ -1,6 +1,6 @@
 import type { ChatInputCommandInteraction, ButtonInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder } from "discord.js";
-import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { loadAvailableModelsForProvider, loadCustomEndpointsForServer } from "@/utils/db/repositories";
 import { setFallbackModelRefs } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
@@ -462,7 +462,7 @@ export async function execute(
   }
 
   // 12. Write to database
-  const writeOk = await setFallbackModelRefs(tomoriState.server_id, finalRefs);
+  const writeOk = await setFallbackModelRefs(tomoriState.server_id, finalRefs, { serverDiscId });
   if (!writeOk) {
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
@@ -472,10 +472,7 @@ export async function execute(
     return;
   }
 
-  // 13. Invalidate cache so the next generation uses the new fallback chain
-  invalidateTomoriStateCache(serverDiscId);
-
-  // 14. Reply with success — modalSubmitInteraction is already deferred and handles both picker and direct flows
+  // 13. Reply with success — modalSubmitInteraction is already deferred and handles both picker and direct flows
   if (finalRefs.length === 0) {
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.model.fallback.cleared_title",

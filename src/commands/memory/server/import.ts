@@ -9,7 +9,6 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
 import type { UserRow } from "@/types/db/schema";
-import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { validateImportFile, importServerMemories } from "@/utils/db/repositories";
 import type { ServerMemoriesExportData } from "@/types/db/dataExport";
 import { loadAllPersonasForServer } from "@/utils/db/repositories";
@@ -175,8 +174,6 @@ export async function execute(
       });
       return;
     }
-
-    invalidateTomoriStateCache(serverDiscId);
 
     await responseInteraction.editReply({
       embeds: [

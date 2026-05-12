@@ -14,6 +14,8 @@
  */
 import type { ExportResult, PersonalityExportResult } from "@/types/db/dataExport";
 import type { ServerConfigExport } from "@/types/db/dataExport";
+import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { invalidateUserCache } from "@/utils/cache/userCache";
 import {
   exportPersonalData,
   exportServerData,
@@ -144,7 +146,9 @@ export class ImportExportRepository implements IRepository<ImportExportShape> {
   async importPersonalMemories(
     ...args: Parameters<typeof importPersonalMemories>
   ): ReturnType<typeof importPersonalMemories> {
-    return importPersonalMemories(...args);
+    const result = await importPersonalMemories(...args);
+    if (result.success) invalidateUserCache(args[0]);
+    return result;
   }
 
   /**
@@ -155,7 +159,9 @@ export class ImportExportRepository implements IRepository<ImportExportShape> {
   async importPersonalSettings(
     ...args: Parameters<typeof importPersonalSettings>
   ): ReturnType<typeof importPersonalSettings> {
-    return importPersonalSettings(...args);
+    const result = await importPersonalSettings(...args);
+    if (result.success) invalidateUserCache(args[0]);
+    return result;
   }
 
   /**
@@ -165,7 +171,9 @@ export class ImportExportRepository implements IRepository<ImportExportShape> {
    * @param config       - ServerConfigExport payload
    */
   async importServerConfig(serverDiscId: string, config: ServerConfigExport): ReturnType<typeof importServerConfig> {
-    return importServerConfig(serverDiscId, config);
+    const result = await importServerConfig(serverDiscId, config);
+    if (result.success) invalidateTomoriStateCache(serverDiscId);
+    return result;
   }
 
   /**
@@ -176,7 +184,9 @@ export class ImportExportRepository implements IRepository<ImportExportShape> {
   async importServerMemories(
     ...args: Parameters<typeof importServerMemories>
   ): ReturnType<typeof importServerMemories> {
-    return importServerMemories(...args);
+    const result = await importServerMemories(...args);
+    if (result.success) invalidateTomoriStateCache(args[0]);
+    return result;
   }
 
   /**
@@ -185,7 +195,9 @@ export class ImportExportRepository implements IRepository<ImportExportShape> {
    * @param args - Forwarded to importPersonalData
    */
   async importPersonalData(...args: Parameters<typeof importPersonalData>): ReturnType<typeof importPersonalData> {
-    return importPersonalData(...args);
+    const result = await importPersonalData(...args);
+    if (result.success) invalidateUserCache(args[0]);
+    return result;
   }
 
   /**
@@ -194,7 +206,9 @@ export class ImportExportRepository implements IRepository<ImportExportShape> {
    * @param args - Forwarded to importServerData
    */
   async importServerData(...args: Parameters<typeof importServerData>): ReturnType<typeof importServerData> {
-    return importServerData(...args);
+    const result = await importServerData(...args);
+    if (result.success) invalidateTomoriStateCache(args[0]);
+    return result;
   }
 
   // ── IRepository contract ───────────────────────────────────────────────────

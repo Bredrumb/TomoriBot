@@ -4,7 +4,6 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
 import type { UserRow } from "@/types/db/schema";
-import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { validateImportFile, importServerConfig } from "@/utils/db/repositories";
 import type { ServerConfigOnlyExportData } from "@/types/db/dataExport";
 import { IMPORT_LIMITS } from "@/utils/security/rateLimiter";
@@ -109,8 +108,6 @@ export async function execute(
       });
       return;
     }
-
-    invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
     await interaction.editReply({
       embeds: [

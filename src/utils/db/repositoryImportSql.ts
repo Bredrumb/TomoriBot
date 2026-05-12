@@ -20,7 +20,6 @@ import {
 } from "../../types/db/dataExport";
 import { validateMemoryContent } from "./memoryLimits";
 import { validateTomoriConfigFields } from "./sqlSecurity";
-import { invalidateUserCache } from "../cache/userCache";
 
 export type ImportFileType =
   | "personal_memories"
@@ -227,8 +226,6 @@ export async function importPersonalSettings(
         error: "commands.data.import.error_update_failed",
       };
     }
-
-    invalidateUserCache(userDiscId);
 
     // 3. Count imported fields (base 2 + optional impersonation/NAI/behavioral fields)
     let fieldsCount = 2;

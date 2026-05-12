@@ -14,8 +14,7 @@ import {
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionHelper";
-import { getCachedTomoriState, getCachedAllPersonas, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { invalidateChannelLlmCache } from "@/utils/cache/channelLlmCache";
+import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { getAllChannelLlmOverridesForServer } from "@/utils/db/repositories";
 import { deleteChannelLlmOverride, setPersonaLlmOverride } from "@/utils/db/repositories";
 import type { UserRow, ErrorContext, TomoriState, LlmRow } from "@/types/db/schema";
@@ -161,7 +160,9 @@ export async function execute(
       Promise.all(
         personasToClear.map(async (persona) => ({
           persona,
-          cleared: await setPersonaLlmOverride(persona.tomori_id, null),
+          cleared: await setPersonaLlmOverride(persona.tomori_id, null, {
+            serverDiscId: interaction.guildId ?? undefined,
+          }),
         })),
       ),
     ]);
@@ -178,13 +179,6 @@ export async function execute(
     const failedPersonaOverrides = personaClearResults
       .filter((result) => !result.cleared)
       .map((result) => result.persona);
-
-    for (const entry of removedChannelOverrides) {
-      invalidateChannelLlmCache(tomoriState.server_id, entry.channelDiscId);
-    }
-    if (clearedPersonaOverrides.length > 0) {
-      invalidateTomoriStateCache(interaction.guild.id);
-    }
 
     if (failedChannelOverrides.length > 0 || failedPersonaOverrides.length > 0) {
       const context: ErrorContext = {

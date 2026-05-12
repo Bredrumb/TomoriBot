@@ -5,8 +5,8 @@
  * video_generation_models, channel_llm_overrides, saved_provider_configs,
  * user_saved_provider_configs, custom_endpoints, openrouter_*_model_registrations.
  *
- * Thin delegation wrapper (expand-then-contract pattern).
- * Phase 2 #4b completion will move SQL inline and remove the god files.
+ * The public boundary lives here and in repositories/index.ts.
+ * Large SQL bodies remain in repository-owned helper modules until deeper domain cleanup.
  */
 import type {
   LlmRow,
@@ -23,6 +23,8 @@ import type {
   OpenRouterImageModelRegistrationRow,
   OpenRouterVideoModelRegistrationRow,
 } from "@/types/db/schema";
+import { invalidateAllChannelLlmCacheForServer, invalidateChannelLlmCache } from "@/utils/cache/channelLlmCacheStore";
+import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import {
   getLlmsByIds,
   loadAvailableLlms,
@@ -105,6 +107,14 @@ export type LlmExportShape = {
   savedProviderConfigs: SavedProviderConfigRow[];
 };
 
+export type LlmCacheInvalidationOptions = {
+  serverDiscId?: string;
+};
+
+export type ChannelLlmCacheInvalidationOptions = LlmCacheInvalidationOptions & {
+  channelDiscId?: string;
+};
+
 export class LlmRepository implements IRepository<LlmExportShape> {
   // ── system catalog reads ───────────────────────────────────────────────────
 
@@ -136,7 +146,7 @@ export class LlmRepository implements IRepository<LlmExportShape> {
   }
 
   /**
-   * Compatibility alias for the legacy dbRead function name.
+   * Compatibility alias for the pre-repository function name.
    *
    * @param llmId - Internal LLM ID
    */
@@ -540,51 +550,104 @@ export class LlmRepository implements IRepository<LlmExportShape> {
   // ── writes ─────────────────────────────────────────────────────────────────
 
   /** @see setChannelLlmOverride */
-  async setChannelLlmOverride(serverId: number, channelDiscId: string, llmId: number): Promise<boolean> {
-    return setChannelLlmOverride(serverId, channelDiscId, llmId);
+  async setChannelLlmOverride(
+    serverId: number,
+    channelDiscId: string,
+    llmId: number,
+    options: LlmCacheInvalidationOptions = {},
+  ): Promise<boolean> {
+    const ok = await setChannelLlmOverride(serverId, channelDiscId, llmId);
+    if (ok) {
+      invalidateChannelLlmCache(serverId, channelDiscId);
+      if (options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
+    }
+    return ok;
   }
 
   /** @see setPersonaLlmOverride */
-  async setPersonaLlmOverride(tomoriId: number, llmId: number | null): Promise<boolean> {
-    return setPersonaLlmOverride(tomoriId, llmId);
+  async setPersonaLlmOverride(
+    tomoriId: number,
+    llmId: number | null,
+    options: LlmCacheInvalidationOptions = {},
+  ): Promise<boolean> {
+    const ok = await setPersonaLlmOverride(tomoriId, llmId);
+    if (ok && options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
+    return ok;
   }
 
   /** @see setFallbackLlms */
-  async setFallbackLlms(serverId: number, llmIds: number[]): Promise<boolean> {
-    return setFallbackLlms(serverId, llmIds);
+  async setFallbackLlms(
+    serverId: number,
+    llmIds: number[],
+    options: LlmCacheInvalidationOptions = {},
+  ): Promise<boolean> {
+    const ok = await setFallbackLlms(serverId, llmIds);
+    if (ok && options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
+    return ok;
   }
 
   /** @see setFallbackModelRefs */
-  async setFallbackModelRefs(serverId: number, refs: FallbackModelRef[]): Promise<boolean> {
-    return setFallbackModelRefs(serverId, refs);
+  async setFallbackModelRefs(
+    serverId: number,
+    refs: FallbackModelRef[],
+    options: LlmCacheInvalidationOptions = {},
+  ): Promise<boolean> {
+    const ok = await setFallbackModelRefs(serverId, refs);
+    if (ok && options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
+    return ok;
   }
 
   /** @see deleteChannelLlmOverride */
-  async deleteChannelLlmOverride(serverId: number, channelDiscId: string): Promise<boolean> {
-    return deleteChannelLlmOverride(serverId, channelDiscId);
+  async deleteChannelLlmOverride(
+    serverId: number,
+    channelDiscId: string,
+    options: LlmCacheInvalidationOptions = {},
+  ): Promise<boolean> {
+    const ok = await deleteChannelLlmOverride(serverId, channelDiscId);
+    if (ok) {
+      invalidateChannelLlmCache(serverId, channelDiscId);
+      if (options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
+    }
+    return ok;
   }
 
   /** @see clearAllChannelLlmOverridesForServer */
-  async clearAllChannelLlmOverrides(serverId: number): Promise<boolean> {
-    return clearAllChannelLlmOverridesForServer(serverId);
+  async clearAllChannelLlmOverrides(serverId: number, options: LlmCacheInvalidationOptions = {}): Promise<boolean> {
+    const ok = await clearAllChannelLlmOverridesForServer(serverId);
+    if (ok) {
+      invalidateAllChannelLlmCacheForServer(serverId);
+      if (options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
+    }
+    return ok;
   }
 
   /** @see clearAllPersonaLlmOverridesForServer */
-  async clearAllPersonaLlmOverrides(serverId: number): Promise<boolean> {
-    return clearAllPersonaLlmOverridesForServer(serverId);
+  async clearAllPersonaLlmOverrides(serverId: number, options: LlmCacheInvalidationOptions = {}): Promise<boolean> {
+    const ok = await clearAllPersonaLlmOverridesForServer(serverId);
+    if (ok && options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
+    return ok;
   }
 
   /** @see upsertSavedProviderConfig */
   async upsertSavedProviderConfig(
     serverId: number,
     config: Parameters<typeof upsertSavedProviderConfig>[1],
+    options: LlmCacheInvalidationOptions = {},
   ): Promise<boolean> {
-    return upsertSavedProviderConfig(serverId, config);
+    const ok = await upsertSavedProviderConfig(serverId, config);
+    if (ok && options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
+    return ok;
   }
 
   /** @see deleteSavedProviderConfig */
-  async deleteSavedProviderConfig(serverId: number, provider: string): Promise<boolean> {
-    return deleteSavedProviderConfig(serverId, provider);
+  async deleteSavedProviderConfig(
+    serverId: number,
+    provider: string,
+    options: LlmCacheInvalidationOptions = {},
+  ): Promise<boolean> {
+    const ok = await deleteSavedProviderConfig(serverId, provider);
+    if (ok && options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
+    return ok;
   }
 
   /** @see upsertUserSavedProviderConfig */
@@ -601,13 +664,32 @@ export class LlmRepository implements IRepository<LlmExportShape> {
   }
 
   /** @see upsertCustomEndpoint */
-  async upsertCustomEndpoint(params: Parameters<typeof upsertCustomEndpoint>[0]): Promise<CustomEndpointRow | null> {
-    return upsertCustomEndpoint(params);
+  async upsertCustomEndpoint(
+    params: Parameters<typeof upsertCustomEndpoint>[0],
+    options: LlmCacheInvalidationOptions = {},
+  ): Promise<CustomEndpointRow | null> {
+    const row = await upsertCustomEndpoint(params);
+    if (row && params.serverId !== null && params.serverId !== undefined && options.serverDiscId) {
+      invalidateTomoriStateCache(options.serverDiscId);
+    }
+    return row;
   }
 
   /** @see deleteCustomEndpoint */
-  async deleteCustomEndpoint(params: Parameters<typeof deleteCustomEndpoint>[0]): Promise<boolean> {
-    return deleteCustomEndpoint(params);
+  async deleteCustomEndpoint(
+    params: Parameters<typeof deleteCustomEndpoint>[0],
+    options: ChannelLlmCacheInvalidationOptions = {},
+  ): Promise<boolean> {
+    const ok = await deleteCustomEndpoint(params);
+    if (ok && params.serverId !== null && params.serverId !== undefined) {
+      if (options.channelDiscId) {
+        invalidateChannelLlmCache(params.serverId, options.channelDiscId);
+      } else {
+        invalidateAllChannelLlmCacheForServer(params.serverId);
+      }
+      if (options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
+    }
+    return ok;
   }
 
   /** @see upsertOpenRouterModelRegistration */

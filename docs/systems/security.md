@@ -94,7 +94,8 @@ Primary files:
 - `src/commands/personal/privacy.ts`
 - `src/events/messageCreate/tomoriChat.ts`
 - `src/utils/text/contextBuilder.ts`
-- `src/utils/db/dbRead.ts`
+- `src/utils/db/repositories/UserRepository.ts`
+- `src/utils/db/repositories/index.ts`
 - `src/db/schema.sql` (`users.privacy_level`, `personalization_blacklist`)
 
 ### Global privacy levels (`/personal privacy`)
@@ -130,7 +131,8 @@ Primary files:
 - `src/commands/personal/config/remove.ts`
 - `src/commands/server/config/export.ts`
 - `src/commands/server/config/remove.ts`
-- `src/utils/db/dataExport.ts`
+- `src/utils/db/repositories/ImportExportRepository.ts`
+- `src/utils/db/repositoryExportSql.ts`
 
 Export is granular by type (JSON file via DM), including:
 - persona personal memories

@@ -4,7 +4,6 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
 import type { UserRow } from "@/types/db/schema";
-import { invalidateUserCache } from "@/utils/cache/userCache";
 import { validateImportFile, importPersonalSettings } from "@/utils/db/repositories";
 import type { PersonalSettingsExportData } from "@/types/db/dataExport";
 import { IMPORT_LIMITS } from "@/utils/security/rateLimiter";
@@ -96,8 +95,6 @@ export async function execute(
       });
       return;
     }
-
-    invalidateUserCache(interaction.user.id);
 
     await interaction.editReply({
       embeds: [

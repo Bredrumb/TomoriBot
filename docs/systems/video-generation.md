@@ -125,5 +125,5 @@ The command currently enforces Discord's standard upload ceiling and rejects ove
 - `src/utils/quota/videoQuotaManager.ts`
 - `src/types/db/schema.ts`
 - `src/db/schema.sql`
-- `src/utils/db/dbWrite.ts`
-- `src/utils/db/dbRead.ts`
+- `src/utils/db/repositories/LlmRepository.ts`
+- `src/utils/db/repositories/index.ts`

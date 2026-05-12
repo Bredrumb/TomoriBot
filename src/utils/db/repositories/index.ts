@@ -1,12 +1,5 @@
 import type { Guild } from "discord.js";
-import type {
-  FallbackModelRef,
-  NaiPresetRow,
-  SetupConfig,
-  TomoriConfigRow,
-  TomoriRow,
-  UserRow,
-} from "@/types/db/schema";
+import type { NaiPresetRow, SetupConfig, TomoriConfigRow, TomoriRow, UserRow } from "@/types/db/schema";
 import type { ServerConfigExport } from "@/types/db/dataExport";
 import { configRepository } from "./ConfigRepository";
 import { importExportRepository } from "./ImportExportRepository";
@@ -202,23 +195,26 @@ export const upsertRandomTrigger = (...args: Parameters<typeof serverRepository.
 export const deleteRandomTrigger = (triggerId: number) => serverRepository.deleteTrigger(triggerId);
 export const rescheduleRandomTrigger = (...args: Parameters<typeof serverRepository.rescheduleTrigger>) =>
   serverRepository.rescheduleTrigger(...args);
-export const setChannelLlmOverride = (serverId: number, channelDiscId: string, llmId: number) =>
-  llmRepository.setChannelLlmOverride(serverId, channelDiscId, llmId);
-export const setPersonaLlmOverride = (tomoriId: number, llmId: number | null) =>
-  llmRepository.setPersonaLlmOverride(tomoriId, llmId);
-export const setFallbackLlms = (serverId: number, llmIds: number[]) => llmRepository.setFallbackLlms(serverId, llmIds);
-export const setFallbackModelRefs = (serverId: number, refs: FallbackModelRef[]) =>
-  llmRepository.setFallbackModelRefs(serverId, refs);
-export const deleteChannelLlmOverride = (serverId: number, channelDiscId: string) =>
-  llmRepository.deleteChannelLlmOverride(serverId, channelDiscId);
-export const clearAllChannelLlmOverridesForServer = (serverId: number) =>
-  llmRepository.clearAllChannelLlmOverrides(serverId);
-export const clearAllPersonaLlmOverridesForServer = (serverId: number) =>
-  llmRepository.clearAllPersonaLlmOverrides(serverId);
+export const setChannelLlmOverride = (...args: Parameters<typeof llmRepository.setChannelLlmOverride>) =>
+  llmRepository.setChannelLlmOverride(...args);
+export const setPersonaLlmOverride = (...args: Parameters<typeof llmRepository.setPersonaLlmOverride>) =>
+  llmRepository.setPersonaLlmOverride(...args);
+export const setFallbackLlms = (...args: Parameters<typeof llmRepository.setFallbackLlms>) =>
+  llmRepository.setFallbackLlms(...args);
+export const setFallbackModelRefs = (...args: Parameters<typeof llmRepository.setFallbackModelRefs>) =>
+  llmRepository.setFallbackModelRefs(...args);
+export const deleteChannelLlmOverride = (...args: Parameters<typeof llmRepository.deleteChannelLlmOverride>) =>
+  llmRepository.deleteChannelLlmOverride(...args);
+export const clearAllChannelLlmOverridesForServer = (
+  ...args: Parameters<typeof llmRepository.clearAllChannelLlmOverrides>
+) => llmRepository.clearAllChannelLlmOverrides(...args);
+export const clearAllPersonaLlmOverridesForServer = (
+  ...args: Parameters<typeof llmRepository.clearAllPersonaLlmOverrides>
+) => llmRepository.clearAllPersonaLlmOverrides(...args);
 export const upsertSavedProviderConfig = (...args: Parameters<typeof llmRepository.upsertSavedProviderConfig>) =>
   llmRepository.upsertSavedProviderConfig(...args);
-export const deleteSavedProviderConfig = (serverId: number, provider: string) =>
-  llmRepository.deleteSavedProviderConfig(serverId, provider);
+export const deleteSavedProviderConfig = (...args: Parameters<typeof llmRepository.deleteSavedProviderConfig>) =>
+  llmRepository.deleteSavedProviderConfig(...args);
 export const upsertUserSavedProviderConfig = (
   ...args: Parameters<typeof llmRepository.upsertUserSavedProviderConfig>
 ) => llmRepository.upsertUserSavedProviderConfig(...args);

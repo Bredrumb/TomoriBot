@@ -167,11 +167,11 @@ When a phase touches code that affects a doc not listed here, add the doc to thi
 - [x] Implement `ImportExportRepository` (subsumes `dataExport.ts` + `dataImportV2.ts`)
 - [x] Migrate callers in `contextBuilder.ts`, `tomoriChat.ts`, and commands to use repositories
 - [x] Delete `dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, `dataImportV2.ts` once unused
-- [ ] Finish cache invalidation ownership cleanup in repository methods (per CLAUDE.md rule)
+- [x] Finish cache invalidation ownership cleanup in repository methods (per CLAUDE.md rule)
   - [x] User, config, persona, server-memory, and MCP repository writes own their core cache invalidation paths
-  - [ ] Move remaining LLM/provider/channel-override invalidations from callers into `LlmRepository` method variants that accept the server Discord ID / channel cache key
-  - [ ] Move remaining import/export invalidations from command callers into `ImportExportRepository` methods where the import method owns the write
-  - [ ] Re-audit personal memory/server memory edit/remove/import paths and either move invalidation into repositories or document why the command/tool remains the cache owner
+  - [x] Move remaining LLM/provider/channel-override invalidations from callers into `LlmRepository` method variants that accept the server Discord ID / channel cache key
+  - [x] Move remaining import/export invalidations from command callers into `ImportExportRepository` methods where the import method owns the write
+  - [x] Re-audit personal memory/server memory edit/remove/import paths and either move invalidation into repositories or document why the command/tool remains the cache owner
 - [x] **Cache invalidation audit (mandatory):** grep the pre-refactor codebase for every existing `cacheInvalidate*`, `cache.invalidate*`, and equivalent call site. Produce a checklist of (call site → which repository method should now own this invalidation). Confirm every entry lands in the corresponding repository method post-migration. CLAUDE.md mandates invalidation-after-write in the same code path; with 115+ DB exports moving into repositories, it's easy to lose one in the shuffle and end up with a stale-cache bug that surfaces weeks later. Audit committed as `docs/refactor/phase4-cache-audit.md`; repository ownership still needs final confirmation during caller migration.
 - [x] Run #4a regression harness; investigate any deltas
 - [x] Update docs per Documentation Alignment Tracker; bump ARCH-ALIGNMENT markers
@@ -181,14 +181,14 @@ When a phase touches code that affects a doc not listed here, add the doc to thi
 - **What:** Extract monolithic logic from `status.ts` (96KB) into `src/utils/metrics/` and from `compact.ts` (40KB) into a dedicated module.
 
 **Subtasks:**
-- [ ] Create `src/utils/metrics/` directory
-- [ ] Extract diagnostic gathering (provider stats, DB stats, cache stats, MCP status) into focused files in `src/utils/metrics/`
-- [ ] Reduce `status.ts` to slash-command routing + embed presentation only
-- [ ] Create `src/utils/compaction/` directory
-- [ ] Extract compaction orchestration logic from `compact.ts` into `src/utils/compaction/`
-- [ ] Reduce `compact.ts` to slash-command routing only
-- [ ] **Smoke test:** in a test guild, run `/tool status` and `/tool compact`; verify all sections of each command render correctly (provider stats, DB stats, cache stats, MCP status for `/tool status`; compaction flow for `/tool compact`). Both commands are diagnostic dumps where silent breakage is plausible.
-- [ ] `bun run check && bun run lint` pass
+- [x] Create `src/utils/metrics/` directory
+- [x] Extract diagnostic gathering (provider stats, DB stats, cache stats, MCP status) into focused files in `src/utils/metrics/`
+- [x] Reduce `status.ts` to slash-command routing + embed presentation only
+- [x] Create `src/utils/compaction/` directory
+- [x] Extract compaction orchestration logic from `compact.ts` into `src/utils/compaction/`
+- [x] Reduce `compact.ts` to slash-command routing only
+- [x] **Smoke test:** in a test guild, run `/tool status` and `/tool compact`; verify all sections of each command render correctly (provider stats, DB stats, cache stats, MCP status for `/tool status`; compaction flow for `/tool compact`). Both commands are diagnostic dumps where silent breakage is plausible.
+- [x] `bun run check && bun run lint` pass
 
 ---
 

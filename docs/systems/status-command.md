@@ -1,8 +1,16 @@
+<!-- ARCH-ALIGNMENT: prereq-phase-2 -->
+
 # Tool Status Command
 
 `/tool status` is the read-only snapshot command for durable personal, server, and persona state.
 
 It exists so users can inspect current configuration without reopening every management command.
+
+## Implementation Boundary
+
+- Slash command registration and routing live in `src/commands/tool/status.ts`.
+- Status data collection and embed page assembly live under `src/utils/metrics/`.
+- `/tool compact` routing lives in `src/commands/tool/compact.ts`; compaction orchestration lives under `src/utils/compaction/`.
 
 ## Scope Coverage
 

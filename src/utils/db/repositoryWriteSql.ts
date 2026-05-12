@@ -1746,7 +1746,7 @@ export async function rescheduleRandomTrigger(
 
 /**
  * UPSERTs a channel-level LLM model override.
- * After calling, invalidate channelLlmCache for this channel.
+ * LlmRepository invalidates channelLlmCache after a successful write.
  *
  * @param serverId - Database server ID (integer)
  * @param channelDiscId - Discord channel ID (snowflake string)
@@ -1772,7 +1772,7 @@ export async function setChannelLlmOverride(serverId: number, channelDiscId: str
 /**
  * Sets a persona-specific LLM model override in persona_configs.
  * Creates the persona_configs row if it does not yet exist.
- * After calling, invalidate TomoriState cache for the server.
+ * LlmRepository invalidates TomoriState cache when the server Discord ID is available.
  *
  * @param tomoriId - The persona's tomori_id
  * @param llmId - The llm_id to set as the override, or null to clear it
@@ -1798,7 +1798,7 @@ export async function setPersonaLlmOverride(tomoriId: number, llmId: number | nu
  * Sets the ordered fallback LLM model chain for a server.
  * When the primary model errors during generation, the bot retries each fallback in order.
  * Pass an empty array to clear all configured fallback models.
- * After calling, invalidate TomoriState cache for the server.
+ * LlmRepository invalidates TomoriState cache when the server Discord ID is available.
  *
  * @param serverId - Database server_id for the target server
  * @param llmIds - Ordered array of llm_id values (up to 5), or [] to clear all fallbacks
@@ -1863,7 +1863,7 @@ export async function setFallbackLlms(serverId: number, llmIds: number[]): Promi
  * Writes the ordered fallback model reference list to a server's config.
  * Supports mixed provider types (llm and custom_endpoint). Also mirrors llm-only IDs into the
  * legacy fallback_llm_ids column for backward compatibility with readers not yet using fallback_model_refs.
- * After calling, invalidate TomoriState cache for the server.
+ * LlmRepository invalidates TomoriState cache when the server Discord ID is available.
  *
  * @param serverId - Database server_id for the target server
  * @param refs - Ordered array of FallbackModelRef entries (up to 5), or [] to clear all fallbacks

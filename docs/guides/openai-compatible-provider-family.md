@@ -457,7 +457,7 @@ The combined extraction + DeepSeek slice is successful when:
 - `src/commands/config/api-key/set.ts`
 - `src/commands/config/model/image.ts`
 - `src/commands/config/model/embedding.ts`
-- `src/utils/db/dbWrite.ts`
+- `src/utils/db/repositories/LlmRepository.ts`
 
 ## Practical Recommendation
 
