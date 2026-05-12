@@ -607,27 +607,27 @@ export class GenerateImageTool extends BaseTool {
       if (!context.suppressProgressNotices) {
         const baseNoticeDescription = localizer(
           context.locale,
-          usesReferences ? "genai.image.generating_with_references_description" : "genai.image.generating_description",
+          usesReferences ? "tools.image.generating_with_references_description" : "tools.image.generating_description",
         );
         const referenceSourceCount = Number(messageId ? 1 : 0) + Number(targetIdentity ? 1 : 0);
         const referencedMessageUrl = messageId ? buildReferencedMessageUrl(context, messageId) : null;
         const extraNoticeLines: string[] = [];
         if (referencedMessageUrl) {
           extraNoticeLines.push(
-            localizer(context.locale, "genai.image.notice_reference_line", {
+            localizer(context.locale, "tools.image.notice_reference_line", {
               message_url: referencedMessageUrl,
             }),
           );
         }
         if (!referencedMessageUrl && referenceSourceCount) {
           extraNoticeLines.push(
-            localizer(context.locale, "genai.image.notice_reference_count_line", {
+            localizer(context.locale, "tools.image.notice_reference_count_line", {
               count: referenceSourceCount.toString(),
             }),
           );
         } else if (referencedMessageUrl && referenceSourceCount > 1) {
           extraNoticeLines.push(
-            localizer(context.locale, "genai.image.notice_reference_count_line", {
+            localizer(context.locale, "tools.image.notice_reference_count_line", {
               count: referenceSourceCount.toString(),
             }),
           );
@@ -636,13 +636,13 @@ export class GenerateImageTool extends BaseTool {
           context,
           "image_generation",
           {
-            titleKey: "genai.image.generating_title",
+            titleKey: "tools.image.generating_title",
             description: buildImageToolNoticeDescription(
               context.locale,
               baseNoticeDescription,
               displayModelName,
               prompt,
-              localizer(context.locale, "genai.image.generating_footer"),
+              localizer(context.locale, "tools.image.generating_footer"),
               extraNoticeLines,
             ),
             color: ColorCode.INFO,

@@ -1,3 +1,5 @@
+<!-- ARCH-ALIGNMENT: prereq-phase-1 -->
+
 # 12. Localization System (i18n)
 
 TomoriBot localizes user-facing text through locale files in `src/locales/`.
@@ -12,7 +14,9 @@ Currently loaded from source:
 ## Runtime Architecture
 
 - Loader: `src/utils/text/localizer.ts`
-- Locale file discovery: `src/locales/*.ts` via `Bun.Glob`
+- Locale structure: `src/locales/{locale}/` directories, one `.ts` file per category
+- Categories: `general`, `commands`, `providers`, `tools`, `bridges`
+- At boot, `initializeLocalizer()` scans each locale directory, imports all category slices, and merges them into a single tree via `Object.assign`
 - Locale values are nested objects, accessed through dot-path keys
 
 Example lookup:
@@ -69,8 +73,8 @@ Key conventions:
 
 ## Adding or Changing Locale Keys
 
-1. Update `src/locales/en-US.ts`.
-2. Mirror the same key structure in `src/locales/ja.ts`.
+1. Update the appropriate category file under `src/locales/en-US/` (e.g. `commands.ts`, `general.ts`).
+2. Mirror the same key structure in the corresponding `src/locales/ja/` file.
 3. Run:
 
 ```bash

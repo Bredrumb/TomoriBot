@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { Glob } from "bun";
 
 /**
@@ -176,29 +176,34 @@ async function loadAvailableKeys(): Promise<{
   const localesPath = join(process.cwd(), "src", "locales");
 
   try {
-    const glob = new Glob("*.ts");
-    for await (const file of glob.scan(localesPath)) {
-      const filePath = join(localesPath, file);
-      const localeName = file.replace(".ts", ""); // e.g., "en-US", "ja"
+    const entries = await readdir(localesPath, { withFileTypes: true });
 
-      try {
-        // Dynamic import the locale file
-        const module = await import(filePath);
-        const localeObject = module.default;
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
 
-        // Extract all keys from this locale
-        const keys = extractKeysFromLocaleObject(localeObject);
-        localeKeys.set(localeName, keys);
+      const localeName = entry.name; // e.g., "en-US", "ja"
+      const localeDir = join(localesPath, localeName);
+      const merged: Record<string, unknown> = {};
 
-        // Also add to the master set
-        for (const key of keys) {
-          availableKeys.add(key);
+      const glob = new Glob("*.ts");
+      for await (const file of glob.scan(localeDir)) {
+        const filePath = join(localeDir, file);
+        try {
+          const module = await import(filePath);
+          Object.assign(merged, module.default);
+        } catch (importError) {
+          log.error(`Failed to import locale slice: ${localeName}/${file}`, importError);
         }
-
-        log.info(`Loaded ${keys.size} keys from locale file: ${localeName}`);
-      } catch (importError) {
-        log.error(`Failed to import locale file: ${file}`, importError);
       }
+
+      const keys = extractKeysFromLocaleObject(merged);
+      localeKeys.set(localeName, keys);
+
+      for (const key of keys) {
+        availableKeys.add(key);
+      }
+
+      log.info(`Loaded ${keys.size} keys from locale: ${localeName}`);
     }
   } catch (error) {
     log.error("Error scanning locale files", error);
@@ -435,13 +440,27 @@ function extractStringValues(obj: unknown, prefix = ""): Map<string, string> {
 }
 
 /**
+ * Loads and merges all category slice files for a locale into one locale object.
+ * Replaces direct imports of the old monolithic `{locale}.ts` files.
+ */
+async function loadMergedLocale(localeName: string): Promise<Record<string, unknown>> {
+  const localeDir = join(process.cwd(), "src", "locales", localeName);
+  const merged: Record<string, unknown> = {};
+  const glob = new Glob("*.ts");
+  for await (const file of glob.scan(localeDir)) {
+    const module = await import(join(localeDir, file));
+    Object.assign(merged, module.default);
+  }
+  return merged;
+}
+
+/**
  * Checks modal title lengths across all locales
  * @param localeKeys - Map of locale names to their key sets
  * @returns Array of modal title length violations
  */
 async function checkModalTitleLengths(localeKeys: Map<string, Set<string>>): Promise<ModalTitleViolation[]> {
   const violations: ModalTitleViolation[] = [];
-  const localesPath = join(process.cwd(), "src", "locales");
 
   // Discord modal title constraints
   const MIN_LENGTH = 5;
@@ -454,12 +473,7 @@ async function checkModalTitleLengths(localeKeys: Map<string, Set<string>>): Pro
     if (modalTitleKeys.length === 0) continue;
 
     try {
-      // Load the locale file
-      const filePath = join(localesPath, `${localeName}.ts`);
-      const module = await import(filePath);
-      const localeObject = module.default;
-
-      // Extract all string values from the locale object
+      const localeObject = await loadMergedLocale(localeName);
       const stringValues = extractStringValues(localeObject);
 
       // Check each modal title key
@@ -496,7 +510,6 @@ async function checkModalDescriptionLengths(
   localeKeys: Map<string, Set<string>>,
 ): Promise<ModalDescriptionViolation[]> {
   const violations: ModalDescriptionViolation[] = [];
-  const localesPath = join(process.cwd(), "src", "locales");
 
   // Discord modal description constraint
   const MAX_LENGTH = 97;
@@ -508,12 +521,7 @@ async function checkModalDescriptionLengths(
     if (modalDescriptionKeys.length === 0) continue;
 
     try {
-      // Load the locale file
-      const filePath = join(localesPath, `${localeName}.ts`);
-      const module = await import(filePath);
-      const localeObject = module.default;
-
-      // Extract all string values from the locale object
+      const localeObject = await loadMergedLocale(localeName);
       const stringValues = extractStringValues(localeObject);
 
       // Check each modal description key
@@ -550,7 +558,6 @@ async function checkCommandDescriptionLengths(
   localeKeys: Map<string, Set<string>>,
 ): Promise<CommandDescriptionViolation[]> {
   const violations: CommandDescriptionViolation[] = [];
-  const localesPath = join(process.cwd(), "src", "locales");
 
   // Discord command description constraints
   const MIN_LENGTH = 1;
@@ -563,12 +570,7 @@ async function checkCommandDescriptionLengths(
     if (commandDescriptionKeys.length === 0) continue;
 
     try {
-      // Load the locale file
-      const filePath = join(localesPath, `${localeName}.ts`);
-      const module = await import(filePath);
-      const localeObject = module.default;
-
-      // Extract all string values from the locale object
+      const localeObject = await loadMergedLocale(localeName);
       const stringValues = extractStringValues(localeObject);
 
       // Check each command description key

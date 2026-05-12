@@ -123,9 +123,9 @@ export class BraveWebSearchTool extends BaseBraveSearchTool {
         context,
         "web_search",
         {
-          titleKey: "genai.search.web_search_title",
+          titleKey: "tools.search.web_search_title",
           titleVars: { query: args.query as string },
-          descriptionKey: "genai.search.disclaimer_description",
+          descriptionKey: "tools.search.disclaimer_description",
         },
         "BraveWebSearchTool",
       );
@@ -207,9 +207,9 @@ export class BraveImageSearchTool extends BaseBraveSearchTool {
         context,
         "image_search",
         {
-          titleKey: "genai.search.image_search_title",
+          titleKey: "tools.search.image_search_title",
           titleVars: { query: args.query as string },
-          descriptionKey: "genai.search.disclaimer_description",
+          descriptionKey: "tools.search.disclaimer_description",
         },
         "BraveImageSearchTool",
       );
@@ -299,9 +299,9 @@ export class BraveVideoSearchTool extends BaseBraveSearchTool {
         context,
         "video_search",
         {
-          titleKey: "genai.search.video_search_title",
+          titleKey: "tools.search.video_search_title",
           titleVars: { query: args.query as string },
-          descriptionKey: "genai.search.disclaimer_description",
+          descriptionKey: "tools.search.disclaimer_description",
         },
         "BraveVideoSearchTool",
       );
@@ -391,9 +391,9 @@ export class BraveNewsSearchTool extends BaseBraveSearchTool {
         context,
         "news_search",
         {
-          titleKey: "genai.search.news_search_title",
+          titleKey: "tools.search.news_search_title",
           titleVars: { query: args.query as string },
-          descriptionKey: "genai.search.disclaimer_description",
+          descriptionKey: "tools.search.disclaimer_description",
         },
         "BraveNewsSearchTool",
       );

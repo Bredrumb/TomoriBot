@@ -219,9 +219,9 @@ export class PeekProfilePictureTool extends BaseTool {
           context,
           "image_analysis",
           {
-            titleKey: "genai.vision.analyzing_title",
-            descriptionKey: "genai.vision.analyzing_description",
-            footerKey: "genai.vision.analyzing_footer",
+            titleKey: "tools.vision.analyzing_title",
+            descriptionKey: "tools.vision.analyzing_description",
+            footerKey: "tools.vision.analyzing_footer",
             color: ColorCode.INFO,
           },
           "PeekProfilePictureTool",

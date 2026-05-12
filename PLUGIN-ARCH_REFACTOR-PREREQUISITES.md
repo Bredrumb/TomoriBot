@@ -58,10 +58,15 @@ Each phase below lists the `/docs/` pages it must update. The phase's quality-ga
 | **#12a Chat regression harness** | `docs/guides/testing-chat-changes.md` (new), `docs/README.md` |
 | **#12b tomoriChat deconstruction** | `docs/core/architecture.md`, `docs/systems/event-system.md` |
 | **#13 eventHandler eager-load** | `docs/systems/event-system.md` |
-| **#14 tomori_configs normalization** | `docs/systems/database-schema.md` |
+| **#14 Partition `tomori_configs` + audit `tomoris`** | `docs/systems/database-schema.md`, `docs/ai/multi-persona.md` |
+| **#14.2 Pass C voice migration** | `docs/systems/database-schema.md` |
+| **#14.5 Drop deprecated provider-config columns** | `docs/systems/database-schema.md` |
+| **#14.6 One-main-persona-per-server invariant** | `docs/systems/database-schema.md` |
 | **#15 JSONB → junction tables** | `docs/systems/database-schema.md` |
 | **#16 Separate state from config** | `docs/systems/database-schema.md` |
 | **#16.5 Migration runner** | `docs/systems/database-schema.md` |
+| **#16.7 Export/import pipeline composition** | `docs/systems/database-schema.md` |
+| **#16.8 `tomoris` → `personas` rename** | `docs/systems/database-schema.md`, `docs/core/architecture.md`, `docs/ai/multi-persona.md` |
 | **#17 Logger/DB circular dep** | `docs/systems/utils.md` (if logger documented there) |
 | **#18 Eradicate `.catch(() => {})`** | _(none)_ |
 | **#21 Eradicate sync I/O** | _(none)_ |
@@ -77,45 +82,47 @@ When a phase touches code that affects a doc not listed here, add the doc to thi
 - **Plugin prereq:** Required by `PLUGIN-ARCH_TASK-LIST.md` AC-5.
 
 **Subtasks:**
-- [ ] Decide category split (e.g., `general`, `commands`, `errors`, `tools`, `providers`, `bridges`)
-- [ ] Create `src/locales/en-US/` and `src/locales/ja/` directories
-- [ ] Move keys from `en-US.ts` into category files; ensure type structure preserved
-- [ ] Mirror exact same keys in `ja/` files
-- [ ] Update `localizer()` to merge slices into one tree at boot
-- [ ] Update `check-locales` script to scan the new directory structure
-- [ ] Delete old monolithic `en-US.ts` and `ja.ts`
-- [ ] `bun run check && bun run lint && bun run check-locales` pass
+- [x] Decide category split (e.g., `general`, `commands`, `errors`, `tools`, `providers`, `bridges`)
+- [x] Create `src/locales/en-US/` and `src/locales/ja/` directories
+- [x] Move keys from `en-US.ts` into category files; ensure type structure preserved
+- [x] Mirror exact same keys in `ja/` files
+- [x] Update `localizer()` to merge slices into one tree at boot
+- [x] Update `check-locales` script to scan the new directory structure
+- [x] Delete old monolithic `en-US.ts` and `ja.ts`
+- [x] **Smoke test:** boot the bot and verify at least one localized reply renders correctly in each locale (en-US, ja). `check-locales` confirms key parity but does NOT verify the runtime merge — a broken `localizer()` merge ships raw keys to users without failing any structural gate.
+- [x] `bun run check && bun run lint && bun run check-locales` pass
 
 ### 2. Simplify `src/utils/text/stringHelper.ts`
 - **What:** Break down the 73KB file of complex regex chains into specialized processors.
 
 **Subtasks:**
-- [ ] Inventory all exported functions in `stringHelper.ts`; group by purpose (emoji, markdown, mentions, normalization)
-- [ ] Create `src/utils/text/processors/` with one file per group (`emojiProcessor.ts`, `markdownProcessor.ts`, etc.)
-- [ ] Move functions to appropriate files; preserve signatures
-- [ ] Replace `stringHelper.ts` with a barrel re-export for backwards compatibility, or update all import sites
-- [ ] Add unit tests for the most complex regex chains before/during the move
-- [ ] `bun run check && bun run lint` pass
+- [x] Inventory all exported functions in `stringHelper.ts`; group by purpose (emoji, markdown, mentions, normalization)
+- [x] Create `src/utils/text/processors/` with one file per group (`emojiProcessor.ts`, `markdownProcessor.ts`, etc.)
+- [x] Move functions to appropriate files; preserve signatures
+- [x] Replace `stringHelper.ts` with a barrel re-export for backwards compatibility, or update all import sites
+- [x] Add unit tests for the most complex regex chains before/during the move
+- [x] `bun run check && bun run lint` pass
 
 ### 2.5. Delete `tomoriChat.ts.backup` zombie file
 **Subtasks:**
-- [ ] Verify nothing imports `tomoriChat.ts.backup`
-- [ ] Delete the file
-- [ ] Confirm git history still contains it for archaeological needs
+- [x] Verify nothing imports `tomoriChat.ts.backup`
+- [x] Delete the file
+- [x] Confirm git history still contains it for archaeological needs
 
 ### 3. Decouple `src/index.ts` & Remove Hacks
 - **What:** Split the 17KB `index.ts` into specialized initialization modules (`src/init/`). Replace `process.env` mutations with a typed config object.
 
 **Subtasks:**
-- [ ] Create `src/init/` directory
-- [ ] Extract DB init into `src/init/database.ts`
-- [ ] Extract Discord client init into `src/init/discord.ts`
-- [ ] Extract event/command/tool loader bootstrapping into `src/init/loaders.ts`
-- [ ] Extract Matrix bridge init into `src/init/bridges.ts` (until Phase E moves it to a plugin)
-- [ ] Define typed `AppConfig` interface in `src/types/config.ts`
-- [ ] Replace `process.env.X = ...` mutations with explicit config-object usage
-- [ ] Reduce `index.ts` to a thin orchestrator that calls each `init/*` in order
-- [ ] `bun run check && bun run lint` pass
+- [x] Create `src/init/` directory
+- [x] Extract DB init into `src/init/database.ts`
+- [x] Extract Discord client init into `src/init/discord.ts`
+- [x] Extract event/command/tool loader bootstrapping into `src/init/loaders.ts`
+- [x] Extract Matrix bridge init into `src/init/bridges.ts` (until Phase E moves it to a plugin)
+- [x] Define typed `AppConfig` interface in `src/types/config.ts`
+- [x] Replace `process.env.X = ...` mutations with explicit config-object usage
+- [x] Reduce `index.ts` to a thin orchestrator that calls each `init/*` in order
+- [x] **Smoke test:** `bun run dev` boots to ready state with each `init/*` module logging success in the expected order. A reordered or failed init module is invisible to `check && lint`.
+- [x] `bun run check && bun run lint` pass
 
 ---
 
@@ -141,6 +148,7 @@ When a phase touches code that affects a doc not listed here, add the doc to thi
 - **What:** Break down `dbRead.ts` (134KB, 73 exports) and `dbWrite.ts` (105KB, 42 exports) into a Repository Pattern. Also fold `dataExport.ts` (30KB) and `dataImportV2.ts` (29KB) into appropriate repositories.
 - **Prerequisite:** #4a must be complete and the harness green on the unmodified DB layer.
 - **Plugin prereq:** Required by `PLUGIN-ARCH_TASK-LIST.md` AC-6.
+- **Export contract:** Repository interface MUST require `toExportShape()` / `fromExportShape()` methods from day one. No repository lands without them. (Phase 6 #16.7 depends on every repo exposing these; backfilling later means touching every repo twice.)
 
 **Subtasks (per repository — group exports by domain):**
 - [ ] Inventory all exports in `dbRead.ts` + `dbWrite.ts`; classify by domain (user, memory variants, config, persona, server, tools, RAG, etc.)
@@ -174,6 +182,7 @@ When a phase touches code that affects a doc not listed here, add the doc to thi
 - [ ] Create `src/utils/compaction/` directory
 - [ ] Extract compaction orchestration logic from `compact.ts` into `src/utils/compaction/`
 - [ ] Reduce `compact.ts` to slash-command routing only
+- [ ] **Smoke test:** in a test guild, run `/tool status` and `/tool compact`; verify all sections of each command render correctly (provider stats, DB stats, cache stats, MCP status for `/tool status`; compaction flow for `/tool compact`). Both commands are diagnostic dumps where silent breakage is plausible.
 - [ ] `bun run check && bun run lint` pass
 
 ---
@@ -208,6 +217,7 @@ When a phase touches code that affects a doc not listed here, add the doc to thi
 - [ ] Convert `case "..."` switches in `commands/tool/prompt/snapshot.ts` (11 cases) to provider-method dispatch
 - [ ] Decide allowlist for legitimate UI-display switches in `commands/help/api-key.ts` (9 cases) — these are arguably user-facing copy, not orchestration
 - [ ] Run grep to verify zero name-comparisons in core orchestration paths
+- [ ] **Smoke test:** boot the bot and verify the provider registry log lists all expected providers as discovered (Google, OpenRouter, NovelAI, Custom, etc.). A provider going dark after the hardcoded array is removed would otherwise be invisible until someone runs a command against it.
 - [ ] `bun run check && bun run lint` pass
 
 ### 7. Split `src/tools/toolRegistry.ts` & Fix MCP Hacks
@@ -234,6 +244,7 @@ When a phase touches code that affects a doc not listed here, add the doc to thi
 - [ ] Audit `commandLoader.ts` for ESM consistency; remove any remaining CJS patterns
 - [ ] Replace any synchronous I/O (`fs.readdirSync`, etc.) with `Bun.file().*` async equivalents
 - [ ] Update import sites where files moved
+- [ ] **Smoke test:** in a test guild, run at least one command exercising each interaction surface — a modal-open command, a paginated reply, and a button-interaction reply. Webhook split needs at least one persona-dispatched reply verified. Type-safety doesn't catch miswired UI plumbing.
 - [ ] `bun run check && bun run lint` pass
 
 ### 9. Modularize `src/utils/matrix/matrixManager.ts`
@@ -256,6 +267,7 @@ When a phase touches code that affects a doc not listed here, add the doc to thi
 
 ### 10. Modularize `src/utils/text/contextBuilder.ts`
 - **What:** Break down the 128KB context builder.
+- **Prerequisite:** Phase 2 #4b complete (repositories must exist so each new context module can consume them instead of raw DB calls).
 
 **Subtasks:**
 - [ ] Inventory `contextBuilder.ts` responsibilities (RAG retrieval, memory loading, template assembly, history fetching)
@@ -270,6 +282,7 @@ When a phase touches code that affects a doc not listed here, add the doc to thi
 
 ### 11. Split `src/utils/discord/streamOrchestrator.ts`
 - **What:** Separate the 111KB stream management.
+- **Prerequisite:** Phase 3 #6 (unified `BaseStreamAdapter`) and #6.5 (provider auto-discovery + name-switch purge) complete.
 
 **Subtasks:**
 - [ ] Inventory `streamOrchestrator.ts` responsibilities (buffering, UI updates, flush logic, stop conditions)
@@ -327,54 +340,248 @@ When a phase touches code that affects a doc not listed here, add the doc to thi
 - [ ] Cache the loaded handler functions in a Map keyed by event name
 - [ ] Replace `fs.existsSync` and `fs.readdirSync` with `Bun.glob` async scans (per Ongoing rule #21)
 - [ ] Confirm the scan remains **shallow** (no recursion into subfolders of `src/events/<eventName>/`); add a code comment documenting this property
-- [ ] Verify event handlers still fire correctly after the change
+- [ ] **Smoke test:** concretely verify `messageCreate`, `guildMemberAdd`, and `interactionCreate` handlers all fire in a test guild after the change. (The existing "verify handlers still fire" subtask was too vague — if any one of these regresses, a specific feature silently dies.)
 - [ ] Benchmark event-handling latency before/after to confirm improvement
 - [ ] `bun run check && bun run lint` pass
+
+---
+
+## Pre-Phase 6 Quick Win (optional, ship standalone)
+
+### Apply the `welcome_prompt` export fix against the current schema
+- **What:** Ship the `welcome_prompt` export fix from `plans/EXPORT_IMPORT_REFACTOR_PLAN.md` as a standalone PR against the **current** (pre-split) schema. ~5 files. Pays down a real bug today.
+- **Why standalone:** The Phase 6 refactor doesn't need to carry this fix. Shipping it now means the bug is closed before Phase 6 begins, and the eventual archival of `plans/EXPORT_IMPORT_REFACTOR_PLAN.md` (in #16.7) doesn't take a known-real fix down with it.
+- **Sequencing:** Independent of every other Phase 6 prerequisite. Can ship at any time — the only requirement is that it lands before #16.7 archives the old plan.
+
+**Subtasks:**
+- [ ] Re-read `plans/EXPORT_IMPORT_REFACTOR_PLAN.md`'s `welcome_prompt` section against current `dataExport.ts` / `dataImportV2.ts` to confirm the bug still reproduces
+- [ ] Apply the fix as described in the old plan
+- [ ] Add or update a regression case in the export/import test suite so the bug cannot recur
+- [ ] `bun run check && bun run lint && bun run check-locales && bun run test` pass
 
 ---
 
 ## Phase 6: Database Schema Normalization (V2)
 *Because we implemented the Repository pattern in Phase 2, we can now alter the underlying database schema without touching **any** application logic outside of the Repositories.*
 
+> **Prerequisite:** Phase 2 #4b green; Phase 1.5 Pass B deprecated-mirror drop complete. Schema-altering migrations touch 115+ call sites without repositories; Pass B's mirror cleanup must finish before partitioning runs against those columns.
+
+> **Sequencing:** Phase 6 steps run #14 → #14.2 → #14.5 → #14.6 → #15 → #16 → #16.7 → #16.8 as a hard sequential chain (treat like the plan's `a`/`b` convention — a step cannot start until the previous step's quality gates are green). The final rename (#16.8) is deliberately last so every interim state remains coherent under the old `tomori_*` naming, and rollback is one `ALTER TABLE personas RENAME TO tomoris` away if anything breaks.
+
 > **Note:** TomoriBot currently has no formal migrations directory (`scripts/db/migrations/` does not exist). Schema lives in `src/db/schema.sql`, `schema_rag.sql`, and `schema_stpreset.sql`. Phase 6 should also introduce a lightweight migration runner so plugins (per `PLUGIN-ARCH_TASK-LIST.md` AC-6) can ship their own schema changes alongside their code.
 
-### 14. Normalize the `tomori_configs` God Table
-- **What:** Split the massive table into focused tables.
+### 14. Partition `tomori_configs` + audit `tomoris` along command write boundaries
+- **What:** Split the god `tomori_configs` table into 12 command-aligned `server_*_configs` tables, and extract persona-scoped concerns from `tomoris` into command-aligned `persona_*_configs` tables. Organizing principle: **one table per command write surface** — when a user runs `/config humanizer`, only one row in one table changes.
 - **Plugin prereq:** Required by `PLUGIN-ARCH_TASK-LIST.md` AC-6.
 
+**Scope:**
+
+Migrate residual server-scoped columns from old `tomori_configs` into 12 command-aligned `server_*_configs` tables:
+- `server_capabilities_configs` (owned by `/capabilities manage`, `/capabilities toggle`)
+- `server_memberpermissions_configs` (owned by `/config member-permissions`)
+- `server_chat_configs` (owned by `/config humanizer`, `/config message-fetch-limit`, `/config send-limit`, `/config match-limit`, `/config cascade-limit`, `/config timezone`, `/config self-debug`, `/config system-prompt set/remove/preset`, `/config context-note set`)
+- `server_noticeembeds_configs` (owned by `/config notice-embeds visibility`)
+- `server_autotrigger_configs` (owned by `/server auto-trigger channels`, `/server auto-trigger threshold`)
+- `server_channelscope_configs` (owned by `/server rp-channels`, `/server private-channels`, `/server crosschannel-blocklist`, `/server stm privacy-bypass`, `/server thought-logs-channel`)
+- `server_welcome_configs` (owned by `/server welcome-channel set/remove`)
+- `server_trigger_behavior_configs` (owned by `/server always-reply`, `/server deliberate-trigger-mode`, `/server cooldown triggers`)
+- `server_nsfw_configs` (owned by `/nsfw jailbreaks`)
+- `server_speech_configs` (owned by `/speech chatterbox parameters`, `/speech transcripts`)
+- `server_byok_configs` (owned by `/server user-byok toggle` — kept standalone to prevent capabilities-namespace bleed)
+- `server_memory_configs` (owned today by `/memory tagging set`; seeded with one column so future `/memory config *` commands have an obvious home)
+
+Audit `tomoris` table — extract persona-scoped concerns into command-aligned tables:
+- `persona_context_note_configs` (split from `personas`: `context_note`, `context_note_depth`)
+- `persona_voice_configs` (`speech_voice_*` columns and the deprecated `elevenlabs_*` pair — Pass C in #14.2 finishes that migration)
+- `persona_imagegen_configs` (`nai_tags`, `nai_char_ref_url`)
+- `persona_textgen_configs` (`nai_attg_author`, `nai_attg_title`, `nai_attg_tags`, `nai_attg_genre`, `nai_attg_stars`)
+
+Consolidate `tomoris.alter_triggers` into `persona_configs.trigger_words` — backfill, then drop the column and remove the `persona.is_alter ? alter_triggers : persona_configs.trigger_words` ternary from 10+ readers (`tomoriChat.ts`, `dbRead.ts`, `tool/status.ts`, etc.).
+
+Migrate user-scoped personalization fields out of `users` into `user_personalization_configs`: `shortterm_cache_crossserver_opt_in`, `nai_char_tags`, `nai_char_ref_url`, `impersonation_prompt`, `personal_dtm`. After extraction, `users` is left with pure identity (`user_disc_id`, `user_nickname`, `language_pref`, `privacy_level`, `registration_locale`).
+
+**Acceptance criterion per table:** export/import round-trip green via repository `toExportShape()` / `fromExportShape()` BEFORE the step is closed. The export pipeline doubles as the drift-checker's source of truth — keeping export in lockstep with each table split keeps the safety net live throughout.
+
+**Endpoint:** drop the old server-scoped `tomori_configs` (the god table) entirely. The name dies; do not reuse it.
+
+**`check-schema` script update:** add a soft warning when any `*_configs` table column count exceeds **~15 columns**, enforcing the fission-threshold guideline so mid-grained tables don't passively drift back into god-table shape. Exempt `server_capabilities_configs` (uniform boolean cluster iterated by `/capabilities manage`'s `PERMISSION_DEFINITIONS` array — growth here is structurally uniform) and `saved_provider_configs` (atomic snapshot table — `/server save-provider` writes all columns together; document the threshold-exceeded justification inline so future audits don't re-litigate).
+
 **Subtasks:**
-- [ ] Audit `tomori_configs` columns; group by domain (LLM, image gen, video gen, NAI, autochannel, conditioning, security, etc.)
-- [ ] Design replacement tables (e.g., `server_llm_configs`, `server_imagegen_configs`, `server_naichat_configs`, `server_autochannel_configs`)
-- [ ] Write migration to create new tables and copy data from `tomori_configs`
-- [ ] Update `ConfigRepository` (from #4) to read/write the new tables
-- [ ] Add backwards-compatibility view `tomori_configs` (or shim in repository) during transition
-- [ ] Migrate all callers to use the new repository methods
-- [ ] Drop the old `tomori_configs` table once safe
-- [ ] Update `dataExport.ts` / import logic to handle new schema
-- [ ] `bun run check-schema` passes (no drift)
+- [ ] Stand up the 12 `server_*_configs` tables and 4 new `persona_*_configs` tables; write CREATE TABLE migrations (paired `.down.sql` per OD-R-6)
+- [ ] Stand up `user_personalization_configs`; write migration
+- [ ] Backfill data: per-column COPY from `tomori_configs` → corresponding `server_*_configs` table; per-column COPY from `tomoris` and `users` into their new homes
+- [ ] Extend each repository (or add new ones per Phase 2 #4b) with reads/writes against the new tables; each new repo ships with `toExportShape()` / `fromExportShape()`
+- [ ] Per table: dual-write through repositories during cutover (expand-then-contract, per Risk R-2 mitigation)
+- [ ] Verify export/import round-trip green per table
+- [ ] Migrate callers to use the new repository methods; remove all references to the old god-table columns
+- [ ] Consolidate `tomoris.alter_triggers` → `persona_configs.trigger_words`: backfill, delete the ternary from 10+ readers, drop the column
+- [ ] Drop `tomori_configs` (the server-scoped god table) entirely at the end of the step
+- [ ] Update `docs/ai/multi-persona.md:23, 56, 442, 498` to reflect the unified trigger-word storage; bump ARCH-ALIGNMENT marker on schema docs
+- [ ] Add `check-schema` soft-warning rule (>15 columns) with the documented exemption list
+- [ ] `bun run check && bun run lint && bun run check-schema && bun run test` (the #4a DB regression harness) pass
 
-### 15. Refactor JSONB Arrays into Junction Tables
-- **What:** Replace FK JSONB arrays with M2M junction tables.
-
-**Subtasks:**
-- [ ] Identify all JSONB array columns holding FK references (e.g., `fallback_llm_ids`, `autoch_disc_ids` if FK-shaped, etc.)
-- [ ] Design junction tables for each (e.g., `tomori_fallback_llms` with `tomori_id` + `llm_id` + `priority`)
-- [ ] Write migrations to create junction tables and backfill from JSONB columns
-- [ ] Update repositories to use junction-table queries
-- [ ] Add FK constraints to enforce referential integrity
-- [ ] Drop the old JSONB columns once callers migrated
-- [ ] `bun run check-schema` passes
-
-### 16. Separate State from Configuration
-- **What:** Move stateful columns out of static config schemas.
+### 14.2. Complete the stalled `elevenlabs_*` → `speech_*` voice migration (Pass C)
+- **What:** Finish the stalled deprecation in `persona_voice_configs`. `seed.sql:2286–2288` started backfilling `elevenlabs_*` → `speech_*` for existing rows, but `/speech voice-assign:374` still writes both columns and 15+ readers in providers/tools/commands use a `speech_voice_id || elevenlabs_voice_id` fallback pattern.
+- **Sequencing:** Runs after #14 — bundled with the persona-scoped split because we're touching every voice caller anyway.
 
 **Subtasks:**
-- [ ] Identify stateful columns currently in config tables (e.g., `consecutive_failures`, `last_error_at`, runtime counters)
-- [ ] Design dedicated state tables (e.g., `tomori_runtime_state`, `llm_health_state`)
-- [ ] Migrate state columns out of config tables
-- [ ] Update repositories to read state from new tables
-- [ ] Update export/import logic to skip state tables (state is not exported)
-- [ ] `bun run check-schema` passes
+- [ ] Backfill any remaining unmigrated rows: extend the `seed.sql:2286–2288` pattern into a one-shot migration that copies `elevenlabs_voice_id` → `speech_voice_id` and `elevenlabs_voice_name` → `speech_voice_name` for any row still missing the new values
+- [ ] Update `/speech voice-assign` to write only `speech_*` columns
+- [ ] Remove the `speech_voice_id || elevenlabs_voice_id` fallback from all 15+ readers (providers/tools/commands); simplify to direct `speech_*` reads
+- [ ] Drop `elevenlabs_voice_id` and `elevenlabs_voice_name` columns from `persona_voice_configs`
+- [ ] `bun run check && bun run lint && bun run check-schema && bun run test` pass
+
+### 14.5. Drop accumulated deprecated columns on provider config tables
+- **What:** Clean up the deprecated columns that accumulated on `saved_provider_configs` and its user-scoped twin `user_saved_provider_configs` while Phase 3 and Pass B were running.
+- **Sequencing:** Runs after #14.2.
+
+**Scope:**
+
+Drop from `saved_provider_configs`:
+- `custom_endpoint_url`, `custom_model_name`, `custom_num_ctx` (Phase 3 — superseded by the `custom_endpoints` table)
+- `fallback_llm_ids` (Phase 3 — superseded by `fallback_model_refs`)
+- `channel_llm_overrides` JSONB at `schema.sql:2273` (Pass B switch-snapshot baggage — the standalone `channel_llm_overrides` table at `schema.sql:2072` is canonical and stays)
+- `persona_llm_overrides` JSONB at `schema.sql:2274` (Pass B switch-snapshot baggage — no replacement needed)
+
+Drop from `user_saved_provider_configs` (lines 2554–2559): same Phase 3 set (`custom_endpoint_url`, `custom_model_name`, `custom_num_ctx`, `fallback_llm_ids`).
+
+**Pre-flight audit (resolve before shipping):** `user_saved_provider_configs.enabled_capabilities TEXT[]` (line 2558) exists on the user variant but not on the server variant. Confirm whether this is intentionally user-only or a missing-column gap on the server variant before locking the cleanup scope.
+
+Post-cleanup, `saved_provider_configs` lands at ~22 columns — above the 15-column fission threshold from #14, but justified by atomic snapshot semantics (one command, `/server save-provider`, writes all columns together as a unit). Document the threshold-exceeded justification inline in the table comment so future audits don't re-litigate.
+
+**Subtasks:**
+- [ ] Resolve `enabled_capabilities` audit question; document the resolution
+- [ ] Migration: `ALTER TABLE saved_provider_configs DROP COLUMN ...` for the 6 deprecated columns (paired `.down.sql`)
+- [ ] Migration: `ALTER TABLE user_saved_provider_configs DROP COLUMN ...` for the 4 deprecated columns (paired `.down.sql`)
+- [ ] Remove dead code paths in repositories that previously read the dropped columns
+- [ ] Verify the standalone `channel_llm_overrides` table at `schema.sql:2072` still works end-to-end (callers in `dbWrite.ts:1760`, `dbRead.ts:3170`, `channelLlmCache.ts`, `/tool status`)
+- [ ] Add the threshold-exceeded justification comment to `saved_provider_configs`
+- [ ] `bun run check && bun run lint && bun run check-schema && bun run test` pass
+
+### 14.6. Enforce "one main persona per server" at the schema level
+- **What:** Add a partial unique index to enforce the "exactly one non-alter persona per server" invariant at the database level.
+- **Sequencing:** Runs after #14.5.
+
+**Scope:** Today the invariant is enforced only by command logic (the `WHERE is_alter = false` filter at 15+ call sites). A buggy migration or direct SQL touch could create two main personas per server. Cheap hardening with no behavioral change.
+
+**Subtasks:**
+- [ ] Migration: `CREATE UNIQUE INDEX personas_one_main_per_server ON personas(server_id) WHERE is_alter = false;` (paired `.down.sql`)
+- [ ] Verify the migration succeeds on a production-shaped dataset (no existing duplicates)
+- [ ] `bun run check && bun run lint && bun run check-schema && bun run test` pass
+
+### 15. Junction-ify FK-shaped JSONB columns
+- **What:** Replace **FK-shaped** JSONB arrays with M2M junction tables. Discord ID arrays and string-value arrays stay as arrays — they are NOT FK-shaped, and junction-ifying them would block atomic write semantics that commands like `/server rp-channels` rely on (writes the whole new list as one transaction) and add unnecessary JOIN cost on every cache read.
+- **Sequencing:** Runs after #14.6. Reason: #15 should operate on columns in their *final* home, not in `tomori_configs` (which is being dropped by #14). If #15 ran first, every junction migration would have to be redone after #14 moves the column.
+
+**Scope:**
+
+In-scope target: `autoch_persona_overrides` JSONB (`Array<{channel_disc_id, tomori_id}>`) on `server_autotrigger_configs` → `server_autotrigger_persona_overrides` junction. The `tomori_id` field in the JSONB is genuinely FK-shaped; junction-ifying gains cascade-delete on persona deletion (today, deleting a persona leaves dangling JSONB entries pointing at a vanished persona).
+
+Already moot: `fallback_llm_ids` JSONB — dropped by #14.5 before #15 runs. No action needed.
+
+Deferred: `fallback_model_refs` audit — defer until Pass B settles its final shape.
+
+Audit of every array/JSONB column post-split (most stay as arrays):
+
+| Column | Home table | FK-shaped? | Action |
+|---|---|---|---|
+| `autoch_persona_overrides` | `server_autotrigger_configs` | ✅ Yes (`tomori_id` FK) | **Junction-ify** |
+| `autoch_disc_ids` | `server_autotrigger_configs` | ❌ Discord snowflakes | Stay array |
+| `rp_channel_ids` | `server_channelscope_configs` | ❌ Discord snowflakes | Stay array |
+| `private_channel_ids` | `server_channelscope_configs` | ❌ Discord snowflakes | Stay array |
+| `crosschannel_blocklist_ids` | `server_channelscope_configs` | ❌ Discord snowflakes | Stay array |
+| `tool_notice_hidden_keys` | `server_noticeembeds_configs` | ❌ String keys | Stay array |
+| `trigger_words` | `persona_configs` | ❌ String values | Stay array |
+| `nai_char_tags` | `user_personalization_configs` | ❌ String tags | Stay array |
+| `fallback_llm_ids` | (dropped by #14.5) | — | Moot |
+| `fallback_model_refs` | `saved_provider_configs` | TBD | Deferred |
+
+**Subtasks:**
+- [ ] Migration: create `server_autotrigger_persona_overrides (server_id, channel_disc_id, persona_id, created_at, PRIMARY KEY (server_id, channel_disc_id))` with `ON DELETE CASCADE` on both `server_id` and `persona_id` FKs (paired `.down.sql`)
+- [ ] Backfill from `autoch_persona_overrides` JSONB into the junction table
+- [ ] Update `server_autotrigger_configs` repository: writes go to both the row and the junction atomically in one transaction
+- [ ] Drop the `autoch_persona_overrides` JSONB column
+- [ ] Verify the autotrigger command flow end-to-end (set, list, clear)
+- [ ] `bun run check && bun run lint && bun run check-schema && bun run test` pass
+
+### 16. Separate Runtime State from Configuration
+- **What:** Extract runtime telemetry from config tables into dedicated `*_runtime_state` tables. Today, wiping telemetry to recover from a transient outage requires UPDATE-ing the same row that holds the encrypted key (for API keys) or persona identity (for autochat counters). That's a footgun.
+- **Sequencing:** Runs after #15.
+
+**Scope:**
+
+`api_key_rotation` → split into `api_key_rotation` (config: `api_key`, `key_version`, `is_main_key_pointer`, `is_enabled`) and `api_key_rotation_runtime_state` (telemetry: `usage_count`, `error_count`, `last_used_at`, `last_error_at`, `last_error_type`, `last_error_message`).
+
+`tomoris.autoch_counter` and `tomoris.autoch_next_target` → split into `persona_autoch_runtime_state (persona_id PK FK → personas ON DELETE CASCADE, autoch_counter INT, autoch_next_target INT, updated_at)`. Mutated on every message processed by the autochat tick logic; doesn't belong in persona identity.
+
+Audit `saved_provider_configs` post-Pass-B for analogous mixing (`consecutive_failures` etc.). If found, split similarly. If not, it stays config-only.
+
+Both runtime-state tables are **excluded from export** — drift-checker (`checkSchemaDrift.ts`) must accept the exclusions explicitly so future drift checks don't false-flag them as missing-from-export.
+
+**Subtasks:**
+- [ ] Migration: create `api_key_rotation_runtime_state (rotation_key_id INT PK FK → api_key_rotation ON DELETE CASCADE, usage_count, error_count, last_used_at, last_error_at, last_error_type, last_error_message, updated_at)` (paired `.down.sql`)
+- [ ] Backfill telemetry from `api_key_rotation` rows into the new state table
+- [ ] Update key-rotation repository to read/write state from the new table
+- [ ] Drop telemetry columns from `api_key_rotation`
+- [ ] Migration: create `persona_autoch_runtime_state` (paired `.down.sql`)
+- [ ] Backfill from `tomoris.autoch_counter` / `tomoris.autoch_next_target`
+- [ ] Update autochat tick logic to write to the new state table
+- [ ] Drop `autoch_counter` and `autoch_next_target` from `tomoris`
+- [ ] Audit `saved_provider_configs` for analogous state mixing; split if found
+- [ ] Update drift-checker to explicitly exclude both runtime-state tables from the export schema comparison
+- [ ] `bun run check && bun run lint && bun run check-schema && bun run test` pass
+
+### 16.7. Replace `tomori_configs`-mirror export pipeline with per-repository composition
+- **What:** Today's export/import assumes a single `serverConfigExportSchema` mirroring `tomori_configs` (`src/types/db/dataExport.ts:~145`), duplicated `UPDATE tomori_configs SET ...` blocks in `dataImportV2.ts:347` and `:421`, and a drift-checker comparing one schema to one table (`checkSchemaDrift.ts:348`). After the split, all three structures break.
+- **Sequencing:** Runs after #16. (Most of the per-table export-pipeline work has already happened incrementally across #14–#16 because each split's acceptance criterion required export/import green per table; this step is the *final consolidation* that deletes the obsolete one-table-mirror plumbing.)
+
+**Subtasks:**
+- [ ] Delete `tomori_configs`-mirror schema in `src/types/db/dataExport.ts`
+- [ ] Delete the duplicated `UPDATE tomori_configs SET ...` blocks in `src/utils/db/dataImportV2.ts:347` and `:421`
+- [ ] Finalize `serverConfigExportSchema` as a composition of per-repository `toExportShape()` outputs
+- [ ] Update `scripts/maintenance/checkSchemaDrift.ts` to iterate each `*_configs` table rather than comparing to one god table
+- [ ] Archive `plans/EXPORT_IMPORT_REFACTOR_PLAN.md` (superseded by this step and the per-table acceptance criteria in #14)
+- [ ] `bun run check && bun run lint && bun run check-schema && bun run test` pass
+
+### 16.8. Rename `tomoris` → `personas`, `tomori_id` → `persona_id`, `tomori_nickname` → `persona_nickname`
+- **What:** Final mechanical rename. Every internal `tomori_*` identifier becomes `persona_*` across schema, code, types, and cache namespaces. User-facing strings, locale keys, ComfyUI placeholders, and the app/repo name are **carve-outs** and stay as-is.
+- **Sequencing:** Last step of Phase 6. Every earlier Phase 6 step operates on `tomori_id` names; one sweep renames everything together. Rollback is one `ALTER TABLE personas RENAME TO tomoris` away if anything breaks.
+
+**Why last:** Every interim Phase 6 state remains coherent under the old naming. Phase 6 likely ships incrementally; keeping the rename at the end means a partially-shipped Phase 6 doesn't leave the codebase in a half-renamed limbo.
+
+**Data model rationale:** Audit of `persona_lineage_id` (`schema.sql:151`) confirmed the schema's real model: every row in `tomoris` is semantically a persona instance, and cross-server persona archetypes are already tracked by `persona_lineage_id`. The "Tomori-the-shapeshifter who *becomes* personas" framing is metaphor, not data structure — Tomori survives as the bot's name (a value, like any persona name) in user-facing strings.
+
+**Scope (DB transaction):**
+- `ALTER TABLE tomoris RENAME TO personas`
+- Rename every `tomori_id` FK column to `persona_id` across the entire schema
+- Rename `tomori_nickname` column → `persona_nickname`
+- Rename FK constraints and indexes accordingly (including the partial unique index from #14.6)
+
+**Scope (code PR):**
+- Grep-and-replace `tomori_id` → `persona_id`, `tomori_nickname` → `persona_nickname` across source
+- Update type definitions in `src/types/`
+- Bump cache namespaces so old cache entries don't leak into the renamed identifiers
+
+**Carve-outs (do NOT rename — these are API surface, not internal naming):**
+
+| Kind | Example | Why keep |
+|---|---|---|
+| User-facing string values | `bot_name: "Tomori"`, "Tomori couldn't reach..." | Brand/character name |
+| Locale key names | `tomori_not_setup_title`, `tomori_busy_replying` | Developer-facing only; renaming creates locale-key churn with zero user benefit |
+| ComfyUI token placeholders | `{TOMORI_PROMPT}`, `{TOMORI_WIDTH}`, `{TOMORI_REFERENCE_IMAGE_*}` | Public API surface for workflow authors; renaming would break workflows in `scripts/comfyui-workflows/` |
+| App/repo name | `TomoriBot` | Brand |
+| `persona_lineage_id` | (already correctly named) | — |
+| `persona_configs` table | (already correctly named — stays put, no rename, no name-reclaim juggling) | — |
+
+**Subtasks:**
+- [ ] Plan the rename PR shape: one DB migration transaction + one large code PR (kept together so the codebase is never in a half-renamed state at HEAD)
+- [ ] Write the rename migration: `ALTER TABLE tomoris RENAME TO personas`; all `tomori_id` → `persona_id` column renames; `tomori_nickname` → `persona_nickname`; constraint/index renames (paired `.down.sql` that reverses everything in one transaction)
+- [ ] Grep-and-replace `tomori_id` → `persona_id` across `src/`, excluding the carve-out list above
+- [ ] Grep-and-replace `tomori_nickname` → `persona_nickname` across `src/`, excluding carve-outs
+- [ ] Update `src/types/` definitions
+- [ ] Bump cache namespaces for any cache keyed on `tomori_id` (per CLAUDE.md cache rules — invalidation belongs in the same code path as the write)
+- [ ] Verify carve-outs intact: `bot_name: "Tomori"` value unchanged, locale keys unchanged, ComfyUI placeholders unchanged, `TomoriBot` repo/app name unchanged
+- [ ] `bun run check && bun run lint && bun run check-schema && bun run check-locales && bun run test` pass
 
 ### 16.5. Introduce a migration runner
 - **What:** Add a sequential migration system. Currently TomoriBot has none — schema lives in static `.sql` files.
@@ -411,6 +618,7 @@ When a phase touches code that affects a doc not listed here, add the doc to thi
 - [ ] Implement chosen pattern
 - [ ] Update `db/client.ts` to use the actual logger instead of `console.log`
 - [ ] Verify no new circular imports introduced (`bun run check`)
+- [ ] **Smoke test:** trigger an intentional DB error (e.g., bad query in a dev-only test path); confirm the error appears in logs with full context, including the underlying SQL error. If the new path silently swallows error logs, postmortem-blind code can feel fine to type checks.
 - [ ] `bun run check && bun run lint` pass
 
 ### 18. Eradicate Swallowed Promises (`.catch(() => {})`)
@@ -503,6 +711,7 @@ Phase 6 (#14, #15, #16) rewrites `tomori_configs` and adds junction tables. If a
 - The #16.5 rollback discipline (paired `.down.sql` or runbook, soak period for destructive migrations) directly addresses this — but only if executed.
 - Schedule destructive migrations during low-traffic windows. Document the maintenance window in the migration's accompanying PR description.
 - For the `tomori_configs` split (#14) specifically, use the **expand-then-contract** pattern: ship the new tables and dual-write from `ConfigRepository` first; verify a release in production; *then* ship the cutover that drops the old columns. Each step is independently revertable.
+- Schema split runs through #14, #14.2, #14.5, #14.6, #15, #16, #16.7 incrementally — each step is independently revertable, and each step's acceptance criterion includes export/import round-trip green so the drift-checker safety net never goes dark mid-refactor. The final rename (#16.8) is deliberately last so every interim state remains coherent under the old `tomori_*` naming, and rollback is one `ALTER TABLE personas RENAME TO tomoris` away if anything breaks.
 
 ### R-3: Phase 12b regression harness has coverage gaps
 The #12a harness is a snapshot test against recorded conversations and fixtures. If a behavior is not in the fixture set, the harness will not catch its regression. `tomoriChat.ts` is 9,500 lines — there *will* be edge cases the fixtures miss.

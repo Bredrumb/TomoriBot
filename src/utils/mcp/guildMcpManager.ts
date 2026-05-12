@@ -245,7 +245,7 @@ class GuildMcpManager {
               context,
               "mcp_tool_call",
               {
-                titleKey: "genai.mcp.tool_invoke_title",
+                titleKey: "tools.mcp.tool_invoke_title",
                 titleVars: { server: conn.name, function: functionName },
                 description: formattedArgs,
               },
@@ -322,7 +322,7 @@ class GuildMcpManager {
 
     // No parameters case
     if (entries.length === 0) {
-      return localizer(locale, "genai.mcp.tool_invoke_no_params");
+      return localizer(locale, "tools.mcp.tool_invoke_no_params");
     }
 
     // Format each argument as "key: value", truncating long values
@@ -335,7 +335,7 @@ class GuildMcpManager {
       return `${key}: ${truncated}`;
     });
 
-    const header = localizer(locale, "genai.mcp.tool_invoke_description");
+    const header = localizer(locale, "tools.mcp.tool_invoke_description");
     let body = lines.join("\n");
 
     // Truncate the whole body if it exceeds limit

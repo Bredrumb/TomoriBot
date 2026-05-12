@@ -117,9 +117,9 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
           context,
           "web_search",
           {
-            titleKey: "genai.search.web_search_title",
+            titleKey: "tools.search.web_search_title",
             titleVars: { query },
-            descriptionKey: "genai.search.disclaimer_description",
+            descriptionKey: "tools.search.disclaimer_description",
           },
           "DuckDuckGoSearchHandler",
         );

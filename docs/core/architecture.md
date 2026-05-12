@@ -1,3 +1,5 @@
+<!-- ARCH-ALIGNMENT: prereq-phase-1 -->
+
 # 3. Architecture Overview
 
 TomoriBot is a modular Discord bot with provider-agnostic AI execution, centralized tool routing, and PostgreSQL-backed state.
@@ -15,7 +17,7 @@ TomoriBot is a modular Discord bot with provider-agnostic AI execution, centrali
 
 ```text
 Discord Gateway
-  -> discord.js Client (src/index.ts)
+  -> discord.js Client (src/index.ts → src/init/discord.ts)
   -> eventHandler (src/handlers/eventHandler.ts)
      -> interactionCreate handlers (slash commands)
      -> messageCreate handlers (chat pipeline)

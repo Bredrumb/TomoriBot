@@ -5,6 +5,7 @@
   "main": "./src/index.ts",
   "type": "module",
   "scripts": {
+    "test": "bun test tests/",
     "build": "rm -rf dist && bun build ./src/index.ts --outdir dist --target bun",
     "start": "bun run dist/index.js",
     "dev": "bun --watch src/index.ts",

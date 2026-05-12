@@ -1,39 +1,48 @@
+<!-- ARCH-ALIGNMENT: prereq-phase-1 -->
+
 # 4. Entry Point and Initialization Flow
 
-This document reflects the current `src/index.ts` startup pipeline.
+`src/index.ts` is a thin orchestrator. All initialization logic lives in `src/init/` modules.
 
-## File
+## Files
 
-- `src/index.ts`
+- `src/index.ts` — orchestrator (calls init modules in order)
+- `src/init/healthServer.ts` — health HTTP server
+- `src/init/secrets.ts` — secrets loading + key manager init
+- `src/init/discord.ts` — Discord client construction + error handlers
+- `src/init/database.ts` — DB init, cooldown cleanup, pg_cron setup
+- `src/init/loaders.ts` — tool registry, localizer, caches, event handler
+- `src/init/bridges.ts` — Matrix bridge (optional)
+- `src/init/timers.ts` — health tracker, scheduled work, memory monitor, cache metrics, quota cleanup
+- `src/types/config.ts` — `AppConfig` interface + `resolveEnvironment()`
 
 ## Startup Sequence
 
-1. Load `.env` (`dotenv`), then load app secrets via `getAppSecrets()`.
-2. Populate `process.env` from secrets (Discord, DB, crypto, optional Matrix/S3/webhook values).
-3. Initialize `keyManager` after env population.
-4. Construct Discord client with intents + sweepers.
-5. Register process/client error handlers.
-6. Initialize database:
+1. Load `.env` (`dotenv`); resolve `AppEnvironment`.
+2. In production: bind health HTTP server on `$PORT` (default 8080) — returns 503 until Discord ready.
+3. Load secrets via `getAppSecrets()`; populate `process.env` for downstream consumers; initialize `keyManager`.
+4. Construct Discord client with intents + sweepers; register process/client error handlers.
+5. Initialize database:
    - run `src/db/schema.sql`
-   - run `src/db/schema_rag.sql` only when pgvector is detected in the database (auto-detect on startup)
+   - run `src/db/schema_rag.sql` only when pgvector is detected
    - run `src/db/seed.sql`
-7. Cleanup expired cooldown rows at startup (`cleanupExpiredCooldowns`).
-8. Attempt optional `pg_cron` registration for hourly cooldown cleanup job.
-9. Initialize tool registry (`initializeTools`).
-10. Initialize localization (`initializeLocalizer`).
-11. Initialize model caches:
+6. Cleanup expired cooldown rows at startup (`cleanupExpiredCooldowns`).
+7. Attempt optional `pg_cron` registration for hourly cooldown cleanup job.
+8. Initialize tool registry (`initializeTools`).
+9. Initialize localization (`initializeLocalizer`).
+10. Initialize model caches:
     - LLM cache (`initializeLLMCache`)
     - OpenRouter capability cache (`initializeOpenRouterCapabilityCache`)
-12. Preload preset avatar cache from DB presets.
-13. Initialize Matrix client (optional; non-fatal on failure).
-14. Attach all event listeners (`eventHandler(client)`).
-15. Register post-ready startup hooks:
+11. Preload preset avatar cache from DB presets.
+12. Initialize Matrix bridge (optional; non-fatal on failure).
+13. Attach all event listeners (`eventHandler(client)`).
+14. Register post-ready startup hooks (deferred until `clientReady`):
     - health tracker init
-    - scheduled work coordinator init (reminders + random triggers; next-due wakeups with reconcile fallback)
+    - scheduled work coordinator init (reminders + random triggers)
     - memory monitor init
-16. Initialize upload quota cleanup scheduler.
-17. In production only, start health HTTP server on `127.0.0.1:3000/health`.
-18. Call `client.login(DISCORD_TOKEN)`.
+    - cache metrics logger init
+15. Initialize upload quota cleanup scheduler.
+16. Call `client.login(DISCORD_TOKEN)`.
 
 ## Error Criticality
 

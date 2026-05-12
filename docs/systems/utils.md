@@ -1,3 +1,5 @@
+<!-- ARCH-ALIGNMENT: prereq-phase-1 -->
+
 # 11. Utils and Helpers
 
 This is a current map of shared utility modules under `src/utils/`.
@@ -46,6 +48,13 @@ This is a current map of shared utility modules under `src/utils/`.
 - `localizer.ts`: locale auto-discovery + lookup
 - `contextBuilder.ts`: structured context construction
 - `contextTruncator.ts`: token-budget truncation strategy
+- `stringHelper.ts`: barrel re-export — all string utilities live in `utils/text/processors/`
+- `processors/regexUtils.ts`: `escapeRegExp`
+- `processors/mentionProcessor.ts`: mention resolution, template variables, emoji normalization
+- `processors/llmOutputProcessor.ts`: LLM output cleaning, speaker-turn truncation
+- `processors/chunkProcessor.ts`: message chunking, sentence splitting
+- `processors/formatters.ts`: time formatting, text humanization, boolean display
+- `processors/timeUtils.ts`: reminder time parsing, lateness calculation
 - `emojiHelper.ts`, `emojiPenalty.ts`
 - `timezoneHelper.ts`, `uncensor.ts`, `youTubeUrlCleaner.ts`
 

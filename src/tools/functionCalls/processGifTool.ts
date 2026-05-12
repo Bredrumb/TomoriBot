@@ -217,9 +217,9 @@ export class ProcessGifTool extends BaseTool {
         context,
         "gif_processing",
         {
-          titleKey: "genai.gif.processing_title",
-          descriptionKey: "genai.gif.processing_description",
-          footerKey: "genai.gif.processing_footer",
+          titleKey: "tools.gif.processing_title",
+          descriptionKey: "tools.gif.processing_description",
+          footerKey: "tools.gif.processing_footer",
           color: ColorCode.INFO,
         },
         "ProcessGifTool",

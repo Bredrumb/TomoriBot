@@ -360,16 +360,16 @@ export class GenerateVideoTool extends BaseTool {
       if (!context.suppressProgressNotices) {
         const baseNoticeDescription = localizer(
           context.locale,
-          usesReference ? "genai.video.generating_with_references_description" : "genai.video.generating_description",
+          usesReference ? "tools.video.generating_with_references_description" : "tools.video.generating_description",
         );
         const referencedMessageUrl = messageId ? buildReferencedMessageUrl(context, messageId) : null;
         const extraNoticeLines = usesReference
           ? [
               referencedMessageUrl
-                ? localizer(context.locale, "genai.video.notice_reference_line", {
+                ? localizer(context.locale, "tools.video.notice_reference_line", {
                     message_url: referencedMessageUrl,
                   })
-                : localizer(context.locale, "genai.video.notice_reference_count_line", {
+                : localizer(context.locale, "tools.video.notice_reference_count_line", {
                     count: "1",
                   }),
             ]
@@ -378,13 +378,13 @@ export class GenerateVideoTool extends BaseTool {
           context,
           "video_generation",
           {
-            titleKey: "genai.video.generating_title",
+            titleKey: "tools.video.generating_title",
             description: buildVideoToolNoticeDescription(
               context.locale,
               baseNoticeDescription,
               displayModelName,
               prompt,
-              localizer(context.locale, "genai.video.generating_footer"),
+              localizer(context.locale, "tools.video.generating_footer"),
               extraNoticeLines,
             ),
             color: ColorCode.INFO,
