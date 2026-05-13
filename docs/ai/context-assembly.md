@@ -1,10 +1,12 @@
-﻿# Context Assembly
+﻿<!-- ARCH-ALIGNMENT: prereq-phase-4 -->
+
+# Context Assembly
 
 > How TomoriBot builds the LLM prompt from server state, user data, conversation history, and optional ST presets.
 
 ## Overview
 
-Context assembly is the process of transforming raw server/user/conversation state into a structured array of `StructuredContextItem[]` that providers send to the LLM. The entry point is `buildContext()` in `src/utils/text/contextBuilder.ts`.
+Context assembly is the process of transforming raw server/user/conversation state into a structured array of `StructuredContextItem[]` that providers send to the LLM. The entry point is `buildContext()` in `src/utils/text/contextBuilder.ts`; responsibility-specific helpers live under `src/utils/text/context/`.
 
 The system has two modes:
 
@@ -25,6 +27,14 @@ buildContext(params)          ← routing wrapper (exported)
   └─ No preset ──────────→ buildContextNative(params)
                              → return native items directly
 ```
+
+Support modules:
+
+- `context/templates.ts` owns default prompt constants, random prompt macros, and conditioning context items
+- `context/memories.ts` owns short-term memory context assembly
+- `context/rag.ts` owns document retrieval/RAG context assembly
+- `context/history.ts` owns media/history formatting helpers, timestamp formatting, and presence formatting
+- `context/types.ts` owns the public context-builder parameter and result types re-exported by `contextBuilder.ts`
 
 ### BuildContextParams
 
@@ -156,7 +166,7 @@ At inference, the **active persona's note takes priority** over the global note.
 
 The note is emitted as a `"user"` role context item with `[System: Author's note — <text>]` formatting, matching the existing convention for system annotations in the dialogue stream (short-term memory summaries, users-in-conversation headers, etc.). No new `authorType` was added.
 
-**Implementation location:** `buildContextNative()` in `src/utils/text/contextBuilder.ts` — the pre-loop setup computes `contextNoteTargetIndex`, and the in-loop guard emits the note at that index. A post-loop fallback handles `depth=0`.
+**Implementation location:** `buildContextNative()` in `src/utils/text/contextBuilder.ts` — the pre-loop setup computes `contextNoteTargetIndex`, and the in-loop guard emits the note at that index through `pushDialogueHistoryContextItem()` from `src/utils/text/context/history.ts`. A post-loop fallback handles `depth=0`.
 
 ## Key Behaviors
 
@@ -239,7 +249,12 @@ Each macro occurrence is rolled independently at context-build time. Media parts
 
 | File | Purpose |
 |------|---------|
-| `src/utils/text/contextBuilder.ts` | Routing wrapper + native context assembly (~2800 lines) |
+| `src/utils/text/contextBuilder.ts` | Public routing wrapper + native context orchestration |
+| `src/utils/text/context/types.ts` | `BuildContextParams`, `BuildContextResult`, `SimplifiedMessageForContext` |
+| `src/utils/text/context/templates.ts` | Default prompt, random-choice macros, conditioning context |
+| `src/utils/text/context/memories.ts` | Short-term memory context from cross-channel and same-channel caches |
+| `src/utils/text/context/rag.ts` | RAG query selection and document chunk context |
+| `src/utils/text/context/history.ts` | Dialogue/media helpers, timestamps, presence formatting |
 | `src/utils/text/presetContextBuilder.ts` | Preset-driven rearrangement engine |
 | `src/utils/text/stPresetEngine.ts` | ST macro template engine (two-pass resolution) |
 | `src/utils/cache/stPresetCache.ts` | In-memory cache for active preset + nodes |

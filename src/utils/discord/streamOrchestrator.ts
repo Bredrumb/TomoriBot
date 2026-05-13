@@ -1,17 +1,17 @@
 /**
  * Universal Discord streaming orchestrator
  *
- * This class contains all the universal Discord integration logic extracted from
+ * This class coordinates the universal Discord streaming pipeline extracted from
  * the original streamGeminiToDiscord function. It works with any StreamProvider
- * implementation to handle streaming responses to Discord channels.
+ * implementation and delegates buffer decisions plus Discord delivery to stream
+ * helper modules.
  *
  * Key responsibilities:
- * - Message sending and chunking
- * - Stream buffer management and code block detection
+ * - Provider chunk routing and tool-call interruption
+ * - Stream buffer coordination and final flushes
  * - Function call routing to ToolRegistry
- * - Discord error handling and user notifications
  * - Stream timeout management
- * - Typing simulation and humanization
+ * - Result and thought-log assembly
  */
 
 import {
@@ -21,23 +21,17 @@ import {
   type Message,
   type Client,
   type ColorResolvable,
-  type BaseGuildTextChannel,
 } from "discord.js";
 import { HumanizerDegree } from "../../types/db/schema";
 import { sendStandardEmbed } from "./embedHelper";
 import { ColorCode, log } from "../misc/logger";
 import { localizer } from "../text/localizer";
-import { STREAMING_LIMITS } from "../security/rateLimiter";
-import { getOrCreateWebhook, invalidateWebhookCache, sendWebhookMessageWithIdentity } from "./webhookManager";
-import { sendWebhookReplyNotice } from "./webhookReply";
 import {
   chunkMessage,
   cleanLLMOutput,
   humanizeString,
   replaceMentionHandles,
-  createSentenceSplitRegex,
   truncateBeforeGenericSpeakerLine,
-  hasTrailingIncompleteMarkdownTable,
   extractMarkdownTableSegments,
   MARKDOWN_TABLE_ATTACHMENT_PREFIX,
 } from "../text/stringHelper";
@@ -73,45 +67,19 @@ import {
   createTypingSimulationConfig,
   VisibleDeliveryMode,
 } from "../../types/stream/types";
+import {
+  autoCloseIncompleteMarkers as autoCloseStreamBufferMarkers,
+  drainDetailsBlocksFromBuffer,
+  drainThinkBlocksFromBuffer,
+  findRegularOverflowFlushIndex,
+  processBufferContent as processStreamBufferContent,
+  stripSummaryTag,
+} from "./stream/bufferManager";
+import { isUserImpersonationStreamContext, type StreamSendPayload, StreamUiUpdater } from "./stream/uiUpdater";
 
 // Empty response handling is now done at the tomoriChat level for fresh context
 
-type StreamSendPayload = {
-  content?: string;
-  files?: AttachmentBuilder[];
-  allowedMentions?: {
-    parse?: Array<"users" | "roles" | "everyone">;
-    repliedUser?: boolean;
-  };
-};
-
 type BufferedDeliveryBoundary = ChunkProcessingResult["breakType"] | "attachment" | "final" | "tool_call";
-
-function isInvalidWebhookError(error: unknown): boolean {
-  const code = (error as { code?: number | string })?.code;
-  return (
-    code === 10015 || // Unknown Webhook
-    code === "10015" ||
-    code === 50027 || // Invalid Webhook Token
-    code === "50027"
-  );
-}
-
-function resolveWebhookTargetChannel(channel: StreamContext["channel"]): BaseGuildTextChannel | null {
-  const isThread = "isThread" in channel && typeof channel.isThread === "function" && channel.isThread();
-  if (isThread) {
-    return channel.parent && "fetchWebhooks" in channel.parent ? (channel.parent as BaseGuildTextChannel) : null;
-  }
-  return "fetchWebhooks" in channel && "createWebhook" in channel ? (channel as BaseGuildTextChannel) : null;
-}
-
-function resolveWebhookThreadId(channel: StreamContext["channel"]): string | undefined {
-  return "isThread" in channel && typeof channel.isThread === "function" && channel.isThread() ? channel.id : undefined;
-}
-
-function isUserImpersonationStreamContext(context: StreamContext): boolean {
-  return Boolean(context.personaUsername && !context.tomoriState.is_alter);
-}
 
 /**
  * Universal Discord streaming orchestrator implementation
@@ -130,6 +98,12 @@ export class StreamOrchestrator implements IStreamOrchestrator {
    * non-empty segment instead of being sent as standalone Discord messages.
    */
   private static readonly ORPHAN_PUNCTUATION_REGEX = /^[.,!?;。！？、，…]+$/;
+
+  private readonly uiUpdater = new StreamUiUpdater({
+    hasStopRequest: (channelId) => StreamOrchestrator.hasStopRequest(channelId),
+    requestStop: (channelId, requesterId) => StreamOrchestrator.requestStop(channelId, requesterId),
+    notifyStreamProgress: (context) => this.notifyStreamProgress(context),
+  });
 
   private static isSilentSpeakerGuardStop(requesterId: string | undefined, state: StreamState): boolean {
     return requesterId === "speaker_guard" && state.messageSentCount === 0 && !state.accumulatedText.trim();
@@ -747,11 +721,11 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 
     // Extract any <think> blocks arriving in the buffer, routing them to the thought log.
     // This handles think tags that arrive split across multiple tiny SSE chunks.
-    this.drainThinkBlocksFromBuffer(state);
+    drainThinkBlocksFromBuffer(state);
 
     // Extract any <details> blocks arriving in the buffer, routing body text to detailsSegments.
     // Same split-tag handling pattern as think blocks.
-    this.drainDetailsBlocksFromBuffer(state);
+    drainDetailsBlocksFromBuffer(state);
 
     // Collapse orphaned Discord subtext markers ("-#\n") so they stay attached to the next line.
     // LLMs sometimes place "-#" alone on a line, which splits into a bare "-#" message.
@@ -762,7 +736,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     let processedSomething: boolean;
     do {
       processedSomething = false;
-      const processingResult = this.processBufferContent(state, config);
+      const processingResult = processStreamBufferContent(state, config);
 
       if (processingResult.shouldFlush && processingResult.segmentToFlush) {
         await this.sendBufferSegment(
@@ -803,7 +777,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
       !state.hasSemanticMarkers &&
       state.buffer.length >= DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_REGULAR
     ) {
-      const flushIndex = this.findRegularOverflowFlushIndex(
+      const flushIndex = findRegularOverflowFlushIndex(
         state.buffer,
         DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_REGULAR,
       );
@@ -857,542 +831,6 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     }
 
     return combined.slice(-StreamOrchestrator.STREAM_CHUNK_DEDUP_TAIL_CHARS);
-  }
-
-  private shouldDelayTrailingPeriodFlush(buffer: string, periodMatch: RegExpExecArray): boolean {
-    const periodEndIndex = periodMatch.index + periodMatch[0].length;
-    return periodMatch[0] === "." && periodEndIndex === buffer.length;
-  }
-
-  private findRegularOverflowFlushIndex(buffer: string, targetLength: number): number {
-    if (!buffer) return 0;
-
-    const target = Math.min(Math.max(1, targetLength), buffer.length);
-    const backwardWindowStart = Math.max(0, target - 300);
-    const forwardWindowEnd = Math.min(buffer.length, target + 200);
-
-    const isSentenceBoundary = (index: number): boolean => {
-      const ch = buffer[index];
-      if (!ch) return false;
-
-      if (ch === "\n") return true;
-      if (!/[.!?。！？]/.test(ch)) return false;
-
-      const nextChar = buffer[index + 1];
-      return nextChar === undefined || /\s/.test(nextChar);
-    };
-
-    // 1) Prefer a nearby forward sentence/newline boundary to avoid cutting
-    // just before the end of a sentence.
-    for (let i = target; i < forwardWindowEnd; i++) {
-      if (isSentenceBoundary(i)) return i + 1;
-    }
-
-    // 2) Otherwise prefer a nearby backward sentence/newline boundary.
-    for (let i = target - 1; i >= backwardWindowStart; i--) {
-      if (isSentenceBoundary(i)) return i + 1;
-    }
-
-    // 3) Fall back to whitespace boundaries.
-    for (let i = target - 1; i >= backwardWindowStart; i--) {
-      if (/\s/.test(buffer[i])) return i + 1;
-    }
-    for (let i = target; i < forwardWindowEnd; i++) {
-      if (/\s/.test(buffer[i])) return i + 1;
-    }
-
-    // 4) Hard fallback.
-    return target;
-  }
-
-  /**
-   * Iteratively extract complete and in-progress `<think>` blocks from `state.buffer`.
-   * Think block content is routed to `thoughtRawSegments`; everything else stays in `state.buffer`.
-   *
-   * Handles think tags that span multiple SSE chunks by accumulating into `thinkBlockBuffer`
-   * until `</think>` arrives.
-   */
-  private drainThinkBlocksFromBuffer(state: StreamState): void {
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      if (state.isInsideThinkBlock) {
-        // Safety: absorb any content that landed in the main buffer while inside a think block
-        if (state.buffer.length > 0) {
-          state.thinkBlockBuffer += state.buffer;
-          state.buffer = "";
-        }
-        // Waiting for </think> — look in the think block accumulator
-        const closeIdx = state.thinkBlockBuffer.indexOf("</think>");
-        if (closeIdx === -1) {
-          // Still accumulating think content, nothing to do yet
-          break;
-        }
-
-        // Route completed think content to the thought log
-        const thinkContent = state.thinkBlockBuffer.slice(0, closeIdx).trim();
-        if (thinkContent) {
-          state.thoughtRawSegments.push(thinkContent);
-          log.info(`Stream: Captured ${thinkContent.length} chars of think block content for thought log`);
-        }
-
-        // Content after </think> returns to the main buffer
-        const afterClose = state.thinkBlockBuffer.slice(closeIdx + "</think>".length);
-        state.thinkBlockBuffer = "";
-        state.isInsideThinkBlock = false;
-        state.buffer += afterClose;
-        // Continue loop — there may be another <think> block in the resumed buffer
-      } else {
-        // Look for an opening <think> tag in the main buffer
-        const openIdx = state.buffer.indexOf("<think>");
-        if (openIdx === -1) {
-          break; // No think block in buffer
-        }
-
-        // Split on <think>: content before stays in buffer, content after goes to accumulator
-        state.thinkBlockBuffer = state.buffer.slice(openIdx + "<think>".length);
-        state.buffer = state.buffer.slice(0, openIdx);
-        state.isInsideThinkBlock = true;
-        // Continue loop — check for immediate </think> in thinkBlockBuffer
-      }
-    }
-  }
-
-  /**
-   * Strips <summary>...</summary> tags from details block content.
-   * Summary tags are headings/labels (e.g. "Global Position Tracker") — only
-   * the body text has context value for STM.
-   */
-  private static stripSummaryTag(content: string): string {
-    return content.replace(/<summary>[\s\S]*?<\/summary>/i, "").trim();
-  }
-
-  /**
-   * Drains <details> blocks from the buffer, mirroring drainThinkBlocksFromBuffer.
-   * Completed blocks have their <summary>...</summary> stripped and the remaining
-   * body text is pushed to state.detailsSegments for later routing to STM.
-   *
-   * @param state - The current stream state with buffer and details block tracking fields
-   */
-  private drainDetailsBlocksFromBuffer(state: StreamState): void {
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      if (state.isInsideDetailsBlock) {
-        // 1. Safety: absorb any content that landed in the main buffer while inside a details block
-        if (state.buffer.length > 0) {
-          state.detailsBlockBuffer += state.buffer;
-          state.buffer = "";
-        }
-        // 2. Waiting for </details> — look in the details block accumulator
-        const closeIdx = state.detailsBlockBuffer.indexOf("</details>");
-        if (closeIdx === -1) {
-          // Still accumulating details content, nothing to do yet
-          break;
-        }
-
-        // 3. Route completed details content to detailsSegments
-        let detailsContent = state.detailsBlockBuffer.slice(0, closeIdx).trim();
-        if (detailsContent) {
-          // Strip <summary>...</summary> — it's just a label, not data worth storing
-          detailsContent = StreamOrchestrator.stripSummaryTag(detailsContent);
-          if (detailsContent) {
-            state.detailsSegments.push(detailsContent);
-            log.info(`Stream: Captured ${detailsContent.length} chars of details block content for STM`);
-          }
-        }
-
-        // 4. Content after </details> returns to the main buffer
-        const afterClose = state.detailsBlockBuffer.slice(closeIdx + "</details>".length);
-        state.detailsBlockBuffer = "";
-        state.isInsideDetailsBlock = false;
-        state.buffer += afterClose;
-        // Continue loop — there may be another <details> block in the resumed buffer
-      } else {
-        // Look for an opening <details> tag in the main buffer (with optional attributes)
-        const openMatch = state.buffer.match(/<details(?:\s[^>]*)?>/);
-        if (!openMatch || openMatch.index === undefined) {
-          break; // No details block in buffer
-        }
-
-        const openIdx = openMatch.index;
-        const fullTag = openMatch[0]; // e.g. "<details>" or "<details open>"
-
-        // Split on <details...>: content before stays in buffer, content after goes to accumulator
-        state.detailsBlockBuffer = state.buffer.slice(openIdx + fullTag.length);
-        state.buffer = state.buffer.slice(0, openIdx);
-        state.isInsideDetailsBlock = true;
-        // Continue loop — check for immediate </details> in detailsBlockBuffer
-      }
-    }
-  }
-
-  /**
-   * Simplified semantic marker detection that checks for INCOMPLETE semantic blocks
-   * Returns true only if there are unclosed/incomplete semantic markers that we should wait for
-   * Focuses on the core cases that cause broken text formatting
-   */
-  private hasIncompleteSemanticMarkers(buffer: string): boolean {
-    // 1. Check for unbalanced parentheses (main issue from original problem)
-    let parenDepth = 0;
-    for (const char of buffer) {
-      if (char === "(") parenDepth++;
-      else if (char === ")") parenDepth--;
-    }
-    if (parenDepth !== 0) {
-      log.info(`Stream: Buffer has unbalanced parentheses (depth: ${parenDepth})`);
-      return true;
-    }
-
-    // 2. Check for unbalanced quotes (regular and Japanese)
-    const regularQuoteCount = (buffer.match(/"/g) || []).length;
-    if (regularQuoteCount % 2 !== 0) {
-      log.info(`Stream: Buffer has unclosed quotes`);
-      return true;
-    }
-
-    const japOpenCount = (buffer.match(/「/g) || []).length;
-    const japCloseCount = (buffer.match(/」/g) || []).length;
-    if (japOpenCount !== japCloseCount) {
-      log.info(`Stream: Buffer has unbalanced Japanese quotes`);
-      return true;
-    }
-
-    // 3. Check for incomplete markdown links [text](url) - simplified approach
-    // This covers the broken link problem from the original issue
-    const openBrackets = (buffer.match(/\[/g) || []).length;
-    const closeBrackets = (buffer.match(/\]/g) || []).length;
-    const openParens = (buffer.match(/\(/g) || []).length;
-    const closeParens = (buffer.match(/\)/g) || []).length;
-
-    // If we have more [ than ] or more ( than ), we might be mid-link
-    if (openBrackets > closeBrackets || openParens > closeParens) {
-      // Check if it looks like a markdown link pattern
-      if (buffer.includes("[") && (buffer.includes("](") || buffer.endsWith("]("))) {
-        log.info(`Stream: Buffer might contain incomplete markdown link`);
-        return true;
-      }
-    }
-
-    // 4. Check for obviously incomplete URLs (only the most basic cases)
-    if (buffer.match(/https?:$|https?:\/$|https?:\/\/$/)) {
-      log.info(`Stream: Buffer ends with incomplete URL protocol`);
-      return true;
-    }
-
-    // 5. Hold incomplete trailing markdown tables so the full block can render as
-    // a single image instead of leaking row-by-row during streaming.
-    if (hasTrailingIncompleteMarkdownTable(buffer)) {
-      log.info(`Stream: Buffer ends with an incomplete markdown table`);
-      return true;
-    }
-
-    // 6. Check for a partial <think> opening tag at the end of the buffer.
-    // e.g. buffer ends with "<", "<t", "<th", "<thi", "<thin", "<think" — hold until complete.
-    const THINK_OPEN = "<think>";
-    for (let len = THINK_OPEN.length - 1; len >= 1; len--) {
-      if (buffer.endsWith(THINK_OPEN.slice(0, len))) {
-        log.info(`Stream: Buffer ends with partial <think> tag prefix`);
-        return true;
-      }
-    }
-
-    // 7. Check for a partial or unclosed <details> tag at the end of the buffer.
-    // Covers plain "<details>" and attribute variants like "<details open>" — holds until
-    // the tag closes with ">". Uses regex instead of the prefix-loop pattern because
-    // <details> can carry attributes (unlike <think> which is always bare).
-    if (/<details(?:\s[^>]*)?$/.test(buffer)) {
-      log.info(`Stream: Buffer ends with partial or unclosed <details> tag`);
-      return true;
-    }
-    // Also check for the very early prefix stage: "<", "<d", "<de", ..., "<detail"
-    // (before the full word "details" arrives). Same approach as <think> prefix detection.
-    const DETAILS_PREFIX = "<details";
-    for (let len = DETAILS_PREFIX.length - 1; len >= 1; len--) {
-      if (buffer.endsWith(DETAILS_PREFIX.slice(0, len))) {
-        log.info(`Stream: Buffer ends with partial <details> tag prefix`);
-        return true;
-      }
-    }
-
-    return false; // No incomplete semantic markers detected
-  }
-
-  /**
-   * Automatically closes incomplete semantic markers in the buffer
-   * This is a QoL fix to prevent message loss when LLMs stop mid-sentence
-   * with unclosed parentheses, quotes, markdown formatting, etc.
-   *
-   * @param buffer - The text buffer that may contain incomplete semantic markers
-   * @returns The buffer with all incomplete markers properly closed
-   */
-  private autoCloseIncompleteMarkers(buffer: string): string {
-    let fixedBuffer = buffer;
-    const fixes: string[] = [];
-
-    // 1. Close unbalanced parentheses
-    let parenDepth = 0;
-    for (const char of fixedBuffer) {
-      if (char === "(") parenDepth++;
-      else if (char === ")") parenDepth--;
-    }
-    if (parenDepth > 0) {
-      // Add closing parentheses
-      const closingParens = ")".repeat(parenDepth);
-      fixedBuffer += closingParens;
-      fixes.push(`${parenDepth} closing parentheses`);
-    }
-
-    // 2. Close unclosed regular quotes
-    const regularQuoteCount = (fixedBuffer.match(/"/g) || []).length;
-    if (regularQuoteCount % 2 !== 0) {
-      fixedBuffer += '"';
-      fixes.push("closing quote");
-    }
-
-    // 3. Close unclosed Japanese quotes
-    const japOpenCount = (fixedBuffer.match(/「/g) || []).length;
-    const japCloseCount = (fixedBuffer.match(/」/g) || []).length;
-    if (japOpenCount > japCloseCount) {
-      const missingCount = japOpenCount - japCloseCount;
-      fixedBuffer += "」".repeat(missingCount);
-      fixes.push(`${missingCount} Japanese closing quote(s)`);
-    }
-
-    // 4. Close incomplete markdown bold (**text or __text)
-    // Check for ** bold markers
-    const doubleStar = (fixedBuffer.match(/\*\*/g) || []).length;
-    if (doubleStar % 2 !== 0) {
-      fixedBuffer += "**";
-      fixes.push("markdown bold (**)");
-    }
-
-    // Check for __ bold markers
-    const doubleUnderscore = (fixedBuffer.match(/__/g) || []).length;
-    if (doubleUnderscore % 2 !== 0) {
-      fixedBuffer += "__";
-      fixes.push("markdown bold (__)");
-    }
-
-    // 5. Close incomplete markdown italic (*text or _text)
-    // Need to be careful not to count ** as * for italic
-    // Count single asterisks not part of **
-    const singleStars = (fixedBuffer.match(/(?<!\*)\*(?!\*)/g) || []).length;
-    if (singleStars % 2 !== 0) {
-      fixedBuffer += "*";
-      fixes.push("markdown italic (*)");
-    }
-
-    // Count single underscores not part of __
-    const singleUnderscores = (fixedBuffer.match(/(?<!_)_(?!_)/g) || []).length;
-    if (singleUnderscores % 2 !== 0) {
-      fixedBuffer += "_";
-      fixes.push("markdown italic (_)");
-    }
-
-    // 6. Close incomplete markdown strikethrough (~~text)
-    const doubleTilde = (fixedBuffer.match(/~~/g) || []).length;
-    if (doubleTilde % 2 !== 0) {
-      fixedBuffer += "~~";
-      fixes.push("markdown strikethrough (~~)");
-    }
-
-    // 7. Close incomplete markdown links
-    // Pattern 1: [text](url - missing closing )
-    if (fixedBuffer.match(/\[[^\]]+\]\([^)]*$/)) {
-      fixedBuffer += ")";
-      fixes.push("markdown link closing parenthesis");
-    }
-    // Pattern 2: [text - missing closing ] and the whole (url) part
-    else if (fixedBuffer.match(/\[[^\]]*$/)) {
-      fixedBuffer += "](#)";
-      fixes.push("markdown link closing bracket and empty URL");
-    }
-
-    // Log what was fixed
-    if (fixes.length > 0) {
-      log.info(
-        `Stream Auto-Close: Applied fixes - ${fixes.join(", ")} to buffer: "${buffer.substring(0, 100)}${buffer.length > 100 ? "..." : ""}"`,
-      );
-    }
-
-    return fixedBuffer;
-  }
-
-  /**
-   * Process buffer content to determine if flushing is needed
-   * This is the core logic extracted from the original streamGeminiToDiscord
-   */
-  private processBufferContent(state: StreamState, config: StreamConfig): ChunkProcessingResult {
-    // Hold the buffer entirely while accumulating a think or details block — don't flush any content
-    if (state.isInsideThinkBlock || state.isInsideDetailsBlock) {
-      return {
-        shouldFlush: false,
-        updatedBuffer: state.buffer,
-        newCodeBlockState: undefined,
-      };
-    }
-
-    if (state.isInsideCodeBlock) {
-      // Look for closing code block
-      const closingBackticksIndex = state.buffer.indexOf("```", 3);
-
-      if (closingBackticksIndex !== -1) {
-        // Found closing backticks
-        const segmentToFlush = state.buffer.substring(0, closingBackticksIndex + 3);
-        const updatedBuffer = state.buffer.substring(closingBackticksIndex + 3);
-
-        return {
-          shouldFlush: true,
-          segmentToFlush,
-          updatedBuffer,
-          newCodeBlockState: false,
-          breakType: "code_close",
-        };
-      } else if (state.buffer.length >= DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_CODE_BLOCK) {
-        // Safety flush for oversized code block
-        return {
-          shouldFlush: true,
-          segmentToFlush: state.buffer,
-          updatedBuffer: "",
-          newCodeBlockState: false,
-          breakType: "overflow",
-        };
-      }
-
-      // Continue accumulating code block
-      return {
-        shouldFlush: false,
-        updatedBuffer: state.buffer,
-        newCodeBlockState: true,
-      };
-    } else {
-      // Not in code block - look for break points
-      const openingBackticksIndex = state.buffer.indexOf("```");
-      const newlineIndex = state.buffer.indexOf("\n");
-
-      // Update semantic marker tracking (enhanced incomplete detection)
-      state.hasSemanticMarkers = this.hasIncompleteSemanticMarkers(state.buffer);
-
-      // Check for period flush only if humanizer is HEAVY
-      let periodEndIndex = -1;
-      if (config.humanizerDegree === HumanizerDegree.HEAVY) {
-        const sentenceRegex = createSentenceSplitRegex();
-        const periodMatch = sentenceRegex.exec(state.buffer);
-        if (periodMatch && !this.shouldDelayTrailingPeriodFlush(state.buffer, periodMatch)) {
-          periodEndIndex = periodMatch.index + periodMatch[0].length;
-        }
-      }
-
-      // Determine earliest break point
-      let earliestBreakIndex = -1;
-      let breakType: ChunkProcessingResult["breakType"];
-
-      if (openingBackticksIndex !== -1) {
-        earliestBreakIndex = openingBackticksIndex;
-        breakType = "code_open";
-      }
-      if (newlineIndex !== -1 && (earliestBreakIndex === -1 || newlineIndex < earliestBreakIndex)) {
-        earliestBreakIndex = newlineIndex;
-        breakType = "newline";
-      }
-      if (periodEndIndex !== -1 && (earliestBreakIndex === -1 || periodEndIndex < earliestBreakIndex)) {
-        earliestBreakIndex = periodEndIndex;
-        breakType = "period";
-      }
-
-      if (earliestBreakIndex !== -1) {
-        if (breakType === "code_open") {
-          // Code blocks always flush regardless of semantic markers (higher priority)
-          if (earliestBreakIndex > 0) {
-            // Text before code block
-            return {
-              shouldFlush: true,
-              segmentToFlush: state.buffer.substring(0, earliestBreakIndex),
-              updatedBuffer: state.buffer.substring(earliestBreakIndex),
-              newCodeBlockState: false,
-              breakType,
-            };
-          } else {
-            // Check if complete code block exists
-            const closingInSegment = state.buffer.indexOf("```", 3);
-            if (closingInSegment !== -1) {
-              // Complete code block
-              return {
-                shouldFlush: true,
-                segmentToFlush: state.buffer.substring(0, closingInSegment + 3),
-                updatedBuffer: state.buffer.substring(closingInSegment + 3),
-                newCodeBlockState: false,
-                breakType: "code_close",
-              };
-            } else {
-              // Start of code block
-              return {
-                shouldFlush: false,
-                updatedBuffer: state.buffer,
-                newCodeBlockState: true,
-              };
-            }
-          }
-        } else if (breakType === "newline" && !state.hasSemanticMarkers) {
-          // Only flush on newlines if no incomplete semantic markers
-          // Additional safety: ensure the segment to flush doesn't contain incomplete markers
-          // If newline is currently the last buffered char, wait for more input.
-          // This avoids sending punctuation-only follow-up chunks like "." or ",".
-          const nextCharIndex = earliestBreakIndex + 1;
-          if (nextCharIndex >= state.buffer.length) {
-            return {
-              shouldFlush: false,
-              updatedBuffer: state.buffer,
-              newCodeBlockState: false,
-            };
-          }
-
-          // If sentence punctuation immediately follows the newline, include it in
-          // the same flush so punctuation stays attached to the prior sentence.
-          // Intentionally excludes ":" so we don't split :emoji: tokens.
-          // Excludes multi-dot sequences (e.g. "...") — these are ellipsis expressions
-          // that belong to the next segment, not trailing punctuation from the current one.
-          // Carrying them causes streaming race conditions to split "..." into ".." + ".sentence".
-          let flushEndIndex = nextCharIndex;
-          const punctuationCarry = state.buffer.substring(nextCharIndex).match(/^\s*(?!\.{2,})[.,!?;。！？、，]+/);
-          if (punctuationCarry) {
-            flushEndIndex += punctuationCarry[0].length;
-          }
-
-          const segmentToFlush = state.buffer.substring(0, flushEndIndex);
-
-          if (!this.hasIncompleteSemanticMarkers(segmentToFlush)) {
-            return {
-              shouldFlush: true,
-              segmentToFlush,
-              updatedBuffer: state.buffer.substring(flushEndIndex),
-              newCodeBlockState: false,
-              breakType,
-            };
-          }
-        } else if (breakType === "period" && !state.hasSemanticMarkers) {
-          // Only flush on periods if no incomplete semantic markers
-          // Additional safety: ensure the segment to flush doesn't contain incomplete markers
-          const segmentToFlush = state.buffer.substring(0, periodEndIndex);
-
-          if (!this.hasIncompleteSemanticMarkers(segmentToFlush)) {
-            return {
-              shouldFlush: true,
-              segmentToFlush,
-              updatedBuffer: state.buffer.substring(periodEndIndex),
-              newCodeBlockState: false,
-              breakType,
-            };
-          }
-        }
-      }
-
-      // No break points found or can't break due to incomplete semantic markers
-      return {
-        shouldFlush: false,
-        updatedBuffer: state.buffer,
-        newCodeBlockState: undefined,
-      };
-    }
   }
 
   /**
@@ -2009,312 +1447,8 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     context: StreamContext,
     state: StreamState,
   ): Promise<Message | null> {
-    if (!payload.content?.trim() && (!payload.files || payload.files.length === 0)) {
-      return null;
-    }
-
-    const strictUserImpersonation = isUserImpersonationStreamContext(context);
-    let replyNoticeMessage: Message | null = null;
-    const threadId = resolveWebhookThreadId(context.channel);
-    const webhookAllowedMentions = payload.allowedMentions ?? {
-      parse: ["users", "roles"],
-      repliedUser: false,
-    };
-    const regularAllowedMentions = payload.allowedMentions ?? {
-      repliedUser: false,
-    };
-
-    // Check for stop request first (highest priority - prevents duplicate embeds)
-    if (StreamOrchestrator.hasStopRequest(context.channel.id)) {
-      log.info("Stream Send: Stop request detected before Discord API call, skipping message send");
-      return null;
-    }
-
-    // Check for per-server send message limit before Discord API call (0 = unlimited)
-    // Silent drop — this is an opt-in setting, so no embed is shown to preserve conversational naturalness
-    const sendMessageLimit = context.tomoriState.config.send_message_limit ?? 0;
-    if (sendMessageLimit > 0 && state.messageSentCount >= sendMessageLimit) {
-      log.info(
-        `Send message limit reached: ${state.messageSentCount} messages sent (server limit: ${sendMessageLimit})`,
-      );
-      if (strictUserImpersonation) {
-        throw new Error(
-          "User impersonation stopped because the server message limit was reached before a reply could be sent.",
-        );
-      }
-      StreamOrchestrator.requestStop(context.channel.id, "send_message_limit");
-      return null;
-    }
-
-    // Check for safety flush limit before Discord API call
-    if (state.messageSentCount >= STREAMING_LIMITS.MAX_FLUSH_COUNT) {
-      log.warn(
-        `Flush limit exceeded: ${state.messageSentCount} messages sent (limit: ${STREAMING_LIMITS.MAX_FLUSH_COUNT})`,
-      );
-
-      if (strictUserImpersonation) {
-        throw new Error("User impersonation stopped because the response exceeded the streaming message limit.");
-      }
-
-      // Send warning embed to user
-      await sendStandardEmbed(context.channel, context.locale, {
-        titleKey: "genai.stream.flush_limit_title",
-        descriptionKey: "genai.stream.flush_limit_description",
-        color: ColorCode.WARN,
-      }).catch((embedError) => {
-        log.warn(
-          "Failed to send flush limit warning embed",
-          embedError instanceof Error ? embedError : new Error(String(embedError)),
-        );
-      });
-
-      // Request graceful stop
-      StreamOrchestrator.requestStop(context.channel.id, "flush_limit");
-      return null;
-    }
-
-    try {
-      if (strictUserImpersonation && !context.webhook) {
-        throw new Error("User impersonation requires a temporary webhook, but none is available.");
-      }
-
-      let sentMessage: Message | null = null;
-      // 1. Use webhook for alter personas (if webhook and persona info provided)
-      // Only require webhook and username - avatarUrl is optional
-      if (context.webhook && context.personaUsername) {
-        log.info(
-          `Stream Send: Using webhook for persona "${context.personaUsername}"${context.personaAvatarUrl ? " with custom avatar" : " (default avatar)"}`,
-        );
-
-        const identity = {
-          username: context.personaUsername,
-          avatarUrl: context.personaAvatarUrl,
-          avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
-        };
-
-        if (
-          !strictUserImpersonation &&
-          context.tomoriState.is_alter &&
-          context.replyToMessage &&
-          context.replyNoticeState &&
-          !context.replyNoticeState.attempted &&
-          state.messageSentCount === 0
-        ) {
-          context.replyNoticeState.attempted = true;
-          try {
-            replyNoticeMessage = await sendWebhookReplyNotice(
-              context.webhook,
-              context.replyToMessage,
-              context.locale,
-              identity,
-              {
-                threadId,
-                botUserId: context.client.user?.id,
-                botName: context.tomoriState.tomori_nickname,
-              },
-            );
-            context.replyNoticeState.sent = true;
-          } catch (noticeError) {
-            log.warn("Stream Send: Failed to send standalone alter reply notice", noticeError as Error);
-          }
-        }
-
-        sentMessage = await sendWebhookMessageWithIdentity(
-          context.webhook,
-          {
-            ...(payload.content !== undefined ? { content: payload.content } : {}),
-            ...(payload.files?.length ? { files: payload.files } : {}),
-            allowedMentions: webhookAllowedMentions,
-            ...(threadId ? { threadId } : {}),
-          },
-          identity,
-        );
-
-        // Mark as replied after the initial webhook send.
-        state.hasRepliedToOriginalMessage = true;
-      }
-      // 2. Regular bot message for main persona or fallback
-      else {
-        // Check if we need to reply or send normally
-        if (!state.hasRepliedToOriginalMessage && context.replyToMessage) {
-          sentMessage = await context.replyToMessage.reply({
-            ...(payload.content !== undefined ? { content: payload.content } : {}),
-            ...(payload.files?.length ? { files: payload.files } : {}),
-            allowedMentions: regularAllowedMentions,
-          });
-          state.hasRepliedToOriginalMessage = true;
-        } else {
-          sentMessage = await context.channel.send({
-            ...(payload.content !== undefined ? { content: payload.content } : {}),
-            ...(payload.files?.length ? { files: payload.files } : {}),
-            allowedMentions: regularAllowedMentions,
-          });
-        }
-      }
-
-      if (!state.firstReplyUrl && sentMessage?.url) {
-        state.firstReplyUrl = sentMessage.url;
-      }
-      state.messageSentCount++;
-      if (textForState) {
-        state.accumulatedText += textForState; // Track all sent text for short-term memory
-      }
-      this.notifyStreamProgress(context);
-      const logPreview = textForState
-        ? textForState.length > 100
-          ? `${textForState.substring(0, 100)}...`
-          : textForState
-        : `[attachment payload: ${payload.files?.length ?? 0} file(s)]`;
-      log.info(`Stream Send: Sent message (${state.messageSentCount}): "${logPreview}"`);
-      return sentMessage;
-    } catch (discordError) {
-      // Recover stale/deleted webhook caches for alter personas.
-      // This applies to both first-send and mid-stream sends.
-      const shouldRecoverWebhook =
-        context.webhook &&
-        context.personaUsername &&
-        context.tomoriState.is_alter &&
-        context.personaUsername === context.tomoriState.tomori_nickname &&
-        isInvalidWebhookError(discordError);
-
-      if (shouldRecoverWebhook) {
-        const webhookTargetChannel = resolveWebhookTargetChannel(context.channel);
-
-        if (webhookTargetChannel) {
-          try {
-            invalidateWebhookCache(webhookTargetChannel.id);
-            const recreatedWebhookResult = await getOrCreateWebhook(webhookTargetChannel);
-            const recreatedWebhook = recreatedWebhookResult.webhook;
-
-            if (recreatedWebhook) {
-              const recoveredThreadId = resolveWebhookThreadId(context.channel);
-              const recoveredIdentity = {
-                username: context.personaUsername,
-                avatarUrl: context.personaAvatarUrl,
-                avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/")
-                  ? context.personaAvatarUrl
-                  : undefined,
-              };
-
-              const recoveredReplyMessage = await sendWebhookMessageWithIdentity(
-                recreatedWebhook,
-                {
-                  ...(payload.content !== undefined ? { content: payload.content } : {}),
-                  ...(payload.files?.length ? { files: payload.files } : {}),
-                  allowedMentions: webhookAllowedMentions,
-                  ...(recoveredThreadId ? { threadId: recoveredThreadId } : {}),
-                },
-                recoveredIdentity,
-              );
-
-              context.webhook = recreatedWebhook;
-              state.hasRepliedToOriginalMessage = true;
-              if (!state.firstReplyUrl && recoveredReplyMessage?.url) {
-                state.firstReplyUrl = recoveredReplyMessage.url;
-              }
-              state.messageSentCount++;
-              if (textForState) {
-                state.accumulatedText += textForState;
-              }
-              this.notifyStreamProgress(context);
-              log.info("Stream Send: Recreated webhook after invalid webhook error and resumed persona sending");
-              return recoveredReplyMessage;
-            }
-          } catch (recoveryError) {
-            log.warn(
-              "Stream Send: Webhook recovery attempt failed, falling back to regular bot message",
-              recoveryError as Error,
-            );
-          }
-        }
-      }
-
-      // If webhook send fails, try fallback to regular bot message (only on first message)
-      if (
-        !strictUserImpersonation &&
-        context.webhook &&
-        context.personaUsername &&
-        !state.hasRepliedToOriginalMessage
-      ) {
-        log.warn("Stream Send: Webhook send failed, falling back to regular bot message", discordError);
-
-        try {
-          if (replyNoticeMessage && context.webhook) {
-            await context.webhook.deleteMessage(replyNoticeMessage.id, threadId).catch((deleteError) => {
-              log.warn(
-                "Stream Send: Failed to delete standalone alter reply notice after webhook fallback",
-                deleteError,
-              );
-            });
-          }
-
-          // Try fallback to regular message
-          let fallbackMessage: Message | null = null;
-          if (context.replyToMessage) {
-            fallbackMessage = await context.replyToMessage.reply({
-              ...(payload.content !== undefined ? { content: payload.content } : {}),
-              ...(payload.files?.length ? { files: payload.files } : {}),
-              allowedMentions: regularAllowedMentions,
-            });
-          } else {
-            fallbackMessage = await context.channel.send({
-              ...(payload.content !== undefined ? { content: payload.content } : {}),
-              ...(payload.files?.length ? { files: payload.files } : {}),
-              allowedMentions: regularAllowedMentions,
-            });
-          }
-
-          state.hasRepliedToOriginalMessage = true;
-          if (!state.firstReplyUrl && fallbackMessage?.url) {
-            state.firstReplyUrl = fallbackMessage.url;
-          }
-          state.messageSentCount++;
-          if (textForState) {
-            state.accumulatedText += textForState; // Track fallback sent text too
-          }
-
-          log.info("Stream Send: Successfully sent message via fallback after webhook failure");
-          return fallbackMessage;
-        } catch (fallbackError) {
-          // Log both errors
-          log.error("Stream Send: Both webhook and fallback failed", fallbackError, {
-            serverId: context.tomoriState?.server_id,
-            errorType: "StreamOrchestrator",
-            metadata: {
-              channelId: context.channel.id,
-              webhookError: String(discordError),
-              fallbackError: String(fallbackError),
-            },
-          });
-        }
-      }
-
-      if (strictUserImpersonation) {
-        log.warn(
-          "Stream Send: User impersonation webhook send failed; not falling back to a regular bot message",
-          discordError as Error,
-        );
-      }
-
-      // Original error logging and re-throw
-      log.error("Stream Send: Discord API error when sending message", discordError, {
-        serverId: context.tomoriState?.server_id,
-        errorType: "StreamOrchestrator",
-        metadata: {
-          channelId: context.channel.id,
-          contentLength: textForState.length,
-          contentPreview: textForState.substring(0, 200),
-          usingWebhook: !!context.webhook,
-        },
-      });
-
-      // Re-throw to let the overall error handling deal with it
-      throw new Error(
-        `Discord send failed: ${discordError instanceof Error ? discordError.message : String(discordError)}`,
-      );
-    }
+    return await this.uiUpdater.sendSinglePayload(payload, textForState, context, state);
   }
-
   /**
    * Interruptible thinking pause that can be cancelled by stop requests
    * @param typingConfig - Typing simulation configuration
@@ -2394,7 +1528,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
       if (state.hasSemanticMarkers) {
         log.info("Stream Seg: Final flush has incomplete semantic markers. Auto-closing them to prevent message loss.");
         // Auto-close incomplete markers to prevent message loss
-        state.buffer = this.autoCloseIncompleteMarkers(state.buffer);
+        state.buffer = autoCloseStreamBufferMarkers(state.buffer);
       }
 
       await this.sendBufferSegment(state.buffer, "final", textConfig, typingConfig, context, state);
@@ -2425,7 +1559,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     // Route any details block content that was still accumulating when the stream ended.
     // Never send incomplete details content to Discord — route to detailsSegments for STM.
     if (state.isInsideDetailsBlock && state.detailsBlockBuffer.trim()) {
-      const detailsContent = StreamOrchestrator.stripSummaryTag(state.detailsBlockBuffer);
+      const detailsContent = stripSummaryTag(state.detailsBlockBuffer);
       if (detailsContent) {
         state.detailsSegments.push(detailsContent);
         log.info(
@@ -2458,7 +1592,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     }
 
     if (state.isInsideDetailsBlock) {
-      const detailsContent = StreamOrchestrator.stripSummaryTag(state.detailsBlockBuffer);
+      const detailsContent = stripSummaryTag(state.detailsBlockBuffer);
       if (detailsContent) {
         state.detailsSegments.push(detailsContent);
         log.info(`Stream Seg: Captured ${detailsContent.length} chars of details block to STM before flush`);
@@ -2477,7 +1611,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
         "Stream Seg: Function call received with incomplete semantic markers. Auto-closing them before flushing.",
       );
       // Auto-close incomplete markers before function call
-      state.buffer = this.autoCloseIncompleteMarkers(state.buffer);
+      state.buffer = autoCloseStreamBufferMarkers(state.buffer);
       state.hasSemanticMarkers = false;
     }
 

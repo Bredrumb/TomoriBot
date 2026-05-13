@@ -204,7 +204,7 @@ Key observations:
 
 ### Why Build-Then-Rearrange?
 
-The native `buildContextNative()` is a 2800+ line function that builds all context blocks with complex conditional logic (user impersonation, RAG, memories, etc.). Extracting each block into a separate function would be a massive refactor with high risk of regression.
+The native `buildContextNative()` remains the fixed-order orchestrator for TomoriBot context blocks, with responsibility-specific helpers extracted under `src/utils/text/context/` for memories, RAG, template/conditioning blocks, and history/media formatting. The preset system still treats native output as tagged buckets and does not duplicate those block builders.
 
 Instead, the preset builder:
 1. Calls native `buildContextNative()` to produce **all** blocks (tagged with `metadataTag`)

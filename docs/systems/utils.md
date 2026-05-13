@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-3 -->
+<!-- ARCH-ALIGNMENT: prereq-phase-4 -->
 
 # 11. Utils and Helpers
 
@@ -47,7 +47,8 @@ This is a current map of shared utility modules under `src/utils/`.
 ### `utils/text`
 
 - `localizer.ts`: locale auto-discovery + lookup
-- `contextBuilder.ts`: structured context construction
+- `contextBuilder.ts`: public structured context routing and native orchestration
+- `context/`: context-builder support modules for types, template/conditioning blocks, memories, RAG, and history/media helpers
 - `contextTruncator.ts`: token-budget truncation strategy
 - `stringHelper.ts`: barrel re-export — all string utilities live in `utils/text/processors/`
 - `processors/regexUtils.ts`: `escapeRegExp`

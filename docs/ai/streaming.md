@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-3 -->
+<!-- ARCH-ALIGNMENT: prereq-phase-4 -->
 
 # 10. Streaming & Response System
 
@@ -12,8 +12,10 @@ This document explains the current streaming architecture for TomoriBot and how 
 TomoriBot uses a modular streaming pipeline:
 
 1. Provider stream adapters normalize raw provider chunks.
-2. `StreamOrchestrator` manages buffering, boundaries, tool-call interruption, and Discord sending.
-3. Text utilities clean, chunk, and optionally humanize content before sending.
+2. `StreamOrchestrator` coordinates stream state, stop/timeout handling, provider chunk routing, and final result assembly.
+3. `stream/bufferManager.ts` owns buffer boundaries, semantic-marker protection, overflow breakpoints, and hidden `<think>`/`<details>` block draining.
+4. `stream/uiUpdater.ts` owns Discord message delivery, webhook recovery, reply notices, and send-limit enforcement.
+5. Text utilities clean, chunk, and optionally humanize content before sending.
 
 Important: TomoriBot now sends **discrete messages**, not "edit the same message every 500ms".
 
@@ -21,7 +23,9 @@ Important: TomoriBot now sends **discrete messages**, not "edit the same message
 
 | Component | File | Responsibility |
 |---|---|---|
-| Universal orchestrator | `src/utils/discord/streamOrchestrator.ts` | Buffering, flush decisions, send pipeline, timeout/stop handling |
+| Universal orchestrator | `src/utils/discord/streamOrchestrator.ts` | Coordinates provider chunks, stream state, stop/follow-up handling, timeout handling, and final result assembly |
+| Buffer manager | `src/utils/discord/stream/bufferManager.ts` | Buffer flush decisions, semantic marker checks, overflow-safe breakpoints, marker auto-close, and hidden reasoning/details block draining |
+| UI updater | `src/utils/discord/stream/uiUpdater.ts` | Discord sends, reply/webhook delivery, webhook recovery, send-limit warnings, and stream-progress notification after successful sends |
 | Stream interfaces | `src/types/stream/interfaces.ts` | Provider/orchestrator contracts, `BaseStreamAdapter`, and stream context |
 | Stream constants/types | `src/types/stream/types.ts` | Message length, flush thresholds, typing settings |
 | Provider stream adapters | `src/providers/*/*StreamAdapter.ts` | Extend `BaseStreamAdapter` and convert provider-native events into normalized chunks |
@@ -63,6 +67,8 @@ Normal provider event chunks may still be assembled in provider subclasses when 
 - builds `TextProcessingConfig`
 - builds typing config from `humanizerDegree`
 - prepares optional output prefill
+- delegates buffer decisions to `stream/bufferManager.ts`
+- delegates Discord payload delivery to `stream/uiUpdater.ts`
 
 ### 3) Per-chunk loop
 
@@ -77,7 +83,8 @@ For each provider raw chunk:
 
 For `text` chunks:
 - append to buffer
-- run boundary detection
+- drain hidden `<think>` and `<details>` blocks through the buffer manager
+- run boundary detection through the buffer manager
 - flush eligible segment(s)
 - apply regular overflow fallback when needed
 
@@ -94,12 +101,13 @@ Each flushed segment goes through:
 
 ### 6) Message chunking and sending
 
-`sendSegment(...)`:
+`sendSegment(...)` and the UI updater:
 - degree `0` queues cleaned text into a pending visible buffer instead of sending immediately
 - degree `0` flushes that queue at tool-call, attachment, error-preservation, and final boundaries
 - degrees `1/2/3` split text with `chunkMessage(...)` (Discord-safe lengths)
 - applies `humanizeString(...)` only for degree `3` (`HEAVY`)
 - degree `1` sends immediately; degrees `2/3` use typing simulation
+- final payload delivery goes through `stream/uiUpdater.ts`, which handles reply-vs-channel sends, webhook identity, webhook recovery, and send-limit stops
 
 ### 7) Completion
 

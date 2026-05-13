@@ -1,7 +1,6 @@
-import type { Client, GuildTextBasedChannel, PresenceStatus } from "discord.js";
+import type { Client, GuildTextBasedChannel } from "discord.js";
 import { GatewayIntentBits } from "discord.js";
 import { sql } from "../db/client";
-import { isRagAvailable } from "../db/ragDetection";
 import {
   isBlacklisted, // Import blacklist checker
   getPrivacyLevel, // Import privacy level checker
@@ -9,7 +8,6 @@ import {
   loadUserRow,
   loadPersonalMemoriesForUserLineage,
   getPendingRemindersForUser,
-  loadEmbeddingModelById,
 } from "../db/repositories"; // Import session helpers
 import {
   ContextItemTag,
@@ -23,41 +21,42 @@ import { log } from "../misc/logger";
 import { replaceTemplateVariables, humanizeString, normalizeCustomEmojisForLlm } from "./stringHelper";
 import { applyUncensorInputTransforms, buildUncensorInjectionText } from "./uncensor";
 import { getCurrentTimeWithOffset, formatUTCOffset, getTimeOfDayPhrase } from "./timezoneHelper";
-import {
-  HumanizerDegree,
-  PrivacyLevel,
-  type ConditioningType,
-  type TomoriConfigRow,
-  type ServerEmojiRow,
-  type ServerStickerRow,
-} from "@/types/db/schema";
+import { HumanizerDegree, PrivacyLevel } from "@/types/db/schema";
 import { UNPAIRED_SAMPLE_DIALOGUE_SENTINEL } from "@/types/preset/presetExport";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { memoryGuard } from "../security/rateLimiter";
-import { formatRetrievedChunksForPrompt, retrieveRelevantDocumentChunks } from "../documents/documentService";
-import {
-  getShortTermMemoriesForServer,
-  getShortTermMemoriesForUser,
-  getShortTermMemoryForServerChannel,
-  getShortTermMemoryForUserChannel,
-  getRelativeTimestamp,
-} from "../cache/shortTermMemoryCache";
 import { getCachedAllPersonas } from "../cache/tomoriStateCache";
-import { getCachedUserRow } from "../cache/userCache";
 import { formatMemoryWithId } from "../memory/memoryId";
 import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTermMemoryIntent";
 import { getCachedActivePreset } from "../cache/stPresetCache";
 import { reassembleWithPreset } from "./presetContextBuilder";
-import { loadConditioningGroupsForPersona } from "@/utils/db/conditioningDb";
-import {
-  CONDITIONING_CONTEXT_MAX_GROUPS_PER_TYPE,
-  getConditioningContextPastParticiple,
-} from "@/utils/conditioning/conditioning";
-import { createToolPromptMacroResolver, type ToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
+import { createToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { formatChannelReferenceLabel } from "@/utils/discord/targetResolver";
-import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
-import { getResolvedCapabilityModelId } from "@/utils/provider/credentialResolver";
+import {
+  buildMediaAttributionText,
+  buildMediaDescription,
+  formatMessageTimestamp,
+  formatTimestampInline,
+  getLastImageOccurrenceIndices,
+  getRenderedImageMessageIdsWithinWindow,
+  getUserPresenceDetails,
+  isCountedRenderedImageAttachment,
+  MEDIA_IMAGE_MESSAGE_LIMIT,
+  pushDialogueHistoryContextItem,
+} from "./context/history";
+import { buildShortTermMemoryContext } from "./context/memories";
+import { buildServerDocumentContextItem } from "./context/rag";
+import {
+  buildConditioningContextItem,
+  DEFAULT_SYSTEM_PROMPT,
+  resolveRandomChoiceMacros,
+  resolveRandomChoiceMacrosInBuildOutput,
+} from "./context/templates";
+import type { BuildContextParams, BuildContextResult } from "./context/types";
+
+export type { BuildContextParams, BuildContextResult, SimplifiedMessageForContext } from "./context/types";
+export { DEFAULT_SYSTEM_PROMPT, formatTimestampInline, resolveRandomChoiceMacros };
 
 /**
  * Maps userId -> nickname for the current mention replacement operation.
@@ -68,63 +67,6 @@ const DISCORD_CHANNEL_LINK_TEST_PATTERN =
   /https?:\/\/(?:canary\.|ptb\.)?discord(?:app)?\.com\/channels\/(?:@me|\d{17,19})\/\d{17,19}(?:\/\d{17,19})?/i;
 const DISCORD_CHANNEL_LINK_REPLACE_PATTERN =
   /https?:\/\/(?:canary\.|ptb\.)?discord(?:app)?\.com\/channels\/(?:@me|\d{17,19})\/(\d{17,19})(?:\/(\d{17,19}))?/gi;
-
-// Environment variables for short-term memory configuration
-const MIN_MESSAGES_FOR_SUMMARY = Number.parseInt(process.env.SHORT_TERM_MEMORY_MIN_MESSAGES_FOR_SUMMARY || "6", 10);
-const MAX_OTHER_CHANNEL_MEMORIES = Number.parseInt(process.env.SHORT_TERM_MEMORY_MAX_OTHER_CHANNELS || "3", 10);
-
-const DOCUMENT_QUERY_MAX_LENGTH = 1000;
-const DOCUMENT_QUERY_MIN_LENGTH = 3;
-const DOCUMENT_MAX_RESULTS = (() => {
-  const parsed = Number.parseInt(process.env.DOCUMENT_MAX_RESULTS || "6", 10);
-  return Number.isFinite(parsed) ? Math.max(1, parsed) : 6;
-})();
-const DOCUMENT_MIN_SIMILARITY = (() => {
-  const parsed = Number.parseFloat(process.env.DOCUMENT_MIN_SIMILARITY || "0.5");
-  return Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : 0.5;
-})();
-const MEDIA_IMAGE_MESSAGE_LIMIT = (() => {
-  const parsed = Number.parseInt(process.env.MEDIA_IMAGE_MESSAGE_LIMIT || "3", 10);
-  return Number.isFinite(parsed) ? Math.max(0, parsed) : 3;
-})();
-
-const RANDOM_CHOICE_MACRO_REGEX =
-  /\{\{\s*random(?:::\s*([^{}]+)|:\s*([^{}]+))\s*\}\}|\{\s*random(?:::\s*([^{}]+)|:\s*([^{}]+))\s*\}/gi;
-
-export const DEFAULT_SYSTEM_PROMPT =
-  "\n{bot} makes sure to respond short and concisely, as {bot} is aware that no one really likes to read walls of text. {bot} only makes lengthy responses if and only if people are asking for assistance or an explanation that warrants it.";
-
-/**
- * Simplified message structure received from tomoriChat.ts.
- * This is an internal representation before converting to StructuredContextItem.
- */
-export type SimplifiedMessageForContext = {
-  id: string; // Discord message ID
-  authorId: string;
-  authorName: string;
-  authorType: "user" | "persona";
-  personaName?: string | null;
-  content: string | null;
-  createdAt?: number; // Discord message creation timestamp in milliseconds (message.createdTimestamp)
-  mediaSourceMessageIds?: string[]; // Array of message IDs that host media (for combined messages)
-  remoteMediaSourceKind?: "reply" | "forwarded";
-  combinedMessageIds?: string[]; // All Discord message IDs when messages are combined
-  individualContents?: string[]; // Per-message content pieces (stored during combining)
-  imageAttachments: Array<{
-    url: string;
-    proxyUrl: string;
-    mimeType: string | null;
-    filename: string;
-    isEmoji?: boolean; // True if this attachment is a custom Discord emoji
-  }>;
-  videoAttachments: Array<{
-    url: string;
-    proxyUrl: string;
-    mimeType: string | null;
-    filename: string;
-    isYouTubeLink: boolean;
-  }>;
-};
 
 /**
  * Quick check to determine if text contains patterns that need conversion.
@@ -149,10 +91,6 @@ function normalizeDiscordChannelLinks(text: string): string {
   return text.replace(DISCORD_CHANNEL_LINK_REPLACE_PATTERN, (_match, channelId: string) => `<#${channelId}>`);
 }
 
-function formatDiscordChannelReference(channelId: string | undefined, fallbackText: string): string {
-  return channelId ? `<#${channelId}>` : fallbackText;
-}
-
 function splitLeadingSystemBlocks(content: string): { leadingSystemBlocks: string[]; remainingContent: string | null } {
   const lines = content.split("\n");
   const leadingSystemBlocks: string[] = [];
@@ -167,70 +105,6 @@ function splitLeadingSystemBlocks(content: string): { leadingSystemBlocks: strin
   return {
     leadingSystemBlocks,
     remainingContent: remainingContent || null,
-  };
-}
-
-/**
- * Resolves ST-style random choice macros that can appear in imported presets
- * or prompt fields. Each macro occurrence is rolled independently.
- */
-export function resolveRandomChoiceMacros(text: string): string {
-  return text.replace(
-    RANDOM_CHOICE_MACRO_REGEX,
-    (
-      _match,
-      doubleBraceColonOptions: string | undefined,
-      doubleBraceCommaOptions: string | undefined,
-      singleBraceColonOptions: string | undefined,
-      singleBraceCommaOptions: string | undefined,
-    ) => {
-      const isColonSyntax = doubleBraceColonOptions !== undefined || singleBraceColonOptions !== undefined;
-      const rawOptions =
-        doubleBraceColonOptions ?? doubleBraceCommaOptions ?? singleBraceColonOptions ?? singleBraceCommaOptions ?? "";
-      const separator = isColonSyntax ? "::" : ",";
-      const items = rawOptions
-        .split(separator)
-        .map((item) => item.trim())
-        .filter((item) => item.length > 0);
-
-      if (items.length === 0) return "";
-      return items[Math.floor(Math.random() * items.length)];
-    },
-  );
-}
-
-function resolveRandomChoiceMacrosInContextItem(item: StructuredContextItem): StructuredContextItem {
-  let changed = false;
-  const parts = item.parts.map((part): ContextPart => {
-    if (part.type !== "text") return part;
-
-    const resolvedText = resolveRandomChoiceMacros(part.text);
-    if (resolvedText === part.text) return part;
-
-    changed = true;
-    return { ...part, text: resolvedText };
-  });
-
-  return changed ? { ...item, parts } : item;
-}
-
-function resolveRandomChoiceMacrosInBuildOutput(output: {
-  contextItems: StructuredContextItem[];
-  tailDirectives: string[];
-  lowerPriorityTailDirectives: string[];
-  uncensorDirective?: string;
-}): {
-  contextItems: StructuredContextItem[];
-  tailDirectives: string[];
-  lowerPriorityTailDirectives: string[];
-  uncensorDirective?: string;
-} {
-  return {
-    contextItems: output.contextItems.map(resolveRandomChoiceMacrosInContextItem),
-    tailDirectives: output.tailDirectives.map(resolveRandomChoiceMacros),
-    lowerPriorityTailDirectives: output.lowerPriorityTailDirectives.map(resolveRandomChoiceMacros),
-    uncensorDirective:
-      output.uncensorDirective !== undefined ? resolveRandomChoiceMacros(output.uncensorDirective) : undefined,
   };
 }
 
@@ -424,656 +298,6 @@ export async function convertMentions(
 
   return result;
 }
-
-/**
- * Builds a human-readable description of media content in a message.
- * Handles images, videos, GIFs, and combined content.
- * @param msg - SimplifiedMessageForContext to describe
- * @returns Media description string (e.g., "1 GIF", "2 images and 1 video")
- * @example
- * buildMediaDescription({imageAttachments: [{mimeType: "image/gif"}], videoAttachments: []})
- * // Returns: "1 GIF"
- * @example
- * buildMediaDescription({imageAttachments: [{mimeType: "image/png"}, {mimeType: "image/jpeg"}], videoAttachments: [{...}]})
- * // Returns: "2 images and 1 video"
- */
-function buildMediaDescription(msg: SimplifiedMessageForContext): string {
-  const imageCount = msg.imageAttachments.length;
-  const videoCount = msg.videoAttachments.length;
-  const hasGif = msg.imageAttachments.some((att) => att.mimeType?.includes("gif"));
-
-  const mediaParts: string[] = [];
-
-  // Handle images (with special case for GIFs)
-  if (imageCount > 0) {
-    if (hasGif && imageCount === 1) {
-      // Single GIF only
-      mediaParts.push("1 GIF");
-    } else if (hasGif) {
-      // Multiple images including at least one GIF
-      mediaParts.push(`${imageCount} image${imageCount > 1 ? "s" : ""} (including GIF)`);
-    } else {
-      // Regular images only
-      mediaParts.push(`${imageCount} image${imageCount > 1 ? "s" : ""}`);
-    }
-  }
-
-  // Handle videos
-  if (videoCount > 0) {
-    mediaParts.push(`${videoCount} video${videoCount > 1 ? "s" : ""}`);
-  }
-
-  return mediaParts.join(" and ");
-}
-
-/**
- * Builds a natural-language attribution string for a media-only message (no text content).
- * Used when a user uploads media without any accompanying text, so the model still knows
- * who sent it. Prose form is intentional — the "authorName:" prefix format is reserved
- * for actual utterances only.
- * @param msg - SimplifiedMessageForContext with at least one attachment
- * @param authorName - Resolved display name of the sender
- * @returns Attribution string (e.g., "Misuzu sent this image", "Misuzu sent these 2 images and a video")
- */
-function buildMediaAttributionText(msg: SimplifiedMessageForContext, authorName: string): string {
-  const imageCount = msg.imageAttachments.length;
-  const videoCount = msg.videoAttachments.length;
-  const hasGif = msg.imageAttachments.some((att) => att.mimeType?.includes("gif"));
-  const isMixed = imageCount > 0 && videoCount > 0;
-
-  const mediaParts: string[] = [];
-
-  // Build image/GIF description
-  if (imageCount > 0) {
-    if (hasGif && imageCount === 1) {
-      mediaParts.push("this GIF");
-    } else if (hasGif) {
-      mediaParts.push(`these ${imageCount} images (including a GIF)`);
-    } else if (imageCount === 1) {
-      mediaParts.push("this image");
-    } else {
-      mediaParts.push(`these ${imageCount} images`);
-    }
-  }
-
-  // Use "a/N video(s)" when mixed with images so "sent this image and a video" reads naturally
-  if (videoCount > 0) {
-    if (isMixed) {
-      mediaParts.push(videoCount === 1 ? "a video" : `${videoCount} videos`);
-    } else {
-      mediaParts.push(videoCount === 1 ? "this video" : `these ${videoCount} videos`);
-    }
-  }
-
-  const mediaDescription = mediaParts.join(" and ") || "this media";
-  return `[System: ${authorName} sent ${mediaDescription}]`;
-}
-
-function isStickerImageAttachment(attachment: SimplifiedMessageForContext["imageAttachments"][number]): boolean {
-  return attachment.proxyUrl.includes("/stickers/") || attachment.url.includes("/stickers/");
-}
-
-function isCountedRenderedImageAttachment(
-  attachment: SimplifiedMessageForContext["imageAttachments"][number],
-): boolean {
-  return !attachment.isEmoji && !isStickerImageAttachment(attachment);
-}
-
-function getRenderedImageMessageIdsWithinWindow(
-  simplifiedMessageHistory: SimplifiedMessageForContext[],
-  mediaWindowCutoff: number,
-): Set<string> {
-  const renderedMessageIds = new Set<string>();
-  if (MEDIA_IMAGE_MESSAGE_LIMIT <= 0) {
-    return renderedMessageIds;
-  }
-
-  for (let i = simplifiedMessageHistory.length - 1; i >= 0; i -= 1) {
-    if (i < mediaWindowCutoff) {
-      break;
-    }
-
-    const message = simplifiedMessageHistory[i];
-    const hasCountedImages = message.imageAttachments.some(isCountedRenderedImageAttachment);
-    if (!hasCountedImages) {
-      continue;
-    }
-
-    renderedMessageIds.add(message.id);
-    if (renderedMessageIds.size >= MEDIA_IMAGE_MESSAGE_LIMIT) {
-      break;
-    }
-  }
-
-  return renderedMessageIds;
-}
-
-/**
- * Pre-computes the last index at which each image proxyUrl appears across
- * rendered messages within the media window. When the same image appears in
- * multiple messages (e.g. the original message AND a reply that merges the
- * referenced attachments), only the latest occurrence should be rendered as
- * base64 to avoid sending duplicate payloads.
- *
- * @param simplifiedMessageHistory - Full ordered message history
- * @param renderedImageMessageIds - Set of message IDs eligible for image rendering
- * @param mediaWindowCutoff - Index threshold for the media window
- * @returns Map of proxyUrl → last history index where that image should be rendered
- */
-function getLastImageOccurrenceIndices(
-  simplifiedMessageHistory: SimplifiedMessageForContext[],
-  renderedImageMessageIds: Set<string>,
-  mediaWindowCutoff: number,
-): Map<string, number> {
-  // 1. Collect all proxyUrls from rendered messages and track every index they appear at
-  const urlToIndices = new Map<string, number[]>();
-
-  for (let i = simplifiedMessageHistory.length - 1; i >= 0; i -= 1) {
-    if (i < mediaWindowCutoff) {
-      break;
-    }
-
-    const message = simplifiedMessageHistory[i];
-    if (!renderedImageMessageIds.has(message.id)) {
-      continue;
-    }
-
-    for (const attachment of message.imageAttachments) {
-      if (!isCountedRenderedImageAttachment(attachment)) {
-        continue;
-      }
-
-      const indices = urlToIndices.get(attachment.proxyUrl);
-      if (indices) {
-        indices.push(i);
-      } else {
-        urlToIndices.set(attachment.proxyUrl, [i]);
-      }
-    }
-  }
-
-  // 2. For images appearing in multiple messages, record the last (highest) index
-  const lastOccurrence = new Map<string, number>();
-  for (const [url, indices] of urlToIndices) {
-    if (indices.length > 1) {
-      lastOccurrence.set(url, Math.max(...indices));
-    }
-  }
-
-  return lastOccurrence;
-}
-
-function getLatestUserQuery(messages: SimplifiedMessageForContext[]): string | null {
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const msg = messages[i];
-    if (msg.authorType !== "user") continue;
-    if (!msg.content) continue;
-    if (msg.authorId === "0") continue; // Skip synthetic continuation prompts
-    const trimmed = msg.content.trim();
-    if (!trimmed) continue;
-    if (trimmed.startsWith("[System:")) continue;
-    return trimmed.slice(0, DOCUMENT_QUERY_MAX_LENGTH);
-  }
-
-  return null;
-}
-
-/**
- * Build short-term memory context for cross-channel and same-channel awareness
- *
- * Phase 2: Loads other-channel crude conversations or summaries (fallback to crude if no summary)
- * Phase 3: Loads same-channel summary with HINT (tool-calling models only)
- *
- * @param triggeringUserId - Discord user ID of the message author
- * @param currentChannelId - Current channel ID
- * @param currentServerId - Current server ID (or "DM")
- * @param tomoriState - Tomori configuration state
- * @param locale - User's preferred locale
- * @param triggererName - Display name of the triggering user
- * @param botName - Bot's display name
- * @param personalMemoriesEnabled - Whether personalization is enabled
- * @param client - Discord client for mention conversion
- * @returns Object with other-channel items and optional same-channel prompt
- */
-async function buildShortTermMemoryContext(
-  triggeringUserId: string,
-  currentChannelId: string,
-  currentServerId: string,
-  tomoriState: import("@/types/db/schema").TomoriState | null,
-  _locale: string,
-  triggererName: string,
-  botName: string,
-  personalMemoriesEnabled: boolean,
-  client: Client,
-  isUserImpersonation: boolean,
-  explicitLongTermMemoryIntent = false,
-  toolPromptMacroResolver?: ToolPromptMacroResolver,
-  currentParentChannelId?: string | null,
-): Promise<{
-  memoryItems: StructuredContextItem[];
-  createPromptText?: string;
-}> {
-  const memoryItems: StructuredContextItem[] = [];
-  let createPromptText: string | undefined;
-  const expandPromptToolText = (macroText: string, fallbackText: string) =>
-    toolPromptMacroResolver ? toolPromptMacroResolver.expand(macroText) : Promise.resolve(fallbackText);
-
-  try {
-    // 1. Check if user has cross-server opt-in enabled
-    const userRow = await getCachedUserRow(triggeringUserId);
-    const crossServerOptIn = userRow?.shortterm_cache_crossserver_opt_in ?? false;
-
-    const personaLineageId = tomoriState?.persona_lineage_id;
-    let otherChannelMemories =
-      currentServerId === "DM"
-        ? getShortTermMemoriesForUser(triggeringUserId, currentChannelId, personaLineageId).filter(
-            (memory) => crossServerOptIn || memory.serverId === currentServerId,
-          )
-        : getShortTermMemoriesForServer(currentServerId, currentChannelId, personaLineageId);
-
-    if (currentServerId !== "DM" && crossServerOptIn) {
-      const crossServerUserMemories = getShortTermMemoriesForUser(
-        triggeringUserId,
-        currentChannelId,
-        personaLineageId,
-      ).filter((memory) => memory.serverId !== currentServerId);
-
-      otherChannelMemories = [...otherChannelMemories, ...crossServerUserMemories];
-    }
-
-    // Filter out private-channel STMs when the current channel is not private.
-    // Private channels isolate their STMs — they cannot leak into non-private channels.
-    // The reverse is allowed: non-private STMs can still appear in private channels.
-    // Also treat a thread as private when its parent channel is private.
-    // This guard is skipped entirely when stm_privacy_bypass is enabled by the server admin.
-    const privateChannelIds = tomoriState?.config.private_channel_ids ?? [];
-    const stmPrivacyBypass = tomoriState?.config.stm_privacy_bypass ?? false;
-    const isCurrentChannelPrivate =
-      privateChannelIds.includes(currentChannelId) ||
-      (currentParentChannelId != null && privateChannelIds.includes(currentParentChannelId));
-    if (!stmPrivacyBypass && !isCurrentChannelPrivate && privateChannelIds.length > 0) {
-      otherChannelMemories = otherChannelMemories.filter(
-        (memory) =>
-          !privateChannelIds.includes(memory.channelId) &&
-          !(memory.parentChannelId != null && privateChannelIds.includes(memory.parentChannelId)),
-      );
-    }
-
-    otherChannelMemories.sort((a, b) => b.lastUpdated - a.lastUpdated);
-
-    // 2. Limit to max number of other-channel memories (most recent first)
-    const limitedMemories = otherChannelMemories.slice(0, MAX_OTHER_CHANNEL_MEMORIES);
-
-    // 3. Build OTHER-CHANNEL MEMORIES context (Phase 2)
-    // Show summaries when available, fall back to crude conversations
-    if (limitedMemories.length > 0) {
-      let otherChannelText = "";
-
-      for (const memory of limitedMemories) {
-        const relativeTime = getRelativeTimestamp(memory.lastUpdated);
-        const isSameServerSharedMemory = currentServerId !== "DM" && memory.serverId === currentServerId;
-
-        // Determine channel reference (privacy-safe)
-        let channelReference: string;
-        if (memory.serverId === currentServerId) {
-          channelReference = formatDiscordChannelReference(
-            memory.channelId,
-            memory.channelName ? `#${memory.channelName}` : "another channel in this server",
-          );
-        } else {
-          channelReference = "a channel in another server";
-        }
-
-        // Show summary if available, otherwise show crude conversation
-        if (memory.summary) {
-          const memoryPrefix = isSameServerSharedMemory
-            ? isUserImpersonation
-              ? `[System: Recent conversation in ${channelReference} (${relativeTime}):\n${memory.summary}]\n\n`
-              : `[System: ${botName} remembers a recent conversation in ${channelReference} (${relativeTime}):\n${memory.summary}]\n\n`
-            : isUserImpersonation
-              ? `[System: Recent conversation with ${triggererName} in ${channelReference} (${relativeTime}):\n${memory.summary}]\n\n`
-              : `[System: ${botName} remembers a recent conversation with ${triggererName} in ${channelReference} (${relativeTime}):\n${memory.summary}]\n\n`;
-          otherChannelText += memoryPrefix;
-        } else {
-          const memoryPrefix = isSameServerSharedMemory
-            ? isUserImpersonation
-              ? `[System: Recent conversation in ${channelReference} (${relativeTime}):\n`
-              : `[System: ${botName} remembers a recent conversation in ${channelReference} (${relativeTime}):\n`
-            : isUserImpersonation
-              ? `[System: Recent conversation with ${triggererName} in ${channelReference} (${relativeTime}):\n`
-              : `[System: ${botName} remembers a recent conversation with ${triggererName} in ${channelReference} (${relativeTime}):\n`;
-          otherChannelText += memoryPrefix;
-
-          for (const msg of memory.messages) {
-            const speaker =
-              msg.speakerName ||
-              (msg.role === "user" ? (isSameServerSharedMemory ? "Someone" : triggererName) : botName);
-            otherChannelText += `${speaker}: "${msg.content}"\n`;
-          }
-
-          otherChannelText += "]\n\n";
-        }
-      }
-
-      if (otherChannelText) {
-        memoryItems.push({
-          role: "user",
-          parts: [
-            {
-              type: "text",
-              text: await convertMentions(
-                otherChannelText.trim(),
-                client,
-                currentServerId,
-                triggererName,
-                botName,
-                personalMemoriesEnabled,
-              ),
-            },
-          ],
-          metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
-        });
-      }
-    }
-
-    // 4. Build SAME-CHANNEL context (Phase 3)
-    // Only shown for tool-calling models
-    // - Summary (if exists): Goes with other memories (middle of context)
-    // - Create prompt (if no summary): Goes at end as instruction
-    // NOTE: STM tool instructions are suppressed for NovelAI — GLM 4.6's limited token
-    // budget (~2800 tokens) makes the update_short_term_memory tool impractical. The
-    // summary data itself is still included as context when available.
-    if (tomoriState?.llm?.has_tools) {
-      const isStmToolAvailable = tomoriState.llm.llm_provider !== "novelai" && !explicitLongTermMemoryIntent;
-
-      const sameChannelMemory =
-        currentServerId === "DM"
-          ? getShortTermMemoryForUserChannel(triggeringUserId, currentChannelId, tomoriState?.tomori_id)
-          : getShortTermMemoryForServerChannel(currentServerId, currentChannelId, tomoriState?.tomori_id);
-
-      if (sameChannelMemory?.summary) {
-        // EXISTING SUMMARY - Add to memoryItems (middle of context, with other memories)
-        const summaryText = isUserImpersonation
-          ? `[System: Short term memory for this ongoing conversation:\n${sameChannelMemory.summary}]`
-          : `[System: ${botName}'s short term memory for this ongoing conversation:\n${sameChannelMemory.summary}]`;
-
-        memoryItems.push({
-          role: "user",
-          parts: [
-            {
-              type: "text",
-              text: await convertMentions(
-                summaryText,
-                client,
-                currentServerId,
-                triggererName,
-                botName,
-                personalMemoriesEnabled,
-              ),
-            },
-          ],
-          metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
-        });
-
-        // Add the HINT immediately after the summary (not at the end)
-        // Only when the STM tool is available for this provider
-        if (isStmToolAvailable) {
-          const hintText = await expandPromptToolText(
-            "[System: HINT: Use the {short_term_memory_tool} tool to update this information AFTER you respond if the conversation has greatly changed its topic. Do NOT use {short_term_memory_tool} when a user explicitly asks you to remember/save/store something for future conversations; use {memory_tool} or {memory_update_tool} instead.]",
-            "[System: HINT: Use the update_short_term_memory tool to update this information AFTER you respond if the conversation has greatly changed its topic. Do NOT use update_short_term_memory when a user explicitly asks you to remember/save/store something for future conversations; use create_long_term_memory or update_long_term_memory instead.]",
-          );
-
-          memoryItems.push({
-            role: "user",
-            parts: [
-              {
-                type: "text",
-                text: await convertMentions(
-                  hintText,
-                  client,
-                  currentServerId,
-                  triggererName,
-                  botName,
-                  personalMemoriesEnabled,
-                ),
-              },
-            ],
-            metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
-          });
-        }
-      } else if (
-        isStmToolAvailable &&
-        sameChannelMemory &&
-        sameChannelMemory.messages.length >= MIN_MESSAGES_FOR_SUMMARY
-      ) {
-        // NO SUMMARY but enough messages - Create prompt at end
-        // Only when the STM tool is available for this provider
-        const createText = await expandPromptToolText(
-          "You currently do not have short term memory saved for this conversation. Use the {short_term_memory_tool} tool to create a short term memory about the current story or conversation's topic AFTER you respond in order to help you cross-reference this in different channels. Do NOT use {short_term_memory_tool} when a user explicitly asks you to remember/save/store something for future conversations; use {memory_tool} or {memory_update_tool} instead. Do NOT mention out loud that you are going to create a short term memory, always use the tool silently.",
-          "You currently do not have short term memory saved for this conversation. Use the update_short_term_memory tool to create a short term memory about the current story or conversation's topic AFTER you respond in order to help you cross-reference this in different channels. Do NOT use update_short_term_memory when a user explicitly asks you to remember/save/store something for future conversations; use create_long_term_memory or update_long_term_memory instead. Do NOT mention out loud that you are going to create a short term memory, always use the tool silently.",
-        );
-
-        createPromptText = await convertMentions(
-          createText,
-          client,
-          currentServerId,
-          triggererName,
-          botName,
-          personalMemoriesEnabled,
-        );
-      }
-      // If less than MIN_MESSAGES_FOR_SUMMARY, don't show any prompt (conversation too short)
-    }
-
-    return { memoryItems, createPromptText };
-  } catch (error) {
-    await log.error(
-      `[buildShortTermMemoryContext] Failed to build short-term memory context - triggeringUserId=${triggeringUserId}, currentChannelId=${currentChannelId}`,
-      error,
-      {
-        errorType: "SHORT_TERM_MEMORY_CONTEXT_ERROR",
-        metadata: { userDiscId: triggeringUserId, currentChannelId },
-      },
-    );
-    return { memoryItems: [], createPromptText: undefined };
-  }
-}
-
-// Month abbreviations for timestamp formatting (avoids locale-sensitive toLocaleString)
-const UTC_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
-
-/**
- * Format a millisecond duration as a human-readable relative time string.
- * @param diffMs - Time difference in milliseconds (positive = in the past)
- * @returns e.g. "5s ago", "3m ago", "2h ago", "4d ago", "2w ago"
- */
-export function formatRelativeTime(diffMs: number): string {
-  const seconds = Math.floor(diffMs / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  const weeks = Math.floor(days / 7);
-  return `${weeks}w ago`;
-}
-
-/**
- * Format a Discord message timestamp as a short inline string suitable for
- * embedding within an existing [System: ...] block (no outer wrapper).
- * @param createdAt - Unix timestamp in milliseconds (message.createdTimestamp)
- * @returns e.g. "Feb 28, 2026 14:32 UTC (3h ago)"
- */
-export function formatTimestampInline(createdAt: number): string {
-  const date = new Date(createdAt);
-  const diffMs = Math.max(0, Date.now() - createdAt);
-  const month = UTC_MONTHS[date.getUTCMonth()];
-  const day = date.getUTCDate();
-  const year = date.getUTCFullYear();
-  const hours = String(date.getUTCHours()).padStart(2, "0");
-  const minutes = String(date.getUTCMinutes()).padStart(2, "0");
-  return `${month} ${day}, ${year} ${hours}:${minutes} UTC (${formatRelativeTime(diffMs)})`;
-}
-
-/**
- * Format a Discord message timestamp as a combined absolute + relative annotation.
- * Relative time is computed at call time (i.e. when context is rebuilt), so it
- * reflects how long ago the message was sent at the moment the LLM reads it.
- * @param createdAt - Unix timestamp in milliseconds (message.createdTimestamp)
- * @returns System annotation, e.g. "[System: Sent Feb 28, 2026 14:32 UTC (3h ago)]"
- */
-export function formatMessageTimestamp(createdAt: number): string {
-  return `[System: Sent ${formatTimestampInline(createdAt)}]`;
-}
-
-function pushDialogueHistoryContextItem(
-  contextItems: StructuredContextItem[],
-  role: "user" | "model",
-  parts: ContextPart[],
-  messageId: string,
-  metadataTag?: ContextItemTag,
-): void {
-  if (parts.length === 0) {
-    return;
-  }
-
-  contextItems.push({
-    role,
-    parts,
-    metadataTag: metadataTag ?? ContextItemTag.DIALOGUE_HISTORY,
-    messageId,
-  });
-}
-
-async function buildConditioningContextItem(params: {
-  client: Client;
-  guildId: string;
-  serverId: number;
-  personaLineageId: number;
-  botName: string;
-  personalMemoriesEnabled: boolean;
-  rewardEnabled: boolean;
-  punishEnabled: boolean;
-}): Promise<StructuredContextItem | null> {
-  const sections: string[] = [];
-
-  const appendSection = async (conditioningType: ConditioningType, enabled: boolean): Promise<void> => {
-    if (!enabled) {
-      return;
-    }
-
-    const visibleGroups = (
-      await loadConditioningGroupsForPersona(params.serverId, params.personaLineageId, conditioningType)
-    )
-      .filter((group) => group.reasonText.trim().length > 0)
-      .slice(0, CONDITIONING_CONTEXT_MAX_GROUPS_PER_TYPE);
-
-    if (visibleGroups.length === 0) {
-      return;
-    }
-
-    const heading =
-      conditioningType === "reward"
-        ? `## Rewarded Behaviors\nHere are past things ${params.botName} did that got rewarded for. Strive to do them again:`
-        : `## Punished Behaviors\nHere are past things ${params.botName} did that got punished for. Avoid doing them again:`;
-
-    const lines = visibleGroups.map((group) => {
-      const users = group.userDiscIds.map((userDiscId) => `<@${userDiscId}>`).join(", ");
-      const action = getConditioningContextPastParticiple(conditioningType, group.actionKey);
-      const countSuffix = group.totalCount > 1 ? ` (${group.totalCount} times)` : "";
-      const actionTextSuffix = group.actionText ? ` with \`${group.actionText}\`` : "";
-      return `- [${params.botName} was ${action} by ${users}. Reason: \`${group.reasonText}\`${actionTextSuffix}]${countSuffix}`;
-    });
-
-    sections.push(`${heading}\n${lines.join("\n")}`);
-  };
-
-  await appendSection("reward", params.rewardEnabled);
-  await appendSection("punish", params.punishEnabled);
-
-  if (sections.length === 0) {
-    return null;
-  }
-
-  return {
-    role: "system",
-    parts: [
-      {
-        type: "text",
-        text: await convertMentions(
-          sections.join("\n\n"),
-          params.client,
-          params.guildId,
-          "User",
-          params.botName,
-          params.personalMemoriesEnabled,
-        ),
-      },
-    ],
-    metadataTag: ContextItemTag.KNOWLEDGE_SERVER_CONDITIONING,
-  };
-}
-
-/** Shared parameter type for both the routing wrapper and native context builder. */
-export interface BuildContextParams {
-  guildId: string;
-  serverName: string;
-  serverDescription: string | null;
-  simplifiedMessageHistory: SimplifiedMessageForContext[];
-  userList: string[];
-  channelDesc: string | null;
-  channelName: string;
-  channelId: string;
-  /** Parent channel ID when `channelId` is a thread — used for private/RP channel inheritance. */
-  parentChannelId?: string | null;
-  client: Client;
-  triggererName: string;
-  triggererUserId?: number;
-  emojiStrings?: string[];
-  tomoriNickname: string;
-  tomoriAttributes: string[];
-  tomoriConfig: TomoriConfigRow;
-  personaPrompt?: string | null;
-  personaLineageId?: number;
-  isDMChannel?: boolean;
-  mediaContextWindow?: number;
-  snapshot?: import("../../types/misc/context").RequestSnapshot;
-  preloadedEmojis?: ServerEmojiRow[] | null;
-  preloadedStickers?: ServerStickerRow[] | null;
-  isUserImpersonation?: boolean;
-  impersonatedUserId?: string;
-  impersonatedUserNickname?: string;
-  impersonatedUserPrompt?: string | null;
-  /** Matrix bridge users: Matrix user ID → stripped display name. */
-  matrixUsers?: Map<string, string>;
-  /** Synthetic participants surfaced as user-like entries. */
-  syntheticUsers?: Map<string, { displayName: string; type: "persona" | "webhook" }>;
-  includeTimestamps?: boolean;
-  seesImages?: boolean;
-  seesVideos?: boolean;
-  hasVisionTool?: boolean;
-  explicitLongTermMemoryIntent?: boolean;
-  /**
-   * When `true`, skips the `DEFAULT_SYSTEM_PROMPT` fallback in the humanizer block.
-   * Set by the routing wrapper when a SillyTavern preset is active and no custom
-   * `/sysprompt` has been configured — the preset fully controls the system prompt.
-   */
-  suppressDefaultSystemPrompt?: boolean;
-  /** Opaque message ID map — caller creates, context builder populates. */
-  messageIdMap?: MessageIdMap;
-}
-
-/** Return type for both buildContext variants. */
-type BuildContextResult = {
-  contextItems: StructuredContextItem[];
-  tailDirectives: string[];
-  lowerPriorityTailDirectives: string[];
-  uncensorDirective?: string;
-  /** Populated map of opaque keys → real Discord message IDs. */
-  messageIdMap: MessageIdMap;
-};
 
 /**
  * Build context with optional SillyTavern preset rearrangement.
@@ -2163,26 +1387,23 @@ async function buildContextNative({
     // Determine the triggering user ID (impersonation takes precedence)
     const actualTriggeringUserId = impersonatedUserId ?? snapshot?.triggererUserRow?.user_disc_id;
 
-    // Determine locale (from snapshot if available)
-    const actualLocale = snapshot?.triggererUserRow?.language_pref ?? "en-US";
-
     // Only build short-term memory context if we have a valid user ID
     if (actualTriggeringUserId) {
-      const { memoryItems, createPromptText } = await buildShortTermMemoryContext(
-        actualTriggeringUserId,
-        channelId,
-        guildId,
+      const { memoryItems, createPromptText } = await buildShortTermMemoryContext({
+        triggeringUserId: actualTriggeringUserId,
+        currentChannelId: channelId,
+        currentServerId: guildId,
         tomoriState,
-        actualLocale,
         triggererName,
         botName,
-        tomoriConfig.personal_memories_enabled,
+        personalMemoriesEnabled: tomoriConfig.personal_memories_enabled,
         client,
         isUserImpersonation,
         explicitLongTermMemoryIntent,
         toolPromptMacroResolver,
-        parentChannelId,
-      );
+        currentParentChannelId: parentChannelId,
+        convertMentions,
+      });
       // Push memory items now (goes in middle of context)
       // Includes: other-channel memories + same-channel summary (if exists)
       contextItems.push(...memoryItems);
@@ -2199,65 +1420,13 @@ async function buildContextNative({
   // Placed after short-term memory so that the stable prefix (system prompt, personality,
   // server knowledge, users, STM) stays cache-friendly — RAG results change per query
   // and would invalidate everything that follows if left higher in the prompt.
-  try {
-    if (isRagAvailable() && memoryGuard.getStatus() !== "critical" && tomoriState?.server_id) {
-      const queryText = getLatestUserQuery(simplifiedMessageHistory);
-      if (queryText && queryText.length >= DOCUMENT_QUERY_MIN_LENGTH) {
-        const [documentRow] =
-          tomoriState.tomori_id === null || tomoriState.tomori_id === undefined
-            ? await sql`
-							SELECT document_id
-							FROM documents
-							WHERE server_id = ${tomoriState.server_id}
-							  AND tomori_id IS NULL
-							LIMIT 1
-						`
-            : await sql`
-							SELECT document_id
-							FROM documents
-							WHERE server_id = ${tomoriState.server_id}
-							  AND (
-								tomori_id = ${tomoriState.tomori_id}
-								OR tomori_id IS NULL
-							  )
-							LIMIT 1
-						`;
-
-        if (documentRow?.document_id) {
-          const creds = await resolveCapabilityCredentials(tomoriState.server_id, "embedding", {
-            userId: triggererUserId ?? null,
-          });
-          const resolvedEmbeddingModelId =
-            getResolvedCapabilityModelId(creds, "embedding") ?? tomoriState.config.embedding_model_id;
-          const embeddingModel = resolvedEmbeddingModelId
-            ? await loadEmbeddingModelById(resolvedEmbeddingModelId)
-            : null;
-          if (embeddingModel) {
-            const chunks = await retrieveRelevantDocumentChunks({
-              serverId: tomoriState.server_id,
-              tomoriId: tomoriState.tomori_id ?? null,
-              query: queryText,
-              embeddingModel,
-              apiKey: creds.apiKey,
-              maxResults: DOCUMENT_MAX_RESULTS,
-              minSimilarity: DOCUMENT_MIN_SIMILARITY,
-            });
-
-            const documentContext = formatRetrievedChunksForPrompt(chunks);
-
-            if (documentContext) {
-              contextItems.push({
-                role: "user",
-                parts: [{ type: "text", text: documentContext }],
-                metadataTag: ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
-              });
-            }
-          }
-        }
-      }
-    }
-  } catch (error) {
-    log.warn("Failed to add server document context", error);
+  const documentContextItem = await buildServerDocumentContextItem({
+    tomoriState,
+    simplifiedMessageHistory,
+    triggererUserId,
+  });
+  if (documentContextItem) {
+    contextItems.push(documentContextItem);
   }
 
   // 7.6 Conditioning history (reward/punish)
@@ -2280,6 +1449,7 @@ async function buildContextNative({
         personalMemoriesEnabled: tomoriConfig.personal_memories_enabled,
         rewardEnabled: tomoriState.reward_conditioning_enabled,
         punishEnabled: tomoriState.punish_conditioning_enabled,
+        convertMentions,
       });
 
       if (conditioningItem) {
@@ -2824,158 +1994,4 @@ async function buildContextNative({
 
   log.info(`Built ${contextItems.length} structured context items for guild ${guildId}.`);
   return { contextItems, tailDirectives, lowerPriorityTailDirectives, uncensorDirective };
-}
-
-/**
- * Fetches a user's current presence and activity information
- * @param client - Discord client for presence lookups
- * @param userId - Discord user ID to fetch presence for
- * @param guildId - Discord guild ID where the user is active
- * @param preloadedMember - Optional preloaded GuildMember to avoid redundant fetches
- * @returns A formatted string describing user's status and activities
- */
-async function getUserPresenceDetails(
-  client: Client,
-  userId: string,
-  guildId: string,
-  preloadedMember?: import("discord.js").GuildMember | null,
-): Promise<string> {
-  try {
-    // 1. Try to get the guild and member objects
-    const guild = client.guilds.cache.get(guildId);
-    if (!guild) {
-      log.warn(`Guild ${guildId} not found in cache when fetching presence`);
-      return "Status unknown";
-    }
-
-    // 2. Use preloaded member if provided, otherwise fetch with presence data
-    // Preloaded member is provided for triggerer (no extra cost)
-    // For non-triggerer users, this only runs in development (production skips them entirely)
-    // Note: Fetching requires GUILD_PRESENCES intent to be enabled
-    let member: import("discord.js").GuildMember | null = null;
-    if (preloadedMember && preloadedMember.id === userId) {
-      member = preloadedMember;
-    } else {
-      member = await guild.members.fetch({ user: userId, force: true }).catch((error) => {
-        log.warn(`Failed to fetch member ${userId}: ${error}`);
-        return null;
-      });
-    }
-
-    if (!member) {
-      log.warn(`Member ${userId} not found in guild ${guild.name}`);
-      return "Offline or status unknown";
-    }
-
-    if (!member.presence) {
-      log.warn(`No presence data available for ${member.user.username} (${member.id})`);
-      return "Offline or status unknown";
-    }
-
-    // 3. Format the base status
-    const statusMap: Record<PresenceStatus, string> = {
-      online: "Online",
-      idle: "Away/Idle",
-      dnd: "Do Not Disturb",
-      offline: "Offline",
-      invisible: "Invisible",
-    };
-
-    const status = statusMap[member.presence.status] || "Status unknown";
-    let result = status;
-
-    // 4. Format activities if present
-    if (member.presence.activities && member.presence.activities.length > 0) {
-      const activityDetails = member.presence.activities.map((activity) => {
-        // Build activity description based on type
-        switch (activity.type) {
-          case 0: // Playing
-            return `Playing ${activity.name}${activity.details ? ` (${activity.details})` : ""}${getTimeSpent(activity.timestamps?.start, activity.timestamps?.end)}`;
-          case 1: // Streaming
-            return `Streaming ${activity.name}${getTimeSpent(activity.timestamps?.start, activity.timestamps?.end)}`;
-          case 2: // Listening
-            if (activity.name === "Spotify" && activity.details && activity.state) {
-              return `Listening to ${activity.details} by ${activity.state} on Spotify${getTimeSpent(activity.timestamps?.start, activity.timestamps?.end)}`;
-            }
-
-            if (activity.details && activity.state) {
-              return `Listening to ${activity.state} - ${activity.details} on ${activity.name}${getTimeSpent(activity.timestamps?.start, activity.timestamps?.end)}`;
-            }
-            return `Listening to ${activity.name}${getTimeSpent(activity.timestamps?.start, activity.timestamps?.end)}`;
-          case 3: // Watching
-            return `Watching ${activity.name}${getTimeSpent(activity.timestamps?.start, activity.timestamps?.end)}`;
-          case 4: // Custom Status
-            return activity.state || "Custom status";
-          case 5: // Competing
-            return `Competing in ${activity.name}${getTimeSpent(activity.timestamps?.start, activity.timestamps?.end)}`;
-          default:
-            return activity.name;
-        }
-      });
-
-      result += ` - ${activityDetails.join(", ")}`;
-      log.info(`Final presence string: "${result}"`);
-    } else {
-      log.info(`User ${member.user.username} has no activities`);
-    }
-
-    return result;
-  } catch (error) {
-    log.error(`Error getting presence for user ${userId}:`, error);
-    return "Status unknown";
-  }
-}
-
-/**
- * Formats time spent on an activity based on start and end timestamps
- * @param startTimestamp - The activity start timestamp (as Date or number)
- * @param endTimestamp - The activity end timestamp (as Date or number, optional)
- * @returns Formatted string with time duration (e.g., "2 hours, 15 minutes")
- */
-function getTimeSpent(startTimestamp?: Date | null | number, endTimestamp?: Date | null | number): string {
-  if (!startTimestamp) {
-    return "";
-  }
-
-  // Convert Date objects to timestamps if needed
-  const startTime =
-    startTimestamp instanceof Date ? startTimestamp.getTime() : typeof startTimestamp === "number" ? startTimestamp : 0;
-
-  // If no valid start time, return empty string
-  if (startTime === 0) {
-    return "";
-  }
-
-  // If no end timestamp is provided, use current time
-  const now = Date.now();
-  const endTime =
-    endTimestamp instanceof Date ? endTimestamp.getTime() : typeof endTimestamp === "number" ? endTimestamp : now;
-
-  // Calculate time difference in milliseconds
-  const timeDiff = endTime - startTime;
-
-  // Convert to hours, minutes, seconds
-  const seconds = Math.floor((timeDiff / 1000) % 60);
-  const minutes = Math.floor((timeDiff / (1000 * 60)) % 60);
-  const hours = Math.floor(timeDiff / (1000 * 60 * 60));
-
-  // Format the time spent string
-  let timeSpent = "";
-
-  if (hours > 0) {
-    timeSpent += `${hours} hour${hours !== 1 ? "s" : ""}`;
-  }
-
-  if (minutes > 0) {
-    if (timeSpent) timeSpent += ", ";
-    timeSpent += `${minutes} minute${minutes !== 1 ? "s" : ""}`;
-  }
-
-  if (seconds > 0 && hours === 0) {
-    // Only show seconds if less than an hour
-    if (timeSpent) timeSpent += ", ";
-    timeSpent += `${seconds} second${seconds !== 1 ? "s" : ""}`;
-  }
-
-  return timeSpent ? ` for ${timeSpent}` : "";
 }

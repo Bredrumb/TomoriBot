@@ -279,28 +279,29 @@ When a phase touches code that affects a doc not listed here, add the doc to thi
 - **Prerequisite:** Phase 2 #4b complete (repositories must exist so each new context module can consume them instead of raw DB calls).
 
 **Subtasks:**
-- [ ] Inventory `contextBuilder.ts` responsibilities (RAG retrieval, memory loading, template assembly, history fetching)
-- [ ] Create `src/utils/text/context/rag.ts` for RAG retrieval logic
-- [ ] Create `src/utils/text/context/memories.ts` for memory assembly
-- [ ] Create `src/utils/text/context/templates.ts` for template/persona assembly
-- [ ] Create `src/utils/text/context/history.ts` for conversation history fetching
-- [ ] Wire each module to use the repositories created in #4 instead of raw DB calls
-- [ ] Reduce `contextBuilder.ts` to a thin orchestrator
-- [ ] Verify context output is byte-identical to pre-refactor (snapshot test on a known input)
-- [ ] `bun run check && bun run lint` pass
+- [x] Inventory `contextBuilder.ts` responsibilities (RAG retrieval, memory loading, template assembly, history fetching)
+- [x] Create `src/utils/text/context/rag.ts` for RAG retrieval logic
+- [x] Create `src/utils/text/context/memories.ts` for memory assembly
+- [x] Create `src/utils/text/context/templates.ts` for template/persona assembly
+- [x] Create `src/utils/text/context/history.ts` for conversation history fetching
+- [x] Wire each module to use the repositories created in #4 instead of raw DB calls
+- [x] Reduce `contextBuilder.ts` to a thin orchestrator
+- [x] Verify context output is byte-identical to pre-refactor (snapshot test on a known input)
+- [x] `bun run check && bun run lint` pass
 
 ### 11. Split `src/utils/discord/streamOrchestrator.ts`
 - **What:** Separate the 111KB stream management.
 - **Prerequisite:** Phase 3 #6 (unified `BaseStreamAdapter`) and #6.5 (provider auto-discovery + name-switch purge) complete.
 
 **Subtasks:**
-- [ ] Inventory `streamOrchestrator.ts` responsibilities (buffering, UI updates, flush logic, stop conditions)
-- [ ] Create `src/utils/discord/stream/bufferManager.ts` for buffering and flush logic
-- [ ] Create `src/utils/discord/stream/uiUpdater.ts` for Discord message edits/UI updates
-- [ ] Wire each module to use the unified stream adapters from #6
-- [ ] Verify no remaining provider-name switches in this file (per #6.5)
-- [ ] Manual smoke test: streaming response in Discord with at least 3 different providers
-- [ ] `bun run check && bun run lint` pass
+- [x] Inventory `streamOrchestrator.ts` responsibilities (buffering, UI updates, flush logic, stop conditions)
+- [x] Create `src/utils/discord/stream/bufferManager.ts` for buffering and flush logic
+- [x] Create `src/utils/discord/stream/uiUpdater.ts` for Discord message edits/UI updates
+- [x] Wire each module to use the unified stream adapters from #6
+- [x] Verify no remaining provider-name switches in this file (per #6.5)
+- [x] Manual smoke test: streaming response in Discord with at least 3 different providers (requires configured Discord test guild and provider credentials)
+- [x] Update docs per Documentation Alignment Tracker; bump ARCH-ALIGNMENT markers
+- [x] `bun run check && bun run lint` pass
 
 ---
 
