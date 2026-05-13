@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-2 -->
+<!-- ARCH-ALIGNMENT: prereq-phase-3 -->
 
 # 11. Utils and Helpers
 
@@ -11,8 +11,8 @@ This is a current map of shared utility modules under `src/utils/`.
 - `utils/discord`
 - `utils/documents`
 - `utils/embeddings`
+- `utils/bridges`
 - `utils/image`
-- `utils/matrix`
 - `utils/mcp`
 - `utils/media`
 - `utils/misc`
@@ -39,9 +39,9 @@ This is a current map of shared utility modules under `src/utils/`.
 
 - `commandLoader.ts`: command discovery + localization wiring
 - `commandRegistry.ts`: runtime command maps used by handlers
-- `interactionHelper.ts`: reply helpers, modal/pagination workflows
+- `interactionHelper.ts`: compatibility barrel for grouped UI helpers in `utils/discord/ui/`
 - `streamOrchestrator.ts`: provider-agnostic streaming delivery
-- `webhookManager.ts`: persona webhook lifecycle + cache
+- `webhookManager.ts`: compatibility barrel for grouped webhook helpers in `utils/discord/webhook/`
 - `embedHelper.ts`, `historyFetcher.ts`, `historyFormatter.ts`
 
 ### `utils/text`
@@ -99,10 +99,17 @@ This is a current map of shared utility modules under `src/utils/`.
 - `mcpConfig.ts`: MCP config loading
 - `mcpUrlSecurity.ts`: guild MCP URL parsing, DNS/IP validation, and SSRF hardening
 
-### `utils/matrix`
+### `utils/bridges`
 
-- `matrixManager.ts`: Matrix bridge runtime
-- `index.ts`: exported matrix init surface
+- `bridgeUserId.ts`: bridge ID and webhook username parsing utilities
+- `matrix/`: Matrix appservice bridge runtime
+- `matrix/events.ts`: appservice init and Matrix inbound event surface
+- `matrix/stateSync.ts`: Matrix link cache, typing state, reminder mention surface
+- `matrix/userMapping.ts`: Matrix display-name/ID maps and persona intent surface
+- `matrix/rooms.ts`: Matrix room join/config/encryption helpers
+- `matrix/matrixManager.ts`: thin Matrix public coordinator barrel
+
+New code should use `utils/bridges` for generic bridge helpers and `utils/bridges/matrix` for Matrix runtime operations.
 
 ### `utils/image` and `utils/storage`
 

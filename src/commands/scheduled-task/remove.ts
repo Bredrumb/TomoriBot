@@ -21,7 +21,7 @@ import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { deleteReminderById } from "@/utils/db/repositories";
 import { formatTimeWithOffset, formatUTCOffset } from "@/utils/text/timezoneHelper";
-import { isBridgeUserId } from "@/utils/bridge";
+import { isBridgeUserId } from "@/utils/bridges";
 
 const MODAL_CUSTOM_ID = "scheduled_task_remove_modal";
 const REMINDER_SELECT_ID = "reminder_select";

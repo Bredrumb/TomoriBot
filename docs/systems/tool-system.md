@@ -1,13 +1,18 @@
-﻿# 9. Tool System
+﻿<!-- ARCH-ALIGNMENT: prereq-phase-3 -->
+
+# 9. Tool System
 
 TomoriBot exposes built-in tools, MCP tools, and REST-backed tools through one central registry.
 
 ## Core Components
 
-- Registry: `src/tools/toolRegistry.ts`
+- Registry and execution dispatch: `src/tools/toolRegistry.ts`
+- Availability filtering: `src/tools/availability.ts`
 - Startup loader: `src/tools/toolInitializer.ts`
 - Tool contracts: `src/types/tool/interfaces.ts`
 - Feature flag mapper: `src/utils/tools/featureFlagMapper.ts`
+
+`toolRegistry.ts` owns registration, lookup, MCP adapter registration, execution routing, execution history, and stats. It delegates provider/context filtering to `availability.ts`, including built-in feature flags, model capability requirements, Discord permission checks, global MCP function filtering, guild MCP collision handling, and image/voice slot pruning.
 
 ## Registration Model (Current)
 
@@ -178,6 +183,7 @@ Behavior notes:
 ## MCP Integration
 
 - MCP manager: `src/utils/mcp/mcpManager.ts`
+- MCP stdio transport: `src/utils/mcp/bannerFilteringStdioTransport.ts`
 - MCP registration handler: `src/events/clientReady/02_registerMCPs.ts`
 - MCP server definitions/configs: `src/tools/mcpServers/*`
 
@@ -188,6 +194,8 @@ Current MCP behavior notes:
 - Guild-registered remote MCP servers added via `/config mcp add` are validated before save and again before each connection attempt.
 - In production, guild MCP servers must use HTTPS and resolve only to publicly routable IP addresses.
 - Direct HTTP/SSE transports for guild MCP servers disable redirects so a validated URL cannot bounce to a different internal target later.
+- Stdio MCP startup uses `BannerFilteringStdioClientTransport`, which strips known banner-art lines from each child process stdout stream before JSON-RPC framing sees them.
+- The bot does not monkey-patch parent `process.stdout`; MCP output filtering is scoped to the child transport that owns the noisy server.
 
 ## Current MCP Servers
 
@@ -199,7 +207,7 @@ From `src/tools/mcpServers/`:
 
 ## Tool Filtering and Availability
 
-`ToolRegistry` filters tools by:
+`src/tools/availability.ts` filters tools by:
 
 - provider availability (`isAvailableFor` / context-aware checks)
 - declared model capability requirements (`requiredModelCapabilities`)

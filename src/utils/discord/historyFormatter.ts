@@ -8,7 +8,7 @@ import type { Message } from "discord.js";
 import { MessageType } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { isRefreshMarkerEmbed } from "@/utils/discord/embedDetection";
-import { stripBridgePrefix } from "@/utils/bridge";
+import { stripBridgePrefix } from "@/utils/bridges";
 import { isAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
 import { getCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { getCachedRenderedMarkdownTable } from "@/utils/text/markdownTableCache";

@@ -66,8 +66,8 @@ import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTermMemoryIntent";
 import { sql } from "@/utils/db/client";
 import { loadEmojiStickerCache } from "../../utils/cache/emojiStickerCache";
-import { getLinkedMatrixRoom, pendingMatrixReplyChannels, sendMatrixTypingIndicator } from "@/utils/matrix";
-import { isBridgeUserId, stripBridgePrefix, extractBridgeUserId, isMatrixBridgeWebhookUsername } from "@/utils/bridge";
+import { getLinkedMatrixRoom, pendingMatrixReplyChannels, sendMatrixTypingIndicator } from "@/utils/bridges/matrix";
+import { isBridgeUserId, stripBridgePrefix, extractBridgeUserId, isMatrixBridgeWebhookUsername } from "@/utils/bridges";
 import { isPersonaAllowedForTrigger } from "@/utils/db/personaAccess";
 
 import type { TomoriState, TomoriConfigRow, ServerEmojiRow, ServerStickerRow, FallbackEntry } from "@/types/db/schema";

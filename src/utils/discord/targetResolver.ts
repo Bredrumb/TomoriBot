@@ -2,7 +2,7 @@ import { ChannelType, type Guild, type GuildMember, type GuildTextBasedChannel }
 import { ContextItemTag, type ConversationUserReference, type StructuredContextItem } from "@/types/misc/context";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { loadUserRowsByNormalizedNickname } from "@/utils/db/repositories";
-import { isBridgeUserId } from "@/utils/bridge";
+import { isBridgeUserId } from "@/utils/bridges";
 
 export type ResolvedUserTarget = {
   status: "resolved";

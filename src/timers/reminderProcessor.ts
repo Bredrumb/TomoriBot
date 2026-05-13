@@ -14,8 +14,8 @@ import {
   sendWebhookMessageWithIdentity,
 } from "../utils/discord/webhookManager";
 import { ensureDiscordUserMention } from "../utils/discord/mentionHelper";
-import { isBridgeUserId } from "../utils/bridge";
-import { sendMatrixReminderMention } from "../utils/matrix";
+import { isBridgeUserId } from "../utils/bridges";
+import { sendMatrixReminderMention } from "../utils/bridges/matrix";
 
 function getNextRecurringReminderTime(
   reminderTime: Date,

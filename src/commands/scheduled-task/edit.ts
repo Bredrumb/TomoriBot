@@ -20,7 +20,7 @@ import {
 } from "@/utils/discord/interactionHelper";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { updateReminder } from "@/utils/db/repositories";
-import { isBridgeUserId } from "@/utils/bridge";
+import { isBridgeUserId } from "@/utils/bridges";
 import { validateFutureTime } from "@/utils/text/stringHelper";
 import { formatTimeWithOffset, formatUTCOffset } from "@/utils/text/timezoneHelper";
 import type { SelectOption } from "@/types/discord/modal";

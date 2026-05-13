@@ -4,7 +4,6 @@
  * Supports both flat subcommands and subcommand groups via folder structure
  */
 import path from "node:path";
-import { readdirSync } from "node:fs";
 import { log } from "../misc/logger";
 import {
   SlashCommandBuilder,
@@ -17,7 +16,6 @@ import {
 } from "discord.js";
 import type { SlashCommandSubcommandBuilder } from "discord.js";
 import type { UserRow, ErrorContext } from "../../types/db/schema";
-import getAllFiles from "../misc/ioHelper";
 import { localizer, getSupportedLocales } from "../text/localizer";
 
 /**
@@ -43,6 +41,25 @@ export type CommandExecutionMap = Map<string, Map<string, CommandExecuteFunction
  * Map for command cooldowns (category -> duration)
  */
 export type CommandCooldownMap = Map<string, number>;
+
+type LoadedCommandModule = {
+  configureSubcommand?: (subcommand: SlashCommandSubcommandBuilder) => SlashCommandSubcommandBuilder;
+  execute?: CommandExecuteFunction;
+  cooldown?: number;
+};
+
+type LoadedCommandFile = {
+  file: string;
+  module: LoadedCommandModule;
+};
+
+type DirectoryItem = {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  isFile: boolean;
+};
+
 // Categories that are completely restricted to guilds only
 const GUILD_ONLY_CATEGORIES: string[] = ["server", "conditioning"];
 // Categories that require manage permissions in guild context
@@ -142,6 +159,38 @@ function localizeWithAliases(locale: string, key: string): string {
   }
 
   return localizer(locale, key);
+}
+
+async function readVisibleDirectory(directory: string): Promise<DirectoryItem[]> {
+  const glob = new Bun.Glob("*");
+  const items: DirectoryItem[] = [];
+
+  for await (const name of glob.scan({ cwd: directory, onlyFiles: false })) {
+    if (name.startsWith(".")) continue;
+
+    const itemPath = path.join(directory, name);
+    const stat = await Bun.file(itemPath).stat();
+    items.push({
+      name,
+      path: itemPath,
+      isDirectory: stat.isDirectory(),
+      isFile: stat.isFile(),
+    });
+  }
+
+  return items;
+}
+
+async function getCommandDirectories(directory: string): Promise<string[]> {
+  const items = await readVisibleDirectory(directory);
+  return items.filter((item) => item.isDirectory).map((item) => item.path);
+}
+
+async function getCommandFiles(directory: string): Promise<string[]> {
+  const items = await readVisibleDirectory(directory);
+  return items
+    .filter((item) => item.isFile && (item.name.endsWith(".ts") || item.name.endsWith(".js")))
+    .map((item) => item.path);
 }
 
 // Note: Individual subcommand restrictions are no longer needed.
@@ -271,7 +320,7 @@ export async function loadCommandData(): Promise<{
     const availableLocales = getSupportedLocales().filter((locale) => locale !== "en-US");
     // 1. Get all command category directories
     const commandsPath = path.join(process.cwd(), "src", "commands");
-    const categoryDirs = getAllFiles(commandsPath, true);
+    const categoryDirs = await getCommandDirectories(commandsPath);
 
     // 2. Process each category directory
     for (const categoryDir of categoryDirs) {
@@ -321,29 +370,26 @@ export async function loadCommandData(): Promise<{
       }
 
       // 4. Get all items (files and directories) in this category
-      const items = readdirSync(categoryDir, { withFileTypes: true });
+      const items = await readVisibleDirectory(categoryDir);
 
       // 5. Process each item (file or directory)
       for (const item of items) {
-        // Skip hidden files/directories
-        if (item.name.startsWith(".")) continue;
-
         const itemPath = path.join(categoryDir, item.name);
 
         // 6. Handle subcommand groups (directories)
-        if (item.isDirectory()) {
+        if (item.isDirectory) {
           const groupName = item.name;
           log.info(`Processing subcommand group: ${categoryName}/${groupName}`);
 
           try {
             // Get all command files in this group
-            const groupCommandFiles = getAllFiles(itemPath);
+            const groupCommandFiles = await getCommandFiles(itemPath);
 
             // Pre-load all command modules asynchronously to support top-level await
-            const loadedModules: Array<{ file: string; module: any }> = [];
+            const loadedModules: LoadedCommandFile[] = [];
             for (const commandFile of groupCommandFiles) {
               try {
-                const commandModule = await import(commandFile);
+                const commandModule = (await import(commandFile)) as LoadedCommandModule;
                 loadedModules.push({ file: commandFile, module: commandModule });
               } catch (error) {
                 const context: ErrorContext = {
@@ -387,11 +433,13 @@ export async function loadCommandData(): Promise<{
                     continue;
                   }
 
+                  const configureSubcommand = commandModule.configureSubcommand;
+                  const execute = commandModule.execute;
                   let subcommandName = "";
 
                   // Add subcommand to group
                   group.addSubcommand((subcommand: SlashCommandSubcommandBuilder) => {
-                    const configuredSubcommand = commandModule.configureSubcommand(subcommand);
+                    const configuredSubcommand = configureSubcommand(subcommand);
                     subcommandName = configuredSubcommand.name;
 
                     // Apply subcommand localizations
@@ -414,7 +462,7 @@ export async function loadCommandData(): Promise<{
 
                   // Store execute function with group.subcommand format
                   const executionKey = `${groupName}.${subcommandName}`;
-                  executionMap.get(categoryName)?.set(executionKey, commandModule.execute);
+                  executionMap.get(categoryName)?.set(executionKey, execute);
 
                   // Store cooldown if defined
                   if (commandModule.cooldown && typeof commandModule.cooldown === "number") {
@@ -450,12 +498,12 @@ export async function loadCommandData(): Promise<{
           }
         }
         // 7. Handle flat subcommands (direct .ts files)
-        else if (item.isFile() && itemPath.endsWith(".ts")) {
+        else if (item.isFile && itemPath.endsWith(".ts")) {
           const commandFile = itemPath;
 
           try {
             // Import the command module
-            const commandModule = await import(commandFile);
+            const commandModule = (await import(commandFile)) as LoadedCommandModule;
 
             // Validate exports: must have configureSubcommand and execute
             if (!commandModule.configureSubcommand || !commandModule.execute) {
@@ -463,13 +511,15 @@ export async function loadCommandData(): Promise<{
               continue;
             }
 
+            const configureSubcommand = commandModule.configureSubcommand;
+            const execute = commandModule.execute;
             // Use a temporary variable to store the subcommand name
             let subcommandName = "";
 
             // Add the subcommand to the category builder
             categoryBuilder.addSubcommand((subcommand: SlashCommandSubcommandBuilder) => {
               // Call the module's configureSubcommand function and capture its result
-              const configuredSubcommand = commandModule.configureSubcommand(subcommand);
+              const configuredSubcommand = configureSubcommand(subcommand);
               // Get the name that was set
               subcommandName = configuredSubcommand.name;
 
@@ -487,7 +537,7 @@ export async function loadCommandData(): Promise<{
             }
 
             // Store the execute function in the map
-            executionMap.get(categoryName)?.set(subcommandName, commandModule.execute);
+            executionMap.get(categoryName)?.set(subcommandName, execute);
 
             // Store cooldown if defined (optional feature)
             if (commandModule.cooldown && typeof commandModule.cooldown === "number") {

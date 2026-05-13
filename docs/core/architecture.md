@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-2 -->
+<!-- ARCH-ALIGNMENT: prereq-phase-3 -->
 
 # 3. Architecture Overview
 
@@ -78,7 +78,7 @@ chat pipeline
 
 ## Runtime Extensions
 
-- Optional Matrix bridge: `src/utils/matrix/*`
+- Optional bridge runtimes: `src/utils/bridges/*` (`src/utils/bridges/matrix/*` for Matrix)
 - Optional production health endpoint: `127.0.0.1:3000/health`
 - Optional pg_cron scheduling for cooldown cleanup
 - Shared in-app scheduled work coordinator for reminder delivery and random triggers

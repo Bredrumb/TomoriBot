@@ -1,5 +1,5 @@
 import { EmbedBuilder, type Message, type Webhook } from "discord.js";
-import { stripBridgePrefix } from "@/utils/bridge";
+import { stripBridgePrefix } from "@/utils/bridges";
 import { localizer } from "@/utils/text/localizer";
 import { sendWebhookMessageWithIdentity, type ResolvedWebhookIdentity } from "@/utils/discord/webhookManager";
 

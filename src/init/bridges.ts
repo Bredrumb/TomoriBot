@@ -10,7 +10,7 @@ import { log } from "@/utils/misc/logger";
 export async function initBridges(client: Client): Promise<void> {
   log.section("Initializing Matrix Bridge...");
   try {
-    const { initializeMatrixClient } = await import("@/utils/matrix");
+    const { initializeMatrixClient } = await import("@/utils/bridges/matrix");
     await initializeMatrixClient(client);
   } catch (error) {
     // Extract message/stack before passing to logger — the bridge error object

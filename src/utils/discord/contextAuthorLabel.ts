@@ -2,7 +2,7 @@ import type { GuildMember, Message } from "discord.js";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { loadUserRow, isBlacklisted } from "@/utils/db/repositories";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
-import { stripBridgePrefix } from "@/utils/bridge";
+import { stripBridgePrefix } from "@/utils/bridges";
 import { log } from "@/utils/misc/logger";
 
 type ResolveContextAuthorLabelOptions = {

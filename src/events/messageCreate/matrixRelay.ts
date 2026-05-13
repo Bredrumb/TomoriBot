@@ -26,7 +26,7 @@ import {
   sendAttachmentToMatrixRoom,
   MATRIX_MAX_ATTACHMENT_BYTES,
   getMatrixIdForDisplayName,
-} from "@/utils/matrix";
+} from "@/utils/bridges/matrix";
 import { log } from "@/utils/misc/logger";
 import type { TomoriState } from "@/types/db/schema";
 import { resolvePersonaAvatarPublicUrl } from "@/utils/storage/avatarStorage";

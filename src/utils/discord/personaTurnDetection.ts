@@ -1,6 +1,6 @@
 import type { Message } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
-import { isMatrixBridgeWebhookUsername } from "@/utils/bridge";
+import { isMatrixBridgeWebhookUsername } from "@/utils/bridges";
 
 export interface PersonaTurnBlockResult {
   blockMessages: Message[];

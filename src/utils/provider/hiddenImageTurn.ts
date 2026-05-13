@@ -26,7 +26,7 @@ import type { ToolContext } from "@/types/tool/interfaces";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { FunctionCall } from "@/types/provider/interfaces";
 import { decryptApiKey } from "@/utils/security/crypto";
-import { stripBridgePrefix } from "@/utils/bridge";
+import { stripBridgePrefix } from "@/utils/bridges";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 

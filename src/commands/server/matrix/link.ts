@@ -23,7 +23,7 @@ import {
   isRoomEncrypted,
   invalidateMatrixLinkCache,
   sendMatrixLinkedSetupNotice,
-} from "@/utils/matrix";
+} from "@/utils/bridges/matrix";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";

@@ -23,7 +23,7 @@ const _require = createRequire(import.meta.url);
 const { Bridge, AppServiceRegistration } = _require("matrix-appservice-bridge") as typeof MatrixAppserviceBridge;
 import { EmbedBuilder, MessageFlags, type BaseGuildTextChannel, type Client, type TextBasedChannel } from "discord.js";
 import type { ReminderRow } from "@/types/db/schema";
-import { isBridgeUserId } from "@/utils/bridge";
+import { isBridgeUserId } from "@/utils/bridges";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { sql } from "@/utils/db/client";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";

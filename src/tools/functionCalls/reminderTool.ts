@@ -7,7 +7,7 @@ import { log } from "../../utils/misc/logger";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { validateFutureTime, formatTimeRemaining } from "../../utils/text/stringHelper";
 import { parseTimeWithOffset, formatUTCOffset, formatTimeWithOffset } from "../../utils/text/timezoneHelper";
-import { isMatrixBridgeWebhookUsername } from "../../utils/bridge";
+import { isMatrixBridgeWebhookUsername } from "../../utils/bridges";
 import { resolveChannelTarget, resolveUserTarget } from "@/utils/discord/targetResolver";
 
 /**

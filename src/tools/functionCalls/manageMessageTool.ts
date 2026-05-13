@@ -11,7 +11,7 @@ import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { getKnownPersonaSpeakerNames, stripLeadingKnownSpeakerPrefixes } from "@/utils/discord/modelAuthoredText";
 import { resolveManagedWebhookForChannel } from "@/utils/discord/webhookManager";
 import { log } from "@/utils/misc/logger";
-import { isMatrixBridgeWebhookUsername, stripBridgePrefix } from "@/utils/bridge";
+import { isMatrixBridgeWebhookUsername, stripBridgePrefix } from "@/utils/bridges";
 
 const DISCORD_ID_PATTERN = /^\d{17,20}$/;
 const MAX_FUZZY_DISTANCE = 1000n;

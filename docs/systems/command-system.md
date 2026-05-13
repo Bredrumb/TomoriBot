@@ -1,4 +1,6 @@
-﻿# 7. Command System
+<!-- ARCH-ALIGNMENT: prereq-phase-3 -->
+
+# 7. Command System
 
 TomoriBot uses Discord slash commands loaded dynamically from `src/commands/`.
 
@@ -14,6 +16,40 @@ Flow:
 3. `handleCommands.ts` resolves category + group + subcommand.
 4. Category cooldown is checked/set in `cooldowns` table (`COMMAND_CATEGORY`).
 5. Target `execute()` is called with `(client, interaction, userData, locale)`.
+
+`commandLoader.ts` is an ESM-only loader. It uses async directory reads while building slash-command registration data and dynamically imports command modules so command files can use top-level await. Do not add `require`, `module.exports`, or synchronous directory traversal to command discovery.
+
+## Discord UI Helper Layout
+
+The public compatibility import remains:
+
+- `src/utils/discord/interactionHelper.ts`
+
+New code should prefer the grouped UI modules when the call site has a clear scope:
+
+- `src/utils/discord/ui/buttons.ts` - confirmation prompts, button status updates, and modal-submit acknowledgement helpers
+- `src/utils/discord/ui/embeds.ts` - info, summary, and Components V2 status replies
+- `src/utils/discord/ui/errors.ts` - reusable status/error update helpers
+- `src/utils/discord/ui/modals.ts` - raw, legacy, and paginated modal prompts
+- `src/utils/discord/ui/pagination.ts` - choice, persona, and status pagination helpers
+
+These groups keep command UI behavior discoverable without forcing existing commands to migrate all imports in one change.
+
+## Webhook Helper Layout
+
+The public compatibility import remains:
+
+- `src/utils/discord/webhookManager.ts`
+
+New code should prefer the grouped webhook modules:
+
+- `src/utils/discord/webhook/lifecycle.ts` - shared/persona webhook creation, lookup, deletion, and avatar updates
+- `src/utils/discord/webhook/personaDispatch.ts` - persona/webhook send paths
+- `src/utils/discord/webhook/identity.ts` - persona avatar and webhook identity resolution
+- `src/utils/discord/webhook/fallback.ts` - managed-webhook restore and transcript fallback behavior
+- `src/utils/discord/webhook/cache.ts` - webhook cache metrics and invalidation helpers
+
+Keep webhook cache invalidation in the same success path as the write or delete that changes webhook state.
 
 ## Command File Contract
 
