@@ -1,3 +1,5 @@
+<!-- ARCH-ALIGNMENT: prereq-phase-5 -->
+
 # TomoriBot Docs Index
 
 This folder is organized by topic instead of numeric filenames.
@@ -68,6 +70,7 @@ This folder is organized by topic instead of numeric filenames.
 - [`guides/coding-standards.md`](./guides/coding-standards.md)
 - [`guides/local-grafana-setup.md`](./guides/local-grafana-setup.md)
 - [`guides/testing-db-changes.md`](./guides/testing-db-changes.md)
+- [`guides/testing-chat-changes.md`](./guides/testing-chat-changes.md)
 
 ## Refactor Notes
 

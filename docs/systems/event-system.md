@@ -1,3 +1,5 @@
+<!-- ARCH-ALIGNMENT: prereq-phase-5-#13 -->
+
 # 6. Event System
 
 TomoriBot routes Discord events through one dispatcher: `src/handlers/eventHandler.ts`.
@@ -5,7 +7,7 @@ TomoriBot routes Discord events through one dispatcher: `src/handlers/eventHandl
 ## Dispatcher Model
 
 - `eventFolderMap` maps Discord event names -> folder names under `src/events/`.
-- All files in the mapped folder are executed in lexical order.
+- Direct `.ts` files in the mapped folder are eagerly imported at startup, cached by Discord event name, and executed in lexical order.
 - Multiple Discord events can map to one folder (emoji/sticker fan-in).
 
 ## Current Event Folders
@@ -36,9 +38,11 @@ TomoriBot routes Discord events through one dispatcher: `src/handlers/eventHandl
 
 ### Message event
 
-`messageCreate` -> `events/messageCreate/*.ts` -> chat/context/tool/stream pipeline.
+`messageCreate` -> `events/messageCreate/tomoriChat.ts` -> `utils/chat/invocation.ts` -> temporary `utils/chat/turnRunner.ts` -> chat/context/tool/stream pipeline.
 
-Current message preprocessing in `tomoriChat.ts` enriches fetched history before `buildContext()`:
+The dispatcher shallow-scans direct `.ts` files under `src/events/messageCreate/`, so helper modules for chat orchestration must not live beside `tomoriChat.ts`. Subfolders under `src/events/<eventName>/` are not scanned. Chat-specific helpers belong under `src/utils/chat/`; invocation normalization lives in `src/utils/chat/invocation.ts`, reply/no-reply admission lives in `src/utils/chat/admission.ts`, channel locks/queues live in `src/utils/chat/channelQueue.ts`, trigger/reply/persona-routing decisions live in `src/utils/chat/triggerProcessor.ts`, webhook/embed emission helpers live in `src/utils/chat/responseEmitter.ts`, and chat-only utility helpers live under `src/utils/chat/helpers/`.
+
+Current message preprocessing in `src/utils/chat/turnRunner.ts` enriches fetched history before `buildContext()`:
 - reply-reference system annotations (opaque `ref_N` handle + full quoted content)
 - forwarded-message snapshot annotations (forwarder + original author + source channel + quoted content)
 - media extraction and opaque `media_N` source-message handles for message-targeted tools
@@ -60,7 +64,7 @@ Current message preprocessing in `tomoriChat.ts` enriches fetched history before
 
 - registers the joining Discord user in the database
 - optionally triggers a configured welcome message in the server's welcome channel
-- welcome greetings reuse the normal `tomoriChat.ts` manual-trigger pipeline, including persona selection, queueing, and mention fallback checks
+- welcome greetings reuse the normal chat coordinator manual-trigger pipeline, including persona selection, queueing, and mention fallback checks
 
 ## Adding a New Event Handler
 

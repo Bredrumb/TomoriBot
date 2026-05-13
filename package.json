@@ -27,6 +27,7 @@
     "audit-keys": "bun run scripts/maintenance/auditKeyVersions.ts",
     "audit-legacy-provider-paths": "bun run scripts/maintenance/cleanupLegacyProviderArtifacts.ts",
     "cleanup-legacy-provider-paths": "bun run scripts/maintenance/cleanupLegacyProviderArtifacts.ts --apply",
+    "audit-refactor-integrity": "bun run scripts/maintenance/checkRefactorIntegrity.ts",
     "rotate-keys": "bun run scripts/maintenance/rotateAllKeys.ts",
     "check-keys": "bun run scripts/maintenance/checkKeys.ts",
     "setup:tokenizers": "bun run scripts/maintenance/downloadTokenizers.ts",

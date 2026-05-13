@@ -18,7 +18,7 @@
 
 import type { Client, Embed, Message } from "discord.js";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { isSelfTriggerMessage } from "./tomoriChat";
+import { isSelfTriggerMessage } from "@/utils/chat/triggerProcessor";
 import {
   isMatrixConfigured,
   getLinkedMatrixRoom,

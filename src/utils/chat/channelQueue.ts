@@ -1,0 +1,709 @@
+import type { Client, Message } from "discord.js";
+import type { ForcedMention } from "@/types/discord/mentions";
+import type { TomoriState } from "@/types/db/schema";
+import type { StructuredContextItem } from "@/types/misc/context";
+import type { StreamingContext } from "@/types/tool/interfaces";
+import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
+import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
+import { log } from "@/utils/misc/logger";
+import type { TextQuotaCheckResult } from "@/utils/quota/textQuotaManager";
+import { localizer } from "@/utils/text/localizer";
+import { isSelfTriggerMessage } from "@/utils/chat/triggerProcessor";
+import type { ManualTriggerInvoker, TextQuotaSource } from "@/utils/chat/invocation";
+import type { LockedChatTurn, RunnableChatAdmission } from "@/utils/chat/types";
+
+function parseIntegerEnvFlag(value: string | undefined, defaultValue: number, minimum: number): number {
+  if (typeof value !== "string") return defaultValue;
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed)) return defaultValue;
+  return Math.max(minimum, parsed);
+}
+
+export const CHANNEL_LOCK_TIMEOUT_MS = parseIntegerEnvFlag(process.env.CHANNEL_LOCK_TIMEOUT_MS, 180000, 10000);
+const TEXT_QUOTA_TRIGGER_TTL_MS = 10 * 60 * 1000;
+const DISCORD_TYPING_KEEPALIVE_INTERVAL_MS = parseIntegerEnvFlag(
+  process.env.DISCORD_TYPING_KEEPALIVE_INTERVAL_MS,
+  8000,
+  1000,
+);
+export const MAX_FOLLOW_UP_INTERRUPTS = Number.parseInt(process.env.MAX_FOLLOW_UP_INTERRUPTS || "3", 10);
+const SELF_REPLY_CHAIN_TTL_MS = 30 * 60 * 1000;
+const SELF_REPLY_SUPPRESSION_TTL_MS = 5000;
+
+export interface TextQuotaTriggerState {
+  serverId: number;
+  userDiscId: string;
+  consumed: boolean;
+  createdAt: number;
+}
+
+export type QueuedMessage = {
+  message: Message;
+  isManuallyTriggered?: boolean;
+  forceReason?: boolean;
+  reasoningQuery?: string;
+  llmOverrideCodename?: string;
+  isStopResponse?: boolean;
+  isFollowUp?: boolean;
+  selectedPersonaId?: number;
+  isPersonaJob?: boolean;
+  isUserImpersonation?: boolean;
+  impersonatedUserId?: string;
+  textQuotaSource?: TextQuotaSource;
+  textQuotaTriggerKey?: string;
+  textQuotaUserDiscId?: string;
+  manualSystemPrompt?: string;
+  manualPrefill?: string;
+  injectedContextItems?: StructuredContextItem[];
+  forcedMentions?: ForcedMention[];
+  manualTriggerInvoker?: ManualTriggerInvoker;
+  manualStreamingContextOverrides?: Pick<
+    StreamingContext,
+    "disableCrossChannelMessage" | "disableRecentMessageReplyTool"
+  >;
+};
+
+export interface ChannelLockEntry {
+  isLocked: boolean;
+  lockedAt: number;
+  currentMessageId?: string;
+  serverDiscId: string;
+  userDiscId?: string;
+  currentIsPersonaJob?: boolean;
+  activePersonaId?: number;
+  activeIsUserImpersonation?: boolean;
+  activeImpersonatedUserId?: string;
+  followUpEligible?: boolean;
+  isInToolCallChain?: boolean;
+  isCommandTriggered?: boolean;
+  typingKeepaliveTimer: NodeJS.Timeout | null;
+  followUpCount: number;
+  messageQueue: QueuedMessage[];
+}
+
+interface SelfReplyChainState {
+  triggerCount: number;
+  lastWasSelf: boolean;
+  updatedAt: number;
+  lastRespondedPersonaId: number | null;
+  originUserDiscId: string | null;
+}
+
+export const channelLocks = new Map<string, ChannelLockEntry>();
+export const textQuotaTriggerStates = new Map<string, TextQuotaTriggerState>();
+export const selfReplySuppressionUntil = new Map<string, number>();
+
+const selfReplyChainStates = new Map<string, SelfReplyChainState>();
+
+export async function runWithChannelLock<T>(
+  admission: RunnableChatAdmission,
+  callback: (lockedTurn: LockedChatTurn) => Promise<T>,
+): Promise<T> {
+  const lockEntry = channelLocks.get(admission.message.channel.id);
+  return await callback({
+    admission,
+    channelId: admission.message.channel.id,
+    lockedAt: lockEntry?.lockedAt ?? Date.now(),
+    queueDepth: lockEntry?.messageQueue.length ?? 0,
+  });
+}
+
+export function isActiveNaturalStopTurn(channelId: string, userDiscId: string): boolean {
+  const lockEntry = channelLocks.get(channelId);
+  return Boolean(
+    lockEntry?.isLocked &&
+      Date.now() - lockEntry.lockedAt <= CHANNEL_LOCK_TIMEOUT_MS &&
+      lockEntry.userDiscId === userDiscId,
+  );
+}
+
+export function getOrCreateChannelLockEntry(channelId: string, serverDiscId: string): ChannelLockEntry {
+  const existing = channelLocks.get(channelId);
+  if (existing) {
+    return existing;
+  }
+
+  const fresh: ChannelLockEntry = {
+    isLocked: false,
+    lockedAt: 0,
+    currentMessageId: undefined,
+    serverDiscId,
+    userDiscId: undefined,
+    currentIsPersonaJob: false,
+    typingKeepaliveTimer: null,
+    followUpCount: 0,
+    messageQueue: [],
+  };
+  channelLocks.set(channelId, fresh);
+  return fresh;
+}
+
+export function releaseStaleChannelLockIfExpired(channelId: string, lockEntry: ChannelLockEntry): boolean {
+  if (!lockEntry.isLocked || Date.now() - lockEntry.lockedAt <= CHANNEL_LOCK_TIMEOUT_MS) {
+    return false;
+  }
+
+  log.warn(
+    `Channel ${channelId} lock is stale (locked since ${new Date(lockEntry.lockedAt).toISOString()} for message ${lockEntry.currentMessageId}). Forcibly releasing. Previous queue length: ${lockEntry.messageQueue.length}`,
+  );
+  stopDiscordTypingKeepalive(channelId, lockEntry, "stale_lock_release");
+  lockEntry.isLocked = false;
+  lockEntry.userDiscId = undefined;
+  lockEntry.currentIsPersonaJob = false;
+  lockEntry.activePersonaId = undefined;
+  lockEntry.activeIsUserImpersonation = undefined;
+  lockEntry.activeImpersonatedUserId = undefined;
+  lockEntry.followUpEligible = false;
+  lockEntry.isInToolCallChain = false;
+  lockEntry.isCommandTriggered = false;
+  lockEntry.messageQueue = [];
+  return true;
+}
+
+export function acquireChannelLockForTurn(
+  lockEntry: ChannelLockEntry,
+  args: {
+    messageId: string;
+    userDiscId: string;
+    isPersonaJob: boolean;
+    selectedPersonaId?: number;
+    isCommandTriggered: boolean;
+  },
+): void {
+  lockEntry.isLocked = true;
+  lockEntry.lockedAt = Date.now();
+  lockEntry.currentMessageId = args.messageId;
+  lockEntry.userDiscId = args.userDiscId;
+  lockEntry.currentIsPersonaJob = args.isPersonaJob;
+  lockEntry.activePersonaId = args.selectedPersonaId;
+  lockEntry.activeIsUserImpersonation = undefined;
+  lockEntry.activeImpersonatedUserId = undefined;
+  lockEntry.followUpEligible = false;
+  lockEntry.isInToolCallChain = false;
+  lockEntry.isCommandTriggered = args.isCommandTriggered;
+}
+
+export function setActiveChannelTurnState(
+  lockEntry: ChannelLockEntry,
+  args: {
+    activePersonaId?: number;
+    followUpEligible: boolean;
+    isUserImpersonation?: boolean;
+    impersonatedUserId?: string;
+  },
+): void {
+  lockEntry.activePersonaId = args.activePersonaId;
+  lockEntry.followUpEligible = args.followUpEligible;
+  lockEntry.activeIsUserImpersonation = args.isUserImpersonation || undefined;
+  lockEntry.activeImpersonatedUserId = args.impersonatedUserId;
+}
+
+export function resetChannelFollowUpCount(channelId: string): void {
+  const lockEntry = channelLocks.get(channelId);
+  if (lockEntry) {
+    lockEntry.followUpCount = 0;
+  }
+}
+
+export function incrementChannelFollowUpCount(channelId: string): void {
+  const lockEntry = channelLocks.get(channelId);
+  if (lockEntry) {
+    lockEntry.followUpCount++;
+  }
+}
+
+export function setChannelToolCallChainActive(lockEntry: ChannelLockEntry | undefined, isActive: boolean): void {
+  if (lockEntry) {
+    lockEntry.isInToolCallChain = isActive;
+  }
+}
+
+export function queuePersonaJobsAtFront(args: {
+  lockEntry: ChannelLockEntry;
+  message: Message;
+  personaJobs: Array<{ personaName: string; selectedPersonaId: number }>;
+  forceReason?: boolean;
+  reasoningQuery?: string;
+  llmOverrideCodename?: string;
+  textQuotaSource: TextQuotaSource;
+  textQuotaTriggerKey: string;
+  textQuotaUserDiscId: string;
+  injectedContextItems?: StructuredContextItem[];
+  forcedMentions?: ForcedMention[];
+}): void {
+  for (let i = args.personaJobs.length - 1; i >= 0; i--) {
+    const queuedPersona = args.personaJobs[i];
+    args.lockEntry.messageQueue.unshift({
+      message: args.message,
+      isManuallyTriggered: true,
+      forceReason: args.forceReason,
+      reasoningQuery: args.reasoningQuery,
+      llmOverrideCodename: args.llmOverrideCodename,
+      selectedPersonaId: queuedPersona.selectedPersonaId,
+      isPersonaJob: true,
+      textQuotaSource: args.textQuotaSource,
+      textQuotaTriggerKey: args.textQuotaTriggerKey,
+      textQuotaUserDiscId: args.textQuotaUserDiscId,
+      injectedContextItems: args.injectedContextItems,
+      forcedMentions: args.forcedMentions,
+    });
+  }
+
+  log.info(
+    `Queued ${args.personaJobs.length} persona job(s) for message ${args.message.id}: ${args.personaJobs
+      .map((personaJob) => personaJob.personaName)
+      .join(", ")}`,
+  );
+}
+
+export function queueStopResponseAtFront(args: {
+  channelId: string;
+  message: Message;
+  llmOverrideCodename?: string;
+  selectedPersonaId?: number;
+  textQuotaTriggerKey: string;
+}): void {
+  const lockEntry = channelLocks.get(args.channelId);
+  if (!lockEntry) {
+    return;
+  }
+
+  lockEntry.messageQueue.unshift({
+    message: args.message,
+    isManuallyTriggered: true,
+    forceReason: false,
+    llmOverrideCodename: args.llmOverrideCodename,
+    isStopResponse: true,
+    selectedPersonaId: args.selectedPersonaId,
+    textQuotaSource: "system",
+    textQuotaTriggerKey: args.textQuotaTriggerKey,
+  });
+
+  log.info(
+    `Stop response queued after stream completion for channel ${args.channelId}. Queue size: ${lockEntry.messageQueue.length}`,
+  );
+}
+
+export async function requestNaturalStopForLockedTurn(args: {
+  channelId: string;
+  serverDiscId: string;
+  lockEntry: ChannelLockEntry;
+  message: Message;
+  client: Client;
+}): Promise<void> {
+  let clearedPersonaJobCount = 0;
+  let clearedSelfTriggerCount = 0;
+
+  try {
+    const allPersonas = await getCachedAllPersonas(args.serverDiscId);
+    ({ clearedPersonaJobCount, clearedSelfTriggerCount } = clearQueuedSelfReplyWork(args.channelId, allPersonas));
+  } catch (error) {
+    log.warn(`Failed to clear queued self-reply work for natural stop in channel ${args.channelId}`, error);
+  }
+
+  log.info(
+    `Stop message detected in channel ${args.channelId} while processing message ${args.lockEntry.currentMessageId}. ` +
+      `Signaling graceful stop after clearing queued self-reply work ` +
+      `(personaJobs=${clearedPersonaJobCount}, selfTriggers=${clearedSelfTriggerCount}).`,
+  );
+
+  StreamOrchestrator.requestStop(args.channelId, args.message.author.id, {
+    originalStopMessage: args.message,
+    client: args.client,
+  });
+
+  log.info(`Stop signal sent for channel ${args.channelId}. Stop response will be generated after stream completes.`);
+}
+
+export function queueFollowUpForLockedTurn(args: {
+  lockEntry: ChannelLockEntry;
+  channelId: string;
+  userDiscId: string;
+  message: Message;
+  textQuotaSource: TextQuotaSource;
+  textQuotaTriggerKey: string;
+  textQuotaUserDiscId: string;
+  manualStreamingContextOverrides: QueuedMessage["manualStreamingContextOverrides"];
+  isNaturalStopMessage: boolean;
+}): boolean {
+  if (
+    !args.lockEntry.isLocked ||
+    args.message.author.bot ||
+    args.message.webhookId ||
+    args.lockEntry.followUpEligible !== true ||
+    args.lockEntry.isCommandTriggered ||
+    args.lockEntry.userDiscId !== args.userDiscId ||
+    args.isNaturalStopMessage ||
+    args.lockEntry.followUpCount >= MAX_FOLLOW_UP_INTERRUPTS
+  ) {
+    return false;
+  }
+
+  if (args.lockEntry.isInToolCallChain) {
+    const removedSupersededFollowUps = enqueueLatestFollowUp(args.lockEntry, args.userDiscId, {
+      message: args.message,
+      isManuallyTriggered: true,
+      forceReason: false,
+      isFollowUp: true,
+      selectedPersonaId: args.lockEntry.activePersonaId,
+      isUserImpersonation: args.lockEntry.activeIsUserImpersonation,
+      impersonatedUserId: args.lockEntry.activeImpersonatedUserId,
+      textQuotaSource: args.textQuotaSource,
+      textQuotaTriggerKey: args.textQuotaTriggerKey,
+      textQuotaUserDiscId: args.textQuotaUserDiscId,
+      manualStreamingContextOverrides: args.manualStreamingContextOverrides,
+    });
+
+    log.info(
+      `Follow-up message during tool-call chain in channel ${args.channelId} from user ${args.userDiscId}. ` +
+        `Queued latest without interrupt to preserve tool progress. ` +
+        `Superseded follow-ups: ${removedSupersededFollowUps}. Queue size: ${args.lockEntry.messageQueue.length}`,
+    );
+    return true;
+  }
+
+  StreamOrchestrator.requestFollowUp(args.channelId, args.userDiscId);
+  const removedSupersededFollowUps = enqueueLatestFollowUp(args.lockEntry, args.userDiscId, {
+    message: args.message,
+    isManuallyTriggered: true,
+    forceReason: false,
+    isFollowUp: true,
+    selectedPersonaId: args.lockEntry.activePersonaId,
+    isUserImpersonation: args.lockEntry.activeIsUserImpersonation,
+    impersonatedUserId: args.lockEntry.activeImpersonatedUserId,
+    textQuotaSource: args.textQuotaSource,
+    textQuotaTriggerKey: args.textQuotaTriggerKey,
+    textQuotaUserDiscId: args.textQuotaUserDiscId,
+    manualStreamingContextOverrides: args.manualStreamingContextOverrides,
+  });
+
+  log.info(
+    `Follow-up message detected in channel ${args.channelId} from user ${args.userDiscId}. ` +
+      `Interrupt requested. Follow-up count: ${args.lockEntry.followUpCount + 1}/${MAX_FOLLOW_UP_INTERRUPTS}. ` +
+      `Superseded follow-ups: ${removedSupersededFollowUps}. Queue size: ${args.lockEntry.messageQueue.length}`,
+  );
+  return true;
+}
+
+export function enqueueBusyChannelMessage(args: {
+  lockEntry: ChannelLockEntry;
+  channelId: string;
+  queuedMessage: QueuedMessage;
+  simulatedAutochatCounterReset: boolean;
+}): void {
+  args.lockEntry.messageQueue.push(args.queuedMessage);
+  log.info(
+    `Channel ${args.channelId} is busy (msg ${args.lockEntry.currentMessageId}). ` +
+      `Enqueued message ${args.queuedMessage.message.id}. Queue: ${args.lockEntry.messageQueue.length}. ` +
+      `Tomori would reply${args.simulatedAutochatCounterReset ? " (autoch_counter simulated as 0 for this check)" : ""}.`,
+  );
+}
+
+export function releaseChannelLockAndReplayQueue(args: {
+  channelId: string;
+  lockEntry: ChannelLockEntry;
+  completedMessageId: string;
+  handleStopResponse: (originalStopMessage: Message, client: Client) => Promise<void>;
+  processQueuedMessage: (queuedMessage: QueuedMessage) => Promise<void>;
+}): void {
+  args.lockEntry.isLocked = false;
+  args.lockEntry.lockedAt = 0;
+  args.lockEntry.currentMessageId = undefined;
+  args.lockEntry.userDiscId = undefined;
+  args.lockEntry.currentIsPersonaJob = false;
+  args.lockEntry.activePersonaId = undefined;
+  args.lockEntry.activeIsUserImpersonation = undefined;
+  args.lockEntry.activeImpersonatedUserId = undefined;
+  args.lockEntry.followUpEligible = false;
+  args.lockEntry.isInToolCallChain = false;
+  args.lockEntry.isCommandTriggered = false;
+  stopDiscordTypingKeepalive(args.channelId, args.lockEntry, "lock_released");
+  log.info(`Channel ${args.channelId} lock released for message ${args.completedMessageId}.`);
+
+  const stopContext = StreamOrchestrator.getAndClearStopContext(args.channelId);
+  if (stopContext) {
+    log.info(`Found stop context for channel ${args.channelId}. Triggering stop response after lock release.`);
+
+    setImmediate(async () => {
+      try {
+        await args.handleStopResponse(stopContext.originalStopMessage, stopContext.client);
+      } catch (error) {
+        log.error("Failed to generate stop response after lock release:", error);
+      }
+    });
+  }
+
+  const nextMessageData = args.lockEntry.messageQueue.shift();
+  if (!nextMessageData) {
+    return;
+  }
+
+  log.info(
+    `Processing next message ${nextMessageData.message.id} from queue for channel ${args.channelId}. ` +
+      `Queue size: ${args.lockEntry.messageQueue.length}`,
+  );
+
+  setImmediate(() => {
+    args.processQueuedMessage(nextMessageData).catch((error) => {
+      log.error(`Error processing queued message ${nextMessageData.message.id}:`, error);
+    });
+  });
+}
+
+export function suppressNextSelfReply(channelId: string, ttlMs = SELF_REPLY_SUPPRESSION_TTL_MS): void {
+  selfReplySuppressionUntil.set(channelId, Date.now() + ttlMs);
+}
+
+export async function refreshDiscordTypingIndicator(channel: Message["channel"], reason: string): Promise<void> {
+  if (!("sendTyping" in channel) || typeof channel.sendTyping !== "function") {
+    return;
+  }
+
+  await channel.sendTyping().catch((error: unknown) => {
+    log.warn(`Discord typing refresh failed for channel ${channel.id} (${reason})`, error);
+  });
+}
+
+export function stopDiscordTypingKeepalive(channelId: string, lockEntry: ChannelLockEntry, reason: string): void {
+  if (!lockEntry.typingKeepaliveTimer) {
+    return;
+  }
+
+  clearInterval(lockEntry.typingKeepaliveTimer);
+  lockEntry.typingKeepaliveTimer = null;
+  log.info(`Discord typing keepalive stopped for channel ${channelId} (${reason}).`);
+}
+
+export async function startDiscordTypingKeepalive(
+  channel: Message["channel"],
+  lockEntry: ChannelLockEntry,
+  messageId: string,
+): Promise<void> {
+  stopDiscordTypingKeepalive(channel.id, lockEntry, "restart");
+  await refreshDiscordTypingIndicator(channel, "lock_scope_start");
+  lockEntry.typingKeepaliveTimer = setInterval(() => {
+    if (
+      !lockEntry.isLocked ||
+      lockEntry.currentMessageId !== messageId ||
+      StreamOrchestrator.hasStopRequest(channel.id)
+    ) {
+      stopDiscordTypingKeepalive(channel.id, lockEntry, "lock_scope_end");
+      return;
+    }
+
+    void refreshDiscordTypingIndicator(channel, "lock_scope_keepalive");
+  }, DISCORD_TYPING_KEEPALIVE_INTERVAL_MS);
+
+  log.info(
+    `Discord typing keepalive started for channel ${channel.id} (message ${messageId}, interval ${DISCORD_TYPING_KEEPALIVE_INTERVAL_MS}ms).`,
+  );
+}
+
+export function cleanupTextQuotaTriggerStates(): void {
+  const now = Date.now();
+  for (const [triggerKey, state] of textQuotaTriggerStates.entries()) {
+    if (now - state.createdAt >= TEXT_QUOTA_TRIGGER_TTL_MS) {
+      textQuotaTriggerStates.delete(triggerKey);
+    }
+  }
+}
+
+export function buildTextQuotaResetInfo(locale: string, quotaCheck: TextQuotaCheckResult): string {
+  if (!quotaCheck.resetTime) {
+    return "";
+  }
+
+  const resetTime = quotaCheck.resetTime;
+  const now = new Date();
+  const diffMs = resetTime.getTime() - now.getTime();
+  const hoursUntilReset = Math.ceil(diffMs / (1000 * 60 * 60));
+
+  if (hoursUntilReset <= 24) {
+    return localizer(locale, "genai.text_quota_resets_in_hours", {
+      hours: hoursUntilReset.toString(),
+    });
+  }
+
+  const daysUntilReset = Math.ceil(hoursUntilReset / 24);
+  return localizer(locale, "genai.text_quota_resets_in_days", {
+    days: daysUntilReset.toString(),
+  });
+}
+
+export function isChannelProcessingLocked(channelId: string): boolean {
+  const lockEntry = channelLocks.get(channelId);
+  if (!lockEntry?.isLocked) return false;
+  if (Date.now() - lockEntry.lockedAt > CHANNEL_LOCK_TIMEOUT_MS) {
+    return false;
+  }
+  return true;
+}
+
+export function clearChannelProcessingQueue(channelId: string): number {
+  const lockEntry = channelLocks.get(channelId);
+  if (!lockEntry || lockEntry.messageQueue.length === 0) {
+    return 0;
+  }
+
+  const clearedCount = lockEntry.messageQueue.length;
+  lockEntry.messageQueue = [];
+
+  log.info(`Cleared ${clearedCount} queued message(s) for channel ${channelId}.`);
+
+  return clearedCount;
+}
+
+export function enqueueLatestFollowUp(
+  lockEntry: ChannelLockEntry,
+  userDiscId: string,
+  followUp: QueuedMessage,
+): number {
+  const previousLength = lockEntry.messageQueue.length;
+  lockEntry.messageQueue = lockEntry.messageQueue.filter(
+    (queuedMessage) =>
+      !(
+        queuedMessage.isFollowUp &&
+        !queuedMessage.isPersonaJob &&
+        !queuedMessage.isStopResponse &&
+        queuedMessage.message.author.id === userDiscId
+      ),
+  );
+  const removedCount = previousLength - lockEntry.messageQueue.length;
+  lockEntry.messageQueue.unshift(followUp);
+  return removedCount;
+}
+
+export function clearQueuedSelfReplyWork(
+  channelId: string,
+  allPersonas: TomoriState[],
+): { clearedPersonaJobCount: number; clearedSelfTriggerCount: number } {
+  const lockEntry = channelLocks.get(channelId);
+  if (!lockEntry || lockEntry.messageQueue.length === 0) {
+    return {
+      clearedPersonaJobCount: 0,
+      clearedSelfTriggerCount: 0,
+    };
+  }
+
+  let clearedPersonaJobCount = 0;
+  let clearedSelfTriggerCount = 0;
+
+  lockEntry.messageQueue = lockEntry.messageQueue.filter((queuedMsg) => {
+    if (queuedMsg.isPersonaJob) {
+      clearedPersonaJobCount++;
+      return false;
+    }
+
+    if (!queuedMsg.isManuallyTriggered && isSelfTriggerMessage(queuedMsg.message, allPersonas)) {
+      clearedSelfTriggerCount++;
+      return false;
+    }
+
+    return true;
+  });
+
+  const clearedTotal = clearedPersonaJobCount + clearedSelfTriggerCount;
+  if (clearedTotal > 0) {
+    log.info(
+      `Cleared ${clearedTotal} queued self-reply item(s) for channel ${channelId} ` +
+        `(personaJobs=${clearedPersonaJobCount}, selfTriggers=${clearedSelfTriggerCount}).`,
+    );
+  }
+
+  return {
+    clearedPersonaJobCount,
+    clearedSelfTriggerCount,
+  };
+}
+
+export function getSelfReplyChainState(channelId: string): SelfReplyChainState {
+  const now = Date.now();
+  const existing = selfReplyChainStates.get(channelId);
+
+  if (existing && now - existing.updatedAt < SELF_REPLY_CHAIN_TTL_MS) {
+    return existing;
+  }
+
+  const fresh: SelfReplyChainState = {
+    triggerCount: 0,
+    lastWasSelf: false,
+    updatedAt: now,
+    lastRespondedPersonaId: null,
+    originUserDiscId: null,
+  };
+  selfReplyChainStates.set(channelId, fresh);
+  return fresh;
+}
+
+export function updateSelfReplyChainState(channelId: string, isSelfMessage: boolean): SelfReplyChainState {
+  const state = getSelfReplyChainState(channelId);
+  state.updatedAt = Date.now();
+
+  if (!isSelfMessage) {
+    state.triggerCount = 0;
+    state.lastWasSelf = false;
+    state.lastRespondedPersonaId = null;
+    state.originUserDiscId = null;
+    return state;
+  }
+
+  if (!state.lastWasSelf) {
+    state.lastWasSelf = true;
+  }
+
+  return state;
+}
+
+export function setLastRespondedPersona(channelId: string, personaId: number): void {
+  const state = getSelfReplyChainState(channelId);
+  state.lastRespondedPersonaId = personaId;
+  state.updatedAt = Date.now();
+}
+
+export function getLastRespondedPersonaId(channelId: string): number | null {
+  const state = getSelfReplyChainState(channelId);
+  return state.lastRespondedPersonaId;
+}
+
+export function setSelfReplyChainOriginUser(channelId: string, userDiscId: string | null): void {
+  const state = getSelfReplyChainState(channelId);
+  state.originUserDiscId = userDiscId;
+  state.updatedAt = Date.now();
+}
+
+export function getSelfReplyChainOriginUser(channelId: string): string | null {
+  const state = getSelfReplyChainState(channelId);
+  return state.originUserDiscId;
+}
+
+export function getUserActiveMessageCount(userDiscId: string): number {
+  let count = 0;
+
+  for (const lockEntry of channelLocks.values()) {
+    if (lockEntry.isLocked && lockEntry.userDiscId === userDiscId && !lockEntry.currentIsPersonaJob) {
+      count++;
+    }
+
+    count += lockEntry.messageQueue.filter(
+      (queuedMsg) => queuedMsg.message.author.id === userDiscId && !queuedMsg.isPersonaJob,
+    ).length;
+  }
+
+  return count;
+}
+
+export function getServerActiveMessageCount(serverDiscId: string): number {
+  let count = 0;
+
+  for (const lockEntry of channelLocks.values()) {
+    if (lockEntry.serverDiscId === serverDiscId) {
+      if (lockEntry.isLocked) {
+        count++;
+      }
+
+      count += lockEntry.messageQueue.length;
+    }
+  }
+
+  return count;
+}

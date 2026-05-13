@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-3 -->
+<!-- ARCH-ALIGNMENT: prereq-phase-5 -->
 
 # 3. Architecture Overview
 
@@ -23,11 +23,17 @@ Discord Gateway
      -> messageCreate handlers (chat pipeline)
 
 chat pipeline
+  -> readable messageCreate coordinator (src/events/messageCreate/tomoriChat.ts)
+  -> typed invocation normalization (src/utils/chat/invocation.ts)
+  -> reply/no-reply admission decision (src/utils/chat/admission.ts)
+  -> channel queue and lock management (src/utils/chat/channelQueue.ts)
+  -> temporary turn runner seam while extraction continues (src/utils/chat/turnRunner.ts)
+  -> trigger/reply decision helpers (src/utils/chat/triggerProcessor.ts)
   -> message history preprocessing (references/media/reaction metadata) + context builder + caches
   -> provider factory -> selected provider
   -> stream adapter + orchestrator
   -> optional tool calls via ToolRegistry
-  -> Discord response streaming
+  -> response emitter helpers (src/utils/chat/responseEmitter.ts) + Discord response streaming
 ```
 
 ## Key Subsystems
@@ -45,6 +51,8 @@ chat pipeline
 - Dispatcher: `src/handlers/eventHandler.ts`
 - Event folders under `src/events/*`
 - Multiple Discord events can map to one folder (emoji/sticker update fan-in)
+- `src/events/messageCreate/tomoriChat.ts` is the readable coordinator for the chat pipeline
+- Message-create chat helpers live under `src/utils/chat/*`; direct `.ts` siblings of `tomoriChat.ts` are event handlers, not helper modules
 
 ### Providers
 

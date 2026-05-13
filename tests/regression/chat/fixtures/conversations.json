@@ -1,0 +1,278 @@
+[
+  {
+    "id": "google-direct-mention-main",
+    "provider": "google",
+    "description": "A user directly mentions the bot, so the main persona should answer.",
+    "message": {
+      "authorId": "user_001",
+      "authorName": "Aki",
+      "content": "<@bot_001> can you summarize this?",
+      "mentionedUserIds": ["bot_001"]
+    },
+    "state": {
+      "deliberateTriggerMode": false,
+      "alwaysReplyEnabled": false,
+      "autochDiscIds": [],
+      "autochPersonaOverrides": [],
+      "autochCounter": 0,
+      "autochNextTarget": 0
+    },
+    "personas": [
+      {
+        "id": 1,
+        "nickname": "Tomori",
+        "isAlter": false,
+        "triggers": ["tomori", "tomo"]
+      },
+      {
+        "id": 2,
+        "nickname": "Lilya",
+        "isAlter": true,
+        "triggers": ["lilya"]
+      }
+    ],
+    "triggerContext": {
+      "isReplyToBot": false,
+      "replyPersonaId": null,
+      "isBotMentioned": true,
+      "isAutoMsgHit": false,
+      "isAlwaysReply": false,
+      "autoTriggerPersonaId": null,
+      "alwaysReplyFallbackPersonaId": null,
+      "deliberateTriggerMode": false,
+      "isAutochatDtmExemptChannel": false,
+      "allowedPersonaIds": null
+    }
+  },
+  {
+    "id": "openrouter-deliberate-alter-trigger",
+    "provider": "openrouter",
+    "description": "Deliberate trigger mode accepts @trigger for an alter persona.",
+    "message": {
+      "authorId": "user_002",
+      "authorName": "Ren",
+      "content": "@lilya check this tool result",
+      "mentionedUserIds": []
+    },
+    "state": {
+      "deliberateTriggerMode": true,
+      "alwaysReplyEnabled": false,
+      "autochDiscIds": [],
+      "autochPersonaOverrides": [],
+      "autochCounter": 0,
+      "autochNextTarget": 0
+    },
+    "personas": [
+      {
+        "id": 1,
+        "nickname": "Tomori",
+        "isAlter": false,
+        "triggers": ["tomori", "tomo"]
+      },
+      {
+        "id": 2,
+        "nickname": "Lilya",
+        "isAlter": true,
+        "triggers": ["lilya"]
+      }
+    ],
+    "triggerContext": {
+      "isReplyToBot": false,
+      "replyPersonaId": null,
+      "isBotMentioned": false,
+      "isAutoMsgHit": false,
+      "isAlwaysReply": false,
+      "autoTriggerPersonaId": null,
+      "alwaysReplyFallbackPersonaId": null,
+      "deliberateTriggerMode": true,
+      "isAutochatDtmExemptChannel": false,
+      "allowedPersonaIds": null
+    }
+  },
+  {
+    "id": "novelai-autochat-channel-alter",
+    "provider": "novelai",
+    "description": "A configured always-reply autochat channel routes to its assigned alter persona.",
+    "message": {
+      "authorId": "user_003",
+      "authorName": "Mio",
+      "content": "quiet background conversation",
+      "mentionedUserIds": []
+    },
+    "state": {
+      "deliberateTriggerMode": false,
+      "alwaysReplyEnabled": false,
+      "autochDiscIds": ["channel_001"],
+      "autochPersonaOverrides": [
+        {
+          "channelDiscId": "channel_001",
+          "tomoriId": 2
+        }
+      ],
+      "autochCounter": 0,
+      "autochNextTarget": 0
+    },
+    "personas": [
+      {
+        "id": 1,
+        "nickname": "Tomori",
+        "isAlter": false,
+        "triggers": ["tomori", "tomo"]
+      },
+      {
+        "id": 2,
+        "nickname": "Lilya",
+        "isAlter": true,
+        "triggers": ["lilya"]
+      }
+    ],
+    "triggerContext": {
+      "isReplyToBot": false,
+      "replyPersonaId": null,
+      "isBotMentioned": false,
+      "isAutoMsgHit": false,
+      "isAlwaysReply": true,
+      "autoTriggerPersonaId": null,
+      "alwaysReplyFallbackPersonaId": 2,
+      "deliberateTriggerMode": false,
+      "isAutochatDtmExemptChannel": false,
+      "allowedPersonaIds": null
+    }
+  },
+  {
+    "id": "google-multi-persona-trigger-order",
+    "provider": "google",
+    "description": "Multiple persona triggers are ordered by their first appearance in the message.",
+    "message": {
+      "authorId": "user_004",
+      "authorName": "Sora",
+      "content": "lilya and then tomori should both look at this",
+      "mentionedUserIds": []
+    },
+    "state": {
+      "deliberateTriggerMode": false,
+      "alwaysReplyEnabled": false,
+      "autochDiscIds": [],
+      "autochPersonaOverrides": [],
+      "autochCounter": 0,
+      "autochNextTarget": 0
+    },
+    "personas": [
+      {
+        "id": 1,
+        "nickname": "Tomori",
+        "isAlter": false,
+        "triggers": ["tomori", "tomo"]
+      },
+      {
+        "id": 2,
+        "nickname": "Lilya",
+        "isAlter": true,
+        "triggers": ["lilya"]
+      }
+    ],
+    "triggerContext": {
+      "isReplyToBot": false,
+      "replyPersonaId": null,
+      "isBotMentioned": false,
+      "isAutoMsgHit": false,
+      "isAlwaysReply": false,
+      "autoTriggerPersonaId": null,
+      "alwaysReplyFallbackPersonaId": null,
+      "deliberateTriggerMode": false,
+      "isAutochatDtmExemptChannel": false,
+      "allowedPersonaIds": null
+    }
+  },
+  {
+    "id": "openrouter-deliberate-mode-ignores-plain-trigger",
+    "provider": "openrouter",
+    "description": "Deliberate trigger mode ignores a plain persona trigger without the @ prefix.",
+    "message": {
+      "authorId": "user_005",
+      "authorName": "Nene",
+      "content": "lilya should not answer without deliberate syntax",
+      "mentionedUserIds": []
+    },
+    "state": {
+      "deliberateTriggerMode": true,
+      "alwaysReplyEnabled": false,
+      "autochDiscIds": [],
+      "autochPersonaOverrides": [],
+      "autochCounter": 0,
+      "autochNextTarget": 0
+    },
+    "personas": [
+      {
+        "id": 1,
+        "nickname": "Tomori",
+        "isAlter": false,
+        "triggers": ["tomori", "tomo"]
+      },
+      {
+        "id": 2,
+        "nickname": "Lilya",
+        "isAlter": true,
+        "triggers": ["lilya"]
+      }
+    ],
+    "triggerContext": {
+      "isReplyToBot": false,
+      "replyPersonaId": null,
+      "isBotMentioned": false,
+      "isAutoMsgHit": false,
+      "isAlwaysReply": false,
+      "autoTriggerPersonaId": null,
+      "alwaysReplyFallbackPersonaId": null,
+      "deliberateTriggerMode": true,
+      "isAutochatDtmExemptChannel": false,
+      "allowedPersonaIds": null
+    }
+  },
+  {
+    "id": "google-persona-webhook-self-trigger",
+    "provider": "google",
+    "description": "A persona webhook message is recognized as self-generated and cannot trigger itself.",
+    "message": {
+      "authorId": "webhook_user_001",
+      "authorName": "Lilya",
+      "content": "lilya tomori",
+      "mentionedUserIds": [],
+      "webhookId": "webhook_lilya"
+    },
+    "state": {
+      "deliberateTriggerMode": false,
+      "alwaysReplyEnabled": false,
+      "autochDiscIds": [],
+      "autochPersonaOverrides": [],
+      "autochCounter": 0,
+      "autochNextTarget": 0
+    },
+    "personas": [
+      {
+        "id": 1,
+        "nickname": "Tomori",
+        "isAlter": false,
+        "triggers": ["tomori", "tomo"]
+      },
+      {
+        "id": 2,
+        "nickname": "Lilya",
+        "isAlter": true,
+        "triggers": ["lilya"]
+      }
+    ],
+    "triggerContext": {
+      "isReplyToBot": false,
+      "replyPersonaId": null,
+      "isBotMentioned": false,
+      "isAutoMsgHit": false,
+      "isAlwaysReply": false,
+      "autoTriggerPersonaId": null,
+      "alwaysReplyFallbackPersonaId": null,
+      "deliberateTriggerMode": false,
+      "isAutochatDtmExemptChannel": false,
+      "allowedPersonaIds": null
+    }
+  }
+]

@@ -64,6 +64,5 @@ export async function initLoaders(client: Client): Promise<void> {
     log.warn("Failed to initialize preset avatar cache (non-critical)", error);
   }
 
-  // Register all Discord event listeners
-  eventHandler(client);
+  await eventHandler(client);
 }
