@@ -199,31 +199,31 @@ When a phase touches code that affects a doc not listed here, add the doc to thi
 - **What:** Create a base `StreamAdapter` class to replace isolated stream adapters.
 
 **Subtasks:**
-- [ ] Define abstract `BaseStreamAdapter` class in `src/types/stream/interfaces.ts` with shared lifecycle hooks
-- [ ] Identify common stream-handling logic across `googleStreamAdapter.ts`, `openrouterStreamAdapter.ts`, `novelaiStreamAdapter.ts`, etc.
-- [ ] Move shared logic into the base class
-- [ ] Refactor each adapter to extend `BaseStreamAdapter`, overriding only provider-specific bits
+- [x] Define abstract `BaseStreamAdapter` class in `src/types/stream/interfaces.ts` with shared lifecycle hooks
+- [x] Identify common stream-handling logic across `googleStreamAdapter.ts`, `openrouterStreamAdapter.ts`, `novelaiStreamAdapter.ts`, etc.
+- [x] Move shared logic into the base class
+- [x] Refactor each adapter to extend `BaseStreamAdapter`, overriding only provider-specific bits
 - [ ] Verify each provider still streams correctly (manual smoke test per provider)
-- [ ] `bun run check && bun run lint` pass
+- [x] `bun run check && bun run lint` pass
 
 ### 6.5. Auto-discover provider registry & purge name-based dispatch
 - **What:** Replace the hardcoded `providerInfos` array and `providerFeatureImplementations` map in `src/utils/provider/providerInfoRegistry.ts:20-82` with folder-scan auto-discovery. Eliminate the 40+ hardcoded provider-name comparisons.
 - **Plugin prereq:** Required by `PLUGIN-ARCH_TASK-LIST.md` AC-1 + AC-2. Highest-leverage single task for plugin readiness.
 
 **Subtasks:**
-- [ ] Refactor `providerInfoRegistry.ts` to scan `src/providers/*/providerInfo.ts` at boot (mirror `providerFactory.ts` glob pattern)
-- [ ] Move each provider's feature implementation declarations into its own `providerInfo.ts` (out of the central map)
-- [ ] Build the `providerFeatureImplementations` map dynamically at boot from discovered provider infos
+- [x] Refactor `providerInfoRegistry.ts` to scan `src/providers/*/providerInfo.ts` at boot (mirror `providerFactory.ts` glob pattern)
+- [x] Move each provider's feature implementation declarations into its own `providerInfo.ts` (out of the central map)
+- [x] Build the `providerFeatureImplementations` map dynamically at boot from discovered provider infos
 - [ ] Replace the `ProviderFeatureImplementation` string-union type with a derived type from discovered providers
-- [ ] Eliminate the 17 `llm_provider === "..."` comparisons in `events/messageCreate/tomoriChat.ts` (lines 5585-8067) — route through provider methods or capability resolvers
-- [ ] Eliminate the 17 `providerName === "..."` comparisons in `commands/tool/prompt/snapshot.ts`
-- [ ] Eliminate the 2 comparisons in `commands/tool/estimate/cost.ts`
-- [ ] Convert `case "google":` switches in `commands/tool/status.ts` (2 cases) to provider-method dispatch
-- [ ] Convert `case "..."` switches in `commands/tool/prompt/snapshot.ts` (11 cases) to provider-method dispatch
-- [ ] Decide allowlist for legitimate UI-display switches in `commands/help/api-key.ts` (9 cases) — these are arguably user-facing copy, not orchestration
-- [ ] Run grep to verify zero name-comparisons in core orchestration paths
+- [x] Eliminate the 17 `llm_provider === "..."` comparisons in `events/messageCreate/tomoriChat.ts` (lines 5585-8067) — route through provider methods or capability resolvers
+- [x] Eliminate the 17 `providerName === "..."` comparisons in `commands/tool/prompt/snapshot.ts`
+- [x] Eliminate the 2 comparisons in `commands/tool/estimate/cost.ts`
+- [x] Convert `case "google":` switches in `commands/tool/status.ts` (2 cases) to provider-method dispatch
+- [x] Convert `case "..."` switches in `commands/tool/prompt/snapshot.ts` (11 cases) to provider-method dispatch
+- [x] Decide allowlist for legitimate UI-display switches in `commands/help/api-key.ts` (9 cases) — these are arguably user-facing copy, not orchestration
+- [x] Run grep to verify zero name-comparisons in core orchestration paths
 - [ ] **Smoke test:** boot the bot and verify the provider registry log lists all expected providers as discovered (Google, OpenRouter, NovelAI, Custom, etc.). A provider going dark after the hardcoded array is removed would otherwise be invisible until someone runs a command against it.
-- [ ] `bun run check && bun run lint` pass
+- [x] `bun run check && bun run lint` pass
 
 ### 7. Split `src/tools/toolRegistry.ts` & Fix MCP Hacks
 - **What:** Separate tool management from execution. Remove the `process.stdout.write` monkey-patch in `mcpManager.ts`.

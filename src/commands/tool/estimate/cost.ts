@@ -32,6 +32,7 @@ import { AnthropicStreamAdapter } from "@/providers/anthropic/anthropicStreamAda
 import { buildOpenAICompatibleMessages } from "@/providers/openaiCompatible/openaiCompatibleMessageBuilder";
 import {
   getProviderDisplayName,
+  getStaticProviderInfo,
   normalizeProviderName,
   resolveProviderFeatureImplementation,
 } from "@/utils/provider/providerInfoRegistry";
@@ -92,6 +93,16 @@ const ZAICODING_OUTPUT_PRICE_PER_MILLION = parseFloatEnv(
   3.0,
   0,
 );
+const zaiPricingByProvider: Record<"zai" | "zaicoding", { input: number; output: number }> = {
+  zai: {
+    input: ZAI_GENERAL_INPUT_PRICE_PER_MILLION,
+    output: ZAI_GENERAL_OUTPUT_PRICE_PER_MILLION,
+  },
+  zaicoding: {
+    input: ZAICODING_INPUT_PRICE_PER_MILLION,
+    output: ZAICODING_OUTPUT_PRICE_PER_MILLION,
+  },
+};
 // Anthropic Claude model-tier pricing (USD per million tokens).
 // Tier is detected from the model codename: opus > sonnet > haiku.
 const ANTHROPIC_OPUS_INPUT_PRICE_PER_MILLION = parseFloatEnv(
@@ -144,6 +155,19 @@ const YOUTUBE_URL_PATTERNS = [
 ];
 
 type LiveProvider = "google" | "openrouter" | "deepseek" | "zai" | "zaicoding" | "anthropic";
+
+const LIVE_PROVIDER_IMPLEMENTATIONS = new Set<LiveProvider>([
+  "google",
+  "openrouter",
+  "deepseek",
+  "zai",
+  "zaicoding",
+  "anthropic",
+]);
+
+function isLiveProvider(value: string | null): value is LiveProvider {
+  return value !== null && LIVE_PROVIDER_IMPLEMENTATIONS.has(value as LiveProvider);
+}
 
 interface ZaiFamilyProviderConfig {
   model: string;
@@ -218,6 +242,43 @@ interface OpenRouterProbeUsage {
   totalTokens?: number;
   total_tokens?: number;
 }
+
+type ContextTruncator = (contextSegments: StructuredContextItem[], tomoriState: TomoriState) => StructuredContextItem[];
+
+const contextTruncators: Partial<Record<LiveProvider, ContextTruncator>> = {
+  openrouter: (contextSegments, tomoriState) => {
+    if (tomoriState.llm.llm_codename === "other-model" || !isOpenRouterCapabilityCacheReady()) {
+      return contextSegments;
+    }
+
+    const tokenLimits = getOpenRouterTokenLimits(tomoriState.llm.llm_codename);
+    const openrouterTruncationOutputCap = parseIntegerEnv(process.env.OPENROUTER_MAX_OUTPUT_TOKENS, 8192, 1);
+    if (!tokenLimits || tokenLimits.contextLength <= 0 || !tokenLimits.maxCompletionTokens) {
+      return contextSegments;
+    }
+
+    const truncationMaxCompletionTokens = Math.min(tokenLimits.maxCompletionTokens, openrouterTruncationOutputCap);
+    const { truncated, totalDropped } = truncateDialogueHistory(
+      contextSegments,
+      tokenLimits.contextLength,
+      truncationMaxCompletionTokens,
+    );
+    return totalDropped > 0 ? truncated : contextSegments;
+  },
+  google: (contextSegments, tomoriState) => {
+    const tokenLimits = getGeminiTokenLimits(tomoriState.llm.llm_codename);
+    if (!tokenLimits || tokenLimits.contextLength <= 0 || !tokenLimits.maxCompletionTokens) {
+      return contextSegments;
+    }
+
+    const { truncated, totalDropped } = truncateDialogueHistory(
+      contextSegments,
+      tokenLimits.contextLength,
+      tokenLimits.maxCompletionTokens,
+    );
+    return totalDropped > 0 ? truncated : contextSegments;
+  },
+};
 
 interface OpenRouterProbeResponse {
   id?: string;
@@ -627,27 +688,11 @@ function formatPricePerMillion(value: number): string {
 function resolveProvider(providerName: string): LiveProvider | null {
   const normalizedProvider = normalizeProviderName(providerName);
   const implementation = resolveProviderFeatureImplementation(normalizedProvider, "liveTokenCounting");
-  if (normalizedProvider === "google" && implementation === "google") {
-    return "google";
-  }
-  if (normalizedProvider === "openrouter" && implementation === "openrouter") {
-    return "openrouter";
-  }
-  if (normalizedProvider === "deepseek" && implementation === "deepseek") {
-    return "deepseek";
-  }
-  if ((normalizedProvider === "zai" || normalizedProvider === "zaicoding") && implementation === "zai") {
-    return normalizedProvider;
-  }
-  if (normalizedProvider === "anthropic" && implementation === "anthropic") {
-    return "anthropic";
-  }
-  return null;
+  return isLiveProvider(implementation) ? implementation : null;
 }
 
 function providerHasNoUsageCosts(providerName: string): boolean {
-  const normalized = normalizeProviderName(providerName);
-  return normalized === "novelai" || normalized === "custom";
+  return getStaticProviderInfo(providerName)?.usageCostMode === "none";
 }
 
 function getTriggererName(interaction: ChatInputCommandInteraction): string {
@@ -872,37 +917,7 @@ async function buildRuntimeParityContext(
 
   let contextSegments = contextBuild.contextItems;
 
-  if (
-    provider === "openrouter" &&
-    tomoriState.llm.llm_codename !== "other-model" &&
-    isOpenRouterCapabilityCacheReady()
-  ) {
-    const tokenLimits = getOpenRouterTokenLimits(tomoriState.llm.llm_codename);
-    const openrouterTruncationOutputCap = parseIntegerEnv(process.env.OPENROUTER_MAX_OUTPUT_TOKENS, 8192, 1);
-    if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
-      const truncationMaxCompletionTokens = Math.min(tokenLimits.maxCompletionTokens, openrouterTruncationOutputCap);
-      const { truncated, totalDropped } = truncateDialogueHistory(
-        contextSegments,
-        tokenLimits.contextLength,
-        truncationMaxCompletionTokens,
-      );
-      if (totalDropped > 0) {
-        contextSegments = truncated;
-      }
-    }
-  } else if (provider === "google") {
-    const tokenLimits = getGeminiTokenLimits(tomoriState.llm.llm_codename);
-    if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
-      const { truncated, totalDropped } = truncateDialogueHistory(
-        contextSegments,
-        tokenLimits.contextLength,
-        tokenLimits.maxCompletionTokens,
-      );
-      if (totalDropped > 0) {
-        contextSegments = truncated;
-      }
-    }
-  }
+  contextSegments = contextTruncators[provider]?.(contextSegments, tomoriState) ?? contextSegments;
 
   const lowerPriorityTailDirectives = [...contextBuild.lowerPriorityTailDirectives];
   const tailDirectives = [...contextBuild.tailDirectives];
@@ -1234,10 +1249,8 @@ async function measureZaiInputTokens(
     providerLabel: getProviderDisplayName(providerName),
     model: providerConfig.model,
     inputTokens: measuredPromptTokens,
-    inputPricePerMillion:
-      providerName === "zaicoding" ? ZAICODING_INPUT_PRICE_PER_MILLION : ZAI_GENERAL_INPUT_PRICE_PER_MILLION,
-    outputPricePerMillion:
-      providerName === "zaicoding" ? ZAICODING_OUTPUT_PRICE_PER_MILLION : ZAI_GENERAL_OUTPUT_PRICE_PER_MILLION,
+    inputPricePerMillion: zaiPricingByProvider[providerName].input,
+    outputPricePerMillion: zaiPricingByProvider[providerName].output,
   };
 }
 
@@ -1322,6 +1335,19 @@ async function measureAnthropicInputTokens(
     outputPricePerMillion: pricing.output,
   };
 }
+
+const liveTokenCounters: Record<
+  LiveProvider,
+  (tomoriState: TomoriState, apiKey: string, contextItems: StructuredContextItem[]) => Promise<LiveCostMeasurement>
+> = {
+  google: measureGoogleInputTokens,
+  openrouter: measureOpenRouterInputTokens,
+  deepseek: measureDeepseekInputTokens,
+  anthropic: measureAnthropicInputTokens,
+  zai: (tomoriState, apiKey, contextItems) => measureZaiInputTokens("zai", tomoriState, apiKey, contextItems),
+  zaicoding: (tomoriState, apiKey, contextItems) =>
+    measureZaiInputTokens("zaicoding", tomoriState, apiKey, contextItems),
+};
 
 async function sendLiveEstimateEmbed(
   interaction: ChatInputCommandInteraction,
@@ -1603,16 +1629,7 @@ export async function execute(
     }
 
     try {
-      const measurement =
-        provider === "google"
-          ? await measureGoogleInputTokens(tomoriState, decryptedApiKey, contextItems)
-          : provider === "openrouter"
-            ? await measureOpenRouterInputTokens(tomoriState, decryptedApiKey, contextItems)
-            : provider === "deepseek"
-              ? await measureDeepseekInputTokens(tomoriState, decryptedApiKey, contextItems)
-              : provider === "anthropic"
-                ? await measureAnthropicInputTokens(tomoriState, decryptedApiKey, contextItems)
-                : await measureZaiInputTokens(provider, tomoriState, decryptedApiKey, contextItems);
+      const measurement = await liveTokenCounters[provider](tomoriState, decryptedApiKey, contextItems);
       await sendLiveEstimateEmbed(interaction, locale, measurement);
     } catch (countError) {
       await log.error(

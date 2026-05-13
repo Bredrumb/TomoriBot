@@ -223,6 +223,90 @@ export interface StreamProvider {
 }
 
 /**
+ * Static identity and capability metadata shared by all stream adapters.
+ */
+export interface StreamAdapterInfo {
+  name: string;
+  version: string;
+  supportsStreaming?: boolean;
+  supportsFunctionCalling: boolean;
+}
+
+/**
+ * Base class for provider stream adapters.
+ *
+ * Provider subclasses still own request construction, provider-native parsing,
+ * and error normalization. The base class centralizes adapter lifecycle identity
+ * and small lifecycle hooks/wrappers used when handing work to StreamOrchestrator.
+ */
+export abstract class BaseStreamAdapter implements StreamProvider {
+  protected constructor(private readonly adapterInfo: StreamAdapterInfo) {}
+
+  abstract startStream(config: StreamConfig, context: StreamContext): AsyncGenerator<RawStreamChunk, void, unknown>;
+
+  abstract processChunk(chunk: RawStreamChunk): ProcessedChunk;
+
+  abstract extractFunctionCall(chunk: RawStreamChunk): FunctionCall | null;
+
+  abstract handleProviderError(error: unknown): ProviderError;
+
+  abstract createErrorDescription(error: ProviderError, locale: string): string | null;
+
+  protected onRawChunk(_chunk: RawStreamChunk): void {}
+
+  protected onProviderError(_error: unknown): void {}
+
+  getProviderInfo(): {
+    name: string;
+    version: string;
+    supportsStreaming: boolean;
+    supportsFunctionCalling: boolean;
+  } {
+    return {
+      name: this.adapterInfo.name,
+      version: this.adapterInfo.version,
+      supportsStreaming: this.adapterInfo.supportsStreaming ?? true,
+      supportsFunctionCalling: this.adapterInfo.supportsFunctionCalling,
+    };
+  }
+
+  protected createRawChunk(
+    data: unknown,
+    metadata?: Record<string, unknown>,
+    providerName = this.adapterInfo.name,
+  ): RawStreamChunk {
+    const chunk = {
+      data,
+      provider: providerName,
+      metadata: {
+        timestamp: Date.now(),
+        ...metadata,
+      },
+    };
+    this.onRawChunk(chunk);
+    return chunk;
+  }
+
+  protected createProviderErrorChunk(
+    error: unknown,
+    metadata?: Record<string, unknown>,
+    providerName = this.adapterInfo.name,
+  ): RawStreamChunk {
+    this.onProviderError(error);
+    return this.createRawChunk(
+      {
+        error: this.handleProviderError(error),
+      },
+      {
+        error: true,
+        ...metadata,
+      },
+      providerName,
+    );
+  }
+}
+
+/**
  * Interface for the universal Discord streaming orchestrator
  * This handles all Discord-specific logic that's common across providers
  */

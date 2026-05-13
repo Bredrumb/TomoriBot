@@ -15,7 +15,7 @@ import { loadSavedProviderConfig } from "@/utils/db/repositories";
 import { buildContext } from "@/utils/text/contextBuilder";
 import { getCachedActivePreset } from "@/utils/cache/stPresetCache";
 import { getCachedPrivacyLevel } from "@/utils/cache/userCache";
-import { normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
+import { getStaticProviderInfo, normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { PrivacyLevel, type UserRow, type TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
@@ -882,15 +882,22 @@ async function buildJsonSnapshot(
   const seesVideos = activeLlm.sees_videos;
 
   let requestData: Record<string, unknown>;
+  const providerInfo = getStaticProviderInfo(providerName);
+  const providerKey = providerInfo?.name ?? normalizeProviderName(providerName);
+  const providerFamily = providerInfo?.apiFamily ?? "openai-compatible";
+  const googleSnapshotAdapterFactories: Record<
+    string,
+    () => GoogleStreamAdapter | VertexStreamAdapter | VertexexpressStreamAdapter
+  > = {
+    google: () => new GoogleStreamAdapter(),
+    vertex: () => new VertexStreamAdapter(),
+    vertexexpress: () => new VertexexpressStreamAdapter(),
+  };
+  const googleSnapshotAdapterFactory = googleSnapshotAdapterFactories[providerKey];
 
-  if (providerName === "google" || providerName === "vertex" || providerName === "vertexexpress") {
+  if (googleSnapshotAdapterFactory) {
     // 1. Assemble context into Google/Vertex Content[] format
-    const adapter =
-      providerName === "google"
-        ? new GoogleStreamAdapter()
-        : providerName === "vertex"
-          ? new VertexStreamAdapter()
-          : new VertexexpressStreamAdapter();
+    const adapter = googleSnapshotAdapterFactory();
     const payload = await adapter.buildTokenCountPayload(contextItems, modelName);
 
     // 2. Sanitize — replace inlineData.data (base64) with placeholder (mirrors logSanitizedRequest)
@@ -911,13 +918,7 @@ async function buildJsonSnapshot(
       systemInstruction: payload.systemInstruction,
       contents: sanitizedContents,
     };
-  } else if (
-    providerName === "openrouter" ||
-    providerName === "deepseek" ||
-    providerName === "zai" ||
-    providerName === "zaicoding" ||
-    providerName === "nvidia"
-  ) {
+  } else if (providerFamily === "openrouter" || providerFamily === "openai-compatible") {
     // 1. Assemble context into OpenAI-compatible messages format
     const adapter = new OpenrouterStreamAdapter();
     const messages = await adapter.buildProbeMessages(contextItems, seesImages, seesVideos);
@@ -940,7 +941,7 @@ async function buildJsonSnapshot(
     });
 
     requestData = { model: modelName, messages: sanitized };
-  } else if (providerName === "anthropic") {
+  } else if (providerFamily === "anthropic") {
     // 1. Assemble context into Anthropic system + messages format
     const adapter = new AnthropicStreamAdapter();
     const { system, messages } = await adapter.buildProbeMessages(contextItems, seesImages);
@@ -1051,32 +1052,21 @@ async function buildJsonSnapshot(
  * Unknown providers fall back to the OpenRouter adapter for OpenAI-compat shape.
  */
 function selectToolAdapter(providerName: string): MCPCapableToolAdapter {
-  switch (providerName) {
-    case "google":
-      return getGoogleToolAdapter();
-    case "vertex":
-      return getVertexToolAdapter();
-    case "vertexexpress":
-      return getVertexexpressToolAdapter();
-    case "anthropic":
-      return getAnthropicToolAdapter();
-    case "openrouter":
-      return getOpenrouterToolAdapter();
-    case "deepseek":
-      return getDeepseekToolAdapter();
-    case "zai":
-      return getZaiToolAdapter();
-    case "zaicoding":
-      return getZaicodingToolAdapter();
-    case "nvidia":
-      return getNvidiaToolAdapter();
-    case "novelai":
-      return getNovelaiToolAdapter();
-    case "custom":
-      return getCustomToolAdapter();
-    default:
-      return getOpenrouterToolAdapter();
-  }
+  const adapterFactories: Record<string, () => MCPCapableToolAdapter> = {
+    google: getGoogleToolAdapter,
+    vertex: getVertexToolAdapter,
+    vertexexpress: getVertexexpressToolAdapter,
+    anthropic: getAnthropicToolAdapter,
+    openrouter: getOpenrouterToolAdapter,
+    deepseek: getDeepseekToolAdapter,
+    zai: getZaiToolAdapter,
+    zaicoding: getZaicodingToolAdapter,
+    nvidia: getNvidiaToolAdapter,
+    novelai: getNovelaiToolAdapter,
+    custom: getCustomToolAdapter,
+  };
+  const providerKey = getStaticProviderInfo(providerName)?.name ?? normalizeProviderName(providerName);
+  return (adapterFactories[providerKey] ?? getOpenrouterToolAdapter)();
 }
 
 /**
@@ -1155,36 +1145,14 @@ function buildRequestConfig(persona: TomoriState, providerName: string, modelNam
   const activeLlm = persona.persona_llm ?? persona.llm;
   const config = persona.config;
   const disabledParams = config.llm_disabled_params ?? [];
+  const providerInfo = getStaticProviderInfo(providerName);
+  const providerKey = providerInfo?.name ?? normalizeProviderName(providerName);
+  const providerFamily = providerInfo?.apiFamily ?? "openai-compatible";
+  const supportsParam = (param: string) =>
+    providerInfo?.supportedParams.some((supportedParam) => supportedParam === param) ?? true;
 
-  if (providerName === "google") {
-    // 1. Google: show raw configured values (unfiltered, mirrors GoogleProviderConfig)
-    const maxOutputTokens =
-      config.llm_max_output_tokens ?? Number.parseInt(process.env.GOOGLE_MAX_OUTPUT_TOKENS || "8192", 10);
-    const out: Record<string, unknown> = {
-      generation_config: {
-        temperature: config.llm_temperature,
-        top_k: config.llm_top_k,
-        top_p: config.llm_top_p,
-        frequency_penalty: config.llm_frequency_penalty,
-        presence_penalty: config.llm_presence_penalty,
-        max_output_tokens: maxOutputTokens,
-        stop_sequences: [],
-      },
-      safety_settings: [
-        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
-      ],
-    };
-    const thinkingConfig = serializeGoogleThinkingConfig(buildGoogleThinkingConfig(modelName, config.thinking_level));
-    if (thinkingConfig) out.thinking_config = thinkingConfig;
-    if (disabledParams.length > 0) out.disabled_params = disabledParams;
-    return out;
-  }
-
-  if (providerName === "vertex" || providerName === "vertexexpress") {
-    // 2. Vertex family: mirrors VertexProvider/VertexexpressProvider request config
+  if (providerFamily === "google-genai") {
+    // 1. Google/Vertex family: show raw configured values (unfiltered, mirrors provider config)
     const maxOutputTokens =
       config.llm_max_output_tokens ?? Number.parseInt(process.env.GOOGLE_MAX_OUTPUT_TOKENS || "8192", 10);
     const out: Record<string, unknown> = {
@@ -1202,13 +1170,16 @@ function buildRequestConfig(persona: TomoriState, providerName: string, modelNam
         { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
       ],
     };
+    const generationConfig = out.generation_config as Record<string, unknown>;
+    if (supportsParam("frequencyPenalty")) generationConfig.frequency_penalty = config.llm_frequency_penalty;
+    if (supportsParam("presencePenalty")) generationConfig.presence_penalty = config.llm_presence_penalty;
     const thinkingConfig = serializeGoogleThinkingConfig(buildGoogleThinkingConfig(modelName, config.thinking_level));
     if (thinkingConfig) out.thinking_config = thinkingConfig;
     if (disabledParams.length > 0) out.disabled_params = disabledParams;
     return out;
   }
 
-  if (providerName === "anthropic") {
+  if (providerFamily === "anthropic") {
     // 3. Anthropic: uses selectAnthropicSamplingParams to coalesce temp+top_p
     const selection = selectAnthropicSamplingParams({
       temperature: config.llm_temperature,
@@ -1257,43 +1228,52 @@ function buildRequestConfig(persona: TomoriState, providerName: string, modelNam
   if (stopStrings) out.stop = stopStrings;
   if (disabledParams.length > 0) out.disabled_params = disabledParams;
 
-  if (providerName === "openrouter") {
-    const reasoningRequest = buildOpenRouterReasoningRequest(config.thinking_level);
-    if (reasoningRequest.reasoning) out.reasoning = reasoningRequest.reasoning;
-  }
-
-  if (providerName === "deepseek") {
-    const thinkingRequest = buildDeepSeekThinkingRequest(modelName, config.thinking_level);
-    if (thinkingRequest.thinking) out.thinking = thinkingRequest.thinking;
-    if (thinkingRequest.omitSampling) {
-      delete out.temperature;
-      delete out.top_p;
-      delete out.frequency_penalty;
-      delete out.presence_penalty;
-    }
-  }
-
-  if (providerName === "zai" || providerName === "zaicoding") {
-    const thinkingRequest = buildZaiThinkingRequest(config.thinking_level);
-    if (thinkingRequest.thinking) out.thinking = thinkingRequest.thinking;
-    if (thinkingRequest.omitSampling) {
-      delete out.temperature;
-      delete out.top_p;
-      delete out.frequency_penalty;
-      delete out.presence_penalty;
-    }
-  }
-
-  if (providerName === "custom") {
-    const customThinking = buildCustomThinkingRequest(config.custom_endpoint_url, config.thinking_level);
-    if (customThinking.reasoning_effort) {
-      out.reasoning_effort = customThinking.reasoning_effort;
-    }
-  }
-
-  if (providerName === "novelai") {
-    out.thinking_directive = getNovelAiThinkingDirective(config.thinking_level);
-  }
+  const requestConfigMutators: Record<string, () => void> = {
+    openrouter: () => {
+      const reasoningRequest = buildOpenRouterReasoningRequest(config.thinking_level);
+      if (reasoningRequest.reasoning) out.reasoning = reasoningRequest.reasoning;
+    },
+    deepseek: () => {
+      const thinkingRequest = buildDeepSeekThinkingRequest(modelName, config.thinking_level);
+      if (thinkingRequest.thinking) out.thinking = thinkingRequest.thinking;
+      if (thinkingRequest.omitSampling) {
+        delete out.temperature;
+        delete out.top_p;
+        delete out.frequency_penalty;
+        delete out.presence_penalty;
+      }
+    },
+    zai: () => {
+      const thinkingRequest = buildZaiThinkingRequest(config.thinking_level);
+      if (thinkingRequest.thinking) out.thinking = thinkingRequest.thinking;
+      if (thinkingRequest.omitSampling) {
+        delete out.temperature;
+        delete out.top_p;
+        delete out.frequency_penalty;
+        delete out.presence_penalty;
+      }
+    },
+    zaicoding: () => {
+      const thinkingRequest = buildZaiThinkingRequest(config.thinking_level);
+      if (thinkingRequest.thinking) out.thinking = thinkingRequest.thinking;
+      if (thinkingRequest.omitSampling) {
+        delete out.temperature;
+        delete out.top_p;
+        delete out.frequency_penalty;
+        delete out.presence_penalty;
+      }
+    },
+    custom: () => {
+      const customThinking = buildCustomThinkingRequest(config.custom_endpoint_url, config.thinking_level);
+      if (customThinking.reasoning_effort) {
+        out.reasoning_effort = customThinking.reasoning_effort;
+      }
+    },
+    novelai: () => {
+      out.thinking_directive = getNovelAiThinkingDirective(config.thinking_level);
+    },
+  };
+  requestConfigMutators[providerKey]?.();
 
   // Acknowledge has_tools flag is mirrored from adapter runtime — informational
   if (!activeLlm.has_tools) out.tools_disabled = true;

@@ -22,13 +22,13 @@ import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context
 import { log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { escapeRegExp, findMarkdownCodeRanges } from "@/utils/text/stringHelper";
+import { BaseStreamAdapter } from "@/types/stream/interfaces";
 import type {
   ProcessedChunk,
   ProviderError,
   RawStreamChunk,
   StreamConfig,
   StreamContext,
-  StreamProvider,
 } from "@/types/stream/interfaces";
 import {
   novelaiGenerateStream,
@@ -174,7 +174,7 @@ export interface NovelaiStreamConfig extends StreamConfig {
  * Username2: message2
  * BotName:
  */
-export class NovelaiStreamAdapter implements StreamProvider {
+export class NovelaiStreamAdapter extends BaseStreamAdapter {
   /**
    * Tags that should be prepended as system instructions
    * Tool-related tags are conditionally included when prompt-based tool calling is enabled.
@@ -248,6 +248,14 @@ export class NovelaiStreamAdapter implements StreamProvider {
    * Reset at the start of each startStream() call so stale values never leak across turns.
    */
   private pendingContinuationPrefill: string | undefined = undefined;
+
+  constructor() {
+    super({
+      name: "novelai",
+      version: "1.0",
+      supportsFunctionCalling: true,
+    });
+  }
 
   /**
    * Returns the incomplete trailing sentence from the most recent stream, if any.
@@ -510,15 +518,7 @@ export class NovelaiStreamAdapter implements StreamProvider {
       yield* this.streamSinglePass(request, config);
     } catch (error) {
       // Convert NovelAI errors to our format
-      const providerError = this.handleProviderError(error);
-      yield {
-        data: { error: providerError },
-        provider: "novelai",
-        metadata: {
-          timestamp: Date.now(),
-          error: true,
-        },
-      };
+      yield this.createProviderErrorChunk(error);
     }
   }
 
@@ -2242,18 +2242,6 @@ export class NovelaiStreamAdapter implements StreamProvider {
       // Fallback if locale key doesn't exist
       return `Error Code ${errorCode}: ${error.message}`;
     }
-  }
-
-  /**
-   * Get provider information
-   */
-  getProviderInfo() {
-    return {
-      name: "novelai",
-      version: "1.0",
-      supportsStreaming: true,
-      supportsFunctionCalling: true, // Prompt-based tool calling for GLM-4.6
-    };
   }
 
   /**

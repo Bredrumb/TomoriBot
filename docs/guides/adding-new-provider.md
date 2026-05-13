@@ -1,4 +1,6 @@
-﻿# Add a New AI Provider
+<!-- ARCH-ALIGNMENT: prereq-phase-3 -->
+
+# Add a New AI Provider
 
 This is the current implementation guide for adding a provider to TomoriBot.
 
@@ -13,13 +15,13 @@ Today, adding a provider usually means all of the following:
 
 1. Add the provider implementation under `src/providers/{providerName}/`.
 2. Add static provider metadata in `providerInfo.ts`.
-3. Register that metadata in `src/utils/provider/providerInfoRegistry.ts`.
-4. Seed provider model inventory in the database.
-5. If the provider supports app-level runtime features beyond core chat, implement the relevant optional capability interfaces on the provider class.
+3. Seed provider model inventory in the database.
+4. If the provider supports app-level runtime features beyond core chat, implement the relevant optional capability interfaces on the provider class.
 
 Important rules:
 
-- `ProviderFactory` auto-discovers provider classes, not all provider metadata and feature executors.
+- `ProviderFactory` auto-discovers provider classes.
+- `providerInfoRegistry` auto-discovers `src/providers/*/providerInfo.ts` metadata and provider-owned feature implementation declarations.
 - Text model defaults come from the database/cache, not from hardcoded model arrays in provider code.
 - If a command only needs to know whether a provider supports a feature, use `providerSupportsFeature()`.
 - If a command needs provider-specific runtime execution, resolve a provider-owned capability instead of hardcoding `provider === "google"` style checks.
@@ -79,7 +81,8 @@ export const exampleProviderInfo: ProviderInfo = {
 	supportsVideos: false,
 	apiFamily: "openai-compatible",
 	featureSupport: {
-		nativeImageGeneration: false,
+		imageGeneration: "none",
+		videoGeneration: "none",
 		embeddings: false,
 		structuredOutput: false,
 		presetGeneration: false,
@@ -88,6 +91,7 @@ export const exampleProviderInfo: ProviderInfo = {
 		conversationCompaction: false,
 		historyExtraction: false,
 	},
+	supportedParams: ["temperature", "topP"] as const,
 };
 ```
 
@@ -96,6 +100,8 @@ Notes:
 - `supportedModels` is usually `[]` because the database is the source of truth for model inventory.
 - `apiFamily` should describe the underlying API surface, not the marketing name.
 - `featureSupport` should reflect app-level support, not just raw vendor API capability.
+- `featureImplementations` is optional. Use it only when this provider routes a shared runtime feature through an existing implementation key, such as `imageGeneration`, `videoGeneration`, or `liveTokenCounting`.
+- `usageCostMode: "none"` is optional metadata for providers where `/tool estimate cost` should not report per-token usage charges.
 
 ## 4. Implement the Provider Class
 
@@ -200,21 +206,17 @@ The pattern (used by Google, OpenRouter, and OpenAI-compatible adapters):
 If this step is missing, guild-registered MCP tools will be discovered and logged
 but never sent to the LLM — the model won't know they exist.
 
-## 6. Register the Provider Metadata
+## 6. Verify Provider Metadata Discovery
 
-`ProviderFactory` will auto-discover `{providerName}Provider.ts`, but that is not enough by itself.
+`ProviderFactory` auto-discovers `{providerName}Provider.ts`, and `providerInfoRegistry` auto-discovers `providerInfo.ts`.
 
-You must also update `src/utils/provider/providerInfoRegistry.ts`:
-
-1. import your `providerInfo.ts`
-2. add it to the `providerInfos` array
-This registry is what powers:
+The metadata registry powers:
 
 - alias normalization
 - capability checks via `providerSupportsFeature()`
-- legacy runtime execution routing via `resolveProviderFeatureImplementation()`
+- temporary runtime execution routing via `resolveProviderFeatureImplementation()`
 
-If you skip this step, the provider may stream chat successfully but still behave as unsupported in feature-gated commands.
+If `providerInfo.ts` is missing or does not export a valid `ProviderInfo` object, the provider may stream chat successfully but still behave as unsupported in feature-gated commands.
 
 ## 7. Implement Optional Runtime Capabilities When Needed
 
@@ -385,7 +387,7 @@ Use this as the last pass before you call a provider integration "done".
 - implement the provider-owned image-generation capability instead of faking it through text chat
 - seed `image_diffusion_models` only for models that are actually wired and tested
 - confirm `/config model image` and any image-generation commands use the provider cleanly
-- if the provider has no native image generation, leave `featureSupport.nativeImageGeneration = false` and do not seed image rows
+- if the provider has no native image generation, leave `featureSupport.imageGeneration = "none"` and do not seed image rows
 
 ### Embedding Models
 

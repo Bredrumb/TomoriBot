@@ -31,13 +31,13 @@ import { localizer } from "../../utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "../../utils/text/stringHelper";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { buildProviderStopStrings } from "../utils/stopStrings";
+import { BaseStreamAdapter } from "../../types/stream/interfaces";
 import type {
   ProcessedChunk,
   ProviderError,
   RawStreamChunk,
   StreamConfig,
   StreamContext,
-  StreamProvider,
 } from "../../types/stream/interfaces";
 import { fetchAndOptimizeImage } from "../../utils/image/imageProcessor";
 import { parseVertexCompositeKey, createVertexClient } from "./vertexClient";
@@ -86,7 +86,7 @@ interface VertexStreamChunk {
  * Shares the same speaker-guard, deduplication, and thought-signature
  * logic as GoogleStreamAdapter because the response format is identical.
  */
-export class VertexStreamAdapter implements StreamProvider {
+export class VertexStreamAdapter extends BaseStreamAdapter {
   private static readonly SPEAKER_GUARD_HOLDBACK_CHARS = 32;
   private static readonly STREAM_TEXT_TAIL_CHARS = 4096;
   private static readonly STREAM_TEXT_MIN_DEDUP_CHARS = 8;
@@ -105,7 +105,13 @@ export class VertexStreamAdapter implements StreamProvider {
   private readonly clientFactory: (apiKey: string) => GoogleGenAI;
 
   constructor(options: VertexStreamAdapterOptions = {}) {
-    this.providerName = options.providerName ?? "vertex";
+    const providerName = options.providerName ?? "vertex";
+    super({
+      name: providerName,
+      version: "1.0",
+      supportsFunctionCalling: true,
+    });
+    this.providerName = providerName;
     this.clientFactory =
       options.clientFactory ??
       ((apiKey: string) => {
@@ -385,16 +391,7 @@ export class VertexStreamAdapter implements StreamProvider {
         }
       }
 
-      // Convert Vertex/API errors to our format
-      const providerError = this.handleProviderError(error);
-      yield {
-        data: { error: providerError },
-        provider: this.providerName,
-        metadata: {
-          timestamp: Date.now(),
-          error: true,
-        },
-      };
+      yield this.createProviderErrorChunk(error, undefined, this.providerName);
     }
   }
 
@@ -1002,18 +999,6 @@ export class VertexStreamAdapter implements StreamProvider {
 
     const errorCode = error.code || "unknown";
     return `Error Code ${errorCode}: ${apiMessage}`;
-  }
-
-  /**
-   * Get provider information
-   */
-  getProviderInfo() {
-    return {
-      name: this.providerName,
-      version: "1.0",
-      supportsStreaming: true,
-      supportsFunctionCalling: true,
-    };
   }
 
   // ─── Context assembly (shared with Google) ───────────────────────────

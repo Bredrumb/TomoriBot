@@ -66,8 +66,8 @@ Follow `docs/guides/adding-new-provider.md`.
 Important:
 
 1. Provider class auto-discovery is only one part of provider integration.
-2. New providers also need static metadata in `providerInfo.ts` and registration in `src/utils/provider/providerInfoRegistry.ts`.
-3. If the provider supports app-level features beyond core chat, wire those feature executors too.
+2. New providers also need static metadata in `providerInfo.ts`; `providerInfoRegistry` auto-discovers it.
+3. If the provider supports app-level features beyond core chat, declare those feature implementations in `providerInfo.ts`.
 4. Seed the correct model tables for the features you support.
 
 ## 7) Add a New Feature Flag-Controlled Tool

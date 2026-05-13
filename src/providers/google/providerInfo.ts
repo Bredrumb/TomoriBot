@@ -22,5 +22,10 @@ export const googleProviderInfo: ProviderInfo = {
     conversationCompaction: true,
     historyExtraction: true,
   },
+  featureImplementations: {
+    imageGeneration: "google",
+    videoGeneration: "google",
+    liveTokenCounting: "google",
+  },
   supportedParams: ["temperature", "topP", "topK", "frequencyPenalty", "presencePenalty"] as const,
 };

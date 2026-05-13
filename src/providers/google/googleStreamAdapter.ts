@@ -30,13 +30,13 @@ import { localizer } from "../../utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "../../utils/text/stringHelper";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { buildProviderStopStrings } from "../utils/stopStrings";
+import { BaseStreamAdapter } from "../../types/stream/interfaces";
 import type {
   ProcessedChunk,
   ProviderError,
   RawStreamChunk,
   StreamConfig,
   StreamContext,
-  StreamProvider,
 } from "../../types/stream/interfaces";
 import { extractGifKeyframes } from "../../utils/media/gifProcessor";
 import { fetchAndOptimizeImage } from "../../utils/image/imageProcessor";
@@ -87,7 +87,7 @@ interface GoogleStreamChunk {
  * - Thought signatures and summaries are included in ProcessedChunk.metadata
  * - Enables the model to maintain reasoning context across function calls
  */
-export class GoogleStreamAdapter implements StreamProvider {
+export class GoogleStreamAdapter extends BaseStreamAdapter {
   private static readonly SPEAKER_GUARD_HOLDBACK_CHARS = 32;
   private static readonly STREAM_TEXT_TAIL_CHARS = 4096;
   private static readonly STREAM_TEXT_MIN_DEDUP_CHARS = 8;
@@ -103,6 +103,14 @@ export class GoogleStreamAdapter implements StreamProvider {
   private speakerGuardPendingTail = "";
   private streamedTextTail = "";
   private speakerGuardEnabled = false;
+
+  constructor() {
+    super({
+      name: "google",
+      version: "2.5",
+      supportsFunctionCalling: true,
+    });
+  }
 
   /**
    * Build a Gemini payload for token counting (or other non-stream requests)
@@ -359,15 +367,7 @@ export class GoogleStreamAdapter implements StreamProvider {
       }
 
       // Convert Google API errors to our format
-      const providerError = this.handleProviderError(error);
-      yield {
-        data: { error: providerError },
-        provider: "google",
-        metadata: {
-          timestamp: Date.now(),
-          error: true,
-        },
-      };
+      yield this.createProviderErrorChunk(error);
     }
   }
 
@@ -975,18 +975,6 @@ export class GoogleStreamAdapter implements StreamProvider {
     // Format as "Error Code {code}: {Google message}"
     const errorCode = error.code || "unknown";
     return `Error Code ${errorCode}: ${googleMessage}`;
-  }
-
-  /**
-   * Get provider information
-   */
-  getProviderInfo() {
-    return {
-      name: "google",
-      version: "2.5",
-      supportsStreaming: true,
-      supportsFunctionCalling: true,
-    };
   }
 
   /**

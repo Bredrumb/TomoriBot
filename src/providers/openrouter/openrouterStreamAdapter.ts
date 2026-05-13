@@ -29,13 +29,13 @@ import { buildProviderStopStrings } from "../utils/stopStrings";
 import { fetchAndOptimizeImage } from "../../utils/image/imageProcessor";
 import { buildOpenrouterProviderRouting } from "./providerRouting";
 import { buildOpenRouterReasoningRequest } from "@/utils/provider/thinkingControl";
+import { BaseStreamAdapter } from "../../types/stream/interfaces";
 import type {
   ProcessedChunk,
   ProviderError,
   RawStreamChunk,
   StreamConfig,
   StreamContext,
-  StreamProvider,
 } from "../../types/stream/interfaces";
 
 /**
@@ -139,7 +139,7 @@ const OPENROUTER_VERBOSE_FETCH = (process.env.OPENROUTER_VERBOSE_FETCH ?? "true"
 /**
  * OpenRouter streaming adapter implementation
  */
-export class OpenrouterStreamAdapter implements StreamProvider {
+export class OpenrouterStreamAdapter extends BaseStreamAdapter {
   private static readonly TEMPERATURE_OMIT_MODELS = new Set<string>([
     // Models that don't support temperature parameter
     // (empty - pony-alpha removed as deprecated)
@@ -188,6 +188,14 @@ export class OpenrouterStreamAdapter implements StreamProvider {
   private speakerGuardPendingTail = "";
   private streamedTextTail = "";
   private speakerGuardEnabled = false;
+
+  constructor() {
+    super({
+      name: "openrouter",
+      version: "1.0.0",
+      supportsFunctionCalling: true,
+    });
+  }
 
   /**
    * Build OpenRouter chat messages from structured context.
@@ -983,16 +991,7 @@ export class OpenrouterStreamAdapter implements StreamProvider {
         };
         this.speakerGuardPendingTail = "";
       }
-      // Convert OpenRouter API errors to our format
-      const providerError = this.handleProviderError(error);
-      yield {
-        data: { error: providerError },
-        provider: "openrouter",
-        metadata: {
-          timestamp: Date.now(),
-          error: true,
-        },
-      };
+      yield this.createProviderErrorChunk(error);
     }
   }
 
@@ -2057,23 +2056,6 @@ export class OpenrouterStreamAdapter implements StreamProvider {
     // Format as "Error Code {code}: {OpenRouter message}"
     const errorCode = error.code || "unknown";
     return `Error Code ${errorCode}: ${openrouterMessage}`;
-  }
-
-  /**
-   * Get provider metadata
-   */
-  getProviderInfo(): {
-    name: string;
-    version: string;
-    supportsStreaming: boolean;
-    supportsFunctionCalling: boolean;
-  } {
-    return {
-      name: "openrouter",
-      version: "1.0.0",
-      supportsStreaming: true,
-      supportsFunctionCalling: true,
-    };
   }
 
   /**

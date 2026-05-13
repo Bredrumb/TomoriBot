@@ -20,13 +20,13 @@ import { fetchAndOptimizeImage } from "../../utils/image/imageProcessor";
 import { isParamDisabled, selectAnthropicSamplingParams } from "@/utils/provider/samplingControl";
 import { buildAnthropicThinkingRequest } from "@/utils/provider/thinkingControl";
 import { buildProviderStopStrings } from "../utils/stopStrings";
+import { BaseStreamAdapter } from "../../types/stream/interfaces";
 import type {
   ProcessedChunk,
   ProviderError,
   RawStreamChunk,
   StreamConfig,
   StreamContext,
-  StreamProvider,
 } from "../../types/stream/interfaces";
 
 /**
@@ -132,7 +132,7 @@ const SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
   ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
 ];
 
-export class AnthropicStreamAdapter implements StreamProvider {
+export class AnthropicStreamAdapter extends BaseStreamAdapter {
   // Accumulators for tool calls across streaming chunks (per-stream instance)
   private toolCallAccumulator: Map<number, AccumulatedToolCall> = new Map();
   // Accumulator for thinking text across streaming chunks
@@ -144,6 +144,14 @@ export class AnthropicStreamAdapter implements StreamProvider {
   // Usage stats from message_start and message_delta
   private inputTokens = 0;
   private outputTokens = 0;
+
+  constructor() {
+    super({
+      name: "anthropic",
+      version: "1.0.0",
+      supportsFunctionCalling: true,
+    });
+  }
 
   /**
    * Initialize and start the streaming process with Anthropic's Messages API
@@ -284,14 +292,9 @@ export class AnthropicStreamAdapter implements StreamProvider {
 
       log.error(`AnthropicStreamAdapter: HTTP ${response.status} error: ${errorText}`);
 
-      yield {
-        data: {
-          type: "error",
-          error: errorData,
-          statusCode: response.status,
-        },
-        provider: "anthropic",
-      };
+      const anthropicError = new Error(JSON.stringify({ error: errorData }));
+      Object.assign(anthropicError, { statusCode: response.status });
+      yield this.createProviderErrorChunk(anthropicError);
       return;
     }
 
@@ -384,6 +387,18 @@ export class AnthropicStreamAdapter implements StreamProvider {
    * Convert a raw Anthropic SSE event into a normalized ProcessedChunk
    */
   processChunk(chunk: RawStreamChunk): ProcessedChunk {
+    if (
+      typeof chunk.data === "object" &&
+      chunk.data !== null &&
+      "error" in chunk.data &&
+      (chunk.data as { error?: unknown }).error
+    ) {
+      return {
+        type: "error",
+        error: (chunk.data as { error: ProviderError }).error,
+      };
+    }
+
     const sseEvent = chunk.data as ParsedSseEvent;
     const { eventType, data } = sseEvent;
     const thoughts: ThoughtLogEntry[] = [];
@@ -719,18 +734,6 @@ export class AnthropicStreamAdapter implements StreamProvider {
     }
 
     return message || null;
-  }
-
-  /**
-   * Get provider info for logging
-   */
-  getProviderInfo(): { name: string; version: string; supportsStreaming: boolean; supportsFunctionCalling: boolean } {
-    return {
-      name: "anthropic",
-      version: "1.0.0",
-      supportsStreaming: true,
-      supportsFunctionCalling: true,
-    };
   }
 
   /**

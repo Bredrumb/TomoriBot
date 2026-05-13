@@ -1,35 +1,49 @@
 import type {
   ProviderApiFamily,
-  ProviderFeatureSupport,
+  ProviderFeatureImplementation,
+  ProviderFeatureName,
   ProviderInfo,
   SupportedParam,
 } from "@/types/provider/interfaces";
-import { customProviderInfo } from "@/providers/custom/providerInfo";
-import { deepseekProviderInfo } from "@/providers/deepseek/providerInfo";
-import { zaiProviderInfo } from "@/providers/zai/providerInfo";
-import { zaicodingProviderInfo } from "@/providers/zaicoding/providerInfo";
-import { googleProviderInfo } from "@/providers/google/providerInfo";
-import { novelaiProviderInfo } from "@/providers/novelai/providerInfo";
-import { nvidiaProviderInfo } from "@/providers/nvidia/providerInfo";
-import { openrouterProviderInfo } from "@/providers/openrouter/providerInfo";
-import { vertexProviderInfo } from "@/providers/vertex/providerInfo";
-import { vertexexpressProviderInfo } from "@/providers/vertexexpress/providerInfo";
-import { anthropicProviderInfo } from "@/providers/anthropic/providerInfo";
 import { getCustomProviderDisplayName, isCustomProvider } from "@/utils/provider/customProviderUtils";
+import * as path from "node:path";
+import { Glob } from "bun";
 
-const providerInfos: readonly ProviderInfo[] = [
-  googleProviderInfo,
-  openrouterProviderInfo,
-  novelaiProviderInfo,
-  nvidiaProviderInfo,
-  customProviderInfo,
-  deepseekProviderInfo,
-  zaiProviderInfo,
-  zaicodingProviderInfo,
-  vertexProviderInfo,
-  vertexexpressProviderInfo,
-  anthropicProviderInfo,
-] as const;
+type ProviderInfoModule = Record<string, unknown>;
+
+function isProviderInfo(value: unknown): value is ProviderInfo {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const candidate = value as Partial<ProviderInfo>;
+  return (
+    typeof candidate.name === "string" &&
+    typeof candidate.displayName === "string" &&
+    Array.isArray(candidate.supportedModels) &&
+    typeof candidate.featureSupport === "object" &&
+    Array.isArray(candidate.supportedParams)
+  );
+}
+
+async function discoverProviderInfos(): Promise<readonly ProviderInfo[]> {
+  const providersPath = path.join(import.meta.dir, "../../providers");
+  const glob = new Glob("*/providerInfo.ts");
+  const providerInfos: ProviderInfo[] = [];
+
+  for await (const providerInfoPath of glob.scan({ cwd: providersPath, onlyFiles: true })) {
+    const providerName = providerInfoPath.split(/[\\/]/)[0];
+    const module = (await import(`../../providers/${providerName}/providerInfo`)) as ProviderInfoModule;
+    const providerInfo = Object.values(module).find(isProviderInfo);
+    if (!providerInfo) {
+      throw new Error(`No ProviderInfo export found in ${providerInfoPath}`);
+    }
+    providerInfos.push(providerInfo);
+  }
+
+  return providerInfos.sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+const providerInfos = await discoverProviderInfos();
 
 const providerInfoByCanonicalName = new Map<string, ProviderInfo>(
   providerInfos.map((info) => [info.name.toLowerCase(), info]),
@@ -44,42 +58,19 @@ for (const info of providerInfos) {
   }
 }
 
-export type ProviderFeatureName = keyof ProviderFeatureSupport;
-export type ProviderFeatureImplementation =
-  | "google"
-  | "openrouter"
-  | "novelai"
-  | "custom"
-  | "deepseek"
-  | "nvidia"
-  | "zai"
-  | "vertex"
-  | "anthropic";
-
 const providerFeatureImplementations: Partial<
   Record<ProviderFeatureName, Partial<Record<string, ProviderFeatureImplementation>>>
-> = {
-  imageGeneration: {
-    google: "google",
-    openrouter: "openrouter",
-    novelai: "novelai",
-    zai: "zai",
-    nvidia: "nvidia",
-  },
-  videoGeneration: {
-    google: "google",
-    openrouter: "openrouter",
-    zai: "zai",
-  },
-  liveTokenCounting: {
-    google: "google",
-    openrouter: "openrouter",
-    deepseek: "deepseek",
-    zai: "zai",
-    zaicoding: "zai",
-    anthropic: "anthropic",
-  },
-};
+> = {};
+
+for (const info of providerInfos) {
+  const canonicalName = info.name.toLowerCase();
+  for (const [featureName, implementation] of Object.entries(info.featureImplementations ?? {}) as Array<
+    [ProviderFeatureName, ProviderFeatureImplementation]
+  >) {
+    providerFeatureImplementations[featureName] ??= {};
+    providerFeatureImplementations[featureName][canonicalName] = implementation;
+  }
+}
 
 export function normalizeProviderName(providerName: string): string {
   const normalizedName = providerName.toLowerCase().trim();

@@ -38,6 +38,7 @@ import {
   resolveActiveTranscriptionEndpoint,
   resolveActiveSpeechEndpoint,
 } from "@/utils/provider/speechEndpointResolver";
+import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import type {
   UserRow,
   ChannelWhitelistRow,
@@ -551,14 +552,10 @@ function getOptionalApiServiceDisplayName(serviceName: string, locale: string): 
   switch (serviceName) {
     case "brave-search":
       return localizer(locale, "commands.tool.status.optional_api_service_brave");
-    case "google":
-      return localizer(locale, "commands.tool.status.optional_api_service_google");
     case "elevenlabs":
       return localizer(locale, "commands.tool.status.optional_api_service_elevenlabs");
-    case "novelai":
-      return localizer(locale, "commands.tool.status.optional_api_service_novelai");
     default:
-      return serviceName;
+      return getProviderDisplayName(serviceName);
   }
 }
 

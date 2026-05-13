@@ -115,7 +115,7 @@ import {
   resolveCapabilityCredentials,
 } from "@/utils/provider/credentialResolver";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
-import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
+import { getProviderDisplayName, providerUsesApiFamily } from "@/utils/provider/providerInfoRegistry";
 
 // Base trigger words that will always work (with or without spaces for English)
 const BASE_TRIGGER_WORDS = process.env.BASE_TRIGGER_WORDS?.split(",").map((word) => word.trim()) || [
@@ -258,6 +258,100 @@ const OPENROUTER_LENGTH_EMPTY_RETRY_DROP_PAIRS = parseIntegerEnvFlag(
   2,
   1,
 );
+
+function providerIsApiFamily(providerName: string, apiFamily: Parameters<typeof providerUsesApiFamily>[1]): boolean {
+  return providerUsesApiFamily(providerName, apiFamily);
+}
+
+async function applyProviderContextTruncation(
+  contextSegments: StructuredContextItem[],
+  tomoriState: TomoriState,
+  serverDiscId: string,
+): Promise<StructuredContextItem[]> {
+  if (
+    providerIsApiFamily(tomoriState.llm.llm_provider, "openrouter") &&
+    tomoriState.llm.llm_codename !== "other-model" &&
+    isOpenRouterCapabilityCacheReady()
+  ) {
+    const tokenLimits = getOpenRouterTokenLimits(tomoriState.llm.llm_codename);
+    const openrouterTruncationOutputCap = Number.parseInt(process.env.OPENROUTER_MAX_OUTPUT_TOKENS || "8192", 10);
+    if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
+      const truncationMaxCompletionTokens = Math.min(tokenLimits.maxCompletionTokens, openrouterTruncationOutputCap);
+      const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } = truncateDialogueHistory(
+        contextSegments,
+        tokenLimits.contextLength,
+        truncationMaxCompletionTokens,
+      );
+      if (totalDropped > 0) {
+        log.warn(
+          `History truncation: dropped ${historyPairsDropped} history exchange pair(s) and ` +
+            `${sampleItemsDropped} sample dialogue item(s) for ` +
+            `${tomoriState.llm.llm_codename} to preserve output budget`,
+        );
+        return truncated;
+      }
+    }
+    return contextSegments;
+  }
+
+  if (providerIsApiFamily(tomoriState.llm.llm_provider, "google-genai")) {
+    const tokenLimits = getGeminiTokenLimits(tomoriState.llm.llm_codename);
+    if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
+      const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } = truncateDialogueHistory(
+        contextSegments,
+        tokenLimits.contextLength,
+        tokenLimits.maxCompletionTokens,
+      );
+      if (totalDropped > 0) {
+        log.warn(
+          `History truncation: dropped ${historyPairsDropped} history exchange pair(s) and ` +
+            `${sampleItemsDropped} sample dialogue item(s) for ` +
+            `${tomoriState.llm.llm_codename} to preserve output budget`,
+        );
+        return truncated;
+      }
+    }
+    return contextSegments;
+  }
+
+  if (providerIsApiFamily(tomoriState.llm.llm_provider, "novelai")) {
+    let naiSubscriptionTokens = getCachedContextTokens(serverDiscId);
+    if (naiSubscriptionTokens === undefined && tomoriState.config.api_key) {
+      try {
+        const tempKey = await decryptApiKey(tomoriState.config.api_key, tomoriState.config.key_version || 1);
+        naiSubscriptionTokens = await refreshNovelAISubscription(serverDiscId, tempKey);
+      } catch {
+        // Subscription fetch failed; getNovelAITokenLimits will use env var fallback
+      }
+    }
+    const tokenLimits = getNovelAITokenLimits(tomoriState.llm.llm_codename, naiSubscriptionTokens);
+    if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
+      const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } = truncateDialogueHistory(
+        contextSegments,
+        tokenLimits.contextLength,
+        tokenLimits.maxCompletionTokens,
+      );
+      if (totalDropped > 0) {
+        log.warn(
+          `History truncation: dropped ${historyPairsDropped} history exchange pair(s) and ` +
+            `${sampleItemsDropped} sample dialogue item(s) for ` +
+            `${tomoriState.llm.llm_codename} to preserve output budget`,
+        );
+        return truncated;
+      }
+    }
+  }
+
+  return contextSegments;
+}
+
+function shouldApplyLengthEmptyRetryTrim(
+  providerName: string,
+  emptyResponseFinishReason: string | null | undefined,
+  retryCount: number,
+): boolean {
+  return emptyResponseFinishReason === "length" && retryCount > 0 && providerIsApiFamily(providerName, "openrouter");
+}
 const REACTION_CONTEXT_MAX_API_CALLS_PER_TURN = parseIntegerEnvFlag(
   process.env.REACTION_CONTEXT_MAX_API_CALLS_PER_TURN,
   20,
@@ -5582,7 +5676,7 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
               false;
 
             const isNovelaiKayraOrErato =
-              tomoriState.llm.llm_provider === "novelai" &&
+              providerIsApiFamily(tomoriState.llm.llm_provider, "novelai") &&
               (tomoriState.llm.llm_codename === "kayra-v1" || tomoriState.llm.llm_codename === "llama-3-erato-v1");
             const usePrefillContinuationDirective = Boolean(trimmedPrefill) && !isNovelaiKayraOrErato;
             if (trimmedPrefill && isNovelaiKayraOrErato) {
@@ -5631,7 +5725,8 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
           let effectiveContextSeesVideos: boolean | undefined;
           const activeLlm = tomoriState?.llm;
           if (
-            activeLlm?.llm_provider === "openrouter" &&
+            activeLlm &&
+            providerIsApiFamily(activeLlm.llm_provider, "openrouter") &&
             activeLlm.llm_codename !== "other-model" &&
             isOpenRouterCapabilityCacheReady()
           ) {
@@ -5696,84 +5791,13 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
             // OpenRouter: uses the live capability cache (fetched at startup from their API).
             // Google:     uses the static GEMINI_TOKEN_LIMITS map (compile-time constant).
             // NovelAI:    uses perks.contextTokens from GET /user/subscription (cached per guild, 24h TTL).
-            if (
-              tomoriState.llm.llm_provider === "openrouter" &&
-              tomoriState.llm.llm_codename !== "other-model" &&
-              isOpenRouterCapabilityCacheReady()
-            ) {
-              const tokenLimits = getOpenRouterTokenLimits(tomoriState.llm.llm_codename);
-              const openrouterTruncationOutputCap = Number.parseInt(
-                process.env.OPENROUTER_MAX_OUTPUT_TOKENS || "8192",
-                10,
-              );
-              if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
-                const truncationMaxCompletionTokens = Math.min(
-                  tokenLimits.maxCompletionTokens,
-                  openrouterTruncationOutputCap,
-                );
-                const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } = truncateDialogueHistory(
-                  contextSegments,
-                  tokenLimits.contextLength,
-                  truncationMaxCompletionTokens,
-                );
-                if (totalDropped > 0) {
-                  log.warn(
-                    `History truncation: dropped ${historyPairsDropped} history exchange pair(s) and ` +
-                      `${sampleItemsDropped} sample dialogue item(s) for ` +
-                      `${tomoriState.llm.llm_codename} to preserve output budget`,
-                  );
-                  contextSegments = truncated;
-                }
-              }
-            } else if (tomoriState.llm.llm_provider === "google") {
-              const tokenLimits = getGeminiTokenLimits(tomoriState.llm.llm_codename);
-              if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
-                const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } = truncateDialogueHistory(
-                  contextSegments,
-                  tokenLimits.contextLength,
-                  tokenLimits.maxCompletionTokens,
-                );
-                if (totalDropped > 0) {
-                  log.warn(
-                    `History truncation: dropped ${historyPairsDropped} history exchange pair(s) and ` +
-                      `${sampleItemsDropped} sample dialogue item(s) for ` +
-                      `${tomoriState.llm.llm_codename} to preserve output budget`,
-                  );
-                  contextSegments = truncated;
-                }
-              }
-            } else if (tomoriState.llm.llm_provider === "novelai") {
-              // Look up subscription contextTokens for accurate tier-aware truncation.
-              // If cache is cold (e.g. after bot restart), decrypt the key early and fetch.
-              let naiSubscriptionTokens = getCachedContextTokens(serverDiscId);
-              if (naiSubscriptionTokens === undefined && tomoriState.config.api_key) {
-                try {
-                  const tempKey = await decryptApiKey(tomoriState.config.api_key, tomoriState.config.key_version || 1);
-                  naiSubscriptionTokens = await refreshNovelAISubscription(serverDiscId, tempKey);
-                } catch {
-                  // Subscription fetch failed; getNovelAITokenLimits will use env var fallback
-                }
-              }
-              const tokenLimits = getNovelAITokenLimits(tomoriState.llm.llm_codename, naiSubscriptionTokens);
-              if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
-                const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } = truncateDialogueHistory(
-                  contextSegments,
-                  tokenLimits.contextLength,
-                  tokenLimits.maxCompletionTokens,
-                );
-                if (totalDropped > 0) {
-                  log.warn(
-                    `History truncation: dropped ${historyPairsDropped} history exchange pair(s) and ` +
-                      `${sampleItemsDropped} sample dialogue item(s) for ` +
-                      `${tomoriState.llm.llm_codename} to preserve output budget`,
-                  );
-                  contextSegments = truncated;
-                }
-              }
-            }
+            contextSegments = await applyProviderContextTruncation(contextSegments, tomoriState, serverDiscId);
 
-            const shouldApplyOpenRouterLengthRetryTrim =
-              emptyResponseFinishReason === "length" && retryCount > 0 && tomoriState.llm.llm_provider === "openrouter";
+            const shouldApplyOpenRouterLengthRetryTrim = shouldApplyLengthEmptyRetryTrim(
+              tomoriState.llm.llm_provider,
+              emptyResponseFinishReason,
+              retryCount,
+            );
             if (shouldApplyOpenRouterLengthRetryTrim) {
               const requestedPairDrops = OPENROUTER_LENGTH_EMPTY_RETRY_DROP_PAIRS * retryCount;
               const { truncated, historyPairsDropped } = dropOldestHistoryExchangePairs(
@@ -6076,7 +6100,7 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
           // Thread the subscription-derived Kayra context limit into providerConfig so the
           // secondary dynamic cap in novelaiStreamAdapter uses the correct tier limit
           // (not the env var default of 8192) for Tablet users (4096) and others.
-          if (tomoriState.llm.llm_provider === "novelai") {
+          if (providerIsApiFamily(tomoriState.llm.llm_provider, "novelai")) {
             const cachedKayraLimit = getCachedContextTokens(serverDiscId);
             if (cachedKayraLimit !== undefined) {
               (providerConfig as NovelaiStreamConfig).kayraContextLimit = cachedKayraLimit;
@@ -6638,7 +6662,7 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
                     }
 
                     // Re-apply NovelAI subscription context limit when relevant
-                    if (entry.model.llm_provider === "novelai") {
+                    if (providerIsApiFamily(entry.model.llm_provider, "novelai")) {
                       const cachedKayraLimit = getCachedContextTokens(serverDiscId);
                       if (cachedKayraLimit !== undefined) {
                         (providerConfig as NovelaiStreamConfig).kayraContextLimit = cachedKayraLimit;
@@ -7411,92 +7435,17 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
                       // OpenRouter: uses the live capability cache (fetched at startup from their API).
                       // Google:     uses the static GEMINI_TOKEN_LIMITS map (compile-time constant).
                       // NovelAI:    uses perks.contextTokens from GET /user/subscription (cached per guild, 24h TTL).
-                      if (
-                        tomoriState.llm.llm_provider === "openrouter" &&
-                        tomoriState.llm.llm_codename !== "other-model" &&
-                        isOpenRouterCapabilityCacheReady()
-                      ) {
-                        const tokenLimits = getOpenRouterTokenLimits(tomoriState.llm.llm_codename);
-                        const openrouterTruncationOutputCap = Number.parseInt(
-                          process.env.OPENROUTER_MAX_OUTPUT_TOKENS || "8192",
-                          10,
-                        );
-                        if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
-                          const truncationMaxCompletionTokens = Math.min(
-                            tokenLimits.maxCompletionTokens,
-                            openrouterTruncationOutputCap,
-                          );
-                          const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } =
-                            truncateDialogueHistory(
-                              contextSegments,
-                              tokenLimits.contextLength,
-                              truncationMaxCompletionTokens,
-                            );
-                          if (totalDropped > 0) {
-                            log.warn(
-                              `History truncation: dropped ${historyPairsDropped} history exchange pair(s) and ` +
-                                `${sampleItemsDropped} sample dialogue item(s) for ` +
-                                `${tomoriState.llm.llm_codename} to preserve output budget`,
-                            );
-                            contextSegments = truncated;
-                          }
-                        }
-                      } else if (tomoriState.llm.llm_provider === "google") {
-                        const tokenLimits = getGeminiTokenLimits(tomoriState.llm.llm_codename);
-                        if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
-                          const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } =
-                            truncateDialogueHistory(
-                              contextSegments,
-                              tokenLimits.contextLength,
-                              tokenLimits.maxCompletionTokens,
-                            );
-                          if (totalDropped > 0) {
-                            log.warn(
-                              `History truncation: dropped ${historyPairsDropped} history exchange pair(s) and ` +
-                                `${sampleItemsDropped} sample dialogue item(s) for ` +
-                                `${tomoriState.llm.llm_codename} to preserve output budget`,
-                            );
-                            contextSegments = truncated;
-                          }
-                        }
-                      } else if (tomoriState.llm.llm_provider === "novelai") {
-                        // Look up subscription contextTokens for accurate tier-aware truncation.
-                        // If cache is cold (e.g. after bot restart), decrypt the key early and fetch.
-                        let naiSubscriptionTokens = getCachedContextTokens(serverDiscId);
-                        if (naiSubscriptionTokens === undefined && tomoriState.config.api_key) {
-                          try {
-                            const tempKey = await decryptApiKey(
-                              tomoriState.config.api_key,
-                              tomoriState.config.key_version || 1,
-                            );
-                            naiSubscriptionTokens = await refreshNovelAISubscription(serverDiscId, tempKey);
-                          } catch {
-                            // Subscription fetch failed; getNovelAITokenLimits will use env var fallback
-                          }
-                        }
-                        const tokenLimits = getNovelAITokenLimits(tomoriState.llm.llm_codename, naiSubscriptionTokens);
-                        if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
-                          const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } =
-                            truncateDialogueHistory(
-                              contextSegments,
-                              tokenLimits.contextLength,
-                              tokenLimits.maxCompletionTokens,
-                            );
-                          if (totalDropped > 0) {
-                            log.warn(
-                              `History truncation: dropped ${historyPairsDropped} history exchange pair(s) and ` +
-                                `${sampleItemsDropped} sample dialogue item(s) for ` +
-                                `${tomoriState.llm.llm_codename} to preserve output budget`,
-                            );
-                            contextSegments = truncated;
-                          }
-                        }
-                      }
+                      contextSegments = await applyProviderContextTruncation(
+                        contextSegments,
+                        tomoriState,
+                        serverDiscId,
+                      );
 
-                      const shouldApplyOpenRouterLengthRetryTrim =
-                        emptyResponseFinishReason === "length" &&
-                        retryCount > 0 &&
-                        tomoriState.llm.llm_provider === "openrouter";
+                      const shouldApplyOpenRouterLengthRetryTrim = shouldApplyLengthEmptyRetryTrim(
+                        tomoriState.llm.llm_provider,
+                        emptyResponseFinishReason,
+                        retryCount,
+                      );
                       if (shouldApplyOpenRouterLengthRetryTrim) {
                         const requestedPairDrops = OPENROUTER_LENGTH_EMPTY_RETRY_DROP_PAIRS * retryCount;
                         const { truncated, historyPairsDropped } = dropOldestHistoryExchangePairs(
@@ -7682,91 +7631,18 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
 
                       // 4. Truncate oldest dialogue history pairs if the conversation is approaching
                       // the context window limit, ensuring the output budget is always preserved.
-                      if (
-                        tomoriState.llm.llm_provider === "openrouter" &&
-                        tomoriState.llm.llm_codename !== "other-model" &&
-                        isOpenRouterCapabilityCacheReady()
-                      ) {
-                        const tokenLimits = getOpenRouterTokenLimits(tomoriState.llm.llm_codename);
-                        const openrouterTruncationOutputCap = Number.parseInt(
-                          process.env.OPENROUTER_MAX_OUTPUT_TOKENS || "8192",
-                          10,
-                        );
-                        if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
-                          const truncationMaxCompletionTokens = Math.min(
-                            tokenLimits.maxCompletionTokens,
-                            openrouterTruncationOutputCap,
-                          );
-                          const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } =
-                            truncateDialogueHistory(
-                              contextSegments,
-                              tokenLimits.contextLength,
-                              truncationMaxCompletionTokens,
-                            );
-                          if (totalDropped > 0) {
-                            log.warn(
-                              `History truncation: dropped ${historyPairsDropped} history exchange pair(s) and ` +
-                                `${sampleItemsDropped} sample dialogue item(s) for ` +
-                                `${tomoriState.llm.llm_codename} to preserve output budget`,
-                            );
-                            contextSegments = truncated;
-                          }
-                        }
-                      } else if (tomoriState.llm.llm_provider === "google") {
-                        const tokenLimits = getGeminiTokenLimits(tomoriState.llm.llm_codename);
-                        if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
-                          const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } =
-                            truncateDialogueHistory(
-                              contextSegments,
-                              tokenLimits.contextLength,
-                              tokenLimits.maxCompletionTokens,
-                            );
-                          if (totalDropped > 0) {
-                            log.warn(
-                              `History truncation: dropped ${historyPairsDropped} history exchange pair(s) and ` +
-                                `${sampleItemsDropped} sample dialogue item(s) for ` +
-                                `${tomoriState.llm.llm_codename} to preserve output budget`,
-                            );
-                            contextSegments = truncated;
-                          }
-                        }
-                      } else if (tomoriState.llm.llm_provider === "novelai") {
-                        let naiSubscriptionTokens = getCachedContextTokens(serverDiscId);
-                        if (naiSubscriptionTokens === undefined && tomoriState.config.api_key) {
-                          try {
-                            const tempKey = await decryptApiKey(
-                              tomoriState.config.api_key,
-                              tomoriState.config.key_version || 1,
-                            );
-                            naiSubscriptionTokens = await refreshNovelAISubscription(serverDiscId, tempKey);
-                          } catch {
-                            // Subscription fetch failed; getNovelAITokenLimits will use env var fallback
-                          }
-                        }
-                        const tokenLimits = getNovelAITokenLimits(tomoriState.llm.llm_codename, naiSubscriptionTokens);
-                        if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
-                          const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } =
-                            truncateDialogueHistory(
-                              contextSegments,
-                              tokenLimits.contextLength,
-                              tokenLimits.maxCompletionTokens,
-                            );
-                          if (totalDropped > 0) {
-                            log.warn(
-                              `History truncation: dropped ${historyPairsDropped} history exchange pair(s) and ` +
-                                `${sampleItemsDropped} sample dialogue item(s) for ` +
-                                `${tomoriState.llm.llm_codename} to preserve output budget`,
-                            );
-                            contextSegments = truncated;
-                          }
-                        }
-                      }
+                      contextSegments = await applyProviderContextTruncation(
+                        contextSegments,
+                        tomoriState,
+                        serverDiscId,
+                      );
 
                       // 5. Length retry trim (same as media expansion handler)
-                      const shouldApplyOpenRouterLengthRetryTrim =
-                        emptyResponseFinishReason === "length" &&
-                        retryCount > 0 &&
-                        tomoriState.llm.llm_provider === "openrouter";
+                      const shouldApplyOpenRouterLengthRetryTrim = shouldApplyLengthEmptyRetryTrim(
+                        tomoriState.llm.llm_provider,
+                        emptyResponseFinishReason,
+                        retryCount,
+                      );
                       if (shouldApplyOpenRouterLengthRetryTrim) {
                         const requestedPairDrops = OPENROUTER_LENGTH_EMPTY_RETRY_DROP_PAIRS * retryCount;
                         const { truncated, historyPairsDropped } = dropOldestHistoryExchangePairs(
@@ -7977,7 +7853,7 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
                     // without repeating the pre-tool text to Discord. After exceeding the
                     // retry threshold, show an error embed and end the turn.
                     const textAlreadySent = (streamResult.accumulatedText ?? "").trim().length > 0;
-                    if (textAlreadySent && provider.getInfo().name === "novelai") {
+                    if (textAlreadySent && providerIsApiFamily(provider.getInfo().name, "novelai")) {
                       naiConsecutiveToolFailures++;
                       if (naiConsecutiveToolFailures >= NAI_TOOL_FAILURE_RETRY_THRESHOLD) {
                         log.warn(
@@ -8064,7 +7940,7 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
                   // 4. NAI GLM follow-up control: decide whether to allow, suppress,
                   // or skip the next generation based on whether text was already sent
                   // and whether the tool requires a follow-up (e.g., search/fetch).
-                  if (providerName === "novelai" && hasPreToolText) {
+                  if (providerIsApiFamily(providerName, "novelai") && hasPreToolText) {
                     // STM is always a silent tool — end the turn immediately (unchanged)
                     if (funcName === "update_short_term_memory") {
                       log.info(

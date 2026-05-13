@@ -1,4 +1,6 @@
-﻿# 8. AI Provider System
+<!-- ARCH-ALIGNMENT: prereq-phase-3 -->
+
+# 8. AI Provider System
 
 TomoriBot uses a provider abstraction so chat logic stays provider-agnostic.
 
@@ -18,6 +20,22 @@ All providers implement `LLMProvider`, including:
 - `createConfig()`
 - `streamToDiscord()`
 - `getDefaultModel()`
+
+## Stream Adapter Contract
+
+Provider streaming is normalized through `StreamProvider` and `BaseStreamAdapter` in `src/types/stream/interfaces.ts`.
+
+Concrete adapters extend `BaseStreamAdapter` directly when they own a provider-specific wire format:
+
+- `src/providers/google/googleStreamAdapter.ts`
+- `src/providers/openrouter/openrouterStreamAdapter.ts`
+- `src/providers/novelai/novelaiStreamAdapter.ts`
+- `src/providers/vertex/vertexStreamAdapter.ts`
+- `src/providers/anthropic/anthropicStreamAdapter.ts`
+
+OpenAI-compatible providers extend `src/providers/openaiCompatible/openaiCompatibleStreamAdapter.ts`, which itself extends `BaseStreamAdapter`. That keeps the common OpenAI-compatible request and SSE behavior in one family adapter while preserving provider-specific overrides for endpoint URL resolution, headers, sampling controls, thinking controls, and custom tool parsing.
+
+`BaseStreamAdapter` centralizes adapter metadata, protected raw/error lifecycle hooks, and raw chunk/error wrapping only. Provider subclasses remain responsible for context assembly, request payloads, native stream parsing, function-call extraction, and localized error descriptions.
 
 ## Current Providers
 
@@ -69,12 +87,14 @@ OpenAI-compatible family internals shared by `custom`, `deepseek`, `nvidia`, `za
 
 Registry helpers live in `src/utils/provider/providerInfoRegistry.ts`.
 
+`providerInfoRegistry.ts` auto-discovers every `src/providers/*/providerInfo.ts` file at module load using Bun's `Glob` scanner. Adding a provider folder with a valid `providerInfo.ts` no longer requires editing a central `providerInfos` array or provider-name type union.
+
 Use these helpers instead of hardcoding provider names in commands/tools:
 
 - `normalizeProviderName()`
 - `getStaticProviderInfo()`
 - `providerSupportsFeature()`
-- `resolveProviderFeatureImplementation()` (legacy runtime routing for untouched paths)
+- `resolveProviderFeatureImplementation()` (temporary runtime routing for shared feature handlers)
 
 Runtime capability resolution lives in:
 
@@ -91,6 +111,17 @@ Runtime capability resolution lives in:
 - live token counting
 - conversation compaction
 - history extraction
+
+`ProviderInfo.featureImplementations` is provider-owned metadata for shared feature executors that still live outside the provider folder, such as native media generation and live token counting. A provider declares only the implementations it actually uses:
+
+```ts
+featureImplementations: {
+  imageGeneration: "example",
+  liveTokenCounting: "example",
+}
+```
+
+The registry builds the feature implementation map from discovered provider info. Core orchestration code must not branch on hardcoded provider names; use provider metadata, API-family helpers, provider methods, or capability resolvers instead.
 
 Rule:
 

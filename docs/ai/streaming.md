@@ -1,4 +1,6 @@
-﻿# 10. Streaming & Response System
+<!-- ARCH-ALIGNMENT: prereq-phase-3 -->
+
+# 10. Streaming & Response System
 
 This document explains the current streaming architecture for TomoriBot and how model output is transformed into Discord messages.
 
@@ -20,9 +22,9 @@ Important: TomoriBot now sends **discrete messages**, not "edit the same message
 | Component | File | Responsibility |
 |---|---|---|
 | Universal orchestrator | `src/utils/discord/streamOrchestrator.ts` | Buffering, flush decisions, send pipeline, timeout/stop handling |
-| Stream interfaces | `src/types/stream/interfaces.ts` | Provider/orchestrator contracts and stream context |
+| Stream interfaces | `src/types/stream/interfaces.ts` | Provider/orchestrator contracts, `BaseStreamAdapter`, and stream context |
 | Stream constants/types | `src/types/stream/types.ts` | Message length, flush thresholds, typing settings |
-| Provider stream adapters | `src/providers/*/*StreamAdapter.ts` | Convert provider-native events into normalized chunks |
+| Provider stream adapters | `src/providers/*/*StreamAdapter.ts` | Extend `BaseStreamAdapter` and convert provider-native events into normalized chunks |
 | Text processing | `src/utils/text/stringHelper.ts` | `cleanLLMOutput`, `chunkMessage`, `humanizeString` |
 | Markdown table detection | `src/utils/text/markdownTable.ts` | Detect complete pipe tables, hold incomplete tails, and split renderable table blocks from plain text |
 | Markdown table rendering | `src/utils/image/markdownTableRenderer.ts` | Render detected markdown tables to PNG attachments without a browser dependency |
@@ -35,6 +37,21 @@ Important: TomoriBot now sends **discrete messages**, not "edit the same message
 `tomoriChat` calls provider `streamToDiscord(...)`.  
 Before heavy response work starts, `tomoriChat` also starts a lock-scoped Discord typing keepalive.  
 Provider builds `StreamConfig` and delegates to `StreamOrchestrator.streamToDiscord(...)`.
+
+### Base Adapter Contract
+
+All provider stream adapters extend `BaseStreamAdapter` from `src/types/stream/interfaces.ts`.
+
+The base class owns shared adapter identity and raw-chunk lifecycle hooks/wrappers:
+
+- `getProviderInfo()` returns consistent adapter metadata for logging and diagnostics.
+- `createRawChunk(...)` wraps provider-native data with provider name and timestamp metadata.
+- `createProviderErrorChunk(...)` wraps provider errors after provider-specific normalization.
+- `onRawChunk(...)` and `onProviderError(...)` are protected no-op hooks for provider subclasses that need adapter-local lifecycle side effects.
+
+Provider subclasses still own request construction, context conversion, provider-native chunk parsing, tool-call extraction, and user-facing error descriptions. The shared OpenAI-compatible family adapter (`src/providers/openaiCompatible/openaiCompatibleStreamAdapter.ts`) also extends the base class, so `custom`, `deepseek`, `nvidia`, `zai`, and `zaicoding` inherit the same contract through that family layer.
+
+Normal provider event chunks may still be assembled in provider subclasses when the native stream shape needs provider-local metadata or split-event ordering. The base raw/error wrappers are the preferred path for generic chunks, not a requirement to flatten every provider-specific yield site.
 
 ### 2) Stream initialization
 

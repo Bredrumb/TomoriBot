@@ -22,8 +22,8 @@ import type {
   RawStreamChunk,
   StreamConfig,
   StreamContext,
-  StreamProvider,
 } from "@/types/stream/interfaces";
+import { BaseStreamAdapter } from "@/types/stream/interfaces";
 import { log } from "@/utils/misc/logger";
 import { isParamDisabled } from "@/utils/provider/samplingControl";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
@@ -31,7 +31,7 @@ import { localizer } from "@/utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/stringHelper";
 import { buildProviderStopStrings } from "@/providers/utils/stopStrings";
 
-export class OpenAICompatibleStreamAdapter implements StreamProvider {
+export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
   private static readonly SPEAKER_GUARD_HOLDBACK_CHARS = 32;
   private static readonly STREAM_TEXT_TAIL_CHARS = 4096;
   private static readonly STREAM_TEXT_MIN_DEDUP_CHARS = 8;
@@ -44,7 +44,13 @@ export class OpenAICompatibleStreamAdapter implements StreamProvider {
   private pendingThinkBlockThoughtText = "";
   private speakerGuardEnabled = false;
 
-  constructor(private readonly options: OpenAICompatibleStreamAdapterOptions) {}
+  constructor(private readonly options: OpenAICompatibleStreamAdapterOptions) {
+    super({
+      name: options.providerName,
+      version: options.version ?? "1.0.0",
+      supportsFunctionCalling: true,
+    });
+  }
 
   async *startStream(config: StreamConfig, context: StreamContext): AsyncGenerator<RawStreamChunk, void, unknown> {
     const openAICompatibleConfig = config as OpenAICompatibleStreamConfig;
@@ -324,16 +330,7 @@ export class OpenAICompatibleStreamAdapter implements StreamProvider {
         this.speakerGuardPendingTail = "";
       }
 
-      yield {
-        data: {
-          error: this.handleProviderError(error),
-        },
-        provider: this.options.providerName,
-        metadata: {
-          timestamp: Date.now(),
-          error: true,
-        },
-      };
+      yield this.createProviderErrorChunk(error);
     }
   }
 
@@ -513,29 +510,8 @@ export class OpenAICompatibleStreamAdapter implements StreamProvider {
     });
   }
 
-  getProviderInfo(): {
-    name: string;
-    version: string;
-    supportsStreaming: boolean;
-    supportsFunctionCalling: boolean;
-  } {
-    return {
-      name: this.options.providerName,
-      version: this.options.version ?? "1.0.0",
-      supportsStreaming: true,
-      supportsFunctionCalling: true,
-    };
-  }
-
   private wrapChunk(chunk: OpenAICompatibleStreamChunk, model: string): RawStreamChunk {
-    return {
-      data: chunk,
-      provider: this.options.providerName,
-      metadata: {
-        timestamp: Date.now(),
-        model,
-      },
-    };
+    return this.createRawChunk(chunk, { model });
   }
 
   private stripThinkBlocksFromChunkContent(chunk: OpenAICompatibleStreamChunk): OpenAICompatibleStreamChunk {
