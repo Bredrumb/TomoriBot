@@ -171,6 +171,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
 
   private static readonly SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
     ContextItemTag.SYSTEM_HUMANIZER_RULES,
+    ContextItemTag.SYSTEM_PERSONA_PROMPT,
     ContextItemTag.SYSTEM_PERSONALITY,
     ContextItemTag.KNOWLEDGE_SERVER_INFO,
     ContextItemTag.KNOWLEDGE_SERVER_EMOJIS, // Text-based with semantic metadata (deterministic ordering)

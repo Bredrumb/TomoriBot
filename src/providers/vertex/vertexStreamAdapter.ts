@@ -90,8 +90,9 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
   private static readonly SPEAKER_GUARD_HOLDBACK_CHARS = 32;
   private static readonly STREAM_TEXT_TAIL_CHARS = 4096;
   private static readonly STREAM_TEXT_MIN_DEDUP_CHARS = 8;
-  private static readonly SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
+  public static readonly SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
     ContextItemTag.SYSTEM_HUMANIZER_RULES,
+    ContextItemTag.SYSTEM_PERSONA_PROMPT,
     ContextItemTag.SYSTEM_PERSONALITY,
     ContextItemTag.KNOWLEDGE_SERVER_INFO,
     ContextItemTag.KNOWLEDGE_SERVER_EMOJIS,

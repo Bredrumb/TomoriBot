@@ -125,6 +125,7 @@ const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
 // Tags that should be extracted to the top-level system parameter
 const SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
   ContextItemTag.SYSTEM_HUMANIZER_RULES,
+  ContextItemTag.SYSTEM_PERSONA_PROMPT,
   ContextItemTag.SYSTEM_PERSONALITY,
   ContextItemTag.KNOWLEDGE_SERVER_INFO,
   ContextItemTag.KNOWLEDGE_SERVER_EMOJIS,

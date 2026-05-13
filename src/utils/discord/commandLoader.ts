@@ -336,6 +336,28 @@ export async function loadCommandData(): Promise<{
           log.info(`Processing subcommand group: ${categoryName}/${groupName}`);
 
           try {
+            // Get all command files in this group
+            const groupCommandFiles = getAllFiles(itemPath);
+
+            // Pre-load all command modules asynchronously to support top-level await
+            const loadedModules: Array<{ file: string; module: any }> = [];
+            for (const commandFile of groupCommandFiles) {
+              try {
+                const commandModule = await import(commandFile);
+                loadedModules.push({ file: commandFile, module: commandModule });
+              } catch (error) {
+                const context: ErrorContext = {
+                  errorType: "CommandLoadingError",
+                  metadata: {
+                    commandFile,
+                    categoryName,
+                    groupName,
+                  },
+                };
+                log.error(`Failed to load grouped command from ${commandFile}:`, error, context);
+              }
+            }
+
             // Add subcommand group to category
             categoryBuilder.addSubcommandGroup((group: SlashCommandSubcommandGroupBuilder) => {
               // Get group description from localizations
@@ -356,16 +378,9 @@ export async function loadCommandData(): Promise<{
                 group.setDescriptionLocalizations(groupLocalizationsMap);
               }
 
-              // Get all command files in this group
-              const groupCommandFiles = getAllFiles(itemPath);
-
-              // Process each command in the group
-              for (const commandFile of groupCommandFiles) {
+              // Process each loaded command in the group
+              for (const { file: commandFile, module: commandModule } of loadedModules) {
                 try {
-                  // Import the command module (needs to be sync for builder pattern)
-                  // We'll use dynamic import but handle it carefully
-                  const commandModule = require(commandFile);
-
                   // Validate exports
                   if (!commandModule.configureSubcommand || !commandModule.execute) {
                     log.warn(`Command at ${commandFile} is missing required exports`);

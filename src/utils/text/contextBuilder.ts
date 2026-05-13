@@ -1310,7 +1310,7 @@ async function buildContextNative({
     contextItems.push({
       role: "system",
       parts: [{ type: "text", text: promptText }],
-      metadataTag: ContextItemTag.SYSTEM_HUMANIZER_RULES,
+      metadataTag: ContextItemTag.SYSTEM_PERSONA_PROMPT,
     });
   }
 

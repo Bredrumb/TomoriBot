@@ -203,7 +203,7 @@ When a phase touches code that affects a doc not listed here, add the doc to thi
 - [x] Identify common stream-handling logic across `googleStreamAdapter.ts`, `openrouterStreamAdapter.ts`, `novelaiStreamAdapter.ts`, etc.
 - [x] Move shared logic into the base class
 - [x] Refactor each adapter to extend `BaseStreamAdapter`, overriding only provider-specific bits
-- [ ] Verify each provider still streams correctly (manual smoke test per provider)
+- [x] Verify each provider still streams correctly (manual smoke test per provider)
 - [x] `bun run check && bun run lint` pass
 
 ### 6.5. Auto-discover provider registry & purge name-based dispatch
@@ -222,7 +222,7 @@ When a phase touches code that affects a doc not listed here, add the doc to thi
 - [x] Convert `case "..."` switches in `commands/tool/prompt/snapshot.ts` (11 cases) to provider-method dispatch
 - [x] Decide allowlist for legitimate UI-display switches in `commands/help/api-key.ts` (9 cases) — these are arguably user-facing copy, not orchestration
 - [x] Run grep to verify zero name-comparisons in core orchestration paths
-- [ ] **Smoke test:** boot the bot and verify the provider registry log lists all expected providers as discovered (Google, OpenRouter, NovelAI, Custom, etc.). A provider going dark after the hardcoded array is removed would otherwise be invisible until someone runs a command against it.
+- [x] **Smoke test:** boot the bot and verify the provider registry log lists all expected providers as discovered (Google, OpenRouter, NovelAI, Custom, etc.). A provider going dark after the hardcoded array is removed would otherwise be invisible until someone runs a command against it.
 - [x] `bun run check && bun run lint` pass
 
 ### 7. Split `src/tools/toolRegistry.ts` & Fix MCP Hacks
