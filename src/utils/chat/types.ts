@@ -1,11 +1,18 @@
-import type { Client, Guild, GuildMember, Message } from "discord.js";
+import type { BaseGuildTextChannel, Client, Guild, GuildMember, Message, Webhook } from "discord.js";
 import type { ForcedMention } from "@/types/discord/mentions";
-import type { TomoriState, UserRow } from "@/types/db/schema";
+import type { ServerEmojiRow, ServerStickerRow, TomoriState, UserRow } from "@/types/db/schema";
 import type { RequestSnapshot, StructuredContextItem } from "@/types/misc/context";
-import type { StreamResult, ThoughtLogPayload } from "@/types/provider/interfaces";
+import type {
+  FunctionCall,
+  FunctionResponseImageMetadata,
+  StreamResult,
+  ThoughtLogPayload,
+} from "@/types/provider/interfaces";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { ThoughtLogOwner } from "@/utils/discord/thoughtLog";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
+import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
+import type { TextQuotaTriggerState } from "@/utils/chat/textQuotaState";
 
 export type TextQuotaSource = "user" | "system";
 
@@ -20,6 +27,37 @@ export interface ManualTriggerInvoker {
   username: string;
   locale?: string;
   member?: GuildMember | null;
+}
+
+/** Public input to tomoriChat() — optional fields apply defaults in normalizeChatInvocation. */
+export interface TomoriChatInput {
+  client: Client;
+  message: Message;
+  isFromQueue: boolean;
+  isManuallyTriggered?: boolean;
+  forceReason?: boolean;
+  reasoningQuery?: string;
+  llmOverrideCodename?: string;
+  isStopResponse?: boolean;
+  retryCount?: number;
+  skipLock?: boolean;
+  reminderRecipientID?: string;
+  reminderData?: ChatReminderData;
+  selectedPersonaId?: number;
+  isPersonaJob?: boolean;
+  isUserImpersonation?: boolean;
+  impersonatedUserId?: string;
+  textQuotaSource?: TextQuotaSource;
+  textQuotaTriggerKey?: string;
+  textQuotaUserDiscId?: string;
+  manualSystemPrompt?: string;
+  manualPrefill?: string;
+  naiContinuationPrefill?: string;
+  emptyResponseFinishReason?: string;
+  injectedContextItems?: StructuredContextItem[];
+  forcedMentions?: ForcedMention[];
+  manualTriggerInvoker?: ManualTriggerInvoker;
+  manualStreamingContextOverrides?: Partial<StreamingContext>;
 }
 
 export interface ChatIncoming {
@@ -92,6 +130,7 @@ export interface LockedChatTurn {
   channelId: string;
   lockedAt: number;
   queueDepth: number;
+  skipLock: boolean;
 }
 
 export interface ChatTurnPlan {
@@ -101,9 +140,32 @@ export interface ChatTurnPlan {
 
 export interface ChatTurn {
   lockedTurn: LockedChatTurn;
-  persona?: TomoriState;
+  persona: TomoriState;
   personaIndex: number;
   totalPersonas: number;
+  allPersonas: TomoriState[];
+  tomoriState: TomoriState;
+  mainPersona: TomoriState | null;
+  userRow: UserRow;
+  requestSnapshot: RequestSnapshot;
+  serverDiscId: string;
+  guild: Guild | null;
+  isDMChannel: boolean;
+  isSelfMessage: boolean;
+  userDiscId: string;
+  cooldownUserDiscId: string;
+  triggererName: string;
+  channelName: string;
+  channelDescription: string | null;
+  serverName: string;
+  serverDescription: string | null;
+  textCredentialSource: "server" | "personal";
+  personalRoutingUserId: number | null;
+  personalTextProvider: string | null;
+  shouldApplyTextQuota: boolean;
+  textQuotaTriggerKey: string;
+  textQuotaState: TextQuotaTriggerState | null;
+  forcedMentions?: ForcedMention[];
   isUserImpersonation: boolean;
   impersonatedUserId?: string;
 }
@@ -113,17 +175,53 @@ export interface ChatTurnContext {
   client: Client;
   message: Message;
   channel: Message["channel"];
+  guild: Guild | null;
   locale: string;
-  tomoriState?: TomoriState;
+  serverDiscId: string;
+  userDiscId: string;
+  isDMChannel: boolean;
+  isFromQueue: boolean;
+  isStopResponse: boolean;
+  isPersonaJob: boolean;
+  isSelfMessage: boolean;
+  isUserImpersonation: boolean;
+  impersonatedUserId?: string;
   allPersonas: TomoriState[];
-  currentPersona?: TomoriState;
+  currentPersona: TomoriState;
+  tomoriState: TomoriState;
+  requestSnapshot: RequestSnapshot;
   contextItems: StructuredContextItem[];
-  requestSnapshot?: RequestSnapshot;
-  streamingContext?: StreamingContext;
-  messageIdMap?: MessageIdMap;
+  simplifiedMessages: SimplifiedMessageForContext[];
+  streamingContext: StreamingContext;
+  messageIdMap: MessageIdMap;
+  emojiStrings: string[];
+  loadedEmojis: ServerEmojiRow[] | null;
+  loadedStickers: ServerStickerRow[] | null;
+  channelName: string;
+  channelDescription: string | null;
+  serverName: string;
+  serverDescription: string | null;
+  triggererName: string;
+  textCredentialSource: "server" | "personal";
+  personalRoutingUserId: number | null;
+  personalTextProvider: string | null;
+  shouldApplyTextQuota: boolean;
+  textQuotaTriggerKey: string;
+  textQuotaState: TextQuotaTriggerState | null;
+  responseTarget?: ChatResponseTarget;
+}
+
+export interface ChatResponseTarget {
+  webhook?: Webhook;
+  temporaryWebhook?: Webhook;
+  personaUsername?: string;
+  personaAvatarUrl?: string;
+  prefixStrippingName?: string;
+  webhookTargetChannel?: BaseGuildTextChannel;
 }
 
 export interface ChatResponseSink {
+  prepare?(context: ChatTurnContext): Promise<ChatResponseTarget | undefined>;
   emitStreamResult(result: StreamResult): Promise<void>;
   emitError(error: unknown): Promise<void>;
   finalize(result: GenerationTurnResult): Promise<void>;
@@ -134,6 +232,13 @@ export interface ChatPersonaResponse {
   personaName: string;
   tomoriId?: number;
   personaLineageId?: number | null;
+}
+
+export interface ToolHistoryEntry {
+  functionCall: FunctionCall;
+  functionResponse: Record<string, unknown>;
+  imageMetadata?: FunctionResponseImageMetadata;
+  preToolCallTextParts?: Array<Record<string, unknown>>;
 }
 
 export interface GenerationTurnResult {

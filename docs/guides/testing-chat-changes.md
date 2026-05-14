@@ -1,8 +1,8 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5 -->
+<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
 
 # Testing Chat Changes
 
-This guide covers the chat regression harness introduced in Phase 5 (#12a). The harness protects the highest-risk chat decision behavior across the Phase 5 (#12b) deconstruction.
+This guide covers the chat regression harness introduced in Phase 5 (#12a). The harness protects the highest-risk chat decision behavior across the chat coordinator and generation-stage refactors.
 
 ## TL;DR
 
@@ -60,7 +60,7 @@ The harness does not require Discord credentials, provider API keys, or a databa
 
 Keep fixtures small. Each fixture should protect one behavior: a reply trigger, a no-reply guard, persona ordering, a webhook/self-trigger edge case, an autochat path, or a reply-reference path.
 
-For Phase 5 (#12b), prefer adding fixtures against `src/utils/chat/triggerProcessor.ts` whenever extracted trigger logic changes. The harness should keep proving behavior at the new module boundary instead of depending only on `tomoriChat.ts`.
+For chat-stage refactors, prefer adding fixtures against the named owner module whenever extracted logic changes. The harness should keep proving behavior at the module boundary instead of depending only on `tomoriChat.ts`.
 
 ## Verifying the harness catches regressions
 
@@ -80,9 +80,9 @@ To smoke test the smoke test:
 4. Restore `.skip`.
 5. Re-run the harness and confirm it passes.
 
-## Expanding for Phase 5 (#12b)
+## Expanding for Chat Refactors
 
-When deconstructing the temporary chat turn runner further, add fixtures for every behavior the extraction touches:
+When changing chat stages, add fixtures for every behavior the extraction touches:
 
 - Golden-path message handling
 - Function-call tool trigger and response routing

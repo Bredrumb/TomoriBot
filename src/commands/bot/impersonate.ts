@@ -22,7 +22,7 @@ import {
 } from "@/utils/discord/guildMessageChannel";
 import type { SelectOption } from "@/types/discord/modal";
 import type { UserRow } from "@/types/db/schema";
-import tomoriChat from "@/events/messageCreate/tomoriChat";
+import { tomoriChat } from "@/events/messageCreate/tomoriChat";
 import {
   checkMessageTriggerCooldownWithWhitelist,
   setMessageTriggerCooldownWithWhitelist,
@@ -356,7 +356,7 @@ async function handlePersonaImpersonation(
     // tomoriChat runs with isManuallyTriggered=false so trigger rules apply as usual.
     // The self-message detection skips the sending persona; other personas may respond.
     if (sentMessage) {
-      void tomoriChat(client, sentMessage, false);
+      void tomoriChat({ client, message: sentMessage, isFromQueue: false });
     }
 
     // 8. Send success confirmation to user
@@ -587,39 +587,25 @@ async function handleUserImpersonation(
 
     // 6. Call tomoriChat with user impersonation enabled
     // tomoriChat will handle everything: context building, refresh embeds, provider call, webhook, etc.
-    await tomoriChat(
+    await tomoriChat({
       client,
-      latestMessage,
-      false, // Not from queue
-      true, // isManuallyTriggered - bypasses bot author check
-      undefined, // No forced reasoning
-      undefined, // No reasoning query
-      undefined, // No LLM override
-      false, // Not a stop response
-      0, // No retry count
-      false, // Don't skip lock
-      undefined, // No reminder recipient
-      undefined, // No reminder data
-      undefined, // No selected persona
-      false, // Not a persona job
-      true, // isUserImpersonation - enables role reversal
-      impersonatedUserId, // impersonatedUserId - the user to mimic
-      "user", // textQuotaSource
-      interaction.id, // textQuotaTriggerKey
-      interaction.user.id, // textQuotaUserDiscId
-      undefined, // manualSystemPrompt
-      undefined, // manualPrefill
-      undefined, // naiContinuationPrefill
-      undefined, // emptyResponseFinishReason
-      undefined, // injectedContextItems
-      undefined, // forcedMentions
-      {
+      message: latestMessage,
+      isFromQueue: false,
+      isManuallyTriggered: true,
+      isStopResponse: false,
+      isPersonaJob: false,
+      isUserImpersonation: true,
+      impersonatedUserId,
+      textQuotaSource: "user",
+      textQuotaTriggerKey: interaction.id,
+      textQuotaUserDiscId: interaction.user.id,
+      manualTriggerInvoker: {
         userDiscId: interaction.user.id,
         username: interaction.user.username,
         locale,
         member: interaction.member as import("discord.js").GuildMember | null,
       },
-    );
+    });
 
     // 7. Set cooldown after successful response (shares cooldown pool with message triggers and /bot respond)
     // Uses whitelist-aware version to respect per-channel cooldown overrides

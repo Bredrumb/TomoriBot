@@ -5,7 +5,7 @@ import type { StructuredContextItem } from "@/types/misc/context";
 import type { EnhancedImageContent } from "@/types/tool/enhancedContextTypes";
 import type { TomoriState } from "@/types/db/schema";
 import { ContextItemTag } from "@/types/misc/context";
-import tomoriChat, { suppressNextSelfReply } from "@/events/messageCreate/tomoriChat";
+import { tomoriChat, suppressNextSelfReply } from "@/events/messageCreate/tomoriChat";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { registerUser } from "@/utils/db/repositories";
 import { buildForcedMentionsForUser, ensureDiscordUserMention } from "@/utils/discord/mentionHelper";
@@ -311,33 +311,21 @@ async function triggerWelcomeMessage(client: Client, member: GuildMember): Promi
     `Triggering welcome message for ${member.user.tag} in channel ${welcomeChannel.id} using persona ${chosenPersona.tomori_nickname}`,
   );
 
-  await tomoriChat(
+  await tomoriChat({
     client,
-    lastMessage,
-    false,
-    true,
-    false,
-    undefined,
-    undefined,
-    false,
-    0,
-    false,
-    undefined,
-    undefined,
-    chosenPersona.tomori_id,
-    false,
-    false,
-    undefined,
-    "system",
-    `welcome:${member.guild.id}:${member.id}:${lastMessage.id}`,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    [welcomeContextItem],
-    forcedMentions.length > 0 ? forcedMentions : undefined,
-  );
+    message: lastMessage,
+    isFromQueue: false,
+    isManuallyTriggered: true,
+    forceReason: false,
+    isStopResponse: false,
+    selectedPersonaId: chosenPersona.tomori_id,
+    isPersonaJob: false,
+    isUserImpersonation: false,
+    textQuotaSource: "system",
+    textQuotaTriggerKey: `welcome:${member.guild.id}:${member.id}:${lastMessage.id}`,
+    injectedContextItems: [welcomeContextItem],
+    forcedMentions: forcedMentions.length > 0 ? forcedMentions : undefined,
+  });
 
   await ensureDiscordUserMention({
     client,

@@ -1,19 +1,18 @@
 import type { Client, Message } from "discord.js";
-import type { ForcedMention } from "@/types/discord/mentions";
-import type { StructuredContextItem } from "@/types/misc/context";
-import type { StreamingContext } from "@/types/tool/interfaces";
-import { evaluateChatAdmission, handleChatDisposition, shouldBotReply } from "@/utils/chat/admission";
+import { evaluateChatAdmission, handleChatDisposition, normalizeChatInvocation } from "@/utils/chat/admission";
 import {
   clearChannelProcessingQueue,
   isChannelProcessingLocked,
+  type QueuedMessage,
   runWithChannelLock,
   suppressNextSelfReply,
 } from "@/utils/chat/channelQueue";
 import { buildChatTurnContext } from "@/utils/chat/contextPipeline";
 import { runGenerationTurn } from "@/utils/chat/generationTurn";
-import { normalizeChatInvocation, type ManualTriggerInvoker, type TextQuotaSource } from "@/utils/chat/invocation";
+import type { TomoriChatInput } from "@/utils/chat/types";
 import { runPostTurnEffects } from "@/utils/chat/postTurnEffects";
 import { createChatResponseSink, handleStopResponse } from "@/utils/chat/responseEmitter";
+import { shouldBotReply } from "@/utils/chat/replyDecision";
 import { planChatTurns } from "@/utils/chat/turnPlanner";
 
 export {
@@ -31,68 +30,8 @@ export {
  * `src/utils/chat/` so helper files are not auto-registered as messageCreate
  * handlers by the shallow event dispatcher.
  */
-export default async function tomoriChat(
-  client: Client,
-  message: Message,
-  isFromQueue: boolean,
-  isManuallyTriggered?: boolean,
-  forceReason?: boolean,
-  reasoningQuery?: string,
-  llmOverrideCodename?: string,
-  isStopResponse?: boolean,
-  retryCount = 0,
-  skipLock = false,
-  reminderRecipientID?: string,
-  reminderData?: {
-    reminder_purpose: string;
-    reminder_lateness?: string | null;
-    self_reminder?: boolean;
-  },
-  selectedPersonaId?: number,
-  isPersonaJob = false,
-  isUserImpersonation = false,
-  impersonatedUserId?: string,
-  textQuotaSource: TextQuotaSource = "user",
-  textQuotaTriggerKey?: string,
-  textQuotaUserDiscId?: string,
-  manualSystemPrompt?: string,
-  manualPrefill?: string,
-  naiContinuationPrefill?: string,
-  emptyResponseFinishReason?: string,
-  injectedContextItems?: StructuredContextItem[],
-  forcedMentions?: ForcedMention[],
-  manualTriggerInvoker?: ManualTriggerInvoker,
-  manualStreamingContextOverrides?: Partial<StreamingContext>,
-): Promise<void> {
-  const incoming = normalizeChatInvocation(
-    client,
-    message,
-    isFromQueue,
-    isManuallyTriggered,
-    forceReason,
-    reasoningQuery,
-    llmOverrideCodename,
-    isStopResponse,
-    retryCount,
-    skipLock,
-    reminderRecipientID,
-    reminderData,
-    selectedPersonaId,
-    isPersonaJob,
-    isUserImpersonation,
-    impersonatedUserId,
-    textQuotaSource,
-    textQuotaTriggerKey,
-    textQuotaUserDiscId,
-    manualSystemPrompt,
-    manualPrefill,
-    naiContinuationPrefill,
-    emptyResponseFinishReason,
-    injectedContextItems,
-    forcedMentions,
-    manualTriggerInvoker,
-    manualStreamingContextOverrides,
-  );
+export async function tomoriChat(input: TomoriChatInput): Promise<void> {
+  const incoming = normalizeChatInvocation(input);
 
   const admission = await evaluateChatAdmission(incoming);
   if (admission.disposition !== "run") {
@@ -100,15 +39,50 @@ export default async function tomoriChat(
     return;
   }
 
-  await runWithChannelLock(admission, async (lockedTurn) => {
-    const turnPlan = await planChatTurns(lockedTurn);
+  await runWithChannelLock(
+    admission,
+    async (lockedTurn) => {
+      const turnPlan = await planChatTurns(lockedTurn);
 
-    for (const turn of turnPlan.turns) {
-      const context = await buildChatTurnContext(turn);
-      const responseSink = createChatResponseSink(context);
-      const result = await runGenerationTurn(context, responseSink);
+      for (const turn of turnPlan.turns) {
+        const context = await buildChatTurnContext(turn);
+        const responseSink = createChatResponseSink(context);
+        const result = await runGenerationTurn(context, responseSink);
 
-      await runPostTurnEffects(context, result);
-    }
-  });
+        await runPostTurnEffects(context, result);
+      }
+    },
+    {
+      handleStopResponse,
+      processQueuedMessage: (queued: QueuedMessage) =>
+        tomoriChat({
+          client: incoming.client,
+          message: queued.message,
+          isFromQueue: true,
+          isManuallyTriggered: queued.isManuallyTriggered,
+          forceReason: queued.forceReason,
+          reasoningQuery: queued.reasoningQuery,
+          llmOverrideCodename: queued.llmOverrideCodename,
+          isStopResponse: queued.isStopResponse,
+          selectedPersonaId: queued.selectedPersonaId,
+          isPersonaJob: queued.isPersonaJob,
+          isUserImpersonation: queued.isUserImpersonation,
+          impersonatedUserId: queued.impersonatedUserId,
+          textQuotaSource: queued.textQuotaSource,
+          textQuotaTriggerKey: queued.textQuotaTriggerKey,
+          textQuotaUserDiscId: queued.textQuotaUserDiscId,
+          manualSystemPrompt: queued.manualSystemPrompt,
+          manualPrefill: queued.manualPrefill,
+          injectedContextItems: queued.injectedContextItems,
+          forcedMentions: queued.forcedMentions,
+          manualTriggerInvoker: queued.manualTriggerInvoker,
+          manualStreamingContextOverrides: queued.manualStreamingContextOverrides,
+        }),
+    },
+  );
+}
+
+/** Thin event-dispatch adapter — satisfies EventFunction(client, ...args) called by the event loader. */
+export default async function messageCreateHandler(client: Client, message: Message): Promise<void> {
+  return tomoriChat({ client, message, isFromQueue: false });
 }

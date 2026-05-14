@@ -1,9 +1,12 @@
-import type { AnyThreadChannel, BaseGuildTextChannel, Client, Message } from "discord.js";
+import type { AnyThreadChannel, BaseGuildTextChannel, Client, Message, TextChannel } from "discord.js";
+import { ChannelType } from "discord.js";
 import type { WebhookCreateErrorReason } from "@/utils/discord/webhook/fallback";
+import { getOrCreateWebhook, resolvePersonaWebhookIdentity } from "@/utils/discord/webhookManager";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
-import { ColorCode } from "@/utils/misc/logger";
-import { log } from "@/utils/misc/logger";
-import type { ChatResponseSink, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
+import { ColorCode, log } from "@/utils/misc/logger";
+import { channelLocks, setActiveChannelTurnState, setChannelToolCallChainActive } from "@/utils/chat/channelQueue";
+import { cacheUserImpersonationWebhook, resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
+import type { ChatResponseSink, ChatResponseTarget, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 
 const WEBHOOK_ERROR_COOLDOWN_MS = parseIntegerEnvFlag(process.env.WEBHOOK_ERROR_COOLDOWN_MS, 600000, 1000);
 const webhookErrorCooldowns = new Map<string, number>();
@@ -57,17 +60,146 @@ export async function sendWebhookErrorEmbed(
 }
 
 export function createChatResponseSink(context: ChatTurnContext): ChatResponseSink {
+  let target: ChatResponseTarget | undefined;
+
   return {
-    async emitStreamResult() {
-      return;
+    async prepare() {
+      target = await resolveResponseTarget(context);
+      context.responseTarget = target;
+      const lockEntry = channelLocks.get(context.turn.lockedTurn.channelId);
+      if (lockEntry) {
+        setActiveChannelTurnState(lockEntry, {
+          activePersonaId: context.currentPersona.tomori_id ?? undefined,
+          followUpEligible: context.currentPersona.tomori_id !== undefined,
+          isUserImpersonation: context.isUserImpersonation,
+          impersonatedUserId: context.impersonatedUserId,
+        });
+        setChannelToolCallChainActive(lockEntry, false);
+      }
+      return target;
+    },
+    async emitStreamResult(result) {
+      if (result.status !== "error") return;
+      await emitGenerationError(context, result.data);
     },
     async emitError(error: unknown) {
-      log.warn(`Chat response sink observed an error for message ${context.message.id}`, error);
+      await emitGenerationError(context, error);
     },
-    async finalize(_result: GenerationTurnResult) {
-      return;
+    async finalize(result: GenerationTurnResult) {
+      if (target?.temporaryWebhook) {
+        await target.temporaryWebhook.delete("User impersonation complete").catch((error: unknown) => {
+          log.warn("Failed to delete temporary user impersonation webhook", error);
+        });
+      }
+      log.info(
+        `Chat response finalized for message ${context.message.id} with status ${result.status} and ${result.personaResponses.length} captured response(s).`,
+      );
     },
   };
+}
+
+async function resolveResponseTarget(context: ChatTurnContext): Promise<ChatResponseTarget | undefined> {
+  const { channel, currentPersona, guild } = context;
+  if (context.isDMChannel || !guild || !supportsWebhookDelivery(channel)) {
+    return undefined;
+  }
+
+  const webhookTargetChannel = channel.isThread() && channel.parent ? channel.parent : channel;
+  if (!("fetchWebhooks" in webhookTargetChannel) || !("createWebhook" in webhookTargetChannel)) {
+    return undefined;
+  }
+
+  if (context.isUserImpersonation && context.impersonatedUserId) {
+    return await createUserImpersonationTarget(context, webhookTargetChannel as TextChannel);
+  }
+
+  if (!currentPersona.is_alter) {
+    return undefined;
+  }
+
+  const webhookResult = await getOrCreateWebhook(webhookTargetChannel as BaseGuildTextChannel);
+  if (!webhookResult.webhook) {
+    if (webhookResult.errorReason) {
+      await sendWebhookErrorEmbed(
+        channel as BaseGuildTextChannel | AnyThreadChannel,
+        context.locale,
+        webhookResult.errorReason,
+      );
+    }
+    return undefined;
+  }
+
+  const identity = await resolvePersonaWebhookIdentity(currentPersona, guild);
+  return {
+    webhook: webhookResult.webhook,
+    personaUsername: identity.username ?? currentPersona.tomori_nickname,
+    personaAvatarUrl: identity.avatarDataUri ?? identity.avatarUrl,
+    webhookTargetChannel: webhookTargetChannel as BaseGuildTextChannel,
+  };
+}
+
+async function createUserImpersonationTarget(
+  context: ChatTurnContext,
+  webhookTargetChannel: TextChannel,
+): Promise<ChatResponseTarget | undefined> {
+  if (!context.impersonatedUserId) return undefined;
+
+  const identity = await resolveImpersonatedIdentity(
+    context.client,
+    context.guild,
+    context.impersonatedUserId,
+    undefined,
+  );
+  const webhook = await webhookTargetChannel.createWebhook({
+    name: identity.displayName || "User",
+    avatar: identity.avatarUrl || undefined,
+    reason: "TomoriBot user impersonation",
+  });
+
+  cacheUserImpersonationWebhook(webhook.id, context.impersonatedUserId);
+  return {
+    webhook,
+    temporaryWebhook: webhook,
+    personaUsername: identity.displayName || "User",
+    personaAvatarUrl: identity.avatarUrl,
+    prefixStrippingName: identity.displayName || "User",
+    webhookTargetChannel,
+  };
+}
+
+function supportsWebhookDelivery(channel: ChatTurnContext["channel"]): boolean {
+  return (
+    channel.type === ChannelType.GuildText ||
+    channel.type === ChannelType.PublicThread ||
+    channel.type === ChannelType.PrivateThread ||
+    channel.type === ChannelType.AnnouncementThread
+  );
+}
+
+async function emitGenerationError(context: ChatTurnContext, error: unknown): Promise<void> {
+  log.error(`Generation failed for message ${context.message.id}`, error);
+  if (context.isUserImpersonation) {
+    throw error instanceof Error ? error : new Error("User impersonation failed before a reply could be sent.");
+  }
+
+  await sendStandardEmbed(
+    context.channel as Parameters<typeof sendStandardEmbed>[0],
+    context.locale,
+    {
+      color: ColorCode.ERROR,
+      titleKey: "genai.generic_error_title",
+      descriptionKey: "genai.stream.streaming_failed_description",
+      descriptionVars: {
+        error_message: error instanceof Error ? error.message : "Unknown Error",
+      },
+      footerKey: "genai.generic_error_footer",
+    },
+    {
+      webhook: context.responseTarget?.webhook,
+      personaUsername: context.responseTarget?.personaUsername,
+      personaAvatarUrl: context.responseTarget?.personaAvatarUrl,
+    },
+  );
 }
 
 export async function handleStopResponse(originalStopMessage: Message, client: Client): Promise<void> {
@@ -76,8 +208,15 @@ export async function handleStopResponse(originalStopMessage: Message, client: C
       `Generating stop response for message ${originalStopMessage.id} in channel ${originalStopMessage.channel.id}`,
     );
 
-    const { default: tomoriChat } = await import("@/events/messageCreate/tomoriChat");
-    await tomoriChat(client, originalStopMessage, true, true, false, undefined, undefined, true, 0, false);
+    const { tomoriChat } = await import("@/events/messageCreate/tomoriChat");
+    await tomoriChat({
+      client,
+      message: originalStopMessage,
+      isFromQueue: true,
+      isManuallyTriggered: true,
+      forceReason: false,
+      isStopResponse: true,
+    });
   } catch (error) {
     log.error("Failed to handle stop response:", error);
   }

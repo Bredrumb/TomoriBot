@@ -1,6 +1,6 @@
 import type { AnyThreadChannel, ButtonInteraction, ChatInputCommandInteraction, Client, Message } from "discord.js";
 import { BaseGuildTextChannel, EmbedBuilder, MessageFlags, type SlashCommandSubcommandBuilder } from "discord.js";
-import tomoriChat, { suppressNextSelfReply } from "@/events/messageCreate/tomoriChat";
+import { tomoriChat, suppressNextSelfReply } from "@/events/messageCreate/tomoriChat";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { getCachedAllPersonas, getCachedMainPersona } from "@/utils/cache/tomoriStateCache";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -472,39 +472,26 @@ export async function execute(
           suppressNextSelfReply(channel.id);
 
           // Fire-and-forget — do not await so the command interaction resolves
-          void tomoriChat(
+          void tomoriChat({
             client,
-            lastMessage,
-            false, // isFromQueue
-            true, // isManuallyTriggered
-            false, // forceReason
-            undefined, // reasoningQuery
-            undefined, // llmOverrideCodename
-            false, // isStopResponse
-            0, // retryCount
-            false, // skipLock
-            undefined, // reminderRecipientID
-            undefined, // reminderData
-            resolvedPersona.tomori_id, // selectedPersonaId
-            false, // isPersonaJob
-            false, // isUserImpersonation
-            undefined, // impersonatedUserId
-            "user", // textQuotaSource
-            interaction.id, // textQuotaTriggerKey
-            interaction.user.id, // textQuotaUserDiscId
-            undefined, // manualSystemPrompt
-            undefined, // manualPrefill
-            undefined, // naiContinuationPrefill
-            undefined, // emptyResponseFinishReason
-            undefined, // injectedContextItems
-            undefined, // forcedMentions
-            {
+            message: lastMessage,
+            isFromQueue: false,
+            isManuallyTriggered: true,
+            forceReason: false,
+            isStopResponse: false,
+            selectedPersonaId: resolvedPersona.tomori_id,
+            isPersonaJob: false,
+            isUserImpersonation: false,
+            textQuotaSource: "user",
+            textQuotaTriggerKey: interaction.id,
+            textQuotaUserDiscId: interaction.user.id,
+            manualTriggerInvoker: {
               userDiscId: interaction.user.id,
               username: interaction.user.username,
               locale,
               member: interaction.member as import("discord.js").GuildMember | null,
             },
-          );
+          });
         }
       } catch (regenError) {
         log.warn(`[deleteTurn] Failed to set up regenerate for persona="${displayName}"`, regenError);

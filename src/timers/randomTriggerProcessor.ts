@@ -4,7 +4,7 @@ import { log } from "../utils/misc/logger";
 import { getDueRandomTriggers } from "../utils/db/repositories";
 import { rescheduleRandomTrigger } from "../utils/db/repositories";
 import type { RandomTriggerRow, TomoriState } from "../types/db/schema";
-import tomoriChat, { suppressNextSelfReply } from "../events/messageCreate/tomoriChat";
+import { tomoriChat, suppressNextSelfReply } from "../events/messageCreate/tomoriChat";
 import { getCachedAllPersonas } from "../utils/cache/tomoriStateCache";
 
 export class RandomTriggerProcessor {
@@ -163,28 +163,20 @@ export class RandomTriggerProcessor {
         `Random trigger ${triggerId}: firing for persona "${chosenPersona.tomori_nickname}" in channel ${trigger.channel_disc_id}`,
       );
 
-      await tomoriChat(
-        this.client,
-        lastMessage,
-        false,
-        true,
-        false,
-        undefined,
-        undefined,
-        false,
-        0,
-        false,
-        undefined,
-        undefined,
-        chosenPersona.tomori_id,
-        false,
-        false,
-        undefined,
-        "system",
-        `random:${triggerId}:${lastMessage.id}`,
-        undefined,
-        trigger.custom_prompt ?? undefined,
-      );
+      await tomoriChat({
+        client: this.client,
+        message: lastMessage,
+        isFromQueue: false,
+        isManuallyTriggered: true,
+        forceReason: false,
+        isStopResponse: false,
+        selectedPersonaId: chosenPersona.tomori_id,
+        isPersonaJob: false,
+        isUserImpersonation: false,
+        textQuotaSource: "system",
+        textQuotaTriggerKey: `random:${triggerId}:${lastMessage.id}`,
+        manualSystemPrompt: trigger.custom_prompt ?? undefined,
+      });
 
       log.success(`Random trigger ${triggerId} fired successfully for persona "${chosenPersona.tomori_nickname}"`);
     } catch (error) {

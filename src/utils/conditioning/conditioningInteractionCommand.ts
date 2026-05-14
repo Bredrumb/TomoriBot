@@ -15,7 +15,7 @@ import type { SelectOption } from "@/types/discord/modal";
 import { loadAllPersonasForServer, loadTomoriState } from "@/utils/db/repositories";
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
-import tomoriChat from "@/events/messageCreate/tomoriChat";
+import { tomoriChat } from "@/events/messageCreate/tomoriChat";
 import {
   CONDITIONING_REASON_MAX_LENGTH,
   normalizeConditioningReason,
@@ -289,39 +289,22 @@ export function createConditioningInteractionCommand(
         `${type} ${actionKey} triggered by ${interaction.user.id} in channel ${interaction.channel.id} for message ${latestMessage.id}`,
       );
 
-      await tomoriChat(
+      await tomoriChat({
         client,
-        latestMessage as Message,
-        false,
-        true,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        0,
-        false,
-        undefined,
-        undefined,
-        selectedPersona.tomori_id,
-        undefined,
-        undefined,
-        undefined,
-        "user",
-        interaction.id,
-        interaction.user.id,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        {
+        message: latestMessage as Message,
+        isFromQueue: false,
+        isManuallyTriggered: true,
+        selectedPersonaId: selectedPersona.tomori_id,
+        textQuotaSource: "user",
+        textQuotaTriggerKey: interaction.id,
+        textQuotaUserDiscId: interaction.user.id,
+        manualTriggerInvoker: {
           userDiscId: interaction.user.id,
           username: interaction.user.username,
           locale,
           member: interaction.member as import("discord.js").GuildMember | null,
         },
-      );
+      });
     } catch (error) {
       await log.error(`Error in ${type} ${actionKey} command`, error, {
         errorType: `${type}_${actionKey}_command_error`,

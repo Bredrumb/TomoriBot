@@ -5,7 +5,7 @@ import { deleteReminderById, getDueReminders } from "../utils/db/repositories";
 import { rescheduleReminder } from "../utils/db/repositories";
 import type { ReminderRow } from "../types/db/schema";
 import { calculateLateness } from "@/utils/text/processors/timeUtils";
-import tomoriChat, { suppressNextSelfReply } from "../events/messageCreate/tomoriChat";
+import { tomoriChat, suppressNextSelfReply } from "../events/messageCreate/tomoriChat";
 import { createStandardEmbed } from "../utils/discord/embedHelper";
 import { getCachedAllPersonas } from "../utils/cache/tomoriStateCache";
 import {
@@ -123,40 +123,26 @@ export class ReminderProcessor {
 
       suppressNextSelfReply(channel.id);
 
-      await tomoriChat(
-        this.client,
-        lastMessage,
-        false,
-        true,
-        false,
-        undefined,
-        undefined,
-        false,
-        0,
-        false,
-        reminder.user_discord_id,
-        {
+      await tomoriChat({
+        client: this.client,
+        message: lastMessage,
+        isFromQueue: false,
+        isManuallyTriggered: true,
+        forceReason: false,
+        isStopResponse: false,
+        reminderRecipientID: reminder.user_discord_id,
+        reminderData: {
           reminder_purpose: reminder.reminder_purpose,
           reminder_lateness: lateness,
           self_reminder: isSelfReminder,
         },
-        reminder.persona_id ?? undefined,
-        false,
-        false,
-        undefined,
-        "system",
-        undefined, // textQuotaTriggerKey
-        undefined, // textQuotaUserDiscId
-        undefined, // manualSystemPrompt
-        undefined, // manualPrefill
-        undefined, // naiContinuationPrefill
-        undefined, // emptyResponseFinishReason
-        undefined, // injectedContextItems
-        undefined, // forcedMentions
-        undefined, // manualTriggerInvoker
+        selectedPersonaId: reminder.persona_id ?? undefined,
+        isPersonaJob: false,
+        isUserImpersonation: false,
+        textQuotaSource: "system",
         // Tasks (self_reminder) may spawn follow-up tasks; user reminders block create_task to prevent loops
-        isSelfReminder ? undefined : { disableReminderTool: true },
-      );
+        manualStreamingContextOverrides: isSelfReminder ? undefined : { disableReminderTool: true },
+      });
 
       log.info(`tomoriChat call completed for reminder ${reminder.reminder_id}`);
 

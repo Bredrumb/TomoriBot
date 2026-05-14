@@ -47,19 +47,12 @@ The script is a guardrail, not a complete architectural proof. Reviewers still n
 | #9 Matrix bridge | `matrixManager.ts`, 9 lines; public responsibility files mostly thin | `src/utils/bridges/matrix/runtime.ts`, 1,405 lines | Facade-only split | Matrix client, events, rooms, state sync, user mapping, media | Split runtime into real responsibility modules; shrink `runtime.ts` to a compatibility barrel or delete it. |
 | #10 Context builder | `contextBuilder.ts`, 5 lines; owned modules under `src/utils/text/context/` are all <600 lines | Deleted `context/core/builderImplementation.ts` | Complete | Context assembly pipeline | Preserved `contextBuilder.ts` as the public API boundary because callers consume context assembly as one capability; audit keep criterion met with 11 import sites. |
 | #11 Stream orchestrator | `streamOrchestrator.ts`, 1 line; owned modules under `src/utils/discord/stream/` are all <600 lines | Deleted `stream/core/orchestratorImplementation.ts` | Complete | Stream state machine, stop registry, buffer flushing, segment processing, message delivery, UI updates, and thought logs | Preserved `streamOrchestrator.ts` as the public API boundary because callers consume streaming as one capability; audit keep criterion met with 15 import sites. |
-| #12b / #12c Chat | `tomoriChat.ts`, 88 lines; `admission.ts`, 248 lines; `channelQueue.ts`, 299 lines | `turnRunner.ts`, 7,856 lines | Incomplete; current entrypoint is not the target coordinator | Chat admission, queueing, context, provider turn, tool loop, response, post-turn effects | Keep #12c open. `tomoriChat.ts` still does `createChatInvocation()` then `runChatTurn()`, not the stage-shaped coordinator. Drain `turnRunner.ts` into the planned modules. |
+| #12b / #12c / 5.5d Chat | `tomoriChat.ts`, ~145 lines; stage modules under `src/utils/chat/` own distinct chat-stage responsibilities | Deleted `turnRunner.ts`; chat implementation lives in `admission.ts`, `admissionQueue.ts`, `channelQueue.ts`, `turnPlanner.ts`, `contextPipeline.ts`, `contextAnnotations.ts`, `contextEmbeds.ts`, `contextMedia.ts`, `generationTurn.ts`, `toolLoop.ts`, `responseEmitter.ts`, `postTurnEffects.ts`, and small queue/identity helpers | **Complete** | Chat admission, queueing, turn planning, context, provider turn, tool loop, response, post-turn effects | Coordinator exposes the target stage sequence; response delivery passes through a sink. Post-5.5d behavioral verification restored the pre-lock trigger gate, rewired the zero-caller exports, audited old helper preservation, and added lifecycle/provider fixtures. See `plans/refactor/phases/phase-5.5d-chat-drain.md` "Post-5.5d Verification" appendix. |
 | #13 Event handler eager-load | Not completed in this snapshot | N/A | Out of scope | Event loading | Do after Phase 5.5 if still useful. |
 
 ## Chat Coordinator Finding
 
-The current chat entrypoint is not the expected shape:
-
-```ts
-const invocation = createChatInvocation(...);
-await runChatTurn(invocation);
-```
-
-The expected shape remains:
+The current chat entrypoint exposes the expected stage narrative:
 
 ```ts
 const incoming = normalizeChatInvocation(...);
@@ -82,7 +75,7 @@ await runWithChannelLock(admission, async (lockedTurn) => {
 });
 ```
 
-Do not mark #12c complete until the event file exposes this stage narrative and `turnRunner.ts` is either deleted or reduced to glue. Response delivery must be represented as a response sink used during generation because Discord streaming happens while the provider turn is running.
+`turnRunner.ts` has been deleted, and response delivery is represented as a response sink used during generation because Discord streaming happens while the provider turn is running.
 
 ## Intentional Large File Rule
 

@@ -540,7 +540,7 @@ export class CrossChannelMessageTool extends BaseTool {
     suppressNextSelfReply(targetChannel.id);
 
     // 10. Call tomoriChat in the target channel
-    const tomoriChat = (await import("../../events/messageCreate/tomoriChat")).default;
+    const { tomoriChat } = await import("../../events/messageCreate/tomoriChat");
 
     const sourcePersonaId = context.activePersonaId ?? context.tomoriState.tomori_id ?? undefined;
     const isSourceUserImpersonation = context.isUserImpersonation === true;
@@ -555,35 +555,22 @@ export class CrossChannelMessageTool extends BaseTool {
       : undefined;
 
     try {
-      await tomoriChat(
-        context.client,
-        lastMessage,
-        false, // isFromQueue
-        true, // isManuallyTriggered
-        false, // forceReason
-        undefined, // reasoningQuery
-        undefined, // llmOverrideCodename
-        false, // isStopResponse
-        0, // retryCount
-        false, // skipLock
-        undefined, // reminderRecipientID
-        undefined, // reminderData
-        sourcePersonaId, // selectedPersonaId — same persona visits target
-        false, // isPersonaJob
-        isSourceUserImpersonation, // isUserImpersonation
-        sourceImpersonatedUserId, // impersonatedUserId
-        "system", // textQuotaSource — system-triggered
-        undefined, // textQuotaTriggerKey
-        undefined, // textQuotaUserDiscId
-        undefined, // manualSystemPrompt
-        undefined, // manualPrefill
-        undefined, // naiContinuationPrefill
-        undefined, // emptyResponseFinishReason
-        [taskInjection], // injectedContextItems
-        undefined, // forcedMentions
-        manualTriggerInvoker, // manualTriggerInvoker
-        { disableCrossChannelMessage: true }, // manualStreamingContextOverrides
-      );
+      await tomoriChat({
+        client: context.client,
+        message: lastMessage,
+        isFromQueue: false,
+        isManuallyTriggered: true,
+        forceReason: false,
+        isStopResponse: false,
+        selectedPersonaId: sourcePersonaId,
+        isPersonaJob: false,
+        isUserImpersonation: isSourceUserImpersonation,
+        impersonatedUserId: sourceImpersonatedUserId,
+        textQuotaSource: "system",
+        injectedContextItems: [taskInjection],
+        manualTriggerInvoker,
+        manualStreamingContextOverrides: { disableCrossChannelMessage: true },
+      });
 
       log.success(
         `Cross-channel tool: Successfully dispatched to #${targetChannel.name} (task: "${(taskArg as string).trim().substring(0, 80)}...")`,

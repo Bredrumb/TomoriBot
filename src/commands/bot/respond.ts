@@ -7,7 +7,7 @@ import { ColorCode, log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import type { UserRow } from "../../types/db/schema";
 import type { ModalComponent, SelectOption } from "../../types/discord/modal";
-import tomoriChat from "../../events/messageCreate/tomoriChat";
+import { tomoriChat } from "../../events/messageCreate/tomoriChat";
 import { loadAllPersonasForServer, loadSmartestModel, loadTomoriState } from "../../utils/db/repositories";
 import {
   checkMessageTriggerCooldownWithWhitelist,
@@ -440,39 +440,27 @@ export async function execute(
       `Manual respond command triggered by ${interaction.user.id} in channel ${interaction.channel.id} for message ${latestMessage.id}`,
     );
 
-    await tomoriChat(
+    await tomoriChat({
       client,
-      passportMessage as Message,
-      false, // isFromQueue
-      true, // isManuallyTriggered - this bypasses normal trigger logic
-      forceReason, // forceReason - enabled when "Use Reasoning" is Yes
-      forceReason ? manualPrompt : undefined, // reasoningQuery - prompt doubles as reasoning query when reasoning is enabled
-      llmOverrideCodename, // llmOverrideCodename - smartest model when reasoning is enabled
-      undefined, // isStopResponse
-      0, // retryCount
-      false, // skipLock
-      undefined, // reminderRecipientID
-      undefined, // reminderData
-      selectedPersona?.tomori_id ?? undefined, // selectedPersonaId
-      undefined, // isPersonaJob
-      undefined, // isUserImpersonation
-      undefined, // impersonatedUserId
-      "user", // textQuotaSource
-      interaction.id, // textQuotaTriggerKey (one slot per /bot respond invocation)
-      interaction.user.id, // textQuotaUserDiscId
-      manualPrompt || undefined, // manualSystemPrompt
-      manualPrefill, // manualPrefill
-      undefined, // naiContinuationPrefill
-      undefined, // emptyResponseFinishReason
-      undefined, // injectedContextItems
-      undefined, // forcedMentions
-      {
+      message: passportMessage as Message,
+      isFromQueue: false,
+      isManuallyTriggered: true,
+      forceReason,
+      reasoningQuery: forceReason ? manualPrompt : undefined,
+      llmOverrideCodename,
+      selectedPersonaId: selectedPersona?.tomori_id ?? undefined,
+      textQuotaSource: "user",
+      textQuotaTriggerKey: interaction.id,
+      textQuotaUserDiscId: interaction.user.id,
+      manualSystemPrompt: manualPrompt || undefined,
+      manualPrefill,
+      manualTriggerInvoker: {
         userDiscId: interaction.user.id,
         username: interaction.user.username,
         locale,
         member: interaction.member as import("discord.js").GuildMember | null,
       },
-    );
+    });
 
     // 7. Set cooldown after successful response (shares cooldown pool with message triggers)
     // Uses whitelist-aware version to respect per-channel cooldown overrides

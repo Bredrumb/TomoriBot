@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5 -->
+<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
 
 # 3. Architecture Overview
 
@@ -27,7 +27,11 @@ chat pipeline
   -> typed invocation normalization (src/utils/chat/invocation.ts)
   -> reply/no-reply admission decision (src/utils/chat/admission.ts)
   -> channel queue and lock management (src/utils/chat/channelQueue.ts)
-  -> temporary turn runner seam while extraction continues (src/utils/chat/turnRunner.ts)
+  -> turn planning and persona routing (src/utils/chat/turnPlanner.ts)
+  -> chat-visible context pipeline (src/utils/chat/contextPipeline.ts)
+  -> response sink creation (src/utils/chat/responseEmitter.ts)
+  -> generation stage (src/utils/chat/generationTurn.ts)
+  -> post-turn effects (src/utils/chat/postTurnEffects.ts)
   -> trigger/reply decision helpers (src/utils/chat/triggerProcessor.ts)
   -> message history preprocessing (references/media/reaction metadata) + context builder + caches
   -> provider factory -> selected provider

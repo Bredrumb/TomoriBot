@@ -6,11 +6,8 @@ import type { StreamingContext } from "@/types/tool/interfaces";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { log } from "@/utils/misc/logger";
-import type { TextQuotaCheckResult } from "@/utils/quota/textQuotaManager";
-import { localizer } from "@/utils/text/localizer";
 import { isSelfTriggerMessage } from "@/utils/chat/triggerProcessor";
-import type { ManualTriggerInvoker, TextQuotaSource } from "@/utils/chat/invocation";
-import type { LockedChatTurn, RunnableChatAdmission } from "@/utils/chat/types";
+import type { LockedChatTurn, ManualTriggerInvoker, RunnableChatAdmission, TextQuotaSource } from "@/utils/chat/types";
 
 function parseIntegerEnvFlag(value: string | undefined, defaultValue: number, minimum: number): number {
   if (typeof value !== "string") return defaultValue;
@@ -20,22 +17,13 @@ function parseIntegerEnvFlag(value: string | undefined, defaultValue: number, mi
 }
 
 export const CHANNEL_LOCK_TIMEOUT_MS = parseIntegerEnvFlag(process.env.CHANNEL_LOCK_TIMEOUT_MS, 180000, 10000);
-const TEXT_QUOTA_TRIGGER_TTL_MS = 10 * 60 * 1000;
 const DISCORD_TYPING_KEEPALIVE_INTERVAL_MS = parseIntegerEnvFlag(
   process.env.DISCORD_TYPING_KEEPALIVE_INTERVAL_MS,
   8000,
   1000,
 );
 export const MAX_FOLLOW_UP_INTERRUPTS = Number.parseInt(process.env.MAX_FOLLOW_UP_INTERRUPTS || "3", 10);
-const SELF_REPLY_CHAIN_TTL_MS = 30 * 60 * 1000;
 const SELF_REPLY_SUPPRESSION_TTL_MS = 5000;
-
-export interface TextQuotaTriggerState {
-  serverId: number;
-  userDiscId: string;
-  consumed: boolean;
-  createdAt: number;
-}
 
 export type QueuedMessage = {
   message: Message;
@@ -81,31 +69,64 @@ export interface ChannelLockEntry {
   messageQueue: QueuedMessage[];
 }
 
-interface SelfReplyChainState {
-  triggerCount: number;
-  lastWasSelf: boolean;
-  updatedAt: number;
-  lastRespondedPersonaId: number | null;
-  originUserDiscId: string | null;
-}
-
 export const channelLocks = new Map<string, ChannelLockEntry>();
-export const textQuotaTriggerStates = new Map<string, TextQuotaTriggerState>();
 export const selfReplySuppressionUntil = new Map<string, number>();
-
-const selfReplyChainStates = new Map<string, SelfReplyChainState>();
 
 export async function runWithChannelLock<T>(
   admission: RunnableChatAdmission,
   callback: (lockedTurn: LockedChatTurn) => Promise<T>,
+  options: {
+    handleStopResponse: (originalStopMessage: Message, client: Client) => Promise<void>;
+    processQueuedMessage: (queuedMessage: QueuedMessage) => Promise<void>;
+  },
 ): Promise<T> {
-  const lockEntry = channelLocks.get(admission.message.channel.id);
-  return await callback({
-    admission,
-    channelId: admission.message.channel.id,
-    lockedAt: lockEntry?.lockedAt ?? Date.now(),
-    queueDepth: lockEntry?.messageQueue.length ?? 0,
+  const channelId = admission.message.channel.id;
+  const skipLock = admission.incoming.skipLock;
+
+  // Retry/internal re-entries (skipLock) reuse the outer turn's lock and typing keepalive
+  if (skipLock) {
+    const lockEntry = channelLocks.get(channelId);
+    return await callback({
+      admission,
+      channelId,
+      lockedAt: lockEntry?.lockedAt ?? Date.now(),
+      queueDepth: lockEntry?.messageQueue.length ?? 0,
+      skipLock: true,
+    });
+  }
+
+  const serverDiscId = admission.serverDiscId ?? channelId;
+  const lockEntry = getOrCreateChannelLockEntry(channelId, serverDiscId);
+  releaseStaleChannelLockIfExpired(channelId, lockEntry);
+
+  const userDiscId = admission.userDiscId ?? admission.message.author.id;
+  acquireChannelLockForTurn(lockEntry, {
+    messageId: admission.message.id,
+    userDiscId,
+    isPersonaJob: admission.incoming.isPersonaJob,
+    selectedPersonaId: admission.incoming.selectedPersonaId,
+    isCommandTriggered: admission.incoming.isManuallyTriggered ?? false,
   });
+
+  await startDiscordTypingKeepalive(admission.message.channel, lockEntry, admission.message.id);
+
+  try {
+    return await callback({
+      admission,
+      channelId,
+      lockedAt: lockEntry.lockedAt,
+      queueDepth: lockEntry.messageQueue.length,
+      skipLock: false,
+    });
+  } finally {
+    releaseChannelLockAndReplayQueue({
+      channelId,
+      lockEntry,
+      completedMessageId: admission.message.id,
+      handleStopResponse: options.handleStopResponse,
+      processQueuedMessage: options.processQueuedMessage,
+    });
+  }
 }
 
 export function isActiveNaturalStopTurn(channelId: string, userDiscId: string): boolean {
@@ -499,37 +520,6 @@ export async function startDiscordTypingKeepalive(
   );
 }
 
-export function cleanupTextQuotaTriggerStates(): void {
-  const now = Date.now();
-  for (const [triggerKey, state] of textQuotaTriggerStates.entries()) {
-    if (now - state.createdAt >= TEXT_QUOTA_TRIGGER_TTL_MS) {
-      textQuotaTriggerStates.delete(triggerKey);
-    }
-  }
-}
-
-export function buildTextQuotaResetInfo(locale: string, quotaCheck: TextQuotaCheckResult): string {
-  if (!quotaCheck.resetTime) {
-    return "";
-  }
-
-  const resetTime = quotaCheck.resetTime;
-  const now = new Date();
-  const diffMs = resetTime.getTime() - now.getTime();
-  const hoursUntilReset = Math.ceil(diffMs / (1000 * 60 * 60));
-
-  if (hoursUntilReset <= 24) {
-    return localizer(locale, "genai.text_quota_resets_in_hours", {
-      hours: hoursUntilReset.toString(),
-    });
-  }
-
-  const daysUntilReset = Math.ceil(hoursUntilReset / 24);
-  return localizer(locale, "genai.text_quota_resets_in_days", {
-    days: daysUntilReset.toString(),
-  });
-}
-
 export function isChannelProcessingLocked(channelId: string): boolean {
   const lockEntry = channelLocks.get(channelId);
   if (!lockEntry?.isLocked) return false;
@@ -614,96 +604,4 @@ export function clearQueuedSelfReplyWork(
     clearedPersonaJobCount,
     clearedSelfTriggerCount,
   };
-}
-
-export function getSelfReplyChainState(channelId: string): SelfReplyChainState {
-  const now = Date.now();
-  const existing = selfReplyChainStates.get(channelId);
-
-  if (existing && now - existing.updatedAt < SELF_REPLY_CHAIN_TTL_MS) {
-    return existing;
-  }
-
-  const fresh: SelfReplyChainState = {
-    triggerCount: 0,
-    lastWasSelf: false,
-    updatedAt: now,
-    lastRespondedPersonaId: null,
-    originUserDiscId: null,
-  };
-  selfReplyChainStates.set(channelId, fresh);
-  return fresh;
-}
-
-export function updateSelfReplyChainState(channelId: string, isSelfMessage: boolean): SelfReplyChainState {
-  const state = getSelfReplyChainState(channelId);
-  state.updatedAt = Date.now();
-
-  if (!isSelfMessage) {
-    state.triggerCount = 0;
-    state.lastWasSelf = false;
-    state.lastRespondedPersonaId = null;
-    state.originUserDiscId = null;
-    return state;
-  }
-
-  if (!state.lastWasSelf) {
-    state.lastWasSelf = true;
-  }
-
-  return state;
-}
-
-export function setLastRespondedPersona(channelId: string, personaId: number): void {
-  const state = getSelfReplyChainState(channelId);
-  state.lastRespondedPersonaId = personaId;
-  state.updatedAt = Date.now();
-}
-
-export function getLastRespondedPersonaId(channelId: string): number | null {
-  const state = getSelfReplyChainState(channelId);
-  return state.lastRespondedPersonaId;
-}
-
-export function setSelfReplyChainOriginUser(channelId: string, userDiscId: string | null): void {
-  const state = getSelfReplyChainState(channelId);
-  state.originUserDiscId = userDiscId;
-  state.updatedAt = Date.now();
-}
-
-export function getSelfReplyChainOriginUser(channelId: string): string | null {
-  const state = getSelfReplyChainState(channelId);
-  return state.originUserDiscId;
-}
-
-export function getUserActiveMessageCount(userDiscId: string): number {
-  let count = 0;
-
-  for (const lockEntry of channelLocks.values()) {
-    if (lockEntry.isLocked && lockEntry.userDiscId === userDiscId && !lockEntry.currentIsPersonaJob) {
-      count++;
-    }
-
-    count += lockEntry.messageQueue.filter(
-      (queuedMsg) => queuedMsg.message.author.id === userDiscId && !queuedMsg.isPersonaJob,
-    ).length;
-  }
-
-  return count;
-}
-
-export function getServerActiveMessageCount(serverDiscId: string): number {
-  let count = 0;
-
-  for (const lockEntry of channelLocks.values()) {
-    if (lockEntry.serverDiscId === serverDiscId) {
-      if (lockEntry.isLocked) {
-        count++;
-      }
-
-      count += lockEntry.messageQueue.length;
-    }
-  }
-
-  return count;
 }

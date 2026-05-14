@@ -3,7 +3,6 @@ import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import { stripBridgePrefix } from "@/utils/bridges";
 
 const QUEUED_REPLY_DIRECTIVE_MAX_CONTENT_LENGTH = 280;
-
 const SUPPORTED_VIDEO_MIME_TYPES = [
   "video/mp4",
   "video/mpeg",

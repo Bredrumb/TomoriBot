@@ -6,6 +6,74 @@
 
 ---
 
+## End-state folder structure
+
+```
+src/utils/db/
+├── client.ts                          # infrastructure
+├── initializeDatabase.ts              # infrastructure
+├── sqlSecurity.ts                     # infrastructure
+├── sqlSplitter.ts                     # infrastructure
+├── ragAvailability.ts                 # renamed from ragDetection.ts
+└── repositories/
+    ├── index.ts                       # ≤50 lines: instances + types only
+    ├── IRepository.ts
+    ├── ServerRepository.ts            # + emojiStickerSync + managedWebhookDb
+    ├── UserRepository.ts              # + personalSpotlight
+    ├── PersonaRepository.ts           # + persona-scoped memoryLimits checks
+    ├── ConfigRepository.ts
+    ├── LlmRepository.ts
+    ├── ToolRepository.ts              # + guildMcpDb
+    ├── RagRepository.ts
+    ├── ImportExportRepository.ts
+    ├── PersonalMemoryRepository.ts    # + checkPersonalMemoryLimit
+    ├── ServerMemoryRepository.ts      # + checkServerMemoryLimit
+    ├── ShortTermMemoryRepository.ts
+    ├── ConditioningMemoryRepository.ts # + conditioningDb
+    ├── WhitelistRepository.ts         # NEW
+    ├── PresetRepository.ts            # NEW
+    ├── CooldownRepository.ts          # NEW
+    └── internal/
+        └── sql/                       # Go-style internal/ — private to repositories/**
+            ├── configReadSql.ts
+            ├── configWriteSql.ts
+            ├── llmReadSql.ts
+            ├── llmWriteSql.ts
+            ├── memoryReadSql.ts
+            ├── memoryWriteSql.ts
+            ├── personaReadSql.ts
+            ├── personaWriteSql.ts
+            ├── serverReadSql.ts       # + emoji/sticker/webhook SQL
+            ├── serverWriteSql.ts      # + emoji/sticker/webhook SQL
+            ├── toolReadSql.ts         # + MCP SQL
+            ├── toolWriteSql.ts        # NEW (currently no write file)
+            ├── userReadSql.ts         # + spotlight SQL
+            ├── userWriteSql.ts        # + spotlight SQL
+            ├── importExportReadSql.ts # from db/repositoryExportSql.ts (753 lines)
+            ├── importExportWriteSql.ts # from db/repositoryImportSql.ts (754 lines)
+            ├── conditioningReadSql.ts # NEW
+            ├── conditioningWriteSql.ts # NEW
+            ├── whitelistReadSql.ts    # NEW
+            ├── whitelistWriteSql.ts   # NEW
+            ├── presetReadSql.ts       # NEW
+            ├── presetWriteSql.ts      # NEW
+            ├── cooldownReadSql.ts     # NEW
+            └── cooldownWriteSql.ts    # NEW
+```
+
+**Outside `src/utils/db/`** (Group E + Group F moves):
+
+```
+src/utils/persona/personaAccess.ts     # moved from db/personaAccess.ts
+src/utils/misc/memoryLimits.ts         # env-loading half of db/memoryLimits.ts
+```
+
+**Privacy convention:** `repositories/internal/**` is accessible only from `repositories/**`. Anything outside `repositories/` that imports from `internal/sql/` is a violation. The audit-script extension (see "Audit script extension" subtask in the plan) enforces this at CI time.
+
+**Why nested under `repositories/`, not at `db/internal/`:** the `internal/` boundary in Go is "only the parent directory and its subdirectories may import." Placing `internal/` at `db/` would let `db/client.ts` and `db/initializeDatabase.ts` reach into per-domain SQL — which they have no business doing. Nesting under `repositories/` matches the actual privacy intent.
+
+---
+
 ## Method
 
 For each root file we recorded:
@@ -36,7 +104,7 @@ The 5.5b 600-line per-module budget is the primary forcing function. Repositorie
 | `ConfigRepository` | 681 | −81 | **Over budget already** |
 | `LlmRepository` | 791 | −191 | **Over budget already** |
 
-SQL siblings (`*ReadSql.ts` / `*WriteSql.ts`) under `repositories/` are not counted against the class budget — they will live in `_sql/` per 5.5e's stated rule.
+SQL siblings (`*ReadSql.ts` / `*WriteSql.ts`) under `repositories/` are not counted against the class budget — they will live in `repositories/internal/sql/` per 5.5e's stated rule (Go-style `internal/` privacy convention).
 
 ---
 
@@ -53,26 +121,26 @@ SQL siblings (`*ReadSql.ts` / `*WriteSql.ts`) under `repositories/` are not coun
 
 All four are connection / startup / security infrastructure with no domain ownership. Confirmed unchanged from plan.
 
-### Group B — Misclassified by the plan (move into `repositories/_sql/`)
+### Group B — Misclassified by the plan (move into `repositories/internal/sql/`)
 
 | File | LOC | Public surface | Disposition | Why |
 |---|---:|---|---|---|
-| `repositoryExportSql.ts` | 753 | Per-table export SQL constants used by `ImportExportRepository` | **Move to `repositories/_sql/importExportReadSql.ts`** | Despite the `repository*` prefix this is one repository's SQL. Plan's "infrastructure" label was based on filename, not content. |
-| `repositoryImportSql.ts` | 754 | Per-table import SQL constants used by `ImportExportRepository` | **Move to `repositories/_sql/importExportWriteSql.ts`** | Same reasoning as above. |
-| `repositoryReadSql.ts` | 7 | `export * from` barrel into 7 `repositories/*ReadSql.ts` files | **Delete** | Once `_sql/` becomes private (the stated 5.5e convention), an external barrel into it is architecturally wrong. |
+| `repositoryExportSql.ts` | 753 | Per-table export SQL constants used by `ImportExportRepository` | **Move to `repositories/internal/sql/importExportReadSql.ts`** | Despite the `repository*` prefix this is one repository's SQL. Plan's "infrastructure" label was based on filename, not content. |
+| `repositoryImportSql.ts` | 754 | Per-table import SQL constants used by `ImportExportRepository` | **Move to `repositories/internal/sql/importExportWriteSql.ts`** | Same reasoning as above. |
+| `repositoryReadSql.ts` | 7 | `export * from` barrel into 7 `repositories/*ReadSql.ts` files | **Delete** | Once `internal/sql/` becomes private (the stated 5.5e convention), an external barrel into it is architecturally wrong. |
 | `repositoryWriteSql.ts` | 6 | `export * from` barrel into 6 `repositories/*WriteSql.ts` files | **Delete** | Same reasoning as above. |
 
 **Action required outside this file:** grep for consumers of `@/utils/db/repositoryReadSql` and `@/utils/db/repositoryWriteSql` before deletion — they must already be importing from the per-domain SQL files (or, ideally, only from Repository classes after the index.ts drain).
 
-### Group C — Folds into existing Repository (with SQL routed to `_sql/`)
+### Group C — Folds into existing Repository (with SQL routed to `internal/sql/`)
 
 | File | LOC | Target Repository | Class additions (est.) | Why |
 |---|---:|---|---:|---|
-| `emojiStickerSync.ts` | 331 | `ServerRepository` | ~80 | Plan already noted ServerRepository owns `loadEmojis` / `loadStickers`. Sync logic is server-scoped. SQL (~250 lines) routes to `_sql/serverWriteSql.ts`. |
+| `emojiStickerSync.ts` | 331 | `ServerRepository` | ~80 | Plan already noted ServerRepository owns `loadEmojis` / `loadStickers`. Sync logic is server-scoped. SQL (~250 lines) routes to `internal/sql/serverWriteSql.ts`. |
 | `managedWebhookDb.ts` | 197 | `ServerRepository` | ~70 | Single-table, server-scoped. Encryption + lazy key rotation pattern matches `guildMcpDb`'s — both are server-scoped encrypted credentials. New `WebhookRepository` would be over-decomposed for one table. |
 | `guildMcpDb.ts` | 237 | `ToolRepository` | ~110 | MCP servers are tool sources; `ToolRepository` has +429 headroom. Encryption logic adds private helpers, not new domain. Honors the user's saved feedback `[[feedback_reuse_existing_patterns]]` — mirror established patterns rather than invent new repositories. |
-| `conditioningDb.ts` | 358 | `ConditioningMemoryRepository` | ~130 | Conditioning history is the natural extension of conditioning memory. +469 headroom on the target. SQL routes to a new `_sql/conditioningWriteSql.ts`. |
-| `personalSpotlight.ts` | 361 | `UserRepository` | ~120 | Personal spotlights are user-scoped state per channel. UserRepository headroom is tight (+49) but SQL extraction keeps the class growth bounded. **If post-fold UserRepository exceeds 650**, escalate to a new `SpotlightRepository` — record the decision in the PR description. |
+| `conditioningDb.ts` | 358 | `ConditioningMemoryRepository` | ~130 | Conditioning history is the natural extension of conditioning memory. +469 headroom on the target. SQL routes to a new `internal/sql/conditioningWriteSql.ts`. |
+| `personalSpotlight.ts` | 361 | `UserRepository` | ~120 | Personal spotlights are user-scoped state per channel. UserRepository headroom is tight (+49) but SQL extraction to `internal/sql/` keeps the class growth bounded. **If post-fold UserRepository exceeds 650**, escalate to a new `SpotlightRepository` — record the decision in the PR description. |
 
 ### Group D — New Repository required
 
@@ -136,7 +204,7 @@ No file at `db/` root is unaccounted for.
 3. **Group F split** (`memoryLimits`) — touches multiple repositories but each addition is small.
 4. **Group D new repositories** — `CooldownRepository` first (already mandated, deduplicates `cooldownManager` ↔ `messageCooldown`), then `WhitelistRepository`, then `PresetRepository`.
 5. **Group E moves** — pure relocations; do last so all callers have stabilized.
-6. **Group B SQL relocations** (`repositoryExportSql` / `repositoryImportSql` → `_sql/`) — final structural move, coincides with the audit-script extension that flags any new `db/` root domain files.
+6. **Group B SQL relocations** (`repositoryExportSql` / `repositoryImportSql` → `repositories/internal/sql/`) — final structural move, coincides with the audit-script extension that flags any new `db/` root domain files.
 
 ---
 

@@ -1,7 +1,17 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { TextChannel, type Client, type Message } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
-import { shouldBotReply } from "@/utils/chat/admission";
+import { evaluateAdmissionQueueAndTriggerGate } from "@/utils/chat/admissionQueue";
+import {
+  acquireChannelLockForTurn,
+  channelLocks,
+  enqueueBusyChannelMessage,
+  getOrCreateChannelLockEntry,
+  releaseChannelLockAndReplayQueue,
+} from "@/utils/chat/channelQueue";
+import { providerIsApiFamily } from "@/utils/chat/toolLoop";
+import { shouldBotReply } from "@/utils/chat/replyDecision";
+import type { ChatIncoming } from "@/utils/chat/types";
 import { determineMatchingPersonas, isSelfTriggerMessage } from "@/utils/chat/triggerProcessor";
 
 type ProviderFixtureName = "google" | "openrouter" | "novelai";
@@ -153,6 +163,10 @@ function makeTomoriState(fixture: ConversationFixture, persona: PersonaFixture):
 }
 
 describe("chat regression harness", () => {
+  afterEach(() => {
+    channelLocks.clear();
+  });
+
   for (const fixture of conversations) {
     it(`${fixture.provider}: ${fixture.description}`, () => {
       const client = makeClient();
@@ -207,6 +221,155 @@ describe("chat regression harness", () => {
     const personas = fixture.personas.map((persona) => makeTomoriState(fixture, persona));
 
     expect(isSelfTriggerMessage(message, personas)).toBe(true);
+  });
+
+  it("acquireChannelLockForTurn sets isLocked and releaseChannelLockAndReplayQueue clears it", () => {
+    const lockEntry = getOrCreateChannelLockEntry(channelId, guildId);
+
+    acquireChannelLockForTurn(lockEntry, {
+      messageId: "lock_lifecycle_msg",
+      userDiscId: "user_lifecycle",
+      isPersonaJob: false,
+      isCommandTriggered: false,
+    });
+
+    expect(lockEntry.isLocked).toBe(true);
+
+    releaseChannelLockAndReplayQueue({
+      channelId,
+      lockEntry,
+      completedMessageId: "lock_lifecycle_msg",
+      handleStopResponse: async () => {},
+      processQueuedMessage: async () => {},
+    });
+
+    expect(lockEntry.isLocked).toBe(false);
+  });
+
+  it("enqueueBusyChannelMessage followed by lock release replays the queued message", async () => {
+    const client = makeClient();
+    const fixture = conversations[0];
+    const activeMessage = makeMessage(fixture, client);
+    const queuedMessage = makeMessage(
+      {
+        ...fixture,
+        id: "queued_lifecycle",
+        message: {
+          ...fixture.message,
+          content: "Tomori, queued lifecycle check",
+        },
+      },
+      client,
+    );
+    const processedMessageIds: string[] = [];
+    const lockEntry = getOrCreateChannelLockEntry(channelId, guildId);
+    acquireChannelLockForTurn(lockEntry, {
+      messageId: activeMessage.id,
+      userDiscId: activeMessage.author.id,
+      isPersonaJob: false,
+      isCommandTriggered: false,
+    });
+
+    enqueueBusyChannelMessage({
+      lockEntry,
+      channelId,
+      simulatedAutochatCounterReset: false,
+      queuedMessage: {
+        message: queuedMessage,
+        textQuotaSource: "user",
+      },
+    });
+
+    releaseChannelLockAndReplayQueue({
+      channelId,
+      lockEntry,
+      completedMessageId: activeMessage.id,
+      handleStopResponse: async () => {},
+      processQueuedMessage: async (queued) => {
+        processedMessageIds.push(queued.message.id);
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(processedMessageIds).toEqual([queuedMessage.id]);
+  });
+
+  it("providerIsApiFamily distinguishes NovelAI from Google GenAI provider branches", () => {
+    expect(providerIsApiFamily("novelai", "novelai")).toBe(true);
+    expect(providerIsApiFamily("google", "google-genai")).toBe(true);
+    expect(providerIsApiFamily("novelai", "google-genai")).toBe(false);
+  });
+
+  it("pre-lock admission ignores non-triggering messages without locking the channel", async () => {
+    const client = makeClient();
+    const fixture = conversations[0];
+    const message = makeMessage(
+      {
+        ...fixture,
+        id: "pre_lock_non_trigger",
+        message: {
+          ...fixture.message,
+          content: "just passing through with no trigger",
+          mentionedUserIds: [],
+        },
+        state: {
+          ...fixture.state,
+          alwaysReplyEnabled: false,
+          autochDiscIds: [],
+          autochCounter: 0,
+          autochNextTarget: 10,
+        },
+      },
+      client,
+    );
+    const earlyTomoriState = makeTomoriState(
+      {
+        ...fixture,
+        state: {
+          ...fixture.state,
+          alwaysReplyEnabled: false,
+          autochDiscIds: [],
+          autochCounter: 0,
+          autochNextTarget: 10,
+        },
+      },
+      {
+        id: 1001,
+        nickname: "Tomori",
+        isAlter: false,
+        triggers: ["tomori"],
+      },
+    );
+    earlyTomoriState.config.thought_log_channel_disc_id = null;
+    const incoming: ChatIncoming = {
+      client,
+      message,
+      isFromQueue: false,
+      retryCount: 0,
+      skipLock: false,
+      isPersonaJob: false,
+      isUserImpersonation: false,
+      textQuotaSource: "user",
+    };
+
+    const disposition = await evaluateAdmissionQueueAndTriggerGate({
+      incoming,
+      channelScope: {
+        guild: null,
+        serverDiscId: guildId,
+        isDMChannel: false,
+      },
+      earlyTomoriState,
+      earlyAllPersonas: [earlyTomoriState],
+      userDiscId: message.author.id,
+      cooldownUserDiscId: message.author.id,
+      isActiveNaturalStopMessage: false,
+      isNaturalStopMessage: false,
+    });
+
+    expect(disposition?.disposition).toBe("ignore");
+    expect(disposition?.reason).toBe("non_trigger_pre_lock");
+    expect(channelLocks.get(channelId)?.isLocked).not.toBe(true);
   });
 
   it.skip("[REGRESSION PROBE] fails when a fixture expectation is deliberately inverted", () => {
