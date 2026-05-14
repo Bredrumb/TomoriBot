@@ -4,7 +4,7 @@ import type { UserRow } from "@/types/db/schema";
 import type { ErrorContext } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replySummaryEmbed } from "@/utils/discord/interactionHelper";
+import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { isGuildMessageCommandChannel } from "@/utils/discord/guildMessageChannel";

@@ -11,7 +11,8 @@ import { getAllWhitelistRoles, removeRoleWhitelist } from "@/utils/db/roleWhitel
 import { invalidateWhitelistCache } from "@/utils/cache/channelWhitelistCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import type { ChannelPersonaWhitelistRow, ErrorContext, RoleWhitelistRow, UserRow } from "@/types/db/schema";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
 import { CooldownType } from "@/types/db/schema";

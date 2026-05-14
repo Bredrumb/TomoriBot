@@ -3,7 +3,7 @@ import { MessageFlags } from "discord.js";
 import { THINKING_LEVEL_VALUES, type ThinkingLevelValue, isThinkingLevelValue } from "@/constants/thinkingLevels";
 import type { ErrorContext, SavedProviderConfigRow, UserRow } from "@/types/db/schema";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { localizer } from "@/utils/text/localizer";

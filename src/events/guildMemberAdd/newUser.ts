@@ -9,11 +9,9 @@ import tomoriChat, { suppressNextSelfReply } from "@/events/messageCreate/tomori
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { registerUser } from "@/utils/db/repositories";
 import { buildForcedMentionsForUser, ensureDiscordUserMention } from "@/utils/discord/mentionHelper";
-import {
-  getOrCreateWebhook,
-  resolvePersonaWebhookIdentity,
-  sendWebhookMessageWithIdentity,
-} from "@/utils/discord/webhookManager";
+import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
+import { resolvePersonaWebhookIdentity } from "@/utils/discord/webhook/identity";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { downloadImage } from "@/utils/image/avatarHelper";
 import { log } from "@/utils/misc/logger";

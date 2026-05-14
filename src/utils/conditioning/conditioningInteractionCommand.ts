@@ -6,7 +6,8 @@ import type {
   SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { EmbedBuilder, MessageFlags, PermissionFlagsBits } from "discord.js";
-import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { ConditioningType, UserRow } from "@/types/db/schema";

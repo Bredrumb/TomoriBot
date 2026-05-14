@@ -5,7 +5,8 @@ import { loadNaiPresetsForModel } from "@/utils/db/repositories";
 import { applyNaiPreset } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import type { UserRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 

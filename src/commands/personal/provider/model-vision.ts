@@ -2,7 +2,8 @@ import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder
 import { MessageFlags } from "discord.js";
 import { loadAvailableModelsForProvider } from "@/utils/db/repositories";
 import { promptForSavedProvider } from "@/commands/model/providerPicker";
-import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { ErrorContext, LlmRow, SavedProviderConfigRow, UserRow } from "@/types/db/schema";

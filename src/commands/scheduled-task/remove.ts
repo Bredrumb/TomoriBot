@@ -11,11 +11,11 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
   acknowledgeModalSubmitForRefresh,
-  replyInfoEmbed,
-  replyComponentsV2Status,
   promptWithPaginatedModal,
   safeSelectOptionText,
-} from "@/utils/discord/interactionHelper";
+} from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { replyComponentsV2Status } from "@/utils/discord/ui/statusComponents";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";

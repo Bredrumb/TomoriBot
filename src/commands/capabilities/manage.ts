@@ -9,7 +9,8 @@
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { type UserRow, type ErrorContext, tomoriConfigSchema, type TomoriConfigRow } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
 import { hasOptApiKey } from "@/utils/security/crypto";

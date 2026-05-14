@@ -9,13 +9,12 @@ import {
 } from "discord.js";
 import { localizer } from "@/utils/text/localizer";
 import { ColorCode, log } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { loadAllPersonasForServer, loadTomoriState } from "@/utils/db/repositories";
-import {
-  getOrCreateWebhook,
-  resolvePersonaWebhookIdentity,
-  sendWebhookMessageWithIdentity,
-} from "@/utils/discord/webhookManager";
+import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
+import { resolvePersonaWebhookIdentity } from "@/utils/discord/webhook/identity";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import {
   isGuildMessageCommandChannel,
   resolveGuildWebhookTargetChannel,

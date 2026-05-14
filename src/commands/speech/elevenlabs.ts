@@ -5,7 +5,7 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { ELEVENLABS_SERVICE_NAME, validateElevenLabsApiKey } from "@/utils/audio/elevenLabsAccount";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";

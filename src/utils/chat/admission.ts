@@ -19,7 +19,7 @@ import { createStandardEmbed, sendStandardEmbed } from "@/utils/discord/embedHel
 import { ColorCode, log } from "@/utils/misc/logger";
 import { checkTextQuota } from "@/utils/quota/textQuotaManager";
 import { checkServerRateLimit, checkUserRateLimit } from "@/utils/security/rateLimiter";
-import { escapeRegExp } from "@/utils/text/stringHelper";
+import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import {
   createScreamingRegex,
   getAutochatAssignedPersonaId,

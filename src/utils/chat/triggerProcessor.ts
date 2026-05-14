@@ -2,7 +2,7 @@ import type { Client, Message } from "discord.js";
 import { DMChannel } from "discord.js";
 import type { TomoriConfigRow, TomoriState } from "@/types/db/schema";
 import { isMatrixBridgeWebhookUsername } from "@/utils/bridges";
-import { escapeRegExp } from "@/utils/text/stringHelper";
+import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 
 /**
  * Creates a regex that matches a trigger word with "screaming" support.

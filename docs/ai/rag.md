@@ -1,3 +1,5 @@
+<!-- ARCH-ALIGNMENT: prereq-phase-5.5c -->
+
 # RAG (Document Memory)
 
 This document explains the full RAG lifecycle in TomoriBot: how documents are uploaded, stored, embedded, retrieved, and injected into prompts, plus the exact settings and code paths involved.
@@ -182,7 +184,8 @@ pgvector requirement:
 - Chunking + retrieval:
   - `src/utils/documents/documentService.ts`
 - Retrieval injection:
-  - `src/utils/text/contextBuilder.ts`
+  - `src/utils/text/context/rag.ts`
+  - `src/utils/text/context/nativeBuilder.ts`
 - Limits:
   - `src/utils/db/memoryLimits.ts`
   - `src/utils/security/rateLimiter.ts`
@@ -192,7 +195,7 @@ pgvector requirement:
 To confirm retrieval is running:
 - Look for the injected "Server Documents" block in the prompt.
 - If needed, add a temporary log around the retrieval block in:
-  - `src/utils/text/contextBuilder.ts`
+  - `src/utils/text/context/rag.ts`
 
 Common failure points:
 - pgvector missing (local RAG enabled but extension not installed)

@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-2 -->
+<!-- ARCH-ALIGNMENT: prereq-phase-5.5c -->
 
 # Tool Status Command
 
@@ -9,8 +9,13 @@ It exists so users can inspect current configuration without reopening every man
 ## Implementation Boundary
 
 - Slash command registration and routing live in `src/commands/tool/status.ts`.
-- Status data collection and embed page assembly live under `src/utils/metrics/`.
-- `/tool compact` routing lives in `src/commands/tool/compact.ts`; compaction orchestration lives under `src/utils/compaction/`.
+- The status coordinator lives in `src/utils/metrics/status/command.ts`.
+- Status page implementation lives under `src/utils/metrics/status/`:
+  - `personalPages.ts` builds personal settings/provider pages.
+  - `personaPages.ts` handles persona selection and persona detail pages.
+  - `serverModelPages.ts`, `serverConfigPages.ts`, and `serverChannelPages.ts` build the server status scopes.
+  - `channelFormatters.ts`, `providerConfigFormatters.ts`, and `sharedFormatters.ts` own reusable redaction and display formatting.
+- `/tool compact` routing lives in `src/commands/tool/compact.ts`; the public coordinator lives in `src/utils/compaction/compactOrchestrator.ts`, with implementation under `src/utils/compaction/compact/`.
 
 ## Scope Coverage
 

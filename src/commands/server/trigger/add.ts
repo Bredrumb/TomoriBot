@@ -8,7 +8,8 @@ import {
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { promptWithRawModal, replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import { personaConfigSchema } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";

@@ -25,8 +25,8 @@ import type {
   APIAttachment,
   TopLevelComponentData,
 } from "discord.js";
-import { localizer } from "../text/localizer";
-import { log, ColorCode } from "../misc/logger";
+import { localizer } from "../../text/localizer";
+import { log, ColorCode } from "../../misc/logger";
 import type {
   RawDiscordComponent,
   RawDiscordWebSocketPacket,
@@ -123,13 +123,18 @@ function transformModalSubmissionPacket(packet: RawDiscordWebSocketPacket): void
  * This patches the actual WebSocket message handler at a lower level
  */
 
-// biome-ignore lint/suspicious/noExplicitAny: Discord.js client type requires any for WebSocket interception
-function setupWebSocketInterception(client: any) {
+type InterceptableDiscordClient = {
+  ws?: {
+    handlePacket?: (packet: RawDiscordWebSocketPacket, shard: RawDiscordShard) => unknown;
+  };
+};
+
+function setupWebSocketInterception(client: unknown) {
   if ((globalThis as GlobalDiscordState).__webSocketPatched) return;
 
   try {
     // Patch the WebSocket manager's handlePacket method
-    const wsManager = client.ws;
+    const wsManager = (client as InterceptableDiscordClient).ws;
     if (wsManager?.handlePacket) {
       const originalHandlePacket = wsManager.handlePacket.bind(wsManager);
 
@@ -234,7 +239,7 @@ import type {
   PaginatedChoiceResult,
   StandardEmbedOptions,
   SummaryEmbedOptions,
-} from "../../types/discord/embed";
+} from "../../../types/discord/embed";
 import type {
   ModalOptions,
   ModalResult,
@@ -242,7 +247,7 @@ import type {
   ModalRadioGroupField,
   ModalCheckboxGroupField,
   ModalCheckboxField,
-} from "../../types/discord/modal";
+} from "../../../types/discord/modal";
 import {
   isModalInputField,
   isModalSelectField,
@@ -250,8 +255,8 @@ import {
   isModalRadioGroupField,
   isModalCheckboxGroupField,
   isModalCheckboxField,
-} from "../../types/discord/modal";
-import { createStandardEmbed, createSummaryEmbed } from "./embedHelper";
+} from "../../../types/discord/modal";
+import { createStandardEmbed, createSummaryEmbed } from "../embedHelper";
 
 const PROMPT_TIMEOUT = 60000; // 60 seconds
 const MODAL_DESCRIPTION_MAX_LENGTH = 99; // Discord modal description limit
@@ -1858,8 +1863,11 @@ export async function replyPaginatedPersonaChoicesV2(
               ),
               flags: MessageFlags.IsComponentsV2,
             });
-          } catch {
-            // Swallow — token may already be expired at this boundary.
+          } catch (error) {
+            log.warn("Failed to mark persona pagination session as timed out", {
+              errorType: "InteractionEditFailed",
+              metadata: { userId: interaction.user.id, error },
+            });
           }
           return { success: false, reason: "timeout" };
         }
@@ -2074,9 +2082,11 @@ export async function replyPaginatedPersonaChoicesV2(
             ),
             flags: MessageFlags.IsComponentsV2,
           });
-        } catch {
-          // Swallow — interaction may already be dead (expired token, rate limit).
-          // Do not re-throw; the outer catch must stay clean of API calls.
+        } catch (error) {
+          log.warn("Failed to update persona pagination terminal status", {
+            errorType: "InteractionEditFailed",
+            metadata: { userId: interaction.user.id, isTimeout, error },
+          });
         }
 
         // "fatal" signals callers that the interaction token is dead and they must
@@ -2729,13 +2739,20 @@ export async function replyPaginatedStatusPages(
         components: [newNavRow],
       });
     }
-  } catch {
+  } catch (error) {
+    log.warn("Status pagination collector ended", {
+      errorType: "PaginationCollectorEnded",
+      metadata: { userId: interaction.user.id, error },
+    });
     // 8. Timeout: strip buttons from the last viewed page to keep it clean
     try {
       const timeoutEmbed = createSummaryEmbed(locale, pages[currentPage]);
       await interaction.editReply({ embeds: [timeoutEmbed], components: [] });
-    } catch {
-      // Ignore follow-up edit errors (e.g. interaction token expired)
+    } catch (editError) {
+      log.warn("Failed to clear status pagination buttons after collector ended", {
+        errorType: "InteractionEditFailed",
+        metadata: { userId: interaction.user.id, error: editError },
+      });
     }
   }
 }

@@ -110,7 +110,7 @@ export class MemoryTool extends BaseTool {
     const { sendStandardEmbed } = await import("../../utils/discord/embedHelper");
     const { ColorCode } = await import("../../utils/misc/logger");
     const { convertMentions } = await import("../../utils/text/contextBuilder");
-    const { sanitizeUnknownTemplatePlaceholders } = await import("../../utils/text/stringHelper");
+    const { sanitizeUnknownTemplatePlaceholders } = await import("@/utils/text/processors/mentionProcessor");
 
     // Import memory validation functions
     const { validateMemoryContent, checkPersonalMemoryLimit, checkServerMemoryLimit } = await import(

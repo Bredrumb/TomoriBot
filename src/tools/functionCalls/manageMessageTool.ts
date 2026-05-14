@@ -9,7 +9,7 @@ import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult }
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { getKnownPersonaSpeakerNames, stripLeadingKnownSpeakerPrefixes } from "@/utils/discord/modelAuthoredText";
-import { resolveManagedWebhookForChannel } from "@/utils/discord/webhookManager";
+import { resolveManagedWebhookForChannel } from "@/utils/discord/webhook/fallback";
 import { log } from "@/utils/misc/logger";
 import { isMatrixBridgeWebhookUsername, stripBridgePrefix } from "@/utils/bridges";
 

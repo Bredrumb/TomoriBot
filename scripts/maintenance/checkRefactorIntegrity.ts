@@ -25,6 +25,10 @@ const sourceDir = resolve(rootDir, "src");
 const largeLineThreshold = readNumberArg("--large-lines", 500);
 const thinLineThreshold = readNumberArg("--thin-lines", 120);
 const oversizedImplementationNames = new Set(["runtime.ts", "orchestrator.ts", "turnRunner.ts"]);
+// Path patterns that indicate the "facade-rename" anti-pattern: a god file moved into
+// an internals dumping ground (core/, internals/, _impl/) with a generic *Implementation.ts
+// or *Internals.ts name. See docs/refactor/refactor-integrity-audit.md "Facade-rename smell".
+const facadeRenamePathPattern = /\/(core|internals|_impl)\/[^/]+(Implementation|Internals)\.ts$/;
 const knownLargeImplementationPaths = new Set([
   "src/utils/chat/turnRunner.ts",
   "src/utils/bridges/matrix/runtime.ts",
@@ -36,6 +40,11 @@ const knownLargeImplementationPaths = new Set([
   "src/utils/db/repositoryWriteSql.ts",
   "src/utils/text/contextBuilder.ts",
   "src/utils/discord/streamOrchestrator.ts",
+  // Phase 5.5c facade-rename targets — added so the existing
+  // "thin facade to large file" finding fires until they're truly decomposed.
+  "src/utils/text/context/core/builderImplementation.ts",
+  "src/utils/discord/stream/core/orchestratorImplementation.ts",
+  "src/utils/metrics/status/commandImplementation.ts",
 ]);
 const knownFacadeTargetPaths = new Set([
   "src/utils/chat/turnRunner.ts",
@@ -46,6 +55,9 @@ const knownFacadeTargetPaths = new Set([
   "src/utils/compaction/compactOrchestrator.ts",
   "src/utils/db/repositoryReadSql.ts",
   "src/utils/db/repositoryWriteSql.ts",
+  "src/utils/text/context/core/builderImplementation.ts",
+  "src/utils/discord/stream/core/orchestratorImplementation.ts",
+  "src/utils/metrics/status/commandImplementation.ts",
 ]);
 
 function readNumberArg(name: string, defaultValue: number): number {
@@ -115,11 +127,24 @@ function addFinding(findings: Finding[], finding: Finding): void {
 }
 
 function isKnownLargeImplementation(file: SourceFile): boolean {
-  return knownLargeImplementationPaths.has(file.repoPath);
+  return knownLargeImplementationPaths.has(file.repoPath) || matchesFacadeRenamePattern(file);
 }
 
 function isKnownFacadeTarget(file: SourceFile): boolean {
-  return knownFacadeTargetPaths.has(file.repoPath) || file.repoPath.endsWith(".legacy.ts");
+  return (
+    knownFacadeTargetPaths.has(file.repoPath) ||
+    file.repoPath.endsWith(".legacy.ts") ||
+    matchesFacadeRenamePattern(file)
+  );
+}
+
+// Catches the "moved a god file into core/<x>Implementation.ts" anti-pattern dynamically,
+// so future occurrences are flagged without anyone editing the hardcoded path lists.
+// A file that lives at .../{core,internals,_impl}/*{Implementation,Internals}.ts AND is
+// >largeLineThreshold lines is treated as an implementation god file for purposes of the
+// "thin facade to large file" check.
+function matchesFacadeRenamePattern(file: SourceFile): boolean {
+  return facadeRenamePathPattern.test(file.repoPath) && file.lineCount > largeLineThreshold;
 }
 
 function shouldIgnoreLargeImportTarget(targetFile: SourceFile): boolean {

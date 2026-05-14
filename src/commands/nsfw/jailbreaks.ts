@@ -8,7 +8,8 @@ import type { CheckboxGroupOption } from "@/types/discord/modal";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { type UserRow, type ErrorContext, tomoriConfigSchema } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
 

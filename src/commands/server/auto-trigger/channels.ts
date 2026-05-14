@@ -22,12 +22,8 @@ import {
   loadGuildTextChecklistChannels,
   type ChecklistChannelTarget,
 } from "@/utils/discord/channelChecklistManager";
-import {
-  promptWithPaginatedModal,
-  promptWithRawModal,
-  replyInfoEmbed,
-  safeSelectOptionText,
-} from "@/utils/discord/interactionHelper";
+import { promptWithPaginatedModal, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import {
   tomoriConfigSchema,
   type AutochatPersonaOverride as AutochatPersonaOverrideRow,

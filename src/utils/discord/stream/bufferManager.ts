@@ -2,7 +2,8 @@ import { HumanizerDegree } from "@/types/db/schema";
 import type { StreamConfig } from "@/types/stream/interfaces";
 import { type ChunkProcessingResult, DISCORD_STREAMING_CONSTANTS, type StreamState } from "@/types/stream/types";
 import { log } from "@/utils/misc/logger";
-import { createSentenceSplitRegex, hasTrailingIncompleteMarkdownTable } from "@/utils/text/stringHelper";
+import { createSentenceSplitRegex } from "@/utils/text/processors/chunkProcessor";
+import { hasTrailingIncompleteMarkdownTable } from "@/utils/text/markdownTable";
 
 function shouldDelayTrailingPeriodFlush(buffer: string, periodMatch: RegExpExecArray): boolean {
   const periodEndIndex = periodMatch.index + periodMatch[0].length;

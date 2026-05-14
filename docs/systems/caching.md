@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-2 -->
+<!-- ARCH-ALIGNMENT: prereq-phase-5.5a -->
 
 # 16. In-Memory Caching System
 
@@ -91,7 +91,7 @@ Caching reduces repeated DB/API calls and helps meet Discord interaction timing 
 
 - Static in-memory lookup map for known NovelAI model token limits
 
-### 10) Webhook cache (`utils/discord/webhookManager.ts`)
+### 10) Webhook cache (`utils/discord/webhook/cache.ts`)
 
 - Keys:
   - channel webhook cache (`channelId`)
@@ -104,7 +104,7 @@ Caching reduces repeated DB/API calls and helps meet Discord interaction timing 
 - Warmed at startup from preset rows
 - No TTL; refresh via restart/re-init
 
-### 12) Persona picker avatar session cache (transient, in `interactionHelper.ts`)
+### 12) Persona picker avatar session cache (transient, in `utils/discord/ui/personaPagination.ts`)
 
 Unlike the caches above, this one is **not** stored in `src/utils/cache/`. It is an ephemeral
 `Map<number, AvatarCacheEntry>` created per command invocation and discarded when the command finishes.
@@ -116,7 +116,7 @@ Unlike the caches above, this one is **not** stored in `src/utils/cache/`. It is
 - **Usage in commands:** declare `const avatarSessionCache: AvatarSessionCache = new Map()` before the outer `while (true)` loop and pass it as `avatarSessionCache` in `replyPaginatedPersonaChoicesV2` options. The helper uses `options.avatarSessionCache ?? new Map()` so callers that omit it still work correctly.
 
 ```ts
-import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/interactionHelper";
+import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 
 const avatarSessionCache: AvatarSessionCache = new Map();
 while (true) {

@@ -14,7 +14,7 @@ import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { invalidateUserCache } from "../../utils/cache/userCache";
 import { sendStandardEmbed } from "../../utils/discord/embedHelper";
 import { convertMentions } from "../../utils/text/contextBuilder";
-import { sanitizeUnknownTemplatePlaceholders } from "../../utils/text/stringHelper";
+import { sanitizeUnknownTemplatePlaceholders } from "@/utils/text/processors/mentionProcessor";
 import {
   isBlacklisted,
   loadUserRow,

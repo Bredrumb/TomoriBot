@@ -3,7 +3,7 @@ import { EmbedBuilder } from "discord.js";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 
 /** GitHub repository in owner/repo format for the releases API */
 const GITHUB_REPO = process.env.GITHUB_REPO || "Bredrumb/TomoriBot";

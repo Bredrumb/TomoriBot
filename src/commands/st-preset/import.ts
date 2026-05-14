@@ -10,7 +10,7 @@ import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { localizer } from "@/utils/text/localizer";
 import { findUnsupportedPresetMacros } from "@/utils/text/stPresetEngine";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { insertPresetWithNodes, setActivePreset } from "@/utils/db/stPresetDb";
 import type { UserRow, ErrorContext, StPresetNodeRow } from "@/types/db/schema";

@@ -10,7 +10,8 @@ import type { SelectOption } from "@/types/discord/modal";
 import { sql } from "@/utils/db/client";
 import { loadSystemPromptPresets } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";
 
 // Modal configuration constants

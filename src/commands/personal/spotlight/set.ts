@@ -23,9 +23,9 @@ import {
   acknowledgeModalSubmitForRefresh,
   promptWithPaginatedModal,
   promptWithRawModal,
-  replyInfoEmbed,
   safeSelectOptionText,
-} from "@/utils/discord/interactionHelper";
+} from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 

@@ -5,7 +5,7 @@ import { getTextQuotaConfig } from "@/utils/quota/textQuotaManager";
 import type { UserRow } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 
 // Quota limit constants
 const MIN_USER_QUOTA = 0; // 0 = unlimited

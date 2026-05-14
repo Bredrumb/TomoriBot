@@ -1,3 +1,5 @@
+<!-- ARCH-ALIGNMENT: prereq-phase-5.5a -->
+
 # 21. SillyTavern Card Import Support
 
 This document describes how `/persona import` handles SillyTavern character cards from either:
@@ -141,5 +143,5 @@ This preserves the debug workflow for unsupported edge-card formats.
 - `src/utils/image/pngMetadata.ts`
 - `src/utils/db/sillyTavernImport.ts`
 - `src/utils/text/contextBuilder.ts`
-- `src/utils/text/stringHelper.ts`
+- `src/utils/text/processors/mentionProcessor.ts`
 - `src/types/preset/presetExport.ts`

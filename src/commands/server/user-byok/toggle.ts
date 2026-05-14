@@ -8,7 +8,7 @@ import { sql } from "@/utils/db/client";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>

@@ -7,7 +7,8 @@ import type {
 import { AttachmentBuilder, EmbedBuilder, MessageFlags } from "discord.js";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import type { UserRow } from "@/types/db/schema";
 import { exportGlobalPersonalMemories, exportPersonaPersonalMemories } from "@/utils/db/repositories";
 import { loadAllPersonasForServer } from "@/utils/db/repositories";

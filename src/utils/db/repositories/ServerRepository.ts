@@ -19,7 +19,6 @@ import type {
 import {
   loadServerEmojis,
   loadServerStickers,
-  isBlacklisted,
   getBlacklistedMemberIds,
   getDueReminders,
   getNextReminderTime,
@@ -27,13 +26,14 @@ import {
   getUserReminderCount,
   deleteReminderById,
   getPendingRemindersForUser,
-  getBraveApiKeyStatus,
   getDueRandomTriggers,
   getNextRandomTriggerTime,
   getServerRandomTriggers,
   getServerRandomTriggerCount,
   getRandomTriggerByPersonaAndChannel,
-} from "@/utils/db/repositoryReadSql";
+} from "@/utils/db/repositories/serverReadSql";
+import { getBraveApiKeyStatus } from "@/utils/db/repositories/toolReadSql";
+import { isBlacklisted } from "@/utils/db/repositories/userReadSql";
 import {
   setupServer,
   addReminder,
@@ -43,7 +43,7 @@ import {
   upsertRandomTrigger,
   deleteRandomTrigger,
   rescheduleRandomTrigger,
-} from "@/utils/db/repositoryWriteSql";
+} from "@/utils/db/repositories/serverWriteSql";
 import {
   checkChannelWhitelist,
   upsertChannelWhitelist,

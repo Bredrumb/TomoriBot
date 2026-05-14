@@ -27,7 +27,7 @@ import type { FunctionCall, ThoughtLogEntry } from "../../types/provider/interfa
 import { ContextItemTag, type StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
-import { truncateBeforeGenericSpeakerLine } from "../../utils/text/stringHelper";
+import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { buildProviderStopStrings } from "../utils/stopStrings";
 import { BaseStreamAdapter } from "../../types/stream/interfaces";

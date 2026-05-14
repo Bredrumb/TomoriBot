@@ -7,7 +7,8 @@ import {
   collectCheckedOpenRouterModelValues,
   MAX_OPENROUTER_MODEL_GROUPS,
 } from "@/utils/discord/openrouterModelRemovalModal";
-import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
   loadRegisteredOpenRouterModelsForScope,

@@ -8,7 +8,8 @@ import {
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { loadAllPersonasForServer } from "@/utils/db/repositories";
 import { updateTomori } from "@/utils/db/repositories";
-import { replyInfoEmbed, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { resolveActiveSpeechEndpoint } from "@/utils/provider/speechEndpointResolver";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";

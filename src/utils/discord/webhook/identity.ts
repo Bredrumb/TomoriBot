@@ -2,4 +2,4 @@ export {
   resolvePersonaAvatarURL,
   resolvePersonaWebhookIdentity,
   type ResolvedWebhookIdentity,
-} from "../webhookManager.legacy";
+} from "./webhookCore";

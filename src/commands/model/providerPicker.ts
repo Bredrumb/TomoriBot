@@ -13,7 +13,7 @@ import {
 import type { StandardEmbedOptions } from "@/types/discord/embed";
 import type { SavedProviderConfigRow } from "@/types/db/schema";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { localizer } from "@/utils/text/localizer";

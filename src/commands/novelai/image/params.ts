@@ -18,7 +18,8 @@ import {
   NAI_IMAGE_SAMPLERS,
   resolveNaiImageParams,
 } from "@/utils/image/naiImageParams";
-import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { UserRow } from "@/types/db/schema";

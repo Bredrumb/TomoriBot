@@ -21,7 +21,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { PrivacyLevel } from "@/types/db/schema";
 import { clearUserCache, getCachedUserRow } from "@/utils/cache/userCache";
-import { loadAvailableLlms, getLlmsByIds, loadLlmById } from "@/utils/db/repositoryReadSql";
+import { loadAvailableLlms, getLlmsByIds, loadLlmById } from "@/utils/db/repositories/llmReadSql";
 import { llmRepository } from "@/utils/db/repositories/LlmRepository";
 import { userRepository } from "@/utils/db/repositories/UserRepository";
 import { FIXTURE_IDS, cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";

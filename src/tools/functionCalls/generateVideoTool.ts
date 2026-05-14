@@ -10,7 +10,7 @@
 import { AttachmentBuilder } from "discord.js";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
-import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhookManager";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import {
   buildReferencedMessageUrl,
   buildVideoToolNoticeDescription,

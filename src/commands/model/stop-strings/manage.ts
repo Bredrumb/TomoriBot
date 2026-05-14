@@ -9,7 +9,8 @@ import type { CheckboxGroupOption, ModalCheckboxGroupField, ModalComponent } fro
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { sql } from "@/utils/db/client";
-import { promptWithRawModal, replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { formatStopStringForDisplay, MAX_STOP_STRINGS_PER_SERVER } from "@/utils/provider/stopStringConfig";
 import { localizer } from "@/utils/text/localizer";

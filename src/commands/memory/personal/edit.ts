@@ -13,14 +13,12 @@ import {
   acknowledgeModalSubmitForRefresh,
   promptWithPaginatedModal,
   promptWithRawModal,
-  promptWithUnacknowledgedConfirmation,
-  replyComponentsV2Status,
-  replyInfoEmbed,
-  type AvatarSessionCache,
-  replyPaginatedPersonaChoicesV2,
   safeSelectOptionText,
-  updateButtonComponentsV2Status,
-} from "@/utils/discord/interactionHelper";
+} from "@/utils/discord/ui/modals";
+import { promptWithUnacknowledgedConfirmation } from "@/utils/discord/ui/confirmation";
+import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import {
   isBlacklisted,

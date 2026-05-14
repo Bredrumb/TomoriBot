@@ -6,7 +6,7 @@ import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { sql } from "@/utils/db/client";
 import { upsertSavedProviderConfig } from "@/utils/db/repositories";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";

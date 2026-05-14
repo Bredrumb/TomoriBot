@@ -18,7 +18,7 @@ import type { FunctionCall, FunctionResponseImageMetadata, ThoughtLogEntry } fro
 import { ContextItemTag, type StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
-import { truncateBeforeGenericSpeakerLine } from "../../utils/text/stringHelper";
+import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import {
   getOpenRouterCapabilities,
   getOpenRouterSupportedParameters,

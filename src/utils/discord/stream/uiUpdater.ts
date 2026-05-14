@@ -2,11 +2,9 @@ import type { BaseGuildTextChannel, Message } from "discord.js";
 import type { StreamContext } from "@/types/stream/interfaces";
 import type { StreamState } from "@/types/stream/types";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
-import {
-  getOrCreateWebhook,
-  invalidateWebhookCache,
-  sendWebhookMessageWithIdentity,
-} from "@/utils/discord/webhookManager";
+import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
+import { invalidateWebhookCache } from "@/utils/discord/webhook/cache";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import { sendWebhookReplyNotice } from "@/utils/discord/webhookReply";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { STREAMING_LIMITS } from "@/utils/security/rateLimiter";

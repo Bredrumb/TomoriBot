@@ -17,7 +17,7 @@
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { updateShortTermMemorySummary, MAX_SUMMARY_LENGTH } from "../../utils/cache/shortTermMemoryCache";
 import { log } from "../../utils/misc/logger";
-import { sanitizeUnknownTemplatePlaceholders } from "../../utils/text/stringHelper";
+import { sanitizeUnknownTemplatePlaceholders } from "@/utils/text/processors/mentionProcessor";
 
 export class UpdateShortTermMemoryTool extends BaseTool {
   name = "update_short_term_memory";

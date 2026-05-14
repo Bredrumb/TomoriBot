@@ -14,7 +14,7 @@ import type { UserRow } from "@/types/db/schema";
 import { toggleCrossServerShortTermMemoryOptIn } from "@/utils/db/repositories";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import { clearShortTermMemoryForUser } from "@/utils/cache/shortTermMemoryCache";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 

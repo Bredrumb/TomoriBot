@@ -19,7 +19,7 @@ import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { invalidateMatrixLinkCache } from "@/utils/bridges/matrix";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 
 /**

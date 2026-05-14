@@ -4,7 +4,7 @@ import type { ToolContext } from "@/types/tool/interfaces";
 import type { TomoriConfigRow } from "@/types/db/schema";
 import { type ToolNoticeKey, TOOL_NOTICE_DEFINITIONS } from "@/constants/toolNotices";
 import { sendStandardEmbed, type WebhookEmbedContext } from "@/utils/discord/embedHelper";
-import { getOrCreateWebhook } from "@/utils/discord/webhookManager";
+import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { localizer } from "@/utils/text/localizer";
 import { log } from "@/utils/misc/logger";
 

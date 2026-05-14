@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-4 -->
+<!-- ARCH-ALIGNMENT: prereq-phase-5.5c -->
 
 # 11. Utils and Helpers
 
@@ -30,7 +30,7 @@ This is a current map of shared utility modules under `src/utils/`.
 
 - `client.ts`: DB client wiring
 - `repositories/`: public data-access facade and domain repositories
-- `repositoryReadSql.ts`, `repositoryWriteSql.ts`: repository-internal SQL bodies retained after Phase 2 for deeper domain cleanup
+- `repositoryReadSql.ts`, `repositoryWriteSql.ts`: compatibility barrels for domain-owned repository SQL modules under `repositories/*Sql.ts`
 - `repositoryExportSql.ts`, `repositoryImportSql.ts`: repository-internal import/export SQL helpers
 - `cooldownManager.ts`, `messageCooldown.ts`, `cooldownsCleanup.ts`
 - feature-specific DB modules such as `channelWhitelist.ts`, `personalSpotlight.ts`, `stPresetDb.ts`, and `managedWebhookDb.ts`
@@ -39,9 +39,9 @@ This is a current map of shared utility modules under `src/utils/`.
 
 - `commandLoader.ts`: command discovery + localization wiring
 - `commandRegistry.ts`: runtime command maps used by handlers
-- `interactionHelper.ts`: compatibility barrel for grouped UI helpers in `utils/discord/ui/`
-- `streamOrchestrator.ts`: provider-agnostic streaming delivery
-- `webhookManager.ts`: compatibility barrel for grouped webhook helpers in `utils/discord/webhook/`
+- `interactionHelper.ts`: compatibility barrel for grouped UI helpers in `utils/discord/ui/`; new code imports the owned UI module directly
+- `streamOrchestrator.ts`: public stream orchestration entry point backed by responsibility modules in `utils/discord/stream/`
+- `webhookManager.ts`: compatibility barrel for grouped webhook helpers in `utils/discord/webhook/`; new code imports the owned webhook module directly
 - `embedHelper.ts`, `historyFetcher.ts`, `historyFormatter.ts`
 
 ### `utils/text`
@@ -50,7 +50,6 @@ This is a current map of shared utility modules under `src/utils/`.
 - `contextBuilder.ts`: public structured context routing and native orchestration
 - `context/`: context-builder support modules for types, template/conditioning blocks, memories, RAG, and history/media helpers
 - `contextTruncator.ts`: token-budget truncation strategy
-- `stringHelper.ts`: barrel re-export — all string utilities live in `utils/text/processors/`
 - `processors/regexUtils.ts`: `escapeRegExp`
 - `processors/mentionProcessor.ts`: mention resolution, template variables, emoji normalization
 - `processors/llmOutputProcessor.ts`: LLM output cleaning, speaker-turn truncation

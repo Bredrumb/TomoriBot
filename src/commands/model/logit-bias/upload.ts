@@ -22,7 +22,7 @@ import {
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { safeDownload } from "@/utils/security/safeDownload";
 
 const MAX_UPLOAD_FILE_SIZE_MB = 2;

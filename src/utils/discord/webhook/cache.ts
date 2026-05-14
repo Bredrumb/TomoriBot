@@ -4,4 +4,4 @@ export {
   getWebhookCacheStats,
   invalidatePersonaWebhookCacheForPersona,
   invalidateWebhookCache,
-} from "../webhookManager.legacy";
+} from "./webhookCore";

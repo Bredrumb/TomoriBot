@@ -1,6 +1,7 @@
 import { MessageFlags, type ButtonInteraction, type ChatInputCommandInteraction } from "discord.js";
 import type { ConditioningType, TomoriState } from "@/types/db/schema";
-import { replyInfoEmbed, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { ColorCode } from "@/utils/misc/logger";
 import { loadAllPersonasForServer } from "@/utils/db/repositories";
 

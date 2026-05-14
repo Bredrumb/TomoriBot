@@ -20,7 +20,8 @@ import {
   loadGuildTextChecklistChannels,
   type ChecklistChannelTarget,
 } from "@/utils/discord/channelChecklistManager";
-import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { tomoriConfigSchema, type ErrorContext, type TomoriState, type UserRow } from "@/types/db/schema";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { sql } from "@/utils/db/client";

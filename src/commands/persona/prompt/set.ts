@@ -8,15 +8,10 @@ import type {
 import { MessageFlags, TextInputStyle } from "discord.js";
 import type { UserRow, TomoriState } from "@/types/db/schema";
 import { log, ColorCode } from "@/utils/misc/logger";
-import {
-  acknowledgeModalSubmitForRefresh,
-  promptWithRawModal,
-  replyComponentsV2Status,
-  replyInfoEmbed,
-  type AvatarSessionCache,
-  replyPaginatedPersonaChoicesV2,
-  updateButtonComponentsV2Status,
-} from "@/utils/discord/interactionHelper";
+import { acknowledgeModalSubmitForRefresh, promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { loadAllPersonasForServer } from "@/utils/db/repositories";
 import { sql } from "@/utils/db/client";

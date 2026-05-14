@@ -1,7 +1,7 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { localizer } from "@/utils/text/localizer";
 import type { UserRow } from "@/types/db/schema";
-import { executeStatusCommand } from "@/utils/metrics/statusCommandMetrics";
+import { executeStatusCommand } from "@/utils/metrics/status/command";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand

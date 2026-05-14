@@ -9,7 +9,7 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/
 import { tomoriConfigSchema, tomoriSchema } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 
 // Constants for threshold limits (Rule #20)

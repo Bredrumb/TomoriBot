@@ -16,7 +16,8 @@ import { formatTextArrayLiteral } from "@/utils/discord/channelChecklistManager"
 import { getBlacklistedMemberIds, loadTomoriState } from "@/utils/db/repositories";
 import { sql } from "@/utils/db/client";
 import { invalidateUserBlacklistCache } from "@/utils/cache/userCache";
-import { promptWithRawModal, replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { ErrorContext, UserRow } from "@/types/db/schema";

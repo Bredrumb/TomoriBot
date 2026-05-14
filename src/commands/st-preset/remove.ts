@@ -7,7 +7,8 @@ import {
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { loadPresetsForServer, deletePreset, setActivePreset } from "@/utils/db/stPresetDb";
 import type { UserRow, ErrorContext, StPresetRow } from "@/types/db/schema";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";

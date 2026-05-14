@@ -21,7 +21,8 @@ import type { FunctionCall, ThoughtLogEntry } from "@/types/provider/interfaces"
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import { log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
-import { escapeRegExp, findMarkdownCodeRanges } from "@/utils/text/stringHelper";
+import { escapeRegExp } from "@/utils/text/processors/regexUtils";
+import { findMarkdownCodeRanges } from "@/utils/text/processors/llmOutputProcessor";
 import { BaseStreamAdapter } from "@/types/stream/interfaces";
 import type {
   ProcessedChunk,

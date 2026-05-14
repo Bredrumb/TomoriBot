@@ -8,13 +8,12 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
   acknowledgeModalSubmitForRefresh,
-  replyInfoEmbed,
-  replyComponentsV2Status,
   promptWithPaginatedModal,
   safeSelectOptionText,
-  type AvatarSessionCache,
-  replyPaginatedPersonaChoicesV2,
-} from "@/utils/discord/interactionHelper";
+} from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { replyComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { type UserRow, type ErrorContext, tomoriConfigSchema, type LlmRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { isCustomProvider } from "@/utils/discord/customProviderModal";

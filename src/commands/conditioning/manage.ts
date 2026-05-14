@@ -13,7 +13,8 @@ import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/disco
 import type { ConditioningGroup } from "@/utils/db/conditioningDb";
 import type { ConditioningType, TomoriState, UserRow } from "@/types/db/schema";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
-import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { deleteConditioningGroupsForPersona, loadConditioningGroupsForPersona } from "@/utils/db/conditioningDb";

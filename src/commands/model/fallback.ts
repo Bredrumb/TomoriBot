@@ -5,7 +5,8 @@ import { loadAvailableModelsForProvider, loadCustomEndpointsForServer } from "@/
 import { setFallbackModelRefs } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import type { LlmRow, UserRow, FallbackModelRef, FallbackEntry, CustomEndpointRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";

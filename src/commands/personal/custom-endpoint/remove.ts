@@ -8,7 +8,8 @@ import {
   collectCheckedCustomEndpointValues,
   MAX_CUSTOM_MODEL_GROUPS,
 } from "@/utils/discord/customModelRemovalModal";
-import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { removeCustomEndpointRegistration } from "@/utils/provider/customEndpointService";
 import { localizer } from "@/utils/text/localizer";

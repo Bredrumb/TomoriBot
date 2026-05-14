@@ -13,7 +13,7 @@ import { setCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { generateVoiceMessageMetadata } from "@/utils/audio/voiceMessageMetadata";
 import type { VoiceMessageMetadata } from "@/utils/audio/voiceMessageMetadata";
 import { getOptApiKey } from "@/utils/security/crypto";
-import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhookManager";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import { resolveActiveSpeechEndpoint } from "@/utils/provider/speechEndpointResolver";
 import { log } from "@/utils/misc/logger";
 

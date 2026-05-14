@@ -11,7 +11,8 @@ import type { ErrorContext, UserRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { getCachedAllPersonas, getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { updateTomoriConfig } from "@/utils/db/repositories";
-import { promptWithRawModal, replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 

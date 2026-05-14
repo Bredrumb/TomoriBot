@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-3 -->
+<!-- ARCH-ALIGNMENT: prereq-phase-5.5a -->
 
 # 7. Command System
 
@@ -21,33 +21,28 @@ Flow:
 
 ## Discord UI Helper Layout
 
-The public compatibility import remains:
+Command files import Discord UI helpers from responsibility-owned modules:
 
-- `src/utils/discord/interactionHelper.ts`
-
-New code should prefer the grouped UI modules when the call site has a clear scope:
-
-- `src/utils/discord/ui/buttons.ts` - confirmation prompts, button status updates, and modal-submit acknowledgement helpers
-- `src/utils/discord/ui/embeds.ts` - info, summary, and Components V2 status replies
-- `src/utils/discord/ui/errors.ts` - reusable status/error update helpers
+- `src/utils/discord/ui/confirmation.ts` - confirmation prompts
 - `src/utils/discord/ui/modals.ts` - raw, legacy, and paginated modal prompts
-- `src/utils/discord/ui/pagination.ts` - choice, persona, and status pagination helpers
+- `src/utils/discord/ui/embeds.ts` - info and summary embed replies
+- `src/utils/discord/ui/statusComponents.ts` - Components V2 status replies and status-page pagination
+- `src/utils/discord/ui/pagination.ts` - generic choice pagination
+- `src/utils/discord/ui/personaPagination.ts` - persona choice pagination and avatar-session cache types
 
-These groups keep command UI behavior discoverable without forcing existing commands to migrate all imports in one change.
+`src/utils/discord/interactionHelper.ts` remains only as the subsystem compatibility barrel. New command code should import from the owned module that matches the helper it uses.
 
 ## Webhook Helper Layout
 
-The public compatibility import remains:
-
-- `src/utils/discord/webhookManager.ts`
-
-New code should prefer the grouped webhook modules:
+Command, event, tool, and stream code import webhook helpers from responsibility-owned modules:
 
 - `src/utils/discord/webhook/lifecycle.ts` - shared/persona webhook creation, lookup, deletion, and avatar updates
 - `src/utils/discord/webhook/personaDispatch.ts` - persona/webhook send paths
 - `src/utils/discord/webhook/identity.ts` - persona avatar and webhook identity resolution
 - `src/utils/discord/webhook/fallback.ts` - managed-webhook restore and transcript fallback behavior
 - `src/utils/discord/webhook/cache.ts` - webhook cache metrics and invalidation helpers
+
+`src/utils/discord/webhookManager.ts` remains only as the subsystem compatibility barrel. New code should import from the owned webhook module directly.
 
 Keep webhook cache invalidation in the same success path as the write or delete that changes webhook state.
 

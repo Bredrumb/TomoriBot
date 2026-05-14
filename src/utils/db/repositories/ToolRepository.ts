@@ -17,7 +17,7 @@ import {
   decryptGuildMcpAuthToken,
   loadAllEnabledGuildMcpServers,
 } from "@/utils/db/guildMcpDb";
-import { getBraveApiKeyStatus } from "@/utils/db/repositoryReadSql";
+import { getBraveApiKeyStatus } from "@/utils/db/repositories/toolReadSql";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { invalidateGuildMcpConfigCache } from "@/utils/cache/guildMcpConfigCache";
 import type { IRepository } from "./IRepository";

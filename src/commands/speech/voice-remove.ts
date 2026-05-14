@@ -10,7 +10,8 @@ import {
 } from "discord.js";
 import { sql } from "@/utils/db/client";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { deleteStoredVoiceSample } from "@/utils/storage/voiceSampleStorage";
 import type { ErrorContext, UserRow } from "@/types/db/schema";

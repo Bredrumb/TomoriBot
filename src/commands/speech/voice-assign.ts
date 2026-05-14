@@ -12,12 +12,11 @@ import { updateTomori } from "@/utils/db/repositories";
 import {
   acknowledgeModalSubmitForRefresh,
   promptWithPaginatedModal,
-  replyInfoEmbed,
-  replyComponentsV2Status,
-  type AvatarSessionCache,
-  replyPaginatedPersonaChoicesV2,
   safeSelectOptionText,
-} from "@/utils/discord/interactionHelper";
+} from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { replyComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { ELEVENLABS_SERVICE_NAME } from "@/utils/audio/elevenLabsAccount";
 import { type ElevenLabsVoiceCatalogEntry, fetchElevenLabsVoiceCatalog } from "@/utils/audio/elevenLabsVoiceCatalog";

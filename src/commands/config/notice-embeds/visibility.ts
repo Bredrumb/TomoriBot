@@ -10,7 +10,8 @@ import { tomoriConfigSchema } from "@/types/db/schema";
 import { TOOL_NOTICE_DEFINITIONS, type ToolNoticeKey } from "@/constants/toolNotices";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { sql } from "@/utils/db/client";
-import { promptWithRawModal, replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 

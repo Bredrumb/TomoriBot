@@ -19,7 +19,9 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/
 import { loadAllPersonasForServer } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 
 const MODAL_CUSTOM_ID = "config_context_note_modal";
 const CONTEXT_NOTE_MAX_LENGTH = 2000;

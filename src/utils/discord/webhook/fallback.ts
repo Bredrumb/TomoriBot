@@ -3,4 +3,4 @@ export {
   sendUserTranscriptViaWebhook,
   type WebhookCreateErrorReason,
   type WebhookCreateResult,
-} from "../webhookManager.legacy";
+} from "./webhookCore";

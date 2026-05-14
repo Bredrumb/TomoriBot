@@ -1,4 +1,4 @@
-﻿<!-- ARCH-ALIGNMENT: prereq-phase-4 -->
+<!-- ARCH-ALIGNMENT: prereq-phase-5.5c -->
 
 # Context Assembly
 
@@ -6,7 +6,7 @@
 
 ## Overview
 
-Context assembly is the process of transforming raw server/user/conversation state into a structured array of `StructuredContextItem[]` that providers send to the LLM. The entry point is `buildContext()` in `src/utils/text/contextBuilder.ts`; responsibility-specific helpers live under `src/utils/text/context/`.
+Context assembly is the process of transforming raw server/user/conversation state into a structured array of `StructuredContextItem[]` that providers send to the LLM. The public entry point is `buildContext()` in `src/utils/text/contextBuilder.ts`; extracted implementation and responsibility-specific helpers live under `src/utils/text/context/`.
 
 The system has two modes:
 
@@ -30,10 +30,16 @@ buildContext(params)          ← routing wrapper (exported)
 
 Support modules:
 
-- `context/templates.ts` owns default prompt constants, random prompt macros, and conditioning context items
-- `context/memories.ts` owns short-term memory context assembly
+- `context/builder.ts` owns preset routing and final random macro resolution
+- `context/nativeBuilder.ts` owns the native assembly sequence as a readable coordinator
+- `context/mentionNormalizer.ts` owns Discord mention, channel-link, role, and template placeholder normalization
+- `context/templates.ts` owns default prompt constants, prompt/sample dialogue blocks, random prompt macros, and conditioning context items
+- `context/memories.ts` owns server-memory and short-term memory context assembly
 - `context/rag.ts` owns document retrieval/RAG context assembly
-- `context/history.ts` owns media/history formatting helpers, timestamp formatting, and presence formatting
+- `context/serverAssets.ts` owns custom emoji and sticker context
+- `context/participants.ts` owns users-in-conversation, personal memories, reminders, and mention metadata
+- `context/dialogueHistory.ts` owns history shaping, context-note insertion, media attribution, and media-window rendering
+- `context/history.ts` owns shared media/history formatting helpers, timestamp formatting, and presence formatting
 - `context/types.ts` owns the public context-builder parameter and result types re-exported by `contextBuilder.ts`
 
 ### BuildContextParams
@@ -166,7 +172,7 @@ At inference, the **active persona's note takes priority** over the global note.
 
 The note is emitted as a `"user"` role context item with `[System: Author's note — <text>]` formatting, matching the existing convention for system annotations in the dialogue stream (short-term memory summaries, users-in-conversation headers, etc.). No new `authorType` was added.
 
-**Implementation location:** `buildContextNative()` in `src/utils/text/contextBuilder.ts` — the pre-loop setup computes `contextNoteTargetIndex`, and the in-loop guard emits the note at that index through `pushDialogueHistoryContextItem()` from `src/utils/text/context/history.ts`. A post-loop fallback handles `depth=0`.
+**Implementation location:** `appendDialogueHistoryContext()` in `src/utils/text/context/dialogueHistory.ts` computes `contextNoteTargetIndex`, emits the note at that index through `pushDialogueHistoryContextItem()` from `src/utils/text/context/history.ts`, and performs the post-loop fallback for `depth=0`.
 
 ## Key Behaviors
 
@@ -249,12 +255,19 @@ Each macro occurrence is rolled independently at context-build time. Media parts
 
 | File | Purpose |
 |------|---------|
-| `src/utils/text/contextBuilder.ts` | Public routing wrapper + native context orchestration |
+| `src/utils/text/contextBuilder.ts` | Public context assembly API boundary |
+| `src/utils/text/context/builder.ts` | Preset-aware context routing wrapper |
+| `src/utils/text/context/nativeBuilder.ts` | Native fixed-order assembly coordinator |
+| `src/utils/text/context/mentionNormalizer.ts` | Mention, channel-link, role, and placeholder normalization |
 | `src/utils/text/context/types.ts` | `BuildContextParams`, `BuildContextResult`, `SimplifiedMessageForContext` |
-| `src/utils/text/context/templates.ts` | Default prompt, random-choice macros, conditioning context |
-| `src/utils/text/context/memories.ts` | Short-term memory context from cross-channel and same-channel caches |
+| `src/utils/text/context/templates.ts` | Default prompt, prompt/sample blocks, random-choice macros, conditioning context |
+| `src/utils/text/context/memories.ts` | Server memories and short-term memory context from cross-channel and same-channel caches |
 | `src/utils/text/context/rag.ts` | RAG query selection and document chunk context |
-| `src/utils/text/context/history.ts` | Dialogue/media helpers, timestamps, presence formatting |
+| `src/utils/text/context/serverAssets.ts` | Custom emoji and sticker context |
+| `src/utils/text/context/serverInfo.ts` | Server/DM knowledge-base header |
+| `src/utils/text/context/participants.ts` | Users-in-conversation, personal memories, reminders, and mention metadata |
+| `src/utils/text/context/dialogueHistory.ts` | Dialogue history shaping, media attribution, context-note injection, and media-window rendering |
+| `src/utils/text/context/history.ts` | Shared dialogue/media helpers, timestamps, presence formatting |
 | `src/utils/text/presetContextBuilder.ts` | Preset-driven rearrangement engine |
 | `src/utils/text/stPresetEngine.ts` | ST macro template engine (two-pass resolution) |
 | `src/utils/cache/stPresetCache.ts` | In-memory cache for active preset + nodes |

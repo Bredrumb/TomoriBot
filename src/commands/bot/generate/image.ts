@@ -13,10 +13,12 @@ import {
   setMessageTriggerCooldownWithWhitelist,
 } from "@/utils/db/cooldownManager";
 import { sendCooldownDM } from "@/utils/discord/cooldownDM";
-import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { loadTomoriState } from "@/utils/db/repositories";
 import { sql } from "@/utils/db/client";
-import { getOrCreateWebhook, resolvePersonaWebhookIdentity } from "@/utils/discord/webhookManager";
+import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
+import { resolvePersonaWebhookIdentity } from "@/utils/discord/webhook/identity";
 import { getCooldownTypeFooterKey } from "@/utils/db/messageCooldown";
 import { checkImageQuota } from "@/utils/quota/imageQuotaManager";
 import { hasOptApiKey } from "@/utils/security/crypto";

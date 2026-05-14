@@ -1,5 +1,5 @@
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { escapeRegExp } from "@/utils/text/stringHelper";
+import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 
 function normalizeSpeakerName(value?: string | null): string | null {
   const trimmed = value?.trim();

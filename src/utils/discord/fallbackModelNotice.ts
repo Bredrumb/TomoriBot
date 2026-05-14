@@ -3,7 +3,7 @@ import type { LlmRow } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { isNoticeEmbedVisible, routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
-import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhookManager";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 

@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-4 -->
+<!-- ARCH-ALIGNMENT: prereq-phase-5.5c -->
 
 # 20. Text Flushing and Chunking (Current Behavior)
 
@@ -14,8 +14,11 @@ It focuses on:
 Primary implementation files:
 - `src/utils/discord/streamOrchestrator.ts`
 - `src/utils/discord/stream/bufferManager.ts`
+- `src/utils/discord/stream/bufferFlusher.ts`
+- `src/utils/discord/stream/segmentProcessor.ts`
+- `src/utils/discord/stream/messageDelivery.ts`
 - `src/utils/discord/stream/uiUpdater.ts`
-- `src/utils/text/stringHelper.ts`
+- `src/utils/text/processors/chunkProcessor.ts`
 - `src/utils/text/emojiPenalty.ts`
 - `src/types/stream/types.ts`
 
@@ -30,13 +33,14 @@ For each incoming provider text chunk:
 1. Raw text is appended to stream buffer.
 2. `drainThinkBlocksFromBuffer(...)` and `drainDetailsBlocksFromBuffer(...)` route hidden provider side-channel text out of the visible reply buffer.
 3. `processBufferContent(...)` in `stream/bufferManager.ts` decides whether to flush part of buffer now.
-4. If a segment is flushed, `sendBufferSegment(...)` runs text preprocessing.
-5. Registered-speaker guard truncates any known non-active `Name:` line before send, and also blocks reserved `Assistant:` lines, but ignores lines inside fenced or inline backtick code.
-6. Complete markdown tables are split out and rendered to PNG attachments when possible.
-7. Remaining text goes through `sendSegment(...)`.
-8. Degree `0` queues the cleaned text into a pending visible buffer; degrees `1/2/3` chunk it into Discord-sized messages immediately.
-9. Degree `0` only flushes that visible buffer at tool/attachment/final boundaries; degree `3` chunks are optionally humanized before send.
-10. Discord payload delivery goes through `stream/uiUpdater.ts`, which chooses reply/channel/webhook sends and enforces send-limit stops.
+4. `stream/bufferFlusher.ts` owns chunk deduplication, oversized-buffer loops, and pending/final flushes.
+5. If a segment is flushed, `stream/segmentProcessor.ts` runs text preprocessing.
+6. Registered-speaker guard truncates any known non-active `Name:` line before send, and also blocks reserved `Assistant:` lines, but ignores lines inside fenced or inline backtick code.
+7. Complete markdown tables are split out and rendered to PNG attachments when possible.
+8. Remaining text goes through `stream/messageDelivery.ts`.
+9. Degree `0` queues the cleaned text into a pending visible buffer; degrees `1/2/3` chunk it into Discord-sized messages immediately.
+10. Degree `0` only flushes that visible buffer at tool/attachment/final boundaries; degree `3` chunks are optionally humanized before send.
+11. Discord payload delivery goes through `stream/uiUpdater.ts`, which chooses reply/channel/webhook sends and enforces send-limit stops.
 
 Execution order for a flushed segment:
 
@@ -107,7 +111,7 @@ This is looped (`while`) so a very large buffer chunk can be drained in multiple
 
 ## Chunking After Flush
 
-Core logic: `chunkMessage(...)` in `stringHelper.ts`; final Discord sends are delegated to `StreamUiUpdater`.
+Core logic: `chunkMessage(...)` in `chunkProcessor.ts`; final Discord sends are delegated through `StreamMessageDelivery` to `StreamUiUpdater`.
 
 Key behavior:
 - Treats code blocks, URLs, and custom Discord emoji tags as atomic blocks.

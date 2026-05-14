@@ -1,6 +1,6 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, type Guild } from "discord.js";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
-import { safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { localizer } from "@/utils/text/localizer";
 
 export const CHECKLIST_MAX_OPTIONS_PER_GROUP = 10;

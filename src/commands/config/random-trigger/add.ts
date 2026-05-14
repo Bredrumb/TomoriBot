@@ -15,7 +15,8 @@ import {
 } from "discord.js";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { getServerRandomTriggerCount, getRandomTriggerByPersonaAndChannel } from "@/utils/db/repositories";
 import { insertRandomTrigger, upsertRandomTrigger } from "@/utils/db/repositories";

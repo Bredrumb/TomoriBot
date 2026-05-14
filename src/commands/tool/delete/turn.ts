@@ -3,10 +3,11 @@ import { BaseGuildTextChannel, EmbedBuilder, MessageFlags, type SlashCommandSubc
 import tomoriChat, { suppressNextSelfReply } from "@/events/messageCreate/tomoriChat";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { getCachedAllPersonas, getCachedMainPersona } from "@/utils/cache/tomoriStateCache";
-import { replyInfoEmbed, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { findLastPersonaTurnBlock } from "@/utils/discord/personaTurnDetection";
-import { resolveManagedWebhookForChannel } from "@/utils/discord/webhookManager";
+import { resolveManagedWebhookForChannel } from "@/utils/discord/webhook/fallback";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 

@@ -5,7 +5,7 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/
 import { type ErrorContext, type UserRow, CooldownType, tomoriConfigSchema } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 
 // Cooldown length limits (seconds)
 const MIN_LENGTH = 1;

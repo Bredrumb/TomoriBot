@@ -4,4 +4,6 @@ export {
   getOrCreatePersonaWebhook,
   getOrCreateWebhook,
   updatePersonaWebhooksAvatar,
-} from "../webhookManager.legacy";
+  type WebhookCreateErrorReason,
+  type WebhookCreateResult,
+} from "./webhookCore";

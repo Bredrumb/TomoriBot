@@ -2,7 +2,7 @@ import type { ChatInputCommandInteraction, MessageFlags, User } from "discord.js
 import { EmbedBuilder } from "discord.js";
 import { localizer } from "@/utils/text/localizer";
 import { log } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode } from "@/utils/misc/logger";
 
 /**

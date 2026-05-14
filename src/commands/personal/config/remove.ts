@@ -3,7 +3,7 @@ import { MessageFlags } from "discord.js";
 import { sql } from "@/utils/db/client";
 import { localizer } from "@/utils/text/localizer";
 import { ColorCode, log } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow } from "@/types/db/schema";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 

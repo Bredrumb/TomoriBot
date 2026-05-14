@@ -12,7 +12,7 @@
 
 import type { Embed } from "discord.js";
 import { localizer, getSupportedLocales, getLocaleSubKeys } from "@/utils/text/localizer";
-import { escapeRegExp } from "@/utils/text/stringHelper";
+import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 
 /** Target embed classifications recognized by the chat pipeline. */
 export type TargetEmbedType =

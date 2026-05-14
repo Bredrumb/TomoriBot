@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-3 -->
+<!-- ARCH-ALIGNMENT: prereq-phase-5.5c -->
 
 # 25. Matrix Bridge & Bridge Utilities
 
@@ -131,12 +131,16 @@ src/utils/bridges/
   index.ts              ← Generic bridge utilities barrel
 
 src/utils/bridges/matrix/
-  runtime.ts            ← Matrix appservice runtime internals
+  runtime.ts            ← Compatibility barrel for Matrix runtime exports
+  appserviceImplementation.ts ← Compatibility barrel for split Matrix modules
+  client.ts             ← Appservice boot and setup notices
+  media.ts              ← Matrix media upload/download and outbound sends
+  state.ts              ← Session-scoped Matrix bridge state and caches
   matrixManager.ts      ← Thin public coordinator barrel
-  events.ts             ← Appservice init and Matrix inbound event surface
-  stateSync.ts          ← Link cache, typing state, reminder mention surface
+  events.ts             ← Matrix inbound event handling and Matrix command handling
+  stateSync.ts          ← Reply tracking, pending reply channels, reminder mention surface
   userMapping.ts        ← Display-name/Matrix-ID maps and persona intent surface
-  rooms.ts              ← Room join/config/encryption helpers
+  rooms.ts              ← Link cache, room joins, and encryption helpers
   index.ts              ← Matrix-specific barrel export
 
 src/events/messageCreate/
@@ -160,7 +164,7 @@ This means a file like `reminderProcessor.ts` imports from `utils/bridges` for t
 ```
 Matrix user sends message
   → Homeserver pushes event to appservice HTTP server (port 9993)
-  → matrixManager.ts onEvent handler fires
+  → client.ts appservice controller dispatches to events.ts
   → Looks up linked Discord channel via matrix_channel_links table
   → Sends webhook message to Discord channel as "[Matrix|@user:host] DisplayName"
   → TomoriBot's messageCreate handler sees the webhook message
@@ -205,15 +209,17 @@ These functions are format-agnostic by design. The `[BridgeName|userId] DisplayN
 
 ### `src/utils/bridges/matrix/` — Matrix Appservice
 
-The public Matrix surface is grouped by responsibility. `matrixManager.ts` is now a thin coordinator barrel that wires these modules together:
+The public Matrix surface is grouped by responsibility. `matrixManager.ts`, `runtime.ts`, and `appserviceImplementation.ts` are compatibility barrels; implementation lives in the responsibility modules:
 
-- **`events.ts`**: Appservice initialization (`initializeMatrixClient`) plus Matrix setup notices.
-- **`rooms.ts`**: Matrix configuration checks, room joins, and encryption checks.
-- **`stateSync.ts`**: Link cache (`getLinkedMatrixRoom`, `getDiscordChannelForRoom`), cache invalidation, typing indicators, pending reply channels, reminder mention pings, and shared attachment-size limits.
-- **`userMapping.ts`**: Display-name/Matrix-ID maps, persona intent provisioning, and bridge user ID recovery.
-- **`matrixManager.ts`**: Public coordinator barrel plus send functions (`sendToMatrixRoom`, `sendAttachmentToMatrixRoom`).
+- **`client.ts`**: Appservice initialization (`initializeMatrixClient`) plus Matrix setup notices.
+- **`events.ts`**: Matrix inbound event handling, Matrix `/kill`, Matrix `/refresh`, and Matrix-to-Discord relay.
+- **`rooms.ts`**: Link cache (`getLinkedMatrixRoom`, `getDiscordChannelForRoom`), cache invalidation, room joins, and encryption checks.
+- **`stateSync.ts`**: Sent-event reply tracking, pending reply channels, Matrix reply fallback stripping, and reminder mention pings.
+- **`userMapping.ts`**: Display-name/Matrix-ID maps, persona intent provisioning, typing indicators, and bridge user ID recovery.
+- **`media.ts`**: Matrix media upload/download, attachment limits, and outbound text/media sends (`sendToMatrixRoom`, `sendAttachmentToMatrixRoom`).
+- **`state.ts`**: Session-scoped bridge instance, link caches, persona provisioning caches, and shared constants.
 
-The current implementation keeps the heavy appservice internals behind `runtime.ts` while the public surface is split. New code should import from the responsibility module or from `@/utils/bridges/matrix`.
+New code should import from the responsibility module or from `@/utils/bridges/matrix`.
 
 ### `src/events/messageCreate/matrixRelay.ts` — Discord→Matrix Relay
 

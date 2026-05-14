@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-4 -->
+<!-- ARCH-ALIGNMENT: prereq-phase-5.5c -->
 
 # 10. Streaming & Response System
 
@@ -23,13 +23,20 @@ Important: TomoriBot now sends **discrete messages**, not "edit the same message
 
 | Component | File | Responsibility |
 |---|---|---|
-| Universal orchestrator | `src/utils/discord/streamOrchestrator.ts` | Coordinates provider chunks, stream state, stop/follow-up handling, timeout handling, and final result assembly |
+| Universal orchestrator | `src/utils/discord/streamOrchestrator.ts` | Public entry point for the streaming capability |
+| Stream state machine | `src/utils/discord/stream/stateMachine.ts` | Coordinates provider chunks, stop/timeout checks, and final result assembly |
+| Stop registry | `src/utils/discord/stream/stopRequests.ts` | Channel-scoped stop and follow-up interrupt state |
 | Buffer manager | `src/utils/discord/stream/bufferManager.ts` | Buffer flush decisions, semantic marker checks, overflow-safe breakpoints, marker auto-close, and hidden reasoning/details block draining |
-| UI updater | `src/utils/discord/stream/uiUpdater.ts` | Discord sends, reply/webhook delivery, webhook recovery, send-limit warnings, and stream-progress notification after successful sends |
+| Buffer flusher | `src/utils/discord/stream/bufferFlusher.ts` | Text chunk ingestion, pending/final buffer flushes, deduplication, and side-channel block completion |
+| Segment processor | `src/utils/discord/stream/segmentProcessor.ts` | Segment cleanup, mention resolution, prefill handling, speaker guard, and table/text routing |
+| Message delivery | `src/utils/discord/stream/messageDelivery.ts` | Chunk sends, typing simulation, aggregate-mode flushing, and markdown-table attachments |
+| UI updater | `src/utils/discord/stream/uiUpdater.ts` | Discord reply/webhook delivery, webhook recovery, send-limit warnings, and stream-progress notification after successful sends |
+| Error UI | `src/utils/discord/stream/errorUi.ts` | Provider-specific and generic stream error Discord responses |
+| Thought logs | `src/utils/discord/stream/thoughtLog.ts` | Reasoning payload assembly and empty-response detection |
 | Stream interfaces | `src/types/stream/interfaces.ts` | Provider/orchestrator contracts, `BaseStreamAdapter`, and stream context |
 | Stream constants/types | `src/types/stream/types.ts` | Message length, flush thresholds, typing settings |
 | Provider stream adapters | `src/providers/*/*StreamAdapter.ts` | Extend `BaseStreamAdapter` and convert provider-native events into normalized chunks |
-| Text processing | `src/utils/text/stringHelper.ts` | `cleanLLMOutput`, `chunkMessage`, `humanizeString` |
+| Text processing | `src/utils/text/processors/*` | `cleanLLMOutput`, `chunkMessage`, `humanizeString` |
 | Markdown table detection | `src/utils/text/markdownTable.ts` | Detect complete pipe tables, hold incomplete tails, and split renderable table blocks from plain text |
 | Markdown table rendering | `src/utils/image/markdownTableRenderer.ts` | Render detected markdown tables to PNG attachments without a browser dependency |
 | Emoji dedup controls | `src/utils/text/emojiPenalty.ts` | Duplicate custom-emoji filtering with safety guards |
@@ -68,7 +75,10 @@ Normal provider event chunks may still be assembled in provider subclasses when 
 - builds typing config from `humanizerDegree`
 - prepares optional output prefill
 - delegates buffer decisions to `stream/bufferManager.ts`
-- delegates Discord payload delivery to `stream/uiUpdater.ts`
+- delegates text chunk ingestion and pending/final flushes to `stream/bufferFlusher.ts`
+- delegates segment cleanup, mention resolution, speaker guard, and markdown-table routing to `stream/segmentProcessor.ts`
+- delegates chunk sending, aggregate-mode flushing, typing simulation, and table attachments to `stream/messageDelivery.ts`
+- delegates final Discord payload delivery and webhook recovery to `stream/uiUpdater.ts`
 
 ### 3) Per-chunk loop
 
@@ -101,7 +111,7 @@ Each flushed segment goes through:
 
 ### 6) Message chunking and sending
 
-`sendSegment(...)` and the UI updater:
+`stream/messageDelivery.ts` and the UI updater:
 - degree `0` queues cleaned text into a pending visible buffer instead of sending immediately
 - degree `0` flushes that queue at tool-call, attachment, error-preservation, and final boundaries
 - degrees `1/2/3` split text with `chunkMessage(...)` (Discord-safe lengths)

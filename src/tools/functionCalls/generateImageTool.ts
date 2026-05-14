@@ -9,7 +9,7 @@ import { GoogleGenAI } from "@google/genai";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import { resolveAvatarByIdentity } from "@/utils/discord/avatarResolver";
-import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhookManager";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import {
   buildImageToolNoticeDescription,
   buildReferencedMessageUrl,

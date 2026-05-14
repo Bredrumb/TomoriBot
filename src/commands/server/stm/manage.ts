@@ -12,7 +12,8 @@ import {
   getShortTermMemoriesForServer,
 } from "@/utils/cache/shortTermMemoryCache";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { promptWithRawModal, replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 

@@ -11,7 +11,8 @@ import {
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import type { UserRow, ErrorContext, StPresetNodeRow, StPresetRow } from "@/types/db/schema";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";

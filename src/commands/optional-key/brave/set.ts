@@ -7,7 +7,7 @@ import {
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import { storeOptApiKey } from "@/utils/security/crypto";
 import { braveWebSearch } from "../../../tools/restAPIs/brave/braveSearchService";

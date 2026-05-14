@@ -25,7 +25,7 @@ import { getShortTermMemoryCacheStats } from "@/utils/cache/shortTermMemoryCache
 import { getStPresetCacheStats } from "@/utils/cache/stPresetCache";
 import { getTomoriStateCacheStats } from "@/utils/cache/tomoriStateCache";
 import { getUserCacheStats } from "@/utils/cache/userCache";
-import { getWebhookCacheSizes } from "@/utils/discord/webhookManager";
+import { getWebhookCacheSizes } from "@/utils/discord/webhook/cache";
 import { log } from "@/utils/misc/logger";
 import { memoryGuard } from "@/utils/security/rateLimiter";
 

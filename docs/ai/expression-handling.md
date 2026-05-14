@@ -1,3 +1,5 @@
+<!-- ARCH-ALIGNMENT: prereq-phase-5.5a -->
+
 # 15. Expression Handling (Emojis & Stickers)
 
 ## Overview
@@ -50,7 +52,7 @@ Message Handler (tomoriChat.ts)
 | **Emoji Event Handler** | `src/events/guildEmojisUpdate/refreshEmojis.ts` | Handles emoji changes + cache invalidation |
 | **Sticker Event Handler** | `src/events/guildStickersUpdate/refreshStickers.ts` | Handles sticker changes + cache invalidation |
 | **Context Builder** | `src/utils/text/contextBuilder.ts` | Adds emoji/sticker metadata to LLM prompts |
-| **String Helper** | `src/utils/text/stringHelper.ts` | Converts `:name:` → `<:name:id>` format |
+| **Mention Processor** | `src/utils/text/processors/mentionProcessor.ts` | Converts `:name:` → `<:name:id>` format |
 | **DB Read** | `src/utils/db/repositories/ServerRepository.ts` | Loads emojis/stickers from database |
 
 ---
@@ -244,7 +246,7 @@ Ellen: hey! <:PepeSadge:1382568794408357949> that's tough <:CatVibe:138256874760
 
 ### Implementation
 
-**Location:** `src/utils/text/stringHelper.ts` → `cleanLLMOutput()`
+**Location:** `src/utils/text/processors/llmOutputProcessor.ts` → `cleanLLMOutput()`
 
 ```typescript
 export function cleanLLMOutput(

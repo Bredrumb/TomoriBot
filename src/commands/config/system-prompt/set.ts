@@ -9,7 +9,8 @@ import { MessageFlags, SlashCommandSubcommandBuilder, TextInputStyle } from "dis
 import type { UserRow } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { combineModalPromptParts, splitPromptIntoModalParts } from "@/utils/text/modalPromptParts";
 

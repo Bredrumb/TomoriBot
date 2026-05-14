@@ -4,7 +4,7 @@ import type { ErrorContext, UserRow } from "@/types/db/schema";
 import type { SummaryEmbedOptions } from "@/types/discord/embed";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyPaginatedStatusPages } from "@/utils/discord/interactionHelper";
+import { replyPaginatedStatusPages } from "@/utils/discord/ui/statusComponents";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 
 /**

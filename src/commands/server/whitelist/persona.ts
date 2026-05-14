@@ -27,15 +27,10 @@ import {
   loadGuildTextChecklistChannels,
   type ChecklistChannelTarget,
 } from "@/utils/discord/channelChecklistManager";
-import {
-  acknowledgeModalSubmitForRefresh,
-  promptWithRawModal,
-  replyComponentsV2Status,
-  replyInfoEmbed,
-  type AvatarSessionCache,
-  replyPaginatedPersonaChoicesV2,
-  updateButtonComponentsV2Status,
-} from "@/utils/discord/interactionHelper";
+import { acknowledgeModalSubmitForRefresh, promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";

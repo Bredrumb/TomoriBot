@@ -7,7 +7,7 @@ import type { BaseGuildTextChannel, Message, Webhook } from "discord.js";
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
-import { getOrCreateWebhook } from "@/utils/discord/webhookManager";
+import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { log } from "@/utils/misc/logger";
 import { getKnownPersonaSpeakerNames, stripLeadingKnownSpeakerPrefixes } from "@/utils/discord/modelAuthoredText";
 import { getReplyContextAuthorName, sendWebhookReplyWithContext } from "@/utils/discord/webhookReply";

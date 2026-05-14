@@ -5,12 +5,9 @@ import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { StreamContext } from "@/types/stream/interfaces";
 import type { TomoriState } from "@/types/db/schema";
-import {
-  getOrCreateWebhook,
-  resolvePersonaWebhookIdentity,
-  sendWebhookMessagesWithIdentity,
-  type ResolvedWebhookIdentity,
-} from "@/utils/discord/webhookManager";
+import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
+import { resolvePersonaWebhookIdentity, type ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
+import { sendWebhookMessagesWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 
 const EMBED_DESCRIPTION_LIMIT = 4096;
 

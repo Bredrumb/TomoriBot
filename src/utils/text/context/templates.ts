@@ -1,11 +1,15 @@
 import type { Client } from "discord.js";
 import { ContextItemTag, type ContextPart, type StructuredContextItem } from "@/types/misc/context";
-import type { ConditioningType } from "@/types/db/schema";
+import { HumanizerDegree, type ConditioningType } from "@/types/db/schema";
 import { loadConditioningGroupsForPersona } from "@/utils/db/conditioningDb";
 import {
   CONDITIONING_CONTEXT_MAX_GROUPS_PER_TYPE,
   getConditioningContextPastParticiple,
 } from "@/utils/conditioning/conditioning";
+import { UNPAIRED_SAMPLE_DIALOGUE_SENTINEL } from "@/types/preset/presetExport";
+import { humanizeString } from "@/utils/text/processors/formatters";
+import { applyUncensorInputTransforms } from "@/utils/text/uncensor";
+import type { TomoriState, TomoriConfigRow } from "@/types/db/schema";
 
 export const DEFAULT_SYSTEM_PROMPT =
   "\n{bot} makes sure to respond short and concisely, as {bot} is aware that no one really likes to read walls of text. {bot} only makes lengthy responses if and only if people are asking for assistance or an explanation that warrants it.";
@@ -85,6 +89,192 @@ export function resolveRandomChoiceMacrosInBuildOutput(output: {
     uncensorDirective:
       output.uncensorDirective !== undefined ? resolveRandomChoiceMacros(output.uncensorDirective) : undefined,
   };
+}
+
+export async function buildPromptContextItems(params: {
+  client: Client;
+  guildId: string;
+  botName: string;
+  tomoriAttributes: string[];
+  tomoriConfig: TomoriConfigRow;
+  personaPrompt?: string | null;
+  isUserImpersonation: boolean;
+  impersonatedIdentityName: string | null;
+  impersonatedUserPrompt?: string | null;
+  suppressDefaultSystemPrompt: boolean;
+  snapshot?: import("@/types/misc/context").RequestSnapshot;
+  toolPromptMacroResolver: { expand(text: string): Promise<string> };
+  convertMentions: MentionConverter;
+}): Promise<StructuredContextItem[]> {
+  const contextItems: StructuredContextItem[] = [];
+
+  if (!params.isUserImpersonation) {
+    const systemPrompt =
+      params.tomoriConfig.system_prompt?.trim() || (params.suppressDefaultSystemPrompt ? null : DEFAULT_SYSTEM_PROMPT);
+
+    if (systemPrompt) {
+      const humanizerText = await params.convertMentions(
+        await params.toolPromptMacroResolver.expand(systemPrompt),
+        params.client,
+        params.guildId,
+        "User",
+        params.botName,
+        params.tomoriConfig.personal_memories_enabled,
+        params.snapshot,
+      );
+      contextItems.push({
+        role: "system",
+        parts: [{ type: "text", text: humanizerText }],
+        metadataTag: ContextItemTag.SYSTEM_HUMANIZER_RULES,
+      });
+    }
+  }
+
+  if (!params.isUserImpersonation && params.personaPrompt?.trim()) {
+    contextItems.push({
+      role: "system",
+      parts: [
+        {
+          type: "text",
+          text: await params.convertMentions(
+            await params.toolPromptMacroResolver.expand(params.personaPrompt.trim()),
+            params.client,
+            params.guildId,
+            "User",
+            params.botName,
+            params.tomoriConfig.personal_memories_enabled,
+            params.snapshot,
+          ),
+        },
+      ],
+      metadataTag: ContextItemTag.SYSTEM_PERSONA_PROMPT,
+    });
+  }
+
+  if (params.isUserImpersonation && params.impersonatedUserPrompt?.trim()) {
+    contextItems.push({
+      role: "system",
+      parts: [
+        {
+          type: "text",
+          text: await params.convertMentions(
+            await params.toolPromptMacroResolver.expand(params.impersonatedUserPrompt.trim()),
+            params.client,
+            params.guildId,
+            params.impersonatedIdentityName || "User",
+            params.botName,
+            params.tomoriConfig.personal_memories_enabled,
+            params.snapshot,
+          ),
+        },
+      ],
+      metadataTag: ContextItemTag.SYSTEM_HUMANIZER_RULES,
+    });
+  }
+
+  if (!params.isUserImpersonation) {
+    contextItems.push({
+      role: "system",
+      parts: [
+        {
+          type: "text",
+          text: await params.convertMentions(
+            await params.toolPromptMacroResolver.expand(params.tomoriAttributes.join("\n")),
+            params.client,
+            params.guildId,
+            "User",
+            params.botName,
+            params.tomoriConfig.personal_memories_enabled,
+            params.snapshot,
+          ),
+        },
+      ],
+      metadataTag: ContextItemTag.SYSTEM_PERSONALITY,
+    });
+  }
+
+  return contextItems;
+}
+
+export async function buildSampleDialogueContextItems(params: {
+  client: Client;
+  guildId: string;
+  triggererName: string;
+  botName: string;
+  tomoriState: TomoriState | null;
+  tomoriConfig: TomoriConfigRow;
+  isUserImpersonation: boolean;
+  uncensorInputOptions: { unicodeSpacesEnabled: boolean; sanitizeEnabled: boolean };
+  convertMentions: MentionConverter;
+}): Promise<StructuredContextItem[]> {
+  const tomoriState = params.tomoriState;
+  if (
+    params.isUserImpersonation ||
+    !tomoriState ||
+    tomoriState.sample_dialogues_in.length === 0 ||
+    tomoriState.sample_dialogues_out.length === 0 ||
+    tomoriState.sample_dialogues_in.length !== tomoriState.sample_dialogues_out.length
+  ) {
+    return [];
+  }
+
+  const contextItems: StructuredContextItem[] = [];
+  for (let i = 0; i < tomoriState.sample_dialogues_in.length; i++) {
+    let userSampleText = tomoriState.sample_dialogues_in[i];
+    const isUnpairedSample = userSampleText === UNPAIRED_SAMPLE_DIALOGUE_SENTINEL;
+    if (!isUnpairedSample) {
+      if (params.tomoriConfig.humanizer_degree >= HumanizerDegree.HEAVY) {
+        userSampleText = humanizeString(userSampleText);
+      }
+      contextItems.push({
+        role: "user",
+        parts: [
+          {
+            type: "text",
+            text: applyUncensorInputTransforms(
+              await params.convertMentions(
+                userSampleText,
+                params.client,
+                params.guildId,
+                params.triggererName,
+                params.botName,
+                params.tomoriConfig.personal_memories_enabled,
+              ),
+              params.uncensorInputOptions,
+            ),
+          },
+        ],
+        metadataTag: ContextItemTag.DIALOGUE_SAMPLE,
+      });
+    }
+
+    let modelSampleText = `${params.botName}: ${tomoriState.sample_dialogues_out[i]}`;
+    if (params.tomoriConfig.humanizer_degree >= HumanizerDegree.HEAVY) {
+      modelSampleText = humanizeString(modelSampleText);
+    }
+    contextItems.push({
+      role: "model",
+      parts: [
+        {
+          type: "text",
+          text: applyUncensorInputTransforms(
+            await params.convertMentions(
+              modelSampleText,
+              params.client,
+              params.guildId,
+              params.triggererName,
+              params.botName,
+              params.tomoriConfig.personal_memories_enabled,
+            ),
+            params.uncensorInputOptions,
+          ),
+        },
+      ],
+      metadataTag: ContextItemTag.DIALOGUE_SAMPLE,
+    });
+  }
+
+  return contextItems;
 }
 
 export async function buildConditioningContextItem(params: {

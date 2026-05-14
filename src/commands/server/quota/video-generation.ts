@@ -2,7 +2,7 @@ import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder
 import { MessageFlags } from "discord.js";
 import { sql } from "@/utils/db/client";
 import type { UserRow } from "@/types/db/schema";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { getVideoQuotaConfig } from "@/utils/quota/videoQuotaManager";
 import { localizer } from "@/utils/text/localizer";

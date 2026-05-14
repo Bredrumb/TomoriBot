@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-2 -->
+<!-- ARCH-ALIGNMENT: prereq-phase-5.5b -->
 
 # 5. Database Schema and Data Model
 
@@ -13,7 +13,7 @@ This document summarizes the current PostgreSQL schema used by TomoriBot.
 
 The Phase 2 repository layer lives under `src/utils/db/repositories/`. Repositories group reads/writes by domain (`UserRepository`, memory repositories, `ConfigRepository`, `PersonaRepository`, `ServerRepository`, `LlmRepository`, `ToolRepository`, `RagRepository`, and `ImportExportRepository`) and implement the shared `IRepository<TExport>` contract.
 
-Application code imports the repository facade rather than raw DB entry points. The former public DB god files (`dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, and `dataImportV2.ts`) have been removed; remaining large SQL bodies are internal repository-owned modules pending deeper domain cleanup.
+Application code imports the repository facade rather than raw DB entry points. The former public DB god files (`dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, and `dataImportV2.ts`) have been removed. Repository SQL is split into domain-owned modules under `src/utils/db/repositories/*Sql.ts`; `repositoryReadSql.ts` and `repositoryWriteSql.ts` remain only as compatibility barrels during the Phase 6 cleanup window.
 
 ## Main Tables (Current)
 

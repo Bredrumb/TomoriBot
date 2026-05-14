@@ -8,7 +8,7 @@ import ffmpegPath from "ffmpeg-static";
 import { parseBuffer } from "music-metadata";
 import { sql } from "@/utils/db/client";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { storeVoiceSample } from "@/utils/storage/voiceSampleStorage";
 import type { ErrorContext, UserRow } from "@/types/db/schema";

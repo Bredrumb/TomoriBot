@@ -8,7 +8,7 @@ import { MessageFlags, SlashCommandSubcommandBuilder } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/contextBuilder";
 

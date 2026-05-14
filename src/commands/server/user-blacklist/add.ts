@@ -9,7 +9,7 @@ import { loadTomoriState } from "@/utils/db/repositories";
 import { invalidateUserBlacklistCache } from "@/utils/cache/userCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>

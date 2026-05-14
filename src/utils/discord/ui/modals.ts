@@ -1,5 +1,7 @@
 export {
+  acknowledgeModalSubmitForRefresh,
   promptWithModal,
   promptWithPaginatedModal,
   promptWithRawModal,
-} from "../interactionHelper.legacy";
+  safeSelectOptionText,
+} from "./interactionCore";

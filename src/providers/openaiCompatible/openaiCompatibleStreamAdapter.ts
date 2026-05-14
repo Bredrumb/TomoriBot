@@ -28,7 +28,7 @@ import { log } from "@/utils/misc/logger";
 import { isParamDisabled } from "@/utils/provider/samplingControl";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { localizer } from "@/utils/text/localizer";
-import { truncateBeforeGenericSpeakerLine } from "@/utils/text/stringHelper";
+import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import { buildProviderStopStrings } from "@/providers/utils/stopStrings";
 
 export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {

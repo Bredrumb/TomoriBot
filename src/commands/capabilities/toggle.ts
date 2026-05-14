@@ -5,7 +5,7 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/
 import { type ErrorContext, type UserRow, tomoriConfigSchema } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 
 // Configure the subcommand — no options, running the command flips the toggle
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>

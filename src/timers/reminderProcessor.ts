@@ -4,7 +4,7 @@ import { log, ColorCode } from "../utils/misc/logger";
 import { deleteReminderById, getDueReminders } from "../utils/db/repositories";
 import { rescheduleReminder } from "../utils/db/repositories";
 import type { ReminderRow } from "../types/db/schema";
-import { calculateLateness } from "../utils/text/stringHelper";
+import { calculateLateness } from "@/utils/text/processors/timeUtils";
 import tomoriChat, { suppressNextSelfReply } from "../events/messageCreate/tomoriChat";
 import { createStandardEmbed } from "../utils/discord/embedHelper";
 import { getCachedAllPersonas } from "../utils/cache/tomoriStateCache";

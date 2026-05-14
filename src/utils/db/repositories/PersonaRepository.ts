@@ -9,8 +9,12 @@
  * and consumed by the Phase 6 (#16.7) export pipeline composition.
  */
 import type { TomoriRow, TomoriState } from "@/types/db/schema";
-import { loadTomoriState, loadAllPersonasForServer, loadPersonaConfigRow } from "@/utils/db/repositoryReadSql";
-import { updateTomori } from "@/utils/db/repositoryWriteSql";
+import {
+  loadTomoriState,
+  loadAllPersonasForServer,
+  loadPersonaConfigRow,
+} from "@/utils/db/repositories/personaReadSql";
+import { updateTomori } from "@/utils/db/repositories/personaWriteSql";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import type { IRepository } from "./IRepository";
 

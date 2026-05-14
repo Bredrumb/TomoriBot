@@ -48,7 +48,8 @@ import {
   type SelectedKeyResult,
 } from "@/utils/security/keyRotation";
 import { localizer, getSupportedLocales, getLocaleSubKeys } from "../../utils/text/localizer";
-import { escapeRegExp, normalizeCustomEmojisForLlm } from "../../utils/text/stringHelper";
+import { escapeRegExp } from "@/utils/text/processors/regexUtils";
+import { normalizeCustomEmojisForLlm } from "@/utils/text/processors/mentionProcessor";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTermMemoryIntent";
 import { sql } from "@/utils/db/client";

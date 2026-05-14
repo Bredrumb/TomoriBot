@@ -12,12 +12,91 @@ import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context
 import type { TomoriState } from "@/types/db/schema";
 import type { ToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
 import type { MentionConverter } from "./templates";
+import { sql } from "@/utils/db/client";
+import { formatMemoryWithId } from "@/utils/memory/memoryId";
 
 const MIN_MESSAGES_FOR_SUMMARY = Number.parseInt(process.env.SHORT_TERM_MEMORY_MIN_MESSAGES_FOR_SUMMARY || "6", 10);
 const MAX_OTHER_CHANNEL_MEMORIES = Number.parseInt(process.env.SHORT_TERM_MEMORY_MAX_OTHER_CHANNELS || "3", 10);
 
 function formatDiscordChannelReference(channelId: string | undefined, fallbackText: string): string {
   return channelId ? `<#${channelId}>` : fallbackText;
+}
+
+/**
+ * Builds persona-scoped server or DM long-term memory context.
+ */
+export async function buildServerMemoryContextItem(params: {
+  tomoriState: TomoriState | null;
+  guildId: string;
+  serverName: string;
+  isDMChannel: boolean;
+  botName: string;
+  personalMemoriesEnabled: boolean;
+  conversationCorpus: string | null;
+  client: Client;
+  convertMentions: MentionConverter;
+}): Promise<StructuredContextItem | null> {
+  if (
+    !params.tomoriState?.server_memories ||
+    !Array.isArray(params.tomoriState.server_memories) ||
+    params.tomoriState.server_memories.length === 0
+  ) {
+    return null;
+  }
+
+  const memoryLabel = params.isDMChannel
+    ? `\n## ${params.botName}'s Memories about this conversation with User\n`
+    : `\n## ${params.botName}'s Memories about ${params.serverName}\n`;
+
+  let serverMemoryLines: string[] = [];
+  try {
+    const serverMemoryRows = await sql<Array<{ server_memory_id: number; content: string; tags: string[] | null }>>`
+      SELECT server_memory_id, content, tags
+      FROM server_memories
+      WHERE server_id = ${params.tomoriState.server_id}
+        AND persona_lineage_id = ${params.tomoriState.persona_lineage_id}
+      ORDER BY created_at DESC
+    `;
+
+    const filteredServerRows = params.conversationCorpus
+      ? serverMemoryRows.filter(
+          (row) =>
+            (row.tags ?? []).length > 0 &&
+            (row.tags ?? []).some((tag) =>
+              params.conversationCorpus?.includes(tag.replace(/^["']+|["']+$/g, "").toLowerCase()),
+            ),
+        )
+      : serverMemoryRows;
+
+    serverMemoryLines = filteredServerRows.map((row) =>
+      formatMemoryWithId(row.server_memory_id, row.content, row.tags ?? []),
+    );
+  } catch (error) {
+    log.warn("Failed to load server memories with IDs for context", error);
+    serverMemoryLines = params.tomoriState.server_memories;
+  }
+
+  if (serverMemoryLines.length === 0) {
+    return null;
+  }
+
+  return {
+    role: "system",
+    parts: [
+      {
+        type: "text",
+        text: await params.convertMentions(
+          `${memoryLabel}${serverMemoryLines.join("\n")}\n`,
+          params.client,
+          params.guildId,
+          "User",
+          params.botName,
+          params.personalMemoriesEnabled,
+        ),
+      },
+    ],
+    metadataTag: ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
+  };
 }
 
 export async function buildShortTermMemoryContext(params: {

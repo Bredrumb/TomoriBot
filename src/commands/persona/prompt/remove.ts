@@ -2,7 +2,8 @@ import type { ChatInputCommandInteraction, ButtonInteraction, Client, SlashComma
 import { MessageFlags } from "discord.js";
 import type { UserRow, TomoriState } from "@/types/db/schema";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { loadAllPersonasForServer } from "@/utils/db/repositories";
 import { sql } from "@/utils/db/client";

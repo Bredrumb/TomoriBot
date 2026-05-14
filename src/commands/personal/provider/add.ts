@@ -8,7 +8,8 @@ import {
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { loadUserSavedProviderConfig, loadUserSavedProviderConfigs } from "@/utils/db/repositories";
 import { upsertUserSavedProviderConfig } from "@/utils/db/repositories";
-import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { ProviderFactory } from "@/utils/provider/providerFactory";
 import { getAllProviderChoices, getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";

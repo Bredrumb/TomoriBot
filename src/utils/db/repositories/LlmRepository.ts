@@ -25,6 +25,7 @@ import type {
 } from "@/types/db/schema";
 import { invalidateAllChannelLlmCacheForServer, invalidateChannelLlmCache } from "@/utils/cache/channelLlmCacheStore";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { loadNaiPresetsForModel } from "@/utils/db/repositories/configReadSql";
 import {
   getLlmsByIds,
   loadAvailableLlms,
@@ -43,7 +44,6 @@ import {
   loadVideoGenerationModelByProviderAndCodename,
   loadLlmById,
   loadLlmByProviderAndCodename,
-  loadNaiPresetsForModel,
   loadSmartestModel,
   loadUniqueProviders,
   getChannelLlmOverride,
@@ -69,7 +69,7 @@ import {
   loadCustomEndpointsForUser,
   loadCustomEndpointsByIds,
   loadCustomEndpoint,
-} from "@/utils/db/repositoryReadSql";
+} from "@/utils/db/repositories/llmReadSql";
 import {
   setChannelLlmOverride,
   setPersonaLlmOverride,
@@ -94,7 +94,7 @@ import {
   deleteOpenRouterVideoModelRegistration,
   restoreOverridesFromSnapshot,
   cleanupDeadChannelOverrides,
-} from "@/utils/db/repositoryWriteSql";
+} from "@/utils/db/repositories/llmWriteSql";
 import type { IRepository } from "./IRepository";
 
 /**

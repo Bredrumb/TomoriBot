@@ -1,5 +1,5 @@
 import type { AnyThreadChannel, BaseGuildTextChannel, Client, Message } from "discord.js";
-import type { WebhookCreateErrorReason } from "@/utils/discord/webhookManager";
+import type { WebhookCreateErrorReason } from "@/utils/discord/webhook/fallback";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { ColorCode } from "@/utils/misc/logger";
 import { log } from "@/utils/misc/logger";

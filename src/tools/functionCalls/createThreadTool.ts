@@ -14,7 +14,8 @@ import {
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
 import { resolveChannelTarget } from "@/utils/discord/targetResolver";
 import { getKnownPersonaSpeakerNames, stripLeadingKnownSpeakerPrefixes } from "@/utils/discord/modelAuthoredText";
-import { getOrCreateWebhook, sendWebhookMessageWithIdentity } from "@/utils/discord/webhookManager";
+import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import { log } from "@/utils/misc/logger";
 
 const MAX_THREAD_NAME_LENGTH = 100;

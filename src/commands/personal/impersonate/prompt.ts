@@ -3,7 +3,8 @@ import { MessageFlags, TextInputStyle } from "discord.js";
 import { sql } from "@/utils/db/client";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { invalidateUserCache } from "@/utils/cache/userCache";
-import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 

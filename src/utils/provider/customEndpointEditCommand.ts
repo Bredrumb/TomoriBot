@@ -13,12 +13,8 @@ import type { ButtonInteraction, ChatInputCommandInteraction, ModalSubmitInterac
 import type { CustomEndpointCapability, CustomEndpointRow, TomoriConfigRow } from "@/types/db/schema";
 import type { ModalComponent } from "@/types/discord/modal";
 import type { SelectOption } from "@/types/discord/modal";
-import {
-  promptWithPaginatedModal,
-  promptWithRawModal,
-  replyInfoEmbed,
-  safeSelectOptionText,
-} from "@/utils/discord/interactionHelper";
+import { promptWithPaginatedModal, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
 import {

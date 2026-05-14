@@ -7,7 +7,7 @@ import {
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 import { ProviderFactory } from "@/utils/provider/providerFactory";
 import { addRotationKey, purgeRotationKeys, getRotationKeyCount } from "@/utils/security/keyRotation";

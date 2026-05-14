@@ -13,7 +13,7 @@ import { getVideoQuotaConfig } from "@/utils/quota/videoQuotaManager";
 import type { UserRow } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 
 type QuotaResetScope = "user" | "server";
 type QuotaResetType = "imagegen" | "textgen" | "videogen";
