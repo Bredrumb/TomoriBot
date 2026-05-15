@@ -577,30 +577,23 @@ export async function execute(
         model: modelCodename,
       });
 
-      const messagePayload: {
-        message: string;
-        media?: Array<{ mimeType: string; data: string }>;
-        config?: {
-          responseModalities: string[];
-          imageConfig: {
-            aspectRatio: string;
-          };
-        };
-      } = {
-        message: prompt,
+      // Build parts: reference images (as inlineData) followed by the text prompt.
+      // SendMessageParameters.message is PartListUnion — inline images must be
+      // passed as inlineData parts, not via a non-existent "media" field.
+      const messageParts: Array<{ inlineData: { mimeType: string; data: string } } | string> = [
+        ...referenceImages.map((img) => ({ inlineData: { mimeType: img.mimeType, data: img.data } })),
+        prompt,
+      ];
+
+      const response = await chat.sendMessage({
+        message: messageParts,
         config: {
           responseModalities: ["IMAGE"],
           imageConfig: {
             aspectRatio: aspectRatio,
           },
         },
-      };
-
-      if (referenceImages.length > 0) {
-        messagePayload.media = referenceImages;
-      }
-
-      const response = await chat.sendMessage(messagePayload);
+      });
 
       // Extract generated image from response
       if (response?.candidates && response.candidates.length > 0 && response.candidates[0]?.content?.parts) {

@@ -322,30 +322,23 @@ export class VertexProvider
       model: request.model,
     });
 
-    const messagePayload: {
-      message: string;
-      media?: Array<{ mimeType: string; data: string }>;
-      config: {
-        responseModalities: string[];
-        imageConfig: {
-          aspectRatio: string;
-        };
-      };
-    } = {
-      message: request.prompt,
+    // Build parts: reference images (as inlineData) followed by the text prompt.
+    // SendMessageParameters.message is PartListUnion — inline images must be
+    // passed as inlineData parts, not via a non-existent "media" field.
+    const messageParts: Array<{ inlineData: { mimeType: string; data: string } } | string> = [
+      ...(request.referenceImages ?? []).map((img) => ({ inlineData: { mimeType: img.mimeType, data: img.data } })),
+      request.prompt,
+    ];
+
+    const response = await chat.sendMessage({
+      message: messageParts,
       config: {
         responseModalities: ["IMAGE"],
         imageConfig: {
           aspectRatio: request.aspectRatio,
         },
       },
-    };
-
-    if (request.referenceImages && request.referenceImages.length > 0) {
-      messagePayload.media = request.referenceImages;
-    }
-
-    const response = await chat.sendMessage(messagePayload);
+    });
     if (response?.candidates && response.candidates.length > 0 && response.candidates[0]?.content?.parts) {
       for (const part of response.candidates[0].content.parts) {
         if (part.inlineData?.data) {
