@@ -159,8 +159,7 @@ export class ReminderTool extends BaseTool {
     }
 
     // Import database functions and utilities
-    const { loadUserRow } = await import("../../utils/db/repositories");
-    const { addReminder } = await import("../../utils/db/repositories");
+    const { userRepository, serverScheduleRepository } = await import("@/utils/db/repositories");
     const { sendStandardEmbed } = await import("../../utils/discord/embedHelper");
     const { ColorCode } = await import("../../utils/misc/logger");
 
@@ -175,7 +174,7 @@ export class ReminderTool extends BaseTool {
     const isMatrixRelayRequester =
       !!context.message?.webhookId && isMatrixBridgeWebhookUsername(context.message?.author?.username ?? "");
 
-    const requestingUserRow = resolvedUserId ? await loadUserRow(resolvedUserId) : null;
+    const requestingUserRow = resolvedUserId ? await userRepository.loadByDiscordId(resolvedUserId) : null;
     const channelId = context.channel.id;
     const requestedTargetUser =
       targetUserArg?.trim() || legacyTargetUserNicknameArg?.trim() || legacyTargetUserDiscordIdArg?.trim();
@@ -466,7 +465,7 @@ export class ReminderTool extends BaseTool {
           );
         } else {
           // Load target user to verify they exist
-          const targetUserRow = await loadUserRow(resolvedTargetUserId);
+          const targetUserRow = await userRepository.loadByDiscordId(resolvedTargetUserId);
 
           if (!targetUserRow?.user_id) {
             log.warn(`Reminder: Resolved target user ${resolvedTargetUserId} is unknown to TomoriBot`);
@@ -485,7 +484,7 @@ export class ReminderTool extends BaseTool {
       }
 
       // Create the reminder in the database
-      const dbResult = await addReminder({
+      const dbResult = await serverScheduleRepository.addReminder({
         server_id: tomoriState.server_id,
         channel_disc_id: resolvedChannelId,
         user_discord_id: resolvedTargetUserId,

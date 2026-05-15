@@ -11,7 +11,7 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import { sql } from "@/utils/db/client";
-import { loadTomoriState } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -230,7 +230,7 @@ export async function execute(
   }
 
   // 2. Load Tomori state for this server
-  const tomoriState = await loadTomoriState(interaction.guild.id);
+  const tomoriState = await personaRepository.loadState(interaction.guild.id);
   if (!tomoriState) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.tomori_not_setup_title",

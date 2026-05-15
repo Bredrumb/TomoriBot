@@ -2,7 +2,7 @@ import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder
 import { MessageFlags } from "discord.js";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { loadCustomEndpointsForUser } from "@/utils/db/repositories";
+import { llmProviderRepo } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { executeCustomEndpointEditCommand } from "@/utils/provider/customEndpointEditCommand";
@@ -71,7 +71,7 @@ export async function execute(
       },
       strictRemoteValidation:
         process.env.RUN_ENV === "production" || process.env.ALLOW_PERSONAL_LOCAL_ENDPOINTS !== "true",
-      loadEndpoints: loadCustomEndpointsForUser,
+      loadEndpoints: llmProviderRepo.loadCustomEndpointsForUser,
     });
   } catch (error) {
     const context: ErrorContext = {

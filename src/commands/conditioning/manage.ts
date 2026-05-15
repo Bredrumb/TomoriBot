@@ -19,7 +19,7 @@ import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { conditioningMemoryRepository } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import { hasManageGuildPermission } from "@/utils/conditioning/conditioningCommandHelper";
-import { loadAllPersonasForServer } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 
 const CHECKBOX_GROUP_PREFIX = "conditioning_manage_group";
 const PAGE_BUTTON_PREFIX = "conditioning_manage_page_";
@@ -77,7 +77,7 @@ export async function execute(
     return;
   }
 
-  const personas = await loadAllPersonasForServer(interaction.guildId);
+  const personas = await personaRepository.loadAllForServer(interaction.guildId);
   if (personas.length === 0) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.tomori_not_setup_title",

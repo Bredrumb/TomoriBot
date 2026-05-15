@@ -16,7 +16,7 @@ import { MessageFlags, TextInputStyle } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadAllPersonasForServer } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -104,7 +104,7 @@ export async function execute(
   try {
     // 5. Persona scope: show paginated persona picker first
     if (scope === "persona") {
-      const allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+      const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
 
       if (allPersonas.length === 0) {
         await replyInfoEmbed(interaction, locale, {

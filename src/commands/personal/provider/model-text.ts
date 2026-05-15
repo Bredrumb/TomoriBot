@@ -1,6 +1,6 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { loadAvailableModelsForProvider } from "@/utils/db/repositories";
+import { llmModelRepo } from "@/utils/db/repositories";
 import { promptForSavedProvider } from "@/commands/model/providerPicker";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
@@ -78,7 +78,7 @@ export async function execute(
       return;
     }
 
-    const availableModels = await loadAvailableModelsForProvider(providerSelection.provider, false, {
+    const availableModels = await llmModelRepo.loadAvailableModelsForProvider(providerSelection.provider, false, {
       kind: "personal",
       ownerId: userData.user_id,
     });

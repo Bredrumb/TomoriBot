@@ -8,8 +8,8 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadAllPersonasForServer } from "@/utils/db/repositories";
-import { updateTomori } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
+
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
@@ -80,7 +80,7 @@ export async function execute(
       return;
     }
 
-    const allPersonas = await loadAllPersonasForServer(serverDiscId);
+    const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -199,7 +199,7 @@ async function saveVoiceDesignPrompt(
   // Keep clone/provider voice assignments as reusable persona data. In auto
   // endpoint mode, speech_voice_name marks VoiceDesign as the active voice
   // choice while preserving any saved sample/provider voice for later.
-  const updatedTomori = await updateTomori(selectedPersona.tomori_id, {
+  const updatedTomori = await personaRepository.update(selectedPersona.tomori_id, {
     speech_voice_design_prompt: designPrompt,
     speech_voice_name: "VoiceDesign",
   });

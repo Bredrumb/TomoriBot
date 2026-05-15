@@ -19,7 +19,7 @@ import { replyComponentsV2Status } from "@/utils/discord/ui/statusComponents";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
-import { deleteReminderById } from "@/utils/db/repositories";
+import { serverScheduleRepository } from "@/utils/db/repositories";
 import { formatTimeWithOffset, formatUTCOffset } from "@/utils/text/timezoneHelper";
 import { isBridgeUserId } from "@/utils/bridges";
 
@@ -51,7 +51,7 @@ async function performReminderRemoval(
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
-  const deleted = await deleteReminderById(reminderToRemove.reminder_id);
+  const deleted = await serverScheduleRepository.deleteReminderById(reminderToRemove.reminder_id);
 
   if (!deleted) {
     await replyInfoEmbed(replyInteraction, locale, {

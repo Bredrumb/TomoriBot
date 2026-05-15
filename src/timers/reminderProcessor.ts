@@ -1,8 +1,8 @@
 import type { Client, Message, TextBasedChannel, TextChannel } from "discord.js";
 import { ChannelType } from "discord.js";
 import { log, ColorCode } from "../utils/misc/logger";
-import { deleteReminderById, getDueReminders } from "../utils/db/repositories";
-import { rescheduleReminder } from "../utils/db/repositories";
+import { serverScheduleRepository } from "@/utils/db/repositories";
+
 import type { ReminderRow } from "../types/db/schema";
 import { calculateLateness } from "@/utils/text/processors/timeUtils";
 import { tomoriChat, suppressNextSelfReply } from "../events/messageCreate/tomoriChat";
@@ -37,7 +37,7 @@ export class ReminderProcessor {
 
   public async processDueReminders(): Promise<void> {
     try {
-      const dueReminders = await getDueReminders();
+      const dueReminders = await serverScheduleRepository.getDueReminders();
 
       if (!dueReminders || dueReminders.length === 0) {
         return;
@@ -164,16 +164,16 @@ export class ReminderProcessor {
 
       if (isRecurring && reminder.reminder_id) {
         const nextTriggerTime = getNextRecurringReminderTime(reminder.reminder_time, repetitionIntervalHours);
-        const rescheduled = await rescheduleReminder(reminder.reminder_id, nextTriggerTime);
+        const rescheduled = await serverScheduleRepository.rescheduleReminder(reminder.reminder_id, nextTriggerTime);
 
         if (rescheduled) {
           log.success(`Reminder ${reminder.reminder_id} executed and rescheduled for ${nextTriggerTime.toISOString()}`);
         } else {
           log.error(`Failed to reschedule recurring reminder ${reminder.reminder_id}; deleting to prevent duplicates`);
-          await deleteReminderById(reminder.reminder_id);
+          await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
         }
       } else if (reminder.reminder_id) {
-        await deleteReminderById(reminder.reminder_id);
+        await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
         log.success(`Reminder ${reminder.reminder_id} executed and deleted successfully`);
       } else {
         log.error("Cannot delete reminder: reminder_id is undefined");
@@ -257,7 +257,7 @@ export class ReminderProcessor {
   private async handleReminderExecutionFailure(reminder: ReminderRow, errorReason: string): Promise<void> {
     try {
       if (reminder.reminder_id) {
-        await deleteReminderById(reminder.reminder_id);
+        await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
       }
 
       try {

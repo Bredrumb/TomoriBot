@@ -13,7 +13,7 @@ import {
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { formatTextArrayLiteral } from "@/utils/discord/channelChecklistManager";
-import { getBlacklistedMemberIds, loadTomoriState } from "@/utils/db/repositories";
+import { personaRepository, userRepository } from "@/utils/db/repositories";
 import { sql } from "@/utils/db/client";
 import { invalidateUserBlacklistCache } from "@/utils/cache/userCache";
 import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
@@ -56,7 +56,7 @@ export async function execute(
   }
 
   try {
-    const tomoriState = await loadTomoriState(interaction.guildId);
+    const tomoriState = await personaRepository.loadState(interaction.guildId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -66,7 +66,7 @@ export async function execute(
       return;
     }
 
-    const blacklistedIds = await getBlacklistedMemberIds(tomoriState.server_id);
+    const blacklistedIds = await userRepository.getBlacklistedMemberIds(tomoriState.server_id);
     if (blacklistedIds.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.server.user-blacklist.remove.none_title",

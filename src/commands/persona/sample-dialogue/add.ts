@@ -16,11 +16,11 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
-import { isBlacklisted, loadAllPersonasForServer } from "@/utils/db/repositories";
+import { personaRepository, userRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import type { SelectOption } from "@/types/discord/modal";
 import { getMemoryLimits, validateSampleDialogue } from "@/utils/misc/memoryLimits";
-import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
+
 import {
   dedupeSampleDialoguePairs,
   formatTextArrayLiteral,
@@ -78,7 +78,7 @@ export async function execute(
     // 3. Check blacklisting only for guild contexts
     // Users with Manage Server permission can bypass blacklist (they can unblacklist themselves anyway)
     if (interaction.guild) {
-      const blacklisted = (await isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
+      const blacklisted = (await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
       if (blacklisted && !hasManagePermission) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.user_blacklisted_title",
@@ -105,7 +105,7 @@ export async function execute(
     }
 
     // 6. Resolve target persona options
-    const allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     const personaSelectOptions: SelectOption[] = allPersonas
       .filter((persona) => persona.tomori_id !== undefined)
       .map((persona) => ({

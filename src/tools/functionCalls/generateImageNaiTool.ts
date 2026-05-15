@@ -40,7 +40,7 @@ import {
   type NaiGenerationCharacterPayload,
 } from "@/utils/image/naiImageGeneration";
 import { loadCharRefAsBase64 } from "@/utils/storage/charrefStorage";
-import { loadSavedProviderConfig } from "@/utils/db/repositories";
+import { llmProviderRepo } from "@/utils/db/repositories";
 import {
   CredentialUnavailableError,
   getResolvedCapabilityModelId,
@@ -356,7 +356,7 @@ export class GenerateImageNaiTool extends BaseTool {
    * @returns Decrypted Google API key, or null if unavailable
    */
   private async resolveGoogleApiKey(context: ToolContext): Promise<string | null> {
-    const savedGoogleConfig = await loadSavedProviderConfig(context.tomoriState.server_id, "google");
+    const savedGoogleConfig = await llmProviderRepo.loadSavedProviderConfig(context.tomoriState.server_id, "google");
     if (savedGoogleConfig?.api_key) {
       return await decryptApiKey(savedGoogleConfig.api_key, savedGoogleConfig.key_version || 1);
     }

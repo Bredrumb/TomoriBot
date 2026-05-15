@@ -8,7 +8,7 @@ import {
 } from "discord.js";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
-import { loadAllPersonasForServer, loadPresetRowsByLocale } from "../../utils/db/repositories";
+import { configRepository, personaRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { localizer, getBaseTriggerWords, getDefaultBotName } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
@@ -256,7 +256,7 @@ export async function execute(
     }
 
     // 4. Fetch available presets for the user's locale using shared helper
-    const presets = await loadPresetRowsByLocale(locale);
+    const presets = await configRepository.loadPresetRowsByLocale(locale);
 
     // 5. Check if there are any presets available
     if (!presets || presets.length === 0) {
@@ -330,7 +330,7 @@ export async function execute(
     const resolvedLineageId = resolvePresetLineageId(selectedPreset);
     const shouldUseResolvedLineageId = resolvedLineageId !== null;
 
-    const allPersonas = await loadAllPersonasForServer(serverDiscId);
+    const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
     const allPersonaNames = allPersonas.map((persona) => persona.tomori_nickname);
     const mainPersona = allPersonas.find((persona) => !persona.is_alter) ?? tomoriState;
 

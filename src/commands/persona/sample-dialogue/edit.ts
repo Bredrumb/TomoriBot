@@ -20,7 +20,7 @@ import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { isBlacklisted, loadAllPersonasForServer } from "@/utils/db/repositories";
+import { personaRepository, userRepository } from "@/utils/db/repositories";
 import { getMemoryLimits, validateSampleDialogue } from "@/utils/misc/memoryLimits";
 import { splitPromptIntoModalParts, combineModalPromptParts } from "@/utils/text/modalPromptParts";
 import type { SelectOption } from "@/types/discord/modal";
@@ -178,7 +178,7 @@ export async function execute(
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
 
     if (interaction.guild) {
-      const blacklisted = (await isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
+      const blacklisted = (await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
       if (blacklisted && !hasManagePermission) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.user_blacklisted_title",
@@ -201,7 +201,7 @@ export async function execute(
       return;
     }
 
-    let allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+    let allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -530,7 +530,7 @@ export async function execute(
         "general.pagination.reloading_persona_picker",
       );
 
-      allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+      allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     }
   } catch (error) {
     const context: ErrorContext = {

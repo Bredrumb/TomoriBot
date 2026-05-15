@@ -10,7 +10,7 @@
  */
 
 import type { LlmRow } from "@/types/db/schema";
-import { getChannelLlmOverride } from "@/utils/db/repositories";
+import { llmOverrideRepo } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import {
   getChannelLlmCacheEntry,
@@ -36,7 +36,7 @@ export async function getCachedChannelLlm(serverId: number, channelDiscId: strin
   if (cached !== undefined) return cached;
 
   try {
-    const llm = await getChannelLlmOverride(serverId, channelDiscId);
+    const llm = await llmOverrideRepo.getChannelLlmOverride(serverId, channelDiscId);
     setChannelLlmCache(serverId, channelDiscId, llm);
     return llm;
   } catch (error) {

@@ -9,21 +9,8 @@ import type {
   UserSavedProviderConfigRow,
 } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
-import {
-  deleteCustomEndpoint,
-  deleteSavedProviderConfig,
-  deleteUserSavedProviderConfig,
-  upsertCustomEndpoint,
-  upsertSavedProviderConfig,
-  upsertUserSavedProviderConfig,
-} from "@/utils/db/repositories";
-import {
-  loadCustomEndpoint,
-  loadCustomEndpointsForServer,
-  loadCustomEndpointsForUser,
-  loadSavedProviderConfig,
-  loadUserSavedProviderConfig,
-} from "@/utils/db/repositories";
+import { llmProviderRepo } from "@/utils/db/repositories";
+
 import { CUSTOM_ENDPOINT_PLACEHOLDER_KEY } from "@/utils/discord/customProviderModal";
 import {
   buildSavedProviderConfigFromExistingOrDefaults,
@@ -85,8 +72,8 @@ async function getExistingSavedConfig(
   provider: string,
 ): Promise<SavedProviderConfigRow | UserSavedProviderConfigRow | null> {
   return scope.kind === "server"
-    ? await loadSavedProviderConfig(scope.ownerId, provider)
-    : await loadUserSavedProviderConfig(scope.ownerId, provider);
+    ? await llmProviderRepo.loadSavedProviderConfig(scope.ownerId, provider)
+    : await llmProviderRepo.loadUserSavedProviderConfig(scope.ownerId, provider);
 }
 
 async function upsertSyntheticTextModel(provider: string, endpoint: CustomEndpointRegistrationInput): Promise<number> {
@@ -470,22 +457,22 @@ export async function registerCustomEndpoint(
   const existingConfig = await getExistingSavedConfig(input.scope, provider);
   const existingEndpoint =
     input.scope.kind === "server"
-      ? await loadCustomEndpoint({
+      ? await llmProviderRepo.loadCustomEndpoint({
           serverId: input.scope.ownerId,
           label: input.label,
           capability: input.capability,
         })
-      : await loadCustomEndpoint({
+      : await llmProviderRepo.loadCustomEndpoint({
           userId: input.scope.ownerId,
           label: input.label,
           capability: input.capability,
         });
   const siblingEndpoints =
     input.scope.kind === "server"
-      ? (await loadCustomEndpointsForServer(input.scope.ownerId)).filter(
+      ? (await llmProviderRepo.loadCustomEndpointsForServer(input.scope.ownerId)).filter(
           (endpoint) => endpoint.capability === input.capability,
         )
-      : (await loadCustomEndpointsForUser(input.scope.ownerId)).filter(
+      : (await llmProviderRepo.loadCustomEndpointsForUser(input.scope.ownerId)).filter(
           (endpoint) => endpoint.capability === input.capability,
         );
   const shouldBeDefault = existingEndpoint?.is_default ?? !siblingEndpoints.some((endpoint) => endpoint.is_default);
@@ -495,7 +482,7 @@ export async function registerCustomEndpoint(
     trimmedAuthToken && trimmedAuthToken.length > 0 ? true : (existingEndpoint?.requires_auth ?? false);
   const serverScope = input.scope.kind === "server" ? input.scope : null;
 
-  const customEndpoint = await upsertCustomEndpoint(
+  const customEndpoint = await llmProviderRepo.upsertCustomEndpoint(
     {
       serverId: input.scope.kind === "server" ? input.scope.ownerId : null,
       userId: input.scope.kind === "personal" ? input.scope.ownerId : null,
@@ -531,7 +518,7 @@ export async function registerCustomEndpoint(
           modelId,
         )) as SavedProviderConfigUpsert;
 
-        return await upsertSavedProviderConfig(
+        return await llmProviderRepo.upsertSavedProviderConfig(
           serverScope.ownerId,
           {
             ...savedConfig,
@@ -553,7 +540,7 @@ export async function registerCustomEndpoint(
           modelId,
         )) as UserSavedProviderConfigUpsert;
 
-        return await upsertUserSavedProviderConfig(input.scope.ownerId, {
+        return await llmProviderRepo.upsertUserSavedProviderConfig(input.scope.ownerId, {
           ...savedConfig,
           llm_id: input.capability === "text" ? modelId : savedConfig.llm_id,
           vision_llm_id: input.capability === "text" && input.seesImages ? modelId : savedConfig.vision_llm_id,
@@ -629,12 +616,12 @@ export async function resolveCustomEndpointForProvider(
   }
 
   return parsed.scope === "server"
-    ? await loadCustomEndpoint({
+    ? await llmProviderRepo.loadCustomEndpoint({
         serverId: parsed.ownerId,
         label: parsed.label,
         capability,
       })
-    : await loadCustomEndpoint({
+    : await llmProviderRepo.loadCustomEndpoint({
         userId: parsed.ownerId,
         label: parsed.label,
         capability,
@@ -656,7 +643,7 @@ export async function removeCustomEndpointRegistration(params: {
 
   const deleted =
     params.scope.kind === "server"
-      ? await deleteCustomEndpoint(
+      ? await llmProviderRepo.deleteCustomEndpoint(
           {
             serverId: params.scope.ownerId,
             label: params.label,
@@ -664,7 +651,7 @@ export async function removeCustomEndpointRegistration(params: {
           },
           { serverDiscId: params.scope.serverDiscId },
         )
-      : await deleteCustomEndpoint({
+      : await llmProviderRepo.deleteCustomEndpoint({
           userId: params.scope.ownerId,
           label: params.label,
           capability: params.capability,
@@ -682,15 +669,17 @@ export async function removeCustomEndpointRegistration(params: {
 
   const remaining =
     params.scope.kind === "server"
-      ? await loadCustomEndpointsForServer(params.scope.ownerId)
-      : await loadCustomEndpointsForUser(params.scope.ownerId);
+      ? await llmProviderRepo.loadCustomEndpointsForServer(params.scope.ownerId)
+      : await llmProviderRepo.loadCustomEndpointsForUser(params.scope.ownerId);
   const sameProviderRemaining = remaining.filter((endpoint) => endpoint.label === params.label);
 
   if (sameProviderRemaining.length === 0) {
     if (params.scope.kind === "server") {
-      await deleteSavedProviderConfig(params.scope.ownerId, provider, { serverDiscId: params.scope.serverDiscId });
+      await llmProviderRepo.deleteSavedProviderConfig(params.scope.ownerId, provider, {
+        serverDiscId: params.scope.serverDiscId,
+      });
     } else {
-      await deleteUserSavedProviderConfig(params.scope.ownerId, provider);
+      await llmProviderRepo.deleteUserSavedProviderConfig(params.scope.ownerId, provider);
     }
     return true;
   }
@@ -721,11 +710,11 @@ export async function removeCustomEndpointRegistration(params: {
         };
 
   if (params.scope.kind === "server") {
-    await upsertSavedProviderConfig(params.scope.ownerId, nextConfig as SavedProviderConfigRow, {
+    await llmProviderRepo.upsertSavedProviderConfig(params.scope.ownerId, nextConfig as SavedProviderConfigRow, {
       serverDiscId: params.scope.serverDiscId,
     });
   } else {
-    await upsertUserSavedProviderConfig(params.scope.ownerId, nextConfig as UserSavedProviderConfigRow);
+    await llmProviderRepo.upsertUserSavedProviderConfig(params.scope.ownerId, nextConfig as UserSavedProviderConfigRow);
   }
 
   return true;
@@ -739,13 +728,13 @@ export async function cleanupCustomProviderArtifacts(provider: string): Promise<
 
   const registeredEndpoints =
     parsed.scope === "server"
-      ? await loadCustomEndpointsForServer(parsed.ownerId)
-      : await loadCustomEndpointsForUser(parsed.ownerId);
+      ? await llmProviderRepo.loadCustomEndpointsForServer(parsed.ownerId)
+      : await llmProviderRepo.loadCustomEndpointsForUser(parsed.ownerId);
 
   const matchingEndpoints = registeredEndpoints.filter((endpoint) => endpoint.label === parsed.label);
 
   for (const endpoint of matchingEndpoints) {
-    await deleteCustomEndpoint(
+    await llmProviderRepo.deleteCustomEndpoint(
       parsed.scope === "server"
         ? {
             serverId: parsed.ownerId,

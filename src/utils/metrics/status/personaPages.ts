@@ -1,7 +1,7 @@
 import { type ButtonInteraction, type ChatInputCommandInteraction, MessageFlags } from "discord.js";
 import type { SummaryEmbedOptions } from "@/types/discord/embed";
 import type { UserRow } from "@/types/db/schema";
-import { loadAllPersonasForServer, loadPersonalMemoriesForUserLineage } from "@/utils/db/repositories";
+import { personaRepository, personalMemoryRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { replyPaginatedStatusPages } from "@/utils/discord/ui/statusComponents";
@@ -27,7 +27,7 @@ export async function showPersonaStatus(
   locale: string,
 ): Promise<void> {
   const limits = getMemoryLimits();
-  const allPersonas = await loadAllPersonasForServer(serverDiscId);
+  const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
 
   if (allPersonas.length === 0) {
     await replyInfoEmbed(interaction, locale, {
@@ -66,7 +66,7 @@ export async function showPersonaStatus(
 
   let personaPersonalMemoryList: string[] = [];
   if (userData.user_id) {
-    const personaPersonalMemoryRows = await loadPersonalMemoriesForUserLineage(
+    const personaPersonalMemoryRows = await personalMemoryRepository.loadForUserLineage(
       userData.user_id,
       personaLineageId,
       false,

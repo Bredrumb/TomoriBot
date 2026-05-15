@@ -13,7 +13,7 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { isBlacklisted, loadAllPersonasForServer, loadEmbeddingModelById } from "@/utils/db/repositories";
+import { llmModelRepo, personaRepository, userRepository } from "@/utils/db/repositories";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { memoryGuard, reserveDocumentQuota } from "@/utils/security/rateLimiter";
@@ -161,7 +161,7 @@ export async function execute(
     // 4. Check blacklist for guild contexts
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
     if (interaction.guild) {
-      const blacklisted = (await isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
+      const blacklisted = (await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
       if (blacklisted && !hasManagePermission) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.user_blacklisted_title",
@@ -240,7 +240,7 @@ export async function execute(
       return;
     }
 
-    const embeddingModel = await loadEmbeddingModelById(embeddingModelId);
+    const embeddingModel = await llmModelRepo.loadEmbeddingModelById(embeddingModelId);
     if (!embeddingModel) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.teach.document.no_embedding_model_title",
@@ -271,7 +271,7 @@ export async function execute(
     // Scope `persona` explicitly uses a string-select modal.
     // Scope `serverwide` intentionally skips persona selection and stores tomori_id as NULL.
     if (scope === "persona") {
-      const allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+      const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
       const personaSelectOptions: SelectOption[] = allPersonas
         .filter((persona) => persona.tomori_id !== undefined)
         .map((persona) => ({

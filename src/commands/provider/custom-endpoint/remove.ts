@@ -2,7 +2,7 @@ import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder
 import { MessageFlags } from "discord.js";
 import type { CustomEndpointCapability, CustomEndpointRow, ErrorContext, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { loadCustomEndpointsForServer } from "@/utils/db/repositories";
+import { llmProviderRepo } from "@/utils/db/repositories";
 import {
   buildCustomEndpointCheckboxGroups,
   collectCheckedCustomEndpointValues,
@@ -120,7 +120,7 @@ export async function execute(
   }
 
   try {
-    const registeredEndpoints = await loadCustomEndpointsForServer(tomoriState.server_id);
+    const registeredEndpoints = await llmProviderRepo.loadCustomEndpointsForServer(tomoriState.server_id);
     if (registeredEndpoints.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.config.custom_models.remove.none_title",

@@ -4,7 +4,7 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow } from "@/types/db/schema";
-import { validateImportFile, importPersonalSettings } from "@/utils/db/repositories";
+import { importRepository } from "@/utils/db/repositories";
 import type { PersonalSettingsExportData } from "@/types/db/dataExport";
 import { IMPORT_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
@@ -63,7 +63,7 @@ export async function execute(
       return;
     }
     const jsonData = JSON.parse(response.buffer.toString("utf8"));
-    const validation = validateImportFile(jsonData);
+    const validation = importRepository.validateImportFile(jsonData);
     if (!validation.valid || !validation.type || !validation.data || validation.type !== "personal_settings") {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.data.import.invalid_file_title",
@@ -76,7 +76,7 @@ export async function execute(
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const importResult = await importPersonalSettings(
+    const importResult = await importRepository.importPersonalSettings(
       interaction.user.id,
       validation.data as PersonalSettingsExportData,
     );

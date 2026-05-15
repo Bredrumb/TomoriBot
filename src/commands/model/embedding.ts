@@ -10,7 +10,7 @@ import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/mod
 import type { ErrorContext, UserRow, EmbeddingModelRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
-import { loadEmbeddingModelById, loadAvailableEmbeddingModelsForProvider } from "@/utils/db/repositories";
+import { llmModelRepo } from "@/utils/db/repositories";
 import { reembedServerDocuments } from "@/utils/documents/documentService";
 import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
@@ -108,8 +108,8 @@ export async function execute(
 
       const currentSelectedId = tomoriState.config.embedding_model_id ?? null;
       const [selectedConfiguredModel, previousModel] = await Promise.all([
-        loadEmbeddingModelById(selectedSavedConfig.embedding_model_id),
-        currentSelectedId ? loadEmbeddingModelById(currentSelectedId) : Promise.resolve(null),
+        llmModelRepo.loadEmbeddingModelById(selectedSavedConfig.embedding_model_id),
+        currentSelectedId ? llmModelRepo.loadEmbeddingModelById(currentSelectedId) : Promise.resolve(null),
       ]);
       const selectedModelName =
         selectedSavedConfig.custom_model_name ??
@@ -160,7 +160,7 @@ export async function execute(
     }
 
     const availableModels =
-      (await loadAvailableEmbeddingModelsForProvider(selectedProvider, false, {
+      (await llmModelRepo.loadAvailableEmbeddingModels(selectedProvider, false, {
         kind: "server",
         ownerId: tomoriState.server_id,
       })) ?? [];
@@ -289,7 +289,7 @@ export async function execute(
     }
 
     const currentEmbeddingModel = tomoriState.config.embedding_model_id
-      ? await loadEmbeddingModelById(tomoriState.config.embedding_model_id)
+      ? await llmModelRepo.loadEmbeddingModelById(tomoriState.config.embedding_model_id)
       : null;
     const shouldReembed =
       currentEmbeddingModel?.model_family && currentEmbeddingModel.model_family !== selectedModel.model_family;

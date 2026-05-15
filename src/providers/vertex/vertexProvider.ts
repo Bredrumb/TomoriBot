@@ -62,7 +62,7 @@ import type {
 import { getVertexToolAdapter } from "./vertexToolAdapter";
 import { parseVertexCompositeKey, createVertexClient } from "./vertexClient";
 import { getCachedDefaultLLM, isLLMCacheReady } from "../../utils/cache/llmCache";
-import { loadDefaultModelForProvider, loadAvailableModelsForProvider } from "../../utils/db/repositories";
+import { llmModelRepo } from "@/utils/db/repositories";
 import { vertexProviderInfo } from "./providerInfo";
 import { callGoogleStructuredJSON } from "../google/googleStructuredOutput";
 import { generateConversationSummaryGoogle, generateRoleplaySummaryGoogle } from "../google/compactGenerator";
@@ -91,7 +91,7 @@ async function getDefaultVertexModel(): Promise<string> {
 
   // 2. Query database for is_default model
   try {
-    const dbDefault = await loadDefaultModelForProvider(providerName);
+    const dbDefault = await llmModelRepo.loadDefaultModel(providerName);
     if (dbDefault) {
       log.info(`Using database default ${providerName} model: ${dbDefault.llm_codename}`);
       return dbDefault.llm_codename;
@@ -104,7 +104,7 @@ async function getDefaultVertexModel(): Promise<string> {
 
   // 3. Fallback to first non-deprecated model
   try {
-    const availableModels = await loadAvailableModelsForProvider(providerName);
+    const availableModels = await llmModelRepo.loadAvailableModelsForProvider(providerName);
     if (availableModels && availableModels.length > 0) {
       const firstModel = availableModels[0].llm_codename;
       log.warn(`No default model found, using first available ${providerName} model: ${firstModel}`);

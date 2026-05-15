@@ -8,7 +8,7 @@ import { localizer } from "../../utils/text/localizer";
 import type { UserRow } from "../../types/db/schema";
 import type { ModalComponent, SelectOption } from "../../types/discord/modal";
 import { tomoriChat } from "../../events/messageCreate/tomoriChat";
-import { loadAllPersonasForServer, loadSmartestModel, loadTomoriState } from "../../utils/db/repositories";
+import { llmModelRepo, personaRepository } from "@/utils/db/repositories";
 import { getCachedWhitelistStatus } from "../../utils/cache/channelWhitelistCache";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
@@ -124,7 +124,7 @@ export async function execute(
   }
 
   // 3. Load tomori state for this server
-  const tomoriState = await loadTomoriState(interaction.guild.id);
+  const tomoriState = await personaRepository.loadState(interaction.guild.id);
   if (!tomoriState) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
@@ -180,7 +180,7 @@ export async function execute(
   }
 
   // 4. Load all personas and check if alters exist
-  const allPersonas = await loadAllPersonasForServer(interaction.guild.id);
+  const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
   const isThread = "isThread" in guildChannel && typeof guildChannel.isThread === "function" && guildChannel.isThread();
   const parentChannelId = isThread && "parent" in guildChannel ? guildChannel.parent?.id : undefined;
   const whitelistStatus = await getCachedWhitelistStatus(
@@ -371,7 +371,7 @@ export async function execute(
     const useReasoning = modalResult.values?.use_reasoning === "true";
     if (useReasoning) {
       const currentProvider = tomoriState.llm.llm_provider;
-      const smartestModel = await loadSmartestModel(currentProvider);
+      const smartestModel = await llmModelRepo.loadSmartestModel(currentProvider);
 
       if (!smartestModel) {
         await replyInteraction.editReply({

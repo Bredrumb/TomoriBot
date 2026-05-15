@@ -15,7 +15,7 @@ import { personaConfigSchema } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
 import { validateMemoryContent, getMemoryLimits } from "@/utils/misc/memoryLimits";
 import type { SelectOption } from "@/types/discord/modal";
-import { loadAllPersonasForServer } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 
 // Get memory limits from environment variables
 const memoryLimits = getMemoryLimits();
@@ -66,7 +66,7 @@ export async function execute(
   let selectedPersona: TomoriState | null = null;
 
   try {
-    const allPersonas = await loadAllPersonasForServer(interaction.guild.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",

@@ -19,7 +19,7 @@ import { promptWithUnacknowledgedConfirmation } from "@/utils/discord/ui/confirm
 import { replyComponentsV2Status } from "@/utils/discord/ui/statusComponents";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { updateReminder } from "@/utils/db/repositories";
+import { serverScheduleRepository } from "@/utils/db/repositories";
 import { isBridgeUserId } from "@/utils/bridges";
 import { validateFutureTime } from "@/utils/text/processors/timeUtils";
 import { formatTimeWithOffset, formatUTCOffset } from "@/utils/text/timezoneHelper";
@@ -234,7 +234,7 @@ async function performReminderEdit(
     ? userData.user_nickname
     : (tomoriState.tomori_nickname ?? client.user?.username ?? "Tomori");
 
-  const updatedReminder = await updateReminder({
+  const updatedReminder = await serverScheduleRepository.updateReminder({
     reminder_id: reminderToEdit.reminder_id,
     server_id: tomoriState.server_id,
     reminder_purpose: newPurpose,

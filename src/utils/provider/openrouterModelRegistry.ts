@@ -1,26 +1,8 @@
 import type { DiffusionModelRow, EmbeddingModelRow, LlmRow, VideoGenerationModelRow } from "@/types/db/schema";
 import { getOrFetchOpenRouterCapabilities } from "@/utils/cache/openrouterCapabilityCache";
 import { sql } from "@/utils/db/client";
-import {
-  loadDiffusionModelByProviderAndCodename,
-  loadEmbeddingModelByProviderAndCodename,
-  loadLlmByProviderAndCodename,
-  loadScopedOpenRouterDiffusionModels,
-  loadScopedOpenRouterEmbeddingModels,
-  loadScopedOpenRouterModels,
-  loadScopedOpenRouterVideoGenerationModels,
-  loadVideoGenerationModelByProviderAndCodename,
-} from "@/utils/db/repositories";
-import {
-  deleteOpenRouterEmbeddingModelRegistration,
-  deleteOpenRouterImageModelRegistration,
-  deleteOpenRouterModelRegistration,
-  deleteOpenRouterVideoModelRegistration,
-  upsertOpenRouterEmbeddingModelRegistration,
-  upsertOpenRouterImageModelRegistration,
-  upsertOpenRouterModelRegistration,
-  upsertOpenRouterVideoModelRegistration,
-} from "@/utils/db/repositories";
+import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+
 import { log } from "@/utils/misc/logger";
 import { isOpenRouterGeminiModelCodename } from "@/utils/provider/openrouterModelCapabilities";
 
@@ -194,7 +176,7 @@ async function upsertScopedOpenRouterLlm(modelCodename: string): Promise<LlmRow 
 	`;
 
   const llmId = Number(rows[0]?.llm_id);
-  return Number.isInteger(llmId) ? await loadLlmByProviderAndCodename("openrouter", modelCodename) : null;
+  return Number.isInteger(llmId) ? await llmModelRepo.loadByProviderAndCodename("openrouter", modelCodename) : null;
 }
 
 async function upsertScopedOpenRouterEmbeddingModel(modelCodename: string): Promise<EmbeddingModelRow | null> {
@@ -231,7 +213,7 @@ async function upsertScopedOpenRouterEmbeddingModel(modelCodename: string): Prom
 
   const embeddingModelId = Number(rows[0]?.embedding_model_id);
   return Number.isInteger(embeddingModelId)
-    ? await loadEmbeddingModelByProviderAndCodename("openrouter", modelCodename)
+    ? await llmModelRepo.loadEmbeddingModelByProviderAndCodename("openrouter", modelCodename)
     : null;
 }
 
@@ -272,7 +254,7 @@ async function upsertScopedOpenRouterDiffusionModel(modelCodename: string): Prom
 
   const diffusionModelId = Number(rows[0]?.diffusion_model_id);
   return Number.isInteger(diffusionModelId)
-    ? await loadDiffusionModelByProviderAndCodename("openrouter", modelCodename)
+    ? await llmModelRepo.loadDiffusionModelByProviderAndCodename("openrouter", modelCodename)
     : null;
 }
 
@@ -310,7 +292,7 @@ async function upsertScopedOpenRouterVideoModel(modelCodename: string): Promise<
 
   const videoModelId = Number(rows[0]?.video_model_id);
   return Number.isInteger(videoModelId)
-    ? await loadVideoGenerationModelByProviderAndCodename("openrouter", modelCodename)
+    ? await llmModelRepo.loadVideoGenerationModelByProviderAndCodename("openrouter", modelCodename)
     : null;
 }
 
@@ -320,22 +302,22 @@ async function loadRegisteredOpenRouterEntriesForCapability(
 ): Promise<RegisteredOpenRouterModelEntry[]> {
   switch (capability) {
     case "text":
-      return (await loadScopedOpenRouterModels(scope, true))
+      return (await llmProviderRepo.loadScopedOpenRouterModels(scope, true))
         .filter((model) => model.is_scoped_registration)
         .map(buildRegisteredEntryFromLlm)
         .filter((model): model is RegisteredOpenRouterModelEntry => model !== null);
     case "embedding":
-      return (await loadScopedOpenRouterEmbeddingModels(scope, true))
+      return (await llmProviderRepo.loadScopedOpenRouterEmbeddingModels(scope, true))
         .filter((model) => model.is_scoped_registration)
         .map(buildRegisteredEntryFromEmbeddingModel)
         .filter((model): model is RegisteredOpenRouterModelEntry => model !== null);
     case "image":
-      return (await loadScopedOpenRouterDiffusionModels(scope, true))
+      return (await llmProviderRepo.loadScopedOpenRouterDiffusionModels(scope, true))
         .filter((model) => model.is_scoped_registration)
         .map(buildRegisteredEntryFromDiffusionModel)
         .filter((model): model is RegisteredOpenRouterModelEntry => model !== null);
     case "video":
-      return (await loadScopedOpenRouterVideoGenerationModels(scope, true))
+      return (await llmProviderRepo.loadScopedOpenRouterVideoGenerationModels(scope, true))
         .filter((model) => model.is_scoped_registration)
         .map(buildRegisteredEntryFromVideoModel)
         .filter((model): model is RegisteredOpenRouterModelEntry => model !== null);
@@ -348,19 +330,19 @@ async function loadOpenRouterBuiltInEntry(
 ): Promise<RegisteredOpenRouterModelEntry | null> {
   switch (capability) {
     case "text": {
-      const llm = await loadLlmByProviderAndCodename("openrouter", modelCodename);
+      const llm = await llmModelRepo.loadByProviderAndCodename("openrouter", modelCodename);
       return llm && !llm.is_scoped_registration ? buildRegisteredEntryFromLlm(llm) : null;
     }
     case "embedding": {
-      const model = await loadEmbeddingModelByProviderAndCodename("openrouter", modelCodename);
+      const model = await llmModelRepo.loadEmbeddingModelByProviderAndCodename("openrouter", modelCodename);
       return model && !model.is_scoped_registration ? buildRegisteredEntryFromEmbeddingModel(model) : null;
     }
     case "image": {
-      const model = await loadDiffusionModelByProviderAndCodename("openrouter", modelCodename);
+      const model = await llmModelRepo.loadDiffusionModelByProviderAndCodename("openrouter", modelCodename);
       return model && !model.is_scoped_registration ? buildRegisteredEntryFromDiffusionModel(model) : null;
     }
     case "video": {
-      const model = await loadVideoGenerationModelByProviderAndCodename("openrouter", modelCodename);
+      const model = await llmModelRepo.loadVideoGenerationModelByProviderAndCodename("openrouter", modelCodename);
       return model && !model.is_scoped_registration ? buildRegisteredEntryFromVideoModel(model) : null;
     }
   }
@@ -541,11 +523,11 @@ export async function registerOpenRouterModelForScope(
 
       const registration =
         scope.kind === "server"
-          ? await upsertOpenRouterModelRegistration({
+          ? await llmProviderRepo.upsertOpenRouterModelRegistration({
               serverId: scope.ownerId,
               llmId: entry.modelId,
             })
-          : await upsertOpenRouterModelRegistration({
+          : await llmProviderRepo.upsertOpenRouterModelRegistration({
               userId: scope.ownerId,
               llmId: entry.modelId,
             });
@@ -568,11 +550,11 @@ export async function registerOpenRouterModelForScope(
 
       const registration =
         scope.kind === "server"
-          ? await upsertOpenRouterEmbeddingModelRegistration({
+          ? await llmProviderRepo.upsertOpenRouterEmbeddingModelRegistration({
               serverId: scope.ownerId,
               embeddingModelId: entry.modelId,
             })
-          : await upsertOpenRouterEmbeddingModelRegistration({
+          : await llmProviderRepo.upsertOpenRouterEmbeddingModelRegistration({
               userId: scope.ownerId,
               embeddingModelId: entry.modelId,
             });
@@ -595,11 +577,11 @@ export async function registerOpenRouterModelForScope(
 
       const registration =
         scope.kind === "server"
-          ? await upsertOpenRouterImageModelRegistration({
+          ? await llmProviderRepo.upsertOpenRouterImageModelRegistration({
               serverId: scope.ownerId,
               diffusionModelId: entry.modelId,
             })
-          : await upsertOpenRouterImageModelRegistration({
+          : await llmProviderRepo.upsertOpenRouterImageModelRegistration({
               userId: scope.ownerId,
               diffusionModelId: entry.modelId,
             });
@@ -622,11 +604,11 @@ export async function registerOpenRouterModelForScope(
 
       const registration =
         scope.kind === "server"
-          ? await upsertOpenRouterVideoModelRegistration({
+          ? await llmProviderRepo.upsertOpenRouterVideoModelRegistration({
               serverId: scope.ownerId,
               videoModelId: entry.modelId,
             })
-          : await upsertOpenRouterVideoModelRegistration({
+          : await llmProviderRepo.upsertOpenRouterVideoModelRegistration({
               userId: scope.ownerId,
               videoModelId: entry.modelId,
             });
@@ -655,7 +637,7 @@ export async function removeOpenRouterModelForScope(
 
   switch (capability) {
     case "text": {
-      const model = await loadLlmByProviderAndCodename("openrouter", normalizedModelName);
+      const model = await llmModelRepo.loadByProviderAndCodename("openrouter", normalizedModelName);
       const entry = model ? buildRegisteredEntryFromLlm(model) : null;
       if (!model || !entry) {
         return { status: "not_found" };
@@ -666,11 +648,11 @@ export async function removeOpenRouterModelForScope(
 
       const deleted =
         scope.kind === "server"
-          ? await deleteOpenRouterModelRegistration({
+          ? await llmProviderRepo.deleteOpenRouterModelRegistration({
               serverId: scope.ownerId,
               llmId: entry.modelId,
             })
-          : await deleteOpenRouterModelRegistration({
+          : await llmProviderRepo.deleteOpenRouterModelRegistration({
               userId: scope.ownerId,
               llmId: entry.modelId,
             });
@@ -703,7 +685,7 @@ export async function removeOpenRouterModelForScope(
       };
     }
     case "embedding": {
-      const model = await loadEmbeddingModelByProviderAndCodename("openrouter", normalizedModelName);
+      const model = await llmModelRepo.loadEmbeddingModelByProviderAndCodename("openrouter", normalizedModelName);
       const entry = model ? buildRegisteredEntryFromEmbeddingModel(model) : null;
       if (!model || !entry) {
         return { status: "not_found" };
@@ -714,11 +696,11 @@ export async function removeOpenRouterModelForScope(
 
       const deleted =
         scope.kind === "server"
-          ? await deleteOpenRouterEmbeddingModelRegistration({
+          ? await llmProviderRepo.deleteOpenRouterEmbeddingModelRegistration({
               serverId: scope.ownerId,
               embeddingModelId: entry.modelId,
             })
-          : await deleteOpenRouterEmbeddingModelRegistration({
+          : await llmProviderRepo.deleteOpenRouterEmbeddingModelRegistration({
               userId: scope.ownerId,
               embeddingModelId: entry.modelId,
             });
@@ -751,7 +733,7 @@ export async function removeOpenRouterModelForScope(
       };
     }
     case "image": {
-      const model = await loadDiffusionModelByProviderAndCodename("openrouter", normalizedModelName);
+      const model = await llmModelRepo.loadDiffusionModelByProviderAndCodename("openrouter", normalizedModelName);
       const entry = model ? buildRegisteredEntryFromDiffusionModel(model) : null;
       if (!model || !entry) {
         return { status: "not_found" };
@@ -762,11 +744,11 @@ export async function removeOpenRouterModelForScope(
 
       const deleted =
         scope.kind === "server"
-          ? await deleteOpenRouterImageModelRegistration({
+          ? await llmProviderRepo.deleteOpenRouterImageModelRegistration({
               serverId: scope.ownerId,
               diffusionModelId: entry.modelId,
             })
-          : await deleteOpenRouterImageModelRegistration({
+          : await llmProviderRepo.deleteOpenRouterImageModelRegistration({
               userId: scope.ownerId,
               diffusionModelId: entry.modelId,
             });
@@ -799,7 +781,7 @@ export async function removeOpenRouterModelForScope(
       };
     }
     case "video": {
-      const model = await loadVideoGenerationModelByProviderAndCodename("openrouter", normalizedModelName);
+      const model = await llmModelRepo.loadVideoGenerationModelByProviderAndCodename("openrouter", normalizedModelName);
       const entry = model ? buildRegisteredEntryFromVideoModel(model) : null;
       if (!model || !entry) {
         return { status: "not_found" };
@@ -810,11 +792,11 @@ export async function removeOpenRouterModelForScope(
 
       const deleted =
         scope.kind === "server"
-          ? await deleteOpenRouterVideoModelRegistration({
+          ? await llmProviderRepo.deleteOpenRouterVideoModelRegistration({
               serverId: scope.ownerId,
               videoModelId: entry.modelId,
             })
-          : await deleteOpenRouterVideoModelRegistration({
+          : await llmProviderRepo.deleteOpenRouterVideoModelRegistration({
               userId: scope.ownerId,
               videoModelId: entry.modelId,
             });

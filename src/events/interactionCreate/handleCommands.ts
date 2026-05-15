@@ -3,7 +3,7 @@ import { sql } from "@/utils/db/client";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
 import { ColorCode, log } from "../../utils/misc/logger";
 import { CooldownType, userSchema, type UserRow, type ErrorContext } from "../../types/db/schema";
-import { registerUser } from "../../utils/db/repositories";
+import { userRepository } from "@/utils/db/repositories";
 import { loadCommandData, type CommandExecutionMap, type CommandCooldownMap } from "../../utils/discord/commandLoader";
 import { resolvePreferredDiscordDisplayName } from "../../utils/discord/displayName";
 
@@ -239,8 +239,8 @@ const handler = async (client: Client, interaction: Interaction): Promise<void> 
                 : null
             : null;
 
-        // Use the registerUser helper (Rule #17) - works for both guild and DM contexts
-        const registeredUser = await registerUser(
+        // Use the userRepository.register helper (Rule #17) - works for both guild and DM contexts
+        const registeredUser = await userRepository.register(
           interaction.user.id,
           resolvePreferredDiscordDisplayName({
             memberDisplayName,

@@ -2,7 +2,7 @@ import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder
 import { MessageFlags } from "discord.js";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadCustomEndpointsForServer } from "@/utils/db/repositories";
+import { llmProviderRepo } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { executeCustomEndpointEditCommand } from "@/utils/provider/customEndpointEditCommand";
@@ -70,7 +70,7 @@ export async function execute(
         capabilityTranscription: "commands.config.custom_models.remove.capability_transcription",
       },
       strictRemoteValidation: false,
-      loadEndpoints: loadCustomEndpointsForServer,
+      loadEndpoints: llmProviderRepo.loadCustomEndpointsForServer,
       onSuccess: () => {
         invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
       },

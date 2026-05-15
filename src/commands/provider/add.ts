@@ -5,8 +5,8 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { loadSavedProviderConfig, loadSavedProviderConfigs, loadUniqueProviders } from "@/utils/db/repositories";
-import { upsertSavedProviderConfig } from "@/utils/db/repositories";
+import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { localizer } from "@/utils/text/localizer";
@@ -56,7 +56,7 @@ export async function execute(
     return;
   }
 
-  const uniqueProviders = ((await loadUniqueProviders()) ?? []).filter(
+  const uniqueProviders = ((await llmModelRepo.loadUniqueProviders()) ?? []).filter(
     (provider) => provider.toLowerCase() !== "custom" && !isCustomProvider(provider),
   );
   if (!uniqueProviders.length) {
@@ -70,7 +70,7 @@ export async function execute(
   }
 
   // 1. Load already-saved providers for this server so we can mark them in the select menu
-  const savedProviders = await loadSavedProviderConfigs(tomoriState.server_id);
+  const savedProviders = await llmProviderRepo.loadSavedProviderConfigs(tomoriState.server_id);
   const savedProviderNames = new Set(savedProviders.map((cfg) => cfg.provider.toLowerCase()));
 
   const alreadyExistingSuffix = localizer(locale, "commands.provider.add.already_existing_suffix");
@@ -162,7 +162,7 @@ export async function execute(
       return;
     }
 
-    const existingConfig = await loadSavedProviderConfig(tomoriState.server_id, selectedProvider);
+    const existingConfig = await llmProviderRepo.loadSavedProviderConfig(tomoriState.server_id, selectedProvider);
     if (apiKeyInput.length < 10) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.provider.api-key.set.invalid_key_title",
@@ -233,7 +233,7 @@ export async function execute(
       existingConfig,
     });
 
-    const upserted = await upsertSavedProviderConfig(tomoriState.server_id, savedConfig);
+    const upserted = await llmProviderRepo.upsertSavedProviderConfig(tomoriState.server_id, savedConfig);
     if (!upserted) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.update_failed_title",

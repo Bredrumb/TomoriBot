@@ -10,8 +10,8 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import type { UserRow } from "@/types/db/schema";
-import { exportPersonaServerMemories } from "@/utils/db/repositories";
-import { loadAllPersonasForServer } from "@/utils/db/repositories";
+import { exportRepository, personaRepository } from "@/utils/db/repositories";
+
 import type { SelectOption } from "@/types/discord/modal";
 
 const PERSONA_MODAL_ID = "memory_server_export_persona_modal";
@@ -43,7 +43,7 @@ export async function execute(
       }
     }
 
-    const personas = await loadAllPersonasForServer(serverDiscId);
+    const personas = await personaRepository.loadAllForServer(serverDiscId);
     const personaSelectOptions: SelectOption[] = personas
       .filter((persona) => persona.tomori_id !== undefined)
       .map((persona) => ({
@@ -102,7 +102,7 @@ export async function execute(
 
     await responseInteraction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const exportResult = await exportPersonaServerMemories(serverDiscId, selectedPersona.tomori_id);
+    const exportResult = await exportRepository.exportPersonaServerMemories(serverDiscId, selectedPersona.tomori_id);
     if (!exportResult.success || !exportResult.data) {
       await responseInteraction.editReply({
         embeds: [

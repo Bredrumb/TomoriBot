@@ -1,5 +1,5 @@
 import { getCachedActivePreset } from "@/utils/cache/stPresetCache";
-import { loadTomoriState } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { reassembleWithPreset } from "@/utils/text/presetContextBuilder";
 import { createToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
@@ -15,7 +15,7 @@ export async function buildContext(params: BuildContextParams): Promise<BuildCon
   const paramsWithMap = { ...params, messageIdMap };
 
   if (!paramsWithMap.isUserImpersonation) {
-    const tomoriStateForPreset = params.snapshot?.tomoriState ?? (await loadTomoriState(params.guildId));
+    const tomoriStateForPreset = params.snapshot?.tomoriState ?? (await personaRepository.loadState(params.guildId));
     const serverId = tomoriStateForPreset?.server_id;
     if (serverId) {
       const presetData = await getCachedActivePreset(serverId);

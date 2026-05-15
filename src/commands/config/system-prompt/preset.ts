@@ -8,7 +8,7 @@ import { MessageFlags, SlashCommandSubcommandBuilder } from "discord.js";
 import type { UserRow, SystemPromptPresetRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { sql } from "@/utils/db/client";
-import { loadSystemPromptPresets } from "@/utils/db/repositories";
+import { configRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
@@ -72,7 +72,7 @@ export async function execute(
 
   try {
     // 4. Load available system prompt presets
-    const presets = await loadSystemPromptPresets();
+    const presets = await configRepository.loadSystemPromptPresets();
 
     // 5. Check if presets are available
     if (!presets || presets.length === 0) {

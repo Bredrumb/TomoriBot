@@ -19,7 +19,7 @@ import {
 } from "../../utils/discord/interactionHelper";
 import type { TomoriState, UserRow } from "../../types/db/schema";
 import { sql } from "@/utils/db/client";
-import { loadAllPersonasForServer } from "../../utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 
 // ─── Modal field IDs ───────────────────────────────────────────────────────────
 const MODAL_CUSTOM_ID = "nai_attg_modal";
@@ -83,7 +83,7 @@ export async function execute(
 
   try {
     // 2. Load all personas for the server
-    const allPersonas = await loadAllPersonasForServer(interaction.guild.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",

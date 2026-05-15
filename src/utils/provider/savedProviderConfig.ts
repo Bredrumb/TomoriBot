@@ -7,18 +7,7 @@ import type {
   UserSavedProviderConfigRow,
   UserSavedProviderConfigUpsert,
 } from "@/types/db/schema";
-import {
-  loadDefaultDiffusionModelForProvider,
-  loadDefaultEmbeddingModelForProvider,
-  loadDefaultModelForProvider,
-  loadDefaultVideoGenerationModelForProvider,
-  loadDefaultVisionModelForProvider,
-  loadCustomEndpoint,
-  loadCustomEndpointsForServer,
-  loadCustomEndpointsForUser,
-  loadSavedProviderConfigs,
-  loadUserSavedProviderConfigs,
-} from "@/utils/db/repositories";
+import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import {
   getStaticProviderInfo,
@@ -87,11 +76,11 @@ export async function loadProviderDefaultSelectionIds(provider: string): Promise
 
   const [defaultTextModel, defaultEmbeddingModel, defaultDiffusionModel, defaultVideoModel, defaultVisionModel] =
     await Promise.all([
-      loadDefaultModelForProvider(normalizedProvider),
-      loadDefaultEmbeddingModelForProvider(normalizedProvider),
-      loadDefaultDiffusionModelForProvider(normalizedProvider),
-      loadDefaultVideoGenerationModelForProvider(normalizedProvider),
-      loadDefaultVisionModelForProvider(normalizedProvider),
+      llmModelRepo.loadDefaultModel(normalizedProvider),
+      llmModelRepo.loadDefaultEmbeddingModel(normalizedProvider),
+      llmModelRepo.loadDefaultDiffusionModel(normalizedProvider),
+      llmModelRepo.loadDefaultVideoGenerationModel(normalizedProvider),
+      llmModelRepo.loadDefaultVisionModel(normalizedProvider),
     ]);
 
   const imageGenerationStyle = getStaticProviderInfo(normalizedProvider)?.featureSupport.imageGeneration ?? "none";
@@ -231,12 +220,12 @@ async function hasRegisteredCustomEndpointCapability(
 
   const endpoint =
     parsed.scope === "server"
-      ? await loadCustomEndpoint({
+      ? await llmProviderRepo.loadCustomEndpoint({
           serverId: parsed.ownerId,
           label: parsed.label,
           capability: endpointCapability,
         })
-      : await loadCustomEndpoint({
+      : await llmProviderRepo.loadCustomEndpoint({
           userId: parsed.ownerId,
           label: parsed.label,
           capability: endpointCapability,
@@ -257,8 +246,8 @@ export async function hasRegisteredCustomProvider(provider: string): Promise<boo
 
   const registeredEndpoints =
     parsed.scope === "server"
-      ? await loadCustomEndpointsForServer(parsed.ownerId)
-      : await loadCustomEndpointsForUser(parsed.ownerId);
+      ? await llmProviderRepo.loadCustomEndpointsForServer(parsed.ownerId)
+      : await llmProviderRepo.loadCustomEndpointsForUser(parsed.ownerId);
 
   return registeredEndpoints.some((endpoint) => endpoint.label === parsed.label);
 }
@@ -267,7 +256,7 @@ export async function loadSavedProvidersForCapability(
   serverId: number,
   capability: SavedProviderCapability,
 ): Promise<SavedProviderConfigRow[]> {
-  const savedConfigs = await loadSavedProviderConfigs(serverId);
+  const savedConfigs = await llmProviderRepo.loadSavedProviderConfigs(serverId);
   const registeredVisibility = await Promise.all(
     savedConfigs.map(async (config) => {
       if (!isCustomProvider(config.provider)) {
@@ -321,7 +310,7 @@ export async function loadUserSavedProvidersForCapability(
   userId: number,
   capability: SavedProviderCapability,
 ): Promise<UserSavedProviderConfigRow[]> {
-  const savedConfigs = await loadUserSavedProviderConfigs(userId);
+  const savedConfigs = await llmProviderRepo.loadUserSavedProviderConfigs(userId);
   const registeredVisibility = await Promise.all(
     savedConfigs.map(async (config) => {
       if (!isCustomProvider(config.provider)) {

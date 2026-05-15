@@ -6,7 +6,7 @@ import {
 } from "discord.js";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { updateTomoriConfig } from "@/utils/db/repositories";
+import { configRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
@@ -53,7 +53,7 @@ export async function execute(
       return;
     }
 
-    const updatedConfig = await updateTomoriConfig(tomoriState.server_id, {
+    const updatedConfig = await configRepository.update(tomoriState.server_id, {
       welcome_channel_disc_id: null,
       welcome_prompt: null,
       welcome_persona_id: null,

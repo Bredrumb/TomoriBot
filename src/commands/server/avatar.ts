@@ -14,7 +14,7 @@ import type { UserRow, ErrorContext, TomoriState } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
 import { safeDownload } from "../../utils/security/safeDownload";
 import { memoryGuard, reserveAvatarQuota } from "../../utils/security/rateLimiter";
-import { loadAllPersonasForServer } from "../../utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 import { sql } from "../../utils/db/client";
 import { convertToPNG } from "../../utils/image/imageProcessor";
 import { deletePersonaAvatarFromStorage, uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage";
@@ -229,7 +229,7 @@ export async function execute(
 
   try {
     // 2. Load personas and prompt user to choose target persona
-    const allPersonas = await loadAllPersonasForServer(interaction.guild.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
     const personaSelectOptions: SelectOption[] = allPersonas
       .filter((persona) => persona.tomori_id !== undefined)
       .map((persona) => ({

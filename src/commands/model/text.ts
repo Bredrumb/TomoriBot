@@ -1,8 +1,8 @@
 import type { ChatInputCommandInteraction, ButtonInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import { sql } from "@/utils/db/client";
-import { loadAvailableModelsForProvider, loadLlmById, loadNaiPresetsForModel } from "@/utils/db/repositories";
-import { setChannelLlmOverride, setPersonaLlmOverride, applyNaiPreset } from "@/utils/db/repositories";
+import { configRepository, llmModelRepo, llmOverrideRepo } from "@/utils/db/repositories";
+
 import { getCachedTomoriState, getCachedAllPersonas, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -116,7 +116,7 @@ export async function execute(
       const selectedProvider = providerSelection.provider;
       const responseInteraction = providerSelection.interaction;
 
-      const availableModels = await loadAvailableModelsForProvider(selectedProvider, false, {
+      const availableModels = await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
         kind: "server",
         ownerId: tomoriState.server_id,
       });
@@ -172,7 +172,7 @@ export async function execute(
         return;
       }
 
-      const channelWriteOk = await setChannelLlmOverride(
+      const channelWriteOk = await llmOverrideRepo.setChannelLlmOverride(
         tomoriState.server_id,
         interaction.channelId,
         selectedChannelModel.llm_id,
@@ -245,7 +245,7 @@ export async function execute(
         const selectedProvider = providerSelection.provider;
         const providerInteraction = providerSelection.interaction;
 
-        const personaAvailableModels = await loadAvailableModelsForProvider(selectedProvider, false, {
+        const personaAvailableModels = await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
           kind: "server",
           ownerId: tomoriState.server_id,
         });
@@ -310,9 +310,13 @@ export async function execute(
           return;
         }
 
-        const personaWriteOk = await setPersonaLlmOverride(selectedPersona.tomori_id, selectedPersonaModel.llm_id, {
-          serverDiscId: serverId,
-        });
+        const personaWriteOk = await llmOverrideRepo.setPersonaLlmOverride(
+          selectedPersona.tomori_id,
+          selectedPersonaModel.llm_id,
+          {
+            serverDiscId: serverId,
+          },
+        );
         if (!personaWriteOk) {
           await replyInfoEmbed(personaModalInteraction, locale, {
             titleKey: "general.errors.update_failed_title",
@@ -348,7 +352,7 @@ export async function execute(
 
     // 3a. Custom provider: activate the already-registered labeled endpoint directly
     if (isCustomProvider(selectedProvider)) {
-      const customModel = selectedSavedConfig?.llm_id ? await loadLlmById(selectedSavedConfig.llm_id) : null;
+      const customModel = selectedSavedConfig?.llm_id ? await llmModelRepo.loadById(selectedSavedConfig.llm_id) : null;
       if (!selectedSavedConfig || !customModel?.llm_id) {
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "commands.model.text.no_models_title",
@@ -413,7 +417,7 @@ export async function execute(
     }
 
     // 3b. Regular provider: model picker
-    const availableModels = await loadAvailableModelsForProvider(selectedProvider, false, {
+    const availableModels = await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
       kind: "server",
       ownerId: tomoriState.server_id,
     });
@@ -572,10 +576,10 @@ export async function execute(
     };
     const defaultPresetEntry = naiDefaultPresets[selectedModel.llm_codename];
     if (defaultPresetEntry) {
-      const naiPresets = await loadNaiPresetsForModel(defaultPresetEntry.target);
+      const naiPresets = await configRepository.loadNaiPresets(defaultPresetEntry.target);
       const defaultPreset = naiPresets.find((p) => p.preset_name === defaultPresetEntry.name);
       if (defaultPreset) {
-        await applyNaiPreset(tomoriState.server_id, defaultPreset, selectedModel.llm_codename);
+        await configRepository.applyNaiPreset(tomoriState.server_id, defaultPreset, selectedModel.llm_codename);
       } else {
         log.warn(
           `Default NAI preset "${defaultPresetEntry.name}" not found in DB. Was seed.sql run? Skipping auto-apply.`,

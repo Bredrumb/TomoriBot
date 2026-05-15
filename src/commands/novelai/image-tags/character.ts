@@ -20,7 +20,7 @@ import {
   TAGS_MODAL_MAX_LENGTH,
 } from "@/utils/novelai/tagHelpers";
 import type { SelectOption } from "@/types/discord/modal";
-import { loadAllPersonasForServer } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 
 // Modal field IDs
 const MODAL_CUSTOM_ID = "novelai_tags_character_modal";
@@ -71,7 +71,7 @@ export async function execute(
 
   try {
     // 2. Load all personas for the server
-    const allPersonas = await loadAllPersonasForServer(interaction.guild.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",

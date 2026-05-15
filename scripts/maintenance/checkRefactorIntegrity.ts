@@ -237,6 +237,45 @@ function collectFindings(files: SourceFile[]): Finding[] {
     }
   }
 
+  // ── Phase 5.5e check: surviving SQL siblings ──────────────────────────────
+  // Any *ReadSql.ts or *WriteSql.ts file anywhere under src/utils/db/ is a
+  // regression: all SQL must be inlined as private methods on the owning
+  // Repository class. These sibling files were deleted in Phase 5.5e Stage C.
+  for (const file of files) {
+    if (!file.repoPath.startsWith("src/utils/db/")) continue;
+    if (/(?:Read|Write)Sql\.ts$/.test(file.repoPath)) {
+      addFinding(findings, {
+        kind: "surviving SQL sibling",
+        sourcePath: file.repoPath,
+        sourceLines: file.lineCount,
+        message:
+          "SQL sibling file survived Phase 5.5e. Inline its SQL as private methods on the owning Repository class and delete this file.",
+      });
+    }
+  }
+
+  // ── Phase 5.5e check: cohabiting siblings ─────────────────────────────────
+  // In src/utils/db/repositories/, every file must be a Repository class,
+  // the index barrel, or the IRepository interface. Any other .ts file at
+  // that depth is a domain file that leaked into the repository layer.
+  const repoDir = "src/utils/db/repositories/";
+  const allowedRepoFilenames = /^(index|IRepository|.*Repository)\.ts$/;
+  for (const file of files) {
+    if (!file.repoPath.startsWith(repoDir)) continue;
+    // Only check files directly in repositories/ (not deeper subfolders)
+    const remainder = file.repoPath.slice(repoDir.length);
+    if (remainder.includes("/")) continue;
+    if (!allowedRepoFilenames.test(basename(file.absPath))) {
+      addFinding(findings, {
+        kind: "cohabiting sibling",
+        sourcePath: file.repoPath,
+        sourceLines: file.lineCount,
+        message:
+          "Non-repository file found in src/utils/db/repositories/. Fold its domain logic into the owning Repository class or move it to a non-db utility path.",
+      });
+    }
+  }
+
   return findings.sort((a, b) => a.sourcePath.localeCompare(b.sourcePath) || a.kind.localeCompare(b.kind));
 }
 

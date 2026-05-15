@@ -1,7 +1,7 @@
 import type { Client, Guild } from "discord.js";
 import { PrivacyLevel } from "@/types/db/schema";
 import { getCachedBlacklistStatus, getCachedPrivacyLevel, getCachedUserRow } from "@/utils/cache/userCache";
-import { loadAllPersonasForServer, loadPersonalMemoriesForUserLineage, loadTomoriState } from "@/utils/db/repositories";
+import { personaRepository, personalMemoryRepository } from "@/utils/db/repositories";
 import { resolvePersonaAvatarURL } from "@/utils/discord/webhook/identity";
 import { resolvePersonaAvatarPublicUrl } from "@/utils/storage/avatarStorage";
 
@@ -11,7 +11,7 @@ export async function buildSupplementaryContext(params: {
   includePersonas: boolean;
 }): Promise<string> {
   const sections: string[] = [];
-  const tomoriState = await loadTomoriState(params.serverDiscId);
+  const tomoriState = await personaRepository.loadState(params.serverDiscId);
 
   if (tomoriState?.server_memories?.length) {
     sections.push(`Server memories:\n- ${tomoriState.server_memories.join("\n- ")}`);
@@ -29,7 +29,7 @@ export async function buildSupplementaryContext(params: {
   }
 
   if (params.includePersonas) {
-    const personas = await loadAllPersonasForServer(params.serverDiscId);
+    const personas = await personaRepository.loadAllForServer(params.serverDiscId);
     if (personas.length > 0) {
       sections.push(
         `Personas:\n- ${personas
@@ -69,7 +69,7 @@ async function buildUserMemoryLines(serverDiscId: string, userIds: string[], lin
     if (!userRow?.user_id) continue;
     if (await getCachedBlacklistStatus(serverDiscId, userId)) continue;
 
-    const personalMemoryRows = await loadPersonalMemoriesForUserLineage(userRow.user_id, lineageId, true);
+    const personalMemoryRows = await personalMemoryRepository.loadForUserLineage(userRow.user_id, lineageId, true);
     if (personalMemoryRows.length === 0) continue;
 
     userMemoryLines.push(
@@ -80,7 +80,7 @@ async function buildUserMemoryLines(serverDiscId: string, userIds: string[], lin
 }
 
 async function buildPersonaAvatarMap(serverDiscId: string, guild?: Guild | null): Promise<Map<string, string>> {
-  const personas = await loadAllPersonasForServer(serverDiscId);
+  const personas = await personaRepository.loadAllForServer(serverDiscId);
   const avatarMap = new Map<string, string>();
   for (const persona of personas) {
     const avatarUrl = guild

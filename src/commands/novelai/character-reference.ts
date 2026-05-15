@@ -8,7 +8,7 @@ import {
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import { sql } from "@/utils/db/client";
-import { loadAllPersonasForServer } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { convertToPNG } from "@/utils/image/imageProcessor";
@@ -342,7 +342,7 @@ export async function execute(
       return;
     }
 
-    const allPersonas = await loadAllPersonasForServer(interaction.guild.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",

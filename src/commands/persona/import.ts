@@ -15,7 +15,7 @@ import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 import type { PresetExportData } from "../../types/preset/presetExport";
 import { extractMetadataFromPNG, extractSillyTavernMetadataFromPNG } from "../../utils/image/pngMetadata";
 import { validatePNGBuffer } from "../../utils/image/avatarHelper";
-import { loadAllPersonasForServer } from "../../utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { sql } from "../../utils/db/client";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
@@ -894,7 +894,7 @@ export async function execute(
     } else {
       // Alter persona import: add new alter persona
       // 11a. Load all existing personas and collect their trigger words
-      const allPersonas = await loadAllPersonasForServer(serverDiscId);
+      const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
       const personaLimits = getMemoryLimits();
 
       if (allPersonas.length >= personaLimits.maxPersonasPerServer) {

@@ -27,7 +27,7 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadAllPersonasForServer, loadEmbeddingModelById } from "@/utils/db/repositories";
+import { llmModelRepo, personaRepository } from "@/utils/db/repositories";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { memoryGuard, reserveDocumentQuota } from "@/utils/security/rateLimiter";
 import { insertDocumentWithChunks } from "@/utils/documents/documentService";
@@ -574,7 +574,7 @@ export async function execute(
       return;
     }
 
-    const embeddingModel = await loadEmbeddingModelById(embeddingModelId);
+    const embeddingModel = await llmModelRepo.loadEmbeddingModelById(embeddingModelId);
     if (!embeddingModel) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.memory.history.import.no_embedding_model_title",
@@ -598,7 +598,7 @@ export async function execute(
     const messageFetchLimit = normalizeMessageFetchLimit(tomoriState.config.message_fetch_limit);
 
     // Load all personas for formatting and detection
-    const allPersonas = await loadAllPersonasForServer(guildId);
+    const allPersonas = await personaRepository.loadAllForServer(guildId);
 
     // ====================================================================
     // SCOPE: PERSONA — Pattern 4 → Pattern 2 hybrid (persona selector first)

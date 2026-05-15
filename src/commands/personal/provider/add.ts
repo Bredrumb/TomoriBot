@@ -6,8 +6,8 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { loadUserSavedProviderConfig, loadUserSavedProviderConfigs } from "@/utils/db/repositories";
-import { upsertUserSavedProviderConfig } from "@/utils/db/repositories";
+import { llmProviderRepo } from "@/utils/db/repositories";
+
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -65,7 +65,9 @@ export async function execute(
   }
 
   const providerChoices = getAllProviderChoices().filter((choice) => !isCustomProvider(choice.value));
-  const existingProviders = new Set((await loadUserSavedProviderConfigs(userData.user_id)).map((row) => row.provider));
+  const existingProviders = new Set(
+    (await llmProviderRepo.loadUserSavedProviderConfigs(userData.user_id)).map((row) => row.provider),
+  );
   const existingSuffix = localizer(locale, "commands.personal.provider.add.already_existing_suffix");
   const providerOptions: SelectOption[] = providerChoices.map((choice) => ({
     label: existingProviders.has(choice.value) ? `${choice.name} (${existingSuffix})` : choice.name,
@@ -138,7 +140,7 @@ export async function execute(
       return;
     }
 
-    const existingConfig = await loadUserSavedProviderConfig(userData.user_id, selectedProvider);
+    const existingConfig = await llmProviderRepo.loadUserSavedProviderConfig(userData.user_id, selectedProvider);
     const encryptionResult = await encryptApiKey(apiKeyInput);
     const savedConfig = await buildUserSavedProviderConfigFromExistingOrDefaults({
       userId: userData.user_id,
@@ -149,7 +151,7 @@ export async function execute(
       existingConfig,
     });
 
-    const upserted = await upsertUserSavedProviderConfig(userData.user_id, savedConfig);
+    const upserted = await llmProviderRepo.upsertUserSavedProviderConfig(userData.user_id, savedConfig);
     if (!upserted) {
       await replyInfoEmbed(modalResult.interaction, locale, {
         titleKey: "general.errors.update_failed_title",

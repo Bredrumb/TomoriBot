@@ -28,7 +28,7 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
 import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadAllPersonasForServer } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 import type { SelectOption } from "@/types/discord/modal";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 
@@ -201,7 +201,7 @@ export async function execute(
     const avatarSessionCache: AvatarSessionCache = new Map();
     while (true) {
       if (scope === "persona") {
-        const allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+        const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
         if (allPersonas.length === 0) {
           await replyInfoEmbed(interaction, locale, {
             titleKey: "general.errors.tomori_not_setup_title",

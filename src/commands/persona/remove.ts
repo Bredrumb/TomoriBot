@@ -11,7 +11,7 @@ import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "
 import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import type { UserRow } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
-import { loadAllPersonasForServer } from "../../utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 import { sql } from "../../utils/db/client";
 import { deletePersonaAvatarFromStorage } from "../../utils/storage/avatarStorage";
 
@@ -69,7 +69,7 @@ export async function execute(
     }
 
     // 3. Load all personas for this server
-    const allPersonas = await loadAllPersonasForServer(interaction.guild.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
 
     // 4. Filter to removable personas:
     // - all alters

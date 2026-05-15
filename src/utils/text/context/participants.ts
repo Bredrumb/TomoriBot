@@ -1,13 +1,6 @@
 import { GatewayIntentBits, type Client, type Guild, type GuildMember } from "discord.js";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import {
-  getPendingRemindersForUser,
-  getPrivacyLevel,
-  loadPersonalMemoriesForUserLineage,
-  loadUserRow,
-  registerUser,
-  isBlacklisted,
-} from "@/utils/db/repositories";
+import { personalMemoryRepository, serverScheduleRepository, userRepository } from "@/utils/db/repositories";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { log } from "@/utils/misc/logger";
 import { formatMemoryWithId } from "@/utils/memory/memoryId";
@@ -97,7 +90,7 @@ export async function buildUsersInConversationContextItem(params: {
       continue;
     }
 
-    let userRow = await loadUserRow(userIdToProcess).catch(() => null);
+    let userRow = await userRepository.loadByDiscordId(userIdToProcess).catch(() => null);
     if (!userRow) {
       const guild = params.client.guilds.cache.get(params.guildId);
       const member = guild ? await guild.members.fetch(userIdToProcess).catch(() => null) : null;
@@ -107,7 +100,7 @@ export async function buildUsersInConversationContextItem(params: {
           memberDisplayName: member.displayName,
           user: member.user,
         });
-        userRow = await registerUser(userIdToProcess, registrationDisplayName, userLanguage);
+        userRow = await userRepository.register(userIdToProcess, registrationDisplayName, userLanguage);
       }
     }
 
@@ -137,10 +130,10 @@ export async function buildUsersInConversationContextItem(params: {
     const isTriggererId = params.snapshot?.triggererUserRow?.user_disc_id === userRow.user_disc_id;
     const userIsBlacklisted = isTriggererId
       ? (params.snapshot?.isTriggererBlacklisted ?? false)
-      : await isBlacklisted(params.guildId, userRow.user_disc_id);
+      : await userRepository.isBlacklisted(params.guildId, userRow.user_disc_id);
     const userPrivacyLevel = isTriggererId
       ? (params.snapshot?.triggererPrivacyLevel ?? PrivacyLevel.MINIMAL)
-      : await getPrivacyLevel(userRow.user_disc_id);
+      : await userRepository.getPrivacyLevel(userRow.user_disc_id);
 
     const customNickname = userRow.user_nickname;
     const serverNickname = member?.nickname;
@@ -245,7 +238,7 @@ export async function buildUsersInConversationContextItem(params: {
 async function buildUserDetailLines(
   params: Parameters<typeof buildUsersInConversationContextItem>[0] & {
     displayName: string;
-    userRow: NonNullable<Awaited<ReturnType<typeof loadUserRow>>>;
+    userRow: NonNullable<Awaited<ReturnType<typeof userRepository.loadByDiscordId>>>;
     member: GuildMember | null;
     guild: Guild | undefined;
     serverPersonalizationEnabled: boolean;
@@ -296,7 +289,11 @@ async function buildUserDetailLines(
       params.snapshot?.tomoriState?.persona_lineage_id ??
       params.tomoriState?.persona_lineage_id ??
       0;
-    const personalMemoryRows = await loadPersonalMemoriesForUserLineage(params.userRow.user_id, activeLineageId, true);
+    const personalMemoryRows = await personalMemoryRepository.loadForUserLineage(
+      params.userRow.user_id,
+      activeLineageId,
+      true,
+    );
     const filteredPersonalRows = params.conversationCorpus
       ? personalMemoryRows.filter(
           (row) =>
@@ -324,7 +321,10 @@ async function buildUserDetailLines(
     }
   }
 
-  const pendingReminders = await getPendingRemindersForUser(params.userRow.user_disc_id, params.guildId);
+  const pendingReminders = await serverScheduleRepository.getPendingRemindersForUser(
+    params.userRow.user_disc_id,
+    params.guildId,
+  );
   if (pendingReminders && pendingReminders.length > 0) {
     detailLines.push("- Reminders:");
     for (const reminder of pendingReminders) {

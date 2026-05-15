@@ -62,7 +62,7 @@ import {
   getOpenRouterTokenLimits,
   isOpenRouterCapabilityCacheReady,
 } from "../../utils/cache/openrouterCapabilityCache";
-import { loadDefaultModelForProvider, loadAvailableModelsForProvider } from "../../utils/db/repositories";
+import { llmModelRepo } from "@/utils/db/repositories";
 import { getMCPManager } from "../../utils/mcp/mcpManager";
 import { isBraveSearchAvailable } from "../../tools/restAPIs/brave/braveSearchService";
 import { openrouterProviderInfo } from "./providerInfo";
@@ -92,7 +92,7 @@ async function getDefaultOpenrouterModel(): Promise<string> {
 
   // 2. Cache not ready or no default found - query database for is_default model
   try {
-    const dbDefault = await loadDefaultModelForProvider(providerName);
+    const dbDefault = await llmModelRepo.loadDefaultModel(providerName);
     if (dbDefault) {
       log.info(`Using database default ${providerName} model: ${dbDefault.llm_codename}`);
       return dbDefault.llm_codename;
@@ -105,7 +105,7 @@ async function getDefaultOpenrouterModel(): Promise<string> {
 
   // 3. Fallback to first non-deprecated model from database
   try {
-    const availableModels = await loadAvailableModelsForProvider(providerName);
+    const availableModels = await llmModelRepo.loadAvailableModelsForProvider(providerName);
     if (availableModels && availableModels.length > 0) {
       const firstModel = availableModels[0].llm_codename;
       log.warn(`No default model found, using first available ${providerName} model: ${firstModel}`);

@@ -7,8 +7,8 @@ import {
 } from "discord.js";
 import { sql } from "@/utils/db/client";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadAllPersonasForServer } from "@/utils/db/repositories";
-import { updateTomori } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
+
 import {
   acknowledgeModalSubmitForRefresh,
   promptWithPaginatedModal,
@@ -79,7 +79,7 @@ export async function execute(
   }
 
   try {
-    const allPersonas = await loadAllPersonasForServer(serverDiscId);
+    const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -230,7 +230,7 @@ export async function execute(
         const voiceNameIfDesignPromptRemains = selectedPersona.speech_voice_design_prompt?.trim()
           ? "VoiceDesign"
           : null;
-        const updatedTomori = await updateTomori(selectedPersona.tomori_id, {
+        const updatedTomori = await personaRepository.update(selectedPersona.tomori_id, {
           speech_voice_sample_id: sampleIdToAssign,
           // Keep any saved VoiceDesign prompt as reusable persona data. In auto
           // endpoint mode, speech_voice_name marks which saved voice type is
@@ -366,7 +366,7 @@ export async function execute(
         return;
       }
 
-      const updatedTomori = await updateTomori(selectedPersona.tomori_id, {
+      const updatedTomori = await personaRepository.update(selectedPersona.tomori_id, {
         speech_voice_id: chosenVoice?.voiceId ?? null,
         speech_voice_name:
           chosenVoice?.name ?? (selectedPersona.speech_voice_design_prompt?.trim() ? "VoiceDesign" : null),

@@ -12,7 +12,7 @@ import {
 } from "@/utils/discord/embedClassifier";
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { getCachedChannelLlm } from "@/utils/cache/channelLlmCache";
-import { loadSavedProviderConfig } from "@/utils/db/repositories";
+import { llmProviderRepo } from "@/utils/db/repositories";
 import { buildContext } from "@/utils/text/contextBuilder";
 import { getCachedActivePreset } from "@/utils/cache/stPresetCache";
 import { getCachedPrivacyLevel } from "@/utils/cache/userCache";
@@ -263,7 +263,10 @@ export async function execute(
 
       const overrideProvider = effectiveLlm.llm_provider.toLowerCase();
       if (overrideProvider !== selectedPersona.llm.llm_provider.toLowerCase()) {
-        const overrideSavedConfig = await loadSavedProviderConfig(selectedPersona.server_id, overrideProvider);
+        const overrideSavedConfig = await llmProviderRepo.loadSavedProviderConfig(
+          selectedPersona.server_id,
+          overrideProvider,
+        );
         if (overrideSavedConfig) {
           effectivePersona = {
             ...effectivePersona,

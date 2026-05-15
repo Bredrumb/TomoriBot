@@ -6,7 +6,7 @@ import { getGeminiTokenLimits } from "@/utils/cache/geminiCapabilityCache";
 import { getNovelAITokenLimits } from "@/utils/cache/novelaiCapabilityCache";
 import { getCachedContextTokens, refreshNovelAISubscription } from "@/utils/cache/novelaiSubscriptionCache";
 import { getOpenRouterTokenLimits, isOpenRouterCapabilityCacheReady } from "@/utils/cache/openrouterCapabilityCache";
-import { loadSavedProviderConfig } from "@/utils/db/repositories";
+import { llmProviderRepo } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { getProviderForTomori, ProviderFactory } from "@/utils/provider/providerFactory";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
@@ -150,7 +150,7 @@ async function createFallbackAttempt(
 ): Promise<GenerationAttempt | null> {
   if (entry.kind === "custom_endpoint") {
     const customProviderName = `custom:s${primaryState.server_id}:${entry.endpoint.label}`;
-    const savedConfig = await loadSavedProviderConfig(primaryState.server_id, customProviderName);
+    const savedConfig = await llmProviderRepo.loadSavedProviderConfig(primaryState.server_id, customProviderName);
     if (!savedConfig?.api_key) {
       log.warn(`Skipping custom endpoint fallback ${entry.endpoint.label}: no saved key.`);
       return null;
@@ -215,7 +215,7 @@ async function resolveApiKey(tomoriState: TomoriState): Promise<string> {
 }
 
 async function applySavedProviderConfig(tomoriState: TomoriState, providerName: string): Promise<TomoriState> {
-  const savedConfig = await loadSavedProviderConfig(tomoriState.server_id, providerName.toLowerCase());
+  const savedConfig = await llmProviderRepo.loadSavedProviderConfig(tomoriState.server_id, providerName.toLowerCase());
   if (!savedConfig?.api_key) {
     throw new Error(`No saved credentials found for provider ${providerName}.`);
   }

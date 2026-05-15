@@ -11,7 +11,7 @@ import getAllFiles from "../../utils/misc/ioHelper";
 import { localizer } from "../../utils/text/localizer";
 import type { SlashCommandSubcommandBuilder } from "discord.js";
 import { ToolRegistry } from "../toolRegistry";
-import { getBraveApiKeyStatus } from "../../utils/db/repositories";
+import { toolRepository } from "@/utils/db/repositories";
 import { getLlmDisplayName } from "@/utils/provider/modelDisplay";
 import { getCachedActivePreset } from "@/utils/cache/stPresetCache";
 
@@ -417,7 +417,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       capabilitiesContent += "## Why Some Features May Be Unavailable\n\n";
 
       // Check API key status for detailed explanations
-      const braveApiKeySet = await getBraveApiKeyStatus(context.tomoriState.server_id);
+      const braveApiKeySet = await toolRepository.getBraveApiKeyStatus(context.tomoriState.server_id);
 
       const unavailableReasons: string[] = [];
 
@@ -560,7 +560,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       const displayModelName = getLlmDisplayName(llm, config.custom_model_name);
 
       // 2. Check API key status
-      const braveApiKeySet = await getBraveApiKeyStatus(serverId);
+      const braveApiKeySet = await toolRepository.getBraveApiKeyStatus(serverId);
       const mainApiKeySet = !!config.api_key;
 
       // 3. Build settings report

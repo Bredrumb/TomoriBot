@@ -11,7 +11,7 @@ import {
 import { sendCooldownDM } from "@/utils/discord/cooldownDM";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { loadTomoriState } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 import { sql } from "@/utils/db/client";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { resolvePersonaWebhookIdentity } from "@/utils/discord/webhook/identity";
@@ -330,7 +330,7 @@ export async function execute(
   }
 
   // 4. Load server state.
-  const baseTomoriState = await loadTomoriState(interaction.guild.id);
+  const baseTomoriState = await personaRepository.loadState(interaction.guild.id);
   if (!baseTomoriState) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",

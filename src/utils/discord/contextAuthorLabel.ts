@@ -1,6 +1,6 @@
 import type { GuildMember, Message } from "discord.js";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { loadUserRow, isBlacklisted } from "@/utils/db/repositories";
+import { userRepository } from "@/utils/db/repositories";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { stripBridgePrefix } from "@/utils/bridges";
 import { log } from "@/utils/misc/logger";
@@ -54,8 +54,8 @@ export async function resolveContextAuthorLabel(
 
   if (guildId && guildId !== "DM") {
     try {
-      const userIsBlacklisted = await isBlacklisted(guildId, message.author.id);
-      const userRow = await loadUserRow(message.author.id);
+      const userIsBlacklisted = await userRepository.isBlacklisted(guildId, message.author.id);
+      const userRow = await userRepository.loadByDiscordId(message.author.id);
       const personalizationDisabled = options.personalMemoriesEnabled === false;
 
       if (!userIsBlacklisted && !personalizationDisabled && userRow?.user_nickname?.trim()) {

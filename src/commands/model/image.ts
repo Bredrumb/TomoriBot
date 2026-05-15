@@ -11,7 +11,7 @@ import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/mod
 import { type UserRow, type ErrorContext, tomoriConfigSchema } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";
-import { loadAvailableDiffusionModelsForProvider } from "@/utils/db/repositories";
+import { llmModelRepo } from "@/utils/db/repositories";
 import { getDiffusionModelById } from "@/utils/image/naiDiffusionModels";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { getProviderDisplayName, getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
@@ -268,7 +268,7 @@ export async function execute(
     }
 
     const availableModels =
-      (await loadAvailableDiffusionModelsForProvider(selectedProvider, false, {
+      (await llmModelRepo.loadAvailableDiffusionModels(selectedProvider, false, {
         kind: "server",
         ownerId: tomoriState.server_id,
       })) ?? [];

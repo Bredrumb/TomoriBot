@@ -63,7 +63,7 @@ import { DISCORD_STREAMING_CONSTANTS } from "@/types/stream/types";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "@/tools/toolRegistry";
 import { getCachedDefaultLLM, isLLMCacheReady } from "@/utils/cache/llmCache";
-import { loadAvailableModelsForProvider, loadDefaultModelForProvider } from "@/utils/db/repositories";
+import { llmModelRepo } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { buildRuntimeLogitBiasMapForLlm } from "@/utils/provider/logitBiasResolver";
 
@@ -79,7 +79,7 @@ async function getDefaultNvidiaModel(): Promise<string> {
   }
 
   try {
-    const dbDefault = await loadDefaultModelForProvider(providerName);
+    const dbDefault = await llmModelRepo.loadDefaultModel(providerName);
     if (dbDefault) {
       log.info(`Using database default ${providerName} model: ${dbDefault.llm_codename}`);
       return dbDefault.llm_codename;
@@ -91,7 +91,7 @@ async function getDefaultNvidiaModel(): Promise<string> {
   }
 
   try {
-    const availableModels = await loadAvailableModelsForProvider(providerName);
+    const availableModels = await llmModelRepo.loadAvailableModelsForProvider(providerName);
     if (availableModels && availableModels.length > 0) {
       const firstModel = availableModels[0].llm_codename;
       log.warn(`No default model found, using first available ${providerName} model: ${firstModel}`);

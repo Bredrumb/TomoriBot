@@ -3,7 +3,7 @@ import type { ConditioningType, TomoriState } from "@/types/db/schema";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { ColorCode } from "@/utils/misc/logger";
-import { loadAllPersonasForServer } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 
 export type PersonaSelectionResult = {
   persona: TomoriState;
@@ -32,7 +32,7 @@ export async function selectConditioningPersona(
     return null;
   }
 
-  const personas = await loadAllPersonasForServer(interaction.guildId);
+  const personas = await personaRepository.loadAllForServer(interaction.guildId);
   if (personas.length === 0) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.tomori_not_setup_title",

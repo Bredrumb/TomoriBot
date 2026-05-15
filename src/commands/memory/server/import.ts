@@ -10,9 +10,9 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import type { UserRow } from "@/types/db/schema";
-import { validateImportFile, importServerMemories } from "@/utils/db/repositories";
+import { importRepository, personaRepository } from "@/utils/db/repositories";
 import type { ServerMemoriesExportData } from "@/types/db/dataExport";
-import { loadAllPersonasForServer } from "@/utils/db/repositories";
+
 import type { SelectOption } from "@/types/discord/modal";
 import { IMPORT_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
@@ -91,7 +91,7 @@ export async function execute(
       return;
     }
     const jsonData = JSON.parse(response.buffer.toString("utf8"));
-    const validation = validateImportFile(jsonData);
+    const validation = importRepository.validateImportFile(jsonData);
     if (!validation.valid || !validation.type || !validation.data || validation.type !== "server_memories") {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.data.import.invalid_file_title",
@@ -102,7 +102,7 @@ export async function execute(
       return;
     }
 
-    const personas = await loadAllPersonasForServer(serverDiscId);
+    const personas = await personaRepository.loadAllForServer(serverDiscId);
     const personaSelectOptions: SelectOption[] = personas
       .filter((persona) => persona.tomori_id !== undefined)
       .map((persona) => ({
@@ -151,7 +151,7 @@ export async function execute(
 
     await responseInteraction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const importResult = await importServerMemories(
+    const importResult = await importRepository.importServerMemories(
       serverDiscId,
       (validation.data as ServerMemoriesExportData).server_memories,
       {

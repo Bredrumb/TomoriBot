@@ -16,8 +16,8 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { getAllChannelLlmOverridesForServer } from "@/utils/db/repositories";
-import { deleteChannelLlmOverride, setPersonaLlmOverride } from "@/utils/db/repositories";
+import { llmOverrideRepo } from "@/utils/db/repositories";
+
 import type { UserRow, ErrorContext, TomoriState, LlmRow } from "@/types/db/schema";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
 
@@ -71,7 +71,7 @@ export async function execute(
     }
 
     const [channelOverrides, allPersonas] = await Promise.all([
-      getAllChannelLlmOverridesForServer(tomoriState.server_id),
+      llmOverrideRepo.getAllChannelLlmOverridesForServer(tomoriState.server_id),
       getCachedAllPersonas(interaction.guild.id),
     ]);
     const personasWithOverride = allPersonas.filter(
@@ -155,13 +155,13 @@ export async function execute(
       Promise.all(
         channelOverridesToRemove.map(async (entry) => ({
           entry,
-          deleted: await deleteChannelLlmOverride(tomoriState.server_id, entry.channelDiscId),
+          deleted: await llmOverrideRepo.deleteChannelLlmOverride(tomoriState.server_id, entry.channelDiscId),
         })),
       ),
       Promise.all(
         personasToClear.map(async (persona) => ({
           persona,
-          cleared: await setPersonaLlmOverride(persona.tomori_id, null, {
+          cleared: await llmOverrideRepo.setPersonaLlmOverride(persona.tomori_id, null, {
             serverDiscId: interaction.guildId ?? undefined,
           }),
         })),

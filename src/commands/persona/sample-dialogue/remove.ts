@@ -20,7 +20,7 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/
 import { type UserRow, type ErrorContext, tomoriSchema, type TomoriState } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
 import type { SelectOption } from "@/types/discord/modal";
-import { loadAllPersonasForServer } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 
 // Rule 20: Constants for static values at the top
 const MODAL_CUSTOM_ID = "forget_sampledialogue_modal";
@@ -224,7 +224,7 @@ export async function execute(
     }
 
     // Select target persona via paginated selector
-    const allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",

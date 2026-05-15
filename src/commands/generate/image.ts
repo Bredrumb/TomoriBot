@@ -18,7 +18,7 @@ import {
 import { GoogleGenAI } from "@google/genai";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
-import { loadTomoriState } from "../../utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 import { sql } from "../../utils/db/client";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
 import type { UserRow } from "../../types/db/schema";
@@ -260,7 +260,7 @@ export async function execute(
 
   // 2. Load TomoriState for this server/user
   const serverId = interaction.guild?.id ?? interaction.user.id;
-  const baseTomoriState = await loadTomoriState(serverId);
+  const baseTomoriState = await personaRepository.loadState(serverId);
 
   // 3. Validate TomoriState exists
   if (!baseTomoriState) {

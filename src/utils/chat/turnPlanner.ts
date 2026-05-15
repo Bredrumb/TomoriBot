@@ -3,7 +3,7 @@ import type { TomoriState, UserRow } from "@/types/db/schema";
 import { CooldownType, PrivacyLevel } from "@/types/db/schema";
 import { getCachedUserRow, getCachedBlacklistStatus, getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { incrementTomoriCounter, registerUser } from "@/utils/db/repositories";
+import { configRepository, userRepository } from "@/utils/db/repositories";
 import { isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
@@ -302,7 +302,7 @@ async function loadOrRegisterTriggerUser(
     user: manualTriggerInvoker ? { username: manualTriggerInvoker.username } : message.author,
     fallback: manualTriggerInvoker?.username ?? message.author.username,
   });
-  const registered = await registerUser(userDiscId, displayName, locale);
+  const registered = await userRepository.register(userDiscId, displayName, locale);
   if (!registered) {
     throw new Error(`Failed to register trigger user ${userDiscId}.`);
   }
@@ -323,7 +323,11 @@ async function updateAutochatCounter(message: Message, tomoriState: TomoriState,
   }
 
   try {
-    const updatedTomoriRow = await incrementTomoriCounter(tomoriState.tomori_id, minThreshold, maxThreshold);
+    const updatedTomoriRow = await configRepository.incrementTomoriCounter(
+      tomoriState.tomori_id,
+      minThreshold,
+      maxThreshold,
+    );
     if (!updatedTomoriRow) {
       log.warn(`Failed to update auto-message counter for server ${serverDiscId}.`);
       return;

@@ -4,7 +4,7 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { setPrivacyLevel } from "../../utils/db/repositories";
+import { userRepository } from "@/utils/db/repositories";
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
@@ -151,7 +151,7 @@ export async function execute(
     await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
 
     // 7. Update privacy level in database
-    const updatedUser = await setPrivacyLevel(interaction.user.id, requestedLevel);
+    const updatedUser = await userRepository.setPrivacyLevel(interaction.user.id, requestedLevel);
 
     if (!updatedUser) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {

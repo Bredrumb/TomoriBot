@@ -20,13 +20,7 @@ import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
-import {
-  isBlacklisted,
-  loadAllPersonasForServer,
-  loadPersonalMemoriesForUserLineage,
-  loadTomoriState,
-  getPrivacyLevel,
-} from "@/utils/db/repositories";
+import { personaRepository, personalMemoryRepository, userRepository } from "@/utils/db/repositories";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import { getMemoryLimits, validateMemoryContent } from "@/utils/misc/memoryLimits";
 import type { SelectOption } from "@/types/discord/modal";
@@ -170,7 +164,7 @@ export async function execute(
 
   try {
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
-    tomoriState = await loadTomoriState(serverDiscId);
+    tomoriState = await personaRepository.loadState(serverDiscId);
     const memoryScope =
       (interaction.options.getString("scope") as typeof PERSONAL_SCOPE_VALUE | typeof GLOBAL_SCOPE_VALUE | null) ??
       PERSONAL_SCOPE_VALUE;
@@ -189,7 +183,7 @@ export async function execute(
       personalizationDisabledWarning = true;
     }
 
-    const userPrivacyLevel = await getPrivacyLevel(interaction.user.id);
+    const userPrivacyLevel = await userRepository.getPrivacyLevel(interaction.user.id);
     if (userPrivacyLevel === PrivacyLevel.FULL) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.teach.memory.personal.opted_out_error_title",
@@ -201,7 +195,7 @@ export async function execute(
     }
 
     if (memoryScope === PERSONAL_SCOPE_VALUE) {
-      const allPersonas = await loadAllPersonasForServer(serverDiscId);
+      const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
       if (allPersonas.length === 0) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.tomori_not_setup_title",
@@ -260,7 +254,7 @@ export async function execute(
         }
 
         const currentMemories = userData.user_id
-          ? (await loadPersonalMemoriesForUserLineage(userData.user_id, targetLineageId, false)).filter(
+          ? (await personalMemoryRepository.loadForUserLineage(userData.user_id, targetLineageId, false)).filter(
               (memory) => memory.persona_lineage_id === targetLineageId,
             )
           : [];
@@ -497,11 +491,11 @@ export async function execute(
     }
 
     const userIsBlacklisted = interaction.guild
-      ? ((await isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false)
+      ? ((await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false)
       : false;
 
     const globalMemories = userData.user_id
-      ? await loadPersonalMemoriesForUserLineage(userData.user_id, GLOBAL_PERSONAL_MEMORY_LINEAGE_ID, false)
+      ? await personalMemoryRepository.loadForUserLineage(userData.user_id, GLOBAL_PERSONAL_MEMORY_LINEAGE_ID, false)
       : [];
 
     if (globalMemories.length === 0) {

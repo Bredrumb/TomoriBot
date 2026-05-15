@@ -1,12 +1,7 @@
 import { type ChatInputCommandInteraction, MessageFlags } from "discord.js";
 import type { CustomEndpointRow, UserRow, UserSavedProviderConfigRow } from "@/types/db/schema";
 import type { SummaryEmbedOptions } from "@/types/discord/embed";
-import {
-  loadCustomEndpointsForUser,
-  loadPersonalMemoriesForUserLineage,
-  loadUserSavedProviderConfigs,
-  getUserReminderCount,
-} from "@/utils/db/repositories";
+import { llmProviderRepo, personalMemoryRepository, serverScheduleRepository } from "@/utils/db/repositories";
 import { replyPaginatedStatusPages } from "@/utils/discord/ui/statusComponents";
 import { ColorCode } from "@/utils/misc/logger";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
@@ -33,16 +28,18 @@ export async function showPersonalStatus(
   let userCustomEndpoints: CustomEndpointRow[] = [];
   if (userData.user_id) {
     [globalPersonalMemoryList, userSavedProviderConfigs, userCustomEndpoints] = await Promise.all([
-      loadPersonalMemoriesForUserLineage(userData.user_id, 0, false).then((rows) => rows.map((row) => row.content)),
-      loadUserSavedProviderConfigs(userData.user_id),
-      loadCustomEndpointsForUser(userData.user_id),
+      personalMemoryRepository
+        .loadForUserLineage(userData.user_id, 0, false)
+        .then((rows) => rows.map((row) => row.content)),
+      llmProviderRepo.loadUserSavedProviderConfigs(userData.user_id),
+      llmProviderRepo.loadCustomEndpointsForUser(userData.user_id),
     ]);
   }
 
   const globalPersonalMemoriesValue = formatNumberedList(globalPersonalMemoryList, locale, MEMORY_TRUNCATE_LENGTH);
   const globalPersonalMemoriesCount = globalPersonalMemoryList.length;
 
-  const reminderCount = await getUserReminderCount(interaction.user.id);
+  const reminderCount = await serverScheduleRepository.getUserReminderCount(interaction.user.id);
   const rawImpersonationPrompt = userData.impersonation_prompt?.trim() ?? null;
   const impersonationPromptValue = rawImpersonationPrompt
     ? `\`\`\`\n${

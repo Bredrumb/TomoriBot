@@ -18,7 +18,7 @@ import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 import { getServerAvatar } from "../../utils/image/avatarHelper";
 import { embedMetadataInPNG } from "../../utils/image/pngMetadata";
 import type { SelectOption } from "../../types/discord/modal";
-import { loadAllPersonasForServer } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 import { convertToPNG } from "@/utils/image/imageProcessor";
 import { loadStoredPersonaAvatarBuffer } from "@/utils/storage/avatarStorage";
@@ -54,7 +54,7 @@ export async function execute(
   try {
     // 1. Resolve target persona via selector
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
-    const allPersonas = await loadAllPersonasForServer(serverDiscId);
+    const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
     const personaSelectOptions: SelectOption[] = allPersonas
       .filter((persona) => persona.tomori_id !== undefined)
       .map((persona) => ({

@@ -15,12 +15,7 @@ import { invalidateUserCache } from "../../utils/cache/userCache";
 import { sendStandardEmbed } from "../../utils/discord/embedHelper";
 import { convertMentions } from "../../utils/text/contextBuilder";
 import { sanitizeUnknownTemplatePlaceholders } from "@/utils/text/processors/mentionProcessor";
-import {
-  isBlacklisted,
-  loadUserRow,
-  getPrivacyLevel,
-  loadPersonalMemoriesForUserLineage,
-} from "@/utils/db/repositories";
+import { personalMemoryRepository, userRepository } from "@/utils/db/repositories";
 import { resolveUserTarget } from "@/utils/discord/targetResolver";
 
 export class UpdateLongTermMemoryTool extends BaseTool {
@@ -214,7 +209,9 @@ export class UpdateLongTermMemoryTool extends BaseTool {
       if (!isPersonalUpdate) {
         if (isDeleteRequested) {
           const resolvedTriggererUserId = context.message?.author?.id || context.userId;
-          const triggererRow = resolvedTriggererUserId ? await loadUserRow(resolvedTriggererUserId) : null;
+          const triggererRow = resolvedTriggererUserId
+            ? await userRepository.loadByDiscordId(resolvedTriggererUserId)
+            : null;
           const [deletedServerMemory] = await sql`
 						DELETE FROM server_memories
 						WHERE server_memory_id = ${memoryId}
@@ -295,7 +292,9 @@ export class UpdateLongTermMemoryTool extends BaseTool {
 
         if (updatedServerMemory) {
           const resolvedTriggererUserId = context.message?.author?.id || context.userId;
-          const triggererRow = resolvedTriggererUserId ? await loadUserRow(resolvedTriggererUserId) : null;
+          const triggererRow = resolvedTriggererUserId
+            ? await userRepository.loadByDiscordId(resolvedTriggererUserId)
+            : null;
           const processedMemoryContent = await convertMentions(
             newContent,
             context.client,
@@ -367,7 +366,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
         };
       }
 
-      const targetUserRow = await loadUserRow(resolvedTargetUserId as string);
+      const targetUserRow = await userRepository.loadByDiscordId(resolvedTargetUserId as string);
       if (!targetUserRow?.user_id) {
         return {
           success: false,
@@ -416,7 +415,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
         targetUserRow.user_disc_id;
 
       if (!isDeleteRequested) {
-        const userPrivacyLevel = await getPrivacyLevel(resolvedTargetUserId as string);
+        const userPrivacyLevel = await userRepository.getPrivacyLevel(resolvedTargetUserId as string);
         if (userPrivacyLevel === PrivacyLevel.PARTIAL || userPrivacyLevel === PrivacyLevel.FULL) {
           return {
             success: false,
@@ -430,7 +429,11 @@ export class UpdateLongTermMemoryTool extends BaseTool {
       }
 
       const personaLineageId = tomoriState.persona_lineage_id ?? 0;
-      const personalMemories = await loadPersonalMemoriesForUserLineage(targetUserRow.user_id, personaLineageId, true);
+      const personalMemories = await personalMemoryRepository.loadForUserLineage(
+        targetUserRow.user_id,
+        personaLineageId,
+        true,
+      );
       const targetMemory = personalMemories.find((memory) => memory.personal_memory_id === memoryId);
       if (!targetMemory) {
         return {
@@ -443,7 +446,9 @@ export class UpdateLongTermMemoryTool extends BaseTool {
         };
       }
 
-      const isUserBlacklisted = guild ? await isBlacklisted(serverDiscId, resolvedTargetUserId as string) : false;
+      const isUserBlacklisted = guild
+        ? await userRepository.isBlacklisted(serverDiscId, resolvedTargetUserId as string)
+        : false;
       const footerKey = !tomoriState.config.personal_memories_enabled
         ? "genai.self_teach.personal_memory_footer_personalization_disabled"
         : isUserBlacklisted

@@ -18,7 +18,7 @@ import {
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
 import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
-import { loadTomoriState, loadAllPersonasForServer, loadPersonalMemoriesForUserLineage } from "@/utils/db/repositories";
+import { personaRepository, personalMemoryRepository } from "@/utils/db/repositories";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import type { SelectOption } from "@/types/discord/modal";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
@@ -175,7 +175,7 @@ export async function execute(
 
   try {
     // 2. Load server's Tomori state to check personalization setting (Rule 17)
-    tomoriState = await loadTomoriState(interaction.guild?.id ?? interaction.user.id);
+    tomoriState = await personaRepository.loadState(interaction.guild?.id ?? interaction.user.id);
     const memoryScope =
       (interaction.options.getString("scope") as typeof PERSONAL_SCOPE_VALUE | typeof GLOBAL_SCOPE_VALUE | null) ??
       PERSONAL_SCOPE_VALUE;
@@ -199,7 +199,7 @@ export async function execute(
     let targetLineageId = GLOBAL_PERSONAL_MEMORY_LINEAGE_ID;
     let selectionInteraction: ChatInputCommandInteraction | ButtonInteraction = interaction;
     if (memoryScope === PERSONAL_SCOPE_VALUE) {
-      const allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+      const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
       if (allPersonas.length === 0) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.tomori_not_setup_title",
@@ -261,7 +261,7 @@ export async function execute(
         // 5. Get current personal memories from lineage-scoped table
         // (Inside PERSONAL_SCOPE_VALUE block, so always persona-scoped)
         const fetchedMemories = userData.user_id
-          ? await loadPersonalMemoriesForUserLineage(userData.user_id, targetLineageId, false)
+          ? await personalMemoryRepository.loadForUserLineage(userData.user_id, targetLineageId, false)
           : [];
         const currentMemories = fetchedMemories.filter((memory) => memory.persona_lineage_id === targetLineageId);
 
@@ -378,7 +378,7 @@ export async function execute(
     } else {
       // 4b. GLOBAL scope: load lineage-0 memories directly (no persona picker needed)
       const globalMemories = userData.user_id
-        ? await loadPersonalMemoriesForUserLineage(userData.user_id, GLOBAL_PERSONAL_MEMORY_LINEAGE_ID, false)
+        ? await personalMemoryRepository.loadForUserLineage(userData.user_id, GLOBAL_PERSONAL_MEMORY_LINEAGE_ID, false)
         : [];
 
       // 5b. Check if there are any global memories to remove

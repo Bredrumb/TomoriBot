@@ -5,7 +5,7 @@ import type { UserRow, ErrorContext } from "../../../types/db/schema";
 import { localizer } from "../../../utils/text/localizer";
 import { log, ColorCode } from "../../../utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal } from "../../../utils/discord/interactionHelper";
-import { isBlacklisted } from "../../../utils/db/repositories";
+import { userRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "../../../utils/cache/tomoriStateCache";
 import type { ModalResult } from "../../../types/discord/modal";
 
@@ -37,7 +37,7 @@ export async function execute(
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
 
     if (interaction.guild) {
-      const blacklisted = (await isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
+      const blacklisted = (await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
       if (blacklisted && !hasManagePermission) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.user_blacklisted_title",

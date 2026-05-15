@@ -4,8 +4,8 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { loadSavedProviderConfigs } from "@/utils/db/repositories";
-import { deleteSavedProviderConfig } from "@/utils/db/repositories";
+import { llmProviderRepo } from "@/utils/db/repositories";
+
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -109,7 +109,7 @@ export async function execute(
 
   try {
     // 3. Load all saved provider configs
-    const rawSavedConfigs = await loadSavedProviderConfigs(tomoriState.server_id);
+    const rawSavedConfigs = await llmProviderRepo.loadSavedProviderConfigs(tomoriState.server_id);
     // Custom providers with live endpoints are managed via /config custom-endpoint remove.
     // Orphaned custom provider rows (no matching custom_endpoints) are kept here as a
     // cleanup path — they have no other way to be removed.
@@ -281,7 +281,7 @@ export async function execute(
       `;
     }
 
-    const deleted = await deleteSavedProviderConfig(tomoriState.server_id, selectedProvider, {
+    const deleted = await llmProviderRepo.deleteSavedProviderConfig(tomoriState.server_id, selectedProvider, {
       serverDiscId: serverId,
     });
 

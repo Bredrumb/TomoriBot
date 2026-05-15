@@ -11,17 +11,11 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
-import {
-  loadTomoriState,
-  isBlacklisted,
-  loadAllPersonasForServer,
-  loadPersonalMemoriesForUserLineage,
-} from "@/utils/db/repositories";
+import { personaRepository, personalMemoryRepository, userRepository } from "@/utils/db/repositories";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import type { ModalResult, SelectOption } from "@/types/discord/modal";
 import { validateMemoryContent, getMemoryLimits } from "@/utils/misc/memoryLimits";
-import { personalMemoryRepository } from "@/utils/db/repositories/PersonalMemoryRepository";
-import { addPersonalMemoryByTomori } from "@/utils/db/repositories";
+
 import type { ModalComponent } from "@/types/discord/modal";
 import { dedupeCaseInsensitive, getNonEmptyNumberedLines, readTxtUpload } from "@/utils/teach/batchUploadUtils";
 
@@ -101,7 +95,7 @@ export async function execute(
     const memoryScope =
       (interaction.options.getString("scope") as typeof PERSONAL_SCOPE_VALUE | typeof GLOBAL_SCOPE_VALUE | null) ??
       PERSONAL_SCOPE_VALUE;
-    tomoriState = await loadTomoriState(serverId);
+    tomoriState = await personaRepository.loadState(serverId);
 
     // 3. Check if Tomori is set up on the server (needed for config check)
     if (!tomoriState) {
@@ -120,7 +114,7 @@ export async function execute(
     const modalComponents: ModalComponent[] = [];
 
     if (memoryScope === PERSONAL_SCOPE_VALUE) {
-      allPersonas = await loadAllPersonasForServer(serverId);
+      allPersonas = await personaRepository.loadAllForServer(serverId);
       if (allPersonas.length === 0) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.tomori_not_setup_title",
@@ -299,9 +293,8 @@ export async function execute(
     }
 
     // 11. Check if user has opted out of personalization (privacy setting)
-    const { getPrivacyLevel } = await import("@/utils/db/repositories");
     const { PrivacyLevel } = await import("../../../types/db/schema");
-    const userPrivacyLevel = await getPrivacyLevel(interaction.user.id);
+    const userPrivacyLevel = await userRepository.getPrivacyLevel(interaction.user.id);
 
     // Only block FULL privacy level (MINIMAL and PARTIAL can manually teach)
     if (userPrivacyLevel === PrivacyLevel.FULL) {
@@ -319,7 +312,11 @@ export async function execute(
 
     // 12. Load existing memories for duplicate detection
     const currentMemories = userData.user_id
-      ? await loadPersonalMemoriesForUserLineage(userData.user_id, targetLineageId, memoryScope === GLOBAL_SCOPE_VALUE)
+      ? await personalMemoryRepository.loadForUserLineage(
+          userData.user_id,
+          targetLineageId,
+          memoryScope === GLOBAL_SCOPE_VALUE,
+        )
       : [];
 
     const existingMemories = new Set(currentMemories.map((row) => row.content.trim().toLowerCase()));
@@ -373,7 +370,7 @@ export async function execute(
     // 14. Insert lineage-scoped memory rows
     let insertSuccess = true;
     if (memoriesToAdd.length === 1) {
-      const insertedMemory = await addPersonalMemoryByTomori(
+      const insertedMemory = await personalMemoryRepository.add(
         targetUserId,
         targetLineageId,
         memoriesToAdd[0] ?? "",
@@ -445,7 +442,7 @@ export async function execute(
     const personalizationEnabled = tomoriState?.config.personal_memories_enabled ?? true;
     // Only check blacklisting for guild contexts (DM users can't be blacklisted)
     const userIsBlacklisted = interaction.guild
-      ? ((await isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false)
+      ? ((await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false)
       : false;
 
     if (!personalizationEnabled) {

@@ -1,8 +1,8 @@
 import type { ChatInputCommandInteraction, ButtonInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder } from "discord.js";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { loadAvailableModelsForProvider, loadCustomEndpointsForServer } from "@/utils/db/repositories";
-import { setFallbackModelRefs } from "@/utils/db/repositories";
+import { llmModelRepo, llmOverrideRepo, llmProviderRepo } from "@/utils/db/repositories";
+
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -227,7 +227,7 @@ export async function execute(
     // Custom endpoint path — enumerate registered endpoints for this label
     const parsed = parseCustomProvider(selectedProvider);
     const label = parsed?.label ?? null;
-    const allEndpoints = await loadCustomEndpointsForServer(tomoriState.server_id);
+    const allEndpoints = await llmProviderRepo.loadCustomEndpointsForServer(tomoriState.server_id);
     availableEndpoints = label ? allEndpoints.filter((ep) => ep.label === label && ep.capability === "text") : [];
 
     if (availableEndpoints.length === 0) {
@@ -248,7 +248,7 @@ export async function execute(
   } else {
     // Standard provider path
     availableModels =
-      (await loadAvailableModelsForProvider(selectedProvider, false, {
+      (await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
         kind: "server",
         ownerId: tomoriState.server_id,
       })) ?? [];
@@ -463,7 +463,7 @@ export async function execute(
   }
 
   // 12. Write to database
-  const writeOk = await setFallbackModelRefs(tomoriState.server_id, finalRefs, { serverDiscId });
+  const writeOk = await llmOverrideRepo.setFallbackModelRefs(tomoriState.server_id, finalRefs, { serverDiscId });
   if (!writeOk) {
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "general.errors.update_failed_title",

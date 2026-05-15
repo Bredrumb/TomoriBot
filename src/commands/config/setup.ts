@@ -11,13 +11,8 @@ import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { ProviderFactory } from "../../utils/provider/providerFactory";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { encryptApiKey } from "../../utils/security/crypto";
-import { setupServer } from "../../utils/db/repositories";
-import {
-  loadTomoriState,
-  loadUniqueProviders,
-  loadPresetOptionsByLocale,
-  loadDefaultModelForProvider,
-} from "@/utils/db/repositories";
+import { configRepository, llmModelRepo, personaRepository, serverRepository } from "@/utils/db/repositories";
+
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { getCachedPresetAvatar } from "@/utils/image/avatarHelper";
 import { lazySyncGuildEmojis } from "@/utils/cache/emojiLazySync";
@@ -77,7 +72,7 @@ export async function execute(
 
   try {
     // 2. Check if a main persona (is_alter=false) exists for this server.
-    //    Previous check used loadTomoriState() which returns ANY persona (main or alter),
+    //    Previous check used personaRepository.loadState() which returns ANY persona (main or alter),
     //    causing a deadlock when the main persona was missing but alters remained:
     //    - Other commands require a main persona → "Initial Setup Required"
     //    - Setup found an alter → "Already Set Up"
@@ -101,10 +96,10 @@ export async function execute(
 			`;
 
       if (mainPersonaRows.length > 0) {
-        const existingTomoriState = await loadTomoriState(serverId);
+        const existingTomoriState = await personaRepository.loadState(serverId);
 
         // 3. Main persona row exists AND state is fully valid — server is healthy, block re-setup.
-        //    If loadTomoriState returns null despite the row existing, the server is in a broken
+        //    If personaRepository.loadState returns null despite the row existing, the server is in a broken
         //    state (missing tomori_configs row or deleted LLM). Fall through to cleanup so the
         //    user isn't permanently locked out by a setup guard that uses a weaker health check
         //    than the commands that actually require a healthy state.
@@ -160,7 +155,7 @@ export async function execute(
           return;
         }
 
-        // 3a. Main persona row exists but loadTomoriState returned null — broken state
+        // 3a. Main persona row exists but personaRepository.loadState returned null — broken state
         //     (e.g. tomori_configs deleted, or llm_id points to a removed model).
         //     Do NOT nuke personas here: alters may be perfectly healthy and only the config
         //     row or model reference is missing. Guide the user to targeted repair commands.
@@ -184,7 +179,7 @@ export async function execute(
 
       // 3b. No main persona row — orphaned alters or empty server entry.
       //     Only tomori_configs is deleted to clear its server_id unique constraint; alter rows
-      //     are preserved since setupServer only inserts a new main persona (is_alter=false).
+      //     are preserved since serverRepository.setup only inserts a new main persona (is_alter=false).
       log.warn(`[Setup] Server ${serverId} has no main persona — clearing config, preserving alters`);
       await sql`
 				DELETE FROM tomori_configs
@@ -199,8 +194,8 @@ export async function execute(
 
     // Load dynamic data for the modal
     const [uniqueProviders, presetOptions] = await Promise.all([
-      loadUniqueProviders(),
-      loadPresetOptionsByLocale(locale, 100),
+      llmModelRepo.loadUniqueProviders(),
+      configRepository.loadPresetOptionsByLocale(locale, 100),
     ]);
 
     // Check if we have the required data
@@ -585,7 +580,7 @@ export async function execute(
 
       // Setup the server
       try {
-        await setupServer(interaction.guild, setupConfig);
+        await serverRepository.setup(interaction.guild, setupConfig);
       } catch (error) {
         log.error("Server setup failed:", error);
         await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -623,7 +618,7 @@ export async function execute(
       if (!isDMChannel && interaction.guild) {
         try {
           // 1. Load the newly created TomoriState to get server_id
-          const newTomoriState = await loadTomoriState(serverId);
+          const newTomoriState = await personaRepository.loadState(serverId);
 
           if (newTomoriState) {
             log.info(`[Setup] Force syncing emojis/stickers for guild ${interaction.guild.name}`);
@@ -694,7 +689,7 @@ export async function execute(
       const humanizerLabel = humanizerLabels[humanizerDegree] || "Unknown";
       let configuredModelName: string | null = null;
       if (!configuredModelName && normalizedProvider) {
-        const defaultModel = await loadDefaultModelForProvider(normalizedProvider);
+        const defaultModel = await llmModelRepo.loadDefaultModel(normalizedProvider);
         if (defaultModel) {
           configuredModelName = defaultModel.llm_codename;
         }

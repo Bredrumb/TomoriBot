@@ -12,7 +12,7 @@ import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { ConditioningType, UserRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
-import { loadAllPersonasForServer, loadTomoriState } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
 import { tomoriChat } from "@/events/messageCreate/tomoriChat";
@@ -104,7 +104,7 @@ export function createConditioningInteractionCommand(
       return;
     }
 
-    const tomoriState = await loadTomoriState(interaction.guild.id);
+    const tomoriState = await personaRepository.loadState(interaction.guild.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.unknown_error_title",
@@ -114,7 +114,7 @@ export function createConditioningInteractionCommand(
       return;
     }
 
-    const allPersonas = await loadAllPersonasForServer(interaction.guild.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",

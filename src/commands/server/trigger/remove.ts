@@ -21,7 +21,7 @@ import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { type UserRow, type ErrorContext, personaConfigSchema, type TomoriState } from "@/types/db/schema";
 import type { CheckboxGroupOption, ModalCheckboxGroupField, SelectOption } from "@/types/discord/modal";
 import { sql } from "@/utils/db/client";
-import { loadAllPersonasForServer } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 
 const TRIGGER_MODAL_CUSTOM_ID = "server_triggerremove_trigger_modal";
 const TRIGGER_SELECT_ID = "trigger_select";
@@ -56,7 +56,7 @@ export async function execute(
   let selectedPersona: TomoriState | null = null;
 
   try {
-    const allPersonas = await loadAllPersonasForServer(interaction.guild.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(
         interaction,

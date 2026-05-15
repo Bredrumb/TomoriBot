@@ -18,7 +18,7 @@ import {
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { ContextItemTag, type StructuredContextItem } from "../../types/misc/context";
 import { ColorCode } from "@/utils/misc/logger";
-import { loadLlmById } from "@/utils/db/repositories";
+import { llmModelRepo } from "@/utils/db/repositories";
 import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
@@ -376,7 +376,7 @@ export class PeekProfilePictureTool extends BaseTool {
       visionLlmId === context.tomoriState.vision_llm?.llm_id
         ? context.tomoriState.vision_llm
         : visionLlmId
-          ? await loadLlmById(visionLlmId)
+          ? await llmModelRepo.loadById(visionLlmId)
           : null;
     if (!visionLlm) {
       return {

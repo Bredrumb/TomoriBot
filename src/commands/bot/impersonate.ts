@@ -11,7 +11,7 @@ import { localizer } from "@/utils/text/localizer";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
-import { loadAllPersonasForServer, loadTomoriState } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { resolvePersonaWebhookIdentity } from "@/utils/discord/webhook/identity";
 import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
@@ -160,7 +160,7 @@ async function handlePersonaImpersonation(
   const invokingMember = interaction.member as import("discord.js").GuildMember | null;
 
   // 1. Load all personas (main + alters) - keep this under 3 seconds
-  const allPersonas = await loadAllPersonasForServer(serverId);
+  const allPersonas = await personaRepository.loadAllForServer(serverId);
   if (!allPersonas || allPersonas.length === 0) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.bot.impersonate.no_personas_title",
@@ -437,7 +437,7 @@ async function handleUserImpersonation(
 
   try {
     // 2. Load tomori state for cooldown configuration
-    const tomoriState = await loadTomoriState(interaction.guild.id);
+    const tomoriState = await personaRepository.loadState(interaction.guild.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.unknown_error_title",

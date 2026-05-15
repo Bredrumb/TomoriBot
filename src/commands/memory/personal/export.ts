@@ -10,8 +10,8 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import type { UserRow } from "@/types/db/schema";
-import { exportGlobalPersonalMemories, exportPersonaPersonalMemories } from "@/utils/db/repositories";
-import { loadAllPersonasForServer } from "@/utils/db/repositories";
+import { exportRepository, personaRepository } from "@/utils/db/repositories";
+
 import type { SelectOption } from "@/types/discord/modal";
 
 const PERSONA_MODAL_ID = "memory_personal_export_persona_modal";
@@ -49,12 +49,12 @@ export async function execute(
   let responseInteraction: ChatInputCommandInteraction | ModalSubmitInteraction = interaction;
 
   try {
-    let exportResult: Awaited<ReturnType<typeof exportGlobalPersonalMemories>>;
+    let exportResult: Awaited<ReturnType<typeof exportRepository.exportGlobalPersonalMemories>>;
     let typeLabel = localizer(locale, "commands.data.export.type_choice_global_personal_memories");
     let filename = `tomori-global-personal-memories-${interaction.user.id}-${Date.now()}.json`;
 
     if (scope === "persona") {
-      const personas = await loadAllPersonasForServer(serverDiscId);
+      const personas = await personaRepository.loadAllForServer(serverDiscId);
       const personaSelectOptions: SelectOption[] = personas
         .filter((persona) => persona.tomori_id !== undefined)
         .map((persona) => ({
@@ -111,12 +111,15 @@ export async function execute(
         return;
       }
 
-      exportResult = await exportPersonaPersonalMemories(interaction.user.id, selectedPersona.persona_lineage_id ?? 0);
+      exportResult = await exportRepository.exportPersonaPersonalMemories(
+        interaction.user.id,
+        selectedPersona.persona_lineage_id ?? 0,
+      );
       typeLabel = localizer(locale, "commands.data.export.type_choice_persona_personal_memories");
       const safeSlug = selectedPersona.tomori_nickname.replace(/[^a-zA-Z0-9-_]/g, "_").slice(0, 32);
       filename = `tomori-personal-memories-${safeSlug}-${interaction.user.id}-${Date.now()}.json`;
     } else {
-      exportResult = await exportGlobalPersonalMemories(interaction.user.id);
+      exportResult = await exportRepository.exportGlobalPersonalMemories(interaction.user.id);
     }
 
     await responseInteraction.deferReply({ flags: MessageFlags.Ephemeral });

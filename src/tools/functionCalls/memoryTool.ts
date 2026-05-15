@@ -105,8 +105,6 @@ export class MemoryTool extends BaseTool {
       targetUserArg?.trim() || legacyTargetUserNicknameArg?.trim() || legacyTargetUserDiscordIdArg?.trim();
 
     // Import database functions
-    const { addPersonalMemoryByTomori, addServerMemoryByTomori } = await import("../../utils/db/repositories");
-    const { isBlacklisted, loadUserRow } = await import("../../utils/db/repositories");
     const { sendStandardEmbed } = await import("../../utils/discord/embedHelper");
     const { ColorCode } = await import("../../utils/misc/logger");
     const { convertMentions } = await import("../../utils/text/contextBuilder");
@@ -114,12 +112,14 @@ export class MemoryTool extends BaseTool {
 
     // Import memory validation and repository singletons
     const { validateMemoryContent } = await import("@/utils/misc/memoryLimits");
-    const { personalMemoryRepository, serverMemoryRepository } = await import("@/utils/db/repositories");
+    const { personalMemoryRepository, serverMemoryRepository, userRepository } = await import(
+      "@/utils/db/repositories"
+    );
 
     // Critical state validation (from tomoriChat.ts:1078-1104)
     const tomoriState = context.tomoriState;
     const resolvedUserId = context.message?.author?.id || context.userId;
-    const userRow = resolvedUserId ? await loadUserRow(resolvedUserId) : null;
+    const userRow = resolvedUserId ? await userRepository.loadByDiscordId(resolvedUserId) : null;
 
     if (!tomoriState || !userRow?.user_id || !tomoriState.server_id || !tomoriState.tomori_id || !resolvedUserId) {
       // Log which specific value is missing for diagnostics
@@ -300,7 +300,7 @@ export class MemoryTool extends BaseTool {
           };
         }
 
-        const dbResult = await addServerMemoryByTomori(
+        const dbResult = await serverMemoryRepository.add(
           tomoriState.server_id,
           tomoriState.tomori_id,
           tomoriState.persona_lineage_id,
@@ -395,7 +395,7 @@ export class MemoryTool extends BaseTool {
 
       try {
         // Load target user (from tomoriChat.ts:1204-1206)
-        const targetUserRow = await loadUserRow(resolvedTargetUserId as string);
+        const targetUserRow = await userRepository.loadByDiscordId(resolvedTargetUserId as string);
 
         if (!targetUserRow?.user_id) {
           log.warn(`Self-teach: Resolved target user ${resolvedTargetUserId} not found in Tomori records`);
@@ -412,9 +412,8 @@ export class MemoryTool extends BaseTool {
         const targetUserDisplayName = resolvedTargetUserLabel || targetUserRow.user_nickname;
 
         // Check if user has opted out of personalization (privacy setting)
-        const { getPrivacyLevel } = await import("../../utils/db/repositories");
         const { PrivacyLevel } = await import("../../types/db/schema");
-        const userPrivacyLevel = await getPrivacyLevel(resolvedTargetUserId as string);
+        const userPrivacyLevel = await userRepository.getPrivacyLevel(resolvedTargetUserId as string);
 
         // Block self-teaching for PARTIAL and FULL privacy levels
         if (userPrivacyLevel === PrivacyLevel.PARTIAL || userPrivacyLevel === PrivacyLevel.FULL) {
@@ -454,7 +453,7 @@ export class MemoryTool extends BaseTool {
         }
 
         // Save personal memory (from tomoriChat.ts:1262-1335)
-        const dbResult = await addPersonalMemoryByTomori(
+        const dbResult = await personalMemoryRepository.add(
           targetUserRow.user_id,
           tomoriState.persona_lineage_id,
           memoryContent,
@@ -487,7 +486,8 @@ export class MemoryTool extends BaseTool {
           if (!serverDiscId) {
             throw new Error("Critical security error: No valid server or user ID available for blacklist checking");
           }
-          const targetUserIsBlacklisted = (await isBlacklisted(serverDiscId, resolvedTargetUserId as string)) ?? false;
+          const targetUserIsBlacklisted =
+            (await userRepository.isBlacklisted(serverDiscId, resolvedTargetUserId as string)) ?? false;
 
           let personalMemoryFooterKey: string;
           if (!personalizationEnabled) {

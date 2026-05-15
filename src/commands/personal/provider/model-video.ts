@@ -1,6 +1,6 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { loadAvailableVideoGenerationModelsForProvider } from "@/utils/db/repositories";
+import { llmModelRepo } from "@/utils/db/repositories";
 import { promptForSavedProvider } from "@/commands/model/providerPicker";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
@@ -68,7 +68,7 @@ export async function execute(
     if (!providerSelection) return;
 
     const availableModels =
-      (await loadAvailableVideoGenerationModelsForProvider(providerSelection.provider, false, {
+      (await llmModelRepo.loadAvailableVideoGenerationModels(providerSelection.provider, false, {
         kind: "personal",
         ownerId: userData.user_id,
       })) ?? [];

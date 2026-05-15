@@ -3,7 +3,7 @@ import { MessageFlags } from "discord.js";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadCustomEndpointsForServer } from "@/utils/db/repositories";
+import { llmProviderRepo } from "@/utils/db/repositories";
 import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -45,7 +45,7 @@ export async function execute(
   }
 
   try {
-    const endpoints = (await loadCustomEndpointsForServer(tomoriState.server_id)).filter(
+    const endpoints = (await llmProviderRepo.loadCustomEndpointsForServer(tomoriState.server_id)).filter(
       (endpoint) => endpoint.capability === "speech" && endpoint.custom_endpoint_id !== undefined,
     );
 

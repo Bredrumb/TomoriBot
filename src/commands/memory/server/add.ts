@@ -11,12 +11,11 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
-import { isBlacklisted, loadAllPersonasForServer } from "@/utils/db/repositories";
+import { personaRepository, serverMemoryRepository, userRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import type { ModalResult, SelectOption } from "@/types/discord/modal";
 import { validateMemoryContent, getMemoryLimits } from "@/utils/misc/memoryLimits";
-import { serverMemoryRepository } from "@/utils/db/repositories/ServerMemoryRepository";
-import { addServerMemoryByTomori } from "@/utils/db/repositories";
+
 import { dedupeCaseInsensitive, getNonEmptyNumberedLines, readTxtUpload } from "@/utils/teach/batchUploadUtils";
 
 // Rule 20: Constants for modal and input IDs
@@ -74,7 +73,7 @@ export async function execute(
     // 3. Check blacklisting only for guild contexts
     // Users with Manage Server permission can bypass blacklist (they can unblacklist themselves anyway)
     if (interaction.guild) {
-      const blacklisted = (await isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
+      const blacklisted = (await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
       if (blacklisted && !hasManagePermission) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.user_blacklisted_title",
@@ -101,7 +100,7 @@ export async function execute(
     }
 
     // 6. Resolve target persona (default: current main persona)
-    const allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -346,7 +345,7 @@ export async function execute(
     // 14. Insert into persona-scoped server memories table
     let insertSuccess = true;
     if (memoriesToAdd.length === 1) {
-      const insertedMemory = await addServerMemoryByTomori(
+      const insertedMemory = await serverMemoryRepository.add(
         targetServerId,
         targetTomoriId,
         targetPersonaLineageId,

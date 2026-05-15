@@ -2,7 +2,7 @@ import { type ChatInputCommandInteraction, type Client, MessageFlags } from "dis
 import type { TomoriState } from "@/types/db/schema";
 import type { SummaryEmbedOptions } from "@/types/discord/embed";
 import { sql } from "@/utils/db/client";
-import { loadCustomEndpointsForServer, loadSavedProviderConfigs } from "@/utils/db/repositories";
+import { llmProviderRepo } from "@/utils/db/repositories";
 import { toolRepository } from "@/utils/db/repositories/ToolRepository";
 import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 import { replyPaginatedStatusPages } from "@/utils/discord/ui/statusComponents";
@@ -44,7 +44,7 @@ export async function showServerConfigStatus(
       WHERE server_id = ${tomoriState.server_id}
       ORDER BY service_name ASC
     `,
-      loadSavedProviderConfigs(tomoriState.server_id),
+      llmProviderRepo.loadSavedProviderConfigs(tomoriState.server_id),
       toolRepository.loadMcpServers(tomoriState.server_id),
       sql<MatrixLinkStatusRow[]>`
       SELECT channel_disc_id FROM matrix_channel_links
@@ -52,7 +52,7 @@ export async function showServerConfigStatus(
       ORDER BY created_at ASC
     `,
       presetRepository.loadPresetsForServer(tomoriState.server_id),
-      loadCustomEndpointsForServer(tomoriState.server_id),
+      llmProviderRepo.loadCustomEndpointsForServer(tomoriState.server_id),
     ]);
 
   const activeStPreset = stPresets.find((preset) => preset.is_active) ?? null;

@@ -74,7 +74,7 @@ import {
   type FunctionResponseImageMetadata,
   type ApiKeyValidationResult,
 } from "../../types/provider/interfaces";
-import { loadSavedProviderConfig } from "@/utils/db/repositories";
+import { llmProviderRepo } from "@/utils/db/repositories";
 import { getCustomToolAdapter } from "./customToolAdapter";
 import { customProviderInfo } from "./providerInfo";
 import { resolveCustomEndpointForProvider } from "@/utils/provider/customEndpointService";
@@ -432,7 +432,7 @@ export class CustomProvider
     // (which NULLs out the custom_* columns) while a persona override still points at a custom LLM.
     let endpointUrl = tomoriState.config.custom_endpoint_url ?? null;
     if (!endpointUrl) {
-      const savedConfig = await loadSavedProviderConfig(tomoriState.server_id, "custom");
+      const savedConfig = await llmProviderRepo.loadSavedProviderConfig(tomoriState.server_id, "custom");
       endpointUrl = savedConfig?.custom_endpoint_url ?? null;
     }
 

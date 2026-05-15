@@ -1,8 +1,8 @@
 import type { Client, Message } from "discord.js";
 import { ChannelType } from "discord.js";
 import { log } from "../utils/misc/logger";
-import { getDueRandomTriggers } from "../utils/db/repositories";
-import { rescheduleRandomTrigger } from "../utils/db/repositories";
+import { serverScheduleRepository } from "@/utils/db/repositories";
+
 import type { RandomTriggerRow, TomoriState } from "../types/db/schema";
 import { tomoriChat, suppressNextSelfReply } from "../events/messageCreate/tomoriChat";
 import { getCachedAllPersonas } from "../utils/cache/tomoriStateCache";
@@ -16,7 +16,7 @@ export class RandomTriggerProcessor {
 
   public async processDueRandomTriggers(): Promise<void> {
     try {
-      const dueTriggers = await getDueRandomTriggers();
+      const dueTriggers = await serverScheduleRepository.getDueTriggers();
 
       if (!dueTriggers || dueTriggers.length === 0) {
         return;
@@ -197,7 +197,12 @@ export class RandomTriggerProcessor {
     randomOffsetRange: number | null,
     consecutiveFailures: number,
   ): Promise<void> {
-    const rescheduled = await rescheduleRandomTrigger(triggerId, timerHours, randomOffsetRange, consecutiveFailures);
+    const rescheduled = await serverScheduleRepository.rescheduleTrigger(
+      triggerId,
+      timerHours,
+      randomOffsetRange,
+      consecutiveFailures,
+    );
     if (!rescheduled) {
       log.error(`Failed to reschedule random trigger ${triggerId} — it may fire repeatedly until rescheduled`);
     }

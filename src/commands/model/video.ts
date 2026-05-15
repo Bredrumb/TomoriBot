@@ -16,7 +16,7 @@ import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/mod
 import { type UserRow, type ErrorContext, tomoriConfigSchema } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";
-import { loadAvailableVideoGenerationModelsForProvider } from "@/utils/db/repositories";
+import { llmModelRepo } from "@/utils/db/repositories";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
@@ -212,7 +212,7 @@ export async function execute(
     }
 
     const availableModels =
-      (await loadAvailableVideoGenerationModelsForProvider(selectedProvider, false, {
+      (await llmModelRepo.loadAvailableVideoGenerationModels(selectedProvider, false, {
         kind: "server",
         ownerId: tomoriState.server_id,
       })) ?? [];

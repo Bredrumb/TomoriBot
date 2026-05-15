@@ -8,7 +8,7 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { localizer } from "@/utils/text/localizer";
 import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
-import { upsertUserSavedProviderConfig } from "@/utils/db/repositories";
+import { llmProviderRepo } from "@/utils/db/repositories";
 import { promptForSavedProvider } from "@/commands/model/providerPicker";
 
 /**
@@ -261,7 +261,7 @@ export async function execute(
     }
 
     // 7. Persist the updated personal sampler config
-    const writeOk = await upsertUserSavedProviderConfig(userData.user_id, nextConfig);
+    const writeOk = await llmProviderRepo.upsertUserSavedProviderConfig(userData.user_id, nextConfig);
     if (!writeOk) {
       await replyWithResult({
         titleKey: "general.errors.update_failed_title",

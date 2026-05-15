@@ -7,7 +7,7 @@ import type { TomoriState } from "@/types/db/schema";
 import { ContextItemTag } from "@/types/misc/context";
 import { tomoriChat, suppressNextSelfReply } from "@/events/messageCreate/tomoriChat";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { registerUser } from "@/utils/db/repositories";
+import { userRepository } from "@/utils/db/repositories";
 import { buildForcedMentionsForUser, ensureDiscordUserMention } from "@/utils/discord/mentionHelper";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { resolvePersonaWebhookIdentity } from "@/utils/discord/webhook/identity";
@@ -380,7 +380,7 @@ const handler = async (_client: Client, member: GuildMember): Promise<void> => {
     const userLanguage = member.guild.preferredLocale;
     log.info(`New user ${member.user.tag} joined server, registering with language: ${userLanguage}`);
 
-    const userData = await registerUser(
+    const userData = await userRepository.register(
       member.id,
       resolvePreferredDiscordDisplayName({
         memberDisplayName: member.displayName,

@@ -4,7 +4,7 @@ import { THINKING_LEVEL_VALUES, type ThinkingLevelValue, isThinkingLevelValue } 
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { sql } from "@/utils/db/client";
-import { upsertSavedProviderConfig } from "@/utils/db/repositories";
+import { llmProviderRepo } from "@/utils/db/repositories";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -276,7 +276,9 @@ export async function execute(
     }
 
     // 7. Persist the updated sampler config
-    const upserted = await upsertSavedProviderConfig(tomoriState.server_id, nextConfig, { serverDiscId: serverId });
+    const upserted = await llmProviderRepo.upsertSavedProviderConfig(tomoriState.server_id, nextConfig, {
+      serverDiscId: serverId,
+    });
     if (!upserted) {
       await replyWithResult({
         titleKey: "general.errors.update_failed_title",

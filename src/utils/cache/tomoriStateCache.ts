@@ -1,6 +1,6 @@
 import type { TomoriState } from "@/types/db/schema";
 import { DatabaseUnavailableError } from "@/types/errors";
-import { loadAllPersonasForServer } from "../db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 import { log } from "../misc/logger";
 
 /**
@@ -109,7 +109,7 @@ export function getLastDbError(serverDiscId: string): { message: string; timesta
  * 1. Check in-memory cache
  *    - HIT & FRESH (<10 min) -> Return immediately (0 DB queries)
  *    - MISS or STALE -> Continue to step 2
- * 2. Load from DB via loadAllPersonasForServer()
+ * 2. Load from DB via personaRepository.loadAllForServer()
  * 3. Cache in memory for next requests
  *
  * @param serverDiscId - Discord server ID
@@ -137,7 +137,7 @@ export async function getCachedAllPersonas(serverDiscId: string): Promise<Tomori
 
   try {
     // 3. Load fresh data from database (all personas)
-    const personas = await loadAllPersonasForServer(serverDiscId);
+    const personas = await personaRepository.loadAllForServer(serverDiscId);
 
     // Successful load — clear any stale DB error for this server
     lastDbError.delete(serverDiscId);

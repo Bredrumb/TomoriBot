@@ -18,8 +18,8 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { getServerRandomTriggerCount, getRandomTriggerByPersonaAndChannel } from "@/utils/db/repositories";
-import { insertRandomTrigger, upsertRandomTrigger } from "@/utils/db/repositories";
+import { serverScheduleRepository } from "@/utils/db/repositories";
+
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 
@@ -148,7 +148,7 @@ export async function execute(
     }
 
     // 4. Check per-server trigger cap before proceeding
-    const triggerCount = await getServerRandomTriggerCount(tomoriState.server_id);
+    const triggerCount = await serverScheduleRepository.getServerTriggerCount(tomoriState.server_id);
     if (triggerCount >= MAX_TRIGGERS_PER_SERVER) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.config.random-trigger.add.cap_reached_title",
@@ -265,19 +265,27 @@ export async function execute(
 
     // 10. Override check: if a named persona already has a trigger for this channel, update it
     if (tomoriId !== null) {
-      const existing = await getRandomTriggerByPersonaAndChannel(tomoriState.server_id, channel.id, tomoriId);
+      const existing = await serverScheduleRepository.getTriggerByPersonaAndChannel(
+        tomoriState.server_id,
+        channel.id,
+        tomoriId,
+      );
 
       if (existing?.trigger_id) {
         // UPSERT the existing trigger with new settings
-        const updated = await upsertRandomTrigger(existing.trigger_id, triggerData);
+        const updated = await serverScheduleRepository.upsertTrigger(existing.trigger_id, triggerData);
 
         if (!updated) {
           const context: ErrorContext = {
             serverId: tomoriState.server_id,
             errorType: "DatabaseUpdateError",
-            metadata: { operation: "upsertRandomTrigger", ...triggerData },
+            metadata: { operation: "serverScheduleRepository.upsertTrigger", ...triggerData },
           };
-          await log.error("Failed to upsert random trigger", new Error("upsertRandomTrigger returned null"), context);
+          await log.error(
+            "Failed to upsert random trigger",
+            new Error("serverScheduleRepository.upsertTrigger returned null"),
+            context,
+          );
           await replyInfoEmbed(modalInteraction, locale, {
             titleKey: "general.errors.update_failed_title",
             descriptionKey: "general.errors.update_failed_description",
@@ -301,15 +309,19 @@ export async function execute(
     }
 
     // 11. INSERT new trigger (includes all Random triggers regardless of duplicates)
-    const inserted = await insertRandomTrigger(triggerData);
+    const inserted = await serverScheduleRepository.insertTrigger(triggerData);
 
     if (!inserted) {
       const context: ErrorContext = {
         serverId: tomoriState.server_id,
         errorType: "DatabaseInsertError",
-        metadata: { operation: "insertRandomTrigger", ...triggerData },
+        metadata: { operation: "serverScheduleRepository.insertTrigger", ...triggerData },
       };
-      await log.error("Failed to insert random trigger", new Error("insertRandomTrigger returned null"), context);
+      await log.error(
+        "Failed to insert random trigger",
+        new Error("serverScheduleRepository.insertTrigger returned null"),
+        context,
+      );
       await replyInfoEmbed(modalInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",

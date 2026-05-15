@@ -1,6 +1,6 @@
 import type { Guild } from "discord.js";
 import type { ServerEmojiRow, ServerStickerRow } from "../../types/db/schema";
-import { loadServerEmojis } from "../db/repositories";
+import { serverRepository } from "@/utils/db/repositories";
 import { log } from "../misc/logger";
 import { sql } from "../db/client";
 import { lazySyncGuildEmojis } from "./emojiLazySync";
@@ -102,7 +102,7 @@ export async function loadEmojiStickerCache(
     let stickers: ServerStickerRow[] | null = null;
 
     if (emojiUsageEnabled) {
-      emojis = await loadServerEmojis(serverId);
+      emojis = await serverRepository.loadEmojis(serverId);
     }
 
     if (stickerUsageEnabled) {

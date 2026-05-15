@@ -7,7 +7,7 @@ import type {
 } from "@/types/db/schema";
 import { personalProviderCapabilitySchema, tomoriConfigSchema } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
-import { loadSavedProviderConfig, loadUserSavedProviderConfigs } from "@/utils/db/repositories";
+import { llmProviderRepo } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { resolveCustomEndpointForProvider } from "@/utils/provider/customEndpointService";
 import { decryptApiKey } from "@/utils/security/crypto";
@@ -307,7 +307,7 @@ async function resolvePersonalCredentials(userId: number, capability: Capability
   const personalCapability = mapCapabilityToPersonalCapability(capability);
   personalProviderCapabilitySchema.parse(personalCapability);
 
-  const qualifyingRows = (await loadUserSavedProviderConfigs(userId))
+  const qualifyingRows = (await llmProviderRepo.loadUserSavedProviderConfigs(userId))
     .filter((row) => row.enabled_capabilities.includes(personalCapability))
     .filter((row) => getCapabilityModelId(row, capability) !== null)
     .sort((left, right) => left.provider.localeCompare(right.provider));
@@ -352,7 +352,7 @@ export async function resolveCapabilityCredentials(
   }
 
   const provider = await resolveProviderForCapability(serverId, capability);
-  const savedConfig = await loadSavedProviderConfig(serverId, provider);
+  const savedConfig = await llmProviderRepo.loadSavedProviderConfig(serverId, provider);
 
   if (!savedConfig) {
     throw new CredentialUnavailableError(provider, capability, "no_saved_config", "server");

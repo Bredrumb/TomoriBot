@@ -1,4 +1,4 @@
-import { loadTomoriState } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTermMemoryIntent";
 import { buildUncensorInjectionText } from "@/utils/text/uncensor";
@@ -78,7 +78,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     unicodeSpacesEnabled: tomoriConfig.uncensor_unicode_space_enabled,
     sanitizeEnabled: tomoriConfig.uncensor_sanitize_enabled,
   };
-  const tomoriState = snapshot?.tomoriState ?? (await loadTomoriState(guildId));
+  const tomoriState = snapshot?.tomoriState ?? (await personaRepository.loadState(guildId));
   const toolPromptMacroResolver = createToolPromptMacroResolver({
     provider: tomoriState?.llm?.llm_provider,
     stateForContext:

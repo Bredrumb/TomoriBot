@@ -1,5 +1,5 @@
 import type { Client, GuildTextBasedChannel } from "discord.js";
-import { loadTomoriState, loadUserRow, isBlacklisted } from "@/utils/db/repositories";
+import { personaRepository, userRepository } from "@/utils/db/repositories";
 import { formatChannelReferenceLabel } from "@/utils/discord/targetResolver";
 import { log } from "@/utils/misc/logger";
 import { normalizeCustomEmojisForLlm, replaceTemplateVariables } from "@/utils/text/processors/mentionProcessor";
@@ -63,7 +63,7 @@ export async function convertMentions(
 
   let currentTomoriNickname = tomoriNickname;
   if (!currentTomoriNickname) {
-    const tomoriState = snapshot?.tomoriState ?? (await loadTomoriState(serverId));
+    const tomoriState = snapshot?.tomoriState ?? (await personaRepository.loadState(serverId));
     currentTomoriNickname = tomoriState?.tomori_nickname || process.env.DEFAULT_BOTNAME || "Tomori";
   }
 
@@ -98,8 +98,8 @@ export async function convertMentions(
             const isTriggererId = snapshot?.triggererUserRow?.user_disc_id === id;
             const isUserBlacklisted = isTriggererId
               ? (snapshot?.isTriggererBlacklisted ?? false)
-              : await isBlacklisted(serverId, id);
-            const userData = isTriggererId ? snapshot?.triggererUserRow : await loadUserRow(id);
+              : await userRepository.isBlacklisted(serverId, id);
+            const userData = isTriggererId ? snapshot?.triggererUserRow : await userRepository.loadByDiscordId(id);
             const serverPersonalizationDisabled = personalMemoriesEnabled === false;
 
             if (!isUserBlacklisted && !serverPersonalizationDisabled && userData?.user_nickname) {

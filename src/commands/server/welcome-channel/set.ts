@@ -10,7 +10,7 @@ import {
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { getCachedAllPersonas, getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { updateTomoriConfig } from "@/utils/db/repositories";
+import { configRepository } from "@/utils/db/repositories";
 import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -167,7 +167,7 @@ export async function execute(
 
     await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const updatedConfig = await updateTomoriConfig(tomoriState.server_id, {
+    const updatedConfig = await configRepository.update(tomoriState.server_id, {
       welcome_channel_disc_id: selectedChannel.id,
       welcome_prompt: additionalPrompt,
       welcome_persona_id: welcomePersonaId,

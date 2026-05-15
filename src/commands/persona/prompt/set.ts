@@ -13,7 +13,7 @@ import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadAllPersonasForServer } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 import { sql } from "@/utils/db/client";
 import { localizer } from "@/utils/text/localizer";
 import { combineModalPromptParts, splitPromptIntoModalParts } from "@/utils/text/modalPromptParts";
@@ -92,7 +92,7 @@ export async function execute(
       return;
     }
 
-    const allPersonas = await loadAllPersonasForServer(serverDiscId);
+    const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.unknown_error_title",

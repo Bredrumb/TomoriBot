@@ -1,6 +1,6 @@
 import { sql } from "@/utils/db/client";
 import { isRagAvailable } from "@/utils/db/ragAvailability";
-import { loadEmbeddingModelById } from "@/utils/db/repositories";
+import { llmModelRepo } from "@/utils/db/repositories";
 import { formatRetrievedChunksForPrompt, retrieveRelevantDocumentChunks } from "@/utils/documents/documentService";
 import { log } from "@/utils/misc/logger";
 import { resolveCapabilityCredentials, getResolvedCapabilityModelId } from "@/utils/provider/credentialResolver";
@@ -80,7 +80,9 @@ export async function buildServerDocumentContextItem(params: {
     });
     const resolvedEmbeddingModelId =
       getResolvedCapabilityModelId(creds, "embedding") ?? tomoriState.config.embedding_model_id;
-    const embeddingModel = resolvedEmbeddingModelId ? await loadEmbeddingModelById(resolvedEmbeddingModelId) : null;
+    const embeddingModel = resolvedEmbeddingModelId
+      ? await llmModelRepo.loadEmbeddingModelById(resolvedEmbeddingModelId)
+      : null;
     if (!embeddingModel) {
       return null;
     }

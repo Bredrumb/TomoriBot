@@ -17,8 +17,8 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithPaginatedModal, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { getServerRandomTriggers } from "@/utils/db/repositories";
-import { deleteRandomTrigger } from "@/utils/db/repositories";
+import { serverScheduleRepository } from "@/utils/db/repositories";
+
 import type { UserRow, ErrorContext, RandomTriggerRow } from "@/types/db/schema";
 import type { CheckboxGroupOption, ModalCheckboxGroupField, SelectOption } from "@/types/discord/modal";
 
@@ -67,7 +67,7 @@ export async function execute(
       return;
     }
 
-    const triggers = await getServerRandomTriggers(tomoriState.server_id);
+    const triggers = await serverScheduleRepository.getServerTriggers(tomoriState.server_id);
     if (triggers.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.config.random-trigger.remove.none_title",
@@ -226,7 +226,7 @@ async function removeRandomTriggers(
   const deletionResults = await Promise.all(
     triggerSummaries.map(async (summary) => ({
       summary,
-      deleted: await deleteRandomTrigger(summary.trigger.trigger_id),
+      deleted: await serverScheduleRepository.deleteTrigger(summary.trigger.trigger_id),
     })),
   );
   const removedSummaries = deletionResults.filter((result) => result.deleted).map((result) => result.summary);
@@ -237,13 +237,13 @@ async function removeRandomTriggers(
       serverId,
       errorType: "DatabaseDeleteError",
       metadata: {
-        operation: "deleteRandomTrigger",
+        operation: "serverScheduleRepository.deleteTrigger",
         failedTriggerIds: failedSummaries.map((summary) => summary.trigger.trigger_id),
       },
     };
     await log.error(
       "Failed to delete one or more random triggers",
-      new Error("deleteRandomTrigger returned false for one or more entries"),
+      new Error("serverScheduleRepository.deleteTrigger returned false for one or more entries"),
       context,
     );
     await replyInfoEmbed(replyInteraction, locale, {

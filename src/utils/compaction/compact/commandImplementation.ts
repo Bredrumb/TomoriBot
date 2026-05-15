@@ -1,7 +1,7 @@
 import type { ChatInputCommandInteraction, Client, TextBasedChannel } from "discord.js";
 import { EmbedBuilder, MessageFlags } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
-import { loadTomoriState } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
@@ -41,7 +41,7 @@ export async function executeCompactCommand(
   if (!modalSelection) return;
 
   const serverDiscId = interaction.guild?.id ?? interaction.user.id;
-  const tomoriState = await loadTomoriState(serverDiscId);
+  const tomoriState = await personaRepository.loadState(serverDiscId);
   if (!tomoriState) {
     await editError(
       modalSelection.submitInteraction,

@@ -25,7 +25,7 @@ import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils
 import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import type { SelectOption } from "@/types/discord/modal";
-import { loadAllPersonasForServer } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 
 // Rule 20: Constants for static values at the top
 const MODAL_CUSTOM_ID = "forget_servermemory_modal";
@@ -161,7 +161,7 @@ export async function execute(
     }
 
     // Select target persona via paginated selector
-    const allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",

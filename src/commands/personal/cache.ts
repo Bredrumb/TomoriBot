@@ -11,7 +11,7 @@
 import type { Client, ChatInputCommandInteraction, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
-import { toggleCrossServerShortTermMemoryOptIn } from "@/utils/db/repositories";
+import { userRepository } from "@/utils/db/repositories";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import { clearShortTermMemoryForUser } from "@/utils/cache/shortTermMemoryCache";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -59,7 +59,7 @@ export async function execute(
   try {
     if (setting === "crossserver") {
       // Toggle cross-server opt-in
-      const newValue = await toggleCrossServerShortTermMemoryOptIn(interaction.user.id);
+      const newValue = await userRepository.toggleCrossServerShmOptIn(interaction.user.id);
 
       // Invalidate user cache to ensure fresh data on next access
       invalidateUserCache(interaction.user.id);

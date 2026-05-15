@@ -1,7 +1,7 @@
 import { type ChatInputCommandInteraction, type Client, MessageFlags } from "discord.js";
 import type { SummaryEmbedOptions } from "@/types/discord/embed";
 import type { TomoriState } from "@/types/db/schema";
-import { getBlacklistedMemberIds, getServerRandomTriggers, loadAllPersonasForServer } from "@/utils/db/repositories";
+import { personaRepository, serverScheduleRepository, userRepository } from "@/utils/db/repositories";
 import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
 import { replyPaginatedStatusPages } from "@/utils/discord/ui/statusComponents";
 import { ColorCode } from "@/utils/misc/logger";
@@ -28,12 +28,12 @@ export async function showServerChannelsStatus(
   const config = tomoriState.config;
   const [blacklistedMemberIds, whitelistPersonas, whitelistChannels, whitelistRoles, randomTriggers, allPersonas] =
     await Promise.all([
-      getBlacklistedMemberIds(tomoriState.server_id),
+      userRepository.getBlacklistedMemberIds(tomoriState.server_id),
       whitelistRepository.getAllWhitelistPersonas(tomoriState.server_id),
       whitelistRepository.getAllWhitelistChannels(tomoriState.server_id),
       whitelistRepository.getAllWhitelistRoles(tomoriState.server_id),
-      getServerRandomTriggers(tomoriState.server_id),
-      loadAllPersonasForServer(serverDiscId),
+      serverScheduleRepository.getServerTriggers(tomoriState.server_id),
+      personaRepository.loadAllForServer(serverDiscId),
     ]);
 
   const personaNameMap = new Map<number, string>();

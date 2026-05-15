@@ -19,7 +19,7 @@ import {
   type TomoriState,
 } from "../../types/db/schema";
 import type { ModalResult, SelectOption } from "../../types/discord/modal";
-import { loadAllPersonasForServer } from "../../utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 import { sql } from "@/utils/db/client";
 
 // Constants for validation
@@ -82,7 +82,7 @@ export async function execute(
 
   try {
     // 2. Resolve all personas for selector
-    const allPersonas = await loadAllPersonasForServer(serverDiscId);
+    const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",

@@ -3,8 +3,7 @@ import type {
   UserSavedProviderConfigRow,
   UserSavedProviderConfigUpsert,
 } from "@/types/db/schema";
-import { loadUserSavedProviderConfig, loadUserSavedProviderConfigs } from "@/utils/db/repositories";
-import { upsertUserSavedProviderConfig } from "@/utils/db/repositories";
+import { llmProviderRepo } from "@/utils/db/repositories";
 
 function sortProviderRows(rows: UserSavedProviderConfigRow[]): UserSavedProviderConfigRow[] {
   return [...rows].sort((left, right) => left.provider.localeCompare(right.provider));
@@ -67,7 +66,7 @@ export async function assignPersonalCapabilityToProvider(
   capability: PersonalProviderCapability,
   updater: (row: UserSavedProviderConfigRow) => UserSavedProviderConfigUpsert,
 ): Promise<boolean> {
-  const rows = await loadUserSavedProviderConfigs(userId);
+  const rows = await llmProviderRepo.loadUserSavedProviderConfigs(userId);
   if (rows.length === 0) {
     return false;
   }
@@ -77,7 +76,7 @@ export async function assignPersonalCapabilityToProvider(
     if (row.provider.toLowerCase() === provider.toLowerCase()) {
       const nextRow = updater(row);
       const nextEnabled = Array.from(new Set([...nextRow.enabled_capabilities, capability]));
-      await upsertUserSavedProviderConfig(userId, {
+      await llmProviderRepo.upsertUserSavedProviderConfig(userId, {
         ...nextRow,
         enabled_capabilities: nextEnabled,
       });
@@ -86,7 +85,7 @@ export async function assignPersonalCapabilityToProvider(
     }
 
     if (row.enabled_capabilities.includes(capability)) {
-      await upsertUserSavedProviderConfig(userId, withCapabilityEnabled(row, capability, false));
+      await llmProviderRepo.upsertUserSavedProviderConfig(userId, withCapabilityEnabled(row, capability, false));
     }
   }
 
@@ -98,7 +97,7 @@ export async function setPersonalCapabilityEnabled(
   capability: PersonalProviderCapability,
   enabled: boolean,
 ): Promise<boolean> {
-  const rows = await loadUserSavedProviderConfigs(userId);
+  const rows = await llmProviderRepo.loadUserSavedProviderConfigs(userId);
   const targetRow =
     getActivePersonalProviderForCapability(rows, capability) ??
     getStoredPersonalProviderForCapability(rows, capability);
@@ -109,18 +108,18 @@ export async function setPersonalCapabilityEnabled(
   for (const row of rows) {
     if (!enabled) {
       if (row.enabled_capabilities.includes(capability)) {
-        await upsertUserSavedProviderConfig(userId, withCapabilityEnabled(row, capability, false));
+        await llmProviderRepo.upsertUserSavedProviderConfig(userId, withCapabilityEnabled(row, capability, false));
       }
       continue;
     }
 
     if (row.provider.toLowerCase() === targetRow.provider.toLowerCase()) {
-      await upsertUserSavedProviderConfig(userId, withCapabilityEnabled(row, capability, enabled));
+      await llmProviderRepo.upsertUserSavedProviderConfig(userId, withCapabilityEnabled(row, capability, enabled));
       continue;
     }
 
     if (row.enabled_capabilities.includes(capability)) {
-      await upsertUserSavedProviderConfig(userId, withCapabilityEnabled(row, capability, false));
+      await llmProviderRepo.upsertUserSavedProviderConfig(userId, withCapabilityEnabled(row, capability, false));
     }
   }
 
@@ -128,7 +127,7 @@ export async function setPersonalCapabilityEnabled(
 }
 
 export async function loadActivePersonalTextProvider(userId: number): Promise<UserSavedProviderConfigRow | null> {
-  const rows = await loadUserSavedProviderConfigs(userId);
+  const rows = await llmProviderRepo.loadUserSavedProviderConfigs(userId);
   return getActivePersonalProviderForCapability(rows, "text");
 }
 
@@ -136,5 +135,5 @@ export async function loadPersonalProviderOrNull(
   userId: number,
   provider: string,
 ): Promise<UserSavedProviderConfigRow | null> {
-  return await loadUserSavedProviderConfig(userId, provider);
+  return await llmProviderRepo.loadUserSavedProviderConfig(userId, provider);
 }

@@ -10,7 +10,7 @@ import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
 import type { UserRow } from "../../types/db/schema";
-import { loadTomoriState } from "../../utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 import { decryptApiKey } from "../../utils/security/crypto";
 import { memoryGuard, PERSONA_LIMITS, reservePersonaQuota } from "../../utils/security/rateLimiter";
 import { safeDownload } from "../../utils/security/safeDownload";
@@ -160,7 +160,7 @@ export async function execute(
   try {
     // 1. Load Tomori state to check provider (works for both guilds and DMs)
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
-    const tomoriState = await loadTomoriState(serverDiscId);
+    const tomoriState = await personaRepository.loadState(serverDiscId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",

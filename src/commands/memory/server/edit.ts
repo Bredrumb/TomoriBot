@@ -20,7 +20,7 @@ import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { isBlacklisted, loadAllPersonasForServer } from "@/utils/db/repositories";
+import { personaRepository, userRepository } from "@/utils/db/repositories";
 import { getMemoryLimits, validateMemoryContent } from "@/utils/misc/memoryLimits";
 import type { SelectOption } from "@/types/discord/modal";
 import {
@@ -154,7 +154,7 @@ export async function execute(
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
 
     if (interaction.guild) {
-      const blacklisted = (await isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
+      const blacklisted = (await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
       if (blacklisted && !hasManagePermission) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.user_blacklisted_title",
@@ -177,7 +177,7 @@ export async function execute(
       return;
     }
 
-    const allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",

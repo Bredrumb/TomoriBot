@@ -1,5 +1,5 @@
 import type { PersonalProviderCapability, TomoriState, UserSavedProviderConfigRow } from "@/types/db/schema";
-import { loadLlmById, loadUserSavedProviderConfigs } from "@/utils/db/repositories";
+import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 
 export interface PersonalProviderOverlayResult {
@@ -42,7 +42,7 @@ export async function applyPersonalProviderSelectionsToTomoriState(
     };
   }
 
-  const rows = await loadUserSavedProviderConfigs(userId);
+  const rows = await llmProviderRepo.loadUserSavedProviderConfigs(userId);
   if (rows.length === 0) {
     return {
       tomoriState,
@@ -90,7 +90,7 @@ export async function applyPersonalProviderSelectionsToTomoriState(
 
   let nextLlm = tomoriState.llm;
   if (activeConfigs.text?.llm_id) {
-    const personalLlm = await loadLlmById(activeConfigs.text.llm_id);
+    const personalLlm = await llmModelRepo.loadById(activeConfigs.text.llm_id);
     if (personalLlm) {
       nextLlm = personalLlm;
     }
@@ -98,7 +98,7 @@ export async function applyPersonalProviderSelectionsToTomoriState(
 
   let nextVisionLlm = tomoriState.vision_llm;
   if (activeConfigs.vision?.vision_llm_id) {
-    const personalVisionLlm = await loadLlmById(activeConfigs.vision.vision_llm_id);
+    const personalVisionLlm = await llmModelRepo.loadById(activeConfigs.vision.vision_llm_id);
     if (personalVisionLlm) {
       nextVisionLlm = personalVisionLlm;
     }
@@ -109,7 +109,7 @@ export async function applyPersonalProviderSelectionsToTomoriState(
   if (activeConfigs.text?.fallback_llm_ids && activeConfigs.text.fallback_llm_ids.length > 0) {
     const personalFallbacks: typeof tomoriState.fallback_llms = [];
     for (const llmId of activeConfigs.text.fallback_llm_ids) {
-      const fallbackLlm = await loadLlmById(llmId);
+      const fallbackLlm = await llmModelRepo.loadById(llmId);
       if (fallbackLlm) {
         personalFallbacks.push(fallbackLlm);
       }

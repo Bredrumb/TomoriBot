@@ -11,7 +11,7 @@ import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "
 import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import type { UserRow } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
-import { loadAllPersonasForServer } from "../../utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 import { downloadImage } from "../../utils/image/avatarHelper";
 import { convertToPNG } from "../../utils/image/imageProcessor";
 import { sql } from "../../utils/db/client";
@@ -120,7 +120,7 @@ export async function execute(
     }
 
     // 3. Load all personas for this server
-    const allPersonas = await loadAllPersonasForServer(interaction.guild.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
 
     // 4. Get main and alter personas
     const mainPersona = allPersonas.find((p) => !p.is_alter);

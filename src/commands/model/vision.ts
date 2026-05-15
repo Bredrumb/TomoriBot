@@ -1,7 +1,7 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import { sql } from "@/utils/db/client";
-import { loadAvailableModelsForProvider } from "@/utils/db/repositories";
+import { llmModelRepo } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -154,7 +154,7 @@ export async function execute(
       return;
     }
 
-    const allModels = await loadAvailableModelsForProvider(selectedProvider, false, {
+    const allModels = await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
       kind: "server",
       ownerId: tomoriState.server_id,
     });

@@ -42,7 +42,7 @@ import type {
   SupportsStructuredOutput,
 } from "@/types/provider/featureInterfaces";
 import { getCachedDefaultLLM, isLLMCacheReady } from "@/utils/cache/llmCache";
-import { loadAvailableModelsForProvider, loadDefaultModelForProvider } from "@/utils/db/repositories";
+import { llmModelRepo } from "@/utils/db/repositories";
 import { callGoogleStructuredJSON } from "@/providers/google/googleStructuredOutput";
 import { generateConversationSummaryGoogle, generateRoleplaySummaryGoogle } from "@/providers/google/compactGenerator";
 import { generatePresetFromPrompt } from "@/providers/google/presetGenerator";
@@ -65,7 +65,7 @@ async function getDefaultVertexexpressModel(): Promise<string> {
   }
 
   try {
-    const dbDefault = await loadDefaultModelForProvider(providerName);
+    const dbDefault = await llmModelRepo.loadDefaultModel(providerName);
     if (dbDefault) {
       log.info(`Using database default ${providerName} model: ${dbDefault.llm_codename}`);
       return dbDefault.llm_codename;
@@ -77,7 +77,7 @@ async function getDefaultVertexexpressModel(): Promise<string> {
   }
 
   try {
-    const availableModels = await loadAvailableModelsForProvider(providerName);
+    const availableModels = await llmModelRepo.loadAvailableModelsForProvider(providerName);
     if (availableModels && availableModels.length > 0) {
       const firstModel = availableModels[0].llm_codename;
       log.warn(`No default model found, using first available ${providerName} model: ${firstModel}`);

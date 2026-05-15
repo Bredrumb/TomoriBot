@@ -1,11 +1,7 @@
 import { type ChatInputCommandInteraction, type Client, MessageFlags } from "discord.js";
 import type { SummaryEmbedOptions } from "@/types/discord/embed";
 import type { TomoriState } from "@/types/db/schema";
-import {
-  loadAllPersonasForServer,
-  getAllChannelLlmOverridesForServer,
-  loadEmbeddingModelById,
-} from "@/utils/db/repositories";
+import { llmModelRepo, llmOverrideRepo, personaRepository } from "@/utils/db/repositories";
 import { getDiffusionModelById } from "@/utils/image/naiDiffusionModels";
 import { getQuotaConfig } from "@/utils/quota/imageQuotaManager";
 import { getTextQuotaConfig } from "@/utils/quota/textQuotaManager";
@@ -50,13 +46,13 @@ export async function showServerModelStatus(
     speechModel,
     transcriptionModel,
   ] = await Promise.all([
-    loadAllPersonasForServer(serverDiscId),
-    getAllChannelLlmOverridesForServer(tomoriState.server_id),
+    personaRepository.loadAllForServer(serverDiscId),
+    llmOverrideRepo.getAllChannelLlmOverridesForServer(tomoriState.server_id),
     getQuotaConfig(tomoriState.server_id),
     getTextQuotaConfig(tomoriState.server_id),
     getVideoQuotaConfig(tomoriState.server_id),
     config.diffusion_model_id ? getDiffusionModelById(config.diffusion_model_id) : Promise.resolve(null),
-    config.embedding_model_id ? loadEmbeddingModelById(config.embedding_model_id) : Promise.resolve(null),
+    config.embedding_model_id ? llmModelRepo.loadEmbeddingModelById(config.embedding_model_id) : Promise.resolve(null),
     config.video_model_id ? loadVideoModelById(config.video_model_id) : Promise.resolve(null),
     config.nai_diffusion_model_id ? getDiffusionModelById(config.nai_diffusion_model_id) : Promise.resolve(null),
     resolveActiveSpeechEndpoint(tomoriState.server_id),
