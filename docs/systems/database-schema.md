@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5b -->
+<!-- ARCH-ALIGNMENT: prereq-phase-5.5e -->
 
 # 5. Database Schema and Data Model
 
@@ -11,9 +11,35 @@ This document summarizes the current PostgreSQL schema used by TomoriBot.
 
 ## Data Access Boundary
 
-The Phase 2 repository layer lives under `src/utils/db/repositories/`. Repositories group reads/writes by domain (`UserRepository`, memory repositories, `ConfigRepository`, `PersonaRepository`, `ServerRepository`, `LlmRepository`, `ToolRepository`, `RagRepository`, and `ImportExportRepository`) and implement the shared `IRepository<TExport>` contract.
+The Phase 2 repository layer lives under `src/utils/db/repositories/`. All 19 repository classes implement the shared `IRepository<TExport>` contract:
 
-Application code imports the repository facade rather than raw DB entry points. The former public DB god files (`dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, and `dataImportV2.ts`) have been removed. Repository SQL is split into domain-owned modules under `src/utils/db/repositories/*Sql.ts`; `repositoryReadSql.ts` and `repositoryWriteSql.ts` remain only as compatibility barrels during the Phase 6 cleanup window.
+| Repository | Domain |
+|---|---|
+| `ConfigRepository` | Server/persona config reads + writes, NAI presets |
+| `CooldownRepository` | Cooldown checks, cooldown writes, cleanup |
+| `ConditioningMemoryRepository` | Reward/punish conditioning history |
+| `ExportRepository` | All data export operations (personal, server, memories, settings) |
+| `ImportRepository` | All data import operations + cache invalidation |
+| `LlmModelRepository` | Global model catalog (text, embedding, diffusion, video) |
+| `LlmOverrideRepository` | Channel/persona LLM override assignments + fallback refs |
+| `LlmProviderRepository` | Saved provider configs, custom endpoints, OpenRouter registrations |
+| `PersonalMemoryRepository` | User + persona lineage scoped personal memories |
+| `PersonaRepository` | Persona state loading + writes (`tomoris`, `persona_configs`) |
+| `PresetRepository` | TomoriBot preset export/import + SillyTavern preset CRUD + ST card conversion |
+| `RagRepository` | RAG document and chunk storage |
+| `ServerMemoryRepository` | Server-wide shared memories |
+| `ServerRepository` | Server identity: setup, emojis/stickers, webhooks, blacklist |
+| `ServerScheduleRepository` | Reminder + random-trigger scheduling |
+| `ShortTermMemoryRepository` | Short-term per-channel/user conversation memory |
+| `ToolRepository` | Tool configurations and API key status |
+| `UserRepository` | User registration, privacy, personalization, spotlight |
+| `WhitelistRepository` | Channel, persona, and role whitelist rules |
+
+Application code imports repository instances from `src/utils/db/repositories/index.ts`. That file re-exports all 19 instances and a small set of shared types; it contains no free functions. The former public DB god files (`dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, `dataImportV2.ts`) have been removed.
+
+### SQL convention
+
+All SQL is inlined as `private` methods directly on the owning Repository class. Separate `*ReadSql.ts` / `*WriteSql.ts` sibling files are forbidden — `checkRefactorIntegrity.ts` will flag any surviving SQL sibling at gate time. If inlining SQL pushes a Repository file past ~1,000 lines, that signals the domain is too broad: **split the Repository itself** (e.g. `LlmRepository` → `LlmModelRepository` + `LlmProviderRepository` + `LlmOverrideRepository`) rather than externalising SQL. Size is the signal; the split must follow a coherent domain boundary.
 
 ## Main Tables (Current)
 

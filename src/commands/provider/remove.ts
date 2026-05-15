@@ -205,14 +205,16 @@ export async function execute(
         ? activeDefaults.vision_llm_id
         : tomoriState.config.vision_llm_id;
 
-    const fallbackRows =
-      tomoriState.config.fallback_llm_ids && tomoriState.config.fallback_llm_ids.length > 0
-        ? await sql<Array<{ llm_id: number; llm_provider: string }>>`
-            SELECT llm_id, llm_provider
-            FROM llms
-            WHERE llm_id = ANY(${tomoriState.config.fallback_llm_ids})
-          `
-        : [];
+    // Avoid ANY($1) array binding — Bun SQL intermittently fails with 08P01 on integer arrays.
+    let fallbackRows: Array<{ llm_id: number; llm_provider: string }> = [];
+    if (tomoriState.config.fallback_llm_ids && tomoriState.config.fallback_llm_ids.length > 0) {
+      const ids = tomoriState.config.fallback_llm_ids;
+      const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
+      fallbackRows = (await sql.unsafe(
+        `SELECT llm_id, llm_provider FROM llms WHERE llm_id IN (${placeholders})`,
+        ids,
+      )) as Array<{ llm_id: number; llm_provider: string }>;
+    }
     const nextFallbackIds = fallbackRows
       .filter((row) => row.llm_provider.toLowerCase() !== selectedProvider.toLowerCase())
       .map((row) => row.llm_id);

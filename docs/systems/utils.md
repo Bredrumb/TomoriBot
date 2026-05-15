@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5c -->
+<!-- ARCH-ALIGNMENT: prereq-phase-5.5e -->
 
 # 11. Utils and Helpers
 
@@ -29,11 +29,11 @@ This is a current map of shared utility modules under `src/utils/`.
 ### `utils/db`
 
 - `client.ts`: DB client wiring
-- `repositories/`: public data-access facade and domain repositories
-- `repositoryReadSql.ts`, `repositoryWriteSql.ts`: compatibility barrels for domain-owned repository SQL modules under `repositories/*Sql.ts`
-- `repositoryExportSql.ts`, `repositoryImportSql.ts`: repository-internal import/export SQL helpers
-- `cooldownManager.ts`, `messageCooldown.ts`, `cooldownsCleanup.ts`
-- feature-specific DB modules such as `channelWhitelist.ts`, `personalSpotlight.ts`, `stPresetDb.ts`, and `managedWebhookDb.ts`
+- `initializeDatabase.ts`: schema + seed startup runner
+- `sqlSecurity.ts`: query parameterisation helpers
+- `sqlSplitter.ts`: SQL file parsing utilities
+- `ragAvailability.ts`: pgvector / RAG feature detection
+- `repositories/`: 19 domain-owned Repository classes + `index.ts` (instance + type re-exports only). All SQL is inlined as `private` methods on each Repository class — no `*ReadSql.ts` / `*WriteSql.ts` sibling files exist. See `docs/systems/database-schema.md` for the full repository table and SQL convention.
 
 ### `utils/discord`
 

@@ -11,6 +11,13 @@ import { log } from "@/utils/misc/logger";
 import { getProviderForTomori, ProviderFactory } from "@/utils/provider/providerFactory";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { decryptApiKey } from "@/utils/security/crypto";
+import {
+  hasAvailableRotationKey,
+  MAX_KEY_ATTEMPTS,
+  recordKeyError,
+  recordKeySuccess,
+  selectApiKey,
+} from "@/utils/security/keyRotation";
 import { truncateDialogueHistory } from "@/utils/text/contextTruncator";
 import type { ChatResponseSink, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import { providerIsApiFamily, runToolLoop } from "@/utils/chat/toolLoop";
@@ -21,6 +28,8 @@ interface GenerationAttempt {
   provider: LLMProvider;
   providerConfig: ProviderConfig;
   successModel: LlmRow;
+  /** Rotation key ID used for this attempt; null when rotation pool is inactive. */
+  rotationKeyId: number | null;
 }
 
 interface FallbackFailure {
@@ -57,12 +66,53 @@ export async function runGenerationTurn(
         emptyResponseFinishReason: context.turn.lockedTurn.admission.incoming.emptyResponseFinishReason,
         retryCount: context.turn.lockedTurn.admission.incoming.retryCount,
       });
-      const result = await runToolLoop({
-        context,
-        provider: attempt.provider,
-        providerConfig: attempt.providerConfig,
-        tomoriState: attempt.tomoriState,
-      });
+
+      // Key rotation inner loop: try multiple keys for this attempt before giving up.
+      let rotationKeyId = attempt.rotationKeyId;
+      const excludedKeyIds = new Set<number>(rotationKeyId != null ? [rotationKeyId] : []);
+      let result!: GenerationTurnResult;
+      let keyAttemptCount = 0;
+
+      while (true) {
+        keyAttemptCount++;
+        if (keyAttemptCount > MAX_KEY_ATTEMPTS) {
+          log.warn(`Exceeded MAX_KEY_ATTEMPTS (${MAX_KEY_ATTEMPTS}) for ${attempt.label}.`);
+          break;
+        }
+
+        result = await runToolLoop({
+          context,
+          provider: attempt.provider,
+          providerConfig: attempt.providerConfig,
+          tomoriState: attempt.tomoriState,
+        });
+
+        if (result.status !== "error") {
+          if (rotationKeyId != null) await recordKeySuccess(rotationKeyId);
+          break;
+        }
+
+        // On error: check if another rotation key is available before falling to model fallback.
+        const hasFallbackKey = await hasAvailableRotationKey(attempt.tomoriState, [...Array.from(excludedKeyIds)]);
+        if (!hasFallbackKey) break;
+
+        // Record error for the key that just failed, then rotate to the next one.
+        if (rotationKeyId != null) {
+          const errorCode = extractErrorCode(result.streamResults.at(-1));
+          const errorType = errorCode.includes("rate_limit") || errorCode.includes("429") ? "rate_limit" : "api_error";
+          await recordKeyError(rotationKeyId, errorType, errorCode);
+          excludedKeyIds.add(rotationKeyId);
+        }
+
+        const nextKey = await selectApiKey(attempt.tomoriState, [...Array.from(excludedKeyIds)]);
+        if (!nextKey) break;
+
+        attempt.providerConfig.apiKey = nextKey.apiKey;
+        rotationKeyId = nextKey.rotationKeyId;
+        log.warn(
+          `Key rotation: retrying ${attempt.label} with key ${rotationKeyId ?? "main"} (attempt ${keyAttemptCount + 1}).`,
+        );
+      }
 
       for (const streamResult of result.streamResults) {
         await responseSink.emitStreamResult(streamResult);
@@ -193,7 +243,12 @@ async function createAttempt(
   const provider = forcedProviderName
     ? await ProviderFactory.getProviderByName(forcedProviderName)
     : await getProviderForTomori(tomoriState);
-  const apiKey = await resolveApiKey(tomoriState);
+
+  // 1. Try the rotation pool first; fall back to the server's own encrypted key.
+  const rotationSelection = await selectApiKey(tomoriState);
+  const apiKey = rotationSelection ? rotationSelection.apiKey : await resolveApiKey(tomoriState);
+  const rotationKeyId = rotationSelection?.rotationKeyId ?? null;
+
   const providerConfig = await provider.createConfig(tomoriState, apiKey);
 
   return {
@@ -202,6 +257,7 @@ async function createAttempt(
     provider,
     providerConfig,
     successModel: tomoriState.llm,
+    rotationKeyId,
   };
 }
 

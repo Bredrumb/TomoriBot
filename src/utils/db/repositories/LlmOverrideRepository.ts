@@ -455,11 +455,12 @@ export class LlmOverrideRepository {
 
       if (deadChannelIds.length === 0) return 0;
 
-      await sql`
-        DELETE FROM channel_llm_overrides
-        WHERE server_id = ${serverId}
-          AND channel_disc_id = ANY(${deadChannelIds})
-      `;
+      // Avoid ANY($1) array binding — Bun SQL intermittently fails with 08P01 on array parameters.
+      const placeholders = deadChannelIds.map((_: string, i: number) => `$${i + 2}`).join(", ");
+      await sql.unsafe(
+        `DELETE FROM channel_llm_overrides WHERE server_id = $1 AND channel_disc_id IN (${placeholders})`,
+        [serverId, ...deadChannelIds],
+      );
 
       log.info(`Cleaned up ${deadChannelIds.length} dead channel override(s) for server ${serverId}`);
       return deadChannelIds.length;

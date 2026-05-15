@@ -13,8 +13,8 @@
  * Run with: bun scripts/maintenance/drainRepositoryShim.ts [--dry-run]
  */
 
-import { readdirSync, readFileSync, statSync, writeFileSync } from "fs";
-import { join, relative } from "path";
+import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { join, relative } from "node:path";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const SRC_DIR = join(import.meta.dir, "../../src");

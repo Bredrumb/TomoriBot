@@ -12,7 +12,12 @@ import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTerm
 import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
 import { buildContext, type SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
-import { stripBridgePrefix, extractBridgeUserId, isMatrixBridgeWebhookUsername } from "@/utils/bridges";
+import { stripBridgePrefix, extractBridgeUserId, isMatrixBridgeWebhookUsername, isBridgeUserId } from "@/utils/bridges";
+import { checkTargetEmbedTitle } from "@/utils/discord/embedClassifier";
+import { getCachedVoiceTranscript, setCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
+import { isAudioAttachment, transcribeMessageAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
+import { resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
+import { getOpenRouterCapabilities, isOpenRouterCapabilityCacheReady } from "@/utils/cache/openrouterCapabilityCache";
 import { buildQueuedReplyDirective, normalizeTailDirective } from "@/utils/chat/contextDirectives";
 import {
   buildCombinedTailDirectiveMessage,
@@ -68,6 +73,38 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
 
   const assets = await loadPersonaAssets(turn);
   const history = await buildSimplifiedHistory(turn, messageIdMap);
+
+  // Resolve impersonation identity fields needed by contextBuilder (Fix #4).
+  let impersonatedUserNickname: string | undefined;
+  let impersonatedUserPrompt: string | undefined;
+  if (incoming.isUserImpersonation && incoming.impersonatedUserId) {
+    const impersonatedUserRow = await getCachedUserRow(incoming.impersonatedUserId);
+    impersonatedUserPrompt = impersonatedUserRow?.impersonation_prompt ?? undefined;
+    const identity = await resolveImpersonatedIdentity(
+      client,
+      turn.guild,
+      incoming.impersonatedUserId,
+      impersonatedUserRow?.user_nickname,
+    );
+    impersonatedUserNickname = identity.displayName;
+  }
+
+  // Resolve live OpenRouter capability flags to avoid stale DB vision values (Fix #3).
+  let effectiveSeesImages: boolean | undefined;
+  let effectiveSeesVideos: boolean | undefined;
+  const activeLlm = turn.persona.llm;
+  if (
+    activeLlm.llm_provider === "openrouter" &&
+    activeLlm.llm_codename !== "other-model" &&
+    isOpenRouterCapabilityCacheReady()
+  ) {
+    const apiCaps = getOpenRouterCapabilities(activeLlm.llm_codename);
+    if (apiCaps) {
+      effectiveSeesImages = apiCaps.seesImages;
+      effectiveSeesVideos = apiCaps.seesVideos;
+    }
+  }
+
   const contextBuild = await buildContext({
     guildId: turn.serverDiscId,
     serverName: turn.serverName,
@@ -95,17 +132,23 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     preloadedStickers: assets.loadedStickers,
     isUserImpersonation: incoming.isUserImpersonation,
     impersonatedUserId: incoming.impersonatedUserId,
+    impersonatedUserNickname,
+    impersonatedUserPrompt,
     explicitLongTermMemoryIntent: streamingContext.explicitLongTermMemoryIntent,
-    hasVisionTool: !!turn.persona.vision_llm && !turn.persona.llm.sees_images,
+    seesImages: effectiveSeesImages,
+    seesVideos: effectiveSeesVideos,
+    hasVisionTool: !!turn.persona.vision_llm && !(effectiveSeesImages ?? turn.persona.llm.sees_images),
     messageIdMap,
   });
 
   const contextItems = appendTailDirectives({
     turn,
+    simplifiedMessages: history.simplifiedMessages,
     contextItems: appendInjectedContextItems(contextBuild.contextItems, incoming.injectedContextItems),
     lowerPriorityTailDirectives: contextBuild.lowerPriorityTailDirectives,
     tailDirectives: contextBuild.tailDirectives,
     uncensorDirective: contextBuild.uncensorDirective,
+    messageIdMap,
   });
 
   return {
@@ -196,7 +239,7 @@ async function buildSimplifiedHistory(
 }> {
   const channel = turn.lockedTurn.admission.channel;
   const fetchLimit = normalizeMessageFetchLimit(turn.persona.config.message_fetch_limit);
-  const messages =
+  let messages =
     "messages" in channel
       ? Array.from((await channel.messages.fetch({ limit: fetchLimit })).values()).reverse()
       : [turn.lockedTurn.admission.message];
@@ -205,6 +248,44 @@ async function buildSimplifiedHistory(
     !messages.some((message) => message.id === turn.lockedTurn.admission.message.id)
   ) {
     messages.push(turn.lockedTurn.admission.message);
+  }
+
+  // Find the most recent reset or compact_refresh embed and slice history at that point.
+  // "reset" starts after the marker; "compact_refresh" starts at the marker (it's included).
+  let resetIndex = -1;
+  let resetType: "reset" | "compact_refresh" | null = null;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    for (const embed of messages[i].embeds) {
+      const embedCheck = checkTargetEmbedTitle(embed.title);
+      if (embedCheck.isTarget && (embedCheck.type === "reset" || embedCheck.type === "compact_refresh")) {
+        resetIndex = i;
+        resetType = embedCheck.type === "compact_refresh" ? "compact_refresh" : "reset";
+        break;
+      }
+    }
+    if (resetIndex !== -1) break;
+  }
+  if (resetIndex !== -1) {
+    const startIndex = resetType === "compact_refresh" ? resetIndex : resetIndex + 1;
+    log.info(`Reset marker at index ${resetIndex} (${resetType}). History starts from index ${startIndex}.`);
+    messages = messages.slice(startIndex);
+  }
+
+  // Pre-populate the voice transcript cache for historical audio messages (Fix #5).
+  // Runs STT before the main loop so cache lookups inside simplifyMessage() are synchronous.
+  // Skipped in chat mode (transcripts are already posted as text messages in that mode).
+  if (!(turn.persona.config.voice_transcript_chat_mode ?? false)) {
+    for (const msg of messages) {
+      if (msg.author.bot || msg.webhookId) continue;
+      if (getCachedVoiceTranscript(msg.id)) continue;
+      const hasAudio = [...msg.attachments.values()].some(isAudioAttachment);
+      if (!hasAudio) continue;
+      const result = await transcribeMessageAudioAttachment(msg, turn.persona.server_id);
+      if (result.transcriptText) {
+        setCachedVoiceTranscript(msg.id, result.transcriptText, "user_stt");
+        log.info(`[VoiceCache] SET user_stt (history) | msg=${msg.id} | chars=${result.transcriptText.length}`);
+      }
+    }
   }
 
   const simplifiedMessages: SimplifiedMessageForContext[] = [];
@@ -235,6 +316,47 @@ async function buildSimplifiedHistory(
 
   if (turn.lockedTurn.admission.client.user?.id && !turn.isUserImpersonation) {
     userIds.add(turn.lockedTurn.admission.client.user.id);
+  }
+
+  // Inject reminder prompt as a synthetic System message so the LLM knows what to remind about.
+  const incoming = turn.lockedTurn.admission.incoming;
+  if (incoming.reminderData && (incoming.reminderRecipientID || incoming.reminderData.self_reminder)) {
+    const isSelfReminder = incoming.reminderData.self_reminder === true;
+    let reminderContent = "";
+
+    if (isSelfReminder) {
+      reminderContent = `[System: A task reminder you set for yourself has triggered. Task: "${incoming.reminderData.reminder_purpose}". Please execute this task now.]`;
+      if (incoming.reminderData.reminder_lateness) {
+        reminderContent += `\n[System: This task is ${incoming.reminderData.reminder_lateness} overdue.]`;
+      }
+    } else if (incoming.reminderRecipientID && isBridgeUserId(incoming.reminderRecipientID)) {
+      // Matrix user IDs (@user:server) must not be wrapped in <@...> — that produces <@@user:server>.
+      const matrixLocalpart = incoming.reminderRecipientID.split(":")[0].replace(/^@/, "");
+      reminderContent = `[System: A reminder you set earlier for @${matrixLocalpart} (Mention ID: @{${matrixLocalpart}}) has triggered. Reminder: "${incoming.reminderData.reminder_purpose}". Focus on reminding and pinging @${matrixLocalpart} about this.]`;
+      if (incoming.reminderData.reminder_lateness) {
+        reminderContent += `\n[System: You are also ${incoming.reminderData.reminder_lateness} late in reminding the user.]`;
+      }
+    } else {
+      reminderContent = `[System: A reminder you set earlier for <@${incoming.reminderRecipientID}> (Mention ID: ${incoming.reminderRecipientID}) has triggered. Reminder: "${incoming.reminderData.reminder_purpose}". Focus on reminding and pinging <@${incoming.reminderRecipientID}> about this.]`;
+      if (incoming.reminderData.reminder_lateness) {
+        reminderContent += `\n[System: You are also ${incoming.reminderData.reminder_lateness} late in reminding the user.]`;
+      }
+    }
+
+    const fallbackAuthorId = turn.lockedTurn.admission.client.user?.id ?? incoming.reminderRecipientID ?? "system";
+    simplifiedMessages.push({
+      id: `synthetic-reminder-${Date.now()}`,
+      authorId: fallbackAuthorId,
+      authorName: "System",
+      authorType: "user",
+      personaName: null,
+      content: reminderContent,
+      imageAttachments: [],
+      videoAttachments: [],
+    });
+    log.info(
+      `Injected reminder into conversation history for ${isSelfReminder ? "self task" : `user ${incoming.reminderRecipientID}`}`,
+    );
   }
 
   return { simplifiedMessages, userIds, matrixUsers, syntheticUsers };
@@ -460,10 +582,12 @@ async function withReactionContext(
 
 function appendTailDirectives(args: {
   turn: ChatTurn;
+  simplifiedMessages: SimplifiedMessageForContext[];
   contextItems: ChatTurnContext["contextItems"];
   lowerPriorityTailDirectives: string[];
   tailDirectives: string[];
   uncensorDirective?: string;
+  messageIdMap?: MessageIdMap;
 }): ChatTurnContext["contextItems"] {
   const incoming = args.turn.lockedTurn.admission.incoming;
   const contextItems = [...args.contextItems];
@@ -479,13 +603,81 @@ function appendTailDirectives(args: {
     tail.push(`The user has activated reasoning mode with the following query: "${incoming.reasoningQuery}".`);
   if (incoming.manualSystemPrompt?.trim()) tail.push(normalizeTailDirective(incoming.manualSystemPrompt));
 
+  // Inject persona self-continuation directive for manual triggers (Fix #1).
+  // When the selected persona was the last speaker, prompt it to continue rather
+  // than repeat itself. Also handles the manualPrefill hybrid-continuation case.
+  const trimmedPrefill = incoming.manualPrefill?.trim();
+  if (
+    incoming.isManuallyTriggered &&
+    !incoming.isUserImpersonation &&
+    !incoming.reasoningQuery &&
+    !incoming.reminderRecipientID &&
+    !incoming.reminderData?.self_reminder &&
+    args.simplifiedMessages.length > 0
+  ) {
+    const lastMsg = args.simplifiedMessages[args.simplifiedMessages.length - 1];
+    const isFromSelectedPersona =
+      lastMsg.authorType === "persona" &&
+      !!args.turn.persona.tomori_nickname &&
+      lastMsg.personaName?.toLowerCase() === args.turn.persona.tomori_nickname.toLowerCase();
+    const isEmbedMessage =
+      lastMsg.content?.includes("[System: The following content came from a system-produced embed]") ?? false;
+
+    const isNovelaiKayraOrErato =
+      args.turn.persona.llm.llm_provider === "novelai" &&
+      (args.turn.persona.llm.llm_codename === "kayra-v1" || args.turn.persona.llm.llm_codename === "llama-3-erato-v1");
+    const usePrefillContinuation = Boolean(trimmedPrefill) && !isNovelaiKayraOrErato;
+
+    if (trimmedPrefill && isNovelaiKayraOrErato) {
+      log.info("Manual prefill directive skipped for NovelAI Kayra/Erato; relying on assistant prefill tail");
+    }
+
+    if ((isFromSelectedPersona && !isEmbedMessage) || usePrefillContinuation) {
+      const reason = usePrefillContinuation ? "manual prefill" : `${args.turn.persona.tomori_nickname} as last speaker`;
+      log.info(`Manual trigger (${reason}) — injecting continuation directive`);
+
+      const botName = args.turn.persona.tomori_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori";
+      let continuationText: string;
+      if (usePrefillContinuation) {
+        continuationText =
+          isFromSelectedPersona && !isEmbedMessage
+            ? `[Continue your last message without repeating it. Begin exactly with: "${botName}: ${trimmedPrefill}". Continue directly after it without repeating the prefix.]`
+            : `[Begin your next reply with: "${botName}: ${trimmedPrefill}". Continue directly after it without repeating the prefix.]`;
+      } else {
+        continuationText = "[Continue your last message without repeating it]";
+      }
+      tail.push(continuationText);
+    }
+  }
+
+  // Resolve the queued reply target name. When the triggering message was sent
+  // by the bot itself or one of its webhook personas, use the configured persona
+  // nickname instead of the raw Discord username (e.g. "Tomori(α)").
+  let queuedReplyTargetName = args.turn.triggererName;
+  if (incoming.isFromQueue) {
+    const queuedMessage = args.turn.lockedTurn.admission.message;
+    const queuedClient = args.turn.lockedTurn.admission.client;
+    if (queuedMessage.author.id === queuedClient.user?.id) {
+      queuedReplyTargetName =
+        args.turn.mainPersona?.tomori_nickname ?? args.turn.tomoriState.tomori_nickname ?? queuedReplyTargetName;
+    } else if (queuedMessage.webhookId) {
+      const webhookName = stripBridgePrefix(queuedMessage.author.username);
+      const personaByNicknameMap = new Map<string, (typeof args.turn.allPersonas)[number]>();
+      for (const p of args.turn.allPersonas) {
+        if (p.tomori_nickname) personaByNicknameMap.set(p.tomori_nickname.toLowerCase(), p);
+      }
+      queuedReplyTargetName =
+        personaByNicknameMap.get(webhookName.toLowerCase())?.tomori_nickname ?? queuedReplyTargetName;
+    }
+  }
+
   const queuedDirective =
     incoming.isFromQueue && !incoming.isStopResponse
       ? buildQueuedReplyDirective(
           args.turn.lockedTurn.admission.message,
-          args.turn.triggererName,
+          queuedReplyTargetName,
           args.turn.persona.tomori_nickname,
-          args.turn.requestSnapshot.tomoriState ? undefined : undefined,
+          args.messageIdMap,
         )
       : null;
 

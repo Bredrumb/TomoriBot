@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
+<!-- ARCH-ALIGNMENT: prereq-phase-5.5e -->
 
 # 3. Architecture Overview
 
@@ -78,8 +78,9 @@ chat pipeline
 - Schema: `src/db/schema.sql`
 - Optional RAG schema: `src/db/schema_rag.sql`
 - Repository boundary: `src/utils/db/repositories/*`
-  - Each repository implements `IRepository<TExport>` with `toExportShape()` / `fromExportShape()`.
-  - Public callers use the repository facade in `src/utils/db/repositories/index.ts`; the former public DB god-file entry points have been removed.
+  - 19 Repository classes implement `IRepository<TExport>` with `toExportShape()` / `fromExportShape()`. Each owns one clear domain; SQL is inlined as private methods with no sibling SQL files.
+  - `src/utils/db/repositories/index.ts` re-exports repository instances and shared types only — no free-function shims. Callers import repository instances directly (e.g. `import { personaRepository } from "@/utils/db/repositories"`).
+  - The former public DB god-file entry points and all `*ReadSql.ts`/`*WriteSql.ts` sibling files have been removed.
 - Core caches in `src/utils/cache/*` (Tomori state, user, expression data, whitelist, short-term memory, model/capability caches)
 
 ### Security + Secrets
