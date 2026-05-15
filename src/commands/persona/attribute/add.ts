@@ -14,7 +14,8 @@ import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/
 import { isBlacklisted, loadAllPersonasForServer } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import type { ModalResult, SelectOption } from "@/types/discord/modal";
-import { checkAttributeLimit, getMemoryLimits, validateAttribute } from "@/utils/db/memoryLimits";
+import { getMemoryLimits, validateAttribute } from "@/utils/misc/memoryLimits";
+import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
 import {
   dedupeCaseInsensitive,
   formatTextArrayLiteral,
@@ -269,7 +270,7 @@ export async function execute(
     }
 
     // 13.5 Check limit against final import size
-    const attributeLimitCheck = await checkAttributeLimit(selectedPersona.tomori_id);
+    const attributeLimitCheck = await personaRepository.checkAttributeLimit(selectedPersona.tomori_id);
     const currentCount = attributeLimitCheck.currentCount ?? currentAttributes.length;
     const maxAllowed = attributeLimitCheck.maxAllowed ?? memoryLimits.maxAttributes;
     const availableSlots = Math.max(0, maxAllowed - currentCount);

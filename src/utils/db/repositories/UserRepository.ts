@@ -18,6 +18,30 @@ import type { IRepository } from "./IRepository";
 /** Export shape for a single user's portable settings. */
 export type UserExportShape = PersonalSettingsExportData;
 
+// ── Personal spotlight types ───────────────────────────────────────────────────
+
+type PersonalSpotlightAggregateRow = {
+  server_id: number | string | bigint;
+  user_id: number | string | bigint;
+  channel_disc_id: string;
+  auto_trigger_tomori_id: number | string | bigint | null;
+  expires_at: Date | string | null;
+  created_at: Date | string | null;
+  updated_at: Date | string | null;
+  persona_ids: unknown;
+};
+
+export interface PersonalSpotlightStatus {
+  serverId: number;
+  userId: number;
+  channelDiscId: string;
+  personaIds: number[];
+  autoTriggerPersonaId: number | null;
+  expiresAt: Date | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+}
+
 export class UserRepository implements IRepository<UserExportShape> {
   // ── reads ──────────────────────────────────────────────────────────────────
 
@@ -315,6 +339,396 @@ export class UserRepository implements IRepository<UserExportShape> {
       log.error(`Error removing blacklist entry for user ${userDiscId} in server ${serverId}:`, error);
       return false;
     }
+  }
+
+  // ── Personal spotlight ────────────────────────────────────────────────────
+
+  /**
+   * Upserts a personal spotlight for a user in a channel, replacing all persona
+   * associations atomically.
+   *
+   * @param serverId            - Internal server DB ID
+   * @param userId              - Internal user DB ID
+   * @param channelDiscId       - Discord channel snowflake
+   * @param personaIds          - Tomori IDs to allow in the spotlight
+   * @param autoTriggerPersonaId - Tomori ID to auto-trigger, or null
+   * @param expiresAt           - Expiry timestamp, or null for permanent
+   */
+  async replacePersonalSpotlight(
+    serverId: number,
+    userId: number,
+    channelDiscId: string,
+    personaIds: number[],
+    autoTriggerPersonaId: number | null,
+    expiresAt: Date | null,
+  ): Promise<void> {
+    const uniquePersonaIds = [...new Set(personaIds)].filter(
+      (personaId) => Number.isInteger(personaId) && personaId > 0,
+    );
+
+    if (uniquePersonaIds.length === 0) {
+      throw new Error("Personal spotlight requires at least one persona");
+    }
+
+    if (autoTriggerPersonaId !== null && !uniquePersonaIds.includes(autoTriggerPersonaId)) {
+      throw new Error("Auto-trigger persona must belong to the spotlight persona set");
+    }
+
+    await sql.transaction(async (tx) => {
+      await tx`
+        INSERT INTO personal_spotlights (
+          server_id,
+          user_id,
+          channel_disc_id,
+          auto_trigger_tomori_id,
+          expires_at
+        )
+        VALUES (
+          ${serverId},
+          ${userId},
+          ${channelDiscId},
+          ${autoTriggerPersonaId},
+          ${expiresAt}
+        )
+        ON CONFLICT (server_id, user_id, channel_disc_id)
+        DO UPDATE SET
+          auto_trigger_tomori_id = EXCLUDED.auto_trigger_tomori_id,
+          expires_at = EXCLUDED.expires_at,
+          updated_at = CURRENT_TIMESTAMP
+      `;
+
+      await tx`
+        DELETE FROM personal_spotlight_personas
+        WHERE server_id = ${serverId}
+          AND user_id = ${userId}
+          AND channel_disc_id = ${channelDiscId}
+      `;
+
+      for (const personaId of uniquePersonaIds) {
+        await tx`
+          INSERT INTO personal_spotlight_personas (
+            server_id,
+            user_id,
+            channel_disc_id,
+            tomori_id
+          )
+          VALUES (
+            ${serverId},
+            ${userId},
+            ${channelDiscId},
+            ${personaId}
+          )
+        `;
+      }
+    });
+  }
+
+  /**
+   * Deletes a personal spotlight entry for a user in a specific channel.
+   *
+   * @param serverId      - Internal server DB ID
+   * @param userId        - Internal user DB ID
+   * @param channelDiscId - Discord channel snowflake
+   * @returns true if a row was deleted
+   */
+  async removePersonalSpotlight(serverId: number, userId: number, channelDiscId: string): Promise<boolean> {
+    const result = await sql`
+      DELETE FROM personal_spotlights
+      WHERE server_id = ${serverId}
+        AND user_id = ${userId}
+        AND channel_disc_id = ${channelDiscId}
+    `;
+
+    return result.count > 0;
+  }
+
+  /**
+   * Loads the current personal spotlight status for a user in a channel, pruning
+   * expired entries and orphaned spotlights (no remaining personas) first.
+   *
+   * @param serverId      - Internal server DB ID
+   * @param userId        - Internal user DB ID
+   * @param channelDiscId - Discord channel snowflake
+   * @returns PersonalSpotlightStatus or null if none active
+   */
+  async getPersonalSpotlightStatus(
+    serverId: number,
+    userId: number,
+    channelDiscId: string,
+  ): Promise<PersonalSpotlightStatus | null> {
+    await this.deleteExpiredPersonalSpotlights(serverId, userId, channelDiscId);
+
+    const [row] = await sql<PersonalSpotlightAggregateRow[]>`
+      SELECT
+        ps.server_id,
+        ps.user_id,
+        ps.channel_disc_id,
+        ps.auto_trigger_tomori_id,
+        ps.expires_at,
+        ps.created_at,
+        ps.updated_at,
+        COALESCE(
+          JSONB_AGG(psp.tomori_id ORDER BY psp.tomori_id) FILTER (WHERE psp.tomori_id IS NOT NULL),
+          '[]'::JSONB
+        ) AS persona_ids
+      FROM personal_spotlights ps
+      LEFT JOIN personal_spotlight_personas psp
+        ON psp.server_id = ps.server_id
+        AND psp.user_id = ps.user_id
+        AND psp.channel_disc_id = ps.channel_disc_id
+      WHERE ps.server_id = ${serverId}
+        AND ps.user_id = ${userId}
+        AND ps.channel_disc_id = ${channelDiscId}
+      GROUP BY
+        ps.server_id,
+        ps.user_id,
+        ps.channel_disc_id,
+        ps.auto_trigger_tomori_id,
+        ps.expires_at,
+        ps.created_at,
+        ps.updated_at
+    `;
+
+    const status = row ? this.mapAggregateRow(row) : null;
+    if (!status) {
+      return null;
+    }
+
+    if (status.personaIds.length > 0) {
+      return status;
+    }
+
+    // Orphaned spotlight — remove it so it doesn't accumulate
+    await this.removePersonalSpotlight(serverId, userId, channelDiscId);
+    return null;
+  }
+
+  /**
+   * Returns all active personal spotlights for a user in a server, pruning expired
+   * and orphaned entries first.
+   *
+   * @param serverId - Internal server DB ID
+   * @param userId   - Internal user DB ID
+   * @returns Sorted array of active PersonalSpotlightStatus entries
+   */
+  async getActivePersonalSpotlightsForUser(serverId: number, userId: number): Promise<PersonalSpotlightStatus[]> {
+    await this.deleteExpiredPersonalSpotlights(serverId, userId);
+
+    const rows = await sql<PersonalSpotlightAggregateRow[]>`
+      SELECT
+        ps.server_id,
+        ps.user_id,
+        ps.channel_disc_id,
+        ps.auto_trigger_tomori_id,
+        ps.expires_at,
+        ps.created_at,
+        ps.updated_at,
+        COALESCE(
+          JSONB_AGG(psp.tomori_id ORDER BY psp.tomori_id) FILTER (WHERE psp.tomori_id IS NOT NULL),
+          '[]'::JSONB
+        ) AS persona_ids
+      FROM personal_spotlights ps
+      LEFT JOIN personal_spotlight_personas psp
+        ON psp.server_id = ps.server_id
+        AND psp.user_id = ps.user_id
+        AND psp.channel_disc_id = ps.channel_disc_id
+      WHERE ps.server_id = ${serverId}
+        AND ps.user_id = ${userId}
+      GROUP BY
+        ps.server_id,
+        ps.user_id,
+        ps.channel_disc_id,
+        ps.auto_trigger_tomori_id,
+        ps.expires_at,
+        ps.created_at,
+        ps.updated_at
+      ORDER BY ps.channel_disc_id ASC
+    `;
+
+    const emptyChannelIds: string[] = [];
+    const spotlights: PersonalSpotlightStatus[] = [];
+
+    for (const row of rows) {
+      const status = this.mapAggregateRow(row);
+      if (!status) {
+        continue;
+      }
+
+      if (status.personaIds.length === 0) {
+        emptyChannelIds.push(status.channelDiscId);
+        continue;
+      }
+
+      spotlights.push(status);
+    }
+
+    if (emptyChannelIds.length > 0) {
+      await Promise.all(
+        emptyChannelIds.map((channelDiscId) => this.removePersonalSpotlight(serverId, userId, channelDiscId)),
+      );
+    }
+
+    return spotlights;
+  }
+
+  /**
+   * Returns true if the given tomoriId is permitted by the spotlight status.
+   * A null spotlight means no restriction — all personas are allowed.
+   *
+   * @param spotlightStatus - Current spotlight, or null/undefined if none
+   * @param tomoriId        - Persona DB ID to check
+   */
+  isPersonaAllowedByPersonalSpotlight(
+    spotlightStatus: PersonalSpotlightStatus | null | undefined,
+    tomoriId: number | null | undefined,
+  ): boolean {
+    if (!spotlightStatus) {
+      return true;
+    }
+
+    if (!Number.isInteger(tomoriId) || !tomoriId) {
+      return false;
+    }
+
+    return spotlightStatus.personaIds.includes(tomoriId);
+  }
+
+  /**
+   * Filters a persona array to only those allowed by the given spotlight status.
+   * Returns all personas unchanged when spotlightStatus is null/undefined.
+   *
+   * @param personas        - Array of persona-like objects with optional tomori_id
+   * @param spotlightStatus - Current spotlight filter, or null/undefined
+   */
+  filterPersonasByPersonalSpotlight<T extends { tomori_id?: number | null | undefined }>(
+    personas: readonly T[],
+    spotlightStatus: PersonalSpotlightStatus | null | undefined,
+  ): T[] {
+    if (!spotlightStatus) {
+      return [...personas];
+    }
+
+    return personas.filter((persona) => this.isPersonaAllowedByPersonalSpotlight(spotlightStatus, persona.tomori_id));
+  }
+
+  // ── Personal spotlight private helpers ───────────────────────────────────
+
+  private normalizeNumber(value: number | string | bigint | null | undefined): number | null {
+    if (typeof value === "number") {
+      return Number.isInteger(value) ? value : null;
+    }
+
+    if (typeof value === "bigint") {
+      return Number(value);
+    }
+
+    if (typeof value === "string" && value.trim() !== "") {
+      const parsed = Number.parseInt(value, 10);
+      return Number.isInteger(parsed) ? parsed : null;
+    }
+
+    return null;
+  }
+
+  private parsePostgresArrayLiteral(value: string): string[] {
+    const trimmed = value.trim();
+    if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+      return [];
+    }
+
+    const inner = trimmed.slice(1, -1).trim();
+    if (inner === "") {
+      return [];
+    }
+
+    return inner
+      .split(",")
+      .map((entry) => entry.trim().replace(/^"(.*)"$/u, "$1"))
+      .filter((entry) => entry.length > 0 && entry.toUpperCase() !== "NULL");
+  }
+
+  private normalizeNumberArray(values: unknown): number[] {
+    let source: unknown = values;
+
+    if (typeof source === "string") {
+      const trimmed = source.trim();
+
+      if (trimmed === "") {
+        source = [];
+      } else {
+        try {
+          const parsed = JSON.parse(trimmed);
+          source = Array.isArray(parsed) ? parsed : this.parsePostgresArrayLiteral(trimmed);
+        } catch {
+          source = this.parsePostgresArrayLiteral(trimmed);
+        }
+      }
+    }
+
+    const normalized = (Array.isArray(source) ? source : [])
+      .map((value) => this.normalizeNumber(value))
+      .filter((value): value is number => value !== null && value > 0);
+
+    return [...new Set(normalized)].sort((left, right) => left - right);
+  }
+
+  private normalizeDate(value: Date | string | null | undefined): Date | null {
+    if (!value) {
+      return null;
+    }
+
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? null : value;
+    }
+
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  private mapAggregateRow(row: PersonalSpotlightAggregateRow): PersonalSpotlightStatus | null {
+    const serverId = this.normalizeNumber(row.server_id);
+    const userId = this.normalizeNumber(row.user_id);
+
+    if (!serverId || !userId || !row.channel_disc_id) {
+      return null;
+    }
+
+    return {
+      serverId,
+      userId,
+      channelDiscId: row.channel_disc_id,
+      personaIds: this.normalizeNumberArray(row.persona_ids),
+      autoTriggerPersonaId: this.normalizeNumber(row.auto_trigger_tomori_id),
+      expiresAt: this.normalizeDate(row.expires_at),
+      createdAt: this.normalizeDate(row.created_at),
+      updatedAt: this.normalizeDate(row.updated_at),
+    };
+  }
+
+  private async deleteExpiredPersonalSpotlights(
+    serverId: number,
+    userId: number,
+    channelDiscId?: string,
+  ): Promise<void> {
+    if (channelDiscId) {
+      await sql`
+        DELETE FROM personal_spotlights
+        WHERE server_id = ${serverId}
+          AND user_id = ${userId}
+          AND channel_disc_id = ${channelDiscId}
+          AND expires_at IS NOT NULL
+          AND expires_at <= CURRENT_TIMESTAMP
+      `;
+      return;
+    }
+
+    await sql`
+      DELETE FROM personal_spotlights
+      WHERE server_id = ${serverId}
+        AND user_id = ${userId}
+        AND expires_at IS NOT NULL
+        AND expires_at <= CURRENT_TIMESTAMP
+    `;
   }
 
   // ── IRepository contract ───────────────────────────────────────────────────

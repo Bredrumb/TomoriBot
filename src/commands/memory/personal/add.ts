@@ -19,7 +19,8 @@ import {
 } from "@/utils/db/repositories";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import type { ModalResult, SelectOption } from "@/types/discord/modal";
-import { validateMemoryContent, checkPersonalMemoryLimit, getMemoryLimits } from "@/utils/db/memoryLimits";
+import { validateMemoryContent, getMemoryLimits } from "@/utils/misc/memoryLimits";
+import { personalMemoryRepository } from "@/utils/db/repositories/PersonalMemoryRepository";
 import { addPersonalMemoryByTomori } from "@/utils/db/repositories";
 import type { ModalComponent } from "@/types/discord/modal";
 import { dedupeCaseInsensitive, getNonEmptyNumberedLines, readTxtUpload } from "@/utils/teach/batchUploadUtils";
@@ -336,7 +337,7 @@ export async function execute(
     }
 
     // 13.5 Check personal memory limit after final scope resolution
-    const personalLimitCheck = await checkPersonalMemoryLimit(
+    const personalLimitCheck = await personalMemoryRepository.checkPersonalMemoryLimit(
       targetUserId,
       targetLineageId,
       memoryScope === GLOBAL_SCOPE_VALUE,

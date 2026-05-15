@@ -28,7 +28,7 @@ import {
   getPrivacyLevel,
 } from "@/utils/db/repositories";
 import { invalidateUserCache } from "@/utils/cache/userCache";
-import { getMemoryLimits, validateMemoryContent } from "@/utils/db/memoryLimits";
+import { getMemoryLimits, validateMemoryContent } from "@/utils/misc/memoryLimits";
 import type { SelectOption } from "@/types/discord/modal";
 import {
   personalMemorySchema,

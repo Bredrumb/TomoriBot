@@ -18,7 +18,7 @@ import type { SelectOption } from "../../types/discord/modal";
 import { sql } from "@/utils/db/client";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 import { getCachedPresetAvatar } from "../../utils/image/avatarHelper";
-import { getMemoryLimits } from "../../utils/db/memoryLimits";
+import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage";
 
 function isUniqueViolation(error: unknown): boolean {

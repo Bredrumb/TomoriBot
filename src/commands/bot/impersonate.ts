@@ -23,18 +23,14 @@ import {
 import type { SelectOption } from "@/types/discord/modal";
 import type { UserRow } from "@/types/db/schema";
 import { tomoriChat } from "@/events/messageCreate/tomoriChat";
-import {
-  checkMessageTriggerCooldownWithWhitelist,
-  setMessageTriggerCooldownWithWhitelist,
-} from "@/utils/db/cooldownManager";
 import { CooldownType } from "@/types/db/schema";
-import { getCooldownTypeFooterKey } from "@/utils/db/messageCooldown";
+import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
 import { sendCooldownDM } from "@/utils/discord/cooldownDM";
 import { isNoticeEmbedVisible } from "@/utils/discord/toolProgressNotice";
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { getCachedUserRow } from "@/utils/cache/userCache";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
-import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/db/personaAccess";
+import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 
 /**
  * Configures the /bot impersonate subcommand
@@ -460,7 +456,7 @@ async function handleUserImpersonation(
       `[/bot impersonate ${commandTarget}] Checking cooldown - globalType: ${cooldownType}, globalLength: ${cooldownLength}s, guild: ${interaction.guild.id}, user: ${interaction.user.id}, channel: ${interaction.channel.id}`,
     );
 
-    const cooldownResult = await checkMessageTriggerCooldownWithWhitelist(
+    const cooldownResult = await cooldownRepository.checkMessageTriggerCooldownWithWhitelist(
       interaction.guild.id,
       interaction.user.id,
       interaction.channel.id,
@@ -484,7 +480,7 @@ async function handleUserImpersonation(
       }
 
       // Show cooldown warning via DM (with ephemeral fallback)
-      const footerKey = getCooldownTypeFooterKey(cooldownResult.cooldownType);
+      const footerKey = cooldownRepository.getCooldownTypeFooterKey(cooldownResult.cooldownType);
       await sendCooldownDM(
         interaction.user,
         locale,
@@ -612,7 +608,7 @@ async function handleUserImpersonation(
     log.info(
       `[/bot impersonate ${commandTarget}] Setting cooldown - globalType: ${cooldownType}, globalLength: ${cooldownLength}s`,
     );
-    await setMessageTriggerCooldownWithWhitelist(
+    await cooldownRepository.setMessageTriggerCooldownWithWhitelist(
       interaction.guild.id,
       interaction.user.id,
       interaction.channel.id,

@@ -1,7 +1,7 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import { sql } from "@/utils/db/client";
-import { isRagAvailable } from "@/utils/db/ragDetection";
+import { isRagAvailable } from "@/utils/db/ragAvailability";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -9,7 +9,7 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import type { ErrorContext, UserRow, EmbeddingModelRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
-import { getMemoryLimits } from "@/utils/db/memoryLimits";
+import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { loadEmbeddingModelById, loadAvailableEmbeddingModelsForProvider } from "@/utils/db/repositories";
 import { reembedServerDocuments } from "@/utils/documents/documentService";
 import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";

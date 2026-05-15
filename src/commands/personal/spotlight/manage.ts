@@ -8,11 +8,7 @@ import type { ModalCheckboxGroupField } from "@/types/discord/modal";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { invalidatePersonalSpotlightCache } from "@/utils/cache/personalSpotlightCache";
-import {
-  getActivePersonalSpotlightsForUser,
-  removePersonalSpotlight,
-  type PersonalSpotlightStatus,
-} from "@/utils/db/personalSpotlight";
+import { userRepository, type PersonalSpotlightStatus } from "@/utils/db/repositories/UserRepository";
 import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
@@ -85,7 +81,10 @@ export async function execute(
     const personas = allPersonasRaw.filter(
       (persona): persona is PersonaWithId => typeof persona.tomori_id === "number",
     );
-    const activeSpotlights = await getActivePersonalSpotlightsForUser(tomoriState.server_id, userData.user_id);
+    const activeSpotlights = await userRepository.getActivePersonalSpotlightsForUser(
+      tomoriState.server_id,
+      userData.user_id,
+    );
     if (activeSpotlights.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.personal.spotlight.manage.none_title",
@@ -140,7 +139,11 @@ export async function execute(
     }
 
     for (const entry of entriesToRemove) {
-      const removed = await removePersonalSpotlight(tomoriState.server_id, userData.user_id, entry.channelDiscId);
+      const removed = await userRepository.removePersonalSpotlight(
+        tomoriState.server_id,
+        userData.user_id,
+        entry.channelDiscId,
+      );
       if (removed) {
         invalidatePersonalSpotlightCache(tomoriState.server_id, userData.user_id, entry.channelDiscId);
       }

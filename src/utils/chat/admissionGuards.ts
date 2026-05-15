@@ -6,12 +6,8 @@ import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotligh
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { getCachedUserRow } from "@/utils/cache/userCache";
 import { getLastDbError } from "@/utils/cache/tomoriStateCache";
-import {
-  checkMessageTriggerCooldownWithWhitelist,
-  setMessageTriggerCooldownWithWhitelist,
-} from "@/utils/db/cooldownManager";
-import { getCooldownTypeFooterKey } from "@/utils/db/messageCooldown";
-import { isPersonaAllowedForTrigger } from "@/utils/db/personaAccess";
+import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
+import { isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 import { sendCooldownDM } from "@/utils/discord/cooldownDM";
 import { createStandardEmbed, sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { ColorCode, log } from "@/utils/misc/logger";
@@ -115,7 +111,7 @@ export async function rejectOnMessageTriggerCooldown(params: {
   locale: string;
   botName: string;
 }): Promise<boolean> {
-  const cooldownResult = await checkMessageTriggerCooldownWithWhitelist(
+  const cooldownResult = await cooldownRepository.checkMessageTriggerCooldownWithWhitelist(
     params.serverDiscId,
     params.userDiscId,
     params.channelId,
@@ -128,7 +124,7 @@ export async function rejectOnMessageTriggerCooldown(params: {
     return false;
   }
 
-  const footerKey = getCooldownTypeFooterKey(cooldownResult.cooldownType);
+  const footerKey = cooldownRepository.getCooldownTypeFooterKey(cooldownResult.cooldownType);
   await sendCooldownDM(
     params.author,
     params.locale,
@@ -160,7 +156,7 @@ export async function setMessageTriggerCooldownForAdmission(params: {
   cooldownLength: number;
   member: GuildMember | null;
 }): Promise<void> {
-  await setMessageTriggerCooldownWithWhitelist(
+  await cooldownRepository.setMessageTriggerCooldownWithWhitelist(
     params.serverDiscId,
     params.userDiscId,
     params.channelId,

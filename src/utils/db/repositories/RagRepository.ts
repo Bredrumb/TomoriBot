@@ -18,7 +18,7 @@ import {
   formatRetrievedChunksForPrompt,
   type RetrievedDocumentChunk,
 } from "@/utils/documents/documentService";
-import { detectRagAvailability, isRagAvailable } from "@/utils/db/ragDetection";
+import { detectRagAvailability, isRagAvailable } from "@/utils/db/ragAvailability";
 import type { IRepository } from "./IRepository";
 
 /** Portable RAG export shape (expanded in Phase 6 #16.7). */

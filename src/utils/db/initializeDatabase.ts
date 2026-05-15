@@ -2,7 +2,7 @@ import type { SQL } from "bun";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { sql as defaultSql } from "@/utils/db/client";
-import { detectRagAvailability } from "@/utils/db/ragDetection";
+import { detectRagAvailability } from "@/utils/db/ragAvailability";
 import { splitSqlStatements } from "@/utils/db/sqlSplitter";
 import { log } from "@/utils/misc/logger";
 

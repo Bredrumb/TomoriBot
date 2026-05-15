@@ -41,15 +41,19 @@ export async function tomoriChat(input: TomoriChatInput): Promise<void> {
 
   await runWithChannelLock(
     admission,
-    async (lockedTurn) => {
+    async (lockedTurn, startTyping) => {
       const turnPlan = await planChatTurns(lockedTurn);
 
-      for (const turn of turnPlan.turns) {
-        const context = await buildChatTurnContext(turn);
-        const responseSink = createChatResponseSink(context);
-        const result = await runGenerationTurn(context, responseSink);
+      if (turnPlan.turns.length > 0) {
+        await startTyping();
 
-        await runPostTurnEffects(context, result);
+        for (const turn of turnPlan.turns) {
+          const context = await buildChatTurnContext(turn);
+          const responseSink = createChatResponseSink(context);
+          const result = await runGenerationTurn(context, responseSink);
+
+          await runPostTurnEffects(context, result);
+        }
       }
     },
     {

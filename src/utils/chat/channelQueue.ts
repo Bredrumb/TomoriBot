@@ -74,7 +74,7 @@ export const selfReplySuppressionUntil = new Map<string, number>();
 
 export async function runWithChannelLock<T>(
   admission: RunnableChatAdmission,
-  callback: (lockedTurn: LockedChatTurn) => Promise<T>,
+  callback: (lockedTurn: LockedChatTurn, startTyping: () => Promise<void>) => Promise<T>,
   options: {
     handleStopResponse: (originalStopMessage: Message, client: Client) => Promise<void>;
     processQueuedMessage: (queuedMessage: QueuedMessage) => Promise<void>;
@@ -83,16 +83,19 @@ export async function runWithChannelLock<T>(
   const channelId = admission.message.channel.id;
   const skipLock = admission.incoming.skipLock;
 
-  // Retry/internal re-entries (skipLock) reuse the outer turn's lock and typing keepalive
+  // Retry/internal re-entries (skipLock) reuse the outer turn's lock and typing keepalive — no new typing start
   if (skipLock) {
     const lockEntry = channelLocks.get(channelId);
-    return await callback({
-      admission,
-      channelId,
-      lockedAt: lockEntry?.lockedAt ?? Date.now(),
-      queueDepth: lockEntry?.messageQueue.length ?? 0,
-      skipLock: true,
-    });
+    return await callback(
+      {
+        admission,
+        channelId,
+        lockedAt: lockEntry?.lockedAt ?? Date.now(),
+        queueDepth: lockEntry?.messageQueue.length ?? 0,
+        skipLock: true,
+      },
+      () => Promise.resolve(),
+    );
   }
 
   const serverDiscId = admission.serverDiscId ?? channelId;
@@ -108,16 +111,17 @@ export async function runWithChannelLock<T>(
     isCommandTriggered: admission.incoming.isManuallyTriggered ?? false,
   });
 
-  await startDiscordTypingKeepalive(admission.message.channel, lockEntry, admission.message.id);
-
   try {
-    return await callback({
-      admission,
-      channelId,
-      lockedAt: lockEntry.lockedAt,
-      queueDepth: lockEntry.messageQueue.length,
-      skipLock: false,
-    });
+    return await callback(
+      {
+        admission,
+        channelId,
+        lockedAt: lockEntry.lockedAt,
+        queueDepth: lockEntry.messageQueue.length,
+        skipLock: false,
+      },
+      () => startDiscordTypingKeepalive(admission.message.channel, lockEntry, admission.message.id),
+    );
   } finally {
     releaseChannelLockAndReplayQueue({
       channelId,

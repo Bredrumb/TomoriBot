@@ -1,6 +1,6 @@
 import type { WhitelistCheckResult } from "@/types/misc/channelWhitelist";
-import { isPersonaAllowedByWhitelistStatus } from "@/utils/db/personaWhitelist";
-import { isPersonaAllowedByPersonalSpotlight, type PersonalSpotlightStatus } from "@/utils/db/personalSpotlight";
+import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
+import { userRepository, type PersonalSpotlightStatus } from "@/utils/db/repositories/UserRepository";
 
 export function isPersonaAllowedForTrigger(
   whitelistStatus: WhitelistCheckResult | null | undefined,
@@ -8,8 +8,8 @@ export function isPersonaAllowedForTrigger(
   tomoriId: number | null | undefined,
 ): boolean {
   return (
-    isPersonaAllowedByWhitelistStatus(whitelistStatus, tomoriId) &&
-    isPersonaAllowedByPersonalSpotlight(spotlightStatus, tomoriId)
+    whitelistRepository.isPersonaAllowedByWhitelistStatus(whitelistStatus, tomoriId) &&
+    userRepository.isPersonaAllowedByPersonalSpotlight(spotlightStatus, tomoriId)
   );
 }
 

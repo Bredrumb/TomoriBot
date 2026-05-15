@@ -9,7 +9,7 @@ import {
 } from "@/utils/db/repositories";
 import { replyPaginatedStatusPages } from "@/utils/discord/ui/statusComponents";
 import { ColorCode } from "@/utils/misc/logger";
-import { getMemoryLimits } from "@/utils/db/memoryLimits";
+import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { formatBooleanLocalized } from "@/utils/text/processors/formatters";
 import {
   formatCustomEndpoints,

@@ -10,7 +10,7 @@
 import type { ErrorContext, PersonalMemoryRow } from "@/types/db/schema";
 import { personalMemorySchema } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
-import { checkPersonalMemoryLimit, validateMemoryContent } from "@/utils/db/memoryLimits";
+import { type MemoryValidationResult, getMemoryLimits, validateMemoryContent } from "@/utils/misc/memoryLimits";
 import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
@@ -104,7 +104,7 @@ export class PersonalMemoryRepository implements IRepository<PersonalMemoryExpor
       return null;
     }
 
-    const personalLimitCheck = await checkPersonalMemoryLimit(userId, personaLineageId, true);
+    const personalLimitCheck = await this.checkPersonalMemoryLimit(userId, personaLineageId, true);
     if (!personalLimitCheck.isValid) {
       log.warn(
         `Personal memory limit exceeded for user ID ${userId}: ${personalLimitCheck.currentCount}/${personalLimitCheck.maxAllowed}`,
@@ -164,6 +164,60 @@ export class PersonalMemoryRepository implements IRepository<PersonalMemoryExpor
         context,
       );
       return null;
+    }
+  }
+
+  // ── limit checks ───────────────────────────────────────────────────────────
+
+  /**
+   * Check if a user has reached their personal memory limit.
+   *
+   * @param userId              - Internal user DB ID
+   * @param personaLineageId    - Persona lineage scope (0 = global)
+   * @param includeGlobalMemories - Whether to count lineage-0 memories too
+   * @returns MemoryValidationResult indicating whether the limit is exceeded
+   */
+  async checkPersonalMemoryLimit(
+    userId: number,
+    personaLineageId = 0,
+    includeGlobalMemories = true,
+  ): Promise<MemoryValidationResult> {
+    const limits = getMemoryLimits();
+
+    try {
+      const [countResult] =
+        includeGlobalMemories && personaLineageId !== 0
+          ? await sql`
+              SELECT COUNT(*) as memory_count
+              FROM personal_memories
+              WHERE user_id = ${userId}
+                AND (
+                  persona_lineage_id = ${personaLineageId}
+                  OR persona_lineage_id = 0
+                )
+            `
+          : await sql`
+              SELECT COUNT(*) as memory_count
+              FROM personal_memories
+              WHERE user_id = ${userId}
+                AND persona_lineage_id = ${personaLineageId}
+            `;
+
+      const currentCount = Number(countResult?.memory_count || 0);
+
+      if (currentCount >= limits.maxPersonalMemories) {
+        return {
+          isValid: false,
+          error: "PERSONAL_MEMORY_LIMIT_EXCEEDED",
+          currentCount,
+          maxAllowed: limits.maxPersonalMemories,
+        };
+      }
+
+      return { isValid: true, currentCount, maxAllowed: limits.maxPersonalMemories };
+    } catch (error) {
+      log.error(`Error checking personal memory limit for user ${userId}:`, error);
+      return { isValid: false, error: "PERSONAL_MEMORY_LIMIT_EXCEEDED" };
     }
   }
 

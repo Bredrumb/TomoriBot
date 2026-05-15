@@ -6,14 +6,13 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { invalidateGuildMcpConfigCache } from "@/utils/cache/guildMcpConfigCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 import type { RadioGroupOption } from "@/types/discord/modal";
-import { insertGuildMcpServer, countGuildMcpServers } from "@/utils/db/guildMcpDb";
+import { toolRepository } from "@/utils/db/repositories/ToolRepository";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import { type McpUrlValidationResult, validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
 
@@ -197,7 +196,7 @@ export async function execute(
     }
 
     // 6. Check server count limit
-    const currentCount = await countGuildMcpServers(tomoriState.server_id);
+    const currentCount = await toolRepository.countMcpServers(tomoriState.server_id);
     if (currentCount >= MAX_SERVERS_PER_GUILD) {
       await replyInfoEmbed(replyInteraction, locale, {
         titleKey: "commands.mcp.add.limit_reached_title",
@@ -223,7 +222,14 @@ export async function execute(
     }
 
     // 8. Persist to database (token is encrypted inline, server_type for tool deduplication)
-    const insertedRow = await insertGuildMcpServer(tomoriState.server_id, name, url, authToken, serverType);
+    const insertedRow = await toolRepository.insertMcpServer(
+      tomoriState.server_id,
+      name,
+      url,
+      authToken,
+      serverType,
+      serverId,
+    );
 
     if (!insertedRow) {
       await replyInfoEmbed(replyInteraction, locale, {
@@ -234,9 +240,6 @@ export async function execute(
       });
       return;
     }
-
-    // 9. Invalidate cache after successful DB write
-    invalidateGuildMcpConfigCache(tomoriState.server_id);
 
     // 10. Mask the URL for display (show domain only)
     let maskedUrl: string;

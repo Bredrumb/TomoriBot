@@ -21,8 +21,8 @@ import {
   normalizeConditioningReason,
   type ConditioningActionKey,
 } from "@/utils/conditioning/conditioning";
-import { recordConditioningEvent } from "@/utils/db/conditioningDb";
-import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/db/personaAccess";
+import { conditioningMemoryRepository } from "@/utils/db/repositories/ConditioningMemoryRepository";
+import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 
 const EMBED_COLOR_BY_TYPE: Record<ConditioningType, ColorCode> = {
   reward: ColorCode.AFFECTION,
@@ -223,7 +223,7 @@ export function createConditioningInteractionCommand(
       const reasonText = normalizeConditioningReason(interaction.options.getString("reason"));
       const extraContext = cmdOptions?.getExtraContext?.(interaction) ?? {};
       const actionTextValue = extraContext.action_text?.trim() ?? null;
-      const conditioningEvent = await recordConditioningEvent({
+      const conditioningEvent = await conditioningMemoryRepository.recordEvent({
         serverId: tomoriState.server_id,
         personaLineageId: selectedPersona.persona_lineage_id ?? 0,
         conditioningType: type,

@@ -112,10 +112,9 @@ export class MemoryTool extends BaseTool {
     const { convertMentions } = await import("../../utils/text/contextBuilder");
     const { sanitizeUnknownTemplatePlaceholders } = await import("@/utils/text/processors/mentionProcessor");
 
-    // Import memory validation functions
-    const { validateMemoryContent, checkPersonalMemoryLimit, checkServerMemoryLimit } = await import(
-      "../../utils/db/memoryLimits"
-    );
+    // Import memory validation and repository singletons
+    const { validateMemoryContent } = await import("@/utils/misc/memoryLimits");
+    const { personalMemoryRepository, serverMemoryRepository } = await import("@/utils/db/repositories");
 
     // Critical state validation (from tomoriChat.ts:1078-1104)
     const tomoriState = context.tomoriState;
@@ -283,7 +282,10 @@ export class MemoryTool extends BaseTool {
       // Server-wide memory handling (from tomoriChat.ts:1127-1179)
       try {
         // Check server memory limit before adding
-        const serverLimitCheck = await checkServerMemoryLimit(tomoriState.server_id, tomoriState.persona_lineage_id);
+        const serverLimitCheck = await serverMemoryRepository.checkServerMemoryLimit(
+          tomoriState.server_id,
+          tomoriState.persona_lineage_id,
+        );
         if (!serverLimitCheck.isValid) {
           return {
             success: false,
@@ -431,7 +433,7 @@ export class MemoryTool extends BaseTool {
         }
 
         // Check personal memory limit before adding
-        const personalLimitCheck = await checkPersonalMemoryLimit(
+        const personalLimitCheck = await personalMemoryRepository.checkPersonalMemoryLimit(
           targetUserRow.user_id,
           tomoriState.persona_lineage_id,
           true,

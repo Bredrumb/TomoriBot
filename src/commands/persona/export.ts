@@ -14,7 +14,7 @@ import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "../../utils/discord/interactionHelper";
 import type { UserRow } from "../../types/db/schema";
-import { exportPresetData } from "../../utils/db/presetExport";
+import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 import { getServerAvatar } from "../../utils/image/avatarHelper";
 import { embedMetadataInPNG } from "../../utils/image/pngMetadata";
 import type { SelectOption } from "../../types/discord/modal";
@@ -127,7 +127,7 @@ export async function execute(
     await responseInteraction.deferReply();
 
     // 3. Export selected persona data from database
-    const exportResult = await exportPresetData(serverDiscId, selectedPersona.tomori_id);
+    const exportResult = await presetRepository.exportPresetData(serverDiscId, selectedPersona.tomori_id);
 
     if (!exportResult.success) {
       await responseInteraction.editReply({

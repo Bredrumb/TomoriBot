@@ -12,7 +12,7 @@ import { findUnsupportedPresetMacros } from "@/utils/text/stPresetEngine";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { safeDownload } from "@/utils/security/safeDownload";
-import { insertPresetWithNodes, setActivePreset } from "@/utils/db/stPresetDb";
+import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 import type { UserRow, ErrorContext, StPresetNodeRow } from "@/types/db/schema";
 
 // ─── Constants ───────────────────────────────────────────────────────
@@ -700,7 +700,7 @@ export async function execute(
     const presetName = derivePresetName(attachment.name ?? "Unnamed Preset");
 
     // 10. Insert into database
-    const preset = await insertPresetWithNodes(tomoriState.server_id, presetName, rawPreset, nodes);
+    const preset = await presetRepository.insertPresetWithNodes(tomoriState.server_id, presetName, rawPreset, nodes);
 
     if (!preset) {
       await interaction.editReply({
@@ -711,7 +711,7 @@ export async function execute(
 
     // 11. Activate the newly imported preset (deactivates any previously active preset)
     if (preset.preset_id) {
-      await setActivePreset(tomoriState.server_id, preset.preset_id);
+      await presetRepository.setActivePreset(tomoriState.server_id, preset.preset_id);
     }
 
     // 12. Count node types for the summary

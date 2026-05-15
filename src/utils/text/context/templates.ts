@@ -1,7 +1,7 @@
 import type { Client } from "discord.js";
 import { ContextItemTag, type ContextPart, type StructuredContextItem } from "@/types/misc/context";
 import { HumanizerDegree, type ConditioningType } from "@/types/db/schema";
-import { loadConditioningGroupsForPersona } from "@/utils/db/conditioningDb";
+import { conditioningMemoryRepository } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import {
   CONDITIONING_CONTEXT_MAX_GROUPS_PER_TYPE,
   getConditioningContextPastParticiple,
@@ -296,7 +296,11 @@ export async function buildConditioningContextItem(params: {
     }
 
     const visibleGroups = (
-      await loadConditioningGroupsForPersona(params.serverId, params.personaLineageId, conditioningType)
+      await conditioningMemoryRepository.loadGroupsForPersona(
+        params.serverId,
+        params.personaLineageId,
+        conditioningType,
+      )
     )
       .filter((group) => group.reasonText.trim().length > 0)
       .slice(0, CONDITIONING_CONTEXT_MAX_GROUPS_PER_TYPE);

@@ -9,17 +9,13 @@ import type { UserRow } from "../../types/db/schema";
 import type { ModalComponent, SelectOption } from "../../types/discord/modal";
 import { tomoriChat } from "../../events/messageCreate/tomoriChat";
 import { loadAllPersonasForServer, loadSmartestModel, loadTomoriState } from "../../utils/db/repositories";
-import {
-  checkMessageTriggerCooldownWithWhitelist,
-  setMessageTriggerCooldownWithWhitelist,
-} from "../../utils/db/cooldownManager";
 import { getCachedWhitelistStatus } from "../../utils/cache/channelWhitelistCache";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { findLastActivePersona } from "@/utils/discord/personaTurnDetection";
-import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/db/personaAccess";
+import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 import { CooldownType } from "../../types/db/schema";
-import { getCooldownTypeFooterKey } from "../../utils/db/messageCooldown";
+import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
 import { isNoticeEmbedVisible } from "@/utils/discord/toolProgressNotice";
 import type { TomoriState } from "@/types/db/schema";
 
@@ -146,7 +142,7 @@ export async function execute(
   const cooldownLength = tomoriState.config.cooldown_length ?? 5;
 
   // Uses whitelist-aware version to respect per-channel cooldown overrides
-  const cooldownResult = await checkMessageTriggerCooldownWithWhitelist(
+  const cooldownResult = await cooldownRepository.checkMessageTriggerCooldownWithWhitelist(
     interaction.guild.id,
     interaction.user.id,
     interaction.channel.id,
@@ -166,7 +162,7 @@ export async function execute(
     }
 
     // Show cooldown warning via DM (with ephemeral fallback)
-    const footerKey = getCooldownTypeFooterKey(cooldownResult.cooldownType);
+    const footerKey = cooldownRepository.getCooldownTypeFooterKey(cooldownResult.cooldownType);
     await sendCooldownDM(
       interaction.user,
       locale,
@@ -464,7 +460,7 @@ export async function execute(
 
     // 7. Set cooldown after successful response (shares cooldown pool with message triggers)
     // Uses whitelist-aware version to respect per-channel cooldown overrides
-    await setMessageTriggerCooldownWithWhitelist(
+    await cooldownRepository.setMessageTriggerCooldownWithWhitelist(
       interaction.guild.id,
       interaction.user.id,
       interaction.channel.id,

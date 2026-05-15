@@ -18,7 +18,7 @@ import {
   getCachedPersonalSpotlightStatus,
   invalidatePersonalSpotlightCache,
 } from "@/utils/cache/personalSpotlightCache";
-import { replacePersonalSpotlight } from "@/utils/db/personalSpotlight";
+import { userRepository } from "@/utils/db/repositories/UserRepository";
 import {
   acknowledgeModalSubmitForRefresh,
   promptWithPaginatedModal,
@@ -330,7 +330,7 @@ export async function execute(
       return;
     }
 
-    await replacePersonalSpotlight(
+    await userRepository.replacePersonalSpotlight(
       tomoriState.server_id,
       userData.user_id,
       selectedChannel.id,

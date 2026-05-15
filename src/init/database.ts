@@ -27,8 +27,8 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
 
   log.section("Cleaning up expired cooldowns...");
   try {
-    const { cleanupExpiredCooldowns } = await import("@/utils/db/cooldownsCleanup");
-    const cleanupResult = await cleanupExpiredCooldowns();
+    const { cooldownRepository } = await import("@/utils/db/repositories/CooldownRepository");
+    const cleanupResult = await cooldownRepository.cleanupExpiredCooldowns();
     if (cleanupResult.success) {
       log.success(`Cooldowns cleanup completed: ${cleanupResult.deletedCount} expired entries removed`);
     } else {

@@ -14,7 +14,8 @@ import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/
 import { isBlacklisted, loadAllPersonasForServer } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import type { ModalResult, SelectOption } from "@/types/discord/modal";
-import { validateMemoryContent, checkServerMemoryLimit, getMemoryLimits } from "@/utils/db/memoryLimits";
+import { validateMemoryContent, getMemoryLimits } from "@/utils/misc/memoryLimits";
+import { serverMemoryRepository } from "@/utils/db/repositories/ServerMemoryRepository";
 import { addServerMemoryByTomori } from "@/utils/db/repositories";
 import { dedupeCaseInsensitive, getNonEmptyNumberedLines, readTxtUpload } from "@/utils/teach/batchUploadUtils";
 
@@ -310,7 +311,10 @@ export async function execute(
     }
 
     // 13.5 Check server memory limit after final persona resolution
-    const serverLimitCheck = await checkServerMemoryLimit(targetServerId, targetPersonaLineageId);
+    const serverLimitCheck = await serverMemoryRepository.checkServerMemoryLimit(
+      targetServerId,
+      targetPersonaLineageId,
+    );
     const currentCount = serverLimitCheck.currentCount ?? existingRows.length;
     const maxAllowed = serverLimitCheck.maxAllowed ?? memoryLimits.maxServerMemories;
     const availableSlots = Math.max(0, maxAllowed - currentCount);

@@ -1,7 +1,7 @@
 import type { Guild } from "discord.js";
 import { sql } from "../db/client";
 import { log } from "../misc/logger";
-import { syncStickersToDatabase } from "../db/emojiStickerSync";
+import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 
 /**
  * Lazy sync stickers for a guild - only fetches from Discord if needed
@@ -89,7 +89,7 @@ export async function lazySyncGuildStickers(guild: Guild, serverId: number, forc
 
     // 7. Sync to database using shared helper
     await sql.transaction(async (tx) => {
-      await syncStickersToDatabase(tx, serverId, currentStickers);
+      await serverRepository.syncStickers(tx, serverId, currentStickers);
     });
 
     log.info("[Sticker Lazy Sync] Transaction completed successfully");

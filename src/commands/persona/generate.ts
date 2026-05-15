@@ -22,7 +22,7 @@ import {
   extractSillyTavernMetadataFromPNG,
   embedMetadataInPNG,
 } from "../../utils/image/pngMetadata";
-import { convertSillyTavernMetadataToPresetData } from "../../utils/db/sillyTavernImport";
+import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 import { presetExportDataSchema, PRESET_EXPORT_VERSION } from "../../types/preset/presetExport";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 import type { PresetExport } from "../../types/preset/presetExport";
@@ -484,7 +484,7 @@ export async function execute(
       if (!extractedPresetContext) {
         const stMetadata = extractSillyTavernMetadataFromPNG(imageBuffer);
         if (stMetadata) {
-          const conversionResult = convertSillyTavernMetadataToPresetData(stMetadata);
+          const conversionResult = presetRepository.convertSillyTavernMetadataToPresetData(stMetadata);
           if (conversionResult.success) {
             extractedPresetContext = JSON.stringify(conversionResult.data);
             log.info("Extracted SillyTavern card data from uploaded image");

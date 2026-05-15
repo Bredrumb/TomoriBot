@@ -10,14 +10,14 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
-import type { ConditioningGroup } from "@/utils/db/conditioningDb";
+import type { ConditioningGroup } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import type { ConditioningType, TomoriState, UserRow } from "@/types/db/schema";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
-import { deleteConditioningGroupsForPersona, loadConditioningGroupsForPersona } from "@/utils/db/conditioningDb";
+import { conditioningMemoryRepository } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import { hasManageGuildPermission } from "@/utils/conditioning/conditioningCommandHelper";
 import { loadAllPersonasForServer } from "@/utils/db/repositories";
 
@@ -126,7 +126,10 @@ export async function execute(
 async function loadManageEntries(personas: TomoriState[]): Promise<ConditioningManageEntry[]> {
   const personaEntries = await Promise.all(
     personas.map(async (persona) => {
-      const groups = await loadConditioningGroupsForPersona(persona.server_id, persona.persona_lineage_id ?? 0);
+      const groups = await conditioningMemoryRepository.loadGroupsForPersona(
+        persona.server_id,
+        persona.persona_lineage_id ?? 0,
+      );
       return groups.map(
         (group): ConditioningManageEntry => ({
           ...group,
@@ -381,7 +384,7 @@ async function persistUpdate(
 
   let deletedRows = 0;
   for (const [personaLineageId, personaGroups] of groupsByPersona) {
-    deletedRows += await deleteConditioningGroupsForPersona(
+    deletedRows += await conditioningMemoryRepository.deleteGroupsForPersona(
       personaGroups[0]?.serverId ?? 0,
       personaLineageId,
       personaGroups.map((group) => ({

@@ -16,7 +16,7 @@ import {
 import type { ModalCheckboxGroupField } from "@/types/discord/modal";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { invalidateWhitelistCache } from "@/utils/cache/channelWhitelistCache";
-import { getPersonaWhitelistChannels, replacePersonaWhitelistChannels } from "@/utils/db/personaWhitelist";
+import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
 import {
   CHECKLIST_CHANNELS_PER_PAGE,
   CHECKLIST_MAX_PAGE_BUTTONS,
@@ -175,7 +175,10 @@ export async function execute(
         continue;
       }
 
-      const currentEntries = await getPersonaWhitelistChannels(tomoriState.server_id, selectedPersona.tomori_id);
+      const currentEntries = await whitelistRepository.getPersonaWhitelistChannels(
+        tomoriState.server_id,
+        selectedPersona.tomori_id,
+      );
       const currentSelectedIds = new Set(currentEntries.map((entry) => entry.channel_disc_id));
 
       if (availableChannels.length <= CHECKLIST_CHANNELS_PER_PAGE) {
@@ -389,7 +392,7 @@ async function persistUpdateAndRefreshPicker(
     return;
   }
 
-  await replacePersonaWhitelistChannels(serverId, persona.tomori_id, normalizedSelectedIds);
+  await whitelistRepository.replacePersonaWhitelistChannels(serverId, persona.tomori_id, normalizedSelectedIds);
   invalidateWhitelistCache(guildId);
 
   if (normalizedSelectedIds.length === 0) {

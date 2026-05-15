@@ -3,7 +3,7 @@ import { sql } from "@/utils/db/client";
 import type { EventFunction, EventArg } from "../../types/discord/global"; // Rule 14
 import type { ErrorContext } from "../../types/db/schema"; // Rule 14
 import { log } from "../../utils/misc/logger"; // Rule 18
-import { syncEmojisToDatabase } from "../../utils/db/emojiStickerSync";
+import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 import { invalidateEmojiStickerCache } from "../../utils/cache/emojiStickerCache";
 
 /**
@@ -50,7 +50,7 @@ const handleGuildEmojisUpdate: EventFunction = async (_client: Client, ...args: 
     // 4. Sync emojis to database using shared helper
     await sql.transaction(async (tx) => {
       // biome-ignore lint/style/noNonNullAssertion: serverId is guaranteed to exist after checks above
-      await syncEmojisToDatabase(tx, serverId!, currentEmojis);
+      await serverRepository.syncEmojis(tx, serverId!, currentEmojis);
     });
 
     // 5. Invalidate in-memory cache to force refresh on next message

@@ -5,9 +5,7 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { getAllWhitelistChannels, removeChannelWhitelist } from "@/utils/db/channelWhitelist";
-import { getAllWhitelistPersonas, removeChannelPersonaWhitelist } from "@/utils/db/personaWhitelist";
-import { getAllWhitelistRoles, removeRoleWhitelist } from "@/utils/db/roleWhitelist";
+import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
 import { invalidateWhitelistCache } from "@/utils/cache/channelWhitelistCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -80,9 +78,9 @@ export async function execute(
     // 3. Get all whitelisted personas, channels, and roles for this server
     const [allPersonas, whitelistPersonas, whitelistChannels, whitelistRoles] = await Promise.all([
       getCachedAllPersonas(interaction.guildId),
-      getAllWhitelistPersonas(tomoriState.server_id),
-      getAllWhitelistChannels(tomoriState.server_id),
-      getAllWhitelistRoles(tomoriState.server_id),
+      whitelistRepository.getAllWhitelistPersonas(tomoriState.server_id),
+      whitelistRepository.getAllWhitelistChannels(tomoriState.server_id),
+      whitelistRepository.getAllWhitelistRoles(tomoriState.server_id),
     ]);
     const personaNameMap = new Map<number, string>();
     for (const persona of allPersonas) {
@@ -291,11 +289,21 @@ export async function execute(
     const [personaResults, channelResults, roleResults] = await Promise.all([
       Promise.all(
         personasToRemove.map((entry) =>
-          removeChannelPersonaWhitelist(tomoriState.server_id, entry.channel_disc_id, entry.tomori_id),
+          whitelistRepository.removeChannelPersonaWhitelist(
+            tomoriState.server_id,
+            entry.channel_disc_id,
+            entry.tomori_id,
+          ),
         ),
       ),
-      Promise.all(channelsToRemove.map((channelId) => removeChannelWhitelist(tomoriState.server_id, channelId))),
-      Promise.all(rolesToRemove.map((roleId) => removeRoleWhitelist(tomoriState.server_id, roleId))),
+      Promise.all(
+        channelsToRemove.map((channelId) =>
+          whitelistRepository.removeChannelWhitelist(tomoriState.server_id, channelId),
+        ),
+      ),
+      Promise.all(
+        rolesToRemove.map((roleId) => whitelistRepository.removeRoleWhitelist(tomoriState.server_id, roleId)),
+      ),
     ]);
 
     const failedRemovals =

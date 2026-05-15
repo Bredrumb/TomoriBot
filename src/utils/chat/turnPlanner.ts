@@ -4,7 +4,7 @@ import { CooldownType, PrivacyLevel } from "@/types/db/schema";
 import { getCachedUserRow, getCachedBlacklistStatus, getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { incrementTomoriCounter, registerUser } from "@/utils/db/repositories";
-import { isPersonaAllowedForTrigger } from "@/utils/db/personaAccess";
+import { isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { ColorCode, log } from "@/utils/misc/logger";

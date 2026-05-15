@@ -12,7 +12,7 @@ import type { ErrorContext, ServerMemoryRow } from "@/types/db/schema";
 import { serverMemorySchema } from "@/types/db/schema";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { sql } from "@/utils/db/client";
-import { checkServerMemoryLimit, validateMemoryContent } from "@/utils/db/memoryLimits";
+import { type MemoryValidationResult, getMemoryLimits, validateMemoryContent } from "@/utils/misc/memoryLimits";
 import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
@@ -57,7 +57,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
       return null;
     }
 
-    const serverLimitCheck = await checkServerMemoryLimit(serverId, personaLineageId);
+    const serverLimitCheck = await this.checkServerMemoryLimit(serverId, personaLineageId);
     if (!serverLimitCheck.isValid) {
       log.warn(
         `Server memory limit exceeded for server ID ${serverId}: ${serverLimitCheck.currentCount}/${serverLimitCheck.maxAllowed}`,
@@ -68,6 +68,51 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
     const row = await this.addServerMemoryRow(serverId, tomoriId, personaLineageId, taughtByUserId, content, tags);
     if (row && serverDiscId) invalidateTomoriStateCache(serverDiscId);
     return row;
+  }
+
+  // ── limit checks ───────────────────────────────────────────────────────────
+
+  /**
+   * Check if a server has reached its memory limit.
+   *
+   * @param serverId         - Internal server DB ID
+   * @param personaLineageId - Optional persona lineage scope
+   * @returns MemoryValidationResult indicating whether the limit is exceeded
+   */
+  async checkServerMemoryLimit(serverId: number, personaLineageId?: number): Promise<MemoryValidationResult> {
+    const limits = getMemoryLimits();
+
+    try {
+      const [countResult] =
+        personaLineageId !== undefined
+          ? await sql`
+              SELECT COUNT(*) as memory_count
+              FROM server_memories
+              WHERE server_id = ${serverId}
+                AND persona_lineage_id = ${personaLineageId}
+            `
+          : await sql`
+              SELECT COUNT(*) as memory_count
+              FROM server_memories
+              WHERE server_id = ${serverId}
+            `;
+
+      const currentCount = Number(countResult?.memory_count || 0);
+
+      if (currentCount >= limits.maxServerMemories) {
+        return {
+          isValid: false,
+          error: "SERVER_MEMORY_LIMIT_EXCEEDED",
+          currentCount,
+          maxAllowed: limits.maxServerMemories,
+        };
+      }
+
+      return { isValid: true, currentCount, maxAllowed: limits.maxServerMemories };
+    } catch (error) {
+      log.error(`Error checking server memory limit for server ${serverId}:`, error);
+      return { isValid: false, error: "SERVER_MEMORY_LIMIT_EXCEEDED" };
+    }
   }
 
   // ── IRepository contract ───────────────────────────────────────────────────

@@ -11,17 +11,12 @@ import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
 import type { UserRow } from "../../types/db/schema";
 import { memoryGuard, IMPORT_LIMITS, reserveImportQuota } from "../../utils/security/rateLimiter";
 import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
-import { validatePresetFile, validatePresetData, importPresetData } from "../../utils/db/presetImport";
+import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 import type { PresetExportData } from "../../types/preset/presetExport";
-import {
-  convertSillyTavernJsonToPresetData,
-  convertSillyTavernMetadataToPresetData,
-  looksLikeSillyTavernCardJson,
-} from "../../utils/db/sillyTavernImport";
 import { extractMetadataFromPNG, extractSillyTavernMetadataFromPNG } from "../../utils/image/pngMetadata";
 import { validatePNGBuffer } from "../../utils/image/avatarHelper";
 import { loadAllPersonasForServer } from "../../utils/db/repositories";
-import { getMemoryLimits } from "../../utils/db/memoryLimits";
+import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { sql } from "../../utils/db/client";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 import { safeDownload } from "@/utils/security/safeDownload";
@@ -454,7 +449,7 @@ export async function execute(
 
       const metadata = extractMetadataFromPNG(importFileBuffer);
       if (metadata) {
-        const validation = validatePresetFile(metadata);
+        const validation = presetRepository.validatePresetFile(metadata);
 
         if (!validation.valid || !validation.data) {
           await interaction.editReply({
@@ -491,7 +486,7 @@ export async function execute(
           return;
         }
 
-        const conversion = convertSillyTavernMetadataToPresetData(sillyTavernData);
+        const conversion = presetRepository.convertSillyTavernMetadataToPresetData(sillyTavernData);
         if (!conversion.success) {
           const debugText = buildSillyTavernDebugText({
             conversionError: conversion.error,
@@ -552,15 +547,15 @@ export async function execute(
         return;
       }
 
-      const validation = validatePresetFile(parsedJson);
+      const validation = presetRepository.validatePresetFile(parsedJson);
       if (validation.valid && validation.data) {
         resolvedImport = {
           avatarImageBuffer: null,
           presetData: validation.data,
           source: "tomori-json",
         };
-      } else if (looksLikeSillyTavernCardJson(parsedJson)) {
-        const conversion = convertSillyTavernJsonToPresetData(parsedJson);
+      } else if (presetRepository.looksLikeSillyTavernCardJson(parsedJson)) {
+        const conversion = presetRepository.convertSillyTavernJsonToPresetData(parsedJson);
         if (!conversion.success) {
           const debugText = buildSillyTavernDebugText({
             conversionError: conversion.error,
@@ -638,7 +633,7 @@ export async function execute(
         [...presetDataFromFile.trigger_words, ...additionalTriggers].map((trigger) => trigger.trim()),
       ),
     };
-    const mergedPresetValidation = validatePresetData(mergedPresetData);
+    const mergedPresetValidation = presetRepository.validatePresetData(mergedPresetData);
     if (!mergedPresetValidation.valid || !mergedPresetValidation.data) {
       await interaction.editReply({
         embeds: [
@@ -662,7 +657,7 @@ export async function execute(
 
     if (importType === "main") {
       // Main persona import: replace existing main persona
-      const importResult = await importPresetData(serverDiscId, presetData, identityMode);
+      const importResult = await presetRepository.importPresetData(serverDiscId, presetData, identityMode);
 
       if (!importResult.success) {
         await interaction.editReply({

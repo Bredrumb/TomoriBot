@@ -8,14 +8,7 @@ import type {
   MessageCreateOptions,
 } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
-import {
-  MANAGED_WEBHOOK_KIND_SHARED_CHANNEL,
-  decryptManagedDiscordWebhookToken,
-  deleteManagedDiscordWebhook,
-  loadManagedDiscordWebhookByChannel,
-  loadManagedDiscordWebhookByChannelAndWebhookId,
-  upsertManagedDiscordWebhook,
-} from "@/utils/db/managedWebhookDb";
+import { MANAGED_WEBHOOK_KIND_SHARED_CHANNEL, serverRepository } from "@/utils/db/repositories/ServerRepository";
 import { log } from "../../misc/logger";
 import { safeDownload } from "../../security/safeDownload";
 import { PERSONA_LIMITS } from "../../security/rateLimiter";
@@ -374,7 +367,7 @@ async function persistSharedChannelWebhook(
     return;
   }
 
-  const stored = await upsertManagedDiscordWebhook({
+  const stored = await serverRepository.upsertManagedWebhook({
     guildDiscId: channel.guildId,
     kind: MANAGED_WEBHOOK_KIND_SHARED_CHANNEL,
     channelDiscId: channel.id,
@@ -392,16 +385,24 @@ async function restoreStoredSharedWebhook(
   webhookId?: string | null,
 ): Promise<Webhook | null> {
   const storedRow = webhookId
-    ? await loadManagedDiscordWebhookByChannelAndWebhookId(channel.id, webhookId, MANAGED_WEBHOOK_KIND_SHARED_CHANNEL)
-    : await loadManagedDiscordWebhookByChannel(channel.id, MANAGED_WEBHOOK_KIND_SHARED_CHANNEL);
+    ? await serverRepository.loadManagedWebhookByChannelAndWebhookId(
+        channel.id,
+        webhookId,
+        MANAGED_WEBHOOK_KIND_SHARED_CHANNEL,
+      )
+    : await serverRepository.loadManagedWebhookByChannel(channel.id, MANAGED_WEBHOOK_KIND_SHARED_CHANNEL);
 
   if (!storedRow) {
     return null;
   }
 
-  const decryptedToken = await decryptManagedDiscordWebhookToken(storedRow);
+  const decryptedToken = await serverRepository.decryptManagedWebhookToken(storedRow);
   if (!decryptedToken) {
-    await deleteManagedDiscordWebhook(channel.id, storedRow.webhook_disc_id, MANAGED_WEBHOOK_KIND_SHARED_CHANNEL);
+    await serverRepository.deleteManagedWebhook(
+      channel.id,
+      storedRow.webhook_disc_id,
+      MANAGED_WEBHOOK_KIND_SHARED_CHANNEL,
+    );
     return null;
   }
 
@@ -411,7 +412,11 @@ async function restoreStoredSharedWebhook(
       log.warn(
         `[Webhook Manager] Stored webhook ${storedRow.webhook_disc_id} does not belong to channel ${channel.id}; removing stale record`,
       );
-      await deleteManagedDiscordWebhook(channel.id, storedRow.webhook_disc_id, MANAGED_WEBHOOK_KIND_SHARED_CHANNEL);
+      await serverRepository.deleteManagedWebhook(
+        channel.id,
+        storedRow.webhook_disc_id,
+        MANAGED_WEBHOOK_KIND_SHARED_CHANNEL,
+      );
       return null;
     }
 
@@ -423,7 +428,11 @@ async function restoreStoredSharedWebhook(
       log.warn(
         `[Webhook Manager] Stored webhook ${storedRow.webhook_disc_id} for channel ${channel.id} is no longer valid; removing stale record`,
       );
-      await deleteManagedDiscordWebhook(channel.id, storedRow.webhook_disc_id, MANAGED_WEBHOOK_KIND_SHARED_CHANNEL);
+      await serverRepository.deleteManagedWebhook(
+        channel.id,
+        storedRow.webhook_disc_id,
+        MANAGED_WEBHOOK_KIND_SHARED_CHANNEL,
+      );
     } else {
       log.warn(`[Webhook Manager] Failed to restore stored webhook for channel ${channel.id}`, error);
     }
@@ -540,7 +549,7 @@ export async function getOrCreateWebhook(channel: TextChannel | BaseGuildTextCha
             return { webhook: cachedWebhook };
           }
           log.warn(`[Webhook Manager] Cached webhook missing in channel ${channelId}, invalidating cache`);
-          await deleteManagedDiscordWebhook(channelId, cachedWebhook.id, MANAGED_WEBHOOK_KIND_SHARED_CHANNEL);
+          await serverRepository.deleteManagedWebhook(channelId, cachedWebhook.id, MANAGED_WEBHOOK_KIND_SHARED_CHANNEL);
           webhookCache.delete(channelId);
         } catch (fetchError) {
           log.warn(

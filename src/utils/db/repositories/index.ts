@@ -1,31 +1,132 @@
 import type { Guild } from "discord.js";
 import type { NaiPresetRow, SetupConfig, TomoriConfigRow, TomoriRow, UserRow } from "@/types/db/schema";
-import type { ServerConfigExport } from "@/types/db/dataExport";
 import { configRepository } from "./ConfigRepository";
-import { importExportRepository } from "./ImportExportRepository";
-import { llmRepository, type OpenRouterModelScope } from "./LlmRepository";
+import { cooldownRepository } from "./CooldownRepository";
+import { exportRepository } from "./ExportRepository";
+import { importRepository } from "./ImportRepository";
+import { llmModelRepo } from "./LlmModelRepository";
+import { llmOverrideRepo } from "./LlmOverrideRepository";
+import { llmProviderRepo } from "./LlmProviderRepository";
 import { personalMemoryRepository } from "./PersonalMemoryRepository";
 import { personaRepository } from "./PersonaRepository";
 import { serverMemoryRepository } from "./ServerMemoryRepository";
+import { presetRepository } from "./PresetRepository";
 import { serverRepository } from "./ServerRepository";
+import { serverScheduleRepository } from "./ServerScheduleRepository";
 import { toolRepository } from "./ToolRepository";
+import { whitelistRepository } from "./WhitelistRepository";
 import { userRepository } from "./UserRepository";
 
 export {
   configRepository,
-  importExportRepository,
-  llmRepository,
+  cooldownRepository,
+  exportRepository,
+  importRepository,
+  llmModelRepo,
+  llmOverrideRepo,
+  llmProviderRepo,
   personalMemoryRepository,
   personaRepository,
+  presetRepository,
   serverMemoryRepository,
   serverRepository,
+  serverScheduleRepository,
   toolRepository,
   userRepository,
+  whitelistRepository,
 };
-export type { OpenRouterModelScope };
+export type { OpenRouterModelScope } from "./LlmModelRepository";
 
-export const getLlmsByIds = (ids: number[]) => llmRepository.getLlmsByIds(ids);
+// ── model catalog reads ────────────────────────────────────────────────────────
+export const getLlmsByIds = (ids: number[]) => llmModelRepo.getLlmsByIds(ids);
 export const loadNaiPresetsForModel = (target: "kayra" | "erato") => configRepository.loadNaiPresets(target);
+export const loadAvailableLlms = (includeDeprecated = false) => llmModelRepo.loadAvailableLlms(includeDeprecated);
+export const loadAvailableModelsForProvider = (
+  ...args: Parameters<typeof llmModelRepo.loadAvailableModelsForProvider>
+) => llmModelRepo.loadAvailableModelsForProvider(...args);
+export const loadLlmById = (llmId: number) => llmModelRepo.loadById(llmId);
+export const loadLlmByProviderAndCodename = (provider: string, codename: string) =>
+  llmModelRepo.loadByProviderAndCodename(provider, codename);
+export const loadDefaultModelForProvider = (providerName: string) => llmModelRepo.loadDefaultModel(providerName);
+export const loadAvailableEmbeddingModelsForProvider = (
+  ...args: Parameters<typeof llmModelRepo.loadAvailableEmbeddingModels>
+) => llmModelRepo.loadAvailableEmbeddingModels(...args);
+export const loadDefaultEmbeddingModelForProvider = (providerName: string) =>
+  llmModelRepo.loadDefaultEmbeddingModel(providerName);
+export const loadAvailableDiffusionModelsForProvider = (
+  ...args: Parameters<typeof llmModelRepo.loadAvailableDiffusionModels>
+) => llmModelRepo.loadAvailableDiffusionModels(...args);
+export const loadDefaultDiffusionModelForProvider = (providerName: string) =>
+  llmModelRepo.loadDefaultDiffusionModel(providerName);
+export const loadAvailableVideoGenerationModelsForProvider = (
+  ...args: Parameters<typeof llmModelRepo.loadAvailableVideoGenerationModels>
+) => llmModelRepo.loadAvailableVideoGenerationModels(...args);
+export const loadDefaultVideoGenerationModelForProvider = (providerName: string) =>
+  llmModelRepo.loadDefaultVideoGenerationModel(providerName);
+export const loadDefaultVisionModelForProvider = (providerName: string) =>
+  llmModelRepo.loadDefaultVisionModel(providerName);
+export const loadEmbeddingModelById = (embeddingModelId: number) =>
+  llmModelRepo.loadEmbeddingModelById(embeddingModelId);
+export const loadEmbeddingModelByProviderAndCodename = (provider: string, codename: string) =>
+  llmModelRepo.loadEmbeddingModelByProviderAndCodename(provider, codename);
+export const loadDiffusionModelByProviderAndCodename = (provider: string, codename: string) =>
+  llmModelRepo.loadDiffusionModelByProviderAndCodename(provider, codename);
+export const loadVideoGenerationModelByProviderAndCodename = (provider: string, codename: string) =>
+  llmModelRepo.loadVideoGenerationModelByProviderAndCodename(provider, codename);
+export const loadSmartestModel = (providerName: string, includeDeprecated = false) =>
+  llmModelRepo.loadSmartestModel(providerName, includeDeprecated);
+export const loadUniqueProviders = (includeDeprecated = false) => llmModelRepo.loadUniqueProviders(includeDeprecated);
+
+// ── provider / registration / custom endpoint reads ────────────────────────────
+export const loadSavedProviderConfigs = (serverId: number) => llmProviderRepo.loadSavedProviderConfigs(serverId);
+export const loadSavedProviderConfig = (serverId: number, provider: string) =>
+  llmProviderRepo.loadSavedProviderConfig(serverId, provider);
+export const loadUserSavedProviderConfigs = (userId: number) => llmProviderRepo.loadUserSavedProviderConfigs(userId);
+export const loadUserSavedProviderConfig = (userId: number, provider: string) =>
+  llmProviderRepo.loadUserSavedProviderConfig(userId, provider);
+export const loadOpenRouterModelRegistrationsForServer = (serverId: number) =>
+  llmProviderRepo.loadOpenRouterModelRegistrationsForServer(serverId);
+export const loadOpenRouterModelRegistrationsForUser = (userId: number) =>
+  llmProviderRepo.loadOpenRouterModelRegistrationsForUser(userId);
+export const loadOpenRouterEmbeddingModelRegistrationsForServer = (serverId: number) =>
+  llmProviderRepo.loadOpenRouterEmbeddingModelRegistrationsForServer(serverId);
+export const loadOpenRouterEmbeddingModelRegistrationsForUser = (userId: number) =>
+  llmProviderRepo.loadOpenRouterEmbeddingModelRegistrationsForUser(userId);
+export const loadOpenRouterImageModelRegistrationsForServer = (serverId: number) =>
+  llmProviderRepo.loadOpenRouterImageModelRegistrationsForServer(serverId);
+export const loadOpenRouterImageModelRegistrationsForUser = (userId: number) =>
+  llmProviderRepo.loadOpenRouterImageModelRegistrationsForUser(userId);
+export const loadOpenRouterVideoModelRegistrationsForServer = (serverId: number) =>
+  llmProviderRepo.loadOpenRouterVideoModelRegistrationsForServer(serverId);
+export const loadOpenRouterVideoModelRegistrationsForUser = (userId: number) =>
+  llmProviderRepo.loadOpenRouterVideoModelRegistrationsForUser(userId);
+export const loadScopedOpenRouterModels = (...args: Parameters<typeof llmProviderRepo.loadScopedOpenRouterModels>) =>
+  llmProviderRepo.loadScopedOpenRouterModels(...args);
+export const loadScopedOpenRouterEmbeddingModels = (
+  ...args: Parameters<typeof llmProviderRepo.loadScopedOpenRouterEmbeddingModels>
+) => llmProviderRepo.loadScopedOpenRouterEmbeddingModels(...args);
+export const loadScopedOpenRouterDiffusionModels = (
+  ...args: Parameters<typeof llmProviderRepo.loadScopedOpenRouterDiffusionModels>
+) => llmProviderRepo.loadScopedOpenRouterDiffusionModels(...args);
+export const loadScopedOpenRouterVideoGenerationModels = (
+  ...args: Parameters<typeof llmProviderRepo.loadScopedOpenRouterVideoGenerationModels>
+) => llmProviderRepo.loadScopedOpenRouterVideoGenerationModels(...args);
+export const loadCustomEndpointsForServer = (serverId: number) =>
+  llmProviderRepo.loadCustomEndpointsForServer(serverId);
+export const loadCustomEndpointsForUser = (userId: number) => llmProviderRepo.loadCustomEndpointsForUser(userId);
+export const loadCustomEndpointsByIds = (ids: number[]) => llmProviderRepo.loadCustomEndpointsByIds(ids);
+export const loadCustomEndpoint = (...args: Parameters<typeof llmProviderRepo.loadCustomEndpoint>) =>
+  llmProviderRepo.loadCustomEndpoint(...args);
+
+// ── channel / persona override reads ──────────────────────────────────────────
+export const getChannelLlmOverride = (serverId: number, channelDiscId: string) =>
+  llmOverrideRepo.getChannelLlmOverride(serverId, channelDiscId);
+export const getAllChannelLlmOverridesForServer = (serverId: number) =>
+  llmOverrideRepo.getAllChannelLlmOverridesForServer(serverId);
+export const loadPersonaLlmOverridesForServer = (serverId: number) =>
+  llmOverrideRepo.loadPersonaLlmOverridesForServer(serverId);
+
+// ── general reads ──────────────────────────────────────────────────────────────
 export const loadTomoriState = (serverDiscId: string) => personaRepository.loadState(serverDiscId);
 export const loadAllPersonasForServer = (serverDiscId: string) => personaRepository.loadAllForServer(serverDiscId);
 export const loadUserRow = (userDiscId: string) => userRepository.loadByDiscordId(userDiscId);
@@ -41,50 +142,6 @@ export const isPrivacyOptedOut = (userDiscId: string) => userRepository.isPrivac
 export const getCrossServerShortTermMemoryOptIn = (userDiscId: string) =>
   userRepository.getCrossServerShmOptIn(userDiscId);
 export const loadServerEmojis = (internalServerId: number) => serverRepository.loadEmojis(internalServerId);
-export const loadAvailableLlms = (includeDeprecated = false) => llmRepository.loadAvailableLlms(includeDeprecated);
-export const loadAvailableModelsForProvider = (
-  providerName: string,
-  includeDeprecated = false,
-  scope?: OpenRouterModelScope,
-) => llmRepository.loadAvailableModelsForProvider(providerName, includeDeprecated, scope);
-export const loadLlmById = (llmId: number) => llmRepository.loadById(llmId);
-export const loadLlmByProviderAndCodename = (provider: string, codename: string) =>
-  llmRepository.loadByProviderAndCodename(provider, codename);
-export const loadDefaultModelForProvider = (providerName: string) => llmRepository.loadDefaultModel(providerName);
-export const loadAvailableEmbeddingModelsForProvider = (
-  providerName: string,
-  includeDeprecated = false,
-  scope?: OpenRouterModelScope,
-) => llmRepository.loadAvailableEmbeddingModels(providerName, includeDeprecated, scope);
-export const loadDefaultEmbeddingModelForProvider = (providerName: string) =>
-  llmRepository.loadDefaultEmbeddingModel(providerName);
-export const loadAvailableDiffusionModelsForProvider = (
-  providerName: string,
-  includeDeprecated = false,
-  scope?: OpenRouterModelScope,
-) => llmRepository.loadAvailableDiffusionModels(providerName, includeDeprecated, scope);
-export const loadDefaultDiffusionModelForProvider = (providerName: string) =>
-  llmRepository.loadDefaultDiffusionModel(providerName);
-export const loadAvailableVideoGenerationModelsForProvider = (
-  providerName: string,
-  includeDeprecated = false,
-  scope?: OpenRouterModelScope,
-) => llmRepository.loadAvailableVideoGenerationModels(providerName, includeDeprecated, scope);
-export const loadDefaultVideoGenerationModelForProvider = (providerName: string) =>
-  llmRepository.loadDefaultVideoGenerationModel(providerName);
-export const loadDefaultVisionModelForProvider = (providerName: string) =>
-  llmRepository.loadDefaultVisionModel(providerName);
-export const loadEmbeddingModelById = (embeddingModelId: number) =>
-  llmRepository.loadEmbeddingModelById(embeddingModelId);
-export const loadEmbeddingModelByProviderAndCodename = (provider: string, codename: string) =>
-  llmRepository.loadEmbeddingModelByProviderAndCodename(provider, codename);
-export const loadDiffusionModelByProviderAndCodename = (provider: string, codename: string) =>
-  llmRepository.loadDiffusionModelByProviderAndCodename(provider, codename);
-export const loadVideoGenerationModelByProviderAndCodename = (provider: string, codename: string) =>
-  llmRepository.loadVideoGenerationModelByProviderAndCodename(provider, codename);
-export const loadSmartestModel = (providerName: string, includeDeprecated = false) =>
-  llmRepository.loadSmartestModel(providerName, includeDeprecated);
-export const loadUniqueProviders = (includeDeprecated = false) => llmRepository.loadUniqueProviders(includeDeprecated);
 export const loadPresetOptions = (maxDescriptionLength?: number) =>
   configRepository.loadPresetOptions(maxDescriptionLength);
 export const loadPresetOptionsByLocale = (locale: string, maxDescriptionLength?: number) =>
@@ -93,63 +150,27 @@ export const loadPresetRowsByLocale = (locale: string) => configRepository.loadP
 export const loadAllPresets = () => configRepository.loadAllPresets();
 export const loadSystemPromptPresets = () => configRepository.loadSystemPromptPresets();
 export const loadServerStickers = (serverDiscId: string) => serverRepository.loadStickers(serverDiscId);
-export const getDueReminders = () => serverRepository.getDueReminders();
-export const getNextReminderTime = () => serverRepository.getNextReminderTime();
-export const getReminderById = (reminderId: number) => serverRepository.getReminderById(reminderId);
-export const getUserReminderCount = (userDiscordId: string) => serverRepository.getUserReminderCount(userDiscordId);
-export const deleteReminderById = (reminderId: number) => serverRepository.deleteReminderById(reminderId);
-export const getPendingRemindersForUser = (...args: Parameters<typeof serverRepository.getPendingRemindersForUser>) =>
-  serverRepository.getPendingRemindersForUser(...args);
+export const getDueReminders = () => serverScheduleRepository.getDueReminders();
+export const getNextReminderTime = () => serverScheduleRepository.getNextReminderTime();
+export const getReminderById = (reminderId: number) => serverScheduleRepository.getReminderById(reminderId);
+export const getUserReminderCount = (userDiscordId: string) =>
+  serverScheduleRepository.getUserReminderCount(userDiscordId);
+export const deleteReminderById = (reminderId: number) => serverScheduleRepository.deleteReminderById(reminderId);
+export const getPendingRemindersForUser = (
+  ...args: Parameters<typeof serverScheduleRepository.getPendingRemindersForUser>
+) => serverScheduleRepository.getPendingRemindersForUser(...args);
 export const getBraveApiKeyStatus = (serverId: number) => toolRepository.getBraveApiKeyStatus(serverId);
 export const getBlacklistedMemberIds = (serverId: number) => userRepository.getBlacklistedMemberIds(serverId);
-export const getDueRandomTriggers = () => serverRepository.getDueTriggers();
-export const getNextRandomTriggerTime = () => serverRepository.getNextTriggerTime();
-export const getServerRandomTriggers = (serverId: number) => serverRepository.getServerTriggers(serverId);
-export const getServerRandomTriggerCount = (serverId: number) => serverRepository.getServerTriggerCount(serverId);
+export const getDueRandomTriggers = () => serverScheduleRepository.getDueTriggers();
+export const getNextRandomTriggerTime = () => serverScheduleRepository.getNextTriggerTime();
+export const getServerRandomTriggers = (serverId: number) => serverScheduleRepository.getServerTriggers(serverId);
+export const getServerRandomTriggerCount = (serverId: number) =>
+  serverScheduleRepository.getServerTriggerCount(serverId);
 export const getRandomTriggerByPersonaAndChannel = (
-  ...args: Parameters<typeof serverRepository.getTriggerByPersonaAndChannel>
-) => serverRepository.getTriggerByPersonaAndChannel(...args);
-export const getChannelLlmOverride = (serverId: number, channelDiscId: string) =>
-  llmRepository.getChannelLlmOverride(serverId, channelDiscId);
-export const getAllChannelLlmOverridesForServer = (serverId: number) =>
-  llmRepository.getAllChannelLlmOverrides(serverId);
-export const loadPersonaLlmOverridesForServer = (serverId: number) => llmRepository.loadPersonaLlmOverrides(serverId);
-export const loadSavedProviderConfigs = (serverId: number) => llmRepository.loadSavedProviderConfigs(serverId);
-export const loadSavedProviderConfig = (serverId: number, provider: string) =>
-  llmRepository.loadSavedProviderConfig(serverId, provider);
-export const loadUserSavedProviderConfigs = (userId: number) => llmRepository.loadUserSavedProviderConfigs(userId);
-export const loadUserSavedProviderConfig = (userId: number, provider: string) =>
-  llmRepository.loadUserSavedProviderConfig(userId, provider);
-export const loadOpenRouterModelRegistrationsForServer = (serverId: number) =>
-  llmRepository.loadOpenRouterModelRegistrationsForServer(serverId);
-export const loadOpenRouterModelRegistrationsForUser = (userId: number) =>
-  llmRepository.loadOpenRouterModelRegistrationsForUser(userId);
-export const loadOpenRouterEmbeddingModelRegistrationsForServer = (serverId: number) =>
-  llmRepository.loadOpenRouterEmbeddingModelRegistrationsForServer(serverId);
-export const loadOpenRouterEmbeddingModelRegistrationsForUser = (userId: number) =>
-  llmRepository.loadOpenRouterEmbeddingModelRegistrationsForUser(userId);
-export const loadOpenRouterImageModelRegistrationsForServer = (serverId: number) =>
-  llmRepository.loadOpenRouterImageModelRegistrationsForServer(serverId);
-export const loadOpenRouterImageModelRegistrationsForUser = (userId: number) =>
-  llmRepository.loadOpenRouterImageModelRegistrationsForUser(userId);
-export const loadOpenRouterVideoModelRegistrationsForServer = (serverId: number) =>
-  llmRepository.loadOpenRouterVideoModelRegistrationsForServer(serverId);
-export const loadOpenRouterVideoModelRegistrationsForUser = (userId: number) =>
-  llmRepository.loadOpenRouterVideoModelRegistrationsForUser(userId);
-export const loadScopedOpenRouterModels = (scope: OpenRouterModelScope, includeDeprecated = false) =>
-  llmRepository.loadScopedOpenRouterModels(scope, includeDeprecated);
-export const loadScopedOpenRouterEmbeddingModels = (scope: OpenRouterModelScope, includeDeprecated = false) =>
-  llmRepository.loadScopedOpenRouterEmbeddingModels(scope, includeDeprecated);
-export const loadScopedOpenRouterDiffusionModels = (scope: OpenRouterModelScope, includeDeprecated = false) =>
-  llmRepository.loadScopedOpenRouterDiffusionModels(scope, includeDeprecated);
-export const loadScopedOpenRouterVideoGenerationModels = (scope: OpenRouterModelScope, includeDeprecated = false) =>
-  llmRepository.loadScopedOpenRouterVideoGenerationModels(scope, includeDeprecated);
-export const loadCustomEndpointsForServer = (serverId: number) => llmRepository.loadCustomEndpointsForServer(serverId);
-export const loadCustomEndpointsForUser = (userId: number) => llmRepository.loadCustomEndpointsForUser(userId);
-export const loadCustomEndpointsByIds = (ids: number[]) => llmRepository.loadCustomEndpointsByIds(ids);
-export const loadCustomEndpoint = (...args: Parameters<typeof llmRepository.loadCustomEndpoint>) =>
-  llmRepository.loadCustomEndpoint(...args);
+  ...args: Parameters<typeof serverScheduleRepository.getTriggerByPersonaAndChannel>
+) => serverScheduleRepository.getTriggerByPersonaAndChannel(...args);
 
+// ── writes ─────────────────────────────────────────────────────────────────────
 export const registerUser = (userDiscId: string, displayName: string, language = "en") =>
   userRepository.register(userDiscId, displayName, language);
 export const setPrivacyLevel = (userDiscId: string, level: UserRow["privacy_level"]) =>
@@ -182,101 +203,108 @@ export const addPersonalMemoryByTomori = (
   memoryContent: string,
   tags: string[] = [],
 ) => personalMemoryRepository.add(userId, personaLineageId, memoryContent, tags);
-export const addReminder = (...args: Parameters<typeof serverRepository.addReminder>) =>
-  serverRepository.addReminder(...args);
-export const rescheduleReminder = (...args: Parameters<typeof serverRepository.rescheduleReminder>) =>
-  serverRepository.rescheduleReminder(...args);
-export const updateReminder = (...args: Parameters<typeof serverRepository.updateReminder>) =>
-  serverRepository.updateReminder(...args);
-export const insertRandomTrigger = (...args: Parameters<typeof serverRepository.insertTrigger>) =>
-  serverRepository.insertTrigger(...args);
-export const upsertRandomTrigger = (...args: Parameters<typeof serverRepository.upsertTrigger>) =>
-  serverRepository.upsertTrigger(...args);
-export const deleteRandomTrigger = (triggerId: number) => serverRepository.deleteTrigger(triggerId);
-export const rescheduleRandomTrigger = (...args: Parameters<typeof serverRepository.rescheduleTrigger>) =>
-  serverRepository.rescheduleTrigger(...args);
-export const setChannelLlmOverride = (...args: Parameters<typeof llmRepository.setChannelLlmOverride>) =>
-  llmRepository.setChannelLlmOverride(...args);
-export const setPersonaLlmOverride = (...args: Parameters<typeof llmRepository.setPersonaLlmOverride>) =>
-  llmRepository.setPersonaLlmOverride(...args);
-export const setFallbackLlms = (...args: Parameters<typeof llmRepository.setFallbackLlms>) =>
-  llmRepository.setFallbackLlms(...args);
-export const setFallbackModelRefs = (...args: Parameters<typeof llmRepository.setFallbackModelRefs>) =>
-  llmRepository.setFallbackModelRefs(...args);
-export const deleteChannelLlmOverride = (...args: Parameters<typeof llmRepository.deleteChannelLlmOverride>) =>
-  llmRepository.deleteChannelLlmOverride(...args);
-export const clearAllChannelLlmOverridesForServer = (
-  ...args: Parameters<typeof llmRepository.clearAllChannelLlmOverrides>
-) => llmRepository.clearAllChannelLlmOverrides(...args);
-export const clearAllPersonaLlmOverridesForServer = (
-  ...args: Parameters<typeof llmRepository.clearAllPersonaLlmOverrides>
-) => llmRepository.clearAllPersonaLlmOverrides(...args);
-export const upsertSavedProviderConfig = (...args: Parameters<typeof llmRepository.upsertSavedProviderConfig>) =>
-  llmRepository.upsertSavedProviderConfig(...args);
-export const deleteSavedProviderConfig = (...args: Parameters<typeof llmRepository.deleteSavedProviderConfig>) =>
-  llmRepository.deleteSavedProviderConfig(...args);
-export const upsertUserSavedProviderConfig = (
-  ...args: Parameters<typeof llmRepository.upsertUserSavedProviderConfig>
-) => llmRepository.upsertUserSavedProviderConfig(...args);
-export const deleteUserSavedProviderConfig = (userId: number, provider: string) =>
-  llmRepository.deleteUserSavedProviderConfig(userId, provider);
-export const upsertCustomEndpoint = (...args: Parameters<typeof llmRepository.upsertCustomEndpoint>) =>
-  llmRepository.upsertCustomEndpoint(...args);
-export const deleteCustomEndpoint = (...args: Parameters<typeof llmRepository.deleteCustomEndpoint>) =>
-  llmRepository.deleteCustomEndpoint(...args);
-export const upsertOpenRouterModelRegistration = (
-  ...args: Parameters<typeof llmRepository.upsertOpenRouterModelRegistration>
-) => llmRepository.upsertOpenRouterModelRegistration(...args);
-export const deleteOpenRouterModelRegistration = (
-  ...args: Parameters<typeof llmRepository.deleteOpenRouterModelRegistration>
-) => llmRepository.deleteOpenRouterModelRegistration(...args);
-export const upsertOpenRouterEmbeddingModelRegistration = (
-  ...args: Parameters<typeof llmRepository.upsertOpenRouterEmbeddingModelRegistration>
-) => llmRepository.upsertOpenRouterEmbeddingModelRegistration(...args);
-export const deleteOpenRouterEmbeddingModelRegistration = (
-  ...args: Parameters<typeof llmRepository.deleteOpenRouterEmbeddingModelRegistration>
-) => llmRepository.deleteOpenRouterEmbeddingModelRegistration(...args);
-export const upsertOpenRouterImageModelRegistration = (
-  ...args: Parameters<typeof llmRepository.upsertOpenRouterImageModelRegistration>
-) => llmRepository.upsertOpenRouterImageModelRegistration(...args);
-export const deleteOpenRouterImageModelRegistration = (
-  ...args: Parameters<typeof llmRepository.deleteOpenRouterImageModelRegistration>
-) => llmRepository.deleteOpenRouterImageModelRegistration(...args);
-export const upsertOpenRouterVideoModelRegistration = (
-  ...args: Parameters<typeof llmRepository.upsertOpenRouterVideoModelRegistration>
-) => llmRepository.upsertOpenRouterVideoModelRegistration(...args);
-export const deleteOpenRouterVideoModelRegistration = (
-  ...args: Parameters<typeof llmRepository.deleteOpenRouterVideoModelRegistration>
-) => llmRepository.deleteOpenRouterVideoModelRegistration(...args);
-export const restoreOverridesFromSnapshot = (...args: Parameters<typeof llmRepository.restoreOverridesFromSnapshot>) =>
-  llmRepository.restoreOverridesFromSnapshot(...args);
-export const cleanupDeadChannelOverrides = (serverId: number, validChannelIds: Set<string>) =>
-  llmRepository.cleanupDeadChannelOverrides(serverId, validChannelIds);
+export const addReminder = (...args: Parameters<typeof serverScheduleRepository.addReminder>) =>
+  serverScheduleRepository.addReminder(...args);
+export const rescheduleReminder = (...args: Parameters<typeof serverScheduleRepository.rescheduleReminder>) =>
+  serverScheduleRepository.rescheduleReminder(...args);
+export const updateReminder = (...args: Parameters<typeof serverScheduleRepository.updateReminder>) =>
+  serverScheduleRepository.updateReminder(...args);
+export const insertRandomTrigger = (...args: Parameters<typeof serverScheduleRepository.insertTrigger>) =>
+  serverScheduleRepository.insertTrigger(...args);
+export const upsertRandomTrigger = (...args: Parameters<typeof serverScheduleRepository.upsertTrigger>) =>
+  serverScheduleRepository.upsertTrigger(...args);
+export const deleteRandomTrigger = (triggerId: number) => serverScheduleRepository.deleteTrigger(triggerId);
+export const rescheduleRandomTrigger = (...args: Parameters<typeof serverScheduleRepository.rescheduleTrigger>) =>
+  serverScheduleRepository.rescheduleTrigger(...args);
 
-export const exportPersonalData = (...args: Parameters<typeof importExportRepository.exportPersonalData>) =>
-  importExportRepository.exportPersonalData(...args);
-export const exportServerData = (serverDiscId: string, tomoriId?: number) =>
-  importExportRepository.exportServerData(serverDiscId, tomoriId);
+// ── override / fallback writes ─────────────────────────────────────────────────
+export const setChannelLlmOverride = (...args: Parameters<typeof llmOverrideRepo.setChannelLlmOverride>) =>
+  llmOverrideRepo.setChannelLlmOverride(...args);
+export const setPersonaLlmOverride = (...args: Parameters<typeof llmOverrideRepo.setPersonaLlmOverride>) =>
+  llmOverrideRepo.setPersonaLlmOverride(...args);
+export const setFallbackLlms = (...args: Parameters<typeof llmOverrideRepo.setFallbackLlms>) =>
+  llmOverrideRepo.setFallbackLlms(...args);
+export const setFallbackModelRefs = (...args: Parameters<typeof llmOverrideRepo.setFallbackModelRefs>) =>
+  llmOverrideRepo.setFallbackModelRefs(...args);
+export const deleteChannelLlmOverride = (...args: Parameters<typeof llmOverrideRepo.deleteChannelLlmOverride>) =>
+  llmOverrideRepo.deleteChannelLlmOverride(...args);
+export const clearAllChannelLlmOverridesForServer = (
+  ...args: Parameters<typeof llmOverrideRepo.clearAllChannelLlmOverridesForServer>
+) => llmOverrideRepo.clearAllChannelLlmOverridesForServer(...args);
+export const clearAllPersonaLlmOverridesForServer = (
+  ...args: Parameters<typeof llmOverrideRepo.clearAllPersonaLlmOverridesForServer>
+) => llmOverrideRepo.clearAllPersonaLlmOverridesForServer(...args);
+export const restoreOverridesFromSnapshot = (
+  ...args: Parameters<typeof llmOverrideRepo.restoreOverridesFromSnapshot>
+) => llmOverrideRepo.restoreOverridesFromSnapshot(...args);
+export const cleanupDeadChannelOverrides = (serverId: number, validChannelIds: Set<string>) =>
+  llmOverrideRepo.cleanupDeadChannelOverrides(serverId, validChannelIds);
+
+// ── provider / endpoint writes ─────────────────────────────────────────────────
+export const upsertSavedProviderConfig = (...args: Parameters<typeof llmProviderRepo.upsertSavedProviderConfig>) =>
+  llmProviderRepo.upsertSavedProviderConfig(...args);
+export const deleteSavedProviderConfig = (...args: Parameters<typeof llmProviderRepo.deleteSavedProviderConfig>) =>
+  llmProviderRepo.deleteSavedProviderConfig(...args);
+export const upsertUserSavedProviderConfig = (
+  ...args: Parameters<typeof llmProviderRepo.upsertUserSavedProviderConfig>
+) => llmProviderRepo.upsertUserSavedProviderConfig(...args);
+export const deleteUserSavedProviderConfig = (userId: number, provider: string) =>
+  llmProviderRepo.deleteUserSavedProviderConfig(userId, provider);
+export const upsertCustomEndpoint = (...args: Parameters<typeof llmProviderRepo.upsertCustomEndpoint>) =>
+  llmProviderRepo.upsertCustomEndpoint(...args);
+export const deleteCustomEndpoint = (...args: Parameters<typeof llmProviderRepo.deleteCustomEndpoint>) =>
+  llmProviderRepo.deleteCustomEndpoint(...args);
+export const upsertOpenRouterModelRegistration = (
+  ...args: Parameters<typeof llmProviderRepo.upsertOpenRouterModelRegistration>
+) => llmProviderRepo.upsertOpenRouterModelRegistration(...args);
+export const deleteOpenRouterModelRegistration = (
+  ...args: Parameters<typeof llmProviderRepo.deleteOpenRouterModelRegistration>
+) => llmProviderRepo.deleteOpenRouterModelRegistration(...args);
+export const upsertOpenRouterEmbeddingModelRegistration = (
+  ...args: Parameters<typeof llmProviderRepo.upsertOpenRouterEmbeddingModelRegistration>
+) => llmProviderRepo.upsertOpenRouterEmbeddingModelRegistration(...args);
+export const deleteOpenRouterEmbeddingModelRegistration = (
+  ...args: Parameters<typeof llmProviderRepo.deleteOpenRouterEmbeddingModelRegistration>
+) => llmProviderRepo.deleteOpenRouterEmbeddingModelRegistration(...args);
+export const upsertOpenRouterImageModelRegistration = (
+  ...args: Parameters<typeof llmProviderRepo.upsertOpenRouterImageModelRegistration>
+) => llmProviderRepo.upsertOpenRouterImageModelRegistration(...args);
+export const deleteOpenRouterImageModelRegistration = (
+  ...args: Parameters<typeof llmProviderRepo.deleteOpenRouterImageModelRegistration>
+) => llmProviderRepo.deleteOpenRouterImageModelRegistration(...args);
+export const upsertOpenRouterVideoModelRegistration = (
+  ...args: Parameters<typeof llmProviderRepo.upsertOpenRouterVideoModelRegistration>
+) => llmProviderRepo.upsertOpenRouterVideoModelRegistration(...args);
+export const deleteOpenRouterVideoModelRegistration = (
+  ...args: Parameters<typeof llmProviderRepo.deleteOpenRouterVideoModelRegistration>
+) => llmProviderRepo.deleteOpenRouterVideoModelRegistration(...args);
+
+// ── export / import ────────────────────────────────────────────────────────────
+export const exportPersonalData = (...args: Parameters<typeof exportRepository.exportPersonalData>) =>
+  exportRepository.exportPersonalData(...args);
+export const exportServerData = (...args: Parameters<typeof exportRepository.exportServerData>) =>
+  exportRepository.exportServerData(...args);
 export const exportPersonaPersonalMemories = (userDiscId: string, personaLineageId: number) =>
-  importExportRepository.exportPersonaPersonalMemories(userDiscId, personaLineageId);
+  exportRepository.exportPersonaPersonalMemories(userDiscId, personaLineageId);
 export const exportGlobalPersonalMemories = (userDiscId: string) =>
-  importExportRepository.exportGlobalPersonalMemories(userDiscId);
-export const exportPersonalSettings = (userDiscId: string) => importExportRepository.exportPersonalSettings(userDiscId);
+  exportRepository.exportGlobalPersonalMemories(userDiscId);
+export const exportPersonalSettings = (userDiscId: string) => exportRepository.exportPersonalSettings(userDiscId);
 export const exportPersonaServerMemories = (serverDiscId: string, tomoriId: number) =>
-  importExportRepository.exportPersonaServerMemories(serverDiscId, tomoriId);
-export const exportServerConfig = (serverDiscId: string) => importExportRepository.exportServerConfig(serverDiscId);
-export const exportPersonalityData = (serverDiscId: string, tomoriId?: number) =>
-  importExportRepository.exportPersonalityData(serverDiscId, tomoriId);
-export const importPersonalMemories = (...args: Parameters<typeof importExportRepository.importPersonalMemories>) =>
-  importExportRepository.importPersonalMemories(...args);
-export const importPersonalSettings = (...args: Parameters<typeof importExportRepository.importPersonalSettings>) =>
-  importExportRepository.importPersonalSettings(...args);
-export const importServerConfig = (serverDiscId: string, config: ServerConfigExport) =>
-  importExportRepository.importServerConfig(serverDiscId, config);
-export const importServerMemories = (...args: Parameters<typeof importExportRepository.importServerMemories>) =>
-  importExportRepository.importServerMemories(...args);
-export const importPersonalData = (...args: Parameters<typeof importExportRepository.importPersonalData>) =>
-  importExportRepository.importPersonalData(...args);
-export const importServerData = (...args: Parameters<typeof importExportRepository.importServerData>) =>
-  importExportRepository.importServerData(...args);
-export const validateImportFile = (jsonData: unknown) => importExportRepository.validateImportFile(jsonData);
+  exportRepository.exportPersonaServerMemories(serverDiscId, tomoriId);
+export const exportServerConfig = (serverDiscId: string) => exportRepository.exportServerConfig(serverDiscId);
+export const exportPersonalityData = (...args: Parameters<typeof exportRepository.exportPersonalityData>) =>
+  exportRepository.exportPersonalityData(...args);
+export const importPersonalMemories = (...args: Parameters<typeof importRepository.importPersonalMemories>) =>
+  importRepository.importPersonalMemories(...args);
+export const importPersonalSettings = (...args: Parameters<typeof importRepository.importPersonalSettings>) =>
+  importRepository.importPersonalSettings(...args);
+export const importServerConfig = (...args: Parameters<typeof importRepository.importServerConfig>) =>
+  importRepository.importServerConfig(...args);
+export const importServerMemories = (...args: Parameters<typeof importRepository.importServerMemories>) =>
+  importRepository.importServerMemories(...args);
+export const importPersonalData = (...args: Parameters<typeof importRepository.importPersonalData>) =>
+  importRepository.importPersonalData(...args);
+export const importServerData = (...args: Parameters<typeof importRepository.importServerData>) =>
+  importRepository.importServerData(...args);
+export const validateImportFile = (jsonData: unknown) => importRepository.validateImportFile(jsonData);
+export type { ImportValidationResult, ImportFileType } from "./ImportRepository";

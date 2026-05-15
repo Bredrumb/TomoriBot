@@ -8,7 +8,7 @@ import {
 import { sql } from "@/utils/db/client";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { CooldownType } from "@/types/db/schema";
-import { upsertChannelWhitelist } from "@/utils/db/channelWhitelist";
+import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
 import { invalidateWhitelistCache } from "@/utils/cache/channelWhitelistCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -198,7 +198,7 @@ export async function execute(
     }
 
     // 8. Upsert channel whitelist
-    await upsertChannelWhitelist(tomoriState.server_id, channel.id, cooldownType, cooldownLength);
+    await whitelistRepository.upsertChannelWhitelist(tomoriState.server_id, channel.id, cooldownType, cooldownLength);
 
     // 9. Invalidate whitelist cache for this server
     invalidateWhitelistCache(interaction.guildId);

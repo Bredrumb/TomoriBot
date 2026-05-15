@@ -13,7 +13,7 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import { personaConfigSchema } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
-import { validateMemoryContent, getMemoryLimits } from "@/utils/db/memoryLimits";
+import { validateMemoryContent, getMemoryLimits } from "@/utils/misc/memoryLimits";
 import type { SelectOption } from "@/types/discord/modal";
 import { loadAllPersonasForServer } from "@/utils/db/repositories";
 

@@ -1,7 +1,7 @@
 import type { Guild } from "discord.js";
 import { sql } from "../db/client";
 import { log } from "../misc/logger";
-import { syncEmojisToDatabase } from "../db/emojiStickerSync";
+import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 
 /**
  * Lazy sync emojis for a guild - only fetches from Discord if needed
@@ -89,7 +89,7 @@ export async function lazySyncGuildEmojis(guild: Guild, serverId: number, forceF
 
     // 7. Sync to database using shared helper
     await sql.transaction(async (tx) => {
-      await syncEmojisToDatabase(tx, serverId, currentEmojis);
+      await serverRepository.syncEmojis(tx, serverId, currentEmojis);
     });
 
     log.info("[Emoji Lazy Sync] Transaction completed successfully");

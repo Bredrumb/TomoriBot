@@ -18,48 +18,27 @@ src/utils/db/
 └── repositories/
     ├── index.ts                       # ≤50 lines: instances + types only
     ├── IRepository.ts
-    ├── ServerRepository.ts            # + emojiStickerSync + managedWebhookDb
-    ├── UserRepository.ts              # + personalSpotlight
+    ├── ServerRepository.ts            # core: setup, emojis/stickers, webhooks, blacklist
+    ├── ServerScheduleRepository.ts    # NEW: reminders + random triggers (split from ServerRepository)
+    ├── UserRepository.ts              # + personalSpotlight (folded; 965 lines post-fold — under 1,000 limit, no SpotlightRepository needed)
     ├── PersonaRepository.ts           # + persona-scoped memoryLimits checks
-    ├── ConfigRepository.ts
-    ├── LlmRepository.ts
+    ├── ConfigRepository.ts            # monitor: ~1,132 combined — split if >1,200 after inlining
+    ├── LlmModelRepository.ts          # NEW (split from LlmRepository): global model catalog
+    ├── LlmProviderRepository.ts       # NEW (split from LlmRepository): saved configs + OpenRouter registrations
+    ├── LlmOverrideRepository.ts       # NEW (split from LlmRepository): channel/persona override assignments
     ├── ToolRepository.ts              # + guildMcpDb
     ├── RagRepository.ts
-    ├── ImportExportRepository.ts
+    ├── ImportExportRepository.ts      # monitor: ~1,730 combined — split by direction if >1,200 after inlining
     ├── PersonalMemoryRepository.ts    # + checkPersonalMemoryLimit
     ├── ServerMemoryRepository.ts      # + checkServerMemoryLimit
     ├── ShortTermMemoryRepository.ts
     ├── ConditioningMemoryRepository.ts # + conditioningDb
-    ├── WhitelistRepository.ts         # NEW
+    ├── WhitelistRepository.ts         # NEW (also absorbs whitelist delegation methods from ServerRepository)
     ├── PresetRepository.ts            # NEW
-    ├── CooldownRepository.ts          # NEW
-    └── internal/
-        └── sql/                       # Go-style internal/ — private to repositories/**
-            ├── configReadSql.ts
-            ├── configWriteSql.ts
-            ├── llmReadSql.ts
-            ├── llmWriteSql.ts
-            ├── memoryReadSql.ts
-            ├── memoryWriteSql.ts
-            ├── personaReadSql.ts
-            ├── personaWriteSql.ts
-            ├── serverReadSql.ts       # + emoji/sticker/webhook SQL
-            ├── serverWriteSql.ts      # + emoji/sticker/webhook SQL
-            ├── toolReadSql.ts         # + MCP SQL
-            ├── toolWriteSql.ts        # NEW (currently no write file)
-            ├── userReadSql.ts         # + spotlight SQL
-            ├── userWriteSql.ts        # + spotlight SQL
-            ├── importExportReadSql.ts # from db/repositoryExportSql.ts (753 lines)
-            ├── importExportWriteSql.ts # from db/repositoryImportSql.ts (754 lines)
-            ├── conditioningReadSql.ts # NEW
-            ├── conditioningWriteSql.ts # NEW
-            ├── whitelistReadSql.ts    # NEW
-            ├── whitelistWriteSql.ts   # NEW
-            ├── presetReadSql.ts       # NEW
-            ├── presetWriteSql.ts      # NEW
-            ├── cooldownReadSql.ts     # NEW
-            └── cooldownWriteSql.ts    # NEW
+    └── CooldownRepository.ts          # NEW
 ```
+
+**No `internal/sql/` subfolder.** All SQL is inlined as `private` methods on the owning Repository class. The existing `*ReadSql.ts` / `*WriteSql.ts` files are dissolved into their repository and deleted. The public/private boundary is enforced by TypeScript's `private` keyword, not by folder convention.
 
 **Outside `src/utils/db/`** (Group E + Group F moves):
 
@@ -67,10 +46,6 @@ src/utils/db/
 src/utils/persona/personaAccess.ts     # moved from db/personaAccess.ts
 src/utils/misc/memoryLimits.ts         # env-loading half of db/memoryLimits.ts
 ```
-
-**Privacy convention:** `repositories/internal/**` is accessible only from `repositories/**`. Anything outside `repositories/` that imports from `internal/sql/` is a violation. The audit-script extension (see "Audit script extension" subtask in the plan) enforces this at CI time.
-
-**Why nested under `repositories/`, not at `db/internal/`:** the `internal/` boundary in Go is "only the parent directory and its subdirectories may import." Placing `internal/` at `db/` would let `db/client.ts` and `db/initializeDatabase.ts` reach into per-domain SQL — which they have no business doing. Nesting under `repositories/` matches the actual privacy intent.
 
 ---
 
@@ -87,24 +62,24 @@ The 5.5b 600-line per-module budget is the primary forcing function. Repositorie
 
 ---
 
-## Repository headroom (post-5.5b baseline)
+## Repository headroom (combined class + SQL, post-5.5b baseline)
 
-| Repository | LOC | Headroom to 600 | Notes |
-|---|---:|---:|---|
-| `PersonaRepository` | 102 | +498 | Plenty of room |
-| `ConditioningMemoryRepository` | 131 | +469 | Plenty of room |
-| `ServerMemoryRepository` | 151 | +449 | Plenty of room |
-| `RagRepository` | 155 | +445 | Plenty of room |
-| `ShortTermMemoryRepository` | 166 | +434 | Plenty of room |
-| `ToolRepository` | 171 | +429 | Plenty of room |
-| `PersonalMemoryRepository` | 192 | +408 | Plenty of room |
-| `ImportExportRepository` | 245 | +355 | Modest room |
-| `ServerRepository` | 405 | +195 | Tight; depends on what folds in |
-| `UserRepository` | 551 | +49 | Already near budget |
-| `ConfigRepository` | 681 | −81 | **Over budget already** |
-| `LlmRepository` | 791 | −191 | **Over budget already** |
+Budget is ~1,000 lines per Repository file once SQL is inlined. SQL sibling LOC is now counted directly — it will be dissolved into the class as `private` methods.
 
-SQL siblings (`*ReadSql.ts` / `*WriteSql.ts`) under `repositories/` are not counted against the class budget — they will live in `repositories/internal/sql/` per 5.5e's stated rule (Go-style `internal/` privacy convention).
+| Repository | Class LOC | SQL sibling LOC | **Combined** | Headroom to 1,000 | Notes |
+|---|---:|---:|---:|---:|---|
+| `RagRepository` | 137 | 0 | **137** | +863 | Fine |
+| `ToolRepository` | 156 | 23 | **179** | +821 | Fine; +~110 from guildMcpDb fold |
+| `ConditioningMemoryRepository` | 119 | 0 | **119** | +881 | Fine; +~130 from conditioningDb fold |
+| `ShortTermMemoryRepository` | 147 | 213 | **360** | +640 | Fine (memoryReadSql 49 + memoryWriteSql 164 are shared; assign proportionally) |
+| `PersonalMemoryRepository` | 175 | 0 | **175** | +825 | Fine; +~small from memoryLimits fold |
+| `ServerMemoryRepository` | 138 | 0 | **138** | +862 | Fine; +~small from memoryLimits fold |
+| `PersonaRepository` | 91 | 717 | **808** | +192 | Fine; +~small from memoryLimits fold |
+| `UserRepository` | 490 | 407 | **897** | +103 | ~~Tight; +~120 from personalSpotlight fold~~ → **965 post-fold (under 1,000). No SpotlightRepository split.** |
+| `ImportExportRepository` | 223 | 1,507 | **1,730** | −730 | **Over budget.** PresetRepository split reduces this (preset SQL moves out); re-measure after that split before deciding whether a further split is needed |
+| `ConfigRepository` | 600 | 532 | **1,132** | −132 | **Over budget.** Evaluate split during implementation; domain boundary TBD in PR |
+| `ServerRepository` | 352 | 1,278 | **1,630** | −630 | **Over budget** before orphan folds (+~150 class). Split during implementation; see size rule in plan |
+| `LlmRepository` | 706 | 3,007 | **3,713** | −2,713 | **Severely over budget. MUST split in this phase.** Domain split (e.g., `LlmProviderRepository` + `LlmModelRepository`) determined during implementation |
 
 ---
 
@@ -121,26 +96,26 @@ SQL siblings (`*ReadSql.ts` / `*WriteSql.ts`) under `repositories/` are not coun
 
 All four are connection / startup / security infrastructure with no domain ownership. Confirmed unchanged from plan.
 
-### Group B — Misclassified by the plan (move into `repositories/internal/sql/`)
+### Group B — Misclassified by the plan (inline into owning Repository, then delete)
 
 | File | LOC | Public surface | Disposition | Why |
 |---|---:|---|---|---|
-| `repositoryExportSql.ts` | 753 | Per-table export SQL constants used by `ImportExportRepository` | **Move to `repositories/internal/sql/importExportReadSql.ts`** | Despite the `repository*` prefix this is one repository's SQL. Plan's "infrastructure" label was based on filename, not content. |
-| `repositoryImportSql.ts` | 754 | Per-table import SQL constants used by `ImportExportRepository` | **Move to `repositories/internal/sql/importExportWriteSql.ts`** | Same reasoning as above. |
-| `repositoryReadSql.ts` | 7 | `export * from` barrel into 7 `repositories/*ReadSql.ts` files | **Delete** | Once `internal/sql/` becomes private (the stated 5.5e convention), an external barrel into it is architecturally wrong. |
-| `repositoryWriteSql.ts` | 6 | `export * from` barrel into 6 `repositories/*WriteSql.ts` files | **Delete** | Same reasoning as above. |
+| `repositoryExportSql.ts` | 753 | Per-table export SQL constants used by `ImportExportRepository` | **Inline as `private` methods into `ImportExportRepository`; delete file** | One repository's SQL — belongs inside that repository, not in a separate file. |
+| `repositoryImportSql.ts` | 754 | Per-table import SQL constants used by `ImportExportRepository` | **Inline as `private` methods into `ImportExportRepository`; delete file** | Same reasoning. Note: `ImportExportRepository` combined LOC will be ~1,730 after inlining — the `PresetRepository` split (Group D) must happen first to reduce that before assessing whether a further split is needed. |
+| `repositoryReadSql.ts` | 7 | `export * from` barrel into 7 `repositories/*ReadSql.ts` files | **Delete** | SQL siblings are being inlined; an external barrel into them is doubly wrong once they're gone. |
+| `repositoryWriteSql.ts` | 6 | `export * from` barrel into 6 `repositories/*WriteSql.ts` files | **Delete** | Same reasoning. |
 
-**Action required outside this file:** grep for consumers of `@/utils/db/repositoryReadSql` and `@/utils/db/repositoryWriteSql` before deletion — they must already be importing from the per-domain SQL files (or, ideally, only from Repository classes after the index.ts drain).
+**Action required outside this file:** grep for consumers of `@/utils/db/repositoryReadSql` and `@/utils/db/repositoryWriteSql` before deletion — they must already be importing from the Repository classes (or direct per-domain SQL files) via the index.ts drain. Any remaining direct SQL imports are a secondary smell to fix at the same time.
 
 ### Group C — Folds into existing Repository (with SQL routed to `internal/sql/`)
 
 | File | LOC | Target Repository | Class additions (est.) | Why |
 |---|---:|---|---:|---|
-| `emojiStickerSync.ts` | 331 | `ServerRepository` | ~80 | Plan already noted ServerRepository owns `loadEmojis` / `loadStickers`. Sync logic is server-scoped. SQL (~250 lines) routes to `internal/sql/serverWriteSql.ts`. |
+| `emojiStickerSync.ts` | 331 | `ServerRepository` | ~80 | Plan already noted ServerRepository owns `loadEmojis` / `loadStickers`. Sync logic is server-scoped. SQL (~250 lines) inlined as private methods on `ServerRepository`. |
 | `managedWebhookDb.ts` | 197 | `ServerRepository` | ~70 | Single-table, server-scoped. Encryption + lazy key rotation pattern matches `guildMcpDb`'s — both are server-scoped encrypted credentials. New `WebhookRepository` would be over-decomposed for one table. |
-| `guildMcpDb.ts` | 237 | `ToolRepository` | ~110 | MCP servers are tool sources; `ToolRepository` has +429 headroom. Encryption logic adds private helpers, not new domain. Honors the user's saved feedback `[[feedback_reuse_existing_patterns]]` — mirror established patterns rather than invent new repositories. |
-| `conditioningDb.ts` | 358 | `ConditioningMemoryRepository` | ~130 | Conditioning history is the natural extension of conditioning memory. +469 headroom on the target. SQL routes to a new `internal/sql/conditioningWriteSql.ts`. |
-| `personalSpotlight.ts` | 361 | `UserRepository` | ~120 | Personal spotlights are user-scoped state per channel. UserRepository headroom is tight (+49) but SQL extraction to `internal/sql/` keeps the class growth bounded. **If post-fold UserRepository exceeds 650**, escalate to a new `SpotlightRepository` — record the decision in the PR description. |
+| `guildMcpDb.ts` | 237 | `ToolRepository` | ~110 | MCP servers are tool sources. Encryption logic adds private helpers, not new domain. Honors the user's saved feedback `[[feedback_reuse_existing_patterns]]` — mirror established patterns rather than invent new repositories. |
+| `conditioningDb.ts` | 358 | `ConditioningMemoryRepository` | ~130 | Conditioning history is the natural extension of conditioning memory. SQL inlined as private methods; combined LOC stays well under 1,000. |
+| `personalSpotlight.ts` | 361 | `UserRepository` | ~120 | ✅ **Done.** Post-fold `UserRepository` is 965 lines — under 1,000. No `SpotlightRepository` split required. |
 
 ### Group D — New Repository required
 
@@ -167,14 +142,49 @@ All four are connection / startup / security infrastructure with no domain owner
 
 ## Conditional decisions resolved (with rationale)
 
+### Original plan hedges
+
 The plan left four "or new X if surface justifies" hedges. The inventory commits to one path each:
 
 | Plan hedge | Decision | Why |
 |---|---|---|
-| Whitelists → `ServerRepository` **or** new `WhitelistRepository` | **New `WhitelistRepository`** | Folding pushes ServerRepository past budget (~880). Whitelists are a coherent domain. |
-| MCP → `ToolRepository` **or** new `McpRepository` | **`ToolRepository`** | Headroom is +429; MCP servers are tool sources. Honors reuse-existing-patterns preference. |
+| Whitelists → `ServerRepository` **or** new `WhitelistRepository` | **New `WhitelistRepository`** | Folding pushes ServerRepository past budget (~880 class-only; combined even larger). Whitelists are a coherent domain. The whitelist delegation methods already on `ServerRepository` move to `WhitelistRepository` at the same time. |
+| MCP → `ToolRepository` **or** new `McpRepository` | **`ToolRepository`** | MCP servers are tool sources. Honors reuse-existing-patterns preference. |
 | Webhook → `ServerRepository` **or** new `WebhookRepository` | **`ServerRepository`** | Single-table, ~70 class-line addition. New repository would be over-decomposed. |
 | Presets → `ImportExportRepository` **or** new `PresetRepository` | **New `PresetRepository`** | 1308 combined LOC and a distinct domain (SillyTavern ingestion ≠ TomoriBot export/import). |
+
+### Over-budget repository splits (resolved here — not deferred to implementing agent)
+
+#### LlmRepository → 3-way split
+
+Combined ~3,713 lines. The domain has three distinct concerns visible in the function inventory:
+
+| New repository | Public API (from current `LlmRepository` / `llmReadSql` / `llmWriteSql`) | Tables owned |
+|---|---|---|
+| `LlmModelRepository` | `loadAvailableLlms`, `getLlmsByIds`, `loadById`, `loadLlmById`, `loadByProviderAndCodename`, `loadAvailableModelsForProvider`, `loadDefaultModel`, `loadSmartestModel`, `loadDefaultVisionModel`, `loadUniqueProviders`; all `loadAvailable*`, `loadDefault*`, `load*ById`, `load*ByProviderAndCodename` for embedding / diffusion / video-generation models | `llms`, `embedding_models`, `diffusion_models`, `video_generation_models` |
+| `LlmProviderRepository` | `loadSavedProviderConfigs`, `loadSavedProviderConfig`, `upsertSavedProviderConfig`, `deleteSavedProviderConfig`; user-scoped variants; `upsertCustomEndpoint`, `deleteCustomEndpoint`; all `loadOpenRouterModelRegistrations*`, `loadScopedOpenRouter*`, `upsertOpenRouterModelRegistration*`, `deleteOpenRouterModelRegistration*` (all modality variants) | `saved_provider_configs`, `user_saved_provider_configs`, `custom_endpoints`, `openrouter_*_registrations` |
+| `LlmOverrideRepository` | `getChannelLlmOverride`, `getAllChannelLlmOverridesForServer`, `setChannelLlmOverride`, `deleteChannelLlmOverride`, `clearAllChannelLlmOverridesForServer`; `loadPersonaLlmOverridesForServer`, `setPersonaLlmOverride`, `clearAllPersonaLlmOverridesForServer`; `setFallbackLlms`, `setFallbackModelRefs`, `restoreOverridesFromSnapshot`, `cleanupDeadChannelOverrides` | `channel_llm_overrides`, `persona_llm_overrides`, fallback refs |
+
+`toExportShape()` / `fromExportShape()` moves to `LlmProviderRepository` (saved provider configs and OpenRouter registrations are the exportable state; model catalog is global seed data).
+
+#### ServerRepository → 2-way split (after whitelist and orphan folds)
+
+Scheduling is cleanly separable from server identity. After extracting scheduling and extracting whitelists to `WhitelistRepository`, `ServerRepository` core lands at ~342 class + ~730 inline SQL ≈ ~1,070 lines — marginally over the 1,000-line heuristic, but `setupServer` is a single unavoidably large transaction (~400 SQL lines), not domain fragmentation. This exception is acceptable and should be documented inline in the repository.
+
+| New repository | Public API | Tables owned |
+|---|---|---|
+| `ServerRepository` (core) | `setup`, `loadEmojis`, `loadStickers`, `isBlacklisted`, `getBlacklistedMemberIds`, `getBraveApiKeyStatus`; webhook methods from `managedWebhookDb` fold | `servers`, `server_emojis`, `server_stickers`, `managed_webhooks` (+ whatever `setupServer` initializes) |
+| `ServerScheduleRepository` (**NEW**) | `getDueReminders`, `getNextReminderTime`, `getReminderById`, `getUserReminderCount`, `deleteReminderById`, `getPendingRemindersForUser`, `addReminder`, `rescheduleReminder`, `updateReminder`; `getDueTriggers`, `getNextTriggerTime`, `getServerTriggers`, `getServerTriggerCount`, `getTriggerByPersonaAndChannel`, `insertTrigger`, `upsertTrigger`, `deleteTrigger`, `rescheduleTrigger` | `reminders`, `random_triggers` |
+
+`toExportShape()` / `fromExportShape()` stays on `ServerRepository` core (server setup state is what's exported; schedule state is transient).
+
+#### ConfigRepository — monitor, do not pre-split
+
+Combined ~1,132 lines. `ConfigRepository` (600 class) + `configReadSql` (245) + `configWriteSql` (287). This is over the 1,000-line heuristic by ~132 lines. However, the config domain is inherently uniform (the class manages a single coherent config-read-write surface). **Decision: inline SQL and re-measure during implementation.** If the combined file exceeds 1,200 lines after inlining, split at the domain boundary identified at that point; document the decision in the PR description.
+
+#### ImportExportRepository — re-evaluate after PresetRepository split
+
+PresetRepository absorbs ~1,308 LOC of preset/SillyTavern SQL. After that split, the remaining export/import SQL (`repositoryExportSql.ts` 753 + `repositoryImportSql.ts` 754) is still ~1,507 lines. The class itself is 223 lines. Combined ~1,730 → still over budget. **Decision: after inlining, if the combined file exceeds 1,200 lines, split by export vs. import direction** (`ImportRepository` handles `fromExportShape` and bulk-import SQL; `ExportRepository` handles `toExportShape` and snapshot SQL). Document the chosen split in the PR description.
 
 ---
 
@@ -199,16 +209,21 @@ No file at `db/` root is unaccounted for.
 
 ## Suggested execution order (for the fold subtasks)
 
-1. **Read-only audits first.** Grep usages of `repositoryReadSql.ts` / `repositoryWriteSql.ts` (Group B barrels) — confirm consumers already use direct imports, then delete the barrels.
-2. **Group C folds** (existing repositories with headroom) — lowest risk, no new repository scaffolding.
+1. **Read-only audits first.** Grep usages of `repositoryReadSql.ts` / `repositoryWriteSql.ts` (Group B barrels) — confirm consumers already use Repository class imports or direct SQL-file imports, then delete the barrels.
+2. **Group C folds** (existing repositories with headroom) — lowest risk, no new repository scaffolding. Inline SQL from the orphan files as private methods while folding.
 3. **Group F split** (`memoryLimits`) — touches multiple repositories but each addition is small.
-4. **Group D new repositories** — `CooldownRepository` first (already mandated, deduplicates `cooldownManager` ↔ `messageCooldown`), then `WhitelistRepository`, then `PresetRepository`.
-5. **Group E moves** — pure relocations; do last so all callers have stabilized.
-6. **Group B SQL relocations** (`repositoryExportSql` / `repositoryImportSql` → `repositories/internal/sql/`) — final structural move, coincides with the audit-script extension that flags any new `db/` root domain files.
+4. **Group D new repositories** — `CooldownRepository` first (deduplicates `cooldownManager` ↔ `messageCooldown`), then `WhitelistRepository` (also migrates whitelist delegation methods from `ServerRepository`), then `PresetRepository`.
+5. **Large repository splits** — inline SQL for over-budget repos and split simultaneously:
+   - `LlmRepository` → `LlmModelRepository` + `LlmProviderRepository` + `LlmOverrideRepository`
+   - `ServerRepository` → `ServerRepository` (core) + `ServerScheduleRepository`
+   - Inline remaining `*ReadSql.ts` / `*WriteSql.ts` for in-budget repos (ConfigRepository, PersonaRepository, UserRepository, etc.)
+6. **Group B SQL dissolution** — inline `repositoryExportSql` / `repositoryImportSql` into `ImportExportRepository` as private methods; delete the source files.
+7. **Group E moves** — pure relocations; do last so all callers have stabilized.
+8. **Audit-script extension** — add the surviving-SQL-siblings and cohabiting-siblings checks; run with `--strict` to confirm zero findings.
 
 ---
 
 ## Open follow-ups (outside 5.5e's scope, but flagged)
 
-- `LlmRepository` (791) and `ConfigRepository` (681) are already over budget before 5.5e. They aren't growing from any fold here, but the audit-script extension (cohabiting-siblings check) should also surface "Repository class > 600 LOC" as a separate finding for Phase 6 to address.
-- `llmReadSql.ts` (2078) and `llmWriteSql.ts` (1204) are extreme cases that suggest the LLM domain may need a further split (per-provider repository or per-table repository). Out of scope for 5.5e but worth noting.
+- The audit-script extension should also surface a "Repository file > 1,000 lines" finding so no future repository silently drifts past the budget after 5.5e ships.
+- Phase 6 creates ~12 new `server_*_configs` tables from `tomori_configs`. Each new table will need read/write methods in a repository — that repository assignment is decided in Phase 6 step #14, not here. The repository splits done in 5.5e should be stable enough that Phase 6 only needs to **add** new methods, not restructure existing repositories.

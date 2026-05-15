@@ -9,7 +9,7 @@ import { ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { formatBooleanLocalized } from "@/utils/text/processors/formatters";
 import { formatLlmDisplayLabel } from "@/utils/provider/modelDisplay";
-import { getMemoryLimits } from "@/utils/db/memoryLimits";
+import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import {
   ATTRIBUTE_TRUNCATE_LENGTH,
   DIALOGUE_TRUNCATE_LENGTH,

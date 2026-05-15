@@ -1,5 +1,5 @@
 import { sql } from "@/utils/db/client";
-import { isRagAvailable } from "@/utils/db/ragDetection";
+import { isRagAvailable } from "@/utils/db/ragAvailability";
 import { loadEmbeddingModelById } from "@/utils/db/repositories";
 import { formatRetrievedChunksForPrompt, retrieveRelevantDocumentChunks } from "@/utils/documents/documentService";
 import { log } from "@/utils/misc/logger";

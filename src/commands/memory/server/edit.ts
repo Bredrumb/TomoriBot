@@ -21,7 +21,7 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { isBlacklisted, loadAllPersonasForServer } from "@/utils/db/repositories";
-import { getMemoryLimits, validateMemoryContent } from "@/utils/db/memoryLimits";
+import { getMemoryLimits, validateMemoryContent } from "@/utils/misc/memoryLimits";
 import type { SelectOption } from "@/types/discord/modal";
 import {
   serverMemorySchema,

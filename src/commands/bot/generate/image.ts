@@ -8,10 +8,6 @@ import {
   type SlashCommandSubcommandBuilder,
   type TextChannel,
 } from "discord.js";
-import {
-  checkMessageTriggerCooldownWithWhitelist,
-  setMessageTriggerCooldownWithWhitelist,
-} from "@/utils/db/cooldownManager";
 import { sendCooldownDM } from "@/utils/discord/cooldownDM";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -19,7 +15,7 @@ import { loadTomoriState } from "@/utils/db/repositories";
 import { sql } from "@/utils/db/client";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { resolvePersonaWebhookIdentity } from "@/utils/discord/webhook/identity";
-import { getCooldownTypeFooterKey } from "@/utils/db/messageCooldown";
+import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
 import { checkImageQuota } from "@/utils/quota/imageQuotaManager";
 import { hasOptApiKey } from "@/utils/security/crypto";
 import { CooldownType, type TomoriState, type UserRow } from "@/types/db/schema";
@@ -29,7 +25,7 @@ import { runHiddenImageTurn } from "@/utils/provider/hiddenImageTurn";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
-import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/db/personaAccess";
+import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 
 // ─── Modal field identifiers ──────────────────────────────────────────────────
 
@@ -353,7 +349,7 @@ export async function execute(
   // 5. Cooldown check.
   const cooldownType = tomoriState.config.cooldown_type ?? CooldownType.OFF;
   const cooldownLength = tomoriState.config.cooldown_length ?? 5;
-  const cooldownResult = await checkMessageTriggerCooldownWithWhitelist(
+  const cooldownResult = await cooldownRepository.checkMessageTriggerCooldownWithWhitelist(
     interaction.guild.id,
     interaction.user.id,
     interaction.channel.id,
@@ -372,7 +368,7 @@ export async function execute(
       return;
     }
 
-    const footerKey = getCooldownTypeFooterKey(cooldownResult.cooldownType);
+    const footerKey = cooldownRepository.getCooldownTypeFooterKey(cooldownResult.cooldownType);
     await sendCooldownDM(
       interaction.user,
       locale,
@@ -684,7 +680,7 @@ export async function execute(
     });
 
     // 15. Record the cooldown entry after confirmed success.
-    await setMessageTriggerCooldownWithWhitelist(
+    await cooldownRepository.setMessageTriggerCooldownWithWhitelist(
       interaction.guild.id,
       interaction.user.id,
       interaction.channel.id,

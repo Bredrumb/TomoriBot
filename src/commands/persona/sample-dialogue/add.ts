@@ -19,7 +19,8 @@ import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/
 import { isBlacklisted, loadAllPersonasForServer } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import type { SelectOption } from "@/types/discord/modal";
-import { checkSampleDialogueLimit, getMemoryLimits, validateSampleDialogue } from "@/utils/db/memoryLimits";
+import { getMemoryLimits, validateSampleDialogue } from "@/utils/misc/memoryLimits";
+import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
 import {
   dedupeSampleDialoguePairs,
   formatTextArrayLiteral,
@@ -335,7 +336,7 @@ export async function execute(
     }
 
     // 12. Check sample dialogue limit after persona resolution
-    const dialogueLimitCheck = await checkSampleDialogueLimit(selectedPersona.tomori_id);
+    const dialogueLimitCheck = await personaRepository.checkSampleDialogueLimit(selectedPersona.tomori_id);
     const currentCount = dialogueLimitCheck.currentCount ?? currentUserDialogues.length;
     const maxAllowed = dialogueLimitCheck.maxAllowed ?? memoryLimits.maxSampleDialogues;
     const availableSlots = Math.max(0, maxAllowed - currentCount);

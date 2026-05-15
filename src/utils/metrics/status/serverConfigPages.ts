@@ -3,8 +3,8 @@ import type { TomoriState } from "@/types/db/schema";
 import type { SummaryEmbedOptions } from "@/types/discord/embed";
 import { sql } from "@/utils/db/client";
 import { loadCustomEndpointsForServer, loadSavedProviderConfigs } from "@/utils/db/repositories";
-import { loadGuildMcpServers } from "@/utils/db/guildMcpDb";
-import { loadPresetsForServer, loadToggleableNodes } from "@/utils/db/stPresetDb";
+import { toolRepository } from "@/utils/db/repositories/ToolRepository";
+import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 import { replyPaginatedStatusPages } from "@/utils/discord/ui/statusComponents";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { isNoticeEmbedVisible } from "@/utils/discord/toolProgressNotice";
@@ -45,19 +45,19 @@ export async function showServerConfigStatus(
       ORDER BY service_name ASC
     `,
       loadSavedProviderConfigs(tomoriState.server_id),
-      loadGuildMcpServers(tomoriState.server_id),
+      toolRepository.loadMcpServers(tomoriState.server_id),
       sql<MatrixLinkStatusRow[]>`
       SELECT channel_disc_id FROM matrix_channel_links
       WHERE server_id = ${tomoriState.server_id}
       ORDER BY created_at ASC
     `,
-      loadPresetsForServer(tomoriState.server_id),
+      presetRepository.loadPresetsForServer(tomoriState.server_id),
       loadCustomEndpointsForServer(tomoriState.server_id),
     ]);
 
   const activeStPreset = stPresets.find((preset) => preset.is_active) ?? null;
   const activeStPresetNodes =
-    activeStPreset?.preset_id != null ? await loadToggleableNodes(activeStPreset.preset_id) : [];
+    activeStPreset?.preset_id != null ? await presetRepository.loadToggleableNodes(activeStPreset.preset_id) : [];
 
   const timezoneOffset = config.timezone_offset;
   const timezoneSign = timezoneOffset >= 0 ? "+" : "-";

@@ -26,7 +26,7 @@ import type {
 } from "@/types/tool/mcpTypes";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { getCachedEnabledGuildMcpConfigs } from "@/utils/cache/guildMcpConfigCache";
-import { decryptGuildMcpAuthToken } from "@/utils/db/guildMcpDb";
+import { toolRepository } from "@/utils/db/repositories/ToolRepository";
 import { sendToolNotice } from "@/utils/discord/toolProgressNotice";
 import { sendFetchProgressNotice } from "@/utils/mcp/mcpExecutor";
 import { validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
@@ -497,7 +497,7 @@ class GuildMcpManager {
 
     try {
       // 1. Decrypt auth token if present
-      const authToken = await decryptGuildMcpAuthToken(config);
+      const authToken = await toolRepository.decryptMcpAuthToken(config);
 
       // 2. Create MCP client
       const client = new MCPClient({

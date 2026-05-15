@@ -16,12 +16,7 @@ import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import type { UserRow, ErrorContext, StPresetNodeRow, StPresetRow } from "@/types/db/schema";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
-import {
-  loadActivePreset,
-  loadPresetsForServer,
-  loadToggleableNodes,
-  updateNodeEnabledStates,
-} from "@/utils/db/stPresetDb";
+import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 
 // ─── Constants ───────────────────────────────────────────────────────
 
@@ -225,9 +220,9 @@ export async function execute(
 
   try {
     // 2. Find the active preset, or fall back to the first available preset
-    let preset = await loadActivePreset(tomoriState.server_id);
+    let preset = await presetRepository.loadActivePreset(tomoriState.server_id);
     if (!preset) {
-      const allPresets = await loadPresetsForServer(tomoriState.server_id);
+      const allPresets = await presetRepository.loadPresetsForServer(tomoriState.server_id);
       preset = allPresets[0] ?? null;
     }
 
@@ -242,7 +237,7 @@ export async function execute(
     }
 
     // 3. Load toggleable nodes from DB (non-marker, ordered by node_order)
-    const dbNodes = await loadToggleableNodes(preset.preset_id);
+    const dbNodes = await presetRepository.loadToggleableNodes(preset.preset_id);
     if (dbNodes.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.st-preset.node.toggle.no_nodes_title",
@@ -370,7 +365,7 @@ async function executeSinglePageToggle(
 
   // Persist changes
   if (summary.changes.length > 0) {
-    await updateNodeEnabledStates(presetId, summary.enabledMap, preset.server_id);
+    await presetRepository.updateNodeEnabledStates(presetId, summary.enabledMap, preset.server_id);
   }
 
   // Reply with summary
@@ -490,10 +485,10 @@ async function executeMultiPageToggle(
 
       // Persist changes
       if (summary.changes.length > 0) {
-        await updateNodeEnabledStates(presetId, summary.enabledMap, preset.server_id);
+        await presetRepository.updateNodeEnabledStates(presetId, summary.enabledMap, preset.server_id);
 
         // Reload nodes from DB so the next modal shows updated defaults
-        currentNodes = await loadToggleableNodes(presetId);
+        currentNodes = await presetRepository.loadToggleableNodes(presetId);
       }
 
       // Reply with summary on the modal interaction

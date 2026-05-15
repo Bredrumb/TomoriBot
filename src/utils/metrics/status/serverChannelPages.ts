@@ -2,9 +2,7 @@ import { type ChatInputCommandInteraction, type Client, MessageFlags } from "dis
 import type { SummaryEmbedOptions } from "@/types/discord/embed";
 import type { TomoriState } from "@/types/db/schema";
 import { getBlacklistedMemberIds, getServerRandomTriggers, loadAllPersonasForServer } from "@/utils/db/repositories";
-import { getAllWhitelistChannels } from "@/utils/db/channelWhitelist";
-import { getAllWhitelistPersonas } from "@/utils/db/personaWhitelist";
-import { getAllWhitelistRoles } from "@/utils/db/roleWhitelist";
+import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
 import { replyPaginatedStatusPages } from "@/utils/discord/ui/statusComponents";
 import { ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
@@ -31,9 +29,9 @@ export async function showServerChannelsStatus(
   const [blacklistedMemberIds, whitelistPersonas, whitelistChannels, whitelistRoles, randomTriggers, allPersonas] =
     await Promise.all([
       getBlacklistedMemberIds(tomoriState.server_id),
-      getAllWhitelistPersonas(tomoriState.server_id),
-      getAllWhitelistChannels(tomoriState.server_id),
-      getAllWhitelistRoles(tomoriState.server_id),
+      whitelistRepository.getAllWhitelistPersonas(tomoriState.server_id),
+      whitelistRepository.getAllWhitelistChannels(tomoriState.server_id),
+      whitelistRepository.getAllWhitelistRoles(tomoriState.server_id),
       getServerRandomTriggers(tomoriState.server_id),
       loadAllPersonasForServer(serverDiscId),
     ]);
