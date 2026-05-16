@@ -161,6 +161,7 @@ export const serverConfigExportSchema = z.object({
   user_byok_mode: z.boolean().optional(),
   context_note: z.string().nullable().optional(),
   context_note_depth: z.number().int().min(0).max(100).optional(),
+  welcome_prompt: z.string().nullable().optional(),
   // Feature toggles (added since initial schema)
   manage_message_enabled: z.boolean().optional(),
   videogen_enabled: z.boolean().optional(),

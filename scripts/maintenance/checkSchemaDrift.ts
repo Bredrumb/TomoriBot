@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 
 interface Issue {
@@ -323,37 +323,52 @@ function checkExportImportMappings(
 
 function checkTomoriConfigExportCoverage(tomoriConfigKeys: Set<string>, exportKeys: Set<string>): void {
   const excluded = new Set([
+    // PKs / FK anchors — auto-resolved from context on import
     "tomori_config_id",
     "tomori_id",
     "server_id",
+    // Model/provider selection — provider-specific; must be reconfigured per server after import
     "llm_id",
     "embedding_model_id",
     "diffusion_model_id",
     "vision_llm_id",
     "video_model_id",
     "nai_diffusion_model_id",
+    // Security — never export credentials
     "api_key",
     "key_version",
+    // Managed by persona commands, not config
     "trigger_words",
+    // Discord channel IDs — server-specific; meaningless on import to another server
     "autoch_disc_ids",
     "autoch_persona_overrides",
+    "rp_channel_ids",
+    "private_channel_ids",
+    "crosschannel_blocklist_ids",
+    "welcome_channel_disc_id",
+    "thought_log_channel_disc_id",
+    // Coupled to autoch_disc_ids; useless without channel context
+    "autoch_threshold",
+    "autoch_threshold_max",
+    // Welcome FK — references tomoris row; server-specific
+    "welcome_persona_id",
+    // Legacy migration sources — superseded by tool_notice_hidden_keys
+    "hide_respond_embed",
+    "hide_impersonation_embeds",
+    // Deprecated — Phase 3 rollout removals
+    "custom_endpoint_url",
+    "custom_model_name",
+    "custom_num_ctx",
+    // Timestamps — auto-managed by DB
+    "created_at",
+    "updated_at",
+    // Forward-compatible pre-exclusions — columns not yet in schema; add deliberate export/exclude decision when each column lands
     "autochannel_lock",
     "bot_member_permissions",
     "bot_member_permissions_enabled",
     "bot_avatar",
     "bot_nickname",
-    "welcome_channel_disc_id",
-    "thought_log_channel_disc_id",
     "thought_logs_channel_disc_id",
-    "welcome_prompt",
-    "welcome_persona_id",
-    "autoch_threshold",
-    "autoch_threshold_max",
-    "hide_respond_embed",
-    "hide_impersonation_embeds",
-    "rp_channel_ids",
-    "private_channel_ids",
-    "crosschannel_blocklist_ids",
     "speech_endpoint_url",
     "speech_voice_id",
     "speech_voice_name",
@@ -361,11 +376,6 @@ function checkTomoriConfigExportCoverage(tomoriConfigKeys: Set<string>, exportKe
     "speech_transcription_endpoint_url",
     "managed_webhook_id",
     "managed_webhook_token",
-    "custom_endpoint_url",
-    "custom_model_name",
-    "custom_num_ctx",
-    "created_at",
-    "updated_at",
   ]);
 
   for (const key of tomoriConfigKeys) {
@@ -396,9 +406,20 @@ async function main(): Promise<void> {
   const root = process.cwd();
   const schemaTs = await readFile(join(root, "src", "types", "db", "schema.ts"), "utf-8");
   const dataExportTs = await readFile(join(root, "src", "types", "db", "dataExport.ts"), "utf-8");
-  const dataExportImpl = await readFile(join(root, "src", "utils", "db", "dataExport.ts"), "utf-8");
-  const dataImportImpl = await readFile(join(root, "src", "utils", "db", "dataImportV2.ts"), "utf-8");
-  const dbWrite = await readFile(join(root, "src", "utils", "db", "dbWrite.ts"), "utf-8");
+  const dataExportImpl = await readFile(
+    join(root, "src", "utils", "db", "repositories", "ExportRepository.ts"),
+    "utf-8",
+  );
+  const dataImportImpl = await readFile(
+    join(root, "src", "utils", "db", "repositories", "ImportRepository.ts"),
+    "utf-8",
+  );
+  const repoDir = join(root, "src", "utils", "db", "repositories");
+  const repoFiles = await readdir(repoDir);
+  const repoContents = await Promise.all(
+    repoFiles.filter((f) => f.endsWith(".ts")).map((f) => readFile(join(repoDir, f), "utf-8")),
+  );
+  const allRepositories = repoContents.join("\n");
   const schemaSql = await readFile(join(root, "src", "db", "schema.sql"), "utf-8");
 
   const tomoriConfigKeys = extractZodObjectKeys(schemaTs, "tomoriConfigSchema");
@@ -408,8 +429,8 @@ async function main(): Promise<void> {
 
   checkTomoriConfigExportCoverage(tomoriConfigKeys, serverConfigExportKeys);
   checkExportImportMappings(serverConfigExportKeys, dataExportImpl, dataImportImpl);
-  checkInsertCounts(dbWrite, "saved_provider_configs");
-  checkInsertCounts(dbWrite, "user_saved_provider_configs");
+  checkInsertCounts(allRepositories, "saved_provider_configs");
+  checkInsertCounts(allRepositories, "user_saved_provider_configs");
   checkSchemaSqlCoverage(schemaSql, "tomori_configs", tomoriConfigKeys);
   checkSchemaSqlCoverage(schemaSql, "saved_provider_configs", savedProviderConfigKeys);
   checkSchemaSqlCoverage(schemaSql, "user_saved_provider_configs", userSavedProviderConfigKeys);
