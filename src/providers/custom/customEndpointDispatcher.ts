@@ -1306,12 +1306,6 @@ export async function generateCustomImageViaEndpoint(params: {
   referenceImageDataUrl?: string | null;
   inpaint?: boolean;
   maskPrompt?: string | null;
-  maskThreshold?: number | null;
-  maskGrow?: number | null;
-  maskFeather?: number | null;
-  cfg?: number | null;
-  denoise?: number | null;
-  referenceDenoise?: number | null;
   seed?: number | null;
   inpaintMaskMode?: string | null;
   inpaintMode?: string | null;
@@ -1331,12 +1325,6 @@ export async function generateCustomImageViaEndpoint(params: {
     referenceImageDataUrl,
     inpaint,
     maskPrompt,
-    maskThreshold,
-    maskGrow,
-    maskFeather,
-    cfg,
-    denoise,
-    referenceDenoise,
     seed,
     inpaintMaskMode,
     inpaintMode,
@@ -1357,12 +1345,6 @@ export async function generateCustomImageViaEndpoint(params: {
       referenceImageDataUrl,
       inpaint,
       maskPrompt,
-      maskThreshold,
-      maskGrow,
-      maskFeather,
-      cfg,
-      denoise,
-      referenceDenoise,
       seed,
       inpaintMaskMode,
       inpaintMode,
@@ -1394,12 +1376,6 @@ export async function generateCustomImageViaEndpoint(params: {
       referenceImageDataUrl,
       inpaint,
       maskPrompt,
-      maskThreshold,
-      maskGrow,
-      maskFeather,
-      cfg,
-      denoise,
-      referenceDenoise,
       seed,
       inpaintMaskMode,
       inpaintMode,
