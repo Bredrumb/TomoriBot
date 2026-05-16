@@ -154,14 +154,8 @@ export function shouldBotReply(
       continue;
     }
 
-    const triggerSource = persona.trigger_words
-      ? "trigger_words"
-      : persona.is_alter
-        ? "alter_triggers"
-        : "config_trigger_words";
-    const triggers =
-      persona.trigger_words ??
-      (persona.is_alter ? (persona.alter_triggers ?? []) : (persona.config?.trigger_words ?? []));
+    const triggerSource = "trigger_words";
+    const triggers = persona.trigger_words ?? [];
 
     for (const trigger of triggers) {
       let matched = false;

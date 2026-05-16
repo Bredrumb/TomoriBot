@@ -95,11 +95,6 @@ export async function showPersonaStatus(
   const personaServerMemoriesCount = personaServerMemoryList.length;
   const personaServerMemoriesValue = formatNumberedList(personaServerMemoryList, locale, MEMORY_TRUNCATE_LENGTH);
 
-  const alterTriggersValue =
-    selectedPersona.alter_triggers.length > 0
-      ? selectedPersona.alter_triggers.map((t) => `\`${t}\``).join(", ")
-      : localizer(locale, "commands.choices.none");
-
   const personaTriggersValue =
     selectedPersona.trigger_words.length > 0
       ? selectedPersona.trigger_words.map((t) => `\`${t}\``).join(", ")
@@ -168,11 +163,6 @@ export async function showPersonaStatus(
       {
         nameKey: "commands.tool.status.field_is_alter",
         value: formatBooleanLocalized(selectedPersona.is_alter, locale),
-        inline: true,
-      },
-      {
-        nameKey: "commands.tool.status.field_alter_triggers",
-        value: alterTriggersValue,
         inline: true,
       },
       {

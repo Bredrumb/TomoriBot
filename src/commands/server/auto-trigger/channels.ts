@@ -25,10 +25,8 @@ import {
 import { promptWithPaginatedModal, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import {
-  tomoriConfigSchema,
   type AutochatPersonaOverride as AutochatPersonaOverrideRow,
   type ErrorContext,
-  type TomoriConfigRow,
   type TomoriState,
   type UserRow,
 } from "@/types/db/schema";
@@ -399,14 +397,14 @@ async function persistUpdate(
       enabled_channels: formatChecklistChannelMentions(enabledIds, availableChannels, locale),
       disabled_count: disabledIds.length.toString(),
       disabled_channels: formatChecklistChannelMentions(disabledIds, availableChannels, locale),
-      selected_count: validatedConfig.data.autoch_disc_ids.length.toString(),
+      selected_count: nextSelectedIds.size.toString(),
     },
     color: ColorCode.SUCCESS,
   });
 
   return {
-    selectedIds: new Set(validatedConfig.data.autoch_disc_ids),
-    personaOverrides: buildAutochatPersonaOverrideMap(validatedConfig.data.autoch_persona_overrides),
+    selectedIds: nextSelectedIds,
+    personaOverrides: nextPersonaOverrides,
   };
 }
 
@@ -651,13 +649,13 @@ async function updateAutochatConfig(
   responseInteraction: ModalSubmitInteraction,
   nextSelectedIds: Set<string>,
   nextPersonaOverrides: Map<string, number>,
-): Promise<{ data: TomoriConfigRow } | null> {
+): Promise<true | null> {
   const [updatedRow] = await sql`
-    UPDATE tomori_configs
+    UPDATE server_auto_trigger_configs
     SET autoch_disc_ids = ${formatTextArrayLiteral([...nextSelectedIds])}::text[],
         autoch_persona_overrides = ${JSON.stringify(serializeAutochatPersonaOverrides(nextPersonaOverrides))}::jsonb
     WHERE server_id = ${tomoriState.server_id}
-    RETURNING *
+    RETURNING server_id
   `;
 
   if (!updatedRow) {
@@ -668,6 +666,7 @@ async function updateAutochatConfig(
       metadata: {
         command: "server auto-trigger channels",
         guildId,
+        targetTable: "server_auto_trigger_configs",
       },
     };
     await log.error("Failed to update auto-trigger channel config", new Error("Database update failed"), context);
@@ -679,27 +678,5 @@ async function updateAutochatConfig(
     return null;
   }
 
-  const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-  if (!validatedConfig.success) {
-    const context: ErrorContext = {
-      tomoriId: tomoriState.tomori_id,
-      serverId: tomoriState.server_id,
-      errorType: "SchemaValidationError",
-      metadata: {
-        command: "server auto-trigger channels",
-        validationErrors: validatedConfig.error.flatten(),
-      },
-    };
-    await log.error("Failed to validate updated config after auto-trigger update", validatedConfig.error, context);
-    await replyInfoEmbed(responseInteraction, locale, {
-      titleKey: "general.errors.update_failed_title",
-      descriptionKey: "general.errors.update_failed_description",
-      color: ColorCode.ERROR,
-    });
-    return null;
-  }
-
-  return {
-    data: validatedConfig.data,
-  };
+  return true;
 }

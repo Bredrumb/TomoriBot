@@ -71,76 +71,65 @@ export async function execute(
       return;
     }
 
-    let updatedRows = await sql<Array<{ tomori_config_id: number }>>`
-      UPDATE tomori_configs
-      SET
-        llm_temperature = 1.2,
-        llm_top_p = 0.95,
-        llm_min_p = 0.05,
-        llm_disabled_params = ARRAY[]::text[],
-        llm_stop_strings = ARRAY[]::text[],
-        llm_stop_speaker_pattern_enabled = false,
-        humanizer_degree = 1,
-        thinking_level = 'auto',
-        timezone_offset = 0,
-        message_fetch_limit = 80,
-        server_memteaching_enabled = true,
-        attribute_memteaching_enabled = false,
-        sampledialogue_memteaching_enabled = false,
-        self_teaching_enabled = true,
-        web_search_enabled = true,
-        personal_memories_enabled = true,
-        emoji_usage_enabled = true,
-        sticker_usage_enabled = true,
-        imagegen_enabled = true,
-        tool_notice_hidden_keys = ARRAY[]::text[],
-        self_debug_enabled = false
-      WHERE server_id = ${serverId}
-      RETURNING tomori_config_id
-    `;
-
-    if (!updatedRows.length) {
-      const mainTomoriRows = await sql<Array<{ tomori_id: number }>>`
-        SELECT tomori_id
-        FROM tomoris
+    // Reset defaults across all split config tables in parallel.
+    // Split tables use server_id as PK so no tomori_id fallback is needed.
+    const [modelRows, chatRows, permRows, capRows, embedRows] = await Promise.all([
+      sql<Array<{ server_id: number }>>`
+        UPDATE server_model_configs
+        SET
+          llm_temperature = 1.2,
+          thinking_level = 'auto',
+          llm_disabled_params = ARRAY[]::text[]
         WHERE server_id = ${serverId}
-          AND is_alter = false
-        ORDER BY updated_at DESC NULLS LAST, tomori_id DESC
-        LIMIT 1
-      `;
-      const mainTomoriId = mainTomoriRows[0]?.tomori_id;
-      if (mainTomoriId) {
-        updatedRows = await sql<Array<{ tomori_config_id: number }>>`
-          UPDATE tomori_configs
-          SET
-            llm_temperature = 1.2,
-            llm_top_p = 0.95,
-            llm_min_p = 0.05,
-            llm_disabled_params = ARRAY[]::text[],
-            llm_stop_strings = ARRAY[]::text[],
-            llm_stop_speaker_pattern_enabled = false,
-            humanizer_degree = 1,
-            thinking_level = 'auto',
-            timezone_offset = 0,
-            message_fetch_limit = 80,
-            server_memteaching_enabled = true,
-            attribute_memteaching_enabled = false,
-            sampledialogue_memteaching_enabled = false,
-            self_teaching_enabled = true,
-            web_search_enabled = true,
-            personal_memories_enabled = true,
-            emoji_usage_enabled = true,
-            sticker_usage_enabled = true,
-            imagegen_enabled = true,
-            tool_notice_hidden_keys = ARRAY[]::text[],
-            self_debug_enabled = false
-          WHERE tomori_id = ${mainTomoriId}
-          RETURNING tomori_config_id
-        `;
-      }
-    }
+        RETURNING server_id
+      `,
+      sql<Array<{ server_id: number }>>`
+        UPDATE server_chat_configs
+        SET
+          llm_top_p = 0.95,
+          llm_min_p = 0.05,
+          llm_stop_strings = ARRAY[]::text[],
+          llm_stop_speaker_pattern_enabled = false,
+          humanizer_degree = 1,
+          timezone_offset = 0,
+          message_fetch_limit = 80,
+          self_debug_enabled = false
+        WHERE server_id = ${serverId}
+        RETURNING server_id
+      `,
+      sql<Array<{ server_id: number }>>`
+        UPDATE server_member_permissions_configs
+        SET
+          server_memteaching_enabled = true,
+          attribute_memteaching_enabled = false,
+          sampledialogue_memteaching_enabled = false,
+          self_teaching_enabled = true,
+          web_search_enabled = true,
+          personal_memories_enabled = true
+        WHERE server_id = ${serverId}
+        RETURNING server_id
+      `,
+      sql<Array<{ server_id: number }>>`
+        UPDATE server_capabilities_configs
+        SET
+          emoji_usage_enabled = true,
+          sticker_usage_enabled = true,
+          imagegen_enabled = true
+        WHERE server_id = ${serverId}
+        RETURNING server_id
+      `,
+      sql<Array<{ server_id: number }>>`
+        UPDATE server_notice_embeds_configs
+        SET tool_notice_hidden_keys = ARRAY[]::text[]
+        WHERE server_id = ${serverId}
+        RETURNING server_id
+      `,
+    ]);
 
-    if (!updatedRows.length) {
+    const anyUpdated =
+      modelRows.length > 0 || chatRows.length > 0 || permRows.length > 0 || capRows.length > 0 || embedRows.length > 0;
+
+    if (!anyUpdated) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.data.delete.no_server_data_title",
         descriptionKey: "commands.data.delete.no_server_data_description",

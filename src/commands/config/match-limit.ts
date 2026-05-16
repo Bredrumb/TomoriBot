@@ -97,10 +97,10 @@ export async function execute(
 
     // 6. Update the limit in the database with direct SQL
     const [updatedRow] = await sql`
-			UPDATE tomori_configs
+			UPDATE server_chat_configs
 			SET match_limit = ${limit}
 			WHERE server_id = ${tomoriState.server_id}
-			RETURNING *
+			RETURNING server_id
 		`;
 
     if (!updatedRow) {
@@ -112,7 +112,7 @@ export async function execute(
         metadata: {
           command: "config trigger-match-limit limit",
           limit,
-          targetTable: "tomori_configs",
+          targetTable: "server_chat_configs",
         },
       };
       await log.error("Failed to update match_limit config", new Error("Database update returned no rows"), context);

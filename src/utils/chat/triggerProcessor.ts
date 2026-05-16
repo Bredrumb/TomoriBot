@@ -269,8 +269,7 @@ export function determineMatchingPersonas(
     const config = persona.config;
     if (!config) continue;
 
-    const triggers =
-      persona.trigger_words ?? (persona.is_alter ? (persona.alter_triggers ?? []) : (config.trigger_words ?? []));
+    const triggers = persona.trigger_words ?? [];
 
     let hasMatch = false;
     let firstMatchIndex = Number.MAX_SAFE_INTEGER;

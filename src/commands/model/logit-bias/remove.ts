@@ -121,10 +121,10 @@ export async function execute(
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       const [updatedRow] = await sql`
-				UPDATE tomori_configs
+				UPDATE server_chat_configs
 				SET llm_logit_biases = '[]'::jsonb
 				WHERE server_id = ${tomoriState.server_id}
-				RETURNING *
+				RETURNING server_id
 			`;
 
       const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
@@ -273,10 +273,10 @@ export async function execute(
     }
 
     const [updatedRow] = await sql`
-			UPDATE tomori_configs
+			UPDATE server_chat_configs
 			SET llm_logit_biases = ${JSON.stringify(remainingEntries)}::jsonb
 			WHERE server_id = ${tomoriState.server_id}
-			RETURNING *
+			RETURNING server_id
 		`;
 
     const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);

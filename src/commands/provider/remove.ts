@@ -257,22 +257,28 @@ export async function execute(
       reassignmentLines.push("- Fallback models -> removed entries from the deleted provider");
     }
 
-    await sql`
-      UPDATE tomori_configs
-      SET llm_id = ${nextLlmId},
-          api_key = ${nextConfigApiKey},
-          key_version = ${nextConfigKeyVersion},
-          custom_endpoint_url = ${nextCustomEndpointUrl},
-          custom_model_name = ${nextCustomModelName},
-          custom_num_ctx = ${nextCustomNumCtx},
-          embedding_model_id = ${nextEmbeddingModelId},
-          diffusion_model_id = ${nextDiffusionModelId},
-          nai_diffusion_model_id = ${nextNaiDiffusionModelId},
-          video_model_id = ${nextVideoModelId},
-          vision_llm_id = ${nextVisionLlmId},
-          fallback_llm_ids = ${JSON.stringify(nextFallbackIds)}::jsonb
-      WHERE server_id = ${tomoriState.server_id}
-    `;
+    await Promise.all([
+      sql`
+        UPDATE server_model_configs
+        SET llm_id = ${nextLlmId},
+            api_key = ${nextConfigApiKey},
+            key_version = ${nextConfigKeyVersion},
+            custom_endpoint_url = ${nextCustomEndpointUrl},
+            custom_model_name = ${nextCustomModelName},
+            custom_num_ctx = ${nextCustomNumCtx},
+            embedding_model_id = ${nextEmbeddingModelId},
+            diffusion_model_id = ${nextDiffusionModelId},
+            video_model_id = ${nextVideoModelId},
+            vision_llm_id = ${nextVisionLlmId},
+            fallback_llm_ids = ${JSON.stringify(nextFallbackIds)}::jsonb
+        WHERE server_id = ${tomoriState.server_id}
+      `,
+      sql`
+        UPDATE server_novelai_imagegen_configs
+        SET nai_diffusion_model_id = ${nextNaiDiffusionModelId}
+        WHERE server_id = ${tomoriState.server_id}
+      `,
+    ]);
 
     if (activeProvider === tomoriState.llm.llm_provider.toLowerCase()) {
       await sql`

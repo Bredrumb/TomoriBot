@@ -402,6 +402,70 @@ function checkSchemaSqlCoverage(schemaSql: string, tableName: string, schemaKeys
   }
 }
 
+/**
+ * Soft-warning (console.warn only, no CI failure) that fires when any
+ * `*_configs` table created in a migration file exceeds the 15-column
+ * fission threshold.  Tables on the exemption list are structural exceptions
+ * where column growth is justified by their access pattern.
+ *
+ * Exemptions:
+ *   server_capabilities_configs — uniform boolean cluster iterated by
+ *     PERMISSION_DEFINITIONS array; growth is structurally uniform.
+ *   saved_provider_configs — atomic snapshot table; all columns are written
+ *     together as a unit by /server save-provider.
+ *   server_chat_configs — aggregate /config + /model parameter surface;
+ *     each column maps to exactly one command option knob.
+ */
+async function checkConfigsColumnThreshold(migrationsDir: string): Promise<void> {
+  const EXEMPT_TABLES = new Set(["server_capabilities_configs", "saved_provider_configs", "server_chat_configs"]);
+  const COLUMN_THRESHOLD = 15;
+
+  const files = await readdir(migrationsDir);
+  const upFiles = files.filter((f) => f.endsWith(".sql") && !f.endsWith(".down.sql"));
+
+  for (const file of upFiles) {
+    const content = await readFile(join(migrationsDir, file), "utf-8");
+    const lines = content.split("\n");
+
+    let inTable = false;
+    let currentTable = "";
+    let columnCount = 0;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      if (!inTable) {
+        const tableName = trimmed.match(/^CREATE TABLE IF NOT EXISTS\s+(\w+)\s*\($/i)?.[1];
+        if (tableName?.endsWith("_configs")) {
+          inTable = true;
+          currentTable = tableName;
+          columnCount = 0;
+        }
+        continue;
+      }
+
+      // End of CREATE TABLE body
+      if (trimmed === ");") {
+        if (!EXEMPT_TABLES.has(currentTable) && columnCount > COLUMN_THRESHOLD) {
+          console.warn(
+            `[check-schema] WARNING: ${currentTable} in ${file} has ${columnCount} columns ` +
+              `(threshold: ${COLUMN_THRESHOLD}). Consider splitting at a command boundary ` +
+              `or adding an exemption in checkSchemaDrift.ts.`,
+          );
+        }
+        inTable = false;
+        continue;
+      }
+
+      if (!trimmed || trimmed.startsWith("--")) continue;
+      // Skip SQL constraint-level lines (not column definitions)
+      if (/^(CONSTRAINT|PRIMARY\s+KEY|UNIQUE\b|CHECK\s*\(|FOREIGN\s+KEY)/i.test(trimmed)) continue;
+
+      columnCount++;
+    }
+  }
+}
+
 async function main(): Promise<void> {
   const root = process.cwd();
   const schemaTs = await readFile(join(root, "src", "types", "db", "schema.ts"), "utf-8");
@@ -434,6 +498,8 @@ async function main(): Promise<void> {
   checkSchemaSqlCoverage(schemaSql, "tomori_configs", tomoriConfigKeys);
   checkSchemaSqlCoverage(schemaSql, "saved_provider_configs", savedProviderConfigKeys);
   checkSchemaSqlCoverage(schemaSql, "user_saved_provider_configs", userSavedProviderConfigKeys);
+
+  await checkConfigsColumnThreshold(join(root, "src", "db", "migrations"));
 
   if (issueList.length === 0) return;
 

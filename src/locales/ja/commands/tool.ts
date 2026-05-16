@@ -242,7 +242,6 @@ export default {
       field_quota_unlimited: `無制限`,
       field_nickname: `ニックネーム`,
       field_is_alter: `オルターペルソナ`,
-      field_alter_triggers: `オルタートリガー`,
       field_persona_triggers: `ペルソナトリガー`,
       field_persona_model: `ペルソナモデル上書き`,
       persona_model_server_default: `サーバーデフォルト`,

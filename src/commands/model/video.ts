@@ -13,7 +13,7 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
-import { type UserRow, type ErrorContext, tomoriConfigSchema } from "@/types/db/schema";
+import { type UserRow, type ErrorContext } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";
 import { llmModelRepo } from "@/utils/db/repositories";
@@ -180,14 +180,13 @@ export async function execute(
       }
 
       const [updatedRow] = await sql`
-        UPDATE tomori_configs
+        UPDATE server_model_configs
         SET video_model_id = ${selectedSavedConfig.video_model_id}
         WHERE server_id = ${tomoriState.server_id}
-        RETURNING *
+        RETURNING server_id
       `;
 
-      const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-      if (!validatedConfig.success || !updatedRow) {
+      if (!updatedRow) {
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
@@ -316,16 +315,13 @@ export async function execute(
 
     // 11. Update the config in the database
     const [updatedRow] = await sql`
-      UPDATE tomori_configs
+      UPDATE server_model_configs
       SET video_model_id = ${selectedModel.video_model_id}
       WHERE server_id = ${tomoriState.server_id}
-      RETURNING *
+      RETURNING server_id
     `;
 
-    // 12. Validate the returned data
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-
-    if (!validatedConfig.success || !updatedRow) {
+    if (!updatedRow) {
       const context: ErrorContext = {
         tomoriId: tomoriState.tomori_id,
         serverId: tomoriState.server_id,
@@ -336,14 +332,11 @@ export async function execute(
           guildId: interaction.guild?.id ?? interaction.user.id,
           selectedModelCodename: selectedModel.codename,
           targetVideoModelId: selectedModel.video_model_id,
-          validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
         },
       };
       await log.error(
-        "Failed to update or validate video model config after DB update",
-        validatedConfig.success
-          ? new Error("Database update returned no rows or unexpected data")
-          : new Error("Updated config data failed validation"),
+        "Failed to update video model config after DB update",
+        new Error("Database update returned no rows"),
         context,
       );
 

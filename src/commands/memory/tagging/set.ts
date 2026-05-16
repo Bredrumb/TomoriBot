@@ -107,7 +107,7 @@ export async function execute(
     const enabled = selectedValue === "true";
 
     const [updatedRow] = await sql`
-      UPDATE tomori_configs
+      UPDATE server_memory_configs
       SET memory_tagging_enabled = ${enabled}
       WHERE server_id = ${tomoriState.server_id}
       RETURNING memory_tagging_enabled

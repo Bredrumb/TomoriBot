@@ -1,9 +1,14 @@
 /**
- * ServerScheduleRepository — manages the `reminders` and `random_triggers` tables.
+ * ServerScheduleRepository — manages the `reminders` and `random_triggers` tables,
+ * plus the Phase 6 Stage A `server_trigger_behavior_configs` and
+ * `server_auto_trigger_configs` tables.
  *
  * Split from ServerRepository in Phase 5.5e Stage C. Scheduling is cleanly
  * separable from server identity: reminders and random triggers share no tables
  * with server setup, emojis, stickers, or webhooks.
+ *
+ * Export contract: toExportShape / fromExportShape are required by IRepository
+ * and consumed by the Phase 6 (#16.7) export pipeline composition.
  */
 import {
   type ErrorContext,
@@ -15,6 +20,31 @@ import {
 import { sql, withCachedPlanRetry } from "@/utils/db/client";
 import { emitScheduledWorkNudge } from "@/timers/scheduledWorkSignals";
 import { log } from "@/utils/misc/logger";
+import type { IRepository } from "./IRepository";
+
+// ── Stage A schedule config table row shapes ────────────────────────────────
+
+/** Row shape for server_trigger_behavior_configs (Phase 6 Stage A). */
+export type ServerTriggerBehaviorConfigsRow = {
+  always_reply_enabled: boolean;
+  deliberate_trigger_mode: boolean;
+  cooldown_type: number;
+  cooldown_length: number;
+};
+
+/** Row shape for server_auto_trigger_configs (Phase 6 Stage A). */
+export type ServerAutoTriggerConfigsRow = {
+  autoch_disc_ids: string[];
+  autoch_persona_overrides: unknown[];
+  autoch_threshold: number;
+  autoch_threshold_max: number;
+};
+
+/** Composite export shape for ServerScheduleRepository's Phase 6 Stage A tables. */
+export type ServerScheduleExportShape = {
+  trigger_behavior: ServerTriggerBehaviorConfigsRow | null;
+  auto_trigger: ServerAutoTriggerConfigsRow | null;
+};
 
 /** Data shape for creating or updating a random trigger. */
 interface RandomTriggerData {
@@ -30,7 +60,7 @@ interface RandomTriggerData {
   failureThreshold: number | null;
 }
 
-export class ServerScheduleRepository {
+export class ServerScheduleRepository implements IRepository<ServerScheduleExportShape> {
   // ── reminder reads ─────────────────────────────────────────────────────────
 
   /** Returns all reminders that are due to fire now. */
@@ -934,6 +964,132 @@ export class ServerScheduleRepository {
       await log.error(`Error rescheduling random trigger ${triggerId}`, error, context);
       return false;
     }
+  }
+
+  // ── IRepository contract ───────────────────────────────────────────────────
+
+  /**
+   * Reads trigger-behavior and auto-trigger configs for the given server.
+   *
+   * @param ownerId - Discord server snowflake
+   */
+  async toExportShape(ownerId: string | number): Promise<ServerScheduleExportShape | null> {
+    const serverDiscId = String(ownerId);
+    const serverId = await this.resolveServerId(serverDiscId);
+    if (!serverId) return null;
+
+    const [triggerBehavior, autoTrigger] = await Promise.all([
+      this.sqlLoadTriggerBehaviorConfigs(serverId),
+      this.sqlLoadAutoTriggerConfigs(serverId),
+    ]);
+
+    if (!triggerBehavior && !autoTrigger) return null;
+    return { trigger_behavior: triggerBehavior, auto_trigger: autoTrigger };
+  }
+
+  /**
+   * Restores ServerScheduleRepository-owned config table rows for a server.
+   * Dual-writes: upserts into each new config table AND back into tomori_configs.
+   *
+   * @param ownerId - Discord server snowflake
+   * @param data    - Previously exported ServerScheduleExportShape
+   */
+  async fromExportShape(ownerId: string | number, data: ServerScheduleExportShape): Promise<boolean> {
+    const serverDiscId = String(ownerId);
+    const serverId = await this.resolveServerId(serverDiscId);
+    if (!serverId) {
+      log.error(`ServerScheduleRepository.fromExportShape: server ${serverDiscId} not found`);
+      return false;
+    }
+
+    try {
+      const ops: Promise<void>[] = [];
+
+      if (data.trigger_behavior) ops.push(this.sqlUpsertTriggerBehaviorConfigs(serverId, data.trigger_behavior));
+      if (data.auto_trigger) ops.push(this.sqlUpsertAutoTriggerConfigs(serverId, data.auto_trigger));
+
+      await Promise.all(ops);
+      return true;
+    } catch (error) {
+      log.error(`ServerScheduleRepository.fromExportShape: write failed for ${serverDiscId}:`, error);
+      return false;
+    }
+  }
+
+  // ── Stage A: resolve internal server ID ──────────────────────────────────
+
+  private async resolveServerId(serverDiscId: string): Promise<number | null> {
+    const [row] = await sql`
+      SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId} LIMIT 1
+    `;
+    return (row?.server_id as number | undefined) ?? null;
+  }
+
+  // ── Stage A: config table reads ───────────────────────────────────────────
+
+  private async sqlLoadTriggerBehaviorConfigs(serverId: number): Promise<ServerTriggerBehaviorConfigsRow | null> {
+    try {
+      const [row] = await sql`
+        SELECT always_reply_enabled, deliberate_trigger_mode, cooldown_type, cooldown_length
+        FROM server_trigger_behavior_configs
+        WHERE server_id = ${serverId}
+      `;
+      return row ? (row as unknown as ServerTriggerBehaviorConfigsRow) : null;
+    } catch (error) {
+      log.error(`Error loading server_trigger_behavior_configs for server ${serverId}:`, error);
+      return null;
+    }
+  }
+
+  private async sqlLoadAutoTriggerConfigs(serverId: number): Promise<ServerAutoTriggerConfigsRow | null> {
+    try {
+      const [row] = await sql`
+        SELECT autoch_disc_ids, autoch_persona_overrides, autoch_threshold, autoch_threshold_max
+        FROM server_auto_trigger_configs
+        WHERE server_id = ${serverId}
+      `;
+      return row ? (row as unknown as ServerAutoTriggerConfigsRow) : null;
+    } catch (error) {
+      log.error(`Error loading server_auto_trigger_configs for server ${serverId}:`, error);
+      return null;
+    }
+  }
+
+  // ── Stage A: config table upserts (new tables) ────────────────────────────
+
+  private async sqlUpsertTriggerBehaviorConfigs(serverId: number, row: ServerTriggerBehaviorConfigsRow): Promise<void> {
+    await sql`
+      INSERT INTO server_trigger_behavior_configs (
+        server_id, always_reply_enabled, deliberate_trigger_mode, cooldown_type, cooldown_length
+      ) VALUES (
+        ${serverId}, ${row.always_reply_enabled}, ${row.deliberate_trigger_mode},
+        ${row.cooldown_type}, ${row.cooldown_length}
+      )
+      ON CONFLICT (server_id) DO UPDATE SET
+        always_reply_enabled    = EXCLUDED.always_reply_enabled,
+        deliberate_trigger_mode = EXCLUDED.deliberate_trigger_mode,
+        cooldown_type           = EXCLUDED.cooldown_type,
+        cooldown_length         = EXCLUDED.cooldown_length,
+        updated_at              = NOW()
+    `;
+  }
+
+  private async sqlUpsertAutoTriggerConfigs(serverId: number, row: ServerAutoTriggerConfigsRow): Promise<void> {
+    const overridesJson = JSON.stringify(row.autoch_persona_overrides);
+    await sql`
+      INSERT INTO server_auto_trigger_configs (
+        server_id, autoch_disc_ids, autoch_persona_overrides, autoch_threshold, autoch_threshold_max
+      ) VALUES (
+        ${serverId}, ${sql.array(row.autoch_disc_ids)}, ${overridesJson}::JSONB,
+        ${row.autoch_threshold}, ${row.autoch_threshold_max}
+      )
+      ON CONFLICT (server_id) DO UPDATE SET
+        autoch_disc_ids          = EXCLUDED.autoch_disc_ids,
+        autoch_persona_overrides = EXCLUDED.autoch_persona_overrides,
+        autoch_threshold         = EXCLUDED.autoch_threshold,
+        autoch_threshold_max     = EXCLUDED.autoch_threshold_max,
+        updated_at               = NOW()
+    `;
   }
 }
 

@@ -112,7 +112,7 @@ export async function execute(
     }
 
     await sql`
-      UPDATE tomori_configs
+      UPDATE server_chat_configs
       SET llm_stop_strings = ${toPostgresTextArrayLiteral(mergedStops)}::text[]
       WHERE server_id = ${tomoriState.server_id}
     `;

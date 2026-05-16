@@ -7,12 +7,8 @@ import type {
 } from "discord.js";
 import { MessageFlags } from "discord.js";
 import { sql } from "@/utils/db/client";
-import {
-  serverMemorySchema, // Use the correct schema for validation
-  type UserRow,
-  type ErrorContext,
-  type TomoriState,
-} from "@/types/db/schema";
+import { serverMemorySchema, // Use the correct schema for validation
+  type UserRow, type ErrorContext, type TomoriState,  } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {

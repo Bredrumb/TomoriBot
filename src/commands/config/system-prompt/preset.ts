@@ -148,7 +148,7 @@ export async function execute(
 
     // 12. Update tomori_configs with the preset prompt text
     await sql`
-			UPDATE tomori_configs
+			UPDATE server_chat_configs
 			SET system_prompt = ${selectedPreset.preset_prompt_text}
 			WHERE server_id = ${tomoriState.server_id}
 		`;

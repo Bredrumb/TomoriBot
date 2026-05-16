@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: phase-6-step-16.5 -->
+<!-- ARCH-ALIGNMENT: phase-6-step-14-stage-a -->
 
 # 5. Database Schema and Data Model
 
@@ -47,9 +47,42 @@ All SQL is inlined as `private` methods directly on the owning Repository class.
 
 - `servers`
 - `tomoris`
-- `tomori_configs`
+- `tomori_configs` *(Phase 6 Stage A: being split — see [Server config normalization](#server-config-normalization) below; Stage B will drop this table after soak)*
 - `persona_configs`
 - `users`
+
+### Server config normalization (Phase 6 Stage A — dual-write active)
+
+`tomori_configs` is being split across 13 command-aligned tables (Stage A: expand + backfill; Stage B: drop `tomori_configs` after soak):
+
+- `server_chat_configs` — `/config humanizer`, `/config message-fetch-limit`, `/model` parameters
+- `server_notice_embeds_configs` — `/config notice-embeds visibility`
+- `server_member_permissions_configs` — `/server member-permissions`
+- `server_channel_scope_configs` — `/server rp-channels`, `/server private-channels`, `/server crosschannel-blocklist`, thought-log channel
+- `server_welcome_configs` — `/server welcome-channel`
+- `server_trigger_behavior_configs` — `/server always-reply`, `/server deliberate-trigger-mode`, cooldown settings (`ServerScheduleRepository`)
+- `server_auto_trigger_configs` — `/server auto-trigger` channels + threshold (`ServerScheduleRepository`)
+- `server_capabilities_configs` — `/capabilities manage`, `/capabilities toggle`
+- `server_novelai_imagegen_configs` — `/novelai` image parameters
+- `server_nsfw_configs` — `/nsfw` jailbreak toggles
+- `server_speech_configs` — `/speech` Chatterbox parameters
+- `server_byok_configs` — `/server user-byok`
+- `server_memory_configs` — `/memory tagging` settings (`ServerMemoryRepository`)
+
+### Persona config normalization (Phase 6 Stage A — dual-write active)
+
+`tomoris` persona-specific config columns are being extracted to 4 tables:
+
+- `persona_context_note_configs` — per-persona context note + depth
+- `persona_voice_configs` — `speech_voice_*` + deprecated `elevenlabs_voice_*` (kept until #14.2 Pass C)
+- `persona_imagegen_configs` — `nai_tags`, `nai_char_ref_url`
+- `persona_textgen_configs` — NovelAI ATTG author/title/tags/genre/stars
+
+### User personalization normalization (Phase 6 Stage A — dual-write active)
+
+`users` personalization columns are being extracted to one table:
+
+- `user_personalization_configs` — `shortterm_cache_crossserver_opt_in`, `nai_char_tags`, `nai_char_ref_url`, `impersonation_prompt`, `personal_dtm`
 
 ### Model registries
 
@@ -267,10 +300,14 @@ schema_migrations (
 
 ```
 src/db/migrations/
-  001_baseline.sql           ← marker migration (no executable SQL)
-  001_baseline.down.sql      ← paired rollback
-  002_split_tomori_configs.sql
-  002_split_tomori_configs.down.sql
+  001_baseline.sql                      ← marker migration (no executable SQL)
+  001_baseline.down.sql                 ← paired rollback
+  002_server_config_tables.sql          ← server_*_configs Stage A expand
+  002_server_config_tables.down.sql
+  003_persona_config_tables.sql         ← persona_*_configs Stage A expand
+  003_persona_config_tables.down.sql
+  004_user_personalization_configs.sql  ← user_personalization_configs Stage A expand
+  004_user_personalization_configs.down.sql
   ...
 ```
 

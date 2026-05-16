@@ -6,12 +6,8 @@ import type {
 } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
 import { sql } from "@/utils/db/client";
-import {
-  tomoriSchema, // Use tomoriSchema for validation
-  type UserRow,
-  type ErrorContext,
-  type TomoriState,
-} from "@/types/db/schema";
+import { tomoriSchema, // Use tomoriSchema for validation
+  type UserRow, type ErrorContext, type TomoriState,  } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";

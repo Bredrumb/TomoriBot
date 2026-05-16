@@ -14,7 +14,7 @@ import {
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { replyComponentsV2Status } from "@/utils/discord/ui/statusComponents";
 import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
-import { type UserRow, type ErrorContext, tomoriConfigSchema, type LlmRow } from "@/types/db/schema";
+import { type UserRow, type ErrorContext, type LlmRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { isCustomProvider } from "@/utils/discord/customProviderModal";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
@@ -371,29 +371,33 @@ export async function execute(
       const fallbackLlmIdsJson = clearFallbacks ? "[]" : JSON.stringify(selectedSavedConfig.fallback_llm_ids ?? []);
 
       const [updatedRow] = await sql`
-        UPDATE tomori_configs
+        UPDATE server_model_configs
         SET llm_id = ${customModel.llm_id},
             api_key = ${selectedSavedConfig.api_key},
             key_version = ${selectedSavedConfig.key_version ?? 1},
             thinking_level = ${selectedSavedConfig.thinking_level ?? "auto"},
             fallback_llm_ids = ${fallbackLlmIdsJson}::jsonb,
             llm_temperature = ${selectedSavedConfig.llm_temperature ?? tomoriState.config.llm_temperature ?? 1.0},
-            llm_top_p = ${selectedSavedConfig.llm_top_p ?? tomoriState.config.llm_top_p ?? 0.95},
-            llm_top_k = ${selectedSavedConfig.llm_top_k ?? tomoriState.config.llm_top_k ?? 0},
-            llm_frequency_penalty = ${selectedSavedConfig.llm_frequency_penalty ?? tomoriState.config.llm_frequency_penalty ?? 0.0},
-            llm_presence_penalty = ${selectedSavedConfig.llm_presence_penalty ?? tomoriState.config.llm_presence_penalty ?? 0.0},
-            llm_min_p = ${selectedSavedConfig.llm_min_p ?? tomoriState.config.llm_min_p ?? 0.05},
             llm_disabled_params = ${disabledParamsLiteral}::text[],
-            llm_logit_biases = ${resolvedLogitBiasesJson}::jsonb,
             custom_model_name = ${selectedSavedConfig.custom_model_name ?? customModel.llm_description ?? customModel.llm_codename},
             custom_endpoint_url = ${selectedSavedConfig.custom_endpoint_url ?? null},
             custom_num_ctx = ${selectedSavedConfig.custom_num_ctx ?? null}
         WHERE server_id = ${tomoriState.server_id}
-        RETURNING *
+        RETURNING server_id
       `;
 
-      const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-      if (!validatedConfig.success || !updatedRow) {
+      await sql`
+        UPDATE server_chat_configs
+        SET llm_top_p = ${selectedSavedConfig.llm_top_p ?? tomoriState.config.llm_top_p ?? 0.95},
+            llm_top_k = ${selectedSavedConfig.llm_top_k ?? tomoriState.config.llm_top_k ?? 0},
+            llm_frequency_penalty = ${selectedSavedConfig.llm_frequency_penalty ?? tomoriState.config.llm_frequency_penalty ?? 0.0},
+            llm_presence_penalty = ${selectedSavedConfig.llm_presence_penalty ?? tomoriState.config.llm_presence_penalty ?? 0.0},
+            llm_min_p = ${selectedSavedConfig.llm_min_p ?? tomoriState.config.llm_min_p ?? 0.05},
+            llm_logit_biases = ${resolvedLogitBiasesJson}::jsonb
+        WHERE server_id = ${tomoriState.server_id}
+      `;
+
+      if (!updatedRow) {
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
@@ -504,8 +508,6 @@ export async function execute(
       return;
     }
 
-    // Phase A mirror write: copy credentials and samplers from saved_provider_configs into tomori_configs
-    // so the existing runtime (which reads tomori_configs) continues to work without modification.
     const resolvedLogitBiases = resolveLogitBiasEntriesForLlm(
       selectedSavedConfig?.llm_logit_biases ?? tomoriState.config.llm_logit_biases ?? [],
       selectedModel,
@@ -516,29 +518,33 @@ export async function execute(
     const disabledParamsLiteral = toPostgresTextArrayLiteral(selectedSavedConfig?.llm_disabled_params);
 
     const [updatedRow] = await sql`
-      UPDATE tomori_configs
+      UPDATE server_model_configs
       SET llm_id = ${selectedModel.llm_id},
           api_key = ${selectedSavedConfig?.api_key ?? null},
           key_version = ${selectedSavedConfig?.key_version ?? 1},
           thinking_level = ${selectedSavedConfig?.thinking_level ?? "auto"},
           fallback_llm_ids = ${fallbackLlmIdsJson}::jsonb,
           llm_temperature = ${selectedSavedConfig?.llm_temperature ?? tomoriState.config.llm_temperature ?? 1.0},
-          llm_top_p = ${selectedSavedConfig?.llm_top_p ?? tomoriState.config.llm_top_p ?? 0.95},
-          llm_top_k = ${selectedSavedConfig?.llm_top_k ?? tomoriState.config.llm_top_k ?? 0},
-          llm_frequency_penalty = ${selectedSavedConfig?.llm_frequency_penalty ?? tomoriState.config.llm_frequency_penalty ?? 0.0},
-          llm_presence_penalty = ${selectedSavedConfig?.llm_presence_penalty ?? tomoriState.config.llm_presence_penalty ?? 0.0},
-          llm_min_p = ${selectedSavedConfig?.llm_min_p ?? tomoriState.config.llm_min_p ?? 0.05},
           llm_disabled_params = ${disabledParamsLiteral}::text[],
-          llm_logit_biases = ${resolvedLogitBiasesJson}::jsonb,
           custom_model_name = NULL,
           custom_endpoint_url = NULL,
           custom_num_ctx = NULL
       WHERE server_id = ${tomoriState.server_id}
-      RETURNING *
+      RETURNING server_id
     `;
 
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-    if (!validatedConfig.success || !updatedRow) {
+    await sql`
+      UPDATE server_chat_configs
+      SET llm_top_p = ${selectedSavedConfig?.llm_top_p ?? tomoriState.config.llm_top_p ?? 0.95},
+          llm_top_k = ${selectedSavedConfig?.llm_top_k ?? tomoriState.config.llm_top_k ?? 0},
+          llm_frequency_penalty = ${selectedSavedConfig?.llm_frequency_penalty ?? tomoriState.config.llm_frequency_penalty ?? 0.0},
+          llm_presence_penalty = ${selectedSavedConfig?.llm_presence_penalty ?? tomoriState.config.llm_presence_penalty ?? 0.0},
+          llm_min_p = ${selectedSavedConfig?.llm_min_p ?? tomoriState.config.llm_min_p ?? 0.05},
+          llm_logit_biases = ${resolvedLogitBiasesJson}::jsonb
+      WHERE server_id = ${tomoriState.server_id}
+    `;
+
+    if (!updatedRow) {
       const context: ErrorContext = {
         tomoriId: tomoriState.tomori_id,
         serverId: tomoriState.server_id,
@@ -549,14 +555,11 @@ export async function execute(
           guildId: interaction.guild?.id ?? interaction.user.id,
           selectedModelCodename,
           targetLlmId: selectedModel.llm_id,
-          validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
         },
       };
       await log.error(
-        "Failed to update or validate LLM config after DB update",
-        validatedConfig.success
-          ? new Error("Database update returned no rows or unexpected data")
-          : new Error("Updated config data failed validation"),
+        "Failed to update LLM config after DB update",
+        new Error("Database update returned no rows"),
         context,
       );
       await replyInfoEmbed(modalSubmitInteraction, locale, {

@@ -196,10 +196,10 @@ export async function execute(
     }
 
     const [updatedRow] = await sql`
-			UPDATE tomori_configs
+			UPDATE server_chat_configs
 			SET llm_logit_biases = ${JSON.stringify(merged.entries)}::jsonb
 			WHERE server_id = ${tomoriState.server_id}
-			RETURNING *
+			RETURNING server_id
 		`;
 
     const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);

@@ -224,7 +224,7 @@ export async function execute(
       `;
     } else {
       await sql`
-        UPDATE tomori_configs
+        UPDATE server_chat_configs
         SET context_note = ${noteToStore},
             context_note_depth = ${depthToStore}
         WHERE server_id = ${tomoriState.server_id}

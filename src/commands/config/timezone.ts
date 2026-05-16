@@ -8,7 +8,7 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/ca
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
-import { type UserRow, type ErrorContext, tomoriConfigSchema } from "../../types/db/schema";
+import { type UserRow, type ErrorContext } from "../../types/db/schema";
 import { sql } from "@/utils/db/client";
 import { formatUTCOffset } from "../../utils/text/timezoneHelper";
 
@@ -107,16 +107,14 @@ export async function execute(
 
     // 6. Update the config in the database using direct SQL
     const [updatedRow] = await sql`
-            UPDATE tomori_configs
+            UPDATE server_chat_configs
             SET timezone_offset = ${timezoneValue}
             WHERE server_id = ${tomoriState.server_id}
-            RETURNING *
+            RETURNING server_id
         `;
 
     // 7. Validate the returned data
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-
-    if (!validatedConfig.success || !updatedRow) {
+    if (!updatedRow) {
       const context: ErrorContext = {
         tomoriId: tomoriState.tomori_id,
         serverId: tomoriState.server_id,
@@ -126,14 +124,11 @@ export async function execute(
           command: "config timezone",
           guildId: interaction.guild?.id,
           timezoneValue,
-          validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
         },
       };
       await log.error(
         "Failed to update or validate timezone_offset config",
-        validatedConfig.success
-          ? new Error("Database update returned no rows or unexpected data")
-          : new Error("Updated config data failed validation"),
+        new Error("Database update returned no rows"),
         context,
       );
 

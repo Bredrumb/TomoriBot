@@ -172,7 +172,7 @@ export async function execute(
             persona_output: presetData.data.sample_dialogues_out[index] ?? "",
           })),
           webhook_avatar_url: selectedPersona.webhook_avatar_url ?? null,
-          alter_triggers: selectedPersona.alter_triggers ?? [],
+          alter_triggers: selectedPersona.trigger_words ?? [],
           nai_tags: selectedPersona.nai_tags ?? [],
         },
       };

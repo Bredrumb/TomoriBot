@@ -331,10 +331,10 @@ async function persistUpdate(
   }
 
   const [updatedRow] = await sql`
-    UPDATE tomori_configs
+    UPDATE server_channel_scope_configs
     SET private_channel_ids = ${formatTextArrayLiteral([...nextSelectedIds])}::text[]
     WHERE server_id = ${tomoriState.server_id}
-    RETURNING *
+    RETURNING server_id
   `;
 
   if (!updatedRow) {

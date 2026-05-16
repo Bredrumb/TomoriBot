@@ -117,10 +117,10 @@ export async function execute(
     }
 
     const [updatedRow] = await sql`
-      UPDATE tomori_configs
+      UPDATE server_notice_embeds_configs
       SET tool_notice_hidden_keys = ${formatTextArrayLiteral(hiddenKeys)}::text[]
       WHERE server_id = ${tomoriState.server_id}
-      RETURNING *
+      RETURNING server_id
     `;
 
     if (!updatedRow) {

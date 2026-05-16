@@ -11,7 +11,7 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
-import { type UserRow, type ErrorContext, tomoriConfigSchema, type TomoriConfigRow } from "@/types/db/schema";
+import { type UserRow, type ErrorContext, type TomoriConfigRow } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
 import { hasOptApiKey } from "@/utils/security/crypto";
 import { ELEVENLABS_SERVICE_NAME } from "@/utils/audio/elevenLabsAccount";
@@ -268,14 +268,13 @@ export async function execute(
     //    sql.unsafe is safe here: dbColumn values are strictly controlled by PERMISSION_DEFINITIONS.
     for (const change of changes) {
       const [updatedRow] = await sql`
-				UPDATE tomori_configs
+				UPDATE server_capabilities_configs
 				SET ${sql.unsafe(change.dbColumn)} = ${change.isEnabled}
 				WHERE server_id = ${tomoriState.server_id}
-				RETURNING *
+				RETURNING server_id
 			`;
 
-      const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-      if (!validatedConfig.success || !updatedRow) {
+      if (!updatedRow) {
         const context: ErrorContext = {
           tomoriId: tomoriState.tomori_id,
           serverId: tomoriState.server_id,
@@ -286,14 +285,12 @@ export async function execute(
             guildId: interaction.guild?.id ?? interaction.user.id,
             dbColumn: change.dbColumn,
             isEnabled: change.isEnabled,
-            validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
+            targetTable: "server_capabilities_configs",
           },
         };
         await log.error(
           `Failed to update permission column: ${change.dbColumn}`,
-          validatedConfig.success
-            ? new Error("Database update returned no rows")
-            : new Error("Updated config failed validation"),
+          new Error("Database update returned no rows"),
           context,
         );
 

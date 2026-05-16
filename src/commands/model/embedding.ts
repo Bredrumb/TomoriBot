@@ -129,10 +129,10 @@ export async function execute(
       }
 
       const [updatedRow] = await sql`
-				UPDATE tomori_configs
+				UPDATE server_model_configs
 				SET embedding_model_id = ${selectedSavedConfig.embedding_model_id}
 				WHERE server_id = ${tomoriState.server_id}
-				RETURNING *
+				RETURNING server_id
 			`;
 
       if (!updatedRow) {
@@ -295,10 +295,10 @@ export async function execute(
       currentEmbeddingModel?.model_family && currentEmbeddingModel.model_family !== selectedModel.model_family;
 
     const [updatedRow] = await sql`
-			UPDATE tomori_configs
+			UPDATE server_model_configs
 			SET embedding_model_id = ${selectedModel.embedding_model_id}
 			WHERE server_id = ${tomoriState.server_id}
-			RETURNING *
+			RETURNING server_id
 		`;
 
     if (!updatedRow) {

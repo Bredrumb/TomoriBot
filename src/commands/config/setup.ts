@@ -181,10 +181,22 @@ export async function execute(
       //     Only tomori_configs is deleted to clear its server_id unique constraint; alter rows
       //     are preserved since serverRepository.setup only inserts a new main persona (is_alter=false).
       log.warn(`[Setup] Server ${serverId} has no main persona — clearing config, preserving alters`);
-      await sql`
-				DELETE FROM tomori_configs
-				WHERE server_id = ${existingInternalServerId}
-			`;
+      await Promise.all([
+        sql`DELETE FROM tomori_configs WHERE server_id = ${existingInternalServerId}`,
+        sql`DELETE FROM server_model_configs WHERE server_id = ${existingInternalServerId}`,
+        sql`DELETE FROM server_chat_configs WHERE server_id = ${existingInternalServerId}`,
+        sql`DELETE FROM server_member_permissions_configs WHERE server_id = ${existingInternalServerId}`,
+        sql`DELETE FROM server_capabilities_configs WHERE server_id = ${existingInternalServerId}`,
+        sql`DELETE FROM server_notice_embeds_configs WHERE server_id = ${existingInternalServerId}`,
+        sql`DELETE FROM server_nsfw_configs WHERE server_id = ${existingInternalServerId}`,
+        sql`DELETE FROM server_speech_configs WHERE server_id = ${existingInternalServerId}`,
+        sql`DELETE FROM server_auto_trigger_configs WHERE server_id = ${existingInternalServerId}`,
+        sql`DELETE FROM server_channel_scope_configs WHERE server_id = ${existingInternalServerId}`,
+        sql`DELETE FROM server_trigger_behavior_configs WHERE server_id = ${existingInternalServerId}`,
+        sql`DELETE FROM server_byok_configs WHERE server_id = ${existingInternalServerId}`,
+        sql`DELETE FROM server_novelai_imagegen_configs WHERE server_id = ${existingInternalServerId}`,
+        sql`DELETE FROM server_memory_configs WHERE server_id = ${existingInternalServerId}`,
+      ]);
 
       // Invalidate cache so stale persona data is not served
       invalidateTomoriStateCache(serverId);
@@ -598,11 +610,11 @@ export async function execute(
       if (normalizedProvider === "novelai") {
         try {
           await sql`
-						UPDATE tomori_configs
+						UPDATE server_capabilities_configs
 						SET emoji_usage_enabled = false,
 						    sticker_usage_enabled = false
 						WHERE server_id = (
-							SELECT server_id FROM servers WHERE discord_id = ${serverId}
+							SELECT server_id FROM servers WHERE server_disc_id = ${serverId}
 						)
 					`;
           log.info(`[Setup] Auto-disabled emoji/sticker usage for NovelAI server ${serverId}`);

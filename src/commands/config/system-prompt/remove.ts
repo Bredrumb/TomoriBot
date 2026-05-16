@@ -70,7 +70,7 @@ export async function execute(
 
     // 3. Clear the system prompt (set to NULL)
     await sql`
-			UPDATE tomori_configs
+			UPDATE server_chat_configs
 			SET system_prompt = NULL
 			WHERE server_id = ${tomoriState.server_id}
 		`;

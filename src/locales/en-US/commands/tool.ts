@@ -242,7 +242,6 @@ I have built-in features to help reduce costs from abusers or spammers in your s
       field_quota_unlimited: `Unlimited`,
       field_nickname: `Nickname`,
       field_is_alter: `Is Alter Persona`,
-      field_alter_triggers: `Alter Triggers`,
       field_persona_triggers: `Persona Triggers`,
       field_persona_model: `Persona Model Override`,
       persona_model_server_default: `Server default`,

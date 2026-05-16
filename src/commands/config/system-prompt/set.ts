@@ -167,7 +167,7 @@ export async function execute(
 
     // 9. Update database
     await sql`
-			UPDATE tomori_configs
+			UPDATE server_chat_configs
 			SET system_prompt = ${systemPrompt}
 			WHERE server_id = ${tomoriState.server_id}
 		`;

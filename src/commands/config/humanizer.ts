@@ -8,7 +8,7 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/ca
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
-import { type UserRow, type ErrorContext, tomoriConfigSchema } from "../../types/db/schema";
+import { type UserRow, type ErrorContext } from "../../types/db/schema";
 import type { RadioGroupOption } from "../../types/discord/modal";
 import { sql } from "@/utils/db/client";
 
@@ -158,16 +158,14 @@ export async function execute(
 
     // 7. Update the config in the database using direct SQL (Rule #4, #15)
     const [updatedRow] = await sql`
-            UPDATE tomori_configs
+            UPDATE server_chat_configs
             SET humanizer_degree = ${humanizerValue}
             WHERE server_id = ${tomoriState.server_id}
-            RETURNING *
+            RETURNING server_id
         `;
 
     // 8. Validate the returned data (Rules #3, #5 - critical config change)
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-
-    if (!validatedConfig.success || !updatedRow) {
+    if (!updatedRow) {
       const context: ErrorContext = {
         tomoriId: tomoriState.tomori_id,
         serverId: tomoriState.server_id,
@@ -177,15 +175,11 @@ export async function execute(
           command: "config humanizer",
           guildId: interaction.guild?.id ?? interaction.user.id,
           humanizerValue,
-          validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(), // Include Zod errors if validation failed
         },
       };
       await log.error(
         "Failed to update or validate humanizer_degree config",
-        // Provide a specific error message based on the failure reason
-        validatedConfig.success
-          ? new Error("Database update returned no rows or unexpected data")
-          : new Error("Updated config data failed validation"),
+        new Error("Database update returned no rows"),
         context,
       );
 

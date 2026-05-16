@@ -39,10 +39,60 @@ import { getUnconfiguredLlm } from "@/utils/provider/unconfiguredLlm";
 import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
-/** Minimal portable shape for a persona export (expanded in Phase 6 #16.7). */
-export type PersonaExportShape = {
+// ── Stage A persona config table row shapes ─────────────────────────────────
+
+/** Row shape for persona_context_note_configs (Phase 6 Stage A). */
+export type PersonaContextNoteConfigsRow = {
+  tomori_id: number;
+  context_note: string | null;
+  context_note_depth: number;
+};
+
+/** Row shape for persona_voice_configs (Phase 6 Stage A). */
+export type PersonaVoiceConfigsRow = {
+  tomori_id: number;
+  speech_voice_sample_id: number | null;
+  speech_voice_id: string | null;
+  speech_voice_name: string | null;
+  speech_voice_design_prompt: string | null;
+  elevenlabs_voice_id: string | null;
+  elevenlabs_voice_name: string | null;
+};
+
+/** Row shape for persona_imagegen_configs (Phase 6 Stage A). */
+export type PersonaImagegenConfigsRow = {
+  tomori_id: number;
+  nai_tags: string[];
+  nai_char_ref_url: string | null;
+};
+
+/** Row shape for persona_textgen_configs (Phase 6 Stage A). */
+export type PersonaTextgenConfigsRow = {
+  tomori_id: number;
+  nai_attg_author: string | null;
+  nai_attg_title: string | null;
+  nai_attg_tags: string | null;
+  nai_attg_genre: string | null;
+  nai_attg_stars: number | null;
+};
+
+/** Per-persona config bundle (Stage A). */
+export type PersonaConfigBundle = {
+  tomori_id: number;
   tomori_nickname: string;
   persona_lineage_id: number | null;
+  context_note_configs: PersonaContextNoteConfigsRow | null;
+  voice_configs: PersonaVoiceConfigsRow | null;
+  imagegen_configs: PersonaImagegenConfigsRow | null;
+  textgen_configs: PersonaTextgenConfigsRow | null;
+};
+
+/**
+ * Export shape for PersonaRepository.
+ * Contains all personas and their Phase 6 Stage A config bundles for a server.
+ */
+export type PersonaExportShape = {
+  personas: PersonaConfigBundle[];
 };
 
 type TomoriConfigJsonResult = {
@@ -215,26 +265,273 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   // ── IRepository contract ───────────────────────────────────────────────────
 
   /**
-   * Exports a minimal portable persona shape for a given server.
-   * The ownerId is the Discord snowflake of the server.
+   * Exports all personas and their Phase 6 Stage A config bundles for a server.
    *
    * @param ownerId - Discord server snowflake
    */
   async toExportShape(ownerId: string | number): Promise<PersonaExportShape | null> {
-    const state = await this.loadTomoriState(String(ownerId));
-    if (!state) return null;
-    return {
-      tomori_nickname: state.tomori_nickname,
-      persona_lineage_id: state.persona_lineage_id ?? null,
-    };
+    const serverDiscId = String(ownerId);
+    const serverId = await this.resolveServerInternalId(serverDiscId);
+    if (!serverId) return null;
+
+    const tomoriRows = await this.sqlLoadAllTomoriIds(serverId);
+    if (!tomoriRows.length) return null;
+
+    const bundles = await Promise.all(
+      tomoriRows.map(async (t) => {
+        const [contextNote, voice, imagegen, textgen] = await Promise.all([
+          this.sqlLoadPersonaContextNoteConfigs(t.tomori_id),
+          this.sqlLoadPersonaVoiceConfigs(t.tomori_id),
+          this.sqlLoadPersonaImagegenConfigs(t.tomori_id),
+          this.sqlLoadPersonaTextgenConfigs(t.tomori_id),
+        ]);
+        return {
+          tomori_id: t.tomori_id,
+          tomori_nickname: t.tomori_nickname,
+          persona_lineage_id: t.persona_lineage_id ?? null,
+          context_note_configs: contextNote,
+          voice_configs: voice,
+          imagegen_configs: imagegen,
+          textgen_configs: textgen,
+        } satisfies PersonaConfigBundle;
+      }),
+    );
+
+    return { personas: bundles };
   }
 
   /**
-   * Persona import is handled by ImportExportRepository (full server export).
-   * This stub satisfies the IRepository contract; expansion is deferred to Phase 6 #16.7.
+   * Restores persona config table rows for all personas in a server.
+   * Dual-writes: upserts into each new config table AND back into tomoris.
+   *
+   * @param ownerId - Discord server snowflake
+   * @param data    - Previously exported PersonaExportShape
    */
-  async fromExportShape(_ownerId: string | number, _data: PersonaExportShape): Promise<boolean> {
-    return false;
+  async fromExportShape(ownerId: string | number, data: PersonaExportShape): Promise<boolean> {
+    const serverDiscId = String(ownerId);
+
+    try {
+      for (const bundle of data.personas) {
+        const ops: Promise<void>[] = [];
+
+        if (bundle.context_note_configs) {
+          ops.push(this.sqlUpsertPersonaContextNoteConfigs(bundle.context_note_configs));
+          ops.push(this.sqlDualWriteContextNoteToTomoris(bundle.context_note_configs));
+        }
+        if (bundle.voice_configs) {
+          ops.push(this.sqlUpsertPersonaVoiceConfigs(bundle.voice_configs));
+          ops.push(this.sqlDualWriteVoiceToTomoris(bundle.voice_configs));
+        }
+        if (bundle.imagegen_configs) {
+          ops.push(this.sqlUpsertPersonaImagegenConfigs(bundle.imagegen_configs));
+          ops.push(this.sqlDualWriteImagegenToTomoris(bundle.imagegen_configs));
+        }
+        if (bundle.textgen_configs) {
+          ops.push(this.sqlUpsertPersonaTextgenConfigs(bundle.textgen_configs));
+          ops.push(this.sqlDualWriteTextgenToTomoris(bundle.textgen_configs));
+        }
+
+        await Promise.all(ops);
+      }
+      return true;
+    } catch (error) {
+      log.error(`PersonaRepository.fromExportShape: write failed for server ${serverDiscId}:`, error);
+      return false;
+    }
+  }
+
+  // ── Stage A: resolve internal server ID ──────────────────────────────────
+
+  private async resolveServerInternalId(serverDiscId: string): Promise<number | null> {
+    const [row] = await sql`
+      SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId} LIMIT 1
+    `;
+    return (row?.server_id as number | undefined) ?? null;
+  }
+
+  private async sqlLoadAllTomoriIds(
+    serverId: number,
+  ): Promise<Array<{ tomori_id: number; tomori_nickname: string; persona_lineage_id: number | null }>> {
+    try {
+      const rows = await sql`
+        SELECT tomori_id, tomori_nickname, persona_lineage_id FROM tomoris WHERE server_id = ${serverId}
+      `;
+      return rows as unknown as Array<{
+        tomori_id: number;
+        tomori_nickname: string;
+        persona_lineage_id: number | null;
+      }>;
+    } catch (error) {
+      log.error(`Error loading tomori IDs for server ${serverId}:`, error);
+      return [];
+    }
+  }
+
+  // ── Stage A: persona config table reads ──────────────────────────────────
+
+  private async sqlLoadPersonaContextNoteConfigs(tomoriId: number): Promise<PersonaContextNoteConfigsRow | null> {
+    try {
+      const [row] = await sql`
+        SELECT tomori_id, context_note, context_note_depth
+        FROM persona_context_note_configs WHERE tomori_id = ${tomoriId}
+      `;
+      return row ? (row as unknown as PersonaContextNoteConfigsRow) : null;
+    } catch (error) {
+      log.error(`Error loading persona_context_note_configs for tomori ${tomoriId}:`, error);
+      return null;
+    }
+  }
+
+  private async sqlLoadPersonaVoiceConfigs(tomoriId: number): Promise<PersonaVoiceConfigsRow | null> {
+    try {
+      const [row] = await sql`
+        SELECT tomori_id, speech_voice_sample_id, speech_voice_id, speech_voice_name,
+               speech_voice_design_prompt, elevenlabs_voice_id, elevenlabs_voice_name
+        FROM persona_voice_configs WHERE tomori_id = ${tomoriId}
+      `;
+      return row ? (row as unknown as PersonaVoiceConfigsRow) : null;
+    } catch (error) {
+      log.error(`Error loading persona_voice_configs for tomori ${tomoriId}:`, error);
+      return null;
+    }
+  }
+
+  private async sqlLoadPersonaImagegenConfigs(tomoriId: number): Promise<PersonaImagegenConfigsRow | null> {
+    try {
+      const [row] = await sql`
+        SELECT tomori_id, nai_tags, nai_char_ref_url
+        FROM persona_imagegen_configs WHERE tomori_id = ${tomoriId}
+      `;
+      return row ? (row as unknown as PersonaImagegenConfigsRow) : null;
+    } catch (error) {
+      log.error(`Error loading persona_imagegen_configs for tomori ${tomoriId}:`, error);
+      return null;
+    }
+  }
+
+  private async sqlLoadPersonaTextgenConfigs(tomoriId: number): Promise<PersonaTextgenConfigsRow | null> {
+    try {
+      const [row] = await sql`
+        SELECT tomori_id, nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
+        FROM persona_textgen_configs WHERE tomori_id = ${tomoriId}
+      `;
+      return row ? (row as unknown as PersonaTextgenConfigsRow) : null;
+    } catch (error) {
+      log.error(`Error loading persona_textgen_configs for tomori ${tomoriId}:`, error);
+      return null;
+    }
+  }
+
+  // ── Stage A: persona config table upserts (new tables) ───────────────────
+
+  private async sqlUpsertPersonaContextNoteConfigs(row: PersonaContextNoteConfigsRow): Promise<void> {
+    await sql`
+      INSERT INTO persona_context_note_configs (tomori_id, context_note, context_note_depth)
+      VALUES (${row.tomori_id}, ${row.context_note}, ${row.context_note_depth})
+      ON CONFLICT (tomori_id) DO UPDATE SET
+        context_note       = EXCLUDED.context_note,
+        context_note_depth = EXCLUDED.context_note_depth,
+        updated_at         = NOW()
+    `;
+  }
+
+  private async sqlUpsertPersonaVoiceConfigs(row: PersonaVoiceConfigsRow): Promise<void> {
+    await sql`
+      INSERT INTO persona_voice_configs (
+        tomori_id, speech_voice_sample_id, speech_voice_id, speech_voice_name,
+        speech_voice_design_prompt, elevenlabs_voice_id, elevenlabs_voice_name
+      ) VALUES (
+        ${row.tomori_id}, ${row.speech_voice_sample_id}, ${row.speech_voice_id},
+        ${row.speech_voice_name}, ${row.speech_voice_design_prompt},
+        ${row.elevenlabs_voice_id}, ${row.elevenlabs_voice_name}
+      )
+      ON CONFLICT (tomori_id) DO UPDATE SET
+        speech_voice_sample_id    = EXCLUDED.speech_voice_sample_id,
+        speech_voice_id           = EXCLUDED.speech_voice_id,
+        speech_voice_name         = EXCLUDED.speech_voice_name,
+        speech_voice_design_prompt = EXCLUDED.speech_voice_design_prompt,
+        elevenlabs_voice_id       = EXCLUDED.elevenlabs_voice_id,
+        elevenlabs_voice_name     = EXCLUDED.elevenlabs_voice_name,
+        updated_at                = NOW()
+    `;
+  }
+
+  private async sqlUpsertPersonaImagegenConfigs(row: PersonaImagegenConfigsRow): Promise<void> {
+    await sql`
+      INSERT INTO persona_imagegen_configs (tomori_id, nai_tags, nai_char_ref_url)
+      VALUES (${row.tomori_id}, ${sql.array(row.nai_tags)}, ${row.nai_char_ref_url})
+      ON CONFLICT (tomori_id) DO UPDATE SET
+        nai_tags       = EXCLUDED.nai_tags,
+        nai_char_ref_url = EXCLUDED.nai_char_ref_url,
+        updated_at     = NOW()
+    `;
+  }
+
+  private async sqlUpsertPersonaTextgenConfigs(row: PersonaTextgenConfigsRow): Promise<void> {
+    await sql`
+      INSERT INTO persona_textgen_configs (
+        tomori_id, nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
+      ) VALUES (
+        ${row.tomori_id}, ${row.nai_attg_author}, ${row.nai_attg_title},
+        ${row.nai_attg_tags}, ${row.nai_attg_genre}, ${row.nai_attg_stars}
+      )
+      ON CONFLICT (tomori_id) DO UPDATE SET
+        nai_attg_author = EXCLUDED.nai_attg_author,
+        nai_attg_title  = EXCLUDED.nai_attg_title,
+        nai_attg_tags   = EXCLUDED.nai_attg_tags,
+        nai_attg_genre  = EXCLUDED.nai_attg_genre,
+        nai_attg_stars  = EXCLUDED.nai_attg_stars,
+        updated_at      = NOW()
+    `;
+  }
+
+  // ── Stage A: dual-write back to tomoris ──────────────────────────────────
+
+  private async sqlDualWriteContextNoteToTomoris(row: PersonaContextNoteConfigsRow): Promise<void> {
+    await sql`
+      UPDATE tomoris SET
+        context_note       = ${row.context_note},
+        context_note_depth = ${row.context_note_depth},
+        updated_at         = NOW()
+      WHERE tomori_id = ${row.tomori_id}
+    `;
+  }
+
+  private async sqlDualWriteVoiceToTomoris(row: PersonaVoiceConfigsRow): Promise<void> {
+    await sql`
+      UPDATE tomoris SET
+        speech_voice_sample_id    = ${row.speech_voice_sample_id},
+        speech_voice_id           = ${row.speech_voice_id},
+        speech_voice_name         = ${row.speech_voice_name},
+        speech_voice_design_prompt = ${row.speech_voice_design_prompt},
+        elevenlabs_voice_id       = ${row.elevenlabs_voice_id},
+        elevenlabs_voice_name     = ${row.elevenlabs_voice_name},
+        updated_at                = NOW()
+      WHERE tomori_id = ${row.tomori_id}
+    `;
+  }
+
+  private async sqlDualWriteImagegenToTomoris(row: PersonaImagegenConfigsRow): Promise<void> {
+    await sql`
+      UPDATE tomoris SET
+        nai_tags         = ${sql.array(row.nai_tags)},
+        nai_char_ref_url = ${row.nai_char_ref_url},
+        updated_at       = NOW()
+      WHERE tomori_id = ${row.tomori_id}
+    `;
+  }
+
+  private async sqlDualWriteTextgenToTomoris(row: PersonaTextgenConfigsRow): Promise<void> {
+    await sql`
+      UPDATE tomoris SET
+        nai_attg_author = ${row.nai_attg_author},
+        nai_attg_title  = ${row.nai_attg_title},
+        nai_attg_tags   = ${row.nai_attg_tags},
+        nai_attg_genre  = ${row.nai_attg_genre},
+        nai_attg_stars  = ${row.nai_attg_stars},
+        updated_at      = NOW()
+      WHERE tomori_id = ${row.tomori_id}
+    `;
   }
 
   // ── private helpers: JSON normalization ───────────────────────────────────
@@ -534,16 +831,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       }
 
       // 10. Combine and validate the full state
-      const fallbackTriggerWords =
-        tomoriData.is_alter === true ? (tomoriData.alter_triggers ?? []) : (configData.trigger_words ?? []);
       const combinedState = {
         ...tomoriData,
         config: configData,
         llm: llmData,
-        // Use persona-scoped trigger_words only when non-empty; an empty array (Zod default when
-        // the persona_configs row exists but the column is NULL/unset) should fall back to the
-        // legacy alter_triggers / config trigger_words so existing alters aren't silently broken.
-        trigger_words: personaConfig?.trigger_words?.length ? personaConfig.trigger_words : fallbackTriggerWords,
+        trigger_words: personaConfig?.trigger_words ?? [],
         persona_prompt: personaConfig?.persona_prompt ?? null,
         reward_conditioning_enabled: personaConfig?.reward_conditioning_enabled ?? true,
         punish_conditioning_enabled: personaConfig?.punish_conditioning_enabled ?? true,
@@ -777,8 +1069,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
               }
             }
 
-            const fallbackTriggerWords =
-              tomoriRow.is_alter === true ? (tomoriRow.alter_triggers ?? []) : (configData.trigger_words ?? []);
             const rawPersonaLineageId = tomoriRow.persona_lineage_id;
             const parsedPersonaLineageId =
               typeof rawPersonaLineageId === "bigint"
@@ -794,10 +1084,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
               ...tomoriRow,
               config: configData,
               llm: llmData,
-              // Use persona-scoped trigger_words only when non-empty; an empty array (Zod default when
-              // the persona_configs row exists but the column is NULL/unset) should fall back to the
-              // legacy alter_triggers / config trigger_words so existing alters aren't silently broken.
-              trigger_words: personaConfig?.trigger_words?.length ? personaConfig.trigger_words : fallbackTriggerWords,
+              trigger_words: personaConfig?.trigger_words ?? [],
               persona_prompt: personaConfig?.persona_prompt ?? null,
               reward_conditioning_enabled: personaConfig?.reward_conditioning_enabled ?? true,
               punish_conditioning_enabled: personaConfig?.punish_conditioning_enabled ?? true,

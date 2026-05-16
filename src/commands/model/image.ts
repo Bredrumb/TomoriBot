@@ -7,8 +7,7 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
-// Import types for validation
-import { type UserRow, type ErrorContext, tomoriConfigSchema } from "@/types/db/schema";
+import { type UserRow, type ErrorContext } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";
 import { llmModelRepo } from "@/utils/db/repositories";
@@ -151,12 +150,18 @@ export async function execute(
     const nextStandardModelId = clearTarget === "nai" ? tomoriState.config.diffusion_model_id : null;
     const nextNaiModelId = clearTarget === "standard" ? tomoriState.config.nai_diffusion_model_id : null;
 
-    await sql`
-      UPDATE tomori_configs
-      SET diffusion_model_id = ${nextStandardModelId},
-          nai_diffusion_model_id = ${nextNaiModelId}
-      WHERE server_id = ${tomoriState.server_id}
-    `;
+    await Promise.all([
+      sql`
+        UPDATE server_model_configs
+        SET diffusion_model_id = ${nextStandardModelId}
+        WHERE server_id = ${tomoriState.server_id}
+      `,
+      sql`
+        UPDATE server_novelai_imagegen_configs
+        SET nai_diffusion_model_id = ${nextNaiModelId}
+        WHERE server_id = ${tomoriState.server_id}
+      `,
+    ]);
 
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
@@ -236,14 +241,13 @@ export async function execute(
       }
 
       const [updatedRow] = await sql`
-        UPDATE tomori_configs
+        UPDATE server_model_configs
         SET diffusion_model_id = ${selectedModelId}
         WHERE server_id = ${tomoriState.server_id}
-        RETURNING *
+        RETURNING server_id
       `;
 
-      const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-      if (!validatedConfig.success || !updatedRow) {
+      if (!updatedRow) {
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
@@ -382,22 +386,19 @@ export async function execute(
     const [updatedRow] =
       targetColumn === "nai_diffusion_model_id"
         ? await sql`
-              UPDATE tomori_configs
+              UPDATE server_novelai_imagegen_configs
               SET nai_diffusion_model_id = ${selectedModel.diffusion_model_id}
               WHERE server_id = ${tomoriState.server_id}
-              RETURNING *
+              RETURNING server_id
           `
         : await sql`
-              UPDATE tomori_configs
+              UPDATE server_model_configs
               SET diffusion_model_id = ${selectedModel.diffusion_model_id}
               WHERE server_id = ${tomoriState.server_id}
-              RETURNING *
+              RETURNING server_id
           `;
 
-    // 11. Validate the returned data
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-
-    if (!validatedConfig.success || !updatedRow) {
+    if (!updatedRow) {
       const context: ErrorContext = {
         tomoriId: tomoriState.tomori_id,
         serverId: tomoriState.server_id,
@@ -408,14 +409,11 @@ export async function execute(
           guildId: interaction.guild?.id ?? interaction.user.id,
           selectedModelCodename: selectedModel.codename,
           targetDiffusionModelId: selectedModel.diffusion_model_id,
-          validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
         },
       };
       await log.error(
-        "Failed to update or validate diffusion model config after DB update",
-        validatedConfig.success
-          ? new Error("Database update returned no rows or unexpected data")
-          : new Error("Updated config data failed validation"),
+        "Failed to update diffusion model config after DB update",
+        new Error("Database update returned no rows"),
         context,
       );
 

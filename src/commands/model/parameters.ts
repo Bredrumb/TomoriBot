@@ -288,21 +288,27 @@ export async function execute(
       return;
     }
 
-    // 8. Mirror sampler values into tomori_configs when this is the currently active provider,
+    // 8. Mirror sampler values into split config tables when this is the currently active provider,
     //    so in-flight requests immediately reflect the new settings without a config switch.
     if (selectedProvider === tomoriState.llm.llm_provider.toLowerCase()) {
-      await sql`
-        UPDATE tomori_configs
-        SET llm_temperature = ${nextConfig.llm_temperature},
-            llm_top_p = ${nextConfig.llm_top_p},
-            llm_top_k = ${nextConfig.llm_top_k},
-            llm_frequency_penalty = ${nextConfig.llm_frequency_penalty},
-            llm_presence_penalty = ${nextConfig.llm_presence_penalty},
-            llm_min_p = ${nextConfig.llm_min_p},
-            llm_max_output_tokens = ${nextConfig.llm_max_output_tokens ?? null},
-            thinking_level = ${nextConfig.thinking_level}
-        WHERE server_id = ${tomoriState.server_id}
-      `;
+      await Promise.all([
+        sql`
+          UPDATE server_model_configs
+          SET llm_temperature = ${nextConfig.llm_temperature},
+              thinking_level = ${nextConfig.thinking_level}
+          WHERE server_id = ${tomoriState.server_id}
+        `,
+        sql`
+          UPDATE server_chat_configs
+          SET llm_top_p = ${nextConfig.llm_top_p},
+              llm_top_k = ${nextConfig.llm_top_k},
+              llm_frequency_penalty = ${nextConfig.llm_frequency_penalty},
+              llm_presence_penalty = ${nextConfig.llm_presence_penalty},
+              llm_min_p = ${nextConfig.llm_min_p},
+              llm_max_output_tokens = ${nextConfig.llm_max_output_tokens ?? null}
+          WHERE server_id = ${tomoriState.server_id}
+        `,
+      ]);
     }
 
     await replyWithResult({

@@ -80,9 +80,7 @@ export function mergeForcedMentions(...mentionLists: Array<ForcedMention[] | und
 export function stripAtPersonaTriggers(content: string, allPersonas: TomoriState[]): string {
   let result = content;
   for (const persona of allPersonas) {
-    const triggers =
-      persona.trigger_words ??
-      (persona.is_alter ? (persona.alter_triggers ?? []) : (persona.config?.trigger_words ?? []));
+    const triggers = persona.trigger_words ?? [];
 
     for (const trigger of triggers) {
       if (!trigger) continue;

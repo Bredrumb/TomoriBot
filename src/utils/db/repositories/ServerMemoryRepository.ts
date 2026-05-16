@@ -16,9 +16,19 @@ import { type MemoryValidationResult, getMemoryLimits, validateMemoryContent } f
 import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
-/** Portable server memory export shape (expanded in Phase 6 #16.7). */
+/** Row shape for server_memory_configs (Phase 6 Stage A). */
+export type ServerMemoryConfigsRow = {
+  memory_tagging_enabled: boolean;
+};
+
+/**
+ * Export shape for ServerMemoryRepository.
+ * Includes the Phase 6 Stage A server_memory_configs table in addition to
+ * the existing memories array (expanded in Phase 6 #16.7).
+ */
 export type ServerMemoryExportShape = {
   server_disc_id: string;
+  memory_configs: ServerMemoryConfigsRow | null;
   memories: Array<{ content: string; tags: string[] }>;
 };
 
@@ -118,21 +128,78 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
   // ── IRepository contract ───────────────────────────────────────────────────
 
   /**
-   * Server memory export is handled by ImportExportRepository.
-   * Stub satisfies IRepository contract pending Phase 6 #16.7.
+   * Reads server_memory_configs for the given server.
+   * Memory rows are exported by ExportRepository; this method covers the config table.
    *
-   * @param ownerId - Discord server snowflake (unused until Phase 6)
+   * @param ownerId - Discord server snowflake
    */
   async toExportShape(ownerId: string | number): Promise<ServerMemoryExportShape | null> {
-    return { server_disc_id: String(ownerId), memories: [] };
+    const serverDiscId = String(ownerId);
+    const serverId = await this.resolveServerId(serverDiscId);
+    if (!serverId) return null;
+
+    const memoryConfigs = await this.sqlLoadMemoryConfigs(serverId);
+    return { server_disc_id: serverDiscId, memory_configs: memoryConfigs, memories: [] };
   }
 
   /**
-   * Server memory import is handled by ImportExportRepository.
-   * Stub satisfies IRepository contract pending Phase 6 #16.7.
+   * Restores server_memory_configs for a server.
+   * @param ownerId - Discord server snowflake
+   * @param data    - Previously exported ServerMemoryExportShape
    */
-  async fromExportShape(_ownerId: string | number, _data: ServerMemoryExportShape): Promise<boolean> {
-    return false;
+  async fromExportShape(ownerId: string | number, data: ServerMemoryExportShape): Promise<boolean> {
+    const serverDiscId = String(ownerId);
+    const serverId = await this.resolveServerId(serverDiscId);
+    if (!serverId) {
+      log.error(`ServerMemoryRepository.fromExportShape: server ${serverDiscId} not found`);
+      return false;
+    }
+
+    if (!data.memory_configs) return true;
+
+    try {
+      await this.sqlUpsertMemoryConfigs(serverId, data.memory_configs);
+      invalidateTomoriStateCache(serverDiscId);
+      return true;
+    } catch (error) {
+      log.error(`ServerMemoryRepository.fromExportShape: write failed for ${serverDiscId}:`, error);
+      return false;
+    }
+  }
+
+  // ── Stage A: resolve internal server ID ──────────────────────────────────
+
+  private async resolveServerId(serverDiscId: string): Promise<number | null> {
+    const [row] = await sql`
+      SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId} LIMIT 1
+    `;
+    return (row?.server_id as number | undefined) ?? null;
+  }
+
+  // ── Stage A: config table read ────────────────────────────────────────────
+
+  private async sqlLoadMemoryConfigs(serverId: number): Promise<ServerMemoryConfigsRow | null> {
+    try {
+      const [row] = await sql`
+        SELECT memory_tagging_enabled FROM server_memory_configs WHERE server_id = ${serverId}
+      `;
+      return row ? (row as unknown as ServerMemoryConfigsRow) : null;
+    } catch (error) {
+      log.error(`Error loading server_memory_configs for server ${serverId}:`, error);
+      return null;
+    }
+  }
+
+  // ── Stage A: config table upsert ─────────────────────────────────────────
+
+  private async sqlUpsertMemoryConfigs(serverId: number, row: ServerMemoryConfigsRow): Promise<void> {
+    await sql`
+      INSERT INTO server_memory_configs (server_id, memory_tagging_enabled)
+      VALUES (${serverId}, ${row.memory_tagging_enabled})
+      ON CONFLICT (server_id) DO UPDATE SET
+        memory_tagging_enabled = EXCLUDED.memory_tagging_enabled,
+        updated_at             = NOW()
+    `;
   }
 
   private async addServerMemoryRow(

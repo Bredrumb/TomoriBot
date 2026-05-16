@@ -63,9 +63,75 @@ interface SyncItemConfig<TDiscord, TDatabase> {
   getDiscordId: (item: TDiscord) => string;
 }
 
-/** Portable server export shape (expanded in Phase 6 #16.7). */
+// ── Stage A server config table row shapes ─────────────────────────────────
+
+/** Row shape for server_chat_configs (Phase 6 Stage A). */
+export type ServerChatConfigsRow = {
+  humanizer_degree: number;
+  message_fetch_limit: number;
+  send_message_limit: number;
+  match_limit: number;
+  cascade_limit: number;
+  timezone_offset: number;
+  self_debug_enabled: boolean;
+  system_prompt: string | null;
+  context_note: string | null;
+  context_note_depth: number;
+  llm_stop_strings: string[];
+  llm_stop_speaker_pattern_enabled: boolean;
+  llm_max_output_tokens: number | null;
+  llm_top_p: number;
+  llm_top_k: number;
+  llm_frequency_penalty: number;
+  llm_presence_penalty: number;
+  llm_min_p: number;
+  llm_logit_biases: unknown[];
+  fallback_model_refs: unknown[];
+};
+
+/** Row shape for server_notice_embeds_configs (Phase 6 Stage A). */
+export type ServerNoticeEmbedsConfigsRow = {
+  tool_notice_hidden_keys: string[];
+};
+
+/** Row shape for server_member_permissions_configs (Phase 6 Stage A). */
+export type ServerMemberPermissionsConfigsRow = {
+  server_memteaching_enabled: boolean;
+  attribute_memteaching_enabled: boolean;
+  sampledialogue_memteaching_enabled: boolean;
+  self_teaching_enabled: boolean;
+  personal_memories_enabled: boolean;
+  hide_impersonation_embeds: boolean;
+  prompt_snapshot_enabled: boolean;
+};
+
+/** Row shape for server_channel_scope_configs (Phase 6 Stage A). */
+export type ServerChannelScopeConfigsRow = {
+  rp_channel_ids: string[];
+  private_channel_ids: string[];
+  crosschannel_blocklist_ids: string[];
+  stm_privacy_bypass: boolean;
+  thought_log_channel_disc_id: string | null;
+};
+
+/** Row shape for server_welcome_configs (Phase 6 Stage A). */
+export type ServerWelcomeConfigsRow = {
+  welcome_channel_disc_id: string | null;
+  welcome_prompt: string | null;
+  welcome_persona_id: number | null;
+};
+
+/**
+ * Composite export shape for ServerRepository's Phase 6 Stage A config tables.
+ * Replaces the old server_disc_id-only stub.
+ */
 export type ServerExportShape = {
   server_disc_id: string;
+  chat: ServerChatConfigsRow | null;
+  notice_embeds: ServerNoticeEmbedsConfigsRow | null;
+  member_permissions: ServerMemberPermissionsConfigsRow | null;
+  channel_scope: ServerChannelScopeConfigsRow | null;
+  welcome: ServerWelcomeConfigsRow | null;
 };
 
 export class ServerRepository implements IRepository<ServerExportShape> {
@@ -1036,21 +1102,266 @@ export class ServerRepository implements IRepository<ServerExportShape> {
   // ── IRepository contract ───────────────────────────────────────────────────
 
   /**
-   * Server export is handled by ImportExportRepository (full server export).
-   * Stub satisfies IRepository contract pending Phase 6 #16.7.
+   * Reads chat, notice-embeds, member-permissions, channel-scope, and welcome
+   * configs for the given server from their Phase 6 Stage A tables.
    *
-   * @param ownerId - Discord server snowflake (unused until Phase 6)
+   * @param ownerId - Discord server snowflake
    */
   async toExportShape(ownerId: string | number): Promise<ServerExportShape | null> {
-    return { server_disc_id: String(ownerId) };
+    const serverDiscId = String(ownerId);
+    const serverId = await this.resolveServerInternalId(serverDiscId);
+    if (!serverId) return null;
+
+    const [chat, noticeEmbeds, memberPerms, channelScope, welcome] = await Promise.all([
+      this.sqlLoadChatConfigs(serverId),
+      this.sqlLoadNoticeEmbedsConfigs(serverId),
+      this.sqlLoadMemberPermissionsConfigs(serverId),
+      this.sqlLoadChannelScopeConfigs(serverId),
+      this.sqlLoadWelcomeConfigs(serverId),
+    ]);
+
+    return {
+      server_disc_id: serverDiscId,
+      chat,
+      notice_embeds: noticeEmbeds,
+      member_permissions: memberPerms,
+      channel_scope: channelScope,
+      welcome,
+    };
   }
 
   /**
-   * Server import is handled by ImportExportRepository.
-   * Stub satisfies IRepository contract pending Phase 6 #16.7.
+   * Restores ServerRepository-owned config table rows for a server.
+   * @param ownerId - Discord server snowflake
+   * @param data    - Previously exported ServerExportShape
    */
-  async fromExportShape(_ownerId: string | number, _data: ServerExportShape): Promise<boolean> {
-    return false;
+  async fromExportShape(ownerId: string | number, data: ServerExportShape): Promise<boolean> {
+    const serverDiscId = String(ownerId);
+    const serverId = await this.resolveServerInternalId(serverDiscId);
+    if (!serverId) {
+      log.error(`ServerRepository.fromExportShape: server ${serverDiscId} not found`);
+      return false;
+    }
+
+    try {
+      const ops: Promise<void>[] = [];
+
+      if (data.chat) ops.push(this.sqlUpsertChatConfigs(serverId, data.chat));
+      if (data.notice_embeds) ops.push(this.sqlUpsertNoticeEmbedsConfigs(serverId, data.notice_embeds));
+      if (data.member_permissions) ops.push(this.sqlUpsertMemberPermissionsConfigs(serverId, data.member_permissions));
+      if (data.channel_scope) ops.push(this.sqlUpsertChannelScopeConfigs(serverId, data.channel_scope));
+      if (data.welcome) ops.push(this.sqlUpsertWelcomeConfigs(serverId, data.welcome));
+
+      await Promise.all(ops);
+      return true;
+    } catch (error) {
+      log.error(`ServerRepository.fromExportShape: write failed for ${serverDiscId}:`, error);
+      return false;
+    }
+  }
+
+  // ── Stage A: resolve internal server ID ──────────────────────────────────
+
+  private async resolveServerInternalId(serverDiscId: string): Promise<number | null> {
+    const [row] = await sql`
+      SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId} LIMIT 1
+    `;
+    return (row?.server_id as number | undefined) ?? null;
+  }
+
+  // ── Stage A: config table reads ───────────────────────────────────────────
+
+  private async sqlLoadChatConfigs(serverId: number): Promise<ServerChatConfigsRow | null> {
+    try {
+      const [row] = await sql`
+        SELECT humanizer_degree, message_fetch_limit, send_message_limit, match_limit,
+               cascade_limit, timezone_offset, self_debug_enabled, system_prompt,
+               context_note, context_note_depth, llm_stop_strings,
+               llm_stop_speaker_pattern_enabled, llm_max_output_tokens,
+               llm_top_p, llm_top_k, llm_frequency_penalty, llm_presence_penalty,
+               llm_min_p, llm_logit_biases, fallback_model_refs
+        FROM server_chat_configs
+        WHERE server_id = ${serverId}
+      `;
+      return row ? (row as unknown as ServerChatConfigsRow) : null;
+    } catch (error) {
+      log.error(`Error loading server_chat_configs for server ${serverId}:`, error);
+      return null;
+    }
+  }
+
+  private async sqlLoadNoticeEmbedsConfigs(serverId: number): Promise<ServerNoticeEmbedsConfigsRow | null> {
+    try {
+      const [row] = await sql`
+        SELECT tool_notice_hidden_keys FROM server_notice_embeds_configs WHERE server_id = ${serverId}
+      `;
+      return row ? (row as unknown as ServerNoticeEmbedsConfigsRow) : null;
+    } catch (error) {
+      log.error(`Error loading server_notice_embeds_configs for server ${serverId}:`, error);
+      return null;
+    }
+  }
+
+  private async sqlLoadMemberPermissionsConfigs(serverId: number): Promise<ServerMemberPermissionsConfigsRow | null> {
+    try {
+      const [row] = await sql`
+        SELECT server_memteaching_enabled, attribute_memteaching_enabled,
+               sampledialogue_memteaching_enabled, self_teaching_enabled,
+               personal_memories_enabled, hide_impersonation_embeds, prompt_snapshot_enabled
+        FROM server_member_permissions_configs
+        WHERE server_id = ${serverId}
+      `;
+      return row ? (row as unknown as ServerMemberPermissionsConfigsRow) : null;
+    } catch (error) {
+      log.error(`Error loading server_member_permissions_configs for server ${serverId}:`, error);
+      return null;
+    }
+  }
+
+  private async sqlLoadChannelScopeConfigs(serverId: number): Promise<ServerChannelScopeConfigsRow | null> {
+    try {
+      const [row] = await sql`
+        SELECT rp_channel_ids, private_channel_ids, crosschannel_blocklist_ids,
+               stm_privacy_bypass, thought_log_channel_disc_id
+        FROM server_channel_scope_configs
+        WHERE server_id = ${serverId}
+      `;
+      return row ? (row as unknown as ServerChannelScopeConfigsRow) : null;
+    } catch (error) {
+      log.error(`Error loading server_channel_scope_configs for server ${serverId}:`, error);
+      return null;
+    }
+  }
+
+  private async sqlLoadWelcomeConfigs(serverId: number): Promise<ServerWelcomeConfigsRow | null> {
+    try {
+      const [row] = await sql`
+        SELECT welcome_channel_disc_id, welcome_prompt, welcome_persona_id
+        FROM server_welcome_configs
+        WHERE server_id = ${serverId}
+      `;
+      return row ? (row as unknown as ServerWelcomeConfigsRow) : null;
+    } catch (error) {
+      log.error(`Error loading server_welcome_configs for server ${serverId}:`, error);
+      return null;
+    }
+  }
+
+  // ── Stage A: config table upserts (new tables) ────────────────────────────
+
+  private async sqlUpsertChatConfigs(serverId: number, row: ServerChatConfigsRow): Promise<void> {
+    const logitBiasesJson = JSON.stringify(row.llm_logit_biases);
+    const fallbackRefsJson = JSON.stringify(row.fallback_model_refs);
+    await sql`
+      INSERT INTO server_chat_configs (
+        server_id, humanizer_degree, message_fetch_limit, send_message_limit,
+        match_limit, cascade_limit, timezone_offset, self_debug_enabled,
+        system_prompt, context_note, context_note_depth, llm_stop_strings,
+        llm_stop_speaker_pattern_enabled, llm_max_output_tokens,
+        llm_top_p, llm_top_k, llm_frequency_penalty, llm_presence_penalty,
+        llm_min_p, llm_logit_biases, fallback_model_refs
+      ) VALUES (
+        ${serverId}, ${row.humanizer_degree}, ${row.message_fetch_limit},
+        ${row.send_message_limit}, ${row.match_limit}, ${row.cascade_limit},
+        ${row.timezone_offset}, ${row.self_debug_enabled}, ${row.system_prompt},
+        ${row.context_note}, ${row.context_note_depth},
+        ${sql.array(row.llm_stop_strings)}, ${row.llm_stop_speaker_pattern_enabled},
+        ${row.llm_max_output_tokens}, ${row.llm_top_p}, ${row.llm_top_k},
+        ${row.llm_frequency_penalty}, ${row.llm_presence_penalty}, ${row.llm_min_p},
+        ${logitBiasesJson}::JSONB, ${fallbackRefsJson}::JSONB
+      )
+      ON CONFLICT (server_id) DO UPDATE SET
+        humanizer_degree                 = EXCLUDED.humanizer_degree,
+        message_fetch_limit              = EXCLUDED.message_fetch_limit,
+        send_message_limit               = EXCLUDED.send_message_limit,
+        match_limit                      = EXCLUDED.match_limit,
+        cascade_limit                    = EXCLUDED.cascade_limit,
+        timezone_offset                  = EXCLUDED.timezone_offset,
+        self_debug_enabled               = EXCLUDED.self_debug_enabled,
+        system_prompt                    = EXCLUDED.system_prompt,
+        context_note                     = EXCLUDED.context_note,
+        context_note_depth               = EXCLUDED.context_note_depth,
+        llm_stop_strings                 = EXCLUDED.llm_stop_strings,
+        llm_stop_speaker_pattern_enabled = EXCLUDED.llm_stop_speaker_pattern_enabled,
+        llm_max_output_tokens            = EXCLUDED.llm_max_output_tokens,
+        llm_top_p                        = EXCLUDED.llm_top_p,
+        llm_top_k                        = EXCLUDED.llm_top_k,
+        llm_frequency_penalty            = EXCLUDED.llm_frequency_penalty,
+        llm_presence_penalty             = EXCLUDED.llm_presence_penalty,
+        llm_min_p                        = EXCLUDED.llm_min_p,
+        llm_logit_biases                 = EXCLUDED.llm_logit_biases,
+        fallback_model_refs              = EXCLUDED.fallback_model_refs,
+        updated_at                       = NOW()
+    `;
+  }
+
+  private async sqlUpsertNoticeEmbedsConfigs(serverId: number, row: ServerNoticeEmbedsConfigsRow): Promise<void> {
+    await sql`
+      INSERT INTO server_notice_embeds_configs (server_id, tool_notice_hidden_keys)
+      VALUES (${serverId}, ${sql.array(row.tool_notice_hidden_keys)})
+      ON CONFLICT (server_id) DO UPDATE SET
+        tool_notice_hidden_keys = EXCLUDED.tool_notice_hidden_keys,
+        updated_at              = NOW()
+    `;
+  }
+
+  private async sqlUpsertMemberPermissionsConfigs(
+    serverId: number,
+    row: ServerMemberPermissionsConfigsRow,
+  ): Promise<void> {
+    await sql`
+      INSERT INTO server_member_permissions_configs (
+        server_id, server_memteaching_enabled, attribute_memteaching_enabled,
+        sampledialogue_memteaching_enabled, self_teaching_enabled,
+        personal_memories_enabled, hide_impersonation_embeds, prompt_snapshot_enabled
+      ) VALUES (
+        ${serverId}, ${row.server_memteaching_enabled}, ${row.attribute_memteaching_enabled},
+        ${row.sampledialogue_memteaching_enabled}, ${row.self_teaching_enabled},
+        ${row.personal_memories_enabled}, ${row.hide_impersonation_embeds},
+        ${row.prompt_snapshot_enabled}
+      )
+      ON CONFLICT (server_id) DO UPDATE SET
+        server_memteaching_enabled         = EXCLUDED.server_memteaching_enabled,
+        attribute_memteaching_enabled      = EXCLUDED.attribute_memteaching_enabled,
+        sampledialogue_memteaching_enabled = EXCLUDED.sampledialogue_memteaching_enabled,
+        self_teaching_enabled              = EXCLUDED.self_teaching_enabled,
+        personal_memories_enabled          = EXCLUDED.personal_memories_enabled,
+        hide_impersonation_embeds          = EXCLUDED.hide_impersonation_embeds,
+        prompt_snapshot_enabled            = EXCLUDED.prompt_snapshot_enabled,
+        updated_at                         = NOW()
+    `;
+  }
+
+  private async sqlUpsertChannelScopeConfigs(serverId: number, row: ServerChannelScopeConfigsRow): Promise<void> {
+    await sql`
+      INSERT INTO server_channel_scope_configs (
+        server_id, rp_channel_ids, private_channel_ids, crosschannel_blocklist_ids,
+        stm_privacy_bypass, thought_log_channel_disc_id
+      ) VALUES (
+        ${serverId}, ${sql.array(row.rp_channel_ids)}, ${sql.array(row.private_channel_ids)},
+        ${sql.array(row.crosschannel_blocklist_ids)}, ${row.stm_privacy_bypass},
+        ${row.thought_log_channel_disc_id}
+      )
+      ON CONFLICT (server_id) DO UPDATE SET
+        rp_channel_ids              = EXCLUDED.rp_channel_ids,
+        private_channel_ids         = EXCLUDED.private_channel_ids,
+        crosschannel_blocklist_ids  = EXCLUDED.crosschannel_blocklist_ids,
+        stm_privacy_bypass          = EXCLUDED.stm_privacy_bypass,
+        thought_log_channel_disc_id = EXCLUDED.thought_log_channel_disc_id,
+        updated_at                  = NOW()
+    `;
+  }
+
+  private async sqlUpsertWelcomeConfigs(serverId: number, row: ServerWelcomeConfigsRow): Promise<void> {
+    await sql`
+      INSERT INTO server_welcome_configs (server_id, welcome_channel_disc_id, welcome_prompt, welcome_persona_id)
+      VALUES (${serverId}, ${row.welcome_channel_disc_id}, ${row.welcome_prompt}, ${row.welcome_persona_id})
+      ON CONFLICT (server_id) DO UPDATE SET
+        welcome_channel_disc_id = EXCLUDED.welcome_channel_disc_id,
+        welcome_prompt          = EXCLUDED.welcome_prompt,
+        welcome_persona_id      = EXCLUDED.welcome_persona_id,
+        updated_at              = NOW()
+    `;
   }
 }
 

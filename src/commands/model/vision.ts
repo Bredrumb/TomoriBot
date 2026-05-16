@@ -7,7 +7,7 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
-import { type UserRow, type ErrorContext, type LlmRow, tomoriConfigSchema } from "@/types/db/schema";
+import { type UserRow, type ErrorContext, type LlmRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";
 import { replyLegacyOpenRouterOtherModelMoved } from "@/utils/discord/openrouterModelMigrationNotice";
@@ -122,14 +122,13 @@ export async function execute(
       }
 
       const [updatedRow] = await sql`
-				UPDATE tomori_configs
+				UPDATE server_model_configs
 				SET vision_llm_id = ${selectedSavedConfig.vision_llm_id}
 				WHERE server_id = ${tomoriState.server_id}
-				RETURNING *
+				RETURNING server_id
 			`;
 
-      const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-      if (!validatedConfig.success || !updatedRow) {
+      if (!updatedRow) {
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
@@ -234,14 +233,13 @@ export async function execute(
       }
 
       const [updatedRow] = await sql`
-				UPDATE tomori_configs
+				UPDATE server_model_configs
 				SET vision_llm_id = NULL
 				WHERE server_id = ${tomoriState.server_id}
-				RETURNING *
+				RETURNING server_id
 			`;
 
-      const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-      if (!validatedConfig.success || !updatedRow) {
+      if (!updatedRow) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
@@ -298,15 +296,13 @@ export async function execute(
 
     // 11. Update vision_llm_id in the database
     const [updatedRow] = await sql`
-			UPDATE tomori_configs
+			UPDATE server_model_configs
 			SET vision_llm_id = ${selectedModel.llm_id}
 			WHERE server_id = ${tomoriState.server_id}
-			RETURNING *
+			RETURNING server_id
 		`;
 
-    // 12. Validate the returned data
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-    if (!validatedConfig.success || !updatedRow) {
+    if (!updatedRow) {
       const context: ErrorContext = {
         tomoriId: tomoriState.tomori_id,
         serverId: tomoriState.server_id,
@@ -317,14 +313,11 @@ export async function execute(
           guildId: serverId,
           selectedModelCodename: selectedModel.llm_codename,
           targetVisionLlmId: selectedModel.llm_id,
-          validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
         },
       };
       await log.error(
-        "Failed to update or validate vision model config after DB update",
-        validatedConfig.success
-          ? new Error("Database update returned no rows or unexpected data")
-          : new Error("Updated config data failed validation"),
+        "Failed to update vision model config after DB update",
+        new Error("Database update returned no rows"),
         context,
       );
 

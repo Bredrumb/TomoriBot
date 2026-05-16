@@ -10,7 +10,7 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { type UserRow, type ErrorContext, tomoriConfigSchema } from "@/types/db/schema";
+import { type UserRow, type ErrorContext } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
 
 const MODAL_CUSTOM_ID = "nsfw_jailbreaks_modal";
@@ -122,17 +122,16 @@ export async function execute(
     }
 
     const [updatedRow] = await sql`
-      UPDATE tomori_configs
+      UPDATE server_nsfw_configs
       SET
         uncensor_injection_enabled = ${nextState.uncensor_injection_enabled},
         uncensor_unicode_space_enabled = ${nextState.uncensor_unicode_space_enabled},
         uncensor_sanitize_enabled = ${nextState.uncensor_sanitize_enabled}
       WHERE server_id = ${tomoriState.server_id}
-      RETURNING *
+      RETURNING server_id
     `;
 
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-    if (!updatedRow || !validatedConfig.success) {
+    if (!updatedRow) {
       const context: ErrorContext = {
         tomoriId: tomoriState.tomori_id,
         serverId: tomoriState.server_id,
@@ -141,14 +140,10 @@ export async function execute(
         metadata: {
           command: "nsfw jailbreaks",
           guildId: interaction.guild?.id ?? interaction.user.id,
-          validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
+          targetTable: "server_nsfw_configs",
         },
       };
-      await log.error(
-        "Failed to update or validate jailbreak config",
-        validatedConfig.success ? new Error("Database update returned no rows") : validatedConfig.error,
-        context,
-      );
+      await log.error("Failed to update jailbreak config", new Error("Database update returned no rows"), context);
       await replyInfoEmbed(modalResult.interaction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",

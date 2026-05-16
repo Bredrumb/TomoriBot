@@ -27,12 +27,12 @@ async function resolveCurrentProvider(serverId: number, capability: CustomEndpoi
     case "video": {
       const [row] =
         capability === "text"
-          ? await sql`SELECT llm_provider AS provider FROM llms WHERE llm_id = (SELECT llm_id FROM tomori_configs WHERE server_id = ${serverId}) LIMIT 1`
+          ? await sql`SELECT llm_provider AS provider FROM llms WHERE llm_id = (SELECT llm_id FROM server_model_configs WHERE server_id = ${serverId}) LIMIT 1`
           : capability === "image"
-            ? await sql`SELECT provider FROM image_diffusion_models WHERE diffusion_model_id = (SELECT diffusion_model_id FROM tomori_configs WHERE server_id = ${serverId}) LIMIT 1`
+            ? await sql`SELECT provider FROM image_diffusion_models WHERE diffusion_model_id = (SELECT diffusion_model_id FROM server_model_configs WHERE server_id = ${serverId}) LIMIT 1`
             : capability === "embedding"
-              ? await sql`SELECT provider FROM embedding_models WHERE embedding_model_id = (SELECT embedding_model_id FROM tomori_configs WHERE server_id = ${serverId}) LIMIT 1`
-              : await sql`SELECT provider FROM video_generation_models WHERE video_model_id = (SELECT video_model_id FROM tomori_configs WHERE server_id = ${serverId}) LIMIT 1`;
+              ? await sql`SELECT provider FROM embedding_models WHERE embedding_model_id = (SELECT embedding_model_id FROM server_model_configs WHERE server_id = ${serverId}) LIMIT 1`
+              : await sql`SELECT provider FROM video_generation_models WHERE video_model_id = (SELECT video_model_id FROM server_model_configs WHERE server_id = ${serverId}) LIMIT 1`;
       return row?.provider ? String(row.provider).toLowerCase() : null;
     }
   }
@@ -77,8 +77,8 @@ async function clearCurrentProviderSelections(
     switch (capability) {
       case "text":
         await sql`
-					UPDATE tomori_configs
-					SET llm_id = NULL,
+					UPDATE server_model_configs
+						SET llm_id = NULL,
 					    custom_endpoint_url = NULL,
 					    custom_model_name = NULL,
 					    custom_num_ctx = NULL,
@@ -87,13 +87,13 @@ async function clearCurrentProviderSelections(
 				`;
         break;
       case "embedding":
-        await sql`UPDATE tomori_configs SET embedding_model_id = NULL WHERE server_id = ${serverId}`;
+        await sql`UPDATE server_model_configs SET embedding_model_id = NULL WHERE server_id = ${serverId}`;
         break;
       case "image":
-        await sql`UPDATE tomori_configs SET diffusion_model_id = NULL WHERE server_id = ${serverId}`;
+        await sql`UPDATE server_model_configs SET diffusion_model_id = NULL WHERE server_id = ${serverId}`;
         break;
       case "video":
-        await sql`UPDATE tomori_configs SET video_model_id = NULL WHERE server_id = ${serverId}`;
+        await sql`UPDATE server_model_configs SET video_model_id = NULL WHERE server_id = ${serverId}`;
         break;
     }
   }

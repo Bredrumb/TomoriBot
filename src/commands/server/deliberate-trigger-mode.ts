@@ -60,10 +60,10 @@ export async function execute(
 
     // 4. Update the database
     const [updatedRow] = await sql`
-			UPDATE tomori_configs
+			UPDATE server_trigger_behavior_configs
 			SET deliberate_trigger_mode = ${newValue}
 			WHERE server_id = ${tomoriState.server_id}
-			RETURNING *
+			RETURNING server_id
 		`;
 
     if (!updatedRow) {
@@ -75,7 +75,7 @@ export async function execute(
         metadata: {
           command: "server deliberatetriggermode",
           newValue,
-          targetTable: "tomori_configs",
+          targetTable: "server_trigger_behavior_configs",
         },
       };
       await log.error(

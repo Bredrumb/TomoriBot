@@ -81,7 +81,6 @@ export const tomoriSchema = z.object({
   autoch_next_target: z.number().default(0),
   is_alter: z.boolean().default(false), // Added January 2026 - Distinguishes main persona (false) from alter personas (true)
   webhook_avatar_url: z.string().nullable().optional(), // Added January 2026 - Stored alter avatar reference (production URL; non-production URL or local avatar path)
-  alter_triggers: z.array(z.string()).default([]), // Added January 2026 - Trigger words for alter personas (main personas use tomori_configs.trigger_words)
   nai_tags: z.array(z.string()).default([]), // Imageboard-style persona appearance tags for NovelAI character profile resolution
   nai_char_ref_url: z.string().nullable().optional(), // Added March 2026 - Persona-specific NovelAI character reference image
   elevenlabs_voice_id: z.string().nullable().optional(), // Added March 2026 - Server-local ElevenLabs voice selection

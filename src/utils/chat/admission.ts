@@ -566,9 +566,7 @@ async function shouldBlockReplyToOtherBot(args: {
       return new RegExp(`\\b${escapeRegExp(word)}\\b`, "i").test(message.content);
     }) ||
     earlyAllPersonas.some((persona) => {
-      const triggers =
-        persona.trigger_words ??
-        (persona.is_alter ? (persona.alter_triggers ?? []) : (persona.config?.trigger_words ?? []));
+      const triggers = persona.trigger_words ?? [];
 
       return triggers.some((trigger: string) => {
         if (trigger.startsWith("<@")) {

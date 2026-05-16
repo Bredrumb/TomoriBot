@@ -674,7 +674,7 @@ export class PresetRepository {
               SELECT
                 tomori_id, tomori_nickname, persona_lineage_id,
                 attribute_list, sample_dialogues_in, sample_dialogues_out,
-                is_alter, alter_triggers, nai_tags, nai_char_ref_url,
+                is_alter, nai_tags, nai_char_ref_url,
                 nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
               FROM tomoris
               WHERE server_id = ${serverId}
@@ -685,7 +685,7 @@ export class PresetRepository {
               SELECT
                 tomori_id, tomori_nickname, persona_lineage_id,
                 attribute_list, sample_dialogues_in, sample_dialogues_out,
-                is_alter, alter_triggers, nai_tags, nai_char_ref_url,
+                is_alter, nai_tags, nai_char_ref_url,
                 nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
               FROM tomoris
               WHERE server_id = ${serverId}
@@ -734,37 +734,6 @@ export class PresetRepository {
       if (personaConfigRows.length) {
         triggerWords = personaConfigRows[0].trigger_words ?? null;
         personaPrompt = personaConfigRows[0].persona_prompt ?? null;
-      }
-
-      // 3.1 Legacy/main fallback: server-scoped config (or tomori_id legacy config)
-      if (triggerWords === null && presetData.is_alter !== true) {
-        const configRows = await sql`
-          SELECT trigger_words
-          FROM tomori_configs
-          WHERE server_id = ${serverId}
-          ORDER BY updated_at DESC NULLS LAST, tomori_config_id DESC
-          LIMIT 1
-        `;
-
-        if (configRows.length) {
-          triggerWords = configRows[0].trigger_words ?? null;
-        } else if (presetData.tomori_id) {
-          const legacyRows = await sql`
-            SELECT trigger_words
-            FROM tomori_configs
-            WHERE tomori_id = ${presetData.tomori_id}
-            ORDER BY updated_at DESC NULLS LAST, tomori_config_id DESC
-            LIMIT 1
-          `;
-          if (legacyRows.length) {
-            triggerWords = legacyRows[0].trigger_words ?? null;
-          }
-        }
-      }
-
-      // 3.2 Legacy alter fallback
-      if (triggerWords === null && presetData.is_alter === true) {
-        triggerWords = presetData.alter_triggers ?? null;
       }
 
       // 4. Build export object with metadata (includes NovelAI persona fields)

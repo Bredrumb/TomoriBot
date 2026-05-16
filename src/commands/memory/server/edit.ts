@@ -23,13 +23,7 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/
 import { personaRepository, userRepository } from "@/utils/db/repositories";
 import { getMemoryLimits, validateMemoryContent } from "@/utils/misc/memoryLimits";
 import type { SelectOption } from "@/types/discord/modal";
-import {
-  serverMemorySchema,
-  type ErrorContext,
-  type ServerMemoryRow,
-  type TomoriState,
-  type UserRow,
-} from "@/types/db/schema";
+import { serverMemorySchema, type ErrorContext, type ServerMemoryRow, type TomoriState, type UserRow,  } from "@/types/db/schema";
 
 const SELECT_MODAL_CUSTOM_ID = "memory_server_edit_select_modal";
 const EDIT_MODAL_CUSTOM_ID = "memory_server_edit_value_modal";

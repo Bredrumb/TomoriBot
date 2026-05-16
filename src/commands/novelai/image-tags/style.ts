@@ -94,7 +94,7 @@ export async function execute(
     if (tagsInput.trim().length === 0) {
       const defaultTagArrayLiteral = formatTextArrayLiteral(DEFAULT_NAI_STYLE_TAGS);
       const cleared = await sql<Array<{ tomori_config_id: number }>>`
-				UPDATE tomori_configs
+				UPDATE server_novelai_imagegen_configs
 				SET nai_style_tags = ${defaultTagArrayLiteral}::TEXT[]
 				WHERE server_id = ${tomoriState.server_id}
 				RETURNING tomori_config_id
@@ -164,7 +164,7 @@ export async function execute(
 
     const tagArrayLiteral = formatTextArrayLiteral(validationResult.tags);
     const updated = await sql<Array<{ tomori_config_id: number }>>`
-			UPDATE tomori_configs
+			UPDATE server_novelai_imagegen_configs
 			SET nai_style_tags = ${tagArrayLiteral}::TEXT[]
 			WHERE server_id = ${tomoriState.server_id}
 			RETURNING tomori_config_id

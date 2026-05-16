@@ -1,6 +1,6 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { type ErrorContext, type UserRow, tomoriConfigSchema } from "@/types/db/schema";
+import { type ErrorContext, type UserRow } from "@/types/db/schema";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { sql } from "@/utils/db/client";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -93,13 +93,13 @@ export async function execute(
       CHATTERBOX_DEFAULT_TURBO_ENABLED;
 
     const [updatedRow] = await sql`
-      UPDATE tomori_configs
+      UPDATE server_speech_configs
       SET
         chatterbox_cfg_weight = ${cfgWeight},
         chatterbox_exaggeration = ${exaggeration},
         chatterbox_turbo_enabled = ${turboEnabled}
       WHERE server_id = ${tomoriState.server_id}
-      RETURNING *
+      RETURNING server_id
     `;
 
     if (!updatedRow) {
@@ -110,7 +110,7 @@ export async function execute(
         errorType: "DatabaseUpdateError",
         metadata: {
           command: "speech chatterbox parameters",
-          targetTable: "tomori_configs",
+          targetTable: "server_speech_configs",
         },
       };
       await log.error(
@@ -118,27 +118,6 @@ export async function execute(
         new Error("Database update returned no rows"),
         context,
       );
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-    if (!validatedConfig.success) {
-      const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
-        serverId: tomoriState.server_id,
-        userId: userData.user_id,
-        errorType: "SchemaValidationError",
-        metadata: {
-          command: "speech chatterbox parameters",
-          validationErrors: validatedConfig.error.flatten(),
-        },
-      };
-      await log.error("Failed to validate updated Chatterbox speech parameters", validatedConfig.error, context);
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",

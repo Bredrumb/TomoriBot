@@ -24,14 +24,7 @@ import { personaRepository, personalMemoryRepository, userRepository } from "@/u
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import { getMemoryLimits, validateMemoryContent } from "@/utils/misc/memoryLimits";
 import type { SelectOption } from "@/types/discord/modal";
-import {
-  personalMemorySchema,
-  PrivacyLevel,
-  type ErrorContext,
-  type PersonalMemoryRow,
-  type TomoriState,
-  type UserRow,
-} from "@/types/db/schema";
+import { personalMemorySchema, PrivacyLevel, type ErrorContext, type PersonalMemoryRow, type TomoriState, type UserRow,  } from "@/types/db/schema";
 
 const SELECT_MODAL_CUSTOM_ID = "memory_personal_edit_select_modal";
 const EDIT_MODAL_CUSTOM_ID = "memory_personal_edit_value_modal";

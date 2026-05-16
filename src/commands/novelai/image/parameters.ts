@@ -428,8 +428,8 @@ export async function execute(
       return;
     }
 
-    const updated = await sql<Array<{ tomori_config_id: number }>>`
-			UPDATE tomori_configs
+    const updated = await sql<Array<{ server_id: number }>>`
+			UPDATE server_novelai_imagegen_configs
 			SET
 				nai_sampler = ${samplerValidation.value},
 				nai_steps = ${stepsValidation.value},
@@ -437,7 +437,7 @@ export async function execute(
 				nai_noise_schedule = ${noiseScheduleValidation.value},
 				nai_cfg_rescale = ${cfgRescaleValidation.value}
 			WHERE server_id = ${tomoriState.server_id}
-			RETURNING tomori_config_id
+			RETURNING server_id
 		`;
 
     if (!updated.length) {

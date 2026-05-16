@@ -36,7 +36,7 @@ export async function execute(
 
     const nextValue = !tomoriState.config.user_byok_mode;
     await sql`
-      UPDATE tomori_configs
+      UPDATE server_byok_configs
       SET user_byok_mode = ${nextValue}
       WHERE server_id = ${tomoriState.server_id}
     `;

@@ -73,10 +73,10 @@ export async function execute(
     }
 
     const [updatedRow] = await sql`
-      UPDATE tomori_configs
+      UPDATE server_speech_configs
       SET voice_transcript_chat_mode = ${isEnabled}
       WHERE server_id = ${tomoriState.server_id}
-      RETURNING *
+      RETURNING server_id
     `;
 
     if (!updatedRow) {
@@ -88,7 +88,7 @@ export async function execute(
         metadata: {
           command: "speech transcripts",
           voiceTranscriptChatMode: isEnabled,
-          targetTable: "tomori_configs",
+          targetTable: "server_speech_configs",
         },
       };
       await log.error(

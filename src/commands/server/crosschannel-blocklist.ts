@@ -465,10 +465,10 @@ async function persistBlocklistUpdate(
   }
 
   const [updatedRow] = await sql`
-    UPDATE tomori_configs
+    UPDATE server_channel_scope_configs
     SET crosschannel_blocklist_ids = ${formatTextArrayLiteral([...nextBlockedIds])}::text[]
     WHERE server_id = ${tomoriState.server_id}
-    RETURNING *
+    RETURNING server_id
   `;
 
   if (!updatedRow) {

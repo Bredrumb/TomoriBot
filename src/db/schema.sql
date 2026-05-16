@@ -145,8 +145,6 @@ EXECUTE FUNCTION update_timestamp();
 SELECT add_column_if_not_exists('tomoris', 'is_alter', 'BOOLEAN', 'false');
 -- webhook_avatar_url: Stores alter avatar reference (production URL; non-production URL or local avatar path)
 SELECT add_column_if_not_exists('tomoris', 'webhook_avatar_url', 'TEXT');
--- alter_triggers: Trigger words for alter personas (main personas use tomori_configs.trigger_words)
-SELECT add_column_if_not_exists('tomoris', 'alter_triggers', 'TEXT[]', 'ARRAY[]::TEXT[]');
 -- persona_lineage_id: Shared identity namespace for cross-server personal memory pooling
 SELECT add_column_if_not_exists('tomoris', 'persona_lineage_id', 'BIGINT');
 -- nai_tags: Imageboard-style persona appearance tags for NovelAI character profile resolution
@@ -434,29 +432,10 @@ BEFORE UPDATE ON persona_configs
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 
--- Backfill persona_configs trigger words from legacy locations
-INSERT INTO persona_configs (tomori_id, trigger_words)
-SELECT
-	t.tomori_id,
-	CASE
-		WHEN t.is_alter THEN COALESCE(t.alter_triggers, ARRAY[]::TEXT[])
-		ELSE COALESCE(tc_server.trigger_words, tc_legacy.trigger_words, ARRAY[]::TEXT[])
-	END AS trigger_words
-FROM tomoris t
-LEFT JOIN LATERAL (
-	SELECT trigger_words
-	FROM tomori_configs
-	WHERE server_id = t.server_id
-	ORDER BY updated_at DESC NULLS LAST, tomori_config_id DESC
-	LIMIT 1
-) tc_server ON true
-LEFT JOIN LATERAL (
-	SELECT trigger_words
-	FROM tomori_configs
-	WHERE tomori_id = t.tomori_id
-	ORDER BY updated_at DESC NULLS LAST, tomori_config_id DESC
-	LIMIT 1
-) tc_legacy ON true
+-- Ensure every persona has a persona_configs row. Trigger words are managed by
+-- migration 005 (consolidate_alter_triggers) and individual command writes.
+INSERT INTO persona_configs (tomori_id)
+SELECT tomori_id FROM tomoris
 ON CONFLICT (tomori_id) DO NOTHING;
 
 -- Add persona conditioning toggles (April 2026)

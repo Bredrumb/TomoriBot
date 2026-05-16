@@ -53,10 +53,10 @@ export async function execute(
     const isEnabled = !(tomoriState.config.tool_use_enabled ?? true);
 
     const [updatedRow] = await sql`
-      UPDATE tomori_configs
+      UPDATE server_capabilities_configs
       SET tool_use_enabled = ${isEnabled}
       WHERE server_id = ${tomoriState.server_id}
-      RETURNING *
+      RETURNING server_id
     `;
 
     if (!updatedRow) {
@@ -68,7 +68,7 @@ export async function execute(
         metadata: {
           command: "config tools toggle",
           toolUseEnabled: isEnabled,
-          targetTable: "tomori_configs",
+          targetTable: "server_capabilities_configs",
         },
       };
       await log.error(

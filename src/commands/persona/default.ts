@@ -388,12 +388,6 @@ export async function execute(
 						persona_prompt = EXCLUDED.persona_prompt
 			`;
 
-      await sql`
-				UPDATE tomori_configs
-				SET trigger_words = ${triggerWordsArrayLiteral}::text[]
-				WHERE server_id = ${tomoriState.server_id}
-			`;
-
       // 11b. Validate the result
       const validationResult = tomoriSchema.safeParse(updatedTomoriResult);
 

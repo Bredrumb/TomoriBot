@@ -109,7 +109,7 @@ export async function execute(
     }
 
     await sql`
-      UPDATE tomori_configs
+      UPDATE server_chat_configs
       SET llm_stop_strings = ${toPostgresTextArrayLiteral(nextStopStrings)}::text[],
           llm_stop_speaker_pattern_enabled = ${speakerPatternEnabled}
       WHERE server_id = ${tomoriState.server_id}

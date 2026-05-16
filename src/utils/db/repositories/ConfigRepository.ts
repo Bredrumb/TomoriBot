@@ -18,8 +18,65 @@ import { validateTomoriConfigFields } from "@/utils/db/sqlSecurity";
 import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
-/** Portable config export shape (expanded in Phase 6 #16.7). */
-export type ConfigExportShape = Partial<TomoriConfigRow>;
+// ── Stage A config table row shapes ───────────────────────────────────────────
+
+/** Row shape for server_capabilities_configs (Phase 6 Stage A). */
+export type ServerCapabilitiesConfigsRow = {
+  emoji_usage_enabled: boolean;
+  sticker_usage_enabled: boolean;
+  web_search_enabled: boolean;
+  manage_message_enabled: boolean;
+  thread_creation_enabled: boolean;
+  imagegen_enabled: boolean;
+  videogen_enabled: boolean;
+  voice_message_enabled: boolean;
+  tool_use_enabled: boolean;
+};
+
+/** Row shape for server_novelai_imagegen_configs (Phase 6 Stage A). */
+export type ServerNovelaiImagegenConfigsRow = {
+  nai_preset_name: string | null;
+  nai_style_tags: string[];
+  nai_negative_tags: string[];
+  nai_sampler: string | null;
+  nai_steps: number | null;
+  nai_scale: number | null;
+  nai_noise_schedule: string | null;
+  nai_cfg_rescale: number | null;
+  nai_diffusion_model_id: number | null;
+};
+
+/** Row shape for server_nsfw_configs (Phase 6 Stage A). */
+export type ServerNsfwConfigsRow = {
+  uncensor_injection_enabled: boolean;
+  uncensor_unicode_space_enabled: boolean;
+  uncensor_sanitize_enabled: boolean;
+};
+
+/** Row shape for server_speech_configs (Phase 6 Stage A). */
+export type ServerSpeechConfigsRow = {
+  voice_transcript_chat_mode: boolean;
+  chatterbox_turbo_enabled: boolean;
+  chatterbox_cfg_weight: number;
+  chatterbox_exaggeration: number;
+};
+
+/** Row shape for server_byok_configs (Phase 6 Stage A). */
+export type ServerByokConfigsRow = {
+  user_byok_mode: boolean;
+};
+
+/**
+ * Composite export shape for ConfigRepository's Phase 6 Stage A tables.
+ * Replaces the old Partial<TomoriConfigRow> stub.
+ */
+export type ConfigExportShape = {
+  capabilities: ServerCapabilitiesConfigsRow | null;
+  novelai_imagegen: ServerNovelaiImagegenConfigsRow | null;
+  nsfw: ServerNsfwConfigsRow | null;
+  speech: ServerSpeechConfigsRow | null;
+  byok: ServerByokConfigsRow | null;
+};
 
 export class ConfigRepository implements IRepository<ConfigExportShape> {
   // ── reads ──────────────────────────────────────────────────────────────────
@@ -468,21 +525,239 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   // ── IRepository contract ───────────────────────────────────────────────────
 
   /**
-   * Config export is handled by ImportExportRepository (full server export).
-   * This stub satisfies the IRepository contract; expansion is deferred to Phase 6 #16.7.
+   * Reads capabilities, NAI imagegen, NSFW, speech, and BYOK configs for the given server.
+   * Returns null if the server has no config row (i.e., not yet set up).
    *
-   * @param _ownerId - Discord server snowflake (unused until Phase 6)
+   * @param ownerId - Discord server snowflake
    */
-  async toExportShape(_ownerId: string | number): Promise<ConfigExportShape | null> {
-    return null;
+  async toExportShape(ownerId: string | number): Promise<ConfigExportShape | null> {
+    const serverDiscId = String(ownerId);
+    const serverId = await this.resolveServerId(serverDiscId);
+    if (!serverId) return null;
+
+    const [caps, nai, nsfw, speech, byok] = await Promise.all([
+      this.sqlLoadCapabilitiesConfigs(serverId),
+      this.sqlLoadNovelaiImagegenConfigs(serverId),
+      this.sqlLoadNsfwConfigs(serverId),
+      this.sqlLoadSpeechConfigs(serverId),
+      this.sqlLoadByokConfigs(serverId),
+    ]);
+
+    if (!caps && !nai && !nsfw && !speech && !byok) return null;
+
+    return { capabilities: caps, novelai_imagegen: nai, nsfw, speech, byok };
   }
 
   /**
-   * Config import is handled by ImportExportRepository.
-   * Stub satisfies IRepository contract pending Phase 6 #16.7.
+   * Restores ConfigRepository-owned table rows for a server.
+   * @param ownerId - Discord server snowflake
+   * @param data    - Previously exported ConfigExportShape
    */
-  async fromExportShape(_ownerId: string | number, _data: ConfigExportShape): Promise<boolean> {
-    return false;
+  async fromExportShape(ownerId: string | number, data: ConfigExportShape): Promise<boolean> {
+    const serverDiscId = String(ownerId);
+    const serverId = await this.resolveServerId(serverDiscId);
+    if (!serverId) {
+      log.error(`ConfigRepository.fromExportShape: server ${serverDiscId} not found`);
+      return false;
+    }
+
+    try {
+      const ops: Promise<void>[] = [];
+
+      if (data.capabilities) ops.push(this.sqlUpsertCapabilitiesConfigs(serverId, data.capabilities));
+      if (data.novelai_imagegen) ops.push(this.sqlUpsertNovelaiImagegenConfigs(serverId, data.novelai_imagegen));
+      if (data.nsfw) ops.push(this.sqlUpsertNsfwConfigs(serverId, data.nsfw));
+      if (data.speech) ops.push(this.sqlUpsertSpeechConfigs(serverId, data.speech));
+      if (data.byok) ops.push(this.sqlUpsertByokConfigs(serverId, data.byok));
+
+      await Promise.all(ops);
+      invalidateTomoriStateCache(serverDiscId);
+      return true;
+    } catch (error) {
+      log.error(`ConfigRepository.fromExportShape: write failed for ${serverDiscId}:`, error);
+      return false;
+    }
+  }
+
+  // ── Stage A: config table reads ───────────────────────────────────────────
+
+  private async resolveServerId(serverDiscId: string): Promise<number | null> {
+    const [row] = await sql`
+      SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId} LIMIT 1
+    `;
+    return (row?.server_id as number | undefined) ?? null;
+  }
+
+  private async sqlLoadCapabilitiesConfigs(serverId: number): Promise<ServerCapabilitiesConfigsRow | null> {
+    try {
+      const [row] = await sql`
+        SELECT emoji_usage_enabled, sticker_usage_enabled, web_search_enabled,
+               manage_message_enabled, thread_creation_enabled, imagegen_enabled,
+               videogen_enabled, voice_message_enabled, tool_use_enabled
+        FROM server_capabilities_configs
+        WHERE server_id = ${serverId}
+      `;
+      return row ? (row as unknown as ServerCapabilitiesConfigsRow) : null;
+    } catch (error) {
+      log.error(`Error loading server_capabilities_configs for server ${serverId}:`, error);
+      return null;
+    }
+  }
+
+  private async sqlLoadNovelaiImagegenConfigs(serverId: number): Promise<ServerNovelaiImagegenConfigsRow | null> {
+    try {
+      const [row] = await sql`
+        SELECT nai_preset_name, nai_style_tags, nai_negative_tags, nai_sampler,
+               nai_steps, nai_scale, nai_noise_schedule, nai_cfg_rescale, nai_diffusion_model_id
+        FROM server_novelai_imagegen_configs
+        WHERE server_id = ${serverId}
+      `;
+      return row ? (row as unknown as ServerNovelaiImagegenConfigsRow) : null;
+    } catch (error) {
+      log.error(`Error loading server_novelai_imagegen_configs for server ${serverId}:`, error);
+      return null;
+    }
+  }
+
+  private async sqlLoadNsfwConfigs(serverId: number): Promise<ServerNsfwConfigsRow | null> {
+    try {
+      const [row] = await sql`
+        SELECT uncensor_injection_enabled, uncensor_unicode_space_enabled, uncensor_sanitize_enabled
+        FROM server_nsfw_configs
+        WHERE server_id = ${serverId}
+      `;
+      return row ? (row as unknown as ServerNsfwConfigsRow) : null;
+    } catch (error) {
+      log.error(`Error loading server_nsfw_configs for server ${serverId}:`, error);
+      return null;
+    }
+  }
+
+  private async sqlLoadSpeechConfigs(serverId: number): Promise<ServerSpeechConfigsRow | null> {
+    try {
+      const [row] = await sql`
+        SELECT voice_transcript_chat_mode, chatterbox_turbo_enabled,
+               chatterbox_cfg_weight, chatterbox_exaggeration
+        FROM server_speech_configs
+        WHERE server_id = ${serverId}
+      `;
+      return row ? (row as unknown as ServerSpeechConfigsRow) : null;
+    } catch (error) {
+      log.error(`Error loading server_speech_configs for server ${serverId}:`, error);
+      return null;
+    }
+  }
+
+  private async sqlLoadByokConfigs(serverId: number): Promise<ServerByokConfigsRow | null> {
+    try {
+      const [row] = await sql`
+        SELECT user_byok_mode
+        FROM server_byok_configs
+        WHERE server_id = ${serverId}
+      `;
+      return row ? (row as unknown as ServerByokConfigsRow) : null;
+    } catch (error) {
+      log.error(`Error loading server_byok_configs for server ${serverId}:`, error);
+      return null;
+    }
+  }
+
+  // ── Stage A: config table upserts (new tables) ────────────────────────────
+
+  private async sqlUpsertCapabilitiesConfigs(serverId: number, row: ServerCapabilitiesConfigsRow): Promise<void> {
+    await sql`
+      INSERT INTO server_capabilities_configs (
+        server_id, emoji_usage_enabled, sticker_usage_enabled, web_search_enabled,
+        manage_message_enabled, thread_creation_enabled, imagegen_enabled,
+        videogen_enabled, voice_message_enabled, tool_use_enabled
+      ) VALUES (
+        ${serverId}, ${row.emoji_usage_enabled}, ${row.sticker_usage_enabled},
+        ${row.web_search_enabled}, ${row.manage_message_enabled}, ${row.thread_creation_enabled},
+        ${row.imagegen_enabled}, ${row.videogen_enabled}, ${row.voice_message_enabled},
+        ${row.tool_use_enabled}
+      )
+      ON CONFLICT (server_id) DO UPDATE SET
+        emoji_usage_enabled    = EXCLUDED.emoji_usage_enabled,
+        sticker_usage_enabled  = EXCLUDED.sticker_usage_enabled,
+        web_search_enabled     = EXCLUDED.web_search_enabled,
+        manage_message_enabled = EXCLUDED.manage_message_enabled,
+        thread_creation_enabled = EXCLUDED.thread_creation_enabled,
+        imagegen_enabled       = EXCLUDED.imagegen_enabled,
+        videogen_enabled       = EXCLUDED.videogen_enabled,
+        voice_message_enabled  = EXCLUDED.voice_message_enabled,
+        tool_use_enabled       = EXCLUDED.tool_use_enabled,
+        updated_at             = NOW()
+    `;
+  }
+
+  private async sqlUpsertNovelaiImagegenConfigs(serverId: number, row: ServerNovelaiImagegenConfigsRow): Promise<void> {
+    await sql`
+      INSERT INTO server_novelai_imagegen_configs (
+        server_id, nai_preset_name, nai_style_tags, nai_negative_tags,
+        nai_sampler, nai_steps, nai_scale, nai_noise_schedule, nai_cfg_rescale,
+        nai_diffusion_model_id
+      ) VALUES (
+        ${serverId}, ${row.nai_preset_name}, ${sql.array(row.nai_style_tags)},
+        ${sql.array(row.nai_negative_tags)}, ${row.nai_sampler}, ${row.nai_steps},
+        ${row.nai_scale}, ${row.nai_noise_schedule}, ${row.nai_cfg_rescale},
+        ${row.nai_diffusion_model_id}
+      )
+      ON CONFLICT (server_id) DO UPDATE SET
+        nai_preset_name        = EXCLUDED.nai_preset_name,
+        nai_style_tags         = EXCLUDED.nai_style_tags,
+        nai_negative_tags      = EXCLUDED.nai_negative_tags,
+        nai_sampler            = EXCLUDED.nai_sampler,
+        nai_steps              = EXCLUDED.nai_steps,
+        nai_scale              = EXCLUDED.nai_scale,
+        nai_noise_schedule     = EXCLUDED.nai_noise_schedule,
+        nai_cfg_rescale        = EXCLUDED.nai_cfg_rescale,
+        nai_diffusion_model_id = EXCLUDED.nai_diffusion_model_id,
+        updated_at             = NOW()
+    `;
+  }
+
+  private async sqlUpsertNsfwConfigs(serverId: number, row: ServerNsfwConfigsRow): Promise<void> {
+    await sql`
+      INSERT INTO server_nsfw_configs (
+        server_id, uncensor_injection_enabled, uncensor_unicode_space_enabled, uncensor_sanitize_enabled
+      ) VALUES (
+        ${serverId}, ${row.uncensor_injection_enabled}, ${row.uncensor_unicode_space_enabled},
+        ${row.uncensor_sanitize_enabled}
+      )
+      ON CONFLICT (server_id) DO UPDATE SET
+        uncensor_injection_enabled     = EXCLUDED.uncensor_injection_enabled,
+        uncensor_unicode_space_enabled = EXCLUDED.uncensor_unicode_space_enabled,
+        uncensor_sanitize_enabled      = EXCLUDED.uncensor_sanitize_enabled,
+        updated_at                     = NOW()
+    `;
+  }
+
+  private async sqlUpsertSpeechConfigs(serverId: number, row: ServerSpeechConfigsRow): Promise<void> {
+    await sql`
+      INSERT INTO server_speech_configs (
+        server_id, voice_transcript_chat_mode, chatterbox_turbo_enabled,
+        chatterbox_cfg_weight, chatterbox_exaggeration
+      ) VALUES (
+        ${serverId}, ${row.voice_transcript_chat_mode}, ${row.chatterbox_turbo_enabled},
+        ${row.chatterbox_cfg_weight}, ${row.chatterbox_exaggeration}
+      )
+      ON CONFLICT (server_id) DO UPDATE SET
+        voice_transcript_chat_mode = EXCLUDED.voice_transcript_chat_mode,
+        chatterbox_turbo_enabled   = EXCLUDED.chatterbox_turbo_enabled,
+        chatterbox_cfg_weight      = EXCLUDED.chatterbox_cfg_weight,
+        chatterbox_exaggeration    = EXCLUDED.chatterbox_exaggeration,
+        updated_at                 = NOW()
+    `;
+  }
+
+  private async sqlUpsertByokConfigs(serverId: number, row: ServerByokConfigsRow): Promise<void> {
+    await sql`
+      INSERT INTO server_byok_configs (server_id, user_byok_mode)
+      VALUES (${serverId}, ${row.user_byok_mode})
+      ON CONFLICT (server_id) DO UPDATE SET
+        user_byok_mode = EXCLUDED.user_byok_mode,
+        updated_at     = NOW()
+    `;
   }
 
   private async updateTomoriConfigRow(

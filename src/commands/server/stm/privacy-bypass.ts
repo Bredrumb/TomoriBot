@@ -61,10 +61,10 @@ export async function execute(
 
     // 4. Persist to the database
     const [updatedRow] = await sql`
-      UPDATE tomori_configs
+      UPDATE server_channel_scope_configs
       SET stm_privacy_bypass = ${newValue}
       WHERE server_id = ${tomoriState.server_id}
-      RETURNING *
+      RETURNING server_id
     `;
 
     if (!updatedRow) {
@@ -76,7 +76,7 @@ export async function execute(
         metadata: {
           command: "server stm privacy-bypass",
           newValue,
-          targetTable: "tomori_configs",
+          targetTable: "server_channel_scope_configs",
         },
       };
       await log.error(

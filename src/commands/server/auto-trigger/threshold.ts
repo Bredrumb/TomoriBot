@@ -6,7 +6,7 @@
 } from "discord.js";
 import { sql } from "@/utils/db/client";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { tomoriConfigSchema, tomoriSchema } from "@/types/db/schema";
+import { tomoriSchema } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -123,11 +123,11 @@ Positive values use a shared fixed or random range.
     // Update config and reset the shared cycle atomically.
     const { updatedConfigRow, updatedTomoriRow } = await sql.transaction(async (tx) => {
       const [configRow] = await tx`
-          UPDATE tomori_configs
+          UPDATE server_auto_trigger_configs
           SET autoch_threshold = ${threshold},
               autoch_threshold_max = ${maxThreshold}
           WHERE server_id = ${tomoriState.server_id}
-          RETURNING *
+          RETURNING server_id
         `;
 
       const [tomoriRow] = await tx`
@@ -155,7 +155,7 @@ Positive values use a shared fixed or random range.
           threshold,
           maxThreshold,
           nextTarget,
-          targetTables: ["tomori_configs", "tomoris"],
+          targetTables: ["server_auto_trigger_configs", "tomoris"],
         },
       };
       await log.error(
@@ -163,28 +163,6 @@ Positive values use a shared fixed or random range.
         new Error("Database update returned no rows"),
         context,
       );
-
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    // Validate the returned data (Rules #3, #5)
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedConfigRow);
-    if (!validatedConfig.success) {
-      const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
-        serverId: tomoriState.server_id,
-        errorType: "SchemaValidationError",
-        metadata: {
-          command: "server auto-trigger threshold",
-          validationErrors: validatedConfig.error.flatten(),
-        },
-      };
-      await log.error("Failed to validate updated config", validatedConfig.error, context);
 
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.update_failed_title",

@@ -93,10 +93,10 @@ export async function execute(
     }
 
     const [updatedRow] = await sql`
-			UPDATE tomori_configs
+			UPDATE server_chat_configs
 			SET message_fetch_limit = ${limit}
 			WHERE server_id = ${tomoriState.server_id}
-			RETURNING *
+			RETURNING server_id
 		`;
 
     if (!updatedRow) {
@@ -108,7 +108,7 @@ export async function execute(
         metadata: {
           command: "config message-fetch-limit limit",
           limit,
-          targetTable: "tomori_configs",
+          targetTable: "server_chat_configs",
         },
       };
       await log.error(

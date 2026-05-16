@@ -759,6 +759,7 @@ export class UserRepository implements IRepository<UserExportShape> {
 
   /**
    * Imports a previously exported user settings shape, merging into the existing row.
+   * Dual-writes: updates users table AND upserts into user_personalization_configs (Stage A).
    * Creates the user row first if it doesn't exist.
    *
    * @param ownerId - Discord user snowflake
@@ -776,22 +777,30 @@ export class UserRepository implements IRepository<UserExportShape> {
     const parsed = validated.data;
 
     try {
-      // Ensure the user row exists before updating
       await this.registerUserRow(userDiscId, parsed.user_nickname, parsed.language_pref);
 
       const user = await this.loadByDiscordId(userDiscId);
       if (!user?.user_id) return false;
 
-      await this.updateUserRow(user.user_id, {
-        user_nickname: parsed.user_nickname,
-        language_pref: parsed.language_pref,
-        impersonation_prompt: parsed.impersonation_prompt ?? undefined,
-        privacy_level: parsed.privacy_level,
-        personal_dtm: parsed.personal_dtm,
-        shortterm_cache_crossserver_opt_in: parsed.shortterm_cache_crossserver_opt_in,
-        nai_char_tags: parsed.nai_char_tags,
-        nai_char_ref_url: parsed.nai_char_ref_url ?? undefined,
-      });
+      await Promise.all([
+        this.updateUserRow(user.user_id, {
+          user_nickname: parsed.user_nickname,
+          language_pref: parsed.language_pref,
+          impersonation_prompt: parsed.impersonation_prompt ?? undefined,
+          privacy_level: parsed.privacy_level,
+          personal_dtm: parsed.personal_dtm,
+          shortterm_cache_crossserver_opt_in: parsed.shortterm_cache_crossserver_opt_in,
+          nai_char_tags: parsed.nai_char_tags,
+          nai_char_ref_url: parsed.nai_char_ref_url ?? undefined,
+        }),
+        this.sqlUpsertUserPersonalizationConfigs(user.user_id, {
+          shortterm_cache_crossserver_opt_in: parsed.shortterm_cache_crossserver_opt_in ?? false,
+          nai_char_tags: parsed.nai_char_tags,
+          nai_char_ref_url: parsed.nai_char_ref_url ?? null,
+          impersonation_prompt: parsed.impersonation_prompt ?? null,
+          personal_dtm: parsed.personal_dtm,
+        }),
+      ]);
 
       invalidateUserCache(userDiscId);
       return true;
@@ -799,6 +808,37 @@ export class UserRepository implements IRepository<UserExportShape> {
       log.error(`UserRepository.fromExportShape: write failed for ${userDiscId}:`, error);
       return false;
     }
+  }
+
+  // ── Stage A: user_personalization_configs upsert ──────────────────────────
+
+  private async sqlUpsertUserPersonalizationConfigs(
+    userId: number,
+    data: {
+      shortterm_cache_crossserver_opt_in: boolean;
+      nai_char_tags: string[];
+      nai_char_ref_url: string | null | undefined;
+      impersonation_prompt: string | null | undefined;
+      personal_dtm: "off" | "follow" | "on" | undefined;
+    },
+  ): Promise<void> {
+    await sql`
+      INSERT INTO user_personalization_configs (
+        user_id, shortterm_cache_crossserver_opt_in, nai_char_tags,
+        nai_char_ref_url, impersonation_prompt, personal_dtm
+      ) VALUES (
+        ${userId}, ${data.shortterm_cache_crossserver_opt_in}, ${sql.array(data.nai_char_tags)},
+        ${data.nai_char_ref_url ?? null}, ${data.impersonation_prompt ?? null},
+        ${data.personal_dtm ?? "follow"}
+      )
+      ON CONFLICT (user_id) DO UPDATE SET
+        shortterm_cache_crossserver_opt_in = EXCLUDED.shortterm_cache_crossserver_opt_in,
+        nai_char_tags                      = EXCLUDED.nai_char_tags,
+        nai_char_ref_url                   = EXCLUDED.nai_char_ref_url,
+        impersonation_prompt               = EXCLUDED.impersonation_prompt,
+        personal_dtm                       = EXCLUDED.personal_dtm,
+        updated_at                         = NOW()
+    `;
   }
 
   private async registerUserRow(userDiscId: string, displayName: string, language = "en"): Promise<UserRow | null> {
