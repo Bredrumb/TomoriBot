@@ -26,7 +26,7 @@ import {
   type UserSavedProviderConfigUpsert,
   type VideoGenerationModelRow,
 } from "@/types/db/schema";
-import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import type { OpenRouterModelScope } from "./LlmModelRepository";

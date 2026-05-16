@@ -21,7 +21,7 @@ import {
 } from "@/types/db/dataExport";
 import { validateMemoryContent } from "@/utils/misc/memoryLimits";
 import { validateTomoriConfigFields } from "@/utils/db/sqlSecurity";
-import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 
 export type ImportFileType =

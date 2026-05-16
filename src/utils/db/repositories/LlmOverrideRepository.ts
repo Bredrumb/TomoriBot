@@ -9,7 +9,7 @@
 import type { FallbackModelRef, LlmRow } from "@/types/db/schema";
 import { invalidateAllChannelLlmCacheForServer, invalidateChannelLlmCache } from "@/utils/cache/channelLlmCacheStore";
 import { getCachedLLM } from "@/utils/cache/llmCache";
-import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 

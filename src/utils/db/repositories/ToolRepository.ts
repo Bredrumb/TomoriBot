@@ -11,7 +11,7 @@ import type { GuildMcpServerRow } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import { keyManager } from "@/utils/security/keyManager";
-import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import { invalidateGuildMcpConfigCache } from "@/utils/cache/guildMcpConfigCache";
 import type { IRepository } from "./IRepository";
 

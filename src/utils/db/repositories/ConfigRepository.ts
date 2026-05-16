@@ -11,7 +11,7 @@ import type { ErrorContext, TomoriConfigRow, NaiPresetRow } from "@/types/db/sch
 import { tomoriConfigSchema, tomoriSchema, naiPresetSchema } from "@/types/db/schema";
 import type { TomoriPresetRow, SystemPromptPresetRow } from "@/types/db/schema";
 import type { FallbackModelRef } from "@/types/db/schema";
-import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import type { SqlParameterArray } from "@/types/db/sqlOperations";
 import { sql } from "@/utils/db/client";
 import { validateTomoriConfigFields } from "@/utils/db/sqlSecurity";

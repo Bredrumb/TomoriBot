@@ -29,7 +29,7 @@ import {
 import type { SqlParameterArray } from "@/types/db/sqlOperations";
 import { DatabaseUnavailableError } from "@/types/errors";
 import { getCachedLLM } from "@/utils/cache/llmCache";
-import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import { sql, withCachedPlanRetry } from "@/utils/db/client";
 import { validateTomoriFields } from "@/utils/db/sqlSecurity";
 import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";

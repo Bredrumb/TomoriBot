@@ -10,7 +10,7 @@
  */
 import type { ErrorContext, ServerMemoryRow } from "@/types/db/schema";
 import { serverMemorySchema } from "@/types/db/schema";
-import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import { sql } from "@/utils/db/client";
 import { type MemoryValidationResult, getMemoryLimits, validateMemoryContent } from "@/utils/misc/memoryLimits";
 import { log } from "@/utils/misc/logger";
