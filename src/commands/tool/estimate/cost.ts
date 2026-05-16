@@ -369,7 +369,6 @@ function estimateToolSchemaTokens(): number {
         manage_message_enabled: true,
         imagegen_enabled: true,
         videogen_enabled: true,
-        nai_exclusive_imggen: false,
         voice_message_enabled: true,
         thread_creation_enabled: true,
       },

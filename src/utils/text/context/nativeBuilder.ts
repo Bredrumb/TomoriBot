@@ -97,7 +97,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
               manage_message_enabled: tomoriConfig.manage_message_enabled,
               imagegen_enabled: tomoriConfig.imagegen_enabled,
               videogen_enabled: tomoriConfig.videogen_enabled,
-              nai_exclusive_imggen: tomoriConfig.nai_exclusive_imggen,
               voice_message_enabled: tomoriConfig.voice_message_enabled,
               thread_creation_enabled: tomoriConfig.thread_creation_enabled,
             },

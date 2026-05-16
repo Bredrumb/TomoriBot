@@ -147,7 +147,6 @@ export const serverConfigExportSchema = z.object({
   nai_scale: z.number().min(0.0).max(10.0).nullable().optional(),
   nai_noise_schedule: z.string().nullable().optional(),
   nai_cfg_rescale: z.number().min(0.0).max(1.0).nullable().optional(),
-  nai_exclusive_imggen: z.boolean().default(false),
   nai_preset_name: z.string().nullable().optional(),
   // Behavior settings (added since initial schema)
   cascade_limit: z.number().int().min(0).max(10).optional(),

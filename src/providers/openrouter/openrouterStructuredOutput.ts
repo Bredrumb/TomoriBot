@@ -214,7 +214,7 @@ export async function callOpenrouterStructuredOutput(
       },
     ];
 
-    const rawExpressionSchema = buildExpressionResponseSchema(images.length);
+    const rawExpressionSchema = buildExpressionResponseSchema();
     const responseSchema = request.model.startsWith("anthropic/")
       ? stripAnthropicUnsupportedConstraints(rawExpressionSchema)
       : rawExpressionSchema;

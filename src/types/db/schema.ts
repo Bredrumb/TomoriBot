@@ -520,7 +520,6 @@ export const tomoriConfigSchema = z.object({
     (value) => normalizeFallbackModelRefs(value),
     fallbackModelRefSchema.array().default([]),
   ),
-  nai_exclusive_imggen: z.boolean().default(false), // Added March 2026 - Hides standard generate_image when NovelAI opt key is present
   other_model_codename: z.string().nullable().optional(), // DEPRECATED Phase 3 rollout - Legacy other-model side-channel; retire after custom endpoint migration lands
   other_model_capabilities: z.preprocess(
     (value) => (typeof value === "string" ? JSON.parse(value) : value),

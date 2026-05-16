@@ -24,7 +24,7 @@ import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { UserRow } from "@/types/db/schema";
 
-const MODAL_CUSTOM_ID = "novelai_image_params_modal";
+const MODAL_CUSTOM_ID = "novelai_image_parameters_modal";
 const SAMPLER_INPUT_ID = "nai_sampler";
 const STEPS_INPUT_ID = "nai_steps";
 const SCALE_INPUT_ID = "nai_scale";
@@ -41,27 +41,27 @@ type ValidationResult<T> =
     };
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
-  subcommand.setName("params").setDescription(localizer("en-US", "commands.novelai.image.params.description"));
+  subcommand.setName("parameters").setDescription(localizer("en-US", "commands.novelai.image.parameters.description"));
 
 function getSamplerLabelKey(sampler: (typeof NAI_IMAGE_SAMPLERS)[number]): string {
   switch (sampler) {
     case "k_euler_ancestral":
-      return "commands.novelai.image.params.sampler_option_k_euler_ancestral";
+      return "commands.novelai.image.parameters.sampler_option_k_euler_ancestral";
     case "k_euler":
-      return "commands.novelai.image.params.sampler_option_k_euler";
+      return "commands.novelai.image.parameters.sampler_option_k_euler";
     case "k_dpmpp_2s_ancestral":
-      return "commands.novelai.image.params.sampler_option_k_dpmpp_2s_ancestral";
+      return "commands.novelai.image.parameters.sampler_option_k_dpmpp_2s_ancestral";
     case "k_dpmpp_2m_sde":
-      return "commands.novelai.image.params.sampler_option_k_dpmpp_2m_sde";
+      return "commands.novelai.image.parameters.sampler_option_k_dpmpp_2m_sde";
     case "k_dpmpp_2m":
-      return "commands.novelai.image.params.sampler_option_k_dpmpp_2m";
+      return "commands.novelai.image.parameters.sampler_option_k_dpmpp_2m";
     case "k_dpmpp_sde":
-      return "commands.novelai.image.params.sampler_option_k_dpmpp_sde";
+      return "commands.novelai.image.parameters.sampler_option_k_dpmpp_sde";
   }
 }
 
 function appendDefaultSuffix(locale: string, label: string): string {
-  return `${label}${localizer(locale, "commands.novelai.image.params.option_default_suffix")}`;
+  return `${label}${localizer(locale, "commands.novelai.image.parameters.option_default_suffix")}`;
 }
 
 function createSamplerOptions(locale: string): SelectOption[] {
@@ -76,22 +76,22 @@ function createSamplerOptions(locale: string): SelectOption[] {
 
 function getSamplerPlaceholder(locale: string, currentSampler: string | null | undefined): string {
   if (currentSampler) {
-    return localizer(locale, "commands.novelai.image.params.sampler_placeholder_current", {
+    return localizer(locale, "commands.novelai.image.parameters.sampler_placeholder_current", {
       sampler: currentSampler,
     });
   }
 
-  return localizer(locale, "commands.novelai.image.params.sampler_placeholder_default");
+  return localizer(locale, "commands.novelai.image.parameters.sampler_placeholder_default");
 }
 
 function getNoiseScheduleLabelKey(noiseSchedule: (typeof NAI_IMAGE_NOISE_SCHEDULES)[number]): string {
   switch (noiseSchedule) {
     case "karras":
-      return "commands.novelai.image.params.noise_schedule_option_karras";
+      return "commands.novelai.image.parameters.noise_schedule_option_karras";
     case "exponential":
-      return "commands.novelai.image.params.noise_schedule_option_exponential";
+      return "commands.novelai.image.parameters.noise_schedule_option_exponential";
     case "polyexponential":
-      return "commands.novelai.image.params.noise_schedule_option_polyexponential";
+      return "commands.novelai.image.parameters.noise_schedule_option_polyexponential";
   }
 }
 
@@ -107,12 +107,12 @@ function createNoiseScheduleOptions(locale: string): SelectOption[] {
 
 function getNoiseSchedulePlaceholder(locale: string, currentNoiseSchedule: string | null | undefined): string {
   if (currentNoiseSchedule) {
-    return localizer(locale, "commands.novelai.image.params.noise_schedule_placeholder_current", {
+    return localizer(locale, "commands.novelai.image.parameters.noise_schedule_placeholder_current", {
       noise_schedule: currentNoiseSchedule,
     });
   }
 
-  return localizer(locale, "commands.novelai.image.params.noise_schedule_placeholder_default");
+  return localizer(locale, "commands.novelai.image.parameters.noise_schedule_placeholder_default");
 }
 
 function parseOptionalInteger(
@@ -218,8 +218,8 @@ function resolveSamplerSelection(
   return parseOptionalEnum(
     trimmed,
     NAI_IMAGE_SAMPLERS,
-    "commands.novelai.image.params.invalid_sampler_title",
-    "commands.novelai.image.params.invalid_sampler_description",
+    "commands.novelai.image.parameters.invalid_sampler_title",
+    "commands.novelai.image.parameters.invalid_sampler_description",
   );
 }
 
@@ -245,8 +245,8 @@ function resolveNoiseScheduleSelection(
   return parseOptionalEnum(
     trimmed,
     NAI_IMAGE_NOISE_SCHEDULES,
-    "commands.novelai.image.params.invalid_noise_schedule_title",
-    "commands.novelai.image.params.invalid_noise_schedule_description",
+    "commands.novelai.image.parameters.invalid_noise_schedule_title",
+    "commands.novelai.image.parameters.invalid_noise_schedule_description",
   );
 }
 
@@ -289,21 +289,21 @@ export async function execute(
   try {
     const modalResult = await promptWithRawModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
-      modalTitleKey: "commands.novelai.image.params.modal_title",
+      modalTitleKey: "commands.novelai.image.parameters.modal_title",
       components: [
         {
           customId: SAMPLER_INPUT_ID,
-          labelKey: "commands.novelai.image.params.sampler_label",
-          descriptionKey: "commands.novelai.image.params.sampler_description",
+          labelKey: "commands.novelai.image.parameters.sampler_label",
+          descriptionKey: "commands.novelai.image.parameters.sampler_description",
           placeholder: getSamplerPlaceholder(locale, tomoriState.config.nai_sampler),
           required: false,
           options: createSamplerOptions(locale),
         },
         {
           customId: STEPS_INPUT_ID,
-          labelKey: "commands.novelai.image.params.steps_label",
-          descriptionKey: "commands.novelai.image.params.steps_description",
-          placeholder: "commands.novelai.image.params.steps_placeholder",
+          labelKey: "commands.novelai.image.parameters.steps_label",
+          descriptionKey: "commands.novelai.image.parameters.steps_description",
+          placeholder: "commands.novelai.image.parameters.steps_placeholder",
           style: TextInputStyle.Short,
           required: false,
           maxLength: 2,
@@ -311,9 +311,9 @@ export async function execute(
         },
         {
           customId: SCALE_INPUT_ID,
-          labelKey: "commands.novelai.image.params.scale_label",
-          descriptionKey: "commands.novelai.image.params.scale_description",
-          placeholder: "commands.novelai.image.params.scale_placeholder",
+          labelKey: "commands.novelai.image.parameters.scale_label",
+          descriptionKey: "commands.novelai.image.parameters.scale_description",
+          placeholder: "commands.novelai.image.parameters.scale_placeholder",
           style: TextInputStyle.Short,
           required: false,
           maxLength: 8,
@@ -321,17 +321,17 @@ export async function execute(
         },
         {
           customId: NOISE_SCHEDULE_INPUT_ID,
-          labelKey: "commands.novelai.image.params.noise_schedule_label",
-          descriptionKey: "commands.novelai.image.params.noise_schedule_description",
+          labelKey: "commands.novelai.image.parameters.noise_schedule_label",
+          descriptionKey: "commands.novelai.image.parameters.noise_schedule_description",
           placeholder: getNoiseSchedulePlaceholder(locale, tomoriState.config.nai_noise_schedule),
           required: false,
           options: createNoiseScheduleOptions(locale),
         },
         {
           customId: CFG_RESCALE_INPUT_ID,
-          labelKey: "commands.novelai.image.params.cfg_rescale_label",
-          descriptionKey: "commands.novelai.image.params.cfg_rescale_description",
-          placeholder: "commands.novelai.image.params.cfg_rescale_placeholder",
+          labelKey: "commands.novelai.image.parameters.cfg_rescale_label",
+          descriptionKey: "commands.novelai.image.parameters.cfg_rescale_description",
+          placeholder: "commands.novelai.image.parameters.cfg_rescale_placeholder",
           style: TextInputStyle.Short,
           required: false,
           maxLength: 8,
@@ -367,8 +367,8 @@ export async function execute(
       stepsInput,
       1,
       50,
-      "commands.novelai.image.params.invalid_steps_title",
-      "commands.novelai.image.params.invalid_steps_description",
+      "commands.novelai.image.parameters.invalid_steps_title",
+      "commands.novelai.image.parameters.invalid_steps_description",
     );
     if (!stepsValidation.success) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -384,8 +384,8 @@ export async function execute(
       scaleInput,
       0,
       10,
-      "commands.novelai.image.params.invalid_scale_title",
-      "commands.novelai.image.params.invalid_scale_description",
+      "commands.novelai.image.parameters.invalid_scale_title",
+      "commands.novelai.image.parameters.invalid_scale_description",
     );
     if (!scaleValidation.success) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -415,8 +415,8 @@ export async function execute(
       cfgRescaleInput,
       0,
       1,
-      "commands.novelai.image.params.invalid_cfg_rescale_title",
-      "commands.novelai.image.params.invalid_cfg_rescale_description",
+      "commands.novelai.image.parameters.invalid_cfg_rescale_title",
+      "commands.novelai.image.parameters.invalid_cfg_rescale_description",
     );
     if (!cfgRescaleValidation.success) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -460,8 +460,8 @@ export async function execute(
     });
 
     await replyInfoEmbed(modalSubmitInteraction, locale, {
-      titleKey: "commands.novelai.image.params.success_title",
-      descriptionKey: "commands.novelai.image.params.success_description",
+      titleKey: "commands.novelai.image.parameters.success_title",
+      descriptionKey: "commands.novelai.image.parameters.success_description",
       descriptionVars: {
         sampler: effectiveParams.sampler,
         steps: effectiveParams.steps.toString(),

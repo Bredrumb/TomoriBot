@@ -290,7 +290,6 @@ export default {
       field_stm_privacy_bypass: `STMプライバシーバイパス`,
       field_voice_messages: `音声メッセージ`,
       field_voice_transcript_mode: `音声文字起こしチャットモード`,
-      field_nai_exclusive_imggen: `NAI専用画像生成`,
       field_context_note: `作者注`,
       field_context_note_depth: `注の深さ`,
       field_context_note_not_set: `*(未設定)*`,

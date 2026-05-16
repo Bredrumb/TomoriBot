@@ -324,11 +324,6 @@ export async function showServerConfigStatus(
         value: formatBooleanLocalized(config.voice_transcript_chat_mode ?? true, locale),
         inline: true,
       },
-      {
-        nameKey: "commands.tool.status.field_nai_exclusive_imggen",
-        value: formatBooleanLocalized(config.nai_exclusive_imggen ?? false, locale),
-        inline: true,
-      },
     ],
   };
 

@@ -1,6 +1,7 @@
 import type { SQL } from "bun";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { runMigrations } from "@/db/migrationRunner";
 import { sql as defaultSql } from "@/utils/db/client";
 import { detectRagAvailability } from "@/utils/db/ragAvailability";
 import { splitSqlStatements } from "@/utils/db/sqlSplitter";
@@ -83,6 +84,10 @@ export async function initializeDatabase(options: InitializeDatabaseOptions = {}
 
       await executeSqlFile(client, seedPath);
       log.success("PostgreSQL database seed verified");
+
+      // Run pending numbered migrations (src/db/migrations/NNN_*.sql) after the
+      // static schema files so Phase 6+ schema changes apply in a controlled order.
+      await runMigrations();
 
       return {
         ragInitialized: ragAvailable,

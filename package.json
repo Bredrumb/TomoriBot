@@ -11,6 +11,8 @@
     "dev": "bun --watch src/index.ts",
     "watch": "bun build ./src/index.ts --outdir dist --target node --watch",
     "purge-commands": "bun run scripts/maintenance/purgeCommands.ts",
+    "db:migrate": "bun run scripts/db/migrate.ts",
+    "check-migrations": "bun run scripts/db/check-migrations.ts",
     "nuke-db": "bun run scripts/maintenance/nukeDb.ts",
     "backup": "bun run scripts/maintenance/backupData.ts --backup",
     "restore-backup": "bun run scripts/maintenance/backupData.ts --restore",
@@ -33,7 +35,7 @@
     "setup:tokenizers": "bun run scripts/maintenance/downloadTokenizers.ts",
     "//audit": "audit:clean runs bun audit --audit-level=high — only high/critical advisories block the pipeline",
     "audit:clean": "bun run scripts/maintenance/auditClean.ts",
-    "validate:static": "bun run check && bun run lint && bun run check-locales && bun run check-schema && bun run audit:clean",
+    "validate:static": "bun run check && bun run lint && bun run check-locales && bun run check-schema && bun run check-migrations && bun run audit:clean",
     "validate:lifecycle": "bun scripts/maintenance/validateLifecycle.ts",
     "vl-db": "bun run validate:lifecycle",
     "vl": "bun run validate:static"

@@ -849,29 +849,6 @@ EXCEPTION
         RAISE NOTICE 'Phase 1 Google opt-key backfill skipped: required table missing';
 END $$;
 
-DO $$
-DECLARE
-    updated_count INTEGER := 0;
-BEGIN
-    UPDATE tomori_configs tc
-    SET diffusion_model_id = NULL
-    WHERE COALESCE(tc.nai_exclusive_imggen, false) = true
-      AND tc.diffusion_model_id IS NOT NULL
-      AND EXISTS (
-          SELECT 1
-          FROM saved_provider_configs spc
-          WHERE spc.server_id = tc.server_id
-            AND spc.provider = 'novelai'
-      );
-
-    GET DIAGNOSTICS updated_count = ROW_COUNT;
-    IF updated_count > 0 THEN
-        RAISE NOTICE 'Phase 1 backfill retired nai_exclusive_imggen for % config row(s)', updated_count;
-    END IF;
-EXCEPTION
-    WHEN undefined_table THEN
-        RAISE NOTICE 'Phase 1 nai_exclusive_imggen retirement skipped: required table missing';
-END $$;
 
 -- Ensure all required columns exist in image_diffusion_models table
 SELECT add_column_if_not_exists('image_diffusion_models', 'is_scoped_registration', 'BOOLEAN', 'false');

@@ -209,9 +209,7 @@ async function resolveSceneImageBackendAvailability(params: {
     hasNaiImageSlot &&
     (hasNovelAiOptKey || (params.provider === "novelai" && Boolean(params.tomoriState.config.api_key)));
   const currentProviderAvailable =
-    params.provider !== "novelai" &&
-    Boolean(params.tomoriState.config.diffusion_model_id) &&
-    !(hasNovelAiOptKey && params.tomoriState.config.nai_exclusive_imggen);
+    params.provider !== "novelai" && Boolean(params.tomoriState.config.diffusion_model_id);
   const defaultBackend = currentProviderAvailable ? "current_provider" : novelAiAvailable ? "novelai" : null;
 
   return {

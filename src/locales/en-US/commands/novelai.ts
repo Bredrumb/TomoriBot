@@ -170,9 +170,9 @@ export default {
 {error}
 \`\`\``,
       },
-      params: {
+      parameters: {
         description: `Override NovelAI image generation sampler and quality settings for this server.`,
-        modal_title: `NovelAI Image Generation Params`,
+        modal_title: `NovelAI Image Generation Parameters`,
         sampler_label: `Sampler`,
         sampler_description: `Choose a sampler to change it. Leave it unselected to keep the current value.`,
         sampler_placeholder_current: `Current override: {sampler}`,
@@ -210,7 +210,7 @@ export default {
         invalid_noise_schedule_description: `Noise schedule must be one of: {options}.`,
         invalid_cfg_rescale_title: `Invalid Prompt Guidance Rescale`,
         invalid_cfg_rescale_description: `Prompt Guidance Rescale must be a number between {min} and {max}.`,
-        success_title: `Image Generation Params Updated`,
+        success_title: `Image Generation Parameters Updated`,
         success_description: `Effective NovelAI image generation parameters for this server:
 \`\`\`
 Sampler: {sampler}

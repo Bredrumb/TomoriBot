@@ -2130,9 +2130,6 @@ SELECT add_column_if_not_exists('tomori_configs', 'nai_preset_name', 'TEXT');
 SELECT add_column_if_not_exists('tomori_configs', 'fallback_llm_ids', 'JSONB', '''[]''::JSONB');
 SELECT add_column_if_not_exists('tomori_configs', 'fallback_model_refs', 'JSONB', '''[]''::JSONB');
 
--- When true, hides the standard generate_image tool so only generate_image_nai is available (March 2026)
-SELECT add_column_if_not_exists('tomori_configs', 'nai_exclusive_imggen', 'BOOLEAN', 'false');
-
 -- Server-wide NovelAI image prompt tag overrides (March 2026)
 -- Style tags replace the old hardcoded quality tag list in generate_image_nai.
 SELECT add_column_if_not_exists(

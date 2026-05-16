@@ -290,7 +290,6 @@ I have built-in features to help reduce costs from abusers or spammers in your s
       field_stm_privacy_bypass: `STM Privacy Bypass`,
       field_voice_messages: `Voice Messages`,
       field_voice_transcript_mode: `Voice Transcript Chat Mode`,
-      field_nai_exclusive_imggen: `NAI-Only Image Gen`,
       field_context_note: `Author's Note`,
       field_context_note_depth: `Note Depth`,
       field_context_note_not_set: `*(Not set)*`,

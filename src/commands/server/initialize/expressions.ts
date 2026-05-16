@@ -108,7 +108,7 @@ ${getAllEmotionKeys().join(", ")}
 Guidelines:
 - Focus on the PRIMARY emotion conveyed by the visual design
 - "neutral" is for emotionally ambiguous or abstract designs
-- Descriptions should be ONE concise sentence describing what you see
+- Descriptions should be ONE concise sentence (10-200 characters) describing what you see
 - Match emoji/sticker names case-insensitively`;
 }
 

@@ -60,30 +60,21 @@ export function buildPresetResponseSchema() {
         description: `Array containing exactly 6 items describing different facets of the character, in this exact order: 1) {bot}'s Description (core identity and essence), 2) {bot}'s Appearance (physical traits and style), 3) {bot}'s Personality (personality traits, comma-separated), 4) {bot}'s Likes (interests and preferences), 5) {bot}'s Dislikes (aversions and pet peeves), 6) {bot}'s Behavioral Quirks (unique mannerisms and patterns). Each item maximum ${maxStringLength} characters, in this specific format per array item: "{bot}'s Description: "`,
         items: {
           type: "string" as const,
-          maxLength: maxStringLength,
         },
-        minItems: 6,
-        maxItems: 6,
       },
       sample_dialogues_in: {
         type: "array" as const,
         description: `Array of exactly 5 example user messages. MUST include these 3 guided scenarios in order: 1) Self-introduction request, 2) Emotional/personal scenario, 3) Practical/functional scenario. Then add 2 free dialogue scenarios that showcase unique character traits. Do NOT prepend with speaker names. Each message maximum ${maxStringLength} characters.`,
         items: {
           type: "string" as const,
-          maxLength: maxStringLength,
         },
-        minItems: 5,
-        maxItems: 5,
       },
       sample_dialogues_out: {
         type: "array" as const,
         description: `Array of exactly 5 character responses paired with sample_dialogues_in. Should reflect the character's speaking style, personality, and demonstrate their full range across the 3 guided scenarios and 2 free scenarios. Do NOT prepend with speaker names. Each response maximum ${maxStringLength} characters.`,
         items: {
           type: "string" as const,
-          maxLength: maxStringLength,
         },
-        minItems: 5,
-        maxItems: 5,
       },
     },
     required: ["attribute_list", "sample_dialogues_in", "sample_dialogues_out"],

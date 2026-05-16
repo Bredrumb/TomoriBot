@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5e -->
+<!-- ARCH-ALIGNMENT: phase-6-step-16.5 -->
 
 # 5. Database Schema and Data Model
 
@@ -240,30 +240,81 @@ Encrypted columns are stored as `BYTEA` with key version tracking:
 - `saved_provider_configs.video_model_id` mirrors the last saved video model for that provider so capability-specific cleanup and future migrations can reason about prior selections; Phase 1 provider switching does not automatically restore video model slots.
 - `saved_provider_configs.provider` and `user_saved_provider_configs.provider` may now hold internal custom provider IDs (`custom:s<server_id>:<label>` / `custom:u<user_id>:<label>`) so labeled custom endpoints can coexist side-by-side without colliding with each other or with classic providers.
 
-## Migration Style
+## Migration System (Phase 6+)
 
-Schema is idempotent and startup-safe:
+### Overview
+
+TomoriBot has two complementary schema mechanisms:
+
+| Mechanism | File | Runs | Purpose |
+|---|---|---|---|
+| Static schema init | `schema.sql`, `schema_rag.sql`, `schema_stpreset.sql`, `seed.sql` | Every boot (idempotent) | Baseline tables, functions, seed data |
+| Migration runner | `src/db/migrations/NNN_*.sql` | Once per version (tracked) | Structural changes that cannot be idempotent (DROP, RENAME, table splits) |
+
+The migration runner (`src/db/migrationRunner.ts`) is called by `initializeDatabase.ts` after the static schema files have applied, so the base schema is always established before migrations run.
+
+Applied migrations are tracked in the `schema_migrations` table:
+
+```sql
+schema_migrations (
+  id         SERIAL      PRIMARY KEY,
+  name       TEXT        UNIQUE NOT NULL,   -- e.g. "002_split_tomori_configs"
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)
+```
+
+### File naming convention
+
+```
+src/db/migrations/
+  001_baseline.sql           ← marker migration (no executable SQL)
+  001_baseline.down.sql      ← paired rollback
+  002_split_tomori_configs.sql
+  002_split_tomori_configs.down.sql
+  ...
+```
+
+- Names must match `NNN_description.sql` (3-digit zero-padded version, lowercase, underscores).
+- Every up-migration **must** ship with a paired `.down.sql` rollback file.
+- `bun run check-migrations` (also part of `bun run vl`) verifies pairing and fails CI if any rollback is missing.
+
+### Running migrations manually
+
+```sh
+bun run db:migrate
+```
+
+The same runner fires automatically at bot startup, so manual invocation is only needed for deployment pipelines or troubleshooting.
+
+### Rollback discipline
+
+- Every migration ships with either a paired `.down.sql` that reverses the change in one transaction, or a documented "if this fails, here's how to recover" runbook in the migration's PR description.
+- For destructive migrations (`DROP COLUMN`, `DROP TABLE`): require a soak period of at least one release where the column/table is unused but still present, so rollback is a code revert rather than a data restore.
+- Forward-only migrations on shared tables are not acceptable — they turn every deployment into a one-way door.
+
+### When to use migrations vs. seed.sql
+
+Use **`seed.sql`** (idempotent, runs every boot) for:
+- Adding new columns with `add_column_if_not_exists`
+- Upserting lookup/reference data
+
+Use a **numbered migration** for:
+- `DROP COLUMN` / `DROP TABLE`
+- `ALTER TABLE ... RENAME`
+- Creating new tables that are part of a schema split
+- Any change that cannot be expressed idempotently
+
+### Static schema (idempotent baseline)
+
+The static files are startup-safe:
 
 - `CREATE TABLE IF NOT EXISTS`
-- helper functions like `add_column_if_not_exists` and `drop_column_if_exists`
-- guarded `DO $$ ... $$` blocks for conditional constraint/index/column changes
+- Helper functions: `add_column_if_not_exists`, `drop_column_if_exists`
+- Guarded `DO $$ ... $$` blocks for conditional constraint/index/column changes
 
 Startup schema execution is shared through `src/utils/db/initializeDatabase.ts`. The bot entry point and
 `bun run vl-db` both use this path, so fresh-install validation exercises the same schema, optional RAG schema,
 ST preset schema, and seed data load as runtime startup.
-
-### Adding Columns — Always Use `seed.sql`
-
-`seed.sql` runs on **every startup** during app initialization. This means any `add_column_if_not_exists` call placed there is automatically applied to existing databases on the next restart — no separate one-off migration script needed.
-
-**The rule:** whenever you add a column to any table, add the corresponding `add_column_if_not_exists` line to `seed.sql`. Group by table under a clearly labeled comment block (e.g. `-- Ensure all required columns exist in tomori_configs table`).
-
-```sql
--- Ensure all required columns exist in tomori_configs table
-SELECT add_column_if_not_exists('tomori_configs', 'my_new_flag', 'BOOLEAN', 'false');
-```
-
-One-off `scripts/maintenance/add*.ts` migration scripts are **not necessary** for column additions and should be avoided — they require manual execution and are easily forgotten. The `seed.sql` approach is self-applying and idempotent.
 
 ## Operational Notes
 

@@ -170,7 +170,7 @@ export default {
 {error}
 \`\`\``,
       },
-      params: {
+      parameters: {
         description: `このサーバー用にNovelAI画像生成のサンプラーと品質設定を上書きします。`,
         modal_title: `NovelAI画像生成パラメータ`,
         sampler_label: `サンプラー`,
