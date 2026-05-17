@@ -11,6 +11,7 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { storeVoiceSample } from "@/utils/storage/voiceSampleStorage";
+import { insertVoiceSample, updateVoiceSamplePath, deleteVoiceSample } from "@/utils/db/repositories/SpeechRepository";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 
@@ -247,12 +248,8 @@ export async function execute(
     const durationMs = Math.round(durationSecs * 1000);
 
     // Insert a placeholder row to reserve a sample_id, then update with the real storage reference.
-    const [insertedRow] = await sql<[{ sample_id: number }]>`
-      INSERT INTO voice_samples (server_id, name, file_path, ref_text, duration_ms)
-      VALUES (${serverId}, ${sampleName}, '', ${refText}, ${durationMs})
-      RETURNING sample_id
-    `;
-    if (!insertedRow) {
+    const sampleId = await insertVoiceSample(serverId, sampleName, refText, durationMs);
+    if (!sampleId) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",
@@ -260,15 +257,13 @@ export async function execute(
       });
       return;
     }
-
-    const sampleId = insertedRow.sample_id;
     const storedReference = await storeVoiceSample({
       serverId,
       sampleId,
       buffer: wavBuffer,
     });
     if (!storedReference) {
-      await sql`DELETE FROM voice_samples WHERE sample_id = ${sampleId}`.catch(() => {});
+      await deleteVoiceSample(sampleId).catch(() => {});
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",
@@ -278,11 +273,7 @@ export async function execute(
     }
 
     // Update the row with the resolved storage reference.
-    await sql`
-      UPDATE voice_samples
-      SET file_path = ${storedReference}
-      WHERE sample_id = ${sampleId}
-    `;
+    await updateVoiceSamplePath(sampleId, storedReference);
 
     const durationDisplay = durationSecs > 0 ? `${Math.floor(durationSecs)}s` : localizer(locale, "general.unknown");
 

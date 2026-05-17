@@ -77,6 +77,102 @@ export class PersonalMemoryRepository implements IRepository<PersonalMemoryExpor
 
   // ── writes ─────────────────────────────────────────────────────────────────
 
+  async edit(personalMemoryId: number, content: string, tags: string[] = []): Promise<boolean> {
+    try {
+      const [updated] = await sql`
+        UPDATE personal_memories
+        SET content = ${content}, tags = ${sql.array(tags)}, updated_at = NOW()
+        WHERE personal_memory_id = ${personalMemoryId}
+        RETURNING personal_memory_id
+      `;
+      return !!updated;
+    } catch (error) {
+      log.error(`Error editing personal memory ${personalMemoryId}:`, error);
+      return false;
+    }
+  }
+
+  async remove(personalMemoryId: number): Promise<boolean> {
+    try {
+      const [deleted] = await sql`
+        DELETE FROM personal_memories
+        WHERE personal_memory_id = ${personalMemoryId}
+        RETURNING personal_memory_id
+      `;
+      return !!deleted;
+    } catch (error) {
+      log.error(`Error removing personal memory ${personalMemoryId}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Delete a personal memory scoped to user + persona lineage.
+   * Used by the updateLongTermMemoryTool function call handler.
+   *
+   * @param memoryId         - Primary key of the personal memory
+   * @param userId           - Internal user DB ID
+   * @param personaLineageId - Persona lineage scope guard; lineage 0 also matches
+   * @returns Row with personal_memory_id and content, or null when not found
+   */
+  async removeByIdForUserAndLineage(
+    memoryId: number,
+    userId: number,
+    personaLineageId: number,
+  ): Promise<{ personal_memory_id: number; content: string } | null> {
+    const [row] = await sql`
+      DELETE FROM personal_memories
+      WHERE personal_memory_id = ${memoryId}
+        AND user_id = ${userId}
+        AND (
+          persona_lineage_id = ${personaLineageId}
+          OR persona_lineage_id = 0
+        )
+      RETURNING personal_memory_id, content
+    `;
+    return row
+      ? {
+          personal_memory_id: row.personal_memory_id as number,
+          content: row.content as string,
+        }
+      : null;
+  }
+
+  /**
+   * Update a personal memory scoped to user + persona lineage.
+   * Used by the updateLongTermMemoryTool function call handler.
+   *
+   * @param memoryId         - Primary key of the personal memory
+   * @param content          - New memory content
+   * @param userId           - Internal user DB ID
+   * @param personaLineageId - Persona lineage scope guard; lineage 0 also matches
+   * @returns Row with personal_memory_id and content, or null when not found
+   */
+  async updateByIdForUserAndLineage(
+    memoryId: number,
+    content: string,
+    userId: number,
+    personaLineageId: number,
+  ): Promise<{ personal_memory_id: number; content: string } | null> {
+    const [row] = await sql`
+      UPDATE personal_memories
+      SET content = ${content}, updated_at = CURRENT_TIMESTAMP
+      WHERE personal_memory_id = ${memoryId}
+        AND user_id = ${userId}
+        AND (
+          persona_lineage_id = ${personaLineageId}
+          OR persona_lineage_id = 0
+        )
+      RETURNING personal_memory_id, content
+    `;
+    return row
+      ? {
+          personal_memory_id: row.personal_memory_id as number,
+          content: row.content as string,
+        }
+      : null;
+  }
+
   /**
    * Inserts a new personal memory for a user.
    * Personal memories have no associated server-level cache to invalidate;

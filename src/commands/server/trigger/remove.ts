@@ -18,9 +18,8 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
 import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { type UserRow, type ErrorContext, personaConfigSchema, type TomoriState } from "@/types/db/schema";
+import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import type { CheckboxGroupOption, ModalCheckboxGroupField, SelectOption } from "@/types/discord/modal";
-import { sql } from "@/utils/db/client";
 import { personaRepository } from "@/utils/db/repositories";
 
 const TRIGGER_MODAL_CUSTOM_ID = "server_triggerremove_trigger_modal";
@@ -29,9 +28,6 @@ const TRIGGER_CHECKBOX_ID_PREFIX = "server_trigger_checkbox_group";
 const MAX_OPTIONS_PER_GROUP = 10;
 const MAX_GROUPS_PER_MODAL = 5;
 const MAX_ENTRIES_PER_MODAL = MAX_OPTIONS_PER_GROUP * MAX_GROUPS_PER_MODAL;
-
-const formatTextArrayLiteral = (items: string[]): string =>
-  `{${items.map((item) => `"${item.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("remove").setDescription(localizer("en-US", "commands.server.trigger.remove.description"));
@@ -358,22 +354,9 @@ async function performTriggerWordRemoval(
     return false;
   }
 
-  await sql`
-		INSERT INTO persona_configs (tomori_id, trigger_words)
-		VALUES (${selectedPersona.tomori_id}, ARRAY[]::text[])
-		ON CONFLICT (tomori_id) DO NOTHING
-	`;
+  const success = await personaRepository.removeTrigger(selectedPersona.tomori_id, remainingTriggerWords);
 
-  const triggerWordsArrayLiteral = formatTextArrayLiteral(remainingTriggerWords);
-  const [updatedRow] = await sql`
-		UPDATE persona_configs
-		SET trigger_words = ${triggerWordsArrayLiteral}::text[]
-		WHERE tomori_id = ${selectedPersona.tomori_id}
-		RETURNING *
-	`;
-
-  const validatedConfig = personaConfigSchema.safeParse(updatedRow);
-  if (!validatedConfig.success || !updatedRow) {
+  if (!success) {
     const context: ErrorContext = {
       tomoriId: selectedPersona.tomori_id,
       serverId: selectedPersona.server_id,
@@ -384,14 +367,11 @@ async function performTriggerWordRemoval(
         guildId,
         removedIndices,
         removedTriggerWords,
-        validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
       },
     };
     await log.error(
-      "Failed to update or validate trigger_words in persona_configs table",
-      validatedConfig.success
-        ? new Error("Database update returned no rows")
-        : new Error("Updated config data failed validation"),
+      "Failed to update trigger_words in persona_configs table via repository",
+      new Error("Database update returned false"),
       context,
     );
 

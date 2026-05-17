@@ -5,9 +5,7 @@ import type {
   ModalSubmitInteraction,
 } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
-import { sql } from "@/utils/db/client";
-import { tomoriSchema, // Use tomoriSchema for validation
-  type UserRow, type ErrorContext, type TomoriState,  } from "@/types/db/schema";
+import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -17,12 +15,7 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/
 import type { SelectOption } from "@/types/discord/modal";
 import { getMemoryLimits, validateSampleDialogue } from "@/utils/misc/memoryLimits";
 
-import {
-  dedupeSampleDialoguePairs,
-  formatTextArrayLiteral,
-  parseSampleDialogueBatch,
-  readTxtUpload,
-} from "@/utils/teach/batchUploadUtils";
+import { dedupeSampleDialoguePairs, parseSampleDialogueBatch, readTxtUpload } from "@/utils/teach/batchUploadUtils";
 
 // Get memory limits from environment variables
 const memoryLimits = getMemoryLimits();
@@ -363,32 +356,14 @@ export async function execute(
       return;
     }
 
-    // 13. Update target persona row in the database using Bun SQL
-    // Use array append/cat for atomic array operations
-    const [updatedTomoriResult] =
-      dialoguesToAdd.length === 1
-        ? await sql`
-					UPDATE tomoris
-					SET
-						sample_dialogues_in = array_append(sample_dialogues_in, ${dialoguesToAdd[0]?.userInput ?? ""}),
-						sample_dialogues_out = array_append(sample_dialogues_out, ${dialoguesToAdd[0]?.botInput ?? ""})
-					WHERE tomori_id = ${selectedPersona.tomori_id}
-					RETURNING *
-				`
-        : await sql`
-					UPDATE tomoris
-					SET
-						sample_dialogues_in = array_cat(sample_dialogues_in, ${formatTextArrayLiteral(dialoguesToAdd.map((dialogue) => dialogue.userInput))}::text[]),
-						sample_dialogues_out = array_cat(sample_dialogues_out, ${formatTextArrayLiteral(dialoguesToAdd.map((dialogue) => dialogue.botInput))}::text[])
-					WHERE tomori_id = ${selectedPersona.tomori_id}
-					RETURNING *
-				`;
+    // 13. Update target persona row in the database using paired atomic array operations
+    const added = await personaRepository.addSampleDialoguePair(
+      selectedPersona.tomori_id,
+      dialoguesToAdd.map((dialogue) => dialogue.userInput),
+      dialoguesToAdd.map((dialogue) => dialogue.botInput),
+    );
 
-    // 13. Validate the result from the database (Rule 3, 5, 6)
-    // Note: tomoriSchema validates a TomoriRow, not the full TomoriState
-    const validationResult = tomoriSchema.safeParse(updatedTomoriResult);
-
-    if (!validationResult.success) {
+    if (!added) {
       // Rule 22: Log error with context (Access IDs directly)
       const context: ErrorContext = {
         userId: userData.user_id,
@@ -398,14 +373,9 @@ export async function execute(
         metadata: {
           command: "teach sampledialogue",
           userDiscordId: interaction.user.id,
-          validationErrors: validationResult.error.issues,
         },
       };
-      await log.error(
-        "Failed to validate updated tomori data after adding sample dialogue",
-        validationResult.error,
-        context,
-      );
+      await log.error("Failed to add sample dialogue pair(s)", new Error("Database update returned no rows"), context);
 
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.update_failed_title",

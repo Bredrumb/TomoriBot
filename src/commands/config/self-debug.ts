@@ -1,8 +1,8 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
+import { configRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { type ErrorContext, type UserRow, tomoriConfigSchema } from "@/types/db/schema";
+import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -80,14 +80,9 @@ export async function execute(
       return;
     }
 
-    const [updatedRow] = await sql`
-			UPDATE server_chat_configs
-			SET self_debug_enabled = ${isEnabled}
-			WHERE server_id = ${tomoriState.server_id}
-			RETURNING server_id
-		`;
+    const updated = await configRepository.updateChatConfig(tomoriState.server_id, { self_debug_enabled: isEnabled });
 
-    if (!updatedRow) {
+    if (!updated) {
       const context: ErrorContext = {
         tomoriId: tomoriState.tomori_id,
         serverId: tomoriState.server_id,
@@ -99,31 +94,7 @@ export async function execute(
           targetTable: "server_chat_configs",
         },
       };
-      await log.error(
-        "Failed to update self_debug_enabled config",
-        new Error("Database update returned no rows"),
-        context,
-      );
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-    if (!validatedConfig.success) {
-      const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
-        serverId: tomoriState.server_id,
-        errorType: "SchemaValidationError",
-        metadata: {
-          command: "config selfdebug",
-          validationErrors: validatedConfig.error.flatten(),
-        },
-      };
-      await log.error("Failed to validate updated config", validatedConfig.error, context);
+      await log.error("Failed to update self_debug_enabled config", new Error("Database update failed"), context);
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",

@@ -161,10 +161,16 @@ export async function execute(
       }
     }
 
-    await sql`
-			DELETE FROM tomoris
-			WHERE tomori_id = ${personaId}
-		`;
+    const removed = await personaRepository.removePersona(personaId);
+    if (!removed) {
+      await replyInfoEmbed(modalSubmitInteraction, locale, {
+        titleKey: "general.errors.update_failed_title",
+        descriptionKey: "general.errors.update_failed_description",
+        color: ColorCode.ERROR,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
 
     if (personaToRemove.webhook_avatar_url) {
       await deletePersonaAvatarFromStorage(personaToRemove.webhook_avatar_url);

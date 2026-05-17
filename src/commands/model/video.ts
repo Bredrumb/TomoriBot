@@ -13,10 +13,10 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
-import { type UserRow, type ErrorContext } from "@/types/db/schema";
+import type { UserRow, ErrorContext } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";
-import { llmModelRepo } from "@/utils/db/repositories";
+import { configRepository, llmModelRepo } from "@/utils/db/repositories";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
@@ -179,14 +179,11 @@ export async function execute(
         return;
       }
 
-      const [updatedRow] = await sql`
-        UPDATE server_model_configs
-        SET video_model_id = ${selectedSavedConfig.video_model_id}
-        WHERE server_id = ${tomoriState.server_id}
-        RETURNING server_id
-      `;
+      const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
+        video_model_id: selectedSavedConfig.video_model_id,
+      });
 
-      if (!updatedRow) {
+      if (!updated) {
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
@@ -314,14 +311,11 @@ export async function execute(
     }
 
     // 11. Update the config in the database
-    const [updatedRow] = await sql`
-      UPDATE server_model_configs
-      SET video_model_id = ${selectedModel.video_model_id}
-      WHERE server_id = ${tomoriState.server_id}
-      RETURNING server_id
-    `;
+    const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
+      video_model_id: selectedModel.video_model_id,
+    });
 
-    if (!updatedRow) {
+    if (!updated) {
       const context: ErrorContext = {
         tomoriId: tomoriState.tomori_id,
         serverId: tomoriState.server_id,
@@ -334,11 +328,7 @@ export async function execute(
           targetVideoModelId: selectedModel.video_model_id,
         },
       };
-      await log.error(
-        "Failed to update video model config after DB update",
-        new Error("Database update returned no rows"),
-        context,
-      );
+      await log.error("Failed to update video model config", new Error("Database update failed"), context);
 
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
@@ -348,7 +338,7 @@ export async function execute(
       return;
     }
 
-    // 13. Invalidate cache so next message gets fresh config
+    // 12. Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
     // 14. Success message with previous model name

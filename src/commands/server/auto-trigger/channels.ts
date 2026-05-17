@@ -18,20 +18,19 @@ import {
   buildChecklistPageActionRows,
   collectCheckedIds,
   formatChecklistChannelMentions,
-  formatTextArrayLiteral,
   loadGuildTextChecklistChannels,
   type ChecklistChannelTarget,
 } from "@/utils/discord/channelChecklistManager";
 import { promptWithPaginatedModal, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import {
-  type AutochatPersonaOverride as AutochatPersonaOverrideRow,
-  type ErrorContext,
-  type TomoriState,
-  type UserRow,
+import type {
+  AutochatPersonaOverride as AutochatPersonaOverrideRow,
+  ErrorContext,
+  TomoriState,
+  UserRow,
 } from "@/types/db/schema";
 import { getCachedAllPersonas, getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { sql } from "@/utils/db/client";
+import { configRepository } from "@/utils/db/repositories";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -650,15 +649,12 @@ async function updateAutochatConfig(
   nextSelectedIds: Set<string>,
   nextPersonaOverrides: Map<string, number>,
 ): Promise<true | null> {
-  const [updatedRow] = await sql`
-    UPDATE server_auto_trigger_configs
-    SET autoch_disc_ids = ${formatTextArrayLiteral([...nextSelectedIds])}::text[],
-        autoch_persona_overrides = ${JSON.stringify(serializeAutochatPersonaOverrides(nextPersonaOverrides))}::jsonb
-    WHERE server_id = ${tomoriState.server_id}
-    RETURNING server_id
-  `;
+  const updated = await configRepository.updateAutoTriggerConfig(tomoriState.server_id, {
+    autoch_disc_ids: [...nextSelectedIds],
+    autoch_persona_overrides: serializeAutochatPersonaOverrides(nextPersonaOverrides),
+  });
 
-  if (!updatedRow) {
+  if (!updated) {
     const context: ErrorContext = {
       tomoriId: tomoriState.tomori_id,
       serverId: tomoriState.server_id,

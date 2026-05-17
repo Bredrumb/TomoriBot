@@ -187,6 +187,27 @@ export class LlmOverrideRepository {
     return ok;
   }
 
+  /**
+   * Deletes all channel-level overrides in a server that point at a specific LLM.
+   * Used when removing custom/scoped model registrations so unrelated overrides survive.
+   *
+   * @param serverId - Internal server DB ID
+   * @param llmId    - LLM ID being removed
+   * @param options  - Optional cache invalidation scope
+   */
+  async deleteChannelLlmOverridesForModel(
+    serverId: number,
+    llmId: number,
+    options: LlmOverrideCacheOptions = {},
+  ): Promise<boolean> {
+    const ok = await this.deleteChannelOverridesForModelSql(serverId, llmId);
+    if (ok) {
+      invalidateAllChannelLlmCacheForServer(serverId);
+      if (options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
+    }
+    return ok;
+  }
+
   // ── persona override writes ─────────────────────────────────────────────────
 
   /**
@@ -219,6 +240,24 @@ export class LlmOverrideRepository {
     options: LlmOverrideCacheOptions = {},
   ): Promise<boolean> {
     const ok = await this.clearAllPersonaOverridesSql(serverId);
+    if (ok && options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
+    return ok;
+  }
+
+  /**
+   * Nulls persona-level overrides in a server that point at a specific LLM.
+   * Used when removing custom/scoped model registrations so unrelated overrides survive.
+   *
+   * @param serverId - Internal server DB ID
+   * @param llmId    - LLM ID being removed
+   * @param options  - Optional cache invalidation scope
+   */
+  async clearPersonaLlmOverridesForModel(
+    serverId: number,
+    llmId: number,
+    options: LlmOverrideCacheOptions = {},
+  ): Promise<boolean> {
+    const ok = await this.clearPersonaOverridesForModelSql(serverId, llmId);
     if (ok && options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
     return ok;
   }
@@ -517,6 +556,21 @@ export class LlmOverrideRepository {
     }
   }
 
+  /** Raw SQL delete for channel override rows pointing at one model. No cache invalidation. */
+  private async deleteChannelOverridesForModelSql(serverId: number, llmId: number): Promise<boolean> {
+    try {
+      await sql`
+        DELETE FROM channel_llm_overrides
+        WHERE server_id = ${serverId}
+          AND llm_id = ${llmId}
+      `;
+      return true;
+    } catch (error) {
+      log.error(`Error deleting channel LLM overrides for server ${serverId} model ${llmId}:`, error);
+      return false;
+    }
+  }
+
   /**
    * Raw SQL upsert for a persona LLM override in persona_configs. No cache invalidation.
    * Called directly by restoreOverridesFromSnapshot to avoid per-override cache thrashing.
@@ -549,6 +603,24 @@ export class LlmOverrideRepository {
       return true;
     } catch (error) {
       log.error(`Error clearing persona LLM overrides for server ${serverId}:`, error);
+      return false;
+    }
+  }
+
+  /** Raw SQL update to null persona overrides pointing at one model. No cache invalidation. */
+  private async clearPersonaOverridesForModelSql(serverId: number, llmId: number): Promise<boolean> {
+    try {
+      await sql`
+        UPDATE persona_configs
+        SET llm_id = NULL, updated_at = CURRENT_TIMESTAMP
+        WHERE llm_id = ${llmId}
+          AND tomori_id IN (
+            SELECT tomori_id FROM tomoris WHERE server_id = ${serverId}
+          )
+      `;
+      return true;
+    } catch (error) {
+      log.error(`Error clearing persona LLM overrides for server ${serverId} model ${llmId}:`, error);
       return false;
     }
   }

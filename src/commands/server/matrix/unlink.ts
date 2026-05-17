@@ -15,6 +15,7 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { sql } from "@/utils/db/client";
+import { serverRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { invalidateMatrixLinkCache } from "@/utils/bridges/matrix";
 import { localizer } from "@/utils/text/localizer";
@@ -120,10 +121,7 @@ export async function execute(
     const roomId = existingLink.matrix_room_id;
 
     // 7. Delete the link record
-    await sql`
-			DELETE FROM matrix_channel_links
-			WHERE channel_disc_id = ${channel.id}
-		`;
+    await serverRepository.unlinkMatrix(channel.id);
 
     // 8. Invalidate both cache directions
     invalidateMatrixLinkCache(channel.id, roomId);

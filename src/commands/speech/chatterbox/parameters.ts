@@ -1,8 +1,8 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { type ErrorContext, type UserRow } from "@/types/db/schema";
+import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { sql } from "@/utils/db/client";
+import { configRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
@@ -92,17 +92,13 @@ export async function execute(
       currentConfig.chatterbox_turbo_enabled ??
       CHATTERBOX_DEFAULT_TURBO_ENABLED;
 
-    const [updatedRow] = await sql`
-      UPDATE server_speech_configs
-      SET
-        chatterbox_cfg_weight = ${cfgWeight},
-        chatterbox_exaggeration = ${exaggeration},
-        chatterbox_turbo_enabled = ${turboEnabled}
-      WHERE server_id = ${tomoriState.server_id}
-      RETURNING server_id
-    `;
+    const updated = await configRepository.updateSpeechConfig(tomoriState.server_id, {
+      chatterbox_cfg_weight: cfgWeight,
+      chatterbox_exaggeration: exaggeration,
+      chatterbox_turbo_enabled: turboEnabled,
+    });
 
-    if (!updatedRow) {
+    if (!updated) {
       const context: ErrorContext = {
         tomoriId: tomoriState.tomori_id,
         serverId: tomoriState.server_id,

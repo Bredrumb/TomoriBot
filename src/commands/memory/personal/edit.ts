@@ -6,7 +6,6 @@ import type {
   SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
@@ -24,7 +23,13 @@ import { personaRepository, personalMemoryRepository, userRepository } from "@/u
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import { getMemoryLimits, validateMemoryContent } from "@/utils/misc/memoryLimits";
 import type { SelectOption } from "@/types/discord/modal";
-import { personalMemorySchema, PrivacyLevel, type ErrorContext, type PersonalMemoryRow, type TomoriState, type UserRow,  } from "@/types/db/schema";
+import {
+  PrivacyLevel,
+  type ErrorContext,
+  type PersonalMemoryRow,
+  type TomoriState,
+  type UserRow,
+} from "@/types/db/schema";
 
 const SELECT_MODAL_CUSTOM_ID = "memory_personal_edit_select_modal";
 const EDIT_MODAL_CUSTOM_ID = "memory_personal_edit_value_modal";
@@ -53,38 +58,14 @@ async function performPersonalMemoryEdit(
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
-  const [updatedMemory] = await sql`
-    UPDATE personal_memories
-    SET content = ${newContent}, tags = ${sql.array(newTags)}
-    WHERE personal_memory_id = ${memoryToEdit.personal_memory_id}
-      AND user_id = ${userData.user_id}
-    RETURNING *
-  `;
-
-  const validationResult = personalMemorySchema.safeParse(updatedMemory);
-  if (!validationResult.success || !updatedMemory) {
-    const context: ErrorContext = {
-      userId: userData.user_id,
-      serverId: null,
-      tomoriId: null,
-      errorType: "DatabaseUpdateError",
-      metadata: {
-        command: "memory personal edit",
-        table: "personal_memories",
-        operation: "UPDATE",
-        personalMemoryId: memoryToEdit.personal_memory_id,
-        validationErrors: validationResult.success ? null : validationResult.error.flatten(),
-      },
-    };
-
-    await log.error(
-      "Failed to update or validate personal memory",
-      validationResult.success
-        ? new Error("Database update returned no rows or unexpected data")
-        : new Error("Updated personal memory failed validation"),
-      context,
+  if (!memoryToEdit.personal_memory_id) {
+    log.error(
+      `performPersonalMemoryEdit called with memory row missing personal_memory_id for user ${userData.user_disc_id}`,
     );
-
+    return false;
+  }
+  const ok = await personalMemoryRepository.edit(memoryToEdit.personal_memory_id, newContent, newTags ?? []);
+  if (!ok) {
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
       descriptionKey: "general.errors.update_failed_description",

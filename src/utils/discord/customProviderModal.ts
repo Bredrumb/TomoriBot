@@ -20,7 +20,7 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
+import { configRepository, llmModelRepo } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import type { McpUrlValidationResult } from "@/utils/mcp/mcpUrlSecurity";
 import { isCustomProvider as isCustomProviderHelper } from "@/utils/provider/customProviderUtils";
@@ -396,50 +396,16 @@ async function createCustomLLMEntry(
 
   log.info(`Creating custom LLM entry: ${codename}`);
 
-  // Insert or update the LLM entry
-  // Use ON CONFLICT to handle cases where the server reconfigures their custom model
-  const result = await sql`
-		INSERT INTO llms (
-			llm_provider,
-			llm_codename,
-			has_tools,
-			sees_images,
-			sees_videos,
-			sees_youtube,
-			supports_structoutput,
-			is_smartest,
-			is_default,
-			is_reasoning,
-			is_deprecated,
-			is_free,
-			is_uncensored,
-			llm_description
-		) VALUES (
-			'custom',
-			${codename},
-			${hasTools},
-			${seesImages},
-			${seesVideos},
-			false,
-			${supportsStructOutput},
-			false,
-			false,
-			false,
-			false,
-			true,
-			true,
-			${"Custom endpoint model configured by server admin"}
-		)
-		ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET
-			has_tools = EXCLUDED.has_tools,
-			sees_images = EXCLUDED.sees_images,
-			sees_videos = EXCLUDED.sees_videos,
-			supports_structoutput = EXCLUDED.supports_structoutput,
-			updated_at = CURRENT_TIMESTAMP
-		RETURNING llm_id
-	`;
-
-  const llmId = result[0].llm_id as number;
+  const llmId = await llmModelRepo.upsertLegacyCustomLlm({
+    codename,
+    hasTools,
+    seesImages,
+    seesVideos,
+    supportsStructOutput,
+  });
+  if (!llmId) {
+    throw new Error(`Failed to create custom LLM entry for ${codename}`);
+  }
   log.info(`Created/updated custom LLM entry with ID: ${llmId}`);
 
   return llmId;
@@ -454,13 +420,8 @@ async function createCustomLLMEntry(
 export async function deleteCustomLLMEntry(serverId: string | number): Promise<void> {
   const codename = `custom/${serverId}`;
 
-  const result = await sql`
-		DELETE FROM llms
-		WHERE llm_codename = ${codename}
-		RETURNING llm_id
-	`;
-
-  if (result.length > 0) {
+  const deleted = await llmModelRepo.deleteLegacyCustomLlm(codename);
+  if (deleted) {
     log.info(`Deleted custom LLM entry for server ${serverId}`);
   }
 }
@@ -481,16 +442,12 @@ export async function saveCustomEndpointConfig(
   customModelName?: string,
   numCtx?: number | null,
 ): Promise<void> {
-  await sql`
-		UPDATE tomori_configs
-		SET
-			custom_endpoint_url = ${endpointUrl},
-			custom_model_name = ${customModelName || null},
-			custom_num_ctx = ${numCtx ?? null},
-			llm_id = ${llmId},
-			updated_at = CURRENT_TIMESTAMP
-		WHERE server_id = ${serverId}
-	`;
+  await configRepository.updateModelConfig(serverId, {
+    custom_endpoint_url: endpointUrl,
+    custom_model_name: customModelName || null,
+    custom_num_ctx: numCtx ?? null,
+    llm_id: llmId,
+  });
 
   log.info(
     `Saved custom endpoint config for server ${serverId}${customModelName ? ` with model name: ${customModelName}` : ""}${numCtx ? ` with num_ctx: ${numCtx}` : ""}`,

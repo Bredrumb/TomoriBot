@@ -11,13 +11,7 @@ import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "../../utils/discord/interactionHelper";
-import {
-  type UserRow,
-  type ErrorContext,
-  tomoriSchema,
-  personaConfigSchema,
-  type TomoriState,
-} from "../../types/db/schema";
+import type { UserRow, ErrorContext, TomoriState } from "../../types/db/schema";
 import type { ModalResult, SelectOption } from "../../types/discord/modal";
 import { personaRepository } from "@/utils/db/repositories";
 import { sql } from "@/utils/db/client";
@@ -212,22 +206,10 @@ export async function execute(
       return;
     }
 
-    // --- Transaction Start (Conceptually) ---
-    // We perform two separate updates, but ideally this would be a transaction
-    // if the database supported it easily with Bun's current driver.
-
     // 7. Update the nickname in the `tomoris` table
-    const [updatedTomoriRow] = await sql`
-            UPDATE tomoris
-            SET tomori_nickname = ${newNickname}
-            WHERE tomori_id = ${selectedPersona.tomori_id}
-            RETURNING *
-        `;
+    const renamed = await personaRepository.renamePersona(selectedPersona.tomori_id, newNickname);
 
-    // 8. Validate the returned `tomoris` data
-    const validatedTomori = tomoriSchema.safeParse(updatedTomoriRow);
-
-    if (!validatedTomori.success || !updatedTomoriRow) {
+    if (!renamed) {
       // Log error specific to tomoris update failure
       const context: ErrorContext = {
         tomoriId: selectedPersona.tomori_id,
@@ -239,14 +221,11 @@ export async function execute(
           table: "tomoris",
           guildId: serverDiscId,
           newNickname,
-          validationErrors: validatedTomori.success ? null : validatedTomori.error.flatten(),
         },
       };
       await log.error(
-        "Failed to update or validate tomori_nickname in tomoris table",
-        validatedTomori.success
-          ? new Error("Database update returned no rows or unexpected data")
-          : new Error("Updated tomori data failed validation"),
+        "Failed to update tomori_nickname in tomoris table",
+        new Error("Database update returned no rows"),
         context,
       );
 
@@ -261,11 +240,9 @@ export async function execute(
     // 9. Add new nickname to trigger words if not already present
     const currentTriggers = selectedPersona.trigger_words ?? [];
     let triggerUpdateNeeded = false;
-    const updatedTriggers = [...currentTriggers]; // Create a mutable copy
 
     // Case-insensitive check if the nickname exists
     if (!currentTriggers.some((trigger) => trigger.toLowerCase() === newNickname.toLowerCase())) {
-      updatedTriggers.push(newNickname);
       triggerUpdateNeeded = true;
       log.info(`Adding new nickname '${newNickname}' to trigger words for tomori ${selectedPersona.tomori_id}`);
     } else {
@@ -276,18 +253,9 @@ export async function execute(
 
     // 10. Update trigger_words in `persona_configs` if needed
     if (triggerUpdateNeeded) {
-      const [updatedConfigRow] = await sql`
-				INSERT INTO persona_configs (tomori_id, trigger_words)
-				VALUES (${selectedPersona.tomori_id}, ARRAY[${newNickname}]::text[])
-				ON CONFLICT (tomori_id) DO UPDATE
-				SET trigger_words = array_append(persona_configs.trigger_words, ${newNickname})
-				RETURNING *
-			`;
+      const triggerAdded = await personaRepository.addTrigger(selectedPersona.tomori_id, [newNickname]);
 
-      // 11. Validate the returned `persona_configs` data
-      const validatedConfig = personaConfigSchema.safeParse(updatedConfigRow);
-
-      if (!validatedConfig.success || !updatedConfigRow) {
+      if (!triggerAdded) {
         // Log error specific to persona_configs update failure
         const context: ErrorContext = {
           tomoriId: selectedPersona.tomori_id,
@@ -300,17 +268,13 @@ export async function execute(
             column: "trigger_words",
             guildId: serverDiscId,
             newNickname,
-            updatedTriggers, // Log the array we tried to set
-            validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
           },
         };
         // Log this as a warning since the primary nickname update succeeded,
         // but inform the user of the partial failure.
         await log.error(
-          "Failed to update or validate trigger_words in persona_configs table",
-          validatedConfig.success
-            ? new Error("Database update returned no rows or unexpected data")
-            : new Error("Updated config data failed validation"),
+          "Failed to update trigger_words in persona_configs table",
+          new Error("Database update returned no rows"),
           context,
         );
 
@@ -328,7 +292,6 @@ export async function execute(
       }
       log.success(`Successfully updated trigger words for tomori ${selectedPersona.tomori_id}`);
     }
-    // --- Transaction End (Conceptually) ---
 
     // 12. Update bot's server nickname only when renaming the main persona
     let nicknameUpdateSuccess = false;

@@ -5,7 +5,6 @@
  * The ID is shown in context as "ID:123".
  */
 
-import { sql } from "@/utils/db/client";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { PrivacyLevel } from "../../types/db/schema";
@@ -15,7 +14,7 @@ import { invalidateUserCache } from "../../utils/cache/userCache";
 import { sendStandardEmbed } from "../../utils/discord/embedHelper";
 import { convertMentions } from "../../utils/text/contextBuilder";
 import { sanitizeUnknownTemplatePlaceholders } from "@/utils/text/processors/mentionProcessor";
-import { personalMemoryRepository, userRepository } from "@/utils/db/repositories";
+import { personalMemoryRepository, serverMemoryRepository, userRepository } from "@/utils/db/repositories";
 import { resolveUserTarget } from "@/utils/discord/targetResolver";
 
 export class UpdateLongTermMemoryTool extends BaseTool {
@@ -212,13 +211,11 @@ export class UpdateLongTermMemoryTool extends BaseTool {
           const triggererRow = resolvedTriggererUserId
             ? await userRepository.loadByDiscordId(resolvedTriggererUserId)
             : null;
-          const [deletedServerMemory] = await sql`
-						DELETE FROM server_memories
-						WHERE server_memory_id = ${memoryId}
-						  AND server_id = ${tomoriState.server_id}
-						  AND persona_lineage_id = ${tomoriState.persona_lineage_id}
-						RETURNING server_memory_id, content, user_id
-					`;
+          const deletedServerMemory = await serverMemoryRepository.removeByIdWithLineage(
+            memoryId,
+            tomoriState.server_id,
+            tomoriState.persona_lineage_id,
+          );
 
           if (deletedServerMemory) {
             const processedMemoryContent = await convertMentions(
@@ -281,14 +278,12 @@ export class UpdateLongTermMemoryTool extends BaseTool {
         }
 
         // 1) Server memory update (server_id + lineage scoped)
-        const [updatedServerMemory] = await sql`
-					UPDATE server_memories
-					SET content = ${newContent}, updated_at = CURRENT_TIMESTAMP
-					WHERE server_memory_id = ${memoryId}
-					  AND server_id = ${tomoriState.server_id}
-					  AND persona_lineage_id = ${tomoriState.persona_lineage_id}
-					RETURNING server_memory_id, content, user_id
-				`;
+        const updatedServerMemory = await serverMemoryRepository.updateByIdWithLineage(
+          memoryId,
+          newContent,
+          tomoriState.server_id,
+          tomoriState.persona_lineage_id,
+        );
 
         if (updatedServerMemory) {
           const resolvedTriggererUserId = context.message?.author?.id || context.userId;
@@ -456,16 +451,11 @@ export class UpdateLongTermMemoryTool extends BaseTool {
           : "genai.self_teach.personal_memory_footer_manage";
 
       if (isDeleteRequested) {
-        const [deletedMemory] = await sql`
-					DELETE FROM personal_memories
-					WHERE personal_memory_id = ${memoryId}
-					  AND user_id = ${targetUserRow.user_id}
-					  AND (
-						persona_lineage_id = ${personaLineageId}
-						OR persona_lineage_id = 0
-					  )
-					RETURNING personal_memory_id, content
-				`;
+        const deletedMemory = await personalMemoryRepository.removeByIdForUserAndLineage(
+          memoryId,
+          targetUserRow.user_id,
+          personaLineageId,
+        );
 
         if (!deletedMemory) {
           log.error(`Failed to delete personal memory ${memoryId} for user ${targetUserRow.user_id}`);
@@ -531,17 +521,12 @@ export class UpdateLongTermMemoryTool extends BaseTool {
         };
       }
 
-      const [updatedMemory] = await sql`
-				UPDATE personal_memories
-				SET content = ${newContent}, updated_at = CURRENT_TIMESTAMP
-				WHERE personal_memory_id = ${memoryId}
-				  AND user_id = ${targetUserRow.user_id}
-				  AND (
-					persona_lineage_id = ${personaLineageId}
-					OR persona_lineage_id = 0
-				  )
-				RETURNING personal_memory_id, content
-			`;
+      const updatedMemory = await personalMemoryRepository.updateByIdForUserAndLineage(
+        memoryId,
+        newContent,
+        targetUserRow.user_id,
+        personaLineageId,
+      );
 
       if (!updatedMemory) {
         log.error(`Failed to update personal memory ${memoryId} for user ${targetUserRow.user_id}`);

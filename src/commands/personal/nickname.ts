@@ -1,12 +1,12 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
-import { userSchema, type UserRow, type ErrorContext, type TomoriState } from "../../types/db/schema";
+import type { UserRow, ErrorContext, TomoriState } from "../../types/db/schema";
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
 import { getCachedTomoriState } from "../../utils/cache/tomoriStateCache";
 import { invalidateUserCache } from "../../utils/cache/userCache";
+import { userRepository } from "@/utils/db/repositories";
 
 // Rule 20: Constants for static values at the top
 const NICKNAME_MIN_LENGTH = 2;
@@ -90,45 +90,23 @@ export async function execute(
     // 6. Store the old nickname for the success message
     const oldNickname = userData.user_nickname;
 
-    // 7. Update the user's nickname in the database using Bun SQL
-    const [updatedResult] = await sql`
-            UPDATE users
-            SET user_nickname = ${newNickname}
-            WHERE user_id = ${userData.user_id}
-            RETURNING *
-        `;
+    // 7. Update the user's nickname in the database
+    // biome-ignore lint/style/noNonNullAssertion: userData.user_id is always provided by command framework
+    const ok = await userRepository.setNickname(userData.user_id!, newNickname);
 
-    // 8. Validate the result from the database
-    const validationResult = userSchema.safeParse(updatedResult);
-
-    if (!validationResult.success) {
-      const context: ErrorContext = {
-        userId: userData.user_id,
-        serverId: tomoriState.server_id, // Include server ID
-        tomoriId: tomoriState.tomori_id, // Include tomori ID
-        errorType: "DatabaseValidationError",
-        metadata: {
-          command: "teach nickname",
-          userDiscordId: interaction.user.id,
-          newNickname,
-          validationErrors: validationResult.error.issues,
-        },
-      };
-      await log.error("Failed to validate updated user data for user_nickname", validationResult.error, context);
-
+    if (!ok) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",
         color: ColorCode.ERROR,
-        // No flags needed
       });
       return;
     }
 
-    // 9. Invalidate user cache so next message gets fresh data
+    // 8. Invalidate user cache so next message gets fresh data
     invalidateUserCache(interaction.user.id);
 
-    // 10. Check if personalization is disabled on this server and prepare message
+    // 9. Check if personalization is disabled on this server and prepare message
     let descriptionKey = "commands.personal.nickname.success_description";
     let embedColor = ColorCode.SUCCESS;
 
@@ -139,7 +117,7 @@ export async function execute(
       embedColor = ColorCode.WARN; // Use warning color
     }
 
-    // 10. Success! Show the nickname change (with potential warning)
+    // 10. Success! Show the nickname change (with potential warning if personalization disabled)
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.personal.nickname.success_title",
       descriptionKey: descriptionKey, // Use the determined description key

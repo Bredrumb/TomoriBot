@@ -10,7 +10,7 @@ import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/mod
 import type { ErrorContext, UserRow, EmbeddingModelRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
-import { llmModelRepo } from "@/utils/db/repositories";
+import { configRepository, llmModelRepo } from "@/utils/db/repositories";
 import { reembedServerDocuments } from "@/utils/documents/documentService";
 import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
@@ -128,14 +128,11 @@ export async function execute(
         return;
       }
 
-      const [updatedRow] = await sql`
-				UPDATE server_model_configs
-				SET embedding_model_id = ${selectedSavedConfig.embedding_model_id}
-				WHERE server_id = ${tomoriState.server_id}
-				RETURNING server_id
-			`;
+      const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
+        embedding_model_id: selectedSavedConfig.embedding_model_id,
+      });
 
-      if (!updatedRow) {
+      if (!updated) {
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
@@ -294,14 +291,11 @@ export async function execute(
     const shouldReembed =
       currentEmbeddingModel?.model_family && currentEmbeddingModel.model_family !== selectedModel.model_family;
 
-    const [updatedRow] = await sql`
-			UPDATE server_model_configs
-			SET embedding_model_id = ${selectedModel.embedding_model_id}
-			WHERE server_id = ${tomoriState.server_id}
-			RETURNING server_id
-		`;
+    const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
+      embedding_model_id: selectedModel.embedding_model_id,
+    });
 
-    if (!updatedRow) {
+    if (!updated) {
       const context: ErrorContext = {
         tomoriId: tomoriState.tomori_id,
         serverId: tomoriState.server_id,
@@ -314,11 +308,7 @@ export async function execute(
           targetEmbeddingModelId: selectedModel.embedding_model_id,
         },
       };
-      await log.error(
-        "Failed to update embedding model config after DB update",
-        new Error("Database update returned no rows"),
-        context,
-      );
+      await log.error("Failed to update embedding model config", new Error("Database update failed"), context);
 
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.update_failed_title",

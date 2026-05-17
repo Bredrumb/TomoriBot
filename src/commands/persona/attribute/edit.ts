@@ -6,7 +6,6 @@ import type {
   SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
@@ -24,7 +23,7 @@ import { personaRepository, userRepository } from "@/utils/db/repositories";
 import { getMemoryLimits, validateAttribute } from "@/utils/misc/memoryLimits";
 import { splitPromptIntoModalParts, combineModalPromptParts } from "@/utils/text/modalPromptParts";
 import type { SelectOption } from "@/types/discord/modal";
-import { tomoriSchema, type ErrorContext, type TomoriState, type UserRow } from "@/types/db/schema";
+import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 
 const SELECT_MODAL_CUSTOM_ID = "persona_attribute_edit_select_modal";
 const EDIT_MODAL_CUSTOM_ID = "persona_attribute_edit_value_modal";
@@ -48,16 +47,20 @@ async function performAttributeEdit(
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
-  const pgIndex = selectedIndex + 1;
-  const [updatedRow] = await sql`
-    UPDATE tomoris
-    SET attribute_list[${pgIndex}] = ${newAttribute}
-    WHERE tomori_id = ${selectedPersona.tomori_id}
-    RETURNING *
-  `;
+  if (selectedPersona.tomori_id === undefined) {
+    await log.error("Cannot edit attribute for persona without tomori_id");
+    await replyInfoEmbed(replyInteraction, locale, {
+      titleKey: "general.errors.update_failed_title",
+      descriptionKey: "general.errors.update_failed_description",
+      color: ColorCode.ERROR,
+    });
+    return false;
+  }
 
-  const validationResult = tomoriSchema.safeParse(updatedRow);
-  if (!validationResult.success || !updatedRow) {
+  const pgIndex = selectedIndex + 1;
+  const updated = await personaRepository.editAttributeAt(selectedPersona.tomori_id, pgIndex, newAttribute);
+
+  if (!updated) {
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: selectedPersona.server_id,
@@ -66,17 +69,10 @@ async function performAttributeEdit(
       metadata: {
         command: "persona attribute edit",
         selectedIndex,
-        validationErrors: validationResult.success ? null : validationResult.error.flatten(),
       },
     };
 
-    await log.error(
-      "Failed to update or validate persona attribute list",
-      validationResult.success
-        ? new Error("Database update returned no rows or unexpected data")
-        : new Error("Updated tomori row failed validation"),
-      context,
-    );
+    await log.error("Failed to update persona attribute list", new Error("Database update returned no rows"), context);
 
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "general.errors.update_failed_title",

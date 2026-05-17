@@ -8,9 +8,9 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/ca
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
-import { type UserRow, type ErrorContext } from "../../types/db/schema";
+import type { UserRow, ErrorContext } from "../../types/db/schema";
 import type { RadioGroupOption } from "../../types/discord/modal";
-import { sql } from "@/utils/db/client";
+import { configRepository } from "@/utils/db/repositories";
 
 // Define constants at the top (Rule #20)
 const HUMANIZER_MIN = 0;
@@ -156,16 +156,13 @@ export async function execute(
       return;
     }
 
-    // 7. Update the config in the database using direct SQL (Rule #4, #15)
-    const [updatedRow] = await sql`
-            UPDATE server_chat_configs
-            SET humanizer_degree = ${humanizerValue}
-            WHERE server_id = ${tomoriState.server_id}
-            RETURNING server_id
-        `;
+    // 7. Update the config in the database (Rule #4, #15)
+    const updated = await configRepository.updateChatConfig(tomoriState.server_id, {
+      humanizer_degree: humanizerValue,
+    });
 
-    // 8. Validate the returned data (Rules #3, #5 - critical config change)
-    if (!updatedRow) {
+    // 8. Check if update succeeded
+    if (!updated) {
       const context: ErrorContext = {
         tomoriId: tomoriState.tomori_id,
         serverId: tomoriState.server_id,
@@ -178,7 +175,7 @@ export async function execute(
         },
       };
       await log.error(
-        "Failed to update or validate humanizer_degree config",
+        "Failed to update humanizer_degree config",
         new Error("Database update returned no rows"),
         context,
       );

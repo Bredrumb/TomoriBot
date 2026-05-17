@@ -413,6 +413,200 @@ export const autochatPersonaOverrideSchema = z.object({
 });
 export type AutochatPersonaOverride = z.infer<typeof autochatPersonaOverrideSchema>;
 
+// ── Split Config Tables (Phase 6 / Stage A & B) ──────────────────────────
+
+export const serverModelConfigSchema = z.object({
+  server_id: z.number().int(),
+  llm_id: z.number().int().nullable().optional(),
+  embedding_model_id: z.number().int().nullable().optional(),
+  diffusion_model_id: z.number().int().nullable().optional(),
+  video_model_id: z.number().int().nullable().optional(),
+  vision_llm_id: z.number().int().nullable().optional(),
+  api_key: z.instanceof(Buffer).nullable().optional(),
+  key_version: z.number().int().default(1),
+  llm_temperature: z.number().min(0.0).max(2.0).default(1.0),
+  thinking_level: z.enum(THINKING_LEVEL_VALUES).default(DEFAULT_THINKING_LEVEL),
+  llm_disabled_params: z.preprocess(
+    (value) => normalizeDisabledLlmParams(value),
+    z.array(supportedParamSchema).default([]),
+  ),
+  custom_endpoint_url: z.string().nullable().optional(),
+  custom_model_name: z.string().nullable().optional(),
+  custom_num_ctx: z.number().int().nullable().optional(),
+  fallback_llm_ids: z.preprocess((value) => normalizeFallbackLlmIds(value), z.array(z.number().int()).default([])),
+  other_model_codename: z.string().nullable().optional(),
+  other_model_capabilities: z.unknown().nullable().optional(),
+  other_model_capabilities_fetched_at: z.date().nullable().optional(),
+  hide_respond_embed: z.boolean().default(false),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type ServerModelConfigRow = z.infer<typeof serverModelConfigSchema>;
+
+export const serverChatConfigSchema = z.object({
+  server_id: z.number().int(),
+  humanizer_degree: z.nativeEnum(HumanizerDegree).default(HumanizerDegree.LIGHT),
+  message_fetch_limit: z.number().int().default(80),
+  send_message_limit: z.number().int().default(0),
+  match_limit: z.number().int().default(3),
+  cascade_limit: z.number().int().default(3),
+  timezone_offset: z.number().int().default(0),
+  self_debug_enabled: z.boolean().default(false),
+  system_prompt: z.string().nullable().optional(),
+  context_note: z.string().nullable().optional(),
+  context_note_depth: z.number().int().default(0),
+  llm_stop_strings: z.preprocess((value) => normalizeStringArray(value), z.array(z.string()).default([])),
+  llm_stop_speaker_pattern_enabled: z.boolean().default(false),
+  llm_max_output_tokens: z.number().int().nullable().optional(),
+  llm_top_p: z.number().default(0.95),
+  llm_top_k: z.number().int().default(0),
+  llm_frequency_penalty: z.number().default(0.0),
+  llm_presence_penalty: z.number().default(0.0),
+  llm_min_p: z.number().default(0.05),
+  llm_logit_biases: z.preprocess(
+    (value) => normalizeLogitBiasEntries(value),
+    z.array(logitBiasEntrySchema).default([]),
+  ),
+  fallback_model_refs: z.preprocess(
+    (value) => normalizeFallbackModelRefs(value),
+    fallbackModelRefSchema.array().default([]),
+  ),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type ServerChatConfigRow = z.infer<typeof serverChatConfigSchema>;
+
+export const serverMemberPermissionsConfigSchema = z.object({
+  server_id: z.number().int(),
+  server_memteaching_enabled: z.boolean().default(true),
+  attribute_memteaching_enabled: z.boolean().default(false),
+  sampledialogue_memteaching_enabled: z.boolean().default(false),
+  self_teaching_enabled: z.boolean().default(true),
+  personal_memories_enabled: z.boolean().default(true),
+  hide_impersonation_embeds: z.boolean().default(false),
+  prompt_snapshot_enabled: z.boolean().default(false),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type ServerMemberPermissionsConfigRow = z.infer<typeof serverMemberPermissionsConfigSchema>;
+
+export const serverCapabilitiesConfigSchema = z.object({
+  server_id: z.number().int(),
+  emoji_usage_enabled: z.boolean().default(true),
+  sticker_usage_enabled: z.boolean().default(true),
+  web_search_enabled: z.boolean().default(true),
+  manage_message_enabled: z.boolean().default(true),
+  thread_creation_enabled: z.boolean().default(true),
+  imagegen_enabled: z.boolean().default(true),
+  videogen_enabled: z.boolean().default(false),
+  voice_message_enabled: z.boolean().default(true),
+  tool_use_enabled: z.boolean().default(true),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type ServerCapabilitiesConfigRow = z.infer<typeof serverCapabilitiesConfigSchema>;
+
+export const serverNoticeEmbedsConfigSchema = z.object({
+  server_id: z.number().int(),
+  tool_notice_hidden_keys: z.preprocess(
+    (value) => normalizeToolNoticeHiddenKeys(value),
+    z.array(toolNoticeKeySchema).default([]),
+  ),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type ServerNoticeEmbedsConfigRow = z.infer<typeof serverNoticeEmbedsConfigSchema>;
+
+export const serverNsfwConfigSchema = z.object({
+  server_id: z.number().int(),
+  uncensor_injection_enabled: z.boolean().default(false),
+  uncensor_unicode_space_enabled: z.boolean().default(false),
+  uncensor_sanitize_enabled: z.boolean().default(false),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type ServerNsfwConfigRow = z.infer<typeof serverNsfwConfigSchema>;
+
+export const serverSpeechConfigSchema = z.object({
+  server_id: z.number().int(),
+  voice_transcript_chat_mode: z.boolean().default(true),
+  chatterbox_turbo_enabled: z.boolean().default(true),
+  chatterbox_cfg_weight: z.number().default(0.5),
+  chatterbox_exaggeration: z.number().default(0.5),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type ServerSpeechConfigRow = z.infer<typeof serverSpeechConfigSchema>;
+
+export const serverAutoTriggerConfigSchema = z.object({
+  server_id: z.number().int(),
+  autoch_disc_ids: z.array(z.string()).default([]),
+  autoch_persona_overrides: z.preprocess(
+    (value) => normalizeJsonbArray(value),
+    z.array(autochatPersonaOverrideSchema).default([]),
+  ),
+  autoch_threshold: z.number().int().default(0),
+  autoch_threshold_max: z.number().int().default(0),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type ServerAutoTriggerConfigRow = z.infer<typeof serverAutoTriggerConfigSchema>;
+
+export const serverChannelScopeConfigSchema = z.object({
+  server_id: z.number().int(),
+  rp_channel_ids: z.array(z.string()).default([]),
+  private_channel_ids: z.array(z.string()).default([]),
+  crosschannel_blocklist_ids: z.array(z.string()).default([]),
+  stm_privacy_bypass: z.boolean().default(false),
+  thought_log_channel_disc_id: z.string().nullable().optional(),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type ServerChannelScopeConfigRow = z.infer<typeof serverChannelScopeConfigSchema>;
+
+export const serverTriggerBehaviorConfigSchema = z.object({
+  server_id: z.number().int(),
+  always_reply_enabled: z.boolean().default(false),
+  deliberate_trigger_mode: z.boolean().default(false),
+  cooldown_type: z.number().int().default(0),
+  cooldown_length: z.number().int().default(5),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type ServerTriggerBehaviorConfigRow = z.infer<typeof serverTriggerBehaviorConfigSchema>;
+
+export const serverNovelaiImagegenConfigSchema = z.object({
+  server_id: z.number().int(),
+  nai_preset_name: z.string().nullable().optional(),
+  nai_style_tags: z.array(z.string()).default([...DEFAULT_NAI_STYLE_TAGS]),
+  nai_negative_tags: z.array(z.string()).default([...DEFAULT_NAI_NEGATIVE_TAGS]),
+  nai_sampler: z.string().nullable().optional(),
+  nai_steps: z.number().int().nullable().optional(),
+  nai_scale: z.number().nullable().optional(),
+  nai_noise_schedule: z.string().nullable().optional(),
+  nai_cfg_rescale: z.number().nullable().optional(),
+  nai_diffusion_model_id: z.number().int().nullable().optional(),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type ServerNovelaiImagegenConfigRow = z.infer<typeof serverNovelaiImagegenConfigSchema>;
+
+export const serverByokConfigSchema = z.object({
+  server_id: z.number().int(),
+  user_byok_mode: z.boolean().default(false),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type ServerByokConfigRow = z.infer<typeof serverByokConfigSchema>;
+
+export const serverMemoryConfigSchema = z.object({
+  server_id: z.number().int(),
+  memory_tagging_enabled: z.boolean().default(false),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type ServerMemoryConfigRow = z.infer<typeof serverMemoryConfigSchema>;
+
 export const tomoriConfigSchema = z.object({
   tomori_config_id: z.number().optional(),
   tomori_id: z.number().nullable().optional(), // Legacy pointer (server-scoped configs use server_id)

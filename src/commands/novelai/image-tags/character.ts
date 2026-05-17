@@ -11,14 +11,7 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { TomoriState, UserRow } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
-import {
-  formatTextArrayLiteral,
-  MAX_TAG_LENGTH,
-  MAX_TAGS,
-  parseAndValidateNaiTags,
-  TAGS_MODAL_MAX_LENGTH,
-} from "@/utils/novelai/tagHelpers";
+import { MAX_TAG_LENGTH, MAX_TAGS, parseAndValidateNaiTags, TAGS_MODAL_MAX_LENGTH } from "@/utils/novelai/tagHelpers";
 import type { SelectOption } from "@/types/discord/modal";
 import { personaRepository } from "@/utils/db/repositories";
 
@@ -150,7 +143,7 @@ export async function execute(
     // 5. Find the selected persona
     selectedPersona = allPersonas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
 
-    if (!selectedPersona) {
+    if (!selectedPersona?.tomori_id) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.unknown_error_title",
         descriptionKey: "general.errors.unknown_error_description",
@@ -161,12 +154,7 @@ export async function execute(
 
     // 6. Handle empty input — clear all tags
     if (!tagsInput || tagsInput.trim().length === 0) {
-      const personaId = selectedPersona.tomori_id;
-      await sql`
-				UPDATE tomoris
-				SET nai_tags = ARRAY[]::TEXT[]
-				WHERE tomori_id = ${personaId}
-			`;
+      await personaRepository.setNaiTags(selectedPersona.tomori_id, []);
       invalidateTomoriStateCache(interaction.guild.id);
 
       await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -224,14 +212,7 @@ export async function execute(
     const uniqueTags = validationResult.tags;
 
     // 8. Replace all existing tags in the database
-    const personaId = selectedPersona.tomori_id;
-    const tagArrayLiteral = formatTextArrayLiteral(uniqueTags);
-
-    await sql`
-			UPDATE tomoris
-			SET nai_tags = ${tagArrayLiteral}::TEXT[]
-			WHERE tomori_id = ${personaId}
-		`;
+    await personaRepository.setNaiTags(selectedPersona.tomori_id, uniqueTags);
 
     // 9. Invalidate cache so next access gets fresh data
     invalidateTomoriStateCache(interaction.guild.id);

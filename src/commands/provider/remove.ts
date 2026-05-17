@@ -4,7 +4,7 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { llmProviderRepo } from "@/utils/db/repositories";
+import { configRepository, llmProviderRepo } from "@/utils/db/repositories";
 
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
@@ -258,35 +258,26 @@ export async function execute(
     }
 
     await Promise.all([
-      sql`
-        UPDATE server_model_configs
-        SET llm_id = ${nextLlmId},
-            api_key = ${nextConfigApiKey},
-            key_version = ${nextConfigKeyVersion},
-            custom_endpoint_url = ${nextCustomEndpointUrl},
-            custom_model_name = ${nextCustomModelName},
-            custom_num_ctx = ${nextCustomNumCtx},
-            embedding_model_id = ${nextEmbeddingModelId},
-            diffusion_model_id = ${nextDiffusionModelId},
-            video_model_id = ${nextVideoModelId},
-            vision_llm_id = ${nextVisionLlmId},
-            fallback_llm_ids = ${JSON.stringify(nextFallbackIds)}::jsonb
-        WHERE server_id = ${tomoriState.server_id}
-      `,
-      sql`
-        UPDATE server_novelai_imagegen_configs
-        SET nai_diffusion_model_id = ${nextNaiDiffusionModelId}
-        WHERE server_id = ${tomoriState.server_id}
-      `,
+      configRepository.updateModelConfig(tomoriState.server_id, {
+        llm_id: nextLlmId,
+        api_key: nextConfigApiKey,
+        key_version: nextConfigKeyVersion,
+        custom_endpoint_url: nextCustomEndpointUrl,
+        custom_model_name: nextCustomModelName,
+        custom_num_ctx: nextCustomNumCtx,
+        embedding_model_id: nextEmbeddingModelId,
+        diffusion_model_id: nextDiffusionModelId,
+        video_model_id: nextVideoModelId,
+        vision_llm_id: nextVisionLlmId,
+        fallback_llm_ids: nextFallbackIds,
+      }),
+      configRepository.updateNovelaiImagegenConfig(tomoriState.server_id, {
+        nai_diffusion_model_id: nextNaiDiffusionModelId,
+      }),
     ]);
 
     if (activeProvider === tomoriState.llm.llm_provider.toLowerCase()) {
-      await sql`
-        UPDATE saved_provider_configs
-        SET fallback_llm_ids = ${JSON.stringify(nextFallbackIds)}::jsonb
-        WHERE server_id = ${tomoriState.server_id}
-          AND provider = ${activeProvider}
-      `;
+      await llmProviderRepo.setSavedProviderConfigFallbacks(tomoriState.server_id, activeProvider, nextFallbackIds);
     }
 
     const deleted = await llmProviderRepo.deleteSavedProviderConfig(tomoriState.server_id, selectedProvider, {

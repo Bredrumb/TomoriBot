@@ -18,7 +18,6 @@ import {
   replyPaginatedPersonaChoicesV2,
 } from "../../utils/discord/interactionHelper";
 import type { TomoriState, UserRow } from "../../types/db/schema";
-import { sql } from "@/utils/db/client";
 import { personaRepository } from "@/utils/db/repositories";
 
 // ─── Modal field IDs ───────────────────────────────────────────────────────────
@@ -225,16 +224,13 @@ export async function execute(
 
       // 6. If all fields are empty → clear all ATTG columns (set to NULL)
       if (!author && !title && !tags && !genre && stars === null) {
-        await sql`
-				UPDATE tomoris
-				SET
-					nai_attg_author = NULL,
-					nai_attg_title  = NULL,
-					nai_attg_tags   = NULL,
-					nai_attg_genre  = NULL,
-					nai_attg_stars  = NULL
-				WHERE tomori_id = ${personaId}
-			`;
+        await personaRepository.setNaiAttg(personaId, {
+          nai_attg_author: null,
+          nai_attg_title: null,
+          nai_attg_tags: null,
+          nai_attg_genre: null,
+          nai_attg_stars: null,
+        });
 
         // 6a. Invalidate cache so next access gets fresh data
         invalidateTomoriStateCache(interaction.guild.id);
@@ -252,18 +248,14 @@ export async function execute(
         continue;
       }
 
-      // 7. Write non-empty values to DB.
-      //    NULL-coalesced with existing values so unmodified fields are preserved.
-      await sql`
-			UPDATE tomoris
-			SET
-				nai_attg_author = ${author},
-				nai_attg_title  = ${title},
-				nai_attg_tags   = ${tags},
-				nai_attg_genre  = ${genre},
-				nai_attg_stars  = ${stars}
-			WHERE tomori_id = ${personaId}
-		`;
+      // 7. Write submitted values to DB.
+      await personaRepository.setNaiAttg(personaId, {
+        nai_attg_author: author,
+        nai_attg_title: title,
+        nai_attg_tags: tags,
+        nai_attg_genre: genre,
+        nai_attg_stars: stars,
+      });
 
       // 7a. Invalidate cache after successful write
       invalidateTomoriStateCache(interaction.guild.id);

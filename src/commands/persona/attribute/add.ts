@@ -1,8 +1,6 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
-import { sql } from "@/utils/db/client";
-import { tomoriSchema, // Use tomoriSchema for validation
-  type UserRow, type ErrorContext, type TomoriState,  } from "@/types/db/schema";
+import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -12,12 +10,7 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/
 import type { ModalResult, SelectOption } from "@/types/discord/modal";
 import { getMemoryLimits, validateAttribute } from "@/utils/misc/memoryLimits";
 
-import {
-  dedupeCaseInsensitive,
-  formatTextArrayLiteral,
-  getNonEmptyNumberedLines,
-  readTxtUpload,
-} from "@/utils/teach/batchUploadUtils";
+import { dedupeCaseInsensitive, getNonEmptyNumberedLines, readTxtUpload } from "@/utils/teach/batchUploadUtils";
 
 // Get memory limits from environment variables
 const memoryLimits = getMemoryLimits();
@@ -297,46 +290,13 @@ export async function execute(
     }
 
     // 14. Update target persona row in the database
-    const [updatedTomoriResult] =
-      attributesToAdd.length === 1
-        ? await sql`
-					UPDATE tomoris
-					SET attribute_list = array_append(attribute_list, ${attributesToAdd[0]})
-					WHERE tomori_id = ${selectedPersona.tomori_id}
-					RETURNING *
-				`
-        : await sql`
-					UPDATE tomoris
-					SET attribute_list = array_cat(attribute_list, ${formatTextArrayLiteral(attributesToAdd)}::text[])
-					WHERE tomori_id = ${selectedPersona.tomori_id}
-					RETURNING *
-				`;
+    const ok = await personaRepository.addAttributes(selectedPersona.tomori_id, attributesToAdd);
 
-    // 15. Validate the result from the database (Rule 3, 5, 6)
-    const validationResult = tomoriSchema.safeParse(updatedTomoriResult);
-
-    if (!validationResult.success) {
-      // Rule 22: Log error with context
-      const context: ErrorContext = {
-        userId: userData.user_id,
-        serverId: tomoriState.server_id,
-        tomoriId: selectedPersona.tomori_id,
-        errorType: "DatabaseValidationError",
-        metadata: {
-          command: "teach attribute",
-          userDiscordId: interaction.user.id, // Keep Discord ID for easier user lookup
-          newAttribute: attributesToAdd.join("\n"),
-          validationErrors: validationResult.error.issues,
-        },
-      };
-      await log.error("Failed to validate updated tomori data after adding attribute", validationResult.error, context);
-
-      // Use modal interaction for reply
+    if (!ok) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",
         color: ColorCode.ERROR,
-        // No flags needed
       });
       return;
     }

@@ -6,7 +6,6 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaRepository } from "@/utils/db/repositories";
-import { sql } from "@/utils/db/client";
 import { localizer } from "@/utils/text/localizer";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
@@ -90,12 +89,15 @@ export async function execute(
       return;
     }
 
-    await sql`
-			INSERT INTO persona_configs (tomori_id, trigger_words, persona_prompt)
-			VALUES (${selectedPersona.tomori_id}, ARRAY[]::text[], NULL)
-			ON CONFLICT (tomori_id) DO UPDATE
-			SET persona_prompt = NULL
-		`;
+    const ok = await personaRepository.removePrompt(selectedPersona.tomori_id);
+    if (!ok) {
+      await replyInfoEmbed(personaSelectionInteraction, locale, {
+        titleKey: "general.errors.update_failed_title",
+        descriptionKey: "general.errors.update_failed_description",
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
 
     invalidateTomoriStateCache(serverDiscId);
 

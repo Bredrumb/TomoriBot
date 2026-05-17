@@ -16,6 +16,7 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { sql } from "@/utils/db/client";
+import { serverRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import {
   isMatrixConfigured,
@@ -159,12 +160,7 @@ export async function execute(
     const oldRoomId = existingLink?.matrix_room_id;
 
     // 11. Upsert: insert or replace existing link for this channel
-    await sql`
-			INSERT INTO matrix_channel_links (server_id, channel_disc_id, matrix_room_id)
-			VALUES (${tomoriState.server_id}, ${channel.id}, ${roomId})
-			ON CONFLICT (channel_disc_id) DO UPDATE
-				SET matrix_room_id = EXCLUDED.matrix_room_id
-		`;
+    await serverRepository.linkMatrix(tomoriState.server_id, channel.id, roomId);
 
     // 12. Invalidate cache entries for both old and new room IDs
     invalidateMatrixLinkCache(channel.id, oldRoomId);

@@ -63,9 +63,9 @@ interface SyncItemConfig<TDiscord, TDatabase> {
   getDiscordId: (item: TDiscord) => string;
 }
 
-// ── Stage A server config table row shapes ─────────────────────────────────
+// ── server config table row shapes ─────────────────────────────────
 
-/** Row shape for server_chat_configs (Phase 6 Stage A). */
+/** Row shape for server_chat_configs (Phase 6). */
 export type ServerChatConfigsRow = {
   humanizer_degree: number;
   message_fetch_limit: number;
@@ -89,12 +89,12 @@ export type ServerChatConfigsRow = {
   fallback_model_refs: unknown[];
 };
 
-/** Row shape for server_notice_embeds_configs (Phase 6 Stage A). */
+/** Row shape for server_notice_embeds_configs (Phase 6). */
 export type ServerNoticeEmbedsConfigsRow = {
   tool_notice_hidden_keys: string[];
 };
 
-/** Row shape for server_member_permissions_configs (Phase 6 Stage A). */
+/** Row shape for server_member_permissions_configs (Phase 6). */
 export type ServerMemberPermissionsConfigsRow = {
   server_memteaching_enabled: boolean;
   attribute_memteaching_enabled: boolean;
@@ -105,7 +105,7 @@ export type ServerMemberPermissionsConfigsRow = {
   prompt_snapshot_enabled: boolean;
 };
 
-/** Row shape for server_channel_scope_configs (Phase 6 Stage A). */
+/** Row shape for server_channel_scope_configs (Phase 6). */
 export type ServerChannelScopeConfigsRow = {
   rp_channel_ids: string[];
   private_channel_ids: string[];
@@ -114,7 +114,7 @@ export type ServerChannelScopeConfigsRow = {
   thought_log_channel_disc_id: string | null;
 };
 
-/** Row shape for server_welcome_configs (Phase 6 Stage A). */
+/** Row shape for server_welcome_configs (Phase 6). */
 export type ServerWelcomeConfigsRow = {
   welcome_channel_disc_id: string | null;
   welcome_prompt: string | null;
@@ -122,7 +122,7 @@ export type ServerWelcomeConfigsRow = {
 };
 
 /**
- * Composite export shape for ServerRepository's Phase 6 Stage A config tables.
+ * Composite export shape for ServerRepository's Phase 6 config tables.
  * Replaces the old server_disc_id-only stub.
  */
 export type ServerExportShape = {
@@ -165,6 +165,27 @@ export class ServerRepository implements IRepository<ServerExportShape> {
    */
   async loadStickers(serverDiscId: string): Promise<ServerStickerRow[] | null> {
     return this.sqlLoadServerStickers(serverDiscId);
+  }
+
+  /**
+   * Loads all synced server stickers by internal server DB ID.
+   * Used by context builders that already hold the resolved server_id.
+   *
+   * @param internalServerId - Internal server DB ID
+   */
+  async loadStickersByInternalId(internalServerId: number): Promise<ServerStickerRow[]> {
+    try {
+      const rows = await sql<ServerStickerRow[]>`
+        SELECT sticker_disc_id, sticker_name, sticker_desc, emotion_key, created_at, updated_at
+        FROM server_stickers
+        WHERE server_id = ${internalServerId}
+        ORDER BY created_at ASC
+      `;
+      return rows ?? [];
+    } catch (error) {
+      log.error(`Error loading stickers for server ID ${internalServerId}:`, error);
+      return [];
+    }
   }
 
   // ── blacklist ──────────────────────────────────────────────────────────────
@@ -1103,7 +1124,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
 
   /**
    * Reads chat, notice-embeds, member-permissions, channel-scope, and welcome
-   * configs for the given server from their Phase 6 Stage A tables.
+   * configs for the given server from their Phase 6 tables.
    *
    * @param ownerId - Discord server snowflake
    */
@@ -1160,7 +1181,91 @@ export class ServerRepository implements IRepository<ServerExportShape> {
     }
   }
 
-  // ── Stage A: resolve internal server ID ──────────────────────────────────
+  // ── server operations ──────────────────────────────────────────────────────
+
+  async addUserBlacklist(serverId: number, userDiscId: string): Promise<boolean> {
+    try {
+      await sql`
+        INSERT INTO personalization_blacklist (server_id, user_disc_id)
+        VALUES (${serverId}, ${userDiscId})
+        ON CONFLICT DO NOTHING
+      `;
+      return true;
+    } catch (e) {
+      log.error(`Error adding user blacklist for server ${serverId}:`, e);
+      return false;
+    }
+  }
+
+  async removeUserBlacklist(serverId: number, userDiscId: string): Promise<boolean> {
+    try {
+      const result = await sql`
+        DELETE FROM personalization_blacklist
+        WHERE server_id = ${serverId} AND user_disc_id = ${userDiscId}
+        RETURNING *
+      `;
+      return result.length > 0;
+    } catch (e) {
+      log.error(`Error removing user blacklist for server ${serverId}:`, e);
+      return false;
+    }
+  }
+
+  /**
+   * Batch-remove multiple users from the server's personalization blacklist.
+   * Single round trip via `user_disc_id = ANY(...)` — preferable to looping
+   * `removeUserBlacklist` when removing several IDs at once.
+   *
+   * @param serverId    - Internal server DB ID
+   * @param userDiscIds - Discord IDs of users to remove from the blacklist
+   * @returns Number of rows actually deleted
+   */
+  async removeUserBlacklistMany(serverId: number, userDiscIds: string[]): Promise<number> {
+    if (userDiscIds.length === 0) return 0;
+    try {
+      const result = await sql`
+        DELETE FROM personalization_blacklist
+        WHERE server_id = ${serverId}
+          AND user_disc_id = ANY(${sql.array(userDiscIds)})
+        RETURNING server_id
+      `;
+      return result.length;
+    } catch (e) {
+      log.error(`Error batch-removing user blacklist entries for server ${serverId}:`, e);
+      return 0;
+    }
+  }
+
+  async linkMatrix(serverId: number, channelDiscId: string, matrixRoomId: string): Promise<boolean> {
+    try {
+      await sql`
+        INSERT INTO matrix_channel_links (server_id, channel_disc_id, matrix_room_id)
+        VALUES (${serverId}, ${channelDiscId}, ${matrixRoomId})
+        ON CONFLICT (channel_disc_id) DO UPDATE
+          SET matrix_room_id = EXCLUDED.matrix_room_id
+      `;
+      return true;
+    } catch (e) {
+      log.error(`Error linking matrix room for server ${serverId}:`, e);
+      return false;
+    }
+  }
+
+  async unlinkMatrix(channelDiscId: string): Promise<boolean> {
+    try {
+      const result = await sql`
+        DELETE FROM matrix_channel_links
+        WHERE channel_disc_id = ${channelDiscId}
+        RETURNING *
+      `;
+      return result.length > 0;
+    } catch (e) {
+      log.error(`Error unlinking matrix room for channel ${channelDiscId}:`, e);
+      return false;
+    }
+  }
+
+  // ── resolve internal server ID ──────────────────────────────────
 
   private async resolveServerInternalId(serverDiscId: string): Promise<number | null> {
     const [row] = await sql`
@@ -1169,7 +1274,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
     return (row?.server_id as number | undefined) ?? null;
   }
 
-  // ── Stage A: config table reads ───────────────────────────────────────────
+  // ── config table reads ───────────────────────────────────────────
 
   private async sqlLoadChatConfigs(serverId: number): Promise<ServerChatConfigsRow | null> {
     try {
@@ -1247,7 +1352,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
     }
   }
 
-  // ── Stage A: config table upserts (new tables) ────────────────────────────
+  // ── config table upserts (new tables) ────────────────────────────
 
   private async sqlUpsertChatConfigs(serverId: number, row: ServerChatConfigsRow): Promise<void> {
     const logitBiasesJson = JSON.stringify(row.llm_logit_biases);
@@ -1350,6 +1455,145 @@ export class ServerRepository implements IRepository<ServerExportShape> {
         thought_log_channel_disc_id = EXCLUDED.thought_log_channel_disc_id,
         updated_at                  = NOW()
     `;
+  }
+
+  // ── expression initialization ──────────────────────────────────────────────
+
+  /**
+   * Minimal classification shape used by initializeExpressions.
+   * Mirrors ExpressionClassification from structuredOutput.ts without importing from providers.
+   */
+
+  /**
+   * Load all server emojis that have not yet been classified (emotion_key is null/unset
+   * or description is empty).
+   *
+   * @param serverId - Internal server DB ID
+   */
+  async loadUninitializedEmojis(
+    serverId: number,
+  ): Promise<Array<{ emoji_disc_id: string; emoji_name: string; is_animated: boolean }>> {
+    return await sql<Array<{ emoji_disc_id: string; emoji_name: string; is_animated: boolean }>>`
+      SELECT emoji_disc_id, emoji_name, is_animated
+      FROM server_emojis
+      WHERE server_id = ${serverId}
+        AND (
+          emotion_key IS NULL
+          OR emotion_key = 'unset'
+          OR emoji_desc IS NULL
+          OR emoji_desc = ''
+        )
+    `;
+  }
+
+  /**
+   * Load all server stickers that have not yet been classified.
+   *
+   * @param serverId - Internal server DB ID
+   */
+  async loadUninitializedStickers(
+    serverId: number,
+  ): Promise<Array<{ sticker_disc_id: string; sticker_name: string; sticker_format: string }>> {
+    return await sql<Array<{ sticker_disc_id: string; sticker_name: string; sticker_format: string }>>`
+      SELECT sticker_disc_id, sticker_name, sticker_format
+      FROM server_stickers
+      WHERE server_id = ${serverId}
+        AND (
+          emotion_key IS NULL
+          OR emotion_key = 'unset'
+          OR sticker_desc IS NULL
+          OR sticker_desc = ''
+        )
+    `;
+  }
+
+  /**
+   * Clear emotion_key and description from all server emojis.
+   * Called before a full overwrite re-initialization.
+   *
+   * @param serverId - Internal server DB ID
+   */
+  async clearEmojiExpressions(serverId: number): Promise<void> {
+    await sql`UPDATE server_emojis SET emotion_key = NULL, emoji_desc = NULL WHERE server_id = ${serverId}`;
+  }
+
+  /**
+   * Clear emotion_key and description from all server stickers.
+   * Called before a full overwrite re-initialization.
+   *
+   * @param serverId - Internal server DB ID
+   */
+  async clearStickerExpressions(serverId: number): Promise<void> {
+    await sql`UPDATE server_stickers SET emotion_key = NULL, sticker_desc = NULL WHERE server_id = ${serverId}`;
+  }
+
+  /**
+   * Apply LLM expression classification results to server_emojis and server_stickers
+   * within a single transaction.
+   * Each result is matched by name (case-insensitive) and only written when the row
+   * is still uninitialized (guards against clobbering manual edits mid-batch).
+   *
+   * @param serverId - Internal server DB ID
+   * @param results  - Classified expressions from the LLM structured output
+   * @returns Object with counts of emojis and stickers that were updated
+   */
+  async initializeExpressions(
+    serverId: number,
+    results: Array<{ name: string; emotion_key: string; description: string }>,
+  ): Promise<{ emojiCount: number; stickerCount: number }> {
+    let emojiCount = 0;
+    let stickerCount = 0;
+
+    await sql.transaction(async (tx) => {
+      for (const result of results) {
+        // 1. Try emoji first (only update if still uninitialized)
+        const emojiRows = await tx`
+          UPDATE server_emojis
+          SET
+            emotion_key = ${result.emotion_key},
+            emoji_desc  = ${result.description},
+            updated_at  = CURRENT_TIMESTAMP
+          WHERE server_id = ${serverId}
+            AND LOWER(emoji_name) = LOWER(${result.name})
+            AND (
+              emotion_key IS NULL
+              OR emotion_key = 'unset'
+              OR emoji_desc IS NULL
+              OR emoji_desc = ''
+            )
+          RETURNING emoji_disc_id
+        `;
+
+        if (emojiRows.length > 0) {
+          emojiCount++;
+          continue;
+        }
+
+        // 2. Fall through to sticker if no emoji matched
+        const stickerRows = await tx`
+          UPDATE server_stickers
+          SET
+            emotion_key  = ${result.emotion_key},
+            sticker_desc = ${result.description},
+            updated_at   = CURRENT_TIMESTAMP
+          WHERE server_id = ${serverId}
+            AND LOWER(sticker_name) = LOWER(${result.name})
+            AND (
+              emotion_key IS NULL
+              OR emotion_key = 'unset'
+              OR sticker_desc IS NULL
+              OR sticker_desc = ''
+            )
+          RETURNING sticker_disc_id
+        `;
+
+        if (stickerRows.length > 0) {
+          stickerCount++;
+        }
+      }
+    });
+
+    return { emojiCount, stickerCount };
   }
 
   private async sqlUpsertWelcomeConfigs(serverId: number, row: ServerWelcomeConfigsRow): Promise<void> {

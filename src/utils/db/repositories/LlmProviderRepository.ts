@@ -1059,6 +1059,33 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
   }
 
   /**
+   * Updates the fallback_llm_ids column on a specific saved_provider_configs row.
+   *
+   * @param serverId        - Internal server DB ID
+   * @param provider        - Provider name (lowercase canonical)
+   * @param fallbackLlmIds  - Replacement fallback model ID list
+   */
+  async setSavedProviderConfigFallbacks(
+    serverId: number,
+    provider: string,
+    fallbackLlmIds: number[],
+  ): Promise<boolean> {
+    try {
+      const result = await sql`
+        UPDATE saved_provider_configs
+        SET fallback_llm_ids = ${fallbackLlmIds}
+        WHERE server_id = ${serverId}
+          AND provider = ${provider}
+        RETURNING server_id
+      `;
+      return result.length > 0;
+    } catch (e) {
+      log.error(`Error updating saved_provider_configs fallbacks for server ${serverId} / ${provider}:`, e);
+      return false;
+    }
+  }
+
+  /**
    * Upserts a personal saved provider config for a user.
    *
    * @param userId - Internal user DB ID
@@ -1347,6 +1374,52 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
     } catch (error) {
       const owner = serverId !== null ? `server ${serverId}` : `user ${userId}`;
       log.error(`Error deleting custom endpoint ${label}/${capability} for ${owner}:`, error);
+      return false;
+    }
+  }
+
+  async setActiveCustomEndpoint(params: {
+    serverId: number;
+    capability: "speech" | "transcription";
+    customEndpointId: number;
+  }): Promise<boolean> {
+    try {
+      const [selectedEndpoint] = await sql<[{ custom_endpoint_id: number }]>`
+        SELECT custom_endpoint_id
+        FROM custom_endpoints
+        WHERE custom_endpoint_id = ${params.customEndpointId}
+          AND server_id = ${params.serverId}
+          AND user_id IS NULL
+          AND capability = ${params.capability}
+        LIMIT 1
+      `;
+
+      if (!selectedEndpoint) {
+        return false;
+      }
+
+      await sql`
+        UPDATE custom_endpoints
+        SET is_default = false,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE server_id = ${params.serverId}
+          AND user_id IS NULL
+          AND capability = ${params.capability}
+      `;
+
+      const result = await sql`
+        UPDATE custom_endpoints
+        SET is_default = true,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE custom_endpoint_id = ${params.customEndpointId}
+          AND server_id = ${params.serverId}
+          AND user_id IS NULL
+          AND capability = ${params.capability}
+      `;
+
+      return result.count > 0;
+    } catch (error) {
+      log.error(`Error setting active custom endpoint ${params.customEndpointId}:`, error);
       return false;
     }
   }

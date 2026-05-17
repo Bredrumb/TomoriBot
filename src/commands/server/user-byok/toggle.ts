@@ -4,7 +4,7 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
+import { configRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -35,11 +35,9 @@ export async function execute(
     }
 
     const nextValue = !tomoriState.config.user_byok_mode;
-    await sql`
-      UPDATE server_byok_configs
-      SET user_byok_mode = ${nextValue}
-      WHERE server_id = ${tomoriState.server_id}
-    `;
+    await configRepository.updateByokConfig(tomoriState.server_id, {
+      user_byok_mode: nextValue,
+    });
 
     invalidateTomoriStateCache(guildId);
 

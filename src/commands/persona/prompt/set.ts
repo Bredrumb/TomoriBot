@@ -14,7 +14,6 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaRepository } from "@/utils/db/repositories";
-import { sql } from "@/utils/db/client";
 import { localizer } from "@/utils/text/localizer";
 import { combineModalPromptParts, splitPromptIntoModalParts } from "@/utils/text/modalPromptParts";
 
@@ -208,12 +207,15 @@ export async function execute(
         return;
       }
 
-      await sql`
-			  INSERT INTO persona_configs (tomori_id, persona_prompt)
-			  VALUES (${selectedPersona.tomori_id}, ${personaPrompt || null})
-			  ON CONFLICT (tomori_id) DO UPDATE
-			  SET persona_prompt = EXCLUDED.persona_prompt
-		  `;
+      const ok = await personaRepository.setPrompt(selectedPersona.tomori_id, personaPrompt || "");
+      if (!ok) {
+        await replyInfoEmbed(modalSubmitInteraction, locale, {
+          titleKey: "general.errors.update_failed_title",
+          descriptionKey: "general.errors.update_failed_description",
+          color: ColorCode.ERROR,
+        });
+        continue;
+      }
 
       invalidateTomoriStateCache(serverDiscId);
 

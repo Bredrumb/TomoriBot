@@ -39,16 +39,16 @@ import { getUnconfiguredLlm } from "@/utils/provider/unconfiguredLlm";
 import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
-// ── Stage A persona config table row shapes ─────────────────────────────────
+// ── persona config table row shapes ─────────────────────────────────
 
-/** Row shape for persona_context_note_configs (Phase 6 Stage A). */
+/** Row shape for persona_context_note_configs (Phase 6). */
 export type PersonaContextNoteConfigsRow = {
   tomori_id: number;
   context_note: string | null;
   context_note_depth: number;
 };
 
-/** Row shape for persona_voice_configs (Phase 6 Stage A). */
+/** Row shape for persona_voice_configs (Phase 6). */
 export type PersonaVoiceConfigsRow = {
   tomori_id: number;
   speech_voice_sample_id: number | null;
@@ -59,14 +59,14 @@ export type PersonaVoiceConfigsRow = {
   elevenlabs_voice_name: string | null;
 };
 
-/** Row shape for persona_imagegen_configs (Phase 6 Stage A). */
+/** Row shape for persona_imagegen_configs (Phase 6). */
 export type PersonaImagegenConfigsRow = {
   tomori_id: number;
   nai_tags: string[];
   nai_char_ref_url: string | null;
 };
 
-/** Row shape for persona_textgen_configs (Phase 6 Stage A). */
+/** Row shape for persona_textgen_configs (Phase 6). */
 export type PersonaTextgenConfigsRow = {
   tomori_id: number;
   nai_attg_author: string | null;
@@ -89,7 +89,7 @@ export type PersonaConfigBundle = {
 
 /**
  * Export shape for PersonaRepository.
- * Contains all personas and their Phase 6 Stage A config bundles for a server.
+ * Contains all personas and their Phase 6 config bundles for a server.
  */
 export type PersonaExportShape = {
   personas: PersonaConfigBundle[];
@@ -149,6 +149,452 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     const row = await this.updateTomori(tomoriId, tomoriData);
     if (row && serverDiscId) invalidateTomoriStateCache(serverDiscId);
     return row;
+  }
+
+  // ── persona operations ─────────────────────────────────────────────────────
+
+  async addAttributes(tomoriId: number, attributes: string[]): Promise<boolean> {
+    try {
+      const result = await sql`
+        UPDATE tomoris
+        SET attribute_list = array_cat(attribute_list, ${sql.array(attributes)})
+        WHERE tomori_id = ${tomoriId}
+        RETURNING *
+      `;
+      return result.length > 0;
+    } catch (e) {
+      log.error(`Error adding attributes for persona ${tomoriId}:`, e);
+      return false;
+    }
+  }
+
+  async editAttributeAt(tomoriId: number, index1Based: number, newAttribute: string): Promise<boolean> {
+    try {
+      const result = await sql`
+        UPDATE tomoris
+        SET attribute_list[${index1Based}] = ${newAttribute}
+        WHERE tomori_id = ${tomoriId}
+        RETURNING tomori_id
+      `;
+      return result.length > 0;
+    } catch (e) {
+      log.error(`Error editing attribute at index ${index1Based} for persona ${tomoriId}:`, e);
+      return false;
+    }
+  }
+
+  async removeAttribute(tomoriId: number, attributeToRemove: string): Promise<boolean> {
+    try {
+      const result = await sql`
+        UPDATE tomoris
+        SET attribute_list = array_remove(attribute_list, ${attributeToRemove})
+        WHERE tomori_id = ${tomoriId}
+        RETURNING *
+      `;
+      return result.length > 0;
+    } catch (e) {
+      log.error(`Error removing attribute for persona ${tomoriId}:`, e);
+      return false;
+    }
+  }
+
+  async setPrompt(tomoriId: number, prompt: string): Promise<boolean> {
+    try {
+      const result = await sql`
+        INSERT INTO persona_configs (tomori_id, persona_prompt)
+        VALUES (${tomoriId}, ${prompt})
+        ON CONFLICT (tomori_id) DO UPDATE
+        SET persona_prompt = EXCLUDED.persona_prompt
+        RETURNING *
+      `;
+      return result.length > 0;
+    } catch (e) {
+      log.error(`Error setting prompt for persona ${tomoriId}:`, e);
+      return false;
+    }
+  }
+
+  async removePrompt(tomoriId: number): Promise<boolean> {
+    try {
+      const result = await sql`
+        UPDATE persona_configs
+        SET persona_prompt = NULL
+        WHERE tomori_id = ${tomoriId}
+        RETURNING *
+      `;
+      return result.length > 0;
+    } catch (e) {
+      log.error(`Error removing prompt for persona ${tomoriId}:`, e);
+      return false;
+    }
+  }
+
+  /**
+   * Set the context note (and depth) for a persona. Writes to both the new
+   * `persona_context_note_configs` table and the legacy `tomoris` columns
+   * (dual-write expand-then-contract pattern, mirrors fromExportShape).
+   *
+   * @param tomoriId - Internal persona DB ID
+   * @param contextNote - Note text, or null to clear
+   * @param contextNoteDepth - Injection depth (0 disables)
+   */
+  async setContextNote(tomoriId: number, contextNote: string | null, contextNoteDepth: number): Promise<boolean> {
+    try {
+      const row: PersonaContextNoteConfigsRow = {
+        tomori_id: tomoriId,
+        context_note: contextNote,
+        context_note_depth: contextNoteDepth,
+      };
+      await Promise.all([this.sqlUpsertPersonaContextNoteConfigs(row), this.sqlDualWriteContextNoteToTomoris(row)]);
+      return true;
+    } catch (e) {
+      log.error(`Error setting context note for persona ${tomoriId}:`, e);
+      return false;
+    }
+  }
+
+  /**
+   * Set the NovelAI ATTG (Author/Title/Tags/Genre/Stars) metadata for a persona.
+   * Writes to both the new `persona_textgen_configs` table and the legacy
+   * `tomoris` columns (dual-write expand-then-contract pattern).
+   *
+   * @param tomoriId - Internal persona DB ID
+   * @param attg     - ATTG fields; any subset may be null to clear that field
+   */
+  async setNaiAttg(
+    tomoriId: number,
+    attg: {
+      nai_attg_author: string | null;
+      nai_attg_title: string | null;
+      nai_attg_tags: string | null;
+      nai_attg_genre: string | null;
+      nai_attg_stars: number | null;
+    },
+  ): Promise<boolean> {
+    try {
+      const row: PersonaTextgenConfigsRow = { tomori_id: tomoriId, ...attg };
+      await Promise.all([this.sqlUpsertPersonaTextgenConfigs(row), this.sqlDualWriteTextgenToTomoris(row)]);
+      return true;
+    } catch (e) {
+      log.error(`Error setting NAI ATTG for persona ${tomoriId}:`, e);
+      return false;
+    }
+  }
+
+  /**
+   * Replace the persona's NovelAI character tags (imageboard-style).
+   * Writes only `nai_tags` to both the new `persona_imagegen_configs` table
+   * and the legacy `tomoris.nai_tags` column — preserves `nai_char_ref_url`.
+   *
+   * @param tomoriId - Internal persona DB ID
+   * @param tags     - Full replacement tag array (use [] to clear)
+   */
+  async setNaiTags(tomoriId: number, tags: string[]): Promise<boolean> {
+    try {
+      await Promise.all([
+        sql`
+          INSERT INTO persona_imagegen_configs (tomori_id, nai_tags)
+          VALUES (${tomoriId}, ${sql.array(tags)})
+          ON CONFLICT (tomori_id) DO UPDATE SET
+            nai_tags   = EXCLUDED.nai_tags,
+            updated_at = NOW()
+        `,
+        sql`
+          UPDATE tomoris
+          SET nai_tags = ${sql.array(tags)}, updated_at = NOW()
+          WHERE tomori_id = ${tomoriId}
+        `,
+      ]);
+      return true;
+    } catch (e) {
+      log.error(`Error setting NAI tags for persona ${tomoriId}:`, e);
+      return false;
+    }
+  }
+
+  async addSampleDialoguePair(tomoriId: number, inputs: string[], outputs: string[]): Promise<boolean> {
+    if (inputs.length !== outputs.length) {
+      log.error(`addSampleDialoguePair input/output length mismatch for persona ${tomoriId}`);
+      return false;
+    }
+    if (inputs.length === 0) return true;
+
+    try {
+      const result = await sql`
+        UPDATE tomoris
+        SET sample_dialogues_in = array_cat(sample_dialogues_in, ${sql.array(inputs)}),
+            sample_dialogues_out = array_cat(sample_dialogues_out, ${sql.array(outputs)})
+        WHERE tomori_id = ${tomoriId}
+        RETURNING tomori_id
+      `;
+      return result.length > 0;
+    } catch (e) {
+      log.error(`Error adding sample dialogue pair(s) for persona ${tomoriId}:`, e);
+      return false;
+    }
+  }
+
+  async editSampleDialoguePairAt(
+    tomoriId: number,
+    index1Based: number,
+    newInput: string,
+    newOutput: string,
+  ): Promise<boolean> {
+    try {
+      const result = await sql`
+        UPDATE tomoris
+        SET sample_dialogues_in[${index1Based}] = ${newInput},
+            sample_dialogues_out[${index1Based}] = ${newOutput}
+        WHERE tomori_id = ${tomoriId}
+        RETURNING tomori_id
+      `;
+      return result.length > 0;
+    } catch (e) {
+      log.error(`Error editing sample dialogue at index ${index1Based} for persona ${tomoriId}:`, e);
+      return false;
+    }
+  }
+
+  async removeSampleDialoguePairAt(tomoriId: number, index1Based: number): Promise<boolean> {
+    try {
+      const result = await sql`
+        UPDATE tomoris
+        SET
+          sample_dialogues_in = (
+            SELECT COALESCE(array_agg(elem ORDER BY ord), '{}')
+            FROM unnest(sample_dialogues_in) WITH ORDINALITY AS t(elem, ord)
+            WHERE ord != ${index1Based}
+          ),
+          sample_dialogues_out = (
+            SELECT COALESCE(array_agg(elem ORDER BY ord), '{}')
+            FROM unnest(sample_dialogues_out) WITH ORDINALITY AS t(elem, ord)
+            WHERE ord != ${index1Based}
+          )
+        WHERE tomori_id = ${tomoriId}
+        RETURNING tomori_id
+      `;
+      return result.length > 0;
+    } catch (e) {
+      log.error(`Error removing sample dialogue at index ${index1Based} for persona ${tomoriId}:`, e);
+      return false;
+    }
+  }
+
+  /**
+   * Repairs mismatched sample-dialogue arrays by truncating both to a safe pair count.
+   *
+   * @param tomoriId    - Internal persona DB ID
+   * @param safeLength  - Length to truncate both dialogue arrays to
+   * @returns The repaired dialogue arrays, or null when no row was updated
+   */
+  async repairSampleDialogues(
+    tomoriId: number,
+    safeLength: number,
+  ): Promise<{ repairedIn: string[]; repairedOut: string[] } | null> {
+    const [updatedRow] = await sql`
+      UPDATE tomoris
+      SET
+        sample_dialogues_in = sample_dialogues_in[1:${safeLength}],
+        sample_dialogues_out = sample_dialogues_out[1:${safeLength}]
+      WHERE tomori_id = ${tomoriId}
+      RETURNING sample_dialogues_in, sample_dialogues_out
+    `;
+
+    return updatedRow
+      ? {
+          repairedIn: (updatedRow.sample_dialogues_in as string[]) ?? [],
+          repairedOut: (updatedRow.sample_dialogues_out as string[]) ?? [],
+        }
+      : null;
+  }
+
+  async removePersona(tomoriId: number): Promise<boolean> {
+    try {
+      const result = await sql`
+        DELETE FROM tomoris
+        WHERE tomori_id = ${tomoriId}
+        RETURNING tomori_id
+      `;
+      return result.length > 0;
+    } catch (e) {
+      log.error(`Error removing persona ${tomoriId}:`, e);
+      return false;
+    }
+  }
+
+  async renamePersona(tomoriId: number, newName: string): Promise<boolean> {
+    try {
+      const result = await sql`
+        UPDATE tomoris
+        SET tomori_nickname = ${newName}
+        WHERE tomori_id = ${tomoriId}
+        RETURNING *
+      `;
+      return result.length > 0;
+    } catch (e) {
+      log.error(`Error renaming persona ${tomoriId}:`, e);
+      return false;
+    }
+  }
+
+  async swapPersona(tomoriId1: number, tomoriId2: number): Promise<boolean> {
+    try {
+      await sql.transaction(async (tx) => {
+        await tx`
+          UPDATE tomoris 
+          SET is_alter = true 
+          WHERE tomori_id = ${tomoriId2}
+        `;
+        await tx`
+          UPDATE tomoris 
+          SET is_alter = false 
+          WHERE tomori_id = ${tomoriId1}
+        `;
+      });
+      return true;
+    } catch (e) {
+      log.error(`Error swapping personas ${tomoriId1} and ${tomoriId2}:`, e);
+      return false;
+    }
+  }
+
+  async setAvatar(tomoriId: number, avatarUrl: string | null): Promise<boolean> {
+    try {
+      const result = await sql`
+        UPDATE tomoris
+        SET webhook_avatar_url = ${avatarUrl}
+        WHERE tomori_id = ${tomoriId}
+        RETURNING *
+      `;
+      return result.length > 0;
+    } catch (e) {
+      log.error(`Error setting avatar for persona ${tomoriId}:`, e);
+      return false;
+    }
+  }
+
+  /**
+   * Creates an alter persona row and returns the inserted row.
+   * Intentionally does not catch DB errors so callers can preserve
+   * unique-violation handling for user-facing name-conflict replies.
+   *
+   * @param params - Alter persona fields to insert
+   */
+  async createAlterPersona(params: {
+    serverId: number;
+    nickname: string;
+    attributes: string[];
+    sampleDialoguesIn: string[];
+    sampleDialoguesOut: string[];
+    personaLineageId?: number | null;
+    naiTags?: string[];
+    naiCharRefUrl?: string | null;
+    naiAttgAuthor?: string | null;
+    naiAttgTitle?: string | null;
+    naiAttgTags?: string | null;
+    naiAttgGenre?: string | null;
+    naiAttgStars?: number | null;
+  }): Promise<TomoriRow | null> {
+    const [row] = await sql`
+      INSERT INTO tomoris (
+        server_id,
+        tomori_nickname,
+        attribute_list,
+        sample_dialogues_in,
+        sample_dialogues_out,
+        is_alter,
+        persona_lineage_id,
+        nai_tags,
+        nai_char_ref_url,
+        nai_attg_author,
+        nai_attg_title,
+        nai_attg_tags,
+        nai_attg_genre,
+        nai_attg_stars
+      )
+      VALUES (
+        ${params.serverId},
+        ${params.nickname},
+        ${sql.array(params.attributes)},
+        ${sql.array(params.sampleDialoguesIn)},
+        ${sql.array(params.sampleDialoguesOut)},
+        true,
+        ${params.personaLineageId ?? 0},
+        ${sql.array(params.naiTags ?? [])},
+        ${params.naiCharRefUrl ?? null},
+        ${params.naiAttgAuthor ?? null},
+        ${params.naiAttgTitle ?? null},
+        ${params.naiAttgTags ?? null},
+        ${params.naiAttgGenre ?? null},
+        ${params.naiAttgStars ?? null}
+      )
+      RETURNING *
+    `;
+    return row ? (row as unknown as TomoriRow) : null;
+  }
+
+  async addTrigger(tomoriId: number, triggers: string[]): Promise<boolean> {
+    try {
+      const result = await sql`
+        INSERT INTO persona_configs (tomori_id, trigger_words)
+        VALUES (${tomoriId}, ${sql.array(triggers)})
+        ON CONFLICT (tomori_id) DO UPDATE
+        SET trigger_words = array_cat(persona_configs.trigger_words, EXCLUDED.trigger_words)
+        RETURNING *
+      `;
+      return result.length > 0;
+    } catch (e) {
+      log.error(`Error adding triggers for persona ${tomoriId}:`, e);
+      return false;
+    }
+  }
+
+  /**
+   * Replace the persona's trigger_words list with the given remaining set.
+   * Upserts into `persona_configs` — if no row exists yet, one is created
+   * (matches addTrigger's behavior; the caller no longer needs a guarantor INSERT).
+   *
+   * @param tomoriId          - Internal persona DB ID
+   * @param triggersRemaining - The full replacement list (NOT a delta)
+   */
+  async removeTrigger(tomoriId: number, triggersRemaining: string[]): Promise<boolean> {
+    try {
+      const result = await sql`
+        INSERT INTO persona_configs (tomori_id, trigger_words)
+        VALUES (${tomoriId}, ${sql.array(triggersRemaining)})
+        ON CONFLICT (tomori_id) DO UPDATE
+        SET trigger_words = EXCLUDED.trigger_words
+        RETURNING *
+      `;
+      return result.length > 0;
+    } catch (e) {
+      log.error(`Error removing triggers for persona ${tomoriId}:`, e);
+      return false;
+    }
+  }
+
+  /**
+   * Atomically upserts both trigger_words and persona_prompt in persona_configs.
+   * Mirrors the INSERT … ON CONFLICT DO UPDATE pattern used by preset-apply flows.
+   *
+   * @param tomoriId - Internal persona DB ID
+   * @param triggers - Full replacement trigger word list (use [] to clear)
+   * @param prompt   - Persona prompt text, or null to clear
+   */
+  async setPersonaConfig(tomoriId: number, triggers: string[], prompt: string | null): Promise<boolean> {
+    try {
+      await sql`
+        INSERT INTO persona_configs (tomori_id, trigger_words, persona_prompt)
+        VALUES (${tomoriId}, ${sql.array(triggers)}, ${prompt})
+        ON CONFLICT (tomori_id) DO UPDATE
+        SET trigger_words  = EXCLUDED.trigger_words,
+            persona_prompt = EXCLUDED.persona_prompt
+      `;
+      return true;
+    } catch (e) {
+      log.error(`Error setting persona config for persona ${tomoriId}:`, e);
+      return false;
+    }
   }
 
   // ── limit checks ───────────────────────────────────────────────────────────
@@ -265,7 +711,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   // ── IRepository contract ───────────────────────────────────────────────────
 
   /**
-   * Exports all personas and their Phase 6 Stage A config bundles for a server.
+   * Exports all personas and their Phase 6 config bundles for a server.
    *
    * @param ownerId - Discord server snowflake
    */
@@ -340,7 +786,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
-  // ── Stage A: resolve internal server ID ──────────────────────────────────
+  // ── resolve internal server ID ──────────────────────────────────
 
   private async resolveServerInternalId(serverDiscId: string): Promise<number | null> {
     const [row] = await sql`
@@ -367,7 +813,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
-  // ── Stage A: persona config table reads ──────────────────────────────────
+  // ── persona config table reads ──────────────────────────────────
 
   private async sqlLoadPersonaContextNoteConfigs(tomoriId: number): Promise<PersonaContextNoteConfigsRow | null> {
     try {
@@ -422,7 +868,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
-  // ── Stage A: persona config table upserts (new tables) ───────────────────
+  // ── persona config table upserts (new tables) ───────────────────
 
   private async sqlUpsertPersonaContextNoteConfigs(row: PersonaContextNoteConfigsRow): Promise<void> {
     await sql`
@@ -485,7 +931,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     `;
   }
 
-  // ── Stage A: dual-write back to tomoris ──────────────────────────────────
+  // ── dual-write back to tomoris ──────────────────────────────────
 
   private async sqlDualWriteContextNoteToTomoris(row: PersonaContextNoteConfigsRow): Promise<void> {
     await sql`

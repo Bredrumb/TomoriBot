@@ -14,7 +14,6 @@ import type { SelectOption } from "../../types/discord/modal";
 import { personaRepository } from "@/utils/db/repositories";
 import { downloadImage } from "../../utils/image/avatarHelper";
 import { convertToPNG } from "../../utils/image/imageProcessor";
-import { sql } from "../../utils/db/client";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 import {
   deletePersonaAvatarFromStorage,
@@ -223,19 +222,8 @@ export async function execute(
 
     // 9. Swap is_alter flags in database.
     // Trigger words are persona-scoped in persona_configs and do not need migration.
-    await sql.transaction(async (tx) => {
-      await tx`
-				UPDATE tomoris
-				SET is_alter = true
-				WHERE tomori_id = ${mainPersona.tomori_id}
-			`;
-
-      await tx`
-				UPDATE tomoris
-				SET is_alter = false
-				WHERE tomori_id = ${selectedAlter.tomori_id}
-			`;
-    });
+    // biome-ignore lint/style/noNonNullAssertion: guaranteed by prior checks
+    await personaRepository.swapPersona(mainPersona.tomori_id!, selectedAlter.tomori_id!);
 
     // 10. Try to update nickname and avatar separately (non-fatal if fails)
     let avatarSwapSuccess = false;
@@ -413,12 +401,8 @@ export async function execute(
         newFormerMainAvatarUrl = storedAvatarUrl;
 
         if (storedAvatarUrl) {
-          // Store in former main's webhook_avatar_url
-          await sql`
-						UPDATE tomoris
-						SET webhook_avatar_url = ${storedAvatarUrl}
-						WHERE tomori_id = ${mainPersona.tomori_id}
-					`;
+          // biome-ignore lint/style/noNonNullAssertion: guaranteed by prior checks
+          await personaRepository.setAvatar(mainPersona.tomori_id!, storedAvatarUrl);
 
           log.success(`Stored former main persona "${mainPersona.tomori_nickname}" avatar URL for future use`);
         } else {
@@ -442,11 +426,7 @@ export async function execute(
       });
 
       if (selectedAlterS3Url) {
-        await sql`
-					UPDATE tomoris
-					SET webhook_avatar_url = ${selectedAlterS3Url}
-					WHERE tomori_id = ${selectedAlter.tomori_id}
-				`;
+        await personaRepository.setAvatar(selectedAlter.tomori_id, selectedAlterS3Url);
         if (previousSelectedAlterAvatarUrl && previousSelectedAlterAvatarUrl !== selectedAlterS3Url) {
           await deletePersonaAvatarFromStorage(previousSelectedAlterAvatarUrl);
         }

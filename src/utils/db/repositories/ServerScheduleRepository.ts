@@ -1,6 +1,6 @@
 /**
  * ServerScheduleRepository — manages the `reminders` and `random_triggers` tables,
- * plus the Phase 6 Stage A `server_trigger_behavior_configs` and
+ * plus the Phase 6 `server_trigger_behavior_configs` and
  * `server_auto_trigger_configs` tables.
  *
  * Split from ServerRepository in Phase 5.5e Stage C. Scheduling is cleanly
@@ -22,9 +22,9 @@ import { emitScheduledWorkNudge } from "@/timers/scheduledWorkSignals";
 import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
-// ── Stage A schedule config table row shapes ────────────────────────────────
+// ── schedule config table row shapes ────────────────────────────────
 
-/** Row shape for server_trigger_behavior_configs (Phase 6 Stage A). */
+/** Row shape for server_trigger_behavior_configs (Phase 6). */
 export type ServerTriggerBehaviorConfigsRow = {
   always_reply_enabled: boolean;
   deliberate_trigger_mode: boolean;
@@ -32,7 +32,7 @@ export type ServerTriggerBehaviorConfigsRow = {
   cooldown_length: number;
 };
 
-/** Row shape for server_auto_trigger_configs (Phase 6 Stage A). */
+/** Row shape for server_auto_trigger_configs (Phase 6). */
 export type ServerAutoTriggerConfigsRow = {
   autoch_disc_ids: string[];
   autoch_persona_overrides: unknown[];
@@ -40,7 +40,7 @@ export type ServerAutoTriggerConfigsRow = {
   autoch_threshold_max: number;
 };
 
-/** Composite export shape for ServerScheduleRepository's Phase 6 Stage A tables. */
+/** Composite export shape for ServerScheduleRepository's Phase 6 tables. */
 export type ServerScheduleExportShape = {
   trigger_behavior: ServerTriggerBehaviorConfigsRow | null;
   auto_trigger: ServerAutoTriggerConfigsRow | null;
@@ -1016,7 +1016,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
     }
   }
 
-  // ── Stage A: resolve internal server ID ──────────────────────────────────
+  // ── private helpers ───────────────────────────────────────────────────────
 
   private async resolveServerId(serverDiscId: string): Promise<number | null> {
     const [row] = await sql`
@@ -1025,7 +1025,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
     return (row?.server_id as number | undefined) ?? null;
   }
 
-  // ── Stage A: config table reads ───────────────────────────────────────────
+  // ── config table reads ───────────────────────────────────────────
 
   private async sqlLoadTriggerBehaviorConfigs(serverId: number): Promise<ServerTriggerBehaviorConfigsRow | null> {
     try {
@@ -1055,7 +1055,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
     }
   }
 
-  // ── Stage A: config table upserts (new tables) ────────────────────────────
+  // ── config table upserts (new tables) ────────────────────────────
 
   private async sqlUpsertTriggerBehaviorConfigs(serverId: number, row: ServerTriggerBehaviorConfigsRow): Promise<void> {
     await sql`

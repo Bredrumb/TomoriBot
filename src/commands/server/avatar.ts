@@ -15,7 +15,6 @@ import type { SelectOption } from "../../types/discord/modal";
 import { safeDownload } from "../../utils/security/safeDownload";
 import { memoryGuard, reserveAvatarQuota } from "../../utils/security/rateLimiter";
 import { personaRepository } from "@/utils/db/repositories";
-import { sql } from "../../utils/db/client";
 import { convertToPNG } from "../../utils/image/imageProcessor";
 import { deletePersonaAvatarFromStorage, uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage";
 import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
@@ -368,11 +367,7 @@ export async function execute(
           await deletePersonaAvatarFromStorage(selectedPersona.webhook_avatar_url);
         }
 
-        await sql`
-					UPDATE tomoris
-					SET webhook_avatar_url = NULL
-					WHERE tomori_id = ${selectedPersona.tomori_id}
-				`;
+        await personaRepository.setAvatar(selectedPersona.tomori_id, null);
 
         invalidateTomoriStateCache(interaction.guild.id);
 
@@ -498,11 +493,7 @@ export async function execute(
           await deletePersonaAvatarFromStorage(selectedPersona.webhook_avatar_url);
         }
 
-        await sql`
-					UPDATE tomoris
-					SET webhook_avatar_url = ${persistedAvatarUrl}
-					WHERE tomori_id = ${selectedPersona.tomori_id}
-				`;
+        await personaRepository.setAvatar(selectedPersona.tomori_id, persistedAvatarUrl);
       }
 
       invalidateTomoriStateCache(interaction.guild.id);

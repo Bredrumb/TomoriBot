@@ -17,7 +17,6 @@ import { extractMetadataFromPNG, extractSillyTavernMetadataFromPNG } from "../..
 import { validatePNGBuffer } from "../../utils/image/avatarHelper";
 import { personaRepository } from "@/utils/db/repositories";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
-import { sql } from "../../utils/db/client";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { resolvePersonaAvatarPublicUrl, uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage";
@@ -982,99 +981,26 @@ export async function execute(
         client.user?.displayAvatarURL({ extension: "png", size: 1024, forceStatic: true }) ??
         null;
 
-      // 11g. Format arrays as PostgreSQL array literals for safe insertion
-      const attributeArrayLiteral = `{${presetData.attribute_list
-        .map((item: string) => `"${item.replace(/(["\\])/g, "\\$1")}"`)
-        .join(",")}}`;
-
-      const dialoguesInArrayLiteral = `{${presetData.sample_dialogues_in
-        .map((item: string) => `"${item.replace(/(["\\])/g, "\\$1")}"`)
-        .join(",")}}`;
-
-      const dialoguesOutArrayLiteral = `{${presetData.sample_dialogues_out
-        .map((item: string) => `"${item.replace(/(["\\])/g, "\\$1")}"`)
-        .join(",")}}`;
-
-      const alterTriggersArrayLiteral = `{${uniqueTriggers
-        .map((item: string) => `"${item.replace(/(["\\])/g, "\\$1")}"`)
-        .join(",")}}`;
-
-      const naiTagsArrayLiteral = `{${(presetData.nai_tags ?? [])
-        .map((item: string) => `"${item.replace(/(["\\])/g, "\\$1")}"`)
-        .join(",")}}`;
-
       // 11h. Insert new alter persona row with lineage mode behavior and NovelAI fields
       const importedLineageId = presetData.persona_lineage_id ?? null;
-      let newAlterRow: { tomori_id: number } | undefined;
+      let newAlterRow: { tomori_id?: number } | undefined;
       try {
-        [newAlterRow] =
-          identityMode === "preserve" && importedLineageId !== null
-            ? await sql`
-						INSERT INTO tomoris (
-							server_id,
-							tomori_nickname,
-							attribute_list,
-							sample_dialogues_in,
-							sample_dialogues_out,
-							is_alter,
-							persona_lineage_id,
-							nai_tags,
-							nai_char_ref_url,
-							nai_attg_author,
-							nai_attg_title,
-							nai_attg_tags,
-							nai_attg_genre,
-							nai_attg_stars
-						) VALUES (
-							${mainPersona.server_id},
-							${presetData.tomori_nickname},
-							${attributeArrayLiteral}::text[],
-							${dialoguesInArrayLiteral}::text[],
-							${dialoguesOutArrayLiteral}::text[],
-							true,
-							${importedLineageId},
-							${naiTagsArrayLiteral}::text[],
-							${presetData.nai_char_ref_url ?? null},
-							${presetData.nai_attg_author ?? null},
-							${presetData.nai_attg_title ?? null},
-							${presetData.nai_attg_tags ?? null},
-							${presetData.nai_attg_genre ?? null},
-							${presetData.nai_attg_stars ?? null}
-						)
-						RETURNING tomori_id
-					`
-            : await sql`
-						INSERT INTO tomoris (
-							server_id,
-							tomori_nickname,
-							attribute_list,
-							sample_dialogues_in,
-							sample_dialogues_out,
-							is_alter,
-							nai_tags,
-							nai_char_ref_url,
-							nai_attg_author,
-							nai_attg_title,
-							nai_attg_tags,
-							nai_attg_genre,
-							nai_attg_stars
-						) VALUES (
-							${mainPersona.server_id},
-							${presetData.tomori_nickname},
-							${attributeArrayLiteral}::text[],
-							${dialoguesInArrayLiteral}::text[],
-							${dialoguesOutArrayLiteral}::text[],
-							true,
-							${naiTagsArrayLiteral}::text[],
-							${presetData.nai_char_ref_url ?? null},
-							${presetData.nai_attg_author ?? null},
-							${presetData.nai_attg_title ?? null},
-							${presetData.nai_attg_tags ?? null},
-							${presetData.nai_attg_genre ?? null},
-							${presetData.nai_attg_stars ?? null}
-						)
-						RETURNING tomori_id
-					`;
+        newAlterRow =
+          (await personaRepository.createAlterPersona({
+            serverId: mainPersona.server_id,
+            nickname: presetData.tomori_nickname,
+            attributes: presetData.attribute_list,
+            sampleDialoguesIn: presetData.sample_dialogues_in,
+            sampleDialoguesOut: presetData.sample_dialogues_out,
+            personaLineageId: identityMode === "preserve" ? importedLineageId : null,
+            naiTags: presetData.nai_tags ?? [],
+            naiCharRefUrl: presetData.nai_char_ref_url ?? null,
+            naiAttgAuthor: presetData.nai_attg_author ?? null,
+            naiAttgTitle: presetData.nai_attg_title ?? null,
+            naiAttgTags: presetData.nai_attg_tags ?? null,
+            naiAttgGenre: presetData.nai_attg_genre ?? null,
+            naiAttgStars: presetData.nai_attg_stars ?? null,
+          })) ?? undefined;
       } catch (error) {
         if (isUniqueViolation(error)) {
           await interaction.editReply({
@@ -1112,18 +1038,22 @@ export async function execute(
       // 11h.1 Store alter trigger words + optional persona prompt in persona_configs
       const importedPersonaPrompt = typeof presetData.persona_prompt === "string" ? presetData.persona_prompt : null;
 
-      await sql`
-				INSERT INTO persona_configs (tomori_id, trigger_words, persona_prompt)
-				VALUES (
-					${newTomoriId},
-					${alterTriggersArrayLiteral}::text[],
-					${importedPersonaPrompt}
-				)
-				ON CONFLICT (tomori_id) DO UPDATE
-				SET
-					trigger_words = EXCLUDED.trigger_words,
-					persona_prompt = EXCLUDED.persona_prompt
-			`;
+      const personaConfigUpdated = await personaRepository.setPersonaConfig(
+        newTomoriId,
+        uniqueTriggers,
+        importedPersonaPrompt,
+      );
+      if (!personaConfigUpdated) {
+        await interaction.editReply({
+          embeds: [
+            new EmbedBuilder()
+              .setTitle(localizer(locale, "general.errors.update_failed_title"))
+              .setDescription(localizer(locale, "general.errors.update_failed_description"))
+              .setColor(ColorCode.ERROR),
+          ],
+        });
+        return;
+      }
 
       const usedMainAvatarFallback = !avatarImageBuffer && Boolean(fallbackAvatarReference);
 
@@ -1208,11 +1138,10 @@ export async function execute(
 
       // 11k. Store avatar URL in webhook_avatar_url column
       if (avatarUrl) {
-        await sql`
-					UPDATE tomoris
-					SET webhook_avatar_url = ${avatarUrl}
-					WHERE tomori_id = ${newTomoriId}
-				`;
+        const avatarUpdated = await personaRepository.setAvatar(newTomoriId, avatarUrl);
+        if (!avatarUpdated) {
+          log.warn(`Failed to persist imported avatar for alter persona ${newTomoriId}`);
+        }
       } else {
         log.warn(`Failed to persist imported avatar for alter persona ${newTomoriId}`);
       }

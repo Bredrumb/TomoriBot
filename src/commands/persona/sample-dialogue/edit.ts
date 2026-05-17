@@ -6,7 +6,6 @@ import type {
   SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
@@ -24,7 +23,7 @@ import { personaRepository, userRepository } from "@/utils/db/repositories";
 import { getMemoryLimits, validateSampleDialogue } from "@/utils/misc/memoryLimits";
 import { splitPromptIntoModalParts, combineModalPromptParts } from "@/utils/text/modalPromptParts";
 import type { SelectOption } from "@/types/discord/modal";
-import { tomoriSchema, type ErrorContext, type TomoriState, type UserRow } from "@/types/db/schema";
+import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 
 const SELECT_MODAL_CUSTOM_ID = "persona_sampledialogue_edit_select_modal";
 const EDIT_MODAL_CUSTOM_ID = "persona_sampledialogue_edit_value_modal";
@@ -56,26 +55,14 @@ async function repairMismatchedDialogues(
     `Self-healing: truncating sample dialogues for tomori ${tomoriId} from (in: ${inLength}, out: ${outLength}) to ${safeLength} pairs`,
   );
 
-  const [updatedRow] = await sql`
-    UPDATE tomoris
-    SET
-      sample_dialogues_in = sample_dialogues_in[1:${safeLength}],
-      sample_dialogues_out = sample_dialogues_out[1:${safeLength}]
-    WHERE tomori_id = ${tomoriId}
-    RETURNING sample_dialogues_in, sample_dialogues_out
-  `;
-
-  if (!updatedRow) {
+  const repaired = await personaRepository.repairSampleDialogues(tomoriId, safeLength);
+  if (!repaired) {
     log.error(`Self-healing failed: no rows returned for tomori ${tomoriId}`);
     return null;
   }
 
   log.success(`Self-healing complete: sample dialogues for tomori ${tomoriId} repaired to ${safeLength} pairs`);
-
-  return {
-    repairedIn: (updatedRow.sample_dialogues_in as string[]) ?? [],
-    repairedOut: (updatedRow.sample_dialogues_out as string[]) ?? [],
-  };
+  return repaired;
 }
 
 async function performSampleDialogueEdit(
@@ -88,18 +75,25 @@ async function performSampleDialogueEdit(
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
-  const pgIndex = selectedIndex + 1;
-  const [updatedRow] = await sql`
-    UPDATE tomoris
-    SET
-      sample_dialogues_in[${pgIndex}] = ${newUserInput},
-      sample_dialogues_out[${pgIndex}] = ${newBotInput}
-    WHERE tomori_id = ${selectedPersona.tomori_id}
-    RETURNING *
-  `;
+  if (selectedPersona.tomori_id === undefined) {
+    await log.error("Cannot edit sample dialogue for persona without tomori_id");
+    await replyInfoEmbed(replyInteraction, locale, {
+      titleKey: "general.errors.update_failed_title",
+      descriptionKey: "general.errors.update_failed_description",
+      color: ColorCode.ERROR,
+    });
+    return false;
+  }
 
-  const validationResult = tomoriSchema.safeParse(updatedRow);
-  if (!validationResult.success || !updatedRow) {
+  const pgIndex = selectedIndex + 1;
+  const updated = await personaRepository.editSampleDialoguePairAt(
+    selectedPersona.tomori_id,
+    pgIndex,
+    newUserInput,
+    newBotInput,
+  );
+
+  if (!updated) {
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: selectedPersona.server_id,
@@ -108,17 +102,10 @@ async function performSampleDialogueEdit(
       metadata: {
         command: "persona sample-dialogue edit",
         selectedIndex,
-        validationErrors: validationResult.success ? null : validationResult.error.flatten(),
       },
     };
 
-    await log.error(
-      "Failed to update or validate sample dialogue arrays",
-      validationResult.success
-        ? new Error("Database update returned no rows or unexpected data")
-        : new Error("Updated tomori row failed validation"),
-      context,
-    );
+    await log.error("Failed to update sample dialogue arrays", new Error("Database update returned no rows"), context);
 
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "general.errors.update_failed_title",

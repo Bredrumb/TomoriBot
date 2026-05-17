@@ -1,16 +1,14 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-// Import sql
-import { sql } from "@/utils/db/client";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
-import { type UserRow, type ErrorContext } from "@/types/db/schema";
+import type { UserRow, ErrorContext } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";
-import { llmModelRepo } from "@/utils/db/repositories";
+import { configRepository, llmModelRepo } from "@/utils/db/repositories";
 import { getDiffusionModelById } from "@/utils/image/naiDiffusionModels";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { getProviderDisplayName, getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
@@ -151,16 +149,12 @@ export async function execute(
     const nextNaiModelId = clearTarget === "standard" ? tomoriState.config.nai_diffusion_model_id : null;
 
     await Promise.all([
-      sql`
-        UPDATE server_model_configs
-        SET diffusion_model_id = ${nextStandardModelId}
-        WHERE server_id = ${tomoriState.server_id}
-      `,
-      sql`
-        UPDATE server_novelai_imagegen_configs
-        SET nai_diffusion_model_id = ${nextNaiModelId}
-        WHERE server_id = ${tomoriState.server_id}
-      `,
+      configRepository.updateModelConfig(tomoriState.server_id, {
+        diffusion_model_id: nextStandardModelId,
+      }),
+      configRepository.updateNovelaiImagegenConfig(tomoriState.server_id, {
+        nai_diffusion_model_id: nextNaiModelId,
+      }),
     ]);
 
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
@@ -240,14 +234,11 @@ export async function execute(
         return;
       }
 
-      const [updatedRow] = await sql`
-        UPDATE server_model_configs
-        SET diffusion_model_id = ${selectedModelId}
-        WHERE server_id = ${tomoriState.server_id}
-        RETURNING server_id
-      `;
+      const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
+        diffusion_model_id: selectedModelId,
+      });
 
-      if (!updatedRow) {
+      if (!updated) {
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
@@ -382,23 +373,17 @@ export async function execute(
       return;
     }
 
-    // 10. Update the config in the database using direct SQL
-    const [updatedRow] =
+    // 10. Update the config in the database via the repository
+    const updated =
       targetColumn === "nai_diffusion_model_id"
-        ? await sql`
-              UPDATE server_novelai_imagegen_configs
-              SET nai_diffusion_model_id = ${selectedModel.diffusion_model_id}
-              WHERE server_id = ${tomoriState.server_id}
-              RETURNING server_id
-          `
-        : await sql`
-              UPDATE server_model_configs
-              SET diffusion_model_id = ${selectedModel.diffusion_model_id}
-              WHERE server_id = ${tomoriState.server_id}
-              RETURNING server_id
-          `;
+        ? await configRepository.updateNovelaiImagegenConfig(tomoriState.server_id, {
+            nai_diffusion_model_id: selectedModel.diffusion_model_id,
+          })
+        : await configRepository.updateModelConfig(tomoriState.server_id, {
+            diffusion_model_id: selectedModel.diffusion_model_id,
+          });
 
-    if (!updatedRow) {
+    if (!updated) {
       const context: ErrorContext = {
         tomoriId: tomoriState.tomori_id,
         serverId: tomoriState.server_id,

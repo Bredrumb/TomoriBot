@@ -14,9 +14,8 @@
 import type { ButtonInteraction, ChatInputCommandInteraction, Client, ModalSubmitInteraction } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { personaRepository } from "@/utils/db/repositories";
+import { configRepository, personaRepository } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -215,20 +214,16 @@ export async function execute(
     const isRemoving = !rawNote;
 
     // 11. Persist to the appropriate table
-    if (scope === "persona" && selectedPersona?.tomori_id) {
-      await sql`
-        UPDATE tomoris
-        SET context_note = ${noteToStore},
-            context_note_depth = ${depthToStore}
-        WHERE tomori_id = ${selectedPersona.tomori_id}
-      `;
-    } else {
-      await sql`
-        UPDATE server_chat_configs
-        SET context_note = ${noteToStore},
-            context_note_depth = ${depthToStore}
-        WHERE server_id = ${tomoriState.server_id}
-      `;
+    const persisted =
+      scope === "persona" && selectedPersona?.tomori_id
+        ? await personaRepository.setContextNote(selectedPersona.tomori_id, noteToStore, depthToStore)
+        : await configRepository.updateChatConfig(tomoriState.server_id, {
+            context_note: noteToStore,
+            context_note_depth: depthToStore,
+          });
+
+    if (!persisted) {
+      throw new Error("Failed to persist context note");
     }
 
     // 12. Invalidate cache AFTER the successful write

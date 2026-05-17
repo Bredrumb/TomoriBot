@@ -178,25 +178,11 @@ export async function execute(
       }
 
       // 3b. No main persona row — orphaned alters or empty server entry.
-      //     Only tomori_configs is deleted to clear its server_id unique constraint; alter rows
-      //     are preserved since serverRepository.setup only inserts a new main persona (is_alter=false).
+      //     Wipe every config-table row to free `tomori_configs.server_id`'s UNIQUE
+      //     constraint; alter rows in `tomoris` are preserved since serverRepository.setup
+      //     only inserts a new main persona (is_alter=false).
       log.warn(`[Setup] Server ${serverId} has no main persona — clearing config, preserving alters`);
-      await Promise.all([
-        sql`DELETE FROM tomori_configs WHERE server_id = ${existingInternalServerId}`,
-        sql`DELETE FROM server_model_configs WHERE server_id = ${existingInternalServerId}`,
-        sql`DELETE FROM server_chat_configs WHERE server_id = ${existingInternalServerId}`,
-        sql`DELETE FROM server_member_permissions_configs WHERE server_id = ${existingInternalServerId}`,
-        sql`DELETE FROM server_capabilities_configs WHERE server_id = ${existingInternalServerId}`,
-        sql`DELETE FROM server_notice_embeds_configs WHERE server_id = ${existingInternalServerId}`,
-        sql`DELETE FROM server_nsfw_configs WHERE server_id = ${existingInternalServerId}`,
-        sql`DELETE FROM server_speech_configs WHERE server_id = ${existingInternalServerId}`,
-        sql`DELETE FROM server_auto_trigger_configs WHERE server_id = ${existingInternalServerId}`,
-        sql`DELETE FROM server_channel_scope_configs WHERE server_id = ${existingInternalServerId}`,
-        sql`DELETE FROM server_trigger_behavior_configs WHERE server_id = ${existingInternalServerId}`,
-        sql`DELETE FROM server_byok_configs WHERE server_id = ${existingInternalServerId}`,
-        sql`DELETE FROM server_novelai_imagegen_configs WHERE server_id = ${existingInternalServerId}`,
-        sql`DELETE FROM server_memory_configs WHERE server_id = ${existingInternalServerId}`,
-      ]);
+      await configRepository.resetAllServerConfigs(existingInternalServerId);
 
       // Invalidate cache so stale persona data is not served
       invalidateTomoriStateCache(serverId);
@@ -607,16 +593,17 @@ export async function execute(
       // The schema defaults both to true, but NovelAI's token budget makes them
       // counterproductive — they consume context without the model being able to use them.
       // The user is notified in the success embed and can re-enable via /config tools manage.
-      if (normalizedProvider === "novelai") {
+      // Load the newly-created TomoriState once and reuse for both the NovelAI
+      // capability auto-disable and the emoji/sticker sync below — avoids a
+      // duplicate cache fetch and gives us the internal server_id.
+      const newTomoriState = await personaRepository.loadState(serverId);
+
+      if (normalizedProvider === "novelai" && newTomoriState) {
         try {
-          await sql`
-						UPDATE server_capabilities_configs
-						SET emoji_usage_enabled = false,
-						    sticker_usage_enabled = false
-						WHERE server_id = (
-							SELECT server_id FROM servers WHERE server_disc_id = ${serverId}
-						)
-					`;
+          await configRepository.updateCapabilitiesConfig(newTomoriState.server_id, {
+            emoji_usage_enabled: false,
+            sticker_usage_enabled: false,
+          });
           log.info(`[Setup] Auto-disabled emoji/sticker usage for NovelAI server ${serverId}`);
         } catch (disableError) {
           // Non-critical — log but don't fail setup
@@ -629,13 +616,10 @@ export async function execute(
       // Ensures emoji/sticker conversion works immediately without requiring an extra message
       if (!isDMChannel && interaction.guild) {
         try {
-          // 1. Load the newly created TomoriState to get server_id
-          const newTomoriState = await personaRepository.loadState(serverId);
-
           if (newTomoriState) {
             log.info(`[Setup] Force syncing emojis/stickers for guild ${interaction.guild.name}`);
 
-            // 2. Force sync both emojis and stickers (ignore 24hr cache)
+            // Force sync both emojis and stickers (ignore 24hr cache)
             await Promise.all([
               lazySyncGuildEmojis(interaction.guild, newTomoriState.server_id, true),
               lazySyncGuildStickers(interaction.guild, newTomoriState.server_id, true),
@@ -646,7 +630,7 @@ export async function execute(
             log.warn(`[Setup] Failed to load TomoriState after setup for guild ${interaction.guild.id}`);
           }
         } catch (syncError) {
-          // 3. Log error but don't fail setup - expressions will sync on first message anyway
+          // Log error but don't fail setup - expressions will sync on first message anyway
           log.warn(`[Setup] Failed to sync expressions during setup (will sync on first message): ${syncError}`);
         }
       }

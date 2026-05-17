@@ -11,11 +11,12 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
-import { type UserRow, type ErrorContext, type TomoriConfigRow } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
+import type { UserRow, ErrorContext, TomoriConfigRow } from "@/types/db/schema";
+import { configRepository } from "@/utils/db/repositories";
 import { hasOptApiKey } from "@/utils/security/crypto";
 import { ELEVENLABS_SERVICE_NAME } from "@/utils/audio/elevenLabsAccount";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
+import type { ServerCapabilitiesConfigsRow } from "@/utils/db/repositories/ConfigRepository";
 
 const PERMISSIONS_MAX_OPTIONS_PER_GROUP = 10;
 
@@ -265,16 +266,13 @@ export async function execute(
     }
 
     // 8. Apply each changed permission to the database.
-    //    sql.unsafe is safe here: dbColumn values are strictly controlled by PERMISSION_DEFINITIONS.
     for (const change of changes) {
-      const [updatedRow] = await sql`
-				UPDATE server_capabilities_configs
-				SET ${sql.unsafe(change.dbColumn)} = ${change.isEnabled}
-				WHERE server_id = ${tomoriState.server_id}
-				RETURNING server_id
-			`;
+      const patch: Partial<ServerCapabilitiesConfigsRow> = {
+        [change.dbColumn as keyof ServerCapabilitiesConfigsRow]: change.isEnabled,
+      };
+      const updated = await configRepository.updateCapabilitiesConfig(tomoriState.server_id, patch);
 
-      if (!updatedRow) {
+      if (!updated) {
         const context: ErrorContext = {
           tomoriId: tomoriState.tomori_id,
           serverId: tomoriState.server_id,

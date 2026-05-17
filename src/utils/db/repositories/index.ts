@@ -1,4 +1,7 @@
 import { configRepository } from "./ConfigRepository";
+import { mcpRepository } from "./McpRepository";
+import { quotaRepository } from "./QuotaRepository";
+import { speechRepository } from "./SpeechRepository";
 import { cooldownRepository } from "./CooldownRepository";
 import { conditioningMemoryRepository } from "./ConditioningMemoryRepository";
 import { exportRepository } from "./ExportRepository";
@@ -20,6 +23,9 @@ import { whitelistRepository } from "./WhitelistRepository";
 
 export {
   configRepository,
+  mcpRepository,
+  quotaRepository,
+  speechRepository,
   conditioningMemoryRepository,
   cooldownRepository,
   exportRepository,

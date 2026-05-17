@@ -9,8 +9,8 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/ca
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
-import { type UserRow, type ErrorContext, type TomoriConfigRow } from "../../types/db/schema";
-import { sql } from "@/utils/db/client";
+import type { ServerMemberPermissionsConfigRow, TomoriConfigRow, UserRow, ErrorContext } from "../../types/db/schema";
+import { configRepository } from "@/utils/db/repositories";
 import type { CheckboxGroupOption } from "@/types/discord/modal";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -28,9 +28,13 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Defines all configurable member teaching permissions for the checkbox modal.
  */
+type MemberPermissionColumn = {
+  [K in keyof ServerMemberPermissionsConfigRow]-?: ServerMemberPermissionsConfigRow[K] extends boolean ? K : never;
+}[keyof ServerMemberPermissionsConfigRow];
+
 interface MemberPermissionDefinition {
   value: string;
-  dbColumn: string;
+  dbColumn: MemberPermissionColumn;
   labelKey: string;
   descKey: string;
   getState: (config: TomoriConfigRow) => boolean;
@@ -152,7 +156,7 @@ export async function execute(
     // 5. Determine which permissions changed
     const newlyEnabled = new Set(modalResult.multiValues?.[MEMBERPERMISSIONS_CHECKBOX_ID] ?? []);
     const changes: Array<{
-      dbColumn: string;
+      dbColumn: MemberPermissionColumn;
       isEnabled: boolean;
       label: string;
     }> = [];
@@ -179,42 +183,34 @@ export async function execute(
       return;
     }
 
-    // 7. Apply each changed permission to the database.
-    //    sql.unsafe is safe here: dbColumn values are strictly controlled by MEMBER_PERMISSION_DEFINITIONS.
+    // 7. Apply all changed permissions to the database in a single update
+    const patch: Partial<ServerMemberPermissionsConfigRow> = {};
     for (const change of changes) {
-      const [updatedRow] = await sql`
-				UPDATE server_member_permissions_configs
-				SET ${sql.unsafe(change.dbColumn)} = ${change.isEnabled}
-				WHERE server_id = ${tomoriState.server_id}
-				RETURNING server_id
-			`;
+      patch[change.dbColumn] = change.isEnabled;
+    }
 
-      if (!updatedRow) {
-        const context: ErrorContext = {
-          tomoriId: tomoriState.tomori_id,
-          serverId: tomoriState.server_id,
-          userId: userData.user_id,
-          errorType: "DatabaseUpdateError",
-          metadata: {
-            command: "server memberpermissions",
-            guildId: interaction.guild.id,
-            dbColumn: change.dbColumn,
-            isEnabled: change.isEnabled,
-          },
-        };
-        await log.error(
-          `Failed to update member permission column: ${change.dbColumn}`,
-          new Error("Database update returned no rows"),
-          context,
-        );
+    const updated = await configRepository.updateMemberPermissionsConfig(tomoriState.server_id, patch);
 
-        await replyInfoEmbed(modalInteraction, locale, {
-          titleKey: "general.errors.update_failed_title",
-          descriptionKey: "general.errors.update_failed_description",
-          color: ColorCode.ERROR,
-        });
-        return;
-      }
+    if (!updated) {
+      const context: ErrorContext = {
+        tomoriId: tomoriState.tomori_id,
+        serverId: tomoriState.server_id,
+        userId: userData.user_id,
+        errorType: "DatabaseUpdateError",
+        metadata: {
+          command: "server memberpermissions",
+          guildId: interaction.guild.id,
+          changesCount: changes.length,
+        },
+      };
+      await log.error("Failed to update member permissions config", new Error("Database update failed"), context);
+
+      await replyInfoEmbed(modalInteraction, locale, {
+        titleKey: "general.errors.update_failed_title",
+        descriptionKey: "general.errors.update_failed_description",
+        color: ColorCode.ERROR,
+      });
+      return;
     }
 
     // 8. Invalidate cache so next message picks up the fresh config

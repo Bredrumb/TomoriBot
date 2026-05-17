@@ -9,11 +9,11 @@ import type {
 } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { MANAGED_WEBHOOK_KIND_SHARED_CHANNEL, serverRepository } from "@/utils/db/repositories/ServerRepository";
+import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
 import { log } from "../../misc/logger";
 import { safeDownload } from "../../security/safeDownload";
 import { PERSONA_LIMITS } from "../../security/rateLimiter";
 import { convertToPNG } from "../../image/imageProcessor";
-import { sql } from "../../db/client";
 import { invalidateTomoriStateCache } from "../../cache/tomoriStateCache";
 import {
   isLocalPersonaAvatarPath,
@@ -201,11 +201,10 @@ async function persistPersonaAvatarReference(
   personaId: number,
   avatarReference: string,
 ): Promise<void> {
-  await sql`
-		UPDATE tomoris
-		SET webhook_avatar_url = ${avatarReference}
-		WHERE tomori_id = ${personaId}
-	`;
+  const updated = await personaRepository.setAvatar(personaId, avatarReference);
+  if (!updated) {
+    throw new Error(`Failed to persist avatar reference for persona ${personaId}`);
+  }
   invalidateTomoriStateCache(guildId);
 }
 
@@ -827,11 +826,10 @@ export async function getOrCreatePersonaWebhook(
       });
       if (webhookAvatarUrl && webhookAvatarUrl !== persona.webhook_avatar_url) {
         try {
-          await sql`
-						UPDATE tomoris
-						SET webhook_avatar_url = ${webhookAvatarUrl}
-						WHERE tomori_id = ${persona.tomori_id}
-					`;
+          const updated = await personaRepository.setAvatar(persona.tomori_id, webhookAvatarUrl);
+          if (!updated) {
+            throw new Error(`Failed to update stored avatar URL for persona ${persona.tomori_id}`);
+          }
           // Invalidate cache so updated URL is used immediately
           if (channel.guild) {
             invalidateTomoriStateCache(channel.guild.id);
@@ -914,11 +912,10 @@ export async function updatePersonaWebhooksAvatar(
           });
           if (webhookAvatarUrl) {
             try {
-              await sql`
-								UPDATE tomoris
-								SET webhook_avatar_url = ${webhookAvatarUrl}
-								WHERE tomori_id = ${personaId}
-							`;
+              const updated = await personaRepository.setAvatar(personaId, webhookAvatarUrl);
+              if (!updated) {
+                throw new Error(`Failed to store permanent webhook avatar URL for persona ${personaId}`);
+              }
               invalidateTomoriStateCache(guild.id);
               log.info(`[Webhook Manager] Stored permanent webhook avatar URL for persona ${personaId}`);
             } catch (dbError) {

@@ -1,8 +1,8 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
+import { configRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { sql } from "@/utils/db/client";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import {
@@ -111,11 +111,29 @@ export async function execute(
       return;
     }
 
-    await sql`
-      UPDATE server_chat_configs
-      SET llm_stop_strings = ${toPostgresTextArrayLiteral(mergedStops)}::text[]
-      WHERE server_id = ${tomoriState.server_id}
-    `;
+    const updated = await configRepository.updateChatConfig(tomoriState.server_id, {
+      llm_stop_strings: mergedStops,
+    });
+
+    if (!updated) {
+      const context: ErrorContext = {
+        userId: userData.user_id,
+        serverId: tomoriState.server_id,
+        tomoriId: tomoriState.tomori_id,
+        errorType: "DatabaseUpdateError",
+        metadata: {
+          command: "config stop-strings add",
+        },
+      };
+      await log.error("Failed to update llm_stop_strings config", new Error("Database update failed"), context);
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "general.errors.update_failed_title",
+        descriptionKey: "general.errors.update_failed_description",
+        color: ColorCode.ERROR,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
 
     invalidateTomoriStateCache(guildKey);
 
@@ -154,10 +172,6 @@ export async function execute(
       flags: MessageFlags.Ephemeral,
     });
   }
-}
-
-function toPostgresTextArrayLiteral(values: readonly string[]): string {
-  return `{${values.map((value) => `"${value.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
 }
 
 function formatStopStringList(stops: readonly string[], locale: string): string {

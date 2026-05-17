@@ -11,8 +11,6 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
-import { personaConfigSchema } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
 import { validateMemoryContent, getMemoryLimits } from "@/utils/misc/memoryLimits";
 import type { SelectOption } from "@/types/discord/modal";
 import { personaRepository } from "@/utils/db/repositories";
@@ -29,9 +27,6 @@ const MAX_TEXT_INPUT_LENGTH = Math.min(
   4000,
   Math.max(1, memoryLimits.maxTriggerWords * (memoryLimits.maxMemoryLength + 1)),
 );
-
-const formatTextArrayLiteral = (items: string[]): string =>
-  `{${items.map((item) => `"${item.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
 
 const formatTriggerList = (triggers: string[]): string => triggers.map((trigger) => `\`${trigger}\``).join(", ");
 
@@ -229,23 +224,15 @@ export async function execute(
       return;
     }
 
-    const triggerArrayLiteral = formatTextArrayLiteral(newTriggers);
     const personaId = selectedPersona.tomori_id ?? null;
     if (!personaId) {
       log.error("Selected persona missing tomori_id - this should never happen");
       return;
     }
 
-    const [updatedConfig] = await sql`
-			INSERT INTO persona_configs (tomori_id, trigger_words)
-			VALUES (${personaId}, ${triggerArrayLiteral}::text[])
-			ON CONFLICT (tomori_id) DO UPDATE
-			SET trigger_words = array_cat(persona_configs.trigger_words, EXCLUDED.trigger_words)
-			RETURNING *
-		`;
+    const success = await personaRepository.addTrigger(personaId, newTriggers);
 
-    const validatedConfig = personaConfigSchema.safeParse(updatedConfig);
-    if (!validatedConfig.success || !updatedConfig) {
+    if (!success) {
       const context: ErrorContext = {
         tomoriId: personaId,
         userId: userData.user_id,
@@ -257,14 +244,11 @@ export async function execute(
           wordAdded: newTriggers,
           updatedField: "trigger_words",
           targetTable: "persona_configs",
-          validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
         },
       };
       await log.error(
-        "Failed to update or validate trigger_words in persona_configs table",
-        validatedConfig.success
-          ? new Error("Database UPDATE failed to return updated row")
-          : new Error("Updated config data failed validation"),
+        "Failed to update trigger_words in persona_configs table via repository",
+        new Error("Database UPDATE failed"),
         context,
       );
 

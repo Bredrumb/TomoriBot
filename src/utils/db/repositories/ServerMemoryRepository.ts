@@ -16,14 +16,14 @@ import { type MemoryValidationResult, getMemoryLimits, validateMemoryContent } f
 import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
-/** Row shape for server_memory_configs (Phase 6 Stage A). */
+/** Row shape for server_memory_configs (Phase 6). */
 export type ServerMemoryConfigsRow = {
   memory_tagging_enabled: boolean;
 };
 
 /**
  * Export shape for ServerMemoryRepository.
- * Includes the Phase 6 Stage A server_memory_configs table in addition to
+ * Includes the Phase 6 server_memory_configs table in addition to
  * the existing memories array (expanded in Phase 6 #16.7).
  */
 export type ServerMemoryExportShape = {
@@ -34,6 +34,35 @@ export type ServerMemoryExportShape = {
 
 export class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
   // ── writes ─────────────────────────────────────────────────────────────────
+
+  async edit(serverMemoryId: number, content: string, tags: string[] = []): Promise<boolean> {
+    try {
+      const [updated] = await sql`
+        UPDATE server_memories
+        SET content = ${content}, tags = ${sql.array(tags)}, updated_at = NOW()
+        WHERE server_memory_id = ${serverMemoryId}
+        RETURNING server_memory_id
+      `;
+      return !!updated;
+    } catch (error) {
+      log.error(`Error editing server memory ${serverMemoryId}:`, error);
+      return false;
+    }
+  }
+
+  async remove(serverMemoryId: number): Promise<boolean> {
+    try {
+      const [deleted] = await sql`
+        DELETE FROM server_memories
+        WHERE server_memory_id = ${serverMemoryId}
+        RETURNING server_memory_id
+      `;
+      return !!deleted;
+    } catch (error) {
+      log.error(`Error removing server memory ${serverMemoryId}:`, error);
+      return false;
+    }
+  }
 
   /**
    * Inserts a new server memory taught by Tomori.
@@ -167,7 +196,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
     }
   }
 
-  // ── Stage A: resolve internal server ID ──────────────────────────────────
+  // ── resolve internal server ID ──────────────────────────────────
 
   private async resolveServerId(serverDiscId: string): Promise<number | null> {
     const [row] = await sql`
@@ -176,7 +205,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
     return (row?.server_id as number | undefined) ?? null;
   }
 
-  // ── Stage A: config table read ────────────────────────────────────────────
+  // ── config table read ────────────────────────────────────────────
 
   private async sqlLoadMemoryConfigs(serverId: number): Promise<ServerMemoryConfigsRow | null> {
     try {
@@ -190,7 +219,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
     }
   }
 
-  // ── Stage A: config table upsert ─────────────────────────────────────────
+  // ── config table upsert ─────────────────────────────────────────
 
   private async sqlUpsertMemoryConfigs(serverId: number, row: ServerMemoryConfigsRow): Promise<void> {
     await sql`
@@ -200,6 +229,191 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
         memory_tagging_enabled = EXCLUDED.memory_tagging_enabled,
         updated_at             = NOW()
     `;
+  }
+
+  // ── document CRUD ──────────────────────────────────────────────────────────
+
+  /**
+   * Load non-history documents for a server/tomori scope.
+   *
+   * @param serverId - Internal server DB ID
+   * @param tomoriId - Null = server-wide (shared) scope; non-null = per-persona scope
+   * @returns Array of document id/name rows
+   */
+  async loadDocuments(
+    serverId: number,
+    tomoriId: number | null,
+  ): Promise<Array<{ document_id: number; document_name: string }>> {
+    if (tomoriId === null) {
+      return await sql<Array<{ document_id: number; document_name: string }>>`
+        SELECT document_id, document_name
+        FROM documents
+        WHERE server_id = ${serverId}
+          AND tomori_id IS NULL
+        ORDER BY created_at DESC
+      `;
+    }
+    return await sql<Array<{ document_id: number; document_name: string }>>`
+      SELECT document_id, document_name
+      FROM documents
+      WHERE server_id = ${serverId}
+        AND tomori_id = ${tomoriId}
+      ORDER BY created_at DESC
+    `;
+  }
+
+  /**
+   * Delete a document (chunks cascade-delete via FK).
+   *
+   * @param documentId - Primary key of the document
+   * @param serverId   - Internal server DB ID (ownership guard)
+   * @param tomoriId   - Null = server-wide scope; non-null = per-persona scope
+   * @returns Deleted document_name or null when not found
+   */
+  async removeDocument(documentId: number, serverId: number, tomoriId: number | null): Promise<string | null> {
+    const rows =
+      tomoriId === null
+        ? await sql`
+            DELETE FROM documents
+            WHERE document_id = ${documentId}
+              AND server_id = ${serverId}
+              AND tomori_id IS NULL
+            RETURNING document_name
+          `
+        : await sql`
+            DELETE FROM documents
+            WHERE document_id = ${documentId}
+              AND server_id = ${serverId}
+              AND tomori_id = ${tomoriId}
+            RETURNING document_name
+          `;
+    return (rows[0]?.document_name as string | undefined) ?? null;
+  }
+
+  /**
+   * Load history-sourced documents for a server/tomori scope.
+   *
+   * @param serverId - Internal server DB ID
+   * @param tomoriId - Null = server-wide scope; non-null = per-persona scope
+   * @returns Array of document id/name rows
+   */
+  async loadHistoryDocuments(
+    serverId: number,
+    tomoriId: number | null,
+  ): Promise<Array<{ document_id: number; document_name: string }>> {
+    if (tomoriId === null) {
+      return await sql<Array<{ document_id: number; document_name: string }>>`
+        SELECT document_id, document_name
+        FROM documents
+        WHERE server_id = ${serverId}
+          AND tomori_id IS NULL
+          AND source_type = 'history'
+        ORDER BY created_at DESC
+      `;
+    }
+    return await sql<Array<{ document_id: number; document_name: string }>>`
+      SELECT document_id, document_name
+      FROM documents
+      WHERE server_id = ${serverId}
+        AND tomori_id = ${tomoriId}
+        AND source_type = 'history'
+      ORDER BY created_at DESC
+    `;
+  }
+
+  /**
+   * Delete a history-sourced document (chunks cascade-delete via FK).
+   *
+   * @param documentId - Primary key of the document
+   * @param serverId   - Internal server DB ID (ownership guard)
+   * @param tomoriId   - Null = server-wide scope; non-null = per-persona scope
+   * @returns Deleted document_name or null when not found
+   */
+  async removeHistoryDocument(documentId: number, serverId: number, tomoriId: number | null): Promise<string | null> {
+    const rows =
+      tomoriId === null
+        ? await sql`
+            DELETE FROM documents
+            WHERE document_id = ${documentId}
+              AND server_id = ${serverId}
+              AND tomori_id IS NULL
+              AND source_type = 'history'
+            RETURNING document_name
+          `
+        : await sql`
+            DELETE FROM documents
+            WHERE document_id = ${documentId}
+              AND server_id = ${serverId}
+              AND tomori_id = ${tomoriId}
+              AND source_type = 'history'
+            RETURNING document_name
+          `;
+    return (rows[0]?.document_name as string | undefined) ?? null;
+  }
+
+  // ── server_memories tool-call operations ───────────────────────────────────
+
+  /**
+   * Delete a server memory scoped to server + persona lineage.
+   * Used by the updateLongTermMemoryTool function call handler.
+   *
+   * @param memoryId         - Primary key of the server memory
+   * @param serverId         - Internal server DB ID (ownership guard)
+   * @param personaLineageId - Persona lineage scope guard
+   * @returns Row with server_memory_id, content, user_id or null when not found
+   */
+  async removeByIdWithLineage(
+    memoryId: number,
+    serverId: number,
+    personaLineageId: number,
+  ): Promise<{ server_memory_id: number; content: string; user_id: number } | null> {
+    const [row] = await sql`
+      DELETE FROM server_memories
+      WHERE server_memory_id = ${memoryId}
+        AND server_id = ${serverId}
+        AND persona_lineage_id = ${personaLineageId}
+      RETURNING server_memory_id, content, user_id
+    `;
+    return row
+      ? {
+          server_memory_id: row.server_memory_id as number,
+          content: row.content as string,
+          user_id: row.user_id as number,
+        }
+      : null;
+  }
+
+  /**
+   * Update a server memory's content, scoped to server + persona lineage.
+   * Used by the updateLongTermMemoryTool function call handler.
+   *
+   * @param memoryId         - Primary key of the server memory
+   * @param content          - New memory content
+   * @param serverId         - Internal server DB ID (ownership guard)
+   * @param personaLineageId - Persona lineage scope guard
+   * @returns Row with server_memory_id, content, user_id or null when not found
+   */
+  async updateByIdWithLineage(
+    memoryId: number,
+    content: string,
+    serverId: number,
+    personaLineageId: number,
+  ): Promise<{ server_memory_id: number; content: string; user_id: number } | null> {
+    const [row] = await sql`
+      UPDATE server_memories
+      SET content = ${content}, updated_at = CURRENT_TIMESTAMP
+      WHERE server_memory_id = ${memoryId}
+        AND server_id = ${serverId}
+        AND persona_lineage_id = ${personaLineageId}
+      RETURNING server_memory_id, content, user_id
+    `;
+    return row
+      ? {
+          server_memory_id: row.server_memory_id as number,
+          content: row.content as string,
+          user_id: row.user_id as number,
+        }
+      : null;
   }
 
   private async addServerMemoryRow(

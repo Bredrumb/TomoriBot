@@ -17,9 +17,8 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
 import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { type UserRow, type ErrorContext, tomoriSchema, type TomoriState } from "@/types/db/schema";
+import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
-import { sql } from "@/utils/db/client";
 import { personaRepository } from "@/utils/db/repositories";
 
 // Rule 20: Constants for static values at the top
@@ -42,39 +41,9 @@ async function performAttributeRemoval(
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
-  // Update the attribute_list in the database using array_remove
-  const [updatedRow] = await sql`
-		UPDATE tomoris
-		SET attribute_list = array_remove(attribute_list, ${attributeToRemove})
-		WHERE tomori_id = ${tomoriState.tomori_id}
-		RETURNING *
-	`;
-
-  // Validate the returned data
-  const validatedTomori = tomoriSchema.safeParse(updatedRow);
-
-  if (!validatedTomori.success || !updatedRow) {
-    // Log error specific to this update failure
-    const context: ErrorContext = {
-      tomoriId: tomoriState.tomori_id,
-      serverId: tomoriState.server_id,
-      userId: userData.user_id,
-      errorType: "DatabaseUpdateError",
-      metadata: {
-        command: "forget attribute",
-        attributeToRemove,
-        validationErrors: validatedTomori.success ? null : validatedTomori.error.flatten(),
-      },
-    };
-
-    await log.error(
-      "Failed to update or validate attribute_list in tomoris table",
-      validatedTomori.success
-        ? new Error("Database update returned no rows or unexpected data")
-        : new Error("Updated tomori data failed validation"),
-      context,
-    );
-
+  // biome-ignore lint/style/noNonNullAssertion: tomoriState.tomori_id is always valid after validation
+  const ok = await personaRepository.removeAttribute(tomoriState.tomori_id!, attributeToRemove);
+  if (!ok) {
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
       descriptionKey: "general.errors.update_failed_description",

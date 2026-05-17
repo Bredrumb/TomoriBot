@@ -1,8 +1,12 @@
-import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
-import type { SQL } from "bun";
-import type { VideoQuotaConfigRow, VideoQuotaRow, VideoServerwideQuotaRow } from "@/types/db/schema";
-import { videoQuotaConfigSchema, videoQuotaSchema, videoServerwideQuotaSchema } from "@/types/db/schema";
+import type { VideoQuotaConfigRow } from "@/types/db/schema";
+import {
+  getOrCreateVideoConfig,
+  incrementVideoQuota as repositoryIncrementVideoQuota,
+  resetServerwideVideoPeriod,
+  touchServerwideVideoQuota,
+  touchUserVideoQuota,
+} from "@/utils/db/repositories/QuotaRepository";
 
 /**
  * Result of video quota check operations.
@@ -22,36 +26,7 @@ export interface VideoQuotaCheckResult {
  * Lower default than image quotas because video generation is more expensive.
  */
 export async function getVideoQuotaConfig(serverId: number): Promise<VideoQuotaConfigRow> {
-  try {
-    // 1. Try to fetch existing config
-    const [existing] = await sql<
-      VideoQuotaConfigRow[]
-    >`SELECT * FROM video_quota_configs WHERE server_id = ${serverId}`;
-
-    if (existing) {
-      return videoQuotaConfigSchema.parse(existing);
-    }
-
-    // 2. Create default config if not exists
-    const [newConfig] = await sql<VideoQuotaConfigRow[]>`
-      INSERT INTO video_quota_configs (server_id, daily_user_quota, serverwide_quota, serverwide_quota_resets_in, enabled)
-      VALUES (${serverId}, 0, 0, 365, false)
-      RETURNING *
-    `;
-
-    log.info("Created default video quota config");
-
-    return videoQuotaConfigSchema.parse(newConfig);
-  } catch (error) {
-    log.error("Failed to get video quota config", error);
-    return {
-      server_id: serverId,
-      daily_user_quota: 0,
-      serverwide_quota: 0,
-      serverwide_quota_resets_in: 365,
-      enabled: false,
-    };
-  }
+  return getOrCreateVideoConfig(serverId);
 }
 
 /**
@@ -73,18 +48,10 @@ export async function checkUserDailyVideoQuota(
     const today = new Date().toISOString().split("T")[0];
 
     // 3. Get or create user's quota record for today
-    const [userQuota] = await sql<VideoQuotaRow[]>`
-      INSERT INTO video_quotas (server_id, user_disc_id, usage_count, quota_date)
-      VALUES (${serverId}, ${userDiscId}, 0, ${today}::date)
-      ON CONFLICT (server_id, user_disc_id, quota_date)
-      DO UPDATE SET server_id = EXCLUDED.server_id
-      RETURNING *
-    `;
-
-    const parsedQuota = videoQuotaSchema.parse(userQuota);
+    const userQuota = await touchUserVideoQuota(serverId, userDiscId, today);
 
     // 4. Check if user has exceeded their daily quota
-    const remaining = config.daily_user_quota - parsedQuota.usage_count;
+    const remaining = config.daily_user_quota - userQuota.usage_count;
 
     if (remaining <= 0) {
       const resetTime = new Date();
@@ -122,52 +89,24 @@ export async function checkServerwideVideoQuota(
 
   try {
     // 2. Get or create server-wide quota record
-    const [serverwideQuota] = await sql<VideoServerwideQuotaRow[]>`
-      INSERT INTO video_serverwide_quotas (
-        server_id,
-        usage_count,
-        quota_period_start,
-        quota_period_end
-      )
-      VALUES (
-        ${serverId},
-        0,
-        CURRENT_TIMESTAMP,
-        CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
-      )
-      ON CONFLICT (server_id)
-      DO UPDATE SET server_id = EXCLUDED.server_id
-      RETURNING *
-    `;
-
-    const parsedQuota = videoServerwideQuotaSchema.parse(serverwideQuota);
+    const serverwideQuota = await touchServerwideVideoQuota(serverId, config.serverwide_quota_resets_in);
 
     // 3. Check if quota period has expired (needs reset)
     const now = new Date();
-    const periodEnd = new Date(parsedQuota.quota_period_end);
+    const periodEnd = new Date(serverwideQuota.quota_period_end);
 
     if (now >= periodEnd) {
-      const [resetQuota] = await sql<VideoServerwideQuotaRow[]>`
-        UPDATE video_serverwide_quotas
-        SET
-          usage_count = 0,
-          quota_period_start = CURRENT_TIMESTAMP,
-          quota_period_end = CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
-        WHERE server_id = ${serverId}
-        RETURNING *
-      `;
-
-      const parsedResetQuota = videoServerwideQuotaSchema.parse(resetQuota);
+      const resetQuota = await resetServerwideVideoPeriod(serverId, config.serverwide_quota_resets_in);
 
       return {
         allowed: true,
         serverwideRemaining: config.serverwide_quota,
-        resetTime: new Date(parsedResetQuota.quota_period_end),
+        resetTime: new Date(resetQuota.quota_period_end),
       };
     }
 
     // 4. Check if server has exceeded its quota
-    const remaining = config.serverwide_quota - parsedQuota.usage_count;
+    const remaining = config.serverwide_quota - serverwideQuota.usage_count;
 
     if (remaining <= 0) {
       return {
@@ -234,25 +173,7 @@ export async function checkVideoQuota(serverId: number, userDiscId: string): Pro
  */
 export async function incrementVideoQuota(serverId: number, userDiscId: string): Promise<void> {
   try {
-    const today = new Date().toISOString().split("T")[0];
-
-    await sql.begin(async (tx: SQL) => {
-      // Increment user quota
-      await tx`
-        INSERT INTO video_quotas (server_id, user_disc_id, usage_count, quota_date)
-        VALUES (${serverId}, ${userDiscId}, 1, ${today}::date)
-        ON CONFLICT (server_id, user_disc_id, quota_date)
-        DO UPDATE SET usage_count = video_quotas.usage_count + 1
-      `;
-
-      // Increment server-wide quota
-      await tx`
-        UPDATE video_serverwide_quotas
-        SET usage_count = usage_count + 1
-        WHERE server_id = ${serverId}
-      `;
-    });
-
+    await repositoryIncrementVideoQuota(serverId, userDiscId);
     log.info("Incremented video quotas");
   } catch (error) {
     log.error("Failed to increment video quota", error);

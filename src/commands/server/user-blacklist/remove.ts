@@ -12,9 +12,7 @@ import {
 } from "discord.js";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
-import { formatTextArrayLiteral } from "@/utils/discord/channelChecklistManager";
-import { personaRepository, userRepository } from "@/utils/db/repositories";
-import { sql } from "@/utils/db/client";
+import { personaRepository, serverRepository, userRepository } from "@/utils/db/repositories";
 import { invalidateUserBlacklistCache } from "@/utils/cache/userCache";
 import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -378,11 +376,7 @@ async function persistUpdate(
     return previousSelectedIds;
   }
 
-  await sql`
-    DELETE FROM personalization_blacklist
-    WHERE server_id = ${serverId}
-      AND user_disc_id = ANY(${formatTextArrayLiteral(removedIds)}::text[])
-  `;
+  await serverRepository.removeUserBlacklistMany(serverId, removedIds);
 
   for (const userId of removedIds) {
     invalidateUserBlacklistCache(responseInteraction.guildId ?? "", userId);

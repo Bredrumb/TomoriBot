@@ -4,12 +4,12 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
+import { configRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
-import { type UserRow, type ErrorContext } from "../../types/db/schema";
-import { sql } from "@/utils/db/client";
+import type { UserRow, ErrorContext } from "../../types/db/schema";
 import { formatUTCOffset } from "../../utils/text/timezoneHelper";
 
 // Define constants at the top
@@ -105,16 +105,10 @@ export async function execute(
       return;
     }
 
-    // 6. Update the config in the database using direct SQL
-    const [updatedRow] = await sql`
-            UPDATE server_chat_configs
-            SET timezone_offset = ${timezoneValue}
-            WHERE server_id = ${tomoriState.server_id}
-            RETURNING server_id
-        `;
+    // 6. Update the config in the database
+    const updated = await configRepository.updateChatConfig(tomoriState.server_id, { timezone_offset: timezoneValue });
 
-    // 7. Validate the returned data
-    if (!updatedRow) {
+    if (!updated) {
       const context: ErrorContext = {
         tomoriId: tomoriState.tomori_id,
         serverId: tomoriState.server_id,
@@ -126,11 +120,7 @@ export async function execute(
           timezoneValue,
         },
       };
-      await log.error(
-        "Failed to update or validate timezone_offset config",
-        new Error("Database update returned no rows"),
-        context,
-      );
+      await log.error("Failed to update timezone_offset config", new Error("Database update failed"), context);
 
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.update_failed_title",
@@ -140,7 +130,7 @@ export async function execute(
       return;
     }
 
-    // 8. Invalidate cache so next message gets fresh config
+    // 7. Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild.id);
 
     // 9. Success message with formatted timezone display

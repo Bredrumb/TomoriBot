@@ -6,8 +6,8 @@
 import type { ChatInputCommandInteraction, Client } from "discord.js";
 import { MessageFlags, SlashCommandSubcommandBuilder } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { configRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/contextBuilder";
@@ -69,11 +69,9 @@ export async function execute(
     }
 
     // 3. Clear the system prompt (set to NULL)
-    await sql`
-			UPDATE server_chat_configs
-			SET system_prompt = NULL
-			WHERE server_id = ${tomoriState.server_id}
-		`;
+    await configRepository.updateChatConfig(tomoriState.server_id, {
+      system_prompt: null,
+    });
 
     // 4. Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(serverId);

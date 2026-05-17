@@ -1,6 +1,6 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
+import { configRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { type ErrorContext, type UserRow, CooldownType } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
@@ -152,15 +152,12 @@ export async function execute(
     }
 
     // 7. Update both cooldown values in the database
-    const [updatedRow] = await sql`
-			UPDATE server_trigger_behavior_configs
-			SET cooldown_type = ${cooldownTypeValue},
-				cooldown_length = ${cooldownLength}
-			WHERE server_id = ${tomoriState.server_id}
-			RETURNING server_id
-		`;
+    const updated = await configRepository.updateTriggerBehaviorConfig(tomoriState.server_id, {
+      cooldown_type: cooldownTypeValue,
+      cooldown_length: cooldownLength,
+    });
 
-    if (!updatedRow) {
+    if (!updated) {
       const context: ErrorContext = {
         tomoriId: tomoriState.tomori_id,
         serverId: tomoriState.server_id,

@@ -1,11 +1,10 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
 import type { UserRow, ErrorContext } from "../../../types/db/schema";
 import { localizer } from "../../../utils/text/localizer";
 import { log, ColorCode } from "../../../utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal } from "../../../utils/discord/interactionHelper";
-import { userRepository } from "@/utils/db/repositories";
+import { userRepository, configRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "../../../utils/cache/tomoriStateCache";
 import type { ModalResult } from "../../../types/discord/modal";
 
@@ -106,14 +105,11 @@ export async function execute(
 
     const enabled = selectedValue === "true";
 
-    const [updatedRow] = await sql`
-      UPDATE server_memory_configs
-      SET memory_tagging_enabled = ${enabled}
-      WHERE server_id = ${tomoriState.server_id}
-      RETURNING memory_tagging_enabled
-    `;
+    const updated = await configRepository.updateMemoryConfig(tomoriState.server_id, {
+      memory_tagging_enabled: enabled,
+    });
 
-    if (!updatedRow) {
+    if (!updated) {
       await replyInfoEmbed(modalInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",

@@ -2,6 +2,11 @@ import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder
 import { MessageFlags } from "discord.js";
 import { sql } from "@/utils/db/client";
 import { getQuotaConfig } from "@/utils/quota/imageQuotaManager";
+import {
+  updateImageDailyUserQuota,
+  updateImageServerwideQuota,
+  updateImageServerwideResetDays,
+} from "@/utils/db/repositories/QuotaRepository";
 import type { UserRow } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -174,11 +179,7 @@ async function updateDailyUserQuota(serverId: number, limit: number, locale: str
   await getQuotaConfig(serverId);
 
   // 2. Update config
-  await sql`
-		UPDATE image_quota_configs
-		SET daily_user_quota = ${limit}
-		WHERE server_id = ${serverId}
-	`;
+  await updateImageDailyUserQuota(serverId, limit);
 
   // 3. Format and return success message
   const limitText = limit === 0 ? localizer(locale, "commands.server.quota.imagegen.unlimited") : `${limit}`;
@@ -198,34 +199,12 @@ async function updateServerwideQuota(serverId: number, limit: number, locale: st
   const currentConfig = await getQuotaConfig(serverId);
 
   // 2. Update config
-  await sql`
-		UPDATE image_quota_configs
-		SET serverwide_quota = ${limit}
-		WHERE server_id = ${serverId}
-	`;
-
-  // 3. If changing from unlimited (0) to a limit, initialize serverwide_quotas table
-  if (currentConfig.serverwide_quota === 0 && limit > 0) {
-    await sql`
-			INSERT INTO serverwide_quotas (
-				server_id,
-				usage_count,
-				quota_period_start,
-				quota_period_end
-			)
-			VALUES (
-				${serverId},
-				0,
-				CURRENT_TIMESTAMP,
-				CURRENT_TIMESTAMP + (${currentConfig.serverwide_quota_resets_in} || ' days')::interval
-			)
-			ON CONFLICT (server_id)
-			DO UPDATE SET
-				usage_count = 0,
-				quota_period_start = CURRENT_TIMESTAMP,
-				quota_period_end = CURRENT_TIMESTAMP + (${currentConfig.serverwide_quota_resets_in} || ' days')::interval
-		`;
-  }
+  await updateImageServerwideQuota(
+    serverId,
+    limit,
+    currentConfig.serverwide_quota_resets_in,
+    currentConfig.serverwide_quota,
+  );
 
   // 4. Format and return success message
   const limitText = limit === 0 ? localizer(locale, "commands.server.quota.imagegen.unlimited") : `${limit}`;
@@ -245,20 +224,7 @@ async function updateResetDays(serverId: number, days: number, locale: string): 
   const currentConfig = await getQuotaConfig(serverId);
 
   // 2. Update config
-  await sql`
-		UPDATE image_quota_configs
-		SET serverwide_quota_resets_in = ${days}
-		WHERE server_id = ${serverId}
-	`;
-
-  // 3. Update existing quota period end date if serverwide quota is active
-  if (currentConfig.serverwide_quota > 0) {
-    await sql`
-			UPDATE serverwide_quotas
-			SET quota_period_end = quota_period_start + (${days} || ' days')::interval
-			WHERE server_id = ${serverId}
-		`;
-  }
+  await updateImageServerwideResetDays(serverId, days, currentConfig.serverwide_quota > 0);
 
   // 4. Format and return success message
   return localizer(locale, "commands.server.quota.imagegen.serverwide_quota_resets_in_success_description", {

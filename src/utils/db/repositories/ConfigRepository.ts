@@ -7,7 +7,24 @@
  * Export contract: toExportShape / fromExportShape are required by IRepository
  * and consumed by the Phase 6 (#16.7) export pipeline composition.
  */
-import type { ErrorContext, TomoriConfigRow, NaiPresetRow } from "@/types/db/schema";
+import type {
+  ErrorContext,
+  TomoriConfigRow,
+  NaiPresetRow,
+  ServerModelConfigRow,
+  ServerChatConfigRow,
+  ServerMemberPermissionsConfigRow,
+  ServerCapabilitiesConfigRow,
+  ServerNoticeEmbedsConfigRow,
+  ServerNsfwConfigRow,
+  ServerSpeechConfigRow,
+  ServerAutoTriggerConfigRow,
+  ServerChannelScopeConfigRow,
+  ServerTriggerBehaviorConfigRow,
+  ServerNovelaiImagegenConfigRow,
+  ServerByokConfigRow,
+  ServerMemoryConfigRow,
+} from "@/types/db/schema";
 import { tomoriConfigSchema, tomoriSchema, naiPresetSchema } from "@/types/db/schema";
 import type { TomoriPresetRow, SystemPromptPresetRow } from "@/types/db/schema";
 import type { FallbackModelRef } from "@/types/db/schema";
@@ -18,9 +35,9 @@ import { validateTomoriConfigFields } from "@/utils/db/sqlSecurity";
 import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
-// ── Stage A config table row shapes ───────────────────────────────────────────
+// ── config table row shapes ───────────────────────────────────────────
 
-/** Row shape for server_capabilities_configs (Phase 6 Stage A). */
+/** Row shape for server_capabilities_configs (Phase 6). */
 export type ServerCapabilitiesConfigsRow = {
   emoji_usage_enabled: boolean;
   sticker_usage_enabled: boolean;
@@ -33,7 +50,7 @@ export type ServerCapabilitiesConfigsRow = {
   tool_use_enabled: boolean;
 };
 
-/** Row shape for server_novelai_imagegen_configs (Phase 6 Stage A). */
+/** Row shape for server_novelai_imagegen_configs (Phase 6). */
 export type ServerNovelaiImagegenConfigsRow = {
   nai_preset_name: string | null;
   nai_style_tags: string[];
@@ -46,14 +63,14 @@ export type ServerNovelaiImagegenConfigsRow = {
   nai_diffusion_model_id: number | null;
 };
 
-/** Row shape for server_nsfw_configs (Phase 6 Stage A). */
+/** Row shape for server_nsfw_configs (Phase 6). */
 export type ServerNsfwConfigsRow = {
   uncensor_injection_enabled: boolean;
   uncensor_unicode_space_enabled: boolean;
   uncensor_sanitize_enabled: boolean;
 };
 
-/** Row shape for server_speech_configs (Phase 6 Stage A). */
+/** Row shape for server_speech_configs (Phase 6). */
 export type ServerSpeechConfigsRow = {
   voice_transcript_chat_mode: boolean;
   chatterbox_turbo_enabled: boolean;
@@ -61,13 +78,13 @@ export type ServerSpeechConfigsRow = {
   chatterbox_exaggeration: number;
 };
 
-/** Row shape for server_byok_configs (Phase 6 Stage A). */
+/** Row shape for server_byok_configs (Phase 6). */
 export type ServerByokConfigsRow = {
   user_byok_mode: boolean;
 };
 
 /**
- * Composite export shape for ConfigRepository's Phase 6 Stage A tables.
+ * Composite export shape for ConfigRepository's Phase 6 tables.
  * Replaces the old Partial<TomoriConfigRow> stub.
  */
 export type ConfigExportShape = {
@@ -522,6 +539,151 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     return ok;
   }
 
+  // ── split table partial updates ──────────────────────────────────
+
+  async updateModelConfig(serverId: number, patch: Partial<ServerModelConfigRow>): Promise<boolean> {
+    return this.executeUpdate("server_model_configs", serverId, patch);
+  }
+
+  async updateChatConfig(serverId: number, patch: Partial<ServerChatConfigRow>): Promise<boolean> {
+    return this.executeUpdate("server_chat_configs", serverId, patch);
+  }
+
+  async updateCapabilitiesConfig(serverId: number, patch: Partial<ServerCapabilitiesConfigRow>): Promise<boolean> {
+    return this.executeUpdate("server_capabilities_configs", serverId, patch);
+  }
+
+  async updateMemberPermissionsConfig(
+    serverId: number,
+    patch: Partial<ServerMemberPermissionsConfigRow>,
+  ): Promise<boolean> {
+    return this.executeUpdate("server_member_permissions_configs", serverId, patch);
+  }
+
+  async updateNoticeEmbedsConfig(serverId: number, patch: Partial<ServerNoticeEmbedsConfigRow>): Promise<boolean> {
+    return this.executeUpdate("server_notice_embeds_configs", serverId, patch);
+  }
+
+  async updateNsfwConfig(serverId: number, patch: Partial<ServerNsfwConfigRow>): Promise<boolean> {
+    return this.executeUpdate("server_nsfw_configs", serverId, patch);
+  }
+
+  async updateSpeechConfig(serverId: number, patch: Partial<ServerSpeechConfigRow>): Promise<boolean> {
+    return this.executeUpdate("server_speech_configs", serverId, patch);
+  }
+
+  async updateAutoTriggerConfig(serverId: number, patch: Partial<ServerAutoTriggerConfigRow>): Promise<boolean> {
+    return this.executeUpdate("server_auto_trigger_configs", serverId, patch);
+  }
+
+  async updateChannelScopeConfig(serverId: number, patch: Partial<ServerChannelScopeConfigRow>): Promise<boolean> {
+    return this.executeUpdate("server_channel_scope_configs", serverId, patch);
+  }
+
+  async updateTriggerBehaviorConfig(
+    serverId: number,
+    patch: Partial<ServerTriggerBehaviorConfigRow>,
+  ): Promise<boolean> {
+    return this.executeUpdate("server_trigger_behavior_configs", serverId, patch);
+  }
+
+  async updateNovelaiImagegenConfig(
+    serverId: number,
+    patch: Partial<ServerNovelaiImagegenConfigRow>,
+  ): Promise<boolean> {
+    return this.executeUpdate("server_novelai_imagegen_configs", serverId, patch);
+  }
+
+  async updateByokConfig(serverId: number, patch: Partial<ServerByokConfigRow>): Promise<boolean> {
+    return this.executeUpdate("server_byok_configs", serverId, patch);
+  }
+
+  async updateMemoryConfig(serverId: number, patch: Partial<ServerMemoryConfigRow>): Promise<boolean> {
+    return this.executeUpdate("server_memory_configs", serverId, patch);
+  }
+
+  /**
+   * Delete every config-table row owned by this server across the 13 split tables
+   * (plus legacy `tomori_configs` until Task F drops it). Used by `/config setup` to
+   * recover from the orphaned-alters state: a server that has alter personas but no
+   * main persona row is wedged because `tomori_configs.server_id` has a UNIQUE
+   * constraint that blocks fresh setup. Wiping all configs frees the constraint
+   * without touching `tomoris` rows, so alters survive the reset.
+   *
+   * @param serverId - Internal server DB ID
+   */
+  async resetAllServerConfigs(serverId: number): Promise<void> {
+    await Promise.all([
+      sql`DELETE FROM tomori_configs WHERE server_id = ${serverId}`,
+      sql`DELETE FROM server_model_configs WHERE server_id = ${serverId}`,
+      sql`DELETE FROM server_chat_configs WHERE server_id = ${serverId}`,
+      sql`DELETE FROM server_member_permissions_configs WHERE server_id = ${serverId}`,
+      sql`DELETE FROM server_capabilities_configs WHERE server_id = ${serverId}`,
+      sql`DELETE FROM server_notice_embeds_configs WHERE server_id = ${serverId}`,
+      sql`DELETE FROM server_nsfw_configs WHERE server_id = ${serverId}`,
+      sql`DELETE FROM server_speech_configs WHERE server_id = ${serverId}`,
+      sql`DELETE FROM server_auto_trigger_configs WHERE server_id = ${serverId}`,
+      sql`DELETE FROM server_channel_scope_configs WHERE server_id = ${serverId}`,
+      sql`DELETE FROM server_trigger_behavior_configs WHERE server_id = ${serverId}`,
+      sql`DELETE FROM server_byok_configs WHERE server_id = ${serverId}`,
+      sql`DELETE FROM server_novelai_imagegen_configs WHERE server_id = ${serverId}`,
+      sql`DELETE FROM server_memory_configs WHERE server_id = ${serverId}`,
+    ]);
+  }
+
+  // ── reads for split tables (used where TomoriState cache is unavailable) ──
+
+  async getModelConfig(serverId: number): Promise<ServerModelConfigRow | null> {
+    try {
+      const [row] = await sql`SELECT * FROM server_model_configs WHERE server_id = ${serverId}`;
+      return (row as unknown as ServerModelConfigRow) ?? null;
+    } catch (error) {
+      log.error(`Error loading server_model_configs for server ${serverId}:`, error);
+      return null;
+    }
+  }
+
+  async getSpeechConfig(serverId: number): Promise<ServerSpeechConfigRow | null> {
+    try {
+      const [row] = await sql`SELECT * FROM server_speech_configs WHERE server_id = ${serverId}`;
+      return (row as unknown as ServerSpeechConfigRow) ?? null;
+    } catch (error) {
+      log.error(`Error loading server_speech_configs for server ${serverId}:`, error);
+      return null;
+    }
+  }
+
+  private async executeUpdate(tableName: string, serverId: number, patch: Record<string, unknown>): Promise<boolean> {
+    const entries = Object.entries(patch).filter(([, v]) => v !== undefined);
+    if (entries.length === 0) return false;
+
+    const setParts: string[] = [];
+    const values: SqlParameterArray = [];
+
+    entries.forEach(([key, value], index) => {
+      setParts.push(`${key} = $${index + 1}`);
+      values.push(value as never);
+    });
+
+    const setClause = setParts.join(", ");
+    values.push(serverId);
+    const serverIdIndex = values.length;
+
+    try {
+      // sql.unsafe is intentional: tableName is dynamic (13 split-config tables) and cannot
+      // be expressed as a typed sql`` identifier; sql(patch) for SET also requires a static
+      // template tag so mixing both with a dynamic table name forces sql.unsafe here.
+      const result = await sql.unsafe(
+        `UPDATE ${tableName} SET ${setClause} WHERE server_id = $${serverIdIndex} RETURNING server_id`,
+        values,
+      );
+      return result.length > 0;
+    } catch (error) {
+      log.error(`Error updating ${tableName} for server_id: ${serverId}:`, error);
+      return false;
+    }
+  }
+
   // ── IRepository contract ───────────────────────────────────────────────────
 
   /**
@@ -579,7 +741,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     }
   }
 
-  // ── Stage A: config table reads ───────────────────────────────────────────
+  // ── config table reads ───────────────────────────────────────────
 
   private async resolveServerId(serverDiscId: string): Promise<number | null> {
     const [row] = await sql`
@@ -662,7 +824,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     }
   }
 
-  // ── Stage A: config table upserts (new tables) ────────────────────────────
+  // ── config table upserts (new tables) ────────────────────────────
 
   private async sqlUpsertCapabilitiesConfigs(serverId: number, row: ServerCapabilitiesConfigsRow): Promise<void> {
     await sql`

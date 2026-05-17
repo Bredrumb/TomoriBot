@@ -38,6 +38,74 @@ export interface CooldownsCleanupResult {
 // ── repository class ──────────────────────────────────────────────────────────
 
 export class CooldownRepository {
+  /**
+   * Checks whether a slash-command category cooldown is active for a user.
+   *
+   * @param userId   - Discord user ID
+   * @param category - Slash-command category
+   */
+  async hasCommandCategoryCooldown(userId: string, category: string): Promise<boolean> {
+    const now = Date.now();
+    const [cooldown] = await sql`
+      SELECT expiry_time
+      FROM cooldowns
+      WHERE cooldown_type = ${CooldownType.COMMAND_CATEGORY}
+        AND user_disc_id = ${userId}
+        AND command_category = ${category}
+        AND expiry_time > ${now}
+    `;
+    return Boolean(cooldown);
+  }
+
+  /**
+   * Returns remaining slash-command category cooldown seconds for a user.
+   *
+   * @param userId   - Discord user ID
+   * @param category - Slash-command category
+   */
+  async getRemainingCommandCategoryCooldownSeconds(userId: string, category: string): Promise<number> {
+    const now = Date.now();
+    const [cooldown] = await sql`
+      SELECT expiry_time
+      FROM cooldowns
+      WHERE cooldown_type = ${CooldownType.COMMAND_CATEGORY}
+        AND user_disc_id = ${userId}
+        AND command_category = ${category}
+        AND expiry_time > ${now}
+    `;
+
+    if (!cooldown) return 0;
+    return Math.ceil((Number(cooldown.expiry_time) - now) / 1000);
+  }
+
+  /**
+   * Upserts a slash-command category cooldown for a user.
+   *
+   * @param userId     - Discord user ID
+   * @param category   - Slash-command category
+   * @param durationMs - Cooldown duration in milliseconds
+   */
+  async setCommandCategoryCooldown(userId: string, category: string, durationMs: number): Promise<void> {
+    const expiryTime = Date.now() + durationMs;
+
+    await sql`
+      INSERT INTO cooldowns (
+        cooldown_type,
+        user_disc_id,
+        command_category,
+        expiry_time
+      )
+      VALUES (
+        ${CooldownType.COMMAND_CATEGORY},
+        ${userId},
+        ${category},
+        ${expiryTime}
+      )
+      ON CONFLICT (cooldown_type, COALESCE(server_disc_id, ''), COALESCE(user_disc_id, ''), COALESCE(channel_disc_id, ''), COALESCE(command_category, ''))
+      DO UPDATE SET expiry_time = ${expiryTime}
+    `;
+  }
+
   // ── exemption check ────────────────────────────────────────────────────────
 
   /**

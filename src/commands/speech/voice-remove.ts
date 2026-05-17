@@ -14,6 +14,7 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { deleteStoredVoiceSample } from "@/utils/storage/voiceSampleStorage";
+import { clearPersonaVoiceSampleRefs, deleteVoiceSample } from "@/utils/db/repositories/SpeechRepository";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { localizer } from "@/utils/text/localizer";
@@ -171,18 +172,10 @@ export async function execute(
     }
 
     // 6. Deletion confirmed: clear persona assignments, remove DB row, delete file.
-    await sql`
-      UPDATE tomoris
-      SET speech_voice_sample_id = NULL
-      WHERE server_id = ${serverId}
-        AND speech_voice_sample_id = ${sampleRow.sample_id}
-    `;
+    await clearPersonaVoiceSampleRefs(serverId, sampleRow.sample_id);
 
-    await sql`
-      DELETE FROM voice_samples
-      WHERE sample_id = ${sampleRow.sample_id}
-    `;
-
+    // Delete the voice sample itself
+    await deleteVoiceSample(sampleRow.sample_id);
     await deleteStoredVoiceSample(sampleRow.file_path);
 
     log.info(

@@ -28,7 +28,7 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
 import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { personaRepository } from "@/utils/db/repositories";
+import { personaRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import type { SelectOption } from "@/types/discord/modal";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 
@@ -50,41 +50,19 @@ async function performHistoryDocumentRemoval(
   tomoriState: TomoriState,
   targetTomoriId: number | null,
   documentId: number,
-  userData: UserRow,
+  _userData: UserRow,
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
-  // Delete the document (chunks cascade via FK)
-  const deletedRows =
-    targetTomoriId === null
-      ? await sql`
-				DELETE FROM documents
-				WHERE document_id = ${documentId}
-				  AND server_id = ${tomoriState.server_id}
-				  AND tomori_id IS NULL
-				  AND source_type = 'history'
-				RETURNING document_name
-			`
-      : await sql`
-				DELETE FROM documents
-				WHERE document_id = ${documentId}
-				  AND server_id = ${tomoriState.server_id}
-				  AND tomori_id = ${targetTomoriId}
-				  AND source_type = 'history'
-				RETURNING document_name
-			`;
-  const [deletedRow] = deletedRows;
+  // Delete the history document (chunks cascade via FK)
+  const documentName = await serverMemoryRepository.removeHistoryDocument(
+    documentId,
+    tomoriState.server_id,
+    targetTomoriId,
+  );
 
-  if (!deletedRow?.document_name) {
-    const context: ErrorContext = {
-      tomoriId: targetTomoriId ?? tomoriState.tomori_id,
-      serverId: tomoriState.server_id,
-      userId: userData.user_id,
-      errorType: "DatabaseUpdateError",
-      metadata: { command: "memory history remove", documentId },
-    };
-    await log.error("Failed to delete history document row", new Error("Document deletion returned no rows"), context);
+  if (!documentName) {
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
       descriptionKey: "general.errors.update_failed_description",
@@ -101,7 +79,7 @@ async function performHistoryDocumentRemoval(
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "commands.memory.history.remove.success_title",
       descriptionKey: "commands.memory.history.remove.success_description",
-      descriptionVars: { name: deletedRow.document_name },
+      descriptionVars: { name: documentName },
       color: ColorCode.SUCCESS,
     });
   }

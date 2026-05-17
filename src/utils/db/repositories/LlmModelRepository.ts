@@ -6,6 +6,7 @@ import {
   type DiffusionModelRow,
   type EmbeddingModelRow,
   type LlmRow,
+  type CustomEndpointCapability,
   type VideoGenerationModelRow,
 } from "@/types/db/schema";
 import { getCachedLLM } from "@/utils/cache/llmCache";
@@ -849,6 +850,639 @@ export class LlmModelRepository {
     } catch (error) {
       log.error(`Error loading video generation model for ${normalizedProvider}/${normalizedCodename}:`, error);
       return null;
+    }
+  }
+  // ── OpenRouter scoped model upserts ──────────────────────────────────────
+
+  /**
+   * Capability flags passed to upsertScopedLlm.
+   * The caller (openrouterModelRegistry) resolves these from the OpenRouter
+   * capability cache before calling this method.
+   */
+
+  /**
+   * Upsert a scoped OpenRouter LLM into the llms catalog.
+   * ON CONFLICT updates all capability flags and clears is_deprecated.
+   *
+   * @param modelCodename - OpenRouter model codename (e.g. "openai/gpt-4o")
+   * @param caps          - Resolved capability flags
+   * @returns The upserted llm_id, or null on failure
+   */
+  async upsertScopedLlm(
+    modelCodename: string,
+    caps: {
+      hasTools: boolean;
+      seesImages: boolean;
+      seesVideos: boolean;
+      seesYoutube: boolean;
+      supportsStructuredOutput: boolean;
+    },
+  ): Promise<number | null> {
+    try {
+      const rows = await sql`
+        INSERT INTO llms (
+          llm_provider, llm_codename, is_scoped_registration, is_smartest,
+          is_default, is_reasoning, is_deprecated, is_free, has_tools,
+          sees_images, sees_videos, sees_youtube, is_uncensored,
+          supports_structoutput, llm_description, ja_description
+        ) VALUES (
+          'openrouter', ${modelCodename}, true, false, false, false, false, false,
+          ${caps.hasTools}, ${caps.seesImages}, ${caps.seesVideos}, ${caps.seesYoutube},
+          false, ${caps.supportsStructuredOutput}, ${modelCodename}, ${modelCodename}
+        )
+        ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET
+          is_scoped_registration  = true,
+          is_deprecated           = false,
+          has_tools               = EXCLUDED.has_tools,
+          sees_images             = EXCLUDED.sees_images,
+          sees_videos             = EXCLUDED.sees_videos,
+          sees_youtube            = EXCLUDED.sees_youtube,
+          supports_structoutput   = EXCLUDED.supports_structoutput,
+          llm_description         = EXCLUDED.llm_description,
+          ja_description          = EXCLUDED.ja_description,
+          updated_at              = CURRENT_TIMESTAMP
+        RETURNING llm_id
+      `;
+      const id = Number(rows[0]?.llm_id);
+      return Number.isInteger(id) ? id : null;
+    } catch (error) {
+      log.error(`LlmModelRepository.upsertScopedLlm: failed for ${modelCodename}`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Upsert a scoped OpenRouter embedding model into the embedding_models catalog.
+   *
+   * @param modelCodename - OpenRouter model codename
+   * @returns The upserted embedding_model_id, or null on failure
+   */
+  async upsertScopedEmbeddingModel(modelCodename: string): Promise<number | null> {
+    const modelFamily = modelCodename.split("/").pop() ?? modelCodename;
+    try {
+      const rows = await sql`
+        INSERT INTO embedding_models (
+          provider, codename, model_family, is_scoped_registration,
+          model_description, ja_description, is_default, is_deprecated
+        ) VALUES (
+          'openrouter', ${modelCodename}, ${modelFamily}, true,
+          ${modelCodename}, ${modelCodename}, false, false
+        )
+        ON CONFLICT (provider, codename) DO UPDATE SET
+          model_family            = EXCLUDED.model_family,
+          is_scoped_registration  = true,
+          model_description       = EXCLUDED.model_description,
+          ja_description          = EXCLUDED.ja_description,
+          is_default              = false,
+          is_deprecated           = false,
+          updated_at              = CURRENT_TIMESTAMP
+        RETURNING embedding_model_id
+      `;
+      const id = Number(rows[0]?.embedding_model_id);
+      return Number.isInteger(id) ? id : null;
+    } catch (error) {
+      log.error(`LlmModelRepository.upsertScopedEmbeddingModel: failed for ${modelCodename}`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Upsert a scoped OpenRouter diffusion model into the image_diffusion_models catalog.
+   *
+   * @param modelCodename - OpenRouter model codename
+   * @returns The upserted diffusion_model_id, or null on failure
+   */
+  async upsertScopedDiffusionModel(modelCodename: string): Promise<number | null> {
+    try {
+      const rows = await sql`
+        INSERT INTO image_diffusion_models (
+          provider, codename, is_scoped_registration,
+          model_description, ja_description, is_default, is_deprecated, is_free, is_uncensored
+        ) VALUES (
+          'openrouter', ${modelCodename}, true,
+          ${modelCodename}, ${modelCodename}, false, false, false, false
+        )
+        ON CONFLICT (provider, codename) DO UPDATE SET
+          is_scoped_registration  = true,
+          model_description       = EXCLUDED.model_description,
+          ja_description          = EXCLUDED.ja_description,
+          is_default              = false,
+          is_deprecated           = false,
+          is_free                 = EXCLUDED.is_free,
+          is_uncensored           = EXCLUDED.is_uncensored,
+          updated_at              = CURRENT_TIMESTAMP
+        RETURNING diffusion_model_id
+      `;
+      const id = Number(rows[0]?.diffusion_model_id);
+      return Number.isInteger(id) ? id : null;
+    } catch (error) {
+      log.error(`LlmModelRepository.upsertScopedDiffusionModel: failed for ${modelCodename}`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Upsert a scoped OpenRouter video generation model into the video_generation_models catalog.
+   *
+   * @param modelCodename - OpenRouter model codename
+   * @returns The upserted video_model_id, or null on failure
+   */
+  async upsertScopedVideoModel(modelCodename: string): Promise<number | null> {
+    try {
+      const rows = await sql`
+        INSERT INTO video_generation_models (
+          provider, codename, is_scoped_registration,
+          model_description, ja_description, is_default, is_deprecated, is_free
+        ) VALUES (
+          'openrouter', ${modelCodename}, true,
+          ${modelCodename}, ${modelCodename}, false, false, false
+        )
+        ON CONFLICT (provider, codename) DO UPDATE SET
+          is_scoped_registration  = true,
+          model_description       = EXCLUDED.model_description,
+          ja_description          = EXCLUDED.ja_description,
+          is_default              = false,
+          is_deprecated           = false,
+          is_free                 = EXCLUDED.is_free,
+          updated_at              = CURRENT_TIMESTAMP
+        RETURNING video_model_id
+      `;
+      const id = Number(rows[0]?.video_model_id);
+      return Number.isInteger(id) ? id : null;
+    } catch (error) {
+      log.error(`LlmModelRepository.upsertScopedVideoModel: failed for ${modelCodename}`, error);
+      return null;
+    }
+  }
+
+  async upsertSyntheticCustomLlm(params: {
+    provider: string;
+    codename: string;
+    displayName: string;
+    hasTools: boolean;
+    seesImages: boolean;
+    seesVideos: boolean;
+    supportsStructOutput: boolean;
+  }): Promise<number | null> {
+    try {
+      const rows = await sql`
+        INSERT INTO llms (
+          llm_provider, llm_codename, has_tools, sees_images, sees_videos,
+          sees_youtube, supports_structoutput, is_smartest, is_default,
+          is_reasoning, is_deprecated, is_free, is_uncensored,
+          llm_description, ja_description
+        ) VALUES (
+          ${params.provider}, ${params.codename}, ${params.hasTools}, ${params.seesImages}, ${params.seesVideos},
+          false, ${params.supportsStructOutput}, false, true,
+          false, false, true, true,
+          ${params.displayName}, ${params.displayName}
+        )
+        ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET
+          has_tools = EXCLUDED.has_tools,
+          sees_images = EXCLUDED.sees_images,
+          sees_videos = EXCLUDED.sees_videos,
+          supports_structoutput = EXCLUDED.supports_structoutput,
+          llm_description = EXCLUDED.llm_description,
+          ja_description = EXCLUDED.ja_description,
+          updated_at = CURRENT_TIMESTAMP
+        RETURNING llm_id
+      `;
+      const id = Number(rows[0]?.llm_id);
+      return Number.isInteger(id) ? id : null;
+    } catch (error) {
+      log.error(`LlmModelRepository.upsertSyntheticCustomLlm: failed for ${params.provider}`, error);
+      return null;
+    }
+  }
+
+  async upsertLegacyCustomLlm(params: {
+    codename: string;
+    hasTools: boolean;
+    seesImages: boolean;
+    seesVideos: boolean;
+    supportsStructOutput: boolean;
+  }): Promise<number | null> {
+    try {
+      const rows = await sql`
+        INSERT INTO llms (
+          llm_provider,
+          llm_codename,
+          has_tools,
+          sees_images,
+          sees_videos,
+          sees_youtube,
+          supports_structoutput,
+          is_smartest,
+          is_default,
+          is_reasoning,
+          is_deprecated,
+          is_free,
+          is_uncensored,
+          llm_description
+        ) VALUES (
+          'custom',
+          ${params.codename},
+          ${params.hasTools},
+          ${params.seesImages},
+          ${params.seesVideos},
+          false,
+          ${params.supportsStructOutput},
+          false,
+          false,
+          false,
+          false,
+          true,
+          true,
+          ${"Custom endpoint model configured by server admin"}
+        )
+        ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET
+          has_tools = EXCLUDED.has_tools,
+          sees_images = EXCLUDED.sees_images,
+          sees_videos = EXCLUDED.sees_videos,
+          supports_structoutput = EXCLUDED.supports_structoutput,
+          updated_at = CURRENT_TIMESTAMP
+        RETURNING llm_id
+      `;
+      const id = Number(rows[0]?.llm_id);
+      return Number.isInteger(id) ? id : null;
+    } catch (error) {
+      log.error(`LlmModelRepository.upsertLegacyCustomLlm: failed for ${params.codename}`, error);
+      return null;
+    }
+  }
+
+  async deleteLegacyCustomLlm(codename: string): Promise<boolean> {
+    const result = await sql`
+      DELETE FROM llms
+      WHERE llm_codename = ${codename}
+      RETURNING llm_id
+    `;
+    return result.length > 0;
+  }
+
+  async upsertSyntheticCustomEmbeddingModel(params: {
+    provider: string;
+    codename: string;
+    displayName: string;
+  }): Promise<number | null> {
+    try {
+      const rows = await sql`
+        INSERT INTO embedding_models (
+          provider, codename, model_family, model_description,
+          ja_description, is_default, is_deprecated
+        ) VALUES (
+          ${params.provider}, ${params.codename}, ${`custom:${params.provider}`},
+          ${params.displayName}, ${params.displayName}, true, false
+        )
+        ON CONFLICT (provider, codename) DO UPDATE SET
+          provider = EXCLUDED.provider,
+          model_family = EXCLUDED.model_family,
+          model_description = EXCLUDED.model_description,
+          ja_description = EXCLUDED.ja_description,
+          is_default = EXCLUDED.is_default,
+          is_deprecated = EXCLUDED.is_deprecated,
+          updated_at = CURRENT_TIMESTAMP
+        RETURNING embedding_model_id
+      `;
+      const id = Number(rows[0]?.embedding_model_id);
+      return Number.isInteger(id) ? id : null;
+    } catch (error) {
+      log.error(`LlmModelRepository.upsertSyntheticCustomEmbeddingModel: failed for ${params.provider}`, error);
+      return null;
+    }
+  }
+
+  async upsertSyntheticCustomDiffusionModel(params: {
+    provider: string;
+    codename: string;
+    displayName: string;
+  }): Promise<number | null> {
+    try {
+      const rows = await sql`
+        INSERT INTO image_diffusion_models (
+          provider, codename, model_description, ja_description,
+          is_default, is_deprecated, is_free, is_uncensored
+        ) VALUES (
+          ${params.provider}, ${params.codename}, ${params.displayName}, ${params.displayName},
+          true, false, true, true
+        )
+        ON CONFLICT (provider, codename) DO UPDATE SET
+          provider = EXCLUDED.provider,
+          model_description = EXCLUDED.model_description,
+          ja_description = EXCLUDED.ja_description,
+          is_default = EXCLUDED.is_default,
+          is_deprecated = EXCLUDED.is_deprecated,
+          is_free = EXCLUDED.is_free,
+          is_uncensored = EXCLUDED.is_uncensored,
+          updated_at = CURRENT_TIMESTAMP
+        RETURNING diffusion_model_id
+      `;
+      const id = Number(rows[0]?.diffusion_model_id);
+      return Number.isInteger(id) ? id : null;
+    } catch (error) {
+      log.error(`LlmModelRepository.upsertSyntheticCustomDiffusionModel: failed for ${params.provider}`, error);
+      return null;
+    }
+  }
+
+  async upsertSyntheticCustomVideoModel(params: {
+    provider: string;
+    codename: string;
+    displayName: string;
+  }): Promise<number | null> {
+    try {
+      const rows = await sql`
+        INSERT INTO video_generation_models (
+          provider, codename, model_description, ja_description,
+          is_default, is_deprecated, is_free
+        ) VALUES (
+          ${params.provider}, ${params.codename}, ${params.displayName}, ${params.displayName},
+          true, false, true
+        )
+        ON CONFLICT (provider, codename) DO UPDATE SET
+          provider = EXCLUDED.provider,
+          model_description = EXCLUDED.model_description,
+          ja_description = EXCLUDED.ja_description,
+          is_default = EXCLUDED.is_default,
+          is_deprecated = EXCLUDED.is_deprecated,
+          is_free = EXCLUDED.is_free,
+          updated_at = CURRENT_TIMESTAMP
+        RETURNING video_model_id
+      `;
+      const id = Number(rows[0]?.video_model_id);
+      return Number.isInteger(id) ? id : null;
+    } catch (error) {
+      log.error(`LlmModelRepository.upsertSyntheticCustomVideoModel: failed for ${params.provider}`, error);
+      return null;
+    }
+  }
+
+  // ── OpenRouter reference checks ───────────────────────────────────────────
+
+  /**
+   * Returns true when any config row (tomori_configs, persona_configs,
+   * channel_llm_overrides, saved_provider_configs, user_saved_provider_configs)
+   * still references the given LLM ID.
+   *
+   * @param llmId - Internal LLM ID
+   */
+  async isLlmStillReferenced(llmId: number): Promise<boolean> {
+    const [row] = await sql<Array<{ in_use: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1 FROM tomori_configs
+        WHERE llm_id = ${llmId}
+           OR vision_llm_id = ${llmId}
+           OR COALESCE(fallback_llm_ids, '[]'::JSONB) @> jsonb_build_array(${llmId})
+           OR EXISTS (
+              SELECT 1 FROM jsonb_array_elements(
+                CASE WHEN jsonb_typeof(COALESCE(tomori_configs.fallback_model_refs, '[]'::JSONB)) = 'array'
+                  THEN COALESCE(tomori_configs.fallback_model_refs, '[]'::JSONB)
+                  ELSE '[]'::JSONB END
+              ) AS ref
+              WHERE ref ->> 'type' = 'llm' AND ref ->> 'id' = ${String(llmId)}
+           )
+        UNION ALL
+        SELECT 1 FROM persona_configs WHERE llm_id = ${llmId}
+        UNION ALL
+        SELECT 1 FROM channel_llm_overrides WHERE llm_id = ${llmId}
+        UNION ALL
+        SELECT 1 FROM saved_provider_configs
+        WHERE llm_id = ${llmId}
+           OR vision_llm_id = ${llmId}
+           OR COALESCE(fallback_llm_ids, '[]'::JSONB) @> jsonb_build_array(${llmId})
+           OR EXISTS (
+              SELECT 1 FROM jsonb_array_elements(
+                CASE WHEN jsonb_typeof(COALESCE(saved_provider_configs.fallback_model_refs, '[]'::JSONB)) = 'array'
+                  THEN COALESCE(saved_provider_configs.fallback_model_refs, '[]'::JSONB)
+                  ELSE '[]'::JSONB END
+              ) AS ref
+              WHERE ref ->> 'type' = 'llm' AND ref ->> 'id' = ${String(llmId)}
+           )
+        UNION ALL
+        SELECT 1 FROM user_saved_provider_configs
+        WHERE llm_id = ${llmId}
+           OR vision_llm_id = ${llmId}
+           OR COALESCE(fallback_llm_ids, '[]'::JSONB) @> jsonb_build_array(${llmId})
+           OR EXISTS (
+              SELECT 1 FROM jsonb_array_elements(
+                CASE WHEN jsonb_typeof(COALESCE(user_saved_provider_configs.fallback_model_refs, '[]'::JSONB)) = 'array'
+                  THEN COALESCE(user_saved_provider_configs.fallback_model_refs, '[]'::JSONB)
+                  ELSE '[]'::JSONB END
+              ) AS ref
+              WHERE ref ->> 'type' = 'llm' AND ref ->> 'id' = ${String(llmId)}
+           )
+      ) AS in_use
+    `;
+    return Boolean(row?.in_use);
+  }
+
+  /**
+   * Returns true when any config row still references the given embedding model ID.
+   *
+   * @param embeddingModelId - Internal embedding model ID
+   */
+  async isEmbeddingModelStillReferenced(embeddingModelId: number): Promise<boolean> {
+    const [row] = await sql<Array<{ in_use: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1 FROM tomori_configs         WHERE embedding_model_id = ${embeddingModelId}
+        UNION ALL
+        SELECT 1 FROM saved_provider_configs WHERE embedding_model_id = ${embeddingModelId}
+        UNION ALL
+        SELECT 1 FROM user_saved_provider_configs WHERE embedding_model_id = ${embeddingModelId}
+      ) AS in_use
+    `;
+    return Boolean(row?.in_use);
+  }
+
+  /**
+   * Returns true when any config row still references the given diffusion model ID.
+   *
+   * @param diffusionModelId - Internal diffusion model ID
+   */
+  async isDiffusionModelStillReferenced(diffusionModelId: number): Promise<boolean> {
+    const [row] = await sql<Array<{ in_use: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1 FROM tomori_configs
+        WHERE diffusion_model_id = ${diffusionModelId} OR nai_diffusion_model_id = ${diffusionModelId}
+        UNION ALL
+        SELECT 1 FROM saved_provider_configs
+        WHERE diffusion_model_id = ${diffusionModelId} OR nai_diffusion_model_id = ${diffusionModelId}
+        UNION ALL
+        SELECT 1 FROM user_saved_provider_configs
+        WHERE diffusion_model_id = ${diffusionModelId} OR nai_diffusion_model_id = ${diffusionModelId}
+      ) AS in_use
+    `;
+    return Boolean(row?.in_use);
+  }
+
+  /**
+   * Returns true when any config row still references the given video model ID.
+   *
+   * @param videoModelId - Internal video model ID
+   */
+  async isVideoModelStillReferenced(videoModelId: number): Promise<boolean> {
+    const [row] = await sql<Array<{ in_use: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1 FROM tomori_configs              WHERE video_model_id = ${videoModelId}
+        UNION ALL
+        SELECT 1 FROM saved_provider_configs      WHERE video_model_id = ${videoModelId}
+        UNION ALL
+        SELECT 1 FROM user_saved_provider_configs WHERE video_model_id = ${videoModelId}
+      ) AS in_use
+    `;
+    return Boolean(row?.in_use);
+  }
+
+  // ── OpenRouter registration counts ────────────────────────────────────────
+
+  /**
+   * Count active scope registrations for a scoped LLM.
+   * Zero means the catalog row can be deleted if also unreferenced.
+   *
+   * @param llmId - Internal LLM ID
+   */
+  async countLlmRegistrations(llmId: number): Promise<number> {
+    const [row] = await sql<Array<{ count: string | number }>>`
+      SELECT COUNT(*) AS count FROM openrouter_model_registrations WHERE llm_id = ${llmId}
+    `;
+    return Number(row?.count ?? 0);
+  }
+
+  /**
+   * Count active scope registrations for a scoped embedding model.
+   *
+   * @param embeddingModelId - Internal embedding model ID
+   */
+  async countEmbeddingModelRegistrations(embeddingModelId: number): Promise<number> {
+    const [row] = await sql<Array<{ count: string | number }>>`
+      SELECT COUNT(*) AS count FROM openrouter_embedding_model_registrations
+      WHERE embedding_model_id = ${embeddingModelId}
+    `;
+    return Number(row?.count ?? 0);
+  }
+
+  /**
+   * Count active scope registrations for a scoped diffusion model.
+   *
+   * @param diffusionModelId - Internal diffusion model ID
+   */
+  async countDiffusionModelRegistrations(diffusionModelId: number): Promise<number> {
+    const [row] = await sql<Array<{ count: string | number }>>`
+      SELECT COUNT(*) AS count FROM openrouter_image_model_registrations
+      WHERE diffusion_model_id = ${diffusionModelId}
+    `;
+    return Number(row?.count ?? 0);
+  }
+
+  /**
+   * Count active scope registrations for a scoped video model.
+   *
+   * @param videoModelId - Internal video model ID
+   */
+  async countVideoModelRegistrations(videoModelId: number): Promise<number> {
+    const [row] = await sql<Array<{ count: string | number }>>`
+      SELECT COUNT(*) AS count FROM openrouter_video_model_registrations
+      WHERE video_model_id = ${videoModelId}
+    `;
+    return Number(row?.count ?? 0);
+  }
+
+  // ── OpenRouter orphan deletes ─────────────────────────────────────────────
+
+  /**
+   * Delete an orphaned scoped OpenRouter LLM catalog row.
+   * Only deletes when llm_provider = 'openrouter' and is_scoped_registration = true.
+   *
+   * @param llmId - Internal LLM ID
+   */
+  async deleteOrphanedLlm(llmId: number): Promise<void> {
+    await sql`
+      DELETE FROM llms
+      WHERE llm_id = ${llmId}
+        AND llm_provider = 'openrouter'
+        AND COALESCE(is_scoped_registration, false) = true
+    `;
+  }
+
+  /**
+   * Delete an orphaned scoped OpenRouter embedding model catalog row.
+   *
+   * @param embeddingModelId - Internal embedding model ID
+   */
+  async deleteOrphanedEmbeddingModel(embeddingModelId: number): Promise<void> {
+    await sql`
+      DELETE FROM embedding_models
+      WHERE embedding_model_id = ${embeddingModelId}
+        AND provider = 'openrouter'
+        AND COALESCE(is_scoped_registration, false) = true
+    `;
+  }
+
+  /**
+   * Delete an orphaned scoped OpenRouter diffusion model catalog row.
+   *
+   * @param diffusionModelId - Internal diffusion model ID
+   */
+  async deleteOrphanedDiffusionModel(diffusionModelId: number): Promise<void> {
+    await sql`
+      DELETE FROM image_diffusion_models
+      WHERE diffusion_model_id = ${diffusionModelId}
+        AND provider = 'openrouter'
+        AND COALESCE(is_scoped_registration, false) = true
+    `;
+  }
+
+  /**
+   * Delete an orphaned scoped OpenRouter video model catalog row.
+   *
+   * @param videoModelId - Internal video model ID
+   */
+  async deleteOrphanedVideoModel(videoModelId: number): Promise<void> {
+    await sql`
+      DELETE FROM video_generation_models
+      WHERE video_model_id = ${videoModelId}
+        AND provider = 'openrouter'
+        AND COALESCE(is_scoped_registration, false) = true
+    `;
+  }
+
+  async deleteSyntheticCustomCapabilityModel(
+    provider: string,
+    codename: string,
+    capability: CustomEndpointCapability,
+  ): Promise<void> {
+    switch (capability) {
+      case "text":
+        await sql`
+          DELETE FROM llms
+          WHERE llm_provider = ${provider}
+            AND llm_codename = ${codename}
+        `;
+        return;
+      case "embedding":
+        await sql`
+          DELETE FROM embedding_models
+          WHERE provider = ${provider}
+            AND codename = ${codename}
+        `;
+        return;
+      case "image":
+        await sql`
+          DELETE FROM image_diffusion_models
+          WHERE provider = ${provider}
+            AND codename = ${codename}
+        `;
+        return;
+      case "video":
+        await sql`
+          DELETE FROM video_generation_models
+          WHERE provider = ${provider}
+            AND codename = ${codename}
+        `;
+        return;
+      case "speech":
+      case "transcription":
+        return;
     }
   }
 }

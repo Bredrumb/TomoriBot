@@ -17,7 +17,6 @@ import type {
   AnyThreadChannel,
 } from "discord.js";
 import type { ZodType } from "zod";
-import { sql } from "../../utils/db/client";
 import { StreamOrchestrator } from "../../utils/discord/streamOrchestrator";
 import { OpenrouterStreamAdapter, type OpenrouterStreamConfig } from "./openrouterStreamAdapter";
 import { generateConversationSummaryOpenrouter, generateRoleplaySummaryOpenrouter } from "./compactGenerator";
@@ -62,7 +61,7 @@ import {
   getOpenRouterTokenLimits,
   isOpenRouterCapabilityCacheReady,
 } from "../../utils/cache/openrouterCapabilityCache";
-import { llmModelRepo } from "@/utils/db/repositories";
+import { configRepository, llmModelRepo } from "@/utils/db/repositories";
 import { getMCPManager } from "../../utils/mcp/mcpManager";
 import { isBraveSearchAvailable } from "../../tools/restAPIs/brave/braveSearchService";
 import { openrouterProviderInfo } from "./providerInfo";
@@ -599,12 +598,10 @@ export class OpenrouterProvider
 
               // Store refreshed capabilities in database
               const now = new Date();
-              await sql`
-                UPDATE tomori_configs
-                SET other_model_capabilities = ${JSON.stringify(capabilities)}::jsonb,
-                    other_model_capabilities_fetched_at = ${now}
-                WHERE server_id = ${tomoriState.server_id}
-              `;
+              await configRepository.updateModelConfig(tomoriState.server_id, {
+                other_model_capabilities: capabilities,
+                other_model_capabilities_fetched_at: now,
+              });
 
               effectiveHasTools = capabilities.hasTools;
               effectiveSeesImages = capabilities.seesImages;

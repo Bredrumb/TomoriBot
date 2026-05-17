@@ -6,8 +6,7 @@ import type {
   SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
-import { personalMemorySchema, type UserRow, type ErrorContext, type TomoriState } from "@/types/db/schema";
+import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
@@ -53,42 +52,8 @@ async function performPersonalMemoryRemoval(
     return false;
   }
 
-  // Delete selected memory row from personal_memories
-  const [updatedUserResult] = await sql`
-		DELETE FROM personal_memories
-		WHERE personal_memory_id = ${memoryToRemove.personal_memory_id}
-		  AND user_id = ${userData.user_id}
-		RETURNING *
-	`;
-
-  // Validate the returned (updated) data
-  const validationResult = personalMemorySchema.safeParse(updatedUserResult);
-
-  if (!validationResult.success || !updatedUserResult) {
-    // Log error specific to this update failure
-    const context: ErrorContext = {
-      userId: userData.user_id,
-      serverId: null,
-      tomoriId: null,
-      errorType: "DatabaseUpdateError",
-      metadata: {
-        command: "forget personalmemory",
-        table: "personal_memories",
-        column: "content",
-        operation: "DELETE",
-        memoryToRemove,
-        validationErrors: validationResult.success ? null : validationResult.error.flatten(),
-      },
-    };
-
-    await log.error(
-      "Failed to update or validate user data after deleting personal memory",
-      validationResult.success
-        ? new Error("Database update returned no rows or unexpected data")
-        : new Error("Updated user data failed validation"),
-      context,
-    );
-
+  const ok = await personalMemoryRepository.remove(memoryToRemove.personal_memory_id);
+  if (!ok) {
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
       descriptionKey: "general.errors.update_failed_description",

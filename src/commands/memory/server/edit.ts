@@ -22,8 +22,9 @@ import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaRepository, userRepository } from "@/utils/db/repositories";
 import { getMemoryLimits, validateMemoryContent } from "@/utils/misc/memoryLimits";
+import { serverMemoryRepository } from "@/utils/db/repositories";
 import type { SelectOption } from "@/types/discord/modal";
-import { serverMemorySchema, type ErrorContext, type ServerMemoryRow, type TomoriState, type UserRow,  } from "@/types/db/schema";
+import type { ErrorContext, ServerMemoryRow, TomoriState, UserRow } from "@/types/db/schema";
 
 const SELECT_MODAL_CUSTOM_ID = "memory_server_edit_select_modal";
 const EDIT_MODAL_CUSTOM_ID = "memory_server_edit_value_modal";
@@ -51,46 +52,23 @@ async function performServerMemoryEdit(
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
-  const updateQuery = hasManagePermission
-    ? sql`
-        UPDATE server_memories
-        SET content = ${newContent}, tags = ${sql.array(newTags)}
-        WHERE server_memory_id = ${memoryToEdit.server_memory_id}
-        RETURNING *
-      `
-    : sql`
-        UPDATE server_memories
-        SET content = ${newContent}, tags = ${sql.array(newTags)}
-        WHERE server_memory_id = ${memoryToEdit.server_memory_id}
-          AND user_id = ${userData.user_id}
-        RETURNING *
-      `;
+  // Check permission: user must be owner or have manage permission
+  // biome-ignore lint/style/noNonNullAssertion: userData.user_id is always provided by command framework
+  if (!hasManagePermission && memoryToEdit.user_id !== userData.user_id!) {
+    await replyInfoEmbed(replyInteraction, locale, {
+      titleKey: "general.errors.update_failed_title",
+      descriptionKey: "general.errors.update_failed_description",
+      color: ColorCode.ERROR,
+    });
+    return false;
+  }
 
-  const [updatedMemory] = await updateQuery;
-  const validationResult = serverMemorySchema.safeParse(updatedMemory);
-  if (!validationResult.success || !updatedMemory) {
-    const context: ErrorContext = {
-      userId: userData.user_id,
-      serverId: selectedPersona.server_id,
-      tomoriId: selectedPersona.tomori_id,
-      errorType: "DatabaseUpdateError",
-      metadata: {
-        command: "memory server edit",
-        table: "server_memories",
-        operation: "UPDATE",
-        serverMemoryId: memoryToEdit.server_memory_id,
-        validationErrors: validationResult.success ? null : validationResult.error.flatten(),
-      },
-    };
-
-    await log.error(
-      "Failed to update or validate server memory",
-      validationResult.success
-        ? new Error("Database update returned no rows or unexpected data")
-        : new Error("Updated server memory failed validation"),
-      context,
-    );
-
+  if (!memoryToEdit.server_memory_id) {
+    log.error(`performServerMemoryEdit called with memory row missing server_memory_id`);
+    return false;
+  }
+  const ok = await serverMemoryRepository.edit(memoryToEdit.server_memory_id, newContent, newTags ?? []);
+  if (!ok) {
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
       descriptionKey: "general.errors.update_failed_description",

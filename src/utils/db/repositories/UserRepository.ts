@@ -341,6 +341,26 @@ export class UserRepository implements IRepository<UserExportShape> {
     }
   }
 
+  async setDeliberateTriggerMode(userId: number, mode: "off" | "follow" | "on"): Promise<boolean> {
+    const updated = await this.update(userId, { personal_dtm: mode });
+    return updated !== null;
+  }
+
+  async setImpersonatePrompt(userId: number, prompt: string | null): Promise<boolean> {
+    const updated = await this.update(userId, { impersonation_prompt: prompt });
+    return updated !== null;
+  }
+
+  async setLanguage(userId: number, language: string): Promise<boolean> {
+    const updated = await this.update(userId, { language_pref: language });
+    return updated !== null;
+  }
+
+  async setNickname(userId: number, nickname: string): Promise<boolean> {
+    const updated = await this.update(userId, { user_nickname: nickname });
+    return updated !== null;
+  }
+
   // ── Personal spotlight ────────────────────────────────────────────────────
 
   /**
@@ -810,7 +830,7 @@ export class UserRepository implements IRepository<UserExportShape> {
     }
   }
 
-  // ── Stage A: user_personalization_configs upsert ──────────────────────────
+  // ── user_personalization_configs upsert ──────────────────────────
 
   private async sqlUpsertUserPersonalizationConfigs(
     userId: number,

@@ -7,8 +7,7 @@ import type {
 } from "discord.js";
 import { MessageFlags } from "discord.js";
 import { sql } from "@/utils/db/client";
-import { serverMemorySchema, // Use the correct schema for validation
-  type UserRow, type ErrorContext, type TomoriState,  } from "@/types/db/schema";
+import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
@@ -21,7 +20,7 @@ import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils
 import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import type { SelectOption } from "@/types/discord/modal";
-import { personaRepository } from "@/utils/db/repositories";
+import { personaRepository, serverMemoryRepository } from "@/utils/db/repositories";
 
 // Rule 20: Constants for static values at the top
 const MODAL_CUSTOM_ID = "forget_servermemory_modal";
@@ -43,39 +42,8 @@ async function performServerMemoryRemoval(
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
-  // Delete the memory from the database using Bun SQL
-  const [deletedRow] = await sql`
-		DELETE FROM server_memories
-		WHERE server_memory_id = ${memoryToDelete.server_memory_id}
-		RETURNING *
-	`;
-
-  // Validate the returned (deleted) data
-  const validatedMemory = serverMemorySchema.safeParse(deletedRow);
-
-  if (!validatedMemory.success || !deletedRow) {
-    // Log error specific to this delete failure
-    const context: ErrorContext = {
-      tomoriId: tomoriState.tomori_id,
-      serverId: tomoriState.server_id,
-      userId: userData.user_id,
-      errorType: "DatabaseDeleteError",
-      metadata: {
-        command: "forget servermemory",
-        table: "server_memories",
-        deletedMemoryId: memoryToDelete.server_memory_id,
-        validationErrors: validatedMemory.success ? null : validatedMemory.error.flatten(),
-      },
-    };
-
-    await log.error(
-      "Failed to delete or validate server memory from server_memories table",
-      validatedMemory.success
-        ? new Error("Database delete returned no rows or unexpected data")
-        : new Error("Deleted server memory data failed validation"),
-      context,
-    );
-
+  const ok = await serverMemoryRepository.remove(memoryToDelete.server_memory_id);
+  if (!ok) {
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
       descriptionKey: "general.errors.update_failed_description",

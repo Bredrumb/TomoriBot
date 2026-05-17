@@ -1,6 +1,5 @@
 import type { ChatInputCommandInteraction, ButtonInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { configRepository, llmModelRepo, llmOverrideRepo } from "@/utils/db/repositories";
 
 import { getCachedTomoriState, getCachedAllPersonas, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
@@ -14,7 +13,7 @@ import {
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { replyComponentsV2Status } from "@/utils/discord/ui/statusComponents";
 import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
-import { type UserRow, type ErrorContext, type LlmRow } from "@/types/db/schema";
+import type { UserRow, ErrorContext, LlmRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { isCustomProvider } from "@/utils/discord/customProviderModal";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
@@ -25,10 +24,6 @@ import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 
 const MODAL_CUSTOM_ID = "config_model_text_modal";
 const MODEL_SELECT_ID = "model_select";
-
-function toPostgresTextArrayLiteral(values: readonly string[] | null | undefined): string {
-  return `{${(values ?? []).map((value) => `"${value.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
-}
 
 /**
  * Returns a localized description with capability flags prepended (e.g. "(FREE+TOOLS+IMG) Description").
@@ -365,37 +360,36 @@ export async function execute(
         selectedSavedConfig.llm_logit_biases ?? tomoriState.config.llm_logit_biases ?? [],
         customModel,
       );
-      const resolvedLogitBiasesJson = JSON.stringify(resolvedLogitBiases.entries);
-      const disabledParamsLiteral = toPostgresTextArrayLiteral(selectedSavedConfig.llm_disabled_params);
       const clearFallbacks = tomoriState.llm?.llm_provider?.toLowerCase() !== selectedProvider;
-      const fallbackLlmIdsJson = clearFallbacks ? "[]" : JSON.stringify(selectedSavedConfig.fallback_llm_ids ?? []);
+      const fallbackLlmIds = clearFallbacks ? [] : (selectedSavedConfig.fallback_llm_ids ?? []);
+      const disabledParams = selectedSavedConfig.llm_disabled_params ?? [];
 
-      const [updatedRow] = await sql`
-        UPDATE server_model_configs
-        SET llm_id = ${customModel.llm_id},
-            api_key = ${selectedSavedConfig.api_key},
-            key_version = ${selectedSavedConfig.key_version ?? 1},
-            thinking_level = ${selectedSavedConfig.thinking_level ?? "auto"},
-            fallback_llm_ids = ${fallbackLlmIdsJson}::jsonb,
-            llm_temperature = ${selectedSavedConfig.llm_temperature ?? tomoriState.config.llm_temperature ?? 1.0},
-            llm_disabled_params = ${disabledParamsLiteral}::text[],
-            custom_model_name = ${selectedSavedConfig.custom_model_name ?? customModel.llm_description ?? customModel.llm_codename},
-            custom_endpoint_url = ${selectedSavedConfig.custom_endpoint_url ?? null},
-            custom_num_ctx = ${selectedSavedConfig.custom_num_ctx ?? null}
-        WHERE server_id = ${tomoriState.server_id}
-        RETURNING server_id
-      `;
-
-      await sql`
-        UPDATE server_chat_configs
-        SET llm_top_p = ${selectedSavedConfig.llm_top_p ?? tomoriState.config.llm_top_p ?? 0.95},
-            llm_top_k = ${selectedSavedConfig.llm_top_k ?? tomoriState.config.llm_top_k ?? 0},
-            llm_frequency_penalty = ${selectedSavedConfig.llm_frequency_penalty ?? tomoriState.config.llm_frequency_penalty ?? 0.0},
-            llm_presence_penalty = ${selectedSavedConfig.llm_presence_penalty ?? tomoriState.config.llm_presence_penalty ?? 0.0},
-            llm_min_p = ${selectedSavedConfig.llm_min_p ?? tomoriState.config.llm_min_p ?? 0.05},
-            llm_logit_biases = ${resolvedLogitBiasesJson}::jsonb
-        WHERE server_id = ${tomoriState.server_id}
-      `;
+      const [updatedModel] = await Promise.all([
+        configRepository.updateModelConfig(tomoriState.server_id, {
+          llm_id: customModel.llm_id,
+          api_key: selectedSavedConfig.api_key,
+          key_version: selectedSavedConfig.key_version ?? 1,
+          thinking_level: selectedSavedConfig.thinking_level ?? "auto",
+          fallback_llm_ids: fallbackLlmIds,
+          llm_temperature: selectedSavedConfig.llm_temperature ?? tomoriState.config.llm_temperature ?? 1.0,
+          llm_disabled_params: disabledParams,
+          custom_model_name:
+            selectedSavedConfig.custom_model_name ?? customModel.llm_description ?? customModel.llm_codename,
+          custom_endpoint_url: selectedSavedConfig.custom_endpoint_url ?? null,
+          custom_num_ctx: selectedSavedConfig.custom_num_ctx ?? null,
+        }),
+        configRepository.updateChatConfig(tomoriState.server_id, {
+          llm_top_p: selectedSavedConfig.llm_top_p ?? tomoriState.config.llm_top_p ?? 0.95,
+          llm_top_k: selectedSavedConfig.llm_top_k ?? tomoriState.config.llm_top_k ?? 0,
+          llm_frequency_penalty:
+            selectedSavedConfig.llm_frequency_penalty ?? tomoriState.config.llm_frequency_penalty ?? 0.0,
+          llm_presence_penalty:
+            selectedSavedConfig.llm_presence_penalty ?? tomoriState.config.llm_presence_penalty ?? 0.0,
+          llm_min_p: selectedSavedConfig.llm_min_p ?? tomoriState.config.llm_min_p ?? 0.05,
+          llm_logit_biases: resolvedLogitBiases.entries,
+        }),
+      ]);
+      const updatedRow = updatedModel;
 
       if (!updatedRow) {
         await replyInfoEmbed(responseInteraction, locale, {
@@ -512,37 +506,35 @@ export async function execute(
       selectedSavedConfig?.llm_logit_biases ?? tomoriState.config.llm_logit_biases ?? [],
       selectedModel,
     );
-    const resolvedLogitBiasesJson = JSON.stringify(resolvedLogitBiases.entries);
     const clearFallbacks = tomoriState.llm?.llm_provider?.toLowerCase() !== selectedProvider;
-    const fallbackLlmIdsJson = clearFallbacks ? "[]" : JSON.stringify(selectedSavedConfig?.fallback_llm_ids ?? []);
-    const disabledParamsLiteral = toPostgresTextArrayLiteral(selectedSavedConfig?.llm_disabled_params);
+    const fallbackLlmIds = clearFallbacks ? [] : (selectedSavedConfig?.fallback_llm_ids ?? []);
+    const disabledParams = selectedSavedConfig?.llm_disabled_params ?? [];
 
-    const [updatedRow] = await sql`
-      UPDATE server_model_configs
-      SET llm_id = ${selectedModel.llm_id},
-          api_key = ${selectedSavedConfig?.api_key ?? null},
-          key_version = ${selectedSavedConfig?.key_version ?? 1},
-          thinking_level = ${selectedSavedConfig?.thinking_level ?? "auto"},
-          fallback_llm_ids = ${fallbackLlmIdsJson}::jsonb,
-          llm_temperature = ${selectedSavedConfig?.llm_temperature ?? tomoriState.config.llm_temperature ?? 1.0},
-          llm_disabled_params = ${disabledParamsLiteral}::text[],
-          custom_model_name = NULL,
-          custom_endpoint_url = NULL,
-          custom_num_ctx = NULL
-      WHERE server_id = ${tomoriState.server_id}
-      RETURNING server_id
-    `;
-
-    await sql`
-      UPDATE server_chat_configs
-      SET llm_top_p = ${selectedSavedConfig?.llm_top_p ?? tomoriState.config.llm_top_p ?? 0.95},
-          llm_top_k = ${selectedSavedConfig?.llm_top_k ?? tomoriState.config.llm_top_k ?? 0},
-          llm_frequency_penalty = ${selectedSavedConfig?.llm_frequency_penalty ?? tomoriState.config.llm_frequency_penalty ?? 0.0},
-          llm_presence_penalty = ${selectedSavedConfig?.llm_presence_penalty ?? tomoriState.config.llm_presence_penalty ?? 0.0},
-          llm_min_p = ${selectedSavedConfig?.llm_min_p ?? tomoriState.config.llm_min_p ?? 0.05},
-          llm_logit_biases = ${resolvedLogitBiasesJson}::jsonb
-      WHERE server_id = ${tomoriState.server_id}
-    `;
+    const [updatedModel] = await Promise.all([
+      configRepository.updateModelConfig(tomoriState.server_id, {
+        llm_id: selectedModel.llm_id,
+        api_key: selectedSavedConfig?.api_key ?? null,
+        key_version: selectedSavedConfig?.key_version ?? 1,
+        thinking_level: selectedSavedConfig?.thinking_level ?? "auto",
+        fallback_llm_ids: fallbackLlmIds,
+        llm_temperature: selectedSavedConfig?.llm_temperature ?? tomoriState.config.llm_temperature ?? 1.0,
+        llm_disabled_params: disabledParams,
+        custom_model_name: null,
+        custom_endpoint_url: null,
+        custom_num_ctx: null,
+      }),
+      configRepository.updateChatConfig(tomoriState.server_id, {
+        llm_top_p: selectedSavedConfig?.llm_top_p ?? tomoriState.config.llm_top_p ?? 0.95,
+        llm_top_k: selectedSavedConfig?.llm_top_k ?? tomoriState.config.llm_top_k ?? 0,
+        llm_frequency_penalty:
+          selectedSavedConfig?.llm_frequency_penalty ?? tomoriState.config.llm_frequency_penalty ?? 0.0,
+        llm_presence_penalty:
+          selectedSavedConfig?.llm_presence_penalty ?? tomoriState.config.llm_presence_penalty ?? 0.0,
+        llm_min_p: selectedSavedConfig?.llm_min_p ?? tomoriState.config.llm_min_p ?? 0.05,
+        llm_logit_biases: resolvedLogitBiases.entries,
+      }),
+    ]);
+    const updatedRow = updatedModel;
 
     if (!updatedRow) {
       const context: ErrorContext = {

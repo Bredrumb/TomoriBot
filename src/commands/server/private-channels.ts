@@ -22,9 +22,9 @@ import {
 } from "@/utils/discord/channelChecklistManager";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { tomoriConfigSchema, type ErrorContext, type TomoriState, type UserRow } from "@/types/db/schema";
+import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { sql } from "@/utils/db/client";
+import { configRepository } from "@/utils/db/repositories";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -330,14 +330,14 @@ async function persistUpdate(
     return previousSelectedIds;
   }
 
-  const [updatedRow] = await sql`
-    UPDATE server_channel_scope_configs
-    SET private_channel_ids = ${formatTextArrayLiteral([...nextSelectedIds])}::text[]
-    WHERE server_id = ${tomoriState.server_id}
-    RETURNING server_id
-  `;
+  const updated = await configRepository.updateChannelScopeConfig(tomoriState.server_id, {
+    private_channel_ids: formatTextArrayLiteral([...nextSelectedIds])
+      .replace(/::text\[\]/g, "")
+      .split(",")
+      .map((v) => v.trim()) as unknown as string[],
+  });
 
-  if (!updatedRow) {
+  if (!updated) {
     const context: ErrorContext = {
       tomoriId: tomoriState.tomori_id,
       serverId: tomoriState.server_id,
@@ -356,26 +356,6 @@ async function persistUpdate(
     return previousSelectedIds;
   }
 
-  const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-  if (!validatedConfig.success) {
-    const context: ErrorContext = {
-      tomoriId: tomoriState.tomori_id,
-      serverId: tomoriState.server_id,
-      errorType: "SchemaValidationError",
-      metadata: {
-        command: "server private-channels",
-        validationErrors: validatedConfig.error.flatten(),
-      },
-    };
-    await log.error("Failed to validate updated config after private-channel update", validatedConfig.error, context);
-    await replyInfoEmbed(responseInteraction, locale, {
-      titleKey: "general.errors.update_failed_title",
-      descriptionKey: "general.errors.update_failed_description",
-      color: ColorCode.ERROR,
-    });
-    return previousSelectedIds;
-  }
-
   invalidateTomoriStateCache(guildId);
 
   await replyInfoEmbed(responseInteraction, locale, {
@@ -386,10 +366,10 @@ async function persistUpdate(
       enabled_channels: formatChecklistChannelMentions(enabledIds, availableChannels, locale),
       disabled_count: disabledIds.length.toString(),
       disabled_channels: formatChecklistChannelMentions(disabledIds, availableChannels, locale),
-      selected_count: validatedConfig.data.private_channel_ids.length.toString(),
+      selected_count: nextSelectedIds.size.toString(),
     },
     color: ColorCode.SUCCESS,
   });
 
-  return new Set(validatedConfig.data.private_channel_ids);
+  return nextSelectedIds;
 }

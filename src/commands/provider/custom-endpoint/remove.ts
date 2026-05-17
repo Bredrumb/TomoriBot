@@ -1,8 +1,8 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import type { CustomEndpointCapability, CustomEndpointRow, ErrorContext, UserRow } from "@/types/db/schema";
-import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { llmProviderRepo } from "@/utils/db/repositories";
+import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { configRepository, llmProviderRepo } from "@/utils/db/repositories";
 import {
   buildCustomEndpointCheckboxGroups,
   collectCheckedCustomEndpointValues,
@@ -72,28 +72,32 @@ function formatRemovedEndpoints(locale: string, endpoints: CustomEndpointRow[]):
 async function clearCurrentProviderSelections(
   serverId: number,
   capabilitiesToClear: Set<CustomEndpointCapability>,
+  currentLlmId: number | null,
+  currentVisionLlmId: number | null,
 ): Promise<void> {
   for (const capability of capabilitiesToClear) {
     switch (capability) {
-      case "text":
-        await sql`
-					UPDATE server_model_configs
-						SET llm_id = NULL,
-					    custom_endpoint_url = NULL,
-					    custom_model_name = NULL,
-					    custom_num_ctx = NULL,
-					    vision_llm_id = CASE WHEN vision_llm_id = llm_id THEN NULL ELSE vision_llm_id END
-					WHERE server_id = ${serverId}
-				`;
+      case "text": {
+        // Self-referencing case: if vision_llm_id pointed at the now-removed text
+        // model, null it too. Resolved in TS so the patch stays a flat partial.
+        const shouldClearVision = currentVisionLlmId !== null && currentVisionLlmId === currentLlmId;
+        await configRepository.updateModelConfig(serverId, {
+          llm_id: null,
+          custom_endpoint_url: null,
+          custom_model_name: null,
+          custom_num_ctx: null,
+          ...(shouldClearVision ? { vision_llm_id: null } : {}),
+        });
         break;
+      }
       case "embedding":
-        await sql`UPDATE server_model_configs SET embedding_model_id = NULL WHERE server_id = ${serverId}`;
+        await configRepository.updateModelConfig(serverId, { embedding_model_id: null });
         break;
       case "image":
-        await sql`UPDATE server_model_configs SET diffusion_model_id = NULL WHERE server_id = ${serverId}`;
+        await configRepository.updateModelConfig(serverId, { diffusion_model_id: null });
         break;
       case "video":
-        await sql`UPDATE server_model_configs SET video_model_id = NULL WHERE server_id = ${serverId}`;
+        await configRepository.updateModelConfig(serverId, { video_model_id: null });
         break;
     }
   }
@@ -217,7 +221,15 @@ export async function execute(
       return;
     }
 
-    await clearCurrentProviderSelections(tomoriState.server_id, capabilitiesToClear);
+    await clearCurrentProviderSelections(
+      tomoriState.server_id,
+      capabilitiesToClear,
+      tomoriState.config.llm_id ?? null,
+      tomoriState.config.vision_llm_id ?? null,
+    );
+    if (capabilitiesToClear.size > 0) {
+      invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
+    }
 
     await replyInfoEmbed(modalResult.interaction, locale, {
       titleKey: "commands.config.custom_models.remove.success_title",

@@ -4,9 +4,8 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
+import { configRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
-import { tomoriConfigSchema } from "../../types/db/schema";
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
@@ -59,14 +58,11 @@ export async function execute(
     const newValue = !tomoriState.config.deliberate_trigger_mode;
 
     // 4. Update the database
-    const [updatedRow] = await sql`
-			UPDATE server_trigger_behavior_configs
-			SET deliberate_trigger_mode = ${newValue}
-			WHERE server_id = ${tomoriState.server_id}
-			RETURNING server_id
-		`;
+    const updated = await configRepository.updateTriggerBehaviorConfig(tomoriState.server_id, {
+      deliberate_trigger_mode: newValue,
+    });
 
-    if (!updatedRow) {
+    if (!updated) {
       const context: ErrorContext = {
         tomoriId: tomoriState.tomori_id,
         serverId: tomoriState.server_id,
@@ -92,29 +88,7 @@ export async function execute(
       return;
     }
 
-    // 5. Validate the returned data
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-    if (!validatedConfig.success) {
-      const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
-        serverId: tomoriState.server_id,
-        errorType: "SchemaValidationError",
-        metadata: {
-          command: "server deliberatetriggermode",
-          validationErrors: validatedConfig.error.flatten(),
-        },
-      };
-      await log.error("Failed to validate updated config", validatedConfig.error, context);
-
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    // 6. Invalidate cache after successful write
+    // 5. Invalidate cache after successful write
     invalidateTomoriStateCache(guildId);
 
     // 7. Send success message

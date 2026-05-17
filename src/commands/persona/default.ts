@@ -13,9 +13,14 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/ca
 import { localizer, getBaseTriggerWords, getDefaultBotName } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "../../utils/discord/interactionHelper";
-import { type UserRow, type ErrorContext, tomoriSchema, type TomoriPresetRow } from "../../types/db/schema";
+import {
+  type UserRow,
+  type ErrorContext,
+  type TomoriRow,
+  tomoriSchema,
+  type TomoriPresetRow,
+} from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
-import { sql } from "@/utils/db/client";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 import { getCachedPresetAvatar } from "../../utils/image/avatarHelper";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
@@ -62,10 +67,6 @@ function dedupeCaseInsensitive(values: string[]): string[] {
     deduped.push(trimmed);
   }
   return deduped;
-}
-
-function toPgTextArrayLiteral(values: string[]): string {
-  return `{${values.map((value) => `"${value.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
 }
 
 function resolvePresetTriggerWords(preset: TomoriPresetRow, locale: string): string[] {
@@ -319,13 +320,9 @@ export async function execute(
     }
 
     // 10. Build preset payloads for database update/insert
-    const attributeArrayLiteral = toPgTextArrayLiteral(selectedPreset.preset_attribute_list);
     const presetPersonaPrompt = selectedPreset.tomori_preset_desc || null;
-    const inArrayLiteral = toPgTextArrayLiteral(selectedPreset.preset_sample_dialogues_in);
-    const outArrayLiteral = toPgTextArrayLiteral(selectedPreset.preset_sample_dialogues_out);
 
     const presetTriggerWords = resolvePresetTriggerWords(selectedPreset, locale);
-    const triggerWordsArrayLiteral = toPgTextArrayLiteral(presetTriggerWords);
     const defaultBotName = getDefaultBotName(locale);
     const resolvedLineageId = resolvePresetLineageId(selectedPreset);
     const shouldUseResolvedLineageId = resolvedLineageId !== null;
@@ -365,33 +362,22 @@ export async function execute(
       }
 
       // 11a. Update main persona and trigger words
-      const [updatedTomoriResult] = await sql`
-				UPDATE tomoris
-				SET
-					tomori_nickname = ${resolvedPersonaName},
-					attribute_list = ${attributeArrayLiteral}::text[],
-					sample_dialogues_in = ${inArrayLiteral}::text[],
-					sample_dialogues_out = ${outArrayLiteral}::text[],
-					persona_lineage_id = CASE
-						WHEN ${shouldUseResolvedLineageId} THEN ${resolvedLineageId}::bigint
-						ELSE persona_lineage_id
-					END
-				WHERE tomori_id = ${targetPersonaId}
-				RETURNING *
-			`;
-
-      await sql`
-				INSERT INTO persona_configs (tomori_id, trigger_words, persona_prompt)
-				VALUES (${targetPersonaId}, ${triggerWordsArrayLiteral}::text[], ${presetPersonaPrompt})
-				ON CONFLICT (tomori_id) DO UPDATE
-				SET trigger_words = EXCLUDED.trigger_words,
-						persona_prompt = EXCLUDED.persona_prompt
-			`;
+      const personaUpdatePayload: Partial<TomoriRow> = {
+        tomori_nickname: resolvedPersonaName,
+        attribute_list: selectedPreset.preset_attribute_list,
+        sample_dialogues_in: selectedPreset.preset_sample_dialogues_in,
+        sample_dialogues_out: selectedPreset.preset_sample_dialogues_out,
+      };
+      if (shouldUseResolvedLineageId && resolvedLineageId !== null) {
+        personaUpdatePayload.persona_lineage_id = resolvedLineageId;
+      }
+      const [updatedTomoriResult, personaConfigUpdated] = await Promise.all([
+        personaRepository.update(targetPersonaId, personaUpdatePayload),
+        personaRepository.setPersonaConfig(targetPersonaId, presetTriggerWords, presetPersonaPrompt),
+      ]);
 
       // 11b. Validate the result
-      const validationResult = tomoriSchema.safeParse(updatedTomoriResult);
-
-      if (!validationResult.success || !updatedTomoriResult) {
+      if (!updatedTomoriResult || !personaConfigUpdated) {
         const context: ErrorContext = {
           userId: userData.user_id,
           serverId: tomoriState.server_id,
@@ -402,14 +388,15 @@ export async function execute(
             targetType,
             preset: selectedPreset.tomori_preset_name,
             presetId: selectedPreset.tomori_preset_id,
-            validationErrors: validationResult.success ? null : validationResult.error.flatten(),
           },
         };
         await log.error(
-          "Failed to validate updated tomori data after applying preset",
-          validationResult.success
-            ? new Error("Database update returned no rows or unexpected data")
-            : new Error("Updated tomori data failed validation"),
+          "Failed to update tomori after applying preset",
+          new Error(
+            !updatedTomoriResult
+              ? "PersonaRepository.update returned null"
+              : "PersonaRepository.setPersonaConfig returned false",
+          ),
           context,
         );
 
@@ -597,52 +584,15 @@ export async function execute(
       (trigger) => !allTriggerWords.has(normalizeForComparison(trigger)),
     );
     const hasNoTriggers = uniqueAlterTriggers.length === 0;
-    const alterTriggerWordsArrayLiteral = toPgTextArrayLiteral(uniqueAlterTriggers);
 
-    let insertedAlterRow: unknown;
-    if (shouldUseResolvedLineageId) {
-      [insertedAlterRow] = await sql`
-				INSERT INTO tomoris (
-					server_id,
-					tomori_nickname,
-					attribute_list,
-					sample_dialogues_in,
-					sample_dialogues_out,
-					is_alter,
-					persona_lineage_id
-				)
-				VALUES (
-					${tomoriState.server_id},
-					${resolvedAlterName},
-					${attributeArrayLiteral}::text[],
-					${inArrayLiteral}::text[],
-					${outArrayLiteral}::text[],
-					true,
-					${resolvedLineageId}::bigint
-				)
-				RETURNING *
-			`;
-    } else {
-      [insertedAlterRow] = await sql`
-				INSERT INTO tomoris (
-					server_id,
-					tomori_nickname,
-					attribute_list,
-					sample_dialogues_in,
-					sample_dialogues_out,
-					is_alter
-				)
-				VALUES (
-					${tomoriState.server_id},
-					${resolvedAlterName},
-					${attributeArrayLiteral}::text[],
-					${inArrayLiteral}::text[],
-					${outArrayLiteral}::text[],
-					true
-				)
-				RETURNING *
-			`;
-    }
+    const insertedAlterRow = await personaRepository.createAlterPersona({
+      serverId: tomoriState.server_id,
+      nickname: resolvedAlterName,
+      attributes: selectedPreset.preset_attribute_list,
+      sampleDialoguesIn: selectedPreset.preset_sample_dialogues_in,
+      sampleDialoguesOut: selectedPreset.preset_sample_dialogues_out,
+      personaLineageId: shouldUseResolvedLineageId ? resolvedLineageId : null,
+    });
 
     const insertedValidation = tomoriSchema.safeParse(insertedAlterRow);
     if (!insertedValidation.success) {
@@ -682,13 +632,19 @@ export async function execute(
       return;
     }
 
-    await sql`
-			INSERT INTO persona_configs (tomori_id, trigger_words, persona_prompt)
-			VALUES (${newAlterId}, ${alterTriggerWordsArrayLiteral}::text[], ${presetPersonaPrompt})
-			ON CONFLICT (tomori_id) DO UPDATE
-			SET trigger_words = EXCLUDED.trigger_words,
-					persona_prompt = EXCLUDED.persona_prompt
-		`;
+    const personaConfigUpdated = await personaRepository.setPersonaConfig(
+      newAlterId,
+      uniqueAlterTriggers,
+      presetPersonaPrompt,
+    );
+    if (!personaConfigUpdated) {
+      await replyInfoEmbed(modalSubmitInteraction, locale, {
+        titleKey: "general.errors.update_failed_title",
+        descriptionKey: "general.errors.update_failed_description",
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
 
     const descriptionParts = [
       localizer(locale, "commands.persona.import.alter_success_description", {
@@ -755,11 +711,10 @@ export async function execute(
       storedAvatarUrl = s3AvatarUrl;
 
       if (storedAvatarUrl) {
-        await sql`
-					UPDATE tomoris
-					SET webhook_avatar_url = ${storedAvatarUrl}
-					WHERE tomori_id = ${newAlterId}
-				`;
+        const avatarUpdated = await personaRepository.setAvatar(newAlterId, storedAvatarUrl);
+        if (!avatarUpdated) {
+          log.warn(`Failed to persist preset avatar for alter persona ${newAlterId}`);
+        }
       } else {
         log.warn(`Failed to persist preset avatar for alter persona ${newAlterId}`);
       }
