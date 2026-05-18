@@ -12,7 +12,6 @@ import { sendCooldownDM } from "@/utils/discord/cooldownDM";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { personaRepository } from "@/utils/db/repositories";
-import { sql } from "@/utils/db/client";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { resolvePersonaWebhookIdentity } from "@/utils/discord/webhook/identity";
 import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
@@ -101,7 +100,7 @@ interface PersonaSummary {
   /** Appearance/personality attribute list used by buildContext(). */
   attribute_list: string[];
   /** Lineage ID used by buildContext() for persona-scoped memory/RAG. */
-  persona_lineage_id: number;
+  persona_lineage_id: number | null;
 }
 
 type ImageQuotaCheckResult = Awaited<ReturnType<typeof checkImageQuota>>;
@@ -165,20 +164,7 @@ function getBackendOptions(locale: string, providerName: string) {
  * @param serverId - Numeric DB server ID from tomoriState
  */
 async function loadServerPersonaSummaries(serverId: number): Promise<PersonaSummary[]> {
-  return await sql<PersonaSummary[]>`
-		SELECT
-			t.tomori_id,
-			t.tomori_nickname,
-			t.webhook_avatar_url,
-			t.is_alter,
-			t.attribute_list,
-			t.persona_lineage_id,
-			pc.persona_prompt
-		FROM tomoris t
-		LEFT JOIN persona_configs pc ON pc.tomori_id = t.tomori_id
-		WHERE t.server_id = ${serverId}
-		ORDER BY t.is_alter ASC, t.updated_at DESC NULLS LAST, t.tomori_id DESC
-	`;
+  return personaRepository.loadServerPersonaSummaries(serverId);
 }
 
 /**

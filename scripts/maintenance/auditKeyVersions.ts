@@ -117,27 +117,6 @@ async function auditKeyVersions() {
     console.log("⚠️  Could not query opt_api_keys table:", error);
   }
 
-  // Check tomori_configs table
-  try {
-    const tomoriConfigsStats = (await sql`
-			SELECT key_version, COUNT(*) as count
-			FROM tomori_configs
-			WHERE api_key IS NOT NULL
-			GROUP BY key_version
-			ORDER BY key_version
-		`) as VersionStats[];
-
-    const tomoriConfigsTotal = tomoriConfigsStats.reduce((sum, s) => sum + Number(s.count), 0);
-
-    tables.push({
-      tableName: "tomori_configs",
-      stats: tomoriConfigsStats,
-      total: tomoriConfigsTotal,
-    });
-  } catch (error) {
-    console.log("⚠️  Could not query tomori_configs table:", error);
-  }
-
   // 3. Display database usage
   if (tables.length === 0 || tables.every((t) => t.total === 0)) {
     console.log("ℹ️  No encrypted data found in database");

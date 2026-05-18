@@ -52,20 +52,41 @@ CREATE TRIGGER update_persona_voice_configs_timestamp
   BEFORE UPDATE ON persona_voice_configs
   FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
-INSERT INTO persona_voice_configs (
-  tomori_id, speech_voice_sample_id, speech_voice_id, speech_voice_name,
-  speech_voice_design_prompt, elevenlabs_voice_id, elevenlabs_voice_name
-)
-SELECT
-  tomori_id,
-  speech_voice_sample_id,
-  speech_voice_id,
-  speech_voice_name,
-  speech_voice_design_prompt,
-  elevenlabs_voice_id,
-  elevenlabs_voice_name
-FROM tomoris
-ON CONFLICT (tomori_id) DO NOTHING;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'tomoris' AND column_name = 'elevenlabs_voice_id'
+  ) THEN
+    INSERT INTO persona_voice_configs (
+      tomori_id, speech_voice_sample_id, speech_voice_id, speech_voice_name,
+      speech_voice_design_prompt, elevenlabs_voice_id, elevenlabs_voice_name
+    )
+    SELECT
+      tomori_id,
+      speech_voice_sample_id,
+      speech_voice_id,
+      speech_voice_name,
+      speech_voice_design_prompt,
+      elevenlabs_voice_id,
+      elevenlabs_voice_name
+    FROM tomoris
+    ON CONFLICT (tomori_id) DO NOTHING;
+  ELSE
+    INSERT INTO persona_voice_configs (
+      tomori_id, speech_voice_sample_id, speech_voice_id, speech_voice_name,
+      speech_voice_design_prompt
+    )
+    SELECT
+      tomori_id,
+      speech_voice_sample_id,
+      speech_voice_id,
+      speech_voice_name,
+      speech_voice_design_prompt
+    FROM tomoris
+    ON CONFLICT (tomori_id) DO NOTHING;
+  END IF;
+END $$;
 
 -- ── persona_imagegen_configs ─────────────────────────────────────────────────
 

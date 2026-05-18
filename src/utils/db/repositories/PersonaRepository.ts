@@ -12,7 +12,7 @@ import {
   apiKeyRotationSchema,
   naiPresetSchema,
   personaConfigSchema,
-  tomoriConfigSchema,
+  assembledServerConfigSchema,
   tomoriStateSchema,
   tomoriSchema,
   type ApiKeyRotationRow,
@@ -22,7 +22,7 @@ import {
   type LlmRow,
   type NaiPresetRow,
   type PersonaConfigRow,
-  type TomoriConfigRow,
+  type AssembledServerConfig,
   type TomoriRow,
   type TomoriState,
 } from "@/types/db/schema";
@@ -55,8 +55,6 @@ export type PersonaVoiceConfigsRow = {
   speech_voice_id: string | null;
   speech_voice_name: string | null;
   speech_voice_design_prompt: string | null;
-  elevenlabs_voice_id: string | null;
-  elevenlabs_voice_name: string | null;
 };
 
 /** Row shape for persona_imagegen_configs (Phase 6). */
@@ -95,9 +93,35 @@ export type PersonaExportShape = {
   personas: PersonaConfigBundle[];
 };
 
-type TomoriConfigJsonResult = {
-  config: unknown;
-};
+/** Fields where SQL NULL carries semantic meaning ("not configured") and must not be coerced to undefined. */
+const MEANINGFULLY_NULLABLE_CONFIG_FIELDS = new Set([
+  "llm_id",
+  "embedding_model_id",
+  "diffusion_model_id",
+  "video_model_id",
+  "vision_llm_id",
+  "api_key",
+  "system_prompt",
+  "context_note",
+  "llm_max_output_tokens",
+  "custom_endpoint_url",
+  "custom_model_name",
+  "custom_num_ctx",
+  "nai_preset_name",
+  "nai_sampler",
+  "nai_steps",
+  "nai_scale",
+  "nai_noise_schedule",
+  "nai_cfg_rescale",
+  "nai_diffusion_model_id",
+  "other_model_codename",
+  "other_model_capabilities",
+  "other_model_capabilities_fetched_at",
+  "welcome_channel_disc_id",
+  "welcome_prompt",
+  "welcome_persona_id",
+  "thought_log_channel_disc_id",
+]);
 
 export class PersonaRepository implements IRepository<PersonaExportShape> {
   private static readonly FALLBACK_DEBUG_ENABLED = new Set(["1", "true", "yes", "on"]).has(
@@ -132,6 +156,69 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    */
   async loadPersonaConfig(tomoriId: number) {
     return this.loadPersonaConfigRow(tomoriId);
+  }
+
+  /**
+   * Loads persona summaries for modal selector and context overrides.
+   * Includes fields needed for context builder persona identity without loading full TomoriState.
+   * Returns main persona first (is_alter=false), then alters ordered by recency.
+   *
+   * @param serverId - Numeric DB server ID
+   * @returns Array of persona summaries with identity/override fields
+   */
+  async loadServerPersonaSummaries(serverId: number): Promise<
+    Array<{
+      tomori_id: number;
+      tomori_nickname: string;
+      webhook_avatar_url: string | null;
+      is_alter: boolean;
+      attribute_list: string[];
+      persona_lineage_id: number | null;
+      persona_prompt: string | null;
+    }>
+  > {
+    try {
+      const rows = await sql`
+        SELECT
+          t.tomori_id,
+          t.tomori_nickname,
+          t.webhook_avatar_url,
+          t.is_alter,
+          t.attribute_list,
+          t.persona_lineage_id,
+          pc.persona_prompt
+        FROM tomoris t
+        LEFT JOIN persona_configs pc ON pc.tomori_id = t.tomori_id
+        WHERE t.server_id = ${serverId}
+        ORDER BY t.is_alter ASC, t.updated_at DESC NULLS LAST, t.tomori_id DESC
+      `;
+      return rows ?? [];
+    } catch (error) {
+      log.error(`Error loading persona summaries for server ${serverId}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Returns true when a main persona (is_alter=false) exists for the given server.
+   * Used by setup to distinguish "no main persona" from "main persona exists but broken state".
+   *
+   * @param serverId - Internal server DB ID
+   */
+  async hasMainPersona(serverId: number): Promise<boolean> {
+    try {
+      const [row] = await sql`
+        SELECT 1
+        FROM tomoris
+        WHERE server_id = ${serverId}
+          AND is_alter = false
+        LIMIT 1
+      `;
+      return row !== undefined;
+    } catch (error) {
+      log.error(`Error checking main persona existence for server ${serverId}:`, error);
+      return false;
+    }
   }
 
   // ── writes ─────────────────────────────────────────────────────────────────
@@ -617,9 +704,12 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             WHERE tomori_id = ${tomoriId}
           `
         : await sql`
-            SELECT array_length(trigger_words, 1) as trigger_count
-            FROM tomori_configs
-            WHERE server_id = ${serverId}
+            SELECT array_length(pc.trigger_words, 1) as trigger_count
+            FROM persona_configs pc
+            JOIN tomoris t ON t.tomori_id = pc.tomori_id
+            WHERE t.server_id = ${serverId}
+              AND t.is_alter = false
+            LIMIT 1
           `;
 
       const currentCount = configResult?.trigger_count || 0;
@@ -832,7 +922,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     try {
       const [row] = await sql`
         SELECT tomori_id, speech_voice_sample_id, speech_voice_id, speech_voice_name,
-               speech_voice_design_prompt, elevenlabs_voice_id, elevenlabs_voice_name
+               speech_voice_design_prompt
         FROM persona_voice_configs WHERE tomori_id = ${tomoriId}
       `;
       return row ? (row as unknown as PersonaVoiceConfigsRow) : null;
@@ -885,19 +975,16 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     await sql`
       INSERT INTO persona_voice_configs (
         tomori_id, speech_voice_sample_id, speech_voice_id, speech_voice_name,
-        speech_voice_design_prompt, elevenlabs_voice_id, elevenlabs_voice_name
+        speech_voice_design_prompt
       ) VALUES (
         ${row.tomori_id}, ${row.speech_voice_sample_id}, ${row.speech_voice_id},
-        ${row.speech_voice_name}, ${row.speech_voice_design_prompt},
-        ${row.elevenlabs_voice_id}, ${row.elevenlabs_voice_name}
+        ${row.speech_voice_name}, ${row.speech_voice_design_prompt}
       )
       ON CONFLICT (tomori_id) DO UPDATE SET
         speech_voice_sample_id    = EXCLUDED.speech_voice_sample_id,
         speech_voice_id           = EXCLUDED.speech_voice_id,
         speech_voice_name         = EXCLUDED.speech_voice_name,
         speech_voice_design_prompt = EXCLUDED.speech_voice_design_prompt,
-        elevenlabs_voice_id       = EXCLUDED.elevenlabs_voice_id,
-        elevenlabs_voice_name     = EXCLUDED.elevenlabs_voice_name,
         updated_at                = NOW()
     `;
   }
@@ -950,8 +1037,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         speech_voice_id           = ${row.speech_voice_id},
         speech_voice_name         = ${row.speech_voice_name},
         speech_voice_design_prompt = ${row.speech_voice_design_prompt},
-        elevenlabs_voice_id       = ${row.elevenlabs_voice_id},
-        elevenlabs_voice_name     = ${row.elevenlabs_voice_name},
         updated_at                = NOW()
       WHERE tomori_id = ${row.tomori_id}
     `;
@@ -980,11 +1065,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     `;
   }
 
-  // ── private helpers: JSON normalization ───────────────────────────────────
+  // ── private helpers: row normalization ────────────────────────────────────
 
   /**
-   * Converts a Postgres bytea JSON representation (e.g., "\\xDEADBEEF") to Buffer.
-   * Returns null when the input is malformed or cannot be parsed.
+   * Converts a Postgres bytea hex-string representation (e.g., "\\xDEADBEEF") to Buffer.
+   * Returns null when the input is malformed or cannot be parsed as hex.
    */
   private parseJsonBytea(value: unknown): Buffer | null {
     if (value === null || value === undefined) return null;
@@ -1002,57 +1087,162 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   }
 
   /**
-   * Normalizes JSON-projected tomori_configs data into runtime-compatible types.
-   * Avoids Bun/Postgres INT[] binary decoding issues while preserving schema shape.
+   * Converts SQL NULL to undefined for fields that use Zod .default(), letting
+   * defaults fire on a LEFT JOIN miss. Skips fields in MEANINGFULLY_NULLABLE_CONFIG_FIELDS
+   * where null encodes "not configured" and must be preserved.
    */
-  private normalizeTomoriConfigFromJson(rawConfig: unknown): unknown {
-    if (!rawConfig || typeof rawConfig !== "object" || Array.isArray(rawConfig)) {
-      return rawConfig;
+  private coerceNullsForZod(rawRow: Record<string, unknown>): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(rawRow)) {
+      result[key] = value === null && !MEANINGFULLY_NULLABLE_CONFIG_FIELDS.has(key) ? undefined : value;
+    }
+    return result;
+  }
+
+  /**
+   * Normalizes a flat split-table join row into runtime-compatible types.
+   * - Hydrates api_key: Uint8Array (direct DB read) → Buffer; hex string (legacy) → Buffer.
+   * - Applies backward-compat autoch_threshold_max backfill for older rows.
+   * - Guards timestamps against edge-case string values (Bun SQL normally returns Date).
+   */
+  private normalizeTomoriConfigFromJson(rawRow: unknown): unknown {
+    if (!rawRow || typeof rawRow !== "object" || Array.isArray(rawRow)) {
+      return rawRow;
     }
 
-    const normalizedConfig = {
-      ...(rawConfig as Record<string, unknown>),
-    };
+    const row = { ...(rawRow as Record<string, unknown>) };
 
-    // Convert JSON bytea string back to Buffer for decryption codepaths.
-    normalizedConfig.api_key = this.parseJsonBytea(normalizedConfig.api_key);
+    // Hydrate api_key: direct DB reads yield Uint8Array or Buffer; legacy JSON path yields hex string.
+    const rawKey = row.api_key;
+    if (rawKey instanceof Uint8Array && !Buffer.isBuffer(rawKey)) {
+      row.api_key = Buffer.from(rawKey);
+    } else if (typeof rawKey === "string") {
+      row.api_key = this.parseJsonBytea(rawKey);
+    }
+    // null stays null; Buffer stays Buffer.
 
-    // Backward compatibility: older rows only stored a single auto-chat threshold.
-    const threshold = Number(normalizedConfig.autoch_threshold ?? 0);
-    const thresholdMax = Number(normalizedConfig.autoch_threshold_max ?? 0);
+    // Backward compat: older rows only stored a single auto-chat threshold.
+    const threshold = Number(row.autoch_threshold ?? 0);
+    const thresholdMax = Number(row.autoch_threshold_max ?? 0);
     if (Number.isFinite(threshold) && threshold > 0 && thresholdMax <= 0) {
-      normalizedConfig.autoch_threshold_max = threshold;
+      row.autoch_threshold_max = threshold;
     }
 
-    // Normalize timestamps from JSON strings to Date objects expected by schemas.
+    // Guard timestamps: Bun SQL returns Date for TIMESTAMPTZ, but handle string edge cases.
     for (const key of ["created_at", "updated_at"] as const) {
-      const value = normalizedConfig[key];
+      const value = row[key];
       if (typeof value === "string" || typeof value === "number") {
         const parsedDate = new Date(value);
-        normalizedConfig[key] = Number.isNaN(parsedDate.getTime()) ? undefined : parsedDate;
+        row[key] = Number.isNaN(parsedDate.getTime()) ? undefined : parsedDate;
       }
     }
 
-    return normalizedConfig;
+    return row;
   }
 
   // ── private SQL: config loading ───────────────────────────────────────────
 
-  private async sqlLoadTomoriConfigByServerId(serverId: number): Promise<TomoriConfigRow | null> {
-    const configRows = await sql<TomoriConfigJsonResult[]>`
-      SELECT to_jsonb(tc) AS config
-      FROM tomori_configs tc
-      WHERE tc.server_id = ${serverId}
-      LIMIT 1
+  /**
+   * Shared SELECT column list for all split-table config joins.
+   * Referenced by both sqlLoadTomoriConfigByServerId and sqlLoadTomoriConfigByTomoriId.
+   *
+   * Table aliases:
+   *   s    = servers
+   *   smc  = server_model_configs          (1)
+   *   scc  = server_chat_configs           (2)
+   *   smpc = server_member_permissions_configs (3)
+   *   scaps = server_capabilities_configs  (4)
+   *   snec = server_notice_embeds_configs  (5)
+   *   snsfw = server_nsfw_configs          (6)
+   *   sspeech = server_speech_configs      (7)
+   *   satc = server_auto_trigger_configs   (8)
+   *   scsc = server_channel_scope_configs  (9)
+   *   stbc = server_trigger_behavior_configs (10)
+   *   snaic = server_novelai_imagegen_configs (11)
+   *   sbyok = server_byok_configs          (12)
+   *   smem = server_memory_configs         (13)
+   *   swc  = server_welcome_configs        (not in composition schema; kept for backward compat)
+   */
+
+  private async sqlLoadTomoriConfigByServerId(serverId: number): Promise<AssembledServerConfig | null> {
+    const [rawRow] = await sql`
+      SELECT
+        s.server_id,
+        smc.created_at, smc.updated_at,
+        -- 1. server_model_configs
+        smc.llm_id, smc.embedding_model_id, smc.diffusion_model_id, smc.video_model_id,
+        smc.vision_llm_id, smc.api_key, smc.key_version, smc.llm_temperature,
+        smc.thinking_level, smc.llm_disabled_params, smc.custom_endpoint_url,
+        smc.custom_model_name, smc.custom_num_ctx, smc.fallback_llm_ids,
+        smc.other_model_codename, smc.other_model_capabilities,
+        smc.other_model_capabilities_fetched_at, smc.hide_respond_embed,
+        -- 2. server_chat_configs
+        scc.humanizer_degree, scc.message_fetch_limit, scc.send_message_limit,
+        scc.match_limit, scc.cascade_limit, scc.timezone_offset, scc.self_debug_enabled,
+        scc.system_prompt, scc.context_note, scc.context_note_depth,
+        scc.llm_stop_strings, scc.llm_stop_speaker_pattern_enabled,
+        scc.llm_max_output_tokens, scc.llm_top_p, scc.llm_top_k,
+        scc.llm_frequency_penalty, scc.llm_presence_penalty, scc.llm_min_p,
+        scc.llm_logit_biases, scc.fallback_model_refs,
+        -- 3. server_member_permissions_configs
+        smpc.server_memteaching_enabled, smpc.attribute_memteaching_enabled,
+        smpc.sampledialogue_memteaching_enabled, smpc.self_teaching_enabled,
+        smpc.personal_memories_enabled, smpc.hide_impersonation_embeds,
+        smpc.prompt_snapshot_enabled,
+        -- 4. server_capabilities_configs
+        scaps.emoji_usage_enabled, scaps.sticker_usage_enabled, scaps.web_search_enabled,
+        scaps.manage_message_enabled, scaps.thread_creation_enabled, scaps.imagegen_enabled,
+        scaps.videogen_enabled, scaps.voice_message_enabled, scaps.tool_use_enabled,
+        -- 5. server_notice_embeds_configs
+        snec.tool_notice_hidden_keys,
+        -- 6. server_nsfw_configs
+        snsfw.uncensor_injection_enabled, snsfw.uncensor_unicode_space_enabled,
+        snsfw.uncensor_sanitize_enabled,
+        -- 7. server_speech_configs
+        sspeech.voice_transcript_chat_mode, sspeech.chatterbox_turbo_enabled,
+        sspeech.chatterbox_cfg_weight, sspeech.chatterbox_exaggeration,
+        -- 8. server_auto_trigger_configs
+        satc.autoch_disc_ids, satc.autoch_persona_overrides,
+        satc.autoch_threshold, satc.autoch_threshold_max,
+        -- 9. server_channel_scope_configs
+        scsc.rp_channel_ids, scsc.private_channel_ids, scsc.crosschannel_blocklist_ids,
+        scsc.stm_privacy_bypass, scsc.thought_log_channel_disc_id,
+        -- 10. server_trigger_behavior_configs
+        stbc.always_reply_enabled, stbc.deliberate_trigger_mode,
+        stbc.cooldown_type, stbc.cooldown_length,
+        -- 11. server_novelai_imagegen_configs
+        snaic.nai_preset_name, snaic.nai_style_tags, snaic.nai_negative_tags,
+        snaic.nai_sampler, snaic.nai_steps, snaic.nai_scale,
+        snaic.nai_noise_schedule, snaic.nai_cfg_rescale, snaic.nai_diffusion_model_id,
+        -- 12. server_byok_configs
+        sbyok.user_byok_mode,
+        -- 13. server_memory_configs
+        smem.memory_tagging_enabled,
+        -- server_welcome_configs (backward compat; not part of the 13-schema composition)
+        swc.welcome_channel_disc_id, swc.welcome_prompt, swc.welcome_persona_id
+      FROM servers s
+      LEFT JOIN server_model_configs smc ON smc.server_id = s.server_id
+      LEFT JOIN server_chat_configs scc ON scc.server_id = s.server_id
+      LEFT JOIN server_member_permissions_configs smpc ON smpc.server_id = s.server_id
+      LEFT JOIN server_capabilities_configs scaps ON scaps.server_id = s.server_id
+      LEFT JOIN server_notice_embeds_configs snec ON snec.server_id = s.server_id
+      LEFT JOIN server_nsfw_configs snsfw ON snsfw.server_id = s.server_id
+      LEFT JOIN server_speech_configs sspeech ON sspeech.server_id = s.server_id
+      LEFT JOIN server_auto_trigger_configs satc ON satc.server_id = s.server_id
+      LEFT JOIN server_channel_scope_configs scsc ON scsc.server_id = s.server_id
+      LEFT JOIN server_trigger_behavior_configs stbc ON stbc.server_id = s.server_id
+      LEFT JOIN server_novelai_imagegen_configs snaic ON snaic.server_id = s.server_id
+      LEFT JOIN server_byok_configs sbyok ON sbyok.server_id = s.server_id
+      LEFT JOIN server_memory_configs smem ON smem.server_id = s.server_id
+      LEFT JOIN server_welcome_configs swc ON swc.server_id = s.server_id
+      WHERE s.server_id = ${serverId}
     `;
 
-    if (!configRows.length) {
-      return null;
-    }
+    if (!rawRow) return null;
 
-    // biome-ignore lint/style/noNonNullAssertion: length checked above
-    const normalized = this.normalizeTomoriConfigFromJson(configRows[0]!.config);
-    const parsedConfig = tomoriConfigSchema.safeParse(normalized);
+    const coerced = this.coerceNullsForZod(rawRow as Record<string, unknown>);
+    const normalized = this.normalizeTomoriConfigFromJson(coerced);
+    const parsedConfig = assembledServerConfigSchema.safeParse(normalized);
     if (!parsedConfig.success) {
       log.error(`Invalid server-scoped tomori config for server_id ${serverId}:`, parsedConfig.error.flatten());
       return null;
@@ -1061,21 +1251,91 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     return parsedConfig.data;
   }
 
-  private async sqlLoadTomoriConfigByTomoriId(tomoriId: number): Promise<TomoriConfigRow | null> {
-    const configRows = await sql<TomoriConfigJsonResult[]>`
-      SELECT to_jsonb(tc) AS config
-      FROM tomori_configs tc
-      WHERE tc.tomori_id = ${tomoriId}
+  /**
+   * Loads config anchored on a tomori_id by joining through tomoris → servers across split tables.
+   * tomori_configs was dropped in Task F2 (migration 008); this method now reads exclusively from the 13 split tables.
+   */
+  private async sqlLoadTomoriConfigByTomoriId(tomoriId: number): Promise<AssembledServerConfig | null> {
+    const [rawRow] = await sql`
+      SELECT
+        s.server_id,
+        smc.created_at, smc.updated_at,
+        -- 1. server_model_configs
+        smc.llm_id, smc.embedding_model_id, smc.diffusion_model_id, smc.video_model_id,
+        smc.vision_llm_id, smc.api_key, smc.key_version, smc.llm_temperature,
+        smc.thinking_level, smc.llm_disabled_params, smc.custom_endpoint_url,
+        smc.custom_model_name, smc.custom_num_ctx, smc.fallback_llm_ids,
+        smc.other_model_codename, smc.other_model_capabilities,
+        smc.other_model_capabilities_fetched_at, smc.hide_respond_embed,
+        -- 2. server_chat_configs
+        scc.humanizer_degree, scc.message_fetch_limit, scc.send_message_limit,
+        scc.match_limit, scc.cascade_limit, scc.timezone_offset, scc.self_debug_enabled,
+        scc.system_prompt, scc.context_note, scc.context_note_depth,
+        scc.llm_stop_strings, scc.llm_stop_speaker_pattern_enabled,
+        scc.llm_max_output_tokens, scc.llm_top_p, scc.llm_top_k,
+        scc.llm_frequency_penalty, scc.llm_presence_penalty, scc.llm_min_p,
+        scc.llm_logit_biases, scc.fallback_model_refs,
+        -- 3. server_member_permissions_configs
+        smpc.server_memteaching_enabled, smpc.attribute_memteaching_enabled,
+        smpc.sampledialogue_memteaching_enabled, smpc.self_teaching_enabled,
+        smpc.personal_memories_enabled, smpc.hide_impersonation_embeds,
+        smpc.prompt_snapshot_enabled,
+        -- 4. server_capabilities_configs
+        scaps.emoji_usage_enabled, scaps.sticker_usage_enabled, scaps.web_search_enabled,
+        scaps.manage_message_enabled, scaps.thread_creation_enabled, scaps.imagegen_enabled,
+        scaps.videogen_enabled, scaps.voice_message_enabled, scaps.tool_use_enabled,
+        -- 5. server_notice_embeds_configs
+        snec.tool_notice_hidden_keys,
+        -- 6. server_nsfw_configs
+        snsfw.uncensor_injection_enabled, snsfw.uncensor_unicode_space_enabled,
+        snsfw.uncensor_sanitize_enabled,
+        -- 7. server_speech_configs
+        sspeech.voice_transcript_chat_mode, sspeech.chatterbox_turbo_enabled,
+        sspeech.chatterbox_cfg_weight, sspeech.chatterbox_exaggeration,
+        -- 8. server_auto_trigger_configs
+        satc.autoch_disc_ids, satc.autoch_persona_overrides,
+        satc.autoch_threshold, satc.autoch_threshold_max,
+        -- 9. server_channel_scope_configs
+        scsc.rp_channel_ids, scsc.private_channel_ids, scsc.crosschannel_blocklist_ids,
+        scsc.stm_privacy_bypass, scsc.thought_log_channel_disc_id,
+        -- 10. server_trigger_behavior_configs
+        stbc.always_reply_enabled, stbc.deliberate_trigger_mode,
+        stbc.cooldown_type, stbc.cooldown_length,
+        -- 11. server_novelai_imagegen_configs
+        snaic.nai_preset_name, snaic.nai_style_tags, snaic.nai_negative_tags,
+        snaic.nai_sampler, snaic.nai_steps, snaic.nai_scale,
+        snaic.nai_noise_schedule, snaic.nai_cfg_rescale, snaic.nai_diffusion_model_id,
+        -- 12. server_byok_configs
+        sbyok.user_byok_mode,
+        -- 13. server_memory_configs
+        smem.memory_tagging_enabled,
+        -- server_welcome_configs (backward compat; not part of the 13-schema composition)
+        swc.welcome_channel_disc_id, swc.welcome_prompt, swc.welcome_persona_id
+      FROM tomoris t
+      JOIN servers s ON s.server_id = t.server_id
+      LEFT JOIN server_model_configs smc ON smc.server_id = s.server_id
+      LEFT JOIN server_chat_configs scc ON scc.server_id = s.server_id
+      LEFT JOIN server_member_permissions_configs smpc ON smpc.server_id = s.server_id
+      LEFT JOIN server_capabilities_configs scaps ON scaps.server_id = s.server_id
+      LEFT JOIN server_notice_embeds_configs snec ON snec.server_id = s.server_id
+      LEFT JOIN server_nsfw_configs snsfw ON snsfw.server_id = s.server_id
+      LEFT JOIN server_speech_configs sspeech ON sspeech.server_id = s.server_id
+      LEFT JOIN server_auto_trigger_configs satc ON satc.server_id = s.server_id
+      LEFT JOIN server_channel_scope_configs scsc ON scsc.server_id = s.server_id
+      LEFT JOIN server_trigger_behavior_configs stbc ON stbc.server_id = s.server_id
+      LEFT JOIN server_novelai_imagegen_configs snaic ON snaic.server_id = s.server_id
+      LEFT JOIN server_byok_configs sbyok ON sbyok.server_id = s.server_id
+      LEFT JOIN server_memory_configs smem ON smem.server_id = s.server_id
+      LEFT JOIN server_welcome_configs swc ON swc.server_id = s.server_id
+      WHERE t.tomori_id = ${tomoriId}
       LIMIT 1
     `;
 
-    if (!configRows.length) {
-      return null;
-    }
+    if (!rawRow) return null;
 
-    // biome-ignore lint/style/noNonNullAssertion: length checked above
-    const normalized = this.normalizeTomoriConfigFromJson(configRows[0]!.config);
-    const parsedConfig = tomoriConfigSchema.safeParse(normalized);
+    const coerced = this.coerceNullsForZod(rawRow as Record<string, unknown>);
+    const normalized = this.normalizeTomoriConfigFromJson(coerced);
+    const parsedConfig = assembledServerConfigSchema.safeParse(normalized);
     if (!parsedConfig.success) {
       log.error(`Invalid legacy tomori config for tomori_id ${tomoriId}:`, parsedConfig.error.flatten());
       return null;

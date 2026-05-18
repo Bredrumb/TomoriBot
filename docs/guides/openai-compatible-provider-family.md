@@ -49,7 +49,7 @@ without pretending it supports everything.
 
 Important existing behavior:
 
-- setup/provider switching already tolerates providers with no image models or embedding models by storing `NULL` in `tomori_configs.diffusion_model_id` and `tomori_configs.embedding_model_id`
+- setup/provider switching already tolerates providers with no image models or embedding models by storing `NULL` in `server_model_configs.diffusion_model_id` and `server_model_configs.embedding_model_id`
 - embedding execution is already routed by the selected embedding model's provider, not strictly by the active chat provider
 - image generation is still gated by the active LLM provider
 

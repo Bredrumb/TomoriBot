@@ -1,6 +1,6 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
+import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 import type { UserRow } from "@/types/db/schema";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -81,11 +81,9 @@ export async function execute(
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  const [serverRow] = await sql<{ server_id: number }[]>`
-		SELECT server_id FROM servers WHERE server_disc_id = ${interaction.guild.id}
-	`;
+  const serverId = await serverRepository.loadServerIdByDiscId(interaction.guild.id);
 
-  if (!serverRow) {
+  if (!serverId) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.server_not_found_title",
       descriptionKey: "general.errors.server_not_found_description",
@@ -93,8 +91,6 @@ export async function execute(
     });
     return;
   }
-
-  const serverId = serverRow.server_id;
   const dailyUserQuota = interaction.options.getInteger("daily_user_quota");
   const serverwideQuota = interaction.options.getInteger("serverwide_quota");
   const resetDays = interaction.options.getInteger("serverwide_quota_resets_in");

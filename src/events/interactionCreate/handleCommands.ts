@@ -1,8 +1,7 @@
 import { MessageFlags, type Client, type Interaction } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
 import { ColorCode, log } from "../../utils/misc/logger";
-import { userSchema, type UserRow, type ErrorContext } from "../../types/db/schema";
+import type { UserRow, ErrorContext } from "../../types/db/schema";
 import { cooldownRepository, userRepository } from "@/utils/db/repositories";
 import { loadCommandData, type CommandExecutionMap, type CommandCooldownMap } from "../../utils/discord/commandLoader";
 import { resolvePreferredDiscordDisplayName } from "../../utils/discord/displayName";
@@ -183,12 +182,10 @@ const handler = async (client: Client, interaction: Interaction): Promise<void> 
 
       // 5. Get or create user data
       let userData: UserRow | undefined;
-      const [existingUser] = await sql`
-        SELECT * FROM users WHERE user_disc_id = ${interaction.user.id}
-      `;
+      const existingUser = await userRepository.loadByDiscordId(interaction.user.id);
 
       if (existingUser) {
-        userData = userSchema.parse(existingUser);
+        userData = existingUser;
       } else {
         // Get locale to use for new user (works for both guilds and DMs)
         const userLanguage = interaction.locale;

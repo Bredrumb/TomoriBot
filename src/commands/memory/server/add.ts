@@ -123,11 +123,7 @@ export async function execute(
       .filter((option) => option.value !== "");
 
     // 7. Check if server memory teaching is enabled
-    // NOTE: Check the correct config key name from tomori_configs table
-    if (
-      !tomoriState.config.server_memteaching_enabled && // Assuming this is the correct key
-      !hasManagePermission
-    ) {
+    if (!tomoriState.config.server_memteaching_enabled && !hasManagePermission) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.teach.memory.server.teaching_disabled_title",
         descriptionKey: "commands.teach.memory.server.teaching_disabled_description",
@@ -284,17 +280,11 @@ export async function execute(
       }
     }
 
-    const existingRows = await sql`
-			SELECT content
-			FROM server_memories
-			WHERE server_id = ${targetServerId}
-			  AND persona_lineage_id = ${targetPersonaLineageId}
-		`;
-    const existingMemories = new Set(
-      existingRows
-        .map((row: { content?: unknown }) => (typeof row.content === "string" ? row.content.trim().toLowerCase() : ""))
-        .filter((content: string) => content.length > 0),
+    const existingContents = await serverMemoryRepository.loadServerMemoryContents(
+      targetServerId,
+      targetPersonaLineageId,
     );
+    const existingMemories = new Set(existingContents.map((c) => c.trim().toLowerCase()).filter((c) => c.length > 0));
     const memoriesToAdd = dedupedMemories.filter((memory) => !existingMemories.has(memory.toLowerCase()));
 
     if (memoriesToAdd.length === 0) {
@@ -314,7 +304,7 @@ export async function execute(
       targetServerId,
       targetPersonaLineageId,
     );
-    const currentCount = serverLimitCheck.currentCount ?? existingRows.length;
+    const currentCount = serverLimitCheck.currentCount ?? existingContents.length;
     const maxAllowed = serverLimitCheck.maxAllowed ?? memoryLimits.maxServerMemories;
     const availableSlots = Math.max(0, maxAllowed - currentCount);
     if (memoriesToAdd.length > availableSlots) {

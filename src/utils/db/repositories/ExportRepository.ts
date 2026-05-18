@@ -160,75 +160,87 @@ export class ExportRepository {
 
       const serverId = serverRows[0].server_id;
 
-      // 2. Get tomori configuration
+      // 2. Get tomori configuration — 13 split-table LEFT JOINs + welcome (E6: replaces dual tomori_configs join).
+      //    COALESCE defaults are belt-and-suspenders for the migration window (servers without a split row).
       const configRows = await sql`
         SELECT
-          COALESCE(tc_server.llm_temperature, tc_legacy.llm_temperature) as llm_temperature,
-          COALESCE(tc_server.llm_top_p, tc_legacy.llm_top_p, 0.95) as llm_top_p,
-          COALESCE(tc_server.llm_top_k, tc_legacy.llm_top_k, 0) as llm_top_k,
-          COALESCE(tc_server.llm_frequency_penalty, tc_legacy.llm_frequency_penalty, 0.0) as llm_frequency_penalty,
-          COALESCE(tc_server.llm_presence_penalty, tc_legacy.llm_presence_penalty, 0.0) as llm_presence_penalty,
-          COALESCE(tc_server.llm_min_p, tc_legacy.llm_min_p, 0.05) as llm_min_p,
-          COALESCE(tc_server.llm_max_output_tokens, tc_legacy.llm_max_output_tokens) as llm_max_output_tokens,
-          COALESCE(tc_server.llm_disabled_params, tc_legacy.llm_disabled_params, ARRAY[]::TEXT[]) as llm_disabled_params,
-          COALESCE(tc_server.llm_logit_biases, tc_legacy.llm_logit_biases, '[]'::jsonb) as llm_logit_biases,
-          COALESCE(tc_server.llm_stop_strings, tc_legacy.llm_stop_strings, ARRAY[]::TEXT[]) as llm_stop_strings,
-          COALESCE(tc_server.llm_stop_speaker_pattern_enabled, tc_legacy.llm_stop_speaker_pattern_enabled, false) as llm_stop_speaker_pattern_enabled,
-          COALESCE(tc_server.humanizer_degree, tc_legacy.humanizer_degree) as humanizer_degree,
-          COALESCE(tc_server.thinking_level, tc_legacy.thinking_level, 'auto') as thinking_level,
-          COALESCE(tc_server.timezone_offset, tc_legacy.timezone_offset) as timezone_offset,
-          COALESCE(tc_server.message_fetch_limit, tc_legacy.message_fetch_limit, 80) as message_fetch_limit,
-          COALESCE(tc_server.system_prompt, tc_legacy.system_prompt) as system_prompt,
-          COALESCE(tc_server.server_memteaching_enabled, tc_legacy.server_memteaching_enabled) as server_memteaching_enabled,
-          COALESCE(tc_server.attribute_memteaching_enabled, tc_legacy.attribute_memteaching_enabled) as attribute_memteaching_enabled,
-          COALESCE(tc_server.sampledialogue_memteaching_enabled, tc_legacy.sampledialogue_memteaching_enabled) as sampledialogue_memteaching_enabled,
-          COALESCE(tc_server.self_teaching_enabled, tc_legacy.self_teaching_enabled) as self_teaching_enabled,
-          COALESCE(tc_server.web_search_enabled, tc_legacy.web_search_enabled) as web_search_enabled,
-          COALESCE(tc_server.personal_memories_enabled, tc_legacy.personal_memories_enabled) as personal_memories_enabled,
-          COALESCE(tc_server.emoji_usage_enabled, tc_legacy.emoji_usage_enabled) as emoji_usage_enabled,
-          COALESCE(tc_server.sticker_usage_enabled, tc_legacy.sticker_usage_enabled) as sticker_usage_enabled,
-          COALESCE(tc_server.imagegen_enabled, tc_legacy.imagegen_enabled) as imagegen_enabled,
-          COALESCE(tc_server.tool_notice_hidden_keys, tc_legacy.tool_notice_hidden_keys, ARRAY[]::TEXT[]) as tool_notice_hidden_keys,
-          COALESCE(tc_server.self_debug_enabled, tc_legacy.self_debug_enabled, false) as self_debug_enabled,
-          COALESCE(tc_server.nai_style_tags, tc_legacy.nai_style_tags) as nai_style_tags,
-          COALESCE(tc_server.nai_negative_tags, tc_legacy.nai_negative_tags) as nai_negative_tags,
-          COALESCE(tc_server.nai_sampler, tc_legacy.nai_sampler) as nai_sampler,
-          COALESCE(tc_server.nai_steps, tc_legacy.nai_steps) as nai_steps,
-          COALESCE(tc_server.nai_scale, tc_legacy.nai_scale) as nai_scale,
-          COALESCE(tc_server.nai_noise_schedule, tc_legacy.nai_noise_schedule) as nai_noise_schedule,
-          COALESCE(tc_server.nai_cfg_rescale, tc_legacy.nai_cfg_rescale) as nai_cfg_rescale,
-          COALESCE(tc_server.nai_preset_name, tc_legacy.nai_preset_name) as nai_preset_name,
-          COALESCE(tc_server.cascade_limit, tc_legacy.cascade_limit, 3) as cascade_limit,
-          COALESCE(tc_server.match_limit, tc_legacy.match_limit, 3) as match_limit,
-          COALESCE(tc_server.send_message_limit, tc_legacy.send_message_limit, 0) as send_message_limit,
-          COALESCE(tc_server.always_reply_enabled, tc_legacy.always_reply_enabled, false) as always_reply_enabled,
-          COALESCE(tc_server.deliberate_trigger_mode, tc_legacy.deliberate_trigger_mode, false) as deliberate_trigger_mode,
-          COALESCE(tc_server.cooldown_type, tc_legacy.cooldown_type, 0) as cooldown_type,
-          COALESCE(tc_server.cooldown_length, tc_legacy.cooldown_length, 5) as cooldown_length,
-          COALESCE(tc_server.stm_privacy_bypass, tc_legacy.stm_privacy_bypass, false) as stm_privacy_bypass,
-          COALESCE(tc_server.user_byok_mode, tc_legacy.user_byok_mode, false) as user_byok_mode,
-          COALESCE(tc_server.context_note, tc_legacy.context_note) as context_note,
-          COALESCE(tc_server.context_note_depth, tc_legacy.context_note_depth, 0) as context_note_depth,
-          COALESCE(tc_server.manage_message_enabled, tc_legacy.manage_message_enabled, true) as manage_message_enabled,
-          COALESCE(tc_server.videogen_enabled, tc_legacy.videogen_enabled, false) as videogen_enabled,
-          COALESCE(tc_server.voice_message_enabled, tc_legacy.voice_message_enabled, true) as voice_message_enabled,
-          COALESCE(tc_server.thread_creation_enabled, tc_legacy.thread_creation_enabled, true) as thread_creation_enabled,
-          COALESCE(tc_server.voice_transcript_chat_mode, tc_legacy.voice_transcript_chat_mode, true) as voice_transcript_chat_mode,
-          COALESCE(tc_server.chatterbox_turbo_enabled, tc_legacy.chatterbox_turbo_enabled, true) as chatterbox_turbo_enabled,
-          COALESCE(tc_server.chatterbox_cfg_weight, tc_legacy.chatterbox_cfg_weight, 0.5) as chatterbox_cfg_weight,
-          COALESCE(tc_server.chatterbox_exaggeration, tc_legacy.chatterbox_exaggeration, 0.5) as chatterbox_exaggeration,
-          COALESCE(tc_server.uncensor_injection_enabled, tc_legacy.uncensor_injection_enabled, false) as uncensor_injection_enabled,
-          COALESCE(tc_server.uncensor_unicode_space_enabled, tc_legacy.uncensor_unicode_space_enabled, false) as uncensor_unicode_space_enabled,
-          COALESCE(tc_server.uncensor_sanitize_enabled, tc_legacy.uncensor_sanitize_enabled, false) as uncensor_sanitize_enabled,
-          COALESCE(tc_server.tool_use_enabled, tc_legacy.tool_use_enabled, true) as tool_use_enabled,
-          COALESCE(tc_server.prompt_snapshot_enabled, tc_legacy.prompt_snapshot_enabled, false) as prompt_snapshot_enabled,
-          COALESCE(tc_server.memory_tagging_enabled, tc_legacy.memory_tagging_enabled, false) as memory_tagging_enabled,
-          COALESCE(tc_server.welcome_prompt, tc_legacy.welcome_prompt) as welcome_prompt
+          COALESCE(smc.llm_temperature, 1.0)                        AS llm_temperature,
+          COALESCE(scc.llm_top_p, 0.95)                             AS llm_top_p,
+          COALESCE(scc.llm_top_k, 0)                                AS llm_top_k,
+          COALESCE(scc.llm_frequency_penalty, 0.0)                  AS llm_frequency_penalty,
+          COALESCE(scc.llm_presence_penalty, 0.0)                   AS llm_presence_penalty,
+          COALESCE(scc.llm_min_p, 0.05)                             AS llm_min_p,
+          scc.llm_max_output_tokens                                  AS llm_max_output_tokens,
+          COALESCE(smc.llm_disabled_params, ARRAY[]::TEXT[])        AS llm_disabled_params,
+          COALESCE(scc.llm_logit_biases, '[]'::jsonb)               AS llm_logit_biases,
+          COALESCE(scc.llm_stop_strings, ARRAY[]::TEXT[])           AS llm_stop_strings,
+          COALESCE(scc.llm_stop_speaker_pattern_enabled, false)     AS llm_stop_speaker_pattern_enabled,
+          COALESCE(scc.humanizer_degree, 1)                         AS humanizer_degree,
+          COALESCE(smc.thinking_level, 'auto')                      AS thinking_level,
+          COALESCE(scc.timezone_offset, 0)                          AS timezone_offset,
+          COALESCE(scc.message_fetch_limit, 80)                     AS message_fetch_limit,
+          scc.system_prompt                                          AS system_prompt,
+          COALESCE(smpc.server_memteaching_enabled, true)           AS server_memteaching_enabled,
+          COALESCE(smpc.attribute_memteaching_enabled, false)       AS attribute_memteaching_enabled,
+          COALESCE(smpc.sampledialogue_memteaching_enabled, false)  AS sampledialogue_memteaching_enabled,
+          COALESCE(smpc.self_teaching_enabled, true)                AS self_teaching_enabled,
+          COALESCE(scac.web_search_enabled, true)                   AS web_search_enabled,
+          COALESCE(smpc.personal_memories_enabled, true)            AS personal_memories_enabled,
+          COALESCE(scac.emoji_usage_enabled, true)                  AS emoji_usage_enabled,
+          COALESCE(scac.sticker_usage_enabled, true)                AS sticker_usage_enabled,
+          COALESCE(scac.imagegen_enabled, true)                     AS imagegen_enabled,
+          COALESCE(snec.tool_notice_hidden_keys, ARRAY[]::TEXT[])   AS tool_notice_hidden_keys,
+          COALESCE(scc.self_debug_enabled, false)                   AS self_debug_enabled,
+          snaic.nai_style_tags                                       AS nai_style_tags,
+          snaic.nai_negative_tags                                    AS nai_negative_tags,
+          snaic.nai_sampler                                          AS nai_sampler,
+          snaic.nai_steps                                            AS nai_steps,
+          snaic.nai_scale                                            AS nai_scale,
+          snaic.nai_noise_schedule                                   AS nai_noise_schedule,
+          snaic.nai_cfg_rescale                                      AS nai_cfg_rescale,
+          snaic.nai_preset_name                                      AS nai_preset_name,
+          COALESCE(scc.cascade_limit, 3)                            AS cascade_limit,
+          COALESCE(scc.match_limit, 3)                              AS match_limit,
+          COALESCE(scc.send_message_limit, 0)                       AS send_message_limit,
+          COALESCE(stbc.always_reply_enabled, false)                AS always_reply_enabled,
+          COALESCE(stbc.deliberate_trigger_mode, false)             AS deliberate_trigger_mode,
+          COALESCE(stbc.cooldown_type, 0)                           AS cooldown_type,
+          COALESCE(stbc.cooldown_length, 5)                         AS cooldown_length,
+          COALESCE(scsc.stm_privacy_bypass, false)                  AS stm_privacy_bypass,
+          COALESCE(sbc.user_byok_mode, false)                       AS user_byok_mode,
+          scc.context_note                                           AS context_note,
+          COALESCE(scc.context_note_depth, 0)                       AS context_note_depth,
+          COALESCE(scac.manage_message_enabled, true)               AS manage_message_enabled,
+          COALESCE(scac.videogen_enabled, false)                    AS videogen_enabled,
+          COALESCE(scac.voice_message_enabled, true)                AS voice_message_enabled,
+          COALESCE(scac.thread_creation_enabled, true)              AS thread_creation_enabled,
+          COALESCE(ssc.voice_transcript_chat_mode, true)            AS voice_transcript_chat_mode,
+          COALESCE(ssc.chatterbox_turbo_enabled, true)              AS chatterbox_turbo_enabled,
+          COALESCE(ssc.chatterbox_cfg_weight, 0.5)                  AS chatterbox_cfg_weight,
+          COALESCE(ssc.chatterbox_exaggeration, 0.5)                AS chatterbox_exaggeration,
+          COALESCE(snc.uncensor_injection_enabled, false)           AS uncensor_injection_enabled,
+          COALESCE(snc.uncensor_unicode_space_enabled, false)       AS uncensor_unicode_space_enabled,
+          COALESCE(snc.uncensor_sanitize_enabled, false)            AS uncensor_sanitize_enabled,
+          COALESCE(scac.tool_use_enabled, true)                     AS tool_use_enabled,
+          COALESCE(smpc.prompt_snapshot_enabled, false)             AS prompt_snapshot_enabled,
+          COALESCE(smemoc.memory_tagging_enabled, false)            AS memory_tagging_enabled,
+          swc.welcome_prompt                                         AS welcome_prompt
         FROM tomoris t
-        LEFT JOIN tomori_configs tc_server ON tc_server.server_id = t.server_id
-        LEFT JOIN tomori_configs tc_legacy ON tc_legacy.tomori_id = t.tomori_id
+        LEFT JOIN server_model_configs smc               ON smc.server_id   = t.server_id
+        LEFT JOIN server_chat_configs scc                ON scc.server_id   = t.server_id
+        LEFT JOIN server_member_permissions_configs smpc ON smpc.server_id  = t.server_id
+        LEFT JOIN server_capabilities_configs scac       ON scac.server_id  = t.server_id
+        LEFT JOIN server_notice_embeds_configs snec      ON snec.server_id  = t.server_id
+        LEFT JOIN server_nsfw_configs snc                ON snc.server_id   = t.server_id
+        LEFT JOIN server_speech_configs ssc              ON ssc.server_id   = t.server_id
+        LEFT JOIN server_channel_scope_configs scsc      ON scsc.server_id  = t.server_id
+        LEFT JOIN server_trigger_behavior_configs stbc   ON stbc.server_id  = t.server_id
+        LEFT JOIN server_novelai_imagegen_configs snaic  ON snaic.server_id = t.server_id
+        LEFT JOIN server_byok_configs sbc                ON sbc.server_id   = t.server_id
+        LEFT JOIN server_memory_configs smemoc           ON smemoc.server_id = t.server_id
+        LEFT JOIN server_welcome_configs swc             ON swc.server_id   = t.server_id
         WHERE t.server_id = ${serverId}
-        AND t.is_alter = false
+          AND t.is_alter = false
         LIMIT 1
       `;
 

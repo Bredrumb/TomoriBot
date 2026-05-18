@@ -33,6 +33,210 @@ export type ServerMemoryExportShape = {
 };
 
 export class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
+  // ── reads ──────────────────────────────────────────────────────────────────
+
+  /**
+   * Returns the count of documents in the documents table for a server.
+   *
+   * @param serverId - Internal server DB ID
+   */
+  async countDocuments(serverId: number): Promise<number> {
+    try {
+      const [row] = await sql<[{ doc_count: string | number }]>`
+        SELECT COUNT(*) as doc_count FROM documents WHERE server_id = ${serverId}
+      `;
+      return Number(row?.doc_count || 0);
+    } catch (error) {
+      log.error(`Error counting documents for server ${serverId}:`, error);
+      return 0;
+    }
+  }
+
+  /**
+   * Loads server memories scoped to a persona lineage, with optional user filter.
+   * Used by /memory server edit and /memory server remove to populate the selection list.
+   *
+   * @param serverId         - Internal server DB ID
+   * @param personaLineageId - Persona lineage scope
+   * @param userId           - If provided, only returns memories owned by this user
+   * @returns Ordered array of ServerMemoryRow (newest first)
+   */
+  async loadServerMemoriesScoped(
+    serverId: number,
+    personaLineageId: number,
+    userId?: number,
+  ): Promise<ServerMemoryRow[]> {
+    try {
+      if (userId !== undefined) {
+        return await sql<ServerMemoryRow[]>`
+          SELECT server_memory_id, server_id, tomori_id, persona_lineage_id, user_id, content, tags, created_at, updated_at
+          FROM server_memories
+          WHERE server_id = ${serverId}
+            AND persona_lineage_id = ${personaLineageId}
+            AND user_id = ${userId}
+          ORDER BY created_at DESC, server_memory_id DESC
+        `;
+      }
+      return await sql<ServerMemoryRow[]>`
+        SELECT server_memory_id, server_id, tomori_id, persona_lineage_id, user_id, content, tags, created_at, updated_at
+        FROM server_memories
+        WHERE server_id = ${serverId}
+          AND persona_lineage_id = ${personaLineageId}
+        ORDER BY created_at DESC, server_memory_id DESC
+      `;
+    } catch (error) {
+      log.error(`Error loading server memories for server ${serverId} lineage ${personaLineageId}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Returns all memory content strings for a server + persona lineage.
+   * Used for case-insensitive duplicate detection before insert.
+   *
+   * @param serverId         - Internal server DB ID
+   * @param personaLineageId - Persona lineage scope
+   * @returns Array of raw content strings
+   */
+  async loadServerMemoryContents(serverId: number, personaLineageId: number): Promise<string[]> {
+    try {
+      const rows = await sql<Array<{ content: string }>>`
+        SELECT content
+        FROM server_memories
+        WHERE server_id = ${serverId}
+          AND persona_lineage_id = ${personaLineageId}
+      `;
+      return rows.map((r) => r.content);
+    } catch (error) {
+      log.error(`Error loading server memory contents for server ${serverId}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Returns true if a document with the given name already exists in the scope.
+   * Used for duplicate-name checking before insert.
+   *
+   * @param serverId     - Internal server DB ID
+   * @param tomoriId     - null = serverwide scope; non-null = per-persona scope
+   * @param documentName - Document name to check
+   */
+  async documentExistsByName(serverId: number, tomoriId: number | null, documentName: string): Promise<boolean> {
+    try {
+      const rows =
+        tomoriId === null
+          ? await sql`
+              SELECT document_id FROM documents
+              WHERE server_id = ${serverId}
+                AND tomori_id IS NULL
+                AND document_name = ${documentName}
+              LIMIT 1
+            `
+          : await sql`
+              SELECT document_id FROM documents
+              WHERE server_id = ${serverId}
+                AND tomori_id = ${tomoriId}
+                AND document_name = ${documentName}
+              LIMIT 1
+            `;
+      return rows.length > 0;
+    } catch (error) {
+      log.error(`Error checking document existence for server ${serverId}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Returns the count of documents in the given server + scope.
+   *
+   * @param serverId - Internal server DB ID
+   * @param tomoriId - null = serverwide scope; non-null = per-persona scope
+   */
+  async countDocumentsScoped(serverId: number, tomoriId: number | null): Promise<number> {
+    try {
+      const [row] =
+        tomoriId === null
+          ? await sql<[{ doc_count: string | number }]>`
+              SELECT COUNT(*) as doc_count
+              FROM documents
+              WHERE server_id = ${serverId}
+                AND tomori_id IS NULL
+            `
+          : await sql<[{ doc_count: string | number }]>`
+              SELECT COUNT(*) as doc_count
+              FROM documents
+              WHERE server_id = ${serverId}
+                AND tomori_id = ${tomoriId}
+            `;
+      return Number(row?.doc_count || 0);
+    } catch (error) {
+      log.error(`Error counting documents for server ${serverId}:`, error);
+      return 0;
+    }
+  }
+
+  /**
+   * Returns the count of document chunks across all documents in the given server + scope.
+   *
+   * @param serverId - Internal server DB ID
+   * @param tomoriId - null = serverwide scope; non-null = per-persona scope
+   */
+  async countChunksScoped(serverId: number, tomoriId: number | null): Promise<number> {
+    try {
+      const [row] =
+        tomoriId === null
+          ? await sql<[{ chunk_count: string | number }]>`
+              SELECT COUNT(*) as chunk_count
+              FROM document_chunks dc
+              JOIN documents d ON d.document_id = dc.document_id
+              WHERE d.server_id = ${serverId}
+                AND d.tomori_id IS NULL
+            `
+          : await sql<[{ chunk_count: string | number }]>`
+              SELECT COUNT(*) as chunk_count
+              FROM document_chunks dc
+              JOIN documents d ON d.document_id = dc.document_id
+              WHERE d.server_id = ${serverId}
+                AND d.tomori_id = ${tomoriId}
+            `;
+      return Number(row?.chunk_count || 0);
+    } catch (error) {
+      log.error(`Error counting chunks for server ${serverId}:`, error);
+      return 0;
+    }
+  }
+
+  /**
+   * Returns true if any document exists for the given server + RAG scope.
+   * For persona scope, also checks serverwide documents (tomori_id IS NULL)
+   * since RAG retrieval includes shared docs.
+   *
+   * @param serverId - Internal server DB ID
+   * @param tomoriId - null = serverwide only; non-null = persona OR serverwide
+   */
+  async hasDocumentInScope(serverId: number, tomoriId: number | null): Promise<boolean> {
+    try {
+      const rows =
+        tomoriId === null
+          ? await sql`
+              SELECT document_id FROM documents
+              WHERE server_id = ${serverId}
+                AND tomori_id IS NULL
+              LIMIT 1
+            `
+          : await sql`
+              SELECT document_id FROM documents
+              WHERE server_id = ${serverId}
+                AND (tomori_id = ${tomoriId} OR tomori_id IS NULL)
+              LIMIT 1
+            `;
+      return rows.length > 0;
+    } catch (error) {
+      log.error(`Error checking document existence for server ${serverId}:`, error);
+      return false;
+    }
+  }
+
   // ── writes ─────────────────────────────────────────────────────────────────
 
   async edit(serverMemoryId: number, content: string, tags: string[] = []): Promise<boolean> {

@@ -43,7 +43,7 @@ Current implementation:
 - Each encrypted row stores `key_version` to support multi-version decryption.
 
 Main encrypted storage locations:
-- `tomori_configs.api_key` + `tomori_configs.key_version`
+- `server_model_configs.api_key` + `server_model_configs.key_version` *(deprecated Phase 1.5 mirror; drop scheduled for step #14.5)*
 - `opt_api_keys.api_key` + `opt_api_keys.key_version`
 - `api_key_rotation.api_key` + `api_key_rotation.key_version` (except main-key pointer rows)
 
@@ -83,7 +83,7 @@ Primary file:
 - Temporary cooldown on errored keys
   - `rate_limit`: 60s
   - `api_error`: 5min
-- Main key pointer support (`is_main_key_pointer=true`) so `tomori_configs.api_key` can participate in the pool
+- Main key pointer support (`is_main_key_pointer=true`) so `server_model_configs.api_key` can participate in the pool
 - Success/error recording updates counters and cooldown metadata
 
 This is separate from encryption key version rotation. It controls runtime provider key usage and failover.

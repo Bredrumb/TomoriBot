@@ -17,8 +17,7 @@ import {
 } from "discord.js";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
-import { personaRepository } from "@/utils/db/repositories";
-import { sql } from "../../utils/db/client";
+import { personaRepository, llmModelRepo } from "@/utils/db/repositories";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
 import type { UserRow } from "../../types/db/schema";
 import { checkVideoQuota, incrementVideoQuota } from "../../utils/quota/videoQuotaManager";
@@ -56,17 +55,13 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * @returns The model codename string (e.g., "veo-3.1-generate-preview")
  */
 async function getVideoModelCodename(videoModelId: number): Promise<string> {
-  const result = await sql`
-    SELECT codename
-    FROM video_generation_models
-    WHERE video_model_id = ${videoModelId}
-  `.values();
+  const model = await llmModelRepo.loadVideoGenerationModelById(videoModelId);
 
-  if (result.length === 0) {
+  if (!model) {
     throw new Error(`Video model not found: ${videoModelId}`);
   }
 
-  return result[0][0] as string;
+  return model.codename;
 }
 
 /**

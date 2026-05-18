@@ -1,6 +1,6 @@
 import type { GuildMcpServerRow } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
+import { mcpRepository } from "@/utils/db/repositories/McpRepository";
 
 /**
  * Cache entry for a guild's MCP server configurations.
@@ -53,18 +53,11 @@ export async function getCachedGuildMcpConfigs(serverId: number): Promise<GuildM
     // Stale — fall through to refresh
   }
 
-  // 2. Cache miss or stale — load from DB
+  // 2. Cache miss or stale — load from DB via repository
   cacheMisses++;
 
   try {
-    const rows = await sql`
-      SELECT guild_mcp_id, server_id, name, url, auth_token, key_version,
-             is_enabled, server_type, created_at, updated_at
-      FROM guild_mcp_servers
-      WHERE server_id = ${serverId}
-      ORDER BY created_at ASC
-    `;
-    const configs = rows as GuildMcpServerRow[];
+    const configs = await mcpRepository.loadGuildMcpConfigs(serverId);
 
     // 3. Cache the result (even if empty — avoids repeated DB queries for guilds with no MCP servers)
     cache.set(serverId, {

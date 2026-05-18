@@ -6,12 +6,12 @@ import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder
 import { MessageFlags } from "discord.js";
 import ffmpegPath from "ffmpeg-static";
 import { parseBuffer } from "music-metadata";
-import { sql } from "@/utils/db/client";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { storeVoiceSample } from "@/utils/storage/voiceSampleStorage";
 import { insertVoiceSample, updateVoiceSamplePath, deleteVoiceSample } from "@/utils/db/repositories/SpeechRepository";
+import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 
@@ -165,12 +165,8 @@ export async function execute(
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   // Resolve server context.
-  const [serverRow] = await sql<[{ server_id: number }]>`
-    SELECT server_id FROM servers
-    WHERE server_disc_id = ${interaction.guild?.id ?? interaction.user.id}
-    LIMIT 1
-  `;
-  if (!serverRow) {
+  const serverId = await serverRepository.loadServerIdByDiscId(interaction.guild?.id ?? interaction.user.id);
+  if (!serverId) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.tomori_not_setup_title",
       descriptionKey: "general.errors.tomori_not_setup_description",
@@ -178,7 +174,6 @@ export async function execute(
     });
     return;
   }
-  const serverId = serverRow.server_id;
 
   try {
     // Download the audio attachment with the configured size limit.

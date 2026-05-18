@@ -1,4 +1,3 @@
-import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import {
   MATRIX_LINK_CACHE_TTL_MS,
@@ -7,6 +6,7 @@ import {
   getMatrixBridge,
   roomLinkCache,
 } from "./state";
+import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 
 export async function joinMatrixRoom(roomId: string): Promise<void> {
   const bridge = getMatrixBridge();
@@ -33,14 +33,7 @@ export async function getLinkedMatrixRoom(channelDiscId: string): Promise<string
     return cached.roomId;
   }
 
-  const [row] = await sql<{ matrix_room_id: string }[]>`
-    SELECT matrix_room_id
-    FROM matrix_channel_links
-    WHERE channel_disc_id = ${channelDiscId}
-    LIMIT 1
-  `;
-
-  const roomId = row?.matrix_room_id ?? null;
+  const roomId = await serverRepository.getExistingMatrixLink(channelDiscId);
   channelLinkCache.set(channelDiscId, { roomId, cachedAt: now });
   return roomId;
 }
@@ -52,14 +45,7 @@ export async function getDiscordChannelForRoom(matrixRoomId: string): Promise<st
     return cached.channelDiscId;
   }
 
-  const [row] = await sql<{ channel_disc_id: string }[]>`
-    SELECT channel_disc_id
-    FROM matrix_channel_links
-    WHERE matrix_room_id = ${matrixRoomId}
-    LIMIT 1
-  `;
-
-  const channelDiscId = row?.channel_disc_id ?? null;
+  const channelDiscId = await serverRepository.getDiscordChannelForMatrixRoom(matrixRoomId);
   roomLinkCache.set(matrixRoomId, { channelDiscId, cachedAt: now });
   return channelDiscId;
 }

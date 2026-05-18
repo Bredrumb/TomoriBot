@@ -5,9 +5,9 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaRepository } from "@/utils/db/repositories";
+import { loadVoiceSamples } from "@/utils/db/repositories/SpeechRepository";
 
 import {
   acknowledgeModalSubmitForRefresh,
@@ -129,12 +129,7 @@ export async function execute(
 
     if (effectiveStyle === "tts-clone") {
       // --- TTS clone path: all server samples available for assignment ---
-      const sampleRows = await sql<{ sample_id: number; name: string; ref_text: string | null; duration_ms: number }[]>`
-        SELECT sample_id, name, ref_text, duration_ms
-        FROM voice_samples
-        WHERE server_id = ${serverId}
-        ORDER BY name
-      `;
+      const sampleRows = await loadVoiceSamples(serverId);
 
       if (!sampleRows.length) {
         await replyInfoEmbed(interaction, locale, {
@@ -370,8 +365,6 @@ export async function execute(
         speech_voice_id: chosenVoice?.voiceId ?? null,
         speech_voice_name:
           chosenVoice?.name ?? (selectedPersona.speech_voice_design_prompt?.trim() ? "VoiceDesign" : null),
-        elevenlabs_voice_id: chosenVoice?.voiceId ?? null,
-        elevenlabs_voice_name: chosenVoice?.name ?? null,
         speech_voice_sample_id: null,
       });
 

@@ -15,7 +15,6 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { serverRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import {
@@ -151,19 +150,13 @@ export async function execute(
     }
 
     // 10. Fetch previous room ID for this channel (to invalidate old cache entry)
-    const [existingLink] = await sql<{ matrix_room_id: string }[]>`
-			SELECT matrix_room_id
-			FROM matrix_channel_links
-			WHERE channel_disc_id = ${channel.id}
-			LIMIT 1
-		`;
-    const oldRoomId = existingLink?.matrix_room_id;
+    const oldRoomId = await serverRepository.getExistingMatrixLink(channel.id);
 
     // 11. Upsert: insert or replace existing link for this channel
     await serverRepository.linkMatrix(tomoriState.server_id, channel.id, roomId);
 
     // 12. Invalidate cache entries for both old and new room IDs
-    invalidateMatrixLinkCache(channel.id, oldRoomId);
+    invalidateMatrixLinkCache(channel.id, oldRoomId ?? undefined);
     invalidateMatrixLinkCache(channel.id, roomId);
 
     // 13. Attempt to join the Matrix room as the bot account (non-critical)

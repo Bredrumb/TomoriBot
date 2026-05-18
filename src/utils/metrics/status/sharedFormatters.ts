@@ -5,7 +5,7 @@ import type {
   LlmRow,
   StPresetNodeRow,
   StPresetRow,
-  TomoriConfigRow,
+  AssembledServerConfig,
 } from "@/types/db/schema";
 import { CooldownType, PrivacyLevel, type TomoriState } from "@/types/db/schema";
 import { formatLlmDisplayLabel } from "@/utils/provider/modelDisplay";
@@ -74,7 +74,7 @@ export function formatQuotaLimitValue(locale: string, limit: number): string {
 }
 
 export function formatOmittedSamplingParams(
-  disabledParams: TomoriConfigRow["llm_disabled_params"] | null | undefined,
+  disabledParams: AssembledServerConfig["llm_disabled_params"] | null | undefined,
   locale: string,
 ): string {
   const omittedParams = SUPPORTED_PARAM_VALUES.filter((param) => disabledParams?.includes(param));

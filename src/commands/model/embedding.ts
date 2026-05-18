@@ -1,6 +1,5 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { isRagAvailable } from "@/utils/db/ragAvailability";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
@@ -10,7 +9,7 @@ import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/mod
 import type { ErrorContext, UserRow, EmbeddingModelRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
-import { configRepository, llmModelRepo } from "@/utils/db/repositories";
+import { configRepository, llmModelRepo, serverMemoryRepository } from "@/utils/db/repositories";
 import { reembedServerDocuments } from "@/utils/documents/documentService";
 import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
@@ -112,9 +111,7 @@ export async function execute(
         currentSelectedId ? llmModelRepo.loadEmbeddingModelById(currentSelectedId) : Promise.resolve(null),
       ]);
       const selectedModelName =
-        selectedSavedConfig.custom_model_name ??
-        getEmbeddingModelDisplayName(selectedConfiguredModel) ??
-        getProviderDisplayName(selectedProvider);
+        getEmbeddingModelDisplayName(selectedConfiguredModel) ?? getProviderDisplayName(selectedProvider);
 
       if (selectedSavedConfig.embedding_model_id === currentSelectedId) {
         await replyInfoEmbed(responseInteraction, locale, {
@@ -321,12 +318,7 @@ export async function execute(
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
     if (shouldReembed && isRagAvailable()) {
-      const [docCountRow] = await sql`
-				SELECT COUNT(*) as doc_count
-				FROM documents
-				WHERE server_id = ${tomoriState.server_id}
-			`;
-      const docCount = Number(docCountRow?.doc_count || 0);
+      const docCount = await serverMemoryRepository.countDocuments(tomoriState.server_id);
       if (docCount > 0) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "commands.model.embedding.reembed_started_title",

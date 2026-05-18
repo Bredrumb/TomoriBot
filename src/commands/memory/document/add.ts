@@ -6,14 +6,13 @@ import type {
   ModalSubmitInteraction,
 } from "discord.js";
 import { MessageFlags, EmbedBuilder } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { isRagAvailable } from "@/utils/db/ragAvailability";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { llmModelRepo, personaRepository, userRepository } from "@/utils/db/repositories";
+import { llmModelRepo, personaRepository, serverMemoryRepository, userRepository } from "@/utils/db/repositories";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { memoryGuard, reserveDocumentQuota } from "@/utils/security/rateLimiter";
@@ -339,25 +338,12 @@ export async function execute(
     }
 
     // 10. Check duplicate document name in selected scope
-    const existing =
-      targetTomoriId === null
-        ? await sql`
-					SELECT document_id
-					FROM documents
-					WHERE server_id = ${tomoriState.server_id}
-					  AND tomori_id IS NULL
-					  AND document_name = ${nameInput}
-					LIMIT 1
-				`
-        : await sql`
-					SELECT document_id
-					FROM documents
-					WHERE server_id = ${tomoriState.server_id}
-					  AND tomori_id = ${targetTomoriId}
-					  AND document_name = ${nameInput}
-					LIMIT 1
-				`;
-    if (existing.length > 0) {
+    const duplicateExists = await serverMemoryRepository.documentExistsByName(
+      tomoriState.server_id,
+      targetTomoriId,
+      nameInput,
+    );
+    if (duplicateExists) {
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "commands.teach.document.duplicate_title",
         descriptionKey: "commands.teach.document.duplicate_description",
@@ -369,21 +355,7 @@ export async function execute(
     }
 
     // 11. Enforce document count limit for selected scope
-    const [docCountRow] =
-      targetTomoriId === null
-        ? await sql`
-					SELECT COUNT(*) as doc_count
-					FROM documents
-					WHERE server_id = ${tomoriState.server_id}
-					  AND tomori_id IS NULL
-				`
-        : await sql`
-					SELECT COUNT(*) as doc_count
-					FROM documents
-					WHERE server_id = ${tomoriState.server_id}
-					  AND tomori_id = ${targetTomoriId}
-				`;
-    const docCount = Number(docCountRow?.doc_count || 0);
+    const docCount = await serverMemoryRepository.countDocumentsScoped(tomoriState.server_id, targetTomoriId);
     if (docCount >= memoryLimits.maxDocumentsPerServer) {
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "commands.teach.document.limit_exceeded_title",
@@ -510,23 +482,7 @@ export async function execute(
       return;
     }
 
-    const [chunkCountRow] =
-      targetTomoriId === null
-        ? await sql`
-					SELECT COUNT(*) as chunk_count
-					FROM document_chunks dc
-					JOIN documents d ON d.document_id = dc.document_id
-					WHERE d.server_id = ${tomoriState.server_id}
-					  AND d.tomori_id IS NULL
-				`
-        : await sql`
-					SELECT COUNT(*) as chunk_count
-					FROM document_chunks dc
-					JOIN documents d ON d.document_id = dc.document_id
-					WHERE d.server_id = ${tomoriState.server_id}
-					  AND d.tomori_id = ${targetTomoriId}
-				`;
-    const currentChunkCount = Number(chunkCountRow?.chunk_count || 0);
+    const currentChunkCount = await serverMemoryRepository.countChunksScoped(tomoriState.server_id, targetTomoriId);
     if (currentChunkCount + chunks.length > memoryLimits.maxDocumentChunksPerServer) {
       await responseInteraction.editReply({
         embeds: [

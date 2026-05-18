@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: phase-6-step-14-stage-a -->
+<!-- ARCH-ALIGNMENT: phase-6-step-14-task-h -->
 
 # 5. Database Schema and Data Model
 
@@ -47,15 +47,14 @@ All SQL is inlined as `private` methods directly on the owning Repository class.
 
 - `servers`
 - `tomoris`
-- `tomori_configs` *(Phase 6 Stage A: being split — see [Server config normalization](#server-config-normalization) below; Stage B will drop this table after soak)*
 - `persona_configs`
 - `users`
 
-### Server config normalization (Phase 6 Stage A — dual-write active)
+### Server config normalization (Phase 6 Step #14 — complete)
 
-`tomori_configs` is being split across 13 command-aligned tables (Stage A: expand + backfill; Stage B: drop `tomori_configs` after soak):
+`tomori_configs` was split across 14 command-aligned tables and dropped (migration `008_drop_tomori_configs.sql`):
 
-- `server_chat_configs` — `/config humanizer`, `/config message-fetch-limit`, `/model` parameters
+- `server_chat_configs` — `/config humanizer`, `/config message-fetch-limit`, `/model` parameters, `cascade_limit`, `match_limit`, `context_note`, `context_note_depth`
 - `server_notice_embeds_configs` — `/config notice-embeds visibility`
 - `server_member_permissions_configs` — `/server member-permissions`
 - `server_channel_scope_configs` — `/server rp-channels`, `/server private-channels`, `/server crosschannel-blocklist`, thought-log channel
@@ -63,22 +62,23 @@ All SQL is inlined as `private` methods directly on the owning Repository class.
 - `server_trigger_behavior_configs` — `/server always-reply`, `/server deliberate-trigger-mode`, cooldown settings (`ServerScheduleRepository`)
 - `server_auto_trigger_configs` — `/server auto-trigger` channels + threshold (`ServerScheduleRepository`)
 - `server_capabilities_configs` — `/capabilities manage`, `/capabilities toggle`
-- `server_novelai_imagegen_configs` — `/novelai` image parameters
+- `server_novelai_imagegen_configs` — `/novelai` image parameters, `nai_style_tags`, `nai_negative_tags`, `nai_diffusion_model_id`
 - `server_nsfw_configs` — `/nsfw` jailbreak toggles
-- `server_speech_configs` — `/speech` Chatterbox parameters
+- `server_speech_configs` — `/speech` Chatterbox parameters, `chatterbox_turbo_enabled`, `chatterbox_cfg_weight`, `chatterbox_exaggeration`
 - `server_byok_configs` — `/server user-byok`
 - `server_memory_configs` — `/memory tagging` settings (`ServerMemoryRepository`)
+- `server_model_configs` — active model-selection FKs (`llm_id`, `embedding_model_id`, `diffusion_model_id`, `video_model_id`, `vision_llm_id`) plus runtime credential/thinking mirrors and Phase 3 inline custom endpoint fields that remain on the active assembled server config
 
-### Persona config normalization (Phase 6 Stage A — dual-write active)
+### Persona config normalization (Phase 6 Step #14 — dual-write active)
 
-`tomoris` persona-specific config columns are being extracted to 4 tables:
+`tomoris` persona-specific config columns are being extracted to 4 tables (source columns remain in `tomoris`; full drop deferred to steps #14.2–#14.6):
 
 - `persona_context_note_configs` — per-persona context note + depth
-- `persona_voice_configs` — `speech_voice_*` + deprecated `elevenlabs_voice_*` (kept until #14.2 Pass C)
+- `persona_voice_configs` — `speech_voice_*` (`elevenlabs_voice_*` dropped by migration 010, Phase 6 Step #14.2)
 - `persona_imagegen_configs` — `nai_tags`, `nai_char_ref_url`
 - `persona_textgen_configs` — NovelAI ATTG author/title/tags/genre/stars
 
-### User personalization normalization (Phase 6 Stage A — dual-write active)
+### User personalization normalization (Phase 6 Step #14 — dual-write active)
 
 `users` personalization columns are being extracted to one table:
 
@@ -132,7 +132,7 @@ All SQL is inlined as `private` methods directly on the owning Repository class.
 
 - `image_quota_configs`
 - `image_quotas`
-- `serverwide_quotas`
+- `image_serverwide_quotas`
 - `text_quota_configs`
 - `text_quotas`
 - `text_serverwide_quotas`
@@ -160,35 +160,37 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 - `tomoris` now supports multiple personas per server (`is_alter` flag).
 - `persona_lineage_id` supports cross-server memory identity matching.
 - Persona names are constrained unique per server (case-insensitive, trimmed).
+- Exactly one non-alter persona (`is_alter = false`) per server is enforced by partial unique index `personas_one_main_per_server ON tomoris(server_id) WHERE is_alter = false` (added in Phase 6 Step #14.6, migration `012`). This hardens the invariant that was previously enforced only at the command layer.
 - `persona_configs.reward_conditioning_enabled` and `persona_configs.punish_conditioning_enabled` are persona-scoped prompt-injection toggles for conditioning memory.
 
 ### Server config scoping
 
-- `tomori_configs.server_id` is the primary modern scope.
-- `tomori_configs.tomori_id` remains as a nullable legacy pointer.
-- `tomori_configs.message_fetch_limit` stores the per-server context fetch cap (default `80`, configurable via `/config message-fetch-limit`).
-- `tomori_configs.thinking_level` stores the active text provider's mirrored reasoning preference (`auto`, `none`, `low`, `medium`, `high`) as managed through `/config samplers`.
-- `tomori_configs.llm_stop_strings` and `tomori_configs.llm_stop_speaker_pattern_enabled` store server-wide stop-string settings applied to every text provider. The speaker-pattern flag defaults to `false`, so `\n{Name}:` generation stops are opt-in.
-- `tomori_configs.welcome_channel_disc_id` stores the single configured join-welcome channel per server.
-- `tomori_configs.thought_log_channel_disc_id` stores the optional server-scoped channel where provider reasoning summaries are posted after successful streamed chat turns.
-- `tomori_configs.autoch_persona_overrides` stores optional per-channel persona assignments for configured auto-trigger channels. Each entry is a JSON object with `channel_disc_id` and `tomori_id`; missing entries fall back to the main persona.
-- `tomori_configs.crosschannel_blocklist_ids` stores the server-scoped channel blocklist for tool-driven `cross_channel_message` dispatch. Blocking a forum/media parent also blocks visits into threads under that parent.
-- `tomori_configs.welcome_prompt` stores the required additional greeting instruction shown in `/server welcome-channel set`.
-- `tomori_configs.welcome_persona_id` stores the selected welcome persona; `NULL` means random persona selection per join.
-- `tomori_configs.tool_notice_hidden_keys` stores the hidden notice-embed key registry used by `/config notice-embeds visibility`, covering both tool progress notices and selected public command notice embeds.
-- `tomori_configs.nai_style_tags` stores server-wide NovelAI style/quality tags prepended to every `generate_image_nai` prompt.
-- `tomori_configs.nai_negative_tags` stores server-wide NovelAI negative tags; an empty array falls back to the `NAI_IMAGE_NEGATIVE_PROMPT` env value.
-- `tomori_configs.diffusion_model_id` stores the active standard image generation model; `NULL` means standard image generation is disabled until a model is explicitly selected again.
-- `tomori_configs.nai_diffusion_model_id` stores the dedicated NovelAI image-model selection for `generate_image_nai`; `NULL` means NovelAI image generation is disabled until a NovelAI model is explicitly selected again.
-- `tomori_configs.nai_sampler`, `nai_steps`, `nai_scale`, `nai_noise_schedule`, and `nai_cfg_rescale` store optional server overrides for NovelAI image generation params; `NULL` means use the env fallback.
-- `tomori_configs.vision_llm_id` stores the dedicated vision model for non-vision chat models; `NULL` means no vision tool is available. When set, the `analyze_image` tool is exposed so non-vision models can delegate image analysis to this model.
-- `tomori_configs.llm_logit_biases` stores server-wide logit-bias entries as raw text/token-ID input plus tokenizer-specific cached resolutions. Raw text stays canonical so entries can be refreshed when `llm_id` changes.
-- `tomori_configs.videogen_enabled` gates both slash-command and tool-driven video generation exposure. The DB default is `false`, so video generation starts disabled until explicitly enabled.
-- `tomori_configs.video_model_id` stores the active server-scoped video generation model selection; `NULL` means video generation is disabled until a model is explicitly selected again.
-- `tomori_configs.context_note` stores the server-wide author's note injected into conversation history at inference time. Acts as a fallback when the active persona has no persona-specific note.
-- `tomori_configs.context_note_depth` stores the injection depth for the global note: `0` = bottom of fetched history (most recent), `N` = N messages from the bottom, clamped to top if it exceeds the actual count.
-- `tomoris.context_note` stores a per-persona author's note. Takes priority over `tomori_configs.context_note` at inference when non-null.
-- `tomoris.context_note_depth` stores the injection depth for the persona-specific note, using the same semantics as `tomori_configs.context_note_depth`.
+`tomori_configs` was dropped in Phase 6 Step #14 (migration `008`). Per-server configuration is now owned by 14 command-aligned split tables. Column mapping for notable fields:
+
+- `server_chat_configs.message_fetch_limit` stores the per-server context fetch cap (default `80`, configurable via `/config message-fetch-limit`).
+- `server_chat_configs.match_limit` and `server_chat_configs.cascade_limit` store the per-message persona trigger cap and the session cascade limit respectively.
+- `server_chat_configs.llm_stop_strings` and `server_chat_configs.llm_stop_speaker_pattern_enabled` store server-wide stop-string settings applied to every text provider. The speaker-pattern flag defaults to `false`, so `\n{Name}:` generation stops are opt-in.
+- `server_chat_configs.llm_logit_biases` stores server-wide logit-bias entries as raw text/token-ID input plus tokenizer-specific cached resolutions. Raw text stays canonical so entries can be refreshed when `llm_id` changes.
+- `server_chat_configs.context_note` stores the server-wide author's note injected into conversation history at inference time. Acts as a fallback when the active persona has no persona-specific note.
+- `server_chat_configs.context_note_depth` stores the injection depth for the global note: `0` = bottom of fetched history (most recent), `N` = N messages from the bottom, clamped to top if it exceeds the actual count.
+- `server_model_configs.thinking_level` stores the active text provider's mirrored reasoning preference (`auto`, `none`, `low`, `medium`, `high`). This is a deprecated Phase 1.5 mirror; it remains on the active runtime config while provider-specific snapshots live in `saved_provider_configs`.
+- `server_model_configs.diffusion_model_id` stores the active standard image generation model; `NULL` means standard image generation is disabled until a model is explicitly selected again.
+- `server_model_configs.vision_llm_id` stores the dedicated vision model for non-vision chat models; `NULL` means no vision tool is available. When set, the `analyze_image` tool is exposed so non-vision models can delegate image analysis to this model.
+- `server_model_configs.video_model_id` stores the active server-scoped video generation model selection; `NULL` means video generation is disabled until a model is explicitly selected again.
+- `server_channel_scope_configs.thought_log_channel_disc_id` stores the optional server-scoped channel where provider reasoning summaries are posted after successful streamed chat turns.
+- `server_channel_scope_configs.crosschannel_blocklist_ids` stores the server-scoped channel blocklist for tool-driven `cross_channel_message` dispatch. Blocking a forum/media parent also blocks visits into threads under that parent.
+- `server_welcome_configs.welcome_channel_disc_id` stores the single configured join-welcome channel per server.
+- `server_welcome_configs.welcome_prompt` stores the required additional greeting instruction shown in `/server welcome-channel set`.
+- `server_welcome_configs.welcome_persona_id` stores the selected welcome persona; `NULL` means random persona selection per join.
+- `server_auto_trigger_configs.autoch_persona_overrides` stores optional per-channel persona assignments for configured auto-trigger channels. Each entry is a JSON object with `channel_disc_id` and `tomori_id`; missing entries fall back to the main persona. (Kept as JSONB until Phase 6 step #15 junction-ifies it.)
+- `server_notice_embeds_configs.tool_notice_hidden_keys` stores the hidden notice-embed key registry used by `/config notice-embeds visibility`, covering both tool progress notices and selected public command notice embeds.
+- `server_novelai_imagegen_configs.nai_style_tags` stores server-wide NovelAI style/quality tags prepended to every `generate_image_nai` prompt.
+- `server_novelai_imagegen_configs.nai_negative_tags` stores server-wide NovelAI negative tags; an empty array falls back to the `NAI_IMAGE_NEGATIVE_PROMPT` env value.
+- `server_novelai_imagegen_configs.nai_diffusion_model_id` stores the dedicated NovelAI image-model selection for `generate_image_nai`; `NULL` means NovelAI image generation is disabled until a NovelAI model is explicitly selected again.
+- `server_novelai_imagegen_configs.nai_sampler`, `nai_steps`, `nai_scale`, `nai_noise_schedule`, and `nai_cfg_rescale` store optional server overrides for NovelAI image generation params; `NULL` means use the env fallback.
+- `server_capabilities_configs.videogen_enabled` gates both slash-command and tool-driven video generation exposure. The DB default is `false`, so video generation starts disabled until explicitly enabled.
+- `persona_context_note_configs.context_note` stores a per-persona author's note. Takes priority over `server_chat_configs.context_note` at inference when non-null. (Dual-write active; source column still present in `tomoris`.)
+- `persona_context_note_configs.context_note_depth` stores the injection depth for the persona-specific note, using the same semantics as `server_chat_configs.context_note_depth`. (Dual-write active.)
 
 ### NovelAI profile tags
 
@@ -249,23 +251,23 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 
 Encrypted columns are stored as `BYTEA` with key version tracking:
 
-- `tomori_configs.api_key` + `tomori_configs.key_version`
+- `server_model_configs.api_key` + `server_model_configs.key_version` *(deprecated Phase 1.5 runtime mirror; provider snapshot keys are canonical in `saved_provider_configs`)*
 - `opt_api_keys.api_key` + `opt_api_keys.key_version`
 - `api_key_rotation.api_key` + `api_key_rotation.key_version`
 - `saved_provider_configs.api_key` + `saved_provider_configs.key_version`
-- `saved_provider_configs.thinking_level` mirrors `tomori_configs.thinking_level` so provider switching can restore the previous provider-specific reasoning preference.
-- `saved_provider_configs.fallback_model_refs` and `user_saved_provider_configs.fallback_model_refs` store ordered polymorphic fallback references as JSON objects shaped like `{type: "llm" | "custom_endpoint", id: number}`. The legacy `fallback_llm_ids` arrays remain during rollout for backward compatibility.
+- `saved_provider_configs.thinking_level` mirrors `server_model_configs.thinking_level` so provider switching can restore the previous provider-specific reasoning preference.
+- `saved_provider_configs.fallback_model_refs` and `user_saved_provider_configs.fallback_model_refs` store ordered polymorphic fallback references as JSON objects shaped like `{type: "llm" | "custom_endpoint", id: number}`. The legacy `fallback_llm_ids` column was dropped by migration 011 (Phase 6 Step #14.5); `fallback_model_refs` is now the sole source of truth.
 - `custom_endpoints` stores labeled self-hosted or proxy-backed endpoint registrations. Rows are scoped either to `server_id` or `user_id`, keyed by `(scope, label, capability)` through scoped partial unique indexes, and carry adapter metadata such as `api_style`, `endpoint_url`, `model_name`, capability flags, workflow JSON or speech/STT adapter options (`extra_config`), `is_default`, and whether auth is required.
 - `voice_samples` stores server-scoped reference audio metadata for local speech cloning. `file_path` is a production S3/CloudFront URL or a local `data/voice-samples/` path. Phase 4 allows one uploaded local sample per server.
-- `tomori_configs.chatterbox_turbo_enabled`, `chatterbox_cfg_weight`, and `chatterbox_exaggeration` store server-scoped Chatterbox speech settings. CFG weight and exaggeration are forwarded to local TTS clone endpoints but only affect the bundled Chatterbox server when Turbo is disabled.
-- `tomoris.speech_voice_sample_id`, `tomoris.speech_voice_id`, and `tomoris.speech_voice_name` store per-persona voice assignment for local clone samples and provider-hosted voices. Legacy `elevenlabs_voice_*` columns are kept read-only for migration compatibility.
+- `server_speech_configs.chatterbox_turbo_enabled`, `chatterbox_cfg_weight`, and `chatterbox_exaggeration` store server-scoped Chatterbox speech settings. CFG weight and exaggeration are forwarded to local TTS clone endpoints but only affect the bundled Chatterbox server when Turbo is disabled.
+- `tomoris.speech_voice_sample_id`, `tomoris.speech_voice_id`, and `tomoris.speech_voice_name` store per-persona voice assignment for local clone samples and provider-hosted voices. The legacy `elevenlabs_voice_*` columns were dropped by migration 010 (Phase 6 Step #14.2); `speech_voice_id` is now the sole voice identifier.
 - `openrouter_model_registrations` scopes extra OpenRouter text `llms` rows to a specific `server_id` or `user_id`.
 - `openrouter_embedding_model_registrations`, `openrouter_image_model_registrations`, and `openrouter_video_model_registrations` do the same for `embedding_models`, `image_diffusion_models`, and `video_generation_models`.
 - All four backing model tables use `is_scoped_registration = true` on those extra rows so they stay hidden from global provider pickers unless joined through a matching registration for that owner.
 
 ### Logit bias snapshot storage
 
-- `saved_provider_configs.llm_logit_biases` mirrors `tomori_configs.llm_logit_biases` so provider snapshots can restore both the original text entries and any cached tokenizer-family resolutions.
+- `saved_provider_configs.llm_logit_biases` mirrors `server_chat_configs.llm_logit_biases` so provider snapshots can restore both the original text entries and any cached tokenizer-family resolutions.
 - This keeps `/config provider switch` compatible with text-first logit-bias UX across model changes while `/config provider add` can seed saved-provider defaults without disturbing the active text stack.
 
 ### Provider snapshot model storage

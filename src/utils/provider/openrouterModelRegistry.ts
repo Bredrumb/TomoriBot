@@ -208,22 +208,25 @@ async function isTextModelStillReferenced(llmId: number): Promise<boolean> {
   const [row] = await sql<Array<{ in_use: boolean }>>`
 		SELECT EXISTS (
 		  SELECT 1
-		  FROM tomori_configs
+		  FROM server_model_configs
 		  WHERE llm_id = ${llmId}
 		     OR vision_llm_id = ${llmId}
 		     OR COALESCE(fallback_llm_ids, '[]'::JSONB) @> jsonb_build_array(${llmId})
-		     OR EXISTS (
-		        SELECT 1
-		        FROM jsonb_array_elements(
-		          CASE
-		            WHEN jsonb_typeof(COALESCE(tomori_configs.fallback_model_refs, '[]'::JSONB)) = 'array'
-		              THEN COALESCE(tomori_configs.fallback_model_refs, '[]'::JSONB)
-		            ELSE '[]'::JSONB
-		          END
-		        ) AS ref
-		        WHERE ref ->> 'type' = 'llm'
-		          AND ref ->> 'id' = ${String(llmId)}
-		     )
+		  UNION ALL
+		  SELECT 1
+		  FROM server_chat_configs
+		  WHERE EXISTS (
+		    SELECT 1
+		    FROM jsonb_array_elements(
+		      CASE
+		        WHEN jsonb_typeof(COALESCE(server_chat_configs.fallback_model_refs, '[]'::JSONB)) = 'array'
+		          THEN COALESCE(server_chat_configs.fallback_model_refs, '[]'::JSONB)
+		        ELSE '[]'::JSONB
+		      END
+		    ) AS ref
+		    WHERE ref ->> 'type' = 'llm'
+		      AND ref ->> 'id' = ${String(llmId)}
+		  )
 		  UNION ALL
 		  SELECT 1
 		  FROM persona_configs
@@ -237,7 +240,6 @@ async function isTextModelStillReferenced(llmId: number): Promise<boolean> {
 		  FROM saved_provider_configs
 		  WHERE llm_id = ${llmId}
 		     OR vision_llm_id = ${llmId}
-		     OR COALESCE(fallback_llm_ids, '[]'::JSONB) @> jsonb_build_array(${llmId})
 		     OR EXISTS (
 		        SELECT 1
 		        FROM jsonb_array_elements(
@@ -255,7 +257,6 @@ async function isTextModelStillReferenced(llmId: number): Promise<boolean> {
 		  FROM user_saved_provider_configs
 		  WHERE llm_id = ${llmId}
 		     OR vision_llm_id = ${llmId}
-		     OR COALESCE(fallback_llm_ids, '[]'::JSONB) @> jsonb_build_array(${llmId})
 		     OR EXISTS (
 		        SELECT 1
 		        FROM jsonb_array_elements(
@@ -278,7 +279,7 @@ async function isEmbeddingModelStillReferenced(embeddingModelId: number): Promis
   const [row] = await sql<Array<{ in_use: boolean }>>`
 		SELECT EXISTS (
 		  SELECT 1
-		  FROM tomori_configs
+		  FROM server_model_configs
 		  WHERE embedding_model_id = ${embeddingModelId}
 		  UNION ALL
 		  SELECT 1
@@ -298,9 +299,12 @@ async function isDiffusionModelStillReferenced(diffusionModelId: number): Promis
   const [row] = await sql<Array<{ in_use: boolean }>>`
 		SELECT EXISTS (
 		  SELECT 1
-		  FROM tomori_configs
+		  FROM server_model_configs
 		  WHERE diffusion_model_id = ${diffusionModelId}
-		     OR nai_diffusion_model_id = ${diffusionModelId}
+		  UNION ALL
+		  SELECT 1
+		  FROM server_novelai_imagegen_configs
+		  WHERE nai_diffusion_model_id = ${diffusionModelId}
 		  UNION ALL
 		  SELECT 1
 		  FROM saved_provider_configs
@@ -321,7 +325,7 @@ async function isVideoModelStillReferenced(videoModelId: number): Promise<boolea
   const [row] = await sql<Array<{ in_use: boolean }>>`
 		SELECT EXISTS (
 		  SELECT 1
-		  FROM tomori_configs
+		  FROM server_model_configs
 		  WHERE video_model_id = ${videoModelId}
 		  UNION ALL
 		  SELECT 1

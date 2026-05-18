@@ -163,9 +163,7 @@ export async function execute(
         currentSelectedId ? loadVideoModelById(currentSelectedId) : Promise.resolve(null),
       ]);
       const selectedModelName =
-        selectedSavedConfig.custom_model_name ??
-        getVideoModelDisplayName(selectedConfiguredModel) ??
-        getProviderDisplayName(selectedProvider);
+        getVideoModelDisplayName(selectedConfiguredModel) ?? getProviderDisplayName(selectedProvider);
 
       if (selectedSavedConfig.video_model_id === currentSelectedId) {
         await replyInfoEmbed(responseInteraction, locale, {

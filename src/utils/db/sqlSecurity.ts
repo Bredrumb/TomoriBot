@@ -10,8 +10,8 @@
  * When new columns are added to a schema, they become writable here without any manual update.
  */
 
-import { userSchema, tomoriSchema, tomoriConfigSchema } from "../../types/db/schema";
-import type { UserRow, TomoriRow, TomoriConfigRow } from "../../types/db/schema";
+import { userSchema, tomoriSchema, assembledServerConfigSchema } from "../../types/db/schema";
+import type { UserRow, TomoriRow, AssembledServerConfig } from "../../types/db/schema";
 import { log } from "../misc/logger";
 
 /**
@@ -35,7 +35,7 @@ const ALLOWED_TOMORI_FIELDS = schemaKeysExcluding<TomoriRow>(tomoriSchema, [
   "updated_at",
 ]);
 
-const ALLOWED_TOMORI_CONFIG_FIELDS = schemaKeysExcluding<TomoriConfigRow>(tomoriConfigSchema, [
+const ALLOWED_TOMORI_CONFIG_FIELDS = schemaKeysExcluding<AssembledServerConfig>(assembledServerConfigSchema, [
   "tomori_config_id", // primary key
   "tomori_id", // FK anchor
   "server_id", // FK anchor
@@ -86,7 +86,7 @@ export function validateTomoriFields(fields: string[]): void {
  */
 export function validateTomoriConfigFields(fields: string[]): void {
   for (const field of fields) {
-    if (!ALLOWED_TOMORI_CONFIG_FIELDS.has(field as keyof TomoriConfigRow)) {
+    if (!ALLOWED_TOMORI_CONFIG_FIELDS.has(field as keyof AssembledServerConfig)) {
       const error = `Security violation: Invalid field name '${field}' for TomoriConfig table update. Allowed fields: ${Array.from(ALLOWED_TOMORI_CONFIG_FIELDS).join(", ")}`;
       log.error(error);
       throw new Error(error);

@@ -6,7 +6,7 @@ import { log } from "@/utils/misc/logger";
 import { formatMemoryWithId } from "@/utils/memory/memoryId";
 import { getCurrentTimeWithOffset, formatUTCOffset, getTimeOfDayPhrase } from "@/utils/text/timezoneHelper";
 import { ContextItemTag, type ConversationUserReference, type StructuredContextItem } from "@/types/misc/context";
-import { PrivacyLevel, type TomoriConfigRow, type TomoriState } from "@/types/db/schema";
+import { PrivacyLevel, type AssembledServerConfig, type TomoriState } from "@/types/db/schema";
 import { getUserPresenceDetails } from "./history";
 import type { MentionConverter } from "./templates";
 
@@ -45,7 +45,7 @@ export async function buildUsersInConversationContextItem(params: {
   botName: string;
   personaLineageId?: number;
   tomoriState: TomoriState | null;
-  tomoriConfig: TomoriConfigRow;
+  tomoriConfig: AssembledServerConfig;
   isDMChannel: boolean;
   isUserImpersonation: boolean;
   impersonatedUserId?: string;

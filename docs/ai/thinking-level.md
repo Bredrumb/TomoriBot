@@ -31,7 +31,7 @@ Default:
 Storage:
 
 - `saved_provider_configs.thinking_level`
-- `tomori_configs.thinking_level` (mirror of the active text provider's saved value)
+- `server_model_configs.thinking_level` (deprecated Phase 1.5 mirror; drop scheduled for step #14.5)
 
 That means the active value is:
 

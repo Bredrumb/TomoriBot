@@ -66,7 +66,7 @@ Name handling:
 
 ## Field Mapping
 
-Imported into `tomoris` / `tomori_configs`:
+Imported into `tomoris` and `persona_configs`:
 
 - `name` -> `tomori_nickname`
 - `description` -> `attribute_list` (no `"Description"` prefix)

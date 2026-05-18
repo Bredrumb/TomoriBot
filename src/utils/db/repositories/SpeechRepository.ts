@@ -24,7 +24,7 @@ import type { IRepository } from "./IRepository";
  * Callers decrypt api_key using decryptApiKey(api_key, key_version).
  */
 export type EndpointCredentialRow = {
-  api_key: string;
+  api_key: Buffer;
   key_version: number;
 };
 
@@ -87,7 +87,7 @@ export async function loadEndpointCredentials(
       LIMIT 1
     `;
     if (!row?.api_key) return null;
-    return { api_key: row.api_key as string, key_version: (row.key_version as number) ?? 1 };
+    return { api_key: row.api_key as Buffer, key_version: (row.key_version as number) ?? 1 };
   } catch (error) {
     log.error(`SpeechRepository.loadEndpointCredentials: failed for server ${serverId}`, error);
     return null;

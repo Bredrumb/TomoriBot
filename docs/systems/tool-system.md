@@ -65,13 +65,13 @@ Current `create_thread` runtime notes:
 - target channels must be regular text or announcement channels; the tool fails closed for DMs, voice channels, forums, media channels, and existing threads
 - runtime requires bot `ViewChannel`, `CreatePublicThreads`, and `SendMessagesInThreads`; it also verifies the invoking member can view the target channel
 - alter persona and user-impersonation turns send the starter message through a bot-managed webhook in the target channel; main persona turns use a normal bot message
-- `/config tools manage` controls availability through `tomori_configs.thread_creation_enabled`
+- `/config tools manage` controls availability through `server_capabilities_configs.thread_creation_enabled`
 
 Current `generate_image_nai` runtime notes:
 
-- server-wide style tags come from `/novelai image-tags style` via `tomori_configs.nai_style_tags`
-- server-wide negative tags come from `/novelai image-tags negative` via `tomori_configs.nai_negative_tags`
-- selecting a NovelAI provider in `/config model image` writes to `tomori_configs.nai_diffusion_model_id`, which drives the dedicated `generate_image_nai` tool
+- server-wide style tags come from `/novelai image-tags style` via `server_novelai_imagegen_configs.nai_style_tags`
+- server-wide negative tags come from `/novelai image-tags negative` via `server_novelai_imagegen_configs.nai_negative_tags`
+- selecting a NovelAI provider in `/config model image` writes to `server_novelai_imagegen_configs.nai_diffusion_model_id`, which drives the dedicated `generate_image_nai` tool
 - `characters[]` now drives V4 multi-character prompting for `generate_image_nai`; coordinate mode is enabled when two or more characters are present
 - persona and user appearance tags are resolved from `tomoris.nai_tags` and `users.nai_char_tags`
 - tool guidance for `generate_image_nai` now uses a simpler inline-tag model: each `characters[]` item is one visible character instance, and `characters[].tags` must contain that character's full appearance plus their role in the scene. For erotic scenes, clothing tags can be omitted and the intended nude state can be stated directly in `tags`. The active schema/runtime no longer advertises `id`-driven appearance autofill or `remove_tags`; if saved appearance tags are available for a known persona/user, they are shown inline in context and the model is expected to copy them into `tags`
@@ -280,7 +280,7 @@ Current notice keys:
 
 Behavior notes:
 
-- visibility is server-scoped via `tomori_configs.tool_notice_hidden_keys`
+- visibility is server-scoped via `server_notice_embeds_configs.tool_notice_hidden_keys`
 - an empty hidden-key list means all current and future notice types remain visible by default
 - `/config notice-embeds visibility` manages the hidden-key list through checkbox groups
 - visible notices are posted in the source channel as normal

@@ -3,7 +3,7 @@
  *
  * Owns tables:
  *   text_quota_configs, text_quotas, text_serverwide_quotas
- *   image_quota_configs, image_quotas, serverwide_quotas (legacy name; see TODO below)
+ *   image_quota_configs, image_quotas, image_serverwide_quotas
  *   video_quota_configs, video_quotas, video_serverwide_quotas
  *
  * This repository is not exportable (quota counters are transient; configs are
@@ -297,9 +297,6 @@ export async function resetServerwideTextQuotaPool(serverId: number): Promise<vo
 }
 
 // ── IMAGE QUOTA ─────────────────────────────────────────────────────────────
-// TODO(phase-6-step-f): rename table `serverwide_quotas` → `image_serverwide_quotas`
-// for naming symmetry with text_serverwide_quotas / video_serverwide_quotas.
-// Defer until after Step D so the rename touches only QuotaRepository.ts + one migration.
 
 /**
  * Fetch or create the image quota config for a server.
@@ -354,7 +351,6 @@ export async function touchUserImageQuota(serverId: number, userDiscId: string, 
 
 /**
  * Touch (get-or-init) the server-wide image quota record.
- * Uses the legacy `serverwide_quotas` table name.
  *
  * @param serverId  - Internal server DB ID
  * @param resetDays - Period length in days (from image_quota_configs)
@@ -362,7 +358,7 @@ export async function touchUserImageQuota(serverId: number, userDiscId: string, 
  */
 export async function touchServerwideImageQuota(serverId: number, resetDays: number): Promise<ServerwideQuotaRow> {
   const [row] = await sql<ServerwideQuotaRow[]>`
-    INSERT INTO serverwide_quotas (server_id, usage_count, quota_period_start, quota_period_end)
+    INSERT INTO image_serverwide_quotas (server_id, usage_count, quota_period_start, quota_period_end)
     VALUES (
       ${serverId},
       0,
@@ -385,7 +381,7 @@ export async function touchServerwideImageQuota(serverId: number, resetDays: num
  */
 export async function resetServerwideImagePeriod(serverId: number, resetDays: number): Promise<ServerwideQuotaRow> {
   const [row] = await sql<ServerwideQuotaRow[]>`
-    UPDATE serverwide_quotas
+    UPDATE image_serverwide_quotas
     SET
       usage_count        = 0,
       quota_period_start = CURRENT_TIMESTAMP,
@@ -414,7 +410,7 @@ export async function incrementImageQuota(serverId: number, userDiscId: string):
         DO UPDATE SET usage_count = image_quotas.usage_count + 1
       `;
       await tx`
-        UPDATE serverwide_quotas SET usage_count = usage_count + 1 WHERE server_id = ${serverId}
+        UPDATE image_serverwide_quotas SET usage_count = usage_count + 1 WHERE server_id = ${serverId}
       `;
     });
   } catch (error) {
@@ -466,7 +462,7 @@ export async function updateImageServerwideQuota(
   await sql`UPDATE image_quota_configs SET serverwide_quota = ${limit} WHERE server_id = ${serverId}`;
   if (previousLimit === 0 && limit > 0) {
     await sql`
-      INSERT INTO serverwide_quotas (server_id, usage_count, quota_period_start, quota_period_end)
+      INSERT INTO image_serverwide_quotas (server_id, usage_count, quota_period_start, quota_period_end)
       VALUES (
         ${serverId},
         0,
@@ -496,7 +492,7 @@ export async function updateImageServerwideResetDays(
   await sql`UPDATE image_quota_configs SET serverwide_quota_resets_in = ${days} WHERE server_id = ${serverId}`;
   if (serverwideActive) {
     await sql`
-      UPDATE serverwide_quotas
+      UPDATE image_serverwide_quotas
       SET quota_period_end = quota_period_start + (${days} || ' days')::interval
       WHERE server_id = ${serverId}
     `;
@@ -527,7 +523,7 @@ export async function resetUserDailyImageQuota(serverId: number, userDiscId: str
 export async function resetServerwideImageQuotaPool(serverId: number): Promise<void> {
   const config = await getOrCreateImageConfig(serverId);
   await sql`
-    INSERT INTO serverwide_quotas (server_id, usage_count, quota_period_start, quota_period_end)
+    INSERT INTO image_serverwide_quotas (server_id, usage_count, quota_period_start, quota_period_end)
     VALUES (
       ${serverId},
       0,

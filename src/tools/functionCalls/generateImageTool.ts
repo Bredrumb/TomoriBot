@@ -16,7 +16,6 @@ import {
   sendToolProgressNotice,
 } from "@/utils/discord/toolProgressNotice";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
-import { sql } from "../../utils/db/client";
 import { checkImageQuota, incrementImageQuota } from "../../utils/quota/imageQuotaManager";
 import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
 import { resolveNativeImageGenerationCapability } from "@/utils/provider/providerCapabilityResolver";
@@ -26,6 +25,7 @@ import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/ut
 import { formatCustomEndpointModelDisplay } from "@/utils/provider/customProviderUtils";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
+import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
 
 /**
  * Tool for generating images using the active provider's native image API
@@ -91,22 +91,18 @@ export class GenerateImageTool extends BaseTool {
   }
 
   /**
-   * Get the diffusion model codename from the database
+   * Get the diffusion model codename from the database via repository
    * @param diffusionModelId - Database ID of the diffusion model
    * @returns The model codename string (e.g., "gemini-2.5-flash-image")
    */
   private async getDiffusionModelCodename(diffusionModelId: number): Promise<string> {
-    const result = await sql`
-			SELECT codename
-			FROM image_diffusion_models
-			WHERE diffusion_model_id = ${diffusionModelId}
-		`.values();
+    const model = await llmModelRepo.loadDiffusionModelById(diffusionModelId);
 
-    if (result.length === 0) {
+    if (!model) {
       throw new Error(`Diffusion model not found in database: ${diffusionModelId}`);
     }
 
-    return result[0][0] as string;
+    return model.codename;
   }
 
   private async sendGeneratedImage(

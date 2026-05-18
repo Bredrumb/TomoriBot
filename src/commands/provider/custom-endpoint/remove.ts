@@ -1,8 +1,14 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import type { CustomEndpointCapability, CustomEndpointRow, ErrorContext, UserRow } from "@/types/db/schema";
+import type {
+  CustomEndpointCapability,
+  CustomEndpointRow,
+  ErrorContext,
+  AssembledServerConfig,
+  UserRow,
+} from "@/types/db/schema";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { configRepository, llmProviderRepo } from "@/utils/db/repositories";
+import { configRepository, llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import {
   buildCustomEndpointCheckboxGroups,
   collectCheckedCustomEndpointValues,
@@ -10,30 +16,38 @@ import {
 } from "@/utils/discord/customModelRemovalModal";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { sql } from "@/utils/db/client";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { removeCustomEndpointRegistration } from "@/utils/provider/customEndpointService";
 import { buildServerCustomProviderName } from "@/utils/provider/customProviderUtils";
 import { localizer } from "@/utils/text/localizer";
 
-async function resolveCurrentProvider(serverId: number, capability: CustomEndpointCapability): Promise<string | null> {
+async function resolveCurrentProvider(
+  config: Pick<AssembledServerConfig, "llm_id" | "diffusion_model_id" | "embedding_model_id" | "video_model_id">,
+  capability: CustomEndpointCapability,
+): Promise<string | null> {
   switch (capability) {
     case "speech":
     case "transcription":
       return null;
-    case "text":
-    case "image":
-    case "embedding":
+    case "text": {
+      if (!config.llm_id) return null;
+      const llm = await llmModelRepo.loadById(config.llm_id);
+      return llm?.llm_provider ? llm.llm_provider.toLowerCase() : null;
+    }
+    case "image": {
+      if (!config.diffusion_model_id) return null;
+      const model = await llmModelRepo.loadDiffusionModelById(config.diffusion_model_id);
+      return model?.provider ? String(model.provider).toLowerCase() : null;
+    }
+    case "embedding": {
+      if (!config.embedding_model_id) return null;
+      const model = await llmModelRepo.loadEmbeddingModelById(config.embedding_model_id);
+      return model?.provider ? String(model.provider).toLowerCase() : null;
+    }
     case "video": {
-      const [row] =
-        capability === "text"
-          ? await sql`SELECT llm_provider AS provider FROM llms WHERE llm_id = (SELECT llm_id FROM server_model_configs WHERE server_id = ${serverId}) LIMIT 1`
-          : capability === "image"
-            ? await sql`SELECT provider FROM image_diffusion_models WHERE diffusion_model_id = (SELECT diffusion_model_id FROM server_model_configs WHERE server_id = ${serverId}) LIMIT 1`
-            : capability === "embedding"
-              ? await sql`SELECT provider FROM embedding_models WHERE embedding_model_id = (SELECT embedding_model_id FROM server_model_configs WHERE server_id = ${serverId}) LIMIT 1`
-              : await sql`SELECT provider FROM video_generation_models WHERE video_model_id = (SELECT video_model_id FROM server_model_configs WHERE server_id = ${serverId}) LIMIT 1`;
-      return row?.provider ? String(row.provider).toLowerCase() : null;
+      if (!config.video_model_id) return null;
+      const model = await llmModelRepo.loadVideoGenerationModelById(config.video_model_id);
+      return model?.provider ? String(model.provider).toLowerCase() : null;
     }
   }
 }
@@ -182,7 +196,7 @@ export async function execute(
     const removedCapabilities = new Set(endpointsToRemove.map((endpoint) => endpoint.capability));
     const currentProviders = new Map<CustomEndpointCapability, string | null>();
     for (const capability of removedCapabilities) {
-      currentProviders.set(capability, await resolveCurrentProvider(tomoriState.server_id, capability));
+      currentProviders.set(capability, await resolveCurrentProvider(tomoriState.config, capability));
     }
 
     const removedEndpoints: CustomEndpointRow[] = [];

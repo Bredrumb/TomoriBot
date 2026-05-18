@@ -6,7 +6,7 @@
  * Priority chain (highest → lowest):
  *   1. persona_llm  — persona-specific override stored in persona_configs
  *   2. channel LLM  — this cache / channel_llm_overrides table
- *   3. global llm   — tomori_configs.llm_id (the existing TomoriState.llm)
+ *   3. global llm   — server_model_configs.llm_id (the existing TomoriState.llm)
  */
 
 import type { LlmRow } from "@/types/db/schema";

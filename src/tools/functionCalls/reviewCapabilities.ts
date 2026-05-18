@@ -238,12 +238,10 @@ export class ReviewCapabilitiesTool extends BaseTool {
       const hasVoiceAssignment = Boolean(
         context.tomoriState.speech_voice_sample_id ||
           context.tomoriState.speech_voice_design_prompt?.trim() ||
-          context.tomoriState.speech_voice_id?.trim() ||
-          context.tomoriState.elevenlabs_voice_id?.trim(),
+          context.tomoriState.speech_voice_id?.trim(),
       );
       const voiceName =
         context.tomoriState.speech_voice_name ||
-        context.tomoriState.elevenlabs_voice_name ||
         (context.tomoriState.speech_voice_design_prompt?.trim() ? "VoiceDesign prompt" : null) ||
         (context.tomoriState.speech_voice_sample_id ? "Local voice sample" : "Unknown");
       const voiceSource =
@@ -364,8 +362,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         const toolHasVoiceAssignment = Boolean(
           context.tomoriState.speech_voice_sample_id ||
             context.tomoriState.speech_voice_design_prompt?.trim() ||
-            context.tomoriState.speech_voice_id?.trim() ||
-            context.tomoriState.elevenlabs_voice_id?.trim(),
+            context.tomoriState.speech_voice_id?.trim(),
         );
         const voiceNote =
           toolHasVoiceAssignment && voiceEnabled
@@ -691,12 +688,10 @@ export class ReviewCapabilitiesTool extends BaseTool {
       const hasPersonaVoice = Boolean(
         context.tomoriState.speech_voice_sample_id ||
           context.tomoriState.speech_voice_design_prompt?.trim() ||
-          context.tomoriState.speech_voice_id?.trim() ||
-          context.tomoriState.elevenlabs_voice_id?.trim(),
+          context.tomoriState.speech_voice_id?.trim(),
       );
       const personaVoiceName =
         context.tomoriState.speech_voice_name ||
-        context.tomoriState.elevenlabs_voice_name ||
         (context.tomoriState.speech_voice_design_prompt?.trim() ? "VoiceDesign prompt" : null) ||
         (context.tomoriState.speech_voice_sample_id ? "Local voice sample" : "Unknown");
       if (voiceEnabledSettings && hasPersonaVoice) {
@@ -774,8 +769,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
           activePersonaHasElevenlabsVoice: Boolean(
             context.tomoriState.speech_voice_sample_id ||
               context.tomoriState.speech_voice_design_prompt?.trim() ||
-              context.tomoriState.speech_voice_id?.trim() ||
-              context.tomoriState.elevenlabs_voice_id?.trim(),
+              context.tomoriState.speech_voice_id?.trim(),
           ),
           activePersonaVoiceDesignPrompt: context.tomoriState.speech_voice_design_prompt?.trim() || null,
           activePersonaVoiceName: context.tomoriState.speech_voice_name,

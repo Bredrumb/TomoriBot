@@ -258,12 +258,17 @@ export async function getAvailableToolsWithMCP(
       const activeSpeechEndpoint = await resolveActiveSpeechEndpoint(serverIdNumber);
       const hasElevenLabsOptKey = await hasOptApiKey(serverIdNumber, ELEVENLABS_SERVICE_NAME);
       const hasSpeechProvider = Boolean(activeSpeechEndpoint) || hasElevenLabsOptKey;
+      // 1. Read split-table model slots: diffusion_model_id/video_model_id live in
+      //    server_model_configs; nai_diffusion_model_id lives in server_novelai_imagegen_configs.
       const [toolConfigRow] = await sql<
         [{ diffusion_model_id: number | null; nai_diffusion_model_id: number | null; video_model_id: number | null }]
       >`
-        SELECT diffusion_model_id, nai_diffusion_model_id, video_model_id
-        FROM tomori_configs
-        WHERE server_id = ${serverIdNumber}
+        SELECT smc.diffusion_model_id,
+               snic.nai_diffusion_model_id,
+               smc.video_model_id
+        FROM server_model_configs smc
+        LEFT JOIN server_novelai_imagegen_configs snic ON snic.server_id = smc.server_id
+        WHERE smc.server_id = ${serverIdNumber}
         LIMIT 1
       `;
 

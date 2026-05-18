@@ -852,6 +852,70 @@ export class LlmModelRepository {
       return null;
     }
   }
+
+  /**
+   * Returns a diffusion model by its internal ID, or null if not found.
+   *
+   * @param diffusionModelId - Internal diffusion model DB ID
+   */
+  async loadDiffusionModelById(diffusionModelId: number): Promise<DiffusionModelRow | null> {
+    if (!Number.isInteger(diffusionModelId) || diffusionModelId <= 0) {
+      log.error(`Invalid diffusion_model_id: ${diffusionModelId}`);
+      return null;
+    }
+
+    try {
+      const rows =
+        await sql`SELECT * FROM image_diffusion_models WHERE diffusion_model_id = ${diffusionModelId} LIMIT 1`;
+      if (!rows.length) {
+        log.warn(`No diffusion model found for diffusion_model_id ${diffusionModelId}`);
+        return null;
+      }
+
+      const parsed = diffusionModelSchema.safeParse(rows[0]);
+      if (!parsed.success) {
+        log.error(`Failed to validate diffusion model data for id ${diffusionModelId}:`, parsed.error.flatten());
+        return null;
+      }
+
+      return parsed.data;
+    } catch (error) {
+      log.error(`Error loading diffusion model for diffusion_model_id ${diffusionModelId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Returns a video generation model by its internal ID, or null if not found.
+   *
+   * @param videoModelId - Internal video model DB ID
+   */
+  async loadVideoGenerationModelById(videoModelId: number): Promise<VideoGenerationModelRow | null> {
+    if (!Number.isInteger(videoModelId) || videoModelId <= 0) {
+      log.error(`Invalid video_model_id: ${videoModelId}`);
+      return null;
+    }
+
+    try {
+      const rows = await sql`SELECT * FROM video_generation_models WHERE video_model_id = ${videoModelId} LIMIT 1`;
+      if (!rows.length) {
+        log.warn(`No video model found for video_model_id ${videoModelId}`);
+        return null;
+      }
+
+      const parsed = videoGenerationModelSchema.safeParse(rows[0]);
+      if (!parsed.success) {
+        log.error(`Failed to validate video model data for id ${videoModelId}:`, parsed.error.flatten());
+        return null;
+      }
+
+      return parsed.data;
+    } catch (error) {
+      log.error(`Error loading video model for video_model_id ${videoModelId}:`, error);
+      return null;
+    }
+  }
+
   // ── OpenRouter scoped model upserts ──────────────────────────────────────
 
   /**
@@ -1220,7 +1284,7 @@ export class LlmModelRepository {
   // ── OpenRouter reference checks ───────────────────────────────────────────
 
   /**
-   * Returns true when any config row (tomori_configs, persona_configs,
+   * Returns true when any config row (server_model_configs, persona_configs,
    * channel_llm_overrides, saved_provider_configs, user_saved_provider_configs)
    * still references the given LLM ID.
    *
@@ -1229,14 +1293,16 @@ export class LlmModelRepository {
   async isLlmStillReferenced(llmId: number): Promise<boolean> {
     const [row] = await sql<Array<{ in_use: boolean }>>`
       SELECT EXISTS (
-        SELECT 1 FROM tomori_configs
+        SELECT 1 FROM server_model_configs
         WHERE llm_id = ${llmId}
            OR vision_llm_id = ${llmId}
            OR COALESCE(fallback_llm_ids, '[]'::JSONB) @> jsonb_build_array(${llmId})
-           OR EXISTS (
+        UNION ALL
+        SELECT 1 FROM server_chat_configs
+        WHERE EXISTS (
               SELECT 1 FROM jsonb_array_elements(
-                CASE WHEN jsonb_typeof(COALESCE(tomori_configs.fallback_model_refs, '[]'::JSONB)) = 'array'
-                  THEN COALESCE(tomori_configs.fallback_model_refs, '[]'::JSONB)
+                CASE WHEN jsonb_typeof(COALESCE(server_chat_configs.fallback_model_refs, '[]'::JSONB)) = 'array'
+                  THEN COALESCE(server_chat_configs.fallback_model_refs, '[]'::JSONB)
                   ELSE '[]'::JSONB END
               ) AS ref
               WHERE ref ->> 'type' = 'llm' AND ref ->> 'id' = ${String(llmId)}
@@ -1249,7 +1315,6 @@ export class LlmModelRepository {
         SELECT 1 FROM saved_provider_configs
         WHERE llm_id = ${llmId}
            OR vision_llm_id = ${llmId}
-           OR COALESCE(fallback_llm_ids, '[]'::JSONB) @> jsonb_build_array(${llmId})
            OR EXISTS (
               SELECT 1 FROM jsonb_array_elements(
                 CASE WHEN jsonb_typeof(COALESCE(saved_provider_configs.fallback_model_refs, '[]'::JSONB)) = 'array'
@@ -1262,7 +1327,6 @@ export class LlmModelRepository {
         SELECT 1 FROM user_saved_provider_configs
         WHERE llm_id = ${llmId}
            OR vision_llm_id = ${llmId}
-           OR COALESCE(fallback_llm_ids, '[]'::JSONB) @> jsonb_build_array(${llmId})
            OR EXISTS (
               SELECT 1 FROM jsonb_array_elements(
                 CASE WHEN jsonb_typeof(COALESCE(user_saved_provider_configs.fallback_model_refs, '[]'::JSONB)) = 'array'
@@ -1284,7 +1348,7 @@ export class LlmModelRepository {
   async isEmbeddingModelStillReferenced(embeddingModelId: number): Promise<boolean> {
     const [row] = await sql<Array<{ in_use: boolean }>>`
       SELECT EXISTS (
-        SELECT 1 FROM tomori_configs         WHERE embedding_model_id = ${embeddingModelId}
+        SELECT 1 FROM server_model_configs         WHERE embedding_model_id = ${embeddingModelId}
         UNION ALL
         SELECT 1 FROM saved_provider_configs WHERE embedding_model_id = ${embeddingModelId}
         UNION ALL
@@ -1302,8 +1366,11 @@ export class LlmModelRepository {
   async isDiffusionModelStillReferenced(diffusionModelId: number): Promise<boolean> {
     const [row] = await sql<Array<{ in_use: boolean }>>`
       SELECT EXISTS (
-        SELECT 1 FROM tomori_configs
-        WHERE diffusion_model_id = ${diffusionModelId} OR nai_diffusion_model_id = ${diffusionModelId}
+        SELECT 1 FROM server_model_configs
+        WHERE diffusion_model_id = ${diffusionModelId}
+        UNION ALL
+        SELECT 1 FROM server_novelai_imagegen_configs
+        WHERE nai_diffusion_model_id = ${diffusionModelId}
         UNION ALL
         SELECT 1 FROM saved_provider_configs
         WHERE diffusion_model_id = ${diffusionModelId} OR nai_diffusion_model_id = ${diffusionModelId}
@@ -1323,7 +1390,7 @@ export class LlmModelRepository {
   async isVideoModelStillReferenced(videoModelId: number): Promise<boolean> {
     const [row] = await sql<Array<{ in_use: boolean }>>`
       SELECT EXISTS (
-        SELECT 1 FROM tomori_configs              WHERE video_model_id = ${videoModelId}
+        SELECT 1 FROM server_model_configs              WHERE video_model_id = ${videoModelId}
         UNION ALL
         SELECT 1 FROM saved_provider_configs      WHERE video_model_id = ${videoModelId}
         UNION ALL

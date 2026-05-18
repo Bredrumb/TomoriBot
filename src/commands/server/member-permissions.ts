@@ -9,7 +9,12 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/ca
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
-import type { ServerMemberPermissionsConfigRow, TomoriConfigRow, UserRow, ErrorContext } from "../../types/db/schema";
+import type {
+  ServerMemberPermissionsConfigRow,
+  AssembledServerConfig,
+  UserRow,
+  ErrorContext,
+} from "../../types/db/schema";
 import { configRepository } from "@/utils/db/repositories";
 import type { CheckboxGroupOption } from "@/types/discord/modal";
 
@@ -37,7 +42,7 @@ interface MemberPermissionDefinition {
   dbColumn: MemberPermissionColumn;
   labelKey: string;
   descKey: string;
-  getState: (config: TomoriConfigRow) => boolean;
+  getState: (config: AssembledServerConfig) => boolean;
 }
 
 const MEMBER_PERMISSION_DEFINITIONS: MemberPermissionDefinition[] = [

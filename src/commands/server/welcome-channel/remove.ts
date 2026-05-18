@@ -53,7 +53,7 @@ export async function execute(
       return;
     }
 
-    const updatedConfig = await configRepository.update(tomoriState.server_id, {
+    const updatedConfig = await configRepository.updateWelcomeConfig(tomoriState.server_id, {
       welcome_channel_disc_id: null,
       welcome_prompt: null,
       welcome_persona_id: null,

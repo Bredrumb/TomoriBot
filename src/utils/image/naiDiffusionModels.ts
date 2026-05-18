@@ -1,6 +1,6 @@
-import type { TomoriConfigRow } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
+import type { AssembledServerConfig } from "@/types/db/schema";
 import { log } from "@/utils/misc/logger";
+import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
 
 export type NaiDiffusionModelSource = "override" | "shared" | "default";
 
@@ -10,7 +10,7 @@ export type ResolvedNaiDiffusionModel = {
   source: NaiDiffusionModelSource;
 };
 
-type NaiDiffusionModelConfig = Pick<TomoriConfigRow, "diffusion_model_id" | "nai_diffusion_model_id">;
+type NaiDiffusionModelConfig = Pick<AssembledServerConfig, "diffusion_model_id" | "nai_diffusion_model_id">;
 
 export type DiffusionModelFields = {
   diffusion_model_id: number;
@@ -25,68 +25,33 @@ export type DiffusionModelFields = {
 };
 
 export async function getDiffusionModelById(diffusionModelId: number): Promise<DiffusionModelFields | null> {
-  const [model] = await sql<DiffusionModelFields[]>`
-		SELECT
-			diffusion_model_id,
-			provider,
-			codename,
-			model_description,
-			ja_description,
-			is_default,
-			is_deprecated,
-			is_free,
-			is_uncensored
-		FROM image_diffusion_models
-		WHERE diffusion_model_id = ${diffusionModelId}
-		LIMIT 1
-	`;
-
-  return model ?? null;
+  const model = await llmModelRepo.loadDiffusionModelById(diffusionModelId);
+  if (!model || model.diffusion_model_id === undefined) return null;
+  return model as DiffusionModelFields;
 }
 
 export async function getNovelAiDiffusionModels(): Promise<DiffusionModelFields[]> {
-  return sql<DiffusionModelFields[]>`
-		SELECT
-			diffusion_model_id,
-			provider,
-			codename,
-			model_description,
-			ja_description,
-			is_default,
-			is_deprecated,
-			is_free,
-			is_uncensored
-		FROM image_diffusion_models
-		WHERE provider = 'novelai'
-			AND is_deprecated = false
-		ORDER BY is_default DESC, codename
-	`;
+  const models = await llmModelRepo.loadAvailableDiffusionModels("novelai", false);
+  if (!models) return [];
+  return models
+    .filter((m) => m.diffusion_model_id !== undefined)
+    .sort((a, b) => {
+      if (a.is_default !== b.is_default) {
+        return a.is_default ? -1 : 1;
+      }
+      return a.codename.localeCompare(b.codename);
+    }) as DiffusionModelFields[];
 }
 
 export async function getDefaultNovelAiDiffusionModel(): Promise<DiffusionModelFields> {
-  const [defaultModel] = await sql<DiffusionModelFields[]>`
-		SELECT
-			diffusion_model_id,
-			provider,
-			codename,
-			model_description,
-			ja_description,
-			is_default,
-			is_deprecated,
-			is_free,
-			is_uncensored
-		FROM image_diffusion_models
-		WHERE provider = 'novelai'
-			AND is_default = true
-			AND is_deprecated = false
-		LIMIT 1
-	`;
+  const models = await llmModelRepo.loadAvailableDiffusionModels("novelai", false);
+  const defaultModel = models?.find((model) => model.is_default === true);
 
-  if (!defaultModel) {
+  if (!defaultModel || defaultModel.diffusion_model_id === undefined) {
     throw new Error("No default NovelAI diffusion model found in database. Please seed the database.");
   }
 
-  return defaultModel;
+  return defaultModel as DiffusionModelFields;
 }
 
 export function getLocalizedDiffusionModelDescription(model: DiffusionModelFields, locale: string): string {

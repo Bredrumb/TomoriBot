@@ -12,7 +12,7 @@
  */
 import { PermissionFlagsBits, type GuildMember, type Message } from "discord.js";
 import { sql } from "@/utils/db/client";
-import { CooldownType, type TomoriConfigRow } from "@/types/db/schema";
+import { CooldownType, type AssembledServerConfig } from "@/types/db/schema";
 import type { WhitelistBlockReason } from "@/types/misc/channelWhitelist";
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { log } from "@/utils/misc/logger";
@@ -391,12 +391,12 @@ export class CooldownRepository {
 
   /**
    * Checks cooldown for a message event. Derives IDs and effective settings from
-   * the Message object and TomoriConfigRow.
+   * the Message object and AssembledServerConfig.
    *
    * @param message - The Discord message that triggered the bot
    * @param config  - The Tomori config containing cooldown settings
    */
-  async checkMessageTriggerCooldown(message: Message, config: TomoriConfigRow): Promise<CooldownCheckResult> {
+  async checkMessageTriggerCooldown(message: Message, config: AssembledServerConfig): Promise<CooldownCheckResult> {
     const serverDiscId = message.guildId ?? message.author.id;
     const memberRoleDiscIds = message.member ? message.member.roles.cache.map((role) => role.id) : undefined;
 
@@ -489,12 +489,12 @@ export class CooldownRepository {
 
   /**
    * Sets cooldown after a successful message event response.
-   * Derives IDs and effective settings from the Message object and TomoriConfigRow.
+   * Derives IDs and effective settings from the Message object and AssembledServerConfig.
    *
    * @param message - The Discord message that triggered the bot
    * @param config  - The Tomori config containing cooldown settings
    */
-  async setMessageTriggerCooldown(message: Message, config: TomoriConfigRow): Promise<void> {
+  async setMessageTriggerCooldown(message: Message, config: AssembledServerConfig): Promise<void> {
     const serverDiscId = message.guildId ?? message.author.id;
     const memberRoleDiscIds = message.member ? message.member.roles.cache.map((role) => role.id) : undefined;
 

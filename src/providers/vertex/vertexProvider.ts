@@ -365,8 +365,7 @@ export class VertexProvider
         activePersonaHasElevenlabsVoice: Boolean(
           tomoriState.speech_voice_sample_id ||
             tomoriState.speech_voice_design_prompt?.trim() ||
-            tomoriState.speech_voice_id?.trim() ||
-            tomoriState.elevenlabs_voice_id?.trim(),
+            tomoriState.speech_voice_id?.trim(),
         ),
         activePersonaVoiceDesignPrompt: tomoriState.speech_voice_design_prompt?.trim() || null,
         activePersonaVoiceName: tomoriState.speech_voice_name,

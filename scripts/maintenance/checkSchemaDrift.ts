@@ -84,26 +84,81 @@ function findMatchingBrace(content: string, openIndex: number): number {
   return -1;
 }
 
-function extractZodObjectKeys(content: string, exportName: string): Set<string> {
-  const declarationIndex = content.indexOf(`export const ${exportName} = z.object(`);
-  if (declarationIndex === -1) {
-    addIssue("zod-schema", `Could not find exported Zod object ${exportName}`);
-    return new Set();
+function findStatementEnd(content: string, startIndex: number): number {
+  let depth = 0;
+  let quote: '"' | "'" | "`" | null = null;
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+
+  for (let i = startIndex; i < content.length; i++) {
+    const char = content[i];
+    const next = content[i + 1];
+
+    if (lineComment) {
+      if (char === "\n") lineComment = false;
+      continue;
+    }
+
+    if (blockComment) {
+      if (char === "*" && next === "/") {
+        blockComment = false;
+        i++;
+      }
+      continue;
+    }
+
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+
+    if (char === "/" && next === "/") {
+      lineComment = true;
+      i++;
+      continue;
+    }
+
+    if (char === "/" && next === "*") {
+      blockComment = true;
+      i++;
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+      continue;
+    }
+
+    if (char === "(" || char === "{" || char === "[") {
+      depth++;
+      continue;
+    }
+
+    if (char === ")" || char === "}" || char === "]") {
+      depth--;
+      continue;
+    }
+
+    if (char === ";" && depth === 0) {
+      return i;
+    }
   }
 
-  const openIndex = content.indexOf("{", declarationIndex);
-  if (openIndex === -1) {
-    addIssue("zod-schema", `Could not find opening object brace for ${exportName}`);
-    return new Set();
-  }
+  return -1;
+}
 
-  const closeIndex = findMatchingBrace(content, openIndex);
-  if (closeIndex === -1) {
-    addIssue("zod-schema", `Could not find closing object brace for ${exportName}`);
-    return new Set();
-  }
-
-  const body = content.slice(openIndex + 1, closeIndex);
+function extractObjectKeysFromBody(body: string): Set<string> {
   const keys = new Set<string>();
   let depth = 0;
   let quote: '"' | "'" | "`" | null = null;
@@ -138,6 +193,82 @@ function extractZodObjectKeys(content: string, exportName: string): Set<string> 
   }
 
   return keys;
+}
+
+function extractDirectZodObjectKeys(content: string, exportName: string): Set<string> | null {
+  const declarationIndex = content.indexOf(`export const ${exportName} = z.object(`);
+  if (declarationIndex === -1) return null;
+
+  const openIndex = content.indexOf("{", declarationIndex);
+  if (openIndex === -1) {
+    addIssue("zod-schema", `Could not find opening object brace for ${exportName}`);
+    return new Set();
+  }
+
+  const closeIndex = findMatchingBrace(content, openIndex);
+  if (closeIndex === -1) {
+    addIssue("zod-schema", `Could not find closing object brace for ${exportName}`);
+    return new Set();
+  }
+
+  return extractObjectKeysFromBody(content.slice(openIndex + 1, closeIndex));
+}
+
+function extractComposedZodObjectKeys(content: string, exportName: string, seen: Set<string>): Set<string> | null {
+  const declarationIndex = content.indexOf(`export const ${exportName} =`);
+  if (declarationIndex === -1) return null;
+
+  const statementEnd = findStatementEnd(content, declarationIndex);
+  if (statementEnd === -1) {
+    addIssue("zod-schema", `Could not find statement end for ${exportName}`);
+    return new Set();
+  }
+
+  const statement = content.slice(declarationIndex, statementEnd);
+  const omittedSharedKeys = new Set(["server_id", "created_at", "updated_at"]);
+  const schemaRefs = Array.from(
+    statement.matchAll(/\b([A-Za-z_][A-Za-z0-9_]*)\.omit\(_sharedOmit\)/g),
+    (match) => match[1],
+  );
+
+  if (schemaRefs.length === 0) return null;
+
+  const keys = new Set<string>();
+  for (const schemaRef of schemaRefs) {
+    const schemaKeys = extractZodObjectKeys(content, schemaRef, seen);
+    for (const key of schemaKeys) {
+      if (!omittedSharedKeys.has(key)) keys.add(key);
+    }
+  }
+
+  const extendIndex = statement.lastIndexOf(".extend(");
+  if (extendIndex !== -1) {
+    const openIndex = statement.indexOf("{", extendIndex);
+    const closeIndex = openIndex === -1 ? -1 : findMatchingBrace(statement, openIndex);
+    if (openIndex === -1 || closeIndex === -1) {
+      addIssue("zod-schema", `Could not parse .extend() block for ${exportName}`);
+    } else {
+      for (const key of extractObjectKeysFromBody(statement.slice(openIndex + 1, closeIndex))) {
+        keys.add(key);
+      }
+    }
+  }
+
+  return keys;
+}
+
+function extractZodObjectKeys(content: string, exportName: string, seen = new Set<string>()): Set<string> {
+  if (seen.has(exportName)) return new Set();
+  seen.add(exportName);
+
+  const directKeys = extractDirectZodObjectKeys(content, exportName);
+  if (directKeys) return directKeys;
+
+  const composedKeys = extractComposedZodObjectKeys(content, exportName, seen);
+  if (composedKeys) return composedKeys;
+
+  addIssue("zod-schema", `Could not find exported Zod object ${exportName}`);
+  return new Set();
 }
 
 function countTopLevelListItems(list: string): number {
@@ -312,10 +443,13 @@ function checkExportImportMappings(
       addIssue("server-config-export", `serverConfigExportSchema includes ${key}, but dataExport.ts does not emit it`);
     }
 
-    if (!dataImportContent.match(new RegExp(`\\b${key}\\s*=`))) {
+    if (
+      !dataImportContent.match(new RegExp(`\\b${key}\\s*=`)) &&
+      !dataImportContent.match(new RegExp(`\\b${key}\\s*:`))
+    ) {
       addIssue(
         "server-config-import",
-        `serverConfigExportSchema includes ${key}, but dataImportV2.ts does not restore it`,
+        `serverConfigExportSchema includes ${key}, but ImportRepository.ts does not restore it`,
       );
     }
   }
@@ -384,7 +518,7 @@ function checkTomoriConfigExportCoverage(tomoriConfigKeys: Set<string>, exportKe
     if (!exportKeys.has(key)) {
       addIssue(
         "server-config-export-coverage",
-        `tomoriConfigSchema field ${key} is neither exported by serverConfigExportSchema nor explicitly excluded`,
+        `assembledServerConfigSchema field ${key} is neither exported by serverConfigExportSchema nor explicitly excluded`,
       );
     }
   }
@@ -486,7 +620,7 @@ async function main(): Promise<void> {
   const allRepositories = repoContents.join("\n");
   const schemaSql = await readFile(join(root, "src", "db", "schema.sql"), "utf-8");
 
-  const tomoriConfigKeys = extractZodObjectKeys(schemaTs, "tomoriConfigSchema");
+  const tomoriConfigKeys = extractZodObjectKeys(schemaTs, "assembledServerConfigSchema");
   const savedProviderConfigKeys = extractZodObjectKeys(schemaTs, "savedProviderConfigSchema");
   const userSavedProviderConfigKeys = extractZodObjectKeys(schemaTs, "userSavedProviderConfigSchema");
   const serverConfigExportKeys = extractZodObjectKeys(dataExportTs, "serverConfigExportSchema");
@@ -495,7 +629,7 @@ async function main(): Promise<void> {
   checkExportImportMappings(serverConfigExportKeys, dataExportImpl, dataImportImpl);
   checkInsertCounts(allRepositories, "saved_provider_configs");
   checkInsertCounts(allRepositories, "user_saved_provider_configs");
-  checkSchemaSqlCoverage(schemaSql, "tomori_configs", tomoriConfigKeys);
+
   checkSchemaSqlCoverage(schemaSql, "saved_provider_configs", savedProviderConfigKeys);
   checkSchemaSqlCoverage(schemaSql, "user_saved_provider_configs", userSavedProviderConfigKeys);
 

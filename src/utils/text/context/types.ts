@@ -1,7 +1,7 @@
 import type { Client } from "discord.js";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import type { RequestSnapshot } from "@/types/misc/context";
-import type { ServerEmojiRow, ServerStickerRow, TomoriConfigRow } from "@/types/db/schema";
+import type { ServerEmojiRow, ServerStickerRow, AssembledServerConfig } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
 
 /**
@@ -54,7 +54,7 @@ export interface BuildContextParams {
   emojiStrings?: string[];
   tomoriNickname: string;
   tomoriAttributes: string[];
-  tomoriConfig: TomoriConfigRow;
+  tomoriConfig: AssembledServerConfig;
   personaPrompt?: string | null;
   personaLineageId?: number;
   isDMChannel?: boolean;

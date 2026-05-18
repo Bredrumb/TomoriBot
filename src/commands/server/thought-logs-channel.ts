@@ -67,7 +67,7 @@ export async function execute(
 
     const currentChannelId = tomoriState.config.thought_log_channel_disc_id;
     const nextChannelId = currentChannelId === selectedChannel.id ? null : selectedChannel.id;
-    const updatedConfig = await configRepository.update(tomoriState.server_id, {
+    const updatedConfig = await configRepository.updateChannelScopeConfig(tomoriState.server_id, {
       thought_log_channel_disc_id: nextChannelId,
     });
 

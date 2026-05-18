@@ -36,7 +36,7 @@ interface PersonaRow {
   tomori_nickname: string;
   is_alter: boolean;
   persona_lineage_id: number | bigint;
-  alter_triggers: string[] | null;
+  trigger_words: string[] | null;
   webhook_avatar_url: string | null;
 }
 
@@ -80,11 +80,17 @@ async function getAllServers(): Promise<ServerRow[]> {
 async function getPersonasForServer(serverId: number): Promise<PersonaRow[]> {
   return await sql<PersonaRow[]>`
     SELECT
-      tomori_id, server_id, tomori_nickname, is_alter,
-      persona_lineage_id, alter_triggers, webhook_avatar_url
-    FROM tomoris
-    WHERE server_id = ${serverId}
-    ORDER BY is_alter ASC, updated_at DESC NULLS LAST, tomori_id DESC
+      t.tomori_id,
+      t.server_id,
+      t.tomori_nickname,
+      t.is_alter,
+      t.persona_lineage_id,
+      COALESCE(pc.trigger_words, '{}'::TEXT[]) AS trigger_words,
+      t.webhook_avatar_url
+    FROM tomoris t
+    LEFT JOIN persona_configs pc ON pc.tomori_id = t.tomori_id
+    WHERE t.server_id = ${serverId}
+    ORDER BY t.is_alter ASC, t.updated_at DESC NULLS LAST, t.tomori_id DESC
   `;
 }
 
@@ -195,7 +201,7 @@ async function runBackup(): Promise<void> {
             tomori_id: persona.tomori_id,
             is_alter,
             webhook_avatar_url: persona.webhook_avatar_url ?? null,
-            alter_triggers: persona.alter_triggers ?? [],
+            trigger_words: persona.trigger_words ?? [],
           },
           // Server memories for this persona
           memories,

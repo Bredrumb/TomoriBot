@@ -147,6 +147,83 @@ export class ServerRepository implements IRepository<ServerExportShape> {
     return this.sqlSetupServer(guild, config);
   }
 
+  // ── server identity reads ──────────────────────────────────────────────────
+
+  /**
+   * Returns the internal server DB ID for a given Discord server snowflake.
+   *
+   * @param serverDiscId - Discord server snowflake
+   * @returns Internal server ID or null if not found
+   */
+  async loadServerIdByDiscId(serverDiscId: string): Promise<number | null> {
+    try {
+      const [row] = await sql<[{ server_id: number }]>`
+        SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId} LIMIT 1
+      `;
+      return row?.server_id ?? null;
+    } catch (error) {
+      log.error(`Error loading server ID for Discord ID ${serverDiscId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Returns the existing Matrix room ID for a Discord channel, if any.
+   *
+   * @param channelDiscId - Discord channel snowflake
+   * @returns Matrix room ID or null if not linked
+   */
+  async getExistingMatrixLink(channelDiscId: string): Promise<string | null> {
+    try {
+      const [row] = await sql<[{ matrix_room_id: string }]>`
+        SELECT matrix_room_id FROM matrix_channel_links
+        WHERE channel_disc_id = ${channelDiscId} LIMIT 1
+      `;
+      return row?.matrix_room_id ?? null;
+    } catch (error) {
+      log.error(`Error loading Matrix link for channel ${channelDiscId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Returns the Discord channel ID linked to a Matrix room, if any.
+   *
+   * @param matrixRoomId - Matrix room ID
+   * @returns Discord channel snowflake or null if not linked
+   */
+  async getDiscordChannelForMatrixRoom(matrixRoomId: string): Promise<string | null> {
+    try {
+      const [row] = await sql<[{ channel_disc_id: string }]>`
+        SELECT channel_disc_id FROM matrix_channel_links
+        WHERE matrix_room_id = ${matrixRoomId} LIMIT 1
+      `;
+      return row?.channel_disc_id ?? null;
+    } catch (error) {
+      log.error(`Error loading Discord channel for Matrix room ${matrixRoomId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Returns true if a user is already blacklisted from personalization on the server.
+   *
+   * @param serverId - Internal server DB ID
+   * @param userDiscId - Discord user snowflake
+   */
+  async isUserBlacklisted(serverId: number, userDiscId: string): Promise<boolean> {
+    try {
+      const [row] = await sql<[{ exists: number }]>`
+        SELECT 1 FROM personalization_blacklist
+        WHERE server_id = ${serverId} AND user_disc_id = ${userDiscId} LIMIT 1
+      `;
+      return !!row;
+    } catch (error) {
+      log.error(`Error checking blacklist for server ${serverId}, user ${userDiscId}:`, error);
+      return false;
+    }
+  }
+
   // ── emoji / sticker reads ──────────────────────────────────────────────────
 
   /**
@@ -551,41 +628,43 @@ export class ServerRepository implements IRepository<ServerExportShape> {
         // Format trigger words as PostgreSQL array
         const triggerWordsArrayLiteral = `{${defaultTriggers.map((t) => `"${t.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
 
-        const [config] = await tx`
-          INSERT INTO tomori_configs (
-            tomori_id,
-            server_id,
-            llm_id,
-            embedding_model_id,
-            api_key,
-            key_version,
-            trigger_words,
-            humanizer_degree,
-            attribute_memteaching_enabled,
-            sampledialogue_memteaching_enabled,
-            timezone_offset,
-            diffusion_model_id,
-            system_prompt,
-            user_byok_mode
-          )
-          VALUES (
-            ${tomori.tomori_id},
-            ${server.server_id},
-            ${selectedLlmId},
-            ${selectedEmbeddingModelId},
-            ${validConfig.encryptedApiKey},
-            ${validConfig.keyVersion},
-            ${triggerWordsArrayLiteral}::text[],
-            ${validConfig.humanizer},
-            ${isDMChannel},
-            ${isDMChannel},
-            ${validConfig.timezoneOffset},
-            ${selectedDiffusionModelId},
-            ${DEFAULT_SYSTEM_PROMPT},
-            ${validConfig.userByokMode}
-          )
-          RETURNING *
+        // Seed the split config tables
+        await tx`
+          INSERT INTO server_model_configs (
+            server_id, llm_id, embedding_model_id, diffusion_model_id, api_key, key_version
+          ) VALUES (
+            ${server.server_id}, ${selectedLlmId}, ${selectedEmbeddingModelId}, ${selectedDiffusionModelId}, ${validConfig.encryptedApiKey}, ${validConfig.keyVersion}
+          ) ON CONFLICT (server_id) DO NOTHING
         `;
+        await tx`
+          INSERT INTO server_chat_configs (
+            server_id, humanizer_degree, timezone_offset, system_prompt
+          ) VALUES (
+            ${server.server_id}, ${validConfig.humanizer}, ${validConfig.timezoneOffset}, ${DEFAULT_SYSTEM_PROMPT}
+          ) ON CONFLICT (server_id) DO NOTHING
+        `;
+        await tx`
+          INSERT INTO server_member_permissions_configs (
+            server_id, attribute_memteaching_enabled, sampledialogue_memteaching_enabled
+          ) VALUES (
+            ${server.server_id}, ${isDMChannel}, ${isDMChannel}
+          ) ON CONFLICT (server_id) DO NOTHING
+        `;
+        await tx`
+          INSERT INTO server_byok_configs (server_id, user_byok_mode)
+          VALUES (${server.server_id}, ${validConfig.userByokMode})
+          ON CONFLICT (server_id) DO NOTHING
+        `;
+        await tx`INSERT INTO server_notice_embeds_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
+        await tx`INSERT INTO server_channel_scope_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
+        await tx`INSERT INTO server_welcome_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
+        await tx`INSERT INTO server_trigger_behavior_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
+        await tx`INSERT INTO server_auto_trigger_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
+        await tx`INSERT INTO server_capabilities_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
+        await tx`INSERT INTO server_novelai_imagegen_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
+        await tx`INSERT INTO server_nsfw_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
+        await tx`INSERT INTO server_speech_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
+        await tx`INSERT INTO server_memory_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
 
         // Initialize persona-scoped config for the main persona.
         await tx`
@@ -601,8 +680,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
               server_id, provider, api_key, key_version,
               llm_id, diffusion_model_id, embedding_model_id,
               nai_diffusion_model_id, video_model_id, vision_llm_id,
-              nai_preset_name, custom_endpoint_url, custom_model_name, custom_num_ctx,
-              thinking_level, fallback_llm_ids, channel_llm_overrides, persona_llm_overrides,
+              nai_preset_name, thinking_level, fallback_model_refs,
               llm_temperature, llm_top_p, llm_top_k,
               llm_frequency_penalty, llm_presence_penalty, llm_min_p,
               llm_max_output_tokens,
@@ -611,8 +689,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
               ${server.server_id}, ${validConfig.provider}, ${validConfig.encryptedApiKey}, ${validConfig.keyVersion},
               ${selectedLlmId}, ${selectedDiffusionModelId}, ${selectedEmbeddingModelId},
               NULL, NULL, NULL,
-              NULL, NULL, NULL, NULL,
-              'auto', '[]'::jsonb, '[]'::jsonb, '[]'::jsonb,
+              NULL, 'auto', '[]'::jsonb,
               NULL, NULL, NULL,
               NULL, NULL, NULL,
               NULL,
@@ -1493,8 +1570,8 @@ export class ServerRepository implements IRepository<ServerExportShape> {
    */
   async loadUninitializedStickers(
     serverId: number,
-  ): Promise<Array<{ sticker_disc_id: string; sticker_name: string; sticker_format: string }>> {
-    return await sql<Array<{ sticker_disc_id: string; sticker_name: string; sticker_format: string }>>`
+  ): Promise<Array<{ sticker_disc_id: string; sticker_name: string; sticker_format: number }>> {
+    return await sql<Array<{ sticker_disc_id: string; sticker_name: string; sticker_format: number }>>`
       SELECT sticker_disc_id, sticker_name, sticker_format
       FROM server_stickers
       WHERE server_id = ${serverId}

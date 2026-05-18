@@ -1,6 +1,5 @@
-import { sql } from "@/utils/db/client";
 import { isRagAvailable } from "@/utils/db/ragAvailability";
-import { llmModelRepo } from "@/utils/db/repositories";
+import { llmModelRepo, serverMemoryRepository } from "@/utils/db/repositories";
 import { formatRetrievedChunksForPrompt, retrieveRelevantDocumentChunks } from "@/utils/documents/documentService";
 import { log } from "@/utils/misc/logger";
 import { resolveCapabilityCredentials, getResolvedCapabilityModelId } from "@/utils/provider/credentialResolver";
@@ -51,27 +50,11 @@ export async function buildServerDocumentContextItem(params: {
       return null;
     }
 
-    const [documentRow] =
-      tomoriState.tomori_id === null || tomoriState.tomori_id === undefined
-        ? await sql`
-            SELECT document_id
-            FROM documents
-            WHERE server_id = ${tomoriState.server_id}
-              AND tomori_id IS NULL
-            LIMIT 1
-          `
-        : await sql`
-            SELECT document_id
-            FROM documents
-            WHERE server_id = ${tomoriState.server_id}
-              AND (
-                tomori_id = ${tomoriState.tomori_id}
-                OR tomori_id IS NULL
-              )
-            LIMIT 1
-          `;
-
-    if (!documentRow?.document_id) {
+    const hasDocument = await serverMemoryRepository.hasDocumentInScope(
+      tomoriState.server_id,
+      tomoriState.tomori_id ?? null,
+    );
+    if (!hasDocument) {
       return null;
     }
 

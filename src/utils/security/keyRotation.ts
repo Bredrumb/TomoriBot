@@ -6,7 +6,7 @@
  * - Round-robin distribution across multiple API keys
  * - Automatic failover on API errors
  * - Cooldown-based recovery (60s for rate limits, 5min for other errors)
- * - Main key pointer design (uses tomori_configs.api_key as virtual key in pool)
+ * - Main key pointer design (uses the server model config api_key as virtual key in pool)
  */
 
 import { sql } from "@/utils/db/client";
@@ -42,7 +42,7 @@ export interface SelectedKeyResult {
   apiKey: string;
   /** The rotation_key_id to use for recording success/error (null for main key without pointer) */
   rotationKeyId: number | null;
-  /** Whether this is the main key from tomori_configs */
+  /** Whether this is the main key from the assembled server config */
   isMainKey: boolean;
 }
 
@@ -73,7 +73,7 @@ function isKeyInCooldown(
  *
  * Selection Algorithm:
  * 1. Query api_key_rotation for server_id
- * 2. If 0-1 rows → no rotation, return null (use tomori_configs.api_key directly)
+ * 2. If 0-1 rows → no rotation, return null (use the assembled server config api_key directly)
  * 3. If 2+ rows → rotation active:
  *    a. Filter: is_enabled = true AND cooldown expired
  *    b. Sort by: usage_count ASC (round-robin)
@@ -137,9 +137,9 @@ export async function selectApiKey(
       let decryptedKey: string;
 
       if (key.is_main_key_pointer) {
-        // Main key pointer: decrypt from tomori_configs.api_key
+        // Main key pointer: decrypt from the assembled server config api_key
         if (!tomoriState.config.api_key) {
-          log.warn(`Main key pointer exists but tomori_configs.api_key is null for server ${serverId}`);
+          log.warn(`Main key pointer exists but server config api_key is null for server ${serverId}`);
           continue;
         }
         const keyVersion = tomoriState.config.key_version || 1;

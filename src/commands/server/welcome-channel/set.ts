@@ -167,7 +167,7 @@ export async function execute(
 
     await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const updatedConfig = await configRepository.update(tomoriState.server_id, {
+    const updatedConfig = await configRepository.updateWelcomeConfig(tomoriState.server_id, {
       welcome_channel_disc_id: selectedChannel.id,
       welcome_prompt: additionalPrompt,
       welcome_persona_id: welcomePersonaId,

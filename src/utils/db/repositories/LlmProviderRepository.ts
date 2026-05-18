@@ -949,9 +949,7 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
   ): Promise<boolean> {
     try {
       const provider = config.provider.toLowerCase();
-      const fallbackJson = JSON.stringify(config.fallback_llm_ids ?? []);
-      const channelOverridesJson = JSON.stringify(config.channel_llm_overrides ?? []);
-      const personaOverridesJson = JSON.stringify(config.persona_llm_overrides ?? []);
+      const fallbackModelRefsJson = JSON.stringify(config.fallback_model_refs ?? []);
       const logitBiasesJson = JSON.stringify(config.llm_logit_biases ?? []);
       const disabledParamsLiteral = this.toPostgresTextArrayLiteral(config.llm_disabled_params);
 
@@ -961,8 +959,7 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
           llm_id, diffusion_model_id, embedding_model_id,
           video_model_id,
           nai_diffusion_model_id, vision_llm_id, nai_preset_name,
-          custom_endpoint_url, custom_model_name, custom_num_ctx, thinking_level,
-          fallback_llm_ids, channel_llm_overrides, persona_llm_overrides,
+          thinking_level, fallback_model_refs,
           llm_temperature, llm_top_p, llm_top_k,
           llm_frequency_penalty, llm_presence_penalty, llm_min_p,
           llm_max_output_tokens,
@@ -972,8 +969,7 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
           ${config.llm_id}, ${config.diffusion_model_id}, ${config.embedding_model_id},
           ${config.video_model_id ?? null},
           ${config.nai_diffusion_model_id}, ${config.vision_llm_id ?? null}, ${config.nai_preset_name},
-          ${config.custom_endpoint_url}, ${config.custom_model_name}, ${config.custom_num_ctx ?? null}, ${config.thinking_level},
-          ${fallbackJson}::jsonb, ${channelOverridesJson}::jsonb, ${personaOverridesJson}::jsonb,
+          ${config.thinking_level}, ${fallbackModelRefsJson}::jsonb,
           ${config.llm_temperature ?? null}, ${config.llm_top_p ?? null}, ${config.llm_top_k ?? null},
           ${config.llm_frequency_penalty ?? null}, ${config.llm_presence_penalty ?? null}, ${config.llm_min_p ?? null},
           ${config.llm_max_output_tokens ?? null},
@@ -989,13 +985,8 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
           nai_diffusion_model_id = EXCLUDED.nai_diffusion_model_id,
           vision_llm_id = EXCLUDED.vision_llm_id,
           nai_preset_name = EXCLUDED.nai_preset_name,
-          custom_endpoint_url = EXCLUDED.custom_endpoint_url,
-          custom_model_name = EXCLUDED.custom_model_name,
-          custom_num_ctx = EXCLUDED.custom_num_ctx,
           thinking_level = EXCLUDED.thinking_level,
-          fallback_llm_ids = EXCLUDED.fallback_llm_ids,
-          channel_llm_overrides = EXCLUDED.channel_llm_overrides,
-          persona_llm_overrides = EXCLUDED.persona_llm_overrides,
+          fallback_model_refs = EXCLUDED.fallback_model_refs,
           llm_temperature = EXCLUDED.llm_temperature,
           llm_top_p = EXCLUDED.llm_top_p,
           llm_top_k = EXCLUDED.llm_top_k,
@@ -1059,33 +1050,6 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
   }
 
   /**
-   * Updates the fallback_llm_ids column on a specific saved_provider_configs row.
-   *
-   * @param serverId        - Internal server DB ID
-   * @param provider        - Provider name (lowercase canonical)
-   * @param fallbackLlmIds  - Replacement fallback model ID list
-   */
-  async setSavedProviderConfigFallbacks(
-    serverId: number,
-    provider: string,
-    fallbackLlmIds: number[],
-  ): Promise<boolean> {
-    try {
-      const result = await sql`
-        UPDATE saved_provider_configs
-        SET fallback_llm_ids = ${fallbackLlmIds}
-        WHERE server_id = ${serverId}
-          AND provider = ${provider}
-        RETURNING server_id
-      `;
-      return result.length > 0;
-    } catch (e) {
-      log.error(`Error updating saved_provider_configs fallbacks for server ${serverId} / ${provider}:`, e);
-      return false;
-    }
-  }
-
-  /**
    * Upserts a personal saved provider config for a user.
    *
    * @param userId - Internal user DB ID
@@ -1095,7 +1059,7 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
     try {
       const provider = config.provider.toLowerCase();
       const enabledCapabilitiesLiteral = this.toPostgresTextArrayLiteral(config.enabled_capabilities);
-      const fallbackJson = JSON.stringify(config.fallback_llm_ids ?? []);
+      const fallbackModelRefsJson = JSON.stringify(config.fallback_model_refs ?? []);
       const logitBiasesJson = JSON.stringify(config.llm_logit_biases ?? []);
       const disabledParamsLiteral = this.toPostgresTextArrayLiteral(config.llm_disabled_params);
 
@@ -1105,8 +1069,7 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
           llm_id, diffusion_model_id, embedding_model_id,
           video_model_id,
           nai_diffusion_model_id, vision_llm_id, nai_preset_name,
-          custom_endpoint_url, custom_model_name, custom_num_ctx, thinking_level,
-          enabled_capabilities, fallback_llm_ids,
+          thinking_level, enabled_capabilities, fallback_model_refs,
           llm_temperature, llm_top_p, llm_top_k,
           llm_frequency_penalty, llm_presence_penalty, llm_min_p,
           llm_max_output_tokens,
@@ -1116,8 +1079,7 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
           ${config.llm_id}, ${config.diffusion_model_id}, ${config.embedding_model_id},
           ${config.video_model_id ?? null},
           ${config.nai_diffusion_model_id}, ${config.vision_llm_id ?? null}, ${config.nai_preset_name},
-          ${config.custom_endpoint_url}, ${config.custom_model_name}, ${config.custom_num_ctx ?? null}, ${config.thinking_level},
-          ${enabledCapabilitiesLiteral}::text[], ${fallbackJson}::jsonb,
+          ${config.thinking_level}, ${enabledCapabilitiesLiteral}::text[], ${fallbackModelRefsJson}::jsonb,
           ${config.llm_temperature ?? null}, ${config.llm_top_p ?? null}, ${config.llm_top_k ?? null},
           ${config.llm_frequency_penalty ?? null}, ${config.llm_presence_penalty ?? null}, ${config.llm_min_p ?? null},
           ${config.llm_max_output_tokens ?? null},
@@ -1133,12 +1095,9 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
           nai_diffusion_model_id = EXCLUDED.nai_diffusion_model_id,
           vision_llm_id = EXCLUDED.vision_llm_id,
           nai_preset_name = EXCLUDED.nai_preset_name,
-          custom_endpoint_url = EXCLUDED.custom_endpoint_url,
-          custom_model_name = EXCLUDED.custom_model_name,
-          custom_num_ctx = EXCLUDED.custom_num_ctx,
           thinking_level = EXCLUDED.thinking_level,
           enabled_capabilities = EXCLUDED.enabled_capabilities,
-          fallback_llm_ids = EXCLUDED.fallback_llm_ids,
+          fallback_model_refs = EXCLUDED.fallback_model_refs,
           llm_temperature = EXCLUDED.llm_temperature,
           llm_top_p = EXCLUDED.llm_top_p,
           llm_top_k = EXCLUDED.llm_top_k,

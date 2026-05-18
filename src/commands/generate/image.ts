@@ -18,8 +18,7 @@ import {
 import { GoogleGenAI } from "@google/genai";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
-import { personaRepository } from "@/utils/db/repositories";
-import { sql } from "../../utils/db/client";
+import { personaRepository, llmModelRepo } from "@/utils/db/repositories";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
 import type { UserRow } from "../../types/db/schema";
 import { checkImageQuota, incrementImageQuota } from "../../utils/quota/imageQuotaManager";
@@ -56,17 +55,13 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * @returns The model codename string (e.g., "gemini-2.5-flash-image")
  */
 async function getDiffusionModelCodename(diffusionModelId: number): Promise<string> {
-  const result = await sql`
-		SELECT codename
-		FROM image_diffusion_models
-		WHERE diffusion_model_id = ${diffusionModelId}
-	`.values();
+  const model = await llmModelRepo.loadDiffusionModelById(diffusionModelId);
 
-  if (result.length === 0) {
+  if (!model) {
     throw new Error(`Diffusion model not found: ${diffusionModelId}`);
   }
 
-  return result[0][0] as string;
+  return model.codename;
 }
 
 /**

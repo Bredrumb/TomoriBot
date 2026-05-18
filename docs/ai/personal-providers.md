@@ -17,7 +17,7 @@ Phase 2 of the provider rehaul adds per-user provider routing on top of the serv
 
 - `resolveCapabilityCredentials(serverId, capability, { userId })` now checks personal providers first when a user context exists.
 - Successful personal resolution returns `source: "personal"`.
-- If `tomori_configs.user_byok_mode = true` and no qualifying personal provider exists for a user-triggered request, runtime raises `PersonalProviderRequiredError`.
+- If `server_byok_configs.user_byok_mode = true` and no qualifying personal provider exists for a user-triggered request, runtime raises `PersonalProviderRequiredError`.
 - Broken enabled personal credentials hard-fail and do not silently fall back to the server provider.
 
 ## Thought logs and privacy
@@ -46,4 +46,4 @@ Phase 2 of the provider rehaul adds per-user provider routing on top of the serv
 - Server cooldown and text quota checks are bypassed for personal text turns.
 - Memory/document embedding commands resolve personal embedding credentials when available.
 - `/config provider remove` can remove the active server provider when `user_byok_mode` is enabled.
-- A BYOK-only server intentionally has `tomori_configs.llm_id = NULL`; the runtime overlays a real model only when a qualifying personal provider is active for that user.
+- A BYOK-only server intentionally has `server_model_configs.llm_id = NULL`; the runtime overlays a real model only when a qualifying personal provider is active for that user.

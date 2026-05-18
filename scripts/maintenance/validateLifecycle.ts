@@ -45,7 +45,7 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
 const requiredTables = [
   "servers",
   "tomoris",
-  "tomori_configs",
+
   "persona_configs",
   "llms",
   "image_diffusion_models",

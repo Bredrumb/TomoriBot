@@ -370,11 +370,10 @@ export class GenerateVoiceMessageTool extends BaseTool {
 
     // Determine which synthesis path to use based on what the active persona has configured.
     // Priority: speech_voice_design_prompt (instruct-capable local TTS) >
-    // speech_voice_sample_id (local clone TTS) > speech_voice_id / elevenlabs_voice_id (ElevenLabs).
+    // speech_voice_sample_id (local clone TTS) > speech_voice_id (ElevenLabs or other provider).
     const voiceDesignPrompt = context.tomoriState.speech_voice_design_prompt?.trim() ?? "";
     const voiceSampleId = context.tomoriState.speech_voice_sample_id ?? null;
-    const voiceId =
-      (context.tomoriState.speech_voice_id?.trim() || context.tomoriState.elevenlabs_voice_id?.trim()) ?? "";
+    const voiceId = context.tomoriState.speech_voice_id?.trim() ?? "";
 
     // 1. Try the new custom-endpoint credential path (Phase 4.1+).
     // 2. Fall back to the legacy opt_api_keys entry for backward compatibility

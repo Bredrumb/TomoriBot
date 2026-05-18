@@ -427,7 +427,7 @@ export async function deleteCustomLLMEntry(serverId: string | number): Promise<v
 }
 
 /**
- * Save custom endpoint configuration to tomori_configs
+ * Save custom endpoint configuration to server_model_configs
  *
  * @param serverId - The internal server_id to update
  * @param endpointUrl - The custom endpoint URL

@@ -108,7 +108,7 @@ const NAI_GLM_CONTEXT_LIMIT = Number.parseInt(process.env.NAI_GLM_CONTEXT_LIMIT 
 
 /**
  * Extracts non-schema preset parameters from a raw preset parameters record.
- * Removes the four fields that are handled via tomori_configs schema columns
+ * Removes the four fields that are handled via split server config columns
  * (temperature, top_k, top_p, min_p) so they don't double-apply.
  * The remaining fields (order, tail_free_sampling, phrase_rep_pen, mirostat_*,
  * typical_p, top_a, repetition_penalty_*, etc.) are passed as preset overrides
@@ -118,7 +118,7 @@ const NAI_GLM_CONTEXT_LIMIT = Number.parseInt(process.env.NAI_GLM_CONTEXT_LIMIT 
  * @returns Partial NovelAIParameters containing only non-schema fields
  */
 function extractNonSchemaPresetParams(params: Record<string, unknown>): Partial<NovelAIParameters> {
-  // These four keys are written to tomori_configs and applied via the existing
+  // These four keys are written to split server config tables and applied via the existing
   // override logic in getParametersForModel — exclude them here to avoid conflicts.
   const schemaKeys = new Set(["temperature", "top_k", "top_p", "min_p"]);
   const result: Record<string, unknown> = {};

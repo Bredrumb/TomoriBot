@@ -1,6 +1,6 @@
 import type { Client } from "discord.js";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
-import type { TomoriConfigRow } from "@/types/db/schema";
+import type { AssembledServerConfig } from "@/types/db/schema";
 import type { MentionConverter } from "./templates";
 
 export async function buildServerInfoContextItem(params: {
@@ -12,7 +12,7 @@ export async function buildServerInfoContextItem(params: {
   isUserImpersonation: boolean;
   impersonatedIdentityName: string | null;
   botName: string;
-  tomoriConfig: TomoriConfigRow;
+  tomoriConfig: AssembledServerConfig;
   snapshot?: import("@/types/misc/context").RequestSnapshot;
   convertMentions: MentionConverter;
 }): Promise<StructuredContextItem> {

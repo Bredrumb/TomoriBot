@@ -1,24 +1,7 @@
--- Ensure all required columns exist in tomori_configs table
-SELECT add_column_if_not_exists('tomori_configs', 'voice_transcript_chat_mode', 'BOOLEAN', 'true');
-SELECT add_column_if_not_exists('tomori_configs', 'chatterbox_turbo_enabled', 'BOOLEAN', 'true');
-SELECT add_column_if_not_exists('tomori_configs', 'chatterbox_cfg_weight', 'REAL', '0.5');
-SELECT add_column_if_not_exists('tomori_configs', 'chatterbox_exaggeration', 'REAL', '0.5');
-SELECT add_column_if_not_exists('tomori_configs', 'other_model_codename', 'TEXT');
-SELECT add_column_if_not_exists('tomori_configs', 'other_model_capabilities', 'JSONB');
-SELECT add_column_if_not_exists('tomori_configs', 'other_model_capabilities_fetched_at', 'TIMESTAMP');
 SELECT add_column_if_not_exists('llms', 'is_scoped_registration', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('image_diffusion_models', 'is_scoped_registration', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('video_generation_models', 'is_scoped_registration', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('embedding_models', 'is_scoped_registration', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('tomori_configs', 'fallback_model_refs', 'JSONB', '''[]''::JSONB');
-SELECT add_column_if_not_exists('tomori_configs', 'autoch_persona_overrides', 'JSONB', '''[]''::JSONB');
-SELECT add_column_if_not_exists('tomori_configs', 'hide_respond_embed', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('tomori_configs', 'hide_impersonation_embeds', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('tomori_configs', 'tool_notice_hidden_keys', 'TEXT[]', 'ARRAY[]::TEXT[]');
-SELECT add_column_if_not_exists('tomori_configs', 'prompt_snapshot_enabled', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('tomori_configs', 'llm_stop_strings', 'TEXT[]', 'ARRAY[]::TEXT[]');
-SELECT add_column_if_not_exists('tomori_configs', 'llm_stop_speaker_pattern_enabled', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('tomori_configs', 'thread_creation_enabled', 'BOOLEAN', 'true');
 
 -- Ensure all required columns exist in saved_provider_configs table
 SELECT add_column_if_not_exists('saved_provider_configs', 'fallback_model_refs', 'JSONB', '''[]''::JSONB');
@@ -207,116 +190,10 @@ CREATE TRIGGER update_openrouter_video_model_registrations_timestamp
     FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
 -- Migrate legacy notice visibility booleans into the shared hidden-key registry
-UPDATE tomori_configs
-SET tool_notice_hidden_keys = ARRAY(
-  SELECT DISTINCT notice_key
-  FROM unnest(
-    COALESCE(tool_notice_hidden_keys, ARRAY[]::TEXT[]) ||
-    CASE WHEN hide_respond_embed THEN ARRAY['respond_embed'] ELSE ARRAY[]::TEXT[] END ||
-    CASE WHEN hide_impersonation_embeds THEN ARRAY['impersonation_notice'] ELSE ARRAY[]::TEXT[] END
-  ) AS notice_key
-  ORDER BY notice_key
-)
-WHERE hide_respond_embed = true
-   OR hide_impersonation_embeds = true;
 
--- Phase 3 migration: backfill polymorphic fallback_model_refs from legacy
--- fallback_llm_ids arrays while keeping the old column during rollout.
-UPDATE tomori_configs
-SET fallback_model_refs = COALESCE((
-    SELECT jsonb_agg(
-        jsonb_build_object(
-            'type', 'llm',
-            'id', fallback_entry.value::INTEGER
-        )
-        ORDER BY fallback_entry.ordinality
-    )
-    FROM jsonb_array_elements_text(
-        CASE
-            WHEN jsonb_typeof(COALESCE(tomori_configs.fallback_llm_ids, '[]'::JSONB)) = 'array'
-                THEN COALESCE(tomori_configs.fallback_llm_ids, '[]'::JSONB)
-            ELSE '[]'::JSONB
-        END
-    ) WITH ORDINALITY AS fallback_entry(value, ordinality)
-), '[]'::JSONB)
-WHERE (
-        CASE
-            WHEN jsonb_typeof(COALESCE(tomori_configs.fallback_model_refs, '[]'::JSONB)) = 'array'
-                THEN jsonb_array_length(COALESCE(tomori_configs.fallback_model_refs, '[]'::JSONB))
-            ELSE 0
-        END
-    ) = 0
-  AND (
-        CASE
-            WHEN jsonb_typeof(COALESCE(tomori_configs.fallback_llm_ids, '[]'::JSONB)) = 'array'
-                THEN jsonb_array_length(COALESCE(tomori_configs.fallback_llm_ids, '[]'::JSONB))
-            ELSE 0
-        END
-    ) > 0;
-
-UPDATE saved_provider_configs
-SET fallback_model_refs = COALESCE((
-    SELECT jsonb_agg(
-        jsonb_build_object(
-            'type', 'llm',
-            'id', fallback_entry.value::INTEGER
-        )
-        ORDER BY fallback_entry.ordinality
-    )
-    FROM jsonb_array_elements_text(
-        CASE
-            WHEN jsonb_typeof(COALESCE(saved_provider_configs.fallback_llm_ids, '[]'::JSONB)) = 'array'
-                THEN COALESCE(saved_provider_configs.fallback_llm_ids, '[]'::JSONB)
-            ELSE '[]'::JSONB
-        END
-    ) WITH ORDINALITY AS fallback_entry(value, ordinality)
-), '[]'::JSONB)
-WHERE (
-        CASE
-            WHEN jsonb_typeof(COALESCE(saved_provider_configs.fallback_model_refs, '[]'::JSONB)) = 'array'
-                THEN jsonb_array_length(COALESCE(saved_provider_configs.fallback_model_refs, '[]'::JSONB))
-            ELSE 0
-        END
-    ) = 0
-  AND (
-        CASE
-            WHEN jsonb_typeof(COALESCE(saved_provider_configs.fallback_llm_ids, '[]'::JSONB)) = 'array'
-                THEN jsonb_array_length(COALESCE(saved_provider_configs.fallback_llm_ids, '[]'::JSONB))
-            ELSE 0
-        END
-    ) > 0;
-
-UPDATE user_saved_provider_configs
-SET fallback_model_refs = COALESCE((
-    SELECT jsonb_agg(
-        jsonb_build_object(
-            'type', 'llm',
-            'id', fallback_entry.value::INTEGER
-        )
-        ORDER BY fallback_entry.ordinality
-    )
-    FROM jsonb_array_elements_text(
-        CASE
-            WHEN jsonb_typeof(COALESCE(user_saved_provider_configs.fallback_llm_ids, '[]'::JSONB)) = 'array'
-                THEN COALESCE(user_saved_provider_configs.fallback_llm_ids, '[]'::JSONB)
-            ELSE '[]'::JSONB
-        END
-    ) WITH ORDINALITY AS fallback_entry(value, ordinality)
-), '[]'::JSONB)
-WHERE (
-        CASE
-            WHEN jsonb_typeof(COALESCE(user_saved_provider_configs.fallback_model_refs, '[]'::JSONB)) = 'array'
-                THEN jsonb_array_length(COALESCE(user_saved_provider_configs.fallback_model_refs, '[]'::JSONB))
-            ELSE 0
-        END
-    ) = 0
-  AND (
-        CASE
-            WHEN jsonb_typeof(COALESCE(user_saved_provider_configs.fallback_llm_ids, '[]'::JSONB)) = 'array'
-                THEN jsonb_array_length(COALESCE(user_saved_provider_configs.fallback_llm_ids, '[]'::JSONB))
-            ELSE 0
-        END
-    ) > 0;
+-- Phase 3 backfill (fallback_llm_ids → fallback_model_refs) superseded by
+-- migration 011_drop_deprecated_provider_config_columns.sql, which finalizes the
+-- backfill and drops fallback_llm_ids. No seed-time action needed.
 
 -- Ensure all required columns exist in persona_configs table
 SELECT add_column_if_not_exists('persona_configs', 'reward_conditioning_enabled', 'BOOLEAN', 'true');
@@ -498,41 +375,6 @@ ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET
   supports_structoutput = EXCLUDED.supports_structoutput,
   updated_at = CURRENT_TIMESTAMP;
 
--- Rename account_setting_* columns in tomori_configs to other_model_* (idempotent).
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tomori_configs' AND column_name = 'account_setting_actual_model') THEN
-        ALTER TABLE tomori_configs RENAME COLUMN account_setting_actual_model TO other_model_codename;
-    END IF;
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tomori_configs' AND column_name = 'account_setting_capabilities') THEN
-        ALTER TABLE tomori_configs RENAME COLUMN account_setting_capabilities TO other_model_capabilities;
-    END IF;
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tomori_configs' AND column_name = 'account_setting_capabilities_fetched_at') THEN
-        ALTER TABLE tomori_configs RENAME COLUMN account_setting_capabilities_fetched_at TO other_model_capabilities_fetched_at;
-    END IF;
-EXCEPTION
-    WHEN OTHERS THEN
-        RAISE NOTICE 'tomori_configs column rename skipped: %', SQLERRM;
-END $$;
-
--- Rename pin_message_enabled to manage_message_enabled in tomori_configs (idempotent).
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tomori_configs' AND column_name = 'pin_message_enabled') THEN
-        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tomori_configs' AND column_name = 'manage_message_enabled') THEN
-            UPDATE tomori_configs
-            SET manage_message_enabled = COALESCE(pin_message_enabled, manage_message_enabled);
-
-            ALTER TABLE tomori_configs DROP COLUMN pin_message_enabled;
-        ELSE
-            ALTER TABLE tomori_configs RENAME COLUMN pin_message_enabled TO manage_message_enabled;
-        END IF;
-    END IF;
-EXCEPTION
-    WHEN OTHERS THEN
-        RAISE NOTICE 'tomori_configs manage_message_enabled rename skipped: %', SQLERRM;
-END $$;
-
 -- Migrate previously-saved legacy Z.ai Coding snapshots to the renamed coding provider.
 -- This must only touch old plain-GLM snapshots. New general Z.ai snapshots use
 -- prefixed `zai/...` model rows and should remain mapped to `zai`.
@@ -560,45 +402,6 @@ BEGIN
               WHERE dm.diffusion_model_id = spc.diffusion_model_id
                 AND dm.provider = 'zaicoding'
           )
-          OR EXISTS (
-              SELECT 1
-              FROM jsonb_array_elements_text(
-                  CASE
-                      WHEN jsonb_typeof(COALESCE(spc.fallback_llm_ids, '[]'::JSONB)) = 'array'
-                          THEN COALESCE(spc.fallback_llm_ids, '[]'::JSONB)
-                      ELSE '[]'::JSONB
-                  END
-              ) AS fallback(llm_id_text)
-              JOIN llms l
-                ON l.llm_id = fallback.llm_id_text::INTEGER
-              WHERE l.llm_provider = 'zaicoding'
-          )
-          OR EXISTS (
-              SELECT 1
-              FROM jsonb_array_elements(
-                  CASE
-                      WHEN jsonb_typeof(COALESCE(spc.channel_llm_overrides, '[]'::JSONB)) = 'array'
-                          THEN COALESCE(spc.channel_llm_overrides, '[]'::JSONB)
-                      ELSE '[]'::JSONB
-                  END
-              ) AS override(entry)
-              JOIN llms l
-                ON l.llm_id = (override.entry ->> 'llm_id')::INTEGER
-              WHERE l.llm_provider = 'zaicoding'
-          )
-          OR EXISTS (
-              SELECT 1
-              FROM jsonb_array_elements(
-                  CASE
-                      WHEN jsonb_typeof(COALESCE(spc.persona_llm_overrides, '[]'::JSONB)) = 'array'
-                          THEN COALESCE(spc.persona_llm_overrides, '[]'::JSONB)
-                      ELSE '[]'::JSONB
-                  END
-              ) AS override(entry)
-              JOIN llms l
-                ON l.llm_id = (override.entry ->> 'llm_id')::INTEGER
-              WHERE l.llm_provider = 'zaicoding'
-          )
       );
 EXCEPTION
     WHEN undefined_table THEN
@@ -608,81 +411,6 @@ END $$;
 -- Phase 1 provider rehaul: promote saved_provider_configs to the canonical
 -- provider-credentials vault by backfilling active provider rows and relevant
 -- optional-key providers on every startup until production data is confirmed.
-DO $$
-DECLARE
-    inserted_count INTEGER := 0;
-BEGIN
-    INSERT INTO saved_provider_configs (
-        server_id,
-        provider,
-        api_key,
-        key_version,
-        llm_id,
-        diffusion_model_id,
-        embedding_model_id,
-        video_model_id,
-        nai_diffusion_model_id,
-        vision_llm_id,
-        nai_preset_name,
-        custom_endpoint_url,
-        custom_model_name,
-        custom_num_ctx,
-        thinking_level,
-        fallback_llm_ids,
-        llm_temperature,
-        llm_top_p,
-        llm_top_k,
-        llm_frequency_penalty,
-        llm_presence_penalty,
-        llm_min_p,
-        llm_logit_biases,
-        llm_disabled_params
-    )
-    SELECT
-        tc.server_id,
-        LOWER(l.llm_provider),
-        tc.api_key,
-        COALESCE(tc.key_version, 1),
-        tc.llm_id,
-        tc.diffusion_model_id,
-        tc.embedding_model_id,
-        tc.video_model_id,
-        tc.nai_diffusion_model_id,
-        tc.vision_llm_id,
-        tc.nai_preset_name,
-        tc.custom_endpoint_url,
-        tc.custom_model_name,
-        tc.custom_num_ctx,
-        tc.thinking_level,
-        COALESCE(tc.fallback_llm_ids, '[]'::JSONB),
-        tc.llm_temperature,
-        tc.llm_top_p,
-        tc.llm_top_k,
-        tc.llm_frequency_penalty,
-        tc.llm_presence_penalty,
-        tc.llm_min_p,
-        COALESCE(tc.llm_logit_biases, '[]'::JSONB),
-        COALESCE(tc.llm_disabled_params, ARRAY[]::TEXT[])
-    FROM tomori_configs tc
-    JOIN llms l ON l.llm_id = tc.llm_id
-    WHERE tc.server_id IS NOT NULL
-      AND tc.api_key IS NOT NULL
-      AND NOT EXISTS (
-          SELECT 1
-          FROM saved_provider_configs spc
-          WHERE spc.server_id = tc.server_id
-            AND spc.provider = LOWER(l.llm_provider)
-      )
-    ON CONFLICT (server_id, provider) DO NOTHING;
-
-    GET DIAGNOSTICS inserted_count = ROW_COUNT;
-    IF inserted_count > 0 THEN
-        RAISE NOTICE 'Phase 1 backfill inserted % active-provider saved config row(s)', inserted_count;
-    END IF;
-EXCEPTION
-    WHEN undefined_table THEN
-        RAISE NOTICE 'Phase 1 active-provider backfill skipped: required table missing';
-END $$;
 
 DO $$
 DECLARE
@@ -710,7 +438,6 @@ BEGIN
         vision_llm_id,
         nai_preset_name,
         thinking_level,
-        fallback_llm_ids,
         llm_logit_biases,
         llm_disabled_params
     )
@@ -734,7 +461,6 @@ BEGIN
         NULL,
         NULL,
         'auto',
-        '[]'::JSONB,
         '[]'::JSONB,
         ARRAY[]::TEXT[]
     FROM opt_api_keys oak
@@ -774,7 +500,6 @@ BEGIN
         vision_llm_id,
         nai_preset_name,
         thinking_level,
-        fallback_llm_ids,
         llm_logit_biases,
         llm_disabled_params
     )
@@ -828,7 +553,6 @@ BEGIN
         NULL,
         'auto',
         '[]'::JSONB,
-        '[]'::JSONB,
         ARRAY[]::TEXT[]
     FROM opt_api_keys oak
     WHERE oak.service_name = 'google'
@@ -848,7 +572,6 @@ EXCEPTION
     WHEN undefined_table THEN
         RAISE NOTICE 'Phase 1 Google opt-key backfill skipped: required table missing';
 END $$;
-
 
 -- Ensure all required columns exist in image_diffusion_models table
 SELECT add_column_if_not_exists('image_diffusion_models', 'is_scoped_registration', 'BOOLEAN', 'false');
@@ -883,61 +606,9 @@ END $$;
 
 -- PART 0.5: Remove legacy Z.ai Coding image generation model now that the coding endpoint
 -- is no longer treated as a native image generation provider.
-DO $$
-DECLARE
-    legacy_zaicoding_diffusion_model_id INTEGER;
-BEGIN
-    SELECT diffusion_model_id
-    INTO legacy_zaicoding_diffusion_model_id
-    FROM image_diffusion_models
-    WHERE provider = 'zaicoding'
-      AND codename = 'glm-image'
-    LIMIT 1;
-
-    IF legacy_zaicoding_diffusion_model_id IS NULL THEN
-        RETURN;
-    END IF;
-
-    UPDATE tomori_configs
-    SET diffusion_model_id = NULL
-    WHERE diffusion_model_id = legacy_zaicoding_diffusion_model_id;
-
-    UPDATE saved_provider_configs
-    SET diffusion_model_id = NULL
-    WHERE diffusion_model_id = legacy_zaicoding_diffusion_model_id;
-
-    UPDATE saved_provider_configs
-    SET nai_diffusion_model_id = NULL
-    WHERE nai_diffusion_model_id = legacy_zaicoding_diffusion_model_id;
-
-    DELETE FROM image_diffusion_models
-    WHERE diffusion_model_id = legacy_zaicoding_diffusion_model_id;
-EXCEPTION
-    WHEN undefined_table THEN
-        RAISE NOTICE 'Table not found during legacy Z.ai Coding image cleanup, skipping';
-    WHEN undefined_column THEN
-        RAISE NOTICE 'Column not found during legacy Z.ai Coding image cleanup, skipping';
-END $$;
 
 -- PART 1: Drop FK constraint and clean up orphaned references BEFORE inserting diffusion models
 -- This allows the INSERT to succeed, then we recreate the constraint after
-DO $$
-BEGIN
-    -- Drop existing constraint (may be pointing to wrong table or blocking updates)
-    ALTER TABLE tomori_configs DROP CONSTRAINT IF EXISTS tomori_configs_diffusion_model_id_fkey;
-
-    -- Clean up orphaned diffusion_model_id values that don't exist in image_diffusion_models
-    -- Set them to NULL so the FK constraint can be recreated successfully
-    UPDATE tomori_configs
-    SET diffusion_model_id = NULL
-    WHERE diffusion_model_id IS NOT NULL
-      AND diffusion_model_id NOT IN (SELECT diffusion_model_id FROM image_diffusion_models);
-EXCEPTION
-    WHEN undefined_table THEN
-        RAISE NOTICE 'Table not found during cleanup, skipping';
-    WHEN undefined_column THEN
-        RAISE NOTICE 'Column not found during cleanup, skipping';
-END $$;
 
 -- Insert Image Diffusion Models with conflict resolution
 INSERT INTO image_diffusion_models (provider, codename, is_default, is_deprecated, is_free, is_uncensored, model_description, ja_description)
@@ -1019,25 +690,6 @@ ON CONFLICT (provider, codename) DO UPDATE SET
 
 -- PART 2: Recreate FK constraint AFTER diffusion models are inserted
 -- Now that valid IDs exist in image_diffusion_models, the constraint can be created successfully
-DO $$
-BEGIN
-    -- Only add if constraint doesn't exist (it was dropped in Part 1)
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conname = 'tomori_configs_diffusion_model_id_fkey'
-    ) THEN
-        ALTER TABLE tomori_configs
-        ADD CONSTRAINT tomori_configs_diffusion_model_id_fkey
-        FOREIGN KEY (diffusion_model_id)
-        REFERENCES image_diffusion_models(diffusion_model_id)
-        ON DELETE SET NULL;
-    END IF;
-EXCEPTION
-    WHEN undefined_table THEN
-        RAISE NOTICE 'Table not found during FK creation, skipping';
-    WHEN undefined_column THEN
-        RAISE NOTICE 'Column not found during FK creation, skipping';
-END $$;
 
 -- ============================================================================
 -- VIDEO GENERATION MODELS (April 2026)
@@ -1092,22 +744,6 @@ SELECT add_column_if_not_exists('embedding_models', 'is_default', 'BOOLEAN', 'fa
 SELECT add_column_if_not_exists('embedding_models', 'is_deprecated', 'BOOLEAN', 'false');
 
 -- PART 1: Drop FK constraint and clean up orphaned references BEFORE inserting embedding models
-DO $$
-BEGIN
-    -- Drop existing constraint
-    ALTER TABLE tomori_configs DROP CONSTRAINT IF EXISTS tomori_configs_embedding_model_id_fkey;
-
-    -- Clean up orphaned embedding_model_id values that don't exist in embedding_models
-    UPDATE tomori_configs
-    SET embedding_model_id = NULL
-    WHERE embedding_model_id IS NOT NULL
-      AND embedding_model_id NOT IN (SELECT embedding_model_id FROM embedding_models);
-EXCEPTION
-    WHEN undefined_table THEN
-        RAISE NOTICE 'Table not found during cleanup, skipping';
-    WHEN undefined_column THEN
-        RAISE NOTICE 'Column not found during cleanup, skipping';
-END $$;
 
 -- Migration: rename Gemini embedding preview codenames to stable names in place when possible.
 -- This preserves existing embedding_model_id references on older installs.
@@ -1214,124 +850,8 @@ ON CONFLICT (provider, codename) DO UPDATE SET
   updated_at = CURRENT_TIMESTAMP;
 
 -- Migration cleanup: if preview rows and stable rows both exist, repoint references to the stable row and remove the preview row.
-DO $$
-DECLARE
-  migration_pair RECORD;
-BEGIN
-  FOR migration_pair IN
-    SELECT *
-    FROM (
-      VALUES
-        ('google', 'gemini-embedding-2-preview', 'gemini-embedding-2'),
-        ('vertex', 'gemini-embedding-2-preview', 'gemini-embedding-2'),
-        ('openrouter', 'google/gemini-embedding-2-preview', 'google/gemini-embedding-2')
-    ) AS pairs(provider_name, old_codename, new_codename)
-  LOOP
-    IF EXISTS (
-      SELECT 1
-      FROM embedding_models old_model
-      JOIN embedding_models new_model
-        ON new_model.provider = migration_pair.provider_name
-       AND new_model.codename = migration_pair.new_codename
-      WHERE old_model.provider = migration_pair.provider_name
-        AND old_model.codename = migration_pair.old_codename
-    ) THEN
-      DELETE FROM openrouter_embedding_model_registrations reg
-      USING embedding_models old_model, embedding_models new_model
-      WHERE old_model.provider = migration_pair.provider_name
-        AND old_model.codename = migration_pair.old_codename
-        AND new_model.provider = migration_pair.provider_name
-        AND new_model.codename = migration_pair.new_codename
-        AND reg.embedding_model_id = old_model.embedding_model_id
-        AND EXISTS (
-          SELECT 1
-          FROM openrouter_embedding_model_registrations existing_reg
-          WHERE existing_reg.embedding_model_id = new_model.embedding_model_id
-            AND existing_reg.server_id IS NOT DISTINCT FROM reg.server_id
-            AND existing_reg.user_id IS NOT DISTINCT FROM reg.user_id
-        );
-
-      UPDATE tomori_configs tc
-      SET embedding_model_id = new_model.embedding_model_id
-      FROM embedding_models old_model, embedding_models new_model
-      WHERE old_model.provider = migration_pair.provider_name
-        AND old_model.codename = migration_pair.old_codename
-        AND new_model.provider = migration_pair.provider_name
-        AND new_model.codename = migration_pair.new_codename
-        AND tc.embedding_model_id = old_model.embedding_model_id;
-
-      UPDATE saved_provider_configs spc
-      SET embedding_model_id = new_model.embedding_model_id
-      FROM embedding_models old_model, embedding_models new_model
-      WHERE old_model.provider = migration_pair.provider_name
-        AND old_model.codename = migration_pair.old_codename
-        AND new_model.provider = migration_pair.provider_name
-        AND new_model.codename = migration_pair.new_codename
-        AND spc.embedding_model_id = old_model.embedding_model_id;
-
-      UPDATE user_saved_provider_configs uspc
-      SET embedding_model_id = new_model.embedding_model_id
-      FROM embedding_models old_model, embedding_models new_model
-      WHERE old_model.provider = migration_pair.provider_name
-        AND old_model.codename = migration_pair.old_codename
-        AND new_model.provider = migration_pair.provider_name
-        AND new_model.codename = migration_pair.new_codename
-        AND uspc.embedding_model_id = old_model.embedding_model_id;
-
-      UPDATE document_chunks dc
-      SET embedding_model_id = new_model.embedding_model_id
-      FROM embedding_models old_model, embedding_models new_model
-      WHERE old_model.provider = migration_pair.provider_name
-        AND old_model.codename = migration_pair.old_codename
-        AND new_model.provider = migration_pair.provider_name
-        AND new_model.codename = migration_pair.new_codename
-        AND dc.embedding_model_id = old_model.embedding_model_id;
-
-      UPDATE openrouter_embedding_model_registrations reg
-      SET embedding_model_id = new_model.embedding_model_id,
-          updated_at = CURRENT_TIMESTAMP
-      FROM embedding_models old_model, embedding_models new_model
-      WHERE old_model.provider = migration_pair.provider_name
-        AND old_model.codename = migration_pair.old_codename
-        AND new_model.provider = migration_pair.provider_name
-        AND new_model.codename = migration_pair.new_codename
-        AND reg.embedding_model_id = old_model.embedding_model_id;
-
-      DELETE FROM embedding_models old_model
-      USING embedding_models new_model
-      WHERE old_model.provider = migration_pair.provider_name
-        AND old_model.codename = migration_pair.old_codename
-        AND new_model.provider = migration_pair.provider_name
-        AND new_model.codename = migration_pair.new_codename;
-    END IF;
-  END LOOP;
-EXCEPTION
-  WHEN undefined_table THEN
-    RAISE NOTICE 'Table not found during embedding model migration, skipping';
-  WHEN undefined_column THEN
-    RAISE NOTICE 'Column not found during embedding model migration, skipping';
-END $$;
 
 -- PART 2: Recreate FK constraint AFTER embedding models are inserted
-DO $$
-BEGIN
-    -- Only add if constraint doesn't exist
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conname = 'tomori_configs_embedding_model_id_fkey'
-    ) THEN
-        ALTER TABLE tomori_configs
-        ADD CONSTRAINT tomori_configs_embedding_model_id_fkey
-        FOREIGN KEY (embedding_model_id)
-        REFERENCES embedding_models(embedding_model_id)
-        ON DELETE SET NULL;
-    END IF;
-EXCEPTION
-    WHEN undefined_table THEN
-        RAISE NOTICE 'Table not found during FK creation, skipping';
-    WHEN undefined_column THEN
-        RAISE NOTICE 'Column not found during FK creation, skipping';
-END $$;
 
 -- Insert Tomori Presets (English)
 INSERT INTO tomori_presets (
@@ -2255,15 +1775,7 @@ SELECT add_column_if_not_exists('tomoris', 'speech_voice_id', 'TEXT');
 SELECT add_column_if_not_exists('tomoris', 'speech_voice_name', 'TEXT');
 SELECT add_column_if_not_exists('tomoris', 'speech_voice_design_prompt', 'TEXT');
 
--- 3. Backfill new columns from legacy ElevenLabs voice columns for any persona
---    that had a voice configured before Phase 4.1. The legacy columns are kept
---    read-only; new writes go to speech_voice_id / speech_voice_name.
-UPDATE tomoris
-SET
-    speech_voice_id   = elevenlabs_voice_id,
-    speech_voice_name = elevenlabs_voice_name
-WHERE elevenlabs_voice_id IS NOT NULL
-  AND speech_voice_id IS NULL;
+-- 3. (Legacy backfill removed — superseded by migration 010_complete_speech_voice_migration.sql.)
 
 -- 4. ElevenLabs migration: copy encrypted key from opt_api_keys into
 --    saved_provider_configs so it can be resolved via the custom endpoint pathway.
@@ -2279,10 +1791,7 @@ INSERT INTO saved_provider_configs (
     embedding_model_id,
     nai_diffusion_model_id,
     nai_preset_name,
-    custom_endpoint_url,
-    custom_model_name,
-    thinking_level,
-    fallback_llm_ids
+    thinking_level
 )
 SELECT
     o.server_id,
@@ -2294,10 +1803,7 @@ SELECT
     NULL,
     NULL,
     NULL,
-    NULL,
-    NULL,
-    'auto',
-    '[]'::JSONB
+    'auto'
 FROM opt_api_keys o
 WHERE o.service_name = 'elevenlabs'
   AND NOT EXISTS (

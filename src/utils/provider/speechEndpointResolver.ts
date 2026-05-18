@@ -1,9 +1,8 @@
 import type { CustomEndpointRow } from "@/types/db/schema";
-import { customEndpointSchema } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import { buildServerCustomProviderName } from "@/utils/provider/customProviderUtils";
 import { decryptApiKey } from "@/utils/security/crypto";
+import { loadActiveEndpoint, loadEndpointCredentials } from "@/utils/db/repositories/SpeechRepository";
 
 export interface SpeechEndpointResult {
   endpoint: CustomEndpointRow;
@@ -24,45 +23,21 @@ async function resolveActiveEndpointByCapability(
   capability: "speech" | "transcription",
 ): Promise<SpeechEndpointResult | null> {
   try {
-    // 1. Find the active (is_default) custom endpoint for this capability on the server.
-    const rows = await sql`
-      SELECT * FROM custom_endpoints
-      WHERE server_id = ${serverId}
-        AND capability = ${capability}
-        AND user_id IS NULL
-        AND is_default = true
-      ORDER BY updated_at DESC, custom_endpoint_id DESC
-      LIMIT 1
-    `;
+    // 1. Find the active (is_default) custom endpoint for this capability on the server via repository
+    const endpoint = await loadActiveEndpoint(serverId, capability);
 
-    if (!rows || rows.length === 0) {
+    if (!endpoint) {
       return null;
     }
-
-    const parsed = customEndpointSchema.safeParse(rows[0]);
-    if (!parsed.success) {
-      log.warn(
-        `[SpeechResolver] Failed to parse ${capability} endpoint for server ${serverId}: ${parsed.error.message}`,
-      );
-      return null;
-    }
-
-    const endpoint = parsed.data;
 
     // 2. Endpoints that don't require auth (local servers) need no key lookup.
     if (!endpoint.requires_auth) {
       return { endpoint, apiKey: "" };
     }
 
-    // 3. Credentials are stored in saved_provider_configs keyed by the internal provider name:
-    //    "custom:s{serverId}:{label}" — mirrors buildServerCustomProviderName.
+    // 3. Credentials are stored in saved_provider_configs keyed by the internal provider name via repository
     const providerName = buildServerCustomProviderName(serverId, endpoint.label);
-    const [configRow] = await sql`
-      SELECT api_key, key_version FROM saved_provider_configs
-      WHERE server_id = ${serverId}
-        AND provider = ${providerName}
-      LIMIT 1
-    `;
+    const configRow = await loadEndpointCredentials(serverId, providerName);
 
     if (!configRow?.api_key) {
       log.warn(
@@ -73,7 +48,7 @@ async function resolveActiveEndpointByCapability(
 
     let apiKey: string;
     try {
-      apiKey = await decryptApiKey(configRow.api_key, configRow.key_version ?? 1);
+      apiKey = await decryptApiKey(configRow.api_key, configRow.key_version);
     } catch {
       log.warn(`[SpeechResolver] Failed to decrypt credentials for ${capability} endpoint on server ${serverId}`);
       return null;

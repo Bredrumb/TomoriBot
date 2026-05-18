@@ -401,11 +401,9 @@ export async function execute(
     }
 
     // 11. Write — update only fallback refs on the selected provider config
-    const llmOnlyIds = finalRefs.filter((r) => r.type === "llm").map((r) => r.id);
     const writeOk = await llmProviderRepo.upsertUserSavedProviderConfig(userData.user_id, {
       ...selectedConfig,
       fallback_model_refs: finalRefs,
-      fallback_llm_ids: llmOnlyIds,
     });
     if (!writeOk) {
       await replyInfoEmbed(modalResult.interaction, locale, {

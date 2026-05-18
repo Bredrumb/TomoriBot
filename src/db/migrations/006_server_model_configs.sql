@@ -17,7 +17,7 @@
 --     in server_notice_embeds_configs.
 --
 -- After this migration and caller redirect (Step 1b code changes), tomori_configs
--- holds no live data and can be safely dropped by migration 007.
+-- holds no live data and can be safely dropped by migration 008.
 --
 -- Down migration: 006_server_model_configs.down.sql
 

@@ -150,7 +150,7 @@ export async function execute(
     return;
   }
 
-  // 10. Apply the preset — writes schema fields to tomori_configs + nai_preset_name
+  // 10. Apply the preset — writes schema fields to split server config tables + nai_preset_name
   const updated = await configRepository.applyNaiPreset(tomoriState.server_id, chosenPreset, modelCodename);
   if (!updated) {
     await replyInfoEmbed(modalInteraction, locale, {

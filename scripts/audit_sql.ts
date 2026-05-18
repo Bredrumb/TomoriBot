@@ -6,12 +6,32 @@ const directoriesToAudit = ["src/"];
 
 const ignorePaths = [
   "src/utils/db/repositories",
+  "src/utils/db/client.ts",
   "src/db/migrations",
   "src/db/client.ts",
   "src/db/migrationRunner.ts",
   "src/init/database.ts",
   "src/types/",
 ];
+
+const exemptPaths = new Map<string, string>([
+  ["src/utils/metrics/dbStats.ts", "observability/status helper"],
+  ["src/utils/metrics/status/serverConfigPages.ts", "observability/status aggregation"],
+  ["src/utils/misc/logger.ts", "logging infrastructure"],
+  ["src/utils/security/crypto.ts", "security primitive"],
+  ["src/utils/security/keyRotation.ts", "security primitive"],
+]);
+
+type QueryHit = {
+  file: string;
+  line: number;
+  query: string;
+};
+
+type ExemptQueryHit = QueryHit & {
+  kind: "READ" | "WRITE";
+  reason: string;
+};
 
 // normalize a path to posix for comparison
 function normalizePath(p: string) {
@@ -41,18 +61,45 @@ async function run() {
     return !ignorePaths.some((ignore) => normalized.includes(ignore));
   });
 
-  const reads: { file: string; line: number; query: string }[] = [];
-  const writes: { file: string; line: number; query: string }[] = [];
+  const reads: QueryHit[] = [];
+  const writes: QueryHit[] = [];
+  const exemptions: ExemptQueryHit[] = [];
 
   for (const file of tsFiles) {
     const content = readFileSync(file, "utf8");
     const lines = content.split("\n");
     let inQuery = false;
+    let inBlockComment = false;
     let currentQuery = "";
     let queryStartLine = 0;
 
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+      let line = lines[i];
+
+      if (inBlockComment) {
+        const blockEnd = line.indexOf("*/");
+        if (blockEnd === -1) {
+          continue;
+        }
+        inBlockComment = false;
+        line = line.slice(blockEnd + 2);
+      }
+
+      const trimmedLine = line.trimStart();
+      if (trimmedLine.startsWith("//")) {
+        continue;
+      }
+
+      const blockStart = line.indexOf("/*");
+      if (blockStart !== -1) {
+        const blockEnd = line.indexOf("*/", blockStart + 2);
+        if (blockEnd === -1) {
+          inBlockComment = true;
+          line = line.slice(0, blockStart);
+        } else {
+          line = `${line.slice(0, blockStart)}${line.slice(blockEnd + 2)}`;
+        }
+      }
 
       if (!inQuery) {
         // Match `sql` with optional `<type>` and backtick, with or without await
@@ -86,13 +133,23 @@ async function run() {
   }
 
   function processQuery(file: string, line: number, query: string) {
+    const normalizedFile = normalizePath(file);
     const upperQuery = query.toUpperCase();
-    if (
+    const kind =
       upperQuery.includes("SELECT") &&
       !upperQuery.includes("INSERT") &&
       !upperQuery.includes("UPDATE") &&
       !upperQuery.includes("DELETE")
-    ) {
+        ? "READ"
+        : "WRITE";
+
+    const exemptReason = exemptPaths.get(normalizedFile);
+    if (exemptReason) {
+      exemptions.push({ file, line, query: query.trim(), kind, reason: exemptReason });
+      return;
+    }
+
+    if (kind === "READ") {
       reads.push({ file, line, query: query.trim() });
     } else {
       writes.push({ file, line, query: query.trim() });
@@ -103,6 +160,8 @@ async function run() {
   writes.forEach((w) => console.log(`${normalizePath(w.file)}:${w.line}`));
   console.log("\n=== READS ===");
   reads.forEach((r) => console.log(`${normalizePath(r.file)}:${r.line}`));
+  console.log("\n=== EXEMPTIONS ===");
+  exemptions.forEach((e) => console.log(`exempt: ${normalizePath(e.file)}:${e.line} (${e.kind}; ${e.reason})`));
 }
 
 run().catch(console.error);

@@ -407,11 +407,7 @@ export class PeekProfilePictureTool extends BaseTool {
     if (provider === "google") {
       analysisResult = await this.callGoogleVisionWithBase64(apiKey, apiModelName, images, prompt);
     } else {
-      const endpointUrl = this.getVisionEndpointUrl(
-        provider,
-        context,
-        creds.customEndpoint?.endpoint_url ?? creds.savedConfig.custom_endpoint_url,
-      );
+      const endpointUrl = this.getVisionEndpointUrl(provider, context, creds.customEndpoint?.endpoint_url ?? null);
       analysisResult = await this.callOpenAICompatibleVisionWithBase64(
         apiKey,
         apiModelName,

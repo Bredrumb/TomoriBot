@@ -6,7 +6,6 @@ import type {
   SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
@@ -204,19 +203,11 @@ export async function execute(
       }
 
       const targetPersonaLineageId = selectedPersona.persona_lineage_id ?? 0;
-      let memoriesQuery = sql`
-        SELECT server_memory_id, server_id, tomori_id, persona_lineage_id, user_id, content, tags, created_at, updated_at
-        FROM server_memories
-        WHERE server_id = ${tomoriState.server_id}
-          AND persona_lineage_id = ${targetPersonaLineageId}
-      `;
-
-      if (!hasManagePermission) {
-        memoriesQuery = sql`${memoriesQuery} AND user_id = ${userData.user_id}`;
-      }
-
-      memoriesQuery = sql`${memoriesQuery} ORDER BY created_at DESC, server_memory_id DESC`;
-      const memories = (await memoriesQuery) as ServerMemoryRow[];
+      const memories = await serverMemoryRepository.loadServerMemoriesScoped(
+        tomoriState.server_id,
+        targetPersonaLineageId,
+        hasManagePermission ? undefined : userData.user_id,
+      );
 
       if (memories.length === 0) {
         const descriptionKey = hasManagePermission

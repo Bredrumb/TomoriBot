@@ -6,6 +6,7 @@ import { ColorCode, log } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow } from "@/types/db/schema";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { configRepository } from "@/utils/db/repositories";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
@@ -71,63 +72,43 @@ export async function execute(
       return;
     }
 
-    // Reset defaults across all split config tables in parallel.
-    // Split tables use server_id as PK so no tomori_id fallback is needed.
-    const [modelRows, chatRows, permRows, capRows, embedRows] = await Promise.all([
-      sql<Array<{ server_id: number }>>`
-        UPDATE server_model_configs
-        SET
-          llm_temperature = 1.2,
-          thinking_level = 'auto',
-          llm_disabled_params = ARRAY[]::text[]
-        WHERE server_id = ${serverId}
-        RETURNING server_id
-      `,
-      sql<Array<{ server_id: number }>>`
-        UPDATE server_chat_configs
-        SET
-          llm_top_p = 0.95,
-          llm_min_p = 0.05,
-          llm_stop_strings = ARRAY[]::text[],
-          llm_stop_speaker_pattern_enabled = false,
-          humanizer_degree = 1,
-          timezone_offset = 0,
-          message_fetch_limit = 80,
-          self_debug_enabled = false
-        WHERE server_id = ${serverId}
-        RETURNING server_id
-      `,
-      sql<Array<{ server_id: number }>>`
-        UPDATE server_member_permissions_configs
-        SET
-          server_memteaching_enabled = true,
-          attribute_memteaching_enabled = false,
-          sampledialogue_memteaching_enabled = false,
-          self_teaching_enabled = true,
-          web_search_enabled = true,
-          personal_memories_enabled = true
-        WHERE server_id = ${serverId}
-        RETURNING server_id
-      `,
-      sql<Array<{ server_id: number }>>`
-        UPDATE server_capabilities_configs
-        SET
-          emoji_usage_enabled = true,
-          sticker_usage_enabled = true,
-          imagegen_enabled = true
-        WHERE server_id = ${serverId}
-        RETURNING server_id
-      `,
-      sql<Array<{ server_id: number }>>`
-        UPDATE server_notice_embeds_configs
-        SET tool_notice_hidden_keys = ARRAY[]::text[]
-        WHERE server_id = ${serverId}
-        RETURNING server_id
-      `,
+    // 1. Reset defaults across all split config tables in parallel via typed repository methods.
+    //    Each method returns a boolean indicating whether any row was updated.
+    const results = await Promise.all([
+      configRepository.updateModelConfig(serverId, {
+        llm_temperature: 1.2,
+        thinking_level: "auto",
+        llm_disabled_params: [],
+      }),
+      configRepository.updateChatConfig(serverId, {
+        llm_top_p: 0.95,
+        llm_min_p: 0.05,
+        llm_stop_strings: [],
+        llm_stop_speaker_pattern_enabled: false,
+        humanizer_degree: 1,
+        timezone_offset: 0,
+        message_fetch_limit: 80,
+        self_debug_enabled: false,
+      }),
+      configRepository.updateMemberPermissionsConfig(serverId, {
+        server_memteaching_enabled: true,
+        attribute_memteaching_enabled: false,
+        sampledialogue_memteaching_enabled: false,
+        self_teaching_enabled: true,
+        personal_memories_enabled: true,
+      }),
+      configRepository.updateCapabilitiesConfig(serverId, {
+        emoji_usage_enabled: true,
+        sticker_usage_enabled: true,
+        web_search_enabled: true,
+        imagegen_enabled: true,
+      }),
+      configRepository.updateNoticeEmbedsConfig(serverId, {
+        tool_notice_hidden_keys: [],
+      }),
     ]);
 
-    const anyUpdated =
-      modelRows.length > 0 || chatRows.length > 0 || permRows.length > 0 || capRows.length > 0 || embedRows.length > 0;
+    const anyUpdated = results.some(Boolean);
 
     if (!anyUpdated) {
       await replyInfoEmbed(interaction, locale, {

@@ -1,7 +1,8 @@
 /**
- * ConfigRepository — manages `tomori_configs` and preset tables.
+ * ConfigRepository — manages the 13 split server config tables and preset tables.
  *
- * Owns all writes to tomori_configs plus preset reads and fallback LLM config.
+ * All config reads and writes route through typed split-table methods.
+ * The legacy `tomori_configs` god table was dropped by migration 008 (Task F2).
  * Persona identity fields (nickname, lineage) live in PersonaRepository.
  *
  * Export contract: toExportShape / fromExportShape are required by IRepository
@@ -9,7 +10,7 @@
  */
 import type {
   ErrorContext,
-  TomoriConfigRow,
+  AssembledServerConfig,
   NaiPresetRow,
   ServerModelConfigRow,
   ServerChatConfigRow,
@@ -25,13 +26,12 @@ import type {
   ServerByokConfigRow,
   ServerMemoryConfigRow,
 } from "@/types/db/schema";
-import { tomoriConfigSchema, tomoriSchema, naiPresetSchema } from "@/types/db/schema";
+import { assembledServerConfigSchema, tomoriSchema, naiPresetSchema } from "@/types/db/schema";
 import type { TomoriPresetRow, SystemPromptPresetRow } from "@/types/db/schema";
 import type { FallbackModelRef } from "@/types/db/schema";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import type { SqlParameterArray } from "@/types/db/sqlOperations";
 import { sql } from "@/utils/db/client";
-import { validateTomoriConfigFields } from "@/utils/db/sqlSecurity";
 import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
@@ -85,7 +85,7 @@ export type ServerByokConfigsRow = {
 
 /**
  * Composite export shape for ConfigRepository's Phase 6 tables.
- * Replaces the old Partial<TomoriConfigRow> stub.
+ * Replaces the old Partial<AssembledServerConfig> stub.
  */
 export type ConfigExportShape = {
   capabilities: ServerCapabilitiesConfigsRow | null;
@@ -332,43 +332,105 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     }
   }
 
-  // ── writes ─────────────────────────────────────────────────────────────────
-
   /**
-   * Updates arbitrary tomori_config fields for a server.
-   * Invalidates the tomori state cache after write.
+   * Loads a single preset row by exact name match, returning only the ID and name.
+   * Used by setup to validate and retrieve the preset ID after modal submission.
    *
-   * @param serverId     - Internal server DB ID
-   * @param configData   - Partial TomoriConfigRow with fields to update
-   * @param serverDiscId - Discord server snowflake (required for cache invalidation)
-   * @returns Updated TomoriConfigRow or null on failure
+   * @param presetName - Exact preset name to look up
+   * @returns Object with preset ID and name, or null if not found
    */
-  async update(
-    serverId: number,
-    configData: Partial<TomoriConfigRow>,
-    serverDiscId?: string,
-  ): Promise<TomoriConfigRow | null> {
-    const row = await this.updateTomoriConfigRow(serverId, configData);
-    if (row && serverDiscId) invalidateTomoriStateCache(serverDiscId);
-    return row;
+  async loadPresetByName(presetName: string): Promise<{ tomori_preset_id: number; tomori_preset_name: string } | null> {
+    try {
+      const [row] = await sql`
+        SELECT tomori_preset_id, tomori_preset_name
+        FROM tomori_presets
+        WHERE tomori_preset_name = ${presetName}
+        LIMIT 1
+      `;
+      if (!row) return null;
+      return { tomori_preset_id: Number(row.tomori_preset_id), tomori_preset_name: String(row.tomori_preset_name) };
+    } catch (error) {
+      log.error(`Error loading preset by name "${presetName}":`, error);
+      return null;
+    }
   }
 
   /**
+   * Loads model-selection and BYOK columns from the split config tables for a server.
+   * Used by credentialResolver to resolve provider for each capability without
+   * bypassing the TomoriState cache — this is an intentional fresh DB read.
+   *
+   * @param serverId - Internal server DB ID
+   */
+  async loadModelCapabilityIds(
+    serverId: number,
+  ): Promise<Pick<
+    AssembledServerConfig,
+    | "llm_id"
+    | "embedding_model_id"
+    | "diffusion_model_id"
+    | "nai_diffusion_model_id"
+    | "video_model_id"
+    | "vision_llm_id"
+    | "user_byok_mode"
+  > | null> {
+    try {
+      // 1. Join the three split tables that own capability-selection columns.
+      //    server_model_configs anchors (always present post-E0 backfill);
+      //    the other two are LEFT JOINs for migration-window safety.
+      const [row] = await sql`
+        SELECT
+          smc.llm_id,
+          smc.embedding_model_id,
+          smc.diffusion_model_id,
+          smc.video_model_id,
+          smc.vision_llm_id,
+          snai.nai_diffusion_model_id,
+          sbc.user_byok_mode
+        FROM server_model_configs smc
+        LEFT JOIN server_novelai_imagegen_configs snai USING (server_id)
+        LEFT JOIN server_byok_configs sbc USING (server_id)
+        WHERE smc.server_id = ${serverId}
+        LIMIT 1
+      `;
+      if (!row) return null;
+
+      const parsed = assembledServerConfigSchema
+        .pick({
+          llm_id: true,
+          embedding_model_id: true,
+          diffusion_model_id: true,
+          nai_diffusion_model_id: true,
+          video_model_id: true,
+          vision_llm_id: true,
+          user_byok_mode: true,
+        })
+        .safeParse(row);
+
+      if (!parsed.success) {
+        log.warn(`Failed to validate capability model IDs for server ${serverId}: ${parsed.error.message}`);
+        return null;
+      }
+      return parsed.data;
+    } catch (error) {
+      log.error(`Error loading model capability IDs for server ${serverId}:`, error);
+      return null;
+    }
+  }
+
+  // ── writes ─────────────────────────────────────────────────────────────────
+
+  /**
    * Applies a NovelAI preset's sampling parameters to a server's config.
-   * Invalidates the tomori state cache after write.
+   * Writes through typed split-table methods; invalidates the tomori state cache on success.
    *
    * @param serverId     - Internal server DB ID
    * @param preset       - NaiPresetRow to apply
    * @param model        - LLM codename for temperature conversion
    * @param serverDiscId - Discord server snowflake (required for cache invalidation)
-   * @returns Updated TomoriConfigRow or null on failure
+   * @returns true on success, false if any write failed
    */
-  async applyNaiPreset(
-    serverId: number,
-    preset: NaiPresetRow,
-    model: string,
-    serverDiscId?: string,
-  ): Promise<TomoriConfigRow | null> {
+  async applyNaiPreset(serverId: number, preset: NaiPresetRow, model: string, serverDiscId?: string): Promise<boolean> {
     const params = preset.parameters;
     const naiTemp = typeof params.temperature === "number" ? params.temperature : 1.35;
     const llm_temperature = this.invertNaiTemperature(naiTemp, model);
@@ -376,15 +438,16 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     const llm_top_p = typeof params.top_p === "number" ? params.top_p : 1.0;
     const llm_min_p = typeof params.min_p === "number" ? params.min_p : 0.05;
 
-    const row = await this.updateTomoriConfigRow(serverId, {
-      llm_temperature,
-      llm_top_k,
-      llm_top_p,
-      llm_min_p,
-      nai_preset_name: preset.preset_name,
-    });
-    if (row && serverDiscId) invalidateTomoriStateCache(serverDiscId);
-    return row;
+    // 1. Write sampling params across their owning split tables in parallel.
+    const [modelOk, chatOk, naiOk] = await Promise.all([
+      this.updateModelConfig(serverId, { llm_temperature }),
+      this.updateChatConfig(serverId, { llm_top_p, llm_top_k, llm_min_p }),
+      this.updateNovelaiImagegenConfig(serverId, { nai_preset_name: preset.preset_name }),
+    ]);
+
+    const ok = modelOk && chatOk && naiOk;
+    if (ok && serverDiscId) invalidateTomoriStateCache(serverDiscId);
+    return ok;
   }
 
   /**
@@ -602,19 +665,27 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     return this.executeUpdate("server_memory_configs", serverId, patch);
   }
 
+  async updateWelcomeConfig(
+    serverId: number,
+    patch: Partial<{
+      welcome_channel_disc_id: string | null;
+      welcome_prompt: string | null;
+      welcome_persona_id: number | null;
+    }>,
+  ): Promise<boolean> {
+    return this.executeUpdate("server_welcome_configs", serverId, patch);
+  }
+
   /**
-   * Delete every config-table row owned by this server across the 13 split tables
-   * (plus legacy `tomori_configs` until Task F drops it). Used by `/config setup` to
-   * recover from the orphaned-alters state: a server that has alter personas but no
-   * main persona row is wedged because `tomori_configs.server_id` has a UNIQUE
-   * constraint that blocks fresh setup. Wiping all configs frees the constraint
-   * without touching `tomoris` rows, so alters survive the reset.
+   * Delete every config-table row owned by this server across the 13 split tables.
+   * Used by `/config setup` to recover from the orphaned-alters state.
+   * Wiping all configs frees the constraint without touching `tomoris` rows, so
+   * alters survive the reset.
    *
    * @param serverId - Internal server DB ID
    */
   async resetAllServerConfigs(serverId: number): Promise<void> {
     await Promise.all([
-      sql`DELETE FROM tomori_configs WHERE server_id = ${serverId}`,
       sql`DELETE FROM server_model_configs WHERE server_id = ${serverId}`,
       sql`DELETE FROM server_chat_configs WHERE server_id = ${serverId}`,
       sql`DELETE FROM server_member_permissions_configs WHERE server_id = ${serverId}`,
@@ -922,86 +993,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     `;
   }
 
-  private async updateTomoriConfigRow(
-    serverId: number,
-    configData: Partial<TomoriConfigRow>,
-  ): Promise<TomoriConfigRow | null> {
-    try {
-      const validConfigData = tomoriConfigSchema.partial().parse(configData);
-      const fields = Object.keys(validConfigData).filter(
-        (key) => key !== "tomori_id" && key !== "tomori_config_id" && key in configData,
-      );
-
-      if (fields.length === 0) {
-        log.warn(`No fields provided to update for server_id: ${serverId}`);
-        return null;
-      }
-
-      validateTomoriConfigFields(fields);
-
-      const setParts: string[] = [];
-      const values: SqlParameterArray = [];
-
-      fields.forEach((field, index) => {
-        setParts.push(`${field} = $${index + 1}`);
-        values.push(validConfigData[field as keyof typeof validConfigData]);
-      });
-
-      const setClause = setParts.join(", ");
-      const finalPlaceholderIndex = values.length + 1;
-      values.push(serverId);
-
-      const result = await sql.unsafe(
-        `
-          UPDATE tomori_configs
-          SET ${setClause}
-          WHERE server_id = $${finalPlaceholderIndex}
-          RETURNING *
-        `,
-        values,
-      );
-
-      if (!result.length) {
-        const context: ErrorContext = {
-          serverId,
-          errorType: "DatabaseUpdateError",
-          metadata: {
-            operation: "updateTomoriConfig",
-            fields,
-          },
-        };
-        await log.error(`No tomori_config found with server_id: ${serverId}`, new Error("Config not found"), context);
-        return null;
-      }
-
-      const updatedConfig = tomoriConfigSchema.safeParse(result[0]);
-      if (!updatedConfig.success) {
-        const context: ErrorContext = {
-          serverId,
-          errorType: "SchemaValidationError",
-          metadata: {
-            operation: "updateTomoriConfig",
-            validationErrors: updatedConfig.error.flatten(),
-          },
-        };
-        await log.error(`Failed to validate updated config for server_id: ${serverId}`, updatedConfig.error, context);
-        return null;
-      }
-
-      return updatedConfig.data;
-    } catch (error) {
-      const context: ErrorContext = {
-        serverId,
-        errorType: "DatabaseUpdateError",
-        metadata: {
-          operation: "updateTomoriConfig",
-        },
-      };
-      await log.error(`Error updating tomori_config for server_id: ${serverId}`, error, context);
-      return null;
-    }
-  }
-
   private invertNaiTemperature(naiTemp: number, _model: string): number {
     return Math.min(2.0, Math.max(0.0, naiTemp));
   }
@@ -1023,49 +1014,16 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
 
   private async setFallbackLlmRows(serverId: number, llmIds: number[]): Promise<boolean> {
     try {
-      const fallbackJson = JSON.stringify(llmIds);
-      const updatedRows = await sql<
-        Array<{
-          tomori_config_id: number;
-          server_id: number | null;
-          tomori_id: number | null;
-          fallback_llm_ids: unknown;
-        }>
-      >`
-        UPDATE tomori_configs
-        SET fallback_llm_ids = ${fallbackJson}::JSONB,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE server_id = ${serverId}
-           OR (
-             server_id IS NULL
-             AND tomori_id IN (
-               SELECT tomori_id FROM tomoris
-               WHERE server_id = ${serverId}
-                 AND is_alter = false
-             )
-           )
-        RETURNING tomori_config_id, server_id, tomori_id, fallback_llm_ids
-      `;
-
-      if (updatedRows.length === 0) {
+      const ok = await this.updateModelConfig(serverId, { fallback_llm_ids: llmIds });
+      if (!ok) {
         log.warn(
           `[FallbackConfig] setFallbackLlms matched 0 rows for server_id ${serverId} (requested ids: [${llmIds.join(", ")}])`,
         );
         return false;
       }
-
       if (this.fallbackDebugEnabled()) {
-        const updatedRowSummary = updatedRows.map((row) => ({
-          tomori_config_id: row.tomori_config_id,
-          server_id: row.server_id,
-          tomori_id: row.tomori_id,
-          fallback_llm_ids: row.fallback_llm_ids,
-        }));
-        log.info(
-          `[FallbackDebug][setFallbackLlms] server_id=${serverId} requested_ids=[${llmIds.join(", ")}] updated_rows=${JSON.stringify(updatedRowSummary)}`,
-        );
+        log.info(`[FallbackDebug][setFallbackLlms] server_id=${serverId} requested_ids=[${llmIds.join(", ")}]`);
       }
-
       return true;
     } catch (error) {
       log.error(`Error setting fallback LLMs for server ${serverId} (ids: [${llmIds.join(", ")}]):`, error);
@@ -1075,33 +1033,16 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
 
   private async setFallbackModelRefRows(serverId: number, refs: FallbackModelRef[]): Promise<boolean> {
     try {
-      const refsJson = JSON.stringify(refs);
       const legacyIds = refs.filter((ref) => ref.type === "llm").map((ref) => ref.id);
-      const legacyJson = JSON.stringify(legacyIds);
-
-      const updatedRows = await sql`
-        UPDATE tomori_configs
-        SET
-          fallback_model_refs = ${refsJson}::JSONB,
-          fallback_llm_ids    = ${legacyJson}::JSONB,
-          updated_at          = CURRENT_TIMESTAMP
-        WHERE server_id = ${serverId}
-           OR (
-             server_id IS NULL
-             AND tomori_id IN (
-               SELECT tomori_id FROM tomoris
-               WHERE server_id = ${serverId}
-                 AND is_alter = false
-             )
-           )
-        RETURNING tomori_config_id
-      `;
-
-      if (updatedRows.length === 0) {
+      // 1. Write refs to server_chat_configs and sync legacy integer-ID list in server_model_configs in parallel.
+      const [refsOk, idsOk] = await Promise.all([
+        this.updateChatConfig(serverId, { fallback_model_refs: refs }),
+        this.updateModelConfig(serverId, { fallback_llm_ids: legacyIds }),
+      ]);
+      if (!refsOk || !idsOk) {
         log.warn(`[FallbackConfig] setFallbackModelRefs matched 0 rows for server_id ${serverId}`);
         return false;
       }
-
       return true;
     } catch (error) {
       log.error(`Error setting fallback model refs for server ${serverId}:`, error);

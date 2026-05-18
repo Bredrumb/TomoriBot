@@ -104,28 +104,6 @@ async function rotateAllKeys() {
     console.error("❌ Failed to query opt_api_keys:", error);
   }
 
-  // Check tomori_configs table
-  try {
-    const tomoriConfigs = await sql`
-			SELECT tomori_config_id, tomori_id, api_key, key_version
-			FROM tomori_configs
-			WHERE (key_version != ${currentVersion} OR key_version IS NULL)
-			  AND api_key IS NOT NULL
-		`;
-
-    for (const row of tomoriConfigs) {
-      oldKeys.push({
-        table: "tomori_configs",
-        id: row.tomori_config_id,
-        api_key: row.api_key,
-        key_version: row.key_version || 1,
-        identifier: `tomori_id: ${row.tomori_id}`,
-      });
-    }
-  } catch (error) {
-    console.error("❌ Failed to query tomori_configs:", error);
-  }
-
   // 2. Check if there's anything to rotate
   if (oldKeys.length === 0) {
     console.log(`✅ All keys are already on the current version (V${currentVersion})`);
@@ -186,14 +164,6 @@ async function rotateAllKeys() {
 					    key_version = ${version},
 					    updated_at = CURRENT_TIMESTAMP
 					WHERE opt_api_key_id = ${oldKey.id}
-				`;
-      } else if (oldKey.table === "tomori_configs") {
-        await sql`
-					UPDATE tomori_configs
-					SET api_key = ${encrypted},
-					    key_version = ${version},
-					    updated_at = CURRENT_TIMESTAMP
-					WHERE tomori_config_id = ${oldKey.id}
 				`;
       }
 

@@ -17,13 +17,13 @@ import {
   sendToolProgressNotice,
 } from "@/utils/discord/toolProgressNotice";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
-import { sql } from "../../utils/db/client";
 import { checkVideoQuota, incrementVideoQuota } from "../../utils/quota/videoQuotaManager";
 import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
 import { generateCustomVideoViaEndpoint } from "@/providers/custom/customEndpointDispatcher";
 import { formatCustomEndpointModelDisplay } from "@/utils/provider/customProviderUtils";
 import type { ProviderNativeVideoResolution } from "@/types/provider/featureInterfaces";
 import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
 
 /** Discord file size limit for non-boosted servers (25 MB) */
 const DISCORD_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
@@ -129,22 +129,18 @@ export class GenerateVideoTool extends BaseTool {
   }
 
   /**
-   * Get the video model codename from the database.
+   * Get the video model codename from the database via repository.
    * @param videoModelId - Database ID of the video generation model
    * @returns The model codename string (e.g., "veo-3.1-generate-preview")
    */
   private async getVideoModelCodename(videoModelId: number): Promise<string> {
-    const result = await sql`
-      SELECT codename
-      FROM video_generation_models
-      WHERE video_model_id = ${videoModelId}
-    `.values();
+    const model = await llmModelRepo.loadVideoGenerationModelById(videoModelId);
 
-    if (result.length === 0) {
+    if (!model) {
       throw new Error(`Video model not found in database: ${videoModelId}`);
     }
 
-    return result[0][0] as string;
+    return model.codename;
   }
 
   /**

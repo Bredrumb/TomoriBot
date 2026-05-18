@@ -6,7 +6,7 @@ import type {
   SavedProviderConfigRow,
   ServerModelConfigRow,
   ServerNovelaiImagegenConfigRow,
-  TomoriConfigRow,
+  AssembledServerConfig,
   UserSavedProviderConfigUpsert,
   UserSavedProviderConfigRow,
 } from "@/types/db/schema";
@@ -30,13 +30,13 @@ type RegistrationScope =
   | {
       kind: "server";
       ownerId: number;
-      baseConfig: TomoriConfigRow;
+      baseConfig: AssembledServerConfig;
       serverDiscId?: string;
     }
   | {
       kind: "personal";
       ownerId: number;
-      baseConfig: TomoriConfigRow;
+      baseConfig: AssembledServerConfig;
     };
 
 export interface CustomEndpointRegistrationInput {
@@ -277,14 +277,6 @@ async function buildSavedConfigForCustomEndpoint(
         baseConfig: scope.baseConfig,
         existingConfig: existingConfig as SavedProviderConfigRow | null,
         llmId: textModelId,
-        customEndpointUrl:
-          endpoint.capability === "text" ? endpoint.endpointUrl : (existingConfig?.custom_endpoint_url ?? null),
-        customModelName:
-          endpoint.capability === "text"
-            ? (endpoint.modelName ?? endpoint.displayName)
-            : (existingConfig?.custom_model_name ?? null),
-        customNumCtx:
-          endpoint.capability === "text" ? (endpoint.numCtx ?? null) : (existingConfig?.custom_num_ctx ?? null),
       })
     : await buildUserSavedProviderConfigFromExistingOrDefaults({
         userId: scope.ownerId,
@@ -294,14 +286,6 @@ async function buildSavedConfigForCustomEndpoint(
         baseConfig: scope.baseConfig,
         existingConfig: existingConfig as UserSavedProviderConfigRow | null,
         llmId: textModelId,
-        customEndpointUrl:
-          endpoint.capability === "text" ? endpoint.endpointUrl : (existingConfig?.custom_endpoint_url ?? null),
-        customModelName:
-          endpoint.capability === "text"
-            ? (endpoint.modelName ?? endpoint.displayName)
-            : (existingConfig?.custom_model_name ?? null),
-        customNumCtx:
-          endpoint.capability === "text" ? (endpoint.numCtx ?? null) : (existingConfig?.custom_num_ctx ?? null),
         enabledCapabilities: (existingConfig as UserSavedProviderConfigRow | null)?.enabled_capabilities ?? [],
       }).then((config) => ({
         ...config,
@@ -524,9 +508,6 @@ export async function removeCustomEndpointRegistration(params: {
           embedding_model_id: params.capability === "embedding" ? null : existingConfig.embedding_model_id,
           diffusion_model_id: params.capability === "image" ? null : existingConfig.diffusion_model_id,
           video_model_id: params.capability === "video" ? null : existingConfig.video_model_id,
-          custom_endpoint_url: params.capability === "text" ? null : existingConfig.custom_endpoint_url,
-          custom_model_name: params.capability === "text" ? null : existingConfig.custom_model_name,
-          custom_num_ctx: params.capability === "text" ? null : existingConfig.custom_num_ctx,
         }
       : {
           ...(existingConfig as UserSavedProviderConfigRow),
@@ -535,9 +516,6 @@ export async function removeCustomEndpointRegistration(params: {
           embedding_model_id: params.capability === "embedding" ? null : existingConfig.embedding_model_id,
           diffusion_model_id: params.capability === "image" ? null : existingConfig.diffusion_model_id,
           video_model_id: params.capability === "video" ? null : existingConfig.video_model_id,
-          custom_endpoint_url: params.capability === "text" ? null : existingConfig.custom_endpoint_url,
-          custom_model_name: params.capability === "text" ? null : existingConfig.custom_model_name,
-          custom_num_ctx: params.capability === "text" ? null : existingConfig.custom_num_ctx,
         };
 
   if (params.scope.kind === "server") {

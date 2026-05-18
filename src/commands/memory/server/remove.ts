@@ -6,7 +6,6 @@ import type {
   SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
 import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -171,11 +170,7 @@ export async function execute(
 
       // 4. Check permissions and if teaching is enabled
       const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
-      // NOTE: Check the correct config key name from tomori_configs table
-      if (
-        !tomoriState.config.server_memteaching_enabled && // Assuming this is the correct key
-        !hasManagePermission
-      ) {
+      if (!tomoriState.config.server_memteaching_enabled && !hasManagePermission) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "commands.teach.memory.server.teaching_disabled_title",
           descriptionKey: "commands.teach.memory.server.teaching_disabled_description",
@@ -187,26 +182,13 @@ export async function execute(
 
       // 5. Fetch lineage-scoped server memories for the selected persona.
       const targetPersonaLineageId = selectedPersona.persona_lineage_id ?? 0;
-      let memoriesQuery = sql`
-				SELECT server_memory_id, content, user_id
-				FROM server_memories
-				WHERE server_id = ${
-          // biome-ignore lint/style/noNonNullAssertion: tomoriState check guarantees server_id
-          tomoriState.server_id!
-        }
-				  AND persona_lineage_id = ${targetPersonaLineageId}
-			`;
-
-      if (!hasManagePermission) {
-        // If user does NOT have ManageGuild permission, only fetch their own memories
-        memoriesQuery = sql`${memoriesQuery} AND user_id = ${userData.user_id}`;
-      }
-
-      // Add ordering
-      memoriesQuery = sql`${memoriesQuery} ORDER BY created_at DESC`;
-
-      // Execute the constructed query
-      const memories = await memoriesQuery;
+      // biome-ignore lint/style/noNonNullAssertion: tomoriState check guarantees server_id
+      const serverId = tomoriState.server_id!;
+      const memories = await serverMemoryRepository.loadServerMemoriesScoped(
+        serverId,
+        targetPersonaLineageId,
+        hasManagePermission ? undefined : userData.user_id,
+      );
 
       if (memories.length === 0) {
         // 6. Check if there are any memories to remove (using the potentially filtered list)
@@ -287,7 +269,8 @@ export async function execute(
       // Perform the database update using the helper function - let helper manage interaction state
       const removalSucceeded = await performServerMemoryRemoval(
         selectedPersona,
-        selectedMemory,
+        // biome-ignore lint/style/noNonNullAssertion: server_memory_id is always present on SELECT results
+        { server_memory_id: selectedMemory.server_memory_id!, content: selectedMemory.content },
         userData,
         modalSubmitInteraction,
         locale,

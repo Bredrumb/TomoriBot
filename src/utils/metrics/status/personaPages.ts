@@ -184,10 +184,7 @@ export async function showPersonaStatus(
       },
       {
         nameKey: "commands.tool.status.field_voice",
-        value:
-          selectedPersona.speech_voice_name ??
-          selectedPersona.elevenlabs_voice_name ??
-          localizer(locale, "commands.choices.none"),
+        value: selectedPersona.speech_voice_name ?? localizer(locale, "commands.choices.none"),
         inline: true,
       },
       {

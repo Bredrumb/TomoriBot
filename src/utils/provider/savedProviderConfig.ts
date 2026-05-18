@@ -2,7 +2,7 @@ import type {
   CustomEndpointCapability,
   SavedProviderConfigRow,
   SavedProviderConfigUpsert,
-  TomoriConfigRow,
+  AssembledServerConfig,
   TomoriState,
   UserSavedProviderConfigRow,
   UserSavedProviderConfigUpsert,
@@ -49,14 +49,8 @@ export function buildSavedProviderSnapshotFromTomoriState(tomoriState: TomoriSta
     llm_min_p: tomoriState.config.llm_min_p,
     llm_disabled_params: tomoriState.config.llm_disabled_params ?? [],
     llm_logit_biases: tomoriState.config.llm_logit_biases ?? [],
-    custom_endpoint_url: tomoriState.config.custom_endpoint_url ?? null,
-    custom_model_name: tomoriState.config.custom_model_name ?? null,
-    custom_num_ctx: tomoriState.config.custom_num_ctx ?? null,
     thinking_level: tomoriState.config.thinking_level,
-    fallback_llm_ids: tomoriState.config.fallback_llm_ids ?? [],
     fallback_model_refs: tomoriState.config.fallback_model_refs ?? [],
-    channel_llm_overrides: [],
-    persona_llm_overrides: [],
   };
 }
 
@@ -102,12 +96,9 @@ export async function buildSavedProviderConfigFromExistingOrDefaults(params: {
   provider: string;
   apiKey: Buffer | null;
   keyVersion: number;
-  baseConfig: TomoriConfigRow;
+  baseConfig: AssembledServerConfig;
   existingConfig?: SavedProviderConfigRow | null;
   llmId?: number | null;
-  customEndpointUrl?: string | null;
-  customModelName?: string | null;
-  customNumCtx?: number | null;
 }): Promise<SavedProviderConfigUpsert> {
   const normalizedProvider = params.provider.toLowerCase();
   const existingConfig = params.existingConfig ?? null;
@@ -133,14 +124,8 @@ export async function buildSavedProviderConfigFromExistingOrDefaults(params: {
     llm_min_p: existingConfig?.llm_min_p ?? params.baseConfig.llm_min_p,
     llm_disabled_params: existingConfig?.llm_disabled_params ?? params.baseConfig.llm_disabled_params ?? [],
     llm_logit_biases: existingConfig?.llm_logit_biases ?? params.baseConfig.llm_logit_biases ?? [],
-    custom_endpoint_url: params.customEndpointUrl ?? existingConfig?.custom_endpoint_url ?? null,
-    custom_model_name: params.customModelName ?? existingConfig?.custom_model_name ?? null,
-    custom_num_ctx: params.customNumCtx ?? existingConfig?.custom_num_ctx ?? null,
     thinking_level: existingConfig?.thinking_level ?? params.baseConfig.thinking_level,
-    fallback_llm_ids: existingConfig?.fallback_llm_ids ?? [],
     fallback_model_refs: existingConfig?.fallback_model_refs ?? [],
-    channel_llm_overrides: existingConfig?.channel_llm_overrides ?? [],
-    persona_llm_overrides: existingConfig?.persona_llm_overrides ?? [],
   };
 }
 
@@ -149,12 +134,9 @@ export async function buildUserSavedProviderConfigFromExistingOrDefaults(params:
   provider: string;
   apiKey: Buffer | null;
   keyVersion: number;
-  baseConfig: TomoriConfigRow;
+  baseConfig: AssembledServerConfig;
   existingConfig?: UserSavedProviderConfigRow | null;
   llmId?: number | null;
-  customEndpointUrl?: string | null;
-  customModelName?: string | null;
-  customNumCtx?: number | null;
   enabledCapabilities?: Array<"text" | "embedding" | "image" | "video" | "vision">;
 }): Promise<UserSavedProviderConfigUpsert> {
   const normalizedProvider = params.provider.toLowerCase();
@@ -181,12 +163,8 @@ export async function buildUserSavedProviderConfigFromExistingOrDefaults(params:
     llm_min_p: existingConfig?.llm_min_p ?? params.baseConfig.llm_min_p,
     llm_disabled_params: existingConfig?.llm_disabled_params ?? params.baseConfig.llm_disabled_params ?? [],
     llm_logit_biases: existingConfig?.llm_logit_biases ?? params.baseConfig.llm_logit_biases ?? [],
-    custom_endpoint_url: params.customEndpointUrl ?? existingConfig?.custom_endpoint_url ?? null,
-    custom_model_name: params.customModelName ?? existingConfig?.custom_model_name ?? null,
-    custom_num_ctx: params.customNumCtx ?? existingConfig?.custom_num_ctx ?? null,
     thinking_level: existingConfig?.thinking_level ?? params.baseConfig.thinking_level,
     enabled_capabilities: params.enabledCapabilities ?? existingConfig?.enabled_capabilities ?? [],
-    fallback_llm_ids: existingConfig?.fallback_llm_ids ?? [],
     fallback_model_refs: existingConfig?.fallback_model_refs ?? [],
   };
 }

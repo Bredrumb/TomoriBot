@@ -5,7 +5,7 @@ import type {
   LlmRow,
   RandomTriggerRow,
   RoleWhitelistRow,
-  TomoriConfigRow,
+  AssembledServerConfig,
 } from "@/types/db/schema";
 import { CooldownType, type TomoriState } from "@/types/db/schema";
 import { formatLlmDisplayLabel } from "@/utils/provider/modelDisplay";
@@ -208,7 +208,7 @@ export async function formatRandomTriggers(
 
 export async function formatAutochatChannels(
   client: Client,
-  config: TomoriConfigRow,
+  config: AssembledServerConfig,
   personaNameMap: Map<number, string>,
   mainPersonaName: string,
   locale: string,
@@ -307,7 +307,7 @@ export function formatPersonaLlmOverrides(
  */
 export async function formatWelcomeChannel(
   client: Client,
-  config: TomoriConfigRow,
+  config: AssembledServerConfig,
   personaNameMap: Map<number, string>,
   locale: string,
 ): Promise<string> {

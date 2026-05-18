@@ -1,6 +1,5 @@
 import { TextInputStyle, MessageFlags } from "discord.js";
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
-import { sql } from "@/utils/db/client";
 import type { SetupConfig, UserRow } from "../../types/db/schema";
 import type { SelectOption, RadioGroupOption } from "../../types/discord/modal";
 import { setupConfigSchema } from "../../types/db/schema";
@@ -77,30 +76,18 @@ export async function execute(
     //    - Other commands require a main persona → "Initial Setup Required"
     //    - Setup found an alter → "Already Set Up"
     //    Now we specifically check for a main persona to break this deadlock.
-    const existingServerRows = await sql`
-			SELECT s.server_id
-			FROM servers s
-			WHERE s.server_disc_id = ${serverId}
-			LIMIT 1
-		`;
-    const existingInternalServerId = existingServerRows[0]?.server_id ?? null;
+    const existingInternalServerId = await serverRepository.loadServerIdByDiscId(serverId);
 
     if (existingInternalServerId) {
       // 2a. Check if a main persona exists for this server
-      const mainPersonaRows = await sql`
-				SELECT t.tomori_id
-				FROM tomoris t
-				WHERE t.server_id = ${existingInternalServerId}
-				  AND t.is_alter = false
-				LIMIT 1
-			`;
+      const hasMain = await personaRepository.hasMainPersona(existingInternalServerId);
 
-      if (mainPersonaRows.length > 0) {
+      if (hasMain) {
         const existingTomoriState = await personaRepository.loadState(serverId);
 
         // 3. Main persona row exists AND state is fully valid — server is healthy, block re-setup.
         //    If personaRepository.loadState returns null despite the row existing, the server is in a broken
-        //    state (missing tomori_configs row or deleted LLM). Fall through to cleanup so the
+        //    state (missing split config rows or deleted LLM). Fall through to cleanup so the
         //    user isn't permanently locked out by a setup guard that uses a weaker health check
         //    than the commands that actually require a healthy state.
         if (existingTomoriState) {
@@ -156,7 +143,7 @@ export async function execute(
         }
 
         // 3a. Main persona row exists but personaRepository.loadState returned null — broken state
-        //     (e.g. tomori_configs deleted, or llm_id points to a removed model).
+        //     (e.g. config row deleted, or llm_id points to a removed model).
         //     Do NOT nuke personas here: alters may be perfectly healthy and only the config
         //     row or model reference is missing. Guide the user to targeted repair commands.
         log.warn(
@@ -178,9 +165,8 @@ export async function execute(
       }
 
       // 3b. No main persona row — orphaned alters or empty server entry.
-      //     Wipe every config-table row to free `tomori_configs.server_id`'s UNIQUE
-      //     constraint; alter rows in `tomoris` are preserved since serverRepository.setup
-      //     only inserts a new main persona (is_alter=false).
+      //     Wipe every config-table row to clear orphaned data; alter rows in `tomoris`
+      //     are preserved since serverRepository.setup only inserts a new main persona (is_alter=false).
       log.warn(`[Setup] Server ${serverId} has no main persona — clearing config, preserving alters`);
       await configRepository.resetAllServerConfigs(existingInternalServerId);
 
@@ -465,14 +451,9 @@ export async function execute(
       }
 
       // Get the full preset data from database
-      const presetRows = await sql`
-			SELECT tomori_preset_id, tomori_preset_name 
-			FROM tomori_presets 
-			WHERE tomori_preset_name = ${selectedPresetOption.name}
-			LIMIT 1
-		`;
+      const presetRow = await configRepository.loadPresetByName(selectedPresetOption.name);
 
-      if (!presetRows.length) {
+      if (!presetRow) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "general.errors.operation_failed_title",
           descriptionKey: "commands.config.setup.preset_not_found",
@@ -481,7 +462,7 @@ export async function execute(
         return;
       }
 
-      const selectedPresetId = presetRows[0].tomori_preset_id;
+      const selectedPresetId = presetRow.tomori_preset_id;
       log.info(`Selected preset ID: ${selectedPresetId} (${selectedPresetOption.name})`);
 
       // 5. Validate humanizer degree (required, must be 0-3)

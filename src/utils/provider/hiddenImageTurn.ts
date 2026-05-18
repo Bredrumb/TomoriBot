@@ -102,7 +102,7 @@ export interface HiddenImageTurnParams {
     tomoriNickname: string;
     personaPrompt: string | null;
     tomoriAttributes: string[];
-    personaLineageId: number;
+    personaLineageId: number | null;
   };
 }
 
@@ -246,7 +246,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
       tomoriAttributes: persona.tomoriAttributes,
       tomoriConfig: tomoriState.config,
       personaPrompt: persona.personaPrompt,
-      personaLineageId: persona.personaLineageId,
+      personaLineageId: persona.personaLineageId ?? undefined,
       isDMChannel: false,
       triggererUserId: internalUserId ?? undefined,
     });

@@ -218,9 +218,7 @@ export async function execute(
         currentSelectedId ? getDiffusionModelById(currentSelectedId) : Promise.resolve(null),
       ]);
       const selectedModelName =
-        selectedSavedConfig?.custom_model_name ??
-        getImageModelDisplayName(selectedConfiguredModel) ??
-        getProviderDisplayName(selectedProvider);
+        getImageModelDisplayName(selectedConfiguredModel) ?? getProviderDisplayName(selectedProvider);
 
       if (selectedModelId === currentSelectedId) {
         await replyInfoEmbed(responseInteraction, locale, {

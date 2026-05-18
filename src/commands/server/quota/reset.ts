@@ -6,7 +6,7 @@ import type {
   UserSelectMenuInteraction,
 } from "discord.js";
 import { ActionRowBuilder, ComponentType, EmbedBuilder, MessageFlags, UserSelectMenuBuilder } from "discord.js";
-import { sql } from "@/utils/db/client";
+import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 import {
   resetServerwideImageQuotaPool,
   resetServerwideTextQuotaPool,
@@ -113,11 +113,9 @@ export async function execute(
   const scope = rawScope as QuotaResetScope;
   const quotaType = rawQuotaType as QuotaResetType;
 
-  const [serverRow] = await sql<{ server_id: number }[]>`
-		SELECT server_id FROM servers WHERE server_disc_id = ${interaction.guild.id}
-	`;
+  const serverId = await serverRepository.loadServerIdByDiscId(interaction.guild.id);
 
-  if (!serverRow) {
+  if (!serverId) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.server_not_found_title",
       descriptionKey: "general.errors.server_not_found_description",
@@ -125,8 +123,6 @@ export async function execute(
     });
     return;
   }
-
-  const serverId = serverRow.server_id;
   try {
     if (scope === "user") {
       const targetUser = await promptUserSelection(interaction, locale);

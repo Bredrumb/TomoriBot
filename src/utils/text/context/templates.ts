@@ -9,7 +9,7 @@ import {
 import { UNPAIRED_SAMPLE_DIALOGUE_SENTINEL } from "@/types/preset/presetExport";
 import { humanizeString } from "@/utils/text/processors/formatters";
 import { applyUncensorInputTransforms } from "@/utils/text/uncensor";
-import type { TomoriState, TomoriConfigRow } from "@/types/db/schema";
+import type { TomoriState, AssembledServerConfig } from "@/types/db/schema";
 
 export const DEFAULT_SYSTEM_PROMPT =
   "\n{bot} makes sure to respond short and concisely, as {bot} is aware that no one really likes to read walls of text. {bot} only makes lengthy responses if and only if people are asking for assistance or an explanation that warrants it.";
@@ -96,7 +96,7 @@ export async function buildPromptContextItems(params: {
   guildId: string;
   botName: string;
   tomoriAttributes: string[];
-  tomoriConfig: TomoriConfigRow;
+  tomoriConfig: AssembledServerConfig;
   personaPrompt?: string | null;
   isUserImpersonation: boolean;
   impersonatedIdentityName: string | null;
@@ -202,7 +202,7 @@ export async function buildSampleDialogueContextItems(params: {
   triggererName: string;
   botName: string;
   tomoriState: TomoriState | null;
-  tomoriConfig: TomoriConfigRow;
+  tomoriConfig: AssembledServerConfig;
   isUserImpersonation: boolean;
   uncensorInputOptions: { unicodeSpacesEnabled: boolean; sanitizeEnabled: boolean };
   convertMentions: MentionConverter;

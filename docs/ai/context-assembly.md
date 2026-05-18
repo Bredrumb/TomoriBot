@@ -53,7 +53,7 @@ All callers pass a single `BuildContextParams` object (exported from `contextBui
 | `triggererName` | `string` | Display name of the user who triggered the response |
 | `tomoriNickname` | `string` | Bot's display name (persona-aware) |
 | `tomoriAttributes` | `string[]` | Personality attribute lines |
-| `tomoriConfig` | `TomoriConfigRow` | Server-level bot configuration |
+| `tomoriConfig` | `AssembledServerConfig` | Server-level bot configuration (assembled from split tables) |
 | `personaPrompt` | `string \| null` | Persona-specific system prompt |
 | `snapshot` | `RequestSnapshot` | Pre-loaded caches (tomoriState, etc.) |
 | `isUserImpersonation` | `boolean` | Whether this is a user impersonation request |
@@ -155,8 +155,8 @@ Two storage scopes exist, set via `/config context-note set`:
 
 | Scope | Table | Column |
 |---|---|---|
-| Per-persona | `tomoris` | `context_note`, `context_note_depth` |
-| Global (server-wide) | `tomori_configs` | `context_note`, `context_note_depth` |
+| Per-persona | `persona_context_note_configs` | `context_note`, `context_note_depth` |
+| Global (server-wide) | `server_chat_configs` | `context_note`, `context_note_depth` |
 
 At inference, the **active persona's note takes priority** over the global note. If the active persona has no note (column is `NULL`), the global note is used as a fallback. If neither is set, no injection occurs.
 

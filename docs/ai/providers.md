@@ -180,7 +180,7 @@ Phase 3 promotes custom endpoints into labeled provider entries instead of a sin
 - `/config model text|embedding|image|video|vision` shows each registered custom label as its own provider choice when that capability is available
 - `/config model speech` and `/config model transcription` switch the active server-scoped speech/STT endpoint by updating the default row in `custom_endpoints`
 - `/config custom-endpoint edit` and `/personal custom-endpoint edit` first ask which registered endpoint row to replace, then merge any provided slash-command fields over that row while keeping omitted fields unchanged
-- legacy inline fields on `tomori_configs` and saved-provider rows (`custom_endpoint_url`, `custom_model_name`, `custom_num_ctx`) remain for backward compatibility during rollout, but new registrations write through the labeled `custom_endpoints` table
+- `custom_endpoint_url`, `custom_model_name`, `custom_num_ctx` remain on `server_model_configs` as the active runtime mirror, but were dropped from `saved_provider_configs` and `user_saved_provider_configs` by migration 011 (Phase 6 Step #14.5); endpoint metadata is now canonical in the `custom_endpoints` table
 - conversation compaction, history extraction, persona preset generation, and image-analysis helpers all resolve through the effective custom endpoint metadata when a custom label is active
 - `/config logit-bias` entries are still stored in config snapshots, but Tomori does not auto-tokenize plain-text entries for custom endpoints
 - `thinking_level` still only maps to generic OpenAI-compatible reasoning controls where the target backend accepts them; backend-specific knobs remain adapter-specific

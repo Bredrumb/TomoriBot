@@ -645,7 +645,7 @@ export class PresetRepository {
 
   /**
    * Exports TomoriBot preset personality data for a given server.
-   * Queries data from tomoris/persona_configs with legacy tomori_configs fallback.
+   * Queries data from tomoris and persona_configs (tomori_configs was dropped in Task F2, migration 008).
    *
    * @param serverDiscId - Discord server ID to export preset for
    * @param targetTomoriId - Optional persona ID to export; defaults to current main persona
@@ -915,13 +915,6 @@ export class PresetRepository {
         SET
           trigger_words = EXCLUDED.trigger_words,
           persona_prompt = EXCLUDED.persona_prompt
-      `;
-
-      await sql`
-        UPDATE tomori_configs
-        SET
-          trigger_words = ${triggerWordsArrayLiteral}::text[]
-        WHERE server_id = ${serverId}
       `;
 
       log.success(`Successfully imported preset for server ${serverDiscId}: ${validatedImportData.tomori_nickname}`);

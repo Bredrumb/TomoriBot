@@ -23,6 +23,8 @@ import { validateMemoryContent } from "@/utils/misc/memoryLimits";
 import { validateTomoriConfigFields } from "@/utils/db/sqlSecurity";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import { invalidateUserCache } from "@/utils/cache/userCache";
+import { configRepository } from "@/utils/db/repositories/ConfigRepository";
+import type { ServerChatConfigRow, ServerNoticeEmbedsConfigRow } from "@/types/db/schema";
 
 export type ImportFileType =
   | "personal_memories"
@@ -88,19 +90,6 @@ export class ImportRepository {
       LIMIT 1
     `;
     return serverRows[0]?.server_id ?? null;
-  }
-
-  /** Returns the main (non-alter) tomori_id for a server. */
-  private async resolveMainTomoriId(serverId: number): Promise<number | undefined> {
-    const mainPersonaRows = await sql<Array<{ tomori_id: number }>>`
-      SELECT tomori_id
-      FROM tomoris
-      WHERE server_id = ${serverId}
-        AND is_alter = false
-      ORDER BY updated_at DESC NULLS LAST, tomori_id DESC
-      LIMIT 1
-    `;
-    return mainPersonaRows[0]?.tomori_id;
   }
 
   /** Normalizes bigint/string/number persona_lineage_id values to a plain number. */
@@ -251,175 +240,178 @@ export class ImportRepository {
         return { success: false, error: "commands.data.import.error_invalid_config" };
       }
 
-      // Build array/JSON literals for safe insertion
-      const naiStyleTagsLiteral = config.nai_style_tags
-        ? `{${config.nai_style_tags.map((tag: string) => `"${tag.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`
-        : null;
-      const naiNegativeTagsLiteral = config.nai_negative_tags
-        ? `{${config.nai_negative_tags.map((tag: string) => `"${tag.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`
-        : null;
-      const toolNoticeHiddenKeysLiteral = config.tool_notice_hidden_keys
-        ? `{${config.tool_notice_hidden_keys.map((key: string) => `"${key.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`
-        : null;
-      const disabledParamsLiteral = config.llm_disabled_params
-        ? `{${config.llm_disabled_params.map((param: string) => `"${param.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`
-        : null;
-      const stopStringsLiteral = config.llm_stop_strings
-        ? `{${config.llm_stop_strings.map((stop: string) => `"${stop.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`
-        : null;
-      const logitBiasesJson = JSON.stringify(config.llm_logit_biases ?? []);
+      // llm_max_output_tokens uses conditional inclusion: only overwrite when explicitly present in the export.
       const hasMaxOutputTokens = Object.hasOwn(config, "llm_max_output_tokens");
 
-      let updateRows = await sql<Array<{ tomori_config_id: number }>>`
-        UPDATE tomori_configs
-        SET
-          llm_temperature = ${config.llm_temperature},
-          llm_top_p = ${config.llm_top_p},
-          llm_top_k = ${config.llm_top_k},
-          llm_frequency_penalty = ${config.llm_frequency_penalty},
-          llm_presence_penalty = ${config.llm_presence_penalty},
-          llm_min_p = ${config.llm_min_p},
-          llm_max_output_tokens = CASE
-            WHEN ${hasMaxOutputTokens} THEN ${config.llm_max_output_tokens ?? null}
-            ELSE llm_max_output_tokens
-          END,
-          llm_disabled_params = COALESCE(${disabledParamsLiteral}::text[], llm_disabled_params, ARRAY[]::text[]),
-          llm_logit_biases = ${logitBiasesJson}::jsonb,
-          llm_stop_strings = COALESCE(${stopStringsLiteral}::text[], llm_stop_strings, ARRAY[]::text[]),
-          llm_stop_speaker_pattern_enabled = COALESCE(${config.llm_stop_speaker_pattern_enabled ?? null}, llm_stop_speaker_pattern_enabled, false),
-          humanizer_degree = ${config.humanizer_degree},
-          thinking_level = ${config.thinking_level},
-          timezone_offset = ${config.timezone_offset},
-          message_fetch_limit = ${config.message_fetch_limit},
-          system_prompt = ${config.system_prompt ?? null},
-          server_memteaching_enabled = ${config.server_memteaching_enabled},
-          attribute_memteaching_enabled = ${config.attribute_memteaching_enabled},
-          sampledialogue_memteaching_enabled = ${config.sampledialogue_memteaching_enabled},
-          self_teaching_enabled = ${config.self_teaching_enabled},
-          web_search_enabled = ${config.web_search_enabled},
-          personal_memories_enabled = ${config.personal_memories_enabled},
-          emoji_usage_enabled = ${config.emoji_usage_enabled},
-          sticker_usage_enabled = ${config.sticker_usage_enabled},
-          imagegen_enabled = ${config.imagegen_enabled},
-          tool_notice_hidden_keys = COALESCE(${toolNoticeHiddenKeysLiteral}::text[], tool_notice_hidden_keys, ARRAY[]::text[]),
-          self_debug_enabled = ${config.self_debug_enabled},
-          nai_style_tags = COALESCE(${naiStyleTagsLiteral}::text[], nai_style_tags),
-          nai_negative_tags = COALESCE(${naiNegativeTagsLiteral}::text[], nai_negative_tags),
-          nai_sampler = COALESCE(${config.nai_sampler ?? null}, nai_sampler),
-          nai_steps = COALESCE(${config.nai_steps ?? null}, nai_steps),
-          nai_scale = COALESCE(${config.nai_scale ?? null}, nai_scale),
-          nai_noise_schedule = COALESCE(${config.nai_noise_schedule ?? null}, nai_noise_schedule),
-          nai_cfg_rescale = COALESCE(${config.nai_cfg_rescale ?? null}, nai_cfg_rescale),
-          nai_preset_name = COALESCE(${config.nai_preset_name ?? null}, nai_preset_name),
-          cascade_limit = COALESCE(${config.cascade_limit ?? null}, cascade_limit),
-          match_limit = COALESCE(${config.match_limit ?? null}, match_limit),
-          send_message_limit = COALESCE(${config.send_message_limit ?? null}, send_message_limit),
-          always_reply_enabled = COALESCE(${config.always_reply_enabled ?? null}, always_reply_enabled),
-          deliberate_trigger_mode = COALESCE(${config.deliberate_trigger_mode ?? null}, deliberate_trigger_mode),
-          cooldown_type = COALESCE(${config.cooldown_type ?? null}, cooldown_type),
-          cooldown_length = COALESCE(${config.cooldown_length ?? null}, cooldown_length),
-          stm_privacy_bypass = COALESCE(${config.stm_privacy_bypass ?? null}, stm_privacy_bypass),
-          user_byok_mode = COALESCE(${config.user_byok_mode ?? null}, user_byok_mode),
-          context_note = COALESCE(${config.context_note ?? null}, context_note),
-          context_note_depth = COALESCE(${config.context_note_depth ?? null}, context_note_depth),
-          manage_message_enabled = COALESCE(${config.manage_message_enabled ?? null}, manage_message_enabled),
-          videogen_enabled = COALESCE(${config.videogen_enabled ?? null}, videogen_enabled),
-          voice_message_enabled = COALESCE(${config.voice_message_enabled ?? null}, voice_message_enabled),
-          thread_creation_enabled = COALESCE(${config.thread_creation_enabled ?? null}, thread_creation_enabled),
-          voice_transcript_chat_mode = COALESCE(${config.voice_transcript_chat_mode ?? null}, voice_transcript_chat_mode),
-          chatterbox_turbo_enabled = COALESCE(${config.chatterbox_turbo_enabled ?? null}, chatterbox_turbo_enabled),
-          chatterbox_cfg_weight = COALESCE(${config.chatterbox_cfg_weight ?? null}, chatterbox_cfg_weight),
-          chatterbox_exaggeration = COALESCE(${config.chatterbox_exaggeration ?? null}, chatterbox_exaggeration),
-          uncensor_injection_enabled = COALESCE(${config.uncensor_injection_enabled ?? null}, uncensor_injection_enabled),
-          uncensor_unicode_space_enabled = COALESCE(${config.uncensor_unicode_space_enabled ?? null}, uncensor_unicode_space_enabled),
-          uncensor_sanitize_enabled = COALESCE(${config.uncensor_sanitize_enabled ?? null}, uncensor_sanitize_enabled),
-          tool_use_enabled = COALESCE(${config.tool_use_enabled ?? null}, tool_use_enabled),
-          prompt_snapshot_enabled = COALESCE(${config.prompt_snapshot_enabled ?? null}, prompt_snapshot_enabled),
-          memory_tagging_enabled = COALESCE(${config.memory_tagging_enabled ?? null}, memory_tagging_enabled),
-          welcome_prompt = COALESCE(${config.welcome_prompt ?? null}, welcome_prompt)
-        WHERE server_id = ${serverId}
-        RETURNING tomori_config_id
-      `;
+      // 1. Partition imported fields into typed patch objects by split-table ownership.
 
-      if (!updateRows.length) {
-        const mainTomoriId = await this.resolveMainTomoriId(serverId);
-        if (mainTomoriId) {
-          updateRows = await sql<Array<{ tomori_config_id: number }>>`
-            UPDATE tomori_configs
-            SET
-              llm_temperature = ${config.llm_temperature},
-              llm_top_p = ${config.llm_top_p},
-              llm_top_k = ${config.llm_top_k},
-              llm_frequency_penalty = ${config.llm_frequency_penalty},
-              llm_presence_penalty = ${config.llm_presence_penalty},
-              llm_min_p = ${config.llm_min_p},
-              llm_max_output_tokens = CASE
-                WHEN ${hasMaxOutputTokens} THEN ${config.llm_max_output_tokens ?? null}
-                ELSE llm_max_output_tokens
-              END,
-              llm_disabled_params = COALESCE(${disabledParamsLiteral}::text[], llm_disabled_params, ARRAY[]::text[]),
-              llm_logit_biases = ${logitBiasesJson}::jsonb,
-              llm_stop_strings = COALESCE(${stopStringsLiteral}::text[], llm_stop_strings, ARRAY[]::text[]),
-              llm_stop_speaker_pattern_enabled = COALESCE(${config.llm_stop_speaker_pattern_enabled ?? null}, llm_stop_speaker_pattern_enabled, false),
-              humanizer_degree = ${config.humanizer_degree},
-              thinking_level = ${config.thinking_level},
-              timezone_offset = ${config.timezone_offset},
-              message_fetch_limit = ${config.message_fetch_limit},
-              system_prompt = ${config.system_prompt ?? null},
-              server_memteaching_enabled = ${config.server_memteaching_enabled},
-              attribute_memteaching_enabled = ${config.attribute_memteaching_enabled},
-              sampledialogue_memteaching_enabled = ${config.sampledialogue_memteaching_enabled},
-              self_teaching_enabled = ${config.self_teaching_enabled},
-              web_search_enabled = ${config.web_search_enabled},
-              personal_memories_enabled = ${config.personal_memories_enabled},
-              emoji_usage_enabled = ${config.emoji_usage_enabled},
-              sticker_usage_enabled = ${config.sticker_usage_enabled},
-              imagegen_enabled = ${config.imagegen_enabled},
-              tool_notice_hidden_keys = COALESCE(${toolNoticeHiddenKeysLiteral}::text[], tool_notice_hidden_keys, ARRAY[]::text[]),
-              self_debug_enabled = ${config.self_debug_enabled},
-              nai_style_tags = COALESCE(${naiStyleTagsLiteral}::text[], nai_style_tags),
-              nai_negative_tags = COALESCE(${naiNegativeTagsLiteral}::text[], nai_negative_tags),
-              nai_sampler = COALESCE(${config.nai_sampler ?? null}, nai_sampler),
-              nai_steps = COALESCE(${config.nai_steps ?? null}, nai_steps),
-              nai_scale = COALESCE(${config.nai_scale ?? null}, nai_scale),
-              nai_noise_schedule = COALESCE(${config.nai_noise_schedule ?? null}, nai_noise_schedule),
-              nai_cfg_rescale = COALESCE(${config.nai_cfg_rescale ?? null}, nai_cfg_rescale),
-                  nai_preset_name = COALESCE(${config.nai_preset_name ?? null}, nai_preset_name),
-              cascade_limit = COALESCE(${config.cascade_limit ?? null}, cascade_limit),
-              match_limit = COALESCE(${config.match_limit ?? null}, match_limit),
-              send_message_limit = COALESCE(${config.send_message_limit ?? null}, send_message_limit),
-              always_reply_enabled = COALESCE(${config.always_reply_enabled ?? null}, always_reply_enabled),
-              deliberate_trigger_mode = COALESCE(${config.deliberate_trigger_mode ?? null}, deliberate_trigger_mode),
-              cooldown_type = COALESCE(${config.cooldown_type ?? null}, cooldown_type),
-              cooldown_length = COALESCE(${config.cooldown_length ?? null}, cooldown_length),
-              stm_privacy_bypass = COALESCE(${config.stm_privacy_bypass ?? null}, stm_privacy_bypass),
-              user_byok_mode = COALESCE(${config.user_byok_mode ?? null}, user_byok_mode),
-              context_note = COALESCE(${config.context_note ?? null}, context_note),
-              context_note_depth = COALESCE(${config.context_note_depth ?? null}, context_note_depth),
-              manage_message_enabled = COALESCE(${config.manage_message_enabled ?? null}, manage_message_enabled),
-              videogen_enabled = COALESCE(${config.videogen_enabled ?? null}, videogen_enabled),
-              voice_message_enabled = COALESCE(${config.voice_message_enabled ?? null}, voice_message_enabled),
-              thread_creation_enabled = COALESCE(${config.thread_creation_enabled ?? null}, thread_creation_enabled),
-              voice_transcript_chat_mode = COALESCE(${config.voice_transcript_chat_mode ?? null}, voice_transcript_chat_mode),
-              chatterbox_turbo_enabled = COALESCE(${config.chatterbox_turbo_enabled ?? null}, chatterbox_turbo_enabled),
-              chatterbox_cfg_weight = COALESCE(${config.chatterbox_cfg_weight ?? null}, chatterbox_cfg_weight),
-              chatterbox_exaggeration = COALESCE(${config.chatterbox_exaggeration ?? null}, chatterbox_exaggeration),
-              uncensor_injection_enabled = COALESCE(${config.uncensor_injection_enabled ?? null}, uncensor_injection_enabled),
-              uncensor_unicode_space_enabled = COALESCE(${config.uncensor_unicode_space_enabled ?? null}, uncensor_unicode_space_enabled),
-              uncensor_sanitize_enabled = COALESCE(${config.uncensor_sanitize_enabled ?? null}, uncensor_sanitize_enabled),
-              tool_use_enabled = COALESCE(${config.tool_use_enabled ?? null}, tool_use_enabled),
-              prompt_snapshot_enabled = COALESCE(${config.prompt_snapshot_enabled ?? null}, prompt_snapshot_enabled),
-              memory_tagging_enabled = COALESCE(${config.memory_tagging_enabled ?? null}, memory_tagging_enabled),
-              welcome_prompt = COALESCE(${config.welcome_prompt ?? null}, welcome_prompt)
-            WHERE tomori_id = ${mainTomoriId}
-            RETURNING tomori_config_id
-          `;
-        }
-      }
+      // server_model_configs: temperature, thinking level, disabled params
+      const modelPatch = {
+        llm_temperature: config.llm_temperature,
+        thinking_level: config.thinking_level,
+        llm_disabled_params: config.llm_disabled_params,
+      };
 
-      if (!updateRows.length) {
+      // server_chat_configs: LLM sampling params, humanizer, prompt, context, limits
+      const chatPatch: Partial<ServerChatConfigRow> = {
+        llm_top_p: config.llm_top_p,
+        llm_top_k: config.llm_top_k,
+        llm_frequency_penalty: config.llm_frequency_penalty,
+        llm_presence_penalty: config.llm_presence_penalty,
+        llm_min_p: config.llm_min_p,
+        llm_logit_biases: config.llm_logit_biases,
+        llm_stop_strings: config.llm_stop_strings,
+        llm_stop_speaker_pattern_enabled: config.llm_stop_speaker_pattern_enabled ?? false,
+        // HumanizerDegree is a numeric enum; number is safe at runtime
+        humanizer_degree: config.humanizer_degree as ServerChatConfigRow["humanizer_degree"],
+        timezone_offset: config.timezone_offset,
+        message_fetch_limit: config.message_fetch_limit,
+        system_prompt: config.system_prompt ?? null,
+        self_debug_enabled: config.self_debug_enabled,
+        ...(hasMaxOutputTokens && { llm_max_output_tokens: config.llm_max_output_tokens ?? null }),
+        ...(config.context_note !== undefined && { context_note: config.context_note }),
+        ...(config.context_note_depth !== undefined && { context_note_depth: config.context_note_depth }),
+        ...(config.cascade_limit !== undefined && { cascade_limit: config.cascade_limit }),
+        ...(config.match_limit !== undefined && { match_limit: config.match_limit }),
+        ...(config.send_message_limit !== undefined && { send_message_limit: config.send_message_limit }),
+      };
+
+      // server_member_permissions_configs: teaching toggles, personal memories, snapshot
+      const memberPermPatch = {
+        server_memteaching_enabled: config.server_memteaching_enabled,
+        attribute_memteaching_enabled: config.attribute_memteaching_enabled,
+        sampledialogue_memteaching_enabled: config.sampledialogue_memteaching_enabled,
+        self_teaching_enabled: config.self_teaching_enabled,
+        personal_memories_enabled: config.personal_memories_enabled,
+        ...(config.prompt_snapshot_enabled !== undefined && {
+          prompt_snapshot_enabled: config.prompt_snapshot_enabled,
+        }),
+      };
+
+      // server_capabilities_configs: feature toggles
+      const capsPatch = {
+        emoji_usage_enabled: config.emoji_usage_enabled,
+        sticker_usage_enabled: config.sticker_usage_enabled,
+        imagegen_enabled: config.imagegen_enabled,
+        web_search_enabled: config.web_search_enabled,
+        ...(config.manage_message_enabled !== undefined && { manage_message_enabled: config.manage_message_enabled }),
+        ...(config.videogen_enabled !== undefined && { videogen_enabled: config.videogen_enabled }),
+        ...(config.voice_message_enabled !== undefined && { voice_message_enabled: config.voice_message_enabled }),
+        ...(config.thread_creation_enabled !== undefined && {
+          thread_creation_enabled: config.thread_creation_enabled,
+        }),
+        ...(config.tool_use_enabled !== undefined && { tool_use_enabled: config.tool_use_enabled }),
+      };
+
+      // server_notice_embeds_configs: tool notice key suppressions
+      // ToolNoticeKey union type is satisfied by the validated string values from the export schema.
+      const noticeEmbedsPatch: Partial<ServerNoticeEmbedsConfigRow> = {
+        tool_notice_hidden_keys:
+          config.tool_notice_hidden_keys as ServerNoticeEmbedsConfigRow["tool_notice_hidden_keys"],
+      };
+
+      // 2. Dispatch the five always-present table writes in parallel.
+      const [modelOk, chatOk] = await Promise.all([
+        configRepository.updateModelConfig(serverId, modelPatch),
+        configRepository.updateChatConfig(serverId, chatPatch),
+        configRepository.updateMemberPermissionsConfig(serverId, memberPermPatch),
+        configRepository.updateCapabilitiesConfig(serverId, capsPatch),
+        configRepository.updateNoticeEmbedsConfig(serverId, noticeEmbedsPatch),
+      ]);
+
+      // 3. Failure on model or chat configs means no split-table row exists for this server_id.
+      if (!modelOk || !chatOk) {
         return { success: false, error: "commands.data.import.error_update_failed" };
       }
+
+      // 4. Dispatch optional-field table writes in parallel; these are absent in older exports.
+      await Promise.all([
+        config.uncensor_injection_enabled !== undefined ||
+        config.uncensor_unicode_space_enabled !== undefined ||
+        config.uncensor_sanitize_enabled !== undefined
+          ? configRepository.updateNsfwConfig(serverId, {
+              ...(config.uncensor_injection_enabled !== undefined && {
+                uncensor_injection_enabled: config.uncensor_injection_enabled,
+              }),
+              ...(config.uncensor_unicode_space_enabled !== undefined && {
+                uncensor_unicode_space_enabled: config.uncensor_unicode_space_enabled,
+              }),
+              ...(config.uncensor_sanitize_enabled !== undefined && {
+                uncensor_sanitize_enabled: config.uncensor_sanitize_enabled,
+              }),
+            })
+          : Promise.resolve(true),
+
+        config.voice_transcript_chat_mode !== undefined ||
+        config.chatterbox_turbo_enabled !== undefined ||
+        config.chatterbox_cfg_weight !== undefined ||
+        config.chatterbox_exaggeration !== undefined
+          ? configRepository.updateSpeechConfig(serverId, {
+              ...(config.voice_transcript_chat_mode !== undefined && {
+                voice_transcript_chat_mode: config.voice_transcript_chat_mode,
+              }),
+              ...(config.chatterbox_turbo_enabled !== undefined && {
+                chatterbox_turbo_enabled: config.chatterbox_turbo_enabled,
+              }),
+              ...(config.chatterbox_cfg_weight !== undefined && {
+                chatterbox_cfg_weight: config.chatterbox_cfg_weight,
+              }),
+              ...(config.chatterbox_exaggeration !== undefined && {
+                chatterbox_exaggeration: config.chatterbox_exaggeration,
+              }),
+            })
+          : Promise.resolve(true),
+
+        config.always_reply_enabled !== undefined ||
+        config.deliberate_trigger_mode !== undefined ||
+        config.cooldown_type !== undefined ||
+        config.cooldown_length !== undefined
+          ? configRepository.updateTriggerBehaviorConfig(serverId, {
+              ...(config.always_reply_enabled !== undefined && { always_reply_enabled: config.always_reply_enabled }),
+              ...(config.deliberate_trigger_mode !== undefined && {
+                deliberate_trigger_mode: config.deliberate_trigger_mode,
+              }),
+              ...(config.cooldown_type !== undefined && { cooldown_type: config.cooldown_type }),
+              ...(config.cooldown_length !== undefined && { cooldown_length: config.cooldown_length }),
+            })
+          : Promise.resolve(true),
+
+        config.stm_privacy_bypass !== undefined
+          ? configRepository.updateChannelScopeConfig(serverId, { stm_privacy_bypass: config.stm_privacy_bypass })
+          : Promise.resolve(true),
+
+        config.nai_style_tags !== undefined ||
+        config.nai_negative_tags !== undefined ||
+        config.nai_sampler !== undefined ||
+        config.nai_steps !== undefined ||
+        config.nai_scale !== undefined ||
+        config.nai_noise_schedule !== undefined ||
+        config.nai_cfg_rescale !== undefined ||
+        config.nai_preset_name !== undefined
+          ? configRepository.updateNovelaiImagegenConfig(serverId, {
+              ...(config.nai_style_tags !== undefined && { nai_style_tags: config.nai_style_tags }),
+              ...(config.nai_negative_tags !== undefined && { nai_negative_tags: config.nai_negative_tags }),
+              ...(config.nai_sampler !== undefined && { nai_sampler: config.nai_sampler }),
+              ...(config.nai_steps !== undefined && { nai_steps: config.nai_steps }),
+              ...(config.nai_scale !== undefined && { nai_scale: config.nai_scale }),
+              ...(config.nai_noise_schedule !== undefined && { nai_noise_schedule: config.nai_noise_schedule }),
+              ...(config.nai_cfg_rescale !== undefined && { nai_cfg_rescale: config.nai_cfg_rescale }),
+              ...(config.nai_preset_name !== undefined && { nai_preset_name: config.nai_preset_name }),
+            })
+          : Promise.resolve(true),
+
+        config.user_byok_mode !== undefined
+          ? configRepository.updateByokConfig(serverId, { user_byok_mode: config.user_byok_mode })
+          : Promise.resolve(true),
+
+        config.memory_tagging_enabled !== undefined
+          ? configRepository.updateMemoryConfig(serverId, { memory_tagging_enabled: config.memory_tagging_enabled })
+          : Promise.resolve(true),
+
+        config.welcome_prompt !== undefined
+          ? configRepository.updateWelcomeConfig(serverId, { welcome_prompt: config.welcome_prompt })
+          : Promise.resolve(true),
+      ]);
 
       return { success: true, itemsImported: { configFieldsCount: configFields.length } };
     } catch (error) {

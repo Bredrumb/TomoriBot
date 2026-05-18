@@ -15,7 +15,7 @@ The prompt-snapshot command produces a runtime-faithful dump of the exact prompt
 
 - Guild-only (cannot be used in DMs — no server context).
 - `ManageGuild` always bypasses the gate.
-- Non-admin access depends on `tomori_configs.prompt_snapshot_enabled` (default off).
+- Non-admin access depends on `server_member_permissions_configs.prompt_snapshot_enabled` (default off).
 
 ## Faithfulness to runtime
 

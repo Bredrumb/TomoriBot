@@ -48,8 +48,8 @@ Used for automatic message-triggered chat flow.
 5. If a persona has a channel whitelist configured anywhere in the server, that persona is only eligible in its whitelisted channels (threads inherit the parent channel entry); personas with no rows remain eligible everywhere. Disallowed automatic persona matches fail silently and manual persona selections (for example `/bot respond`, `/bot impersonate`, conditioning, and scene-image sender selection) are rejected.
 6. If the triggering user has a personal spotlight for the effective channel, that spotlight becomes an additional persona filter on top of the server whitelist. Only personas present in both sets may trigger, including proxy/self chains. The spotlight's optional personal auto-trigger persona behaves like a user+channel-scoped always-reply fallback, but still respects the server whitelist result.
 7. If channel is whitelisted and has an explicit override, use that channel-specific cooldown type/length.
-8. If channel is whitelisted without an override, inherit global `tomori_configs.cooldown_type/cooldown_length`.
-9. Otherwise use global `tomori_configs.cooldown_type/cooldown_length`.
+8. If channel is whitelisted without an override, inherit global `server_trigger_behavior_configs.cooldown_type/cooldown_length`.
+9. Otherwise use global `server_trigger_behavior_configs.cooldown_type/cooldown_length`.
 
 ### Cooldown types
 

@@ -8,13 +8,18 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { deleteStoredVoiceSample } from "@/utils/storage/voiceSampleStorage";
-import { clearPersonaVoiceSampleRefs, deleteVoiceSample } from "@/utils/db/repositories/SpeechRepository";
+import {
+  clearPersonaVoiceSampleRefs,
+  deleteVoiceSample,
+  loadVoiceSamples,
+  countPersonaVoiceSampleRefs,
+} from "@/utils/db/repositories/SpeechRepository";
+import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { localizer } from "@/utils/text/localizer";
@@ -44,12 +49,8 @@ export async function execute(
     return;
   }
 
-  const [serverRow] = await sql<[{ server_id: number }]>`
-    SELECT server_id FROM servers
-    WHERE server_disc_id = ${interaction.guild?.id ?? interaction.user.id}
-    LIMIT 1
-  `;
-  if (!serverRow) {
+  const serverId = await serverRepository.loadServerIdByDiscId(interaction.guild?.id ?? interaction.user.id);
+  if (!serverId) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.tomori_not_setup_title",
       descriptionKey: "general.errors.tomori_not_setup_description",
@@ -58,16 +59,10 @@ export async function execute(
     });
     return;
   }
-  const serverId = serverRow.server_id;
 
   try {
     // 1. Load all server voice samples.
-    const sampleRows = await sql<{ sample_id: number; name: string; file_path: string; duration_ms: number }[]>`
-      SELECT sample_id, name, file_path, duration_ms
-      FROM voice_samples
-      WHERE server_id = ${serverId}
-      ORDER BY name
-    `;
+    const sampleRows = await loadVoiceSamples(serverId);
 
     if (!sampleRows.length) {
       await replyInfoEmbed(interaction, locale, {
@@ -124,12 +119,8 @@ export async function execute(
     }
 
     // 4. Count how many personas currently reference this sample.
-    const [refCountRow] = await sql<[{ count: string }]>`
-      SELECT COUNT(*) AS count FROM tomoris
-      WHERE server_id = ${serverId}
-        AND speech_voice_sample_id = ${sampleRow.sample_id}
-    `;
-    const refCount = Number(refCountRow?.count ?? 0);
+    // biome-ignore lint/style/noNonNullAssertion: sampleRow is validated above, sample_id is always present on VoiceSampleRow
+    const refCount = await countPersonaVoiceSampleRefs(serverId, sampleRow.sample_id!);
 
     // 5. Show confirm / cancel buttons.
     const confirmEmbed = createStandardEmbed(locale, {
@@ -172,11 +163,14 @@ export async function execute(
     }
 
     // 6. Deletion confirmed: clear persona assignments, remove DB row, delete file.
-    await clearPersonaVoiceSampleRefs(serverId, sampleRow.sample_id);
+    // biome-ignore lint/style/noNonNullAssertion: sampleRow is validated above, sample_id is always present
+    await clearPersonaVoiceSampleRefs(serverId, sampleRow.sample_id!);
 
     // Delete the voice sample itself
-    await deleteVoiceSample(sampleRow.sample_id);
-    await deleteStoredVoiceSample(sampleRow.file_path);
+    // biome-ignore lint/style/noNonNullAssertion: sampleRow is validated above, sample_id is always present
+    await deleteVoiceSample(sampleRow.sample_id!);
+    // biome-ignore lint/style/noNonNullAssertion: sampleRow is validated above, file_path is always present
+    await deleteStoredVoiceSample(sampleRow.file_path!);
 
     log.info(
       `[VoiceRemove] Deleted sample "${sampleRow.name}" (id=${sampleRow.sample_id}) for server ${serverId} | ${refCount} persona(s) cleared`,

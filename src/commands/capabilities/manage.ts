@@ -11,7 +11,7 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
-import type { UserRow, ErrorContext, TomoriConfigRow } from "@/types/db/schema";
+import type { UserRow, ErrorContext, AssembledServerConfig } from "@/types/db/schema";
 import { configRepository } from "@/utils/db/repositories";
 import { hasOptApiKey } from "@/utils/security/crypto";
 import { ELEVENLABS_SERVICE_NAME } from "@/utils/audio/elevenLabsAccount";
@@ -37,14 +37,14 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 interface PermissionDefinition {
   /** Value used as the checkbox option identifier */
   value: string;
-  /** The tomori_configs column to update */
+  /** The split server config column to update */
   dbColumn: string;
   /** Locale key for the option label */
   labelKey: string;
   /** Locale key for the short option description shown in the checkbox */
   descKey: string;
   /** Extracts current state from a config row */
-  getState: (config: TomoriConfigRow) => boolean;
+  getState: (config: AssembledServerConfig) => boolean;
   /** If true, this option is only shown when an ElevenLabs key is configured */
   requiresElevenLabs?: boolean;
 }

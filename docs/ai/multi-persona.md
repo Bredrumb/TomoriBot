@@ -9,7 +9,7 @@ TomoriBot supports **one main persona** plus **multiple alter personas** per ser
 - **Main persona**: the default identity; responds to mentions, direct replies, and auto-message triggers.
 - **Alter personas**: optional additional identities with their own trigger words and (optional) custom avatars.
 - **Shared context**: all personas share the same conversation history and server memories.
-- **Shared config**: all personas in a server share the same `tomori_configs` row.
+- **Shared config**: all personas in a server share the same server-scoped config tables (`server_*_configs`).
 - **Sequential responses**: if multiple personas match a trigger, they respond one-by-one via the channel queue.
 
 ## Data Model
@@ -20,16 +20,14 @@ Each persona is a row in `tomoris`.
 
 Key columns:
 - `is_alter`: `false` for main, `true` for alters.
-- `alter_triggers`: trigger words for alters (main uses `tomori_configs.trigger_words`).
 - `webhook_avatar_url`: stored alter avatar reference.
   - Production: stable public URL (S3 / CloudFront).
   - Non-production: stable local path under `data/avatars/...`, or a legacy HTTP URL until lazy migration runs.
 
-### `tomori_configs`
+### `persona_configs`
 
-Server-scoped config (shared by all personas):
-- `server_id` is the primary linkage.
-- `trigger_words` is used by **main persona only**.
+Per-persona configuration (one row per persona in `tomoris`):
+- `trigger_words`: trigger words for this persona — **all personas use this column** (Phase 6 F1 merged the former `tomoris.alter_triggers` column here; the old `is_alter ? alter_triggers : trigger_words` ternary is gone).
 
 ### `reminders`
 
@@ -51,9 +49,7 @@ Reminders are tied to a persona to preserve the identity that set them:
 
 ### Trigger words
 
-Each persona checks its own trigger list:
-- **Main**: `tomori_configs.trigger_words`.
-- **Alter**: `tomoris.alter_triggers`.
+Each persona checks its own trigger list in `persona_configs.trigger_words`. The former split (`tomori_configs.trigger_words` for main, `tomoris.alter_triggers` for alters) was unified in Phase 6 F1.
 
 If multiple personas match, they respond in deterministic order based on where their trigger first appears in the message. The per-message count is capped by `/config trigger-match-limit`.
 
@@ -74,7 +70,7 @@ Configured join welcomes also use the manual-trigger path:
 
 Configured auto-trigger channels can also pin a single persona per channel:
 - `/server auto-trigger channels` can enable/disable channels in bulk, or target one channel and choose which persona should answer there.
-- The per-channel assignment is stored in `tomori_configs.autoch_persona_overrides`.
+- The per-channel assignment is stored in `server_auto_trigger_configs.autoch_persona_overrides`.
 - If a channel has no explicit assignment, auto-trigger falls back to the main persona.
 
 ### Personal spotlight
@@ -183,7 +179,7 @@ Proxy-trigger note: if user A is restricted to persona Alice by either server wh
 
 ### Configuration
 
-**Database:** `tomori_configs.cascade_limit`
+**Database:** `server_chat_configs.cascade_limit`
 - Default: 3
 - Range: 0 to 10
 - 0 = Only the first triggered persona responds, no additional triggers allowed
@@ -191,7 +187,7 @@ Proxy-trigger note: if user A is restricted to persona Alice by either server wh
 
 **Command:** `/config trigger-cascade-limit`
 
-**Database:** `tomori_configs.match_limit`
+**Database:** `server_chat_configs.match_limit`
 - Default: 3
 - Range: 1 to 10
 - Caps how many personas one message can trigger
@@ -439,7 +435,7 @@ Behavior:
 ### `/persona swap`
 
 - Promotes an alter to main.
-- Transfers triggers between `alter_triggers` and `tomori_configs.trigger_words`.
+- Updates `persona_configs.trigger_words` for both personas (all trigger words unified in `persona_configs.trigger_words` after Phase 6 F1).
 - Updates guild avatar and nickname.
 - Stores the previous main avatar in `webhook_avatar_url`.
 - Local alter avatars are loaded from the stored file path when present.
@@ -495,7 +491,7 @@ In-memory caches:
 ### Alter doesn't respond
 
 1. **Check trigger words:**
-   - Confirm trigger words are unique and present in `alter_triggers`
+   - Confirm trigger words are unique and present in `persona_configs.trigger_words`
    - Check if message contained the trigger or was a reply to alter webhook
 
 2. **Check cascade trigger limit:**

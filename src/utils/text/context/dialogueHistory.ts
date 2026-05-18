@@ -1,6 +1,6 @@
 import type { Client } from "discord.js";
 import { ContextItemTag, type ContextPart, type StructuredContextItem } from "@/types/misc/context";
-import { HumanizerDegree, type TomoriConfigRow, type TomoriState } from "@/types/db/schema";
+import { HumanizerDegree, type AssembledServerConfig, type TomoriState } from "@/types/db/schema";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { log } from "@/utils/misc/logger";
 import { memoryGuard } from "@/utils/security/rateLimiter";
@@ -28,7 +28,7 @@ export async function appendDialogueHistoryContext(params: {
   guildId: string;
   simplifiedMessageHistory: SimplifiedMessageForContext[];
   botName: string;
-  tomoriConfig: TomoriConfigRow;
+  tomoriConfig: AssembledServerConfig;
   tomoriState: TomoriState | null;
   mediaContextWindow?: number;
   includeTimestamps: boolean;

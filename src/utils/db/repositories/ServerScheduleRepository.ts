@@ -46,6 +46,20 @@ export type ServerScheduleExportShape = {
   auto_trigger: ServerAutoTriggerConfigsRow | null;
 };
 
+export type ReminderSelectionRow = {
+  reminder_id: number;
+  reminder_purpose: string;
+  reminder_time: Date;
+  repetition_interval_hours: number | null;
+  self_reminder: boolean | null;
+  channel_disc_id: string;
+  created_by_user_id: number | null;
+  created_by_nickname: string | null;
+  user_discord_id: string;
+  user_nickname: string;
+  persona_nickname: string | null;
+};
+
 /** Data shape for creating or updating a random trigger. */
 interface RandomTriggerData {
   serverId: number;
@@ -108,6 +122,16 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
    */
   async getPendingRemindersForUser(userDiscordId: string, serverDiscId?: string): Promise<ReminderRow[] | null> {
     return this.sqlGetPendingRemindersForUser(userDiscordId, serverDiscId);
+  }
+
+  /**
+   * Loads reminders for command selection lists with optional owner filtering.
+   *
+   * @param serverId    - Internal server DB ID
+   * @param ownerUserId - If provided, only returns reminders created by this user
+   */
+  async loadReminderSelections(serverId: number, ownerUserId?: number): Promise<ReminderSelectionRow[]> {
+    return this.sqlLoadReminderSelections(serverId, ownerUserId);
   }
 
   // ── reminder writes ────────────────────────────────────────────────────────
@@ -442,6 +466,56 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
     } catch (error) {
       log.error(`Error loading pending reminders for user ${userDiscordId}:`, error);
       return null;
+    }
+  }
+
+  private async sqlLoadReminderSelections(serverId: number, ownerUserId?: number): Promise<ReminderSelectionRow[]> {
+    try {
+      if (typeof ownerUserId === "number") {
+        return await sql<ReminderSelectionRow[]>`
+          SELECT
+            r.reminder_id,
+            r.reminder_purpose,
+            r.reminder_time,
+            r.repetition_interval_hours,
+            r.self_reminder,
+            r.channel_disc_id,
+            r.created_by_user_id,
+            r.user_discord_id,
+            r.user_nickname,
+            u.user_nickname AS created_by_nickname,
+            t.tomori_nickname AS persona_nickname
+          FROM reminders r
+          LEFT JOIN users u ON r.created_by_user_id = u.user_id
+          LEFT JOIN tomoris t ON r.persona_id = t.tomori_id
+          WHERE r.server_id = ${serverId}
+            AND r.created_by_user_id = ${ownerUserId}
+          ORDER BY r.reminder_time ASC
+        `;
+      }
+
+      return await sql<ReminderSelectionRow[]>`
+        SELECT
+          r.reminder_id,
+          r.reminder_purpose,
+          r.reminder_time,
+          r.repetition_interval_hours,
+          r.self_reminder,
+          r.channel_disc_id,
+          r.created_by_user_id,
+          r.user_discord_id,
+          r.user_nickname,
+          u.user_nickname AS created_by_nickname,
+          t.tomori_nickname AS persona_nickname
+        FROM reminders r
+        LEFT JOIN users u ON r.created_by_user_id = u.user_id
+        LEFT JOIN tomoris t ON r.persona_id = t.tomori_id
+        WHERE r.server_id = ${serverId}
+        ORDER BY r.reminder_time ASC
+      `;
+    } catch (error) {
+      log.error(`Error loading reminder selections for server ${serverId}:`, error);
+      return [];
     }
   }
 
@@ -989,7 +1063,6 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
 
   /**
    * Restores ServerScheduleRepository-owned config table rows for a server.
-   * Dual-writes: upserts into each new config table AND back into tomori_configs.
    *
    * @param ownerId - Discord server snowflake
    * @param data    - Previously exported ServerScheduleExportShape

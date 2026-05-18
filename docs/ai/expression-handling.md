@@ -530,14 +530,14 @@ Savings: 0% (but no performance regression)
 **Per-server toggles:**
 
 ```typescript
-// tomori_configs table
+// server_capabilities_configs table
 emoji_usage_enabled: boolean    // Default: true
 sticker_usage_enabled: boolean  // Default: false
 ```
 
 **Disable expressions:**
 ```sql
-UPDATE tomori_configs
+UPDATE server_capabilities_configs
 SET emoji_usage_enabled = false
 WHERE server_id = 2;
 ```

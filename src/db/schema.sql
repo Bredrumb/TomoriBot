@@ -151,10 +151,8 @@ SELECT add_column_if_not_exists('tomoris', 'persona_lineage_id', 'BIGINT');
 SELECT add_column_if_not_exists('tomoris', 'nai_tags', 'TEXT[]', 'ARRAY[]::TEXT[]');
 -- nai_char_ref_url: Stored reference image URL/path for NovelAI character consistency
 SELECT add_column_if_not_exists('tomoris', 'nai_char_ref_url', 'TEXT');
--- elevenlabs_voice_id: Selected ElevenLabs voice for this persona (server-local)
-SELECT add_column_if_not_exists('tomoris', 'elevenlabs_voice_id', 'TEXT');
--- elevenlabs_voice_name: Cached friendly name for the selected ElevenLabs voice
-SELECT add_column_if_not_exists('tomoris', 'elevenlabs_voice_name', 'TEXT');
+-- elevenlabs_voice_id / elevenlabs_voice_name were added here (March 2026) and
+-- dropped by migration 010_complete_speech_voice_migration.sql (Phase 6 Step #14.2).
 
 -- Create lineage sequence (start high so reserved low IDs stay available)
 CREATE SEQUENCE IF NOT EXISTS persona_lineage_id_seq
@@ -204,6 +202,12 @@ END $$;
 -- Create index for efficient multi-persona queries (main persona is queried frequently)
 CREATE INDEX IF NOT EXISTS idx_tomoris_server_is_alter ON tomoris(server_id, is_alter);
 CREATE INDEX IF NOT EXISTS idx_tomoris_persona_lineage_id ON tomoris(persona_lineage_id);
+
+-- Phase 6 Step #14.6: enforce exactly one main persona (is_alter=false) per server.
+-- Name is forward-compatible with the #16.8 rename (tomoris → personas).
+CREATE UNIQUE INDEX IF NOT EXISTS personas_one_main_per_server
+  ON tomoris(server_id)
+  WHERE is_alter = false;
 
 -- Normalize legacy duplicate persona names within a server before enforcing uniqueness.
 -- Keep the highest-priority row unchanged (main persona first, then most-recent),
@@ -269,7 +273,6 @@ SELECT add_column_if_not_exists('llms', 'is_uncensored', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'supports_structoutput', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'llm_description', 'TEXT');
 SELECT add_column_if_not_exists('llms', 'ja_description', 'TEXT');
-
 
 -- Removed updated_at trigger for llms table (static metadata, rarely changes)
 DROP TRIGGER IF EXISTS update_llms_timestamp ON llms;
@@ -377,42 +380,6 @@ EXCEPTION
     RAISE NOTICE 'Model metadata table missing while relaxing codename uniqueness; skipping';
 END $$;
 
-CREATE TABLE IF NOT EXISTS tomori_configs (
-  tomori_config_id SERIAL PRIMARY KEY,
-  tomori_id INT UNIQUE, -- Legacy pointer (nullable; server_id is the primary linkage)
-  server_id INT, -- Server-scoped config (nullable for legacy rows)
-  llm_id INT,
-  embedding_model_id INT,
-  llm_temperature REAL NOT NULL DEFAULT 1.0 CHECK (llm_temperature >= 0.0 AND llm_temperature <= 2.0), -- DEPRECATED Phase 1.5 Pass B: mirror of saved_provider_configs; drop after checklist passes
-  api_key BYTEA, -- encrypted; DEPRECATED Phase 1.5 Pass B: mirror of saved_provider_configs.api_key
-  trigger_words TEXT[] DEFAULT '{}',
-  autoch_disc_ids TEXT[] DEFAULT '{}',
-  autoch_persona_overrides JSONB DEFAULT '[]'::JSONB,
-  autoch_threshold INT DEFAULT 0, -- 0 with configured channels means always-reply, otherwise minimum messages before auto-chat
-  autoch_threshold_max INT DEFAULT 0, -- 0 keeps fixed/always behavior; > autoch_threshold enables a shared random range
-  message_fetch_limit INT DEFAULT 80,
-	server_memteaching_enabled BOOLEAN DEFAULT true,
-	attribute_memteaching_enabled BOOLEAN DEFAULT false,
-  sampledialogue_memteaching_enabled BOOLEAN DEFAULT false,
-  self_teaching_enabled BOOLEAN DEFAULT true,
-  personal_memories_enabled BOOLEAN DEFAULT true,
-  memory_tagging_enabled BOOLEAN DEFAULT false,
-  imagegen_enabled BOOLEAN DEFAULT true,
-  videogen_enabled BOOLEAN DEFAULT false,
-  thread_creation_enabled BOOLEAN DEFAULT true,
-  tool_notice_hidden_keys TEXT[] DEFAULT '{}',
-  llm_disabled_params TEXT[] DEFAULT '{}', -- DEPRECATED Phase 1.5 Pass B: mirror of saved_provider_configs
-  llm_stop_strings TEXT[] DEFAULT '{}',
-  llm_stop_speaker_pattern_enabled BOOLEAN DEFAULT false,
-  humanizer_degree INT DEFAULT 1,
-  thinking_level TEXT DEFAULT 'auto', -- DEPRECATED Phase 1.5 Pass B: mirror of saved_provider_configs
-  user_byok_mode BOOLEAN DEFAULT false,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (tomori_id) REFERENCES tomoris(tomori_id) ON DELETE SET NULL,
-  FOREIGN KEY (llm_id) REFERENCES llms(llm_id) ON DELETE RESTRICT
-);
-
 -- Persona-scoped config table (trigger words + optional persona prompt)
 CREATE TABLE IF NOT EXISTS persona_configs (
   tomori_id INT PRIMARY KEY,
@@ -443,356 +410,132 @@ SELECT add_column_if_not_exists('persona_configs', 'reward_conditioning_enabled'
 SELECT add_column_if_not_exists('persona_configs', 'punish_conditioning_enabled', 'BOOLEAN', 'true');
 
 -- Add server_id column for server-scoped configs (January 2026)
-SELECT add_column_if_not_exists('tomori_configs', 'server_id', 'INTEGER');
 
 -- Add hide_impersonation_embeds permission (February 2026)
-SELECT add_column_if_not_exists('tomori_configs', 'hide_impersonation_embeds', 'BOOLEAN', 'false');
 
 -- Allow tomori_id to be nullable and prevent cascade deletes from removing server-scoped config
-DO $$
-DECLARE
-    fk_delete_action CHAR;
-BEGIN
-    -- Drop NOT NULL if present
-    IF EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'tomori_configs'
-        AND column_name = 'tomori_id'
-        AND is_nullable = 'NO'
-    ) THEN
-        ALTER TABLE tomori_configs ALTER COLUMN tomori_id DROP NOT NULL;
-    END IF;
-
-    -- Detect current FK delete action (if any)
-    SELECT confdeltype INTO fk_delete_action
-    FROM pg_constraint
-    WHERE conname = 'tomori_configs_tomori_id_fkey';
-
-    -- Recreate FK with ON DELETE SET NULL if needed
-    IF fk_delete_action IS NULL OR fk_delete_action <> 'n' THEN
-        ALTER TABLE tomori_configs DROP CONSTRAINT IF EXISTS tomori_configs_tomori_id_fkey;
-        ALTER TABLE tomori_configs
-        ADD CONSTRAINT tomori_configs_tomori_id_fkey
-        FOREIGN KEY (tomori_id)
-        REFERENCES tomoris(tomori_id)
-        ON DELETE SET NULL;
-    END IF;
-END $$;
 
 -- Backfill server_id for main persona configs (legacy rows)
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'tomori_configs' AND column_name = 'server_id'
-    ) THEN
-        UPDATE tomori_configs tc
-        SET server_id = t.server_id
-        FROM tomoris t
-        WHERE tc.server_id IS NULL
-          AND tc.tomori_id = t.tomori_id
-          AND t.is_alter = false;
-    END IF;
-END $$;
 
 -- Add foreign key to servers for server-scoped config
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conname = 'tomori_configs_server_id_fkey'
-    ) THEN
-        ALTER TABLE tomori_configs
-        ADD CONSTRAINT tomori_configs_server_id_fkey
-        FOREIGN KEY (server_id)
-        REFERENCES servers(server_id)
-        ON DELETE CASCADE;
-    END IF;
-END $$;
 
 -- Create unique index on server_id if no duplicates (NULLs allowed)
-DO $$
-DECLARE
-    duplicate_count INTEGER;
-BEGIN
-    SELECT COUNT(*) INTO duplicate_count
-    FROM (
-        SELECT server_id
-        FROM tomori_configs
-        WHERE server_id IS NOT NULL
-        GROUP BY server_id
-        HAVING COUNT(*) > 1
-    ) duplicates;
-
-    IF duplicate_count = 0 THEN
-        EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS idx_tomori_configs_server_id_unique ON tomori_configs(server_id) WHERE server_id IS NOT NULL';
-    ELSE
-        RAISE NOTICE 'Skipped unique index on tomori_configs.server_id due to duplicates';
-    END IF;
-END $$;
 
 -- Non-unique index for server_id lookups (fallback if unique index skipped)
-CREATE INDEX IF NOT EXISTS idx_tomori_configs_server_id ON tomori_configs(server_id);
 
 -- Add columns for emoji and sticker usage permissions (May 5, 2025)
-SELECT add_column_if_not_exists('tomori_configs', 'emoji_usage_enabled', 'BOOLEAN', 'true');
-SELECT add_column_if_not_exists('tomori_configs', 'sticker_usage_enabled', 'BOOLEAN', 'true');
 
 -- Add timezone offset column for server-wide timezone configuration 
-SELECT add_column_if_not_exists('tomori_configs', 'timezone_offset', 'INTEGER', '0');
 
 -- Rename google_search_enabled to web_search_enabled for Brave Search integration 
-SELECT add_column_if_not_exists('tomori_configs', 'web_search_enabled', 'BOOLEAN', 'true');
 
 -- Add message management permission (November 2025)
-SELECT add_column_if_not_exists('tomori_configs', 'manage_message_enabled', 'BOOLEAN', 'true');
 
 -- Add thread creation permission (May 2026)
-SELECT add_column_if_not_exists('tomori_configs', 'thread_creation_enabled', 'BOOLEAN', 'true');
 
 -- Add image generation permission
-SELECT add_column_if_not_exists('tomori_configs', 'imagegen_enabled', 'BOOLEAN', 'true');
 
 -- Add hide respond embed permission (January 2026)
-SELECT add_column_if_not_exists('tomori_configs', 'hide_respond_embed', 'BOOLEAN', 'false');
 
 -- Add self-debug permission (March 2026)
 -- When enabled, Tomori ingests her own error embeds into context as [System: ...] lines
-SELECT add_column_if_not_exists('tomori_configs', 'self_debug_enabled', 'BOOLEAN', 'false');
 
 -- Add uncensor feature toggles (February 2026)
-SELECT add_column_if_not_exists('tomori_configs', 'uncensor_injection_enabled', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('tomori_configs', 'uncensor_unicode_space_enabled', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('tomori_configs', 'uncensor_sanitize_enabled', 'BOOLEAN', 'false');
 
 -- Add video generation permission
-SELECT add_column_if_not_exists('tomori_configs', 'videogen_enabled', 'BOOLEAN', 'false');
-ALTER TABLE tomori_configs ALTER COLUMN videogen_enabled SET DEFAULT false;
 
 -- Add video model reference for video generation
-SELECT add_column_if_not_exists('tomori_configs', 'video_model_id', 'INTEGER');
 
 -- Add diffusion model reference for image generation 
-SELECT add_column_if_not_exists('tomori_configs', 'diffusion_model_id', 'INTEGER');
 
 -- Add embedding model reference for document embedding
-SELECT add_column_if_not_exists('tomori_configs', 'embedding_model_id', 'INTEGER');
 
 -- Add custom system prompt column (December 2025)
-SELECT add_column_if_not_exists('tomori_configs', 'system_prompt', 'TEXT', 'NULL');
 
 -- Add message trigger cooldown columns (January 2026)
 -- cooldown_type: 0=off, 1=per-user, 2=per-channel, 3=server-wide (managers exempt), 4=strict server-wide
-SELECT add_column_if_not_exists('tomori_configs', 'cooldown_type', 'INTEGER', '0');
 -- cooldown_length: Duration in seconds (1-86400, default 5)
-SELECT add_column_if_not_exists('tomori_configs', 'cooldown_length', 'INTEGER', '5');
 
 -- Cascade trigger limit for persona triggering (January 2026, renamed April 2026)
 -- 0 = first trigger only, default 3, max 10 enforced by command validation
 -- Renamed from self_reply_limit to cascade_limit
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tomori_configs' AND column_name = 'self_reply_limit')
-    AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tomori_configs' AND column_name = 'cascade_limit') THEN
-    ALTER TABLE tomori_configs RENAME COLUMN self_reply_limit TO cascade_limit;
-  END IF;
-END $$;
-SELECT add_column_if_not_exists('tomori_configs', 'cascade_limit', 'INTEGER', '3');
 
 -- Per-message match limit cap (February 2026, renamed April 2026)
 -- Minimum 1, default 3, max 10 enforced by command validation
 -- Renamed from triggered_persona_limit to match_limit
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tomori_configs' AND column_name = 'triggered_persona_limit')
-    AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tomori_configs' AND column_name = 'match_limit') THEN
-    ALTER TABLE tomori_configs RENAME COLUMN triggered_persona_limit TO match_limit;
-  END IF;
-END $$;
-SELECT add_column_if_not_exists('tomori_configs', 'match_limit', 'INTEGER', '3');
 
 -- Per-server history fetch limit for context building (February 2026)
 -- Min 20, max 100 enforced by command and schema validation
-SELECT add_column_if_not_exists('tomori_configs', 'message_fetch_limit', 'INTEGER', '80');
 
 -- Send message limit (March 2026)
 -- Caps the number of Discord messages sent per response (0 = unlimited, capped by MAX_FLUSH_COUNT)
 -- Each message is a semantically complete chunk, so this produces clean cutoffs unlike maxOutputTokens
-SELECT add_column_if_not_exists('tomori_configs', 'send_message_limit', 'INTEGER', '0');
 
 -- Always-reply mode (March 2026)
 -- When enabled, main persona replies to all user messages in guild channels (like DMs)
 -- Alter personas still require explicit trigger words; main persona defers if an alter is triggered
-SELECT add_column_if_not_exists('tomori_configs', 'always_reply_enabled', 'BOOLEAN', 'false');
 
 -- Deliberate trigger mode (April 2026)
 -- When enabled, plain {trigger} words are blocked; only @{trigger}, replies, mentions, and /bot respond work
-SELECT add_column_if_not_exists('tomori_configs', 'deliberate_trigger_mode', 'BOOLEAN', 'false');
 
 -- Auto-chat shared range state (March 2026)
 SELECT add_column_if_not_exists('tomoris', 'autoch_next_target', 'INTEGER', '0');
-SELECT add_column_if_not_exists('tomori_configs', 'autoch_threshold_max', 'INTEGER', '0');
-UPDATE tomori_configs
-SET autoch_threshold_max = autoch_threshold
-WHERE COALESCE(autoch_threshold, 0) > 0
-  AND COALESCE(autoch_threshold_max, 0) = 0;
 
 -- Add custom endpoint URL for self-hosted OpenAI-compatible LLM endpoints (January 2026)
 -- DEPRECATED Phase 3 rollout: legacy inline custom field kept only for backward compatibility while labeled custom_endpoints takes over.
-SELECT add_column_if_not_exists('tomori_configs', 'custom_endpoint_url', 'TEXT');
 
 -- Add custom model name for custom endpoints (January 2026)
 -- DEPRECATED Phase 3 rollout: legacy inline custom field kept only for backward compatibility while labeled custom_endpoints takes over.
-SELECT add_column_if_not_exists('tomori_configs', 'custom_model_name', 'TEXT');
 
 -- Add context window size for custom endpoints (April 2026)
 -- DEPRECATED Phase 3 rollout: legacy inline custom field kept only for backward compatibility while labeled custom_endpoints takes over.
-SELECT add_column_if_not_exists('tomori_configs', 'custom_num_ctx', 'INT');
 
 -- Add provider-agnostic thinking level hint (April 2026)
 -- DEPRECATED Phase 1.5 Pass B: thinking_level is now canonical in saved_provider_configs
-SELECT add_column_if_not_exists('tomori_configs', 'thinking_level', 'TEXT', '''auto''');
 
 -- Add RP channel IDs for per-channel emoji/sticker suppression (February 2026)
 -- Channels in this list always suppress emojis and stickers regardless of global settings
-SELECT add_column_if_not_exists('tomori_configs', 'rp_channel_ids', 'TEXT[]', 'ARRAY[]::TEXT[]');
 
 -- Add private channel IDs for STM isolation and thought-log suppression (March 2026)
 -- STMs created in these channels cannot leak into other channels, and thought logs are never emitted from them
-SELECT add_column_if_not_exists('tomori_configs', 'private_channel_ids', 'TEXT[]', 'ARRAY[]::TEXT[]');
 
 -- Add STM privacy bypass flag (April 2026)
 -- When TRUE, private-channel STMs are allowed to leak into non-private channels (bypasses default isolation)
-SELECT add_column_if_not_exists('tomori_configs', 'stm_privacy_bypass', 'BOOLEAN', 'FALSE');
 
 -- Add cross-channel blocklist channel IDs (April 2026)
 -- Channels in this list cannot be targeted by the cross_channel_message tool; forum/media parents also block thread visits
-SELECT add_column_if_not_exists('tomori_configs', 'crosschannel_blocklist_ids', 'TEXT[]', 'ARRAY[]::TEXT[]');
 
 -- Add welcome channel configuration (March 2026)
 -- One configured channel/prompt/persona per server for join greetings
-SELECT add_column_if_not_exists('tomori_configs', 'welcome_channel_disc_id', 'TEXT', 'NULL');
-SELECT add_column_if_not_exists('tomori_configs', 'thought_log_channel_disc_id', 'TEXT', 'NULL');
-SELECT add_column_if_not_exists('tomori_configs', 'welcome_prompt', 'TEXT', 'NULL');
-SELECT add_column_if_not_exists('tomori_configs', 'welcome_persona_id', 'INTEGER', 'NULL');
-SELECT add_column_if_not_exists('tomori_configs', 'autoch_persona_overrides', 'JSONB', '''[]''::JSONB');
 
 -- Add hidden notice embed registry (April 2026)
 -- Stores hidden notice keys only; missing entries remain visible by default
-SELECT add_column_if_not_exists('tomori_configs', 'tool_notice_hidden_keys', 'TEXT[]', 'ARRAY[]::TEXT[]');
 
 -- Add LLM sampling parameter columns (February 2026)
 -- DEPRECATED Phase 1.5 Pass B: all sampler columns are now canonical in saved_provider_configs
 -- llm_top_p: Nucleus sampling — probability mass threshold (0.95=default, 0.0=most restricted)
-SELECT add_column_if_not_exists('tomori_configs', 'llm_top_p', 'REAL', '0.95');
 -- llm_top_k: Top-K sampling — candidate token count (0=neutral/disabled, max 40)
-SELECT add_column_if_not_exists('tomori_configs', 'llm_top_k', 'INTEGER', '0');
 -- llm_frequency_penalty: Penalize frequently used tokens (-2.0 to 2.0, 0.0=neutral)
-SELECT add_column_if_not_exists('tomori_configs', 'llm_frequency_penalty', 'REAL', '0.0');
 -- llm_presence_penalty: Penalize already-used topics (-2.0 to 2.0, 0.0=neutral)
-SELECT add_column_if_not_exists('tomori_configs', 'llm_presence_penalty', 'REAL', '0.0');
 -- llm_min_p: Minimum probability threshold sampling (0.05=default, 1.0=most restricted)
-SELECT add_column_if_not_exists('tomori_configs', 'llm_min_p', 'REAL', '0.05');
 -- llm_disabled_params: Parameter names omitted from outbound provider payloads
-SELECT add_column_if_not_exists('tomori_configs', 'llm_disabled_params', 'TEXT[]', 'ARRAY[]::TEXT[]');
-SELECT add_column_if_not_exists('tomori_configs', 'llm_stop_strings', 'TEXT[]', 'ARRAY[]::TEXT[]');
-SELECT add_column_if_not_exists('tomori_configs', 'llm_stop_speaker_pattern_enabled', 'BOOLEAN', 'false');
 -- llm_logit_biases: Stored OpenAI-style logit bias entries [{id, text, value}, ...]
-SELECT add_column_if_not_exists('tomori_configs', 'llm_logit_biases', 'JSONB', '''[]''::JSONB');
 
 -- Migration: Update llm_temperature range from [1.0, 2.0] to [0.0, 2.0] and default from 1.2 to 1.0 (March 2026)
-DO $$
-BEGIN
-    -- Drop the old CHECK constraint (name may vary across deployments)
-    EXECUTE (
-        SELECT 'ALTER TABLE tomori_configs DROP CONSTRAINT ' || conname
-        FROM pg_constraint
-        WHERE conrelid = 'tomori_configs'::regclass
-          AND contype = 'c'
-          AND pg_get_constraintdef(oid) LIKE '%llm_temperature%'
-        LIMIT 1
-    );
-EXCEPTION WHEN OTHERS THEN
-    -- No existing constraint found — that's fine
-    NULL;
-END $$;
-ALTER TABLE tomori_configs ADD CONSTRAINT tomori_configs_llm_temperature_check
     CHECK (llm_temperature >= 0.0 AND llm_temperature <= 2.0);
-ALTER TABLE tomori_configs ALTER COLUMN llm_temperature SET DEFAULT 1.0;
 
 -- Migration: update llm_min_p default from 0.0 to 0.05 (April 2026)
-ALTER TABLE tomori_configs ALTER COLUMN llm_min_p SET DEFAULT 0.05;
 
 -- Add foreign key constraint if the column was just created
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conname = 'tomori_configs_diffusion_model_id_fkey'
-    ) THEN
-        ALTER TABLE tomori_configs
-        ADD CONSTRAINT tomori_configs_diffusion_model_id_fkey
-        FOREIGN KEY (diffusion_model_id)
-        REFERENCES image_diffusion_models(diffusion_model_id)
-        ON DELETE SET NULL;
-    END IF;
-END $$;
 
 -- Add foreign key constraint for video model if not exists
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conname = 'tomori_configs_video_model_id_fkey'
-    ) THEN
-        ALTER TABLE tomori_configs
-        ADD CONSTRAINT tomori_configs_video_model_id_fkey
-        FOREIGN KEY (video_model_id)
-        REFERENCES video_generation_models(video_model_id)
-        ON DELETE SET NULL;
-    END IF;
-END $$;
 
 -- Add foreign key constraint for embedding model if not exists
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conname = 'tomori_configs_embedding_model_id_fkey'
-    ) THEN
-        ALTER TABLE tomori_configs
-        ADD CONSTRAINT tomori_configs_embedding_model_id_fkey
-        FOREIGN KEY (embedding_model_id)
-        REFERENCES embedding_models(embedding_model_id)
-        ON DELETE SET NULL;
-    END IF;
-END $$;
 
 -- Migrate existing google_search_enabled values to web_search_enabled if the old column exists
-DO $$
-BEGIN
-    IF EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'tomori_configs' AND column_name = 'google_search_enabled') THEN
-        -- Copy values from old column to new column
-        UPDATE tomori_configs 
-        SET web_search_enabled = google_search_enabled 
-        WHERE web_search_enabled IS NULL OR web_search_enabled != google_search_enabled;
-        
-        -- Drop the old column
-        ALTER TABLE tomori_configs DROP COLUMN IF EXISTS google_search_enabled;
-        RAISE NOTICE 'Migrated google_search_enabled to web_search_enabled and dropped old column';
-    END IF;
-END $$;
 
 -- Add tool-use master toggle (April 2026)
 -- When FALSE, has_tools is artificially overridden to false in the pipeline for all models
-SELECT add_column_if_not_exists('tomori_configs', 'tool_use_enabled', 'BOOLEAN', 'true');
-
--- Create updated_at trigger for tomori_configs table
-DROP TRIGGER IF EXISTS update_tomori_configs_timestamp ON tomori_configs;
-CREATE TRIGGER update_tomori_configs_timestamp
-BEFORE UPDATE ON tomori_configs
-FOR EACH ROW
-EXECUTE FUNCTION update_timestamp();
 
 CREATE TABLE IF NOT EXISTS tomori_presets (
   tomori_preset_id SERIAL PRIMARY KEY,
@@ -1180,7 +923,6 @@ CREATE TABLE IF NOT EXISTS conditioning_history (
   FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
-
 
 DROP TRIGGER IF EXISTS update_conditioning_history_timestamp ON conditioning_history;
 CREATE TRIGGER update_conditioning_history_timestamp
@@ -1634,8 +1376,6 @@ CREATE INDEX IF NOT EXISTS idx_reminders_server_id ON reminders(server_id);
 DROP TRIGGER IF EXISTS update_reminders_timestamp ON reminders;
 
 -- Drop deprecated columns 
-SELECT drop_column_if_exists('tomori_configs', 'teach_cost');
-SELECT drop_column_if_exists('tomori_configs', 'gamba_limit');
 SELECT drop_column_if_exists('users', 'tomocoins_held');
 SELECT drop_column_if_exists('users', 'tomocoins_deposited');
 
@@ -1643,20 +1383,17 @@ SELECT drop_column_if_exists('users', 'tomocoins_deposited');
 SELECT add_column_if_not_exists('opt_api_keys', 'key_version', 'INTEGER', '1');
 CREATE INDEX IF NOT EXISTS idx_opt_api_keys_version ON opt_api_keys(key_version);
 
--- Add key_version column to tomori_configs for main API key rotation (November 2025)
 -- DEPRECATED Phase 1.5 Pass B: api_key/key_version are now canonical in saved_provider_configs
-SELECT add_column_if_not_exists('tomori_configs', 'key_version', 'INTEGER', '1');
-CREATE INDEX IF NOT EXISTS idx_tomori_configs_key_version ON tomori_configs(key_version);
 
 -- API Key Rotation table for load balancing and failover (January 2026)
 -- Stores additional API keys for round-robin distribution and automatic failover
 CREATE TABLE IF NOT EXISTS api_key_rotation (
   rotation_key_id SERIAL PRIMARY KEY,
   server_id INT NOT NULL,
-  provider TEXT NOT NULL,                           -- Must match current provider in tomori_configs
+  provider TEXT NOT NULL,                           -- Must match current provider in saved_provider_configs
   api_key BYTEA,                                    -- NULL if is_main_key_pointer = true
   key_version INTEGER DEFAULT 1,                    -- Encryption key version
-  is_main_key_pointer BOOLEAN DEFAULT false,        -- true = use tomori_configs.api_key instead
+  is_main_key_pointer BOOLEAN DEFAULT false,        -- true = use saved_provider_configs.api_key instead
   is_enabled BOOLEAN DEFAULT true,                  -- Manual or auto-disabled after errors
   usage_count BIGINT DEFAULT 0,                     -- For round-robin tracking
   error_count INTEGER DEFAULT 0,                    -- Consecutive errors
@@ -1737,7 +1474,7 @@ CREATE INDEX IF NOT EXISTS idx_image_quotas_date
 	ON image_quotas(quota_date);
 
 -- Server-wide quota tracking (resets based on serverwide_quota_resets_in)
-CREATE TABLE IF NOT EXISTS serverwide_quotas (
+CREATE TABLE IF NOT EXISTS image_serverwide_quotas (
 	server_id INT PRIMARY KEY,
 	usage_count INT NOT NULL DEFAULT 0,                      -- Total images generated this period
 	quota_period_start TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1752,25 +1489,25 @@ BEGIN
     -- Check if last_updated column exists and updated_at doesn't
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'serverwide_quotas' AND column_name = 'last_updated'
+        WHERE table_name = 'image_serverwide_quotas' AND column_name = 'last_updated'
     ) AND NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'serverwide_quotas' AND column_name = 'updated_at'
+        WHERE table_name = 'image_serverwide_quotas' AND column_name = 'updated_at'
     ) THEN
-        ALTER TABLE serverwide_quotas RENAME COLUMN last_updated TO updated_at;
+        ALTER TABLE image_serverwide_quotas RENAME COLUMN last_updated TO updated_at;
     END IF;
 END $$;
 
--- Create updated_at trigger for serverwide_quotas table
-DROP TRIGGER IF EXISTS update_serverwide_quotas_timestamp ON serverwide_quotas;
-CREATE TRIGGER update_serverwide_quotas_timestamp
-BEFORE UPDATE ON serverwide_quotas
+-- Create updated_at trigger for image_serverwide_quotas table
+DROP TRIGGER IF EXISTS update_image_serverwide_quotas_timestamp ON image_serverwide_quotas;
+CREATE TRIGGER update_image_serverwide_quotas_timestamp
+BEFORE UPDATE ON image_serverwide_quotas
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 
 -- Index for cleanup queries (find expired quota periods)
-CREATE INDEX IF NOT EXISTS idx_serverwide_quotas_period_end
-	ON serverwide_quotas(quota_period_end);
+CREATE INDEX IF NOT EXISTS idx_image_serverwide_quotas_period_end
+	ON image_serverwide_quotas(quota_period_end);
 
 -- Function to clean up old user quota records (older than 7 days)
 CREATE OR REPLACE FUNCTION cleanup_old_image_quotas()
@@ -1973,7 +1710,6 @@ $$ LANGUAGE plpgsql;
 
 -- Example usage - This shows how to add columns to existing tables
 -- You can add these calls whenever you need to introduce schema changes
--- SELECT add_column_if_not_exists('tomori_configs', 'new_feature_flag', 'BOOLEAN', 'false');
 -- SELECT add_column_if_not_exists('users', 'avatar_url', 'TEXT');
 -- SELECT add_column_if_not_exists('tomoris', 'response_count', 'INT', '0');
 
@@ -2066,7 +1802,6 @@ CREATE TRIGGER update_channel_llm_overrides_timestamp
     BEFORE UPDATE ON channel_llm_overrides
     FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
-
 -- ============================================================================
 -- NOVELAI ATTG METADATA (March 2026)
 -- Per-persona Author/Title/Tags/Genre/Stars for Kayra/Erato prompt formatting.
@@ -2082,7 +1817,6 @@ SELECT add_column_if_not_exists('tomoris', 'nai_attg_stars',  'SMALLINT', NULL);
 -- NOVELAI SAMPLING PRESETS (March 2026)
 -- Stores per-model preset configs (Kayra and Erato) with human-readable
 -- descriptions. Schema-compatible fields (temperature, top_k, top_p, min_p)
--- are written to tomori_configs; NAI-specific fields (order, tail_free_sampling,
 -- phrase_rep_pen, etc.) are merged at generation time via nai_preset_name lookup.
 -- ============================================================================
 
@@ -2102,99 +1836,22 @@ CREATE TABLE IF NOT EXISTS nai_presets (
 CREATE INDEX IF NOT EXISTS idx_nai_presets_model_target ON nai_presets(model_target, is_default);
 
 -- Link active preset by name to server config (nullable for non-NAI providers)
-SELECT add_column_if_not_exists('tomori_configs', 'nai_preset_name', 'TEXT');
 
 -- Add fallback model chain for automatic provider failover (March 2026)
 -- DEPRECATED Phase 3 rollout: legacy fallback array kept only for backward compatibility until fallback_model_refs is fully adopted.
-SELECT add_column_if_not_exists('tomori_configs', 'fallback_llm_ids', 'JSONB', '''[]''::JSONB');
-SELECT add_column_if_not_exists('tomori_configs', 'fallback_model_refs', 'JSONB', '''[]''::JSONB');
 
 -- Server-wide NovelAI image prompt tag overrides (March 2026)
--- Style tags replace the old hardcoded quality tag list in generate_image_nai.
-SELECT add_column_if_not_exists(
-	'tomori_configs',
-	'nai_style_tags',
-	'TEXT[]',
-	'''{"8k","absurdres","masterpiece","best quality","good quality","newest"}'''
-);
-
--- Negative tags replace the old hardcoded NAI negative prompt in generate_image_nai.
-SELECT add_column_if_not_exists(
-	'tomori_configs',
-	'nai_negative_tags',
-	'TEXT[]',
-	'''{"lowres","worst quality","low quality","bad quality","old","oldest","unfinished","scan artifacts","jpeg artifacts","jaggy lines","unclear","sketch","blurry","bad anatomy","very displeasing","displeasing","bad hands","bad fingers","missing fingers","bad proportions","bad perspective","bad eyes","bad pupils","multiple heads","extra faces","many arms","poorly drawn face","poorly drawn hands","fused hands","bad feet","too many legs","malformed limbs","extra arms","multiple ears","extra digits","fewer digits","twitter username","username","watermark","signature","2koma","4koma","comic"}'''
-);
+-- nai_style_tags and nai_negative_tags were on tomori_configs (legacy god table).
+-- Migrated to server_novelai_imagegen_configs (migration 002); tomori_configs
+-- was dropped by migration 008. These add_column calls were removed in Task F2 review.
 
 -- Per-server NovelAI image generation parameter overrides (March 2026)
-SELECT add_column_if_not_exists('tomori_configs', 'nai_sampler', 'TEXT', 'NULL');
-SELECT add_column_if_not_exists('tomori_configs', 'nai_steps', 'SMALLINT', 'NULL');
-SELECT add_column_if_not_exists('tomori_configs', 'nai_scale', 'REAL', 'NULL');
-SELECT add_column_if_not_exists('tomori_configs', 'nai_noise_schedule', 'TEXT', 'NULL');
-SELECT add_column_if_not_exists('tomori_configs', 'nai_cfg_rescale', 'REAL', 'NULL');
-SELECT add_column_if_not_exists('tomori_configs', 'nai_diffusion_model_id', 'INTEGER', 'NULL');
-
-DO $$
-BEGIN
-	IF NOT EXISTS (
-		SELECT 1 FROM pg_constraint
-		WHERE conname = 'tomori_configs_nai_diffusion_model_id_fkey'
-	) THEN
-		ALTER TABLE tomori_configs
-		ADD CONSTRAINT tomori_configs_nai_diffusion_model_id_fkey
-		FOREIGN KEY (nai_diffusion_model_id)
-		REFERENCES image_diffusion_models(diffusion_model_id)
-		ON DELETE SET NULL;
-	END IF;
-END $$;
 
 -- Migration: add vision_llm_id column (March 2026 — dedicated vision model for non-vision chat models)
-SELECT add_column_if_not_exists('tomori_configs', 'vision_llm_id', 'INTEGER', 'NULL');
-
-DO $$
-BEGIN
-	IF NOT EXISTS (
-		SELECT 1 FROM pg_constraint
-		WHERE conname = 'tomori_configs_vision_llm_id_fkey'
-	) THEN
-		ALTER TABLE tomori_configs
-		ADD CONSTRAINT tomori_configs_vision_llm_id_fkey
-		FOREIGN KEY (vision_llm_id)
-		REFERENCES llms(llm_id)
-		ON DELETE SET NULL;
-	END IF;
-END $$;
 
 -- Bun SQL currently fails on INT[] binary decoding in some code paths.
--- Migrate fallback_llm_ids to JSONB for stable SELECT */RETURNING * behavior.
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1
-        FROM information_schema.columns
-        WHERE table_name = 'tomori_configs'
-          AND column_name = 'fallback_llm_ids'
-          AND udt_name = '_int4'
-    ) THEN
-        ALTER TABLE tomori_configs
-            ALTER COLUMN fallback_llm_ids DROP DEFAULT;
-
-        ALTER TABLE tomori_configs
-            ALTER COLUMN fallback_llm_ids TYPE JSONB
-            USING COALESCE(to_jsonb(fallback_llm_ids), '[]'::JSONB);
-    END IF;
-
-    IF EXISTS (
-        SELECT 1
-        FROM information_schema.columns
-        WHERE table_name = 'tomori_configs'
-          AND column_name = 'fallback_llm_ids'
-          AND udt_name = 'jsonb'
-    ) THEN
-        ALTER TABLE tomori_configs
-            ALTER COLUMN fallback_llm_ids SET DEFAULT '[]'::JSONB;
-    END IF;
-END $$;
+-- fallback_llm_ids was migrated to JSONB, then superseded by fallback_model_refs,
+-- and dropped by migration 011_drop_deprecated_provider_config_columns.sql.
 
 -- ============================================================
 -- Guild MCP Servers (per-guild remote MCP server registrations)
@@ -2229,6 +1886,11 @@ CREATE TRIGGER update_guild_mcp_servers_timestamp
 -- Stores API key, model selections, and endpoint config per provider
 -- so users can switch between providers without losing their setup.
 -- One row per provider per server. UPSERT on save, DELETE on remove.
+--
+-- Fission-threshold exemption: this table exceeds the 15-column soft warning.
+-- Justified by atomic snapshot semantics — /server save-provider writes ALL
+-- columns together as a single unit; splitting by command boundary is not
+-- applicable here because the entire row is one logical "provider snapshot."
 -- ============================================================
 CREATE TABLE IF NOT EXISTS saved_provider_configs (
   saved_config_id SERIAL PRIMARY KEY,
@@ -2241,13 +1903,10 @@ CREATE TABLE IF NOT EXISTS saved_provider_configs (
   embedding_model_id INT,                     -- Embedding model at time of save
   nai_diffusion_model_id INT,                 -- Dedicated NovelAI image model at time of save
   nai_preset_name TEXT,                       -- NovelAI sampling preset at time of save
-  custom_endpoint_url TEXT,                   -- DEPRECATED Phase 3 rollout: legacy inline custom field; new registrations live in custom_endpoints
-  custom_model_name TEXT,                     -- DEPRECATED Phase 3 rollout: legacy inline custom field; new registrations live in custom_endpoints
-  custom_num_ctx INT,                         -- DEPRECATED Phase 3 rollout: legacy inline custom field; new registrations live in custom_endpoints
+  -- custom_endpoint_url, custom_model_name, custom_num_ctx dropped by migration 011 (Phase 3 — now in custom_endpoints)
+  -- fallback_llm_ids dropped by migration 011 (Phase 3 — superseded by fallback_model_refs)
+  -- channel_llm_overrides, persona_llm_overrides JSONB dropped by migration 011 (Pass B switch-snapshot baggage)
   thinking_level TEXT DEFAULT 'auto',         -- Provider-specific thinking/reasoning effort snapshot
-  fallback_llm_ids JSONB DEFAULT '[]'::JSONB, -- DEPRECATED Phase 3 rollout: legacy fallback array; replace with fallback_model_refs before dropping
-  channel_llm_overrides JSONB DEFAULT '[]'::JSONB,  -- DEPRECATED Phase 1.5 Pass B: switch-snapshot baggage; no longer written after switch.ts removed
-  persona_llm_overrides JSONB DEFAULT '[]'::JSONB,  -- DEPRECATED Phase 1.5 Pass B: switch-snapshot baggage; no longer written after switch.ts removed
   llm_logit_biases JSONB DEFAULT '[]'::JSONB, -- Snapshot: [{id, text, value}, ...]
   llm_disabled_params TEXT[] DEFAULT '{}',    -- Snapshot: params omitted for this provider
   saved_at TIMESTAMPTZ DEFAULT NOW(),
@@ -2263,10 +1922,9 @@ CREATE TABLE IF NOT EXISTS saved_provider_configs (
 CREATE INDEX IF NOT EXISTS idx_saved_provider_configs_server
   ON saved_provider_configs(server_id);
 
--- Migration: add override snapshot columns (for existing deployments)
--- DEPRECATED Phase 1.5 Pass B: switch-snapshot baggage; drop after checklist passes
-SELECT add_column_if_not_exists('saved_provider_configs', 'channel_llm_overrides', 'JSONB', '''[]''::JSONB');
-SELECT add_column_if_not_exists('saved_provider_configs', 'persona_llm_overrides', 'JSONB', '''[]''::JSONB');
+-- channel_llm_overrides, persona_llm_overrides: dropped by migration 011 (Pass B baggage)
+-- custom_endpoint_url, custom_model_name, custom_num_ctx: dropped by migration 011 (Phase 3)
+-- fallback_llm_ids: dropped by migration 011 (Phase 3)
 
 -- Migration: add vision_llm_id column (for existing deployments)
 SELECT add_column_if_not_exists('saved_provider_configs', 'vision_llm_id', 'INTEGER', 'NULL');
@@ -2286,23 +1944,9 @@ SELECT add_column_if_not_exists('saved_provider_configs', 'video_model_id', 'INT
 -- Migration: add thinking_level snapshot column to saved_provider_configs (April 2026)
 SELECT add_column_if_not_exists('saved_provider_configs', 'thinking_level', 'TEXT', '''auto''');
 
--- Migration: add custom_num_ctx column to saved_provider_configs (April 2026)
-SELECT add_column_if_not_exists('saved_provider_configs', 'custom_num_ctx', 'INT', 'NULL');
 SELECT add_column_if_not_exists('saved_provider_configs', 'fallback_model_refs', 'JSONB', '''[]''::JSONB');
 
--- Migration: add user_byok_mode column to tomori_configs (April 2026)
-SELECT add_column_if_not_exists('tomori_configs', 'user_byok_mode', 'BOOLEAN', 'false');
-
 -- Migration: BYOK-only servers may intentionally operate without a server text model (April 2026)
-DO $$
-BEGIN
-  BEGIN
-    ALTER TABLE tomori_configs ALTER COLUMN llm_id DROP NOT NULL;
-  EXCEPTION
-    WHEN undefined_table THEN
-      NULL;
-  END;
-END $$;
 
 -- Auto-update timestamp trigger
 DROP TRIGGER IF EXISTS update_saved_provider_configs_timestamp ON saved_provider_configs;
@@ -2527,12 +2171,10 @@ CREATE TABLE IF NOT EXISTS user_saved_provider_configs (
   llm_min_p REAL,
   llm_logit_biases JSONB DEFAULT '[]'::JSONB,
   llm_disabled_params TEXT[] DEFAULT '{}',
-  custom_endpoint_url TEXT, -- DEPRECATED Phase 3 rollout: legacy inline custom field; new registrations live in custom_endpoints
-  custom_model_name TEXT, -- DEPRECATED Phase 3 rollout: legacy inline custom field; new registrations live in custom_endpoints
-  custom_num_ctx INT, -- DEPRECATED Phase 3 rollout: legacy inline custom field; new registrations live in custom_endpoints
+  -- custom_endpoint_url, custom_model_name, custom_num_ctx dropped by migration 011 (Phase 3)
+  -- fallback_llm_ids dropped by migration 011 (Phase 3)
   thinking_level TEXT DEFAULT 'auto',
-  enabled_capabilities TEXT[] DEFAULT '{}',
-  fallback_llm_ids JSONB DEFAULT '[]'::JSONB, -- DEPRECATED Phase 3 rollout: legacy fallback array; replace with fallback_model_refs before dropping
+  enabled_capabilities TEXT[] DEFAULT '{}', -- Intentionally user-only: which capabilities this user-provider is active for
   saved_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(user_id, provider),
@@ -2558,12 +2200,10 @@ SELECT add_column_if_not_exists('user_saved_provider_configs', 'llm_presence_pen
 SELECT add_column_if_not_exists('user_saved_provider_configs', 'llm_min_p', 'REAL', 'NULL');
 SELECT add_column_if_not_exists('user_saved_provider_configs', 'llm_logit_biases', 'JSONB', '''[]''::JSONB');
 SELECT add_column_if_not_exists('user_saved_provider_configs', 'llm_disabled_params', 'TEXT[]', 'ARRAY[]::TEXT[]');
-SELECT add_column_if_not_exists('user_saved_provider_configs', 'custom_endpoint_url', 'TEXT', 'NULL');
-SELECT add_column_if_not_exists('user_saved_provider_configs', 'custom_model_name', 'TEXT', 'NULL');
-SELECT add_column_if_not_exists('user_saved_provider_configs', 'custom_num_ctx', 'INT', 'NULL');
+-- custom_endpoint_url, custom_model_name, custom_num_ctx: dropped by migration 011
+-- fallback_llm_ids: dropped by migration 011
 SELECT add_column_if_not_exists('user_saved_provider_configs', 'thinking_level', 'TEXT', '''auto''');
 SELECT add_column_if_not_exists('user_saved_provider_configs', 'enabled_capabilities', 'TEXT[]', 'ARRAY[]::TEXT[]');
-SELECT add_column_if_not_exists('user_saved_provider_configs', 'fallback_llm_ids', 'JSONB', '''[]''::JSONB');
 SELECT add_column_if_not_exists('user_saved_provider_configs', 'fallback_model_refs', 'JSONB', '''[]''::JSONB');
 
 DROP TRIGGER IF EXISTS update_user_saved_provider_configs_timestamp ON user_saved_provider_configs;
@@ -2582,27 +2222,18 @@ CREATE TRIGGER update_user_saved_provider_configs_timestamp
 -- Per-persona note (on tomoris)
 SELECT add_column_if_not_exists('tomoris', 'context_note', 'TEXT', 'NULL');
 SELECT add_column_if_not_exists('tomoris', 'context_note_depth', 'INTEGER', '0');
--- Server-wide / global fallback note (on tomori_configs)
-SELECT add_column_if_not_exists('tomori_configs', 'context_note', 'TEXT', 'NULL');
-SELECT add_column_if_not_exists('tomori_configs', 'context_note_depth', 'INTEGER', '0');
 
 -- ============================================================
 -- Voice / TTS feature toggles (March 2026)
 -- ============================================================
 -- voice_message_enabled: Allow sending ElevenLabs TTS voice messages in this server
-SELECT add_column_if_not_exists('tomori_configs', 'voice_message_enabled', 'BOOLEAN', 'true');
 -- voice_transcript_chat_mode: Post voice transcripts as webhook chat messages instead of internal cache
-SELECT add_column_if_not_exists('tomori_configs', 'voice_transcript_chat_mode', 'BOOLEAN', 'true');
 -- Chatterbox local TTS controls. CFG/exaggeration apply only when turbo is disabled.
-SELECT add_column_if_not_exists('tomori_configs', 'chatterbox_turbo_enabled', 'BOOLEAN', 'true');
-SELECT add_column_if_not_exists('tomori_configs', 'chatterbox_cfg_weight', 'REAL', '0.5');
-SELECT add_column_if_not_exists('tomori_configs', 'chatterbox_exaggeration', 'REAL', '0.5');
 
 -- ============================================================
 -- Prompt snapshot permission (April 2026)
 -- ============================================================
 -- prompt_snapshot_enabled: Allow non-admin members to use /tool prompt snapshot
-SELECT add_column_if_not_exists('tomori_configs', 'prompt_snapshot_enabled', 'BOOLEAN', 'false');
 
 -- ============================================================
 -- Voice samples table + per-persona TTS voice assignment (Phase 4.1)
@@ -2646,9 +2277,7 @@ END $$;
 
 -- Max output tokens override (April 2026)
 -- User-configurable generation length cap per saved provider. NULL = use provider default (8192 or hardcoded fallback).
-SELECT add_column_if_not_exists('tomori_configs', 'llm_max_output_tokens', 'INTEGER', 'NULL');
 SELECT add_column_if_not_exists('saved_provider_configs', 'llm_max_output_tokens', 'INTEGER', 'NULL');
 SELECT add_column_if_not_exists('user_saved_provider_configs', 'llm_max_output_tokens', 'INTEGER', 'NULL');
 
 -- Memory tag filtering toggle (May 2026)
-SELECT add_column_if_not_exists('tomori_configs', 'memory_tagging_enabled', 'BOOLEAN', 'false');

@@ -14,7 +14,6 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { serverRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { invalidateMatrixLinkCache } from "@/utils/bridges/matrix";
@@ -101,14 +100,9 @@ export async function execute(
     const channel = interaction.options.getChannel("channel", true);
 
     // 6. Query existing link so we can invalidate the room-side cache too
-    const [existingLink] = await sql<{ matrix_room_id: string }[]>`
-			SELECT matrix_room_id
-			FROM matrix_channel_links
-			WHERE channel_disc_id = ${channel.id}
-			LIMIT 1
-		`;
+    const existingRoomId = await serverRepository.getExistingMatrixLink(channel.id);
 
-    if (!existingLink) {
+    if (!existingRoomId) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.WARN,
         titleKey: "commands.server.matrix.unlink.not_linked_title",
@@ -118,7 +112,7 @@ export async function execute(
       return;
     }
 
-    const roomId = existingLink.matrix_room_id;
+    const roomId = existingRoomId;
 
     // 7. Delete the link record
     await serverRepository.unlinkMatrix(channel.id);

@@ -140,7 +140,7 @@ export async function execute(
           ? "commands.model.vision.success_description"
           : "commands.model.vision.success_no_tools_description",
         descriptionVars: {
-          model_name: selectedSavedConfig.custom_model_name ?? getProviderDisplayName(selectedProvider),
+          model_name: getProviderDisplayName(selectedProvider),
           chat_model: tomoriState.llm.llm_codename,
           provider: getProviderDisplayName(selectedProvider),
         },

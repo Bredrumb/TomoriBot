@@ -83,8 +83,6 @@ export const tomoriSchema = z.object({
   webhook_avatar_url: z.string().nullable().optional(), // Added January 2026 - Stored alter avatar reference (production URL; non-production URL or local avatar path)
   nai_tags: z.array(z.string()).default([]), // Imageboard-style persona appearance tags for NovelAI character profile resolution
   nai_char_ref_url: z.string().nullable().optional(), // Added March 2026 - Persona-specific NovelAI character reference image
-  elevenlabs_voice_id: z.string().nullable().optional(), // Added March 2026 - Server-local ElevenLabs voice selection
-  elevenlabs_voice_name: z.string().nullable().optional(), // Added March 2026 - Cached ElevenLabs voice display name
   nai_attg_author: z.string().nullable().optional(), // Added March 2026 - ATTG: Story author name
   nai_attg_title: z.string().nullable().optional(), // Added March 2026 - ATTG: Story title
   nai_attg_tags: z.string().nullable().optional(), // Added March 2026 - ATTG: Genre/style tags
@@ -607,139 +605,71 @@ export const serverMemoryConfigSchema = z.object({
 });
 export type ServerMemoryConfigRow = z.infer<typeof serverMemoryConfigSchema>;
 
-export const tomoriConfigSchema = z.object({
-  tomori_config_id: z.number().optional(),
-  tomori_id: z.number().nullable().optional(), // Legacy pointer (server-scoped configs use server_id)
-  server_id: z.number().nullable().optional(), // Added January 2026 - Server-scoped config (nullable for legacy rows)
-  llm_id: z.number().int().nullable(),
-  embedding_model_id: z.number().int().nullable().optional(), // Added February 2026 - Embedding model for document retrieval
-  diffusion_model_id: z.number().int().nullable().optional(), // Added December 2025 - Image generation model
-  vision_llm_id: z.number().int().nullable().optional(), // Added March 2026 - Dedicated vision model for non-vision chat models (FK to llms)
-  video_model_id: z.number().int().nullable().optional(), // Added April 2026 - Video generation model
-  nai_diffusion_model_id: z.number().int().nullable().optional(), // Added March 2026 - Dedicated NovelAI image model override for generate_image_nai
-  nai_style_tags: z.array(z.string()).default([...DEFAULT_NAI_STYLE_TAGS]), // Added March 2026 - Server-wide NovelAI style/quality tags
-  nai_negative_tags: z.array(z.string()).default([...DEFAULT_NAI_NEGATIVE_TAGS]), // Added March 2026 - Server-wide NovelAI negative prompt tags
-  nai_sampler: z.string().nullable().optional(), // Added March 2026 - Server override for NovelAI image sampler
-  nai_steps: z.number().int().min(1).max(50).nullable().optional(), // Added March 2026 - Server override for NovelAI image steps
-  nai_scale: z.number().min(0.0).max(10.0).nullable().optional(), // Added March 2026 - Server override for NovelAI image scale
-  nai_noise_schedule: z.string().nullable().optional(), // Added March 2026 - Server override for NovelAI noise schedule
-  nai_cfg_rescale: z.number().min(0.0).max(1.0).nullable().optional(), // Added March 2026 - Server override for NovelAI cfg_rescale
-  llm_temperature: z.number().min(0.0).max(2.0).default(1.0),
-  llm_top_p: z.number().min(0.0).max(1.0).default(0.95), // Added February 2026 - Nucleus sampling
-  llm_top_k: z.number().int().min(0).max(40).default(0), // Added February 2026 - Top-K sampling (0=disabled)
-  llm_frequency_penalty: z.number().min(-2.0).max(2.0).default(0.0), // Added February 2026 - Frequency penalty (0.0=neutral)
-  llm_presence_penalty: z.number().min(-2.0).max(2.0).default(0.0), // Added February 2026 - Presence penalty (0.0=neutral)
-  llm_min_p: z.number().min(0.0).max(1.0).default(0.05), // Added February 2026 - Min-P sampling (0.05=default)
-  llm_max_output_tokens: z.number().int().min(1).nullable().optional(), // Added April 2026 - Max output tokens override (NULL = use provider default)
-  llm_disabled_params: z.preprocess(
-    (value) => normalizeDisabledLlmParams(value),
-    z.array(supportedParamSchema).default([]),
-  ), // Added April 2026 - Parameter names omitted from provider payloads
-  llm_logit_biases: z.preprocess(
-    (value) => normalizeLogitBiasEntries(value),
-    z.array(logitBiasEntrySchema).default([]),
-  ), // Added March 2026 - Stored OpenAI-style logit bias entries (text or explicit token IDs)
-  llm_stop_strings: z.preprocess((value) => normalizeStringArray(value), z.array(z.string()).default([])), // Added April 2026 - Server-wide exact stop strings
-  llm_stop_speaker_pattern_enabled: z.boolean().default(false), // Added April 2026 - Opt-in "\n{Name}:" speaker stop pattern
-  api_key: z.instanceof(Buffer).nullable(),
-  key_version: z.number().int().default(1).optional(), // Added November 2025 - Encryption key version for rotation
-  trigger_words: z.array(z.string()).default([]),
-  autoch_disc_ids: z.array(z.string()).default([]),
-  autoch_persona_overrides: z.preprocess(
-    (value) => normalizeJsonbArray(value),
-    z.array(autochatPersonaOverrideSchema).default([]),
-  ), // Added April 2026 - Optional per-channel persona assignment for auto-trigger channels
-  rp_channel_ids: z.array(z.string()).default([]), // Added February 2026 - Channels where emojis/stickers are always suppressed
-  private_channel_ids: z.array(z.string()).default([]), // Added March 2026 - Channels where STMs cannot leak out and thought logs are suppressed
-  stm_privacy_bypass: z.boolean().default(false), // Added April 2026 - When true, private-channel STMs are allowed to leak into non-private channels
-  crosschannel_blocklist_ids: z.array(z.string()).default([]), // Added April 2026 - Channels blocked as cross_channel_message targets; thread parents also apply
-  welcome_channel_disc_id: z.string().nullable().optional(), // Added March 2026 - Channel used for member join welcomes
-  thought_log_channel_disc_id: z.string().nullable().optional(), // Added March 2026 - Channel used for reasoning/thought log embeds
-  welcome_prompt: z.string().nullable().optional(), // Added March 2026 - Additional prompt appended to join welcomes
-  welcome_persona_id: z.number().int().nullable().optional(), // Added March 2026 - NULL means random persona selection for welcomes
-  autoch_threshold: z.number().default(0),
-  autoch_threshold_max: z.number().default(0),
-  always_reply_enabled: z.boolean().default(false), // Added March 2026 - Main persona replies to all user messages (guild only, alters still require triggers)
-  deliberate_trigger_mode: z.boolean().default(false), // Added April 2026 - Blocks plain trigger words; requires @{trigger}, reply, mention, or /bot respond
-  cascade_limit: z.number().int().min(0).max(10).default(3), // Added January 2026, renamed April 2026 - Total additional triggers allowed after the first
-  send_message_limit: z.number().int().min(0).max(40).default(0), // Added March 2026 - Max Discord messages per response (0 = unlimited, capped by MAX_FLUSH_COUNT)
-  match_limit: z.number().int().min(1).max(10).default(3), // Added February 2026, renamed April 2026 - Max personas matched per message
-  message_fetch_limit: z.number().int().min(20).max(100).default(80), // Added February 2026 - Max recent messages fetched for context
-  server_memteaching_enabled: z.boolean().default(true),
-  attribute_memteaching_enabled: z.boolean().default(false),
-  sampledialogue_memteaching_enabled: z.boolean().default(false),
-  prompt_snapshot_enabled: z.boolean().default(false), // Added April 2026 - Allow non-admin members to use /tool prompt snapshot
-  self_teaching_enabled: z.boolean().default(true),
-  web_search_enabled: z.boolean().default(true), // New: Added for Web Search permission (Brave Search)
-  personal_memories_enabled: z.boolean().default(true),
-  memory_tagging_enabled: z.boolean().default(false),
-  humanizer_degree: z.nativeEnum(HumanizerDegree).default(HumanizerDegree.LIGHT),
-  thinking_level: z.enum(THINKING_LEVEL_VALUES).default(DEFAULT_THINKING_LEVEL), // Added April 2026 - General reasoning/thinking effort hint
-  user_byok_mode: z.boolean().default(false), // Added April 2026 - Require per-user personal providers for user-attributed triggers
-  emoji_usage_enabled: z.boolean().default(true), // Added May 5, 2025
-  sticker_usage_enabled: z.boolean().default(true), // Added May 5, 2025
-  manage_message_enabled: z.boolean().default(true), // Added November 5, 2025 - Permission gate for message management tools
-  imagegen_enabled: z.boolean().default(true), // Added January 2026 - Permission for image generation
-  hide_respond_embed: z.boolean().default(false), // Added January 2026 - Legacy migration source for respond notice visibility
-  hide_impersonation_embeds: z.boolean().default(false), // Added February 2026 - Legacy migration source for impersonation notice visibility
-  tool_notice_hidden_keys: z.preprocess(
-    (value) => normalizeToolNoticeHiddenKeys(value),
-    z.array(toolNoticeKeySchema).default([]),
-  ), // Added April 2026 - Hidden notice embed types; missing entries remain visible by default
-  voice_message_enabled: z.boolean().default(true), // Added March 2026 - Allow Tomori to send ElevenLabs TTS voice messages
-  thread_creation_enabled: z.boolean().default(true), // Added May 2026 - Allow tool-driven Discord thread creation
-  voice_transcript_chat_mode: z.boolean().default(true), // Added March 2026 - Post voice transcripts as webhook chat messages instead of using internal cache
-  chatterbox_turbo_enabled: z.boolean().default(true), // Added April 2026 - Use Chatterbox-Turbo model.generate path for local Chatterbox TTS
-  chatterbox_cfg_weight: z.number().min(0.0).default(0.5), // Added April 2026 - Standard Chatterbox CFG weight; ignored by Turbo
-  chatterbox_exaggeration: z.number().min(0.0).default(0.5), // Added April 2026 - Standard Chatterbox expression strength; ignored by Turbo
-  self_debug_enabled: z.boolean().default(false), // Added March 2026 - Include Tomori error embeds in context as [System: ...]
-  uncensor_injection_enabled: z.boolean().default(false), // Added February 2026 - Prompt injection mitigation toggle
-  uncensor_unicode_space_enabled: z.boolean().default(false), // Added February 2026 - Unicode space replacement toggle
-  uncensor_sanitize_enabled: z.boolean().default(false), // Added February 2026 - Sensitive word sanitization toggle
-  tool_use_enabled: z.boolean().default(true), // Added April 2026 - Master toggle; when false, has_tools is forced to false in the pipeline
-  videogen_enabled: z.boolean().default(false), // Added January 2026 - Reserved for future video generation; DB default is disabled
-  timezone_offset: z.number().int().min(-12).max(14).default(0),
-  system_prompt: z.string().nullable(), // Added December 2025 - Custom system prompt for personality instructions
-  context_note: z.string().nullable().optional(), // Added April 2026 - Global author's note injected into conversation history (persona note takes precedence)
-  context_note_depth: z.number().int().min(0).max(100).default(0), // Added April 2026 - Depth from bottom (0=lowest, 100=max)
-  cooldown_type: z.nativeEnum(CooldownType).default(CooldownType.OFF), // Added January 2026 - Message trigger cooldown type
-  cooldown_length: z.number().int().min(1).max(86400).default(5), // Added January 2026 - Cooldown duration in seconds
-  custom_endpoint_url: z.string().nullable().optional(), // DEPRECATED Phase 3 rollout - Legacy inline custom field; new registrations should resolve via custom_endpoints
-  custom_model_name: z.string().nullable().optional(), // DEPRECATED Phase 3 rollout - Legacy inline custom field; new registrations should resolve via custom_endpoints
-  custom_num_ctx: z.number().int().min(512).nullable().optional(), // DEPRECATED Phase 3 rollout - Legacy inline custom field; new registrations should resolve via custom_endpoints
-  nai_preset_name: z.string().nullable().optional(), // Added March 2026 - Active NovelAI sampling preset name (null for non-NAI providers)
-  fallback_llm_ids: z.preprocess((value) => normalizeFallbackLlmIds(value), z.array(z.number().int()).default([])), // DEPRECATED Phase 3 rollout - Legacy fallback array; migrate readers/writers to fallback_model_refs before dropping
-  fallback_model_refs: z.preprocess(
-    (value) => normalizeFallbackModelRefs(value),
-    fallbackModelRefSchema.array().default([]),
-  ),
-  other_model_codename: z.string().nullable().optional(), // DEPRECATED Phase 3 rollout - Legacy other-model side-channel; retire after custom endpoint migration lands
-  other_model_capabilities: z.preprocess(
-    (value) => (typeof value === "string" ? JSON.parse(value) : value),
-    z
-      .object({
-        hasTools: z.boolean().default(false),
-        seesImages: z.boolean().default(false),
-        seesVideos: z.boolean().default(false),
-        supportsStructuredOutput: z.boolean().default(false),
-      })
-      .nullable()
-      .optional(),
-  ), // DEPRECATED Phase 3 rollout - Legacy other-model cache; retire after custom endpoint migration lands
-  other_model_capabilities_fetched_at: z.preprocess(
-    (value) => (typeof value === "string" ? new Date(value) : value),
-    z.date().nullable().optional(),
-  ), // DEPRECATED Phase 3 rollout - Legacy other-model cache timestamp; retire after custom endpoint migration lands
-  created_at: z.date().optional(),
-  updated_at: z.date().optional(),
-});
-export type TomoriConfigRow = z.infer<typeof tomoriConfigSchema>;
+/**
+ * Assembled view over the 13 split server config tables (Phase 6 / Stage B).
+ * Replaces the previous monolithic `tomori_configs` row shape.
+ * Callers read this as a flat object — nested restructuring (config.model.X) is deferred to Task G.
+ *
+ * Composition order: serverModelConfigSchema anchors the merge chain (13 tables total).
+ * Shared identity columns (server_id, created_at, updated_at) are omitted from every
+ * split schema before merging, then re-extended once to prevent silent field shadowing.
+ *
+ * The .extend() block also:
+ *   - Preserves exact nullable types for llm_id and api_key (non-optional in the legacy shape)
+ *   - Overrides other_model_capabilities with the typed object shape callers access
+ *   - Adds welcome_* fields (live in server_welcome_configs, not a schema in this composition)
+ *   - Drops trigger_words (verified zero config.trigger_words callers; canonical store is persona_configs)
+ */
+const _sharedOmit = { server_id: true, created_at: true, updated_at: true } as const;
+export const assembledServerConfigSchema = serverModelConfigSchema
+  .omit(_sharedOmit)
+  .merge(serverChatConfigSchema.omit(_sharedOmit))
+  .merge(serverMemberPermissionsConfigSchema.omit(_sharedOmit))
+  .merge(serverCapabilitiesConfigSchema.omit(_sharedOmit))
+  .merge(serverNoticeEmbedsConfigSchema.omit(_sharedOmit))
+  .merge(serverNsfwConfigSchema.omit(_sharedOmit))
+  .merge(serverSpeechConfigSchema.omit(_sharedOmit))
+  .merge(serverAutoTriggerConfigSchema.omit(_sharedOmit))
+  .merge(serverChannelScopeConfigSchema.omit(_sharedOmit))
+  .merge(serverTriggerBehaviorConfigSchema.omit(_sharedOmit))
+  .merge(serverNovelaiImagegenConfigSchema.omit(_sharedOmit))
+  .merge(serverByokConfigSchema.omit(_sharedOmit))
+  .merge(serverMemoryConfigSchema.omit(_sharedOmit))
+  .extend({
+    // Identity fields added once after the merge chain.
+    tomori_config_id: z.number().optional(),
+    tomori_id: z.number().nullable().optional(),
+    server_id: z.number().nullable().optional(),
+    created_at: z.date().optional(),
+    updated_at: z.date().optional(),
+    // Preserve non-optional nullable types to avoid breaking callers that declare these as T | null.
+    llm_id: z.number().int().nullable(),
+    api_key: z.instanceof(Buffer).nullable(),
+    // Override with the properly typed shape; openrouterProvider accesses .hasTools / .seesImages.
+    other_model_capabilities: z.preprocess(
+      (value) => (typeof value === "string" ? JSON.parse(value) : value),
+      z
+        .object({
+          hasTools: z.boolean().default(false),
+          seesImages: z.boolean().default(false),
+          seesVideos: z.boolean().default(false),
+          supportsStructuredOutput: z.boolean().default(false),
+        })
+        .nullable()
+        .optional(),
+    ),
+    // Welcome fields live in server_welcome_configs (not part of the 13-schema merge).
+    welcome_channel_disc_id: z.string().nullable().optional(),
+    welcome_prompt: z.string().nullable().optional(),
+    welcome_persona_id: z.number().int().nullable().optional(),
+  });
+export type AssembledServerConfig = z.infer<typeof assembledServerConfigSchema>;
 
 /**
  * Schema for a NovelAI sampling preset row.
  * Stores the full parameter JSON alongside human-readable descriptions.
  * Schema-compatible fields (temperature, top_k, top_p, min_p) are written
- * to tomori_configs; NAI-specific fields are merged at generation time.
+ * to the split server config tables; NAI-specific fields are merged at generation time.
  */
 export const naiPresetSchema = z.object({
   nai_preset_id: z.number(),
@@ -1097,10 +1027,10 @@ const coerceIntNumber = z.preprocess((value) => {
 export const apiKeyRotationSchema = z.object({
   rotation_key_id: z.number().optional(), // Primary key, auto-generated
   server_id: z.number(), // Foreign key to servers table
-  provider: z.string(), // Must match current provider in tomori_configs
+  provider: z.string(), // Must match the active provider for this server
   api_key: z.instanceof(Buffer).nullable(), // NULL if is_main_key_pointer = true
   key_version: z.number().int().default(1), // Encryption key version
-  is_main_key_pointer: z.boolean().default(false), // true = use tomori_configs.api_key
+  is_main_key_pointer: z.boolean().default(false), // true = use the assembled server config api_key
   is_enabled: z.boolean().default(true), // Manual or auto-disabled after errors
   usage_count: coerceNumber.default(0), // For round-robin tracking
   error_count: coerceIntNumber.default(0), // Consecutive errors
@@ -1275,7 +1205,7 @@ export type RandomTriggerRow = z.infer<typeof randomTriggerSchema>;
  * Tomori's combined state (base config + LLM settings + LLM info)
  */
 export type TomoriState = TomoriRow & {
-  config: TomoriConfigRow;
+  config: AssembledServerConfig;
   llm: LlmRow; // Added LLM information
   trigger_words: string[]; // Persona-scoped trigger words from persona_configs
   persona_prompt: string | null; // Optional persona-specific prompt appended after system prompt
@@ -1294,7 +1224,7 @@ export type TomoriState = TomoriRow & {
  * Schema for validating the combined Tomori state
  */
 export const tomoriStateSchema = tomoriSchema.extend({
-  config: tomoriConfigSchema,
+  config: assembledServerConfigSchema,
   llm: llmSchema, // Added LLM schema validation
   trigger_words: z.array(z.string()).default([]),
   persona_prompt: z.string().nullable().default(null),
@@ -1351,7 +1281,6 @@ export type SetupConfig = z.infer<typeof setupConfigSchema>;
 export const setupResultSchema = z.object({
   server: serverSchema,
   tomori: tomoriSchema,
-  config: tomoriConfigSchema,
   emojis: z.array(serverEmojiSchema),
   stickers: z.array(serverStickerSchema),
 });
@@ -1407,36 +1336,10 @@ export const savedProviderConfigSchema = z.object({
     (value) => normalizeLogitBiasEntries(value),
     z.array(logitBiasEntrySchema).default([]),
   ), // Added March 2026 - Logit bias snapshot
-  custom_endpoint_url: z.string().nullable(), // DEPRECATED Phase 3 rollout - Legacy inline custom field mirrored for backward compatibility
-  custom_model_name: z.string().nullable(), // DEPRECATED Phase 3 rollout - Legacy inline custom field mirrored for backward compatibility
-  custom_num_ctx: z.number().int().min(512).nullable().optional(), // DEPRECATED Phase 3 rollout - Legacy inline custom field mirrored for backward compatibility
   thinking_level: z.enum(THINKING_LEVEL_VALUES).default(DEFAULT_THINKING_LEVEL),
-  fallback_llm_ids: z.preprocess((value) => normalizeFallbackLlmIds(value), z.array(z.number().int()).default([])), // DEPRECATED Phase 3 rollout - Legacy fallback array mirrored for backward compatibility
   fallback_model_refs: z.preprocess(
     (value) => normalizeFallbackModelRefs(value),
     fallbackModelRefSchema.array().default([]),
-  ),
-  channel_llm_overrides: z.preprocess(
-    (value) => normalizeJsonbArray(value),
-    z
-      .array(
-        z.object({
-          channel_disc_id: z.string(),
-          llm_id: z.number().int(),
-        }),
-      )
-      .default([]),
-  ),
-  persona_llm_overrides: z.preprocess(
-    (value) => normalizeJsonbArray(value),
-    z
-      .array(
-        z.object({
-          tomori_id: z.number().int(),
-          llm_id: z.number().int(),
-        }),
-      )
-      .default([]),
   ),
   saved_at: z.coerce.date().optional(),
   updated_at: z.coerce.date().optional(),
@@ -1484,15 +1387,11 @@ export const userSavedProviderConfigSchema = z.object({
     (value) => normalizeLogitBiasEntries(value),
     z.array(logitBiasEntrySchema).default([]),
   ),
-  custom_endpoint_url: z.string().nullable(), // DEPRECATED Phase 3 rollout - Legacy inline custom field mirrored for backward compatibility
-  custom_model_name: z.string().nullable(), // DEPRECATED Phase 3 rollout - Legacy inline custom field mirrored for backward compatibility
-  custom_num_ctx: z.number().int().min(512).nullable().optional(), // DEPRECATED Phase 3 rollout - Legacy inline custom field mirrored for backward compatibility
   thinking_level: z.enum(THINKING_LEVEL_VALUES).default(DEFAULT_THINKING_LEVEL),
   enabled_capabilities: z.preprocess(
     (value) => normalizeEnabledCapabilities(value),
     z.array(personalProviderCapabilitySchema).default([]),
   ),
-  fallback_llm_ids: z.preprocess((value) => normalizeFallbackLlmIds(value), z.array(z.number().int()).default([])), // DEPRECATED Phase 3 rollout - Legacy fallback array mirrored for backward compatibility
   fallback_model_refs: z.preprocess(
     (value) => normalizeFallbackModelRefs(value),
     fallbackModelRefSchema.array().default([]),

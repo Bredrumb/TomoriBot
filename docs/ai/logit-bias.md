@@ -111,7 +111,7 @@ Custom, NovelAI, and Google providers do not currently send `logit_bias`.
 
 Server-wide active config:
 
-- `tomori_configs.llm_logit_biases`
+- `server_chat_configs.llm_logit_biases`
 
 Per-provider saved snapshots:
 

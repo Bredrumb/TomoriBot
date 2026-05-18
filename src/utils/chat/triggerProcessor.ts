@@ -1,6 +1,6 @@
 import type { Client, Message } from "discord.js";
 import { DMChannel } from "discord.js";
-import type { TomoriConfigRow, TomoriState } from "@/types/db/schema";
+import type { AssembledServerConfig, TomoriState } from "@/types/db/schema";
 import { isMatrixBridgeWebhookUsername } from "@/utils/bridges";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 
@@ -111,7 +111,7 @@ export function isSelfTriggerMessage(message: Message, allPersonas: TomoriState[
   return allPersonas.some((persona) => persona.tomori_nickname?.toLowerCase() === authorName);
 }
 
-export function getAutochatRange(config: TomoriConfigRow): {
+export function getAutochatRange(config: AssembledServerConfig): {
   minThreshold: number;
   maxThreshold: number;
 } {
@@ -127,11 +127,11 @@ export function getAutochatRange(config: TomoriConfigRow): {
   };
 }
 
-export function isAutochatConfiguredChannel(config: TomoriConfigRow, channelId: string): boolean {
+export function isAutochatConfiguredChannel(config: AssembledServerConfig, channelId: string): boolean {
   return config.autoch_disc_ids.length > 0 && config.autoch_disc_ids.includes(channelId);
 }
 
-export function getAutochatAssignedPersonaId(config: TomoriConfigRow, channelId: string): number | null {
+export function getAutochatAssignedPersonaId(config: AssembledServerConfig, channelId: string): number | null {
   const assignedPersona = config.autoch_persona_overrides.find((entry) => entry.channel_disc_id === channelId);
   return assignedPersona?.tomori_id ?? null;
 }
@@ -140,17 +140,17 @@ export function isAutochatQualifyingMessage(message: Message, isSelfMessage: boo
   return !isSelfMessage && isRealUserLikeMessage(message) && !(message.channel instanceof DMChannel);
 }
 
-export function isAutochatCounterChannelActive(config: TomoriConfigRow, channelId: string): boolean {
+export function isAutochatCounterChannelActive(config: AssembledServerConfig, channelId: string): boolean {
   const { minThreshold, maxThreshold } = getAutochatRange(config);
   return minThreshold > 0 && maxThreshold > 0 && isAutochatConfiguredChannel(config, channelId);
 }
 
-export function isAutochatAlwaysReplyChannelActive(config: TomoriConfigRow, channelId: string): boolean {
+export function isAutochatAlwaysReplyChannelActive(config: AssembledServerConfig, channelId: string): boolean {
   const { minThreshold, maxThreshold } = getAutochatRange(config);
   return minThreshold === 0 && maxThreshold === 0 && isAutochatConfiguredChannel(config, channelId);
 }
 
-export function isAutochatOverrideChannel(config: TomoriConfigRow, channelId: string): boolean {
+export function isAutochatOverrideChannel(config: AssembledServerConfig, channelId: string): boolean {
   return (config.always_reply_enabled ?? false) || isAutochatConfiguredChannel(config, channelId);
 }
 

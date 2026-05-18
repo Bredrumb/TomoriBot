@@ -4,7 +4,6 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { personaRepository, serverRepository } from "@/utils/db/repositories";
 import { invalidateUserBlacklistCache } from "@/utils/cache/userCache";
 import { localizer } from "@/utils/text/localizer";
@@ -72,13 +71,9 @@ export async function execute(
       return;
     }
 
-    const [existingEntry] = await sql`
-      SELECT 1 FROM personalization_blacklist
-      WHERE server_id = ${tomoriState.server_id} AND user_disc_id = ${targetDiscordUser.id}
-      LIMIT 1
-    `;
+    const isAlreadyBlacklisted = await serverRepository.isUserBlacklisted(tomoriState.server_id, targetDiscordUser.id);
 
-    if (existingEntry) {
+    if (isAlreadyBlacklisted) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.server.user-blacklist.add.already_blacklisted_title",
         descriptionKey: "commands.server.user-blacklist.add.already_blacklisted_description",

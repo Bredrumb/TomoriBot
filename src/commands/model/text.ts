@@ -361,7 +361,9 @@ export async function execute(
         customModel,
       );
       const clearFallbacks = tomoriState.llm?.llm_provider?.toLowerCase() !== selectedProvider;
-      const fallbackLlmIds = clearFallbacks ? [] : (selectedSavedConfig.fallback_llm_ids ?? []);
+      const fallbackLlmIds = clearFallbacks
+        ? []
+        : (selectedSavedConfig.fallback_model_refs ?? []).filter((r) => r.type === "llm").map((r) => r.id);
       const disabledParams = selectedSavedConfig.llm_disabled_params ?? [];
 
       const [updatedModel] = await Promise.all([
@@ -373,10 +375,10 @@ export async function execute(
           fallback_llm_ids: fallbackLlmIds,
           llm_temperature: selectedSavedConfig.llm_temperature ?? tomoriState.config.llm_temperature ?? 1.0,
           llm_disabled_params: disabledParams,
-          custom_model_name:
-            selectedSavedConfig.custom_model_name ?? customModel.llm_description ?? customModel.llm_codename,
-          custom_endpoint_url: selectedSavedConfig.custom_endpoint_url ?? null,
-          custom_num_ctx: selectedSavedConfig.custom_num_ctx ?? null,
+          // custom_* mirrors are resolved at runtime from the custom_endpoints table; null them here
+          custom_model_name: null,
+          custom_endpoint_url: null,
+          custom_num_ctx: null,
         }),
         configRepository.updateChatConfig(tomoriState.server_id, {
           llm_top_p: selectedSavedConfig.llm_top_p ?? tomoriState.config.llm_top_p ?? 0.95,
@@ -405,7 +407,7 @@ export async function execute(
         titleKey: "commands.model.text.success_title",
         descriptionKey: "commands.model.text.success_description",
         descriptionVars: {
-          model_name: selectedSavedConfig.custom_model_name ?? customModel.llm_description ?? customModel.llm_codename,
+          model_name: customModel.llm_description ?? customModel.llm_codename,
           previous_model: tomoriState.llm?.llm_codename ?? localizer(locale, "general.unknown"),
           provider: getProviderDisplayName(selectedProvider),
         },
@@ -507,7 +509,9 @@ export async function execute(
       selectedModel,
     );
     const clearFallbacks = tomoriState.llm?.llm_provider?.toLowerCase() !== selectedProvider;
-    const fallbackLlmIds = clearFallbacks ? [] : (selectedSavedConfig?.fallback_llm_ids ?? []);
+    const fallbackLlmIds = clearFallbacks
+      ? []
+      : (selectedSavedConfig?.fallback_model_refs ?? []).filter((r) => r.type === "llm").map((r) => r.id);
     const disabledParams = selectedSavedConfig?.llm_disabled_params ?? [];
 
     const [updatedModel] = await Promise.all([

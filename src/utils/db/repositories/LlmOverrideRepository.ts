@@ -2,7 +2,7 @@
  * LlmOverrideRepository — manages channel/persona LLM override assignments and fallback refs.
  *
  * Covered tables: channel_llm_overrides, persona_configs (llm_id column),
- * tomori_configs (fallback_llm_ids + fallback_model_refs columns).
+ * server_model_configs (fallback_llm_ids), server_chat_configs (fallback_model_refs).
  *
  * No IRepository implementation — override state is transient and not exported per-server.
  */
@@ -10,6 +10,7 @@ import type { FallbackModelRef, LlmRow } from "@/types/db/schema";
 import { invalidateAllChannelLlmCacheForServer, invalidateChannelLlmCache } from "@/utils/cache/channelLlmCacheStore";
 import { getCachedLLM } from "@/utils/cache/llmCache";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
+import { configRepository } from "@/utils/db/repositories/ConfigRepository";
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 
@@ -274,34 +275,9 @@ export class LlmOverrideRepository {
    */
   async setFallbackLlms(serverId: number, llmIds: number[], options: LlmOverrideCacheOptions = {}): Promise<boolean> {
     try {
-      const fallbackJson = JSON.stringify(llmIds);
-      // Match server-scoped rows (server_id = serverId) first.
-      // Legacy rows have server_id = NULL and are linked via tomori_id → tomoris.server_id,
-      // so include them in the same UPDATE to avoid silently writing nothing.
-      const updatedRows = await sql<
-        Array<{
-          tomori_config_id: number;
-          server_id: number | null;
-          tomori_id: number | null;
-          fallback_llm_ids: unknown;
-        }>
-      >`
-        UPDATE tomori_configs
-        SET fallback_llm_ids = ${fallbackJson}::JSONB,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE server_id = ${serverId}
-           OR (
-               server_id IS NULL
-               AND tomori_id IN (
-                   SELECT tomori_id FROM tomoris
-                   WHERE server_id = ${serverId}
-                     AND is_alter = false
-               )
-           )
-        RETURNING tomori_config_id, server_id, tomori_id, fallback_llm_ids
-      `;
+      const ok = await configRepository.updateModelConfig(serverId, { fallback_llm_ids: llmIds });
 
-      if (updatedRows.length === 0) {
+      if (!ok) {
         log.warn(
           `[FallbackConfig] setFallbackLlms matched 0 rows for server_id ${serverId} (requested ids: [${llmIds.join(", ")}])`,
         );
@@ -309,15 +285,7 @@ export class LlmOverrideRepository {
       }
 
       if (FALLBACK_DEBUG_ENABLED) {
-        const updatedRowSummary = updatedRows.map((row) => ({
-          tomori_config_id: row.tomori_config_id,
-          server_id: row.server_id,
-          tomori_id: row.tomori_id,
-          fallback_llm_ids: row.fallback_llm_ids,
-        }));
-        log.info(
-          `[FallbackDebug][setFallbackLlms] server_id=${serverId} requested_ids=[${llmIds.join(", ")}] updated_rows=${JSON.stringify(updatedRowSummary)}`,
-        );
+        log.info(`[FallbackDebug][setFallbackLlms] server_id=${serverId} requested_ids=[${llmIds.join(", ")}]`);
       }
 
       if (options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
@@ -343,30 +311,15 @@ export class LlmOverrideRepository {
     options: LlmOverrideCacheOptions = {},
   ): Promise<boolean> {
     try {
-      const refsJson = JSON.stringify(refs);
       // Mirror llm-only IDs into the legacy column so older code paths keep working
       const legacyIds = refs.filter((r) => r.type === "llm").map((r) => r.id);
-      const legacyJson = JSON.stringify(legacyIds);
 
-      const updatedRows = await sql`
-        UPDATE tomori_configs
-        SET
-          fallback_model_refs = ${refsJson}::JSONB,
-          fallback_llm_ids    = ${legacyJson}::JSONB,
-          updated_at          = CURRENT_TIMESTAMP
-        WHERE server_id = ${serverId}
-           OR (
-               server_id IS NULL
-               AND tomori_id IN (
-                   SELECT tomori_id FROM tomoris
-                   WHERE server_id = ${serverId}
-                     AND is_alter = false
-               )
-           )
-        RETURNING tomori_config_id
-      `;
+      const [refsOk, idsOk] = await Promise.all([
+        configRepository.updateChatConfig(serverId, { fallback_model_refs: refs }),
+        configRepository.updateModelConfig(serverId, { fallback_llm_ids: legacyIds }),
+      ]);
 
-      if (updatedRows.length === 0) {
+      if (!refsOk || !idsOk) {
         log.warn(`[FallbackConfig] setFallbackModelRefs matched 0 rows for server_id ${serverId}`);
         return false;
       }

@@ -10,7 +10,6 @@
 
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { personaRepository, serverRepository } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -40,24 +39,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         .setDescription(localizer("en-US", "commands.server.initialize.expressions.overwrite_description"))
         .setRequired(false),
     );
-
-/**
- * Database row type for uninitialized emojis
- */
-interface UninitializedEmoji {
-  emoji_disc_id: string;
-  emoji_name: string;
-  is_animated: boolean;
-}
-
-/**
- * Database row type for uninitialized stickers
- */
-interface UninitializedSticker {
-  sticker_disc_id: string;
-  sticker_name: string;
-  sticker_format: number;
-}
 
 /**
  * Convert ColorCode hex string to Discord number format
@@ -266,31 +247,11 @@ export async function execute(
       ]);
     }
 
-    // 6. Query database for uninitialized emojis
-    const uninitializedEmojis = await sql<UninitializedEmoji[]>`
-			SELECT emoji_disc_id, emoji_name, is_animated
-			FROM server_emojis
-			WHERE server_id = ${tomoriState.server_id}
-				AND (
-					emotion_key IS NULL
-					OR emotion_key = 'unset'
-					OR emoji_desc IS NULL
-					OR emoji_desc = ''
-				)
-		`;
-
-    // 7. Query database for uninitialized stickers
-    const uninitializedStickers = await sql<UninitializedSticker[]>`
-			SELECT sticker_disc_id, sticker_name, sticker_format
-			FROM server_stickers
-			WHERE server_id = ${tomoriState.server_id}
-				AND (
-					emotion_key IS NULL
-					OR emotion_key = 'unset'
-					OR sticker_desc IS NULL
-					OR sticker_desc = ''
-				)
-		`;
+    // 6. Query database for uninitialized expressions
+    const [uninitializedEmojis, uninitializedStickers] = await Promise.all([
+      serverRepository.loadUninitializedEmojis(tomoriState.server_id),
+      serverRepository.loadUninitializedStickers(tomoriState.server_id),
+    ]);
 
     // 8. Check if there's anything to initialize
     const totalUninitialized = uninitializedEmojis.length + uninitializedStickers.length;

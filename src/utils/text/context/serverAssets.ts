@@ -1,9 +1,9 @@
 import type { Client } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
-import type { ServerEmojiRow, ServerStickerRow, TomoriConfigRow, TomoriState } from "@/types/db/schema";
+import type { ServerEmojiRow, ServerStickerRow, AssembledServerConfig, TomoriState } from "@/types/db/schema";
 import type { ToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
 import type { MentionConverter } from "./templates";
+import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 
 type EmojiMetadata =
   | ServerEmojiRow
@@ -35,7 +35,7 @@ export async function buildServerEmojiContextItem(params: {
   botName: string;
   isDMChannel: boolean;
   isUserImpersonation: boolean;
-  tomoriConfig: TomoriConfigRow;
+  tomoriConfig: AssembledServerConfig;
   tomoriState: TomoriState | null;
   preloadedEmojis?: ServerEmojiRow[] | null;
   snapshot?: import("@/types/misc/context").RequestSnapshot;
@@ -53,12 +53,7 @@ export async function buildServerEmojiContextItem(params: {
   const emojiMetadata =
     params.preloadedEmojis && params.preloadedEmojis.length > 0
       ? params.preloadedEmojis
-      : await sql<EmojiMetadata[]>`
-          SELECT emoji_disc_id, emoji_name, emoji_desc, emotion_key, is_animated, created_at, updated_at
-          FROM server_emojis
-          WHERE server_id = ${params.tomoriState.server_id}
-          ORDER BY created_at ASC
-        `;
+      : (await serverRepository.loadEmojis(params.tomoriState.server_id)) || [];
 
   const emojiMetadataByName = new Map<string, EmojiMetadata>();
   const hasEmojiMetadata = (metadata: EmojiMetadata) =>
@@ -137,7 +132,7 @@ export async function buildServerStickerContextItem(params: {
   botName: string;
   isDMChannel: boolean;
   isUserImpersonation: boolean;
-  tomoriConfig: TomoriConfigRow;
+  tomoriConfig: AssembledServerConfig;
   tomoriState: TomoriState | null;
   preloadedStickers?: ServerStickerRow[] | null;
   toolPromptMacroResolver: ToolPromptMacroResolver;
@@ -160,12 +155,7 @@ export async function buildServerStickerContextItem(params: {
   const stickerMetadata =
     params.preloadedStickers && params.preloadedStickers.length > 0
       ? params.preloadedStickers
-      : await sql<StickerMetadata[]>`
-          SELECT sticker_disc_id, sticker_name, sticker_desc, emotion_key, created_at, updated_at
-          FROM server_stickers
-          WHERE server_id = ${params.tomoriState.server_id}
-          ORDER BY created_at ASC
-        `;
+      : await serverRepository.loadStickersByInternalId(params.tomoriState.server_id);
 
   const stickerMetadataByName = new Map<string, StickerMetadata>();
   const hasStickerMetadata = (metadata: StickerMetadata) =>

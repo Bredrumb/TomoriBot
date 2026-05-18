@@ -4,7 +4,7 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { configRepository, llmProviderRepo } from "@/utils/db/repositories";
+import { configRepository, llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
@@ -20,46 +20,26 @@ import { promptForSavedProvider } from "../model/providerPicker";
 
 async function resolveLlmProvider(llmId: number | null | undefined): Promise<string | null> {
   if (!llmId) return null;
-  const [row] = await sql`
-    SELECT llm_provider
-    FROM llms
-    WHERE llm_id = ${llmId}
-    LIMIT 1
-  `;
-  return row?.llm_provider ? String(row.llm_provider).toLowerCase() : null;
+  const llm = await llmModelRepo.loadById(llmId);
+  return llm?.llm_provider ? llm.llm_provider.toLowerCase() : null;
 }
 
 async function resolveDiffusionProvider(diffusionModelId: number | null | undefined): Promise<string | null> {
   if (!diffusionModelId) return null;
-  const [row] = await sql`
-    SELECT provider
-    FROM image_diffusion_models
-    WHERE diffusion_model_id = ${diffusionModelId}
-    LIMIT 1
-  `;
-  return row?.provider ? String(row.provider).toLowerCase() : null;
+  const model = await llmModelRepo.loadDiffusionModelById(diffusionModelId);
+  return model?.provider ? String(model.provider).toLowerCase() : null;
 }
 
 async function resolveEmbeddingProvider(embeddingModelId: number | null | undefined): Promise<string | null> {
   if (!embeddingModelId) return null;
-  const [row] = await sql`
-    SELECT provider
-    FROM embedding_models
-    WHERE embedding_model_id = ${embeddingModelId}
-    LIMIT 1
-  `;
-  return row?.provider ? String(row.provider).toLowerCase() : null;
+  const model = await llmModelRepo.loadEmbeddingModelById(embeddingModelId);
+  return model?.provider ? String(model.provider).toLowerCase() : null;
 }
 
 async function resolveVideoProvider(videoModelId: number | null | undefined): Promise<string | null> {
   if (!videoModelId) return null;
-  const [row] = await sql`
-    SELECT provider
-    FROM video_generation_models
-    WHERE video_model_id = ${videoModelId}
-    LIMIT 1
-  `;
-  return row?.provider ? String(row.provider).toLowerCase() : null;
+  const model = await llmModelRepo.loadVideoGenerationModelById(videoModelId);
+  return model?.provider ? String(model.provider).toLowerCase() : null;
 }
 
 // Configure the subcommand
@@ -275,10 +255,6 @@ export async function execute(
         nai_diffusion_model_id: nextNaiDiffusionModelId,
       }),
     ]);
-
-    if (activeProvider === tomoriState.llm.llm_provider.toLowerCase()) {
-      await llmProviderRepo.setSavedProviderConfigFallbacks(tomoriState.server_id, activeProvider, nextFallbackIds);
-    }
 
     const deleted = await llmProviderRepo.deleteSavedProviderConfig(tomoriState.server_id, selectedProvider, {
       serverDiscId: serverId,
