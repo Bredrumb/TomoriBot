@@ -563,11 +563,11 @@ export class ServerRepository implements IRepository<ServerExportShape> {
         const selectedEmbeddingModelId = selectedEmbeddingModel ? selectedEmbeddingModel.embedding_model_id : null;
 
         const presetRows = await tx<
-          Array<{ preset_trigger_words: string[] | null; tomori_preset_desc: string | null }>
+          Array<{ preset_trigger_words: string[] | null; persona_preset_desc: string | null }>
         >`
-          SELECT preset_trigger_words, tomori_preset_desc
-          FROM tomori_presets
-          WHERE tomori_preset_id = ${validConfig.presetId}
+          SELECT preset_trigger_words, persona_preset_desc
+          FROM persona_presets
+          WHERE persona_preset_id = ${validConfig.presetId}
           LIMIT 1
         `;
         const presetTriggerCandidates =
@@ -587,7 +587,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
 
         const defaultTriggers =
           dedupedPresetTriggers.length > 0 ? dedupedPresetTriggers : getBaseTriggerWords(validConfig.locale);
-        const presetPersonaPrompt = presetRows[0]?.tomori_preset_desc?.trim() || null;
+        const presetPersonaPrompt = presetRows[0]?.persona_preset_desc?.trim() || null;
 
         // 1. Create or update server record with DM support
         const [server] = await tx`
@@ -600,9 +600,9 @@ export class ServerRepository implements IRepository<ServerExportShape> {
 
         // 2. Create Tomori instance with preset including description
         const [tomori] = await tx`
-          INSERT INTO tomoris (
+          INSERT INTO personas (
             server_id,
-            tomori_nickname,
+            persona_nickname,
             attribute_list,
             sample_dialogues_in,
             sample_dialogues_out
@@ -613,14 +613,14 @@ export class ServerRepository implements IRepository<ServerExportShape> {
             (
               SELECT
                 array_prepend(
-                  '{bot}''s Description: ' || tomori_preset_desc,
+                  '{bot}''s Description: ' || persona_preset_desc,
                   preset_attribute_list
                 )
-              FROM tomori_presets
-              WHERE tomori_preset_id = ${validConfig.presetId}
+              FROM persona_presets
+              WHERE persona_preset_id = ${validConfig.presetId}
             ),
-            (SELECT preset_sample_dialogues_in FROM tomori_presets WHERE tomori_preset_id = ${validConfig.presetId}),
-            (SELECT preset_sample_dialogues_out FROM tomori_presets WHERE tomori_preset_id = ${validConfig.presetId})
+            (SELECT preset_sample_dialogues_in FROM persona_presets WHERE persona_preset_id = ${validConfig.presetId}),
+            (SELECT preset_sample_dialogues_out FROM persona_presets WHERE persona_preset_id = ${validConfig.presetId})
           )
           RETURNING *
         `;
@@ -668,9 +668,9 @@ export class ServerRepository implements IRepository<ServerExportShape> {
 
         // Initialize persona-scoped config for the main persona.
         await tx`
-          INSERT INTO persona_configs (tomori_id, trigger_words, persona_prompt)
-          VALUES (${tomori.tomori_id}, ${triggerWordsArrayLiteral}::text[], ${presetPersonaPrompt})
-          ON CONFLICT (tomori_id) DO NOTHING
+          INSERT INTO persona_configs (persona_id, trigger_words, persona_prompt)
+          VALUES (${tomori.persona_id}, ${triggerWordsArrayLiteral}::text[], ${presetPersonaPrompt})
+          ON CONFLICT (persona_id) DO NOTHING
         `;
 
         // Seed the saved_provider_configs row for the provider registered at setup.

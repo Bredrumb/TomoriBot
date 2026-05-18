@@ -35,10 +35,10 @@ export async function resolveContextAuthorLabel(
       try {
         const personas = await getCachedAllPersonas(guildId);
         const matchedPersona = personas.find(
-          (persona) => persona.tomori_nickname?.trim().toLowerCase() === webhookName?.trim().toLowerCase(),
+          (persona) => persona.persona_nickname?.trim().toLowerCase() === webhookName?.trim().toLowerCase(),
         );
-        if (matchedPersona?.tomori_nickname) {
-          return matchedPersona.tomori_nickname;
+        if (matchedPersona?.persona_nickname) {
+          return matchedPersona.persona_nickname;
         }
       } catch (error) {
         log.warn("Failed to resolve persona name for webhook-authored boomerang context message", error);

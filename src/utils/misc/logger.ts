@@ -228,7 +228,7 @@ export const log = {
     const stackTrace = toErrorStack(err);
 
     const dbPayload = {
-      tomori_id: context?.tomoriId ?? null,
+      persona_id: context?.tomoriId ?? null,
       user_id: context?.userId ?? null,
       server_id: context?.serverId ?? null,
       error_type: context?.errorType ?? "GenericError",
@@ -241,10 +241,10 @@ export const log = {
     try {
       await sql`
                 INSERT INTO error_logs (
-                    tomori_id, user_id, server_id,
+                    persona_id, user_id, server_id,
                     error_type, error_message, stack_trace, error_metadata
                 ) VALUES (
-                    ${dbPayload.tomori_id}, ${dbPayload.user_id}, ${dbPayload.server_id},
+                    ${dbPayload.persona_id}, ${dbPayload.user_id}, ${dbPayload.server_id},
                     ${dbPayload.error_type}, ${dbPayload.error_message}, ${dbPayload.stack_trace},
                     ${dbPayload.error_metadata}::jsonb
                 )

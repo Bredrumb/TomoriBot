@@ -253,11 +253,11 @@ async function triggerWelcomeMessage(client: Client, member: GuildMember): Promi
   const chosenPersona =
     selectedWelcomePersonaId === null
       ? availablePersonas[Math.floor(Math.random() * availablePersonas.length)]
-      : (availablePersonas.find((persona) => persona.tomori_id === selectedWelcomePersonaId) ??
+      : (availablePersonas.find((persona) => persona.persona_id === selectedWelcomePersonaId) ??
         availablePersonas.find((persona) => !persona.is_alter) ??
         availablePersonas[0]);
 
-  if (!chosenPersona?.tomori_id) {
+  if (!chosenPersona?.persona_id) {
     log.warn(`Skipping welcome for ${member.user.tag}: no persona could be resolved`);
     return;
   }
@@ -308,7 +308,7 @@ async function triggerWelcomeMessage(client: Client, member: GuildMember): Promi
 
   suppressNextSelfReply(welcomeChannel.id);
   log.info(
-    `Triggering welcome message for ${member.user.tag} in channel ${welcomeChannel.id} using persona ${chosenPersona.tomori_nickname}`,
+    `Triggering welcome message for ${member.user.tag} in channel ${welcomeChannel.id} using persona ${chosenPersona.persona_nickname}`,
   );
 
   await tomoriChat({
@@ -318,7 +318,7 @@ async function triggerWelcomeMessage(client: Client, member: GuildMember): Promi
     isManuallyTriggered: true,
     forceReason: false,
     isStopResponse: false,
-    selectedPersonaId: chosenPersona.tomori_id,
+    selectedPersonaId: chosenPersona.persona_id,
     isPersonaJob: false,
     isUserImpersonation: false,
     textQuotaSource: "system",

@@ -14,9 +14,9 @@ TomoriBot supports **one main persona** plus **multiple alter personas** per ser
 
 ## Data Model
 
-### `tomoris`
+### `personas`
 
-Each persona is a row in `tomoris`.
+Each persona is a row in `personas`.
 
 Key columns:
 - `is_alter`: `false` for main, `true` for alters.
@@ -26,13 +26,13 @@ Key columns:
 
 ### `persona_configs`
 
-Per-persona configuration (one row per persona in `tomoris`):
-- `trigger_words`: trigger words for this persona — **all personas use this column** (Phase 6 F1 merged the former `tomoris.alter_triggers` column here; the old `is_alter ? alter_triggers : trigger_words` ternary is gone).
+Per-persona configuration (one row per persona in `personas`):
+- `trigger_words`: trigger words for this persona — **all personas use this column** (Phase 6 F1 merged the former `personas.alter_triggers` column here; the old `is_alter ? alter_triggers : trigger_words` ternary is gone).
 
 ### `reminders`
 
 Reminders are tied to a persona to preserve the identity that set them:
-- `persona_id` (nullable): the `tomori_id` that created the reminder.
+- `persona_id` (nullable): the persona's `persona_id` that created the reminder.
 - When missing or invalid, reminders **fall back to the main persona**.
 
 ## Triggering and Routing
@@ -49,7 +49,7 @@ Reminders are tied to a persona to preserve the identity that set them:
 
 ### Trigger words
 
-Each persona checks its own trigger list in `persona_configs.trigger_words`. The former split (`tomori_configs.trigger_words` for main, `tomoris.alter_triggers` for alters) was unified in Phase 6 F1.
+Each persona checks its own trigger list in `persona_configs.trigger_words`. The former split (`tomori_configs.trigger_words` for main, `personas.alter_triggers` for alters) was unified in Phase 6 F1.
 
 If multiple personas match, they respond in deterministic order based on where their trigger first appears in the message. The per-message count is capped by `/config trigger-match-limit`.
 
@@ -352,7 +352,7 @@ Main persona and alter messages carry their identity through **different Discord
 | **Main persona** | Bot's own Discord user (direct reply) | Bot's **guild member nickname at send time** | `message.member.displayName` |
 | **Alter persona** | Shared channel webhook with per-send override | Per-message `username` override baked into the webhook send | `message.author.username` (+ `stripBridgePrefix`) |
 
-**Why the asymmetry matters:** the currently active `tomoriState.tomori_nickname` is **not** a safe proxy for the author of a historic message. It reflects "who is talking right now," not "who sent that older message." Using it to label prior messages causes cross-persona mislabeling whenever an alter switch has happened between send and now (e.g. Evil Lilya replying to an earlier Aphel message would render "Replying to Evil Lilya").
+**Why the asymmetry matters:** the currently active `tomoriState.persona_nickname` is **not** a safe proxy for the author of a historic message. It reflects "who is talking right now," not "who sent that older message." Using it to label prior messages causes cross-persona mislabeling whenever an alter switch has happened between send and now (e.g. Evil Lilya replying to an earlier Aphel message would render "Replying to Evil Lilya").
 
 **Resolution order** (implemented in `src/utils/discord/webhookReply.ts` → `getReplyContextAuthorName`):
 
@@ -377,14 +377,14 @@ The same shared webhook identity path is used for streamed chunks, tool embeds, 
 
 When alter persona webhook messages are part of recent chat context, TomoriBot
 surfaces those participants in "users in conversation" using the persona's
-database `tomori_id` (short numeric). This avoids production/local webhook ID
+database `persona_id` (short numeric). This avoids production/local webhook ID
 differences and gives tools a stable ID for avatar targeting.
 
 Non-persona webhook participants (if any) are still surfaced by webhook ID.
 Both are rendered as regular conversation users in context (no explicit webhook/persona
 identity label).
 Responding alter personas are injected into that list each turn, so they can
-always self-target avatar tools with their own `tomori_id` even when no previous
+always self-target avatar tools with their own `persona_id` even when no previous
 webhook message is present in the fetched history window.
 When alter personas are active, TomoriBot suppresses the extra bot-account user
 entry to avoid duplicate/confusing IDs in that list.

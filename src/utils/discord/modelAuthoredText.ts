@@ -30,7 +30,7 @@ export async function getKnownPersonaSpeakerNames(
 
   const personas = await getCachedAllPersonas(guildId);
   for (const persona of personas) {
-    const normalizedName = normalizeSpeakerName(persona.tomori_nickname);
+    const normalizedName = normalizeSpeakerName(persona.persona_nickname);
     if (normalizedName) {
       speakerNames.add(normalizedName);
     }

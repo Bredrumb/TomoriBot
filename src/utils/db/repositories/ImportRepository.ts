@@ -100,16 +100,16 @@ export class ImportRepository {
     return null;
   }
 
-  /** Returns the main persona tomori_id and persona_lineage_id for a server. */
+  /** Returns the main persona persona_id and persona_lineage_id for a server. */
   private async resolveMainTomoriScope(
     serverId: number,
   ): Promise<{ tomoriId: number; personaLineageId: number } | null> {
-    const mainPersonaRows = await sql<Array<{ tomori_id: number; persona_lineage_id: number | string | bigint }>>`
-      SELECT tomori_id, persona_lineage_id
-      FROM tomoris
+    const mainPersonaRows = await sql<Array<{ persona_id: number; persona_lineage_id: number | string | bigint }>>`
+      SELECT persona_id, persona_lineage_id
+      FROM personas
       WHERE server_id = ${serverId}
         AND is_alter = false
-      ORDER BY updated_at DESC NULLS LAST, tomori_id DESC
+      ORDER BY updated_at DESC NULLS LAST, persona_id DESC
       LIMIT 1
     `;
 
@@ -119,7 +119,7 @@ export class ImportRepository {
     const personaLineageId = this.coerceLineageId(mainTomori.persona_lineage_id);
     if (typeof personaLineageId !== "number" || !Number.isFinite(personaLineageId)) return null;
 
-    return { tomoriId: mainTomori.tomori_id, personaLineageId };
+    return { tomoriId: mainTomori.persona_id, personaLineageId };
   }
 
   // ── private SQL operations (no cache) ─────────────────────────────────────
@@ -449,20 +449,20 @@ export class ImportRepository {
         if (target.tomoriId) {
           const [targetPersona] = await sql<
             Array<{
-              tomori_id: number;
+              persona_id: number;
               persona_lineage_id: number | string | bigint;
             }>
           >`
-            SELECT tomori_id, persona_lineage_id
-            FROM tomoris
+            SELECT persona_id, persona_lineage_id
+            FROM personas
             WHERE server_id = ${serverId}
-              AND tomori_id = ${target.tomoriId}
+              AND persona_id = ${target.tomoriId}
             LIMIT 1
           `;
           if (!targetPersona) {
             return { success: false, error: "commands.data.import.error_no_server_data" };
           }
-          insertTomoriId = targetPersona.tomori_id;
+          insertTomoriId = targetPersona.persona_id;
           targetPersonaLineageId = this.coerceLineageId(targetPersona.persona_lineage_id);
         } else {
           const mainScope = await this.resolveMainTomoriScope(serverId);
@@ -504,7 +504,7 @@ export class ImportRepository {
 
       for (const memory of memories) {
         await sql`
-          INSERT INTO server_memories (server_id, tomori_id, persona_lineage_id, user_id, content, tags)
+          INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, tags)
           VALUES (${serverId}, ${insertTomoriId}, ${targetPersonaLineageId}, ${userId}, ${memory.content}, ${sql.array(memory.tags)})
         `;
       }

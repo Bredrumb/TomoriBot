@@ -9,7 +9,7 @@
  * Supports three scopes:
  * - persona: Store facts for a specific persona (user selects via paginated buttons)
  * - automatic: Detect personas from webhook authors, create per-persona documents
- * - global: Store facts serverwide (tomori_id = NULL)
+ * - global: Store facts serverwide (persona_id = NULL)
  */
 
 import type {
@@ -597,7 +597,7 @@ export async function execute(
 
       personaSelectionInteraction = personaSelection.interaction;
       const selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await replyInfoEmbed(personaSelectionInteraction, locale, {
           titleKey: "general.errors.invalid_option_title",
           descriptionKey: "general.errors.invalid_option_description",
@@ -606,9 +606,9 @@ export async function execute(
         return;
       }
 
-      const targetTomoriId = selectedPersona.tomori_id;
+      const targetTomoriId = selectedPersona.persona_id;
       const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_persona", {
-        persona_name: selectedPersona.tomori_nickname,
+        persona_name: selectedPersona.persona_nickname,
       });
 
       // Defer the button interaction for long processing
@@ -693,7 +693,7 @@ export async function execute(
 
       const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_global");
 
-      // Check duplicate name (serverwide scope = tomori_id IS NULL)
+      // Check duplicate name (serverwide scope = persona_id IS NULL)
       if (await serverMemoryRepository.documentExistsByName(tomoriState.server_id, null, nameInput)) {
         await interaction.editReply({
           embeds: [
@@ -842,12 +842,12 @@ export async function execute(
     const personaResults: string[] = [];
 
     for (const tomoriId of detectedTomoriIds) {
-      const persona = allPersonas.find((p) => p.tomori_id === tomoriId);
+      const persona = allPersonas.find((p) => p.persona_id === tomoriId);
       if (!persona) continue;
 
-      const docName = `${nameInput} (${persona.tomori_nickname})`;
+      const docName = `${nameInput} (${persona.persona_nickname})`;
       const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_persona", {
-        persona_name: persona.tomori_nickname,
+        persona_name: persona.persona_nickname,
       });
 
       // Check duplicate name for this persona
@@ -876,7 +876,7 @@ export async function execute(
       if (storeResult) {
         personaResults.push(
           localizer(locale, "commands.memory.history.import.success_automatic_persona_line", {
-            persona_name: persona.tomori_nickname,
+            persona_name: persona.persona_nickname,
             doc_name: docName,
             chunk_count: storeResult.chunkCount.toString(),
           }),
@@ -903,7 +903,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: tomoriState?.tomori_id,
+      tomoriId: tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "memory history import",

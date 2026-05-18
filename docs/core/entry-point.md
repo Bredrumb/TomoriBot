@@ -23,9 +23,12 @@
 3. Load secrets via `getAppSecrets()`; populate `process.env` for downstream consumers; initialize `keyManager`.
 4. Construct Discord client with intents + sweepers; register process/client error handlers.
 5. Initialize database:
+   - run narrow pre-schema legacy rename bridges for known table renames that would otherwise conflict with fresh `schema.sql`
    - run `src/db/schema.sql`
    - run `src/db/schema_rag.sql` only when pgvector is detected
+   - run `src/db/schema_stpreset.sql`
    - run `src/db/seed.sql`
+   - run pending numbered migrations from `src/db/migrations/`
 6. Cleanup expired cooldown rows at startup (`cleanupExpiredCooldowns`).
 7. Attempt optional `pg_cron` registration for hourly cooldown cleanup job.
 8. Initialize tool registry (`initializeTools`).

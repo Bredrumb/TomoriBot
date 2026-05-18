@@ -56,10 +56,10 @@ export async function execute(
     if (scope === "persona") {
       const personas = await personaRepository.loadAllForServer(serverDiscId);
       const personaSelectOptions: SelectOption[] = personas
-        .filter((persona) => persona.tomori_id !== undefined)
+        .filter((persona) => persona.persona_id !== undefined)
         .map((persona) => ({
-          label: safeSelectOptionText(persona.tomori_nickname),
-          value: persona.tomori_id?.toString() ?? "",
+          label: safeSelectOptionText(persona.persona_nickname),
+          value: persona.persona_id?.toString() ?? "",
           description: persona.is_alter
             ? localizer(locale, "commands.data.export.alter_persona_description")
             : localizer(locale, "commands.data.export.main_persona_description"),
@@ -101,7 +101,7 @@ export async function execute(
       responseInteraction = modalSubmitInteraction;
 
       const selectedPersonaId = personaModalResult.values?.[PERSONA_SELECT_ID];
-      const selectedPersona = personas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
+      const selectedPersona = personas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
       if (!selectedPersona) {
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "general.errors.invalid_option_title",
@@ -116,7 +116,7 @@ export async function execute(
         selectedPersona.persona_lineage_id ?? 0,
       );
       typeLabel = localizer(locale, "commands.data.export.type_choice_persona_personal_memories");
-      const safeSlug = selectedPersona.tomori_nickname.replace(/[^a-zA-Z0-9-_]/g, "_").slice(0, 32);
+      const safeSlug = selectedPersona.persona_nickname.replace(/[^a-zA-Z0-9-_]/g, "_").slice(0, 32);
       filename = `tomori-personal-memories-${safeSlug}-${interaction.user.id}-${Date.now()}.json`;
     } else {
       exportResult = await exportRepository.exportGlobalPersonalMemories(interaction.user.id);

@@ -185,7 +185,7 @@ async function evaluateLockedChannelAdmission(args: {
       isAutochatOverride: isAutochatOverrideChannel(earlyTomoriState.config, channelIds.effectiveChannelId),
       author: message.author,
       locale: cooldownLocale,
-      botName: earlyTomoriState.tomori_nickname,
+      botName: earlyTomoriState.persona_nickname,
     });
     if (rejectedByCooldown) {
       log.info(`Message ${message.id} rejected before queuing due to cooldown.`);

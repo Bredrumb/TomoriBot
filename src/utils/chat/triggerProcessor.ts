@@ -108,7 +108,7 @@ export function isSelfTriggerMessage(message: Message, allPersonas: TomoriState[
   const authorName = message.author.username?.toLowerCase();
   if (!authorName) return false;
 
-  return allPersonas.some((persona) => persona.tomori_nickname?.toLowerCase() === authorName);
+  return allPersonas.some((persona) => persona.persona_nickname?.toLowerCase() === authorName);
 }
 
 export function getAutochatRange(config: AssembledServerConfig): {
@@ -133,7 +133,7 @@ export function isAutochatConfiguredChannel(config: AssembledServerConfig, chann
 
 export function getAutochatAssignedPersonaId(config: AssembledServerConfig, channelId: string): number | null {
   const assignedPersona = config.autoch_persona_overrides.find((entry) => entry.channel_disc_id === channelId);
-  return assignedPersona?.tomori_id ?? null;
+  return assignedPersona?.persona_id ?? null;
 }
 
 export function isAutochatQualifyingMessage(message: Message, isSelfMessage: boolean): boolean {
@@ -183,11 +183,11 @@ export function determineMatchingPersonas(
 ): TomoriState[] {
   const mainPersona = allPersonas.find((persona) => !persona.is_alter);
   const resolveFallbackPersona = (personaId?: number | null): TomoriState | undefined =>
-    (personaId ? allPersonas.find((persona) => persona.tomori_id === personaId) : undefined) ?? mainPersona;
+    (personaId ? allPersonas.find((persona) => persona.persona_id === personaId) : undefined) ?? mainPersona;
   const isPersonaAllowed = (persona?: TomoriState | null): persona is TomoriState =>
     Boolean(
       persona &&
-        (!allowedPersonaIds || (typeof persona.tomori_id === "number" && allowedPersonaIds.has(persona.tomori_id))),
+        (!allowedPersonaIds || (typeof persona.persona_id === "number" && allowedPersonaIds.has(persona.persona_id))),
     );
 
   const forcedPersonas: TomoriState[] = [];
@@ -196,15 +196,15 @@ export function determineMatchingPersonas(
     if (!isPersonaAllowed(persona)) {
       return;
     }
-    if (typeof persona.tomori_id === "number" && forcedPersonaIds.has(persona.tomori_id)) {
+    if (typeof persona.persona_id === "number" && forcedPersonaIds.has(persona.persona_id)) {
       return;
     }
-    if (typeof persona.tomori_id !== "number" && forcedPersonas.includes(persona)) {
+    if (typeof persona.persona_id !== "number" && forcedPersonas.includes(persona)) {
       return;
     }
     forcedPersonas.push(persona);
-    if (typeof persona.tomori_id === "number") {
-      forcedPersonaIds.add(persona.tomori_id);
+    if (typeof persona.persona_id === "number") {
+      forcedPersonaIds.add(persona.persona_id);
     }
   };
 
@@ -221,7 +221,7 @@ export function determineMatchingPersonas(
   let senderPersona: TomoriState | undefined;
   const personaByNickname = new Map<string, TomoriState>();
   for (const persona of allPersonas) {
-    const nicknameKey = persona.tomori_nickname?.toLowerCase();
+    const nicknameKey = persona.persona_nickname?.toLowerCase();
     if (!nicknameKey || personaByNickname.has(nicknameKey)) continue;
     personaByNickname.set(nicknameKey, persona);
   }
@@ -256,13 +256,13 @@ export function determineMatchingPersonas(
       continue;
     }
 
-    if (senderPersona && persona.tomori_id === senderPersona.tomori_id) {
+    if (senderPersona && persona.persona_id === senderPersona.persona_id) {
       continue;
     }
-    if (repliedToPersona && persona.tomori_id === repliedToPersona.tomori_id) {
+    if (repliedToPersona && persona.persona_id === repliedToPersona.persona_id) {
       continue;
     }
-    if (typeof persona.tomori_id === "number" && forcedPersonaIds.has(persona.tomori_id)) {
+    if (typeof persona.persona_id === "number" && forcedPersonaIds.has(persona.persona_id)) {
       continue;
     }
 
@@ -277,7 +277,7 @@ export function determineMatchingPersonas(
     for (const trigger of triggers) {
       const isPersonaDtmExempt =
         isAutochatDtmExemptChannel &&
-        (autoTriggerPersonaId === null ? !persona.is_alter : autoTriggerPersonaId === persona.tomori_id);
+        (autoTriggerPersonaId === null ? !persona.is_alter : autoTriggerPersonaId === persona.persona_id);
       const matchIndex = getTriggerFirstMatchIndex(message, trigger, deliberateTriggerMode && !isPersonaDtmExempt);
       if (matchIndex !== Number.POSITIVE_INFINITY) {
         hasMatch = true;

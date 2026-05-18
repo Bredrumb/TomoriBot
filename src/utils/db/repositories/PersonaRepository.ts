@@ -1,8 +1,8 @@
 /**
- * PersonaRepository — manages the `tomoris` and persona resolution tables.
+ * PersonaRepository — manages the `personas` and persona resolution tables.
  *
  * Owns TomoriState loading (composite persona + config + memories read) and
- * all writes to the `tomoris` table. Configuration writes live in
+ * all writes to the `personas` table. Configuration writes live in
  * ConfigRepository; the split mirrors the planned #14 DB partition.
  *
  * Export contract: toExportShape / fromExportShape are required by IRepository
@@ -44,14 +44,14 @@ import type { IRepository } from "./IRepository";
 
 /** Row shape for persona_context_note_configs (Phase 6). */
 export type PersonaContextNoteConfigsRow = {
-  tomori_id: number;
+  persona_id: number;
   context_note: string | null;
   context_note_depth: number;
 };
 
 /** Row shape for persona_voice_configs (Phase 6). */
 export type PersonaVoiceConfigsRow = {
-  tomori_id: number;
+  persona_id: number;
   speech_voice_sample_id: number | null;
   speech_voice_id: string | null;
   speech_voice_name: string | null;
@@ -60,14 +60,14 @@ export type PersonaVoiceConfigsRow = {
 
 /** Row shape for persona_imagegen_configs (Phase 6). */
 export type PersonaImagegenConfigsRow = {
-  tomori_id: number;
+  persona_id: number;
   nai_tags: string[];
   nai_char_ref_url: string | null;
 };
 
 /** Row shape for persona_textgen_configs (Phase 6). */
 export type PersonaTextgenConfigsRow = {
-  tomori_id: number;
+  persona_id: number;
   nai_attg_author: string | null;
   nai_attg_title: string | null;
   nai_attg_tags: string | null;
@@ -77,8 +77,8 @@ export type PersonaTextgenConfigsRow = {
 
 /** Per-persona config bundle (Stage A). */
 export type PersonaConfigBundle = {
-  tomori_id: number;
-  tomori_nickname: string;
+  persona_id: number;
+  persona_nickname: string;
   persona_lineage_id: number | null;
   context_note_configs: PersonaContextNoteConfigsRow | null;
   voice_configs: PersonaVoiceConfigsRow | null;
@@ -169,8 +169,8 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    */
   async loadServerPersonaSummaries(serverId: number): Promise<
     Array<{
-      tomori_id: number;
-      tomori_nickname: string;
+      persona_id: number;
+      persona_nickname: string;
       webhook_avatar_url: string | null;
       is_alter: boolean;
       attribute_list: string[];
@@ -181,17 +181,17 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     try {
       const rows = await sql`
         SELECT
-          t.tomori_id,
-          t.tomori_nickname,
+          t.persona_id,
+          t.persona_nickname,
           t.webhook_avatar_url,
           t.is_alter,
           t.attribute_list,
           t.persona_lineage_id,
           pc.persona_prompt
-        FROM tomoris t
-        LEFT JOIN persona_configs pc ON pc.tomori_id = t.tomori_id
+        FROM personas t
+        LEFT JOIN persona_configs pc ON pc.persona_id = t.persona_id
         WHERE t.server_id = ${serverId}
-        ORDER BY t.is_alter ASC, t.updated_at DESC NULLS LAST, t.tomori_id DESC
+        ORDER BY t.is_alter ASC, t.updated_at DESC NULLS LAST, t.persona_id DESC
       `;
       return rows ?? [];
     } catch (error) {
@@ -210,7 +210,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     try {
       const [row] = await sql`
         SELECT 1
-        FROM tomoris
+        FROM personas
         WHERE server_id = ${serverId}
           AND is_alter = false
         LIMIT 1
@@ -244,9 +244,9 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   async addAttributes(tomoriId: number, attributes: string[]): Promise<boolean> {
     try {
       const result = await sql`
-        UPDATE tomoris
+        UPDATE personas
         SET attribute_list = array_cat(attribute_list, ${sql.array(attributes)})
-        WHERE tomori_id = ${tomoriId}
+        WHERE persona_id = ${tomoriId}
         RETURNING *
       `;
       return result.length > 0;
@@ -259,10 +259,10 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   async editAttributeAt(tomoriId: number, index1Based: number, newAttribute: string): Promise<boolean> {
     try {
       const result = await sql`
-        UPDATE tomoris
+        UPDATE personas
         SET attribute_list[${index1Based}] = ${newAttribute}
-        WHERE tomori_id = ${tomoriId}
-        RETURNING tomori_id
+        WHERE persona_id = ${tomoriId}
+        RETURNING persona_id
       `;
       return result.length > 0;
     } catch (e) {
@@ -274,9 +274,9 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   async removeAttribute(tomoriId: number, attributeToRemove: string): Promise<boolean> {
     try {
       const result = await sql`
-        UPDATE tomoris
+        UPDATE personas
         SET attribute_list = array_remove(attribute_list, ${attributeToRemove})
-        WHERE tomori_id = ${tomoriId}
+        WHERE persona_id = ${tomoriId}
         RETURNING *
       `;
       return result.length > 0;
@@ -289,9 +289,9 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   async setPrompt(tomoriId: number, prompt: string): Promise<boolean> {
     try {
       const result = await sql`
-        INSERT INTO persona_configs (tomori_id, persona_prompt)
+        INSERT INTO persona_configs (persona_id, persona_prompt)
         VALUES (${tomoriId}, ${prompt})
-        ON CONFLICT (tomori_id) DO UPDATE
+        ON CONFLICT (persona_id) DO UPDATE
         SET persona_prompt = EXCLUDED.persona_prompt
         RETURNING *
       `;
@@ -307,7 +307,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       const result = await sql`
         UPDATE persona_configs
         SET persona_prompt = NULL
-        WHERE tomori_id = ${tomoriId}
+        WHERE persona_id = ${tomoriId}
         RETURNING *
       `;
       return result.length > 0;
@@ -319,7 +319,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   /**
    * Set the context note (and depth) for a persona. Writes to both the new
-   * `persona_context_note_configs` table and the legacy `tomoris` columns
+   * `persona_context_note_configs` table and the persona mirror columns
    * (dual-write expand-then-contract pattern, mirrors fromExportShape).
    *
    * @param tomoriId - Internal persona DB ID
@@ -329,7 +329,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   async setContextNote(tomoriId: number, contextNote: string | null, contextNoteDepth: number): Promise<boolean> {
     try {
       const row: PersonaContextNoteConfigsRow = {
-        tomori_id: tomoriId,
+        persona_id: tomoriId,
         context_note: contextNote,
         context_note_depth: contextNoteDepth,
       };
@@ -344,7 +344,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   /**
    * Set the NovelAI ATTG (Author/Title/Tags/Genre/Stars) metadata for a persona.
    * Writes to both the new `persona_textgen_configs` table and the legacy
-   * `tomoris` columns (dual-write expand-then-contract pattern).
+   * `personas` columns (dual-write expand-then-contract pattern).
    *
    * @param tomoriId - Internal persona DB ID
    * @param attg     - ATTG fields; any subset may be null to clear that field
@@ -360,7 +360,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     },
   ): Promise<boolean> {
     try {
-      const row: PersonaTextgenConfigsRow = { tomori_id: tomoriId, ...attg };
+      const row: PersonaTextgenConfigsRow = { persona_id: tomoriId, ...attg };
       await Promise.all([this.sqlUpsertPersonaTextgenConfigs(row), this.sqlDualWriteTextgenToTomoris(row)]);
       return true;
     } catch (e) {
@@ -372,7 +372,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   /**
    * Replace the persona's NovelAI character tags (imageboard-style).
    * Writes only `nai_tags` to both the new `persona_imagegen_configs` table
-   * and the legacy `tomoris.nai_tags` column — preserves `nai_char_ref_url`.
+   * and the `personas.nai_tags` column — preserves `nai_char_ref_url`.
    *
    * @param tomoriId - Internal persona DB ID
    * @param tags     - Full replacement tag array (use [] to clear)
@@ -381,16 +381,16 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     try {
       await Promise.all([
         sql`
-          INSERT INTO persona_imagegen_configs (tomori_id, nai_tags)
+          INSERT INTO persona_imagegen_configs (persona_id, nai_tags)
           VALUES (${tomoriId}, ${sql.array(tags)})
-          ON CONFLICT (tomori_id) DO UPDATE SET
+          ON CONFLICT (persona_id) DO UPDATE SET
             nai_tags   = EXCLUDED.nai_tags,
             updated_at = NOW()
         `,
         sql`
-          UPDATE tomoris
+          UPDATE personas
           SET nai_tags = ${sql.array(tags)}, updated_at = NOW()
-          WHERE tomori_id = ${tomoriId}
+          WHERE persona_id = ${tomoriId}
         `,
       ]);
       return true;
@@ -409,11 +409,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
     try {
       const result = await sql`
-        UPDATE tomoris
+        UPDATE personas
         SET sample_dialogues_in = array_cat(sample_dialogues_in, ${sql.array(inputs)}),
             sample_dialogues_out = array_cat(sample_dialogues_out, ${sql.array(outputs)})
-        WHERE tomori_id = ${tomoriId}
-        RETURNING tomori_id
+        WHERE persona_id = ${tomoriId}
+        RETURNING persona_id
       `;
       return result.length > 0;
     } catch (e) {
@@ -430,11 +430,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   ): Promise<boolean> {
     try {
       const result = await sql`
-        UPDATE tomoris
+        UPDATE personas
         SET sample_dialogues_in[${index1Based}] = ${newInput},
             sample_dialogues_out[${index1Based}] = ${newOutput}
-        WHERE tomori_id = ${tomoriId}
-        RETURNING tomori_id
+        WHERE persona_id = ${tomoriId}
+        RETURNING persona_id
       `;
       return result.length > 0;
     } catch (e) {
@@ -446,7 +446,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   async removeSampleDialoguePairAt(tomoriId: number, index1Based: number): Promise<boolean> {
     try {
       const result = await sql`
-        UPDATE tomoris
+        UPDATE personas
         SET
           sample_dialogues_in = (
             SELECT COALESCE(array_agg(elem ORDER BY ord), '{}')
@@ -458,8 +458,8 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             FROM unnest(sample_dialogues_out) WITH ORDINALITY AS t(elem, ord)
             WHERE ord != ${index1Based}
           )
-        WHERE tomori_id = ${tomoriId}
-        RETURNING tomori_id
+        WHERE persona_id = ${tomoriId}
+        RETURNING persona_id
       `;
       return result.length > 0;
     } catch (e) {
@@ -480,11 +480,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     safeLength: number,
   ): Promise<{ repairedIn: string[]; repairedOut: string[] } | null> {
     const [updatedRow] = await sql`
-      UPDATE tomoris
+      UPDATE personas
       SET
         sample_dialogues_in = sample_dialogues_in[1:${safeLength}],
         sample_dialogues_out = sample_dialogues_out[1:${safeLength}]
-      WHERE tomori_id = ${tomoriId}
+      WHERE persona_id = ${tomoriId}
       RETURNING sample_dialogues_in, sample_dialogues_out
     `;
 
@@ -499,9 +499,9 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   async removePersona(tomoriId: number): Promise<boolean> {
     try {
       const result = await sql`
-        DELETE FROM tomoris
-        WHERE tomori_id = ${tomoriId}
-        RETURNING tomori_id
+        DELETE FROM personas
+        WHERE persona_id = ${tomoriId}
+        RETURNING persona_id
       `;
       return result.length > 0;
     } catch (e) {
@@ -513,9 +513,9 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   async renamePersona(tomoriId: number, newName: string): Promise<boolean> {
     try {
       const result = await sql`
-        UPDATE tomoris
-        SET tomori_nickname = ${newName}
-        WHERE tomori_id = ${tomoriId}
+        UPDATE personas
+        SET persona_nickname = ${newName}
+        WHERE persona_id = ${tomoriId}
         RETURNING *
       `;
       return result.length > 0;
@@ -529,14 +529,14 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     try {
       await sql.transaction(async (tx) => {
         await tx`
-          UPDATE tomoris 
-          SET is_alter = true 
-          WHERE tomori_id = ${tomoriId2}
+          UPDATE personas
+          SET is_alter = true
+          WHERE persona_id = ${tomoriId2}
         `;
         await tx`
-          UPDATE tomoris 
-          SET is_alter = false 
-          WHERE tomori_id = ${tomoriId1}
+          UPDATE personas
+          SET is_alter = false
+          WHERE persona_id = ${tomoriId1}
         `;
       });
       return true;
@@ -549,9 +549,9 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   async setAvatar(tomoriId: number, avatarUrl: string | null): Promise<boolean> {
     try {
       const result = await sql`
-        UPDATE tomoris
+        UPDATE personas
         SET webhook_avatar_url = ${avatarUrl}
-        WHERE tomori_id = ${tomoriId}
+        WHERE persona_id = ${tomoriId}
         RETURNING *
       `;
       return result.length > 0;
@@ -584,9 +584,9 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     naiAttgStars?: number | null;
   }): Promise<TomoriRow | null> {
     const [row] = await sql`
-      INSERT INTO tomoris (
+      INSERT INTO personas (
         server_id,
-        tomori_nickname,
+        persona_nickname,
         attribute_list,
         sample_dialogues_in,
         sample_dialogues_out,
@@ -624,9 +624,9 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   async addTrigger(tomoriId: number, triggers: string[]): Promise<boolean> {
     try {
       const result = await sql`
-        INSERT INTO persona_configs (tomori_id, trigger_words)
+        INSERT INTO persona_configs (persona_id, trigger_words)
         VALUES (${tomoriId}, ${sql.array(triggers)})
-        ON CONFLICT (tomori_id) DO UPDATE
+        ON CONFLICT (persona_id) DO UPDATE
         SET trigger_words = array_cat(persona_configs.trigger_words, EXCLUDED.trigger_words)
         RETURNING *
       `;
@@ -648,9 +648,9 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   async removeTrigger(tomoriId: number, triggersRemaining: string[]): Promise<boolean> {
     try {
       const result = await sql`
-        INSERT INTO persona_configs (tomori_id, trigger_words)
+        INSERT INTO persona_configs (persona_id, trigger_words)
         VALUES (${tomoriId}, ${sql.array(triggersRemaining)})
-        ON CONFLICT (tomori_id) DO UPDATE
+        ON CONFLICT (persona_id) DO UPDATE
         SET trigger_words = EXCLUDED.trigger_words
         RETURNING *
       `;
@@ -672,9 +672,9 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   async setPersonaConfig(tomoriId: number, triggers: string[], prompt: string | null): Promise<boolean> {
     try {
       await sql`
-        INSERT INTO persona_configs (tomori_id, trigger_words, persona_prompt)
+        INSERT INTO persona_configs (persona_id, trigger_words, persona_prompt)
         VALUES (${tomoriId}, ${sql.array(triggers)}, ${prompt})
-        ON CONFLICT (tomori_id) DO UPDATE
+        ON CONFLICT (persona_id) DO UPDATE
         SET trigger_words  = EXCLUDED.trigger_words,
             persona_prompt = EXCLUDED.persona_prompt
       `;
@@ -702,12 +702,12 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         ? await sql`
             SELECT array_length(trigger_words, 1) as trigger_count
             FROM persona_configs
-            WHERE tomori_id = ${tomoriId}
+            WHERE persona_id = ${tomoriId}
           `
         : await sql`
             SELECT array_length(pc.trigger_words, 1) as trigger_count
             FROM persona_configs pc
-            JOIN tomoris t ON t.tomori_id = pc.tomori_id
+            JOIN personas t ON t.persona_id = pc.persona_id
             WHERE t.server_id = ${serverId}
               AND t.is_alter = false
             LIMIT 1
@@ -743,8 +743,8 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     try {
       const [tomoriResult] = await sql`
         SELECT array_length(sample_dialogues_in, 1) as dialogue_count
-        FROM tomoris
-        WHERE tomori_id = ${tomoriId}
+        FROM personas
+        WHERE persona_id = ${tomoriId}
       `;
 
       const currentCount = tomoriResult?.dialogue_count || 0;
@@ -777,8 +777,8 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     try {
       const [tomoriResult] = await sql`
         SELECT array_length(attribute_list, 1) as attribute_count
-        FROM tomoris
-        WHERE tomori_id = ${tomoriId}
+        FROM personas
+        WHERE persona_id = ${tomoriId}
       `;
 
       const currentCount = tomoriResult?.attribute_count || 0;
@@ -817,14 +817,14 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     const bundles = await Promise.all(
       tomoriRows.map(async (t) => {
         const [contextNote, voice, imagegen, textgen] = await Promise.all([
-          this.sqlLoadPersonaContextNoteConfigs(t.tomori_id),
-          this.sqlLoadPersonaVoiceConfigs(t.tomori_id),
-          this.sqlLoadPersonaImagegenConfigs(t.tomori_id),
-          this.sqlLoadPersonaTextgenConfigs(t.tomori_id),
+          this.sqlLoadPersonaContextNoteConfigs(t.persona_id),
+          this.sqlLoadPersonaVoiceConfigs(t.persona_id),
+          this.sqlLoadPersonaImagegenConfigs(t.persona_id),
+          this.sqlLoadPersonaTextgenConfigs(t.persona_id),
         ]);
         return {
-          tomori_id: t.tomori_id,
-          tomori_nickname: t.tomori_nickname,
+          persona_id: t.persona_id,
+          persona_nickname: t.persona_nickname,
           persona_lineage_id: t.persona_lineage_id ?? null,
           context_note_configs: contextNote,
           voice_configs: voice,
@@ -839,7 +839,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   /**
    * Restores persona config table rows for all personas in a server.
-   * Dual-writes: upserts into each new config table AND back into tomoris.
+   * Dual-writes: upserts into each config table AND back into personas.
    *
    * @param ownerId - Discord server snowflake
    * @param data    - Previously exported PersonaExportShape
@@ -888,14 +888,14 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   private async sqlLoadAllTomoriIds(
     serverId: number,
-  ): Promise<Array<{ tomori_id: number; tomori_nickname: string; persona_lineage_id: number | null }>> {
+  ): Promise<Array<{ persona_id: number; persona_nickname: string; persona_lineage_id: number | null }>> {
     try {
       const rows = await sql`
-        SELECT tomori_id, tomori_nickname, persona_lineage_id FROM tomoris WHERE server_id = ${serverId}
+        SELECT persona_id, persona_nickname, persona_lineage_id FROM personas WHERE server_id = ${serverId}
       `;
       return rows as unknown as Array<{
-        tomori_id: number;
-        tomori_nickname: string;
+        persona_id: number;
+        persona_nickname: string;
         persona_lineage_id: number | null;
       }>;
     } catch (error) {
@@ -909,8 +909,8 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   private async sqlLoadPersonaContextNoteConfigs(tomoriId: number): Promise<PersonaContextNoteConfigsRow | null> {
     try {
       const [row] = await sql`
-        SELECT tomori_id, context_note, context_note_depth
-        FROM persona_context_note_configs WHERE tomori_id = ${tomoriId}
+        SELECT persona_id, context_note, context_note_depth
+        FROM persona_context_note_configs WHERE persona_id = ${tomoriId}
       `;
       return row ? (row as unknown as PersonaContextNoteConfigsRow) : null;
     } catch (error) {
@@ -922,9 +922,9 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   private async sqlLoadPersonaVoiceConfigs(tomoriId: number): Promise<PersonaVoiceConfigsRow | null> {
     try {
       const [row] = await sql`
-        SELECT tomori_id, speech_voice_sample_id, speech_voice_id, speech_voice_name,
+        SELECT persona_id, speech_voice_sample_id, speech_voice_id, speech_voice_name,
                speech_voice_design_prompt
-        FROM persona_voice_configs WHERE tomori_id = ${tomoriId}
+        FROM persona_voice_configs WHERE persona_id = ${tomoriId}
       `;
       return row ? (row as unknown as PersonaVoiceConfigsRow) : null;
     } catch (error) {
@@ -936,8 +936,8 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   private async sqlLoadPersonaImagegenConfigs(tomoriId: number): Promise<PersonaImagegenConfigsRow | null> {
     try {
       const [row] = await sql`
-        SELECT tomori_id, nai_tags, nai_char_ref_url
-        FROM persona_imagegen_configs WHERE tomori_id = ${tomoriId}
+        SELECT persona_id, nai_tags, nai_char_ref_url
+        FROM persona_imagegen_configs WHERE persona_id = ${tomoriId}
       `;
       return row ? (row as unknown as PersonaImagegenConfigsRow) : null;
     } catch (error) {
@@ -949,8 +949,8 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   private async sqlLoadPersonaTextgenConfigs(tomoriId: number): Promise<PersonaTextgenConfigsRow | null> {
     try {
       const [row] = await sql`
-        SELECT tomori_id, nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
-        FROM persona_textgen_configs WHERE tomori_id = ${tomoriId}
+        SELECT persona_id, nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
+        FROM persona_textgen_configs WHERE persona_id = ${tomoriId}
       `;
       return row ? (row as unknown as PersonaTextgenConfigsRow) : null;
     } catch (error) {
@@ -963,9 +963,9 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   private async sqlUpsertPersonaContextNoteConfigs(row: PersonaContextNoteConfigsRow): Promise<void> {
     await sql`
-      INSERT INTO persona_context_note_configs (tomori_id, context_note, context_note_depth)
-      VALUES (${row.tomori_id}, ${row.context_note}, ${row.context_note_depth})
-      ON CONFLICT (tomori_id) DO UPDATE SET
+      INSERT INTO persona_context_note_configs (persona_id, context_note, context_note_depth)
+      VALUES (${row.persona_id}, ${row.context_note}, ${row.context_note_depth})
+      ON CONFLICT (persona_id) DO UPDATE SET
         context_note       = EXCLUDED.context_note,
         context_note_depth = EXCLUDED.context_note_depth,
         updated_at         = NOW()
@@ -975,13 +975,13 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   private async sqlUpsertPersonaVoiceConfigs(row: PersonaVoiceConfigsRow): Promise<void> {
     await sql`
       INSERT INTO persona_voice_configs (
-        tomori_id, speech_voice_sample_id, speech_voice_id, speech_voice_name,
+        persona_id, speech_voice_sample_id, speech_voice_id, speech_voice_name,
         speech_voice_design_prompt
       ) VALUES (
-        ${row.tomori_id}, ${row.speech_voice_sample_id}, ${row.speech_voice_id},
+        ${row.persona_id}, ${row.speech_voice_sample_id}, ${row.speech_voice_id},
         ${row.speech_voice_name}, ${row.speech_voice_design_prompt}
       )
-      ON CONFLICT (tomori_id) DO UPDATE SET
+      ON CONFLICT (persona_id) DO UPDATE SET
         speech_voice_sample_id    = EXCLUDED.speech_voice_sample_id,
         speech_voice_id           = EXCLUDED.speech_voice_id,
         speech_voice_name         = EXCLUDED.speech_voice_name,
@@ -992,9 +992,9 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   private async sqlUpsertPersonaImagegenConfigs(row: PersonaImagegenConfigsRow): Promise<void> {
     await sql`
-      INSERT INTO persona_imagegen_configs (tomori_id, nai_tags, nai_char_ref_url)
-      VALUES (${row.tomori_id}, ${sql.array(row.nai_tags)}, ${row.nai_char_ref_url})
-      ON CONFLICT (tomori_id) DO UPDATE SET
+      INSERT INTO persona_imagegen_configs (persona_id, nai_tags, nai_char_ref_url)
+      VALUES (${row.persona_id}, ${sql.array(row.nai_tags)}, ${row.nai_char_ref_url})
+      ON CONFLICT (persona_id) DO UPDATE SET
         nai_tags       = EXCLUDED.nai_tags,
         nai_char_ref_url = EXCLUDED.nai_char_ref_url,
         updated_at     = NOW()
@@ -1004,12 +1004,12 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   private async sqlUpsertPersonaTextgenConfigs(row: PersonaTextgenConfigsRow): Promise<void> {
     await sql`
       INSERT INTO persona_textgen_configs (
-        tomori_id, nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
+        persona_id, nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
       ) VALUES (
-        ${row.tomori_id}, ${row.nai_attg_author}, ${row.nai_attg_title},
+        ${row.persona_id}, ${row.nai_attg_author}, ${row.nai_attg_title},
         ${row.nai_attg_tags}, ${row.nai_attg_genre}, ${row.nai_attg_stars}
       )
-      ON CONFLICT (tomori_id) DO UPDATE SET
+      ON CONFLICT (persona_id) DO UPDATE SET
         nai_attg_author = EXCLUDED.nai_attg_author,
         nai_attg_title  = EXCLUDED.nai_attg_title,
         nai_attg_tags   = EXCLUDED.nai_attg_tags,
@@ -1019,50 +1019,50 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     `;
   }
 
-  // ── dual-write back to tomoris ──────────────────────────────────
+  // ── dual-write back to personas ─────────────────────────────────
 
   private async sqlDualWriteContextNoteToTomoris(row: PersonaContextNoteConfigsRow): Promise<void> {
     await sql`
-      UPDATE tomoris SET
+      UPDATE personas SET
         context_note       = ${row.context_note},
         context_note_depth = ${row.context_note_depth},
         updated_at         = NOW()
-      WHERE tomori_id = ${row.tomori_id}
+      WHERE persona_id = ${row.persona_id}
     `;
   }
 
   private async sqlDualWriteVoiceToTomoris(row: PersonaVoiceConfigsRow): Promise<void> {
     await sql`
-      UPDATE tomoris SET
+      UPDATE personas SET
         speech_voice_sample_id    = ${row.speech_voice_sample_id},
         speech_voice_id           = ${row.speech_voice_id},
         speech_voice_name         = ${row.speech_voice_name},
         speech_voice_design_prompt = ${row.speech_voice_design_prompt},
         updated_at                = NOW()
-      WHERE tomori_id = ${row.tomori_id}
+      WHERE persona_id = ${row.persona_id}
     `;
   }
 
   private async sqlDualWriteImagegenToTomoris(row: PersonaImagegenConfigsRow): Promise<void> {
     await sql`
-      UPDATE tomoris SET
+      UPDATE personas SET
         nai_tags         = ${sql.array(row.nai_tags)},
         nai_char_ref_url = ${row.nai_char_ref_url},
         updated_at       = NOW()
-      WHERE tomori_id = ${row.tomori_id}
+      WHERE persona_id = ${row.persona_id}
     `;
   }
 
   private async sqlDualWriteTextgenToTomoris(row: PersonaTextgenConfigsRow): Promise<void> {
     await sql`
-      UPDATE tomoris SET
+      UPDATE personas SET
         nai_attg_author = ${row.nai_attg_author},
         nai_attg_title  = ${row.nai_attg_title},
         nai_attg_tags   = ${row.nai_attg_tags},
         nai_attg_genre  = ${row.nai_attg_genre},
         nai_attg_stars  = ${row.nai_attg_stars},
         updated_at      = NOW()
-      WHERE tomori_id = ${row.tomori_id}
+      WHERE persona_id = ${row.persona_id}
     `;
   }
 
@@ -1206,7 +1206,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         satc.autoch_disc_ids,
         (
           SELECT COALESCE(
-            JSON_AGG(JSON_BUILD_OBJECT('channel_disc_id', o.channel_disc_id, 'tomori_id', o.persona_id)),
+            JSON_AGG(JSON_BUILD_OBJECT('channel_disc_id', o.channel_disc_id, 'persona_id', o.persona_id)),
             '[]'::JSON
           )
           FROM server_auto_trigger_persona_overrides o
@@ -1261,7 +1261,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   }
 
   /**
-   * Loads config anchored on a tomori_id by joining through tomoris → servers across split tables.
+   * Loads config anchored on a persona_id by joining through personas → servers across split tables.
    * tomori_configs was dropped in Task F2 (migration 008); this method now reads exclusively from the 13 split tables.
    */
   private async sqlLoadTomoriConfigByTomoriId(tomoriId: number): Promise<AssembledServerConfig | null> {
@@ -1305,7 +1305,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         satc.autoch_disc_ids,
         (
           SELECT COALESCE(
-            JSON_AGG(JSON_BUILD_OBJECT('channel_disc_id', o.channel_disc_id, 'tomori_id', o.persona_id)),
+            JSON_AGG(JSON_BUILD_OBJECT('channel_disc_id', o.channel_disc_id, 'persona_id', o.persona_id)),
             '[]'::JSON
           )
           FROM server_auto_trigger_persona_overrides o
@@ -1328,7 +1328,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         smem.memory_tagging_enabled,
         -- server_welcome_configs (backward compat; not part of the 13-schema composition)
         swc.welcome_channel_disc_id, swc.welcome_prompt, swc.welcome_persona_id
-      FROM tomoris t
+      FROM personas t
       JOIN servers s ON s.server_id = t.server_id
       LEFT JOIN server_model_configs smc ON smc.server_id = s.server_id
       LEFT JOIN server_chat_configs scc ON scc.server_id = s.server_id
@@ -1344,7 +1344,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       LEFT JOIN server_byok_configs sbyok ON sbyok.server_id = s.server_id
       LEFT JOIN server_memory_configs smem ON smem.server_id = s.server_id
       LEFT JOIN server_welcome_configs swc ON swc.server_id = s.server_id
-      WHERE t.tomori_id = ${tomoriId}
+      WHERE t.persona_id = ${tomoriId}
       LIMIT 1
     `;
 
@@ -1354,7 +1354,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     const normalized = this.normalizeTomoriConfigFromJson(coerced);
     const parsedConfig = assembledServerConfigSchema.safeParse(normalized);
     if (!parsedConfig.success) {
-      log.error(`Invalid legacy tomori config for tomori_id ${tomoriId}:`, parsedConfig.error.flatten());
+      log.error(`Invalid legacy tomori config for persona_id ${tomoriId}:`, parsedConfig.error.flatten());
       return null;
     }
 
@@ -1368,10 +1368,10 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       // 1. Load main persona row using server Discord ID
       const tomoriRows = await sql`
         SELECT t.*
-        FROM tomoris t
+        FROM personas t
         JOIN servers s ON t.server_id = s.server_id
         WHERE s.server_disc_id = ${serverDiscId}
-        ORDER BY t.is_alter ASC, t.updated_at DESC NULLS LAST, t.tomori_id DESC
+        ORDER BY t.is_alter ASC, t.updated_at DESC NULLS LAST, t.persona_id DESC
         LIMIT 1
       `;
 
@@ -1383,13 +1383,13 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
       // 2. Load associated config using server_id (server-scoped config)
       // biome-ignore lint/style/noNonNullAssertion: Row existence checked above, ID is guaranteed by DB schema.
-      const tomoriId = tomoriData.tomori_id!;
+      const tomoriId = tomoriData.persona_id!;
       const serverId = tomoriData.server_id;
       let configData = await this.sqlLoadTomoriConfigByServerId(serverId);
 
-      // Backward compatibility: fall back to tomori_id if server_id config missing
+      // Backward compatibility: fall back to persona_id if server_id config missing
       if (!configData) {
-        log.warn(`No server-scoped config found for server ${serverDiscId}; falling back to tomori_id ${tomoriId}`);
+        log.warn(`No server-scoped config found for server ${serverDiscId}; falling back to persona_id ${tomoriId}`);
         configData = await this.sqlLoadTomoriConfigByTomoriId(tomoriId);
       }
 
@@ -1429,7 +1429,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       const personaConfigRows = await sql`
         SELECT *
         FROM persona_configs
-        WHERE tomori_id = ${tomoriId}
+        WHERE persona_id = ${tomoriId}
         LIMIT 1
       `;
       let personaConfig: PersonaConfigRow | null = null;
@@ -1614,10 +1614,10 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
           // 1. Load all Tomori persona rows for this server (main first, then alters)
           const tomoriRows = await sql`
             SELECT t.*
-            FROM tomoris t
+            FROM personas t
             JOIN servers s ON t.server_id = s.server_id
             WHERE s.server_disc_id = ${serverDiscId}
-            ORDER BY t.is_alter ASC, t.updated_at DESC NULLS LAST, t.tomori_id DESC
+            ORDER BY t.is_alter ASC, t.updated_at DESC NULLS LAST, t.persona_id DESC
           `;
 
           if (!tomoriRows.length) {
@@ -1632,10 +1632,10 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
           if (!configData) {
             const mainTomoriRow = tomoriRows.find((row: TomoriRow) => row.is_alter === false) ?? tomoriRows[0];
-            const fallbackTomoriId = mainTomoriRow?.tomori_id;
+            const fallbackTomoriId = mainTomoriRow?.persona_id;
             if (fallbackTomoriId) {
               log.warn(
-                `No server-scoped config found for server ${serverDiscId}; falling back to tomori_id ${fallbackTomoriId}`,
+                `No server-scoped config found for server ${serverDiscId}; falling back to persona_id ${fallbackTomoriId}`,
               );
               configData = await this.sqlLoadTomoriConfigByTomoriId(fallbackTomoriId);
             }
@@ -1741,14 +1741,14 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
           const personaConfigRows = await sql`
             SELECT pc.*
             FROM persona_configs pc
-            JOIN tomoris t ON t.tomori_id = pc.tomori_id
+            JOIN personas t ON t.persona_id = pc.persona_id
             WHERE t.server_id = ${serverId}
           `;
           const personaConfigMap = new Map<number, PersonaConfigRow>();
           for (const row of personaConfigRows) {
             const parsed = personaConfigSchema.safeParse(row);
             if (parsed.success) {
-              personaConfigMap.set(parsed.data.tomori_id, parsed.data);
+              personaConfigMap.set(parsed.data.persona_id, parsed.data);
             } else {
               log.warn(`Invalid persona config row for server ${serverDiscId}:`, parsed.error.flatten());
             }
@@ -1785,7 +1785,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
           // 8. Batch-load autochat runtime counters for all personas in this server.
           const tomoriIds: number[] = (tomoriRows as TomoriRow[])
-            .map((r) => r.tomori_id)
+            .map((r) => r.persona_id)
             .filter((id): id is number => typeof id === "number");
           const autochRuntimeRows =
             tomoriIds.length > 0
@@ -1823,9 +1823,9 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
           // 10. Build persona states
           const personas: TomoriState[] = [];
           for (const tomoriRow of tomoriRows) {
-            const tomoriId = tomoriRow.tomori_id;
+            const tomoriId = tomoriRow.persona_id;
             if (!tomoriId) {
-              log.warn(`Skipping persona with missing tomori_id for server ${serverDiscId}`);
+              log.warn(`Skipping persona with missing persona_id for server ${serverDiscId}`);
               continue;
             }
 
@@ -1881,7 +1881,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             const parsedState = tomoriStateSchema.safeParse(combinedState);
             if (!parsedState.success) {
               log.error(
-                `Failed to validate persona state for server ${serverDiscId}, tomori_id ${tomoriId}:`,
+                `Failed to validate persona state for server ${serverDiscId}, persona_id ${tomoriId}:`,
                 parsedState.error.flatten(),
               );
               continue;
@@ -1913,7 +1913,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       const rows = await sql`
         SELECT *
         FROM persona_configs
-        WHERE tomori_id = ${tomoriId}
+        WHERE persona_id = ${tomoriId}
         LIMIT 1
       `;
 
@@ -1945,10 +1945,10 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       // Filter to only keys present in the original input — Zod injects defaults
       // for all schema fields with .default(), which would incorrectly expand the
       // SET clause (e.g. attribute_list: [] would overwrite existing data).
-      const fields = Object.keys(validTomoriData).filter((key) => key !== "tomori_id" && key in tomoriData);
+      const fields = Object.keys(validTomoriData).filter((key) => key !== "persona_id" && key in tomoriData);
 
       if (fields.length === 0) {
-        log.warn(`No fields provided to update for tomori_id: ${tomoriId}`);
+        log.warn(`No fields provided to update for persona_id: ${tomoriId}`);
         return null;
       }
 
@@ -1985,9 +1985,9 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       // Bun SQL expects a single array argument, not individual arguments).
       const result = await sql.unsafe(
         `
-          UPDATE tomoris
+          UPDATE personas
           SET ${setClause}
-          WHERE tomori_id = $${finalPlaceholderIndex}
+          WHERE persona_id = $${finalPlaceholderIndex}
           RETURNING *
         `,
         values,

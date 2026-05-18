@@ -73,7 +73,7 @@ export async function execute(
     }
 
     errorContext.serverId = tomoriState.server_id;
-    errorContext.tomoriId = tomoriState.tomori_id;
+    errorContext.tomoriId = tomoriState.persona_id;
 
     // 3. Get all whitelisted personas, channels, and roles for this server
     const [allPersonas, whitelistPersonas, whitelistChannels, whitelistRoles] = await Promise.all([
@@ -84,8 +84,8 @@ export async function execute(
     ]);
     const personaNameMap = new Map<number, string>();
     for (const persona of allPersonas) {
-      if (typeof persona.tomori_id === "number") {
-        personaNameMap.set(persona.tomori_id, persona.tomori_nickname);
+      if (typeof persona.persona_id === "number") {
+        personaNameMap.set(persona.persona_id, persona.persona_nickname);
       }
     }
 
@@ -292,7 +292,7 @@ export async function execute(
           whitelistRepository.removeChannelPersonaWhitelist(
             tomoriState.server_id,
             entry.channel_disc_id,
-            entry.tomori_id,
+            entry.persona_id,
           ),
         ),
       ),
@@ -373,7 +373,7 @@ export async function execute(
     );
 
     log.info(
-      `Whitelist entries removed in server ${interaction.guildId}: personas=[${personasToRemove.map((entry) => `${entry.channel_disc_id}:${entry.tomori_id}`).join(", ")}], channels=[${channelsToRemove.join(", ")}], roles=[${rolesToRemove.join(", ")}]`,
+      `Whitelist entries removed in server ${interaction.guildId}: personas=[${personasToRemove.map((entry) => `${entry.channel_disc_id}:${entry.persona_id}`).join(", ")}], channels=[${channelsToRemove.join(", ")}], roles=[${rolesToRemove.join(", ")}]`,
     );
   } catch (error) {
     log.error("Error executing /server whitelist remove command", error, errorContext);
@@ -431,7 +431,7 @@ async function buildRoleCheckboxOptions(
 }
 
 function getPersonaWhitelistEntryValue(entry: ChannelPersonaWhitelistRow): string {
-  return `${entry.channel_disc_id}:${entry.tomori_id}`;
+  return `${entry.channel_disc_id}:${entry.persona_id}`;
 }
 
 async function formatPersonaWhitelistEntryLabel(
@@ -440,7 +440,7 @@ async function formatPersonaWhitelistEntryLabel(
   personaNameMap: Map<number, string>,
   locale: string,
 ): Promise<string> {
-  const personaName = personaNameMap.get(entry.tomori_id) ?? `ID:${entry.tomori_id}`;
+  const personaName = personaNameMap.get(entry.persona_id) ?? `ID:${entry.persona_id}`;
 
   try {
     const channel = await interaction.guild?.channels.fetch(entry.channel_disc_id);

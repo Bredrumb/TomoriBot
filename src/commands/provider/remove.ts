@@ -306,7 +306,7 @@ export async function execute(
     const errorServerId = interaction.guild?.id ?? interaction.user.id;
     const state = await getCachedTomoriState(errorServerId);
     serverIdForError = state?.server_id ?? null;
-    tomoriIdForError = state?.tomori_id ?? null;
+    tomoriIdForError = state?.persona_id ?? null;
 
     const context: ErrorContext = {
       userId: userData.user_id,

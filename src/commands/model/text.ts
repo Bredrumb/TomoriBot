@@ -225,7 +225,7 @@ export async function execute(
 
         const personaButtonInteraction: ButtonInteraction = personaSelection.interaction;
         const selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-        if (!selectedPersona?.tomori_id) {
+        if (!selectedPersona?.persona_id) {
           await replyInfoEmbed(personaButtonInteraction, locale, {
             titleKey: "general.errors.invalid_option_title",
             descriptionKey: "general.errors.invalid_option_description",
@@ -306,7 +306,7 @@ export async function execute(
         }
 
         const personaWriteOk = await llmOverrideRepo.setPersonaLlmOverride(
-          selectedPersona.tomori_id,
+          selectedPersona.persona_id,
           selectedPersonaModel.llm_id,
           {
             serverDiscId: serverId,
@@ -329,7 +329,7 @@ export async function execute(
           "commands.model.text.scope_set_persona_success",
           ColorCode.SUCCESS,
           {
-            persona: selectedPersona.tomori_nickname,
+            persona: selectedPersona.persona_nickname,
             model: selectedPersonaModel.llm_codename,
           },
           "general.pagination.reloading_persona_picker",
@@ -465,7 +465,7 @@ export async function execute(
 
     if (!selectedModel?.llm_id) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        tomoriId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "CommandExecutionError",
@@ -542,7 +542,7 @@ export async function execute(
 
     if (!updatedRow) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        tomoriId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
@@ -609,7 +609,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState.server_id,
-      tomoriId: tomoriState.tomori_id,
+      tomoriId: tomoriState.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "config model text",

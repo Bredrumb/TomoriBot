@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS server_auto_trigger_persona_overrides (
   created_at      TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (server_id, channel_disc_id),
   FOREIGN KEY (server_id)  REFERENCES servers(server_id)      ON DELETE CASCADE,
-  FOREIGN KEY (persona_id) REFERENCES tomoris(tomori_id)      ON DELETE CASCADE
+  FOREIGN KEY (persona_id) REFERENCES personas(persona_id)    ON DELETE CASCADE
 );
 
 -- 2. Backfill from JSONB, skipping dangling persona references.
@@ -25,13 +25,19 @@ SELECT
   (entry->>'channel_disc_id')::TEXT,
   (entry->>'tomori_id')::INT
 FROM server_auto_trigger_configs satc
-CROSS JOIN LATERAL JSONB_ARRAY_ELEMENTS(satc.autoch_persona_overrides) AS entry
+CROSS JOIN LATERAL JSONB_ARRAY_ELEMENTS(
+  CASE
+    WHEN JSONB_TYPEOF(satc.autoch_persona_overrides) = 'array'
+      THEN satc.autoch_persona_overrides
+    ELSE '[]'::JSONB
+  END
+) AS entry
 WHERE
   (entry->>'channel_disc_id') IS NOT NULL
   AND (entry->>'channel_disc_id') <> ''
   AND (entry->>'tomori_id') ~ '^\d+$'
   AND EXISTS (
-    SELECT 1 FROM tomoris t WHERE t.tomori_id = (entry->>'tomori_id')::INT
+    SELECT 1 FROM personas t WHERE t.persona_id = (entry->>'tomori_id')::INT
   )
 ON CONFLICT (server_id, channel_disc_id) DO NOTHING;
 

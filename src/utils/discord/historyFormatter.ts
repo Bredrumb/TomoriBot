@@ -111,8 +111,8 @@ export function formatMessagesForExtraction(
   // Build a lowercase nickname → tomoriId map for persona detection
   const nicknameToTomoriId = new Map<string, number>();
   for (const persona of serverPersonas) {
-    if (persona.tomori_id !== undefined) {
-      nicknameToTomoriId.set(persona.tomori_nickname.toLowerCase(), persona.tomori_id);
+    if (persona.persona_id !== undefined) {
+      nicknameToTomoriId.set(persona.persona_nickname.toLowerCase(), persona.persona_id);
     }
   }
 

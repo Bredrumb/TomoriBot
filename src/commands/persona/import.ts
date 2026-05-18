@@ -914,7 +914,7 @@ export async function execute(
       }
 
       // 11b. Check for name uniqueness (case-insensitive)
-      const existingNames = allPersonas.map((p) => normalizePersonaName(p.tomori_nickname));
+      const existingNames = allPersonas.map((p) => normalizePersonaName(p.persona_nickname));
       const importName = normalizePersonaName(presetData.tomori_nickname);
 
       if (existingNames.includes(importName)) {
@@ -983,7 +983,7 @@ export async function execute(
 
       // 11h. Insert new alter persona row with lineage mode behavior and NovelAI fields
       const importedLineageId = presetData.persona_lineage_id ?? null;
-      let newAlterRow: { tomori_id?: number } | undefined;
+      let newAlterRow: { persona_id?: number } | undefined;
       try {
         newAlterRow =
           (await personaRepository.createAlterPersona({
@@ -1020,7 +1020,7 @@ export async function execute(
         throw error;
       }
 
-      if (!newAlterRow?.tomori_id) {
+      if (!newAlterRow?.persona_id) {
         log.error("Failed to insert alter persona row");
         await interaction.editReply({
           embeds: [
@@ -1033,7 +1033,7 @@ export async function execute(
         return;
       }
 
-      const newTomoriId = newAlterRow.tomori_id;
+      const newTomoriId = newAlterRow.persona_id;
 
       // 11h.1 Store alter trigger words + optional persona prompt in persona_configs
       const importedPersonaPrompt = typeof presetData.persona_prompt === "string" ? presetData.persona_prompt : null;
@@ -1069,7 +1069,7 @@ export async function execute(
       if (usedMainAvatarFallback) {
         descriptionParts.push(
           `\n\n${localizer(locale, "commands.persona.import.alter_avatar_fallback_main", {
-            nickname: mainPersona.tomori_nickname,
+            nickname: mainPersona.persona_nickname,
           })}`,
         );
       }

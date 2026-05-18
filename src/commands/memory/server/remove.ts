@@ -155,7 +155,7 @@ export async function execute(
 
       personaSelectionInteraction = personaSelection.interaction;
       selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await updateButtonComponentsV2Status(
           personaSelectionInteraction,
           locale,
@@ -298,7 +298,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: selectedPersona?.tomori_id ?? tomoriState?.tomori_id,
+      tomoriId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "forget servermemory",

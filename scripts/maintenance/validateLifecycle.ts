@@ -44,14 +44,14 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
 
 const requiredTables = [
   "servers",
-  "tomoris",
+  "personas",
 
   "persona_configs",
   "llms",
   "image_diffusion_models",
   "video_generation_models",
   "embedding_models",
-  "tomori_presets",
+  "persona_presets",
   "system_prompt_presets",
   "users",
   "server_memories",
@@ -69,7 +69,7 @@ const seedChecks: SeedCheck[] = [
   { table: "image_diffusion_models", minimumRows: 1 },
   { table: "video_generation_models", minimumRows: 1 },
   { table: "embedding_models", minimumRows: 1 },
-  { table: "tomori_presets", minimumRows: 1 },
+  { table: "persona_presets", minimumRows: 1 },
   { table: "system_prompt_presets", minimumRows: 1 },
   { table: "nai_presets", minimumRows: 1 },
 ];

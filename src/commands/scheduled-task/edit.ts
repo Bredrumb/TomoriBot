@@ -218,7 +218,7 @@ async function performReminderEdit(
   const targetUserId = isReminderForInvoker ? userData.user_disc_id : (botUserId as string);
   const targetUserNickname = isReminderForInvoker
     ? userData.user_nickname
-    : (tomoriState.tomori_nickname ?? client.user?.username ?? "Tomori");
+    : (tomoriState.persona_nickname ?? client.user?.username ?? "Tomori");
 
   const updatedReminder = await serverScheduleRepository.updateReminder({
     reminder_id: reminderToEdit.reminder_id,
@@ -312,7 +312,7 @@ export async function execute(
 
     // 2. Build select options — persona_id NULL means the main persona owns the reminder
     const reminderSelectOptions: SelectOption[] = reminders.map((reminder, index) => {
-      const personaName = reminder.persona_nickname ?? state.tomori_nickname;
+      const personaName = reminder.persona_nickname ?? state.persona_nickname;
       const formattedTime = formatTimeWithOffset(new Date(reminder.reminder_time), timezoneOffset, {
         year: "numeric",
         month: "short",
@@ -582,7 +582,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: tomoriState?.tomori_id,
+      tomoriId: tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "scheduled-task edit",

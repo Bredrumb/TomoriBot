@@ -21,9 +21,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { PrivacyLevel } from "@/types/db/schema";
 import { clearUserCache, getCachedUserRow } from "@/utils/cache/userCache";
-import { loadAvailableLlms, getLlmsByIds, loadLlmById } from "@/utils/db/repositories/llmReadSql";
-import { llmRepository } from "@/utils/db/repositories/LlmRepository";
-import { userRepository } from "@/utils/db/repositories/UserRepository";
+import { llmModelRepo, userRepository } from "@/utils/db/repositories";
 import { FIXTURE_IDS, cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
@@ -184,14 +182,14 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
 
   describe("LlmRepository.loadAvailableLlms", () => {
     it("returns the same rows as the direct repository SQL call", async () => {
-      const direct = await loadAvailableLlms();
-      const via = await llmRepository.loadAvailableLlms();
+      const direct = await testSql`SELECT * FROM llms WHERE is_deprecated = false ORDER BY llm_id ASC`;
+      const via = await llmModelRepo.loadAvailableLlms();
       expect(via).toEqual(direct);
     });
 
     it("with includeDeprecated=true returns >= non-deprecated count", async () => {
-      const active = await llmRepository.loadAvailableLlms(false);
-      const all = await llmRepository.loadAvailableLlms(true);
+      const active = await llmModelRepo.loadAvailableLlms(false);
+      const all = await llmModelRepo.loadAvailableLlms(true);
       if (!active || !all) throw new Error("loadAvailableLlms returned null");
       expect(all.length).toBeGreaterThanOrEqual(active.length);
     });
@@ -199,29 +197,32 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
 
   describe("LlmRepository.loadLlmById", () => {
     it("returns the same row as the direct repository SQL call", async () => {
-      const allLlms = await loadAvailableLlms();
+      const allLlms = await llmModelRepo.loadAvailableLlms();
       if (!allLlms?.[0]) throw new Error("No seeded LLMs found");
       const id = allLlms[0].llm_id;
 
-      const direct = await loadLlmById(id);
-      const via = await llmRepository.loadLlmById(id);
-      expect(via).toEqual(direct);
+      const direct = await testSql`SELECT * FROM llms WHERE llm_id = ${id} LIMIT 1`;
+      const via = await llmModelRepo.loadById(id);
+      expect(via).toEqual(direct[0]);
     });
 
     it("returns null for a non-existent ID", async () => {
-      const result = await llmRepository.loadLlmById(999_999_999);
+      const result = await llmModelRepo.loadById(999_999_999);
       expect(result).toBeNull();
     });
   });
 
   describe("LlmRepository.getLlmsByIds", () => {
     it("returns the same rows as the direct repository SQL call", async () => {
-      const allLlms = await loadAvailableLlms();
+      const allLlms = await llmModelRepo.loadAvailableLlms();
       if (!allLlms || allLlms.length < 2) throw new Error("Need at least 2 seeded LLMs");
       const ids = allLlms.slice(0, 2).map((l) => l.llm_id);
 
-      const direct = await getLlmsByIds(ids);
-      const via = await llmRepository.getLlmsByIds(ids);
+      const direct = await testSql.unsafe(
+        `SELECT * FROM llms WHERE llm_id IN (${ids.map((_, index) => `$${index + 1}`).join(", ")})`,
+        ids,
+      );
+      const via = await llmModelRepo.getLlmsByIds(ids);
       expect(via.map((l) => l.llm_id).sort()).toEqual(direct.map((l) => l.llm_id).sort());
     });
   });
@@ -241,8 +242,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
   it.skip("[REGRESSION PROBE] wrong delegation in loadAvailableLlms() would fail parity test", async () => {
     // To prove: make llmRepository.loadAvailableLlms() return [] unconditionally
     // and confirm the parity test above fails.
-    const direct = await loadAvailableLlms();
-    const via = await llmRepository.loadAvailableLlms();
+    const direct = await llmModelRepo.loadAvailableLlms();
+    const via = await llmModelRepo.loadAvailableLlms();
     expect(via).toEqual(direct); // Would fail if delegation were a no-op
   });
 });

@@ -52,7 +52,7 @@ export async function showPersonaStatus(
   const personaInteraction: ButtonInteraction = personaSelection.interaction;
   const selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
 
-  if (!selectedPersona?.tomori_id) {
+  if (!selectedPersona?.persona_id) {
     await replyInfoEmbed(personaInteraction, locale, {
       titleKey: "general.errors.invalid_option_title",
       descriptionKey: "general.errors.invalid_option_description",
@@ -61,7 +61,7 @@ export async function showPersonaStatus(
     return;
   }
 
-  const personaName = selectedPersona.tomori_nickname;
+  const personaName = selectedPersona.persona_nickname;
   const personaLineageId = selectedPersona.persona_lineage_id ?? 0;
 
   let personaPersonalMemoryList: string[] = [];

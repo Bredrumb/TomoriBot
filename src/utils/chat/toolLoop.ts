@@ -235,7 +235,7 @@ async function executeToolCall(
     webhook: params.context.responseTarget?.webhook,
     personaUsername: params.context.responseTarget?.personaUsername,
     personaAvatarUrl: params.context.responseTarget?.personaAvatarUrl,
-    activePersonaId: params.context.currentPersona.tomori_id ?? undefined,
+    activePersonaId: params.context.currentPersona.persona_id ?? undefined,
     isUserImpersonation: params.context.isUserImpersonation,
     impersonatedUserId: params.context.impersonatedUserId,
     contextItems: params.context.contextItems,
@@ -342,7 +342,7 @@ function queueStopResponseIfPresent(context: ChatTurnContext): void {
     channelId: context.channel.id,
     message: stopContext.originalStopMessage,
     llmOverrideCodename: context.turn.lockedTurn.admission.incoming.llmOverrideCodename,
-    selectedPersonaId: context.currentPersona.tomori_id ?? undefined,
+    selectedPersonaId: context.currentPersona.persona_id ?? undefined,
     textQuotaTriggerKey: context.textQuotaTriggerKey,
   });
 }
@@ -365,9 +365,9 @@ function buildResult(
       text.length > 0
         ? [
             {
-              personaName: context.currentPersona.tomori_nickname,
+              personaName: context.currentPersona.persona_nickname,
               text,
-              tomoriId: context.currentPersona.tomori_id,
+              tomoriId: context.currentPersona.persona_id,
               personaLineageId: context.currentPersona.persona_lineage_id,
             },
           ]

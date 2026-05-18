@@ -72,10 +72,10 @@ export async function execute(
     }
 
     const personaSelectOptions: SelectOption[] = allPersonas
-      .filter((persona) => persona.tomori_id !== undefined)
+      .filter((persona) => persona.persona_id !== undefined)
       .map((persona) => ({
-        label: safeSelectOptionText(persona.tomori_nickname),
-        value: persona.tomori_id?.toString() ?? "",
+        label: safeSelectOptionText(persona.persona_nickname),
+        value: persona.persona_id?.toString() ?? "",
         description: persona.is_alter
           ? localizer(locale, "commands.server.trigger.add.alter_persona_description")
           : localizer(locale, "commands.server.trigger.add.main_persona_description"),
@@ -134,7 +134,7 @@ export async function execute(
       return;
     }
 
-    selectedPersona = allPersonas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
+    selectedPersona = allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
 
     if (!selectedPersona) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -224,9 +224,9 @@ export async function execute(
       return;
     }
 
-    const personaId = selectedPersona.tomori_id ?? null;
+    const personaId = selectedPersona.persona_id ?? null;
     if (!personaId) {
-      log.error("Selected persona missing tomori_id - this should never happen");
+      log.error("Selected persona missing persona_id - this should never happen");
       return;
     }
 
@@ -267,7 +267,7 @@ export async function execute(
       titleKey: "commands.server.trigger.add.success_title",
       descriptionKey: "commands.server.trigger.add.success_description",
       descriptionVars: {
-        persona_name: selectedPersona.tomori_nickname,
+        persona_name: selectedPersona.persona_nickname,
         added_words: formatTriggerList(newTriggers),
         added_count: newTriggers.length.toString(),
         word_count: updatedTriggerCount.toString(),
@@ -280,7 +280,7 @@ export async function execute(
       metadata: {
         command: "config triggeradd",
         guildId: interaction.guild.id,
-        personaId: selectedPersona?.tomori_id ?? null,
+        personaId: selectedPersona?.persona_id ?? null,
       },
     };
     await log.error("Error in /config triggeradd command", error, context);

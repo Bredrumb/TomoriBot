@@ -20,10 +20,27 @@ export const FIXTURE_IDS = {
 /** Internal DB IDs populated after insertFixtures() runs. */
 export interface FixtureRefs {
   serverId: number;
-  tomoriId: number;
+  personaId: number;
   personaLineageId: number;
   userId: number;
 }
+
+const SERVER_CONFIG_TABLES = [
+  "server_model_configs",
+  "server_chat_configs",
+  "server_member_permissions_configs",
+  "server_capabilities_configs",
+  "server_notice_embeds_configs",
+  "server_nsfw_configs",
+  "server_speech_configs",
+  "server_auto_trigger_configs",
+  "server_channel_scope_configs",
+  "server_trigger_behavior_configs",
+  "server_byok_configs",
+  "server_novelai_imagegen_configs",
+  "server_memory_configs",
+  "server_welcome_configs",
+] as const;
 
 /**
  * Inserts the minimal fixture set needed across all regression test files.
@@ -43,51 +60,49 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
   const serverId: number = serverRow.server_id;
 
   // 2. Persona (llm_id left NULL → BYOK/unconfigured mode; avoids needing a real LLM row)
-  const [tomoriRow] = await db`
-    INSERT INTO tomoris (server_id, tomori_nickname, is_alter)
+  const [personaRow] = await db`
+    INSERT INTO personas (server_id, persona_nickname, is_alter)
     VALUES (${serverId}, '_rt_persona', false)
     ON CONFLICT DO NOTHING
-    RETURNING tomori_id, persona_lineage_id
+    RETURNING persona_id, persona_lineage_id
   `;
 
-  let tomoriId: number;
+  let personaId: number;
   let personaLineageId: number;
 
-  if (tomoriRow) {
-    tomoriId = tomoriRow.tomori_id;
-    personaLineageId = Number(tomoriRow.persona_lineage_id);
+  if (personaRow) {
+    personaId = personaRow.persona_id;
+    personaLineageId = Number(personaRow.persona_lineage_id);
   } else {
     // Row already existed — re-query to get the IDs
     const [existing] = await db`
-      SELECT tomori_id, persona_lineage_id
-      FROM tomoris
+      SELECT persona_id, persona_lineage_id
+      FROM personas
       WHERE server_id = ${serverId} AND is_alter = false
       LIMIT 1
     `;
-    tomoriId = existing.tomori_id;
+    personaId = existing.persona_id;
     personaLineageId = Number(existing.persona_lineage_id);
   }
 
   // Reset mutable fixture fields so failed/interrupted prior runs cannot leak
   // renamed personas or changed config into the next harness run.
   await db`
-    UPDATE tomoris
-    SET tomori_nickname = '_rt_persona'
-    WHERE tomori_id = ${tomoriId}
+    UPDATE personas
+    SET persona_nickname = '_rt_persona'
+    WHERE persona_id = ${personaId}
   `;
 
-  // 3. Server-scoped config (server_id linkage; tomori_id for legacy compatibility)
-  await db`
-    INSERT INTO tomori_configs (server_id, tomori_id)
-    VALUES (${serverId}, ${tomoriId})
-    ON CONFLICT DO NOTHING
-  `;
+  // 3. Server-scoped split config rows.
+  for (const table of SERVER_CONFIG_TABLES) {
+    await db.unsafe(`INSERT INTO ${table} (server_id) VALUES ($1) ON CONFLICT (server_id) DO NOTHING`, [serverId]);
+  }
 
   // 4. Persona-scoped config
   await db`
-    INSERT INTO persona_configs (tomori_id, trigger_words)
-    VALUES (${tomoriId}, ARRAY['_rt_trigger']::TEXT[])
-    ON CONFLICT (tomori_id) DO NOTHING
+    INSERT INTO persona_configs (persona_id, trigger_words)
+    VALUES (${personaId}, ARRAY['_rt_trigger']::TEXT[])
+    ON CONFLICT (persona_id) DO UPDATE SET trigger_words = EXCLUDED.trigger_words
   `;
 
   // 5. Test user
@@ -104,18 +119,18 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
   `;
   const userId: number = userRow.user_id;
 
-  return { serverId, tomoriId, personaLineageId, userId };
+  return { serverId, personaId, personaLineageId, userId };
 }
 
 /**
  * Removes all fixture rows created by insertFixtures().
- * Cascade deletes handle child rows (tomoris, tomori_configs, persona_configs,
+ * Cascade deletes handle child rows (personas, split config tables, persona_configs,
  * server_memories) when the servers row is deleted.
  *
  * @param db - The test SQL client from testDb.ts
  */
 export async function cleanupFixtures(db: SQL): Promise<void> {
-  // Cascade via FK: deletes tomoris → tomori_configs, persona_configs, server_memories
+  // Cascade via FK: deletes personas, split config rows, persona_configs, server_memories
   await db`DELETE FROM servers WHERE server_disc_id = ${FIXTURE_IDS.serverDiscId}`;
 
   // Users have no cascade from servers — clean up separately

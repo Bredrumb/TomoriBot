@@ -111,27 +111,27 @@ export class RandomTriggerProcessor {
         return;
       }
 
-      if (trigger.tomori_id === null || trigger.tomori_id === undefined) {
+      if (trigger.persona_id === null || trigger.persona_id === undefined) {
         const randomIndex = Math.floor(Math.random() * allPersonas.length);
         chosenPersona = allPersonas[randomIndex] ?? null;
       } else {
-        chosenPersona = allPersonas.find((persona) => persona.tomori_id === trigger.tomori_id) ?? null;
+        chosenPersona = allPersonas.find((persona) => persona.persona_id === trigger.persona_id) ?? null;
       }
 
       if (!chosenPersona) {
         log.warn(
-          `Random trigger ${triggerId}: could not resolve persona (tomori_id=${trigger.tomori_id}) — rescheduling`,
+          `Random trigger ${triggerId}: could not resolve persona (persona_id=${trigger.persona_id}) — rescheduling`,
         );
         return;
       }
 
       if (!trigger.respond_to_self && lastMessage) {
         const isPersonaLastSpeaker =
-          lastMessage.webhookId !== null && lastMessage.author.username === chosenPersona.tomori_nickname;
+          lastMessage.webhookId !== null && lastMessage.author.username === chosenPersona.persona_nickname;
 
         if (isPersonaLastSpeaker) {
           log.info(
-            `Random trigger ${triggerId}: persona "${chosenPersona.tomori_nickname}" spoke last, respond_to_self=false — skipping & rescheduling`,
+            `Random trigger ${triggerId}: persona "${chosenPersona.persona_nickname}" spoke last, respond_to_self=false — skipping & rescheduling`,
           );
           return;
         }
@@ -160,7 +160,7 @@ export class RandomTriggerProcessor {
       consecutiveFailures = 0;
 
       log.info(
-        `Random trigger ${triggerId}: firing for persona "${chosenPersona.tomori_nickname}" in channel ${trigger.channel_disc_id}`,
+        `Random trigger ${triggerId}: firing for persona "${chosenPersona.persona_nickname}" in channel ${trigger.channel_disc_id}`,
       );
 
       await tomoriChat({
@@ -170,7 +170,7 @@ export class RandomTriggerProcessor {
         isManuallyTriggered: true,
         forceReason: false,
         isStopResponse: false,
-        selectedPersonaId: chosenPersona.tomori_id,
+        selectedPersonaId: chosenPersona.persona_id,
         isPersonaJob: false,
         isUserImpersonation: false,
         textQuotaSource: "system",
@@ -178,7 +178,7 @@ export class RandomTriggerProcessor {
         manualSystemPrompt: trigger.custom_prompt ?? undefined,
       });
 
-      log.success(`Random trigger ${triggerId} fired successfully for persona "${chosenPersona.tomori_nickname}"`);
+      log.success(`Random trigger ${triggerId} fired successfully for persona "${chosenPersona.persona_nickname}"`);
     } catch (error) {
       log.error(`Error executing random trigger ${triggerId}:`, error);
     } finally {

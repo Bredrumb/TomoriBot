@@ -268,14 +268,14 @@ export async function execute(
     let scopeLabel = localizer(locale, "commands.teach.document.scope_label_serverwide");
 
     // Scope `persona` explicitly uses a string-select modal.
-    // Scope `serverwide` intentionally skips persona selection and stores tomori_id as NULL.
+    // Scope `serverwide` intentionally skips persona selection and stores persona_id as NULL.
     if (scope === "persona") {
       const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
       const personaSelectOptions: SelectOption[] = allPersonas
-        .filter((persona) => persona.tomori_id !== undefined)
+        .filter((persona) => persona.persona_id !== undefined)
         .map((persona) => ({
-          label: safeSelectOptionText(persona.tomori_nickname),
-          value: persona.tomori_id?.toString() ?? "",
+          label: safeSelectOptionText(persona.persona_nickname),
+          value: persona.persona_id?.toString() ?? "",
           description: persona.is_alter
             ? localizer(locale, "commands.teach.document.alter_persona_description")
             : localizer(locale, "commands.teach.document.main_persona_description"),
@@ -320,9 +320,9 @@ export async function execute(
 
       const selectedPersonaId = personaModalResult.values?.[DOCUMENT_PERSONA_SELECT_ID];
       const selectedPersona =
-        allPersonas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
+        allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
 
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "general.errors.invalid_option_title",
           descriptionKey: "general.errors.invalid_option_description",
@@ -331,9 +331,9 @@ export async function execute(
         return;
       }
 
-      targetTomoriId = selectedPersona.tomori_id;
+      targetTomoriId = selectedPersona.persona_id;
       scopeLabel = localizer(locale, "commands.teach.document.scope_label_persona", {
-        persona_name: selectedPersona.tomori_nickname,
+        persona_name: selectedPersona.persona_nickname,
       });
     }
 
@@ -545,7 +545,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: targetTomoriId ?? tomoriState?.tomori_id,
+      tomoriId: targetTomoriId ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "teach document",

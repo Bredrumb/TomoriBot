@@ -19,7 +19,7 @@ const MAX_GROUPS_PER_MODAL = 5;
 const MAX_ENTRIES_PER_MODAL = MAX_OPTIONS_PER_GROUP * MAX_GROUPS_PER_MODAL;
 const CHECKBOX_ID_PREFIX = "personal_spotlight_manage_checkbox_group";
 
-type PersonaWithId = TomoriState & { tomori_id: number };
+type PersonaWithId = TomoriState & { persona_id: number };
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("manage").setDescription(localizer("en-US", "commands.personal.spotlight.manage.description"));
@@ -76,10 +76,10 @@ export async function execute(
     }
 
     errorContext.serverId = tomoriState.server_id;
-    errorContext.tomoriId = tomoriState.tomori_id;
+    errorContext.tomoriId = tomoriState.persona_id;
 
     const personas = allPersonasRaw.filter(
-      (persona): persona is PersonaWithId => typeof persona.tomori_id === "number",
+      (persona): persona is PersonaWithId => typeof persona.persona_id === "number",
     );
     const activeSpotlights = await userRepository.getActivePersonalSpotlightsForUser(
       tomoriState.server_id,
@@ -179,7 +179,7 @@ function buildCheckboxGroups(
   interaction: ChatInputCommandInteraction,
   locale: string,
 ): ModalCheckboxGroupField[] {
-  const personaNameById = new Map(personas.map((persona) => [persona.tomori_id, persona.tomori_nickname]));
+  const personaNameById = new Map(personas.map((persona) => [persona.persona_id, persona.persona_nickname]));
   const groups: ModalCheckboxGroupField[] = [];
 
   for (let index = 0; index < activeSpotlights.length; index += MAX_OPTIONS_PER_GROUP) {

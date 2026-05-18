@@ -1,9 +1,9 @@
 import { sql } from "@/utils/db/client";
+import { presetRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { config } from "dotenv";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { exportPresetData } from "@/utils/db/presetExport";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 
 config();
@@ -31,9 +31,9 @@ interface ServerRow {
 }
 
 interface PersonaRow {
-  tomori_id: number;
+  persona_id: number;
   server_id: number;
-  tomori_nickname: string;
+  persona_nickname: string;
   is_alter: boolean;
   persona_lineage_id: number | bigint;
   trigger_words: string[] | null;
@@ -44,7 +44,7 @@ interface PersonaManifestEntry {
   filename: string;
   filename_png: string | null;
   nickname: string;
-  tomori_id: number;
+  persona_id: number;
   is_alter: boolean;
   memory_count: number;
 }
@@ -80,17 +80,17 @@ async function getAllServers(): Promise<ServerRow[]> {
 async function getPersonasForServer(serverId: number): Promise<PersonaRow[]> {
   return await sql<PersonaRow[]>`
     SELECT
-      t.tomori_id,
+      t.persona_id,
       t.server_id,
-      t.tomori_nickname,
+      t.persona_nickname,
       t.is_alter,
       t.persona_lineage_id,
       COALESCE(pc.trigger_words, '{}'::TEXT[]) AS trigger_words,
       t.webhook_avatar_url
-    FROM tomoris t
-    LEFT JOIN persona_configs pc ON pc.tomori_id = t.tomori_id
+    FROM personas t
+    LEFT JOIN persona_configs pc ON pc.persona_id = t.persona_id
     WHERE t.server_id = ${serverId}
-    ORDER BY t.is_alter ASC, t.updated_at DESC NULLS LAST, t.tomori_id DESC
+    ORDER BY t.is_alter ASC, t.updated_at DESC NULLS LAST, t.persona_id DESC
   `;
 }
 
@@ -173,12 +173,12 @@ async function runBackup(): Promise<void> {
 
     // 6. Export each persona
     for (const persona of personas) {
-      const { tomori_nickname: nickname, is_alter } = persona;
+      const { persona_nickname: nickname, is_alter } = persona;
       const typeTag = is_alter ? "alter" : "main";
 
       try {
         // 6a. Canonical export (identical to /persona export)
-        const exportResult = await exportPresetData(server.server_disc_id, persona.tomori_id);
+        const exportResult = await presetRepository.exportPresetData(server.server_disc_id, persona.persona_id);
         if (!exportResult.success) {
           log.error(`    FAILED: ${nickname} (${typeTag}) — ${exportResult.error}`);
           totalFailed++;
@@ -198,7 +198,7 @@ async function runBackup(): Promise<void> {
           preset: exportResult.data,
           // Extra metadata not in standard export
           meta: {
-            tomori_id: persona.tomori_id,
+            persona_id: persona.persona_id,
             is_alter,
             webhook_avatar_url: persona.webhook_avatar_url ?? null,
             trigger_words: persona.trigger_words ?? [],
@@ -212,7 +212,7 @@ async function runBackup(): Promise<void> {
           fallback: "persona",
           maxLength: 50,
         });
-        const filename = `${sanitized}_${persona.tomori_id}.json`;
+        const filename = `${sanitized}_${persona.persona_id}.json`;
         writeFileSync(join(serverDir, filename), `${JSON.stringify(backup, null, 2)}\n`);
 
         // 6e. Generate PNG with embedded metadata (only when avatar is available)
@@ -228,7 +228,7 @@ async function runBackup(): Promise<void> {
             if (avatarBuffer) {
               const pngBuffer = await convertToPNG(avatarBuffer);
               const pngWithMetadata = embedMetadataInPNG(pngBuffer, exportResult.data);
-              filenamePng = `${sanitized}_${persona.tomori_id}.png`;
+              filenamePng = `${sanitized}_${persona.persona_id}.png`;
               writeFileSync(join(serverDir, filenamePng), pngWithMetadata);
             }
           } catch (error) {
@@ -243,7 +243,7 @@ async function runBackup(): Promise<void> {
           filename,
           filename_png: filenamePng,
           nickname,
-          tomori_id: persona.tomori_id,
+          persona_id: persona.persona_id,
           is_alter,
           memory_count: memories.length,
         });

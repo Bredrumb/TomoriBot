@@ -117,7 +117,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       const stopStrings = buildProviderStopStrings({
         providerName: this.options.providerName,
         model: config.model,
-        personaName: context.tomoriState.tomori_nickname,
+        personaName: context.tomoriState.persona_nickname,
         configuredStops: context.tomoriState.config.llm_stop_strings,
         includePersonaSpeakerStop,
       });

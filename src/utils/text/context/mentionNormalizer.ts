@@ -64,7 +64,7 @@ export async function convertMentions(
   let currentTomoriNickname = tomoriNickname;
   if (!currentTomoriNickname) {
     const tomoriState = snapshot?.tomoriState ?? (await personaRepository.loadState(serverId));
-    currentTomoriNickname = tomoriState?.tomori_nickname || process.env.DEFAULT_BOTNAME || "Tomori";
+    currentTomoriNickname = tomoriState?.persona_nickname || process.env.DEFAULT_BOTNAME || "Tomori";
   }
 
   const mentionPattern = /<[@#][!&]?(\d{17,19})>/g;

@@ -457,7 +457,7 @@ export class CrossChannelMessageTool extends BaseTool {
         filteredMessages.map(async (m) => ({
           author: await resolveContextAuthorLabel(m, {
             guildId: context.guildId,
-            tomoriNickname: context.tomoriState.tomori_nickname,
+            tomoriNickname: context.tomoriState.persona_nickname,
             personalMemoriesEnabled: context.tomoriState.config.personal_memories_enabled,
           }),
           content: m.content
@@ -466,7 +466,7 @@ export class CrossChannelMessageTool extends BaseTool {
                 context.client,
                 context.guildId ?? "",
                 undefined,
-                context.tomoriState.tomori_nickname,
+                context.tomoriState.persona_nickname,
                 context.tomoriState.config.personal_memories_enabled,
               )
             : "(no text content)",
@@ -542,7 +542,7 @@ export class CrossChannelMessageTool extends BaseTool {
     // 10. Call tomoriChat in the target channel
     const { tomoriChat } = await import("../../events/messageCreate/tomoriChat");
 
-    const sourcePersonaId = context.activePersonaId ?? context.tomoriState.tomori_id ?? undefined;
+    const sourcePersonaId = context.activePersonaId ?? context.tomoriState.persona_id ?? undefined;
     const isSourceUserImpersonation = context.isUserImpersonation === true;
     const sourceImpersonatedUserId = context.impersonatedUserId;
     const manualTriggerInvoker = context.userId
@@ -606,7 +606,7 @@ export class CrossChannelMessageTool extends BaseTool {
             filteredMessages.map(async (m) => ({
               author: await resolveContextAuthorLabel(m, {
                 guildId: context.guildId,
-                tomoriNickname: context.tomoriState.tomori_nickname,
+                tomoriNickname: context.tomoriState.persona_nickname,
                 personalMemoriesEnabled: context.tomoriState.config.personal_memories_enabled,
               }),
               content: m.content
@@ -615,7 +615,7 @@ export class CrossChannelMessageTool extends BaseTool {
                     context.client,
                     context.guildId ?? "",
                     undefined,
-                    context.tomoriState.tomori_nickname,
+                    context.tomoriState.persona_nickname,
                     context.tomoriState.config.personal_memories_enabled,
                   )
                 : "(no text content)",

@@ -46,20 +46,28 @@
 --  PresetRepository.exportPreset — 2 callers confirmed (export command + import/export flow)
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- Backfill alter persona trigger words into persona_configs.trigger_words
--- where persona_configs.trigger_words is empty and tomoris.alter_triggers is not.
--- Main personas were already backfilled from tomori_configs.trigger_words by the
--- schema.sql init INSERT; this UPDATE catches any alter persona whose persona_configs
--- row was created before alter_triggers was populated, or whose row was inserted with
--- an empty array via ON CONFLICT DO NOTHING on the schema.sql INSERT.
-UPDATE persona_configs pc
-SET trigger_words = t.alter_triggers
-FROM tomoris t
-WHERE t.tomori_id = pc.tomori_id
-  AND t.is_alter = true
-  AND t.alter_triggers IS NOT NULL
-  AND array_length(t.alter_triggers, 1) > 0
-  AND (pc.trigger_words IS NULL OR array_length(pc.trigger_words, 1) = 0);
+-- Backfill alter persona trigger words into persona_configs.trigger_words where
+-- the legacy alter_triggers column still exists. Fresh #16.8 schemas no longer
+-- have that column, so this is guarded for migration-runner replay from scratch.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'personas'
+      AND column_name = 'alter_triggers'
+  ) THEN
+    UPDATE persona_configs pc
+    SET trigger_words = t.alter_triggers
+    FROM personas t
+    WHERE t.persona_id = pc.persona_id
+      AND t.is_alter = true
+      AND t.alter_triggers IS NOT NULL
+      AND array_length(t.alter_triggers, 1) > 0
+      AND (pc.trigger_words IS NULL OR array_length(pc.trigger_words, 1) = 0);
 
--- Drop the now-redundant column. All alter trigger data is in persona_configs.trigger_words.
-ALTER TABLE tomoris DROP COLUMN IF EXISTS alter_triggers;
+    -- Drop the now-redundant column. All alter trigger data is in persona_configs.trigger_words.
+    ALTER TABLE personas DROP COLUMN IF EXISTS alter_triggers;
+  END IF;
+END $$;

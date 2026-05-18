@@ -209,7 +209,7 @@ export class ReminderTool extends BaseTool {
     }
 
     const personaNickname =
-      context.personaUsername || tomoriState.tomori_nickname || context.client.user?.username || "TomoriBot";
+      context.personaUsername || tomoriState.persona_nickname || context.client.user?.username || "TomoriBot";
 
     // Validate reminder purpose
     if (typeof reminderPurposeArg !== "string" || !reminderPurposeArg.trim()) {
@@ -423,7 +423,7 @@ export class ReminderTool extends BaseTool {
 
       if (isSelfReminder) {
         resolvedTargetUserId = botUserId as string;
-        actualNicknameInDB = tomoriState.tomori_nickname || context.client.user?.username || "Tomori";
+        actualNicknameInDB = tomoriState.persona_nickname || context.client.user?.username || "Tomori";
         resolvedTargetUserLabel = actualNicknameInDB;
       } else if (shouldDefaultTargetToInvoker) {
         resolvedTargetUserId = resolvedUserId;
@@ -494,7 +494,7 @@ export class ReminderTool extends BaseTool {
         repetition_interval_hours: repetitionIntervalHours,
         self_reminder: isSelfReminder,
         created_by_user_id: requestingUserRow?.user_id ?? null,
-        persona_id: context.tomoriState.tomori_id ?? null,
+        persona_id: context.tomoriState.persona_id ?? null,
       });
 
       if (dbResult) {

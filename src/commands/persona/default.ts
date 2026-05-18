@@ -115,7 +115,7 @@ function resolvePresetLineageId(preset: TomoriPresetRow): number | null {
   }
 
   // Locale-safe fallback for environments where avatar paths were customized.
-  const normalizedName = preset.tomori_preset_name.toLowerCase();
+  const normalizedName = preset.persona_preset_name.toLowerCase();
   if (normalizedName.includes("bratty")) return 716;
   if (normalizedName.includes("gloomy")) return 1770;
   if (normalizedName.includes("shy")) return 3585;
@@ -144,7 +144,7 @@ function decodeBase64DataUri(dataUri: string): Buffer | null {
 }
 
 async function getPresetAvatarBuffer(preset: TomoriPresetRow): Promise<Buffer | null> {
-  const cachedAvatarDataUri = getCachedPresetAvatar(preset.tomori_preset_id);
+  const cachedAvatarDataUri = getCachedPresetAvatar(preset.persona_preset_id);
   if (cachedAvatarDataUri) {
     const decoded = decodeBase64DataUri(cachedAvatarDataUri);
     if (decoded) {
@@ -161,7 +161,7 @@ async function getPresetAvatarBuffer(preset: TomoriPresetRow): Promise<Buffer | 
     const absolutePath = path.join(process.cwd(), presetAvatarPath);
     return await readFile(absolutePath);
   } catch (error) {
-    log.warn(`Failed to load preset avatar file "${presetAvatarPath}" for preset ${preset.tomori_preset_id}`, error);
+    log.warn(`Failed to load preset avatar file "${presetAvatarPath}" for preset ${preset.persona_preset_id}`, error);
     return null;
   }
 }
@@ -193,7 +193,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * - type=default (default): updates the main persona.
  * - type=alter: creates an alter persona from the selected preset.
  *
- * Preset trigger words come from tomori_presets.preset_trigger_words,
+ * Preset trigger words come from persona_presets.preset_trigger_words,
  * with locale base-trigger fallback for backward compatibility.
  * Persona naming prefers the locale default bot name, then falls back to
  * preset trigger words in order if the preferred name is already taken.
@@ -271,9 +271,9 @@ export async function execute(
 
     // 6. Create preset options for the select menu using full descriptions
     const presetSelectOptions: SelectOption[] = presets.map((preset: TomoriPresetRow) => ({
-      label: safeSelectOptionText(preset.tomori_preset_name),
-      value: safeSelectOptionText(preset.tomori_preset_name),
-      description: safeSelectOptionText(preset.tomori_preset_desc),
+      label: safeSelectOptionText(preset.persona_preset_name),
+      value: safeSelectOptionText(preset.persona_preset_name),
+      description: safeSelectOptionText(preset.persona_preset_desc),
     }));
 
     // 7. Show the modal with preset selection
@@ -310,7 +310,7 @@ export async function execute(
     const selectedPresetName = modalResult.values![PRESET_SELECT_ID];
 
     // 9. Find the selected preset - let helper functions manage interaction state
-    const selectedPreset = presets.find((preset: TomoriPresetRow) => preset.tomori_preset_name === selectedPresetName);
+    const selectedPreset = presets.find((preset: TomoriPresetRow) => preset.persona_preset_name === selectedPresetName);
 
     if (!selectedPreset) {
       await modalSubmitInteraction.editReply({
@@ -320,7 +320,7 @@ export async function execute(
     }
 
     // 10. Build preset payloads for database update/insert
-    const presetPersonaPrompt = selectedPreset.tomori_preset_desc || null;
+    const presetPersonaPrompt = selectedPreset.persona_preset_desc || null;
 
     const presetTriggerWords = resolvePresetTriggerWords(selectedPreset, locale);
     const defaultBotName = getDefaultBotName(locale);
@@ -328,11 +328,11 @@ export async function execute(
     const shouldUseResolvedLineageId = resolvedLineageId !== null;
 
     const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
-    const allPersonaNames = allPersonas.map((persona) => persona.tomori_nickname);
+    const allPersonaNames = allPersonas.map((persona) => persona.persona_nickname);
     const mainPersona = allPersonas.find((persona) => !persona.is_alter) ?? tomoriState;
 
     if (targetType === "default") {
-      const targetPersonaId = mainPersona.tomori_id ?? tomoriState.tomori_id;
+      const targetPersonaId = mainPersona.persona_id ?? tomoriState.persona_id;
       if (!targetPersonaId) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "general.errors.update_failed_title",
@@ -343,8 +343,8 @@ export async function execute(
       }
 
       const takenNamesExcludingTarget = allPersonas
-        .filter((persona) => persona.tomori_id !== targetPersonaId)
-        .map((persona) => persona.tomori_nickname);
+        .filter((persona) => persona.persona_id !== targetPersonaId)
+        .map((persona) => persona.persona_nickname);
       const resolvedPersonaName = resolveAvailablePersonaName(
         defaultBotName,
         presetTriggerWords,
@@ -363,7 +363,7 @@ export async function execute(
 
       // 11a. Update main persona and trigger words
       const personaUpdatePayload: Partial<TomoriRow> = {
-        tomori_nickname: resolvedPersonaName,
+        persona_nickname: resolvedPersonaName,
         attribute_list: selectedPreset.preset_attribute_list,
         sample_dialogues_in: selectedPreset.preset_sample_dialogues_in,
         sample_dialogues_out: selectedPreset.preset_sample_dialogues_out,
@@ -386,8 +386,8 @@ export async function execute(
           metadata: {
             command: "persona default",
             targetType,
-            preset: selectedPreset.tomori_preset_name,
-            presetId: selectedPreset.tomori_preset_id,
+            preset: selectedPreset.persona_preset_name,
+            presetId: selectedPreset.persona_preset_id,
           },
         };
         await log.error(
@@ -432,7 +432,7 @@ export async function execute(
           }
 
           if (interaction.guild) {
-            const cachedAvatar = getCachedPresetAvatar(selectedPreset.tomori_preset_id);
+            const cachedAvatar = getCachedPresetAvatar(selectedPreset.persona_preset_id);
 
             const avatarValue = cachedAvatar || null;
             const endpoint = `https://discord.com/api/v10/guilds/${interaction.guild.id}/members/@me`;
@@ -447,7 +447,7 @@ export async function execute(
 
             if (response.ok) {
               const actionDescription = cachedAvatar
-                ? `Set preset avatar for "${selectedPreset.tomori_preset_name}"`
+                ? `Set preset avatar for "${selectedPreset.persona_preset_name}"`
                 : "Reset guild avatar to bot default";
               log.info(`${actionDescription} for guild ${interaction.guild.id} after applying preset`);
             } else {
@@ -463,7 +463,7 @@ export async function execute(
 
       const triggerSummary = presetTriggerWords.length > 0 ? presetTriggerWords.join(", ") : "N/A";
       const detailedSuccessDescription = localizer(locale, "commands.persona.default.success_details_description", {
-        preset_name: selectedPreset.tomori_preset_name,
+        preset_name: selectedPreset.persona_preset_name,
         nickname: resolvedPersonaName,
         attribute_count: selectedPreset.preset_attribute_list.length,
         dialogue_count: selectedPreset.preset_sample_dialogues_in.length,
@@ -527,7 +527,7 @@ export async function execute(
       });
 
       log.success(
-        `Applied preset "${selectedPreset.tomori_preset_name}" to main persona for server ${tomoriState.server_id} by user ${userData.user_disc_id}`,
+        `Applied preset "${selectedPreset.persona_preset_name}" to main persona for server ${tomoriState.server_id} by user ${userData.user_disc_id}`,
       );
 
       await modalSubmitInteraction.editReply({
@@ -603,8 +603,8 @@ export async function execute(
         metadata: {
           command: "persona default",
           targetType,
-          preset: selectedPreset.tomori_preset_name,
-          presetId: selectedPreset.tomori_preset_id,
+          preset: selectedPreset.persona_preset_name,
+          presetId: selectedPreset.persona_preset_id,
           validationErrors: insertedValidation.error.flatten(),
         },
       };
@@ -622,7 +622,7 @@ export async function execute(
       return;
     }
 
-    const newAlterId = insertedValidation.data.tomori_id;
+    const newAlterId = insertedValidation.data.persona_id;
     if (!newAlterId) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
@@ -724,7 +724,7 @@ export async function execute(
     invalidateTomoriStateCache(serverDiscId);
 
     log.success(
-      `Applied preset "${selectedPreset.tomori_preset_name}" to alter persona "${resolvedAlterName}" with ${uniqueAlterTriggers.length} unique triggers for server ${tomoriState.server_id} by user ${userData.user_disc_id}`,
+      `Applied preset "${selectedPreset.persona_preset_name}" to alter persona "${resolvedAlterName}" with ${uniqueAlterTriggers.length} unique triggers for server ${tomoriState.server_id} by user ${userData.user_disc_id}`,
     );
 
     await modalSubmitInteraction.editReply({
@@ -758,7 +758,7 @@ export async function execute(
     if (interaction.guild?.id) {
       const state = await getCachedTomoriState(interaction.guild.id);
       serverIdForError = state?.server_id ?? null;
-      tomoriIdForError = state?.tomori_id ?? null;
+      tomoriIdForError = state?.persona_id ?? null;
     }
 
     const context: ErrorContext = {

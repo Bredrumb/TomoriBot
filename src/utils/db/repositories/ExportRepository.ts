@@ -225,7 +225,7 @@ export class ExportRepository {
           COALESCE(smpc.prompt_snapshot_enabled, false)             AS prompt_snapshot_enabled,
           COALESCE(smemoc.memory_tagging_enabled, false)            AS memory_tagging_enabled,
           swc.welcome_prompt                                         AS welcome_prompt
-        FROM tomoris t
+        FROM personas t
         LEFT JOIN server_model_configs smc               ON smc.server_id   = t.server_id
         LEFT JOIN server_chat_configs scc                ON scc.server_id   = t.server_id
         LEFT JOIN server_member_permissions_configs smpc ON smpc.server_id  = t.server_id
@@ -256,18 +256,18 @@ export class ExportRepository {
       if (!targetTomoriId) {
         const mainPersonaRows = await sql<
           Array<{
-            tomori_id: number;
+            persona_id: number;
             persona_lineage_id: number | bigint | string;
           }>
         >`
-          SELECT tomori_id, persona_lineage_id
-          FROM tomoris
+          SELECT persona_id, persona_lineage_id
+          FROM personas
           WHERE server_id = ${serverId}
             AND is_alter = false
-          ORDER BY updated_at DESC NULLS LAST, tomori_id DESC
+          ORDER BY updated_at DESC NULLS LAST, persona_id DESC
           LIMIT 1
         `;
-        targetTomoriId = mainPersonaRows[0]?.tomori_id;
+        targetTomoriId = mainPersonaRows[0]?.persona_id;
         const rawMainLineageId = mainPersonaRows[0]?.persona_lineage_id;
         targetPersonaLineageId =
           typeof rawMainLineageId === "bigint"
@@ -278,8 +278,8 @@ export class ExportRepository {
       } else {
         const [targetPersonaMeta] = await sql<Array<{ persona_lineage_id: number | bigint | string }>>`
           SELECT persona_lineage_id
-          FROM tomoris
-          WHERE tomori_id = ${targetTomoriId}
+          FROM personas
+          WHERE persona_id = ${targetTomoriId}
             AND server_id = ${serverId}
           LIMIT 1
         `;
@@ -582,23 +582,23 @@ export class ExportRepository {
         typeof tomoriId === "number"
           ? await sql`
               SELECT
-                t.tomori_nickname,
+                t.persona_nickname,
                 t.attribute_list,
                 t.sample_dialogues_in,
                 t.sample_dialogues_out
-              FROM tomoris t
+              FROM personas t
               JOIN servers s ON t.server_id = s.server_id
               WHERE s.server_disc_id = ${serverDiscId}
-                AND t.tomori_id = ${tomoriId}
+                AND t.persona_id = ${tomoriId}
               LIMIT 1
             `
           : await sql`
               SELECT
-                t.tomori_nickname,
+                t.persona_nickname,
                 t.attribute_list,
                 t.sample_dialogues_in,
                 t.sample_dialogues_out
-              FROM tomoris t
+              FROM personas t
               JOIN servers s ON t.server_id = s.server_id
               WHERE s.server_disc_id = ${serverDiscId}
                 AND t.is_alter = false
@@ -617,7 +617,7 @@ export class ExportRepository {
       textOutput += `========================================\n`;
       textOutput += `TOMORI PERSONALITY EXPORT\n`;
       textOutput += `========================================\n\n`;
-      textOutput += `Personality Name: ${personalityData.tomori_nickname}\n`;
+      textOutput += `Personality Name: ${personalityData.persona_nickname}\n`;
       textOutput += `Exported: ${new Date().toISOString()}\n\n`;
 
       textOutput += `========================================\n`;

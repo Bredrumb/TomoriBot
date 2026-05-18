@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: phase-6-step-14-task-h -->
+<!-- ARCH-ALIGNMENT: phase-6-step-16.8e -->
 
 # 5. Database Schema and Data Model
 
@@ -24,7 +24,7 @@ The Phase 2 repository layer lives under `src/utils/db/repositories/`. All 19 re
 | `LlmOverrideRepository` | Channel/persona LLM override assignments + fallback refs |
 | `LlmProviderRepository` | Saved provider configs, custom endpoints, OpenRouter registrations |
 | `PersonalMemoryRepository` | User + persona lineage scoped personal memories |
-| `PersonaRepository` | Persona state loading + writes (`tomoris`, `persona_configs`) |
+| `PersonaRepository` | Persona state loading + writes (`personas`, `persona_configs`) |
 | `PresetRepository` | TomoriBot preset export/import + SillyTavern preset CRUD + ST card conversion |
 | `RagRepository` | RAG document and chunk storage |
 | `ServerMemoryRepository` | Server-wide shared memories |
@@ -46,7 +46,7 @@ All SQL is inlined as `private` methods directly on the owning Repository class.
 ### Core identity/config
 
 - `servers`
-- `tomoris`
+- `personas`
 - `persona_configs`
 - `users`
 
@@ -69,16 +69,16 @@ All SQL is inlined as `private` methods directly on the owning Repository class.
 - `server_memory_configs` — `/memory tagging` settings (`ServerMemoryRepository`)
 - `server_model_configs` — active model-selection FKs (`llm_id`, `embedding_model_id`, `diffusion_model_id`, `video_model_id`, `vision_llm_id`) plus runtime credential/thinking mirrors and Phase 3 inline custom endpoint fields that remain on the active assembled server config
 
-### Persona config normalization (Phase 6 Step #14 — dual-write active)
+### Persona config normalization (Phase 6 Step #14 — complete)
 
-`tomoris` persona-specific config columns are being extracted to 4 tables (source columns remain in `tomoris`; full drop deferred to steps #14.2–#14.6):
+`personas` persona-specific config columns were extracted to 4 tables (steps #14.2–#14.6 complete):
 
 - `persona_context_note_configs` — per-persona context note + depth
 - `persona_voice_configs` — `speech_voice_*` (`elevenlabs_voice_*` dropped by migration 010, Phase 6 Step #14.2)
 - `persona_imagegen_configs` — `nai_tags`, `nai_char_ref_url`
 - `persona_textgen_configs` — NovelAI ATTG author/title/tags/genre/stars
 
-### User personalization normalization (Phase 6 Step #14 — dual-write active)
+### User personalization normalization (Phase 6 Step #14 — complete)
 
 `users` personalization columns are being extracted to one table:
 
@@ -93,7 +93,7 @@ All SQL is inlined as `private` methods directly on the owning Repository class.
 
 ### Presets and prompts
 
-- `tomori_presets`
+- `persona_presets`
 - `system_prompt_presets`
 
 ### Memory and expression data
@@ -159,10 +159,10 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 
 ### Multi-persona
 
-- `tomoris` now supports multiple personas per server (`is_alter` flag).
+- `personas` now supports multiple personas per server (`is_alter` flag).
 - `persona_lineage_id` supports cross-server memory identity matching.
 - Persona names are constrained unique per server (case-insensitive, trimmed).
-- Exactly one non-alter persona (`is_alter = false`) per server is enforced by partial unique index `personas_one_main_per_server ON tomoris(server_id) WHERE is_alter = false` (added in Phase 6 Step #14.6, migration `012`). This hardens the invariant that was previously enforced only at the command layer.
+- Exactly one non-alter persona (`is_alter = false`) per server is enforced by partial unique index `personas_one_main_per_server ON personas(server_id) WHERE is_alter = false` (added in Phase 6 Step #14.6, migration `012`). This hardens the invariant that was previously enforced only at the command layer.
 - `persona_configs.reward_conditioning_enabled` and `persona_configs.punish_conditioning_enabled` are persona-scoped prompt-injection toggles for conditioning memory.
 
 ### Server config scoping
@@ -184,15 +184,15 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 - `server_welcome_configs.welcome_channel_disc_id` stores the single configured join-welcome channel per server.
 - `server_welcome_configs.welcome_prompt` stores the required additional greeting instruction shown in `/server welcome-channel set`.
 - `server_welcome_configs.welcome_persona_id` stores the selected welcome persona; `NULL` means random persona selection per join.
-- `server_auto_trigger_persona_overrides` (junction table, Phase 6 step #15) stores optional per-channel persona overrides for auto-trigger channels. Each row maps `(server_id, channel_disc_id)` → `persona_id` (FK to `tomoris(tomori_id)` with `ON DELETE CASCADE`). Missing entries fall back to the main persona. The assembled config exposes these as `autoch_persona_overrides: [{channel_disc_id, tomori_id}]` via a `JSON_AGG` subquery in `PersonaRepository`.
+- `server_auto_trigger_persona_overrides` (junction table, Phase 6 step #15) stores optional per-channel persona overrides for auto-trigger channels. Each row maps `(server_id, channel_disc_id)` → `persona_id` (FK to `personas(persona_id)` with `ON DELETE CASCADE`). Missing entries fall back to the main persona. The assembled config exposes these as `autoch_persona_overrides: [{channel_disc_id, persona_id}]` via a `JSON_AGG` subquery in `PersonaRepository`.
 - `server_notice_embeds_configs.tool_notice_hidden_keys` stores the hidden notice-embed key registry used by `/config notice-embeds visibility`, covering both tool progress notices and selected public command notice embeds.
 - `server_novelai_imagegen_configs.nai_style_tags` stores server-wide NovelAI style/quality tags prepended to every `generate_image_nai` prompt.
 - `server_novelai_imagegen_configs.nai_negative_tags` stores server-wide NovelAI negative tags; an empty array falls back to the `NAI_IMAGE_NEGATIVE_PROMPT` env value.
 - `server_novelai_imagegen_configs.nai_diffusion_model_id` stores the dedicated NovelAI image-model selection for `generate_image_nai`; `NULL` means NovelAI image generation is disabled until a NovelAI model is explicitly selected again.
 - `server_novelai_imagegen_configs.nai_sampler`, `nai_steps`, `nai_scale`, `nai_noise_schedule`, and `nai_cfg_rescale` store optional server overrides for NovelAI image generation params; `NULL` means use the env fallback.
 - `server_capabilities_configs.videogen_enabled` gates both slash-command and tool-driven video generation exposure. The DB default is `false`, so video generation starts disabled until explicitly enabled.
-- `persona_context_note_configs.context_note` stores a per-persona author's note. Takes priority over `server_chat_configs.context_note` at inference when non-null. (Dual-write active; source column still present in `tomoris`.)
-- `persona_context_note_configs.context_note_depth` stores the injection depth for the persona-specific note, using the same semantics as `server_chat_configs.context_note_depth`. (Dual-write active.)
+- `persona_context_note_configs.context_note` stores a per-persona author's note. Takes priority over `server_chat_configs.context_note` at inference when non-null.
+- `persona_context_note_configs.context_note_depth` stores the injection depth for the persona-specific note, using the same semantics as `server_chat_configs.context_note_depth`.
 
 ### Server config export/import
 
@@ -204,8 +204,8 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 
 ### NovelAI profile tags
 
-- `tomoris.nai_tags` stores per-persona NovelAI character tags.
-- `tomoris.nai_char_ref_url` stores the persisted persona reference image URL/path used by the `/novelai character-reference` workflow.
+- `personas.nai_tags` stores per-persona NovelAI character tags.
+- `personas.nai_char_ref_url` stores the persisted persona reference image URL/path used by the `/novelai character-reference` workflow.
 - `users.nai_char_tags` stores per-user NovelAI character tags keyed by Discord snowflake (`users.user_disc_id`).
 - `users.nai_char_ref_url` stores the persisted user reference image URL/path keyed by Discord snowflake.
 
@@ -216,7 +216,7 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 ### Personal spotlight routing
 
 - `personal_spotlights` stores one user-scoped spotlight row per `server_id + user_id + channel_disc_id`.
-- `personal_spotlights.auto_trigger_tomori_id` stores the optional persona automatically triggered for that user in that channel.
+- `personal_spotlights.auto_trigger_persona_id` stores the optional persona automatically triggered for that user in that channel.
 - `personal_spotlights.expires_at` is `NULL` for permanent spotlights and timestamped for timed spotlights.
 - `personal_spotlight_personas` stores the selected allowed persona set for each spotlight row.
 - Runtime reads `personal_spotlights` + `personal_spotlight_personas` together and intersects them with server whitelist rules, so personal spotlight never expands server-level access.
@@ -252,7 +252,7 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 
 `channel_persona_whitelist` stores persona-specific channel restrictions:
 
-- rows are keyed by `server_id + channel_disc_id + tomori_id`
+- rows are keyed by `server_id + channel_disc_id + persona_id`
 - if a persona has one or more rows, that persona is only eligible in those channels
 - if a persona has no rows, that persona remains eligible in all channels
 - thread checks inherit parent-channel entries when evaluating a restricted persona
@@ -270,7 +270,7 @@ Encrypted columns are stored as `BYTEA` with key version tracking:
 - `custom_endpoints` stores labeled self-hosted or proxy-backed endpoint registrations. Rows are scoped either to `server_id` or `user_id`, keyed by `(scope, label, capability)` through scoped partial unique indexes, and carry adapter metadata such as `api_style`, `endpoint_url`, `model_name`, capability flags, workflow JSON or speech/STT adapter options (`extra_config`), `is_default`, and whether auth is required.
 - `voice_samples` stores server-scoped reference audio metadata for local speech cloning. `file_path` is a production S3/CloudFront URL or a local `data/voice-samples/` path. Phase 4 allows one uploaded local sample per server.
 - `server_speech_configs.chatterbox_turbo_enabled`, `chatterbox_cfg_weight`, and `chatterbox_exaggeration` store server-scoped Chatterbox speech settings. CFG weight and exaggeration are forwarded to local TTS clone endpoints but only affect the bundled Chatterbox server when Turbo is disabled.
-- `tomoris.speech_voice_sample_id`, `tomoris.speech_voice_id`, and `tomoris.speech_voice_name` store per-persona voice assignment for local clone samples and provider-hosted voices. The legacy `elevenlabs_voice_*` columns were dropped by migration 010 (Phase 6 Step #14.2); `speech_voice_id` is now the sole voice identifier.
+- `personas.speech_voice_sample_id`, `personas.speech_voice_id`, and `personas.speech_voice_name` store per-persona voice assignment for local clone samples and provider-hosted voices. The legacy `elevenlabs_voice_*` columns were dropped by migration 010 (Phase 6 Step #14.2); `speech_voice_id` is now the sole voice identifier.
 - `openrouter_model_registrations` scopes extra OpenRouter text `llms` rows to a specific `server_id` or `user_id`.
 - `openrouter_embedding_model_registrations`, `openrouter_image_model_registrations`, and `openrouter_video_model_registrations` do the same for `embedding_models`, `image_diffusion_models`, and `video_generation_models`.
 - All four backing model tables use `is_scoped_registration = true` on those extra rows so they stay hidden from global provider pickers unless joined through a matching registration for that owner.
@@ -293,9 +293,9 @@ Two runtime-state tables hold high-frequency telemetry that does not belong in i
 | Table | FK → | Holds | Added |
 |---|---|---|---|
 | `api_key_rotation_runtime_state` | `api_key_rotation(rotation_key_id)` | `usage_count`, `error_count`, cooldown timestamps | migration 014 |
-| `persona_autoch_runtime_state` | `tomoris(tomori_id)` | `autoch_counter`, `autoch_next_target` | migration 015 |
+| `persona_autoch_runtime_state` | `personas(persona_id)` | `autoch_counter`, `autoch_next_target` | migration 015 |
 
-**`persona_autoch_runtime_state`** — FK column is named `persona_id` (semantic, forward-compatible with the #16.8 rename; same pattern as `server_auto_trigger_persona_overrides`). Mutated on every message processed by the autochat tick via UPSERT (`ConfigRepository.incrementTomoriCounter`). ON DELETE CASCADE ensures runtime cleanup is atomic with persona deletion. New personas auto-initialize on first UPSERT; the state is also loaded during `PersonaRepository.loadTomoriState` and batch-loaded by `loadAllPersonasForServer`. `TomoriState.autoch_counter` and `TomoriState.autoch_next_target` are sourced from this table, not from `tomoris`.
+**`persona_autoch_runtime_state`** — FK column is `persona_id` (same pattern as `server_auto_trigger_persona_overrides`). Mutated on every message processed by the autochat tick via UPSERT (`ConfigRepository.incrementTomoriCounter`). ON DELETE CASCADE ensures runtime cleanup is atomic with persona deletion. New personas auto-initialize on first UPSERT; the state is also loaded during `PersonaRepository.loadTomoriState` and batch-loaded by `loadAllPersonasForServer`. `TomoriState.autoch_counter` and `TomoriState.autoch_next_target` are sourced from this table, not from `personas`.
 
 ## Migration System (Phase 6+)
 
@@ -305,10 +305,19 @@ TomoriBot has two complementary schema mechanisms:
 
 | Mechanism | File | Runs | Purpose |
 |---|---|---|---|
+| Pre-schema legacy rename bridge | Selected rename migrations called by `initializeDatabase.ts` | Before static schema, only when legacy tables are detected | Preserve data for table renames where the latest static schema would otherwise create the target table first |
 | Static schema init | `schema.sql`, `schema_rag.sql`, `schema_stpreset.sql`, `seed.sql` | Every boot (idempotent) | Baseline tables, functions, seed data |
 | Migration runner | `src/db/migrations/NNN_*.sql` | Once per version (tracked) | Structural changes that cannot be idempotent (DROP, RENAME, table splits) |
 
-The migration runner (`src/db/migrationRunner.ts`) is called by `initializeDatabase.ts` after the static schema files have applied, so the base schema is always established before migrations run.
+`initializeDatabase.ts` first runs narrow legacy rename bridges for known table renames such as
+`serverwide_quotas` -> `image_serverwide_quotas` and `tomoris` -> `personas` when the old tables are present.
+This prevents the latest static schema from creating an empty target table before the rename can preserve existing
+rows. The normal migration runner (`src/db/migrationRunner.ts`) is still called after the static schema files have
+applied and records the migration as usual.
+
+On a clean fresh install, `schema.sql` already represents the latest schema snapshot. Startup records all historical
+migration names in `schema_migrations` without replaying their backfill/drop bodies, because those bodies depend on
+legacy source tables that correctly do not exist in a fresh database.
 
 Applied migrations are tracked in the `schema_migrations` table:
 

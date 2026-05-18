@@ -203,7 +203,7 @@ export async function execute(
 
     // 6. Build persona select options — index-based values avoid Discord's 100-char value limit
     const personaOptions = personas.map((persona, index) => ({
-      label: safeSelectOptionText(persona.tomori_nickname),
+      label: safeSelectOptionText(persona.persona_nickname),
       value: index.toString(),
       description: persona.is_alter ? "Alter Persona" : "Main Persona",
     }));
@@ -316,8 +316,8 @@ export async function execute(
     // 11. Build persona nickname index for webhook attribution
     const personaByNickname = new Map<string, TomoriState>();
     for (const p of personas) {
-      if (!p.tomori_nickname) continue;
-      const key = p.tomori_nickname.toLowerCase();
+      if (!p.persona_nickname) continue;
+      const key = p.persona_nickname.toLowerCase();
       if (!personaByNickname.has(key)) personaByNickname.set(key, p);
     }
     const mainPersona = personas.find((p) => !p.is_alter) ?? tomoriState;
@@ -363,17 +363,17 @@ export async function execute(
       let personaName: string | null = null;
 
       if (message.author.id === client.user?.id) {
-        authorName = mainPersona.tomori_nickname ?? tomoriState.tomori_nickname ?? message.author.username;
+        authorName = mainPersona.persona_nickname ?? tomoriState.persona_nickname ?? message.author.username;
         authorType = "persona";
         personaName = authorName;
       } else if (message.webhookId) {
         const webhookName = message.author.username?.trim();
         const matchedPersona = webhookName ? personaByNickname.get(webhookName.toLowerCase()) : undefined;
         if (matchedPersona) {
-          authorName = matchedPersona.tomori_nickname;
+          authorName = matchedPersona.persona_nickname;
           authorType = "persona";
-          personaName = matchedPersona.tomori_nickname;
-          effectiveAuthorId = `persona:${matchedPersona.tomori_id ?? matchedPersona.tomori_nickname}`;
+          personaName = matchedPersona.persona_nickname;
+          effectiveAuthorId = `persona:${matchedPersona.persona_id ?? matchedPersona.persona_nickname}`;
         } else if (webhookName) {
           authorName = webhookName;
         }
@@ -438,7 +438,7 @@ export async function execute(
       //   b) Link-preview embeds (Twitter/YouTube/articles) are extracted as
       //      `[System: Link preview embed content: ...]` and their images are added
       //      to imageAttachments — ONLY for non-Tomori-authored messages.
-      const botNickname = mainPersona.tomori_nickname ?? tomoriState.tomori_nickname ?? null;
+      const botNickname = mainPersona.persona_nickname ?? tomoriState.persona_nickname ?? null;
       const isTomoriAuthored = message.author.id === client.user?.id;
       const embedTextSegments: string[] = [];
       if (message.embeds.length > 0) {
@@ -559,7 +559,7 @@ export async function execute(
       triggererName: interaction.user.displayName || interaction.user.globalName || interaction.user.username,
       // snapshot.triggererUserRow unlocks STM context (actualTriggeringUserId guard inside buildContext)
       snapshot: { triggererUserRow: userData, tomoriState: effectivePersona },
-      tomoriNickname: selectedPersona.tomori_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
+      tomoriNickname: selectedPersona.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
       tomoriAttributes: selectedPersona.attribute_list,
       tomoriConfig: effectivePersona.config,
       personaPrompt: selectedPersona.persona_prompt ?? null,
@@ -581,7 +581,7 @@ export async function execute(
     const lowerPriorityTailDirectives = [...contextBuild.lowerPriorityTailDirectives];
     const emojiPenaltyDirective = getEmojiPenaltyDirective(
       contextItems,
-      selectedPersona.tomori_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
+      selectedPersona.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
     );
     if (emojiPenaltyDirective) lowerPriorityTailDirectives.push(emojiPenaltyDirective);
 
@@ -652,7 +652,7 @@ export async function execute(
     const descriptionParts: string[] = [];
     descriptionParts.push(
       localizer(locale, "commands.tool.prompt.snapshot.dm_description", {
-        persona_name: selectedPersona.tomori_nickname,
+        persona_name: selectedPersona.persona_nickname,
         format: formatLabel,
       }),
     );
@@ -661,7 +661,7 @@ export async function execute(
         "```yaml",
         `server_id: ${interaction.guild.id}`,
         `channel: #${channelName}`,
-        `persona: ${selectedPersona.tomori_nickname}`,
+        `persona: ${selectedPersona.persona_nickname}`,
         `provider: ${providerName}`,
         `model: ${modelName}`,
         `preset: ${presetName ?? "(native)"}`,
@@ -1191,7 +1191,7 @@ function buildRequestConfig(persona: TomoriState, providerName: string, modelNam
     const stopSequences = buildProviderStopStrings({
       providerName: "anthropic",
       model: modelName,
-      personaName: persona.tomori_nickname,
+      personaName: persona.persona_nickname,
     });
 
     const thinkingRequest = buildAnthropicThinkingRequest(modelName, config.thinking_level);
@@ -1216,7 +1216,7 @@ function buildRequestConfig(persona: TomoriState, providerName: string, modelNam
   const stopStrings = buildProviderStopStrings({
     providerName,
     model: modelName,
-    personaName: persona.tomori_nickname,
+    personaName: persona.persona_nickname,
   });
 
   const out: Record<string, unknown> = { max_tokens: maxTokens };

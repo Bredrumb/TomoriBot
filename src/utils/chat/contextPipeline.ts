@@ -121,7 +121,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     triggererName: turn.triggererName,
     triggererUserId: turn.userRow.user_id,
     emojiStrings: assets.emojiStrings,
-    tomoriNickname: turn.persona.tomori_nickname,
+    tomoriNickname: turn.persona.persona_nickname,
     tomoriAttributes: turn.persona.attribute_list,
     tomoriConfig: turn.persona.config,
     personaPrompt: turn.persona.persona_prompt ?? null,
@@ -292,7 +292,7 @@ async function buildSimplifiedHistory(
   const userIds = new Set<string>();
   const matrixUsers = new Map<string, string>();
   const syntheticUsers = new Map<string, { displayName: string; type: "persona" | "webhook" }>();
-  const personaByName = new Map(turn.allPersonas.map((persona) => [persona.tomori_nickname.toLowerCase(), persona]));
+  const personaByName = new Map(turn.allPersonas.map((persona) => [persona.persona_nickname.toLowerCase(), persona]));
   const reactionBudgetState = createReactionContextBudgetState();
 
   for (const msg of messages) {
@@ -406,17 +406,17 @@ async function simplifyMessage(
   let personaName: string | null = null;
 
   if (msg.author.id === turn.lockedTurn.admission.client.user?.id || isDebug) {
-    authorName = turn.mainPersona?.tomori_nickname ?? turn.persona.tomori_nickname;
+    authorName = turn.mainPersona?.persona_nickname ?? turn.persona.persona_nickname;
     authorType = "persona";
     personaName = authorName;
   } else if (isWebhook) {
     const webhookName = stripBridgePrefix(msg.author.username);
     const matchedPersona = personaByName.get(webhookName.toLowerCase());
     if (matchedPersona) {
-      authorId = String(matchedPersona.tomori_id ?? webhookName);
-      authorName = matchedPersona.tomori_nickname;
+      authorId = String(matchedPersona.persona_id ?? webhookName);
+      authorName = matchedPersona.persona_nickname;
       authorType = "persona";
-      personaName = matchedPersona.tomori_nickname;
+      personaName = matchedPersona.persona_nickname;
       syntheticUsers.set(authorId, { displayName: authorName, type: "persona" });
     } else {
       authorId = msg.webhookId ?? msg.author.id;
@@ -450,7 +450,7 @@ async function simplifyMessage(
     messageIdMap,
     forwarderName: authorName,
     clientUserId: turn.lockedTurn.admission.client.user?.id,
-    tomoriNickname: turn.persona.tomori_nickname,
+    tomoriNickname: turn.persona.persona_nickname,
     selfDebugEnabled: turn.persona.config.self_debug_enabled ?? false,
   });
   content = forwardContext.content;
@@ -466,7 +466,7 @@ async function simplifyMessage(
     imageAttachments,
     isTomoriAuthoredMessage,
     selfDebugEnabled: turn.persona.config.self_debug_enabled ?? false,
-    tomoriNickname: turn.persona.tomori_nickname,
+    tomoriNickname: turn.persona.persona_nickname,
   });
   content = embedResult.content;
   hasProcessedEmbed = embedResult.processedSystemEmbed;
@@ -553,7 +553,7 @@ async function withReplyContext(
       replyMessage: msg,
       referencedMessage: referenced,
       clientUserId: turn.lockedTurn.admission.client.user?.id,
-      botDisplayName: turn.persona.tomori_nickname,
+      botDisplayName: turn.persona.persona_nickname,
       personaByNickname,
       serverDiscId: turn.serverDiscId,
       serverPersonalizationDisabled: turn.persona.config.personal_memories_enabled === false,
@@ -574,7 +574,7 @@ async function withReactionContext(
 ): Promise<string> {
   const annotation = await buildReactionContextAnnotation(msg, reactionBudgetState, {
     clientUserId: turn.lockedTurn.admission.client.user?.id,
-    mainPersonaNickname: turn.mainPersona?.tomori_nickname ?? turn.persona.tomori_nickname,
+    mainPersonaNickname: turn.mainPersona?.persona_nickname ?? turn.persona.persona_nickname,
   });
   if (!annotation) return content;
   return content ? `${content}\n${annotation}` : annotation;
@@ -595,7 +595,7 @@ function appendTailDirectives(args: {
   const tail = [...args.tailDirectives];
   const emojiPenalty = getEmojiPenaltyDirective(
     contextItems,
-    incoming.isUserImpersonation ? null : args.turn.persona.tomori_nickname,
+    incoming.isUserImpersonation ? null : args.turn.persona.persona_nickname,
   );
   if (emojiPenalty) lowerPriority.push(emojiPenalty);
   if (incoming.isStopResponse) tail.push("The user has requested you to stop your current generation.");
@@ -618,8 +618,8 @@ function appendTailDirectives(args: {
     const lastMsg = args.simplifiedMessages[args.simplifiedMessages.length - 1];
     const isFromSelectedPersona =
       lastMsg.authorType === "persona" &&
-      !!args.turn.persona.tomori_nickname &&
-      lastMsg.personaName?.toLowerCase() === args.turn.persona.tomori_nickname.toLowerCase();
+      !!args.turn.persona.persona_nickname &&
+      lastMsg.personaName?.toLowerCase() === args.turn.persona.persona_nickname.toLowerCase();
     const isEmbedMessage =
       lastMsg.content?.includes("[System: The following content came from a system-produced embed]") ?? false;
 
@@ -633,10 +633,12 @@ function appendTailDirectives(args: {
     }
 
     if ((isFromSelectedPersona && !isEmbedMessage) || usePrefillContinuation) {
-      const reason = usePrefillContinuation ? "manual prefill" : `${args.turn.persona.tomori_nickname} as last speaker`;
+      const reason = usePrefillContinuation
+        ? "manual prefill"
+        : `${args.turn.persona.persona_nickname} as last speaker`;
       log.info(`Manual trigger (${reason}) — injecting continuation directive`);
 
-      const botName = args.turn.persona.tomori_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori";
+      const botName = args.turn.persona.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori";
       let continuationText: string;
       if (usePrefillContinuation) {
         continuationText =
@@ -659,15 +661,15 @@ function appendTailDirectives(args: {
     const queuedClient = args.turn.lockedTurn.admission.client;
     if (queuedMessage.author.id === queuedClient.user?.id) {
       queuedReplyTargetName =
-        args.turn.mainPersona?.tomori_nickname ?? args.turn.tomoriState.tomori_nickname ?? queuedReplyTargetName;
+        args.turn.mainPersona?.persona_nickname ?? args.turn.tomoriState.persona_nickname ?? queuedReplyTargetName;
     } else if (queuedMessage.webhookId) {
       const webhookName = stripBridgePrefix(queuedMessage.author.username);
       const personaByNicknameMap = new Map<string, (typeof args.turn.allPersonas)[number]>();
       for (const p of args.turn.allPersonas) {
-        if (p.tomori_nickname) personaByNicknameMap.set(p.tomori_nickname.toLowerCase(), p);
+        if (p.persona_nickname) personaByNicknameMap.set(p.persona_nickname.toLowerCase(), p);
       }
       queuedReplyTargetName =
-        personaByNicknameMap.get(webhookName.toLowerCase())?.tomori_nickname ?? queuedReplyTargetName;
+        personaByNicknameMap.get(webhookName.toLowerCase())?.persona_nickname ?? queuedReplyTargetName;
     }
   }
 
@@ -676,7 +678,7 @@ function appendTailDirectives(args: {
       ? buildQueuedReplyDirective(
           args.turn.lockedTurn.admission.message,
           queuedReplyTargetName,
-          args.turn.persona.tomori_nickname,
+          args.turn.persona.persona_nickname,
           args.messageIdMap,
         )
       : null;
@@ -701,7 +703,7 @@ function appendTailDirectives(args: {
   if (incoming.manualPrefill?.trim()) {
     contextItems.push({
       role: "model",
-      parts: [{ type: "text", text: `${args.turn.persona.tomori_nickname}: ${incoming.manualPrefill.trim()}` }],
+      parts: [{ type: "text", text: `${args.turn.persona.persona_nickname}: ${incoming.manualPrefill.trim()}` }],
       metadataTag: ContextItemTag.DIALOGUE_HISTORY,
     });
   }

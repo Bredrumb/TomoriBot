@@ -89,7 +89,7 @@ export async function execute(
 
     const personaButtonInteraction = personaSelection.interaction as ButtonInteraction;
     selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-    if (!selectedPersona?.tomori_id) {
+    if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(personaButtonInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -106,7 +106,7 @@ export async function execute(
         ? selectedPersona.speech_voice_name
         : null;
 
-    const updatedTomori = await personaRepository.update(selectedPersona.tomori_id, {
+    const updatedTomori = await personaRepository.update(selectedPersona.persona_id, {
       speech_voice_design_prompt: null,
       speech_voice_name: voiceNameIfOtherVoiceRemains,
     });
@@ -124,14 +124,14 @@ export async function execute(
     await replyInfoEmbed(personaButtonInteraction, locale, {
       titleKey: "commands.speech.voice_design.cleared_title",
       descriptionKey: "commands.speech.voice_design.cleared_description",
-      descriptionVars: { persona: selectedPersona.tomori_nickname },
+      descriptionVars: { persona: selectedPersona.persona_nickname },
       color: ColorCode.SUCCESS,
     });
   } catch (error) {
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: selectedPersona?.server_id ?? null,
-      tomoriId: selectedPersona?.tomori_id ?? null,
+      tomoriId: selectedPersona?.persona_id ?? null,
       errorType: "CommandExecutionError",
       metadata: {
         command: "speech voice-design remove",

@@ -43,7 +43,7 @@ function getChannelAutoTriggerPersona(
 ): TomoriState | null {
   const resolveById = (tomoriId: number | null | undefined): TomoriState | null => {
     if (tomoriId === null || tomoriId === undefined) return null;
-    return personas.find((persona) => persona.tomori_id === tomoriId) ?? null;
+    return personas.find((persona) => persona.persona_id === tomoriId) ?? null;
   };
 
   const personalAutoTriggerPersona = resolveById(personalAutoTriggerPersonaId);
@@ -57,7 +57,7 @@ function getChannelAutoTriggerPersona(
 
   const serverAutoTriggerPersonaId =
     tomoriState.config.autoch_persona_overrides.find((entry) => entry.channel_disc_id === effectiveChannelId)
-      ?.tomori_id ?? null;
+      ?.persona_id ?? null;
 
   return serverAutoTriggerPersonaId === null
     ? (personas.find((persona) => !persona.is_alter) ?? null)
@@ -170,7 +170,7 @@ export async function execute(
       "commands.bot.respond.cooldown_active",
       {
         seconds: cooldownResult.remainingSeconds.toString(),
-        botName: tomoriState.tomori_nickname,
+        botName: tomoriState.persona_nickname,
       },
       footerKey,
       interaction,
@@ -225,14 +225,14 @@ export async function execute(
     return;
   }
 
-  const availablePersonaIds = new Set(availablePersonas.map((persona) => persona.tomori_id));
+  const availablePersonaIds = new Set(availablePersonas.map((persona) => persona.persona_id));
   const lastActivePersona = findLastActivePersona({
     messages,
     allPersonas,
     clientUserId: client.user?.id,
   });
   const allowedLastActivePersona =
-    lastActivePersona && availablePersonaIds.has(lastActivePersona.tomori_id) ? lastActivePersona : null;
+    lastActivePersona && availablePersonaIds.has(lastActivePersona.persona_id) ? lastActivePersona : null;
   const autoTriggerPersona = getChannelAutoTriggerPersona(
     availablePersonas,
     parentChannelId ?? interaction.channel.id,
@@ -271,7 +271,7 @@ export async function execute(
     // 1. Persona select dropdown — show when multiple personas are available
     if (availablePersonas.length > 1) {
       const personaOptions: SelectOption[] = availablePersonas.map((persona, index) => ({
-        label: safeSelectOptionText(persona.tomori_nickname),
+        label: safeSelectOptionText(persona.persona_nickname),
         value: index.toString(),
         description: localizer(
           locale,
@@ -345,11 +345,11 @@ export async function execute(
     if (availablePersonas.length > 1) {
       selectedPersona = availablePersonas[selectedIndex] ?? fallbackPersona;
       log.info(
-        `User ${interaction.user.id} selected persona ${selectedPersona.tomori_nickname} (ID: ${selectedPersona.tomori_id}) for manual respond`,
+        `User ${interaction.user.id} selected persona ${selectedPersona.persona_nickname} (ID: ${selectedPersona.persona_id}) for manual respond`,
       );
     }
 
-    if (!isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, selectedPersona?.tomori_id)) {
+    if (!isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, selectedPersona?.persona_id)) {
       await replyInteraction.editReply({
         embeds: [
           new EmbedBuilder()
@@ -392,7 +392,7 @@ export async function execute(
     // Direct response — skip modal, use default persona
     await interaction.deferReply({ flags: deferFlags });
 
-    if (!isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, selectedPersona?.tomori_id)) {
+    if (!isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, selectedPersona?.persona_id)) {
       await interaction.editReply({
         embeds: [
           new EmbedBuilder()
@@ -444,7 +444,7 @@ export async function execute(
       forceReason,
       reasoningQuery: forceReason ? manualPrompt : undefined,
       llmOverrideCodename,
-      selectedPersonaId: selectedPersona?.tomori_id ?? undefined,
+      selectedPersonaId: selectedPersona?.persona_id ?? undefined,
       textQuotaSource: "user",
       textQuotaTriggerKey: interaction.id,
       textQuotaUserDiscId: interaction.user.id,

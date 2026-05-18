@@ -75,7 +75,7 @@ export type ValidatedTomoriConfigFields = string[];
  */
 export type SqlSecurityContext = {
   /** The table being operated on */
-  tableName: "users" | "tomoris";
+  tableName: "users" | "personas";
   /** Field names that passed whitelist validation */
   validatedFields: string[];
   /** The operation being performed */

@@ -89,7 +89,7 @@ export async function insertDocumentWithChunks(params: {
     const [documentRow] = await tx`
 			INSERT INTO documents (
 				server_id,
-				tomori_id,
+				persona_id,
 				uploader_user_id,
 				document_name,
 				file_name,
@@ -195,7 +195,7 @@ export async function retrieveRelevantDocumentChunks(params: {
 					JOIN documents d ON d.document_id = dc.document_id
 					WHERE dc.server_id = ${serverId}
 					  AND dc.embedding_family = ${embeddingModel.model_family}
-					  AND d.tomori_id IS NULL
+					  AND d.persona_id IS NULL
 					ORDER BY dc.embedding <=> ${queryVector}::vector
 					LIMIT ${maxResults}
 				`
@@ -218,8 +218,8 @@ export async function retrieveRelevantDocumentChunks(params: {
 					WHERE dc.server_id = ${serverId}
 					  AND dc.embedding_family = ${embeddingModel.model_family}
 					  AND (
-						d.tomori_id = ${tomoriId}
-						OR d.tomori_id IS NULL
+						d.persona_id = ${tomoriId}
+						OR d.persona_id IS NULL
 					  )
 					ORDER BY dc.embedding <=> ${queryVector}::vector
 					LIMIT ${maxResults}

@@ -5,12 +5,11 @@
 -- 15+ call sites; this migration hardens it in the DB so a buggy migration or direct
 -- SQL touch cannot silently create two main personas for the same server.
 --
--- Name is forward-compatible with the #16.8 table rename (tomoris → personas).
 -- Data preflight: if duplicate main personas exist, this migration will fail with a
 -- unique-violation error and must NOT be run until duplicates are resolved.
--- Check before applying: SELECT server_id, COUNT(*) FROM tomoris WHERE is_alter = false
+-- Check before applying: SELECT server_id, COUNT(*) FROM personas WHERE is_alter = false
 --   GROUP BY server_id HAVING COUNT(*) > 1;
 
 CREATE UNIQUE INDEX IF NOT EXISTS personas_one_main_per_server
-  ON tomoris(server_id)
+  ON personas(server_id)
   WHERE is_alter = false;

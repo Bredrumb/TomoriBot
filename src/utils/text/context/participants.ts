@@ -72,7 +72,7 @@ export async function buildUsersInConversationContextItem(params: {
   for (const userIdToProcess of params.userList) {
     if (
       (params.client.user && userIdToProcess === params.client.user.id) ||
-      (params.tomoriState?.is_alter && userIdToProcess === String(params.tomoriState.tomori_id))
+      (params.tomoriState?.is_alter && userIdToProcess === String(params.tomoriState.persona_id))
     ) {
       userEntries.push({
         userId: userIdToProcess,
@@ -377,13 +377,15 @@ async function applySyntheticPersonaAppearance(
     return [];
   });
   const personaById = new Map(
-    allPersonas.filter((persona) => persona.tomori_id != null).map((persona) => [persona.tomori_id as number, persona]),
+    allPersonas
+      .filter((persona) => persona.persona_id != null)
+      .map((persona) => [persona.persona_id as number, persona]),
   );
 
   for (const [syntheticId, syntheticEntry] of params.syntheticUsers.entries()) {
     if (syntheticEntry.type !== "persona" || !/^\d{1,10}$/.test(syntheticId)) continue;
     const personaId = Number.parseInt(syntheticId, 10);
-    if (personaId === params.tomoriState?.tomori_id) continue;
+    if (personaId === params.tomoriState?.persona_id) continue;
     const persona = personaById.get(personaId);
     const targetEntry = userEntries.find((entry) => entry.userId === syntheticId);
     if (persona && targetEntry) {

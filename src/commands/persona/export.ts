@@ -56,10 +56,10 @@ export async function execute(
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
     const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
     const personaSelectOptions: SelectOption[] = allPersonas
-      .filter((persona) => persona.tomori_id !== undefined)
+      .filter((persona) => persona.persona_id !== undefined)
       .map((persona) => ({
-        label: safeSelectOptionText(persona.tomori_nickname),
-        value: persona.tomori_id?.toString() ?? "",
+        label: safeSelectOptionText(persona.persona_nickname),
+        value: persona.persona_id?.toString() ?? "",
         description: persona.is_alter
           ? localizer(locale, "commands.persona.export.alter_persona_description")
           : localizer(locale, "commands.persona.export.main_persona_description"),
@@ -113,8 +113,8 @@ export async function execute(
     const selectedPersonaId = personaModalResult.values?.[PERSONA_EXPORT_SELECT_ID];
     const exportJsonSelection = personaModalResult.values?.[PERSONA_EXPORT_JSON_SELECT_ID] ?? PERSONA_EXPORT_JSON_FALSE;
     const exportJson = exportJsonSelection === PERSONA_EXPORT_JSON_TRUE;
-    const selectedPersona = allPersonas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
-    if (!selectedPersona?.tomori_id) {
+    const selectedPersona = allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
+    if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -127,7 +127,7 @@ export async function execute(
     await responseInteraction.deferReply();
 
     // 3. Export selected persona data from database
-    const exportResult = await presetRepository.exportPresetData(serverDiscId, selectedPersona.tomori_id);
+    const exportResult = await presetRepository.exportPresetData(serverDiscId, selectedPersona.persona_id);
 
     if (!exportResult.success) {
       await responseInteraction.editReply({
@@ -158,8 +158,8 @@ export async function execute(
         exported_at: new Date().toISOString(),
         note: localizer(locale, "commands.persona.export.json_non_importable_note"),
         persona: {
-          tomori_id: selectedPersona.tomori_id ?? null,
-          tomori_nickname: nickname,
+          persona_id: selectedPersona.persona_id ?? null,
+          persona_nickname: nickname,
           is_alter: selectedPersona.is_alter === true,
           persona_lineage_id: presetData.data.persona_lineage_id,
           trigger_words: presetData.data.trigger_words,
@@ -214,13 +214,13 @@ export async function execute(
             selectedAvatarBuffer = await convertToPNG(storedAvatarBuffer);
           } catch (error) {
             log.warn(
-              `Failed to convert alter avatar to PNG for tomori ${selectedPersona.tomori_id}; falling back to server avatar`,
+              `Failed to convert alter avatar to PNG for tomori ${selectedPersona.persona_id}; falling back to server avatar`,
               error as Error,
             );
           }
         } else {
           log.warn(
-            `Failed to download alter avatar for tomori ${selectedPersona.tomori_id}; falling back to server avatar`,
+            `Failed to download alter avatar for tomori ${selectedPersona.persona_id}; falling back to server avatar`,
           );
         }
       }

@@ -96,10 +96,10 @@ export async function execute(
     // 6. Resolve target persona options
     const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     const personaSelectOptions: SelectOption[] = allPersonas
-      .filter((persona) => persona.tomori_id !== undefined)
+      .filter((persona) => persona.persona_id !== undefined)
       .map((persona) => ({
-        label: safeSelectOptionText(persona.tomori_nickname),
-        value: persona.tomori_id?.toString() ?? "",
+        label: safeSelectOptionText(persona.persona_nickname),
+        value: persona.persona_id?.toString() ?? "",
         description: persona.is_alter
           ? localizer(locale, "commands.teach.sampledialogue.alter_persona_description")
           : localizer(locale, "commands.teach.sampledialogue.main_persona_description"),
@@ -182,8 +182,8 @@ export async function execute(
     // Resolve selected persona from modal
     // biome-ignore lint/style/noNonNullAssertion: Modal submit + required=true guarantees value
     const selectedPersonaId = modalResult.values![PERSONA_SELECT_ID];
-    selectedPersona = allPersonas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
-    if (!selectedPersona?.tomori_id) {
+    selectedPersona = allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
+    if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -325,7 +325,7 @@ export async function execute(
     }
 
     // 12. Check sample dialogue limit after persona resolution
-    const dialogueLimitCheck = await personaRepository.checkSampleDialogueLimit(selectedPersona.tomori_id);
+    const dialogueLimitCheck = await personaRepository.checkSampleDialogueLimit(selectedPersona.persona_id);
     const currentCount = dialogueLimitCheck.currentCount ?? currentUserDialogues.length;
     const maxAllowed = dialogueLimitCheck.maxAllowed ?? memoryLimits.maxSampleDialogues;
     const availableSlots = Math.max(0, maxAllowed - currentCount);
@@ -358,7 +358,7 @@ export async function execute(
 
     // 13. Update target persona row in the database using paired atomic array operations
     const added = await personaRepository.addSampleDialoguePair(
-      selectedPersona.tomori_id,
+      selectedPersona.persona_id,
       dialoguesToAdd.map((dialogue) => dialogue.userInput),
       dialoguesToAdd.map((dialogue) => dialogue.botInput),
     );
@@ -368,7 +368,7 @@ export async function execute(
       const context: ErrorContext = {
         userId: userData.user_id,
         serverId: tomoriState.server_id, // Direct access
-        tomoriId: selectedPersona.tomori_id,
+        tomoriId: selectedPersona.persona_id,
         errorType: "DatabaseValidationError",
         metadata: {
           command: "teach sampledialogue",
@@ -425,7 +425,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: selectedPersona?.tomori_id ?? tomoriState?.tomori_id,
+      tomoriId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "teach sampledialogue",

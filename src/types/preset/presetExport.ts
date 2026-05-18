@@ -35,7 +35,7 @@ export const PRESET_MAX_NAI_TAGS = parsePositiveIntegerEnv("PRESET_MAX_NAI_TAGS"
 
 /**
  * Preset personality data structure
- * Contains all personality-related fields from tomoris and persona-scoped config tables
+ * Contains all personality-related fields from personas and persona-scoped config tables.
  */
 export interface PresetExportData {
   tomori_nickname: string;

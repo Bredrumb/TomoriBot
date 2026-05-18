@@ -208,7 +208,7 @@ async function clearMatrixTypingIndicatorsForChannel(channel: BaseGuildTextChann
   try {
     const personas = await getCachedAllPersonas(channel.guildId);
     for (const persona of personas) {
-      const name = persona.tomori_nickname?.trim();
+      const name = persona.persona_nickname?.trim();
       if (name) personaNames.add(name);
     }
   } catch (error) {

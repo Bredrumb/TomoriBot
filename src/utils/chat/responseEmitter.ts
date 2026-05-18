@@ -69,8 +69,8 @@ export function createChatResponseSink(context: ChatTurnContext): ChatResponseSi
       const lockEntry = channelLocks.get(context.turn.lockedTurn.channelId);
       if (lockEntry) {
         setActiveChannelTurnState(lockEntry, {
-          activePersonaId: context.currentPersona.tomori_id ?? undefined,
-          followUpEligible: context.currentPersona.tomori_id !== undefined,
+          activePersonaId: context.currentPersona.persona_id ?? undefined,
+          followUpEligible: context.currentPersona.persona_id !== undefined,
           isUserImpersonation: context.isUserImpersonation,
           impersonatedUserId: context.impersonatedUserId,
         });
@@ -132,7 +132,7 @@ async function resolveResponseTarget(context: ChatTurnContext): Promise<ChatResp
   const identity = await resolvePersonaWebhookIdentity(currentPersona, guild);
   return {
     webhook: webhookResult.webhook,
-    personaUsername: identity.username ?? currentPersona.tomori_nickname,
+    personaUsername: identity.username ?? currentPersona.persona_nickname,
     personaAvatarUrl: identity.avatarDataUri ?? identity.avatarUrl,
     webhookTargetChannel: webhookTargetChannel as BaseGuildTextChannel,
   };

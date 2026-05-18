@@ -8,7 +8,7 @@
  * Requires: POSTGRES_DB=tomodb_test (see docs/guides/testing-db-changes.md)
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { isBlacklisted } from "@/utils/db/repositories";
+import { userRepository } from "@/utils/db/repositories";
 import { FIXTURE_IDS, cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
@@ -27,12 +27,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server — regression", () => {
   // ── blacklist ─────────────────────────────────────────────────────────────
 
   it("isBlacklisted returns false for a user not in the blacklist", async () => {
-    const result = await isBlacklisted(FIXTURE_IDS.serverDiscId, FIXTURE_IDS.userDiscId);
+    const result = await userRepository.isBlacklisted(FIXTURE_IDS.serverDiscId, FIXTURE_IDS.userDiscId);
     expect(result).toBe(false);
   });
 
   it("isBlacklisted returns false for a completely unknown server+user pair", async () => {
-    const result = await isBlacklisted("_rt_unknown_server", "_rt_unknown_user");
+    const result = await userRepository.isBlacklisted("_rt_unknown_server", "_rt_unknown_user");
     expect(result).toBe(false);
   });
 
@@ -47,7 +47,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server — regression", () => {
       ON CONFLICT DO NOTHING
     `;
 
-    const result = await isBlacklisted(FIXTURE_IDS.serverDiscId, FIXTURE_IDS.userDiscId);
+    const result = await userRepository.isBlacklisted(FIXTURE_IDS.serverDiscId, FIXTURE_IDS.userDiscId);
     expect(result).toBe(true);
   });
 
@@ -57,7 +57,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server — regression", () => {
       WHERE server_id = ${refs.serverId} AND user_disc_id = ${FIXTURE_IDS.userDiscId}
     `;
 
-    const result = await isBlacklisted(FIXTURE_IDS.serverDiscId, FIXTURE_IDS.userDiscId);
+    const result = await userRepository.isBlacklisted(FIXTURE_IDS.serverDiscId, FIXTURE_IDS.userDiscId);
     expect(result).toBe(false);
   });
 });

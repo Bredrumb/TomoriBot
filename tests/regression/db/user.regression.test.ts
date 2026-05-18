@@ -8,8 +8,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { PrivacyLevel } from "@/types/db/schema";
-import { loadUserRow, loadUserRowsByNormalizedNickname } from "@/utils/db/repositories";
-import { registerUser, setPrivacyLevel, updateUser } from "@/utils/db/repositories";
+import { userRepository } from "@/utils/db/repositories";
 import { FIXTURE_IDS, cleanupFixtures, insertFixtures } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
@@ -26,19 +25,19 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User — regression", () => {
   // ── reads ────────────────────────────────────────────────────────────────
 
   it("loadUserRow returns null for a non-existent user", async () => {
-    const result = await loadUserRow("_rt_nonexistent_9999");
+    const result = await userRepository.loadByDiscordId("_rt_nonexistent_9999");
     expect(result).toBeNull();
   });
 
   it("loadUserRow returns the fixture user", async () => {
-    const user = await loadUserRow(FIXTURE_IDS.userDiscId);
+    const user = await userRepository.loadByDiscordId(FIXTURE_IDS.userDiscId);
     expect(user).not.toBeNull();
     expect(user?.user_disc_id).toBe(FIXTURE_IDS.userDiscId);
     expect(user?.user_nickname).toBe("_rt_user");
   });
 
   it("loadUserRowsByNormalizedNickname finds by exact nickname", async () => {
-    const results = await loadUserRowsByNormalizedNickname("_rt_user");
+    const results = await userRepository.findByNormalizedNickname("_rt_user");
     const match = results.find((u) => u.user_disc_id === FIXTURE_IDS.userDiscId);
     expect(match).not.toBeUndefined();
   });
@@ -46,35 +45,35 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User — regression", () => {
   // ── writes ───────────────────────────────────────────────────────────────
 
   it("registerUser creates a new user row", async () => {
-    const user = await registerUser(FIXTURE_IDS.regUserDiscId, "_rt_reg_name", "en");
+    const user = await userRepository.register(FIXTURE_IDS.regUserDiscId, "_rt_reg_name", "en");
     expect(user).not.toBeNull();
     expect(user?.user_disc_id).toBe(FIXTURE_IDS.regUserDiscId);
     expect(user?.user_nickname).toBe("_rt_reg_name");
   });
 
   it("registerUser is idempotent — re-registering returns existing row", async () => {
-    const first = await registerUser(FIXTURE_IDS.regUserDiscId, "_rt_reg_name", "en");
-    const second = await registerUser(FIXTURE_IDS.regUserDiscId, "_rt_different_name", "en");
+    const first = await userRepository.register(FIXTURE_IDS.regUserDiscId, "_rt_reg_name", "en");
+    const second = await userRepository.register(FIXTURE_IDS.regUserDiscId, "_rt_different_name", "en");
     // Existing nickname should NOT be overwritten (ON CONFLICT DO NOTHING semantics)
     expect(second?.user_id).toBe(first?.user_id);
     expect(second?.user_nickname).toBe("_rt_reg_name");
   });
 
   it("setPrivacyLevel updates the row and returns the updated user", async () => {
-    const updated = await setPrivacyLevel(FIXTURE_IDS.regUserDiscId, PrivacyLevel.PARTIAL);
+    const updated = await userRepository.setPrivacyLevel(FIXTURE_IDS.regUserDiscId, PrivacyLevel.PARTIAL);
     expect(updated).not.toBeNull();
     expect(updated?.privacy_level).toBe(PrivacyLevel.PARTIAL);
   });
 
   it("loadUserRow reflects the privacy level change", async () => {
-    const user = await loadUserRow(FIXTURE_IDS.regUserDiscId);
+    const user = await userRepository.loadByDiscordId(FIXTURE_IDS.regUserDiscId);
     expect(user?.privacy_level).toBe(PrivacyLevel.PARTIAL);
   });
 
   it("updateUser patches arbitrary fields", async () => {
-    const userRow = await loadUserRow(FIXTURE_IDS.regUserDiscId);
+    const userRow = await userRepository.loadByDiscordId(FIXTURE_IDS.regUserDiscId);
     if (!userRow) throw new Error("Expected registered user to exist");
-    const updated = await updateUser(userRow.user_id, { user_nickname: "_rt_renamed" });
+    const updated = await userRepository.update(userRow.user_id, { user_nickname: "_rt_renamed" });
     expect(updated?.user_nickname).toBe("_rt_renamed");
   });
 
@@ -83,7 +82,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User — regression", () => {
   // harness detects regressions. To prove it works: add "WHERE 1=0" to the
   // loadUserRow SELECT and confirm this test fails.
   it.skip("[REGRESSION PROBE] loadUserRow returns the correct row after rename", async () => {
-    const user = await loadUserRow(FIXTURE_IDS.regUserDiscId);
+    const user = await userRepository.loadByDiscordId(FIXTURE_IDS.regUserDiscId);
     // If loadUserRow's SELECT were broken (e.g. wrong WHERE), this would be null
     expect(user?.user_nickname).toBe("_rt_renamed");
   });

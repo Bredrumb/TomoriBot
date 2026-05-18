@@ -101,22 +101,22 @@ export class LlmOverrideRepository {
   }
 
   /**
-   * Returns all persona-level LLM overrides for a server as raw {tomori_id, llm_id} pairs.
+   * Returns all persona-level LLM overrides for a server as raw {persona_id, llm_id} pairs.
    * Only returns personas with a non-null llm_id override. Used for snapshotting during provider switch.
    *
    * @param serverId - Internal server DB ID
    */
-  async loadPersonaLlmOverridesForServer(serverId: number): Promise<{ tomori_id: number; llm_id: number }[]> {
+  async loadPersonaLlmOverridesForServer(serverId: number): Promise<{ persona_id: number; llm_id: number }[]> {
     try {
       const rows = await sql`
-        SELECT pc.tomori_id, pc.llm_id
+        SELECT pc.persona_id, pc.llm_id
         FROM persona_configs pc
-        JOIN tomoris t ON t.tomori_id = pc.tomori_id
+        JOIN personas t ON t.persona_id = pc.persona_id
         WHERE t.server_id = ${serverId}
           AND pc.llm_id IS NOT NULL
       `;
-      return rows.map((row: { tomori_id: number; llm_id: number }) => ({
-        tomori_id: row.tomori_id,
+      return rows.map((row: { persona_id: number; llm_id: number }) => ({
+        persona_id: row.persona_id,
         llm_id: row.llm_id,
       }));
     } catch (error) {
@@ -215,7 +215,7 @@ export class LlmOverrideRepository {
    * Upserts a persona-level LLM override in persona_configs.
    * Creates the persona_configs row if it does not yet exist.
    *
-   * @param tomoriId - The persona's tomori_id
+   * @param tomoriId - The persona's persona_id
    * @param llmId    - LLM ID to set as the override, or null to clear it
    * @param options  - Optional cache invalidation scope
    */
@@ -344,26 +344,26 @@ export class LlmOverrideRepository {
    *
    * @param serverId        - Internal server DB ID
    * @param channelOverrides - {channel_disc_id, llm_id} pairs from saved config
-   * @param personaOverrides - {tomori_id, llm_id} pairs from saved config
+   * @param personaOverrides - {persona_id, llm_id} pairs from saved config
    * @param validChannelIds  - Discord channel IDs currently present in the guild
    */
   async restoreOverridesFromSnapshot(
     serverId: number,
     channelOverrides: { channel_disc_id: string; llm_id: number }[],
-    personaOverrides: { tomori_id: number; llm_id: number }[],
+    personaOverrides: { persona_id: number; llm_id: number }[],
     validChannelIds: Set<string>,
   ): Promise<{
     channelRestored: number;
     personaRestored: number;
     skipped: number;
     restoredChannelOverrides: { channel_disc_id: string; llm_id: number }[];
-    restoredPersonaOverrides: { tomori_id: number; llm_id: number }[];
+    restoredPersonaOverrides: { persona_id: number; llm_id: number }[];
   }> {
     let channelRestored = 0;
     let personaRestored = 0;
     let skipped = 0;
     const restoredChannelOverrides: { channel_disc_id: string; llm_id: number }[] = [];
-    const restoredPersonaOverrides: { tomori_id: number; llm_id: number }[] = [];
+    const restoredPersonaOverrides: { persona_id: number; llm_id: number }[] = [];
 
     for (const override of channelOverrides) {
       if (!validChannelIds.has(override.channel_disc_id)) {
@@ -392,13 +392,15 @@ export class LlmOverrideRepository {
 
     for (const override of personaOverrides) {
       const personaCheck = await sql`
-        SELECT tomori_id FROM tomoris
-        WHERE tomori_id = ${override.tomori_id} AND server_id = ${serverId}
+        SELECT persona_id FROM personas
+        WHERE persona_id = ${override.persona_id} AND server_id = ${serverId}
         LIMIT 1
       `;
       if (personaCheck.length === 0) {
         skipped++;
-        log.info(`Skipping persona override: tomori_id ${override.tomori_id} no longer exists for server ${serverId}`);
+        log.info(
+          `Skipping persona override: persona_id ${override.persona_id} no longer exists for server ${serverId}`,
+        );
         continue;
       }
 
@@ -406,12 +408,12 @@ export class LlmOverrideRepository {
       if (llmCheck.length === 0) {
         skipped++;
         log.info(
-          `Skipping persona override for tomori_id ${override.tomori_id}: llm_id ${override.llm_id} no longer exists`,
+          `Skipping persona override for persona_id ${override.persona_id}: llm_id ${override.llm_id} no longer exists`,
         );
         continue;
       }
 
-      const success = await this.writePersonaOverrideSql(override.tomori_id, override.llm_id);
+      const success = await this.writePersonaOverrideSql(override.persona_id, override.llm_id);
       if (success) {
         personaRestored++;
         restoredPersonaOverrides.push(override);
@@ -531,14 +533,14 @@ export class LlmOverrideRepository {
   private async writePersonaOverrideSql(tomoriId: number, llmId: number | null): Promise<boolean> {
     try {
       await sql`
-        INSERT INTO persona_configs (tomori_id, llm_id)
+        INSERT INTO persona_configs (persona_id, llm_id)
         VALUES (${tomoriId}, ${llmId})
-        ON CONFLICT (tomori_id)
+        ON CONFLICT (persona_id)
         DO UPDATE SET llm_id = EXCLUDED.llm_id, updated_at = CURRENT_TIMESTAMP
       `;
       return true;
     } catch (error) {
-      log.error(`Error setting persona LLM override for tomori_id ${tomoriId}:`, error);
+      log.error(`Error setting persona LLM override for persona_id ${tomoriId}:`, error);
       return false;
     }
   }
@@ -549,8 +551,8 @@ export class LlmOverrideRepository {
       await sql`
         UPDATE persona_configs
         SET llm_id = NULL, updated_at = CURRENT_TIMESTAMP
-        WHERE tomori_id IN (
-          SELECT tomori_id FROM tomoris WHERE server_id = ${serverId}
+        WHERE persona_id IN (
+          SELECT persona_id FROM personas WHERE server_id = ${serverId}
         )
       `;
       return true;
@@ -567,8 +569,8 @@ export class LlmOverrideRepository {
         UPDATE persona_configs
         SET llm_id = NULL, updated_at = CURRENT_TIMESTAMP
         WHERE llm_id = ${llmId}
-          AND tomori_id IN (
-            SELECT tomori_id FROM tomoris WHERE server_id = ${serverId}
+          AND persona_id IN (
+            SELECT persona_id FROM personas WHERE server_id = ${serverId}
           )
       `;
       return true;

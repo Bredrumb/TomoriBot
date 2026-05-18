@@ -53,7 +53,7 @@ function isLegacyAvatarIdentity(id: string): boolean {
 
 function normalizeAvatarTargetId(id: string, context: ToolContext): string {
   const trimmed = id.trim();
-  const activePersonaId = context.tomoriState.tomori_id;
+  const activePersonaId = context.tomoriState.persona_id;
   if (activePersonaId == null) {
     return trimmed;
   }
@@ -285,7 +285,7 @@ async function resolvePersonaAvatar(
     );
     return [];
   });
-  const persona = allPersonas.find((entry) => entry.tomori_id === personaId);
+  const persona = allPersonas.find((entry) => entry.persona_id === personaId);
   if (!persona) {
     return null;
   }
@@ -306,11 +306,11 @@ async function resolvePersonaAvatar(
       null;
   }
 
-  if (!avatarUrl && context.personaUsername === persona.tomori_nickname) {
+  if (!avatarUrl && context.personaUsername === persona.persona_nickname) {
     avatarUrl = context.personaAvatarUrl ?? null;
   }
 
-  if (!avatarUrl && context.webhook && context.personaUsername === persona.tomori_nickname) {
+  if (!avatarUrl && context.webhook && context.personaUsername === persona.persona_nickname) {
     avatarUrl =
       context.webhook.avatarURL({
         size: 1024,
@@ -334,7 +334,7 @@ async function resolvePersonaAvatar(
 
   return {
     sourceType: "persona",
-    username: persona.tomori_nickname,
+    username: persona.persona_nickname,
     avatarUrl,
   };
 }
@@ -376,14 +376,14 @@ export async function resolveAvatarByIdentity(
     });
 
     for (const persona of allPersonas) {
-      if (persona.tomori_id == null) {
+      if (persona.persona_id == null) {
         continue;
       }
 
-      if (normalizeUserTargetInput(persona.tomori_nickname) === normalizedIdentity) {
+      if (normalizeUserTargetInput(persona.persona_nickname) === normalizedIdentity) {
         personaMatches.push({
-          personaId: persona.tomori_id,
-          nickname: persona.tomori_nickname,
+          personaId: persona.persona_id,
+          nickname: persona.persona_nickname,
         });
       }
     }
@@ -460,7 +460,7 @@ export async function resolveAvatarByDiscordId(
       log.info(`[Avatar Resolver] Resolved ID ${id} as persona avatar (${personaAvatar.username}) via ${normalizedId}`);
       return personaAvatar;
     }
-    throw new Error(`No persona found with tomori_id ${personaId}`);
+    throw new Error(`No persona found with persona_id ${personaId}`);
   }
 
   try {

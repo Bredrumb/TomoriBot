@@ -269,7 +269,7 @@ export class CreateThreadTool extends BaseTool {
 
     const speakerNames = await getKnownPersonaSpeakerNames(context.guildId, [
       context.personaUsername,
-      context.tomoriState.tomori_nickname,
+      context.tomoriState.persona_nickname,
     ]);
     const firstMessage = stripLeadingKnownSpeakerPrefixes(firstMessageRaw, speakerNames).trim();
 

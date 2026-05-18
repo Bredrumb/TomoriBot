@@ -94,7 +94,7 @@ export async function execute(
     }
 
     errorContext.serverId = tomoriState.server_id;
-    errorContext.tomoriId = tomoriState.tomori_id;
+    errorContext.tomoriId = tomoriState.persona_id;
 
     // 5. Get command options
     const channel = interaction.options.getChannel("channel", true);

@@ -76,8 +76,8 @@ async function performSampleDialogueRemoval(
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
-  if (tomoriState.tomori_id === undefined) {
-    await log.error("Cannot remove sample dialogue for persona without tomori_id");
+  if (tomoriState.persona_id === undefined) {
+    await log.error("Cannot remove sample dialogue for persona without persona_id");
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
       descriptionKey: "general.errors.update_failed_description",
@@ -93,12 +93,12 @@ async function performSampleDialogueRemoval(
   // Convert 0-based JS index to 1-based PostgreSQL ordinality
   const pgIndex = selectedIndex + 1;
 
-  const removed = await personaRepository.removeSampleDialoguePairAt(tomoriState.tomori_id, pgIndex);
+  const removed = await personaRepository.removeSampleDialoguePairAt(tomoriState.persona_id, pgIndex);
 
   if (!removed) {
     // Log error specific to this update failure
     const context: ErrorContext = {
-      tomoriId: tomoriState.tomori_id,
+      tomoriId: tomoriState.persona_id,
       serverId: tomoriState.server_id,
       userId: userData.user_id,
       errorType: "DatabaseUpdateError",
@@ -109,7 +109,7 @@ async function performSampleDialogueRemoval(
     };
 
     await log.error(
-      "Failed to update sample_dialogues in tomoris table",
+      "Failed to update sample_dialogues in personas table",
       new Error("Database update returned no rows"),
       context,
     );
@@ -129,7 +129,7 @@ async function performSampleDialogueRemoval(
 
   // Log success and show success message
   log.success(
-    `Removed sample dialogue pair at index ${selectedIndex} for tomori ${tomoriState.tomori_id} by user ${userData.user_disc_id}`,
+    `Removed sample dialogue pair at index ${selectedIndex} for tomori ${tomoriState.persona_id} by user ${userData.user_disc_id}`,
   );
 
   if (!suppressSuccessReply) {
@@ -228,7 +228,7 @@ export async function execute(
 
       personaSelectionInteraction = personaSelection.interaction;
       selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await updateButtonComponentsV2Status(
           personaSelectionInteraction,
           locale,
@@ -263,7 +263,7 @@ export async function execute(
       // This repairs corruption from the old array_remove() bug
       if (currentIn.length !== currentOut.length && currentIn.length > 0 && currentOut.length > 0) {
         const repaired = await repairMismatchedDialogues(
-          selectedPersona.tomori_id,
+          selectedPersona.persona_id,
           currentIn.length,
           currentOut.length,
         );
@@ -385,7 +385,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: selectedPersona?.tomori_id ?? tomoriState?.tomori_id,
+      tomoriId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "forget sampledialogue",

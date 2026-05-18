@@ -69,7 +69,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
     try {
       if (userId !== undefined) {
         return await sql<ServerMemoryRow[]>`
-          SELECT server_memory_id, server_id, tomori_id, persona_lineage_id, user_id, content, tags, created_at, updated_at
+          SELECT server_memory_id, server_id, persona_id, persona_lineage_id, user_id, content, tags, created_at, updated_at
           FROM server_memories
           WHERE server_id = ${serverId}
             AND persona_lineage_id = ${personaLineageId}
@@ -78,7 +78,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
         `;
       }
       return await sql<ServerMemoryRow[]>`
-        SELECT server_memory_id, server_id, tomori_id, persona_lineage_id, user_id, content, tags, created_at, updated_at
+        SELECT server_memory_id, server_id, persona_id, persona_lineage_id, user_id, content, tags, created_at, updated_at
         FROM server_memories
         WHERE server_id = ${serverId}
           AND persona_lineage_id = ${personaLineageId}
@@ -128,14 +128,14 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
           ? await sql`
               SELECT document_id FROM documents
               WHERE server_id = ${serverId}
-                AND tomori_id IS NULL
+                AND persona_id IS NULL
                 AND document_name = ${documentName}
               LIMIT 1
             `
           : await sql`
               SELECT document_id FROM documents
               WHERE server_id = ${serverId}
-                AND tomori_id = ${tomoriId}
+                AND persona_id = ${tomoriId}
                 AND document_name = ${documentName}
               LIMIT 1
             `;
@@ -160,13 +160,13 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
               SELECT COUNT(*) as doc_count
               FROM documents
               WHERE server_id = ${serverId}
-                AND tomori_id IS NULL
+                AND persona_id IS NULL
             `
           : await sql<[{ doc_count: string | number }]>`
               SELECT COUNT(*) as doc_count
               FROM documents
               WHERE server_id = ${serverId}
-                AND tomori_id = ${tomoriId}
+                AND persona_id = ${tomoriId}
             `;
       return Number(row?.doc_count || 0);
     } catch (error) {
@@ -190,14 +190,14 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
               FROM document_chunks dc
               JOIN documents d ON d.document_id = dc.document_id
               WHERE d.server_id = ${serverId}
-                AND d.tomori_id IS NULL
+                AND d.persona_id IS NULL
             `
           : await sql<[{ chunk_count: string | number }]>`
               SELECT COUNT(*) as chunk_count
               FROM document_chunks dc
               JOIN documents d ON d.document_id = dc.document_id
               WHERE d.server_id = ${serverId}
-                AND d.tomori_id = ${tomoriId}
+                AND d.persona_id = ${tomoriId}
             `;
       return Number(row?.chunk_count || 0);
     } catch (error) {
@@ -208,7 +208,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
 
   /**
    * Returns true if any document exists for the given server + RAG scope.
-   * For persona scope, also checks serverwide documents (tomori_id IS NULL)
+   * For persona scope, also checks serverwide documents (persona_id IS NULL)
    * since RAG retrieval includes shared docs.
    *
    * @param serverId - Internal server DB ID
@@ -221,13 +221,13 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
           ? await sql`
               SELECT document_id FROM documents
               WHERE server_id = ${serverId}
-                AND tomori_id IS NULL
+                AND persona_id IS NULL
               LIMIT 1
             `
           : await sql`
               SELECT document_id FROM documents
               WHERE server_id = ${serverId}
-                AND (tomori_id = ${tomoriId} OR tomori_id IS NULL)
+                AND (persona_id = ${tomoriId} OR persona_id IS NULL)
               LIMIT 1
             `;
       return rows.length > 0;
@@ -453,7 +453,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
         SELECT document_id, document_name
         FROM documents
         WHERE server_id = ${serverId}
-          AND tomori_id IS NULL
+          AND persona_id IS NULL
         ORDER BY created_at DESC
       `;
     }
@@ -461,7 +461,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
       SELECT document_id, document_name
       FROM documents
       WHERE server_id = ${serverId}
-        AND tomori_id = ${tomoriId}
+        AND persona_id = ${tomoriId}
       ORDER BY created_at DESC
     `;
   }
@@ -481,14 +481,14 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
             DELETE FROM documents
             WHERE document_id = ${documentId}
               AND server_id = ${serverId}
-              AND tomori_id IS NULL
+              AND persona_id IS NULL
             RETURNING document_name
           `
         : await sql`
             DELETE FROM documents
             WHERE document_id = ${documentId}
               AND server_id = ${serverId}
-              AND tomori_id = ${tomoriId}
+              AND persona_id = ${tomoriId}
             RETURNING document_name
           `;
     return (rows[0]?.document_name as string | undefined) ?? null;
@@ -510,7 +510,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
         SELECT document_id, document_name
         FROM documents
         WHERE server_id = ${serverId}
-          AND tomori_id IS NULL
+          AND persona_id IS NULL
           AND source_type = 'history'
         ORDER BY created_at DESC
       `;
@@ -519,7 +519,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
       SELECT document_id, document_name
       FROM documents
       WHERE server_id = ${serverId}
-        AND tomori_id = ${tomoriId}
+        AND persona_id = ${tomoriId}
         AND source_type = 'history'
       ORDER BY created_at DESC
     `;
@@ -540,7 +540,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
             DELETE FROM documents
             WHERE document_id = ${documentId}
               AND server_id = ${serverId}
-              AND tomori_id IS NULL
+              AND persona_id IS NULL
               AND source_type = 'history'
             RETURNING document_name
           `
@@ -548,7 +548,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
             DELETE FROM documents
             WHERE document_id = ${documentId}
               AND server_id = ${serverId}
-              AND tomori_id = ${tomoriId}
+              AND persona_id = ${tomoriId}
               AND source_type = 'history'
             RETURNING document_name
           `;
@@ -630,7 +630,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
   ): Promise<ServerMemoryRow | null> {
     try {
       const [newMemory] = await sql`
-        INSERT INTO server_memories (server_id, tomori_id, persona_lineage_id, user_id, content, tags)
+        INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, tags)
         VALUES (${serverId}, ${tomoriId}, ${personaLineageId}, ${taughtByUserId}, ${content}, ${sql.array(tags)})
         RETURNING *
       `;

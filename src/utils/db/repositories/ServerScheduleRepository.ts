@@ -219,7 +219,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
    *
    * @param serverId      - Internal server DB ID
    * @param channelDiscId - Discord channel snowflake
-   * @param tomoriId      - Persona's tomori_id
+   * @param tomoriId      - Persona's persona_id
    */
   async getTriggerByPersonaAndChannel(
     serverId: number,
@@ -483,10 +483,10 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
             r.user_discord_id,
             r.user_nickname,
             u.user_nickname AS created_by_nickname,
-            t.tomori_nickname AS persona_nickname
+            t.persona_nickname AS persona_nickname
           FROM reminders r
           LEFT JOIN users u ON r.created_by_user_id = u.user_id
-          LEFT JOIN tomoris t ON r.persona_id = t.tomori_id
+          LEFT JOIN personas t ON r.persona_id = t.persona_id
           WHERE r.server_id = ${serverId}
             AND r.created_by_user_id = ${ownerUserId}
           ORDER BY r.reminder_time ASC
@@ -505,10 +505,10 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
           r.user_discord_id,
           r.user_nickname,
           u.user_nickname AS created_by_nickname,
-          t.tomori_nickname AS persona_nickname
+          t.persona_nickname AS persona_nickname
         FROM reminders r
         LEFT JOIN users u ON r.created_by_user_id = u.user_id
-        LEFT JOIN tomoris t ON r.persona_id = t.tomori_id
+        LEFT JOIN personas t ON r.persona_id = t.persona_id
         WHERE r.server_id = ${serverId}
         ORDER BY r.reminder_time ASC
       `;
@@ -848,7 +848,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
         SELECT * FROM random_triggers
         WHERE server_id = ${serverId}
           AND channel_disc_id = ${channelDiscId}
-          AND tomori_id = ${tomoriId}
+          AND persona_id = ${tomoriId}
         LIMIT 1
       `;
 
@@ -879,7 +879,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
         INSERT INTO random_triggers (
           server_id,
           channel_disc_id,
-          tomori_id,
+          persona_id,
           timer_hours,
           random_offset_range,
           chance_percent,

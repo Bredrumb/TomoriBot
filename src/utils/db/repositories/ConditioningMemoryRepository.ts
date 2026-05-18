@@ -216,16 +216,16 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
       const [row] =
         column === "reward_conditioning_enabled"
           ? await sql`
-              INSERT INTO persona_configs (tomori_id, reward_conditioning_enabled)
+              INSERT INTO persona_configs (persona_id, reward_conditioning_enabled)
               VALUES (${tomoriId}, ${enabled})
-              ON CONFLICT (tomori_id)
+              ON CONFLICT (persona_id)
               DO UPDATE SET reward_conditioning_enabled = EXCLUDED.reward_conditioning_enabled, updated_at = CURRENT_TIMESTAMP
               RETURNING *
             `
           : await sql`
-              INSERT INTO persona_configs (tomori_id, punish_conditioning_enabled)
+              INSERT INTO persona_configs (persona_id, punish_conditioning_enabled)
               VALUES (${tomoriId}, ${enabled})
-              ON CONFLICT (tomori_id)
+              ON CONFLICT (persona_id)
               DO UPDATE SET punish_conditioning_enabled = EXCLUDED.punish_conditioning_enabled, updated_at = CURRENT_TIMESTAMP
               RETURNING *
             `;
@@ -261,19 +261,19 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
     try {
       const updatedRows =
         column === "reward_conditioning_enabled"
-          ? await sql<Array<{ tomori_id: number }>>`
-              INSERT INTO persona_configs (tomori_id, reward_conditioning_enabled)
-              SELECT tomori_id, ${enabled} FROM tomoris WHERE server_id = ${serverId}
-              ON CONFLICT (tomori_id)
+          ? await sql<Array<{ persona_id: number }>>`
+              INSERT INTO persona_configs (persona_id, reward_conditioning_enabled)
+              SELECT persona_id, ${enabled} FROM personas WHERE server_id = ${serverId}
+              ON CONFLICT (persona_id)
               DO UPDATE SET reward_conditioning_enabled = EXCLUDED.reward_conditioning_enabled, updated_at = CURRENT_TIMESTAMP
-              RETURNING tomori_id
+              RETURNING persona_id
             `
-          : await sql<Array<{ tomori_id: number }>>`
-              INSERT INTO persona_configs (tomori_id, punish_conditioning_enabled)
-              SELECT tomori_id, ${enabled} FROM tomoris WHERE server_id = ${serverId}
-              ON CONFLICT (tomori_id)
+          : await sql<Array<{ persona_id: number }>>`
+              INSERT INTO persona_configs (persona_id, punish_conditioning_enabled)
+              SELECT persona_id, ${enabled} FROM personas WHERE server_id = ${serverId}
+              ON CONFLICT (persona_id)
               DO UPDATE SET punish_conditioning_enabled = EXCLUDED.punish_conditioning_enabled, updated_at = CURRENT_TIMESTAMP
-              RETURNING tomori_id
+              RETURNING persona_id
             `;
 
       return updatedRows.length;

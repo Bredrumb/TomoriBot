@@ -49,8 +49,8 @@ Caching reduces repeated DB/API calls and helps meet Discord interaction timing 
 ### 5) Short-term memory cache (`shortTermMemoryCache.ts`)
 
 - Keys:
-  - user-scoped: `shortterm:user:{userId}:{channelId}` (persona-scoped variant includes `:{tomoriId}`)
-  - server-shared: `shortterm:server:{serverId}:{channelId}` (persona-scoped variant includes `:{tomoriId}`)
+  - user-scoped: `shortterm:user:{userId}:{channelId}` (persona-scoped variant includes `:{personaId}`)
+  - server-shared: `shortterm:server:{serverId}:{channelId}` (persona-scoped variant includes `:{personaId}`)
 - Stores per-channel conversation snippets and optional summaries
 - Guild behavior: the latest STM for a persona in a channel is shared across that server's other channels; user-scoped STM is retained for cross-server opt-in behavior
 - When the triggering user message explicitly asks Tomori to remember something for future use, STM tool nudges are suppressed for that turn so long-term memory tools take priority; raw short-term conversation capture still continues after the reply

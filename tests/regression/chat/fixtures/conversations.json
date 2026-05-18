@@ -106,7 +106,7 @@
       "autochPersonaOverrides": [
         {
           "channelDiscId": "channel_001",
-          "tomoriId": 2
+          "personaId": 2
         }
       ],
       "autochCounter": 0,

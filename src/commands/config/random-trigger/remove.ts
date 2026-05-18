@@ -82,8 +82,8 @@ export async function execute(
     const allPersonas = await getCachedAllPersonas(interaction.guild.id);
     const personaNameById = new Map<number, string>();
     for (const persona of allPersonas) {
-      if (persona.tomori_id != null) {
-        personaNameById.set(persona.tomori_id, persona.tomori_nickname);
+      if (persona.persona_id != null) {
+        personaNameById.set(persona.persona_id, persona.persona_nickname);
       }
     }
 
@@ -282,7 +282,9 @@ function buildTriggerSummaries(
         ? `#${guildChannel.name}`
         : `Unknown (${trigger.channel_disc_id.slice(0, 10)}...)`;
       const personaName =
-        trigger.tomori_id == null ? randomLabel : (personaNameById.get(trigger.tomori_id) ?? `ID:${trigger.tomori_id}`);
+        trigger.persona_id == null
+          ? randomLabel
+          : (personaNameById.get(trigger.persona_id) ?? `ID:${trigger.persona_id}`);
       const timingLabel = formatTimingLabel(trigger);
       return {
         trigger,

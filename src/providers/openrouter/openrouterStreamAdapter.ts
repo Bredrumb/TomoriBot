@@ -417,7 +417,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       context.currentTurnModelParts,
       context.functionInteractionHistory,
       openrouterConfig.seesImages ?? true, // Default to true for backward compatibility
-      context.tomoriState.tomori_nickname ?? "Assistant",
+      context.tomoriState.persona_nickname ?? "Assistant",
       openrouterConfig.seesVideos ?? false, // Default false — videos are strictly opt-in per model
       context.messageIdMap,
     );
@@ -451,7 +451,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       const stopStrings = buildProviderStopStrings({
         providerName: "openrouter",
         model: config.model,
-        personaName: context.tomoriState.tomori_nickname,
+        personaName: context.tomoriState.persona_nickname,
         configuredStops: context.tomoriState.config.llm_stop_strings,
         includePersonaSpeakerStop: speakerStopPatternEnabled,
       });

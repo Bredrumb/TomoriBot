@@ -119,7 +119,7 @@ export async function execute(
       personaSelectionInteraction = personaResult.interaction;
       selectedPersona = allPersonas[personaResult.selectedIndex] ?? null;
 
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await replyInfoEmbed(personaSelectionInteraction, locale, {
           titleKey: "general.errors.invalid_option_title",
           descriptionKey: "general.errors.invalid_option_description",
@@ -220,7 +220,7 @@ export async function execute(
         stars = parsed;
       }
 
-      const personaId = selectedPersona.tomori_id;
+      const personaId = selectedPersona.persona_id;
 
       // 6. If all fields are empty → clear all ATTG columns (set to NULL)
       if (!author && !title && !tags && !genre && stars === null) {
@@ -242,7 +242,7 @@ export async function execute(
           "commands.novelai.attg.cleared_title",
           "commands.novelai.attg.cleared_description",
           ColorCode.SUCCESS,
-          { persona_name: selectedPersona.tomori_nickname },
+          { persona_name: selectedPersona.persona_nickname },
           "general.pagination.reloading_persona_picker",
         );
         continue;
@@ -268,7 +268,7 @@ export async function execute(
         "commands.novelai.attg.success_title",
         "commands.novelai.attg.success_description",
         ColorCode.SUCCESS,
-        { persona_name: selectedPersona.tomori_nickname },
+        { persona_name: selectedPersona.persona_nickname },
         "general.pagination.reloading_persona_picker",
       );
     }
@@ -278,7 +278,7 @@ export async function execute(
       metadata: {
         command: "nai attg",
         guildId: interaction.guild?.id ?? null,
-        personaId: selectedPersona?.tomori_id ?? null,
+        personaId: selectedPersona?.persona_id ?? null,
       },
     };
     await log.error("Error in /novelai attg command", error, context);

@@ -220,7 +220,7 @@ export class ReminderProcessor {
 
     try {
       const personas = await getCachedAllPersonas(channel.guild.id);
-      const persona = personas.find((p) => p.tomori_id === reminder.persona_id);
+      const persona = personas.find((p) => p.persona_id === reminder.persona_id);
       if (!persona?.is_alter) return false;
 
       const isThread = "isThread" in channel && typeof channel.isThread === "function" && channel.isThread();

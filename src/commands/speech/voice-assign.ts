@@ -160,7 +160,7 @@ export async function execute(
 
         const personaButtonInteraction = personaSelection.interaction as ButtonInteraction;
         selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-        if (!selectedPersona?.tomori_id) {
+        if (!selectedPersona?.persona_id) {
           await replyInfoEmbed(personaButtonInteraction, locale, {
             titleKey: "general.errors.invalid_option_title",
             descriptionKey: "general.errors.invalid_option_description",
@@ -225,7 +225,7 @@ export async function execute(
         const voiceNameIfDesignPromptRemains = selectedPersona.speech_voice_design_prompt?.trim()
           ? "VoiceDesign"
           : null;
-        const updatedTomori = await personaRepository.update(selectedPersona.tomori_id, {
+        const updatedTomori = await personaRepository.update(selectedPersona.persona_id, {
           speech_voice_sample_id: sampleIdToAssign,
           // Keep any saved VoiceDesign prompt as reusable persona data. In auto
           // endpoint mode, speech_voice_name marks which saved voice type is
@@ -255,8 +255,8 @@ export async function execute(
             : "commands.speech.voice_assign.success_description",
           ColorCode.SUCCESS,
           isClear
-            ? { persona: selectedPersona.tomori_nickname }
-            : { persona: selectedPersona.tomori_nickname, voice: chosenSample?.name ?? "" },
+            ? { persona: selectedPersona.persona_nickname }
+            : { persona: selectedPersona.persona_nickname, voice: chosenSample?.name ?? "" },
           "general.pagination.reloading_persona_picker",
         );
       }
@@ -303,7 +303,7 @@ export async function execute(
 
       const personaButtonInteraction = personaSelection.interaction as ButtonInteraction;
       selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await replyInfoEmbed(personaButtonInteraction, locale, {
           titleKey: "general.errors.invalid_option_title",
           descriptionKey: "general.errors.invalid_option_description",
@@ -361,7 +361,7 @@ export async function execute(
         return;
       }
 
-      const updatedTomori = await personaRepository.update(selectedPersona.tomori_id, {
+      const updatedTomori = await personaRepository.update(selectedPersona.persona_id, {
         speech_voice_id: chosenVoice?.voiceId ?? null,
         speech_voice_name:
           chosenVoice?.name ?? (selectedPersona.speech_voice_design_prompt?.trim() ? "VoiceDesign" : null),
@@ -388,8 +388,8 @@ export async function execute(
           : "commands.speech.voice_assign.success_description",
         ColorCode.SUCCESS,
         isClear
-          ? { persona: selectedPersona.tomori_nickname }
-          : { persona: selectedPersona.tomori_nickname, voice: chosenVoice?.name ?? "" },
+          ? { persona: selectedPersona.persona_nickname }
+          : { persona: selectedPersona.persona_nickname, voice: chosenVoice?.name ?? "" },
         "general.pagination.reloading_persona_picker",
       );
     }
@@ -398,13 +398,13 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: selectedPersona?.server_id ?? null,
-      tomoriId: selectedPersona?.tomori_id ?? null,
+      tomoriId: selectedPersona?.persona_id ?? null,
       errorType: "CommandExecutionError",
       metadata: {
         command: "speech voice-assign",
         guildId: interaction.guild?.id ?? interaction.user.id,
         executorDiscordId: interaction.user.id,
-        selectedPersonaId: selectedPersona?.tomori_id ?? null,
+        selectedPersonaId: selectedPersona?.persona_id ?? null,
       },
     };
     await log.error("Error executing /speech voice-assign", error as Error, context);

@@ -5,7 +5,7 @@ import { getVisibleDeliveryMode, type TextProcessingConfig } from "@/types/strea
 export function createStreamTextProcessingConfig(config: StreamConfig, context: StreamContext): TextProcessingConfig {
   const { mentionMap, mentionIdSet } = buildMentionLookup(context.contextItems);
   applyForcedMentions(mentionMap, mentionIdSet, context.forcedMentions);
-  const botName = context.prefixStrippingName ?? context.personaUsername ?? context.tomoriState.tomori_nickname;
+  const botName = context.prefixStrippingName ?? context.personaUsername ?? context.tomoriState.persona_nickname;
 
   return {
     humanizerDegree: config.humanizerDegree,

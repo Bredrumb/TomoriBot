@@ -104,10 +104,10 @@ export async function execute(
 
     const personas = await personaRepository.loadAllForServer(serverDiscId);
     const personaSelectOptions: SelectOption[] = personas
-      .filter((persona) => persona.tomori_id !== undefined)
+      .filter((persona) => persona.persona_id !== undefined)
       .map((persona) => ({
-        label: safeSelectOptionText(persona.tomori_nickname),
-        value: persona.tomori_id?.toString() ?? "",
+        label: safeSelectOptionText(persona.persona_nickname),
+        value: persona.persona_id?.toString() ?? "",
         description: persona.is_alter
           ? localizer(locale, "commands.data.import.alter_persona_description")
           : localizer(locale, "commands.data.import.main_persona_description"),
@@ -139,8 +139,8 @@ export async function execute(
     responseInteraction = modalSubmitInteraction;
 
     const selectedPersonaId = personaModalResult.values?.[PERSONA_SELECT_ID];
-    const selectedPersona = personas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
-    if (!selectedPersona?.tomori_id) {
+    const selectedPersona = personas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
+    if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -156,7 +156,7 @@ export async function execute(
       (validation.data as ServerMemoriesExportData).server_memories,
       {
         mode: "persona",
-        tomoriId: selectedPersona.tomori_id,
+        tomoriId: selectedPersona.persona_id,
       },
     );
 

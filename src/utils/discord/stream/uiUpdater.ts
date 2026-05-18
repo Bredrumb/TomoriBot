@@ -147,7 +147,7 @@ export class StreamUiUpdater {
               {
                 threadId,
                 botUserId: context.client.user?.id,
-                botName: context.tomoriState.tomori_nickname,
+                botName: context.tomoriState.persona_nickname,
               },
             );
             context.replyNoticeState.sent = true;
@@ -278,7 +278,7 @@ export class StreamUiUpdater {
       context.webhook &&
       context.personaUsername &&
       context.tomoriState.is_alter &&
-      context.personaUsername === context.tomoriState.tomori_nickname &&
+      context.personaUsername === context.tomoriState.persona_nickname &&
       isInvalidWebhookError(discordError);
 
     if (!shouldRecoverWebhook) {

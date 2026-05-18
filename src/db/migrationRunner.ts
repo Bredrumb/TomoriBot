@@ -1,8 +1,9 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
-import { sql } from "@/utils/db/client";
+import { sql as defaultSql } from "@/utils/db/client";
 import { splitSqlStatements } from "@/utils/db/sqlSplitter";
 import { log } from "@/utils/misc/logger";
+import type { SQL } from "bun";
 
 /** Absolute path to the migrations directory. */
 const MIGRATIONS_DIR = path.join(import.meta.dir, "migrations");
@@ -24,8 +25,8 @@ interface PendingMigration {
  * Creates the schema_migrations tracking table if it does not yet exist.
  * The table records which migration files have been applied and when.
  */
-async function ensureMigrationsTable(): Promise<void> {
-  await sql.unsafe(`
+async function ensureMigrationsTable(client: SQL): Promise<void> {
+  await client.unsafe(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       id         SERIAL      PRIMARY KEY,
       name       TEXT        UNIQUE NOT NULL,
@@ -37,8 +38,8 @@ async function ensureMigrationsTable(): Promise<void> {
 /**
  * Returns the set of migration names (stems) that have already been applied.
  */
-async function getAppliedMigrations(): Promise<Set<string>> {
-  const rows = await sql<{ name: string }[]>`SELECT name FROM schema_migrations`;
+async function getAppliedMigrations(client: SQL): Promise<Set<string>> {
+  const rows = await client<{ name: string }[]>`SELECT name FROM schema_migrations`;
   return new Set(rows.map((r) => r.name));
 }
 
@@ -86,6 +87,31 @@ async function getPendingMigrations(applied: Set<string>): Promise<PendingMigrat
 }
 
 /**
+ * Records every known migration as applied without executing the migration body.
+ *
+ * This is used only after a fresh database has been initialized from the latest
+ * static schema snapshot. In that case the historical expand/backfill/drop
+ * migrations are already represented by schema.sql and replaying them would ask
+ * for legacy source tables that correctly do not exist on a clean install.
+ *
+ * @param client - SQL client to use for the target database
+ */
+export async function markAllMigrationsApplied(client: SQL = defaultSql): Promise<void> {
+  await ensureMigrationsTable(client);
+
+  const migrations = await getPendingMigrations(new Set());
+  for (const migration of migrations) {
+    await client`
+      INSERT INTO schema_migrations (name)
+      VALUES (${migration.name})
+      ON CONFLICT (name) DO NOTHING
+    `;
+  }
+
+  log.success(`Database migrations: ${migrations.length} historical migration marker(s) recorded for fresh schema`);
+}
+
+/**
  * Applies a single migration file and records it in schema_migrations.
  *
  * Comment-only files (e.g. the 001_baseline marker) produce zero statements
@@ -94,17 +120,17 @@ async function getPendingMigrations(applied: Set<string>): Promise<PendingMigrat
  *
  * @param migration - Migration to apply
  */
-async function applyMigration(migration: PendingMigration): Promise<void> {
+async function applyMigration(client: SQL, migration: PendingMigration): Promise<void> {
   const sqlText = await readFile(migration.filePath, "utf-8");
   const statements = splitSqlStatements(sqlText);
 
   // Execute each statement in order; a failure here aborts the migration
   // and leaves schema_migrations unchanged so the next boot retries it.
   for (const stmt of statements) {
-    await sql.unsafe(stmt);
+    await client.unsafe(stmt);
   }
 
-  await sql`INSERT INTO schema_migrations (name) VALUES (${migration.name})`;
+  await client`INSERT INTO schema_migrations (name) VALUES (${migration.name})`;
 }
 
 /**
@@ -120,10 +146,10 @@ async function applyMigration(migration: PendingMigration): Promise<void> {
  * A migration failure is re-thrown so the caller (initializeDatabase) can
  * decide whether to abort startup.
  */
-export async function runMigrations(): Promise<void> {
-  await ensureMigrationsTable();
+export async function runMigrations(client: SQL = defaultSql): Promise<void> {
+  await ensureMigrationsTable(client);
 
-  const applied = await getAppliedMigrations();
+  const applied = await getAppliedMigrations(client);
   const pending = await getPendingMigrations(applied);
 
   if (pending.length === 0) {
@@ -136,7 +162,7 @@ export async function runMigrations(): Promise<void> {
   for (const migration of pending) {
     log.info(`Applying migration: ${migration.name}`);
     try {
-      await applyMigration(migration);
+      await applyMigration(client, migration);
       log.success(`Migration applied: ${migration.name}`);
     } catch (error) {
       log.error(`Migration failed: ${migration.name}`, error);

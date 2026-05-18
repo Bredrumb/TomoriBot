@@ -3,7 +3,7 @@
  *
  * Owns tables: voice_samples, custom_endpoints (speech/transcription rows),
  * saved_provider_configs (credential lookup by provider name), and
- * tomoris.speech_voice_sample_id (persona voice assignment).
+ * personas.speech_voice_sample_id (persona voice assignment).
  *
  * Note: decryptApiKey is NOT called here — credential decryption is a security
  * concern owned by the caller (speechEndpointResolver.ts). This repo returns
@@ -186,7 +186,7 @@ export async function deleteVoiceSample(sampleId: number): Promise<void> {
 }
 
 /**
- * Count how many persona (tomoris) rows currently reference a voice sample.
+ * Count how many persona rows currently reference a voice sample.
  * Used to display a warning before deletion.
  *
  * @param serverId - Internal server DB ID
@@ -196,7 +196,7 @@ export async function deleteVoiceSample(sampleId: number): Promise<void> {
 export async function countPersonaVoiceSampleRefs(serverId: number, sampleId: number): Promise<number> {
   try {
     const [row] = await sql<[{ count: string }]>`
-      SELECT COUNT(*) AS count FROM tomoris
+      SELECT COUNT(*) AS count FROM personas
       WHERE server_id = ${serverId}
         AND speech_voice_sample_id = ${sampleId}
     `;
@@ -216,7 +216,7 @@ export async function countPersonaVoiceSampleRefs(serverId: number, sampleId: nu
  */
 export async function clearPersonaVoiceSampleRefs(serverId: number, sampleId: number): Promise<void> {
   await sql`
-    UPDATE tomoris
+    UPDATE personas
     SET speech_voice_sample_id = NULL
     WHERE server_id = ${serverId}
       AND speech_voice_sample_id = ${sampleId}

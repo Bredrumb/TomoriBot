@@ -126,10 +126,10 @@ export async function execute(
       }
 
       const personaSelectOptions: SelectOption[] = allPersonas
-        .filter((persona) => persona.tomori_id !== undefined)
+        .filter((persona) => persona.persona_id !== undefined)
         .map((persona) => ({
-          label: safeSelectOptionText(persona.tomori_nickname),
-          value: persona.tomori_id?.toString() ?? "",
+          label: safeSelectOptionText(persona.persona_nickname),
+          value: persona.persona_id?.toString() ?? "",
           description: persona.is_alter
             ? localizer(locale, "commands.teach.memory.personal.alter_persona_description")
             : localizer(locale, "commands.teach.memory.personal.main_persona_description"),
@@ -206,7 +206,7 @@ export async function execute(
       : [];
     if (memoryScope === PERSONAL_SCOPE_VALUE) {
       const selectedPersonaId = modalResult.values?.persona_select;
-      selectedPersona = allPersonas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
+      selectedPersona = allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
       if (!selectedPersona) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "general.errors.invalid_option_title",
@@ -392,7 +392,7 @@ export async function execute(
         await log.error("Batch insert failed for personal memories", insertError, {
           userId: userData.user_id,
           serverId: tomoriState.server_id,
-          tomoriId: selectedPersona?.tomori_id ?? tomoriState.tomori_id,
+          tomoriId: selectedPersona?.persona_id ?? tomoriState.persona_id,
           errorType: "DatabaseValidationError",
           metadata: {
             command: "teach personalmemory",
@@ -408,7 +408,7 @@ export async function execute(
       const context: ErrorContext = {
         userId: userData.user_id,
         serverId: tomoriState.server_id, // Include server context
-        tomoriId: selectedPersona?.tomori_id ?? tomoriState.tomori_id,
+        tomoriId: selectedPersona?.persona_id ?? tomoriState.persona_id,
         errorType: "DatabaseValidationError",
         metadata: {
           command: "teach personalmemory",
@@ -483,7 +483,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: tomoriState?.tomori_id,
+      tomoriId: tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "teach personalmemory",

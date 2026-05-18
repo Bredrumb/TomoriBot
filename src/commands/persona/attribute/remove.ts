@@ -41,8 +41,8 @@ async function performAttributeRemoval(
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
-  // biome-ignore lint/style/noNonNullAssertion: tomoriState.tomori_id is always valid after validation
-  const ok = await personaRepository.removeAttribute(tomoriState.tomori_id!, attributeToRemove);
+  // biome-ignore lint/style/noNonNullAssertion: tomoriState.persona_id is always valid after validation
+  const ok = await personaRepository.removeAttribute(tomoriState.persona_id!, attributeToRemove);
   if (!ok) {
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
@@ -59,7 +59,7 @@ async function performAttributeRemoval(
 
   // Log success and show success message
   log.success(
-    `Removed attribute "${attributeToRemove}" for tomori ${tomoriState.tomori_id} by user ${userData.user_disc_id}`,
+    `Removed attribute "${attributeToRemove}" for tomori ${tomoriState.persona_id} by user ${userData.user_disc_id}`,
   );
 
   if (!suppressSuccessReply) {
@@ -155,7 +155,7 @@ export async function execute(
 
       personaSelectionInteraction = personaSelection.interaction;
       selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await updateButtonComponentsV2Status(
           personaSelectionInteraction,
           locale,
@@ -274,7 +274,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: selectedPersona?.tomori_id ?? tomoriState?.tomori_id,
+      tomoriId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "forget attribute",

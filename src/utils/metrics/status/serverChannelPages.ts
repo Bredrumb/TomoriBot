@@ -38,12 +38,12 @@ export async function showServerChannelsStatus(
 
   const personaNameMap = new Map<number, string>();
   for (const persona of allPersonas) {
-    if (persona.tomori_id) {
-      personaNameMap.set(persona.tomori_id, persona.tomori_nickname);
+    if (persona.persona_id) {
+      personaNameMap.set(persona.persona_id, persona.persona_nickname);
     }
   }
   const mainPersonaName =
-    allPersonas.find((persona) => !persona.is_alter)?.tomori_nickname ?? localizer(locale, "commands.choices.none");
+    allPersonas.find((persona) => !persona.is_alter)?.persona_nickname ?? localizer(locale, "commands.choices.none");
 
   const blacklistedCount = blacklistedMemberIds.length;
   const blacklistedValue =

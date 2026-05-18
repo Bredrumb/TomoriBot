@@ -107,7 +107,7 @@ export async function execute(
 
     const personaButtonInteraction = personaSelection.interaction as ButtonInteraction;
     selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-    if (!selectedPersona?.tomori_id) {
+    if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(personaButtonInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -162,7 +162,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: selectedPersona?.server_id ?? null,
-      tomoriId: selectedPersona?.tomori_id ?? null,
+      tomoriId: selectedPersona?.persona_id ?? null,
       errorType: "CommandExecutionError",
       metadata: {
         command: "speech voice-design set",
@@ -187,7 +187,7 @@ async function saveVoiceDesignPrompt(
   selectedPersona: TomoriState,
   designPrompt: string,
 ): Promise<void> {
-  if (!selectedPersona.tomori_id) {
+  if (!selectedPersona.persona_id) {
     await replyInfoEmbed(responseInteraction, locale, {
       titleKey: "general.errors.invalid_option_title",
       descriptionKey: "general.errors.invalid_option_description",
@@ -199,7 +199,7 @@ async function saveVoiceDesignPrompt(
   // Keep clone/provider voice assignments as reusable persona data. In auto
   // endpoint mode, speech_voice_name marks VoiceDesign as the active voice
   // choice while preserving any saved sample/provider voice for later.
-  const updatedTomori = await personaRepository.update(selectedPersona.tomori_id, {
+  const updatedTomori = await personaRepository.update(selectedPersona.persona_id, {
     speech_voice_design_prompt: designPrompt,
     speech_voice_name: "VoiceDesign",
   });
@@ -218,7 +218,7 @@ async function saveVoiceDesignPrompt(
     titleKey: "commands.speech.voice_design.success_title",
     descriptionKey: "commands.speech.voice_design.success_description",
     descriptionVars: {
-      persona: selectedPersona.tomori_nickname,
+      persona: selectedPersona.persona_nickname,
       preview: designPrompt.length > 120 ? `${designPrompt.slice(0, 117)}...` : designPrompt,
     },
     color: ColorCode.SUCCESS,

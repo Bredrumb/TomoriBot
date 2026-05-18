@@ -91,10 +91,10 @@ export async function execute(
     // 6. Resolve target persona options
     const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     const personaSelectOptions: SelectOption[] = allPersonas
-      .filter((persona) => persona.tomori_id !== undefined)
+      .filter((persona) => persona.persona_id !== undefined)
       .map((persona) => ({
-        label: safeSelectOptionText(persona.tomori_nickname),
-        value: persona.tomori_id?.toString() ?? "",
+        label: safeSelectOptionText(persona.persona_nickname),
+        value: persona.persona_id?.toString() ?? "",
         description: persona.is_alter
           ? localizer(locale, "commands.teach.attribute.alter_persona_description")
           : localizer(locale, "commands.teach.attribute.main_persona_description"),
@@ -169,8 +169,8 @@ export async function execute(
     // 10. Resolve selected persona + attribute input
     // biome-ignore lint/style/noNonNullAssertion: Outcome 'submit' + required persona select guarantees value
     const selectedPersonaId = modalResult.values![PERSONA_SELECT_ID];
-    selectedPersona = allPersonas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
-    if (!selectedPersona?.tomori_id) {
+    selectedPersona = allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
+    if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -259,7 +259,7 @@ export async function execute(
     }
 
     // 13.5 Check limit against final import size
-    const attributeLimitCheck = await personaRepository.checkAttributeLimit(selectedPersona.tomori_id);
+    const attributeLimitCheck = await personaRepository.checkAttributeLimit(selectedPersona.persona_id);
     const currentCount = attributeLimitCheck.currentCount ?? currentAttributes.length;
     const maxAllowed = attributeLimitCheck.maxAllowed ?? memoryLimits.maxAttributes;
     const availableSlots = Math.max(0, maxAllowed - currentCount);
@@ -290,7 +290,7 @@ export async function execute(
     }
 
     // 14. Update target persona row in the database
-    const ok = await personaRepository.addAttributes(selectedPersona.tomori_id, attributesToAdd);
+    const ok = await personaRepository.addAttributes(selectedPersona.persona_id, attributesToAdd);
 
     if (!ok) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -329,7 +329,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id, // Use optional chaining as tomoriState might be null if error happened early
-      tomoriId: tomoriState?.tomori_id,
+      tomoriId: tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "teach attribute",

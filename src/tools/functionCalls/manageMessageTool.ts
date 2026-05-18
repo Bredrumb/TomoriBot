@@ -270,7 +270,7 @@ export class ManageMessageTool extends BaseTool {
 
     const speakerNameSet = await getKnownPersonaSpeakerNames(context.guildId, [
       context.personaUsername,
-      context.tomoriState.tomori_nickname,
+      context.tomoriState.persona_nickname,
     ]);
     const personaNameSet = new Set([...speakerNameSet].map((speakerName) => speakerName.toLowerCase()));
     const fetchLimit = normalizeMessageFetchLimit(context.tomoriState.config.message_fetch_limit);

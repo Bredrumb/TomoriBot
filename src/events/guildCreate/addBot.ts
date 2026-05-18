@@ -22,8 +22,8 @@ const handler = async (client: Client, guild: Guild): Promise<void> => {
     // 2. Check if Tomori exists if server found via repository
     let tomoriExists = false;
     if (serverId) {
-      const tomoris = await personaRepository.loadServerPersonaSummaries(serverId);
-      tomoriExists = tomoris !== null && tomoris.length > 0;
+      const personas = await personaRepository.loadServerPersonaSummaries(serverId);
+      tomoriExists = personas !== null && personas.length > 0;
     }
 
     // 3. Try to send to system channel first, fallback to best channel

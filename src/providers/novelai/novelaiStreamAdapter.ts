@@ -333,7 +333,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     let prompt: string;
     if (isGlm) {
       // GLM 4.6: Official chat template with role tags and forced thinking
-      prompt = this.assembleGlmChatPrompt(context.contextItems, context.tomoriState.tomori_nickname, {
+      prompt = this.assembleGlmChatPrompt(context.contextItems, context.tomoriState.persona_nickname, {
         toolDefinitions: this.toolDefinitions,
         functionInteractionHistory: context.functionInteractionHistory,
         messageIdMap: context.messageIdMap,
@@ -344,7 +344,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       // Kayra: Flat text prompt with NAI prompt-convention formatting
       // Build ATTG block from persona metadata (null if not configured)
       const attgBlock = this.buildAttgBlock(context.tomoriState, config.model);
-      const basePrompt = this.assembleNovelAIPrompt(context.contextItems, context.tomoriState.tomori_nickname, {
+      const basePrompt = this.assembleNovelAIPrompt(context.contextItems, context.tomoriState.persona_nickname, {
         toolDefinitions: this.toolDefinitions,
         functionInteractionHistory: context.functionInteractionHistory,
         attgBlock,
@@ -356,7 +356,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       // breaks true continuation for Kayra/Erato.
       const outputPrefillTail = context.outputPrefill?.trim() ?? "";
       const hasTailPrefill = outputPrefillTail.length > 0 && basePrompt.trimEnd().endsWith(outputPrefillTail);
-      prompt = hasTailPrefill ? basePrompt : `${basePrompt}\n${context.tomoriState.tomori_nickname}: `;
+      prompt = hasTailPrefill ? basePrompt : `${basePrompt}\n${context.tomoriState.persona_nickname}: `;
       if (hasTailPrefill) {
         log.info("NovelAI Kayra: Detected assistant prefill at prompt tail; skipping trailing bot-name cue");
       }
@@ -489,7 +489,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       }
       // Exclude the bot's own name — it may legitimately appear on new lines
       // as it continues its own turn across multiple sentences.
-      speakerSet.delete(context.tomoriState.tomori_nickname);
+      speakerSet.delete(context.tomoriState.persona_nickname);
       this.knownSpeakers = speakerSet;
     } else {
       this.knownSpeakers = new Set();
@@ -499,7 +499,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     const openAIStopStrings = buildProviderStopStrings({
       providerName: "novelai",
       model: config.model,
-      personaName: context.tomoriState.tomori_nickname,
+      personaName: context.tomoriState.persona_nickname,
       configuredStops: context.tomoriState.config.llm_stop_strings,
       includePersonaSpeakerStop: this.speakerStopPatternEnabled,
     });

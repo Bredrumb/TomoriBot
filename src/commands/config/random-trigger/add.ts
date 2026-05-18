@@ -170,8 +170,8 @@ export async function execute(
         value: RANDOM_PERSONA_VALUE,
       },
       ...allPersonas.map((p) => ({
-        label: safeSelectOptionText(p.tomori_nickname),
-        value: (p.tomori_id ?? 0).toString(),
+        label: safeSelectOptionText(p.persona_nickname),
+        value: (p.persona_id ?? 0).toString(),
       })),
     ];
 
@@ -248,7 +248,8 @@ export async function execute(
     const personaDisplayName =
       tomoriId === null
         ? localizer(locale, "commands.config.random-trigger.add.persona_random_label")
-        : (allPersonas.find((p) => p.tomori_id === tomoriId)?.tomori_nickname ?? localizer(locale, "general.unknown"));
+        : (allPersonas.find((p) => p.persona_id === tomoriId)?.persona_nickname ??
+          localizer(locale, "general.unknown"));
 
     const triggerData = {
       serverId: tomoriState.server_id,

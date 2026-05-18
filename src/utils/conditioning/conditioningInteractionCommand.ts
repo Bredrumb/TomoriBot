@@ -161,12 +161,12 @@ export function createConditioningInteractionCommand(
     if (alterPersonas.length > 0) {
       const personaOptions: SelectOption[] = [
         {
-          label: safeSelectOptionText(mainPersona.tomori_nickname),
+          label: safeSelectOptionText(mainPersona.persona_nickname),
           value: "0",
           description: localizer(locale, "commands.bot.respond.main_persona_description"),
         },
         ...alterPersonas.map((persona, index) => ({
-          label: safeSelectOptionText(persona.tomori_nickname),
+          label: safeSelectOptionText(persona.persona_nickname),
           value: (index + 1).toString(),
           description: localizer(locale, "commands.bot.respond.alter_persona_description"),
         })),
@@ -199,7 +199,7 @@ export function createConditioningInteractionCommand(
       selectedPersona = selectedIndex === 0 ? mainPersona : (alterPersonas[selectedIndex - 1] ?? mainPersona);
     }
 
-    if (!selectedPersona.tomori_id) {
+    if (!selectedPersona.persona_id) {
       await replyInfoEmbed(replyInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -219,7 +219,7 @@ export function createConditioningInteractionCommand(
 
     try {
       const botName =
-        selectedPersona.tomori_nickname ?? tomoriState.tomori_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori";
+        selectedPersona.persona_nickname ?? tomoriState.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori";
       const reasonText = normalizeConditioningReason(interaction.options.getString("reason"));
       const extraContext = cmdOptions?.getExtraContext?.(interaction) ?? {};
       const actionTextValue = extraContext.action_text?.trim() ?? null;
@@ -270,9 +270,9 @@ export function createConditioningInteractionCommand(
         return;
       }
 
-      if (!isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, selectedPersona.tomori_id)) {
+      if (!isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, selectedPersona.persona_id)) {
         log.info(
-          `${type} ${actionKey} interaction completed without chat response because persona ${selectedPersona.tomori_id} is blocked by persona access rules in ${interaction.channel.id}`,
+          `${type} ${actionKey} interaction completed without chat response because persona ${selectedPersona.persona_id} is blocked by persona access rules in ${interaction.channel.id}`,
         );
         return;
       }
@@ -294,7 +294,7 @@ export function createConditioningInteractionCommand(
         message: latestMessage as Message,
         isFromQueue: false,
         isManuallyTriggered: true,
-        selectedPersonaId: selectedPersona.tomori_id,
+        selectedPersonaId: selectedPersona.persona_id,
         textQuotaSource: "user",
         textQuotaTriggerKey: interaction.id,
         textQuotaUserDiscId: interaction.user.id,

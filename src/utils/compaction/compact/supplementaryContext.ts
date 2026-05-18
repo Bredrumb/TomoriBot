@@ -35,7 +35,7 @@ export async function buildSupplementaryContext(params: {
         `Personas:\n- ${personas
           .map((persona) => {
             const attributes = persona.attribute_list?.length ? persona.attribute_list.join(" | ") : "(no attributes)";
-            return `${persona.tomori_nickname}: ${attributes}`;
+            return `${persona.persona_nickname}: ${attributes}`;
           })
           .join("\n- ")}`,
       );
@@ -88,7 +88,7 @@ async function buildPersonaAvatarMap(serverDiscId: string, guild?: Guild | null)
       : persona.webhook_avatar_url
         ? (resolvePersonaAvatarPublicUrl(persona.webhook_avatar_url) ?? undefined)
         : undefined;
-    const nameKey = persona.tomori_nickname?.trim().toLowerCase();
+    const nameKey = persona.persona_nickname?.trim().toLowerCase();
     if (avatarUrl && nameKey) avatarMap.set(nameKey, avatarUrl);
   }
   return avatarMap;

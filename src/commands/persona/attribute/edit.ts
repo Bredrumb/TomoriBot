@@ -47,8 +47,8 @@ async function performAttributeEdit(
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
-  if (selectedPersona.tomori_id === undefined) {
-    await log.error("Cannot edit attribute for persona without tomori_id");
+  if (selectedPersona.persona_id === undefined) {
+    await log.error("Cannot edit attribute for persona without persona_id");
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
       descriptionKey: "general.errors.update_failed_description",
@@ -58,13 +58,13 @@ async function performAttributeEdit(
   }
 
   const pgIndex = selectedIndex + 1;
-  const updated = await personaRepository.editAttributeAt(selectedPersona.tomori_id, pgIndex, newAttribute);
+  const updated = await personaRepository.editAttributeAt(selectedPersona.persona_id, pgIndex, newAttribute);
 
   if (!updated) {
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: selectedPersona.server_id,
-      tomoriId: selectedPersona.tomori_id,
+      tomoriId: selectedPersona.persona_id,
       errorType: "DatabaseUpdateError",
       metadata: {
         command: "persona attribute edit",
@@ -87,7 +87,7 @@ async function performAttributeEdit(
   }
 
   log.success(
-    `Updated attribute ${selectedIndex} for tomori ${selectedPersona.tomori_id} by ${userData.user_disc_id}: "${formatAttributePreview(newAttribute, 60)}"`,
+    `Updated attribute ${selectedIndex} for tomori ${selectedPersona.persona_id} by ${userData.user_disc_id}: "${formatAttributePreview(newAttribute, 60)}"`,
   );
 
   if (!suppressSuccessReply) {
@@ -185,7 +185,7 @@ export async function execute(
 
       personaSelectionInteraction = personaSelection.interaction;
       selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await updateButtonComponentsV2Status(
           personaSelectionInteraction,
           locale,
@@ -421,7 +421,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: selectedPersona?.tomori_id ?? tomoriState?.tomori_id,
+      tomoriId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "persona attribute edit",

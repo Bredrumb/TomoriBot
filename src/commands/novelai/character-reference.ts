@@ -154,8 +154,8 @@ async function loadCurrentUserCharRef(userDiscId: string): Promise<string | null
 async function loadCurrentPersonaCharRef(personaId: number): Promise<string | null> {
   const rows = await sql<Array<StoredRefRow>>`
 		SELECT nai_char_ref_url
-		FROM tomoris
-		WHERE tomori_id = ${personaId}
+		FROM personas
+		WHERE persona_id = ${personaId}
 		LIMIT 1
 	`;
 
@@ -230,7 +230,7 @@ async function handlePersonaTarget(
   selectedPersona: TomoriState,
   imageAttachment: Attachment | null,
 ): Promise<void> {
-  if (!selectedPersona.tomori_id || !interaction.guild) {
+  if (!selectedPersona.persona_id || !interaction.guild) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.invalid_option_title",
       descriptionKey: "general.errors.invalid_option_description",
@@ -256,18 +256,18 @@ async function handlePersonaTarget(
     pngBuffer = prepared.buffer;
   }
 
-  const previousRef = await loadCurrentPersonaCharRef(selectedPersona.tomori_id);
+  const previousRef = await loadCurrentPersonaCharRef(selectedPersona.persona_id);
   const updated = await replaceStoredCharReference({
     entityType: "personas",
-    entityId: selectedPersona.tomori_id,
+    entityId: selectedPersona.persona_id,
     previousRef,
     nextBuffer: pngBuffer,
     persistNextRef: async (nextRef) => {
-      const rows = await sql<Array<{ tomori_id: number }>>`
-				UPDATE tomoris
+      const rows = await sql<Array<{ persona_id: number }>>`
+				UPDATE personas
 				SET nai_char_ref_url = ${nextRef}
-				WHERE tomori_id = ${selectedPersona.tomori_id}
-				RETURNING tomori_id
+				WHERE persona_id = ${selectedPersona.persona_id}
+				RETURNING persona_id
 			`;
       return rows.length > 0;
     },
@@ -293,7 +293,7 @@ async function handlePersonaTarget(
       ? "commands.novelai.character-reference.success_persona_description"
       : "commands.novelai.character-reference.cleared_persona_description",
     descriptionVars: {
-      persona_name: selectedPersona.tomori_nickname,
+      persona_name: selectedPersona.persona_nickname,
     },
     color: ColorCode.SUCCESS,
   });
@@ -363,7 +363,7 @@ export async function execute(
     }
 
     const selectedPersona = allPersonas[personaResult.selectedIndex] ?? null;
-    if (!selectedPersona?.tomori_id) {
+    if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",

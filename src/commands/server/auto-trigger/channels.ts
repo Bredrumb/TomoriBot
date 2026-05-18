@@ -449,7 +449,7 @@ async function executeSingleChannel(
   }
 
   const mainPersona = allPersonas.find((persona) => !persona.is_alter) ?? allPersonas[0];
-  if (!mainPersona?.tomori_id) {
+  if (!mainPersona?.persona_id) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",
@@ -461,14 +461,14 @@ async function executeSingleChannel(
 
   const selectedIds = new Set(tomoriState.config.autoch_disc_ids ?? []);
   const previousPersonaOverrides = buildAutochatPersonaOverrideMap(tomoriState.config.autoch_persona_overrides);
-  const currentPersonaId = previousPersonaOverrides.get(channel.id) ?? mainPersona.tomori_id;
-  const currentPersona = allPersonas.find((persona) => persona.tomori_id === currentPersonaId) ?? mainPersona;
+  const currentPersonaId = previousPersonaOverrides.get(channel.id) ?? mainPersona.persona_id;
+  const currentPersona = allPersonas.find((persona) => persona.persona_id === currentPersonaId) ?? mainPersona;
 
   const personaOptions: SelectOption[] = allPersonas
-    .filter((persona) => persona.tomori_id !== undefined)
+    .filter((persona) => persona.persona_id !== undefined)
     .map((persona) => ({
-      label: safeSelectOptionText(persona.tomori_nickname),
-      value: persona.tomori_id?.toString() ?? "",
+      label: safeSelectOptionText(persona.persona_nickname),
+      value: persona.persona_id?.toString() ?? "",
       description: persona.is_alter
         ? localizer(locale, "commands.server.auto-trigger.channels.alter_persona_description")
         : localizer(locale, "commands.server.auto-trigger.channels.main_persona_description"),
@@ -491,7 +491,7 @@ async function executeSingleChannel(
         labelKey: "commands.server.auto-trigger.channels.single_persona_label",
         descriptionKey: "commands.server.auto-trigger.channels.single_persona_description",
         placeholder: localizer(locale, "commands.server.auto-trigger.channels.single_persona_placeholder", {
-          persona: currentPersona.tomori_nickname,
+          persona: currentPersona.persona_nickname,
         }),
         required: false,
         options: personaOptions,
@@ -509,7 +509,7 @@ async function executeSingleChannel(
 
   if (selectedPersonaValue) {
     const parsedPersonaId = Number.parseInt(selectedPersonaValue, 10);
-    const resolvedPersona = allPersonas.find((persona) => persona.tomori_id === parsedPersonaId);
+    const resolvedPersona = allPersonas.find((persona) => persona.persona_id === parsedPersonaId);
     if (!resolvedPersona || Number.isNaN(parsedPersonaId)) {
       await replyInfoEmbed(modalResult.interaction, locale, {
         titleKey: "general.errors.invalid_option_title",
@@ -527,10 +527,10 @@ async function executeSingleChannel(
 
   if (isEnabled) {
     nextSelectedIds.add(channel.id);
-    if (desiredPersona.tomori_id === mainPersona.tomori_id) {
+    if (desiredPersona.persona_id === mainPersona.persona_id) {
       nextPersonaOverrides.delete(channel.id);
-    } else if (desiredPersona.tomori_id) {
-      nextPersonaOverrides.set(channel.id, desiredPersona.tomori_id);
+    } else if (desiredPersona.persona_id) {
+      nextPersonaOverrides.set(channel.id, desiredPersona.persona_id);
     }
   } else {
     nextSelectedIds.delete(channel.id);
@@ -571,7 +571,7 @@ async function executeSingleChannel(
       : "commands.server.auto-trigger.channels.single_success_disabled_description",
     descriptionVars: {
       channel: `<#${channel.id}>`,
-      persona: desiredPersona.tomori_nickname,
+      persona: desiredPersona.persona_nickname,
     },
     color: ColorCode.SUCCESS,
   });
@@ -582,10 +582,10 @@ function buildAutochatPersonaOverrideMap(
 ): Map<string, number> {
   const entries = new Map<string, number>();
   for (const override of overrides ?? []) {
-    if (!override?.channel_disc_id || !Number.isInteger(override.tomori_id)) {
+    if (!override?.channel_disc_id || !Number.isInteger(override.persona_id)) {
       continue;
     }
-    entries.set(override.channel_disc_id, override.tomori_id);
+    entries.set(override.channel_disc_id, override.persona_id);
   }
   return entries;
 }
@@ -607,9 +607,9 @@ function pruneAutochatPersonaOverrides(overrides: Map<string, number>, selectedI
 function serializeAutochatPersonaOverrides(overrides: Map<string, number>): AutochatPersonaOverrideRow[] {
   return [...overrides.entries()]
     .sort(([leftChannelId], [rightChannelId]) => leftChannelId.localeCompare(rightChannelId))
-    .map(([channel_disc_id, tomori_id]) => ({
+    .map(([channel_disc_id, persona_id]) => ({
       channel_disc_id,
-      tomori_id,
+      persona_id,
     }));
 }
 
@@ -656,7 +656,7 @@ async function updateAutochatConfig(
 
   if (!updated) {
     const context: ErrorContext = {
-      tomoriId: tomoriState.tomori_id,
+      tomoriId: tomoriState.persona_id,
       serverId: tomoriState.server_id,
       errorType: "CommandExecutionError",
       metadata: {

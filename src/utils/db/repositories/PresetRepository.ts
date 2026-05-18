@@ -645,7 +645,7 @@ export class PresetRepository {
 
   /**
    * Exports TomoriBot preset personality data for a given server.
-   * Queries data from tomoris and persona_configs (tomori_configs was dropped in Task F2, migration 008).
+   * Queries data from personas and persona_configs (tomori_configs was dropped in Task F2, migration 008).
    *
    * @param serverDiscId - Discord server ID to export preset for
    * @param targetTomoriId - Optional persona ID to export; defaults to current main persona
@@ -672,25 +672,25 @@ export class PresetRepository {
         typeof targetTomoriId === "number"
           ? await sql`
               SELECT
-                tomori_id, tomori_nickname, persona_lineage_id,
+                persona_id, persona_nickname, persona_lineage_id,
                 attribute_list, sample_dialogues_in, sample_dialogues_out,
                 is_alter, nai_tags, nai_char_ref_url,
                 nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
-              FROM tomoris
+              FROM personas
               WHERE server_id = ${serverId}
-                AND tomori_id = ${targetTomoriId}
+                AND persona_id = ${targetTomoriId}
               LIMIT 1
             `
           : await sql`
               SELECT
-                tomori_id, tomori_nickname, persona_lineage_id,
+                persona_id, persona_nickname, persona_lineage_id,
                 attribute_list, sample_dialogues_in, sample_dialogues_out,
                 is_alter, nai_tags, nai_char_ref_url,
                 nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
-              FROM tomoris
+              FROM personas
               WHERE server_id = ${serverId}
                 AND is_alter = false
-              ORDER BY updated_at DESC NULLS LAST, tomori_id DESC
+              ORDER BY updated_at DESC NULLS LAST, persona_id DESC
               LIMIT 1
             `;
 
@@ -702,7 +702,7 @@ export class PresetRepository {
       if (typeof targetTomoriId !== "number") {
         const mainCountRows = await sql`
           SELECT COUNT(*)::int AS count
-          FROM tomoris
+          FROM personas
           WHERE server_id = ${serverId}
           AND is_alter = false
         `;
@@ -728,7 +728,7 @@ export class PresetRepository {
       const personaConfigRows = await sql`
         SELECT trigger_words, persona_prompt
         FROM persona_configs
-        WHERE tomori_id = ${presetData.tomori_id}
+        WHERE persona_id = ${presetData.persona_id}
         LIMIT 1
       `;
       if (personaConfigRows.length) {
@@ -742,7 +742,7 @@ export class PresetRepository {
         type: "preset",
         exported_at: new Date().toISOString(),
         data: {
-          tomori_nickname: presetData.tomori_nickname,
+          tomori_nickname: presetData.persona_nickname,
           attribute_list: presetData.attribute_list || [],
           sample_dialogues_in: presetData.sample_dialogues_in || [],
           sample_dialogues_out: presetData.sample_dialogues_out || [],
@@ -767,7 +767,7 @@ export class PresetRepository {
       }
 
       log.success(
-        `Successfully exported preset for server ${serverDiscId}, persona ${presetData.tomori_id}: ${presetData.tomori_nickname}`,
+        `Successfully exported preset for server ${serverDiscId}, persona ${presetData.persona_id}: ${presetData.persona_nickname}`,
       );
 
       return { success: true, data: validated.data };
@@ -812,9 +812,9 @@ export class PresetRepository {
 
       // 2. Get internal server ID and tomori ID (main persona only)
       const serverRows = await sql`
-        SELECT s.server_id, t.tomori_id, t.persona_lineage_id
+        SELECT s.server_id, t.persona_id, t.persona_lineage_id
         FROM servers s
-        JOIN tomoris t ON s.server_id = t.server_id
+        JOIN personas t ON s.server_id = t.server_id
         WHERE s.server_disc_id = ${serverDiscId}
         AND t.is_alter = false
         LIMIT 1
@@ -825,16 +825,16 @@ export class PresetRepository {
       }
 
       const serverId = serverRows[0].server_id;
-      const mainTomoriId = serverRows[0].tomori_id;
+      const mainTomoriId = serverRows[0].persona_id;
       const importedLineageId = validatedImportData.persona_lineage_id ?? null;
 
       // 3. Enforce persona nickname uniqueness within this server (excluding current main persona)
-      const conflictingNameRows = await sql<Array<{ tomori_id: number }>>`
-        SELECT tomori_id
-        FROM tomoris
+      const conflictingNameRows = await sql<Array<{ persona_id: number }>>`
+        SELECT persona_id
+        FROM personas
         WHERE server_id = ${serverId}
-          AND tomori_id <> ${mainTomoriId}
-          AND lower(btrim(tomori_nickname)) = lower(btrim(${validatedImportData.tomori_nickname}))
+          AND persona_id <> ${mainTomoriId}
+          AND lower(btrim(persona_nickname)) = lower(btrim(${validatedImportData.tomori_nickname}))
         LIMIT 1
       `;
       if (conflictingNameRows.length > 0) {
@@ -867,12 +867,12 @@ export class PresetRepository {
         .map((item: string) => `"${item.replace(/(["\\])/g, "\\$1")}"`)
         .join(",")}}`;
 
-      // 6. Update tomoris table with personality data, lineage behavior, and NovelAI fields
+      // 6. Update personas table with personality data, lineage behavior, and NovelAI fields
       try {
         await sql`
-          UPDATE tomoris
+          UPDATE personas
           SET
-            tomori_nickname = ${validatedImportData.tomori_nickname},
+            persona_nickname = ${validatedImportData.tomori_nickname},
             attribute_list = ${attributeArrayLiteral}::text[],
             sample_dialogues_in = ${dialoguesInArrayLiteral}::text[],
             sample_dialogues_out = ${dialoguesOutArrayLiteral}::text[],
@@ -888,7 +888,7 @@ export class PresetRepository {
             nai_attg_tags = ${validatedImportData.nai_attg_tags ?? null},
             nai_attg_genre = ${validatedImportData.nai_attg_genre ?? null},
             nai_attg_stars = ${validatedImportData.nai_attg_stars ?? null}
-          WHERE tomori_id = ${mainTomoriId}
+          WHERE persona_id = ${mainTomoriId}
         `;
       } catch (error) {
         if (this.isUniqueViolation(error)) {
@@ -905,13 +905,13 @@ export class PresetRepository {
         typeof validatedImportData.persona_prompt === "string" ? validatedImportData.persona_prompt : null;
 
       await sql`
-        INSERT INTO persona_configs (tomori_id, trigger_words, persona_prompt)
+        INSERT INTO persona_configs (persona_id, trigger_words, persona_prompt)
         VALUES (
           ${mainTomoriId},
           ${triggerWordsArrayLiteral}::text[],
           ${importedPersonaPrompt}
         )
-        ON CONFLICT (tomori_id) DO UPDATE
+        ON CONFLICT (persona_id) DO UPDATE
         SET
           trigger_words = EXCLUDED.trigger_words,
           persona_prompt = EXCLUDED.persona_prompt

@@ -88,7 +88,7 @@ export async function execute(
       responseInteraction = personaSelection.interaction;
       selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
       tomoriState = selectedPersona;
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await updateButtonComponentsV2Status(
           personaSelection.interaction,
           locale,
@@ -101,7 +101,7 @@ export async function execute(
         continue;
       }
       const selectedPersonaWithId = selectedPersona as TomoriState & {
-        tomori_id: number;
+        persona_id: number;
       };
 
       const currentTriggerWords = selectedPersonaWithId.trigger_words ?? [];
@@ -213,7 +213,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: selectedPersona?.server_id ?? tomoriState?.server_id,
-      tomoriId: selectedPersona?.tomori_id ?? tomoriState?.tomori_id,
+      tomoriId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "server trigger remove",
@@ -246,7 +246,7 @@ export async function execute(
 
 async function handlePaginatedTriggerRemovalFallback(
   responseInteraction: ChatInputCommandInteraction | ButtonInteraction,
-  selectedPersona: TomoriState & { tomori_id: number },
+  selectedPersona: TomoriState & { persona_id: number },
   currentTriggerWords: string[],
   userData: UserRow,
   locale: string,
@@ -332,7 +332,7 @@ async function handlePaginatedTriggerRemovalFallback(
 }
 
 async function performTriggerWordRemoval(
-  selectedPersona: TomoriState & { tomori_id: number },
+  selectedPersona: TomoriState & { persona_id: number },
   currentTriggerWords: string[],
   removedIndices: number[],
   userData: UserRow,
@@ -354,11 +354,11 @@ async function performTriggerWordRemoval(
     return false;
   }
 
-  const success = await personaRepository.removeTrigger(selectedPersona.tomori_id, remainingTriggerWords);
+  const success = await personaRepository.removeTrigger(selectedPersona.persona_id, remainingTriggerWords);
 
   if (!success) {
     const context: ErrorContext = {
-      tomoriId: selectedPersona.tomori_id,
+      tomoriId: selectedPersona.persona_id,
       serverId: selectedPersona.server_id,
       userId: userData.user_id,
       errorType: "DatabaseUpdateError",
@@ -386,7 +386,7 @@ async function performTriggerWordRemoval(
   invalidateTomoriStateCache(guildId);
 
   log.success(
-    `Removed ${removedTriggerWords.length} trigger word(s) for tomori ${selectedPersona.tomori_id} by user ${userData.user_disc_id}: ${removedTriggerWords.join(", ")}`,
+    `Removed ${removedTriggerWords.length} trigger word(s) for tomori ${selectedPersona.persona_id} by user ${userData.user_disc_id}: ${removedTriggerWords.join(", ")}`,
   );
 
   if (!suppressSuccessReply) {

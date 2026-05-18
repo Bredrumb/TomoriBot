@@ -168,7 +168,7 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
       existingStops: requestConfig.stopSequences,
       providerName: "google",
       model: config.model,
-      personaName: context.tomoriState.tomori_nickname,
+      personaName: context.tomoriState.persona_nickname,
       configuredStops: context.tomoriState.config.llm_stop_strings,
       includePersonaSpeakerStop: speakerStopPatternEnabled,
     });

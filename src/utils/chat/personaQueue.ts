@@ -28,14 +28,14 @@ export function queueAdditionalPersonaTurns(args: {
   const personasToHandleNow: TomoriState[] = [firstPersona];
 
   for (const persona of remainingPersonas) {
-    if (persona.tomori_id) {
+    if (persona.persona_id) {
       personasToQueue.push({
         persona,
-        selectedPersonaId: persona.tomori_id,
+        selectedPersonaId: persona.persona_id,
       });
     } else {
       log.warn(
-        `Persona "${persona.tomori_nickname}" is missing tomori_id; handling in current pass instead of queueing.`,
+        `Persona "${persona.persona_nickname}" is missing persona_id; handling in current pass instead of queueing.`,
       );
       personasToHandleNow.push(persona);
     }
@@ -46,7 +46,7 @@ export function queueAdditionalPersonaTurns(args: {
       lockEntry: args.lockEntry,
       message: args.message,
       personaJobs: personasToQueue.map((queuedPersona) => ({
-        personaName: queuedPersona.persona.tomori_nickname,
+        personaName: queuedPersona.persona.persona_nickname,
         selectedPersonaId: queuedPersona.selectedPersonaId,
       })),
       forceReason: args.forceReason,

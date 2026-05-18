@@ -133,7 +133,7 @@ Positive values use a shared fixed or random range.
       // Reset the autochat cycle in the runtime state table (upsert handles first-time rows).
       const [runtimeRow] = await tx`
           INSERT INTO persona_autoch_runtime_state (persona_id, autoch_counter, autoch_next_target)
-          VALUES (${tomoriState.tomori_id}, 0, ${nextTarget})
+          VALUES (${tomoriState.persona_id}, 0, ${nextTarget})
           ON CONFLICT (persona_id) DO UPDATE
             SET autoch_counter = 0,
                 autoch_next_target = EXCLUDED.autoch_next_target
@@ -148,7 +148,7 @@ Positive values use a shared fixed or random range.
 
     if (!updatedConfigRow || !updatedTomoriRow) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        tomoriId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
@@ -177,7 +177,7 @@ Positive values use a shared fixed or random range.
     const validatedRuntime = personaAutochRuntimeStateSchema.safeParse(updatedTomoriRow);
     if (!validatedRuntime.success) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        tomoriId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         errorType: "SchemaValidationError",
         metadata: {

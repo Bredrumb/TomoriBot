@@ -30,14 +30,14 @@ const ALLOWED_USER_FIELDS = schemaKeysExcluding<UserRow>(userSchema, [
 ]);
 
 const ALLOWED_TOMORI_FIELDS = schemaKeysExcluding<TomoriRow>(tomoriSchema, [
-  "tomori_id", // primary key
+  "persona_id", // primary key (renamed from persona_id in migration 016)
   "created_at",
   "updated_at",
 ]);
 
 const ALLOWED_TOMORI_CONFIG_FIELDS = schemaKeysExcluding<AssembledServerConfig>(assembledServerConfigSchema, [
   "tomori_config_id", // primary key
-  "tomori_id", // FK anchor
+  "persona_id", // FK anchor
   "server_id", // FK anchor
   "created_at",
   "updated_at",

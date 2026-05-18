@@ -7,7 +7,7 @@
  * Requires: POSTGRES_DB=tomodb_test (see docs/guides/testing-db-changes.md)
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { getBraveApiKeyStatus } from "@/utils/db/repositories";
+import { mcpRepository, toolRepository } from "@/utils/db/repositories";
 import { cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
@@ -24,11 +24,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Tool — regression", () => {
   });
 
   // ── brave API key status ──────────────────────────────────────────────────
-  // getBraveApiKeyStatus is representative of the ToolRepository read path:
-  // it checks a server-scoped feature flag stored in tomori_configs.
+  // getBraveApiKeyStatus is representative of the ToolRepository read path.
 
   it("getBraveApiKeyStatus returns false when no key is configured", async () => {
-    const hasKey = await getBraveApiKeyStatus(refs.serverId);
+    const hasKey = await toolRepository.getBraveApiKeyStatus(refs.serverId);
     // Fixture server has no Brave key — must return false, not throw
     expect(hasKey).toBe(false);
   });
@@ -37,8 +36,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Tool — regression", () => {
   // guildMcpDb.ts reads from mcp_server_configs; no config means empty result.
 
   it("guild MCP config read returns empty array for unconfigured server", async () => {
-    const { loadGuildMcpServers } = await import("@/utils/db/guildMcpDb");
-    const configs = await loadGuildMcpServers(refs.serverId);
+    const configs = await mcpRepository.loadGuildMcpConfigs(refs.serverId);
     expect(Array.isArray(configs)).toBe(true);
     // Fresh fixture server has no MCP config rows
     expect(configs).toHaveLength(0);
@@ -55,7 +53,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("RAG — regression", () => {
   // In the test DB, pgvector may or may not be installed — both outcomes are valid.
 
   it("detectRagAvailability returns a boolean without throwing", async () => {
-    const { detectRagAvailability } = await import("@/utils/db/ragDetection");
+    const { detectRagAvailability } = await import("@/utils/db/ragAvailability");
     const available = await detectRagAvailability();
     expect(typeof available).toBe("boolean");
   });

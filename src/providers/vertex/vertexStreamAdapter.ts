@@ -196,7 +196,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       existingStops: requestConfig.stopSequences,
       providerName: this.providerName,
       model: config.model,
-      personaName: context.tomoriState.tomori_nickname,
+      personaName: context.tomoriState.persona_nickname,
       configuredStops: context.tomoriState.config.llm_stop_strings,
       includePersonaSpeakerStop: speakerStopPatternEnabled,
     });

@@ -137,9 +137,9 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     try {
       const descriptionLength = maxDescriptionLength ?? 100;
       const presetRows = await sql`
-        SELECT tomori_preset_name, tomori_preset_desc
-        FROM tomori_presets
-        ORDER BY tomori_preset_name ASC
+        SELECT persona_preset_name, persona_preset_desc
+        FROM persona_presets
+        ORDER BY persona_preset_name ASC
       `;
 
       if (!presetRows || presetRows.length === 0) {
@@ -148,14 +148,14 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
       }
 
       const presetOptions = presetRows.map((row: Record<string, unknown>) => {
-        const description = row.tomori_preset_desc as string;
+        const description = row.persona_preset_desc as string;
         const truncatedDescription =
           description.length > descriptionLength
             ? `${description.substring(0, descriptionLength - 3)}...`
             : description;
 
         return {
-          name: row.tomori_preset_name as string,
+          name: row.persona_preset_name as string,
           description: truncatedDescription,
         };
       });
@@ -181,19 +181,19 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     try {
       const descriptionLength = maxDescriptionLength ?? 100;
       let presetRows = await sql`
-        SELECT tomori_preset_name, tomori_preset_desc
-        FROM tomori_presets
+        SELECT persona_preset_name, persona_preset_desc
+        FROM persona_presets
         WHERE preset_language = ${locale}
-        ORDER BY tomori_preset_name ASC
+        ORDER BY persona_preset_name ASC
       `;
 
       if (presetRows.length === 0) {
         const baseLanguage = locale.split("-")[0];
         presetRows = await sql`
-          SELECT tomori_preset_name, tomori_preset_desc
-          FROM tomori_presets
+          SELECT persona_preset_name, persona_preset_desc
+          FROM persona_presets
           WHERE preset_language = ${baseLanguage}
-          ORDER BY tomori_preset_name ASC
+          ORDER BY persona_preset_name ASC
         `;
 
         if (presetRows.length > 0) {
@@ -203,10 +203,10 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
 
       if (presetRows.length === 0 && locale !== "en-US") {
         presetRows = await sql`
-          SELECT tomori_preset_name, tomori_preset_desc
-          FROM tomori_presets
+          SELECT persona_preset_name, persona_preset_desc
+          FROM persona_presets
           WHERE preset_language = 'en-US'
-          ORDER BY tomori_preset_name ASC
+          ORDER BY persona_preset_name ASC
         `;
 
         if (presetRows.length > 0) {
@@ -220,14 +220,14 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
       }
 
       const presetOptions = presetRows.map((row: Record<string, unknown>) => {
-        const description = row.tomori_preset_desc as string;
+        const description = row.persona_preset_desc as string;
         const truncatedDescription =
           description.length > descriptionLength
             ? `${description.substring(0, descriptionLength - 3)}...`
             : description;
 
         return {
-          name: row.tomori_preset_name as string,
+          name: row.persona_preset_name as string,
           description: truncatedDescription,
         };
       });
@@ -248,17 +248,17 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   async loadPresetRowsByLocale(locale: string): Promise<TomoriPresetRow[] | null> {
     try {
       let presets = await sql`
-        SELECT * FROM tomori_presets
+        SELECT * FROM persona_presets
         WHERE preset_language = ${locale}
-        ORDER BY tomori_preset_name ASC
+        ORDER BY persona_preset_name ASC
       `;
 
       if (presets.length === 0) {
         const baseLanguage = locale.split("-")[0];
         presets = await sql`
-          SELECT * FROM tomori_presets
+          SELECT * FROM persona_presets
           WHERE preset_language = ${baseLanguage}
-          ORDER BY tomori_preset_name ASC
+          ORDER BY persona_preset_name ASC
         `;
 
         if (presets.length > 0) {
@@ -268,9 +268,9 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
 
       if (presets.length === 0 && locale !== "en-US") {
         presets = await sql`
-          SELECT * FROM tomori_presets
+          SELECT * FROM persona_presets
           WHERE preset_language = 'en-US'
-          ORDER BY tomori_preset_name ASC
+          ORDER BY persona_preset_name ASC
         `;
 
         if (presets.length > 0) {
@@ -295,8 +295,8 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   async loadAllPresets(): Promise<TomoriPresetRow[] | null> {
     try {
       const presets = await sql`
-        SELECT * FROM tomori_presets
-        ORDER BY tomori_preset_name ASC
+        SELECT * FROM persona_presets
+        ORDER BY persona_preset_name ASC
       `;
 
       if (!presets || presets.length === 0) {
@@ -340,16 +340,18 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
    * @param presetName - Exact preset name to look up
    * @returns Object with preset ID and name, or null if not found
    */
-  async loadPresetByName(presetName: string): Promise<{ tomori_preset_id: number; tomori_preset_name: string } | null> {
+  async loadPresetByName(
+    presetName: string,
+  ): Promise<{ persona_preset_id: number; persona_preset_name: string } | null> {
     try {
       const [row] = await sql`
-        SELECT tomori_preset_id, tomori_preset_name
-        FROM tomori_presets
-        WHERE tomori_preset_name = ${presetName}
+        SELECT persona_preset_id, persona_preset_name
+        FROM persona_presets
+        WHERE persona_preset_name = ${presetName}
         LIMIT 1
       `;
       if (!row) return null;
-      return { tomori_preset_id: Number(row.tomori_preset_id), tomori_preset_name: String(row.tomori_preset_name) };
+      return { persona_preset_id: Number(row.persona_preset_id), persona_preset_name: String(row.persona_preset_name) };
     } catch (error) {
       log.error(`Error loading preset by name "${presetName}":`, error);
       return null;
@@ -670,7 +672,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
           for (const override of overrides) {
             await tx`
               INSERT INTO server_auto_trigger_persona_overrides (server_id, channel_disc_id, persona_id)
-              VALUES (${serverId}, ${override.channel_disc_id}, ${override.tomori_id})
+              VALUES (${serverId}, ${override.channel_disc_id}, ${override.persona_id})
             `;
           }
         }
@@ -722,7 +724,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   /**
    * Delete every config-table row owned by this server across the 13 split tables.
    * Used by `/config setup` to recover from the orphaned-alters state.
-   * Wiping all configs frees the constraint without touching `tomoris` rows, so
+   * Wiping all configs frees the constraint without touching `personas` rows, so
    * alters survive the reset.
    *
    * @param serverId - Internal server DB ID

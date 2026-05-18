@@ -176,8 +176,8 @@ export class UpdateLongTermMemoryTool extends BaseTool {
     const isPersonalUpdate = Boolean(resolvedTargetUserId);
 
     const tomoriState = context.tomoriState;
-    if (!tomoriState?.server_id || !tomoriState.tomori_id) {
-      log.error("Missing server_id or tomori_id in Tomori state for memory update");
+    if (!tomoriState?.server_id || !tomoriState.persona_id) {
+      log.error("Missing server_id or persona_id in Tomori state for memory update");
       return {
         success: false,
         error: "Internal bot error: Missing server context",
@@ -202,7 +202,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
     }
 
     const personaNickname =
-      context.personaUsername || tomoriState.tomori_nickname || context.client.user?.username || "TomoriBot";
+      context.personaUsername || tomoriState.persona_nickname || context.client.user?.username || "TomoriBot";
 
     try {
       if (!isPersonalUpdate) {
@@ -223,7 +223,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
               context.client,
               serverDiscId,
               triggererRow?.user_nickname,
-              tomoriState.tomori_nickname,
+              tomoriState.persona_nickname,
               tomoriState?.config.personal_memories_enabled,
             );
 
@@ -295,7 +295,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
             context.client,
             serverDiscId,
             triggererRow?.user_nickname,
-            tomoriState.tomori_nickname,
+            tomoriState.persona_nickname,
             tomoriState?.config.personal_memories_enabled,
           );
 
@@ -476,7 +476,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
           context.client,
           serverDiscId,
           userDisplayName,
-          tomoriState.tomori_nickname,
+          tomoriState.persona_nickname,
           tomoriState?.config.personal_memories_enabled,
         );
 
@@ -547,7 +547,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
         context.client,
         serverDiscId,
         userDisplayName,
-        tomoriState.tomori_nickname,
+        tomoriState.persona_nickname,
         tomoriState?.config.personal_memories_enabled,
       );
 

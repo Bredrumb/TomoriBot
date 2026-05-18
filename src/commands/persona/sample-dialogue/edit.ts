@@ -75,8 +75,8 @@ async function performSampleDialogueEdit(
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
-  if (selectedPersona.tomori_id === undefined) {
-    await log.error("Cannot edit sample dialogue for persona without tomori_id");
+  if (selectedPersona.persona_id === undefined) {
+    await log.error("Cannot edit sample dialogue for persona without persona_id");
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
       descriptionKey: "general.errors.update_failed_description",
@@ -87,7 +87,7 @@ async function performSampleDialogueEdit(
 
   const pgIndex = selectedIndex + 1;
   const updated = await personaRepository.editSampleDialoguePairAt(
-    selectedPersona.tomori_id,
+    selectedPersona.persona_id,
     pgIndex,
     newUserInput,
     newBotInput,
@@ -97,7 +97,7 @@ async function performSampleDialogueEdit(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: selectedPersona.server_id,
-      tomoriId: selectedPersona.tomori_id,
+      tomoriId: selectedPersona.persona_id,
       errorType: "DatabaseUpdateError",
       metadata: {
         command: "persona sample-dialogue edit",
@@ -120,7 +120,7 @@ async function performSampleDialogueEdit(
   }
 
   log.success(
-    `Updated sample dialogue ${selectedIndex} for tomori ${selectedPersona.tomori_id} by ${userData.user_disc_id}`,
+    `Updated sample dialogue ${selectedIndex} for tomori ${selectedPersona.persona_id} by ${userData.user_disc_id}`,
   );
 
   if (!suppressSuccessReply) {
@@ -219,7 +219,7 @@ export async function execute(
 
       personaSelectionInteraction = personaSelection.interaction;
       selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await updateButtonComponentsV2Status(
           personaSelectionInteraction,
           locale,
@@ -247,7 +247,7 @@ export async function execute(
 
       if (currentIn.length !== currentOut.length && currentIn.length > 0 && currentOut.length > 0) {
         const repaired = await repairMismatchedDialogues(
-          selectedPersona.tomori_id,
+          selectedPersona.persona_id,
           currentIn.length,
           currentOut.length,
         );
@@ -523,7 +523,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: selectedPersona?.tomori_id ?? tomoriState?.tomori_id,
+      tomoriId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "persona sample-dialogue edit",

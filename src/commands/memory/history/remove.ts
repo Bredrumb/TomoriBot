@@ -4,7 +4,7 @@
  *
  * Supports two scopes:
  * - persona: Show documents scoped to a selected persona
- * - serverwide: Show documents with tomori_id IS NULL
+ * - serverwide: Show documents with persona_id IS NULL
  */
 
 import {
@@ -208,7 +208,7 @@ export async function execute(
 
         personaSelectionInteraction = personaSelection.interaction;
         const selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-        if (!selectedPersona?.tomori_id) {
+        if (!selectedPersona?.persona_id) {
           await updateButtonComponentsV2Status(
             personaSelectionInteraction,
             locale,
@@ -220,7 +220,7 @@ export async function execute(
           );
           continue;
         }
-        targetTomoriId = selectedPersona.tomori_id;
+        targetTomoriId = selectedPersona.persona_id;
       }
 
       // 6. Query history-extracted documents for the selected scope
@@ -231,7 +231,7 @@ export async function execute(
 						SELECT document_id, document_name
 						FROM documents
 						WHERE server_id = ${tomoriState.server_id}
-						  AND tomori_id IS NULL
+						  AND persona_id IS NULL
 						  AND source_type = 'history'
 						ORDER BY created_at DESC
 					`
@@ -239,7 +239,7 @@ export async function execute(
 						SELECT document_id, document_name
 						FROM documents
 						WHERE server_id = ${tomoriState.server_id}
-						  AND tomori_id = ${targetTomoriId}
+						  AND persona_id = ${targetTomoriId}
 						  AND source_type = 'history'
 						ORDER BY created_at DESC
 					`;
@@ -359,7 +359,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: targetTomoriId ?? tomoriState?.tomori_id,
+      tomoriId: targetTomoriId ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "memory history remove",

@@ -1355,7 +1355,7 @@ function buildPersonaPageComponents(
       components: [
         {
           type: ComponentType.TextDisplay,
-          content: `### ${safeSelectOptionText(persona.tomori_nickname, 80)}\n${snippet}`,
+          content: `### ${safeSelectOptionText(persona.persona_nickname, 80)}\n${snippet}`,
         },
       ],
       accessory: {
@@ -1971,7 +1971,7 @@ export async function replyPaginatedPersonaChoicesV2(
           const startIdx = (currentPage - 1) * PERSONA_PAGINATION_ITEMS_PER_PAGE;
           const absoluteIndex = startIdx + selectionIdx;
           const selectedPersona = options.personas[absoluteIndex];
-          const selectedItem = selectedPersona?.tomori_nickname ?? localizer(locale, "general.unknown");
+          const selectedItem = selectedPersona?.persona_nickname ?? localizer(locale, "general.unknown");
 
           if (!selectedPersona) {
             await buttonInteraction.deferUpdate();

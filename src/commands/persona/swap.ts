@@ -157,7 +157,7 @@ export async function execute(
 
     // 6. Build select options for modal
     const alterSelectOptions: SelectOption[] = alterPersonas.map((persona, index) => ({
-      label: safeSelectOptionText(persona.tomori_nickname),
+      label: safeSelectOptionText(persona.persona_nickname),
       value: index.toString(), // Use index to avoid truncation issues
     }));
 
@@ -223,7 +223,7 @@ export async function execute(
     // 9. Swap is_alter flags in database.
     // Trigger words are persona-scoped in persona_configs and do not need migration.
     // biome-ignore lint/style/noNonNullAssertion: guaranteed by prior checks
-    await personaRepository.swapPersona(mainPersona.tomori_id!, selectedAlter.tomori_id!);
+    await personaRepository.swapPersona(mainPersona.persona_id!, selectedAlter.persona_id!);
 
     // 10. Try to update nickname and avatar separately (non-fatal if fails)
     let avatarSwapSuccess = false;
@@ -247,7 +247,7 @@ export async function execute(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          nick: selectedAlter.tomori_nickname,
+          nick: selectedAlter.persona_nickname,
         }),
       });
 
@@ -292,7 +292,7 @@ export async function execute(
           if (response.ok) {
             avatarSwapSuccess = true;
             log.success(
-              `Successfully swapped guild avatar to "${selectedAlter.tomori_nickname}" for guild ${interaction.guild.id}`,
+              `Successfully swapped guild avatar to "${selectedAlter.persona_nickname}" for guild ${interaction.guild.id}`,
             );
           } else {
             const errorText = await response.text();
@@ -323,8 +323,8 @@ export async function execute(
     // 13. Show success embed with former main's avatar as image
     const descriptionLines = [
       localizer(locale, "commands.persona.swap.success_description", {
-        new_main: selectedAlter.tomori_nickname,
-        old_main: mainPersona.tomori_nickname,
+        new_main: selectedAlter.persona_nickname,
+        old_main: mainPersona.persona_nickname,
       }),
     ];
 
@@ -356,7 +356,7 @@ export async function execute(
 
     let formerMainAvatarAttachment: AttachmentBuilder | null = null;
     if (formerMainAvatarBuffer) {
-      const sanitizedNickname = sanitizeAttachmentFilenamePart(mainPersona.tomori_nickname, {
+      const sanitizedNickname = sanitizeAttachmentFilenamePart(mainPersona.persona_nickname, {
         fallback: "persona",
         maxLength: 50,
       });
@@ -388,9 +388,9 @@ export async function execute(
       try {
         const sentEmbed = reply.embeds[0];
         const s3StoredUrl =
-          formerMainAvatarBuffer && mainPersona.tomori_id
+          formerMainAvatarBuffer && mainPersona.persona_id
             ? await uploadPersonaAvatarToStorage({
-                personaId: mainPersona.tomori_id,
+                personaId: mainPersona.persona_id,
                 serverDiscId: interaction.guild.id,
                 label: "former main swap",
                 buffer: formerMainAvatarBuffer,
@@ -402,11 +402,11 @@ export async function execute(
 
         if (storedAvatarUrl) {
           // biome-ignore lint/style/noNonNullAssertion: guaranteed by prior checks
-          await personaRepository.setAvatar(mainPersona.tomori_id!, storedAvatarUrl);
+          await personaRepository.setAvatar(mainPersona.persona_id!, storedAvatarUrl);
 
-          log.success(`Stored former main persona "${mainPersona.tomori_nickname}" avatar URL for future use`);
+          log.success(`Stored former main persona "${mainPersona.persona_nickname}" avatar URL for future use`);
         } else {
-          log.warn(`Failed to extract image URL from success embed for former main persona ${mainPersona.tomori_id}`);
+          log.warn(`Failed to extract image URL from success embed for former main persona ${mainPersona.persona_id}`);
         }
       } catch (storageError) {
         // Non-fatal error - persona swap was successful, avatar storage failed
@@ -417,16 +417,16 @@ export async function execute(
     }
 
     // 14b. Ensure selected alter has a stable avatar URL stored (optional)
-    if (selectedAlterAvatarBuffer && selectedAlter.tomori_id) {
+    if (selectedAlterAvatarBuffer && selectedAlter.persona_id) {
       const selectedAlterS3Url = await uploadPersonaAvatarToStorage({
-        personaId: selectedAlter.tomori_id,
+        personaId: selectedAlter.persona_id,
         serverDiscId: interaction.guild.id,
         label: "selected alter swap",
         buffer: selectedAlterAvatarBuffer,
       });
 
       if (selectedAlterS3Url) {
-        await personaRepository.setAvatar(selectedAlter.tomori_id, selectedAlterS3Url);
+        await personaRepository.setAvatar(selectedAlter.persona_id, selectedAlterS3Url);
         if (previousSelectedAlterAvatarUrl && previousSelectedAlterAvatarUrl !== selectedAlterS3Url) {
           await deletePersonaAvatarFromStorage(previousSelectedAlterAvatarUrl);
         }
@@ -443,7 +443,7 @@ export async function execute(
     }
 
     log.success(
-      `Successfully swapped personas: "${selectedAlter.tomori_nickname}" is now main, "${mainPersona.tomori_nickname}" is now alter for guild ${interaction.guild.id}`,
+      `Successfully swapped personas: "${selectedAlter.persona_nickname}" is now main, "${mainPersona.persona_nickname}" is now alter for guild ${interaction.guild.id}`,
     );
   } catch (error) {
     log.error("Error executing persona swap command:", error, {

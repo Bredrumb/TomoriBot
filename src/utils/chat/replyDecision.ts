@@ -73,11 +73,11 @@ export function shouldBotReply(
   const allowedPersonaIds = options.allowedPersonaIds ?? null;
   const mainPersona = allPersonas.find((persona) => !persona.is_alter);
   const resolveFallbackPersona = (personaId?: number | null): TomoriState | undefined =>
-    (personaId ? allPersonas.find((persona) => persona.tomori_id === personaId) : undefined) ?? mainPersona;
+    (personaId ? allPersonas.find((persona) => persona.persona_id === personaId) : undefined) ?? mainPersona;
   const isPersonaAllowed = (persona?: TomoriState | null): persona is TomoriState =>
     Boolean(
       persona &&
-        (!allowedPersonaIds || (typeof persona.tomori_id === "number" && allowedPersonaIds.has(persona.tomori_id))),
+        (!allowedPersonaIds || (typeof persona.persona_id === "number" && allowedPersonaIds.has(persona.persona_id))),
     );
 
   let isReplyToBot = false;
@@ -85,7 +85,7 @@ export function shouldBotReply(
   let replyPersonaTarget: TomoriState | null = null;
   const personaByNickname = new Map<string, TomoriState>();
   for (const persona of allPersonas) {
-    const nicknameKey = persona.tomori_nickname?.toLowerCase();
+    const nicknameKey = persona.persona_nickname?.toLowerCase();
     if (!nicknameKey || personaByNickname.has(nicknameKey)) continue;
     personaByNickname.set(nicknameKey, persona);
   }
@@ -150,7 +150,7 @@ export function shouldBotReply(
       continue;
     }
 
-    if (senderPersona && persona.tomori_id === senderPersona.tomori_id) {
+    if (senderPersona && persona.persona_id === senderPersona.persona_id) {
       continue;
     }
 
@@ -170,7 +170,7 @@ export function shouldBotReply(
         matched = isJapanese ? message.content.includes(trigger) : createScreamingRegex(trigger).test(message.content);
         const isPersonaDtmExempt =
           isAutoTriggerChannel &&
-          (autochatPersonaId === null ? !persona.is_alter : autochatPersonaId === persona.tomori_id);
+          (autochatPersonaId === null ? !persona.is_alter : autochatPersonaId === persona.persona_id);
         isDeliberate =
           isDtmActive && !isPersonaDtmExempt ? getDeliberateTriggerMatch(message.content, trigger) !== null : true;
       }
@@ -183,10 +183,10 @@ export function shouldBotReply(
         }
         if (isSelfMessage) {
           selfMsgTriggerDiag = {
-            matchedPersona: persona.tomori_nickname ?? `id:${persona.tomori_id}`,
+            matchedPersona: persona.persona_nickname ?? `id:${persona.persona_id}`,
             matchedTrigger: trigger,
             triggerSource,
-            senderPersona: senderPersona?.tomori_nickname ?? `id:${senderPersona?.tomori_id}`,
+            senderPersona: senderPersona?.persona_nickname ?? `id:${senderPersona?.persona_id}`,
             contentSnippet: message.content.slice(0, 120),
           };
         }
@@ -262,7 +262,7 @@ export function shouldBotReply(
 
     log.info(
       `[Self-Msg Reply Decision] msg ${message.id} in ch ${message.channel.id} ` +
-        `from "${senderPersona?.tomori_nickname ?? message.author.username}" -> would reply. ` +
+        `from "${senderPersona?.persona_nickname ?? message.author.username}" -> would reply. ` +
         `Reasons: [${reasons.join(", ")}]. ` +
         `autoch_counter=${tomoriState.autoch_counter}/${tomoriState.autoch_next_target}, ` +
         `cascadeLimit=${cascadeLimit}, triggerCount=${getSelfReplyChainState(message.channel.id).triggerCount}`,

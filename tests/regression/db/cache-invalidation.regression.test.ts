@@ -14,8 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { PrivacyLevel } from "@/types/db/schema";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { clearUserCache, getCachedUserRow, invalidateUserCache } from "@/utils/cache/userCache";
-import { loadUserRow } from "@/utils/db/repositories";
-import { registerUser, setPrivacyLevel, updateTomoriConfig } from "@/utils/db/repositories";
+import { configRepository, personaRepository, userRepository } from "@/utils/db/repositories";
 import { FIXTURE_IDS, cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
@@ -49,7 +48,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Cache invalidation — regression", () => 
 
     // Step 2: Write a change (setPrivacyLevel also invalidates the cache internally)
     const newLevel = originalPrivacy === PrivacyLevel.MINIMAL ? PrivacyLevel.PARTIAL : PrivacyLevel.MINIMAL;
-    await setPrivacyLevel(FIXTURE_IDS.userDiscId, newLevel);
+    await userRepository.setPrivacyLevel(FIXTURE_IDS.userDiscId, newLevel);
 
     // Step 3: Manually ensure cache is cleared (the write should have done this,
     // but the explicit invalidation here proves the harness can detect if it was NOT cleared)
@@ -79,21 +78,19 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Cache invalidation — regression", () => 
 
   it("invalidateTomoriStateCache causes the next getCachedAllPersonas to hit the DB", async () => {
     const { getCachedAllPersonas } = await import("@/utils/cache/tomoriStateCache");
-    const { updateTomori } = await import("@/utils/db/repositories");
-
     // Warm cache
     await getCachedAllPersonas(FIXTURE_IDS.serverDiscId);
 
     // Write a nickname change (which invalidates the cache in the real write path)
-    await updateTomori(refs.tomoriId, { tomori_nickname: "_rt_cache_renamed" });
+    await personaRepository.update(refs.personaId, { persona_nickname: "_rt_cache_renamed" });
 
     // Invalidate (updateTomori should do this; we do it explicitly to prove the harness works)
     invalidateTomoriStateCache(FIXTURE_IDS.serverDiscId);
 
     // Re-read — DB should reflect the new nickname
     const personas = await getCachedAllPersonas(FIXTURE_IDS.serverDiscId);
-    const main = personas.find((p) => p.tomori_id === refs.tomoriId);
-    expect(main?.tomori_nickname).toBe("_rt_cache_renamed");
+    const main = personas.find((p) => p.persona_id === refs.personaId);
+    expect(main?.persona_nickname).toBe("_rt_cache_renamed");
   });
 
   it("config write → cache invalidation → fresh read reflects new config value", async () => {
@@ -103,8 +100,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Cache invalidation — regression", () => 
     await getCachedMainPersona(FIXTURE_IDS.serverDiscId);
 
     // Mutate config
-    await updateTomoriConfig(refs.serverId, { message_fetch_limit: 42 });
-    // updateTomoriConfig should invalidate the tomori state cache
+    await configRepository.updateChatConfig(refs.serverId, { message_fetch_limit: 42 });
+    // Config writes should invalidate the tomori state cache in command paths.
     invalidateTomoriStateCache(FIXTURE_IDS.serverDiscId);
 
     // Verify fresh read
@@ -117,9 +114,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Cache invalidation — regression", () => 
   // 1. Remove the `invalidateUserCache(userDiscId)` call from `UserRepository.register`
   // 2. Run this test — it should fail because getCachedUserRow returns stale data
   it.skip("[REGRESSION PROBE] harness detects missing cache invalidation", async () => {
-    await registerUser("_rt_probe_user", "_rt_probe", "en");
+    await userRepository.register("_rt_probe_user", "_rt_probe", "en");
     // If invalidation were missing, a cached null entry would persist and loadUserRow would still return null
-    const user = await loadUserRow("_rt_probe_user");
+    const user = await userRepository.loadByDiscordId("_rt_probe_user");
     expect(user).not.toBeNull();
   });
 });

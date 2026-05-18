@@ -132,7 +132,7 @@ export async function execute(
       modalHost = personaSelection.interaction;
       selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
 
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         return;
       }
     }
@@ -215,8 +215,8 @@ export async function execute(
 
     // 11. Persist to the appropriate table
     const persisted =
-      scope === "persona" && selectedPersona?.tomori_id
-        ? await personaRepository.setContextNote(selectedPersona.tomori_id, noteToStore, depthToStore)
+      scope === "persona" && selectedPersona?.persona_id
+        ? await personaRepository.setContextNote(selectedPersona.persona_id, noteToStore, depthToStore)
         : await configRepository.updateChatConfig(tomoriState.server_id, {
             context_note: noteToStore,
             context_note_depth: depthToStore,
@@ -232,7 +232,7 @@ export async function execute(
     // 13. Reply with scoped success message
     const scopeLabel =
       scope === "persona" && selectedPersona
-        ? selectedPersona.tomori_nickname
+        ? selectedPersona.persona_nickname
         : localizer(locale, "commands.config.context-note.set.global_option");
 
     if (isRemoving) {
@@ -255,7 +255,7 @@ export async function execute(
     }
 
     log.info(
-      `Context note ${isRemoving ? "cleared" : "updated"} for server ${serverId} scope=${scope}${selectedPersona ? ` persona=${selectedPersona.tomori_id}` : ""} depth=${depthToStore}`,
+      `Context note ${isRemoving ? "cleared" : "updated"} for server ${serverId} scope=${scope}${selectedPersona ? ` persona=${selectedPersona.persona_id}` : ""} depth=${depthToStore}`,
     );
   } catch (error) {
     log.error("Failed to set context note:", error as Error);

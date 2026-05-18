@@ -134,7 +134,7 @@ async function loadManageEntries(personas: TomoriState[]): Promise<ConditioningM
         (group): ConditioningManageEntry => ({
           ...group,
           serverId: persona.server_id,
-          personaName: persona.tomori_nickname,
+          personaName: persona.persona_nickname,
           personaLineageId: persona.persona_lineage_id ?? 0,
         }),
       );

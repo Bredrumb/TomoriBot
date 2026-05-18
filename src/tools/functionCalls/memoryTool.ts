@@ -121,14 +121,14 @@ export class MemoryTool extends BaseTool {
     const resolvedUserId = context.message?.author?.id || context.userId;
     const userRow = resolvedUserId ? await userRepository.loadByDiscordId(resolvedUserId) : null;
 
-    if (!tomoriState || !userRow?.user_id || !tomoriState.server_id || !tomoriState.tomori_id || !resolvedUserId) {
+    if (!tomoriState || !userRow?.user_id || !tomoriState.server_id || !tomoriState.persona_id || !resolvedUserId) {
       // Log which specific value is missing for diagnostics
       const missing = [
         !tomoriState && "tomoriState",
         !userRow && "userRow",
         userRow && !userRow.user_id && "userRow.user_id",
         tomoriState && !tomoriState.server_id && "tomoriState.server_id",
-        tomoriState && !tomoriState.tomori_id && "tomoriState.tomori_id",
+        tomoriState && !tomoriState.persona_id && "tomoriState.persona_id",
         !resolvedUserId && "resolvedUserId",
       ].filter(Boolean);
       log.error(`Critical state missing before handling create_long_term_memory: [${missing.join(", ")}]`);
@@ -143,7 +143,7 @@ export class MemoryTool extends BaseTool {
     }
 
     const personaNickname =
-      context.personaUsername || tomoriState.tomori_nickname || context.client.user?.username || "TomoriBot";
+      context.personaUsername || tomoriState.persona_nickname || context.client.user?.username || "TomoriBot";
 
     // Validate memory content (from tomoriChat.ts:1105-1113)
     if (typeof memoryContentArg !== "string" || !memoryContentArg.trim()) {
@@ -266,7 +266,7 @@ export class MemoryTool extends BaseTool {
     // The schema migration repairs this, but block the write if it somehow persists.
     if (tomoriState.persona_lineage_id === 0) {
       log.error(
-        `Self-teach blocked: Tomori ${tomoriState.tomori_id} has persona_lineage_id=0. Schema migration may not have run.`,
+        `Self-teach blocked: Tomori ${tomoriState.persona_id} has persona_lineage_id=0. Schema migration may not have run.`,
       );
       return {
         success: false,
@@ -302,7 +302,7 @@ export class MemoryTool extends BaseTool {
 
         const dbResult = await serverMemoryRepository.add(
           tomoriState.server_id,
-          tomoriState.tomori_id,
+          tomoriState.persona_id,
           tomoriState.persona_lineage_id,
           userRow.user_id,
           memoryContent,
@@ -322,7 +322,7 @@ export class MemoryTool extends BaseTool {
             context.client,
             serverId,
             userRow.user_nickname, // Use triggerer's name for {user} replacement
-            tomoriState.tomori_nickname, // Use bot's current nickname for {bot} replacement
+            tomoriState.persona_nickname, // Use bot's current nickname for {bot} replacement
             tomoriState?.config.personal_memories_enabled,
           );
 
@@ -475,7 +475,7 @@ export class MemoryTool extends BaseTool {
             context.client,
             serverId,
             targetUserDisplayName, // Use target user's name for {user} replacement
-            tomoriState.tomori_nickname, // Use bot's current nickname for {bot} replacement
+            tomoriState.persona_nickname, // Use bot's current nickname for {bot} replacement
             tomoriState?.config.personal_memories_enabled,
           );
 

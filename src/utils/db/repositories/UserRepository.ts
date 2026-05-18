@@ -24,7 +24,7 @@ type PersonalSpotlightAggregateRow = {
   server_id: number | string | bigint;
   user_id: number | string | bigint;
   channel_disc_id: string;
-  auto_trigger_tomori_id: number | string | bigint | null;
+  auto_trigger_persona_id: number | string | bigint | null;
   expires_at: Date | string | null;
   created_at: Date | string | null;
   updated_at: Date | string | null;
@@ -400,7 +400,7 @@ export class UserRepository implements IRepository<UserExportShape> {
           server_id,
           user_id,
           channel_disc_id,
-          auto_trigger_tomori_id,
+          auto_trigger_persona_id,
           expires_at
         )
         VALUES (
@@ -412,7 +412,7 @@ export class UserRepository implements IRepository<UserExportShape> {
         )
         ON CONFLICT (server_id, user_id, channel_disc_id)
         DO UPDATE SET
-          auto_trigger_tomori_id = EXCLUDED.auto_trigger_tomori_id,
+          auto_trigger_persona_id = EXCLUDED.auto_trigger_persona_id,
           expires_at = EXCLUDED.expires_at,
           updated_at = CURRENT_TIMESTAMP
       `;
@@ -430,7 +430,7 @@ export class UserRepository implements IRepository<UserExportShape> {
             server_id,
             user_id,
             channel_disc_id,
-            tomori_id
+            persona_id
           )
           VALUES (
             ${serverId},
@@ -483,12 +483,12 @@ export class UserRepository implements IRepository<UserExportShape> {
         ps.server_id,
         ps.user_id,
         ps.channel_disc_id,
-        ps.auto_trigger_tomori_id,
+        ps.auto_trigger_persona_id,
         ps.expires_at,
         ps.created_at,
         ps.updated_at,
         COALESCE(
-          JSONB_AGG(psp.tomori_id ORDER BY psp.tomori_id) FILTER (WHERE psp.tomori_id IS NOT NULL),
+          JSONB_AGG(psp.persona_id ORDER BY psp.persona_id) FILTER (WHERE psp.persona_id IS NOT NULL),
           '[]'::JSONB
         ) AS persona_ids
       FROM personal_spotlights ps
@@ -503,7 +503,7 @@ export class UserRepository implements IRepository<UserExportShape> {
         ps.server_id,
         ps.user_id,
         ps.channel_disc_id,
-        ps.auto_trigger_tomori_id,
+        ps.auto_trigger_persona_id,
         ps.expires_at,
         ps.created_at,
         ps.updated_at
@@ -539,12 +539,12 @@ export class UserRepository implements IRepository<UserExportShape> {
         ps.server_id,
         ps.user_id,
         ps.channel_disc_id,
-        ps.auto_trigger_tomori_id,
+        ps.auto_trigger_persona_id,
         ps.expires_at,
         ps.created_at,
         ps.updated_at,
         COALESCE(
-          JSONB_AGG(psp.tomori_id ORDER BY psp.tomori_id) FILTER (WHERE psp.tomori_id IS NOT NULL),
+          JSONB_AGG(psp.persona_id ORDER BY psp.persona_id) FILTER (WHERE psp.persona_id IS NOT NULL),
           '[]'::JSONB
         ) AS persona_ids
       FROM personal_spotlights ps
@@ -558,7 +558,7 @@ export class UserRepository implements IRepository<UserExportShape> {
         ps.server_id,
         ps.user_id,
         ps.channel_disc_id,
-        ps.auto_trigger_tomori_id,
+        ps.auto_trigger_persona_id,
         ps.expires_at,
         ps.created_at,
         ps.updated_at
@@ -617,10 +617,10 @@ export class UserRepository implements IRepository<UserExportShape> {
    * Filters a persona array to only those allowed by the given spotlight status.
    * Returns all personas unchanged when spotlightStatus is null/undefined.
    *
-   * @param personas        - Array of persona-like objects with optional tomori_id
+   * @param personas        - Array of persona-like objects with optional persona_id
    * @param spotlightStatus - Current spotlight filter, or null/undefined
    */
-  filterPersonasByPersonalSpotlight<T extends { tomori_id?: number | null | undefined }>(
+  filterPersonasByPersonalSpotlight<T extends { persona_id?: number | null | undefined }>(
     personas: readonly T[],
     spotlightStatus: PersonalSpotlightStatus | null | undefined,
   ): T[] {
@@ -628,7 +628,7 @@ export class UserRepository implements IRepository<UserExportShape> {
       return [...personas];
     }
 
-    return personas.filter((persona) => this.isPersonaAllowedByPersonalSpotlight(spotlightStatus, persona.tomori_id));
+    return personas.filter((persona) => this.isPersonaAllowedByPersonalSpotlight(spotlightStatus, persona.persona_id));
   }
 
   // ── Personal spotlight private helpers ───────────────────────────────────
@@ -718,7 +718,7 @@ export class UserRepository implements IRepository<UserExportShape> {
       userId,
       channelDiscId: row.channel_disc_id,
       personaIds: this.normalizeNumberArray(row.persona_ids),
-      autoTriggerPersonaId: this.normalizeNumber(row.auto_trigger_tomori_id),
+      autoTriggerPersonaId: this.normalizeNumber(row.auto_trigger_persona_id),
       expiresAt: this.normalizeDate(row.expires_at),
       createdAt: this.normalizeDate(row.created_at),
       updatedAt: this.normalizeDate(row.updated_at),

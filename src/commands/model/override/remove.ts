@@ -34,7 +34,7 @@ type ChannelOverrideEntry = {
 
 type PersonaOverrideEntry = TomoriState & {
   persona_llm: LlmRow;
-  tomori_id: number;
+  persona_id: number;
 };
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
@@ -75,7 +75,7 @@ export async function execute(
       getCachedAllPersonas(interaction.guild.id),
     ]);
     const personasWithOverride = allPersonas.filter(
-      (persona): persona is PersonaOverrideEntry => persona.persona_llm != null && persona.tomori_id != null,
+      (persona): persona is PersonaOverrideEntry => persona.persona_llm != null && persona.persona_id != null,
     );
 
     if (channelOverrides.length === 0 && personasWithOverride.length === 0) {
@@ -140,7 +140,7 @@ export async function execute(
     );
 
     const channelOverridesToRemove = channelOverrides.filter((entry) => !checkedChannelIds.has(entry.channelDiscId));
-    const personasToClear = personasWithOverride.filter((persona) => !checkedPersonaIds.has(persona.tomori_id));
+    const personasToClear = personasWithOverride.filter((persona) => !checkedPersonaIds.has(persona.persona_id));
 
     if (channelOverridesToRemove.length === 0 && personasToClear.length === 0) {
       await replyInfoEmbed(modalInteraction, locale, {
@@ -161,7 +161,7 @@ export async function execute(
       Promise.all(
         personasToClear.map(async (persona) => ({
           persona,
-          cleared: await llmOverrideRepo.setPersonaLlmOverride(persona.tomori_id, null, {
+          cleared: await llmOverrideRepo.setPersonaLlmOverride(persona.persona_id, null, {
             serverDiscId: interaction.guildId ?? undefined,
           }),
         })),
@@ -188,7 +188,7 @@ export async function execute(
         metadata: {
           command: "config remove modeloverride",
           failedChannelDiscIds: failedChannelOverrides.map((entry) => entry.channelDiscId),
-          failedTomoriIds: failedPersonaOverrides.map((persona) => persona.tomori_id),
+          failedTomoriIds: failedPersonaOverrides.map((persona) => persona.persona_id),
         },
       };
       await log.error(
@@ -216,7 +216,7 @@ export async function execute(
     }
     if (clearedPersonaOverrides.length > 0) {
       removedSections.push(
-        `**${localizer(locale, "commands.config.remove.modeloverride.persona_checkbox_label")}**\n${formatRemovedNames(clearedPersonaOverrides.map((persona) => `**${persona.tomori_nickname}**`))}`,
+        `**${localizer(locale, "commands.config.remove.modeloverride.persona_checkbox_label")}**\n${formatRemovedNames(clearedPersonaOverrides.map((persona) => `**${persona.persona_nickname}**`))}`,
       );
     }
 
@@ -302,8 +302,8 @@ function buildPersonaOverrideCheckboxGroups(personasWithOverride: PersonaOverrid
     const chunk = personasWithOverride.slice(i, i + MAX_OPTIONS_PER_GROUP);
     const groupIndex = Math.floor(i / MAX_OPTIONS_PER_GROUP);
     const options: CheckboxGroupOption[] = chunk.map((persona) => ({
-      label: persona.tomori_nickname,
-      value: persona.tomori_id.toString(),
+      label: persona.persona_nickname,
+      value: persona.persona_id.toString(),
       description: formatLlmSummary(persona.persona_llm),
       default: true,
     }));

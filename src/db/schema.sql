@@ -96,10 +96,10 @@ BEFORE UPDATE ON servers
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 
-CREATE TABLE IF NOT EXISTS tomoris (
-  tomori_id SERIAL PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS personas (
+  persona_id SERIAL PRIMARY KEY,
   server_id INT NOT NULL,
-  tomori_nickname TEXT NOT NULL,
+  persona_nickname TEXT NOT NULL,
   attribute_list TEXT[] DEFAULT '{}',
   sample_dialogues_in TEXT[] DEFAULT '{}', -- array index is soft id of sample dialogue pairs
   sample_dialogues_out TEXT[] DEFAULT '{}',
@@ -109,10 +109,10 @@ CREATE TABLE IF NOT EXISTS tomoris (
   FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE
 );
 
--- Create updated_at trigger for tomoris table
-DROP TRIGGER IF EXISTS update_tomoris_timestamp ON tomoris;
-CREATE TRIGGER update_tomoris_timestamp
-BEFORE UPDATE ON tomoris
+-- Create updated_at trigger for personas table
+DROP TRIGGER IF EXISTS update_personas_timestamp ON personas;
+CREATE TRIGGER update_personas_timestamp
+BEFORE UPDATE ON personas
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 
@@ -141,15 +141,15 @@ EXECUTE FUNCTION update_timestamp();
 
 -- Add multi-persona support columns (January 2026)
 -- is_alter: Distinguishes main persona (false) from alter personas (true)
-SELECT add_column_if_not_exists('tomoris', 'is_alter', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('personas', 'is_alter', 'BOOLEAN', 'false');
 -- webhook_avatar_url: Stores alter avatar reference (production URL; non-production URL or local avatar path)
-SELECT add_column_if_not_exists('tomoris', 'webhook_avatar_url', 'TEXT');
+SELECT add_column_if_not_exists('personas', 'webhook_avatar_url', 'TEXT');
 -- persona_lineage_id: Shared identity namespace for cross-server personal memory pooling
-SELECT add_column_if_not_exists('tomoris', 'persona_lineage_id', 'BIGINT');
+SELECT add_column_if_not_exists('personas', 'persona_lineage_id', 'BIGINT');
 -- nai_tags: Imageboard-style persona appearance tags for NovelAI character profile resolution
-SELECT add_column_if_not_exists('tomoris', 'nai_tags', 'TEXT[]', 'ARRAY[]::TEXT[]');
+SELECT add_column_if_not_exists('personas', 'nai_tags', 'TEXT[]', 'ARRAY[]::TEXT[]');
 -- nai_char_ref_url: Stored reference image URL/path for NovelAI character consistency
-SELECT add_column_if_not_exists('tomoris', 'nai_char_ref_url', 'TEXT');
+SELECT add_column_if_not_exists('personas', 'nai_char_ref_url', 'TEXT');
 -- elevenlabs_voice_id / elevenlabs_voice_name were added here (March 2026) and
 -- dropped by migration 010_complete_speech_voice_migration.sql (Phase 6 Step #14.2).
 
@@ -162,26 +162,26 @@ CREATE SEQUENCE IF NOT EXISTS persona_lineage_id_seq
 -- Backfill missing lineage IDs for existing personas
 DO $$
 BEGIN
-	UPDATE tomoris
+	UPDATE personas
 	SET persona_lineage_id = nextval('persona_lineage_id_seq')
 	WHERE persona_lineage_id IS NULL;
 
 	-- Repair personas incorrectly assigned lineage ID 0 (reserved for global memories only, never a valid persona ID)
-	UPDATE tomoris
+	UPDATE personas
 	SET persona_lineage_id = nextval('persona_lineage_id_seq')
 	WHERE persona_lineage_id = 0;
 END $$;
 
 -- Ensure future personas get lineage IDs automatically
-ALTER TABLE tomoris
+ALTER TABLE personas
 	ALTER COLUMN persona_lineage_id SET DEFAULT nextval('persona_lineage_id_seq');
-ALTER TABLE tomoris
+ALTER TABLE personas
 	ALTER COLUMN persona_lineage_id SET NOT NULL;
 
 -- Ensure sequence advances beyond highest existing lineage or reserved floor
 SELECT setval(
 	'persona_lineage_id_seq',
-	GREATEST((SELECT COALESCE(MAX(persona_lineage_id), 0) FROM tomoris), 10000),
+	GREATEST((SELECT COALESCE(MAX(persona_lineage_id), 0) FROM personas), 10000),
 	true
 );
 
@@ -191,21 +191,20 @@ BEGIN
     IF EXISTS (
         SELECT 1
         FROM pg_constraint
-        WHERE conname = 'tomoris_server_id_key'
+        WHERE conname = 'personas_server_id_key'
     ) THEN
-        ALTER TABLE tomoris DROP CONSTRAINT tomoris_server_id_key;
-        RAISE NOTICE 'Dropped unique constraint tomoris_server_id_key to allow multiple personas per server';
+        ALTER TABLE personas DROP CONSTRAINT personas_server_id_key;
+        RAISE NOTICE 'Dropped unique constraint personas_server_id_key to allow multiple personas per server';
     END IF;
 END $$;
 
 -- Create index for efficient multi-persona queries (main persona is queried frequently)
-CREATE INDEX IF NOT EXISTS idx_tomoris_server_is_alter ON tomoris(server_id, is_alter);
-CREATE INDEX IF NOT EXISTS idx_tomoris_persona_lineage_id ON tomoris(persona_lineage_id);
+CREATE INDEX IF NOT EXISTS idx_personas_server_is_alter ON personas(server_id, is_alter);
+CREATE INDEX IF NOT EXISTS idx_personas_persona_lineage_id ON personas(persona_lineage_id);
 
 -- Phase 6 Step #14.6: enforce exactly one main persona (is_alter=false) per server.
--- Name is forward-compatible with the #16.8 rename (tomoris → personas).
 CREATE UNIQUE INDEX IF NOT EXISTS personas_one_main_per_server
-  ON tomoris(server_id)
+  ON personas(server_id)
   WHERE is_alter = false;
 
 -- Normalize legacy duplicate persona names within a server before enforcing uniqueness.
@@ -213,23 +212,23 @@ CREATE UNIQUE INDEX IF NOT EXISTS personas_one_main_per_server
 -- and append a deterministic suffix to lower-priority duplicates.
 WITH ranked_persona_names AS (
 	SELECT
-		tomori_id,
+		persona_id,
 		server_id,
 		ROW_NUMBER() OVER (
-			PARTITION BY server_id, lower(btrim(tomori_nickname))
-			ORDER BY is_alter ASC, updated_at DESC NULLS LAST, tomori_id DESC
+			PARTITION BY server_id, lower(btrim(persona_nickname))
+			ORDER BY is_alter ASC, updated_at DESC NULLS LAST, persona_id DESC
 		) AS name_rank
-	FROM tomoris
+	FROM personas
 )
-UPDATE tomoris t
-SET tomori_nickname = t.tomori_nickname || ' [dup-' || t.tomori_id::TEXT || ']'
+UPDATE personas t
+SET persona_nickname = t.persona_nickname || ' [dup-' || t.persona_id::TEXT || ']'
 FROM ranked_persona_names r
-WHERE t.tomori_id = r.tomori_id
+WHERE t.persona_id = r.persona_id
   AND r.name_rank > 1;
 
 -- Hard guardrail: persona names must be unique per server (case-insensitive, trimmed).
-CREATE UNIQUE INDEX IF NOT EXISTS idx_tomoris_server_nickname_ci_unique
-ON tomoris(server_id, lower(btrim(tomori_nickname)));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_personas_server_nickname_ci_unique
+ON personas(server_id, lower(btrim(persona_nickname)));
 
 CREATE TABLE IF NOT EXISTS llms (
   llm_id SERIAL PRIMARY KEY,
@@ -381,14 +380,14 @@ END $$;
 
 -- Persona-scoped config table (trigger words + optional persona prompt)
 CREATE TABLE IF NOT EXISTS persona_configs (
-  tomori_id INT PRIMARY KEY,
+  persona_id INT PRIMARY KEY,
   trigger_words TEXT[] DEFAULT '{}',
   persona_prompt TEXT NULL,
   reward_conditioning_enabled BOOLEAN DEFAULT true,
   punish_conditioning_enabled BOOLEAN DEFAULT true,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (tomori_id) REFERENCES tomoris(tomori_id) ON DELETE CASCADE
+  FOREIGN KEY (persona_id) REFERENCES personas(persona_id) ON DELETE CASCADE
 );
 
 -- Create updated_at trigger for persona_configs table
@@ -400,9 +399,9 @@ EXECUTE FUNCTION update_timestamp();
 
 -- Ensure every persona has a persona_configs row. Trigger words are managed by
 -- migration 005 (consolidate_alter_triggers) and individual command writes.
-INSERT INTO persona_configs (tomori_id)
-SELECT tomori_id FROM tomoris
-ON CONFLICT (tomori_id) DO NOTHING;
+INSERT INTO persona_configs (persona_id)
+SELECT persona_id FROM personas
+ON CONFLICT (persona_id) DO NOTHING;
 
 -- Add persona conditioning toggles (April 2026)
 SELECT add_column_if_not_exists('persona_configs', 'reward_conditioning_enabled', 'BOOLEAN', 'true');
@@ -412,7 +411,7 @@ SELECT add_column_if_not_exists('persona_configs', 'punish_conditioning_enabled'
 
 -- Add hide_impersonation_embeds permission (February 2026)
 
--- Allow tomori_id to be nullable and prevent cascade deletes from removing server-scoped config
+-- Allow persona_id to be nullable and prevent cascade deletes from removing server-scoped config
 
 -- Backfill server_id for main persona configs (legacy rows)
 
@@ -521,7 +520,6 @@ SELECT add_column_if_not_exists('persona_configs', 'punish_conditioning_enabled'
 -- llm_logit_biases: Stored OpenAI-style logit bias entries [{id, text, value}, ...]
 
 -- Migration: Update llm_temperature range from [1.0, 2.0] to [0.0, 2.0] and default from 1.2 to 1.0 (March 2026)
-    CHECK (llm_temperature >= 0.0 AND llm_temperature <= 2.0);
 
 -- Migration: update llm_min_p default from 0.0 to 0.05 (April 2026)
 
@@ -536,10 +534,10 @@ SELECT add_column_if_not_exists('persona_configs', 'punish_conditioning_enabled'
 -- Add tool-use master toggle (April 2026)
 -- When FALSE, has_tools is artificially overridden to false in the pipeline for all models
 
-CREATE TABLE IF NOT EXISTS tomori_presets (
-  tomori_preset_id SERIAL PRIMARY KEY,
-  tomori_preset_name TEXT NOT NULL UNIQUE,
-  tomori_preset_desc TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS persona_presets (
+  persona_preset_id SERIAL PRIMARY KEY,
+  persona_preset_name TEXT NOT NULL UNIQUE,
+  persona_preset_desc TEXT NOT NULL,
   preset_attribute_list TEXT[] DEFAULT '{}',
   preset_sample_dialogues_in TEXT[] DEFAULT '{}', -- array index is soft id of sample dialogue pairs
   preset_sample_dialogues_out TEXT[] DEFAULT '{}',
@@ -549,12 +547,12 @@ CREATE TABLE IF NOT EXISTS tomori_presets (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Removed updated_at trigger for tomori_presets table (static metadata, rarely changes)
-DROP TRIGGER IF EXISTS update_tomori_presets_timestamp ON tomori_presets;
+-- Removed updated_at trigger for persona_presets table (static metadata, rarely changes)
+DROP TRIGGER IF EXISTS update_persona_presets_timestamp ON persona_presets;
 
 -- Add preset avatar path column for profile pictures 
-SELECT add_column_if_not_exists('tomori_presets', 'preset_avatar_path', 'TEXT');
-SELECT add_column_if_not_exists('tomori_presets', 'preset_trigger_words', 'TEXT[]', 'ARRAY[]::TEXT[]');
+SELECT add_column_if_not_exists('persona_presets', 'preset_avatar_path', 'TEXT');
+SELECT add_column_if_not_exists('persona_presets', 'preset_trigger_words', 'TEXT[]', 'ARRAY[]::TEXT[]');
 
 -- Table: system_prompt_presets
 -- Purpose: Store pre-made system prompt presets that users can apply
@@ -766,7 +764,7 @@ END $$;
 CREATE TABLE IF NOT EXISTS server_memories (
   server_memory_id SERIAL PRIMARY KEY,
   server_id INT NOT NULL,
-  tomori_id INT, -- Optional persona pointer for attribution (set to NULL if persona deleted)
+  persona_id INT, -- Optional persona pointer for attribution (set to NULL if persona deleted)
   persona_lineage_id BIGINT NOT NULL, -- Shared persona identity for memory continuity across remove/re-import
   user_id INT, -- Creator of this server memory (nullable - set to NULL if user deleted)
   content TEXT NOT NULL,
@@ -777,8 +775,8 @@ CREATE TABLE IF NOT EXISTS server_memories (
   FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE
 );
 
--- Add tomori_id column for existing databases
-SELECT add_column_if_not_exists('server_memories', 'tomori_id', 'INTEGER');
+-- Add persona_id column for existing databases
+SELECT add_column_if_not_exists('server_memories', 'persona_id', 'INTEGER');
 -- Add lineage scope column for existing databases
 SELECT add_column_if_not_exists('server_memories', 'persona_lineage_id', 'BIGINT');
 -- Add tags column for existing databases
@@ -788,16 +786,16 @@ SELECT add_column_if_not_exists('server_memories', 'tags', 'TEXT[]', 'ARRAY[]::T
 DO $$
 BEGIN
 	UPDATE server_memories sm
-	SET tomori_id = main.tomori_id
+	SET persona_id = main.persona_id
 	FROM (
 		SELECT DISTINCT ON (server_id)
 			server_id,
-			tomori_id
-		FROM tomoris
+			persona_id
+		FROM personas
 		WHERE is_alter = false
-		ORDER BY server_id, updated_at DESC NULLS LAST, tomori_id DESC
+		ORDER BY server_id, updated_at DESC NULLS LAST, persona_id DESC
 	) main
-	WHERE sm.tomori_id IS NULL
+	WHERE sm.persona_id IS NULL
 	  AND sm.server_id = main.server_id;
 END $$;
 
@@ -806,9 +804,9 @@ DO $$
 BEGIN
 	UPDATE server_memories sm
 	SET persona_lineage_id = t.persona_lineage_id
-	FROM tomoris t
+	FROM personas t
 	WHERE sm.persona_lineage_id IS NULL
-	  AND sm.tomori_id = t.tomori_id;
+	  AND sm.persona_id = t.persona_id;
 END $$;
 
 -- Backfill any remaining lineage NULLs to each server's current main persona lineage
@@ -820,9 +818,9 @@ BEGIN
 		SELECT DISTINCT ON (server_id)
 			server_id,
 			persona_lineage_id
-		FROM tomoris
+		FROM personas
 		WHERE is_alter = false
-		ORDER BY server_id, updated_at DESC NULLS LAST, tomori_id DESC
+		ORDER BY server_id, updated_at DESC NULLS LAST, persona_id DESC
 	) main
 	WHERE sm.persona_lineage_id IS NULL
 	  AND sm.server_id = main.server_id;
@@ -837,8 +835,8 @@ BEGIN
 		SELECT DISTINCT ON (server_id)
 			server_id,
 			persona_lineage_id
-		FROM tomoris
-		ORDER BY server_id, is_alter ASC, updated_at DESC NULLS LAST, tomori_id DESC
+		FROM personas
+		ORDER BY server_id, is_alter ASC, updated_at DESC NULLS LAST, persona_id DESC
 	) fallback
 	WHERE sm.persona_lineage_id IS NULL
 	  AND sm.server_id = fallback.server_id;
@@ -846,12 +844,12 @@ END $$;
 
 -- Guard against orphaned persona pointers before enforcing tomori FK
 UPDATE server_memories sm
-SET tomori_id = NULL
-WHERE sm.tomori_id IS NOT NULL
+SET persona_id = NULL
+WHERE sm.persona_id IS NOT NULL
   AND NOT EXISTS (
   	SELECT 1
-  	FROM tomoris t
-  	WHERE t.tomori_id = sm.tomori_id
+    FROM personas t
+    WHERE t.persona_id = sm.persona_id
   );
 
 -- Enforce NOT NULL only when all rows have been backfilled
@@ -871,7 +869,7 @@ BEGIN
 	END IF;
 END $$;
 
--- Ensure FK for server_memories.tomori_id exists with ON DELETE SET NULL
+-- Ensure FK for server_memories.persona_id exists with ON DELETE SET NULL
 DO $$
 DECLARE
 	fk_delete_action CHAR;
@@ -879,30 +877,30 @@ BEGIN
 	SELECT c.confdeltype
 	INTO fk_delete_action
 	FROM pg_constraint c
-	WHERE c.conname = 'server_memories_tomori_id_fkey'
+	WHERE c.conname = 'server_memories_persona_id_fkey'
 	LIMIT 1;
 
 	IF fk_delete_action IS NULL THEN
 		ALTER TABLE server_memories
-		ADD CONSTRAINT server_memories_tomori_id_fkey
-		FOREIGN KEY (tomori_id)
-		REFERENCES tomoris(tomori_id)
+		ADD CONSTRAINT server_memories_persona_id_fkey
+		FOREIGN KEY (persona_id)
+		REFERENCES personas(persona_id)
 		ON DELETE SET NULL;
 	ELSIF fk_delete_action <> 'n' THEN
 		ALTER TABLE server_memories
-		DROP CONSTRAINT server_memories_tomori_id_fkey;
+		DROP CONSTRAINT server_memories_persona_id_fkey;
 		ALTER TABLE server_memories
-		ADD CONSTRAINT server_memories_tomori_id_fkey
-		FOREIGN KEY (tomori_id)
-		REFERENCES tomoris(tomori_id)
+		ADD CONSTRAINT server_memories_persona_id_fkey
+		FOREIGN KEY (persona_id)
+		REFERENCES personas(persona_id)
 		ON DELETE SET NULL;
 	END IF;
 END $$;
 
 -- Removed updated_at trigger for server_memories table (never updated after creation, only INSERT/DELETE)
 DROP TRIGGER IF EXISTS update_server_memories_timestamp ON server_memories;
-CREATE INDEX IF NOT EXISTS idx_server_memories_tomori_id ON server_memories(tomori_id);
-CREATE INDEX IF NOT EXISTS idx_server_memories_tomori_created_at ON server_memories(tomori_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_server_memories_persona_id ON server_memories(persona_id);
+CREATE INDEX IF NOT EXISTS idx_server_memories_persona_created_at ON server_memories(persona_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_server_memories_lineage_id ON server_memories(persona_lineage_id);
 CREATE INDEX IF NOT EXISTS idx_server_memories_server_lineage_created_at ON server_memories(server_id, persona_lineage_id, created_at DESC);
 
@@ -1108,12 +1106,12 @@ EXECUTE FUNCTION update_timestamp();
 CREATE TABLE IF NOT EXISTS channel_persona_whitelist (
 	server_id INT NOT NULL,
 	channel_disc_id TEXT NOT NULL,
-	tomori_id INT NOT NULL,
+	persona_id INT NOT NULL,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-	PRIMARY KEY (server_id, channel_disc_id, tomori_id),
+	PRIMARY KEY (server_id, channel_disc_id, persona_id),
 	FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE,
-	FOREIGN KEY (tomori_id) REFERENCES tomoris(tomori_id) ON DELETE CASCADE
+	FOREIGN KEY (persona_id) REFERENCES personas(persona_id) ON DELETE CASCADE
 );
 
 -- Create indexes for channel_persona_whitelist
@@ -1135,28 +1133,28 @@ CREATE TABLE IF NOT EXISTS personal_spotlights (
 	server_id INT NOT NULL,
 	user_id INT NOT NULL,
 	channel_disc_id TEXT NOT NULL,
-	auto_trigger_tomori_id INT NULL,
+	auto_trigger_persona_id INT NULL,
 	expires_at TIMESTAMP NULL,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	PRIMARY KEY (server_id, user_id, channel_disc_id),
 	FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE,
 	FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-	FOREIGN KEY (auto_trigger_tomori_id) REFERENCES tomoris(tomori_id) ON DELETE SET NULL
+	FOREIGN KEY (auto_trigger_persona_id) REFERENCES personas(persona_id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS personal_spotlight_personas (
 	server_id INT NOT NULL,
 	user_id INT NOT NULL,
 	channel_disc_id TEXT NOT NULL,
-	tomori_id INT NOT NULL,
+	persona_id INT NOT NULL,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-	PRIMARY KEY (server_id, user_id, channel_disc_id, tomori_id),
+	PRIMARY KEY (server_id, user_id, channel_disc_id, persona_id),
 	FOREIGN KEY (server_id, user_id, channel_disc_id)
 		REFERENCES personal_spotlights(server_id, user_id, channel_disc_id)
 		ON DELETE CASCADE,
-	FOREIGN KEY (tomori_id) REFERENCES tomoris(tomori_id) ON DELETE CASCADE
+	FOREIGN KEY (persona_id) REFERENCES personas(persona_id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_personal_spotlights_server_user
@@ -1181,7 +1179,7 @@ EXECUTE FUNCTION update_timestamp();
 CREATE TABLE IF NOT EXISTS error_logs (
   error_log_id SERIAL PRIMARY KEY,
   -- Context IDs - Made nullable as errors can happen outside these contexts
-  tomori_id INT NULL,
+  persona_id INT NULL,
   user_id INT NULL,
   server_id INT NULL,
   -- Error Details
@@ -1193,7 +1191,7 @@ CREATE TABLE IF NOT EXISTS error_logs (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   -- Foreign Keys - Changed to SET NULL to preserve logs even if related entity is deleted
-  FOREIGN KEY (tomori_id) REFERENCES tomoris(tomori_id) ON DELETE SET NULL,
+  FOREIGN KEY (persona_id) REFERENCES personas(persona_id) ON DELETE SET NULL,
   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL,
   FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE SET NULL
 );
@@ -1362,7 +1360,7 @@ BEGIN
         ALTER TABLE reminders
         ADD CONSTRAINT reminders_persona_id_fkey
         FOREIGN KEY (persona_id)
-        REFERENCES tomoris(tomori_id)
+        REFERENCES personas(persona_id)
         ON DELETE SET NULL;
     END IF;
 END $$;
@@ -1437,8 +1435,8 @@ FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 
 -- Persona autochat runtime state (Phase 6 Step #16B).
--- Stores hot-path autochat counters separately from persona identity in tomoris.
--- FK column uses the forward-compatible name persona_id (→ tomoris(tomori_id));
+-- Stores hot-path autochat counters separately from persona identity in personas.
+-- FK column uses the forward-compatible name persona_id (→ personas(persona_id));
 -- ON DELETE CASCADE ensures cleanup when a persona is deleted.
 -- Both columns default to 0 so new personas auto-initialize on first UPSERT.
 CREATE TABLE IF NOT EXISTS persona_autoch_runtime_state (
@@ -1446,7 +1444,7 @@ CREATE TABLE IF NOT EXISTS persona_autoch_runtime_state (
   autoch_counter     INT NOT NULL DEFAULT 0,   -- Messages seen since cycle start
   autoch_next_target INT NOT NULL DEFAULT 0,   -- Target count for next autochat trigger (0 = always-reply)
   updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  FOREIGN KEY (persona_id) REFERENCES tomoris(tomori_id) ON DELETE CASCADE
+  FOREIGN KEY (persona_id) REFERENCES personas(persona_id) ON DELETE CASCADE
 );
 
 DROP TRIGGER IF EXISTS update_persona_autoch_runtime_state_timestamp ON persona_autoch_runtime_state;
@@ -1455,7 +1453,7 @@ BEFORE UPDATE ON persona_autoch_runtime_state
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 
--- Backfill for existing tomoris rows that pre-date migration 015.
+-- Backfill for existing personas rows that pre-date migration 015.
 -- On pre-migration databases, preserve legacy counter values before the migration runner
 -- drops the old columns. On fresh/post-migration databases, seed any missing state row
 -- with the same zero defaults runtime loaders use.
@@ -1463,21 +1461,21 @@ DO $$
 BEGIN
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'tomoris' AND column_name = 'autoch_counter'
+    WHERE table_name = 'personas' AND column_name = 'autoch_counter'
   ) AND EXISTS (
     SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'tomoris' AND column_name = 'autoch_next_target'
+    WHERE table_name = 'personas' AND column_name = 'autoch_next_target'
   ) THEN
     INSERT INTO persona_autoch_runtime_state (persona_id, autoch_counter, autoch_next_target)
-    SELECT tomori_id, COALESCE(autoch_counter, 0), COALESCE(autoch_next_target, 0)
-    FROM tomoris
+    SELECT persona_id, COALESCE(autoch_counter, 0), COALESCE(autoch_next_target, 0)
+    FROM personas
     ON CONFLICT (persona_id) DO UPDATE SET
       autoch_counter = EXCLUDED.autoch_counter,
       autoch_next_target = EXCLUDED.autoch_next_target;
   ELSE
     INSERT INTO persona_autoch_runtime_state (persona_id, autoch_counter, autoch_next_target)
-    SELECT tomori_id, 0, 0
-    FROM tomoris
+    SELECT persona_id, 0, 0
+    FROM personas
     ON CONFLICT (persona_id) DO NOTHING;
   END IF;
 END $$;
@@ -1772,7 +1770,7 @@ $$ LANGUAGE plpgsql;
 -- Example usage - This shows how to add columns to existing tables
 -- You can add these calls whenever you need to introduce schema changes
 -- SELECT add_column_if_not_exists('users', 'avatar_url', 'TEXT');
--- SELECT add_column_if_not_exists('tomoris', 'response_count', 'INT', '0');
+-- SELECT add_column_if_not_exists('personas', 'response_count', 'INT', '0');
 
 -- ============================================================================
 -- MATRIX BRIDGE
@@ -1800,7 +1798,7 @@ CREATE TABLE IF NOT EXISTS random_triggers (
   trigger_id              SERIAL PRIMARY KEY,
   server_id               INT NOT NULL,
   channel_disc_id         TEXT NOT NULL,
-  tomori_id               INT,                                -- NULL = "Random" persona selection
+  persona_id               INT,                                -- NULL = "Random" persona selection
   timer_hours             INTEGER NOT NULL,                   -- How often to roll the dice (hours)
   random_offset_range     INTEGER,                            -- Optional +/- random offset range in hours
   chance_percent          INTEGER NOT NULL,                   -- Probability of firing (1-100)
@@ -1811,7 +1809,7 @@ CREATE TABLE IF NOT EXISTS random_triggers (
   created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE,
-  FOREIGN KEY (tomori_id) REFERENCES tomoris(tomori_id) ON DELETE CASCADE
+  FOREIGN KEY (persona_id) REFERENCES personas(persona_id) ON DELETE CASCADE
 );
 SELECT add_column_if_not_exists('random_triggers', 'random_offset_range', 'INTEGER');
 SELECT add_column_if_not_exists('random_triggers', 'failure_threshold', 'INTEGER');
@@ -1823,10 +1821,10 @@ CREATE INDEX IF NOT EXISTS idx_random_triggers_next ON random_triggers(next_trig
 -- Fast lookup for triggers by server (used in cap checks and remove command)
 CREATE INDEX IF NOT EXISTS idx_random_triggers_server ON random_triggers(server_id);
 -- Enforce uniqueness: a specific named persona can only have one trigger per channel
--- NULL tomori_id (Random) is excluded and can have multiple triggers per channel
+-- NULL persona_id (Random) is excluded and can have multiple triggers per channel
 CREATE UNIQUE INDEX IF NOT EXISTS idx_random_triggers_unique_persona
-  ON random_triggers(server_id, channel_disc_id, tomori_id)
-  WHERE tomori_id IS NOT NULL;
+  ON random_triggers(server_id, channel_disc_id, persona_id)
+  WHERE persona_id IS NOT NULL;
 
 -- updated_at trigger for random_triggers (DROP first for idempotency on re-run)
 DROP TRIGGER IF EXISTS update_random_triggers_timestamp ON random_triggers;
@@ -1869,11 +1867,11 @@ CREATE TRIGGER update_channel_llm_overrides_timestamp
 -- Stars are Erato-only (injected only when model = llama-3-erato-v1).
 -- ============================================================================
 
-SELECT add_column_if_not_exists('tomoris', 'nai_attg_author', 'TEXT', NULL);
-SELECT add_column_if_not_exists('tomoris', 'nai_attg_title',  'TEXT', NULL);
-SELECT add_column_if_not_exists('tomoris', 'nai_attg_tags',   'TEXT', NULL);
-SELECT add_column_if_not_exists('tomoris', 'nai_attg_genre',  'TEXT', NULL);
-SELECT add_column_if_not_exists('tomoris', 'nai_attg_stars',  'SMALLINT', NULL);
+SELECT add_column_if_not_exists('personas', 'nai_attg_author', 'TEXT', NULL);
+SELECT add_column_if_not_exists('personas', 'nai_attg_title',  'TEXT', NULL);
+SELECT add_column_if_not_exists('personas', 'nai_attg_tags',   'TEXT', NULL);
+SELECT add_column_if_not_exists('personas', 'nai_attg_genre',  'TEXT', NULL);
+SELECT add_column_if_not_exists('personas', 'nai_attg_stars',  'SMALLINT', NULL);
 -- ============================================================================
 -- NOVELAI SAMPLING PRESETS (March 2026)
 -- Stores per-model preset configs (Kayra and Erato) with human-readable
@@ -2280,9 +2278,9 @@ CREATE TRIGGER update_user_saved_provider_configs_timestamp
 -- depth=0 means "at the very bottom" (after all fetched messages).
 -- depth=N means N messages above the bottom; clamped to top if N > total.
 -- ============================================================
--- Per-persona note (on tomoris)
-SELECT add_column_if_not_exists('tomoris', 'context_note', 'TEXT', 'NULL');
-SELECT add_column_if_not_exists('tomoris', 'context_note_depth', 'INTEGER', '0');
+-- Per-persona note (on personas)
+SELECT add_column_if_not_exists('personas', 'context_note', 'TEXT', 'NULL');
+SELECT add_column_if_not_exists('personas', 'context_note_depth', 'INTEGER', '0');
 
 -- ============================================================
 -- Voice / TTS feature toggles (March 2026)
@@ -2317,19 +2315,19 @@ CREATE TABLE IF NOT EXISTS voice_samples (
 
 CREATE INDEX IF NOT EXISTS idx_voice_samples_server ON voice_samples(server_id);
 
-SELECT add_column_if_not_exists('tomoris', 'speech_voice_sample_id', 'INTEGER', 'NULL');
-SELECT add_column_if_not_exists('tomoris', 'speech_voice_id', 'TEXT', 'NULL');
-SELECT add_column_if_not_exists('tomoris', 'speech_voice_name', 'TEXT', 'NULL');
-SELECT add_column_if_not_exists('tomoris', 'speech_voice_design_prompt', 'TEXT', 'NULL');
+SELECT add_column_if_not_exists('personas', 'speech_voice_sample_id', 'INTEGER', 'NULL');
+SELECT add_column_if_not_exists('personas', 'speech_voice_id', 'TEXT', 'NULL');
+SELECT add_column_if_not_exists('personas', 'speech_voice_name', 'TEXT', 'NULL');
+SELECT add_column_if_not_exists('personas', 'speech_voice_design_prompt', 'TEXT', 'NULL');
 
 DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint
-    WHERE conname = 'tomoris_speech_voice_sample_id_fkey'
+    WHERE conname = 'personas_speech_voice_sample_id_fkey'
   ) THEN
-    ALTER TABLE tomoris
-    ADD CONSTRAINT tomoris_speech_voice_sample_id_fkey
+    ALTER TABLE personas
+    ADD CONSTRAINT personas_speech_voice_sample_id_fkey
     FOREIGN KEY (speech_voice_sample_id)
     REFERENCES voice_samples(sample_id)
     ON DELETE SET NULL;

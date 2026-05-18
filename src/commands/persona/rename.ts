@@ -88,10 +88,10 @@ export async function execute(
     }
 
     const personaSelectOptions: SelectOption[] = allPersonas
-      .filter((persona) => persona.tomori_id !== undefined)
+      .filter((persona) => persona.persona_id !== undefined)
       .map((persona) => ({
-        label: safeSelectOptionText(persona.tomori_nickname),
-        value: persona.tomori_id?.toString() ?? "",
+        label: safeSelectOptionText(persona.persona_nickname),
+        value: persona.persona_id?.toString() ?? "",
         description: persona.is_alter
           ? localizer(locale, "commands.persona.rename.alter_persona_description")
           : localizer(locale, "commands.persona.rename.main_persona_description"),
@@ -148,8 +148,8 @@ export async function execute(
     attemptedNickname = modalResult.values?.[NEW_NAME_INPUT_ID] ?? "";
     const newNickname = attemptedNickname.trim();
 
-    selectedPersona = allPersonas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
-    if (!selectedPersona?.tomori_id) {
+    selectedPersona = allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
+    if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -173,7 +173,7 @@ export async function execute(
     }
 
     // 5. Store the old nickname for the success message
-    const oldNickname = selectedPersona.tomori_nickname;
+    const oldNickname = selectedPersona.persona_nickname;
 
     // 6. Check if the nickname is actually changing
     if (newNickname === oldNickname) {
@@ -188,12 +188,12 @@ export async function execute(
       return;
     }
 
-    const duplicateNameRows = await sql<Array<{ tomori_id: number }>>`
-			SELECT tomori_id
-			FROM tomoris
+    const duplicateNameRows = await sql<Array<{ persona_id: number }>>`
+			SELECT persona_id
+			FROM personas
 			WHERE server_id = ${selectedPersona.server_id}
-			  AND tomori_id <> ${selectedPersona.tomori_id}
-			  AND lower(btrim(tomori_nickname)) = lower(btrim(${newNickname}))
+			  AND persona_id <> ${selectedPersona.persona_id}
+			  AND lower(btrim(persona_nickname)) = lower(btrim(${newNickname}))
 			LIMIT 1
 		`;
     if (duplicateNameRows.length > 0) {
@@ -206,25 +206,25 @@ export async function execute(
       return;
     }
 
-    // 7. Update the nickname in the `tomoris` table
-    const renamed = await personaRepository.renamePersona(selectedPersona.tomori_id, newNickname);
+    // 7. Update the nickname in the `personas` table
+    const renamed = await personaRepository.renamePersona(selectedPersona.persona_id, newNickname);
 
     if (!renamed) {
-      // Log error specific to tomoris update failure
+      // Log error specific to personas update failure
       const context: ErrorContext = {
-        tomoriId: selectedPersona.tomori_id,
+        tomoriId: selectedPersona.persona_id,
         serverId: selectedPersona.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
         metadata: {
           command: "config rename",
-          table: "tomoris",
+          table: "personas",
           guildId: serverDiscId,
           newNickname,
         },
       };
       await log.error(
-        "Failed to update tomori_nickname in tomoris table",
+        "Failed to update persona_nickname in personas table",
         new Error("Database update returned no rows"),
         context,
       );
@@ -244,21 +244,21 @@ export async function execute(
     // Case-insensitive check if the nickname exists
     if (!currentTriggers.some((trigger) => trigger.toLowerCase() === newNickname.toLowerCase())) {
       triggerUpdateNeeded = true;
-      log.info(`Adding new nickname '${newNickname}' to trigger words for tomori ${selectedPersona.tomori_id}`);
+      log.info(`Adding new nickname '${newNickname}' to trigger words for tomori ${selectedPersona.persona_id}`);
     } else {
       log.info(
-        `Nickname '${newNickname}' already exists in trigger words for tomori ${selectedPersona.tomori_id}. Skipping update.`,
+        `Nickname '${newNickname}' already exists in trigger words for tomori ${selectedPersona.persona_id}. Skipping update.`,
       );
     }
 
     // 10. Update trigger_words in `persona_configs` if needed
     if (triggerUpdateNeeded) {
-      const triggerAdded = await personaRepository.addTrigger(selectedPersona.tomori_id, [newNickname]);
+      const triggerAdded = await personaRepository.addTrigger(selectedPersona.persona_id, [newNickname]);
 
       if (!triggerAdded) {
         // Log error specific to persona_configs update failure
         const context: ErrorContext = {
-          tomoriId: selectedPersona.tomori_id,
+          tomoriId: selectedPersona.persona_id,
           serverId: selectedPersona.server_id,
           userId: userData.user_id,
           errorType: "DatabaseUpdateError",
@@ -290,7 +290,7 @@ export async function execute(
         });
         return; // Stop execution after informing about partial success
       }
-      log.success(`Successfully updated trigger words for tomori ${selectedPersona.tomori_id}`);
+      log.success(`Successfully updated trigger words for tomori ${selectedPersona.persona_id}`);
     }
 
     // 12. Update bot's server nickname only when renaming the main persona
@@ -354,13 +354,13 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: selectedPersona?.server_id ?? null,
-      tomoriId: selectedPersona?.tomori_id ?? null,
+      tomoriId: selectedPersona?.persona_id ?? null,
       errorType: "CommandExecutionError",
       metadata: {
         command: "config rename",
         guildId: serverDiscId,
         executorDiscordId: interaction.user.id,
-        selectedPersonaId: selectedPersona?.tomori_id ?? null,
+        selectedPersonaId: selectedPersona?.persona_id ?? null,
         nicknameAttempted: attemptedNickname,
       },
     };

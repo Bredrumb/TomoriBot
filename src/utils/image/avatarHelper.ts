@@ -209,7 +209,7 @@ export async function initializePresetAvatarCache(presets: TomoriPresetRow[]): P
     for (const preset of presets) {
       // Skip if no avatar path is set
       if (!preset.preset_avatar_path) {
-        presetAvatarCache.set(preset.tomori_preset_id, null);
+        presetAvatarCache.set(preset.persona_preset_id, null);
         continue;
       }
 
@@ -223,8 +223,8 @@ export async function initializePresetAvatarCache(presets: TomoriPresetRow[]): P
         // 5. Validate it's a PNG
         const validation = validatePNGBuffer(imageBuffer);
         if (!validation.isValid) {
-          log.warn(`Invalid PNG for preset "${preset.tomori_preset_name}": ${validation.error}`);
-          presetAvatarCache.set(preset.tomori_preset_id, null);
+          log.warn(`Invalid PNG for preset "${preset.persona_preset_name}": ${validation.error}`);
+          presetAvatarCache.set(preset.persona_preset_id, null);
           continue;
         }
 
@@ -233,16 +233,16 @@ export async function initializePresetAvatarCache(presets: TomoriPresetRow[]): P
         const dataUri = `data:image/png;base64,${base64}`;
 
         // 7. Cache it
-        presetAvatarCache.set(preset.tomori_preset_id, dataUri);
+        presetAvatarCache.set(preset.persona_preset_id, dataUri);
         log.success(
-          `Cached avatar for preset "${preset.tomori_preset_name}" (${(imageBuffer.length / 1024).toFixed(2)} KB)`,
+          `Cached avatar for preset "${preset.persona_preset_name}" (${(imageBuffer.length / 1024).toFixed(2)} KB)`,
         );
       } catch (error) {
         // File doesn't exist or can't be read - cache as null
         log.warn(
-          `Could not load avatar for preset "${preset.tomori_preset_name}": ${error instanceof Error ? error.message : "Unknown error"}`,
+          `Could not load avatar for preset "${preset.persona_preset_name}": ${error instanceof Error ? error.message : "Unknown error"}`,
         );
-        presetAvatarCache.set(preset.tomori_preset_id, null);
+        presetAvatarCache.set(preset.persona_preset_id, null);
       }
     }
 

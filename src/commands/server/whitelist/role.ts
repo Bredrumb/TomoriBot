@@ -84,7 +84,7 @@ export async function execute(
     }
 
     errorContext.serverId = tomoriState.server_id;
-    errorContext.tomoriId = tomoriState.tomori_id;
+    errorContext.tomoriId = tomoriState.persona_id;
 
     // 3. Get command parameters
     const role = interaction.options.getRole("role", true);

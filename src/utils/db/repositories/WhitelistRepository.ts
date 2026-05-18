@@ -23,12 +23,12 @@ type PersonaWhitelistStatus = Pick<
 export class WhitelistRepository {
   // ── private helpers ────────────────────────────────────────────────────────
 
-  private normalizeTomoriIds(rows: Array<{ tomori_id: number | string | bigint }>): number[] {
+  private normalizeTomoriIds(rows: Array<{ persona_id: number | string | bigint }>): number[] {
     return rows
       .map((row) => {
-        if (typeof row.tomori_id === "bigint") return Number(row.tomori_id);
-        if (typeof row.tomori_id === "string") return Number.parseInt(row.tomori_id, 10);
-        return row.tomori_id;
+        if (typeof row.persona_id === "bigint") return Number(row.persona_id);
+        if (typeof row.persona_id === "string") return Number.parseInt(row.persona_id, 10);
+        return row.persona_id;
       })
       .filter((tomoriId): tomoriId is number => Number.isInteger(tomoriId) && tomoriId > 0);
   }
@@ -118,11 +118,11 @@ export class WhitelistRepository {
         sql<Array<{ role_disc_id: string }>>`
           SELECT role_disc_id FROM role_whitelist WHERE server_id = ${serverId}
         `,
-        sql<Array<{ tomori_id: number | string | bigint }>>`
-          SELECT DISTINCT tomori_id
+        sql<Array<{ persona_id: number | string | bigint }>>`
+          SELECT DISTINCT persona_id
           FROM channel_persona_whitelist
           WHERE server_id = ${serverId}
-          ORDER BY tomori_id ASC
+          ORDER BY persona_id ASC
         `,
       ]);
       const hasActiveRoleWhitelist = roleRows.length > 0;
@@ -142,19 +142,19 @@ export class WhitelistRepository {
       const restrictedPersonaIds = this.normalizeTomoriIds(restrictedPersonaRows);
       const hasActivePersonaWhitelist = restrictedPersonaIds.length > 0;
 
-      let allowedRestrictedPersonaRows = await sql<Array<{ tomori_id: number | string | bigint }>>`
-        SELECT tomori_id
+      let allowedRestrictedPersonaRows = await sql<Array<{ persona_id: number | string | bigint }>>`
+        SELECT persona_id
         FROM channel_persona_whitelist
         WHERE server_id = ${serverId} AND channel_disc_id = ${channelDiscId}
-        ORDER BY created_at ASC, tomori_id ASC
+        ORDER BY created_at ASC, persona_id ASC
       `;
 
       if (parentChannelDiscId) {
-        const parentRows = await sql<Array<{ tomori_id: number | string | bigint }>>`
-          SELECT tomori_id
+        const parentRows = await sql<Array<{ persona_id: number | string | bigint }>>`
+          SELECT persona_id
           FROM channel_persona_whitelist
           WHERE server_id = ${serverId} AND channel_disc_id = ${parentChannelDiscId}
-          ORDER BY created_at ASC, tomori_id ASC
+          ORDER BY created_at ASC, persona_id ASC
         `;
         allowedRestrictedPersonaRows = [...allowedRestrictedPersonaRows, ...parentRows];
       }
@@ -273,12 +273,12 @@ export class WhitelistRepository {
 
     await sql.transaction(async (tx) => {
       await tx`
-        DELETE FROM channel_persona_whitelist WHERE server_id = ${serverId} AND tomori_id = ${tomoriId}
+        DELETE FROM channel_persona_whitelist WHERE server_id = ${serverId} AND persona_id = ${tomoriId}
       `;
 
       for (const channelDiscId of uniqueChannelDiscIds) {
         await tx`
-          INSERT INTO channel_persona_whitelist (server_id, channel_disc_id, tomori_id)
+          INSERT INTO channel_persona_whitelist (server_id, channel_disc_id, persona_id)
           VALUES (${serverId}, ${channelDiscId}, ${tomoriId})
         `;
       }
@@ -296,7 +296,7 @@ export class WhitelistRepository {
   async removeChannelPersonaWhitelist(serverId: number, channelDiscId: string, tomoriId: number): Promise<boolean> {
     const result = await sql`
       DELETE FROM channel_persona_whitelist
-      WHERE server_id = ${serverId} AND channel_disc_id = ${channelDiscId} AND tomori_id = ${tomoriId}
+      WHERE server_id = ${serverId} AND channel_disc_id = ${channelDiscId} AND persona_id = ${tomoriId}
     `;
     return result.count > 0;
   }
@@ -312,7 +312,7 @@ export class WhitelistRepository {
     const result = await sql`
       SELECT *
       FROM channel_persona_whitelist
-      WHERE server_id = ${serverId} AND tomori_id = ${tomoriId}
+      WHERE server_id = ${serverId} AND persona_id = ${tomoriId}
       ORDER BY channel_disc_id ASC, created_at ASC
     `;
     return result as ChannelPersonaWhitelistRow[];
@@ -329,7 +329,7 @@ export class WhitelistRepository {
       SELECT *
       FROM channel_persona_whitelist
       WHERE server_id = ${serverId}
-      ORDER BY tomori_id ASC, channel_disc_id ASC, created_at ASC
+      ORDER BY persona_id ASC, channel_disc_id ASC, created_at ASC
     `;
     return result as ChannelPersonaWhitelistRow[];
   }
@@ -358,16 +358,16 @@ export class WhitelistRepository {
    * Filter a persona list down to only entries allowed by the effective persona-channel whitelist.
    * Returns the original list unchanged when no persona whitelist is active.
    *
-   * @param personas        - List of persona-like objects with optional tomori_id
+   * @param personas        - List of persona-like objects with optional persona_id
    * @param whitelistStatus - The current whitelist status for the channel
    * @returns Filtered array of allowed personas
    */
-  filterPersonasByWhitelist<T extends { tomori_id?: number | null | undefined }>(
+  filterPersonasByWhitelist<T extends { persona_id?: number | null | undefined }>(
     personas: readonly T[],
     whitelistStatus: PersonaWhitelistStatus | null | undefined,
   ): T[] {
     if (!whitelistStatus?.hasActivePersonaWhitelist) return [...personas];
-    return personas.filter((persona) => this.isPersonaAllowedByWhitelistStatus(whitelistStatus, persona.tomori_id));
+    return personas.filter((persona) => this.isPersonaAllowedByWhitelistStatus(whitelistStatus, persona.persona_id));
   }
 
   // ── role whitelist ─────────────────────────────────────────────────────────

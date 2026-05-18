@@ -60,7 +60,7 @@ export const serverSchema = z.object({
 export type ServerRow = z.infer<typeof serverSchema>;
 
 export const tomoriSchema = z.object({
-  tomori_id: z.number().optional(),
+  persona_id: z.number().optional(),
   server_id: z.number(),
   persona_lineage_id: z
     .preprocess((value) => {
@@ -73,7 +73,7 @@ export const tomoriSchema = z.object({
       return value;
     }, z.number().int().nonnegative())
     .default(0),
-  tomori_nickname: z.string(),
+  persona_nickname: z.string(),
   attribute_list: z.array(z.string()).default([]),
   sample_dialogues_in: z.array(z.string()).default([]),
   sample_dialogues_out: z.array(z.string()).default([]),
@@ -100,8 +100,8 @@ export type TomoriRow = z.infer<typeof tomoriSchema>;
 
 /**
  * Runtime autochat counters for a persona (Phase 6 Step #16B).
- * Separated from tomoris so identity rows are not mutated on every message tick.
- * FK column is persona_id → tomoris(tomori_id); ON DELETE CASCADE keeps cleanup atomic.
+ * Separated from personas so identity rows are not mutated on every message tick.
+ * FK column is persona_id → personas(persona_id); ON DELETE CASCADE keeps cleanup atomic.
  */
 export const personaAutochRuntimeStateSchema = z.object({
   persona_id: z.number().int(),
@@ -419,7 +419,7 @@ const toolNoticeKeySchema = z.enum(TOOL_NOTICE_KEYS);
 const supportedParamSchema = z.enum(SUPPORTED_PARAM_VALUES);
 export const autochatPersonaOverrideSchema = z.object({
   channel_disc_id: z.string(),
-  tomori_id: z.number().int(),
+  persona_id: z.number().int(),
 });
 export type AutochatPersonaOverride = z.infer<typeof autochatPersonaOverrideSchema>;
 
@@ -696,7 +696,7 @@ export const naiPresetSchema = z.object({
 export type NaiPresetRow = z.infer<typeof naiPresetSchema>;
 
 export const personaConfigSchema = z.object({
-  tomori_id: z.number(),
+  persona_id: z.number(),
   trigger_words: z.array(z.string()).default([]),
   persona_prompt: z.string().nullable().optional(),
   reward_conditioning_enabled: z.boolean().default(true),
@@ -721,9 +721,9 @@ export const channelLlmOverrideSchema = z.object({
 export type ChannelLlmOverrideRow = z.infer<typeof channelLlmOverrideSchema>;
 
 export const tomoriPresetSchema = z.object({
-  tomori_preset_id: z.number(),
-  tomori_preset_name: z.string(),
-  tomori_preset_desc: z.string(),
+  persona_preset_id: z.number(),
+  persona_preset_name: z.string(),
+  persona_preset_desc: z.string(),
   preset_attribute_list: z.array(z.string()).default([]),
   preset_sample_dialogues_in: z.array(z.string()).default([]),
   preset_sample_dialogues_out: z.array(z.string()).default([]),
@@ -778,7 +778,7 @@ export type ServerStickerRow = z.infer<typeof serverStickerSchema>;
 export const serverMemorySchema = z.object({
   server_memory_id: z.number().optional(),
   server_id: z.number(),
-  tomori_id: z.number().nullable().optional(),
+  persona_id: z.number().nullable().optional(),
   persona_lineage_id: z.preprocess((value) => {
     if (typeof value === "bigint") {
       return Number(value);
@@ -842,7 +842,7 @@ export type PersonalMemoryRow = z.infer<typeof personalMemorySchema>;
 export const documentSchema = z.object({
   document_id: z.number().optional(),
   server_id: z.number(),
-  tomori_id: z.number().nullable().optional(),
+  persona_id: z.number().nullable().optional(),
   uploader_user_id: z.number().nullable().optional(),
   document_name: z.string(),
   file_name: z.string().nullable().optional(),
@@ -912,7 +912,7 @@ export type RoleWhitelistRow = z.infer<typeof roleWhitelistSchema>;
 export const channelPersonaWhitelistSchema = z.object({
   server_id: z.number(),
   channel_disc_id: z.string(),
-  tomori_id: z.number().int(),
+  persona_id: z.number().int(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -922,7 +922,7 @@ export const personalSpotlightSchema = z.object({
   server_id: z.number(),
   user_id: z.number(),
   channel_disc_id: z.string(),
-  auto_trigger_tomori_id: z.number().int().nullable().optional(),
+  auto_trigger_persona_id: z.number().int().nullable().optional(),
   expires_at: z.date().nullable().optional(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
@@ -933,7 +933,7 @@ export const personalSpotlightPersonaSchema = z.object({
   server_id: z.number(),
   user_id: z.number(),
   channel_disc_id: z.string(),
-  tomori_id: z.number().int(),
+  persona_id: z.number().int(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -942,7 +942,7 @@ export type PersonalSpotlightPersonaRow = z.infer<typeof personalSpotlightPerson
 export const errorLogSchema = z.object({
   error_log_id: z.number().optional(), // Primary key, optional as it's generated
   // Context IDs - Optional because errors can occur outside specific contexts
-  tomori_id: z.number().nullable().optional(),
+  persona_id: z.number().nullable().optional(),
   user_id: z.number().nullable().optional(),
   server_id: z.number().nullable().optional(),
   // Error Details
@@ -1216,7 +1216,7 @@ export const randomTriggerSchema = z.object({
   trigger_id: z.number().optional(), // Primary key, auto-generated
   server_id: z.number(), // Foreign key to servers table
   channel_disc_id: z.string(), // Discord channel ID where trigger fires
-  tomori_id: z.number().nullable().optional(), // NULL = "Random" persona selection
+  persona_id: z.number().nullable().optional(), // NULL = "Random" persona selection
   timer_hours: z.number().int().min(1), // How often to roll the dice (hours)
   random_offset_range: z.number().int().min(0).nullable().optional(), // Optional +/- jitter range (hours)
   chance_percent: z.number().int().min(1).max(100), // Probability of firing (1-100%)

@@ -123,7 +123,7 @@ export async function execute(
       personaSelectionInteraction = personaSelection.interaction;
       const selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
 
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await updateButtonComponentsV2Status(
           personaSelectionInteraction,
           locale,
@@ -207,7 +207,7 @@ export async function execute(
         return;
       }
 
-      const ok = await personaRepository.setPrompt(selectedPersona.tomori_id, personaPrompt || "");
+      const ok = await personaRepository.setPrompt(selectedPersona.persona_id, personaPrompt || "");
       if (!ok) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "general.errors.update_failed_title",
@@ -228,14 +228,14 @@ export async function execute(
           ? "commands.teach.personaprompt.success_description"
           : "commands.forget.personaprompt.success_description",
         ColorCode.SUCCESS,
-        { persona_name: selectedPersona.tomori_nickname },
+        { persona_name: selectedPersona.persona_nickname },
         "general.pagination.reloading_persona_picker",
       );
     }
   } catch (error) {
     await log.error("Error in /teach personaprompt command", error, {
       serverId: tomoriState?.server_id,
-      tomoriId: tomoriState?.tomori_id,
+      tomoriId: tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "teach personaprompt",

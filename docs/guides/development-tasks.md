@@ -79,7 +79,7 @@ Important:
 
 ## 8) Add a New Persona Preset
 
-1. Add preset row in `src/db/seed.sql` (`tomori_presets`).
+1. Add preset row in `src/db/seed.sql` (`persona_presets`).
 2. Add optional avatar path (stored under `src/db/img/`).
 3. Validate via `/persona import` and persona cache behavior.
 

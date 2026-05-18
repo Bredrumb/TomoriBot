@@ -282,9 +282,9 @@ export async function evaluateChatAccess(params: {
     whitelistStatus.hasActivePersonaWhitelist || personalSpotlightStatus
       ? new Set(
           params.allPersonas.flatMap((persona) =>
-            typeof persona.tomori_id === "number" &&
-            isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, persona.tomori_id)
-              ? [persona.tomori_id]
+            typeof persona.persona_id === "number" &&
+            isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, persona.persona_id)
+              ? [persona.persona_id]
               : [],
           ),
         )
@@ -312,7 +312,7 @@ export async function validateDirectChatTrigger(params: {
 }): Promise<DirectChatTriggerValidation> {
   const personaByNickname = new Map<string, TomoriState>();
   for (const persona of params.allPersonas) {
-    const nicknameKey = persona.tomori_nickname?.toLowerCase();
+    const nicknameKey = persona.persona_nickname?.toLowerCase();
     if (!nicknameKey || personaByNickname.has(nicknameKey)) continue;
     personaByNickname.set(nicknameKey, persona);
   }

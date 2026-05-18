@@ -80,7 +80,7 @@ export async function execute(
     personaSelectionInteraction = personaSelection.interaction;
     const selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
 
-    if (!selectedPersona?.tomori_id) {
+    if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(personaSelectionInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -89,7 +89,7 @@ export async function execute(
       return;
     }
 
-    const ok = await personaRepository.removePrompt(selectedPersona.tomori_id);
+    const ok = await personaRepository.removePrompt(selectedPersona.persona_id);
     if (!ok) {
       await replyInfoEmbed(personaSelectionInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
@@ -104,13 +104,13 @@ export async function execute(
     await replyInfoEmbed(personaSelectionInteraction, locale, {
       titleKey: "commands.forget.personaprompt.success_title",
       descriptionKey: "commands.forget.personaprompt.success_description",
-      descriptionVars: { persona_name: selectedPersona.tomori_nickname },
+      descriptionVars: { persona_name: selectedPersona.persona_nickname },
       color: ColorCode.SUCCESS,
     });
   } catch (error) {
     await log.error("Error in /forget personaprompt command", error, {
       serverId: tomoriState?.server_id,
-      tomoriId: tomoriState?.tomori_id,
+      tomoriId: tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "forget personaprompt",

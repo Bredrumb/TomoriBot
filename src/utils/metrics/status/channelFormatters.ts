@@ -112,9 +112,9 @@ export async function formatWhitelistPersonaEntries(
 
   const channelsByPersona = new Map<number, string[]>();
   for (const entry of entries) {
-    const channelIds = channelsByPersona.get(entry.tomori_id) ?? [];
+    const channelIds = channelsByPersona.get(entry.persona_id) ?? [];
     channelIds.push(entry.channel_disc_id);
-    channelsByPersona.set(entry.tomori_id, channelIds);
+    channelsByPersona.set(entry.persona_id, channelIds);
   }
 
   const lines = await Promise.all(
@@ -141,7 +141,7 @@ export async function formatWhitelistPersonaEntries(
  * Each entry shows channel, persona name, timer interval, and trigger probability.
  * @param client - Discord client for channel mentions
  * @param triggers - Array of random trigger rows from the database
- * @param personaNameMap - Map of tomori_id to persona nickname for name resolution
+ * @param personaNameMap - Map of persona_id to persona nickname for name resolution
  * @param locale - User locale
  * @returns Formatted random trigger list string, or localized "None" if empty
  */
@@ -160,8 +160,8 @@ export async function formatRandomTriggers(
       const mention = await resolveChannelMention(client, trigger.channel_disc_id, locale);
 
       const personaName =
-        trigger.tomori_id != null
-          ? (personaNameMap.get(trigger.tomori_id) ?? `ID:${trigger.tomori_id}`)
+        trigger.persona_id != null
+          ? (personaNameMap.get(trigger.persona_id) ?? `ID:${trigger.persona_id}`)
           : localizer(locale, "commands.tool.status.random_trigger_persona_random");
       const offsetSegment =
         trigger.random_offset_range != null && trigger.random_offset_range > 0
@@ -225,7 +225,7 @@ export async function formatAutochatChannels(
   }
 
   const overrideMap = new Map(
-    (config.autoch_persona_overrides ?? []).map((override) => [override.channel_disc_id, override.tomori_id]),
+    (config.autoch_persona_overrides ?? []).map((override) => [override.channel_disc_id, override.persona_id]),
   );
 
   const lines = await Promise.all(
@@ -290,7 +290,7 @@ export function formatPersonaLlmOverrides(
 
   return overrides
     .map((p, index) => {
-      return `${index + 1}. **${p.tomori_nickname}** → ${formatLlmDisplayLabel(p.persona_llm, customModelName, otherModelCodename)}`;
+      return `${index + 1}. **${p.persona_nickname}** → ${formatLlmDisplayLabel(p.persona_llm, customModelName, otherModelCodename)}`;
     })
     .join("\n");
 }

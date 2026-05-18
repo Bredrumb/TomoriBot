@@ -496,7 +496,7 @@ async function resolveMessageAuthorDisplayName(params: {
     return params.botDisplayName || "Bot";
   }
   return (
-    matchedPersona?.tomori_nickname ??
+    matchedPersona?.persona_nickname ??
     (userBlacklisted || params.serverPersonalizationDisabled || !userRow?.user_nickname
       ? fallbackName
       : userRow.user_nickname)

@@ -165,7 +165,7 @@ export async function execute(
       }
 
       // 3b. No main persona row — orphaned alters or empty server entry.
-      //     Wipe every config-table row to clear orphaned data; alter rows in `tomoris`
+      //     Wipe every config-table row to clear orphaned data; alter rows in `personas`
       //     are preserved since serverRepository.setup only inserts a new main persona (is_alter=false).
       log.warn(`[Setup] Server ${serverId} has no main persona — clearing config, preserving alters`);
       await configRepository.resetAllServerConfigs(existingInternalServerId);
@@ -462,7 +462,7 @@ export async function execute(
         return;
       }
 
-      const selectedPresetId = presetRow.tomori_preset_id;
+      const selectedPresetId = presetRow.persona_preset_id;
       log.info(`Selected preset ID: ${selectedPresetId} (${selectedPresetOption.name})`);
 
       // 5. Validate humanizer degree (required, must be 0-3)

@@ -385,9 +385,9 @@ export class GenerateImageNaiTool extends BaseTool {
       }>
     >`
 			SELECT nai_tags, nai_char_ref_url
-			FROM tomoris
+			FROM personas
 			WHERE server_id = ${serverId}
-			  AND tomori_id = ${personaId}
+			  AND persona_id = ${personaId}
 			LIMIT 1
 		`;
 
@@ -462,9 +462,9 @@ export class GenerateImageNaiTool extends BaseTool {
       const rawId = typeof character.id === "string" ? character.id.trim() : undefined;
       const clientUserId = context.client.user?.id;
       const normalizedId = NAI_ENABLE_PROFILE_CHARACTER_AUTOFILL
-        ? (rawId === "self" || (clientUserId && rawId === clientUserId && context.tomoriState.tomori_id != null)) &&
-          context.tomoriState.tomori_id
-          ? `persona:${context.tomoriState.tomori_id}`
+        ? (rawId === "self" || (clientUserId && rawId === clientUserId && context.tomoriState.persona_id != null)) &&
+          context.tomoriState.persona_id
+          ? `persona:${context.tomoriState.persona_id}`
           : rawId
         : undefined;
 
@@ -473,10 +473,10 @@ export class GenerateImageNaiTool extends BaseTool {
         rawId &&
         clientUserId &&
         rawId === clientUserId &&
-        context.tomoriState.tomori_id != null
+        context.tomoriState.persona_id != null
       ) {
         log.info(
-          `[NAI] Remapped bot user ID ${rawId} to active persona persona:${context.tomoriState.tomori_id} for character profile resolution`,
+          `[NAI] Remapped bot user ID ${rawId} to active persona persona:${context.tomoriState.persona_id} for character profile resolution`,
         );
       }
 

@@ -268,7 +268,7 @@ export class InteractWithRecentMessageTool extends BaseTool {
   private async sanitizeReplyContent(content: string, context: ToolContext): Promise<string> {
     const speakerNames = await getKnownPersonaSpeakerNames(context.guildId, [
       context.personaUsername,
-      context.tomoriState.tomori_nickname,
+      context.tomoriState.persona_nickname,
     ]);
     return stripLeadingKnownSpeakerPrefixes(content, speakerNames);
   }
@@ -407,7 +407,7 @@ export class InteractWithRecentMessageTool extends BaseTool {
             author: getReplyContextAuthorName(
               targetMessage,
               context.client.user?.id,
-              context.tomoriState.tomori_nickname,
+              context.tomoriState.persona_nickname,
             ),
             preview: buildMessagePreview(targetMessage),
           },
@@ -528,7 +528,7 @@ export class InteractWithRecentMessageTool extends BaseTool {
           author: getReplyContextAuthorName(
             targetMessage,
             context.client.user?.id,
-            context.tomoriState.tomori_nickname,
+            context.tomoriState.persona_nickname,
           ),
           preview: normalizePreview(sanitizedReplyContent),
           used_webhook_context: Boolean(webhookReplyContext && context.personaUsername),

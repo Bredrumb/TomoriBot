@@ -235,12 +235,12 @@ export async function buildShortTermMemoryContext(params: {
           ? getShortTermMemoryForUserChannel(
               params.triggeringUserId,
               params.currentChannelId,
-              params.tomoriState?.tomori_id,
+              params.tomoriState?.persona_id,
             )
           : getShortTermMemoryForServerChannel(
               params.currentServerId,
               params.currentChannelId,
-              params.tomoriState?.tomori_id,
+              params.tomoriState?.persona_id,
             );
 
       if (sameChannelMemory?.summary) {

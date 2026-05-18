@@ -52,7 +52,7 @@ export async function buildServerDocumentContextItem(params: {
 
     const hasDocument = await serverMemoryRepository.hasDocumentInScope(
       tomoriState.server_id,
-      tomoriState.tomori_id ?? null,
+      tomoriState.persona_id ?? null,
     );
     if (!hasDocument) {
       return null;
@@ -72,7 +72,7 @@ export async function buildServerDocumentContextItem(params: {
 
     const chunks = await retrieveRelevantDocumentChunks({
       serverId: tomoriState.server_id,
-      tomoriId: tomoriState.tomori_id ?? null,
+      tomoriId: tomoriState.persona_id ?? null,
       query: queryText,
       embeddingModel,
       apiKey: creds.apiKey,

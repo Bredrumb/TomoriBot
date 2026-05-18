@@ -119,7 +119,7 @@ export async function execute(
       const context: ErrorContext = {
         userId: userData.user_id,
         serverId: tomoriState.server_id,
-        tomoriId: tomoriState.tomori_id,
+        tomoriId: tomoriState.persona_id,
         errorType: "DatabaseUpdateError",
         metadata: {
           command: "config stop-strings add",
@@ -151,7 +151,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState.server_id,
-      tomoriId: tomoriState.tomori_id,
+      tomoriId: tomoriState.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "config stop-strings add",

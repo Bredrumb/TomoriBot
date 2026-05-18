@@ -225,7 +225,7 @@ export async function execute(
       messages,
       allPersonas,
       clientUserId: client.user?.id,
-      targetPersonaId: resolvedPersona?.tomori_id,
+      targetPersonaId: resolvedPersona?.persona_id,
     });
     const blockMessages = detectedTurn.blockMessages;
     resolvedPersona = detectedTurn.resolvedPersona;
@@ -243,7 +243,7 @@ export async function execute(
       return;
     }
 
-    const displayName = resolvedPersona?.tomori_nickname ?? detectedTurn.targetPersonaKey ?? "Unknown";
+    const displayName = resolvedPersona?.persona_nickname ?? detectedTurn.targetPersonaKey ?? "Unknown";
     const totalCount = blockMessages.length;
 
     // 11. Inform user that deletion is in progress
@@ -479,7 +479,7 @@ export async function execute(
             isManuallyTriggered: true,
             forceReason: false,
             isStopResponse: false,
-            selectedPersonaId: resolvedPersona.tomori_id,
+            selectedPersonaId: resolvedPersona.persona_id,
             isPersonaJob: false,
             isUserImpersonation: false,
             textQuotaSource: "user",

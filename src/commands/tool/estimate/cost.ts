@@ -726,8 +726,8 @@ async function buildRuntimeParityContext(
   const mainPersona = personas.find((persona) => !persona.is_alter) ?? tomoriState;
   const personaByNickname = new Map<string, TomoriState>();
   for (const persona of personas) {
-    if (!persona.tomori_nickname) continue;
-    const key = persona.tomori_nickname.toLowerCase();
+    if (!persona.persona_nickname) continue;
+    const key = persona.persona_nickname.toLowerCase();
     if (!personaByNickname.has(key)) {
       personaByNickname.set(key, persona);
     }
@@ -757,7 +757,7 @@ async function buildRuntimeParityContext(
     let personaName: string | null = null;
 
     if (message.author.id === client.user?.id) {
-      authorName = mainPersona.tomori_nickname ?? tomoriState.tomori_nickname ?? message.author.username;
+      authorName = mainPersona.persona_nickname ?? tomoriState.persona_nickname ?? message.author.username;
       authorType = "persona";
       personaName = authorName;
     } else if (message.webhookId) {
@@ -765,10 +765,10 @@ async function buildRuntimeParityContext(
       const matchedPersona = webhookName ? personaByNickname.get(webhookName.toLowerCase()) : undefined;
 
       if (matchedPersona) {
-        authorName = matchedPersona.tomori_nickname;
+        authorName = matchedPersona.persona_nickname;
         authorType = "persona";
-        personaName = matchedPersona.tomori_nickname;
-        effectiveAuthorId = `persona:${matchedPersona.tomori_id ?? matchedPersona.tomori_nickname}`;
+        personaName = matchedPersona.persona_nickname;
+        effectiveAuthorId = `persona:${matchedPersona.persona_id ?? matchedPersona.persona_nickname}`;
       } else if (webhookName) {
         authorName = webhookName;
       }
@@ -906,7 +906,7 @@ async function buildRuntimeParityContext(
     channelId: interaction.channelId,
     client,
     triggererName: getTriggererName(interaction),
-    tomoriNickname: tomoriState.tomori_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
+    tomoriNickname: tomoriState.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
     tomoriAttributes: tomoriState.attribute_list,
     tomoriConfig: tomoriState.config,
     personaPrompt: tomoriState.persona_prompt ?? null,
@@ -922,7 +922,7 @@ async function buildRuntimeParityContext(
   const tailDirectives = [...contextBuild.tailDirectives];
   const emojiPenaltyDirective = getEmojiPenaltyDirective(
     contextSegments,
-    tomoriState.tomori_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
+    tomoriState.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
   );
   if (emojiPenaltyDirective) {
     lowerPriorityTailDirectives.push(emojiPenaltyDirective);

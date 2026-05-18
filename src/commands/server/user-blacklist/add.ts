@@ -102,7 +102,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: state?.server_id ?? null,
-      tomoriId: state?.tomori_id ?? null,
+      tomoriId: state?.persona_id ?? null,
       errorType: "CommandExecutionError",
       metadata: {
         command: "server user-blacklist add",

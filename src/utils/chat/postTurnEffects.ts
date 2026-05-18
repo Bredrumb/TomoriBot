@@ -43,7 +43,7 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
     typeof streamResultData?.emptyResponseReason === "string" ? streamResultData.emptyResponseReason : undefined;
   const speakerGuardRetryDirective =
     emptyResponseReason === "speaker_guard"
-      ? buildSpeakerGuardRetryDirective(context.currentPersona.tomori_nickname ?? context.tomoriState.tomori_nickname)
+      ? buildSpeakerGuardRetryDirective(context.currentPersona.persona_nickname ?? context.tomoriState.persona_nickname)
       : null;
   const retryInjectedContextItems = mergeInjectedContextItems(
     incoming.injectedContextItems,
@@ -51,7 +51,7 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
   );
   if (emptyResponseReason === "speaker_guard") {
     log.info(
-      `Empty response retry will inject active-speaker guidance for persona "${context.currentPersona.tomori_nickname ?? context.tomoriState.tomori_nickname ?? "Tomori"}".`,
+      `Empty response retry will inject active-speaker guidance for persona "${context.currentPersona.persona_nickname ?? context.tomoriState.persona_nickname ?? "Tomori"}".`,
     );
   }
 
@@ -69,7 +69,7 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
     skipLock: true,
     reminderRecipientID: incoming.reminderRecipientID,
     reminderData: incoming.reminderData,
-    selectedPersonaId: context.currentPersona.tomori_id ?? incoming.selectedPersonaId,
+    selectedPersonaId: context.currentPersona.persona_id ?? incoming.selectedPersonaId,
     isPersonaJob: context.isPersonaJob,
     isUserImpersonation: context.isUserImpersonation,
     impersonatedUserId: context.impersonatedUserId,
@@ -103,8 +103,8 @@ async function consumeTextQuota(context: ChatTurnContext, result: GenerationTurn
 }
 
 function updateSelfReplyBookkeeping(context: ChatTurnContext, result: GenerationTurnResult): void {
-  if (result.personaResponses.length > 0 && context.currentPersona.tomori_id) {
-    setLastRespondedPersona(context.channel.id, context.currentPersona.tomori_id);
+  if (result.personaResponses.length > 0 && context.currentPersona.persona_id) {
+    setLastRespondedPersona(context.channel.id, context.currentPersona.persona_id);
   }
 
   const incoming = context.turn.lockedTurn.admission.incoming;

@@ -91,8 +91,8 @@ interface SceneImageBackendAvailability {
  * and overriding the `buildContext()` persona identity in the hidden agent.
  */
 interface PersonaSummary {
-  tomori_id: number;
-  tomori_nickname: string;
+  persona_id: number;
+  persona_nickname: string;
   webhook_avatar_url: string | null;
   is_alter: boolean;
   /** From persona_configs — null when no persona-specific prompt is set. */
@@ -171,13 +171,13 @@ async function loadServerPersonaSummaries(serverId: number): Promise<PersonaSumm
  * Builds string-select options from persona summaries for the modal.
  * The active persona (matching activeTomoriId) is marked as default.
  * @param personas - List of persona summaries from loadServerPersonaSummaries
- * @param activeTomoriId - The currently active persona's tomori_id
+ * @param activeTomoriId - The currently active persona's persona_id
  */
 function getPersonaSelectOptions(personas: PersonaSummary[], activeTomoriId: number) {
   return personas.map((p) => ({
-    label: p.tomori_nickname,
-    value: p.tomori_id.toString(),
-    default: p.tomori_id === activeTomoriId,
+    label: p.persona_nickname,
+    value: p.persona_id.toString(),
+    default: p.persona_id === activeTomoriId,
   }));
 }
 
@@ -360,7 +360,7 @@ export async function execute(
       "commands.bot.generate.image.cooldown_active",
       {
         seconds: cooldownResult.remainingSeconds.toString(),
-        botName: tomoriState.tomori_nickname,
+        botName: tomoriState.persona_nickname,
       },
       footerKey,
       interaction,
@@ -465,9 +465,9 @@ export async function execute(
   }
 
   // 11. Show the modal (fire-and-forget UX — no public bot response until image posts).
-  const defaultPersonaId = availablePersonaSummaries.some((persona) => persona.tomori_id === tomoriState.tomori_id)
-    ? (tomoriState.tomori_id ?? fallbackPersonaSummary?.tomori_id ?? -1)
-    : (fallbackPersonaSummary?.tomori_id ?? -1);
+  const defaultPersonaId = availablePersonaSummaries.some((persona) => persona.persona_id === tomoriState.persona_id)
+    ? (tomoriState.persona_id ?? fallbackPersonaSummary?.persona_id ?? -1)
+    : (fallbackPersonaSummary?.persona_id ?? -1);
   const modalResult = await promptWithRawModal(
     interaction,
     locale,
@@ -552,13 +552,13 @@ export async function execute(
 
     // 13. Resolve the selected sender persona and its webhook identity.
     const selectedPersonaIdStr = modalResult.values?.[PERSONA_INPUT_ID];
-    const selectedPersonaId = selectedPersonaIdStr ? Number.parseInt(selectedPersonaIdStr, 10) : tomoriState.tomori_id;
+    const selectedPersonaId = selectedPersonaIdStr ? Number.parseInt(selectedPersonaIdStr, 10) : tomoriState.persona_id;
     const selectedPersona =
-      availablePersonaSummaries.find((p) => p.tomori_id === selectedPersonaId) ?? fallbackPersonaSummary;
+      availablePersonaSummaries.find((p) => p.persona_id === selectedPersonaId) ?? fallbackPersonaSummary;
 
     if (
       !selectedPersona ||
-      !isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, selectedPersona.tomori_id)
+      !isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, selectedPersona.persona_id)
     ) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.message_cooldown_title",
@@ -573,7 +573,7 @@ export async function execute(
     let senderPersonaAvatarUrl: string | undefined;
 
     if (selectedPersona) {
-      senderPersonaUsername = selectedPersona.tomori_nickname;
+      senderPersonaUsername = selectedPersona.persona_nickname;
 
       // Attempt to get or create the channel webhook for persona-identity posting.
       // Threads and channels without ManageWebhooks permission fall back to a direct bot message.
@@ -601,7 +601,7 @@ export async function execute(
     }
 
     log.info(
-      `[/bot generate image] Starting hidden image agent for channel ${interaction.channel.id} — backend=${selectedBackend}, preset=${settingPreset.plannerLabel}, sender=${selectedPersona?.tomori_nickname ?? "active"}`,
+      `[/bot generate image] Starting hidden image agent for channel ${interaction.channel.id} — backend=${selectedBackend}, preset=${settingPreset.plannerLabel}, sender=${selectedPersona?.persona_nickname ?? "active"}`,
     );
 
     // 14. Invoke the hidden image agent turn.
@@ -611,9 +611,9 @@ export async function execute(
     // Pass a context override only when the selected persona differs from the active one,
     // so buildContext() prompts the model as the chosen sender persona.
     const contextPersonaOverride =
-      selectedPersona && selectedPersona.tomori_id !== tomoriState.tomori_id
+      selectedPersona && selectedPersona.persona_id !== tomoriState.persona_id
         ? {
-            tomoriNickname: selectedPersona.tomori_nickname,
+            tomoriNickname: selectedPersona.persona_nickname,
             personaPrompt: selectedPersona.persona_prompt,
             tomoriAttributes: selectedPersona.attribute_list,
             personaLineageId: selectedPersona.persona_lineage_id,

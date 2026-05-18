@@ -45,10 +45,10 @@ export async function execute(
 
     const personas = await personaRepository.loadAllForServer(serverDiscId);
     const personaSelectOptions: SelectOption[] = personas
-      .filter((persona) => persona.tomori_id !== undefined)
+      .filter((persona) => persona.persona_id !== undefined)
       .map((persona) => ({
-        label: safeSelectOptionText(persona.tomori_nickname),
-        value: persona.tomori_id?.toString() ?? "",
+        label: safeSelectOptionText(persona.persona_nickname),
+        value: persona.persona_id?.toString() ?? "",
         description: persona.is_alter
           ? localizer(locale, "commands.data.export.alter_persona_description")
           : localizer(locale, "commands.data.export.main_persona_description"),
@@ -90,8 +90,8 @@ export async function execute(
     responseInteraction = modalSubmitInteraction;
 
     const selectedPersonaId = personaModalResult.values?.[PERSONA_SELECT_ID];
-    const selectedPersona = personas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
-    if (!selectedPersona?.tomori_id) {
+    const selectedPersona = personas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
+    if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -102,7 +102,7 @@ export async function execute(
 
     await responseInteraction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const exportResult = await exportRepository.exportPersonaServerMemories(serverDiscId, selectedPersona.tomori_id);
+    const exportResult = await exportRepository.exportPersonaServerMemories(serverDiscId, selectedPersona.persona_id);
     if (!exportResult.success || !exportResult.data) {
       await responseInteraction.editReply({
         embeds: [
@@ -119,7 +119,7 @@ export async function execute(
       return;
     }
 
-    const safeSlug = selectedPersona.tomori_nickname.replace(/[^a-zA-Z0-9-_]/g, "_").slice(0, 32);
+    const safeSlug = selectedPersona.persona_nickname.replace(/[^a-zA-Z0-9-_]/g, "_").slice(0, 32);
     const attachment = new AttachmentBuilder(Buffer.from(JSON.stringify(exportResult.data, null, 2), "utf-8"), {
       name: `tomori-server-memories-${safeSlug}-${serverDiscId}-${Date.now()}.json`,
     });

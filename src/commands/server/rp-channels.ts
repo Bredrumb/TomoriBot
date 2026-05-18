@@ -337,7 +337,7 @@ async function persistUpdate(
 
   if (!updated) {
     const context: ErrorContext = {
-      tomoriId: tomoriState.tomori_id,
+      tomoriId: tomoriState.persona_id,
       serverId: tomoriState.server_id,
       errorType: "CommandExecutionError",
       metadata: {

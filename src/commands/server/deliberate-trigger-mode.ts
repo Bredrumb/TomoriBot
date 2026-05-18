@@ -64,7 +64,7 @@ export async function execute(
 
     if (!updated) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        tomoriId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
@@ -100,7 +100,7 @@ export async function execute(
         ? "commands.server.deliberatetriggermode.enabled_description"
         : "commands.server.deliberatetriggermode.disabled_description",
       descriptionVars: {
-        persona_name: tomoriState.tomori_nickname,
+        persona_name: tomoriState.persona_nickname,
       },
       color: newValue ? ColorCode.SUCCESS : ColorCode.WARN,
     });

@@ -160,7 +160,7 @@ export class UpdateShortTermMemoryTool extends BaseTool {
           : null;
 
       // 5. Update both the user-scoped STM and, in guilds, the shared server STM
-      const tomoriId = context.tomoriState?.tomori_id ?? null;
+      const tomoriId = context.tomoriState?.persona_id ?? null;
       const personaLineageId = context.tomoriState?.persona_lineage_id ?? null;
       const userCacheKey = tomoriId
         ? `shortterm:user:${triggeringUserId}:${channelId}:${tomoriId}`

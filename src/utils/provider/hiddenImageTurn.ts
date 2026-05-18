@@ -190,7 +190,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
       authorId,
       authorName,
       authorType: isBotMessage ? "persona" : "user",
-      personaName: isBotMessage ? tomoriState.tomori_nickname : null,
+      personaName: isBotMessage ? tomoriState.persona_nickname : null,
       content: msg.cleanContent || msg.content || null,
       createdAt: msg.createdTimestamp,
       imageAttachments: [], // Skip — see comment above
@@ -225,7 +225,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     // Use the selected sender persona's identity if an override is provided;
     // otherwise fall back to the active tomoriState values.
     const persona = contextPersonaOverride ?? {
-      tomoriNickname: tomoriState.tomori_nickname,
+      tomoriNickname: tomoriState.persona_nickname,
       personaPrompt: tomoriState.persona_prompt ?? null,
       tomoriAttributes: tomoriState.attribute_list,
       personaLineageId: tomoriState.persona_lineage_id,

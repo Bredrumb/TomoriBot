@@ -112,10 +112,10 @@ export async function execute(
     }
 
     const personaSelectOptions: SelectOption[] = allPersonas
-      .filter((persona) => persona.tomori_id !== undefined)
+      .filter((persona) => persona.persona_id !== undefined)
       .map((persona) => ({
-        label: safeSelectOptionText(persona.tomori_nickname),
-        value: persona.tomori_id?.toString() ?? "",
+        label: safeSelectOptionText(persona.persona_nickname),
+        value: persona.persona_id?.toString() ?? "",
         description: persona.is_alter
           ? localizer(locale, "commands.teach.memory.server.alter_persona_description")
           : localizer(locale, "commands.teach.memory.server.main_persona_description"),
@@ -201,8 +201,8 @@ export async function execute(
         ].slice(0, MAX_TAGS)
       : [];
     const selectedPersonaId = modalResult.values?.persona_select;
-    selectedPersona = allPersonas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
-    if (!selectedPersona?.tomori_id) {
+    selectedPersona = allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
+    if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -219,7 +219,7 @@ export async function execute(
       });
       return;
     }
-    const targetTomoriId = selectedPersona.tomori_id;
+    const targetTomoriId = selectedPersona.persona_id;
     const targetPersonaLineageId = selectedPersona.persona_lineage_id ?? 0;
     const targetServerId = tomoriState.server_id;
 
@@ -349,7 +349,7 @@ export async function execute(
         await sql.transaction(async (tx) => {
           for (const memory of memoriesToAdd) {
             await tx`
-							INSERT INTO server_memories (server_id, tomori_id, persona_lineage_id, user_id, content, tags)
+							INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, tags)
 							VALUES (${targetServerId}, ${targetTomoriId}, ${targetPersonaLineageId}, ${targetUserId}, ${memory}, ${sql.array(parsedTags)})
 						`;
           }
@@ -427,7 +427,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: tomoriState?.tomori_id,
+      tomoriId: tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "teach servermemory",

@@ -25,7 +25,7 @@ type PersonaFixture = {
 
 type AutochatPersonaOverrideFixture = {
   channelDiscId: string;
-  tomoriId: number;
+  personaId: number;
 };
 
 type ConversationFixture = {
@@ -139,11 +139,10 @@ function makeMessage(fixture: ConversationFixture, client: Client): Message {
 
 function makeTomoriState(fixture: ConversationFixture, persona: PersonaFixture): TomoriState {
   return {
-    tomori_id: persona.id,
-    tomori_nickname: persona.nickname,
+    persona_id: persona.id,
+    persona_nickname: persona.nickname,
     is_alter: persona.isAlter,
     trigger_words: persona.triggers,
-    alter_triggers: persona.isAlter ? persona.triggers : null,
     autoch_counter: fixture.state.autochCounter,
     autoch_next_target: fixture.state.autochNextTarget,
     config: {
@@ -153,7 +152,7 @@ function makeTomoriState(fixture: ConversationFixture, persona: PersonaFixture):
       autoch_disc_ids: fixture.state.autochDiscIds,
       autoch_persona_overrides: fixture.state.autochPersonaOverrides.map((override) => ({
         channel_disc_id: override.channelDiscId,
-        tomori_id: override.tomoriId,
+        persona_id: override.personaId,
       })),
       autoch_threshold: 0,
       autoch_threshold_max: 0,
@@ -176,7 +175,7 @@ describe("chat regression harness", () => {
       const replyPersona =
         fixture.triggerContext.replyPersonaId === null
           ? null
-          : (personas.find((persona) => persona.tomori_id === fixture.triggerContext.replyPersonaId) ?? null);
+          : (personas.find((persona) => persona.persona_id === fixture.triggerContext.replyPersonaId) ?? null);
       const allowedPersonaIds =
         fixture.triggerContext.allowedPersonaIds === null ? null : new Set(fixture.triggerContext.allowedPersonaIds);
 
@@ -203,7 +202,7 @@ describe("chat regression harness", () => {
           fixture.triggerContext.deliberateTriggerMode,
           fixture.triggerContext.isAutochatDtmExemptChannel,
           allowedPersonaIds,
-        ).map((persona) => persona.tomori_nickname ?? `id:${persona.tomori_id}`),
+        ).map((persona) => persona.persona_nickname ?? `id:${persona.persona_id}`),
       };
 
       expect(actualDecision).toEqual(expectedDecisions[fixture.id]);

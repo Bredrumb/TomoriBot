@@ -66,9 +66,9 @@ Name handling:
 
 ## Field Mapping
 
-Imported into `tomoris` and `persona_configs`:
+Imported into `personas` and `persona_configs`:
 
-- `name` -> `tomori_nickname`
+- `name` -> `persona_nickname`
 - `description` -> `attribute_list` (no `"Description"` prefix)
 - `personality` -> `attribute_list` (section-labeled)
 - `scenario` -> `attribute_list` (section-labeled)

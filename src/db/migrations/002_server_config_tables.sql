@@ -39,7 +39,7 @@
 --   fallback_llm_ids — DEPRECATED Phase 3
 --   trigger_words — already migrated to persona_configs
 --   hide_respond_embed — deprecated; superseded by tool_notice_hidden_keys
---   tomori_config_id, tomori_id, server_id — PKs/FK anchors
+--   tomori_config_id, persona_id, server_id — PKs/FK anchors
 --   created_at, updated_at — auto-managed per-row
 
 -- ── server_chat_configs ──────────────────────────────────────────────────────
@@ -210,8 +210,8 @@ CREATE TABLE IF NOT EXISTS server_welcome_configs (
   server_id              INT  PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
   welcome_channel_disc_id TEXT,
   welcome_prompt         TEXT,
-  -- welcome_persona_id: FK to tomoris; SET NULL on persona deletion so welcome config survives
-  welcome_persona_id     INT  REFERENCES tomoris(tomori_id) ON DELETE SET NULL,
+  -- welcome_persona_id: FK to personas; SET NULL on persona deletion so welcome config survives
+  welcome_persona_id     INT  REFERENCES personas(persona_id) ON DELETE SET NULL,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

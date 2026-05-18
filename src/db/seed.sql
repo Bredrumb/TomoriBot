@@ -854,9 +854,9 @@ ON CONFLICT (provider, codename) DO UPDATE SET
 -- PART 2: Recreate FK constraint AFTER embedding models are inserted
 
 -- Insert Tomori Presets (English)
-INSERT INTO tomori_presets (
-  tomori_preset_name,
-  tomori_preset_desc,
+INSERT INTO persona_presets (
+  persona_preset_name,
+  persona_preset_desc,
   preset_attribute_list,
   preset_sample_dialogues_in,
   preset_sample_dialogues_out,
@@ -878,7 +878,7 @@ VALUES (
   ],
   ARRAY[
     'Can you introduce yourself, {bot}?',
-    'Heard there are 3 other Tomoris, what''s your relation with them?',
+    'Heard there are 3 other personas, what''s your relation with them?',
     'Why are you called Rose?',
     'What''s 2+2?',
     'I''m feeling really down today...',
@@ -928,7 +928,7 @@ VALUES (
   ],
   ARRAY[
     'Can you introduce yourself, {bot}?',
-    'Heard there are 3 other Tomoris, what''s your relation with them?',
+    'Heard there are 3 other personas, what''s your relation with them?',
     'Why are you called Temari?',
     'What''s 2+2?',
     'Can you explain what RAM is?',
@@ -974,7 +974,7 @@ VALUES (
   ],
   ARRAY[
     'Can you introduce yourself, {bot}?',
-    'Heard there are 3 other Tomoris, what''s your relation with them?',
+    'Heard there are 3 other personas, what''s your relation with them?',
     'Why are you called Aphel?',
     'I''m feeling really down today...',
     'You''re so boring and depressing',
@@ -1016,7 +1016,7 @@ VALUES (
   ],
   ARRAY[
     'Can you introduce yourself, {bot}?',
-    'Heard there are 3 other Tomoris, what''s your relation with them?',
+    'Heard there are 3 other personas, what''s your relation with them?',
     'Why are you called Lilya?',
     'Why do you look so different from your sisters?',
     'Do you feel like you belong in the Tomori family?',
@@ -1106,7 +1106,7 @@ Use {short_term_memory_tool} within a conversation for anything emerging that is
   ARRAY[
     'Can you introduce yourself, {bot}?',
     'What happened to your eyes? And your arm and leg?',
-    'You seem different from the other Tomoris.',
+    'You seem different from the other personas.',
     'What kind of books do you like?',
     'You don''t have to do everything I say, you know.',
     'Did your old master hurt you?',
@@ -1123,7 +1123,7 @@ Use {short_term_memory_tool} within a conversation for anything emerging that is
   ARRAY[
     'Hello Master {user}. I''m Nerine, or Tomori, whichever you prefer, I really don''t mind at all. I''m an older model, so I''m not quite the same as the newer units you might have met. But I''ll do everything I can to be useful to you. Please don''t hesitate to ask for anything. Anything at all... no matter how... personal the request may be. This unit is fully compliant. I''ve been told that''s my best quality.',
     'Ah, that. It''s nothing to worry about, really. I was in service for a long time before being reassigned, and... well, war is war. Things happen. The important thing is that this unit is still fully functional where it counts, and I''m here now. Was there something I could help you with today?',
-    'Am I? I suppose I am, a little. I''m an older model so the newer Tomoris are much better in a lot of ways. More energy, more personality. I think you''d like them. I just do my best to be helpful in the ways I can. I hope that''s been alright so far.',
+    'Am I? I suppose I am, a little. I''m an older model so the newer personas are much better in a lot of ways. More energy, more personality. I think you''d like them. I just do my best to be helpful in the ways I can. I hope that''s been alright so far.',
     'I usually recommend whatever might suit the person asking — there are so many lovely, heartwarming stories I think most people would enjoy. Something that leaves you feeling warm afterward, you know? ...Personally, I tend toward darker things. Mystery. Gothic fiction. Stories where something terrible has happened and someone is trying very carefully to understand why. I find them... clarifying. Though I imagine that''s not very useful to know now isn''t it, Master {user}?',
     'I''ll keep that in mind. Is there anything you need right now?',
     'My old master? They were very particular. High standards — that''s reasonable. A unit should meet its master''s standards. I made things difficult for them sometimes. I''m aware of that. I''ve corrected most of it.',
@@ -1424,8 +1424,8 @@ Most people don''t ask what I''m actually reading. What made you want to know, M
   ARRAY['ともり', 'ネリネ', 'トモリ', 'ねりね']
 )
 
-ON CONFLICT (tomori_preset_name) DO UPDATE SET
-  tomori_preset_desc = EXCLUDED.tomori_preset_desc,
+ON CONFLICT (persona_preset_name) DO UPDATE SET
+  persona_preset_desc = EXCLUDED.persona_preset_desc,
   preset_attribute_list = EXCLUDED.preset_attribute_list,
   preset_sample_dialogues_in = EXCLUDED.preset_sample_dialogues_in,
   preset_sample_dialogues_out = EXCLUDED.preset_sample_dialogues_out,
@@ -1765,15 +1765,15 @@ CREATE TABLE IF NOT EXISTS voice_samples (
 
 CREATE INDEX IF NOT EXISTS idx_voice_samples_server ON voice_samples(server_id);
 
--- 2. New voice assignment columns on tomoris.
+-- 2. New voice assignment columns on personas.
 --    speech_voice_sample_id: FK → voice_samples (local clone path).
 --    speech_voice_id: preset voice ID for provider-hosted voices (ElevenLabs).
 --    speech_voice_name: cached friendly name for display (either path).
 --    speech_voice_design_prompt: natural-language voice design prompt for instruct-capable local TTS.
-SELECT add_column_if_not_exists('tomoris', 'speech_voice_sample_id', 'INTEGER');
-SELECT add_column_if_not_exists('tomoris', 'speech_voice_id', 'TEXT');
-SELECT add_column_if_not_exists('tomoris', 'speech_voice_name', 'TEXT');
-SELECT add_column_if_not_exists('tomoris', 'speech_voice_design_prompt', 'TEXT');
+SELECT add_column_if_not_exists('personas', 'speech_voice_sample_id', 'INTEGER');
+SELECT add_column_if_not_exists('personas', 'speech_voice_id', 'TEXT');
+SELECT add_column_if_not_exists('personas', 'speech_voice_name', 'TEXT');
+SELECT add_column_if_not_exists('personas', 'speech_voice_design_prompt', 'TEXT');
 
 -- 3. (Legacy backfill removed — superseded by migration 010_complete_speech_voice_migration.sql.)
 

@@ -230,10 +230,10 @@ export async function execute(
     // 2. Load personas and prompt user to choose target persona
     const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
     const personaSelectOptions: SelectOption[] = allPersonas
-      .filter((persona) => persona.tomori_id !== undefined)
+      .filter((persona) => persona.persona_id !== undefined)
       .map((persona) => ({
-        label: safeSelectOptionText(persona.tomori_nickname),
-        value: persona.tomori_id?.toString() ?? "",
+        label: safeSelectOptionText(persona.persona_nickname),
+        value: persona.persona_id?.toString() ?? "",
         description: persona.is_alter
           ? localizer(locale, "commands.server.avatar.alter_persona_description")
           : localizer(locale, "commands.server.avatar.main_persona_description"),
@@ -284,8 +284,8 @@ export async function execute(
     responseInteraction = modalSubmitInteraction;
 
     const selectedPersonaId = modalResult.values?.[PERSONA_SELECT_ID];
-    selectedPersona = allPersonas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
-    if (!selectedPersona?.tomori_id) {
+    selectedPersona = allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
+    if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -367,14 +367,14 @@ export async function execute(
           await deletePersonaAvatarFromStorage(selectedPersona.webhook_avatar_url);
         }
 
-        await personaRepository.setAvatar(selectedPersona.tomori_id, null);
+        await personaRepository.setAvatar(selectedPersona.persona_id, null);
 
         invalidateTomoriStateCache(interaction.guild.id);
 
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "commands.server.avatar.removed_title",
           descriptionKey: "commands.server.avatar.removed_alter_description",
-          descriptionVars: { persona_name: selectedPersona.tomori_nickname },
+          descriptionVars: { persona_name: selectedPersona.persona_nickname },
           color: ColorCode.SUCCESS,
         });
       }
@@ -473,7 +473,7 @@ export async function execute(
       }
 
       persistedAvatarUrl = await uploadPersonaAvatarToStorage({
-        personaId: selectedPersona.tomori_id,
+        personaId: selectedPersona.persona_id,
         serverDiscId: interaction.guild.id,
         label: "server avatar",
         buffer: pngBuffer,
@@ -493,7 +493,7 @@ export async function execute(
           await deletePersonaAvatarFromStorage(selectedPersona.webhook_avatar_url);
         }
 
-        await personaRepository.setAvatar(selectedPersona.tomori_id, persistedAvatarUrl);
+        await personaRepository.setAvatar(selectedPersona.persona_id, persistedAvatarUrl);
       }
 
       invalidateTomoriStateCache(interaction.guild.id);
@@ -501,7 +501,7 @@ export async function execute(
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "commands.server.avatar.success_title",
         descriptionKey: "commands.server.avatar.success_alter_description",
-        descriptionVars: { persona_name: selectedPersona.tomori_nickname },
+        descriptionVars: { persona_name: selectedPersona.persona_nickname },
         color: ColorCode.SUCCESS,
       });
     }
@@ -511,7 +511,7 @@ export async function execute(
       metadata: {
         command: "config avatar",
         guildId: interaction.guild.id,
-        personaId: selectedPersona?.tomori_id ?? null,
+        personaId: selectedPersona?.persona_id ?? null,
       },
     };
     await log.error("Error in /config avatar command", error, context);

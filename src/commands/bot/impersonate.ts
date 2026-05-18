@@ -211,7 +211,7 @@ async function handlePersonaImpersonation(
 
   // 2. Build select options for modal
   const personaSelectOptions: SelectOption[] = availablePersonas.map((persona, index) => ({
-    label: safeSelectOptionText(persona.tomori_nickname),
+    label: safeSelectOptionText(persona.persona_nickname),
     value: index.toString(), // Use index to avoid ID truncation issues
     description: persona.is_alter ? "Alter Persona" : "Main Persona",
   }));
@@ -256,8 +256,8 @@ async function handlePersonaImpersonation(
 
   const selectedPersona = availablePersonas[selectedIndex];
   if (
-    !selectedPersona?.tomori_id ||
-    !isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, selectedPersona.tomori_id)
+    !selectedPersona?.persona_id ||
+    !isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, selectedPersona.persona_id)
   ) {
     log.info(
       `[/bot impersonate persona] Rejected persona selection at index ${selectedIndex} in channel ${channel.id} due to persona access rules or stale modal state`,
@@ -359,13 +359,13 @@ async function handlePersonaImpersonation(
     await replyInfoEmbed(modalResult.interaction, locale, {
       titleKey: "commands.bot.impersonate.persona_success_title",
       descriptionKey: "commands.bot.impersonate.persona_success_description",
-      descriptionVars: { persona: selectedPersona.tomori_nickname },
+      descriptionVars: { persona: selectedPersona.persona_nickname },
       color: ColorCode.SUCCESS,
     });
   } catch (error) {
     log.error("Failed to send impersonated message", {
       error,
-      personaId: selectedPersona.tomori_id,
+      personaId: selectedPersona.persona_id,
       serverId,
     });
     await replyInfoEmbed(modalResult.interaction, locale, {
@@ -488,7 +488,7 @@ async function handleUserImpersonation(
         cooldownActiveKey,
         {
           seconds: cooldownResult.remainingSeconds.toString(),
-          botName: tomoriState.tomori_nickname,
+          botName: tomoriState.persona_nickname,
         },
         footerKey,
         interaction,
@@ -514,7 +514,7 @@ async function handleUserImpersonation(
         )
       : null;
 
-    if (!isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, tomoriState.tomori_id)) {
+    if (!isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, tomoriState.persona_id)) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.message_cooldown_title",
         descriptionKey: "commands.bot.impersonate.main_persona_access_blocked",

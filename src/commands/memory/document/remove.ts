@@ -174,7 +174,7 @@ export async function execute(
 
         personaSelectionInteraction = personaSelection.interaction;
         const selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-        if (!selectedPersona?.tomori_id) {
+        if (!selectedPersona?.persona_id) {
           await updateButtonComponentsV2Status(
             personaSelectionInteraction,
             locale,
@@ -186,7 +186,7 @@ export async function execute(
           );
           continue;
         }
-        targetTomoriId = selectedPersona.tomori_id;
+        targetTomoriId = selectedPersona.persona_id;
       }
 
       const selectionInteraction = personaSelectionInteraction ?? interaction;
@@ -196,14 +196,14 @@ export async function execute(
 						SELECT document_id, document_name
 						FROM documents
 						WHERE server_id = ${tomoriState.server_id}
-						  AND tomori_id IS NULL
+						  AND persona_id IS NULL
 						ORDER BY created_at DESC
 					`
           : await sql<Array<{ document_id: number; document_name: string }>>`
 						SELECT document_id, document_name
 						FROM documents
 						WHERE server_id = ${tomoriState.server_id}
-						  AND tomori_id = ${targetTomoriId}
+						  AND persona_id = ${targetTomoriId}
 						ORDER BY created_at DESC
 					`;
 
@@ -323,7 +323,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: targetTomoriId ?? tomoriState?.tomori_id,
+      tomoriId: targetTomoriId ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "forget document",

@@ -156,8 +156,8 @@ export async function execute(
 function getActiveServerStmEntries(guildId: string, personas: TomoriState[], locale: string): ActiveServerStmEntry[] {
   const personaNameById = new Map<number, string>();
   for (const persona of personas) {
-    if (persona.tomori_id != null) {
-      personaNameById.set(persona.tomori_id, persona.tomori_nickname);
+    if (persona.persona_id != null) {
+      personaNameById.set(persona.persona_id, persona.persona_nickname);
     }
   }
 

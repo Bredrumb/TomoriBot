@@ -316,7 +316,13 @@ async function resolveNonProductionPersonaAvatarReference(persona: TomoriState, 
     return null;
   }
 
-  if (IS_PRODUCTION || !persona.is_alter || !guild || !persona.tomori_id || isLocalPersonaAvatarPath(avatarReference)) {
+  if (
+    IS_PRODUCTION ||
+    !persona.is_alter ||
+    !guild ||
+    !persona.persona_id ||
+    isLocalPersonaAvatarPath(avatarReference)
+  ) {
     return avatarReference;
   }
 
@@ -328,17 +334,17 @@ async function resolveNonProductionPersonaAvatarReference(persona: TomoriState, 
   if (downloadResult.success && downloadResult.buffer) {
     normalizedBuffer = await normalizeAvatarToPng(
       downloadResult.buffer,
-      `legacy avatar for persona ${persona.tomori_id}`,
+      `legacy avatar for persona ${persona.persona_id}`,
     );
   } else {
     log.warn(
-      `[Webhook Manager] Failed to download legacy avatar for persona ${persona.tomori_id}: ${downloadResult.error ?? "unknown error"}`,
+      `[Webhook Manager] Failed to download legacy avatar for persona ${persona.persona_id}: ${downloadResult.error ?? "unknown error"}`,
     );
   }
 
   if (!normalizedBuffer) {
-    log.info(`[Webhook Manager] Attempting legacy webhook recovery for persona ${persona.tomori_id}`);
-    const recoveredAvatar = await attemptWebhookAvatarRecovery(guild, persona.tomori_id);
+    log.info(`[Webhook Manager] Attempting legacy webhook recovery for persona ${persona.persona_id}`);
+    const recoveredAvatar = await attemptWebhookAvatarRecovery(guild, persona.persona_id);
     if (recoveredAvatar) {
       normalizedBuffer = recoveredAvatar.buffer;
     }
@@ -350,7 +356,7 @@ async function resolveNonProductionPersonaAvatarReference(persona: TomoriState, 
 
   const storedReference = await storeMigratedPersonaAvatar(
     guild.id,
-    persona.tomori_id,
+    persona.persona_id,
     normalizedBuffer,
     "legacy avatar migration",
   );
@@ -441,7 +447,7 @@ async function restoreStoredSharedWebhook(
 
 async function resolvePersonaAvatarIdentity(persona: TomoriState, guild?: Guild): Promise<ResolvedWebhookIdentity> {
   const identity: ResolvedWebhookIdentity = {
-    username: persona.tomori_nickname,
+    username: persona.persona_nickname,
   };
 
   if (!persona.webhook_avatar_url) {
@@ -494,14 +500,14 @@ async function resolvePersonaWebhookAvatar(persona: TomoriState, guild?: Guild):
   });
   if (!downloadResult.success || !downloadResult.buffer) {
     log.warn(
-      `[Webhook Manager] Failed to download avatar for persona ${persona.tomori_nickname}: ${downloadResult.error ?? "unknown error"}`,
+      `[Webhook Manager] Failed to download avatar for persona ${persona.persona_nickname}: ${downloadResult.error ?? "unknown error"}`,
     );
     return undefined;
   }
 
   const normalizedBuffer = await normalizeAvatarToPng(
     downloadResult.buffer,
-    `avatar for persona ${persona.tomori_nickname}`,
+    `avatar for persona ${persona.persona_nickname}`,
   );
   if (!normalizedBuffer) {
     return undefined;
@@ -757,15 +763,15 @@ export async function getOrCreatePersonaWebhook(
   persona: TomoriState,
 ): Promise<WebhookCreateResult> {
   try {
-    if (!persona.tomori_id) {
+    if (!persona.persona_id) {
       log.warn(
-        `[Webhook Manager] Missing tomori_id for persona ${persona.tomori_nickname}, cannot create persona webhook.`,
+        `[Webhook Manager] Missing persona_id for persona ${persona.persona_nickname}, cannot create persona webhook.`,
       );
       return { webhook: null, errorReason: "unknown" };
     }
 
     const channelId = channel.id;
-    const cacheKey = getPersonaWebhookCacheKey(channelId, persona.tomori_id);
+    const cacheKey = getPersonaWebhookCacheKey(channelId, persona.persona_id);
 
     const cachedWebhook = personaWebhookCache.get(cacheKey);
     if (cachedWebhook) {
@@ -779,7 +785,7 @@ export async function getOrCreatePersonaWebhook(
           // Verify webhook still exists remotely; cached objects may survive manual deletes.
           const liveWebhooks = await channel.fetchWebhooks();
           if (liveWebhooks.has(cachedWebhook.id)) {
-            log.info(`[Webhook Manager] Persona cache HIT for channel ${channelId} (persona ${persona.tomori_id})`);
+            log.info(`[Webhook Manager] Persona cache HIT for channel ${channelId} (persona ${persona.persona_id})`);
             return { webhook: cachedWebhook };
           }
           log.warn(`[Webhook Manager] Cached persona webhook missing in channel ${channelId}, invalidating cache`);
@@ -796,7 +802,7 @@ export async function getOrCreatePersonaWebhook(
 
     log.info(`[Webhook Manager] Persona cache MISS for channel ${channelId}, fetching webhooks`);
     const webhooks = await channel.fetchWebhooks();
-    const personaWebhookName = getPersonaWebhookName(persona.tomori_id);
+    const personaWebhookName = getPersonaWebhookName(persona.persona_id);
     let webhook = webhooks.find((wh) => wh.name === personaWebhookName);
 
     // Check if webhook has a token (webhooks from fetchWebhooks don't have tokens)
@@ -826,19 +832,19 @@ export async function getOrCreatePersonaWebhook(
       });
       if (webhookAvatarUrl && webhookAvatarUrl !== persona.webhook_avatar_url) {
         try {
-          const updated = await personaRepository.setAvatar(persona.tomori_id, webhookAvatarUrl);
+          const updated = await personaRepository.setAvatar(persona.persona_id, webhookAvatarUrl);
           if (!updated) {
-            throw new Error(`Failed to update stored avatar URL for persona ${persona.tomori_id}`);
+            throw new Error(`Failed to update stored avatar URL for persona ${persona.persona_id}`);
           }
           // Invalidate cache so updated URL is used immediately
           if (channel.guild) {
             invalidateTomoriStateCache(channel.guild.id);
           }
           log.success(
-            `[Webhook Manager] Updated stored avatar URL to permanent webhook URL for persona ${persona.tomori_id}`,
+            `[Webhook Manager] Updated stored avatar URL to permanent webhook URL for persona ${persona.persona_id}`,
           );
         } catch (error) {
-          log.warn(`[Webhook Manager] Failed to update stored avatar URL for persona ${persona.tomori_id}`, error);
+          log.warn(`[Webhook Manager] Failed to update stored avatar URL for persona ${persona.persona_id}`, error);
         }
       }
     }
@@ -986,7 +992,7 @@ export async function sendAsPersona(
   try {
     const resolvedIdentity = options?.guild
       ? await resolvePersonaWebhookIdentity(persona, options.guild)
-      : { username: persona.tomori_nickname };
+      : { username: persona.persona_nickname };
     const avatarURL = sanitizeAvatarUrl(options?.avatarURL);
     const identity: ResolvedWebhookIdentity = {
       ...resolvedIdentity,
@@ -1015,7 +1021,7 @@ export async function sendAsPersona(
     );
 
     log.info(
-      `[Webhook Manager] Sent message as persona ${persona.tomori_nickname} (${persona.is_alter ? "alter" : "main"})`,
+      `[Webhook Manager] Sent message as persona ${persona.persona_nickname} (${persona.is_alter ? "alter" : "main"})`,
     );
     return message;
   } catch (error) {
@@ -1024,11 +1030,11 @@ export async function sendAsPersona(
       invalidateWebhookCache(webhook.channelId);
     }
 
-    log.error(`[Webhook Manager] Failed to send message as persona ${persona.tomori_nickname}:`, {
+    log.error(`[Webhook Manager] Failed to send message as persona ${persona.persona_nickname}:`, {
       errorType: "webhook_send_error",
       metadata: {
-        personaId: persona.tomori_id,
-        personaName: persona.tomori_nickname,
+        personaId: persona.persona_id,
+        personaName: persona.persona_nickname,
         isAlter: persona.is_alter,
         error,
       },

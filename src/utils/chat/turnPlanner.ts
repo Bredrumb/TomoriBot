@@ -194,8 +194,8 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
   const lockEntry = channelLocks.get(lockedTurn.channelId);
   if (lockEntry) {
     setActiveChannelTurnState(lockEntry, {
-      activePersonaId: personasToRespond[0]?.tomori_id ?? undefined,
-      followUpEligible: personasToRespond[0]?.tomori_id !== undefined,
+      activePersonaId: personasToRespond[0]?.persona_id ?? undefined,
+      followUpEligible: personasToRespond[0]?.persona_id !== undefined,
       isUserImpersonation: incoming.isUserImpersonation,
       impersonatedUserId: incoming.impersonatedUserId,
     });
@@ -281,7 +281,7 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
 
   log.info(
     `${turns.length} persona(s) will respond to message ${message.id}: ${turns
-      .map((turn) => turn.persona.tomori_nickname)
+      .map((turn) => turn.persona.persona_nickname)
       .join(", ")}`,
   );
   return { lockedTurn, turns };
@@ -317,14 +317,14 @@ async function updateAutochatCounter(message: Message, tomoriState: TomoriState,
   if (!isAutochatCounterChannelActive(tomoriState.config, effectiveChannelId) || !isRealUserMessage(message)) {
     return;
   }
-  if (!tomoriState.tomori_id) {
+  if (!tomoriState.persona_id) {
     log.error(`Tomori ID missing for server ${serverDiscId} during counter increment.`);
     return;
   }
 
   try {
     const updatedTomoriRow = await configRepository.incrementTomoriCounter(
-      tomoriState.tomori_id,
+      tomoriState.persona_id,
       minThreshold,
       maxThreshold,
     );
@@ -446,12 +446,12 @@ function selectPersonasForTurn(args: {
 }): TomoriState[] {
   const incoming = args.lockedTurn.admission.incoming;
   const selectedPersona = incoming.selectedPersonaId
-    ? (args.allPersonas.find((persona) => persona.tomori_id === incoming.selectedPersonaId) ?? args.fallbackPersona)
+    ? (args.allPersonas.find((persona) => persona.persona_id === incoming.selectedPersonaId) ?? args.fallbackPersona)
     : args.fallbackPersona;
 
   if (incoming.isManuallyTriggered) {
     return selectedPersona &&
-      isPersonaAllowedForTrigger(args.whitelistStatus, args.personalSpotlightStatus, selectedPersona.tomori_id)
+      isPersonaAllowedForTrigger(args.whitelistStatus, args.personalSpotlightStatus, selectedPersona.persona_id)
       ? [selectedPersona]
       : [];
   }
@@ -460,7 +460,7 @@ function selectPersonasForTurn(args: {
     return incoming.isStopResponse
       ? mainTurn
       : mainTurn.filter((persona) =>
-          isPersonaAllowedForTrigger(args.whitelistStatus, args.personalSpotlightStatus, persona.tomori_id),
+          isPersonaAllowedForTrigger(args.whitelistStatus, args.personalSpotlightStatus, persona.persona_id),
         );
   }
 
@@ -518,7 +518,7 @@ function selectPersonasForTurn(args: {
   if (args.isSelfMessage) {
     const lastRespondedId = getLastRespondedPersonaId(args.channelId);
     if (lastRespondedId !== null) {
-      personasToRespond = personasToRespond.filter((persona) => persona.tomori_id !== lastRespondedId);
+      personasToRespond = personasToRespond.filter((persona) => persona.persona_id !== lastRespondedId);
     }
   }
 
@@ -567,7 +567,7 @@ async function enforceTurnGuards(
       ),
       author: message.author,
       locale: admission.locale,
-      botName: tomoriState.tomori_nickname,
+      botName: tomoriState.persona_nickname,
     });
     if (rejectedByCooldown) return false;
 

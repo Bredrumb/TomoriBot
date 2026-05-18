@@ -13,10 +13,10 @@ export function isPersonaAllowedForTrigger(
   );
 }
 
-export function filterPersonasForTrigger<T extends { tomori_id?: number | null | undefined }>(
+export function filterPersonasForTrigger<T extends { persona_id?: number | null | undefined }>(
   personas: readonly T[],
   whitelistStatus: WhitelistCheckResult | null | undefined,
   spotlightStatus: PersonalSpotlightStatus | null | undefined,
 ): T[] {
-  return personas.filter((persona) => isPersonaAllowedForTrigger(whitelistStatus, spotlightStatus, persona.tomori_id));
+  return personas.filter((persona) => isPersonaAllowedForTrigger(whitelistStatus, spotlightStatus, persona.persona_id));
 }
