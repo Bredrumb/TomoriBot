@@ -26,6 +26,7 @@ import {
   type TomoriRow,
   type TomoriState,
 } from "@/types/db/schema";
+import type { PersonaAutochRuntimeStateRow } from "@/types/db/schema";
 import type { SqlParameterArray } from "@/types/db/sqlOperations";
 import { DatabaseUnavailableError } from "@/types/errors";
 import { getCachedLLM } from "@/utils/cache/llmCache";
@@ -1201,8 +1202,16 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         -- 7. server_speech_configs
         sspeech.voice_transcript_chat_mode, sspeech.chatterbox_turbo_enabled,
         sspeech.chatterbox_cfg_weight, sspeech.chatterbox_exaggeration,
-        -- 8. server_auto_trigger_configs
-        satc.autoch_disc_ids, satc.autoch_persona_overrides,
+        -- 8. server_auto_trigger_configs (persona overrides aggregated from junction table)
+        satc.autoch_disc_ids,
+        (
+          SELECT COALESCE(
+            JSON_AGG(JSON_BUILD_OBJECT('channel_disc_id', o.channel_disc_id, 'tomori_id', o.persona_id)),
+            '[]'::JSON
+          )
+          FROM server_auto_trigger_persona_overrides o
+          WHERE o.server_id = s.server_id
+        ) AS autoch_persona_overrides,
         satc.autoch_threshold, satc.autoch_threshold_max,
         -- 9. server_channel_scope_configs
         scsc.rp_channel_ids, scsc.private_channel_ids, scsc.crosschannel_blocklist_ids,
@@ -1292,8 +1301,16 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         -- 7. server_speech_configs
         sspeech.voice_transcript_chat_mode, sspeech.chatterbox_turbo_enabled,
         sspeech.chatterbox_cfg_weight, sspeech.chatterbox_exaggeration,
-        -- 8. server_auto_trigger_configs
-        satc.autoch_disc_ids, satc.autoch_persona_overrides,
+        -- 8. server_auto_trigger_configs (persona overrides aggregated from junction table)
+        satc.autoch_disc_ids,
+        (
+          SELECT COALESCE(
+            JSON_AGG(JSON_BUILD_OBJECT('channel_disc_id', o.channel_disc_id, 'tomori_id', o.persona_id)),
+            '[]'::JSON
+          )
+          FROM server_auto_trigger_persona_overrides o
+          WHERE o.server_id = s.server_id
+        ) AS autoch_persona_overrides,
         satc.autoch_threshold, satc.autoch_threshold_max,
         -- 9. server_channel_scope_configs
         scsc.rp_channel_ids, scsc.private_channel_ids, scsc.crosschannel_blocklist_ids,
@@ -1445,11 +1462,33 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       // Extract memory content strings into an array
       const serverMemories = serverMemoriesRows.map((row: { content: string }) => row.content);
 
-      // 6. Load API key rotation pool for this server (if any)
+      // 6. Load autochat runtime counters for this persona (default to 0 if row not yet created).
+      const autochRuntimeRows = await sql`
+        SELECT autoch_counter, autoch_next_target
+        FROM persona_autoch_runtime_state
+        WHERE persona_id = ${tomoriId}
+        LIMIT 1
+      `;
+      const autochRuntime: Pick<PersonaAutochRuntimeStateRow, "autoch_counter" | "autoch_next_target"> =
+        autochRuntimeRows.length > 0
+          ? {
+              autoch_counter: (autochRuntimeRows[0].autoch_counter as number) ?? 0,
+              autoch_next_target: (autochRuntimeRows[0].autoch_next_target as number) ?? 0,
+            }
+          : { autoch_counter: 0, autoch_next_target: 0 };
+
+      // 7. Load API key rotation pool for this server (if any)
       const rotationKeysRows = await sql`
-        SELECT * FROM api_key_rotation
-        WHERE server_id = ${tomoriData.server_id}
-        ORDER BY usage_count ASC, rotation_key_id ASC
+        SELECT
+          akr.rotation_key_id, akr.server_id, akr.provider, akr.api_key, akr.key_version,
+          akr.is_main_key_pointer, akr.is_enabled, akr.created_at, akr.updated_at,
+          COALESCE(rs.usage_count, 0) AS usage_count,
+          COALESCE(rs.error_count, 0) AS error_count,
+          rs.last_used_at, rs.last_error_at, rs.last_error_type, rs.last_error_message
+        FROM api_key_rotation akr
+        LEFT JOIN api_key_rotation_runtime_state rs USING (rotation_key_id)
+        WHERE akr.server_id = ${tomoriData.server_id}
+        ORDER BY COALESCE(rs.usage_count, 0) ASC, akr.rotation_key_id ASC
       `;
 
       // Validate rotation keys
@@ -1464,7 +1503,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         }
       }
 
-      // 7. Load active NAI preset if one is configured for this server
+      // 8. Load active NAI preset if one is configured for this server
       let naiPreset: NaiPresetRow | undefined;
       const presetName = configData.nai_preset_name;
       if (presetName) {
@@ -1483,7 +1522,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         }
       }
 
-      // 8. Resolve fallback model chain — prefer fallback_model_refs (new), fall back to fallback_llm_ids (legacy)
+      // 9. Resolve fallback model chain — prefer fallback_model_refs (new), fall back to fallback_llm_ids (legacy)
       const rawFallbackIds = configData.fallback_llm_ids;
       const fallbackLlmIds = configData.fallback_llm_ids;
       const fallbackLlms = fallbackLlmIds.length > 0 ? await llmModelRepo.getLlmsByIds(fallbackLlmIds) : [];
@@ -1522,7 +1561,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         if (resolved.length > 0) fallbackChain = resolved;
       }
 
-      // 9. Load vision model if configured (for non-vision chat model image analysis delegation)
+      // 10. Load vision model if configured (for non-vision chat model image analysis delegation)
       let visionLlm: LlmRow | undefined;
       if (configData.vision_llm_id) {
         visionLlm = getCachedLLM(configData.vision_llm_id) as LlmRow | undefined;
@@ -1536,7 +1575,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         }
       }
 
-      // 10. Combine and validate the full state
+      // 11. Combine and validate the full state
       const combinedState = {
         ...tomoriData,
         config: configData,
@@ -1545,6 +1584,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         persona_prompt: personaConfig?.persona_prompt ?? null,
         reward_conditioning_enabled: personaConfig?.reward_conditioning_enabled ?? true,
         punish_conditioning_enabled: personaConfig?.punish_conditioning_enabled ?? true,
+        ...autochRuntime,
         server_memories: serverMemories,
         rotation_keys: rotationKeys.length > 0 ? rotationKeys : undefined,
         vision_llm: visionLlm,
@@ -1674,9 +1714,16 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
           // 5. Load rotation keys once (server-scoped)
           const rotationKeysRows = await sql`
-            SELECT * FROM api_key_rotation
-            WHERE server_id = ${serverId}
-            ORDER BY usage_count ASC, rotation_key_id ASC
+            SELECT
+              akr.rotation_key_id, akr.server_id, akr.provider, akr.api_key, akr.key_version,
+              akr.is_main_key_pointer, akr.is_enabled, akr.created_at, akr.updated_at,
+              COALESCE(rs.usage_count, 0) AS usage_count,
+              COALESCE(rs.error_count, 0) AS error_count,
+              rs.last_used_at, rs.last_error_at, rs.last_error_type, rs.last_error_message
+            FROM api_key_rotation akr
+            LEFT JOIN api_key_rotation_runtime_state rs USING (rotation_key_id)
+            WHERE akr.server_id = ${serverId}
+            ORDER BY COALESCE(rs.usage_count, 0) ASC, akr.rotation_key_id ASC
           `;
 
           const rotationKeys: ApiKeyRotationRow[] = [];
@@ -1736,7 +1783,30 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             memoriesByLineage.set(lineageId, existing);
           }
 
-          // 8. Load vision model if configured (server-scoped, loaded once for all personas)
+          // 8. Batch-load autochat runtime counters for all personas in this server.
+          const tomoriIds: number[] = (tomoriRows as TomoriRow[])
+            .map((r) => r.tomori_id)
+            .filter((id): id is number => typeof id === "number");
+          const autochRuntimeRows =
+            tomoriIds.length > 0
+              ? await sql`
+                SELECT persona_id, autoch_counter, autoch_next_target
+                FROM persona_autoch_runtime_state
+                WHERE persona_id = ANY(${sql.array(tomoriIds, "int4")})
+              `
+              : [];
+          const autochRuntimeByPersonaId = new Map<
+            number,
+            Pick<PersonaAutochRuntimeStateRow, "autoch_counter" | "autoch_next_target">
+          >();
+          for (const row of autochRuntimeRows) {
+            autochRuntimeByPersonaId.set(row.persona_id as number, {
+              autoch_counter: (row.autoch_counter as number) ?? 0,
+              autoch_next_target: (row.autoch_next_target as number) ?? 0,
+            });
+          }
+
+          // 9. Load vision model if configured (server-scoped, loaded once for all personas)
           let visionLlm: LlmRow | undefined;
           if (configData.vision_llm_id) {
             visionLlm = getCachedLLM(configData.vision_llm_id) as LlmRow | undefined;
@@ -1750,7 +1820,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             }
           }
 
-          // 9. Build persona states
+          // 10. Build persona states
           const personas: TomoriState[] = [];
           for (const tomoriRow of tomoriRows) {
             const tomoriId = tomoriRow.tomori_id;
@@ -1786,6 +1856,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             // Personas sharing lineage intentionally share server memories.
             const serverMemories = memoriesByLineage.get(personaLineageId) ?? [];
 
+            const autochRuntime = autochRuntimeByPersonaId.get(tomoriId) ?? {
+              autoch_counter: 0,
+              autoch_next_target: 0,
+            };
+
             const combinedState = {
               ...tomoriRow,
               config: configData,
@@ -1796,6 +1871,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
               punish_conditioning_enabled: personaConfig?.punish_conditioning_enabled ?? true,
               server_memories: serverMemories,
               rotation_keys: rotationKeys.length > 0 ? rotationKeys : undefined,
+              ...autochRuntime,
               vision_llm: visionLlm,
               fallback_llms: fallbackLlms.length > 0 ? fallbackLlms : undefined,
               fallback_chain: fallbackChain,

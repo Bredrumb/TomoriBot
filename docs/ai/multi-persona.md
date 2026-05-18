@@ -70,7 +70,7 @@ Configured join welcomes also use the manual-trigger path:
 
 Configured auto-trigger channels can also pin a single persona per channel:
 - `/server auto-trigger channels` can enable/disable channels in bulk, or target one channel and choose which persona should answer there.
-- The per-channel assignment is stored in `server_auto_trigger_configs.autoch_persona_overrides`.
+- The per-channel assignment is stored in `server_auto_trigger_persona_overrides`; the assembled config still exposes it as `autoch_persona_overrides`.
 - If a channel has no explicit assignment, auto-trigger falls back to the main persona.
 
 ### Personal spotlight

@@ -25,8 +25,9 @@ import type {
   ServerNovelaiImagegenConfigRow,
   ServerByokConfigRow,
   ServerMemoryConfigRow,
+  PersonaAutochRuntimeStateRow,
 } from "@/types/db/schema";
-import { assembledServerConfigSchema, tomoriSchema, naiPresetSchema } from "@/types/db/schema";
+import { assembledServerConfigSchema, personaAutochRuntimeStateSchema, naiPresetSchema } from "@/types/db/schema";
 import type { TomoriPresetRow, SystemPromptPresetRow } from "@/types/db/schema";
 import type { FallbackModelRef } from "@/types/db/schema";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
@@ -458,72 +459,61 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
    * @param minThreshold - Minimum auto-chat threshold from config
    * @param maxThreshold - Maximum auto-chat threshold from config
    */
-  async incrementTomoriCounter(tomoriId: number, minThreshold: number, maxThreshold: number) {
+  async incrementTomoriCounter(
+    tomoriId: number,
+    minThreshold: number,
+    maxThreshold: number,
+  ): Promise<PersonaAutochRuntimeStateRow | null> {
     try {
       const normalizedMin = Math.max(minThreshold, 0);
       const normalizedMax = Math.max(maxThreshold, normalizedMin);
 
       if (normalizedMin <= 0 || normalizedMax <= 0) {
-        const [incrementedTomori] = await sql`
-          UPDATE tomoris
-          SET autoch_counter = 0,
-            autoch_next_target = 0
-          WHERE tomori_id = ${tomoriId}
+        // 1. Always-reply mode — reset counters to 0 in the runtime table.
+        const [runtimeRow] = await sql`
+          INSERT INTO persona_autoch_runtime_state (persona_id, autoch_counter, autoch_next_target)
+          VALUES (${tomoriId}, 0, 0)
+          ON CONFLICT (persona_id) DO UPDATE
+            SET autoch_counter = 0, autoch_next_target = 0
           RETURNING *
         `;
 
-        const parsedTomori = tomoriSchema.safeParse(incrementedTomori);
-        return parsedTomori.success ? parsedTomori.data : null;
+        const parsed = personaAutochRuntimeStateSchema.safeParse(runtimeRow);
+        return parsed.success ? parsed.data : null;
       }
 
-      const updatedTomori = await sql.transaction(async (tx) => {
-        const [currentTomori] = await tx`
+      // 2. Threshold mode — read current state, compute next, write back atomically.
+      const updatedRuntime = await sql.transaction(async (tx) => {
+        const [currentRuntime] = await tx`
           SELECT *
-          FROM tomoris
-          WHERE tomori_id = ${tomoriId}
+          FROM persona_autoch_runtime_state
+          WHERE persona_id = ${tomoriId}
           FOR UPDATE
         `;
 
-        if (!currentTomori) {
-          return null;
-        }
+        // Row may not exist for personas created before migration 015.
+        const currentCounter = (currentRuntime?.autoch_counter as number | undefined) ?? 0;
+        const currentTarget = (currentRuntime?.autoch_next_target as number | undefined) ?? 0;
 
-        const parsedCurrentTomori = tomoriSchema.safeParse(currentTomori);
-        if (!parsedCurrentTomori.success) {
-          const context: ErrorContext = {
-            tomoriId,
-            errorType: "SchemaValidationError",
-            metadata: {
-              operation: "incrementTomoriCounter",
-              validationErrors: parsedCurrentTomori.error.flatten(),
-            },
-          };
-
-          await log.error("Failed to validate Tomori data before counter update", parsedCurrentTomori.error, context);
-          return null;
-        }
-
-        const currentTomoriRow = parsedCurrentTomori.data;
-        const currentTarget = currentTomoriRow.autoch_next_target;
-        const shouldStartNewCycle = currentTarget > 0 && currentTomoriRow.autoch_counter >= currentTarget;
+        const shouldStartNewCycle = currentTarget > 0 && currentCounter >= currentTarget;
         const nextTarget =
           shouldStartNewCycle || currentTarget <= 0
             ? this.rollAutochatTarget(normalizedMin, normalizedMax)
             : currentTarget;
-        const nextCounter = shouldStartNewCycle ? 1 : currentTomoriRow.autoch_counter + 1;
+        const nextCounter = shouldStartNewCycle ? 1 : currentCounter + 1;
 
         const [updatedRow] = await tx`
-          UPDATE tomoris
-          SET autoch_counter = ${nextCounter},
-            autoch_next_target = ${nextTarget}
-          WHERE tomori_id = ${tomoriId}
+          INSERT INTO persona_autoch_runtime_state (persona_id, autoch_counter, autoch_next_target)
+          VALUES (${tomoriId}, ${nextCounter}, ${nextTarget})
+          ON CONFLICT (persona_id) DO UPDATE
+            SET autoch_counter = ${nextCounter}, autoch_next_target = ${nextTarget}
           RETURNING *
         `;
 
         return updatedRow ?? null;
       });
 
-      if (!updatedTomori) {
+      if (!updatedRuntime) {
         const context: ErrorContext = {
           tomoriId,
           errorType: "DatabaseUpdateError",
@@ -536,28 +526,28 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
 
         await log.error(
           `Failed to increment auto-chat counter for Tomori ${tomoriId}`,
-          new Error("Tomori not found"),
+          new Error("Runtime state upsert returned no rows"),
           context,
         );
         return null;
       }
 
-      const parsedTomori = tomoriSchema.safeParse(updatedTomori);
-      if (!parsedTomori.success) {
+      const parsedRuntime = personaAutochRuntimeStateSchema.safeParse(updatedRuntime);
+      if (!parsedRuntime.success) {
         const context: ErrorContext = {
           tomoriId,
           errorType: "SchemaValidationError",
           metadata: {
             operation: "incrementTomoriCounter",
-            validationErrors: parsedTomori.error.flatten(),
+            validationErrors: parsedRuntime.error.flatten(),
           },
         };
 
-        await log.error("Failed to validate Tomori data after counter update", parsedTomori.error, context);
+        await log.error("Failed to validate autochat runtime state after counter update", parsedRuntime.error, context);
         return null;
       }
 
-      return parsedTomori.data;
+      return parsedRuntime.data;
     } catch (error) {
       const context: ErrorContext = {
         tomoriId,
@@ -635,8 +625,61 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     return this.executeUpdate("server_speech_configs", serverId, patch);
   }
 
+  /**
+   * Atomically updates `server_auto_trigger_configs` columns and replaces junction rows in
+   * `server_auto_trigger_persona_overrides`. Both writes are wrapped in a single transaction
+   * so a failure never leaves the config row and junction in an inconsistent state.
+   *
+   * @param serverId - Internal server DB ID
+   * @param patch    - Partial auto-trigger config; `autoch_persona_overrides` is routed to the
+   *                   junction table while all other keys update the config row directly.
+   */
   async updateAutoTriggerConfig(serverId: number, patch: Partial<ServerAutoTriggerConfigRow>): Promise<boolean> {
-    return this.executeUpdate("server_auto_trigger_configs", serverId, patch);
+    const { autoch_persona_overrides: overrides, ...tableColumns } = patch;
+    const columnEntries = Object.entries(tableColumns).filter(([, v]) => v !== undefined);
+    const hasColumns = columnEntries.length > 0;
+    const hasOverrides = overrides !== undefined;
+
+    if (!hasColumns && !hasOverrides) return false;
+
+    try {
+      await sql.begin(async (tx) => {
+        const existingConfigRows = await tx`
+          SELECT server_id
+          FROM server_auto_trigger_configs
+          WHERE server_id = ${serverId}
+          FOR UPDATE
+        `;
+        if (existingConfigRows.length === 0) {
+          throw new Error(`server_auto_trigger_configs row not found for server_id ${serverId}`);
+        }
+
+        // 1. Update direct columns on server_auto_trigger_configs (if any provided).
+        if (hasColumns) {
+          const setParts = columnEntries.map(([k], i) => `${k} = $${i + 1}`);
+          const values: unknown[] = [...columnEntries.map(([, v]) => v), serverId];
+          await tx.unsafe(
+            `UPDATE server_auto_trigger_configs SET ${setParts.join(", ")} WHERE server_id = $${values.length}`,
+            values as never[],
+          );
+        }
+
+        // 2. Replace junction rows atomically (DELETE + INSERT to handle removals).
+        if (hasOverrides) {
+          await tx`DELETE FROM server_auto_trigger_persona_overrides WHERE server_id = ${serverId}`;
+          for (const override of overrides) {
+            await tx`
+              INSERT INTO server_auto_trigger_persona_overrides (server_id, channel_disc_id, persona_id)
+              VALUES (${serverId}, ${override.channel_disc_id}, ${override.tomori_id})
+            `;
+          }
+        }
+      });
+      return true;
+    } catch (error) {
+      log.error(`Error updating auto_trigger config for server_id: ${serverId}:`, error);
+      return false;
+    }
   }
 
   async updateChannelScopeConfig(serverId: number, patch: Partial<ServerChannelScopeConfigRow>): Promise<boolean> {

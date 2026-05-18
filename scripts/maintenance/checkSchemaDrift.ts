@@ -8,6 +8,13 @@ interface Issue {
 
 const issueList: Issue[] = [];
 
+// Intentional export exclusions: these tables hold resettable telemetry/counters,
+// not portable server/persona configuration.
+const RUNTIME_STATE_EXPORT_EXCLUDED_TABLES = new Set([
+  "api_key_rotation_runtime_state",
+  "persona_autoch_runtime_state",
+]);
+
 function addIssue(check: string, message: string): void {
   issueList.push({ check, message });
 }
@@ -164,6 +171,7 @@ function extractObjectKeysFromBody(body: string): Set<string> {
   let quote: '"' | "'" | "`" | null = null;
   let escaped = false;
   let lineStart = 0;
+  let lineStartDepth = 0;
 
   for (let i = 0; i <= body.length; i++) {
     const char = body[i] ?? "\n";
@@ -183,12 +191,13 @@ function extractObjectKeysFromBody(body: string): Set<string> {
     } else if (char === ")" || char === "}" || char === "]") {
       depth--;
     } else if (char === "\n") {
-      if (depth === 0) {
+      if (lineStartDepth === 0) {
         const line = body.slice(lineStart, i);
         const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:/);
         if (match) keys.add(match[1]);
       }
       lineStart = i + 1;
+      lineStartDepth = depth;
     }
   }
 
@@ -226,15 +235,26 @@ function extractComposedZodObjectKeys(content: string, exportName: string, seen:
 
   const statement = content.slice(declarationIndex, statementEnd);
   const omittedSharedKeys = new Set(["server_id", "created_at", "updated_at"]);
-  const schemaRefs = Array.from(
+  const omittedSchemaRefs = Array.from(
     statement.matchAll(/\b([A-Za-z_][A-Za-z0-9_]*)\.omit\(_sharedOmit\)/g),
     (match) => match[1],
   );
+  const directSchemaRefs = [
+    ...Array.from(statement.matchAll(/=\s*([A-Za-z_][A-Za-z0-9_]*)\b/g), (match) => match[1]),
+    ...Array.from(statement.matchAll(/\.merge\(\s*([A-Za-z_][A-Za-z0-9_]*)\b/g), (match) => match[1]),
+  ];
 
-  if (schemaRefs.length === 0) return null;
+  if (omittedSchemaRefs.length === 0 && directSchemaRefs.length === 0) return null;
 
   const keys = new Set<string>();
-  for (const schemaRef of schemaRefs) {
+  for (const schemaRef of directSchemaRefs) {
+    const schemaKeys = extractZodObjectKeys(content, schemaRef, seen);
+    for (const key of schemaKeys) {
+      keys.add(key);
+    }
+  }
+
+  for (const schemaRef of omittedSchemaRefs) {
     const schemaKeys = extractZodObjectKeys(content, schemaRef, seen);
     for (const key of schemaKeys) {
       if (!omittedSharedKeys.has(key)) keys.add(key);
@@ -435,12 +455,15 @@ function checkExportImportMappings(
     if (!dataExportContent.match(new RegExp(`\\bas\\s+${key}\\b`, "i"))) {
       addIssue(
         "server-config-export",
-        `serverConfigExportSchema includes ${key}, but dataExport.ts does not SELECT it`,
+        `serverConfigExportSchema includes ${key}, but ExportRepository.ts does not SELECT it`,
       );
     }
 
     if (!dataExportContent.match(new RegExp(`\\b${key}\\s*:`))) {
-      addIssue("server-config-export", `serverConfigExportSchema includes ${key}, but dataExport.ts does not emit it`);
+      addIssue(
+        "server-config-export",
+        `serverConfigExportSchema includes ${key}, but ExportRepository.ts does not emit it`,
+      );
     }
 
     if (
@@ -455,70 +478,203 @@ function checkExportImportMappings(
   }
 }
 
-function checkTomoriConfigExportCoverage(tomoriConfigKeys: Set<string>, exportKeys: Set<string>): void {
-  const excluded = new Set([
-    // PKs / FK anchors — auto-resolved from context on import
-    "tomori_config_id",
-    "tomori_id",
-    "server_id",
-    // Model/provider selection — provider-specific; must be reconfigured per server after import
-    "llm_id",
-    "embedding_model_id",
-    "diffusion_model_id",
-    "vision_llm_id",
-    "video_model_id",
-    "nai_diffusion_model_id",
-    // Security — never export credentials
-    "api_key",
-    "key_version",
-    // Managed by persona commands, not config
-    "trigger_words",
-    // Discord channel IDs — server-specific; meaningless on import to another server
-    "autoch_disc_ids",
-    "autoch_persona_overrides",
-    "rp_channel_ids",
-    "private_channel_ids",
-    "crosschannel_blocklist_ids",
-    "welcome_channel_disc_id",
-    "thought_log_channel_disc_id",
-    // Coupled to autoch_disc_ids; useless without channel context
-    "autoch_threshold",
-    "autoch_threshold_max",
-    // Welcome FK — references tomoris row; server-specific
-    "welcome_persona_id",
-    // Legacy migration sources — superseded by tool_notice_hidden_keys
-    "hide_respond_embed",
-    "hide_impersonation_embeds",
-    // Deprecated — Phase 3 rollout removals
-    "custom_endpoint_url",
-    "custom_model_name",
-    "custom_num_ctx",
-    // Timestamps — auto-managed by DB
-    "created_at",
-    "updated_at",
-    // Forward-compatible pre-exclusions — columns not yet in schema; add deliberate export/exclude decision when each column lands
-    "autochannel_lock",
-    "bot_member_permissions",
-    "bot_member_permissions_enabled",
-    "bot_avatar",
-    "bot_nickname",
-    "thought_logs_channel_disc_id",
-    "speech_endpoint_url",
-    "speech_voice_id",
-    "speech_voice_name",
-    "speech_voice_sample_id",
-    "speech_transcription_endpoint_url",
-    "managed_webhook_id",
-    "managed_webhook_token",
-  ]);
+type ServerConfigExportCoverageTarget = {
+  tableName: string;
+  rowSchemaName?: string;
+  exportSchemaName: string;
+  sourceKeys?: string[];
+  excludedKeys?: string[];
+};
 
-  for (const key of tomoriConfigKeys) {
-    if (excluded.has(key)) continue;
+const SHARED_CONFIG_TABLE_KEYS = new Set(["server_id", "created_at", "updated_at"]);
 
-    if (!exportKeys.has(key)) {
+const SERVER_CONFIG_EXPORT_COVERAGE_TARGETS: ServerConfigExportCoverageTarget[] = [
+  {
+    tableName: "server_model_configs",
+    rowSchemaName: "serverModelConfigSchema",
+    exportSchemaName: "serverModelConfigExportSchema",
+    excludedKeys: [
+      // Model/provider selection is environment-specific and must be reconfigured after import.
+      "llm_id",
+      "embedding_model_id",
+      "diffusion_model_id",
+      "video_model_id",
+      "vision_llm_id",
+      // Security-sensitive encrypted credential mirrors are never exported.
+      "api_key",
+      "key_version",
+      // Deprecated migration/compatibility fields are not part of portable config.
+      "custom_endpoint_url",
+      "custom_model_name",
+      "custom_num_ctx",
+      "fallback_llm_ids",
+      "other_model_codename",
+      "other_model_capabilities",
+      "other_model_capabilities_fetched_at",
+      "hide_respond_embed",
+    ],
+  },
+  {
+    tableName: "server_chat_configs",
+    rowSchemaName: "serverChatConfigSchema",
+    exportSchemaName: "serverChatConfigExportSchema",
+    excludedKeys: [
+      // Fallback refs contain server-local model/custom-endpoint pointers.
+      "fallback_model_refs",
+    ],
+  },
+  {
+    tableName: "server_member_permissions_configs",
+    rowSchemaName: "serverMemberPermissionsConfigSchema",
+    exportSchemaName: "serverMemberPermissionsConfigExportSchema",
+    excludedKeys: [
+      // Legacy migration source superseded by server_notice_embeds_configs.tool_notice_hidden_keys.
+      "hide_impersonation_embeds",
+    ],
+  },
+  {
+    tableName: "server_capabilities_configs",
+    rowSchemaName: "serverCapabilitiesConfigSchema",
+    exportSchemaName: "serverCapabilitiesConfigExportSchema",
+  },
+  {
+    tableName: "server_notice_embeds_configs",
+    rowSchemaName: "serverNoticeEmbedsConfigSchema",
+    exportSchemaName: "serverNoticeEmbedsConfigExportSchema",
+  },
+  {
+    tableName: "server_nsfw_configs",
+    rowSchemaName: "serverNsfwConfigSchema",
+    exportSchemaName: "serverNsfwConfigExportSchema",
+  },
+  {
+    tableName: "server_speech_configs",
+    rowSchemaName: "serverSpeechConfigSchema",
+    exportSchemaName: "serverSpeechConfigExportSchema",
+  },
+  {
+    tableName: "server_auto_trigger_configs",
+    rowSchemaName: "serverAutoTriggerConfigSchema",
+    exportSchemaName: "serverAutoTriggerConfigExportSchema",
+    excludedKeys: [
+      // Discord channel IDs and channel-coupled thresholds are server-specific.
+      "autoch_disc_ids",
+      "autoch_threshold",
+      "autoch_threshold_max",
+      // Junction-owned override data references server-local personas/channels.
+      "autoch_persona_overrides",
+    ],
+  },
+  {
+    tableName: "server_channel_scope_configs",
+    rowSchemaName: "serverChannelScopeConfigSchema",
+    exportSchemaName: "serverChannelScopeConfigExportSchema",
+    excludedKeys: [
+      // Discord channel IDs are not portable across servers.
+      "rp_channel_ids",
+      "private_channel_ids",
+      "crosschannel_blocklist_ids",
+      "thought_log_channel_disc_id",
+    ],
+  },
+  {
+    tableName: "server_trigger_behavior_configs",
+    rowSchemaName: "serverTriggerBehaviorConfigSchema",
+    exportSchemaName: "serverTriggerBehaviorConfigExportSchema",
+  },
+  {
+    tableName: "server_novelai_imagegen_configs",
+    rowSchemaName: "serverNovelaiImagegenConfigSchema",
+    exportSchemaName: "serverNovelaiImagegenConfigExportSchema",
+    excludedKeys: [
+      // Model/provider selection is environment-specific and must be reconfigured after import.
+      "nai_diffusion_model_id",
+    ],
+  },
+  {
+    tableName: "server_byok_configs",
+    rowSchemaName: "serverByokConfigSchema",
+    exportSchemaName: "serverByokConfigExportSchema",
+  },
+  {
+    tableName: "server_memory_configs",
+    rowSchemaName: "serverMemoryConfigSchema",
+    exportSchemaName: "serverMemoryConfigExportSchema",
+  },
+  {
+    tableName: "server_welcome_configs",
+    exportSchemaName: "serverWelcomeConfigExportSchema",
+    sourceKeys: [
+      "server_id",
+      "welcome_channel_disc_id",
+      "welcome_prompt",
+      "welcome_persona_id",
+      "created_at",
+      "updated_at",
+    ],
+    excludedKeys: [
+      // Discord channel IDs and persona FKs are server-specific.
+      "welcome_channel_disc_id",
+      "welcome_persona_id",
+    ],
+  },
+];
+
+function checkServerConfigExportComposition(
+  schemaContent: string,
+  dataExportContent: string,
+  composedExportKeys: Set<string>,
+): void {
+  const composedFromSlices = new Set<string>();
+
+  for (const target of SERVER_CONFIG_EXPORT_COVERAGE_TARGETS) {
+    const sourceKeys = target.sourceKeys
+      ? new Set(target.sourceKeys)
+      : extractZodObjectKeys(schemaContent, target.rowSchemaName ?? "");
+    const exportKeys = extractZodObjectKeys(dataExportContent, target.exportSchemaName);
+    const excludedKeys = new Set([...SHARED_CONFIG_TABLE_KEYS, ...(target.excludedKeys ?? [])]);
+
+    for (const key of sourceKeys) {
+      if (excludedKeys.has(key)) continue;
+      if (!exportKeys.has(key)) {
+        addIssue(
+          "server-config-export-coverage",
+          `${target.tableName}.${key} is neither exported by ${target.exportSchemaName} nor explicitly excluded`,
+        );
+      }
+    }
+
+    for (const key of exportKeys) {
+      composedFromSlices.add(key);
+      if (!sourceKeys.has(key)) {
+        addIssue(
+          "server-config-export-coverage",
+          `${target.exportSchemaName} exports ${key}, but ${target.tableName} does not define that field`,
+        );
+      }
+      if (excludedKeys.has(key)) {
+        addIssue(
+          "server-config-export-coverage",
+          `${target.exportSchemaName} exports ${key}, but ${target.tableName}.${key} is explicitly excluded`,
+        );
+      }
+    }
+  }
+
+  for (const key of composedFromSlices) {
+    if (!composedExportKeys.has(key)) {
       addIssue(
-        "server-config-export-coverage",
-        `assembledServerConfigSchema field ${key} is neither exported by serverConfigExportSchema nor explicitly excluded`,
+        "server-config-export-composition",
+        `${key} is exported by a per-table schema but missing from serverConfigExportSchema`,
+      );
+    }
+  }
+
+  for (const key of composedExportKeys) {
+    if (!composedFromSlices.has(key)) {
+      addIssue(
+        "server-config-export-composition",
+        `${key} is in serverConfigExportSchema but not in any per-table export schema`,
       );
     }
   }
@@ -532,6 +688,35 @@ function checkSchemaSqlCoverage(schemaSql: string, tableName: string, schemaKeys
 
     if (!hasSchemaSqlColumn(schemaSql, tableName, key)) {
       addIssue("schema-sql-coverage", `${tableName}.${key} exists in Zod schema but not in schema.sql`);
+    }
+  }
+}
+
+function extractCreateTableNames(schemaSql: string): Set<string> {
+  return new Set(
+    Array.from(
+      schemaSql.matchAll(/CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/gi),
+      (match) => match[1],
+    ),
+  );
+}
+
+function checkRuntimeStateExportExclusions(schemaSql: string): void {
+  const tableNames = extractCreateTableNames(schemaSql);
+  const runtimeStateTables = Array.from(tableNames).filter((tableName) => tableName.endsWith("_runtime_state"));
+
+  for (const tableName of runtimeStateTables) {
+    if (!RUNTIME_STATE_EXPORT_EXCLUDED_TABLES.has(tableName)) {
+      addIssue(
+        "runtime-state-export",
+        `${tableName} is a runtime-state table but is not explicitly excluded from export coverage`,
+      );
+    }
+  }
+
+  for (const tableName of RUNTIME_STATE_EXPORT_EXCLUDED_TABLES) {
+    if (!tableNames.has(tableName)) {
+      addIssue("runtime-state-export", `${tableName} is excluded from export coverage but is missing from schema.sql`);
     }
   }
 }
@@ -620,18 +805,18 @@ async function main(): Promise<void> {
   const allRepositories = repoContents.join("\n");
   const schemaSql = await readFile(join(root, "src", "db", "schema.sql"), "utf-8");
 
-  const tomoriConfigKeys = extractZodObjectKeys(schemaTs, "assembledServerConfigSchema");
   const savedProviderConfigKeys = extractZodObjectKeys(schemaTs, "savedProviderConfigSchema");
   const userSavedProviderConfigKeys = extractZodObjectKeys(schemaTs, "userSavedProviderConfigSchema");
   const serverConfigExportKeys = extractZodObjectKeys(dataExportTs, "serverConfigExportSchema");
 
-  checkTomoriConfigExportCoverage(tomoriConfigKeys, serverConfigExportKeys);
+  checkServerConfigExportComposition(schemaTs, dataExportTs, serverConfigExportKeys);
   checkExportImportMappings(serverConfigExportKeys, dataExportImpl, dataImportImpl);
   checkInsertCounts(allRepositories, "saved_provider_configs");
   checkInsertCounts(allRepositories, "user_saved_provider_configs");
 
   checkSchemaSqlCoverage(schemaSql, "saved_provider_configs", savedProviderConfigKeys);
   checkSchemaSqlCoverage(schemaSql, "user_saved_provider_configs", userSavedProviderConfigKeys);
+  checkRuntimeStateExportExclusions(schemaSql);
 
   await checkConfigsColumnThreshold(join(root, "src", "db", "migrations"));
 

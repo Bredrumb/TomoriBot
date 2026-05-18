@@ -32,10 +32,9 @@ export type ServerTriggerBehaviorConfigsRow = {
   cooldown_length: number;
 };
 
-/** Row shape for server_auto_trigger_configs (Phase 6). */
+/** Row shape for server_auto_trigger_configs (Phase 6, post-013 migration). */
 export type ServerAutoTriggerConfigsRow = {
   autoch_disc_ids: string[];
-  autoch_persona_overrides: unknown[];
   autoch_threshold: number;
   autoch_threshold_max: number;
 };
@@ -1117,7 +1116,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
   private async sqlLoadAutoTriggerConfigs(serverId: number): Promise<ServerAutoTriggerConfigsRow | null> {
     try {
       const [row] = await sql`
-        SELECT autoch_disc_ids, autoch_persona_overrides, autoch_threshold, autoch_threshold_max
+        SELECT autoch_disc_ids, autoch_threshold, autoch_threshold_max
         FROM server_auto_trigger_configs
         WHERE server_id = ${serverId}
       `;
@@ -1148,20 +1147,18 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
   }
 
   private async sqlUpsertAutoTriggerConfigs(serverId: number, row: ServerAutoTriggerConfigsRow): Promise<void> {
-    const overridesJson = JSON.stringify(row.autoch_persona_overrides);
     await sql`
       INSERT INTO server_auto_trigger_configs (
-        server_id, autoch_disc_ids, autoch_persona_overrides, autoch_threshold, autoch_threshold_max
+        server_id, autoch_disc_ids, autoch_threshold, autoch_threshold_max
       ) VALUES (
-        ${serverId}, ${sql.array(row.autoch_disc_ids)}, ${overridesJson}::JSONB,
+        ${serverId}, ${sql.array(row.autoch_disc_ids)},
         ${row.autoch_threshold}, ${row.autoch_threshold_max}
       )
       ON CONFLICT (server_id) DO UPDATE SET
-        autoch_disc_ids          = EXCLUDED.autoch_disc_ids,
-        autoch_persona_overrides = EXCLUDED.autoch_persona_overrides,
-        autoch_threshold         = EXCLUDED.autoch_threshold,
-        autoch_threshold_max     = EXCLUDED.autoch_threshold_max,
-        updated_at               = NOW()
+        autoch_disc_ids      = EXCLUDED.autoch_disc_ids,
+        autoch_threshold     = EXCLUDED.autoch_threshold,
+        autoch_threshold_max = EXCLUDED.autoch_threshold_max,
+        updated_at           = NOW()
     `;
   }
 }

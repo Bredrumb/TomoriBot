@@ -311,7 +311,7 @@ export class ImportRepository {
       };
 
       // 2. Dispatch the five always-present table writes in parallel.
-      const [modelOk, chatOk] = await Promise.all([
+      const requiredWriteResults = await Promise.all([
         configRepository.updateModelConfig(serverId, modelPatch),
         configRepository.updateChatConfig(serverId, chatPatch),
         configRepository.updateMemberPermissionsConfig(serverId, memberPermPatch),
@@ -319,13 +319,13 @@ export class ImportRepository {
         configRepository.updateNoticeEmbedsConfig(serverId, noticeEmbedsPatch),
       ]);
 
-      // 3. Failure on model or chat configs means no split-table row exists for this server_id.
-      if (!modelOk || !chatOk) {
+      // 3. Failure on any required config write means at least one split-table row failed to restore.
+      if (requiredWriteResults.some((ok) => !ok)) {
         return { success: false, error: "commands.data.import.error_update_failed" };
       }
 
       // 4. Dispatch optional-field table writes in parallel; these are absent in older exports.
-      await Promise.all([
+      const optionalWriteResults = await Promise.all([
         config.uncensor_injection_enabled !== undefined ||
         config.uncensor_unicode_space_enabled !== undefined ||
         config.uncensor_sanitize_enabled !== undefined
@@ -412,6 +412,10 @@ export class ImportRepository {
           ? configRepository.updateWelcomeConfig(serverId, { welcome_prompt: config.welcome_prompt })
           : Promise.resolve(true),
       ]);
+
+      if (optionalWriteResults.some((ok) => !ok)) {
+        return { success: false, error: "commands.data.import.error_update_failed" };
+      }
 
       return { success: true, itemsImported: { configFieldsCount: configFields.length } };
     } catch (error) {

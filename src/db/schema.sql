@@ -103,8 +103,7 @@ CREATE TABLE IF NOT EXISTS tomoris (
   attribute_list TEXT[] DEFAULT '{}',
   sample_dialogues_in TEXT[] DEFAULT '{}', -- array index is soft id of sample dialogue pairs
   sample_dialogues_out TEXT[] DEFAULT '{}',
-  autoch_counter INT DEFAULT 0,
-  autoch_next_target INT DEFAULT 0,
+  -- autoch_counter and autoch_next_target were here; moved to persona_autoch_runtime_state by migration 015.
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE
@@ -478,8 +477,8 @@ SELECT add_column_if_not_exists('persona_configs', 'punish_conditioning_enabled'
 -- Deliberate trigger mode (April 2026)
 -- When enabled, plain {trigger} words are blocked; only @{trigger}, replies, mentions, and /bot respond work
 
--- Auto-chat shared range state (March 2026)
-SELECT add_column_if_not_exists('tomoris', 'autoch_next_target', 'INTEGER', '0');
+-- Auto-chat shared range state (March 2026): autoch_next_target was here;
+-- moved to persona_autoch_runtime_state by migration 015 (Phase 6 Step #16B).
 
 -- Add custom endpoint URL for self-hosted OpenAI-compatible LLM endpoints (January 2026)
 -- DEPRECATED Phase 3 rollout: legacy inline custom field kept only for backward compatibility while labeled custom_endpoints takes over.
@@ -1386,7 +1385,8 @@ CREATE INDEX IF NOT EXISTS idx_opt_api_keys_version ON opt_api_keys(key_version)
 -- DEPRECATED Phase 1.5 Pass B: api_key/key_version are now canonical in saved_provider_configs
 
 -- API Key Rotation table for load balancing and failover (January 2026)
--- Stores additional API keys for round-robin distribution and automatic failover
+-- Stores additional API keys for round-robin distribution and automatic failover.
+-- Config/security columns only — runtime telemetry lives in api_key_rotation_runtime_state.
 CREATE TABLE IF NOT EXISTS api_key_rotation (
   rotation_key_id SERIAL PRIMARY KEY,
   server_id INT NOT NULL,
@@ -1395,12 +1395,6 @@ CREATE TABLE IF NOT EXISTS api_key_rotation (
   key_version INTEGER DEFAULT 1,                    -- Encryption key version
   is_main_key_pointer BOOLEAN DEFAULT false,        -- true = use saved_provider_configs.api_key instead
   is_enabled BOOLEAN DEFAULT true,                  -- Manual or auto-disabled after errors
-  usage_count BIGINT DEFAULT 0,                     -- For round-robin tracking
-  error_count INTEGER DEFAULT 0,                    -- Consecutive errors
-  last_used_at TIMESTAMP,
-  last_error_at TIMESTAMP,                          -- For cooldown logic
-  last_error_type TEXT,                             -- 'rate_limit' (60s) or 'api_error' (5min)
-  last_error_message TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE
@@ -1420,6 +1414,73 @@ CREATE TRIGGER update_api_key_rotation_timestamp
 BEFORE UPDATE ON api_key_rotation
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
+
+-- Runtime telemetry for API key rotation — excluded from export, reset independently of config.
+-- JOIN with api_key_rotation on rotation_key_id for key selection queries.
+CREATE TABLE IF NOT EXISTS api_key_rotation_runtime_state (
+  rotation_key_id  INT PRIMARY KEY,
+  usage_count      BIGINT NOT NULL DEFAULT 0,       -- Round-robin sort key
+  error_count      INTEGER NOT NULL DEFAULT 0,      -- Consecutive errors since last success
+  last_used_at     TIMESTAMP,                        -- Last successful API call
+  last_error_at    TIMESTAMP,                        -- Timestamp of most recent error (for cooldown)
+  last_error_type  TEXT,                             -- 'rate_limit' (60s) or 'api_error' (5min)
+  last_error_message TEXT,                           -- Human-readable error message (truncated to 500)
+  updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (rotation_key_id) REFERENCES api_key_rotation(rotation_key_id) ON DELETE CASCADE
+);
+
+-- Create updated_at trigger for api_key_rotation_runtime_state table
+DROP TRIGGER IF EXISTS update_api_key_rotation_runtime_state_timestamp ON api_key_rotation_runtime_state;
+CREATE TRIGGER update_api_key_rotation_runtime_state_timestamp
+BEFORE UPDATE ON api_key_rotation_runtime_state
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
+-- Persona autochat runtime state (Phase 6 Step #16B).
+-- Stores hot-path autochat counters separately from persona identity in tomoris.
+-- FK column uses the forward-compatible name persona_id (→ tomoris(tomori_id));
+-- ON DELETE CASCADE ensures cleanup when a persona is deleted.
+-- Both columns default to 0 so new personas auto-initialize on first UPSERT.
+CREATE TABLE IF NOT EXISTS persona_autoch_runtime_state (
+  persona_id         INT PRIMARY KEY,
+  autoch_counter     INT NOT NULL DEFAULT 0,   -- Messages seen since cycle start
+  autoch_next_target INT NOT NULL DEFAULT 0,   -- Target count for next autochat trigger (0 = always-reply)
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  FOREIGN KEY (persona_id) REFERENCES tomoris(tomori_id) ON DELETE CASCADE
+);
+
+DROP TRIGGER IF EXISTS update_persona_autoch_runtime_state_timestamp ON persona_autoch_runtime_state;
+CREATE TRIGGER update_persona_autoch_runtime_state_timestamp
+BEFORE UPDATE ON persona_autoch_runtime_state
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
+-- Backfill for existing tomoris rows that pre-date migration 015.
+-- On pre-migration databases, preserve legacy counter values before the migration runner
+-- drops the old columns. On fresh/post-migration databases, seed any missing state row
+-- with the same zero defaults runtime loaders use.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'tomoris' AND column_name = 'autoch_counter'
+  ) AND EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'tomoris' AND column_name = 'autoch_next_target'
+  ) THEN
+    INSERT INTO persona_autoch_runtime_state (persona_id, autoch_counter, autoch_next_target)
+    SELECT tomori_id, COALESCE(autoch_counter, 0), COALESCE(autoch_next_target, 0)
+    FROM tomoris
+    ON CONFLICT (persona_id) DO UPDATE SET
+      autoch_counter = EXCLUDED.autoch_counter,
+      autoch_next_target = EXCLUDED.autoch_next_target;
+  ELSE
+    INSERT INTO persona_autoch_runtime_state (persona_id, autoch_counter, autoch_next_target)
+    SELECT tomori_id, 0, 0
+    FROM tomoris
+    ON CONFLICT (persona_id) DO NOTHING;
+  END IF;
+END $$;
 
 -- ============================================================================
 -- IMAGE QUOTA SYSTEM (Phase 3)

@@ -77,8 +77,7 @@ export const tomoriSchema = z.object({
   attribute_list: z.array(z.string()).default([]),
   sample_dialogues_in: z.array(z.string()).default([]),
   sample_dialogues_out: z.array(z.string()).default([]),
-  autoch_counter: z.number().default(0),
-  autoch_next_target: z.number().default(0),
+  // autoch_counter and autoch_next_target moved to personaAutochRuntimeStateSchema (migration 015).
   is_alter: z.boolean().default(false), // Added January 2026 - Distinguishes main persona (false) from alter personas (true)
   webhook_avatar_url: z.string().nullable().optional(), // Added January 2026 - Stored alter avatar reference (production URL; non-production URL or local avatar path)
   nai_tags: z.array(z.string()).default([]), // Imageboard-style persona appearance tags for NovelAI character profile resolution
@@ -98,6 +97,19 @@ export const tomoriSchema = z.object({
   updated_at: z.date().optional(),
 });
 export type TomoriRow = z.infer<typeof tomoriSchema>;
+
+/**
+ * Runtime autochat counters for a persona (Phase 6 Step #16B).
+ * Separated from tomoris so identity rows are not mutated on every message tick.
+ * FK column is persona_id → tomoris(tomori_id); ON DELETE CASCADE keeps cleanup atomic.
+ */
+export const personaAutochRuntimeStateSchema = z.object({
+  persona_id: z.number().int(),
+  autoch_counter: z.number().int().default(0),
+  autoch_next_target: z.number().int().default(0),
+  updated_at: z.date().optional(),
+});
+export type PersonaAutochRuntimeStateRow = z.infer<typeof personaAutochRuntimeStateSchema>;
 
 /**
  * Schema for voice_samples table — reference audio clips for local TTS voice cloning.
@@ -1021,10 +1033,10 @@ const coerceIntNumber = z.preprocess((value) => {
 }, z.number().int());
 
 /**
- * Schema for API key rotation table entries
- * Used for load balancing (round-robin) and failover across multiple API keys
+ * Schema for api_key_rotation table (config/security columns only).
+ * Runtime telemetry lives in api_key_rotation_runtime_state.
  */
-export const apiKeyRotationSchema = z.object({
+export const apiKeyRotationConfigSchema = z.object({
   rotation_key_id: z.number().optional(), // Primary key, auto-generated
   server_id: z.number(), // Foreign key to servers table
   provider: z.string(), // Must match the active provider for this server
@@ -1032,15 +1044,33 @@ export const apiKeyRotationSchema = z.object({
   key_version: z.number().int().default(1), // Encryption key version
   is_main_key_pointer: z.boolean().default(false), // true = use the assembled server config api_key
   is_enabled: z.boolean().default(true), // Manual or auto-disabled after errors
-  usage_count: coerceNumber.default(0), // For round-robin tracking
-  error_count: coerceIntNumber.default(0), // Consecutive errors
-  last_used_at: z.date().nullable().optional(), // Last successful use
-  last_error_at: z.date().nullable().optional(), // For cooldown logic
-  last_error_type: ApiKeyRotationErrorType.nullable().optional(), // Error category for cooldown
-  last_error_message: z.string().nullable().optional(), // Human-readable error
   created_at: z.date().optional(), // Handled by DB default
   updated_at: z.date().optional(), // Handled by DB default/trigger
 });
+
+/**
+ * Schema for api_key_rotation_runtime_state table.
+ * Excluded from export; reset independently of config/credentials.
+ */
+export const apiKeyRotationRuntimeStateSchema = z.object({
+  rotation_key_id: z.number(), // PK + FK → api_key_rotation(rotation_key_id) ON DELETE CASCADE
+  usage_count: coerceNumber.default(0), // For round-robin tracking
+  error_count: coerceIntNumber.default(0), // Consecutive errors since last success
+  last_used_at: z.date().nullable().optional(), // Last successful API call
+  last_error_at: z.date().nullable().optional(), // For cooldown logic
+  last_error_type: ApiKeyRotationErrorType.nullable().optional(), // Error category for cooldown
+  last_error_message: z.string().nullable().optional(), // Human-readable error (truncated to 500)
+  updated_at: z.date().optional(), // Handled by DB default/trigger
+});
+export type ApiKeyRotationRuntimeStateRow = z.infer<typeof apiKeyRotationRuntimeStateSchema>;
+
+/**
+ * Schema for the joined api_key_rotation + api_key_rotation_runtime_state row.
+ * All key selection queries JOIN both tables; this is the shape returned to callers.
+ */
+export const apiKeyRotationSchema = apiKeyRotationConfigSchema.merge(
+  apiKeyRotationRuntimeStateSchema.omit({ rotation_key_id: true }),
+);
 export type ApiKeyRotationRow = z.infer<typeof apiKeyRotationSchema>;
 
 /**
@@ -1218,6 +1248,9 @@ export type TomoriState = TomoriRow & {
   nai_preset?: NaiPresetRow; // Added March 2026 - Active NovelAI sampling preset (null when not using NAI)
   fallback_llms?: LlmRow[]; // Added March 2026 - Resolved LLM rows for fallback model failover chain (legacy; prefer fallback_chain)
   fallback_chain?: FallbackEntry[]; // Added April 2026 - Ordered fallback entries resolving both llm and custom_endpoint refs
+  // Autochat runtime counters from persona_autoch_runtime_state (migration 015).
+  autoch_counter: number;
+  autoch_next_target: number;
 };
 
 /**
@@ -1244,6 +1277,9 @@ export const tomoriStateSchema = tomoriSchema.extend({
       ]),
     )
     .optional(), // Added April 2026 - Ordered fallback entries (llm + custom_endpoint refs)
+  // Autochat runtime counters loaded from persona_autoch_runtime_state (migration 015).
+  autoch_counter: z.number().int().default(0),
+  autoch_next_target: z.number().int().default(0),
 });
 
 /**

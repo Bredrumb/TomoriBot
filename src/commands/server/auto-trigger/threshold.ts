@@ -6,7 +6,7 @@
 } from "discord.js";
 import { sql } from "@/utils/db/client";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { tomoriSchema } from "@/types/db/schema";
+import { personaAutochRuntimeStateSchema } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -130,17 +130,19 @@ Positive values use a shared fixed or random range.
           RETURNING server_id
         `;
 
-      const [tomoriRow] = await tx`
-          UPDATE tomoris
-          SET autoch_counter = 0,
-              autoch_next_target = ${nextTarget}
-          WHERE tomori_id = ${tomoriState.tomori_id}
+      // Reset the autochat cycle in the runtime state table (upsert handles first-time rows).
+      const [runtimeRow] = await tx`
+          INSERT INTO persona_autoch_runtime_state (persona_id, autoch_counter, autoch_next_target)
+          VALUES (${tomoriState.tomori_id}, 0, ${nextTarget})
+          ON CONFLICT (persona_id) DO UPDATE
+            SET autoch_counter = 0,
+                autoch_next_target = EXCLUDED.autoch_next_target
           RETURNING *
         `;
 
       return {
         updatedConfigRow: configRow ?? null,
-        updatedTomoriRow: tomoriRow ?? null,
+        updatedTomoriRow: runtimeRow ?? null,
       };
     });
 
@@ -155,7 +157,7 @@ Positive values use a shared fixed or random range.
           threshold,
           maxThreshold,
           nextTarget,
-          targetTables: ["server_auto_trigger_configs", "tomoris"],
+          targetTables: ["server_auto_trigger_configs", "persona_autoch_runtime_state"],
         },
       };
       await log.error(
@@ -172,18 +174,18 @@ Positive values use a shared fixed or random range.
       return;
     }
 
-    const validatedTomori = tomoriSchema.safeParse(updatedTomoriRow);
-    if (!validatedTomori.success) {
+    const validatedRuntime = personaAutochRuntimeStateSchema.safeParse(updatedTomoriRow);
+    if (!validatedRuntime.success) {
       const context: ErrorContext = {
         tomoriId: tomoriState.tomori_id,
         serverId: tomoriState.server_id,
         errorType: "SchemaValidationError",
         metadata: {
           command: "server auto-trigger threshold",
-          validationErrors: validatedTomori.error.flatten(),
+          validationErrors: validatedRuntime.error.flatten(),
         },
       };
-      await log.error("Failed to validate updated Tomori auto-chat state", validatedTomori.error, context);
+      await log.error("Failed to validate updated autochat runtime state", validatedRuntime.error, context);
 
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.update_failed_title",

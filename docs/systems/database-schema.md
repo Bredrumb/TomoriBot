@@ -119,7 +119,9 @@ All SQL is inlined as `private` methods directly on the owning Repository class.
 - `reminders`
 - `error_logs`
 - `opt_api_keys`
-- `api_key_rotation`
+- `api_key_rotation` (config/credentials only)
+- `api_key_rotation_runtime_state` (telemetry: usage, errors, cooldown — excluded from export)
+- `persona_autoch_runtime_state` (autochat counters per persona — excluded from export)
 - `saved_provider_configs`
 - `user_saved_provider_configs`
 - `custom_endpoints`
@@ -182,7 +184,7 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 - `server_welcome_configs.welcome_channel_disc_id` stores the single configured join-welcome channel per server.
 - `server_welcome_configs.welcome_prompt` stores the required additional greeting instruction shown in `/server welcome-channel set`.
 - `server_welcome_configs.welcome_persona_id` stores the selected welcome persona; `NULL` means random persona selection per join.
-- `server_auto_trigger_configs.autoch_persona_overrides` stores optional per-channel persona assignments for configured auto-trigger channels. Each entry is a JSON object with `channel_disc_id` and `tomori_id`; missing entries fall back to the main persona. (Kept as JSONB until Phase 6 step #15 junction-ifies it.)
+- `server_auto_trigger_persona_overrides` (junction table, Phase 6 step #15) stores optional per-channel persona overrides for auto-trigger channels. Each row maps `(server_id, channel_disc_id)` → `persona_id` (FK to `tomoris(tomori_id)` with `ON DELETE CASCADE`). Missing entries fall back to the main persona. The assembled config exposes these as `autoch_persona_overrides: [{channel_disc_id, tomori_id}]` via a `JSON_AGG` subquery in `PersonaRepository`.
 - `server_notice_embeds_configs.tool_notice_hidden_keys` stores the hidden notice-embed key registry used by `/config notice-embeds visibility`, covering both tool progress notices and selected public command notice embeds.
 - `server_novelai_imagegen_configs.nai_style_tags` stores server-wide NovelAI style/quality tags prepended to every `generate_image_nai` prompt.
 - `server_novelai_imagegen_configs.nai_negative_tags` stores server-wide NovelAI negative tags; an empty array falls back to the `NAI_IMAGE_NEGATIVE_PROMPT` env value.
@@ -191,6 +193,14 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 - `server_capabilities_configs.videogen_enabled` gates both slash-command and tool-driven video generation exposure. The DB default is `false`, so video generation starts disabled until explicitly enabled.
 - `persona_context_note_configs.context_note` stores a per-persona author's note. Takes priority over `server_chat_configs.context_note` at inference when non-null. (Dual-write active; source column still present in `tomoris`.)
 - `persona_context_note_configs.context_note_depth` stores the injection depth for the persona-specific note, using the same semantics as `server_chat_configs.context_note_depth`. (Dual-write active.)
+
+### Server config export/import
+
+`/server config export` and the legacy full-server export keep the historical flat JSON payload for file compatibility, but `serverConfigExportSchema` is now composed from per-table export slices in `src/types/db/dataExport.ts`. Each slice maps to one split config table, with explicit exclusions for non-portable Discord IDs, server-local model/provider pointers, encrypted credentials, legacy migration fields, and runtime state.
+
+`ExportRepository.exportServerData()` reads the split tables directly and emits the flat composed shape. `ImportRepository.importServerConfig()` partitions that same flat payload back into split-table patch objects and writes through the typed `ConfigRepository.update*Config()` methods; all required and optional split-table update results must succeed before the import reports success and invalidates the Tomori state cache.
+
+`scripts/maintenance/checkSchemaDrift.ts` validates export coverage per split config table rather than comparing against a `tomori_configs` mirror. It also verifies that `serverConfigExportSchema` is exactly the union of the per-table export slices and that every exported key is selected, emitted, and restored. Runtime-state tables such as `api_key_rotation_runtime_state` and `persona_autoch_runtime_state` remain explicitly excluded from export/import.
 
 ### NovelAI profile tags
 
@@ -253,7 +263,7 @@ Encrypted columns are stored as `BYTEA` with key version tracking:
 
 - `server_model_configs.api_key` + `server_model_configs.key_version` *(deprecated Phase 1.5 runtime mirror; provider snapshot keys are canonical in `saved_provider_configs`)*
 - `opt_api_keys.api_key` + `opt_api_keys.key_version`
-- `api_key_rotation.api_key` + `api_key_rotation.key_version`
+- `api_key_rotation.api_key` + `api_key_rotation.key_version` (telemetry split to `api_key_rotation_runtime_state` by migration 014)
 - `saved_provider_configs.api_key` + `saved_provider_configs.key_version`
 - `saved_provider_configs.thinking_level` mirrors `server_model_configs.thinking_level` so provider switching can restore the previous provider-specific reasoning preference.
 - `saved_provider_configs.fallback_model_refs` and `user_saved_provider_configs.fallback_model_refs` store ordered polymorphic fallback references as JSON objects shaped like `{type: "llm" | "custom_endpoint", id: number}`. The legacy `fallback_llm_ids` column was dropped by migration 011 (Phase 6 Step #14.5); `fallback_model_refs` is now the sole source of truth.
@@ -274,6 +284,18 @@ Encrypted columns are stored as `BYTEA` with key version tracking:
 
 - `saved_provider_configs.video_model_id` mirrors the last saved video model for that provider so capability-specific cleanup and future migrations can reason about prior selections; Phase 1 provider switching does not automatically restore video model slots.
 - `saved_provider_configs.provider` and `user_saved_provider_configs.provider` may now hold internal custom provider IDs (`custom:s<server_id>:<label>` / `custom:u<user_id>:<label>`) so labeled custom endpoints can coexist side-by-side without colliding with each other or with classic providers.
+- Phase 6 Step #16 audited `saved_provider_configs` for runtime telemetry analogous to key-rotation counters/errors. None was found: `consecutive_failures` does not exist on this table, and the remaining fields are credentials or provider/model/sampler snapshots. No runtime-state split is pending for saved provider configs.
+
+### Runtime state tables (Phase 6 Step #16)
+
+Two runtime-state tables hold high-frequency telemetry that does not belong in identity or config rows. Both are **excluded from export** (drift-checker exemption list).
+
+| Table | FK → | Holds | Added |
+|---|---|---|---|
+| `api_key_rotation_runtime_state` | `api_key_rotation(rotation_key_id)` | `usage_count`, `error_count`, cooldown timestamps | migration 014 |
+| `persona_autoch_runtime_state` | `tomoris(tomori_id)` | `autoch_counter`, `autoch_next_target` | migration 015 |
+
+**`persona_autoch_runtime_state`** — FK column is named `persona_id` (semantic, forward-compatible with the #16.8 rename; same pattern as `server_auto_trigger_persona_overrides`). Mutated on every message processed by the autochat tick via UPSERT (`ConfigRepository.incrementTomoriCounter`). ON DELETE CASCADE ensures runtime cleanup is atomic with persona deletion. New personas auto-initialize on first UPSERT; the state is also loaded during `PersonaRepository.loadTomoriState` and batch-loaded by `loadAllPersonasForServer`. `TomoriState.autoch_counter` and `TomoriState.autoch_next_target` are sourced from this table, not from `tomoris`.
 
 ## Migration System (Phase 6+)
 
