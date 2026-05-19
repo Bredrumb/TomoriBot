@@ -212,7 +212,7 @@ export async function execute(
     if (!renamed) {
       // Log error specific to personas update failure
       const context: ErrorContext = {
-        tomoriId: selectedPersona.persona_id,
+        personaId: selectedPersona.persona_id,
         serverId: selectedPersona.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
@@ -258,7 +258,7 @@ export async function execute(
       if (!triggerAdded) {
         // Log error specific to persona_configs update failure
         const context: ErrorContext = {
-          tomoriId: selectedPersona.persona_id,
+          personaId: selectedPersona.persona_id,
           serverId: selectedPersona.server_id,
           userId: userData.user_id,
           errorType: "DatabaseUpdateError",
@@ -354,7 +354,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: selectedPersona?.server_id ?? null,
-      tomoriId: selectedPersona?.persona_id ?? null,
+      personaId: selectedPersona?.persona_id ?? null,
       errorType: "CommandExecutionError",
       metadata: {
         command: "config rename",

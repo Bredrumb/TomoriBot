@@ -29,14 +29,14 @@ type DocumentScope = "persona" | "serverwide";
 
 async function performDocumentRemoval(
   tomoriState: TomoriState,
-  targetTomoriId: number | null,
+  targetPersonaId: number | null,
   documentId: number,
   _userData: UserRow,
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
-  const documentName = await serverMemoryRepository.removeDocument(documentId, tomoriState.server_id, targetTomoriId);
+  const documentName = await serverMemoryRepository.removeDocument(documentId, tomoriState.server_id, targetPersonaId);
 
   if (!documentName) {
     await replyInfoEmbed(replyInteraction, locale, {
@@ -103,7 +103,7 @@ export async function execute(
   }
 
   let tomoriState: TomoriState | null = null;
-  let targetTomoriId: number | null = null;
+  let targetPersonaId: number | null = null;
   let personaSelectionInteraction: ButtonInteraction | null = null;
 
   try {
@@ -186,12 +186,12 @@ export async function execute(
           );
           continue;
         }
-        targetTomoriId = selectedPersona.persona_id;
+        targetPersonaId = selectedPersona.persona_id;
       }
 
       const selectionInteraction = personaSelectionInteraction ?? interaction;
       const documents =
-        targetTomoriId === null
+        targetPersonaId === null
           ? await sql<Array<{ document_id: number; document_name: string }>>`
 						SELECT document_id, document_name
 						FROM documents
@@ -203,7 +203,7 @@ export async function execute(
 						SELECT document_id, document_name
 						FROM documents
 						WHERE server_id = ${tomoriState.server_id}
-						  AND persona_id = ${targetTomoriId}
+						  AND persona_id = ${targetPersonaId}
 						ORDER BY created_at DESC
 					`;
 
@@ -296,7 +296,7 @@ export async function execute(
 
       const removalSucceeded = await performDocumentRemoval(
         tomoriState,
-        targetTomoriId,
+        targetPersonaId,
         selectedId,
         userData,
         modalSubmitInteraction,
@@ -323,7 +323,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: targetTomoriId ?? tomoriState?.persona_id,
+      personaId: targetPersonaId ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "forget document",

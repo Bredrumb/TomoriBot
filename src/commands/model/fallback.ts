@@ -6,6 +6,7 @@ import { llmModelRepo, llmOverrideRepo, llmProviderRepo } from "@/utils/db/repos
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { safeReply } from "@/utils/discord/safeReply";
 import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import type { LlmRow, UserRow, FallbackModelRef, FallbackEntry, CustomEndpointRow } from "@/types/db/schema";
@@ -343,7 +344,7 @@ export async function execute(
       modalInteraction = pageButtonInteraction as ButtonInteraction;
     } catch {
       // Timeout — clean up and exit
-      await interaction.editReply({ embeds: [], components: [] }).catch(() => {});
+      await safeReply(interaction.editReply({ embeds: [], components: [] }), "fallback model timeout cleanup");
       return;
     }
   }

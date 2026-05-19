@@ -239,22 +239,22 @@ export async function execute(
     const customPromptRaw = values[PROMPT_INPUT_ID]?.trim() || null;
 
     // Map "random" sentinel → null (DB stores NULL for random selection)
-    const tomoriId = personaRawValue === RANDOM_PERSONA_VALUE ? null : Number.parseInt(personaRawValue, 10);
+    const personaId = personaRawValue === RANDOM_PERSONA_VALUE ? null : Number.parseInt(personaRawValue, 10);
 
     // Checkbox Group: "yes" present in multiValues = respond to self enabled
     const respondToSelf = (modalResult.multiValues?.[RESPOND_TO_SELF_ID] ?? []).includes("yes");
 
     // Resolve display name for success/override embeds
     const personaDisplayName =
-      tomoriId === null
+      personaId === null
         ? localizer(locale, "commands.config.random-trigger.add.persona_random_label")
-        : (allPersonas.find((p) => p.persona_id === tomoriId)?.persona_nickname ??
+        : (allPersonas.find((p) => p.persona_id === personaId)?.persona_nickname ??
           localizer(locale, "general.unknown"));
 
     const triggerData = {
       serverId: tomoriState.server_id,
       channelDiscId: channel.id,
-      tomoriId,
+      personaId,
       timerHours,
       randomOffsetRange,
       chancePercent: chance,
@@ -265,11 +265,11 @@ export async function execute(
     };
 
     // 10. Override check: if a named persona already has a trigger for this channel, update it
-    if (tomoriId !== null) {
+    if (personaId !== null) {
       const existing = await serverScheduleRepository.getTriggerByPersonaAndChannel(
         tomoriState.server_id,
         channel.id,
-        tomoriId,
+        personaId,
       );
 
       if (existing?.trigger_id) {

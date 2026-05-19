@@ -84,7 +84,17 @@ async function normalizeToWav(inputBuffer: Buffer): Promise<Buffer> {
 
     return await fs.readFile(tmpOut);
   } finally {
-    await Promise.all([fs.unlink(tmpIn).catch(() => {}), fs.unlink(tmpOut).catch(() => {})]);
+    await Promise.all([
+      fs.unlink(tmpIn).catch((err: unknown) => {
+        if ((err as NodeJS.ErrnoException).code !== "ENOENT")
+          log.warn("[VoiceAdd] Failed to delete temp input file", err);
+      }),
+      fs.unlink(tmpOut).catch((err: unknown) => {
+        // tmpOut may not exist if transcoding failed before producing output
+        if ((err as NodeJS.ErrnoException).code !== "ENOENT")
+          log.warn("[VoiceAdd] Failed to delete temp output file", err);
+      }),
+    ]);
   }
 }
 
@@ -258,7 +268,9 @@ export async function execute(
       buffer: wavBuffer,
     });
     if (!storedReference) {
-      await deleteVoiceSample(sampleId).catch(() => {});
+      await deleteVoiceSample(sampleId).catch((err: unknown) =>
+        log.warn("[VoiceAdd] Failed to delete voice sample record after storage failure", err),
+      );
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",

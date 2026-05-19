@@ -26,10 +26,9 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { llmModelRepo, personaRepository, serverMemoryRepository } from "@/utils/db/repositories";
+import { llmModelRepo, personaRepository, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { memoryGuard, reserveDocumentQuota } from "@/utils/security/rateLimiter";
-import { insertDocumentWithChunks } from "@/utils/documents/documentService";
 import { generateEmbeddingsBatched, providerSupportsEmbeddingTaskType } from "@/utils/embeddings/embeddingProvider";
 import { fetchHistoryUntilMarker } from "@/utils/discord/historyFetcher";
 import { formatMessagesForExtraction } from "@/utils/discord/historyFormatter";
@@ -262,7 +261,7 @@ async function storeExtractedFacts(params: {
   entries: HistoryMemoryEntry[];
   documentName: string;
   serverId: number;
-  tomoriId: number | null;
+  personaId: number | null;
   uploaderUserId: number | null;
   embeddingModelId: number;
   embeddingFamily: string;
@@ -278,7 +277,7 @@ async function storeExtractedFacts(params: {
     entries,
     documentName,
     serverId,
-    tomoriId,
+    personaId,
     uploaderUserId,
     embeddingModelId,
     embeddingFamily,
@@ -298,7 +297,7 @@ async function storeExtractedFacts(params: {
   const textContent = chunks.join("\n\n");
 
   // 2. Check document count limit
-  const docCount = await serverMemoryRepository.countDocumentsScoped(serverId, tomoriId);
+  const docCount = await serverMemoryRepository.countDocumentsScoped(serverId, personaId);
   if (docCount >= memoryLimits.maxDocumentsPerServer) {
     await replyInteraction.editReply({
       embeds: [
@@ -318,7 +317,7 @@ async function storeExtractedFacts(params: {
   }
 
   // 3. Check chunk count limit
-  const currentChunkCount = await serverMemoryRepository.countChunksScoped(serverId, tomoriId);
+  const currentChunkCount = await serverMemoryRepository.countChunksScoped(serverId, personaId);
   if (currentChunkCount + chunks.length > memoryLimits.maxDocumentChunksPerServer) {
     await replyInteraction.editReply({
       embeds: [
@@ -360,9 +359,9 @@ async function storeExtractedFacts(params: {
   });
 
   // 6. Insert document with chunks
-  const documentId = await insertDocumentWithChunks({
+  const documentId = await ragRepository.insertWithChunks({
     serverId,
-    tomoriId,
+    personaId,
     uploaderUserId,
     documentName,
     fileName: null,
@@ -606,7 +605,7 @@ export async function execute(
         return;
       }
 
-      const targetTomoriId = selectedPersona.persona_id;
+      const targetPersonaId = selectedPersona.persona_id;
       const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_persona", {
         persona_name: selectedPersona.persona_nickname,
       });
@@ -617,7 +616,7 @@ export async function execute(
       });
 
       // Check duplicate name
-      if (await serverMemoryRepository.documentExistsByName(tomoriState.server_id, targetTomoriId, nameInput)) {
+      if (await serverMemoryRepository.documentExistsByName(tomoriState.server_id, targetPersonaId, nameInput)) {
         await personaSelectionInteraction.editReply({
           embeds: [
             new EmbedBuilder()
@@ -651,7 +650,7 @@ export async function execute(
         entries: pipelineResult.entries,
         documentName: nameInput,
         serverId: tomoriState.server_id,
-        tomoriId: targetTomoriId,
+        personaId: targetPersonaId,
         uploaderUserId: userData.user_id ?? null,
         embeddingModelId,
         embeddingFamily: embeddingModel.model_family,
@@ -728,7 +727,7 @@ export async function execute(
         entries: pipelineResult.entries,
         documentName: nameInput,
         serverId: tomoriState.server_id,
-        tomoriId: null,
+        personaId: null,
         uploaderUserId: userData.user_id ?? null,
         embeddingModelId,
         embeddingFamily: embeddingModel.model_family,
@@ -809,7 +808,7 @@ export async function execute(
         entries,
         documentName: nameInput,
         serverId: tomoriState.server_id,
-        tomoriId: null,
+        personaId: null,
         uploaderUserId: userData.user_id ?? null,
         embeddingModelId,
         embeddingFamily: embeddingModel.model_family,
@@ -841,8 +840,8 @@ export async function execute(
     // Create per-persona documents
     const personaResults: string[] = [];
 
-    for (const tomoriId of detectedTomoriIds) {
-      const persona = allPersonas.find((p) => p.persona_id === tomoriId);
+    for (const personaId of detectedTomoriIds) {
+      const persona = allPersonas.find((p) => p.persona_id === personaId);
       if (!persona) continue;
 
       const docName = `${nameInput} (${persona.persona_nickname})`;
@@ -851,8 +850,8 @@ export async function execute(
       });
 
       // Check duplicate name for this persona
-      if (await serverMemoryRepository.documentExistsByName(tomoriState.server_id, tomoriId, docName)) {
-        log.warn(`Skipping duplicate document "${docName}" for persona ${tomoriId} during automatic scope`);
+      if (await serverMemoryRepository.documentExistsByName(tomoriState.server_id, personaId, docName)) {
+        log.warn(`Skipping duplicate document "${docName}" for persona ${personaId} during automatic scope`);
         continue;
       }
 
@@ -860,7 +859,7 @@ export async function execute(
         entries,
         documentName: docName,
         serverId: tomoriState.server_id,
-        tomoriId,
+        personaId,
         uploaderUserId: userData.user_id ?? null,
         embeddingModelId,
         embeddingFamily: embeddingModel.model_family,
@@ -903,7 +902,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: tomoriState?.persona_id,
+      personaId: tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "memory history import",

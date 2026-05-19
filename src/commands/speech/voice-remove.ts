@@ -9,6 +9,7 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { log, ColorCode } from "@/utils/misc/logger";
+import { safeReply } from "@/utils/discord/safeReply";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
@@ -151,7 +152,7 @@ export async function execute(
         time: INTERACTION_TIMEOUT_MS,
       })) as ButtonInteraction;
     } catch {
-      await modalSubmitInteraction.editReply({ components: [] }).catch(() => {});
+      await safeReply(modalSubmitInteraction.editReply({ components: [] }), "voice-remove confirm timeout");
       return;
     }
 

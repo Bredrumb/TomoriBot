@@ -439,6 +439,26 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
+      - name: Destructive migration gate
+        # Blocks deploys that introduce destructive migrations (DROP TABLE / COLUMN /
+        # CONSTRAINT, ALTER COLUMN ... TYPE, TRUNCATE, unfiltered DELETE) unless the
+        # deployer opted into a pre-deploy backup via (Checkpoint) in the commit
+        # message or create_db_backup=true on manual dispatch. See OD-R-6 and
+        # docs/guides/safe-migration.md.
+        if: |
+          !(
+            (github.event_name == 'workflow_dispatch' && inputs.create_db_backup == true) ||
+            (github.event_name == 'push' && contains(github.event.head_commit.message, '(Checkpoint)'))
+          )
+        run: |
+          PREV_REF="${{ github.event.before }}"
+          if [ -z "$PREV_REF" ] || [ "$PREV_REF" = "0000000000000000000000000000000000000000" ]; then
+            echo "No previous-ref available; scanning all up-migrations as a conservative fallback."
+            bun run scripts/maintenance/checkPendingMigrations.ts --all
+          else
+            bun run scripts/maintenance/checkPendingMigrations.ts --changed-since "$PREV_REF"
+          fi
+
       - name: Optional Cloud SQL backup (manual or (Checkpoint) commit)
         if: |
           (github.event_name == 'workflow_dispatch' && inputs.create_db_backup == true) ||

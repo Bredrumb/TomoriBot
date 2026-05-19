@@ -20,6 +20,7 @@ const exemptPaths = new Map<string, string>([
   ["src/utils/misc/logger.ts", "logging infrastructure"],
   ["src/utils/security/crypto.ts", "security primitive"],
   ["src/utils/security/keyRotation.ts", "security primitive"],
+  ["src/utils/documents/documentService.ts", "RAG service layer; SQL invoked exclusively through RagRepository facade"],
 ]);
 
 type QueryHit = {
@@ -102,8 +103,10 @@ async function run() {
       }
 
       if (!inQuery) {
-        // Match `sql` with optional `<type>` and backtick, with or without await
-        const matchRegex = /(?:await\s+)?sql(?:<[^>]+>)?\s*`/;
+        // Match `sql` or `tx` with optional `<type>` and backtick, with or without await.
+        // The `tx` alternative catches transaction blocks written as `tx\`` inside
+        // sql.begin(async tx => ...) / sql.transaction(async tx => ...) callbacks.
+        const matchRegex = /(?:await\s+)?(?:sql|tx)(?:<[^>]+>)?\s*`/;
         const match = line.match(matchRegex);
         if (match) {
           inQuery = true;

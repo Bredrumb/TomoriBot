@@ -64,7 +64,7 @@ async function performAttributeEdit(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: selectedPersona.server_id,
-      tomoriId: selectedPersona.persona_id,
+      personaId: selectedPersona.persona_id,
       errorType: "DatabaseUpdateError",
       metadata: {
         command: "persona attribute edit",
@@ -421,7 +421,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
+      personaId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "persona attribute edit",

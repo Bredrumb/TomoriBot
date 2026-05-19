@@ -272,7 +272,7 @@ export async function execute(
 
     if (!selectedModel?.video_model_id) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.persona_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "CommandExecutionError",
@@ -315,7 +315,7 @@ export async function execute(
 
     if (!updated) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.persona_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
@@ -366,17 +366,17 @@ export async function execute(
   } catch (error) {
     // 15. Log error with context
     let serverIdForError: number | null = null;
-    let tomoriIdForError: number | null = null;
+    let personaIdForError: number | null = null;
     if (interaction.guild?.id) {
       const state = await getCachedTomoriState(interaction.guild.id);
       serverIdForError = state?.server_id ?? null;
-      tomoriIdForError = state?.persona_id ?? null;
+      personaIdForError = state?.persona_id ?? null;
     }
 
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: serverIdForError,
-      tomoriId: tomoriIdForError,
+      personaId: personaIdForError,
       errorType: "CommandExecutionError",
       metadata: {
         command: "config model video",

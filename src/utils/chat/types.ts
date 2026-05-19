@@ -230,7 +230,7 @@ export interface ChatResponseSink {
 export interface ChatPersonaResponse {
   text: string;
   personaName: string;
-  tomoriId?: number;
+  personaId?: number;
   personaLineageId?: number | null;
 }
 

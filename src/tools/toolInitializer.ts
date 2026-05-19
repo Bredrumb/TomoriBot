@@ -31,9 +31,7 @@ export async function initializeTools(): Promise<void> {
 
     // 2. Auto-discover built-in function call tools
     const functionCallsPath = path.join(process.cwd(), "src", "tools", "functionCalls");
-    const functionCallFiles = getAllFiles(functionCallsPath).filter(
-      (file) => !file.endsWith("index.ts"), // Skip index.ts
-    );
+    const functionCallFiles = (await getAllFiles(functionCallsPath)).filter((file) => !file.endsWith("index.ts"));
 
     log.info(`Scanning ${functionCallFiles.length} files in functionCalls directory...`);
 
@@ -44,7 +42,7 @@ export async function initializeTools(): Promise<void> {
 
     // 3. Auto-discover Brave Search tools
     const braveToolsPath = path.join(process.cwd(), "src", "tools", "restAPIs", "brave");
-    const braveToolFiles = getAllFiles(braveToolsPath).filter((file) => file.endsWith("braveTools.ts"));
+    const braveToolFiles = (await getAllFiles(braveToolsPath)).filter((file) => file.endsWith("braveTools.ts"));
 
     log.info(`Scanning ${braveToolFiles.length} files in Brave tools directory...`);
 

@@ -41,9 +41,9 @@ function getChannelAutoTriggerPersona(
   tomoriState: TomoriState,
   personalAutoTriggerPersonaId?: number | null,
 ): TomoriState | null {
-  const resolveById = (tomoriId: number | null | undefined): TomoriState | null => {
-    if (tomoriId === null || tomoriId === undefined) return null;
-    return personas.find((persona) => persona.persona_id === tomoriId) ?? null;
+  const resolveById = (personaId: number | null | undefined): TomoriState | null => {
+    if (personaId === null || personaId === undefined) return null;
+    return personas.find((persona) => persona.persona_id === personaId) ?? null;
   };
 
   const personalAutoTriggerPersona = resolveById(personalAutoTriggerPersonaId);

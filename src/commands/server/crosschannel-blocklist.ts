@@ -473,7 +473,7 @@ async function persistBlocklistUpdate(
 
   if (!updated) {
     const context: ErrorContext = {
-      tomoriId: tomoriState.persona_id,
+      personaId: tomoriState.persona_id,
       serverId: tomoriState.server_id,
       errorType: "CommandExecutionError",
       metadata: {

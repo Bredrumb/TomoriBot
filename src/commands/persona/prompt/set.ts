@@ -235,7 +235,7 @@ export async function execute(
   } catch (error) {
     await log.error("Error in /teach personaprompt command", error, {
       serverId: tomoriState?.server_id,
-      tomoriId: tomoriState?.persona_id,
+      personaId: tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "teach personaprompt",

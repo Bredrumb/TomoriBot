@@ -45,23 +45,23 @@ function makeDialogueKey(userInput: string, botInput: string): string {
 }
 
 async function repairMismatchedDialogues(
-  tomoriId: number,
+  personaId: number,
   inLength: number,
   outLength: number,
 ): Promise<{ repairedIn: string[]; repairedOut: string[] } | null> {
   const safeLength = Math.min(inLength, outLength);
 
   log.warn(
-    `Self-healing: truncating sample dialogues for tomori ${tomoriId} from (in: ${inLength}, out: ${outLength}) to ${safeLength} pairs`,
+    `Self-healing: truncating sample dialogues for tomori ${personaId} from (in: ${inLength}, out: ${outLength}) to ${safeLength} pairs`,
   );
 
-  const repaired = await personaRepository.repairSampleDialogues(tomoriId, safeLength);
+  const repaired = await personaRepository.repairSampleDialogues(personaId, safeLength);
   if (!repaired) {
-    log.error(`Self-healing failed: no rows returned for tomori ${tomoriId}`);
+    log.error(`Self-healing failed: no rows returned for tomori ${personaId}`);
     return null;
   }
 
-  log.success(`Self-healing complete: sample dialogues for tomori ${tomoriId} repaired to ${safeLength} pairs`);
+  log.success(`Self-healing complete: sample dialogues for tomori ${personaId} repaired to ${safeLength} pairs`);
   return repaired;
 }
 
@@ -97,7 +97,7 @@ async function performSampleDialogueEdit(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: selectedPersona.server_id,
-      tomoriId: selectedPersona.persona_id,
+      personaId: selectedPersona.persona_id,
       errorType: "DatabaseUpdateError",
       metadata: {
         command: "persona sample-dialogue edit",
@@ -523,7 +523,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
+      personaId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "persona sample-dialogue edit",

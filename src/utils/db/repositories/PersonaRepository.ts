@@ -153,10 +153,10 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   /**
    * Loads the PersonaConfigRow for a specific tomori by internal ID.
    *
-   * @param tomoriId - Internal tomori DB ID
+   * @param personaId - Internal tomori DB ID
    */
-  async loadPersonaConfig(tomoriId: number) {
-    return this.loadPersonaConfigRow(tomoriId);
+  async loadPersonaConfig(personaId: number) {
+    return this.loadPersonaConfigRow(personaId);
   }
 
   /**
@@ -228,91 +228,91 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    * Updates arbitrary fields on a Tomori row.
    * Invalidates the server's tomori state cache after write.
    *
-   * @param tomoriId      - Internal tomori DB ID
+   * @param personaId      - Internal tomori DB ID
    * @param tomoriData    - Partial TomoriRow with fields to update
    * @param serverDiscId  - Discord server snowflake (required for cache invalidation)
    * @returns Updated TomoriRow or null on failure
    */
-  async update(tomoriId: number, tomoriData: Partial<TomoriRow>, serverDiscId?: string): Promise<TomoriRow | null> {
-    const row = await this.updateTomori(tomoriId, tomoriData);
+  async update(personaId: number, tomoriData: Partial<TomoriRow>, serverDiscId?: string): Promise<TomoriRow | null> {
+    const row = await this.updateTomori(personaId, tomoriData);
     if (row && serverDiscId) invalidateTomoriStateCache(serverDiscId);
     return row;
   }
 
   // ── persona operations ─────────────────────────────────────────────────────
 
-  async addAttributes(tomoriId: number, attributes: string[]): Promise<boolean> {
+  async addAttributes(personaId: number, attributes: string[]): Promise<boolean> {
     try {
       const result = await sql`
         UPDATE personas
         SET attribute_list = array_cat(attribute_list, ${sql.array(attributes)})
-        WHERE persona_id = ${tomoriId}
+        WHERE persona_id = ${personaId}
         RETURNING *
       `;
       return result.length > 0;
     } catch (e) {
-      log.error(`Error adding attributes for persona ${tomoriId}:`, e);
+      log.error(`Error adding attributes for persona ${personaId}:`, e);
       return false;
     }
   }
 
-  async editAttributeAt(tomoriId: number, index1Based: number, newAttribute: string): Promise<boolean> {
+  async editAttributeAt(personaId: number, index1Based: number, newAttribute: string): Promise<boolean> {
     try {
       const result = await sql`
         UPDATE personas
         SET attribute_list[${index1Based}] = ${newAttribute}
-        WHERE persona_id = ${tomoriId}
+        WHERE persona_id = ${personaId}
         RETURNING persona_id
       `;
       return result.length > 0;
     } catch (e) {
-      log.error(`Error editing attribute at index ${index1Based} for persona ${tomoriId}:`, e);
+      log.error(`Error editing attribute at index ${index1Based} for persona ${personaId}:`, e);
       return false;
     }
   }
 
-  async removeAttribute(tomoriId: number, attributeToRemove: string): Promise<boolean> {
+  async removeAttribute(personaId: number, attributeToRemove: string): Promise<boolean> {
     try {
       const result = await sql`
         UPDATE personas
         SET attribute_list = array_remove(attribute_list, ${attributeToRemove})
-        WHERE persona_id = ${tomoriId}
+        WHERE persona_id = ${personaId}
         RETURNING *
       `;
       return result.length > 0;
     } catch (e) {
-      log.error(`Error removing attribute for persona ${tomoriId}:`, e);
+      log.error(`Error removing attribute for persona ${personaId}:`, e);
       return false;
     }
   }
 
-  async setPrompt(tomoriId: number, prompt: string): Promise<boolean> {
+  async setPrompt(personaId: number, prompt: string): Promise<boolean> {
     try {
       const result = await sql`
         INSERT INTO persona_configs (persona_id, persona_prompt)
-        VALUES (${tomoriId}, ${prompt})
+        VALUES (${personaId}, ${prompt})
         ON CONFLICT (persona_id) DO UPDATE
         SET persona_prompt = EXCLUDED.persona_prompt
         RETURNING *
       `;
       return result.length > 0;
     } catch (e) {
-      log.error(`Error setting prompt for persona ${tomoriId}:`, e);
+      log.error(`Error setting prompt for persona ${personaId}:`, e);
       return false;
     }
   }
 
-  async removePrompt(tomoriId: number): Promise<boolean> {
+  async removePrompt(personaId: number): Promise<boolean> {
     try {
       const result = await sql`
         UPDATE persona_configs
         SET persona_prompt = NULL
-        WHERE persona_id = ${tomoriId}
+        WHERE persona_id = ${personaId}
         RETURNING *
       `;
       return result.length > 0;
     } catch (e) {
-      log.error(`Error removing prompt for persona ${tomoriId}:`, e);
+      log.error(`Error removing prompt for persona ${personaId}:`, e);
       return false;
     }
   }
@@ -322,21 +322,21 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    * `persona_context_note_configs` table and the persona mirror columns
    * (dual-write expand-then-contract pattern, mirrors fromExportShape).
    *
-   * @param tomoriId - Internal persona DB ID
+   * @param personaId - Internal persona DB ID
    * @param contextNote - Note text, or null to clear
    * @param contextNoteDepth - Injection depth (0 disables)
    */
-  async setContextNote(tomoriId: number, contextNote: string | null, contextNoteDepth: number): Promise<boolean> {
+  async setContextNote(personaId: number, contextNote: string | null, contextNoteDepth: number): Promise<boolean> {
     try {
       const row: PersonaContextNoteConfigsRow = {
-        persona_id: tomoriId,
+        persona_id: personaId,
         context_note: contextNote,
         context_note_depth: contextNoteDepth,
       };
       await Promise.all([this.sqlUpsertPersonaContextNoteConfigs(row), this.sqlDualWriteContextNoteToTomoris(row)]);
       return true;
     } catch (e) {
-      log.error(`Error setting context note for persona ${tomoriId}:`, e);
+      log.error(`Error setting context note for persona ${personaId}:`, e);
       return false;
     }
   }
@@ -346,11 +346,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    * Writes to both the new `persona_textgen_configs` table and the legacy
    * `personas` columns (dual-write expand-then-contract pattern).
    *
-   * @param tomoriId - Internal persona DB ID
+   * @param personaId - Internal persona DB ID
    * @param attg     - ATTG fields; any subset may be null to clear that field
    */
   async setNaiAttg(
-    tomoriId: number,
+    personaId: number,
     attg: {
       nai_attg_author: string | null;
       nai_attg_title: string | null;
@@ -360,11 +360,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     },
   ): Promise<boolean> {
     try {
-      const row: PersonaTextgenConfigsRow = { persona_id: tomoriId, ...attg };
+      const row: PersonaTextgenConfigsRow = { persona_id: personaId, ...attg };
       await Promise.all([this.sqlUpsertPersonaTextgenConfigs(row), this.sqlDualWriteTextgenToTomoris(row)]);
       return true;
     } catch (e) {
-      log.error(`Error setting NAI ATTG for persona ${tomoriId}:`, e);
+      log.error(`Error setting NAI ATTG for persona ${personaId}:`, e);
       return false;
     }
   }
@@ -374,15 +374,15 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    * Writes only `nai_tags` to both the new `persona_imagegen_configs` table
    * and the `personas.nai_tags` column — preserves `nai_char_ref_url`.
    *
-   * @param tomoriId - Internal persona DB ID
+   * @param personaId - Internal persona DB ID
    * @param tags     - Full replacement tag array (use [] to clear)
    */
-  async setNaiTags(tomoriId: number, tags: string[]): Promise<boolean> {
+  async setNaiTags(personaId: number, tags: string[]): Promise<boolean> {
     try {
       await Promise.all([
         sql`
           INSERT INTO persona_imagegen_configs (persona_id, nai_tags)
-          VALUES (${tomoriId}, ${sql.array(tags)})
+          VALUES (${personaId}, ${sql.array(tags)})
           ON CONFLICT (persona_id) DO UPDATE SET
             nai_tags   = EXCLUDED.nai_tags,
             updated_at = NOW()
@@ -390,19 +390,19 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         sql`
           UPDATE personas
           SET nai_tags = ${sql.array(tags)}, updated_at = NOW()
-          WHERE persona_id = ${tomoriId}
+          WHERE persona_id = ${personaId}
         `,
       ]);
       return true;
     } catch (e) {
-      log.error(`Error setting NAI tags for persona ${tomoriId}:`, e);
+      log.error(`Error setting NAI tags for persona ${personaId}:`, e);
       return false;
     }
   }
 
-  async addSampleDialoguePair(tomoriId: number, inputs: string[], outputs: string[]): Promise<boolean> {
+  async addSampleDialoguePair(personaId: number, inputs: string[], outputs: string[]): Promise<boolean> {
     if (inputs.length !== outputs.length) {
-      log.error(`addSampleDialoguePair input/output length mismatch for persona ${tomoriId}`);
+      log.error(`addSampleDialoguePair input/output length mismatch for persona ${personaId}`);
       return false;
     }
     if (inputs.length === 0) return true;
@@ -412,18 +412,18 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         UPDATE personas
         SET sample_dialogues_in = array_cat(sample_dialogues_in, ${sql.array(inputs)}),
             sample_dialogues_out = array_cat(sample_dialogues_out, ${sql.array(outputs)})
-        WHERE persona_id = ${tomoriId}
+        WHERE persona_id = ${personaId}
         RETURNING persona_id
       `;
       return result.length > 0;
     } catch (e) {
-      log.error(`Error adding sample dialogue pair(s) for persona ${tomoriId}:`, e);
+      log.error(`Error adding sample dialogue pair(s) for persona ${personaId}:`, e);
       return false;
     }
   }
 
   async editSampleDialoguePairAt(
-    tomoriId: number,
+    personaId: number,
     index1Based: number,
     newInput: string,
     newOutput: string,
@@ -433,17 +433,17 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         UPDATE personas
         SET sample_dialogues_in[${index1Based}] = ${newInput},
             sample_dialogues_out[${index1Based}] = ${newOutput}
-        WHERE persona_id = ${tomoriId}
+        WHERE persona_id = ${personaId}
         RETURNING persona_id
       `;
       return result.length > 0;
     } catch (e) {
-      log.error(`Error editing sample dialogue at index ${index1Based} for persona ${tomoriId}:`, e);
+      log.error(`Error editing sample dialogue at index ${index1Based} for persona ${personaId}:`, e);
       return false;
     }
   }
 
-  async removeSampleDialoguePairAt(tomoriId: number, index1Based: number): Promise<boolean> {
+  async removeSampleDialoguePairAt(personaId: number, index1Based: number): Promise<boolean> {
     try {
       const result = await sql`
         UPDATE personas
@@ -458,12 +458,12 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             FROM unnest(sample_dialogues_out) WITH ORDINALITY AS t(elem, ord)
             WHERE ord != ${index1Based}
           )
-        WHERE persona_id = ${tomoriId}
+        WHERE persona_id = ${personaId}
         RETURNING persona_id
       `;
       return result.length > 0;
     } catch (e) {
-      log.error(`Error removing sample dialogue at index ${index1Based} for persona ${tomoriId}:`, e);
+      log.error(`Error removing sample dialogue at index ${index1Based} for persona ${personaId}:`, e);
       return false;
     }
   }
@@ -471,12 +471,12 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   /**
    * Repairs mismatched sample-dialogue arrays by truncating both to a safe pair count.
    *
-   * @param tomoriId    - Internal persona DB ID
+   * @param personaId    - Internal persona DB ID
    * @param safeLength  - Length to truncate both dialogue arrays to
    * @returns The repaired dialogue arrays, or null when no row was updated
    */
   async repairSampleDialogues(
-    tomoriId: number,
+    personaId: number,
     safeLength: number,
   ): Promise<{ repairedIn: string[]; repairedOut: string[] } | null> {
     const [updatedRow] = await sql`
@@ -484,7 +484,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       SET
         sample_dialogues_in = sample_dialogues_in[1:${safeLength}],
         sample_dialogues_out = sample_dialogues_out[1:${safeLength}]
-      WHERE persona_id = ${tomoriId}
+      WHERE persona_id = ${personaId}
       RETURNING sample_dialogues_in, sample_dialogues_out
     `;
 
@@ -496,67 +496,67 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       : null;
   }
 
-  async removePersona(tomoriId: number): Promise<boolean> {
+  async removePersona(personaId: number): Promise<boolean> {
     try {
       const result = await sql`
         DELETE FROM personas
-        WHERE persona_id = ${tomoriId}
+        WHERE persona_id = ${personaId}
         RETURNING persona_id
       `;
       return result.length > 0;
     } catch (e) {
-      log.error(`Error removing persona ${tomoriId}:`, e);
+      log.error(`Error removing persona ${personaId}:`, e);
       return false;
     }
   }
 
-  async renamePersona(tomoriId: number, newName: string): Promise<boolean> {
+  async renamePersona(personaId: number, newName: string): Promise<boolean> {
     try {
       const result = await sql`
         UPDATE personas
         SET persona_nickname = ${newName}
-        WHERE persona_id = ${tomoriId}
+        WHERE persona_id = ${personaId}
         RETURNING *
       `;
       return result.length > 0;
     } catch (e) {
-      log.error(`Error renaming persona ${tomoriId}:`, e);
+      log.error(`Error renaming persona ${personaId}:`, e);
       return false;
     }
   }
 
-  async swapPersona(tomoriId1: number, tomoriId2: number): Promise<boolean> {
+  async swapPersona(personaId1: number, personaId2: number): Promise<boolean> {
     try {
       await sql.transaction(async (tx) => {
         await tx`
           UPDATE personas
           SET is_alter = true
-          WHERE persona_id = ${tomoriId2}
+          WHERE persona_id = ${personaId2}
         `;
         await tx`
           UPDATE personas
           SET is_alter = false
-          WHERE persona_id = ${tomoriId1}
+          WHERE persona_id = ${personaId1}
         `;
       });
       return true;
     } catch (e) {
-      log.error(`Error swapping personas ${tomoriId1} and ${tomoriId2}:`, e);
+      log.error(`Error swapping personas ${personaId1} and ${personaId2}:`, e);
       return false;
     }
   }
 
-  async setAvatar(tomoriId: number, avatarUrl: string | null): Promise<boolean> {
+  async setAvatar(personaId: number, avatarUrl: string | null): Promise<boolean> {
     try {
       const result = await sql`
         UPDATE personas
         SET webhook_avatar_url = ${avatarUrl}
-        WHERE persona_id = ${tomoriId}
+        WHERE persona_id = ${personaId}
         RETURNING *
       `;
       return result.length > 0;
     } catch (e) {
-      log.error(`Error setting avatar for persona ${tomoriId}:`, e);
+      log.error(`Error setting avatar for persona ${personaId}:`, e);
       return false;
     }
   }
@@ -621,18 +621,18 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     return row ? (row as unknown as TomoriRow) : null;
   }
 
-  async addTrigger(tomoriId: number, triggers: string[]): Promise<boolean> {
+  async addTrigger(personaId: number, triggers: string[]): Promise<boolean> {
     try {
       const result = await sql`
         INSERT INTO persona_configs (persona_id, trigger_words)
-        VALUES (${tomoriId}, ${sql.array(triggers)})
+        VALUES (${personaId}, ${sql.array(triggers)})
         ON CONFLICT (persona_id) DO UPDATE
         SET trigger_words = array_cat(persona_configs.trigger_words, EXCLUDED.trigger_words)
         RETURNING *
       `;
       return result.length > 0;
     } catch (e) {
-      log.error(`Error adding triggers for persona ${tomoriId}:`, e);
+      log.error(`Error adding triggers for persona ${personaId}:`, e);
       return false;
     }
   }
@@ -642,21 +642,21 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    * Upserts into `persona_configs` — if no row exists yet, one is created
    * (matches addTrigger's behavior; the caller no longer needs a guarantor INSERT).
    *
-   * @param tomoriId          - Internal persona DB ID
+   * @param personaId          - Internal persona DB ID
    * @param triggersRemaining - The full replacement list (NOT a delta)
    */
-  async removeTrigger(tomoriId: number, triggersRemaining: string[]): Promise<boolean> {
+  async removeTrigger(personaId: number, triggersRemaining: string[]): Promise<boolean> {
     try {
       const result = await sql`
         INSERT INTO persona_configs (persona_id, trigger_words)
-        VALUES (${tomoriId}, ${sql.array(triggersRemaining)})
+        VALUES (${personaId}, ${sql.array(triggersRemaining)})
         ON CONFLICT (persona_id) DO UPDATE
         SET trigger_words = EXCLUDED.trigger_words
         RETURNING *
       `;
       return result.length > 0;
     } catch (e) {
-      log.error(`Error removing triggers for persona ${tomoriId}:`, e);
+      log.error(`Error removing triggers for persona ${personaId}:`, e);
       return false;
     }
   }
@@ -665,22 +665,22 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    * Atomically upserts both trigger_words and persona_prompt in persona_configs.
    * Mirrors the INSERT … ON CONFLICT DO UPDATE pattern used by preset-apply flows.
    *
-   * @param tomoriId - Internal persona DB ID
+   * @param personaId - Internal persona DB ID
    * @param triggers - Full replacement trigger word list (use [] to clear)
    * @param prompt   - Persona prompt text, or null to clear
    */
-  async setPersonaConfig(tomoriId: number, triggers: string[], prompt: string | null): Promise<boolean> {
+  async setPersonaConfig(personaId: number, triggers: string[], prompt: string | null): Promise<boolean> {
     try {
       await sql`
         INSERT INTO persona_configs (persona_id, trigger_words, persona_prompt)
-        VALUES (${tomoriId}, ${sql.array(triggers)}, ${prompt})
+        VALUES (${personaId}, ${sql.array(triggers)}, ${prompt})
         ON CONFLICT (persona_id) DO UPDATE
         SET trigger_words  = EXCLUDED.trigger_words,
             persona_prompt = EXCLUDED.persona_prompt
       `;
       return true;
     } catch (e) {
-      log.error(`Error setting persona config for persona ${tomoriId}:`, e);
+      log.error(`Error setting persona config for persona ${personaId}:`, e);
       return false;
     }
   }
@@ -691,18 +691,18 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    * Check if a server has reached its trigger word limit.
    *
    * @param serverId  - Internal server DB ID
-   * @param tomoriId  - Optional tomori ID for persona-scoped trigger words
+   * @param personaId  - Optional tomori ID for persona-scoped trigger words
    * @returns MemoryValidationResult indicating whether the limit is exceeded
    */
-  async checkTriggerWordLimit(serverId: number, tomoriId?: number): Promise<MemoryValidationResult> {
+  async checkTriggerWordLimit(serverId: number, personaId?: number): Promise<MemoryValidationResult> {
     const limits = getMemoryLimits();
 
     try {
-      const [configResult] = tomoriId
+      const [configResult] = personaId
         ? await sql`
             SELECT array_length(trigger_words, 1) as trigger_count
             FROM persona_configs
-            WHERE persona_id = ${tomoriId}
+            WHERE persona_id = ${personaId}
           `
         : await sql`
             SELECT array_length(pc.trigger_words, 1) as trigger_count
@@ -734,17 +734,17 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   /**
    * Check if a tomori has reached its sample dialogue limit.
    *
-   * @param tomoriId - Internal tomori DB ID
+   * @param personaId - Internal tomori DB ID
    * @returns MemoryValidationResult indicating whether the limit is exceeded
    */
-  async checkSampleDialogueLimit(tomoriId: number): Promise<MemoryValidationResult> {
+  async checkSampleDialogueLimit(personaId: number): Promise<MemoryValidationResult> {
     const limits = getMemoryLimits();
 
     try {
       const [tomoriResult] = await sql`
         SELECT array_length(sample_dialogues_in, 1) as dialogue_count
         FROM personas
-        WHERE persona_id = ${tomoriId}
+        WHERE persona_id = ${personaId}
       `;
 
       const currentCount = tomoriResult?.dialogue_count || 0;
@@ -760,7 +760,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
       return { isValid: true, currentCount, maxAllowed: limits.maxSampleDialogues };
     } catch (error) {
-      log.error(`Error checking sample dialogue limit for tomori ${tomoriId}:`, error);
+      log.error(`Error checking sample dialogue limit for tomori ${personaId}:`, error);
       return { isValid: false, error: "SAMPLE_DIALOGUE_LIMIT_EXCEEDED" };
     }
   }
@@ -768,17 +768,17 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   /**
    * Check if a tomori has reached its attribute limit.
    *
-   * @param tomoriId - Internal tomori DB ID
+   * @param personaId - Internal tomori DB ID
    * @returns MemoryValidationResult indicating whether the limit is exceeded
    */
-  async checkAttributeLimit(tomoriId: number): Promise<MemoryValidationResult> {
+  async checkAttributeLimit(personaId: number): Promise<MemoryValidationResult> {
     const limits = getMemoryLimits();
 
     try {
       const [tomoriResult] = await sql`
         SELECT array_length(attribute_list, 1) as attribute_count
         FROM personas
-        WHERE persona_id = ${tomoriId}
+        WHERE persona_id = ${personaId}
       `;
 
       const currentCount = tomoriResult?.attribute_count || 0;
@@ -794,7 +794,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
       return { isValid: true, currentCount, maxAllowed: limits.maxAttributes };
     } catch (error) {
-      log.error(`Error checking attribute limit for tomori ${tomoriId}:`, error);
+      log.error(`Error checking attribute limit for tomori ${personaId}:`, error);
       return { isValid: false, error: "ATTRIBUTE_LIMIT_EXCEEDED" };
     }
   }
@@ -906,55 +906,55 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   // ── persona config table reads ──────────────────────────────────
 
-  private async sqlLoadPersonaContextNoteConfigs(tomoriId: number): Promise<PersonaContextNoteConfigsRow | null> {
+  private async sqlLoadPersonaContextNoteConfigs(personaId: number): Promise<PersonaContextNoteConfigsRow | null> {
     try {
       const [row] = await sql`
         SELECT persona_id, context_note, context_note_depth
-        FROM persona_context_note_configs WHERE persona_id = ${tomoriId}
+        FROM persona_context_note_configs WHERE persona_id = ${personaId}
       `;
       return row ? (row as unknown as PersonaContextNoteConfigsRow) : null;
     } catch (error) {
-      log.error(`Error loading persona_context_note_configs for tomori ${tomoriId}:`, error);
+      log.error(`Error loading persona_context_note_configs for tomori ${personaId}:`, error);
       return null;
     }
   }
 
-  private async sqlLoadPersonaVoiceConfigs(tomoriId: number): Promise<PersonaVoiceConfigsRow | null> {
+  private async sqlLoadPersonaVoiceConfigs(personaId: number): Promise<PersonaVoiceConfigsRow | null> {
     try {
       const [row] = await sql`
         SELECT persona_id, speech_voice_sample_id, speech_voice_id, speech_voice_name,
                speech_voice_design_prompt
-        FROM persona_voice_configs WHERE persona_id = ${tomoriId}
+        FROM persona_voice_configs WHERE persona_id = ${personaId}
       `;
       return row ? (row as unknown as PersonaVoiceConfigsRow) : null;
     } catch (error) {
-      log.error(`Error loading persona_voice_configs for tomori ${tomoriId}:`, error);
+      log.error(`Error loading persona_voice_configs for tomori ${personaId}:`, error);
       return null;
     }
   }
 
-  private async sqlLoadPersonaImagegenConfigs(tomoriId: number): Promise<PersonaImagegenConfigsRow | null> {
+  private async sqlLoadPersonaImagegenConfigs(personaId: number): Promise<PersonaImagegenConfigsRow | null> {
     try {
       const [row] = await sql`
         SELECT persona_id, nai_tags, nai_char_ref_url
-        FROM persona_imagegen_configs WHERE persona_id = ${tomoriId}
+        FROM persona_imagegen_configs WHERE persona_id = ${personaId}
       `;
       return row ? (row as unknown as PersonaImagegenConfigsRow) : null;
     } catch (error) {
-      log.error(`Error loading persona_imagegen_configs for tomori ${tomoriId}:`, error);
+      log.error(`Error loading persona_imagegen_configs for tomori ${personaId}:`, error);
       return null;
     }
   }
 
-  private async sqlLoadPersonaTextgenConfigs(tomoriId: number): Promise<PersonaTextgenConfigsRow | null> {
+  private async sqlLoadPersonaTextgenConfigs(personaId: number): Promise<PersonaTextgenConfigsRow | null> {
     try {
       const [row] = await sql`
         SELECT persona_id, nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
-        FROM persona_textgen_configs WHERE persona_id = ${tomoriId}
+        FROM persona_textgen_configs WHERE persona_id = ${personaId}
       `;
       return row ? (row as unknown as PersonaTextgenConfigsRow) : null;
     } catch (error) {
-      log.error(`Error loading persona_textgen_configs for tomori ${tomoriId}:`, error);
+      log.error(`Error loading persona_textgen_configs for tomori ${personaId}:`, error);
       return null;
     }
   }
@@ -1264,7 +1264,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    * Loads config anchored on a persona_id by joining through personas → servers across split tables.
    * tomori_configs was dropped in Task F2 (migration 008); this method now reads exclusively from the 13 split tables.
    */
-  private async sqlLoadTomoriConfigByTomoriId(tomoriId: number): Promise<AssembledServerConfig | null> {
+  private async sqlLoadTomoriConfigByTomoriId(personaId: number): Promise<AssembledServerConfig | null> {
     const [rawRow] = await sql`
       SELECT
         s.server_id,
@@ -1344,7 +1344,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       LEFT JOIN server_byok_configs sbyok ON sbyok.server_id = s.server_id
       LEFT JOIN server_memory_configs smem ON smem.server_id = s.server_id
       LEFT JOIN server_welcome_configs swc ON swc.server_id = s.server_id
-      WHERE t.persona_id = ${tomoriId}
+      WHERE t.persona_id = ${personaId}
       LIMIT 1
     `;
 
@@ -1354,7 +1354,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     const normalized = this.normalizeTomoriConfigFromJson(coerced);
     const parsedConfig = assembledServerConfigSchema.safeParse(normalized);
     if (!parsedConfig.success) {
-      log.error(`Invalid legacy tomori config for persona_id ${tomoriId}:`, parsedConfig.error.flatten());
+      log.error(`Invalid legacy tomori config for persona_id ${personaId}:`, parsedConfig.error.flatten());
       return null;
     }
 
@@ -1383,18 +1383,18 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
       // 2. Load associated config using server_id (server-scoped config)
       // biome-ignore lint/style/noNonNullAssertion: Row existence checked above, ID is guaranteed by DB schema.
-      const tomoriId = tomoriData.persona_id!;
+      const personaId = tomoriData.persona_id!;
       const serverId = tomoriData.server_id;
       let configData = await this.sqlLoadTomoriConfigByServerId(serverId);
 
       // Backward compatibility: fall back to persona_id if server_id config missing
       if (!configData) {
-        log.warn(`No server-scoped config found for server ${serverDiscId}; falling back to persona_id ${tomoriId}`);
-        configData = await this.sqlLoadTomoriConfigByTomoriId(tomoriId);
+        log.warn(`No server-scoped config found for server ${serverDiscId}; falling back to persona_id ${personaId}`);
+        configData = await this.sqlLoadTomoriConfigByTomoriId(personaId);
       }
 
       if (!configData) {
-        log.error(`Found Tomori (${tomoriId}) but no config for server ${serverDiscId}`);
+        log.error(`Found Tomori (${personaId}) but no config for server ${serverDiscId}`);
         return null;
       }
 
@@ -1429,7 +1429,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       const personaConfigRows = await sql`
         SELECT *
         FROM persona_configs
-        WHERE persona_id = ${tomoriId}
+        WHERE persona_id = ${personaId}
         LIMIT 1
       `;
       let personaConfig: PersonaConfigRow | null = null;
@@ -1438,7 +1438,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         if (parsedPersonaConfig.success) {
           personaConfig = parsedPersonaConfig.data;
         } else {
-          log.warn(`Invalid persona config row for tomori ${tomoriId}:`, parsedPersonaConfig.error.flatten());
+          log.warn(`Invalid persona config row for tomori ${personaId}:`, parsedPersonaConfig.error.flatten());
         }
       }
 
@@ -1466,7 +1466,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       const autochRuntimeRows = await sql`
         SELECT autoch_counter, autoch_next_target
         FROM persona_autoch_runtime_state
-        WHERE persona_id = ${tomoriId}
+        WHERE persona_id = ${personaId}
         LIMIT 1
       `;
       const autochRuntime: Pick<PersonaAutochRuntimeStateRow, "autoch_counter" | "autoch_next_target"> =
@@ -1784,15 +1784,15 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
           }
 
           // 8. Batch-load autochat runtime counters for all personas in this server.
-          const tomoriIds: number[] = (tomoriRows as TomoriRow[])
+          const personaIds: number[] = (tomoriRows as TomoriRow[])
             .map((r) => r.persona_id)
             .filter((id): id is number => typeof id === "number");
           const autochRuntimeRows =
-            tomoriIds.length > 0
+            personaIds.length > 0
               ? await sql`
                 SELECT persona_id, autoch_counter, autoch_next_target
                 FROM persona_autoch_runtime_state
-                WHERE persona_id = ANY(${sql.array(tomoriIds, "int4")})
+                WHERE persona_id = ANY(${sql.array(personaIds, "int4")})
               `
               : [];
           const autochRuntimeByPersonaId = new Map<
@@ -1823,13 +1823,13 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
           // 10. Build persona states
           const personas: TomoriState[] = [];
           for (const tomoriRow of tomoriRows) {
-            const tomoriId = tomoriRow.persona_id;
-            if (!tomoriId) {
+            const personaId = tomoriRow.persona_id;
+            if (!personaId) {
               log.warn(`Skipping persona with missing persona_id for server ${serverDiscId}`);
               continue;
             }
 
-            const personaConfig = personaConfigMap.get(tomoriId);
+            const personaConfig = personaConfigMap.get(personaId);
 
             // Resolve persona-specific LLM override if set (cache first, DB fallback)
             let personaLlm: LlmRow | undefined;
@@ -1856,7 +1856,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             // Personas sharing lineage intentionally share server memories.
             const serverMemories = memoriesByLineage.get(personaLineageId) ?? [];
 
-            const autochRuntime = autochRuntimeByPersonaId.get(tomoriId) ?? {
+            const autochRuntime = autochRuntimeByPersonaId.get(personaId) ?? {
               autoch_counter: 0,
               autoch_next_target: 0,
             };
@@ -1881,7 +1881,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             const parsedState = tomoriStateSchema.safeParse(combinedState);
             if (!parsedState.success) {
               log.error(
-                `Failed to validate persona state for server ${serverDiscId}, persona_id ${tomoriId}:`,
+                `Failed to validate persona state for server ${serverDiscId}, persona_id ${personaId}:`,
                 parsedState.error.flatten(),
               );
               continue;
@@ -1908,12 +1908,12 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     );
   }
 
-  private async loadPersonaConfigRow(tomoriId: number): Promise<PersonaConfigRow | null> {
+  private async loadPersonaConfigRow(personaId: number): Promise<PersonaConfigRow | null> {
     try {
       const rows = await sql`
         SELECT *
         FROM persona_configs
-        WHERE persona_id = ${tomoriId}
+        WHERE persona_id = ${personaId}
         LIMIT 1
       `;
 
@@ -1923,20 +1923,20 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
       const parsed = personaConfigSchema.safeParse(rows[0]);
       if (!parsed.success) {
-        log.warn(`Failed to validate persona config for tomori ${tomoriId}:`, parsed.error.flatten());
+        log.warn(`Failed to validate persona config for tomori ${personaId}:`, parsed.error.flatten());
         return null;
       }
 
       return parsed.data;
     } catch (error) {
-      log.error(`Error loading persona config for tomori ${tomoriId}:`, error);
+      log.error(`Error loading persona config for tomori ${personaId}:`, error);
       return null;
     }
   }
 
   // ── private SQL: tomori writes ────────────────────────────────────────────
 
-  private async updateTomori(tomoriId: number, tomoriData: Partial<TomoriRow>): Promise<TomoriRow | null> {
+  private async updateTomori(personaId: number, tomoriData: Partial<TomoriRow>): Promise<TomoriRow | null> {
     try {
       // Validate the partial data with Zod (Rule #7)
       const validTomoriData = tomoriSchema.partial().parse(tomoriData);
@@ -1948,7 +1948,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       const fields = Object.keys(validTomoriData).filter((key) => key !== "persona_id" && key in tomoriData);
 
       if (fields.length === 0) {
-        log.warn(`No fields provided to update for persona_id: ${tomoriId}`);
+        log.warn(`No fields provided to update for persona_id: ${personaId}`);
         return null;
       }
 
@@ -1977,9 +1977,9 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       // 3. Join the SET parts
       const setClause = setParts.join(", ");
 
-      // 4. Add the tomoriId as the last parameter for the WHERE clause
+      // 4. Add the personaId as the last parameter for the WHERE clause
       const finalPlaceholderIndex = values.length + 1;
-      values.push(tomoriId);
+      values.push(personaId);
 
       // 5. Execute the UPDATE using sql.unsafe() with the values array (not spread —
       // Bun SQL expects a single array argument, not individual arguments).
@@ -1995,14 +1995,14 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
       if (!result.length) {
         const context: ErrorContext = {
-          tomoriId,
+          personaId,
           errorType: "DatabaseUpdateError",
           metadata: {
             operation: "updateTomori",
             fields,
           },
         };
-        await log.error(`No tomori found with id: ${tomoriId}`, new Error("Tomori not found"), context);
+        await log.error(`No tomori found with id: ${personaId}`, new Error("Tomori not found"), context);
         return null;
       }
 
@@ -2010,27 +2010,27 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       const updatedTomori = tomoriSchema.safeParse(result[0]);
       if (!updatedTomori.success) {
         const context: ErrorContext = {
-          tomoriId,
+          personaId,
           errorType: "SchemaValidationError",
           metadata: {
             operation: "updateTomori",
             validationErrors: updatedTomori.error.flatten(),
           },
         };
-        await log.error(`Failed to validate updated tomori for id: ${tomoriId}`, updatedTomori.error, context);
+        await log.error(`Failed to validate updated tomori for id: ${personaId}`, updatedTomori.error, context);
         return null;
       }
 
       return updatedTomori.data;
     } catch (error) {
       const context: ErrorContext = {
-        tomoriId,
+        personaId,
         errorType: "DatabaseUpdateError",
         metadata: {
           operation: "updateTomori",
         },
       };
-      await log.error(`Error updating tomori for id: ${tomoriId}`, error, context);
+      await log.error(`Error updating tomori for id: ${personaId}`, error, context);
       return null;
     }
   }

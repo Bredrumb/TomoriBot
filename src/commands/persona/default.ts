@@ -381,7 +381,7 @@ export async function execute(
         const context: ErrorContext = {
           userId: userData.user_id,
           serverId: tomoriState.server_id,
-          tomoriId: targetPersonaId,
+          personaId: targetPersonaId,
           errorType: "DatabaseValidationError",
           metadata: {
             command: "persona default",
@@ -754,17 +754,17 @@ export async function execute(
 
     // 13. Log error with context
     let serverIdForError: number | null = null;
-    let tomoriIdForError: number | null = null;
+    let personaIdForError: number | null = null;
     if (interaction.guild?.id) {
       const state = await getCachedTomoriState(interaction.guild.id);
       serverIdForError = state?.server_id ?? null;
-      tomoriIdForError = state?.persona_id ?? null;
+      personaIdForError = state?.persona_id ?? null;
     }
 
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: serverIdForError,
-      tomoriId: tomoriIdForError,
+      personaId: personaIdForError,
       errorType: "CommandExecutionError",
       metadata: {
         command: "persona default",

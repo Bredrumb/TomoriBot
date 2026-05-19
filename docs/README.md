@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5 -->
+<!-- ARCH-ALIGNMENT: prereq-phase-7 -->
 
 # TomoriBot Docs Index
 
@@ -71,6 +71,7 @@ This folder is organized by topic instead of numeric filenames.
 - [`guides/local-grafana-setup.md`](./guides/local-grafana-setup.md)
 - [`guides/testing-db-changes.md`](./guides/testing-db-changes.md)
 - [`guides/testing-chat-changes.md`](./guides/testing-chat-changes.md)
+- [`guides/safe-migration.md`](./guides/safe-migration.md)
 
 ## Refactor Notes
 

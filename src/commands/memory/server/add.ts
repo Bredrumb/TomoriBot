@@ -5,7 +5,6 @@ import type {
   ModalSubmitInteraction,
 } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
-import { sql } from "@/utils/db/client";
 import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -219,7 +218,7 @@ export async function execute(
       });
       return;
     }
-    const targetTomoriId = selectedPersona.persona_id;
+    const targetPersonaId = selectedPersona.persona_id;
     const targetPersonaLineageId = selectedPersona.persona_lineage_id ?? 0;
     const targetServerId = tomoriState.server_id;
 
@@ -337,7 +336,7 @@ export async function execute(
     if (memoriesToAdd.length === 1) {
       const insertedMemory = await serverMemoryRepository.add(
         targetServerId,
-        targetTomoriId,
+        targetPersonaId,
         targetPersonaLineageId,
         targetUserId,
         memoriesToAdd[0] ?? "",
@@ -345,26 +344,25 @@ export async function execute(
       );
       insertSuccess = insertedMemory !== null;
     } else {
-      try {
-        await sql.transaction(async (tx) => {
-          for (const memory of memoriesToAdd) {
-            await tx`
-							INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, tags)
-							VALUES (${targetServerId}, ${targetTomoriId}, ${targetPersonaLineageId}, ${targetUserId}, ${memory}, ${sql.array(parsedTags)})
-						`;
-          }
-        });
-      } catch (insertError) {
-        insertSuccess = false;
-        await log.error("Batch insert failed for server memories", insertError, {
+      // Batch path: delegate to repository which wraps the transaction internally
+      insertSuccess = await serverMemoryRepository.addBatch(
+        targetServerId,
+        targetPersonaId,
+        targetPersonaLineageId,
+        targetUserId,
+        memoriesToAdd,
+        parsedTags,
+      );
+      if (!insertSuccess) {
+        await log.error("Batch insert failed for server memories", new Error("addBatch returned false"), {
           userId: userData.user_id,
           serverId: targetServerId,
-          tomoriId: targetTomoriId,
+          personaId: targetPersonaId,
           errorType: "DatabaseValidationError",
           metadata: {
             command: "teach servermemory",
             insertCount: memoriesToAdd.length,
-            targetTomoriId: targetTomoriId,
+            targetPersonaId: targetPersonaId,
           },
         });
       }
@@ -375,7 +373,7 @@ export async function execute(
       const context: ErrorContext = {
         userId: userData.user_id,
         serverId: targetServerId,
-        tomoriId: targetTomoriId,
+        personaId: targetPersonaId,
         errorType: "DatabaseValidationError",
         metadata: {
           command: "teach servermemory",
@@ -383,7 +381,7 @@ export async function execute(
           operation: "INSERT",
           userDiscordId: interaction.user.id,
           newMemoryContent: memoriesToAdd.join("\n"),
-          targetTomoriId: targetTomoriId,
+          targetPersonaId: targetPersonaId,
         },
       };
       await log.error("Failed to insert server memory data", new Error("Insert returned null"), context);
@@ -427,7 +425,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: tomoriState?.persona_id,
+      personaId: tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "teach servermemory",

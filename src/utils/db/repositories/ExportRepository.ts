@@ -141,10 +141,10 @@ export class ExportRepository {
   /**
    * Exports server data (configuration and server memories).
    * @param serverDiscId - Discord server ID to export data for
-   * @param tomoriId - Optional persona ID to export persona-scoped server memories from
+   * @param personaId - Optional persona ID to export persona-scoped server memories from
    * @returns ExportResult containing the exported data or error
    */
-  async exportServerData(serverDiscId: string, tomoriId?: number): Promise<ExportResult> {
+  async exportServerData(serverDiscId: string, personaId?: number): Promise<ExportResult> {
     try {
       // 1. Get internal server ID
       const serverRows = await sql`
@@ -251,9 +251,9 @@ export class ExportRepository {
       const configData = configRows[0];
 
       // 3. Resolve target persona/lineage for server memory export
-      let targetTomoriId = tomoriId;
+      let targetPersonaId = personaId;
       let targetPersonaLineageId: number | null = null;
-      if (!targetTomoriId) {
+      if (!targetPersonaId) {
         const mainPersonaRows = await sql<
           Array<{
             persona_id: number;
@@ -267,7 +267,7 @@ export class ExportRepository {
           ORDER BY updated_at DESC NULLS LAST, persona_id DESC
           LIMIT 1
         `;
-        targetTomoriId = mainPersonaRows[0]?.persona_id;
+        targetPersonaId = mainPersonaRows[0]?.persona_id;
         const rawMainLineageId = mainPersonaRows[0]?.persona_lineage_id;
         targetPersonaLineageId =
           typeof rawMainLineageId === "bigint"
@@ -279,7 +279,7 @@ export class ExportRepository {
         const [targetPersonaMeta] = await sql<Array<{ persona_lineage_id: number | bigint | string }>>`
           SELECT persona_lineage_id
           FROM personas
-          WHERE persona_id = ${targetTomoriId}
+          WHERE persona_id = ${targetPersonaId}
             AND server_id = ${serverId}
           LIMIT 1
         `;
@@ -519,10 +519,10 @@ export class ExportRepository {
   /**
    * Exports persona-scoped server memories only.
    * @param serverDiscId - Discord server ID to export data for
-   * @param tomoriId - Persona ID to export memories from
+   * @param personaId - Persona ID to export memories from
    */
-  async exportPersonaServerMemories(serverDiscId: string, tomoriId: number): Promise<ExportResult> {
-    const baseExport = await this.exportServerData(serverDiscId, tomoriId);
+  async exportPersonaServerMemories(serverDiscId: string, personaId: number): Promise<ExportResult> {
+    const baseExport = await this.exportServerData(serverDiscId, personaId);
     if (!baseExport.success || !baseExport.data || baseExport.data.type !== "server") {
       return { success: false, error: baseExport.error || "commands.data.export.error_export_failed" };
     }
@@ -572,14 +572,14 @@ export class ExportRepository {
   /**
    * Exports personality data as a human-readable text file.
    * @param serverDiscId - Discord server ID to export personality for
-   * @param tomoriId - Optional persona ID to export personality for
+   * @param personaId - Optional persona ID to export personality for
    * @returns PersonalityExportResult containing formatted text or error
    */
-  async exportPersonalityData(serverDiscId: string, tomoriId?: number): Promise<PersonalityExportResult> {
+  async exportPersonalityData(serverDiscId: string, personaId?: number): Promise<PersonalityExportResult> {
     try {
       // 1. Get persona data (selected persona or default main persona)
       const rows =
-        typeof tomoriId === "number"
+        typeof personaId === "number"
           ? await sql`
               SELECT
                 t.persona_nickname,
@@ -589,7 +589,7 @@ export class ExportRepository {
               FROM personas t
               JOIN servers s ON t.server_id = s.server_id
               WHERE s.server_disc_id = ${serverDiscId}
-                AND t.persona_id = ${tomoriId}
+                AND t.persona_id = ${personaId}
               LIMIT 1
             `
           : await sql`

@@ -9,8 +9,7 @@ import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/mod
 import type { ErrorContext, UserRow, EmbeddingModelRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
-import { configRepository, llmModelRepo, serverMemoryRepository } from "@/utils/db/repositories";
-import { reembedServerDocuments } from "@/utils/documents/documentService";
+import { configRepository, llmModelRepo, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
@@ -246,7 +245,7 @@ export async function execute(
 
     if (!selectedModel?.embedding_model_id) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.persona_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "CommandExecutionError",
@@ -294,7 +293,7 @@ export async function execute(
 
     if (!updated) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.persona_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
@@ -328,7 +327,7 @@ export async function execute(
 
         const creds = await resolveCapabilityCredentials(tomoriState.server_id, "embedding");
         const limits = getMemoryLimits();
-        await reembedServerDocuments({
+        await ragRepository.reembedServerDocuments({
           serverId: tomoriState.server_id,
           embeddingModel: selectedModel,
           apiKey: creds.apiKey,
@@ -364,7 +363,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState.server_id,
-      tomoriId: tomoriState.persona_id,
+      personaId: tomoriState.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "config model embedding",

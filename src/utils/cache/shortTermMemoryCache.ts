@@ -11,8 +11,8 @@
  * - Relative timestamp formatting (e.g., "2 hours ago")
  *
  * Design:
- * - User key pattern: `shortterm:user:${userId}:${channelId}` or `shortterm:user:${userId}:${channelId}:${tomoriId}`
- * - Server key pattern: `shortterm:server:${serverId}:${channelId}` or `shortterm:server:${serverId}:${channelId}:${tomoriId}`
+ * - User key pattern: `shortterm:user:${userId}:${channelId}` or `shortterm:user:${userId}:${channelId}:${personaId}`
+ * - Server key pattern: `shortterm:server:${serverId}:${channelId}` or `shortterm:server:${serverId}:${channelId}:${personaId}`
  * - Conversations: Last 10 condensed turns (user + model messages)
  * - Summaries: Tool-generated summaries replace crude conversations
  * - Cross-model compatible: Summaries created by any model work for all models
@@ -57,7 +57,7 @@ export interface ShortTermMemoryEntry {
   channelName?: string;
 
   /** Tomori persona ID for persona-scoped memory */
-  tomoriId?: number | null;
+  personaId?: number | null;
 
   /** Persona lineage ID for cross-server persona matching */
   personaLineageId?: number | null;
@@ -109,10 +109,10 @@ const stats: CacheStats = {
  * Generate cache key for a user in a channel, optionally scoped to a persona
  * @param userId - Discord user ID
  * @param channelId - Discord channel ID
- * @param tomoriId - Optional persona ID for persona-scoped memory
+ * @param personaId - Optional persona ID for persona-scoped memory
  */
-function getUserCacheKey(userId: string, channelId: string, tomoriId?: number | null): string {
-  if (tomoriId) return `${USER_CACHE_PREFIX}:${userId}:${channelId}:${tomoriId}`;
+function getUserCacheKey(userId: string, channelId: string, personaId?: number | null): string {
+  if (personaId) return `${USER_CACHE_PREFIX}:${userId}:${channelId}:${personaId}`;
   return `${USER_CACHE_PREFIX}:${userId}:${channelId}`;
 }
 
@@ -120,11 +120,11 @@ function getUserCacheKey(userId: string, channelId: string, tomoriId?: number | 
  * Generate cache key for a server-shared channel memory, optionally scoped to a persona
  * @param serverId - Discord server ID
  * @param channelId - Discord channel ID
- * @param tomoriId - Optional persona ID for persona-scoped memory
+ * @param personaId - Optional persona ID for persona-scoped memory
  */
-function getServerCacheKey(serverId: string, channelId: string, tomoriId?: number | null): string {
-  if (tomoriId) {
-    return `${SERVER_CACHE_PREFIX}:${serverId}:${channelId}:${tomoriId}`;
+function getServerCacheKey(serverId: string, channelId: string, personaId?: number | null): string {
+  if (personaId) {
+    return `${SERVER_CACHE_PREFIX}:${serverId}:${channelId}:${personaId}`;
   }
   return `${SERVER_CACHE_PREFIX}:${serverId}:${channelId}`;
 }
@@ -186,7 +186,7 @@ function storeMemoryEntry(
   serverId: string,
   serverName?: string,
   channelName?: string,
-  tomoriId?: number | null,
+  personaId?: number | null,
   personaLineageId?: number | null,
   parentChannelId?: string | null,
 ): void {
@@ -200,7 +200,7 @@ function storeMemoryEntry(
     channelId,
     parentChannelId,
     channelName,
-    tomoriId,
+    personaId,
     personaLineageId,
     lastUpdated: Date.now(),
   };
@@ -274,7 +274,7 @@ function updateSummaryForKey(
   channelId: string,
   serverName?: string,
   channelName?: string,
-  tomoriId?: number | null,
+  personaId?: number | null,
   personaLineageId?: number | null,
   parentChannelId?: string | null,
 ): void {
@@ -289,7 +289,7 @@ function updateSummaryForKey(
       channelId,
       parentChannelId,
       channelName,
-      tomoriId,
+      personaId,
       personaLineageId,
       lastUpdated: Date.now(),
     };
@@ -310,7 +310,7 @@ function updateSummaryForKey(
  * @param serverId - Discord server ID (or "DM" for direct messages)
  * @param serverName - Optional server name for same-server channel mentions
  * @param channelName - Optional channel name for same-server channel mentions
- * @param tomoriId - Optional persona ID for persona-scoped memory
+ * @param personaId - Optional persona ID for persona-scoped memory
  * @param personaLineageId - Optional persona lineage ID for cross-server persona matching
  * @param parentChannelId - Parent channel ID when channelId is a thread (used for privacy inheritance)
  */
@@ -326,7 +326,7 @@ export function storeShortTermMemory(
   serverId: string,
   serverName?: string,
   channelName?: string,
-  tomoriId?: number | null,
+  personaId?: number | null,
   personaLineageId?: number | null,
   parentChannelId?: string | null,
 ): void {
@@ -341,26 +341,26 @@ export function storeShortTermMemory(
     const limitedMessages = messages.slice(-MAX_MESSAGES_PER_CHANNEL);
 
     storeMemoryEntry(
-      getUserCacheKey(userId, channelId, tomoriId),
+      getUserCacheKey(userId, channelId, personaId),
       channelId,
       limitedMessages,
       serverId,
       serverName,
       channelName,
-      tomoriId,
+      personaId,
       personaLineageId,
       parentChannelId,
     );
 
     if (serverId !== "DM") {
       storeMemoryEntry(
-        getServerCacheKey(serverId, channelId, tomoriId),
+        getServerCacheKey(serverId, channelId, personaId),
         channelId,
         limitedMessages,
         serverId,
         serverName,
         channelName,
-        tomoriId,
+        personaId,
         personaLineageId,
         parentChannelId,
       );
@@ -436,16 +436,16 @@ export function getShortTermMemoriesForServer(
  *
  * @param userId - Discord user ID
  * @param channelId - Discord channel ID
- * @param tomoriId - Optional persona ID for persona-scoped memory
+ * @param personaId - Optional persona ID for persona-scoped memory
  * @returns Memory entry if found and not expired, undefined otherwise
  */
 export function getShortTermMemoryForUserChannel(
   userId: string,
   channelId: string,
-  tomoriId?: number | null,
+  personaId?: number | null,
 ): ShortTermMemoryEntry | undefined {
   try {
-    return getShortTermMemoryByKey(getUserCacheKey(userId, channelId, tomoriId));
+    return getShortTermMemoryByKey(getUserCacheKey(userId, channelId, personaId));
   } catch (error) {
     log.error(
       `[shortTermMemoryCache] Failed to get user short-term memory for channel - userId=${userId}, channelId=${channelId}`,
@@ -464,20 +464,20 @@ export function getShortTermMemoryForUserChannel(
  *
  * @param serverId - Discord server ID
  * @param channelId - Discord channel ID
- * @param tomoriId - Optional persona ID for persona-scoped memory
+ * @param personaId - Optional persona ID for persona-scoped memory
  * @returns Memory entry if found and not expired, undefined otherwise
  */
 export function getShortTermMemoryForServerChannel(
   serverId: string,
   channelId: string,
-  tomoriId?: number | null,
+  personaId?: number | null,
 ): ShortTermMemoryEntry | undefined {
   try {
     if (!serverId || serverId === "DM") {
       return undefined;
     }
 
-    return getShortTermMemoryByKey(getServerCacheKey(serverId, channelId, tomoriId));
+    return getShortTermMemoryByKey(getServerCacheKey(serverId, channelId, personaId));
   } catch (error) {
     log.error(
       `[shortTermMemoryCache] Failed to get server short-term memory for channel - serverId=${serverId}, channelId=${channelId}`,
@@ -497,9 +497,9 @@ export function getShortTermMemoryForServerChannel(
 export function getShortTermMemoryForChannel(
   userId: string,
   channelId: string,
-  tomoriId?: number | null,
+  personaId?: number | null,
 ): ShortTermMemoryEntry | undefined {
-  return getShortTermMemoryForUserChannel(userId, channelId, tomoriId);
+  return getShortTermMemoryForUserChannel(userId, channelId, personaId);
 }
 
 /**
@@ -511,7 +511,7 @@ export function getShortTermMemoryForChannel(
  * @param serverId - Discord server ID (required if creating new entry)
  * @param serverName - Server name (optional, for new entries)
  * @param channelName - Channel name (optional, for new entries)
- * @param tomoriId - Optional persona ID for persona-scoped memory
+ * @param personaId - Optional persona ID for persona-scoped memory
  * @param personaLineageId - Optional persona lineage ID for cross-server persona matching
  * @param parentChannelId - Parent channel ID when channelId is a thread (used for privacy inheritance)
  */
@@ -522,7 +522,7 @@ export function updateShortTermMemorySummary(
   serverId?: string,
   serverName?: string,
   channelName?: string,
-  tomoriId?: number | null,
+  personaId?: number | null,
   personaLineageId?: number | null,
   parentChannelId?: string | null,
 ): void {
@@ -537,26 +537,26 @@ export function updateShortTermMemorySummary(
     const truncatedSummary = summary.length > MAX_SUMMARY_LENGTH ? summary.slice(0, MAX_SUMMARY_LENGTH) : summary;
 
     updateSummaryForKey(
-      getUserCacheKey(userId, channelId, tomoriId),
+      getUserCacheKey(userId, channelId, personaId),
       truncatedSummary,
       serverId || "unknown",
       channelId,
       serverName,
       channelName,
-      tomoriId,
+      personaId,
       personaLineageId,
       parentChannelId,
     );
 
     if (serverId && serverId !== "DM") {
       updateSummaryForKey(
-        getServerCacheKey(serverId, channelId, tomoriId),
+        getServerCacheKey(serverId, channelId, personaId),
         truncatedSummary,
         serverId,
         channelId,
         serverName,
         channelName,
-        tomoriId,
+        personaId,
         personaLineageId,
         parentChannelId,
       );
@@ -578,22 +578,22 @@ export function updateShortTermMemorySummary(
  *
  * @param userId - Discord user ID
  * @param channelId - Discord channel ID
- * @param tomoriId - Optional persona ID for persona-scoped memory
+ * @param personaId - Optional persona ID for persona-scoped memory
  */
 export function invalidateShortTermMemory(
   userId: string,
   channelId: string,
-  tomoriId?: number | null,
+  personaId?: number | null,
   serverId?: string,
 ): void {
   try {
     let clearedCount = 0;
 
-    if (cache.delete(getUserCacheKey(userId, channelId, tomoriId))) {
+    if (cache.delete(getUserCacheKey(userId, channelId, personaId))) {
       clearedCount++;
     }
 
-    if (serverId && serverId !== "DM" && cache.delete(getServerCacheKey(serverId, channelId, tomoriId))) {
+    if (serverId && serverId !== "DM" && cache.delete(getServerCacheKey(serverId, channelId, personaId))) {
       clearedCount++;
     }
 
@@ -647,31 +647,31 @@ export function clearShortTermMemoryForChannel(channelId: string): void {
  *
  * @param serverId - Discord server ID
  * @param channelId - Discord channel ID
- * @param tomoriId - Optional persona ID for persona-scoped memory
+ * @param personaId - Optional persona ID for persona-scoped memory
  */
 export function clearShortTermMemoryForServerChannel(
   serverId: string,
   channelId: string,
-  tomoriId?: number | null,
+  personaId?: number | null,
 ): void {
   try {
     if (!serverId || serverId === "DM" || !channelId) {
       log.warn(
-        `[shortTermMemoryCache] Invalid parameters for clearShortTermMemoryForServerChannel - serverId=${serverId}, channelId=${channelId}, tomoriId=${tomoriId ?? "none"}`,
+        `[shortTermMemoryCache] Invalid parameters for clearShortTermMemoryForServerChannel - serverId=${serverId}, channelId=${channelId}, personaId=${personaId ?? "none"}`,
       );
       return;
     }
 
-    if (cache.delete(getServerCacheKey(serverId, channelId, tomoriId))) {
+    if (cache.delete(getServerCacheKey(serverId, channelId, personaId))) {
       stats.invalidations++;
     }
   } catch (error) {
     log.error(
-      `[shortTermMemoryCache] Failed to clear server short-term memory entry - serverId=${serverId}, channelId=${channelId}, tomoriId=${tomoriId ?? "none"}`,
+      `[shortTermMemoryCache] Failed to clear server short-term memory entry - serverId=${serverId}, channelId=${channelId}, personaId=${personaId ?? "none"}`,
       error,
       {
         errorType: "CACHE_CLEAR_ERROR",
-        metadata: { serverId, channelId, tomoriId },
+        metadata: { serverId, channelId, personaId },
       },
     );
   }

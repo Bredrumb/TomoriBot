@@ -5,11 +5,11 @@ import { userRepository, type PersonalSpotlightStatus } from "@/utils/db/reposit
 export function isPersonaAllowedForTrigger(
   whitelistStatus: WhitelistCheckResult | null | undefined,
   spotlightStatus: PersonalSpotlightStatus | null | undefined,
-  tomoriId: number | null | undefined,
+  personaId: number | null | undefined,
 ): boolean {
   return (
-    whitelistRepository.isPersonaAllowedByWhitelistStatus(whitelistStatus, tomoriId) &&
-    userRepository.isPersonaAllowedByPersonalSpotlight(spotlightStatus, tomoriId)
+    whitelistRepository.isPersonaAllowedByWhitelistStatus(whitelistStatus, personaId) &&
+    userRepository.isPersonaAllowedByPersonalSpotlight(spotlightStatus, personaId)
   );
 }
 

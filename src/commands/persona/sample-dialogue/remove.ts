@@ -29,13 +29,13 @@ const DIALOGUE_SELECT_ID = "dialogue_select";
  * Repairs mismatched sample dialogue arrays by truncating both to the shorter length.
  * This heals corruption caused by the old array_remove() bug which could remove
  * duplicate values from one array but not the other, breaking alignment.
- * @param tomoriId - The tomori ID to repair
+ * @param personaId - The tomori ID to repair
  * @param inLength - Current length of sample_dialogues_in
  * @param outLength - Current length of sample_dialogues_out
  * @returns The repaired [in, out] arrays, or null if repair failed
  */
 async function repairMismatchedDialogues(
-  tomoriId: number,
+  personaId: number,
   inLength: number,
   outLength: number,
 ): Promise<{ repairedIn: string[]; repairedOut: string[] } | null> {
@@ -43,16 +43,16 @@ async function repairMismatchedDialogues(
   const safeLength = Math.min(inLength, outLength);
 
   log.warn(
-    `Self-healing: truncating sample dialogues for tomori ${tomoriId} from (in: ${inLength}, out: ${outLength}) to ${safeLength} pairs`,
+    `Self-healing: truncating sample dialogues for tomori ${personaId} from (in: ${inLength}, out: ${outLength}) to ${safeLength} pairs`,
   );
 
-  const repaired = await personaRepository.repairSampleDialogues(tomoriId, safeLength);
+  const repaired = await personaRepository.repairSampleDialogues(personaId, safeLength);
   if (!repaired) {
-    log.error(`Self-healing failed: no rows returned for tomori ${tomoriId}`);
+    log.error(`Self-healing failed: no rows returned for tomori ${personaId}`);
     return null;
   }
 
-  log.success(`Self-healing complete: sample dialogues for tomori ${tomoriId} repaired to ${safeLength} pairs`);
+  log.success(`Self-healing complete: sample dialogues for tomori ${personaId} repaired to ${safeLength} pairs`);
   return repaired;
 }
 
@@ -98,7 +98,7 @@ async function performSampleDialogueRemoval(
   if (!removed) {
     // Log error specific to this update failure
     const context: ErrorContext = {
-      tomoriId: tomoriState.persona_id,
+      personaId: tomoriState.persona_id,
       serverId: tomoriState.server_id,
       userId: userData.user_id,
       errorType: "DatabaseUpdateError",
@@ -385,7 +385,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
+      personaId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "forget sampledialogue",

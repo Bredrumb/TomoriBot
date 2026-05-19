@@ -15,6 +15,7 @@ import type { SavedProviderConfigRow } from "@/types/db/schema";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode } from "@/utils/misc/logger";
+import { safeReply } from "@/utils/discord/safeReply";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { localizer } from "@/utils/text/localizer";
 
@@ -171,7 +172,7 @@ export async function replaceProviderPickerWithInfo(
     embeds: [createStandardEmbed(locale, options)],
     components: [],
   });
-  await interaction.deleteReply().catch(() => {});
+  await safeReply(interaction.deleteReply(), "provider picker reply cleanup");
   return true;
 }
 

@@ -1,5 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { Glob } from "bun";
 
 /**
  * Lightweight logger (no DB dependency)
@@ -117,17 +118,35 @@ export interface StaleEntry {
 }
 
 /**
+ * Loads and merges all category slice files for a locale into a single flat object.
+ * The locale directory structure is: src/locales/{locale}/*.ts (category files).
+ * Each category file exports a default object whose top-level keys are merged.
+ *
+ * @param localeName - Locale identifier, e.g. "en-US" or "ja"
+ * @returns Merged locale object containing all keys from all category slices
+ */
+async function loadMergedLocale(localeName: string): Promise<Record<string, unknown>> {
+  const localeDir = join(process.cwd(), "src", "locales", localeName);
+  const merged: Record<string, unknown> = {};
+  const glob = new Glob("*.ts");
+  for await (const file of glob.scan(localeDir)) {
+    const module = await import(join(localeDir, file));
+    Object.assign(merged, module.default);
+  }
+  return merged;
+}
+
+/**
  * Finds keys where the Japanese translation is either identical to the English value
  * (never translated) or contains no CJK characters (still English text).
  * Returns results sorted by key for easy review.
  */
 async function findStaleTranslations(): Promise<StaleEntry[]> {
-  const localesPath = join(process.cwd(), "src", "locales");
-  const enModule = await import(join(localesPath, "en-US.ts"));
-  const jaModule = await import(join(localesPath, "ja.ts"));
+  const enLocale = await loadMergedLocale("en-US");
+  const jaLocale = await loadMergedLocale("ja");
 
-  const enFlat = flatten(enModule.default);
-  const jaFlat = flatten(jaModule.default);
+  const enFlat = flatten(enLocale);
+  const jaFlat = flatten(jaLocale);
 
   const stale: StaleEntry[] = [];
 

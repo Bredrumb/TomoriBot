@@ -30,7 +30,7 @@ export class WhitelistRepository {
         if (typeof row.persona_id === "string") return Number.parseInt(row.persona_id, 10);
         return row.persona_id;
       })
-      .filter((tomoriId): tomoriId is number => Number.isInteger(tomoriId) && tomoriId > 0);
+      .filter((personaId): personaId is number => Number.isInteger(personaId) && personaId > 0);
   }
 
   // ── channel whitelist ──────────────────────────────────────────────────────
@@ -265,21 +265,21 @@ export class WhitelistRepository {
    * Passing an empty array clears the persona-specific channel restriction.
    *
    * @param serverId       - Internal server DB ID
-   * @param tomoriId       - Internal tomori DB ID
+   * @param personaId       - Internal tomori DB ID
    * @param channelDiscIds - Discord channel snowflakes to allow for this persona
    */
-  async replacePersonaWhitelistChannels(serverId: number, tomoriId: number, channelDiscIds: string[]): Promise<void> {
+  async replacePersonaWhitelistChannels(serverId: number, personaId: number, channelDiscIds: string[]): Promise<void> {
     const uniqueChannelDiscIds = [...new Set(channelDiscIds)];
 
     await sql.transaction(async (tx) => {
       await tx`
-        DELETE FROM channel_persona_whitelist WHERE server_id = ${serverId} AND persona_id = ${tomoriId}
+        DELETE FROM channel_persona_whitelist WHERE server_id = ${serverId} AND persona_id = ${personaId}
       `;
 
       for (const channelDiscId of uniqueChannelDiscIds) {
         await tx`
           INSERT INTO channel_persona_whitelist (server_id, channel_disc_id, persona_id)
-          VALUES (${serverId}, ${channelDiscId}, ${tomoriId})
+          VALUES (${serverId}, ${channelDiscId}, ${personaId})
         `;
       }
     });
@@ -290,13 +290,13 @@ export class WhitelistRepository {
    *
    * @param serverId      - Internal server DB ID
    * @param channelDiscId - Discord channel snowflake
-   * @param tomoriId      - Internal tomori DB ID
+   * @param personaId      - Internal tomori DB ID
    * @returns True if an entry was deleted, false if not found
    */
-  async removeChannelPersonaWhitelist(serverId: number, channelDiscId: string, tomoriId: number): Promise<boolean> {
+  async removeChannelPersonaWhitelist(serverId: number, channelDiscId: string, personaId: number): Promise<boolean> {
     const result = await sql`
       DELETE FROM channel_persona_whitelist
-      WHERE server_id = ${serverId} AND channel_disc_id = ${channelDiscId} AND persona_id = ${tomoriId}
+      WHERE server_id = ${serverId} AND channel_disc_id = ${channelDiscId} AND persona_id = ${personaId}
     `;
     return result.count > 0;
   }
@@ -305,14 +305,14 @@ export class WhitelistRepository {
    * Get the channel whitelist entries for a single persona.
    *
    * @param serverId - Internal server DB ID
-   * @param tomoriId - Internal tomori DB ID
+   * @param personaId - Internal tomori DB ID
    * @returns Array of ChannelPersonaWhitelistRow ordered by channel then creation time
    */
-  async getPersonaWhitelistChannels(serverId: number, tomoriId: number): Promise<ChannelPersonaWhitelistRow[]> {
+  async getPersonaWhitelistChannels(serverId: number, personaId: number): Promise<ChannelPersonaWhitelistRow[]> {
     const result = await sql`
       SELECT *
       FROM channel_persona_whitelist
-      WHERE server_id = ${serverId} AND persona_id = ${tomoriId}
+      WHERE server_id = ${serverId} AND persona_id = ${personaId}
       ORDER BY channel_disc_id ASC, created_at ASC
     `;
     return result as ChannelPersonaWhitelistRow[];
@@ -341,17 +341,17 @@ export class WhitelistRepository {
    * Restricted personas are allowed only in their configured channels; unrestricted personas are always allowed.
    *
    * @param whitelistStatus - The current whitelist status for the channel
-   * @param tomoriId        - Internal tomori DB ID to check
+   * @param personaId        - Internal tomori DB ID to check
    * @returns True if this persona may respond in the current channel
    */
   isPersonaAllowedByWhitelistStatus(
     whitelistStatus: PersonaWhitelistStatus | null | undefined,
-    tomoriId: number | null | undefined,
+    personaId: number | null | undefined,
   ): boolean {
     if (!whitelistStatus?.hasActivePersonaWhitelist) return true;
-    if (!Number.isInteger(tomoriId) || !tomoriId) return false;
-    if (!(whitelistStatus.restrictedPersonaIds?.includes(tomoriId) ?? false)) return true;
-    return whitelistStatus.whitelistedPersonaIds?.includes(tomoriId) ?? false;
+    if (!Number.isInteger(personaId) || !personaId) return false;
+    if (!(whitelistStatus.restrictedPersonaIds?.includes(personaId) ?? false)) return true;
+    return whitelistStatus.whitelistedPersonaIds?.includes(personaId) ?? false;
   }
 
   /**

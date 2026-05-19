@@ -194,7 +194,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: null,
-      tomoriId: null,
+      personaId: null,
       errorType: "CommandExecutionError",
       metadata: { command: "config mcp toggle" },
     };

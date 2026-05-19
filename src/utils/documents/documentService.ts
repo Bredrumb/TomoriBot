@@ -51,7 +51,7 @@ export function formatVector(values: number[]): string {
 
 export async function insertDocumentWithChunks(params: {
   serverId: number;
-  tomoriId: number | null;
+  personaId: number | null;
   uploaderUserId: number | null;
   documentName: string;
   fileName: string | null;
@@ -67,7 +67,7 @@ export async function insertDocumentWithChunks(params: {
 }): Promise<number> {
   const {
     serverId,
-    tomoriId,
+    personaId,
     uploaderUserId,
     documentName,
     fileName,
@@ -99,7 +99,7 @@ export async function insertDocumentWithChunks(params: {
 				source_type
 			) VALUES (
 				${serverId},
-				${tomoriId},
+				${personaId},
 				${uploaderUserId},
 				${documentName},
 				${fileName},
@@ -146,7 +146,7 @@ export async function insertDocumentWithChunks(params: {
 
 export async function retrieveRelevantDocumentChunks(params: {
   serverId: number;
-  tomoriId?: number | null;
+  personaId?: number | null;
   query: string;
   embeddingModel: EmbeddingModelRow;
   apiKey: string;
@@ -154,7 +154,7 @@ export async function retrieveRelevantDocumentChunks(params: {
   minSimilarity: number;
   batchSize?: number;
 }): Promise<RetrievedDocumentChunk[]> {
-  const { serverId, tomoriId, query, embeddingModel, apiKey, maxResults, minSimilarity, batchSize } = params;
+  const { serverId, personaId, query, embeddingModel, apiKey, maxResults, minSimilarity, batchSize } = params;
 
   if (!query.trim()) {
     return [];
@@ -176,7 +176,7 @@ export async function retrieveRelevantDocumentChunks(params: {
   const queryVector = formatVector(queryEmbeddings[0]);
 
   const rows =
-    tomoriId === null || tomoriId === undefined
+    personaId === null || personaId === undefined
       ? await sql<
           Array<{
             document_id: number;
@@ -218,7 +218,7 @@ export async function retrieveRelevantDocumentChunks(params: {
 					WHERE dc.server_id = ${serverId}
 					  AND dc.embedding_family = ${embeddingModel.model_family}
 					  AND (
-						d.persona_id = ${tomoriId}
+						d.persona_id = ${personaId}
 						OR d.persona_id IS NULL
 					  )
 					ORDER BY dc.embedding <=> ${queryVector}::vector

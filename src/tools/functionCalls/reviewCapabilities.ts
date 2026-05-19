@@ -1032,7 +1032,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       const commandsPath = path.join(process.cwd(), "src", "commands");
 
       // 2. Get all category directories
-      const categoryDirs = getAllFiles(commandsPath, true);
+      const categoryDirs = await getAllFiles(commandsPath, true);
 
       // 3. Build markdown documentation
       let commandsMarkdown = "# Your Slash Commands\n\n";
@@ -1053,7 +1053,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         commandsMarkdown += `${categoryDescription}\n\n`;
 
         // 6. Get direct command files (immediate children - direct subcommands)
-        const directCommandFiles = getAllFiles(categoryDir).filter((file) => file.endsWith(".ts"));
+        const directCommandFiles = (await getAllFiles(categoryDir)).filter((file) => file.endsWith(".ts"));
 
         // 7. Process direct subcommands (no subcommand group)
         for (const commandFile of directCommandFiles) {
@@ -1087,14 +1087,14 @@ export class ReviewCapabilitiesTool extends BaseTool {
         }
 
         // 13. Get subdirectories (potential subcommand groups)
-        const subcommandGroups = getAllFiles(categoryDir, true);
+        const subcommandGroups = await getAllFiles(categoryDir, true);
 
         // 14. Process subcommand groups
         for (const groupDir of subcommandGroups) {
           const groupName = path.basename(groupDir);
 
           // 15. Get command files in this subcommand group
-          const groupCommandFiles = getAllFiles(groupDir).filter((file) => file.endsWith(".ts"));
+          const groupCommandFiles = (await getAllFiles(groupDir)).filter((file) => file.endsWith(".ts"));
 
           // 16. Process each command file in the group
           for (const commandFile of groupCommandFiles) {

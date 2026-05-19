@@ -2,6 +2,7 @@ import type { ChatInputCommandInteraction, ButtonInteraction, Client, SlashComma
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from "discord.js";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { safeReply } from "@/utils/discord/safeReply";
 import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
@@ -293,7 +294,10 @@ export async function execute(
         optionsForModal = [clearOption, ...allModelOptions.slice(startIndex, startIndex + ITEMS_PER_PAGE)];
         modalInteraction = pageButtonInteraction as ButtonInteraction;
       } catch {
-        await interaction.editReply({ embeds: [], components: [] }).catch(() => {});
+        await safeReply(
+          interaction.editReply({ embeds: [], components: [] }),
+          "personal fallback model timeout cleanup",
+        );
         return;
       }
     }

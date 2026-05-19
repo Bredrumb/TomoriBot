@@ -592,25 +592,25 @@ export class UserRepository implements IRepository<UserExportShape> {
   }
 
   /**
-   * Returns true if the given tomoriId is permitted by the spotlight status.
+   * Returns true if the given personaId is permitted by the spotlight status.
    * A null spotlight means no restriction — all personas are allowed.
    *
    * @param spotlightStatus - Current spotlight, or null/undefined if none
-   * @param tomoriId        - Persona DB ID to check
+   * @param personaId        - Persona DB ID to check
    */
   isPersonaAllowedByPersonalSpotlight(
     spotlightStatus: PersonalSpotlightStatus | null | undefined,
-    tomoriId: number | null | undefined,
+    personaId: number | null | undefined,
   ): boolean {
     if (!spotlightStatus) {
       return true;
     }
 
-    if (!Number.isInteger(tomoriId) || !tomoriId) {
+    if (!Number.isInteger(personaId) || !personaId) {
       return false;
     }
 
-    return spotlightStatus.personaIds.includes(tomoriId);
+    return spotlightStatus.personaIds.includes(personaId);
   }
 
   /**

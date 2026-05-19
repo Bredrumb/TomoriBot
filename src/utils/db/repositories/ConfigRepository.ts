@@ -457,12 +457,12 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
    * Increments the auto-chat counter for a Tomori and rolls a new target if needed.
    * Does NOT invalidate the tomori state cache (counter is a hot-path write).
    *
-   * @param tomoriId     - Internal tomori DB ID
+   * @param personaId     - Internal tomori DB ID
    * @param minThreshold - Minimum auto-chat threshold from config
    * @param maxThreshold - Maximum auto-chat threshold from config
    */
   async incrementTomoriCounter(
-    tomoriId: number,
+    personaId: number,
     minThreshold: number,
     maxThreshold: number,
   ): Promise<PersonaAutochRuntimeStateRow | null> {
@@ -474,7 +474,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
         // 1. Always-reply mode — reset counters to 0 in the runtime table.
         const [runtimeRow] = await sql`
           INSERT INTO persona_autoch_runtime_state (persona_id, autoch_counter, autoch_next_target)
-          VALUES (${tomoriId}, 0, 0)
+          VALUES (${personaId}, 0, 0)
           ON CONFLICT (persona_id) DO UPDATE
             SET autoch_counter = 0, autoch_next_target = 0
           RETURNING *
@@ -489,7 +489,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
         const [currentRuntime] = await tx`
           SELECT *
           FROM persona_autoch_runtime_state
-          WHERE persona_id = ${tomoriId}
+          WHERE persona_id = ${personaId}
           FOR UPDATE
         `;
 
@@ -506,7 +506,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
 
         const [updatedRow] = await tx`
           INSERT INTO persona_autoch_runtime_state (persona_id, autoch_counter, autoch_next_target)
-          VALUES (${tomoriId}, ${nextCounter}, ${nextTarget})
+          VALUES (${personaId}, ${nextCounter}, ${nextTarget})
           ON CONFLICT (persona_id) DO UPDATE
             SET autoch_counter = ${nextCounter}, autoch_next_target = ${nextTarget}
           RETURNING *
@@ -517,7 +517,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
 
       if (!updatedRuntime) {
         const context: ErrorContext = {
-          tomoriId,
+          personaId,
           errorType: "DatabaseUpdateError",
           metadata: {
             operation: "incrementTomoriCounter",
@@ -527,7 +527,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
         };
 
         await log.error(
-          `Failed to increment auto-chat counter for Tomori ${tomoriId}`,
+          `Failed to increment auto-chat counter for Tomori ${personaId}`,
           new Error("Runtime state upsert returned no rows"),
           context,
         );
@@ -537,7 +537,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
       const parsedRuntime = personaAutochRuntimeStateSchema.safeParse(updatedRuntime);
       if (!parsedRuntime.success) {
         const context: ErrorContext = {
-          tomoriId,
+          personaId,
           errorType: "SchemaValidationError",
           metadata: {
             operation: "incrementTomoriCounter",
@@ -552,7 +552,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
       return parsedRuntime.data;
     } catch (error) {
       const context: ErrorContext = {
-        tomoriId,
+        personaId,
         errorType: "DatabaseOperationError",
         metadata: {
           operation: "incrementTomoriCounter",
@@ -561,7 +561,106 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
         },
       };
 
-      await log.error(`Error incrementing auto counter for Tomori ${tomoriId}`, error, context);
+      await log.error(`Error incrementing auto counter for Tomori ${personaId}`, error, context);
+      return null;
+    }
+  }
+
+  /**
+   * Atomically updates the shared auto-chat threshold range and resets the
+   * persona's runtime cycle counter in a single transaction.
+   *
+   * @param serverId     - Internal server DB ID
+   * @param personaId    - Internal persona DB ID whose cycle is being reset
+   * @param threshold    - Minimum (or fixed) auto-chat threshold; 0 = always-reply
+   * @param maxThreshold - Maximum auto-chat threshold (>= threshold)
+   * @param nextTarget   - Next cycle target to seed the runtime row with
+   * @returns Updated runtime state row, or null on failure (config row missing, etc.)
+   */
+  async setAutoChatThreshold(
+    serverId: number,
+    personaId: number,
+    threshold: number,
+    maxThreshold: number,
+    nextTarget: number,
+  ): Promise<PersonaAutochRuntimeStateRow | null> {
+    try {
+      const result = await sql.transaction(async (tx) => {
+        // 1. Update the shared range on server_auto_trigger_configs.
+        const [configRow] = await tx`
+          UPDATE server_auto_trigger_configs
+          SET autoch_threshold = ${threshold},
+              autoch_threshold_max = ${maxThreshold}
+          WHERE server_id = ${serverId}
+          RETURNING server_id
+        `;
+
+        if (!configRow) {
+          throw new Error(`server_auto_trigger_configs row not found for server_id ${serverId}`);
+        }
+
+        // 2. Reset the persona's runtime cycle (upsert handles first-time rows).
+        const [runtimeRow] = await tx`
+          INSERT INTO persona_autoch_runtime_state (persona_id, autoch_counter, autoch_next_target)
+          VALUES (${personaId}, 0, ${nextTarget})
+          ON CONFLICT (persona_id) DO UPDATE
+            SET autoch_counter = 0,
+                autoch_next_target = EXCLUDED.autoch_next_target
+          RETURNING *
+        `;
+
+        return runtimeRow ?? null;
+      });
+
+      if (!result) {
+        const context: ErrorContext = {
+          serverId,
+          personaId: personaId,
+          errorType: "DatabaseUpdateError",
+          metadata: {
+            operation: "setAutoChatThreshold",
+            threshold,
+            maxThreshold,
+            nextTarget,
+          },
+        };
+        await log.error(
+          `Auto-chat threshold update returned no runtime row for server ${serverId}`,
+          new Error("Runtime state upsert returned no rows"),
+          context,
+        );
+        return null;
+      }
+
+      const parsed = personaAutochRuntimeStateSchema.safeParse(result);
+      if (!parsed.success) {
+        const context: ErrorContext = {
+          serverId,
+          personaId: personaId,
+          errorType: "SchemaValidationError",
+          metadata: {
+            operation: "setAutoChatThreshold",
+            validationErrors: parsed.error.flatten(),
+          },
+        };
+        await log.error("Failed to validate runtime state after threshold reset", parsed.error, context);
+        return null;
+      }
+
+      return parsed.data;
+    } catch (error) {
+      const context: ErrorContext = {
+        serverId,
+        personaId: personaId,
+        errorType: "DatabaseOperationError",
+        metadata: {
+          operation: "setAutoChatThreshold",
+          threshold,
+          maxThreshold,
+          nextTarget,
+        },
+      };
+      await log.error(`Error setting auto-chat threshold for server ${serverId}`, error, context);
       return null;
     }
   }

@@ -213,7 +213,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: selectedPersona?.server_id ?? tomoriState?.server_id,
-      tomoriId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
+      personaId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "server trigger remove",
@@ -358,7 +358,7 @@ async function performTriggerWordRemoval(
 
   if (!success) {
     const context: ErrorContext = {
-      tomoriId: selectedPersona.persona_id,
+      personaId: selectedPersona.persona_id,
       serverId: selectedPersona.server_id,
       userId: userData.user_id,
       errorType: "DatabaseUpdateError",

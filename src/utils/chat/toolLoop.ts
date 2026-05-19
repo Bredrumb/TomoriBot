@@ -367,7 +367,7 @@ function buildResult(
             {
               personaName: context.currentPersona.persona_nickname,
               text,
-              tomoriId: context.currentPersona.persona_id,
+              personaId: context.currentPersona.persona_id,
               personaLineageId: context.currentPersona.persona_lineage_id,
             },
           ]

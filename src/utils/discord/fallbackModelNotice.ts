@@ -145,9 +145,13 @@ export async function sendFallbackModelUsageNotice({
             components: [disabledButtonRow],
             ...(threadId ? { threadId } : {}),
           })
-          .catch(() => {});
+          .catch((err: unknown) =>
+            log.warn("[FallbackNotice] Failed to disable buttons via webhook after collector end", err),
+          );
       } else {
-        await noticeMessage.edit({ components: [disabledButtonRow] }).catch(() => {});
+        await noticeMessage
+          .edit({ components: [disabledButtonRow] })
+          .catch((err: unknown) => log.warn("[FallbackNotice] Failed to disable buttons after collector end", err));
       }
     });
   } catch (error) {

@@ -156,7 +156,7 @@ export async function execute(
       (validation.data as ServerMemoriesExportData).server_memories,
       {
         mode: "persona",
-        tomoriId: selectedPersona.persona_id,
+        personaId: selectedPersona.persona_id,
       },
     );
 

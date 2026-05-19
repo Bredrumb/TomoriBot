@@ -1,4 +1,5 @@
 import { configRepository } from "./ConfigRepository";
+import { errorLogRepository } from "./ErrorLogRepository";
 import { mcpRepository } from "./McpRepository";
 import { quotaRepository } from "./QuotaRepository";
 import { speechRepository } from "./SpeechRepository";
@@ -23,6 +24,7 @@ import { whitelistRepository } from "./WhitelistRepository";
 
 export {
   configRepository,
+  errorLogRepository,
   mcpRepository,
   quotaRepository,
   speechRepository,

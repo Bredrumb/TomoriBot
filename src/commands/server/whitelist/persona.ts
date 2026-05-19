@@ -64,7 +64,7 @@ export async function execute(
   const errorContext: ErrorContext = {
     userId: user.user_id,
     serverId: null,
-    tomoriId: null,
+    personaId: null,
   };
   let responseInteraction: ResponseInteraction = interaction;
 
@@ -93,7 +93,7 @@ export async function execute(
     }
 
     errorContext.serverId = tomoriState.server_id;
-    errorContext.tomoriId = tomoriState.persona_id;
+    errorContext.personaId = tomoriState.persona_id;
 
     const allPersonas = allPersonasRaw.filter(
       (persona): persona is PersonaWithId => typeof persona.persona_id === "number",
@@ -141,7 +141,7 @@ export async function execute(
         continue;
       }
 
-      errorContext.tomoriId = selectedPersona.persona_id;
+      errorContext.personaId = selectedPersona.persona_id;
 
       if (availableChannels.length === 0) {
         await updateButtonComponentsV2Status(

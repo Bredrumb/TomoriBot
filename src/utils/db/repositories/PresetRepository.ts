@@ -648,10 +648,10 @@ export class PresetRepository {
    * Queries data from personas and persona_configs (tomori_configs was dropped in Task F2, migration 008).
    *
    * @param serverDiscId - Discord server ID to export preset for
-   * @param targetTomoriId - Optional persona ID to export; defaults to current main persona
+   * @param targetPersonaId - Optional persona ID to export; defaults to current main persona
    * @returns ExportResult containing the exported preset data or error
    */
-  async exportPresetData(serverDiscId: string, targetTomoriId?: number): Promise<ExportResult> {
+  async exportPresetData(serverDiscId: string, targetPersonaId?: number): Promise<ExportResult> {
     try {
       // 1. Get internal server ID
       const serverRows = await sql`
@@ -669,7 +669,7 @@ export class PresetRepository {
 
       // 2. Query target persona row (explicit selection) or default main persona
       const personaRows =
-        typeof targetTomoriId === "number"
+        typeof targetPersonaId === "number"
           ? await sql`
               SELECT
                 persona_id, persona_nickname, persona_lineage_id,
@@ -678,7 +678,7 @@ export class PresetRepository {
                 nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
               FROM personas
               WHERE server_id = ${serverId}
-                AND persona_id = ${targetTomoriId}
+                AND persona_id = ${targetPersonaId}
               LIMIT 1
             `
           : await sql`
@@ -699,7 +699,7 @@ export class PresetRepository {
       }
 
       const presetData = personaRows[0];
-      if (typeof targetTomoriId !== "number") {
+      if (typeof targetPersonaId !== "number") {
         const mainCountRows = await sql`
           SELECT COUNT(*)::int AS count
           FROM personas

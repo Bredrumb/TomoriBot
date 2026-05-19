@@ -12,11 +12,16 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { llmModelRepo, personaRepository, serverMemoryRepository, userRepository } from "@/utils/db/repositories";
+import {
+  llmModelRepo,
+  personaRepository,
+  ragRepository,
+  serverMemoryRepository,
+  userRepository,
+} from "@/utils/db/repositories";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { memoryGuard, reserveDocumentQuota } from "@/utils/security/rateLimiter";
-import { chunkDocumentText, insertDocumentWithChunks, normalizeDocumentText } from "@/utils/documents/documentService";
 import { extractTextFromBuffer } from "@/utils/documents/textExtractor";
 import { generateEmbeddingsBatched, providerSupportsEmbeddingTaskType } from "@/utils/embeddings/embeddingProvider";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
@@ -111,7 +116,7 @@ export async function execute(
 
   const memoryLimits = getMemoryLimits();
   let tomoriState: TomoriState | null = null;
-  let targetTomoriId: number | null = null;
+  let targetPersonaId: number | null = null;
   let modalSubmitInteraction: ModalSubmitInteraction | null = null;
   let responseInteraction: ChatInputCommandInteraction | ModalSubmitInteraction = interaction;
 
@@ -331,7 +336,7 @@ export async function execute(
         return;
       }
 
-      targetTomoriId = selectedPersona.persona_id;
+      targetPersonaId = selectedPersona.persona_id;
       scopeLabel = localizer(locale, "commands.teach.document.scope_label_persona", {
         persona_name: selectedPersona.persona_nickname,
       });
@@ -340,7 +345,7 @@ export async function execute(
     // 10. Check duplicate document name in selected scope
     const duplicateExists = await serverMemoryRepository.documentExistsByName(
       tomoriState.server_id,
-      targetTomoriId,
+      targetPersonaId,
       nameInput,
     );
     if (duplicateExists) {
@@ -355,7 +360,7 @@ export async function execute(
     }
 
     // 11. Enforce document count limit for selected scope
-    const docCount = await serverMemoryRepository.countDocumentsScoped(tomoriState.server_id, targetTomoriId);
+    const docCount = await serverMemoryRepository.countDocumentsScoped(tomoriState.server_id, targetPersonaId);
     if (docCount >= memoryLimits.maxDocumentsPerServer) {
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "commands.teach.document.limit_exceeded_title",
@@ -422,7 +427,7 @@ export async function execute(
       attachment.name ?? "document",
       attachment.contentType,
     );
-    const normalizedText = normalizeDocumentText(rawText);
+    const normalizedText = ragRepository.normalizeText(rawText);
 
     if (!normalizedText) {
       await responseInteraction.editReply({
@@ -452,7 +457,11 @@ export async function execute(
       return;
     }
 
-    const chunks = chunkDocumentText(normalizedText, memoryLimits.documentChunkSize, memoryLimits.documentChunkOverlap);
+    const chunks = ragRepository.chunkText(
+      normalizedText,
+      memoryLimits.documentChunkSize,
+      memoryLimits.documentChunkOverlap,
+    );
 
     if (chunks.length === 0) {
       await responseInteraction.editReply({
@@ -482,7 +491,7 @@ export async function execute(
       return;
     }
 
-    const currentChunkCount = await serverMemoryRepository.countChunksScoped(tomoriState.server_id, targetTomoriId);
+    const currentChunkCount = await serverMemoryRepository.countChunksScoped(tomoriState.server_id, targetPersonaId);
     if (currentChunkCount + chunks.length > memoryLimits.maxDocumentChunksPerServer) {
       await responseInteraction.editReply({
         embeds: [
@@ -509,9 +518,9 @@ export async function execute(
       batchSize: 16,
     });
 
-    const documentId = await insertDocumentWithChunks({
+    const documentId = await ragRepository.insertWithChunks({
       serverId: tomoriState.server_id,
-      tomoriId: targetTomoriId,
+      personaId: targetPersonaId,
       uploaderUserId: userData.user_id ?? null,
       documentName: nameInput,
       fileName: attachment.name ?? null,
@@ -545,7 +554,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: targetTomoriId ?? tomoriState?.persona_id,
+      personaId: targetPersonaId ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "teach document",

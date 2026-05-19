@@ -4,9 +4,8 @@
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
+import { configRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { personaAutochRuntimeStateSchema } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -120,35 +119,28 @@ Positive values use a shared fixed or random range.
 
     const nextTarget = isAlwaysReplyMode ? 0 : rollAutochatTarget(threshold, maxThreshold);
 
-    // Update config and reset the shared cycle atomically.
-    const { updatedConfigRow, updatedTomoriRow } = await sql.transaction(async (tx) => {
-      const [configRow] = await tx`
-          UPDATE server_auto_trigger_configs
-          SET autoch_threshold = ${threshold},
-              autoch_threshold_max = ${maxThreshold}
-          WHERE server_id = ${tomoriState.server_id}
-          RETURNING server_id
-        `;
+    // Guard: invariants for a setup persona (mirrors prior inline-SQL assumptions).
+    if (tomoriState.server_id === undefined || tomoriState.persona_id === undefined) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "general.errors.tomori_not_setup_title",
+        descriptionKey: "general.errors.tomori_not_setup_description",
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
 
-      // Reset the autochat cycle in the runtime state table (upsert handles first-time rows).
-      const [runtimeRow] = await tx`
-          INSERT INTO persona_autoch_runtime_state (persona_id, autoch_counter, autoch_next_target)
-          VALUES (${tomoriState.persona_id}, 0, ${nextTarget})
-          ON CONFLICT (persona_id) DO UPDATE
-            SET autoch_counter = 0,
-                autoch_next_target = EXCLUDED.autoch_next_target
-          RETURNING *
-        `;
+    // Update config and reset the shared cycle atomically via repository.
+    const updatedRuntime = await configRepository.setAutoChatThreshold(
+      tomoriState.server_id,
+      tomoriState.persona_id,
+      threshold,
+      maxThreshold,
+      nextTarget,
+    );
 
-      return {
-        updatedConfigRow: configRow ?? null,
-        updatedTomoriRow: runtimeRow ?? null,
-      };
-    });
-
-    if (!updatedConfigRow || !updatedTomoriRow) {
+    if (!updatedRuntime) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.persona_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
@@ -162,30 +154,9 @@ Positive values use a shared fixed or random range.
       };
       await log.error(
         "Failed to update auto-chat range config/state",
-        new Error("Database update returned no rows"),
+        new Error("configRepository.setAutoChatThreshold returned null"),
         context,
       );
-
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    const validatedRuntime = personaAutochRuntimeStateSchema.safeParse(updatedTomoriRow);
-    if (!validatedRuntime.success) {
-      const context: ErrorContext = {
-        tomoriId: tomoriState.persona_id,
-        serverId: tomoriState.server_id,
-        errorType: "SchemaValidationError",
-        metadata: {
-          command: "server auto-trigger threshold",
-          validationErrors: validatedRuntime.error.flatten(),
-        },
-      };
-      await log.error("Failed to validate updated autochat runtime state", validatedRuntime.error, context);
 
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.update_failed_title",

@@ -302,16 +302,16 @@ export async function execute(
     });
   } catch (error) {
     let serverIdForError: number | null = null;
-    let tomoriIdForError: number | null = null;
+    let personaIdForError: number | null = null;
     const errorServerId = interaction.guild?.id ?? interaction.user.id;
     const state = await getCachedTomoriState(errorServerId);
     serverIdForError = state?.server_id ?? null;
-    tomoriIdForError = state?.persona_id ?? null;
+    personaIdForError = state?.persona_id ?? null;
 
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: serverIdForError,
-      tomoriId: tomoriIdForError,
+      personaId: personaIdForError,
       errorType: "CommandExecutionError",
       metadata: {
         command: "config provider remove",

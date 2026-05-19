@@ -97,16 +97,16 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
   /**
    * Enables or disables reward/punishment conditioning for a specific persona.
    *
-   * @param tomoriId        - Internal tomori DB ID
+   * @param personaId        - Internal tomori DB ID
    * @param conditioningType - Type to toggle (reward | punish)
    * @param enabled         - New enabled state
    */
   async setPersonaConditioningEnabled(
-    tomoriId: number,
+    personaId: number,
     conditioningType: ConditioningType,
     enabled: boolean,
   ): Promise<boolean> {
-    return this.sqlSetPersonaConditioningEnabled(tomoriId, conditioningType, enabled);
+    return this.sqlSetPersonaConditioningEnabled(personaId, conditioningType, enabled);
   }
 
   /**
@@ -206,7 +206,7 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
   }
 
   private async sqlSetPersonaConditioningEnabled(
-    tomoriId: number,
+    personaId: number,
     conditioningType: ConditioningType,
     enabled: boolean,
   ): Promise<boolean> {
@@ -217,14 +217,14 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
         column === "reward_conditioning_enabled"
           ? await sql`
               INSERT INTO persona_configs (persona_id, reward_conditioning_enabled)
-              VALUES (${tomoriId}, ${enabled})
+              VALUES (${personaId}, ${enabled})
               ON CONFLICT (persona_id)
               DO UPDATE SET reward_conditioning_enabled = EXCLUDED.reward_conditioning_enabled, updated_at = CURRENT_TIMESTAMP
               RETURNING *
             `
           : await sql`
               INSERT INTO persona_configs (persona_id, punish_conditioning_enabled)
-              VALUES (${tomoriId}, ${enabled})
+              VALUES (${personaId}, ${enabled})
               ON CONFLICT (persona_id)
               DO UPDATE SET punish_conditioning_enabled = EXCLUDED.punish_conditioning_enabled, updated_at = CURRENT_TIMESTAMP
               RETURNING *
@@ -233,7 +233,7 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
       const parsed = personaConfigSchema.safeParse(row);
       if (!parsed.success) {
         await log.error("Failed to validate persona conditioning toggle update", parsed.error, {
-          tomoriId,
+          personaId,
           errorType: "SchemaValidationError",
           metadata: { operation: "setPersonaConditioningEnabled", conditioningType, enabled },
         });
@@ -243,7 +243,7 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
       return true;
     } catch (error) {
       await log.error("Failed to update persona conditioning toggle", error, {
-        tomoriId,
+        personaId,
         errorType: "DatabaseUpdateError",
         metadata: { operation: "setPersonaConditioningEnabled", conditioningType, enabled },
       });

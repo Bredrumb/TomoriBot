@@ -1,4 +1,4 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5e -->
+<!-- ARCH-ALIGNMENT: prereq-phase-7.17 -->
 
 # 11. Utils and Helpers
 
@@ -33,7 +33,7 @@ This is a current map of shared utility modules under `src/utils/`.
 - `sqlSecurity.ts`: query parameterisation helpers
 - `sqlSplitter.ts`: SQL file parsing utilities
 - `ragAvailability.ts`: pgvector / RAG feature detection
-- `repositories/`: 19 domain-owned Repository classes + `index.ts` (instance + type re-exports only). All SQL is inlined as `private` methods on each Repository class — no `*ReadSql.ts` / `*WriteSql.ts` sibling files exist. See `docs/systems/database-schema.md` for the full repository table and SQL convention.
+- `repositories/`: 20 domain-owned Repository classes + `index.ts` (instance + type re-exports only). All SQL is inlined as `private` methods on each Repository class — no `*ReadSql.ts` / `*WriteSql.ts` sibling files exist. `ErrorLogRepository` is the one exception: it is a thin shim used by `logger.ts` to insert into `error_logs` without creating a circular import. See `docs/systems/database-schema.md` for the full repository table and SQL convention.
 
 ### `utils/discord`
 

@@ -174,6 +174,49 @@ export class PersonalMemoryRepository implements IRepository<PersonalMemoryExpor
   }
 
   /**
+   * Batch-inserts multiple personal memories for a user in a single transaction.
+   * All rows share the same userId, personaLineageId, and tags.
+   * Rolls back all inserts if any row fails (atomicity guarantee).
+   *
+   * @param userId           - Internal user DB ID
+   * @param personaLineageId - Persona lineage scope for all memories
+   * @param memories         - Array of content strings to insert
+   * @param tags             - Optional classification tags applied to all memories
+   * @returns true on full success, false if the transaction was rolled back
+   */
+  async addBatch(userId: number, personaLineageId: number, memories: string[], tags: string[] = []): Promise<boolean> {
+    if (memories.length === 0) return true;
+
+    try {
+      await sql.transaction(async (tx) => {
+        for (const memory of memories) {
+          await tx`
+            INSERT INTO personal_memories (user_id, persona_lineage_id, content, tags)
+            VALUES (${userId}, ${personaLineageId}, ${memory}, ${sql.array(tags)})
+          `;
+        }
+      });
+      return true;
+    } catch (error) {
+      const context: ErrorContext = {
+        userId,
+        errorType: "DatabaseInsertError",
+        metadata: {
+          operation: "addBatchPersonalMemories",
+          personaLineageId,
+          insertCount: memories.length,
+        },
+      };
+      await log.error(
+        `Error batch-inserting personal memories for user ${userId} in lineage ${personaLineageId}`,
+        error,
+        context,
+      );
+      return false;
+    }
+  }
+
+  /**
    * Inserts a new personal memory for a user.
    * Personal memories have no associated server-level cache to invalidate;
    * they are loaded fresh per context build via loadForUserLineage.

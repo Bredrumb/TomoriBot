@@ -19,6 +19,7 @@ import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import { personaRepository, llmModelRepo } from "@/utils/db/repositories";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
+import { safeReply } from "@/utils/discord/safeReply";
 import type { UserRow } from "../../types/db/schema";
 import { checkVideoQuota, incrementVideoQuota } from "../../utils/quota/videoQuotaManager";
 import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
@@ -484,14 +485,17 @@ export async function execute(
       .setColor(ColorCode.ERROR);
 
     if (modalSubmitInteraction) {
-      await modalSubmitInteraction.editReply({ embeds: [errorEmbed] }).catch(() => {});
+      await safeReply(modalSubmitInteraction.editReply({ embeds: [errorEmbed] }), "video error embed");
     } else {
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "commands.generate.video.error_title",
-        descriptionKey: "commands.generate.video.generic_error_description",
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      await safeReply(
+        replyInfoEmbed(interaction, locale, {
+          titleKey: "commands.generate.video.error_title",
+          descriptionKey: "commands.generate.video.generic_error_description",
+          color: ColorCode.ERROR,
+          flags: MessageFlags.Ephemeral,
+        }),
+        "video fallback error embed",
+      );
     }
   }
 }

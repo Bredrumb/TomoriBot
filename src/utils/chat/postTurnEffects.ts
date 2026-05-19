@@ -156,11 +156,11 @@ async function writeShortTermMemory(context: ChatTurnContext, result: Generation
 
     const personaIds = [
       ...new Set(
-        result.personaResponses.map((response) => response.tomoriId).filter((id): id is number => id !== undefined),
+        result.personaResponses.map((response) => response.personaId).filter((id): id is number => id !== undefined),
       ),
     ];
-    for (const tomoriId of personaIds.length > 0 ? personaIds : [null]) {
-      const response = result.personaResponses.find((entry) => entry.tomoriId === tomoriId);
+    for (const personaId of personaIds.length > 0 ? personaIds : [null]) {
+      const response = result.personaResponses.find((entry) => entry.personaId === personaId);
       storeShortTermMemory(
         context.userDiscId,
         context.channel.id,
@@ -168,7 +168,7 @@ async function writeShortTermMemory(context: ChatTurnContext, result: Generation
         context.isDMChannel ? "DM" : context.serverDiscId,
         context.serverName,
         context.channelName,
-        tomoriId,
+        personaId,
         response?.personaLineageId ?? null,
         context.channel.isThread() ? context.channel.parentId : null,
       );

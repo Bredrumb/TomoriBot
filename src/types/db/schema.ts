@@ -957,7 +957,7 @@ export const errorLogSchema = z.object({
 export type ErrorLogRow = z.infer<typeof errorLogSchema>;
 
 export interface ErrorContext {
-  tomoriId?: number | null;
+  personaId?: number | null;
   userId?: number | null;
   serverId?: number | null; // Database ID only - use metadata for Discord snowflakes
   errorType?: string;

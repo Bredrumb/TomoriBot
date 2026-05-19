@@ -271,7 +271,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id ?? null,
-      tomoriId: tomoriState?.persona_id ?? null,
+      personaId: tomoriState?.persona_id ?? null,
       errorType: "CommandExecutionError",
       metadata: { command: "config mcp add" },
     };

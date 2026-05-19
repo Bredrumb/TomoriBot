@@ -170,7 +170,7 @@ export async function execute(
       const context: ErrorContext = {
         userId: userData.user_id,
         serverId: tomoriState.server_id,
-        tomoriId: null,
+        personaId: null,
         errorType: "DatabaseDeleteError",
         metadata: {
           command: "config mcp remove",
@@ -207,7 +207,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: null,
-      tomoriId: null,
+      personaId: null,
       errorType: "CommandExecutionError",
       metadata: { command: "config mcp remove" },
     };

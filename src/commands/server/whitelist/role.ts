@@ -55,7 +55,7 @@ export async function execute(
   const errorContext: ErrorContext = {
     userId: user.user_id,
     serverId: null,
-    tomoriId: null,
+    personaId: null,
   };
 
   try {
@@ -84,7 +84,7 @@ export async function execute(
     }
 
     errorContext.serverId = tomoriState.server_id;
-    errorContext.tomoriId = tomoriState.persona_id;
+    errorContext.personaId = tomoriState.persona_id;
 
     // 3. Get command parameters
     const role = interaction.options.getRole("role", true);

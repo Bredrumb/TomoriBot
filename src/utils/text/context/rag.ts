@@ -1,6 +1,5 @@
 import { isRagAvailable } from "@/utils/db/ragAvailability";
-import { llmModelRepo, serverMemoryRepository } from "@/utils/db/repositories";
-import { formatRetrievedChunksForPrompt, retrieveRelevantDocumentChunks } from "@/utils/documents/documentService";
+import { llmModelRepo, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { resolveCapabilityCredentials, getResolvedCapabilityModelId } from "@/utils/provider/credentialResolver";
 import { memoryGuard } from "@/utils/security/rateLimiter";
@@ -70,9 +69,9 @@ export async function buildServerDocumentContextItem(params: {
       return null;
     }
 
-    const chunks = await retrieveRelevantDocumentChunks({
+    const chunks = await ragRepository.retrieveRelevantChunks({
       serverId: tomoriState.server_id,
-      tomoriId: tomoriState.persona_id ?? null,
+      personaId: tomoriState.persona_id ?? null,
       query: queryText,
       embeddingModel,
       apiKey: creds.apiKey,
@@ -80,7 +79,7 @@ export async function buildServerDocumentContextItem(params: {
       minSimilarity: DOCUMENT_MIN_SIMILARITY,
     });
 
-    const documentContext = formatRetrievedChunksForPrompt(chunks);
+    const documentContext = ragRepository.formatChunksForPrompt(chunks);
     if (!documentContext) {
       return null;
     }

@@ -234,7 +234,7 @@ export async function execute(
 
     if (!success) {
       const context: ErrorContext = {
-        tomoriId: personaId,
+        personaId: personaId,
         userId: userData.user_id,
         serverId: selectedPersona.server_id,
         errorType: "DatabaseUpdateError",

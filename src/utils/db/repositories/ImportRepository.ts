@@ -103,7 +103,7 @@ export class ImportRepository {
   /** Returns the main persona persona_id and persona_lineage_id for a server. */
   private async resolveMainTomoriScope(
     serverId: number,
-  ): Promise<{ tomoriId: number; personaLineageId: number } | null> {
+  ): Promise<{ personaId: number; personaLineageId: number } | null> {
     const mainPersonaRows = await sql<Array<{ persona_id: number; persona_lineage_id: number | string | bigint }>>`
       SELECT persona_id, persona_lineage_id
       FROM personas
@@ -119,7 +119,7 @@ export class ImportRepository {
     const personaLineageId = this.coerceLineageId(mainTomori.persona_lineage_id);
     if (typeof personaLineageId !== "number" || !Number.isFinite(personaLineageId)) return null;
 
-    return { tomoriId: mainTomori.persona_id, personaLineageId };
+    return { personaId: mainTomori.persona_id, personaLineageId };
   }
 
   // ── private SQL operations (no cache) ─────────────────────────────────────
@@ -427,7 +427,7 @@ export class ImportRepository {
   private async sqlImportServerMemories(
     serverDiscId: string,
     memories: MemoryItem[],
-    target: { mode: "persona"; tomoriId?: number } | { mode: "global" },
+    target: { mode: "persona"; personaId?: number } | { mode: "global" },
   ): Promise<ImportResult> {
     try {
       const serverId = await this.resolveServerId(serverDiscId);
@@ -446,7 +446,7 @@ export class ImportRepository {
       let targetPersonaLineageId: number | null = null;
 
       if (target.mode === "persona") {
-        if (target.tomoriId) {
+        if (target.personaId) {
           const [targetPersona] = await sql<
             Array<{
               persona_id: number;
@@ -456,7 +456,7 @@ export class ImportRepository {
             SELECT persona_id, persona_lineage_id
             FROM personas
             WHERE server_id = ${serverId}
-              AND persona_id = ${target.tomoriId}
+              AND persona_id = ${target.personaId}
             LIMIT 1
           `;
           if (!targetPersona) {
@@ -466,7 +466,7 @@ export class ImportRepository {
           targetPersonaLineageId = this.coerceLineageId(targetPersona.persona_lineage_id);
         } else {
           const mainScope = await this.resolveMainTomoriScope(serverId);
-          insertTomoriId = mainScope?.tomoriId ?? null;
+          insertTomoriId = mainScope?.personaId ?? null;
           targetPersonaLineageId = mainScope?.personaLineageId ?? null;
         }
       } else {
@@ -558,14 +558,14 @@ export class ImportRepository {
   private async sqlImportServerData(
     serverDiscId: string,
     importData: ServerExportData,
-    tomoriId?: number,
+    personaId?: number,
   ): Promise<ImportResult> {
     const configResult = await this.sqlImportServerConfig(serverDiscId, importData.config);
     if (!configResult.success) return configResult;
 
     const memoriesResult = await this.sqlImportServerMemories(serverDiscId, importData.server_memories, {
       mode: "persona",
-      tomoriId,
+      personaId,
     });
     if (!memoriesResult.success) return memoriesResult;
 
@@ -622,12 +622,12 @@ export class ImportRepository {
    * Imports server memories from an export payload.
    * @param serverDiscId - Discord server snowflake
    * @param memories - Array of memory items to import
-   * @param target - Target scope: persona (with optional tomoriId) or global
+   * @param target - Target scope: persona (with optional personaId) or global
    */
   async importServerMemories(
     serverDiscId: string,
     memories: MemoryItem[],
-    target: { mode: "persona"; tomoriId?: number } | { mode: "global" },
+    target: { mode: "persona"; personaId?: number } | { mode: "global" },
   ): Promise<ImportResult> {
     const result = await this.sqlImportServerMemories(serverDiscId, memories, target);
     if (result.success) invalidateTomoriStateCache(serverDiscId);
@@ -654,10 +654,14 @@ export class ImportRepository {
    * Imports the full server data bundle (config + memories).
    * @param serverDiscId - Discord server snowflake
    * @param importData - ServerExportData payload
-   * @param tomoriId - Optional specific tomori ID to scope memories
+   * @param personaId - Optional specific tomori ID to scope memories
    */
-  async importServerData(serverDiscId: string, importData: ServerExportData, tomoriId?: number): Promise<ImportResult> {
-    const result = await this.sqlImportServerData(serverDiscId, importData, tomoriId);
+  async importServerData(
+    serverDiscId: string,
+    importData: ServerExportData,
+    personaId?: number,
+  ): Promise<ImportResult> {
+    const result = await this.sqlImportServerData(serverDiscId, importData, personaId);
     if (result.success) invalidateTomoriStateCache(serverDiscId);
     return result;
   }

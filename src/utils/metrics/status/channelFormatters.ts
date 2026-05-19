@@ -118,8 +118,8 @@ export async function formatWhitelistPersonaEntries(
   }
 
   const lines = await Promise.all(
-    Array.from(channelsByPersona.entries()).map(async ([tomoriId, channelIds], index) => {
-      const personaName = personaNameMap.get(tomoriId) ?? `ID:${tomoriId}`;
+    Array.from(channelsByPersona.entries()).map(async ([personaId, channelIds], index) => {
+      const personaName = personaNameMap.get(personaId) ?? `ID:${personaId}`;
       const sortedChannelIds = [...new Set(channelIds)].sort((left, right) => left.localeCompare(right));
       const channelsValue =
         sortedChannelIds.length <= MAX_ITEMS_DISPLAY

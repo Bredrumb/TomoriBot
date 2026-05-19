@@ -33,7 +33,7 @@ export async function execute(
   const errorContext: ErrorContext = {
     userId: userData.user_id,
     serverId: null,
-    tomoriId: null,
+    personaId: null,
     metadata: {
       command: "personal spotlight manage",
       guildId: interaction.guildId,
@@ -76,7 +76,7 @@ export async function execute(
     }
 
     errorContext.serverId = tomoriState.server_id;
-    errorContext.tomoriId = tomoriState.persona_id;
+    errorContext.personaId = tomoriState.persona_id;
 
     const personas = allPersonasRaw.filter(
       (persona): persona is PersonaWithId => typeof persona.persona_id === "number",

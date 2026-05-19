@@ -133,7 +133,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id, // Use optional chaining
-      tomoriId: tomoriState?.persona_id, // Use optional chaining
+      personaId: tomoriState?.persona_id, // Use optional chaining
       errorType: "CommandExecutionError",
       metadata: {
         command: "teach nickname",

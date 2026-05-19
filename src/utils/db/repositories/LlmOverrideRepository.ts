@@ -215,16 +215,16 @@ export class LlmOverrideRepository {
    * Upserts a persona-level LLM override in persona_configs.
    * Creates the persona_configs row if it does not yet exist.
    *
-   * @param tomoriId - The persona's persona_id
+   * @param personaId - The persona's persona_id
    * @param llmId    - LLM ID to set as the override, or null to clear it
    * @param options  - Optional cache invalidation scope
    */
   async setPersonaLlmOverride(
-    tomoriId: number,
+    personaId: number,
     llmId: number | null,
     options: LlmOverrideCacheOptions = {},
   ): Promise<boolean> {
-    const ok = await this.writePersonaOverrideSql(tomoriId, llmId);
+    const ok = await this.writePersonaOverrideSql(personaId, llmId);
     if (ok && options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
     return ok;
   }
@@ -530,17 +530,17 @@ export class LlmOverrideRepository {
    * Raw SQL upsert for a persona LLM override in persona_configs. No cache invalidation.
    * Called directly by restoreOverridesFromSnapshot to avoid per-override cache thrashing.
    */
-  private async writePersonaOverrideSql(tomoriId: number, llmId: number | null): Promise<boolean> {
+  private async writePersonaOverrideSql(personaId: number, llmId: number | null): Promise<boolean> {
     try {
       await sql`
         INSERT INTO persona_configs (persona_id, llm_id)
-        VALUES (${tomoriId}, ${llmId})
+        VALUES (${personaId}, ${llmId})
         ON CONFLICT (persona_id)
         DO UPDATE SET llm_id = EXCLUDED.llm_id, updated_at = CURRENT_TIMESTAMP
       `;
       return true;
     } catch (error) {
-      log.error(`Error setting persona LLM override for persona_id ${tomoriId}:`, error);
+      log.error(`Error setting persona LLM override for persona_id ${personaId}:`, error);
       return false;
     }
   }

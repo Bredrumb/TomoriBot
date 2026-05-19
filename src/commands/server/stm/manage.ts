@@ -117,7 +117,7 @@ export async function execute(
     }
 
     for (const entry of entriesToClear) {
-      clearShortTermMemoryForServerChannel(interaction.guildId, entry.channelId, entry.tomoriId);
+      clearShortTermMemoryForServerChannel(interaction.guildId, entry.channelId, entry.personaId);
     }
 
     await replyInfoEmbed(modalInteraction, locale, {
@@ -165,8 +165,8 @@ function getActiveServerStmEntries(guildId: string, personas: TomoriState[], loc
     .map((entry) => ({
       ...entry,
       personaName:
-        entry.tomoriId != null
-          ? (personaNameById.get(entry.tomoriId) ?? `${localizer(locale, "general.unknown")} (${entry.tomoriId})`)
+        entry.personaId != null
+          ? (personaNameById.get(entry.personaId) ?? `${localizer(locale, "general.unknown")} (${entry.personaId})`)
           : localizer(locale, "commands.server.stm.manage.unscoped_label"),
     }))
     .sort((a, b) => b.lastUpdated - a.lastUpdated);
@@ -230,7 +230,7 @@ function buildEntryDescription(
 }
 
 function getEntryValue(entry: ShortTermMemoryEntry): string {
-  return `${entry.channelId}:${entry.tomoriId ?? "none"}`;
+  return `${entry.channelId}:${entry.personaId ?? "none"}`;
 }
 
 function collectCheckedValues(multiValues: Record<string, string[]> | undefined, groupCount: number): Set<string> {

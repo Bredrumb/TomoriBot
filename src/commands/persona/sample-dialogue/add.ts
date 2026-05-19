@@ -368,7 +368,7 @@ export async function execute(
       const context: ErrorContext = {
         userId: userData.user_id,
         serverId: tomoriState.server_id, // Direct access
-        tomoriId: selectedPersona.persona_id,
+        personaId: selectedPersona.persona_id,
         errorType: "DatabaseValidationError",
         metadata: {
           command: "teach sampledialogue",
@@ -425,7 +425,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
+      personaId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "teach sampledialogue",

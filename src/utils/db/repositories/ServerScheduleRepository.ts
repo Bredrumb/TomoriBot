@@ -63,7 +63,7 @@ export type ReminderSelectionRow = {
 interface RandomTriggerData {
   serverId: number;
   channelDiscId: string;
-  tomoriId: number | null;
+  personaId: number | null;
   timerHours: number;
   randomOffsetRange: number | null;
   chancePercent: number;
@@ -219,14 +219,14 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
    *
    * @param serverId      - Internal server DB ID
    * @param channelDiscId - Discord channel snowflake
-   * @param tomoriId      - Persona's persona_id
+   * @param personaId      - Persona's persona_id
    */
   async getTriggerByPersonaAndChannel(
     serverId: number,
     channelDiscId: string,
-    tomoriId: number,
+    personaId: number,
   ): Promise<RandomTriggerRow | null> {
-    return this.sqlGetRandomTriggerByPersonaAndChannel(serverId, channelDiscId, tomoriId);
+    return this.sqlGetRandomTriggerByPersonaAndChannel(serverId, channelDiscId, personaId);
   }
 
   // ── random trigger writes ──────────────────────────────────────────────────
@@ -840,7 +840,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
   private async sqlGetRandomTriggerByPersonaAndChannel(
     serverId: number,
     channelDiscId: string,
-    tomoriId: number,
+    personaId: number,
   ): Promise<RandomTriggerRow | null> {
     try {
       // 1. Find matching trigger for the specific named persona in this channel
@@ -848,7 +848,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
         SELECT * FROM random_triggers
         WHERE server_id = ${serverId}
           AND channel_disc_id = ${channelDiscId}
-          AND persona_id = ${tomoriId}
+          AND persona_id = ${personaId}
         LIMIT 1
       `;
 
@@ -857,13 +857,13 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
       // 2. Validate and return
       const parsed = randomTriggerSchema.safeParse(row);
       if (!parsed.success) {
-        log.warn(`Invalid random trigger row for persona ${tomoriId} in channel ${channelDiscId}:`, parsed.error);
+        log.warn(`Invalid random trigger row for persona ${personaId} in channel ${channelDiscId}:`, parsed.error);
         return null;
       }
       return parsed.data;
     } catch (error) {
       log.error(
-        `Error fetching random trigger for server ${serverId}, channel ${channelDiscId}, persona ${tomoriId}:`,
+        `Error fetching random trigger for server ${serverId}, channel ${channelDiscId}, persona ${personaId}:`,
         error,
       );
       return null;
@@ -892,7 +892,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
         ) VALUES (
           ${data.serverId},
           ${data.channelDiscId},
-          ${data.tomoriId},
+          ${data.personaId},
           ${data.timerHours},
           ${data.randomOffsetRange},
           ${data.chancePercent},

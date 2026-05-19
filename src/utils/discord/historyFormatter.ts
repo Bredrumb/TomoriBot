@@ -108,7 +108,7 @@ export function formatMessagesForExtraction(
   const lines: string[] = [];
   const detectedTomoriIds = new Set<number>();
 
-  // Build a lowercase nickname → tomoriId map for persona detection
+  // Build a lowercase nickname → personaId map for persona detection
   const nicknameToTomoriId = new Map<string, number>();
   for (const persona of serverPersonas) {
     if (persona.persona_id !== undefined) {

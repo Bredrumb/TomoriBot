@@ -118,13 +118,13 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
    * Used for duplicate-name checking before insert.
    *
    * @param serverId     - Internal server DB ID
-   * @param tomoriId     - null = serverwide scope; non-null = per-persona scope
+   * @param personaId     - null = serverwide scope; non-null = per-persona scope
    * @param documentName - Document name to check
    */
-  async documentExistsByName(serverId: number, tomoriId: number | null, documentName: string): Promise<boolean> {
+  async documentExistsByName(serverId: number, personaId: number | null, documentName: string): Promise<boolean> {
     try {
       const rows =
-        tomoriId === null
+        personaId === null
           ? await sql`
               SELECT document_id FROM documents
               WHERE server_id = ${serverId}
@@ -135,7 +135,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
           : await sql`
               SELECT document_id FROM documents
               WHERE server_id = ${serverId}
-                AND persona_id = ${tomoriId}
+                AND persona_id = ${personaId}
                 AND document_name = ${documentName}
               LIMIT 1
             `;
@@ -150,12 +150,12 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
    * Returns the count of documents in the given server + scope.
    *
    * @param serverId - Internal server DB ID
-   * @param tomoriId - null = serverwide scope; non-null = per-persona scope
+   * @param personaId - null = serverwide scope; non-null = per-persona scope
    */
-  async countDocumentsScoped(serverId: number, tomoriId: number | null): Promise<number> {
+  async countDocumentsScoped(serverId: number, personaId: number | null): Promise<number> {
     try {
       const [row] =
-        tomoriId === null
+        personaId === null
           ? await sql<[{ doc_count: string | number }]>`
               SELECT COUNT(*) as doc_count
               FROM documents
@@ -166,7 +166,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
               SELECT COUNT(*) as doc_count
               FROM documents
               WHERE server_id = ${serverId}
-                AND persona_id = ${tomoriId}
+                AND persona_id = ${personaId}
             `;
       return Number(row?.doc_count || 0);
     } catch (error) {
@@ -179,12 +179,12 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
    * Returns the count of document chunks across all documents in the given server + scope.
    *
    * @param serverId - Internal server DB ID
-   * @param tomoriId - null = serverwide scope; non-null = per-persona scope
+   * @param personaId - null = serverwide scope; non-null = per-persona scope
    */
-  async countChunksScoped(serverId: number, tomoriId: number | null): Promise<number> {
+  async countChunksScoped(serverId: number, personaId: number | null): Promise<number> {
     try {
       const [row] =
-        tomoriId === null
+        personaId === null
           ? await sql<[{ chunk_count: string | number }]>`
               SELECT COUNT(*) as chunk_count
               FROM document_chunks dc
@@ -197,7 +197,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
               FROM document_chunks dc
               JOIN documents d ON d.document_id = dc.document_id
               WHERE d.server_id = ${serverId}
-                AND d.persona_id = ${tomoriId}
+                AND d.persona_id = ${personaId}
             `;
       return Number(row?.chunk_count || 0);
     } catch (error) {
@@ -212,12 +212,12 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
    * since RAG retrieval includes shared docs.
    *
    * @param serverId - Internal server DB ID
-   * @param tomoriId - null = serverwide only; non-null = persona OR serverwide
+   * @param personaId - null = serverwide only; non-null = persona OR serverwide
    */
-  async hasDocumentInScope(serverId: number, tomoriId: number | null): Promise<boolean> {
+  async hasDocumentInScope(serverId: number, personaId: number | null): Promise<boolean> {
     try {
       const rows =
-        tomoriId === null
+        personaId === null
           ? await sql`
               SELECT document_id FROM documents
               WHERE server_id = ${serverId}
@@ -227,7 +227,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
           : await sql`
               SELECT document_id FROM documents
               WHERE server_id = ${serverId}
-                AND (persona_id = ${tomoriId} OR persona_id IS NULL)
+                AND (persona_id = ${personaId} OR persona_id IS NULL)
               LIMIT 1
             `;
       return rows.length > 0;
@@ -269,11 +269,66 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
   }
 
   /**
+   * Batch-inserts multiple server memories in a single transaction.
+   * All rows share the same serverId, personaId, personaLineageId, userId, and tags.
+   * Rolls back all inserts if any row fails (atomicity guarantee).
+   * Cache invalidation is the caller's responsibility after a successful return.
+   *
+   * @param serverId         - Internal server DB ID
+   * @param personaId         - Internal tomori DB ID
+   * @param personaLineageId - Persona lineage scope for all memories
+   * @param taughtByUserId   - Internal DB ID of the teaching user
+   * @param memories         - Array of content strings to insert
+   * @param tags             - Optional classification tags applied to all memories
+   * @returns true on full success, false if the transaction was rolled back
+   */
+  async addBatch(
+    serverId: number,
+    personaId: number,
+    personaLineageId: number,
+    taughtByUserId: number,
+    memories: string[],
+    tags: string[] = [],
+  ): Promise<boolean> {
+    if (memories.length === 0) return true;
+
+    try {
+      await sql.transaction(async (tx) => {
+        for (const memory of memories) {
+          await tx`
+            INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, tags)
+            VALUES (${serverId}, ${personaId}, ${personaLineageId}, ${taughtByUserId}, ${memory}, ${sql.array(tags)})
+          `;
+        }
+      });
+      return true;
+    } catch (error) {
+      const context: ErrorContext = {
+        serverId,
+        personaId,
+        userId: taughtByUserId,
+        errorType: "DatabaseInsertError",
+        metadata: {
+          operation: "addBatchServerMemories",
+          personaLineageId,
+          insertCount: memories.length,
+        },
+      };
+      await log.error(
+        `Error batch-inserting server memories for server ${serverId} tomori ${personaId}`,
+        error,
+        context,
+      );
+      return false;
+    }
+  }
+
+  /**
    * Inserts a new server memory taught by Tomori.
    * Invalidates the tomori state cache so the next context build reads the new memory.
    *
    * @param serverId        - Internal server DB ID
-   * @param tomoriId        - Internal tomori DB ID
+   * @param personaId        - Internal tomori DB ID
    * @param personaLineageId - Persona lineage the memory belongs to
    * @param taughtByUserId  - Internal DB ID of the user who triggered the memory
    * @param content         - Memory content string
@@ -283,7 +338,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
    */
   async add(
     serverId: number,
-    tomoriId: number,
+    personaId: number,
     personaLineageId: number,
     taughtByUserId: number,
     content: string,
@@ -291,7 +346,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
     serverDiscId?: string,
   ): Promise<ServerMemoryRow | null> {
     log.info(
-      `Tomori is attempting to self-learn a server memory for server ID ${serverId}, tomori ID ${tomoriId}, lineage ${personaLineageId} (triggered by user ID ${taughtByUserId}): "${content.substring(0, 50)}..."`,
+      `Tomori is attempting to self-learn a server memory for server ID ${serverId}, tomori ID ${personaId}, lineage ${personaLineageId} (triggered by user ID ${taughtByUserId}): "${content.substring(0, 50)}..."`,
     );
 
     const contentValidation = validateMemoryContent(content);
@@ -308,7 +363,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
       return null;
     }
 
-    const row = await this.addServerMemoryRow(serverId, tomoriId, personaLineageId, taughtByUserId, content, tags);
+    const row = await this.addServerMemoryRow(serverId, personaId, personaLineageId, taughtByUserId, content, tags);
     if (row && serverDiscId) invalidateTomoriStateCache(serverDiscId);
     return row;
   }
@@ -441,14 +496,14 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
    * Load non-history documents for a server/tomori scope.
    *
    * @param serverId - Internal server DB ID
-   * @param tomoriId - Null = server-wide (shared) scope; non-null = per-persona scope
+   * @param personaId - Null = server-wide (shared) scope; non-null = per-persona scope
    * @returns Array of document id/name rows
    */
   async loadDocuments(
     serverId: number,
-    tomoriId: number | null,
+    personaId: number | null,
   ): Promise<Array<{ document_id: number; document_name: string }>> {
-    if (tomoriId === null) {
+    if (personaId === null) {
       return await sql<Array<{ document_id: number; document_name: string }>>`
         SELECT document_id, document_name
         FROM documents
@@ -461,7 +516,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
       SELECT document_id, document_name
       FROM documents
       WHERE server_id = ${serverId}
-        AND persona_id = ${tomoriId}
+        AND persona_id = ${personaId}
       ORDER BY created_at DESC
     `;
   }
@@ -471,12 +526,12 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
    *
    * @param documentId - Primary key of the document
    * @param serverId   - Internal server DB ID (ownership guard)
-   * @param tomoriId   - Null = server-wide scope; non-null = per-persona scope
+   * @param personaId   - Null = server-wide scope; non-null = per-persona scope
    * @returns Deleted document_name or null when not found
    */
-  async removeDocument(documentId: number, serverId: number, tomoriId: number | null): Promise<string | null> {
+  async removeDocument(documentId: number, serverId: number, personaId: number | null): Promise<string | null> {
     const rows =
-      tomoriId === null
+      personaId === null
         ? await sql`
             DELETE FROM documents
             WHERE document_id = ${documentId}
@@ -488,7 +543,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
             DELETE FROM documents
             WHERE document_id = ${documentId}
               AND server_id = ${serverId}
-              AND persona_id = ${tomoriId}
+              AND persona_id = ${personaId}
             RETURNING document_name
           `;
     return (rows[0]?.document_name as string | undefined) ?? null;
@@ -498,14 +553,14 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
    * Load history-sourced documents for a server/tomori scope.
    *
    * @param serverId - Internal server DB ID
-   * @param tomoriId - Null = server-wide scope; non-null = per-persona scope
+   * @param personaId - Null = server-wide scope; non-null = per-persona scope
    * @returns Array of document id/name rows
    */
   async loadHistoryDocuments(
     serverId: number,
-    tomoriId: number | null,
+    personaId: number | null,
   ): Promise<Array<{ document_id: number; document_name: string }>> {
-    if (tomoriId === null) {
+    if (personaId === null) {
       return await sql<Array<{ document_id: number; document_name: string }>>`
         SELECT document_id, document_name
         FROM documents
@@ -519,7 +574,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
       SELECT document_id, document_name
       FROM documents
       WHERE server_id = ${serverId}
-        AND persona_id = ${tomoriId}
+        AND persona_id = ${personaId}
         AND source_type = 'history'
       ORDER BY created_at DESC
     `;
@@ -530,12 +585,12 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
    *
    * @param documentId - Primary key of the document
    * @param serverId   - Internal server DB ID (ownership guard)
-   * @param tomoriId   - Null = server-wide scope; non-null = per-persona scope
+   * @param personaId   - Null = server-wide scope; non-null = per-persona scope
    * @returns Deleted document_name or null when not found
    */
-  async removeHistoryDocument(documentId: number, serverId: number, tomoriId: number | null): Promise<string | null> {
+  async removeHistoryDocument(documentId: number, serverId: number, personaId: number | null): Promise<string | null> {
     const rows =
-      tomoriId === null
+      personaId === null
         ? await sql`
             DELETE FROM documents
             WHERE document_id = ${documentId}
@@ -548,7 +603,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
             DELETE FROM documents
             WHERE document_id = ${documentId}
               AND server_id = ${serverId}
-              AND persona_id = ${tomoriId}
+              AND persona_id = ${personaId}
               AND source_type = 'history'
             RETURNING document_name
           `;
@@ -622,7 +677,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
 
   private async addServerMemoryRow(
     serverId: number,
-    tomoriId: number,
+    personaId: number,
     personaLineageId: number,
     taughtByUserId: number,
     content: string,
@@ -631,7 +686,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
     try {
       const [newMemory] = await sql`
         INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, tags)
-        VALUES (${serverId}, ${tomoriId}, ${personaLineageId}, ${taughtByUserId}, ${content}, ${sql.array(tags)})
+        VALUES (${serverId}, ${personaId}, ${personaLineageId}, ${taughtByUserId}, ${content}, ${sql.array(tags)})
         RETURNING *
       `;
 
@@ -639,7 +694,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
       if (!validatedMemory.success) {
         const context: ErrorContext = {
           serverId,
-          tomoriId,
+          personaId,
           userId: taughtByUserId,
           errorType: "SchemaValidationError",
           metadata: {
@@ -657,13 +712,13 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
       }
 
       log.success(
-        `Tomori successfully saved a new server memory (ID: ${validatedMemory.data.server_memory_id}) for server ID ${serverId}, tomori ID ${tomoriId}, taught by user ID ${taughtByUserId}.`,
+        `Tomori successfully saved a new server memory (ID: ${validatedMemory.data.server_memory_id}) for server ID ${serverId}, tomori ID ${personaId}, taught by user ID ${taughtByUserId}.`,
       );
       return validatedMemory.data;
     } catch (error) {
       const context: ErrorContext = {
         serverId,
-        tomoriId,
+        personaId,
         userId: taughtByUserId,
         errorType: "DatabaseInsertError",
         metadata: {

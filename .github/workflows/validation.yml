@@ -20,13 +20,16 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_DB: tomodb
+          # Named `tomodb_test` to satisfy `tests/regression/db/setup/testDb.ts`'s
+          # DB_TESTS_AVAILABLE gate, which only enables the DB regression suites
+          # when POSTGRES_DB matches TEST_POSTGRES_DB (default "tomodb_test").
+          POSTGRES_DB: tomodb_test
           POSTGRES_USER: tomori
           POSTGRES_PASSWORD: tomori_ci_password
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U tomori -d tomodb" --health-interval 10s
+          --health-cmd "pg_isready -U tomori -d tomodb_test" --health-interval 10s
           --health-timeout 5s --health-retries 5
 
     env:
@@ -34,7 +37,7 @@ jobs:
       POSTGRES_PORT: 5432
       POSTGRES_USER: tomori
       POSTGRES_PASSWORD: tomori_ci_password
-      POSTGRES_DB: tomodb
+      POSTGRES_DB: tomodb_test
       CRYPTO_SECRET: ci_validation_crypto_secret
       RUN_ENV: development
 
@@ -56,6 +59,12 @@ jobs:
       - name: Run linting and type checks
         run: bun run lint && bun run check
 
+      - name: Audit inline SQL outside repositories
+        run: bun run scripts/audit_sql.ts
+        # Fails the check if any non-exempt SQL appears outside src/utils/db/repositories/.
+        # See plans/refactor/phases/regression-checks/phase-6-regressions.md for the
+        # tx`` regex fix that made this audit complete.
+
       - name: Check schema drift
         run: bun run check-schema
 
@@ -74,3 +83,8 @@ jobs:
 
       - name: Run lifecycle validation
         run: bun run vl-db
+
+      - name: Run unit/integration tests
+        run: bun run test
+        # Exercises the repository layer, DB error paths, and the post-Phase-7
+        # logger → ErrorLogRepository → sql chain against the CI postgres service.
