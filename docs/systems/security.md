@@ -51,8 +51,8 @@ Main encrypted storage locations:
 
 Primary files/scripts:
 - `src/utils/security/keyManager.ts`
-- `scripts/maintenance/auditKeyVersions.ts` (`bun run audit-keys`)
-- `scripts/maintenance/rotateAllKeys.ts` (`bun run rotate-keys`)
+- `scripts/devtools/auditKeyVersions.ts` (`bun run audit-keys`)
+- `scripts/devtools/rotateAllKeys.ts` (`bun run rotate-keys`)
 
 Environment key model:
 - Legacy: `CRYPTO_SECRET` (treated as version 1 when needed)

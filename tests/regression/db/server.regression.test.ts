@@ -5,7 +5,7 @@
  * loadTomoriState implicitly tests server row loading; this file focuses on
  * server-scoped operations that don't fit other domain files.
  *
- * Requires: POSTGRES_DB=tomodb_test (see docs/guides/testing-db-changes.md)
+ * Requires: a local Postgres connection (see docs/guides/testing-db-changes.md)
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { userRepository } from "@/utils/db/repositories";

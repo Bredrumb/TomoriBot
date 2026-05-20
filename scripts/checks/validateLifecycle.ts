@@ -32,7 +32,7 @@ const envFilePath = join(validationRoot, ".env");
 const keepArtifacts = process.env.TOMORI_VL_KEEP_ARTIFACTS === "true";
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
-  console.log("Usage: bun run validate:lifecycle");
+  console.log("Usage: bun run db:lifecycle");
   console.log("");
   console.log("Creates a disposable PostgreSQL database, runs schema/seed initialization,");
   console.log("smoke-tests DB maintenance scripts, runs nuke-db against the disposable DB,");
@@ -333,7 +333,6 @@ async function main(): Promise<void> {
     await runCommand("bun run backup:memories", ["bun", "run", "backup:memories"], commandEnv);
     await runCommand("bun run audit-keys", ["bun", "run", "audit-keys"], commandEnv);
     await runCommand("bun run rotate-keys --dry-run", ["bun", "run", "rotate-keys", "--dry-run"], commandEnv);
-    await runCommand("bun run audit-legacy-provider-paths", ["bun", "run", "audit-legacy-provider-paths"], commandEnv);
 
     section("Validating Nuke And Reinitialize");
     await appSql.close({ timeout: 1 });

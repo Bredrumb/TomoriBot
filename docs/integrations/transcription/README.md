@@ -6,7 +6,7 @@ Visible transcript posting is separate. `/speech transcripts` only controls whet
 
 ## Quick Flow
 
-1. Start the WhisperX reference server from `scripts/stt/`.
+1. Start the WhisperX reference server from `servers/stt/`.
 2. Register it with `/config custom-endpoint add` using capability `transcription` and api style `openai-compatible-transcription`.
 3. Select it with `/config model transcription`.
 

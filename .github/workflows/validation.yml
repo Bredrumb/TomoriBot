@@ -20,9 +20,6 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          # Named `tomodb_test` to satisfy `tests/regression/db/setup/testDb.ts`'s
-          # DB_TESTS_AVAILABLE gate, which only enables the DB regression suites
-          # when POSTGRES_DB matches TEST_POSTGRES_DB (default "tomodb_test").
           POSTGRES_DB: tomodb_test
           POSTGRES_USER: tomori
           POSTGRES_PASSWORD: tomori_ci_password
@@ -60,7 +57,7 @@ jobs:
         run: bun run lint && bun run check
 
       - name: Audit inline SQL outside repositories
-        run: bun run scripts/audit_sql.ts
+        run: bun run scripts/checks/audit_sql.ts
         # Fails the check if any non-exempt SQL appears outside src/utils/db/repositories/.
         # See plans/refactor/phases/regression-checks/phase-6-regressions.md for the
         # tx`` regex fix that made this audit complete.
@@ -82,9 +79,10 @@ jobs:
           fi
 
       - name: Run lifecycle validation
-        run: bun run vl-db
+        run: bun run db:lifecycle
 
       - name: Run unit/integration tests
         run: bun run test
-        # Exercises the repository layer, DB error paths, and the post-Phase-7
-        # logger → ErrorLogRepository → sql chain against the CI postgres service.
+        # runTests.ts detects POSTGRES_PASSWORD, provisions a disposable
+        # tomoribot_test_<id> database, injects TEST_DB_READY=1, and drops
+        # the database after the suite completes (or on failure).

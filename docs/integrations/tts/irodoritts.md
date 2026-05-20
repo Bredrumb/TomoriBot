@@ -1,6 +1,6 @@
 # IrodoriTTS
 
-Irodori-TTS 500M v2 is a Japanese-focused voice-cloning TTS model. It runs via a local FastAPI wrapper server in `scripts/tts/irodoritts/`.
+Irodori-TTS 500M v2 is a Japanese-focused voice-cloning TTS model. It runs via a local FastAPI wrapper server in `servers/tts/irodoritts/`.
 
 ## Why a script instead of a plain pip install
 

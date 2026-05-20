@@ -3,7 +3,7 @@
 WhisperX is the recommended beginner-friendly local transcription path.
 
 ```powershell
-cd scripts/stt
+cd servers/stt
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip

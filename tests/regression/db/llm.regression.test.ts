@@ -6,7 +6,7 @@
  *
  * LLM rows come from seed.sql — no fixture insertion needed.
  *
- * Requires: POSTGRES_DB=tomodb_test (see docs/guides/testing-db-changes.md)
+ * Requires: a local Postgres connection (see docs/guides/testing-db-changes.md)
  */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { llmModelRepo } from "@/utils/db/repositories";

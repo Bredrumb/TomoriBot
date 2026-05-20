@@ -3,16 +3,7 @@
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
     "ignoreUnknown": false,
-    "includes": [
-      "**/*",
-      "!!**/node_modules",
-      "!!**/dist",
-      "!!**/tokenizers",
-      "!!scripts/audit_sql.ts",
-      "!!scripts/clean_comments.ts",
-      "!!scripts/maintenance/cleanupSafeParse.ts",
-      "!!scripts/maintenance/redirectTomoriConfigWrites.ts"
-    ]
+    "includes": ["**/*", "!!**/node_modules", "!!**/dist", "!!**/tokenizers", "!!scripts"]
   },
   "formatter": {
     "enabled": true,

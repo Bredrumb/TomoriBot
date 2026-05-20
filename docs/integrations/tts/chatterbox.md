@@ -1,14 +1,14 @@
 # Chatterbox TTS
 
-Use `scripts/tts/chatterbox/server.py` for a local clone endpoint. It defaults to Chatterbox-Turbo, preserving bracket delivery tags and matching TomoriBot's fastest current behavior.
+Use `servers/tts/chatterbox/server.py` for a local clone endpoint. It defaults to Chatterbox-Turbo, preserving bracket delivery tags and matching TomoriBot's fastest current behavior.
 
 ```powershell
-python -m venv scripts\tts\chatterbox\.venv
-scripts\tts\chatterbox\.venv\Scripts\Activate.ps1
+python -m venv servers\tts\chatterbox\.venv
+servers\tts\chatterbox\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install numpy
-pip install -r scripts\tts\chatterbox\requirements.txt
-python scripts\tts\chatterbox\server.py
+pip install -r servers\tts\chatterbox\requirements.txt
+python servers\tts\chatterbox\server.py
 ```
 
 Register with `/config custom-endpoint add`:

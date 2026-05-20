@@ -6,7 +6,7 @@
 <div align="center">
 
   <a href="https://github.com/Bredrumb/TomoriBot">
-    <img src="img/tomoricon.png" alt="Logo" width="80" height="80">
+    <img src="assets/img/tomoricon.png" alt="Logo" width="80" height="80">
   </a>
 
 <h3 align="center">TomoriBot</h3>
@@ -43,7 +43,7 @@ English | [日本語](README_ja.md)
 
 
 <!-- PROJECT LOGO -->
-![TomoriBot Banner](img/tomobanner.png)
+![TomoriBot Banner](assets/img/tomobanner.png)
 [![Bun][Bun.sh]][Bun-url][![Discord.js][Discord.js]][Discord-url][![TypeScript][TypeScript.js]][TypeScript-url][![PostgreSQL][PostgreSQL.org]][PostgreSQL-url]
 
   
@@ -72,40 +72,40 @@ If you're enjoying TomoriBot, please consider giving her a ⭐ on GitHub or supp
 ## Feature Showcase
 
 
-![Screenshots 1](img/scs/1.png)
+![Screenshots 1](assets/img/scs/1.png)
 <h3 align="center">Agentic AI-Powered Conversation</h3>
 <p align="center">TomoriBot has LOTS of tools that allows her to go beyond just chatting, such as searching the web, setting recurrent tasks/reminders, utilizing your server's emotes/stickers, and memory options such as RAG and STM that allow her to remember context across channels and servers. </p>
 
 <br />
 
 
-![Screenshots 2](img/scs/2.png)
+![Screenshots 2](assets/img/scs/2.png)
 <h3 align="center">Complete Multimodal Input/Output</h3>
 <p align="center">TomoriBot can process images, audio, and video sent       
-  directly in Discord and generate them in return using your own local model endpoints or through API keys, all of which are encrypted inside a persistent database. Ready-to-use ComfyUI workflows and audio servers can be found inside this repo's <code>/scripts/</code> folder!</p>
+  directly in Discord and generate them in return using your own local model endpoints or through API keys, all of which are encrypted inside a persistent database. Ready-to-use ComfyUI workflows can be found in <code>assets/comfyui-workflows/</code> and local audio inference servers in <code>servers/</code>!</p>
 
 <br />
 
-![Screenshots 3](img/scs/3.png)
+![Screenshots 3](assets/img/scs/3.png)
 <h3 align="center">Multi-Persona Support</h3>
 <p align="center">TomoriBot's in-server personality, behavior, and avatar can be easily changed, created, as well as exported for others as Personas (akin to shareable AI Character Cards). Import and even transform your favorite SillyTavern cards through <code>/persona generate</code>. You can have an unlimited amount of different personas in a single server, each having their own memories and agendas. You can also orchestrate them to work with each other to do work in your server (or just mess around with each other).</p>
 
 <br />
 
 
-![Screenshots 4](img/scs/4.png)
+![Screenshots 4](assets/img/scs/4.png)
 <h3 align="center">100+ Native Commands for Configuration</h3>
 <p align="center">Everything can be managed through Discord's native slash commands and interactive UI. Completely manage personas, prompts, tweak model parameters, set up MCP tool servers, adjust permissions, configure memory, set server member rate limits, and much more! You can also ask TomoriBot directly on what she can do and what her slash commands are. Currently, a Web Dashboard is in the works for even easier management.</p>
 
 <br />
 
 
-![Screenshots 6](img/scs/6.png)
+![Screenshots 6](assets/img/scs/6.png)
 
 <h3 align="center">SillyTavern Integration (Beta)</h3>
 <p align="center">Use your favorite SillyTavern presets directly in Discord through TomoriBot which adjusts her prompt completely, just plop the .json right in through <code>st-preset</code>. Discord's new native checkbox groups for modals makes it easy to toggle nodes on and off like in SillyTavern. You can also import SillyTavern character cards directly through <code>/persona import</code> or you can modify them first with <code>/persona generate</code>.</p>
 
-![Screenshots 5](img/scs/5.png)
+![Screenshots 5](assets/img/scs/5.png)
 <h3 align="center">Lots of More Features, and Counting!</h3>
 <p align="center">A bunch of fun features that are easy to setup ranging from practical automatic greetings for new server members and cross-channel movement, to silly ones like user impersonations for some trolling. New ones are constantly in development, so please report through GitHub issues or the official Discord for any bugs (or to share any fun suggestions).</p>
 
@@ -424,9 +424,9 @@ Enable these capability flags for ChatMock:
 | `bun run nuke-db` | Drops all tables (start the bot afterwards to reinitialise). Usually used in conjunction with backups for clean installs |
 | `bun run purge-commands` | Clear all registered Discord slash commands |
 | `bun run rotate-keys` | Migrate all encrypted fields to the current key version |
-| `bun run vl-db` | Creates a disposable local PostgreSQL database and validates fresh schema initialization, backup/restore scripts, key audits, legacy-provider audit, `nuke-db`, and re-initialization |
+| `bun run db:lifecycle` | Creates a disposable local PostgreSQL database and validates fresh schema initialization, backup/restore scripts, key audits, legacy-provider audit, `nuke-db`, and re-initialization |
 
-`bun run backup` and `bun run vl-db` require PostgreSQL client tools (`pg_dump` and `psql`) in PATH. `bun run vl-db` also needs a local PostgreSQL user with permission to create and drop disposable databases.
+`bun run backup` and `bun run db:lifecycle` require PostgreSQL client tools (`pg_dump` and `psql`) in PATH. `bun run db:lifecycle` also needs a local PostgreSQL user with permission to create and drop disposable databases.
 
 ### Updating TomoriBot
 
@@ -549,7 +549,7 @@ Since TomoriBot is still in Beta, any contributions made are **greatly appreciat
 
 ### To contribute new features
 
-The TomoriBot wiki for contributors is still WIP but there are already comprehensive documentation available at `/docs/` that can help you understand TomoriBot's architecture more. Please make sure that `bun run check`, `bun run lint`, `bun run check-locales`, and `bun run vl-db` do not return any errors before doing a pull request of a new feature.
+The TomoriBot wiki for contributors is still WIP but there are already comprehensive documentation available at `/docs/` that can help you understand TomoriBot's architecture more. Please make sure that `bun run check`, `bun run lint`, `bun run check-locales`, and `bun run db:lifecycle` do not return any errors before doing a pull request of a new feature.
 
 <!-- LEGAL -->
 ## Legal & License

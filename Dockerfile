@@ -83,7 +83,7 @@ RUN bun install --frozen-lockfile --production
 COPY --chown=tomori:tomori src/ ./src/
 
 # Copy static images used by slash commands (banners)
-COPY --chown=tomori:tomori img/ ./img/
+COPY --chown=tomori:tomori assets/img/ ./assets/img/
 
 # Copy legal documents (Terms of Service, Privacy Policy)
 COPY --chown=tomori:tomori legal/ ./legal/

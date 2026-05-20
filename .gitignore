@@ -54,6 +54,7 @@ tmpclaude*
 *REFERENCES*.md
 crash*/
 .prompts/
+.antigravitycli/
 ACTIVECONTEXT.md
 GEMINI.md
 AGENTS.md

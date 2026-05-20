@@ -8,7 +8,7 @@
  * cache-invalidation assertion (write → cache cleared → next read goes to DB)"
  * acceptance criterion for #4a.
  *
- * Requires: POSTGRES_DB=tomodb_test (see docs/guides/testing-db-changes.md)
+ * Requires: a local Postgres connection (see docs/guides/testing-db-changes.md)
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { PrivacyLevel } from "@/types/db/schema";

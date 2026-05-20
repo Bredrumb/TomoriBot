@@ -19,20 +19,20 @@ Run these commands from the repo root.
 
 ```powershell
 # 1. Create and activate a virtual environment inside scripts/stt/
-python -m venv scripts\stt\.venv
-scripts\stt\.venv\Scripts\Activate.ps1
+python -m venv servers\stt\.venv
+servers\stt\.venv\Scripts\Activate.ps1
 
 # 2. Upgrade pip
 python -m pip install -U pip
 
 # 3. Install dependencies
-python -m pip install -r scripts\stt\requirements.txt
+python -m pip install -r servers\stt\requirements.txt
 
 # 4. (GPU only) Reinstall PyTorch with CUDA support — skip this for CPU-only installs
 pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124
 
 # 5. Start the server
-python scripts\stt\whisperx_server.py
+python servers\stt\whisperx_server.py
 ```
 
 > **CUDA version**: use `cu118` or `cu121` in the index URL above if your driver targets an older toolkit.

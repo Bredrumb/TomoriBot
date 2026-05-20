@@ -13,7 +13,7 @@ function resolveBackupsRoot(): string {
 }
 
 // ---------------------------------------------------------------------------
-// scripts/maintenance/backupPersonas.ts
+// scripts/devtools/backupPersonas.ts
 //   bun run backup:personas  → export ALL personas across all servers
 //
 //   For each persona: writes an import-compatible JSON file containing the

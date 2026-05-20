@@ -9,10 +9,7 @@ Closes # <!-- Replace # with issue number, or remove this line if not applicable
 - [ ] Refactor / Chore
 
 ## Quality Gates
-- [ ] `bun run check` passes
-- [ ] `bun run lint` passes
-- [ ] (If database schema changed) `bun run check-schema` and `bun run vl-db` pass
-- [ ] (If applicable) Added user-facing strings to `src/locales/en-US.ts` 
+- [ ] `bun run vl` output shows no critical failures
 - [ ] (If adding or modifying a Discord Command) Followed command patterns and conventions in [`docs/systems/command-system.md`](../docs/systems/command-system.md) 
 - [ ] No hardcoded operational limits/timeouts (use env vars, document in `.env.optional.example`)
 

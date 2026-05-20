@@ -4,7 +4,7 @@
  * Covers: loadTomoriState, loadAllPersonasForServer, loadPersonaConfigRow,
  * updateTomori.
  *
- * Requires: POSTGRES_DB=tomodb_test (see docs/guides/testing-db-changes.md)
+ * Requires: a local Postgres connection (see docs/guides/testing-db-changes.md)
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { personaRepository } from "@/utils/db/repositories";

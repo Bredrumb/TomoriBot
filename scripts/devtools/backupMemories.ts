@@ -11,7 +11,7 @@ function resolveBackupsRoot(): string {
 }
 
 // ---------------------------------------------------------------------------
-// scripts/maintenance/backupMemories.ts
+// scripts/devtools/backupMemories.ts
 //   bun run backup:memories  → export ALL personal memories across all users
 //
 //   Reads from the personal_memories table (lineage-scoped). Each user gets

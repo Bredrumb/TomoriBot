@@ -1,19 +1,19 @@
 # Qwen3-TTS
 
-Use `scripts/tts/qwen3tts/server.py` for both Qwen3-TTS 12Hz 1.7B modes. By default it starts in auto mode, which chooses the Base voice-clone model or VoiceDesign model from each request shape.
+Use `servers/tts/qwen3tts/server.py` for both Qwen3-TTS 12Hz 1.7B modes. By default it starts in auto mode, which chooses the Base voice-clone model or VoiceDesign model from each request shape.
 
 ```powershell
-python -m venv scripts\tts\qwen3tts\.venv
-scripts\tts\qwen3tts\.venv\Scripts\Activate.ps1
+python -m venv servers\tts\qwen3tts\.venv
+servers\tts\qwen3tts\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-pip install -r scripts\tts\qwen3tts\requirements.txt
-python scripts\tts\qwen3tts\server.py
+pip install -r servers\tts\qwen3tts\requirements.txt
+python servers\tts\qwen3tts\server.py
 ```
 
 You can also specify auto mode explicitly:
 
 ```powershell
-python scripts\tts\qwen3tts\server.py --mode auto
+python servers\tts\qwen3tts\server.py --mode auto
 ```
 
 Auto mode inspects each `/synthesize` request: requests with `ref_audio` use the clone model, while requests with `instruct` use the VoiceDesign model. It keeps only one model loaded at a time and swaps models when the request type changes, so the first request after a swap may be slower.
@@ -33,9 +33,9 @@ Register with `/provider custom-endpoint add`:
 Start the same server in VoiceDesign mode when serving `Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign`.
 
 ```powershell
-scripts\tts\qwen3tts\.venv\Scripts\Activate.ps1
+servers\tts\qwen3tts\.venv\Scripts\Activate.ps1
 $env:TOMORI_TTS_MODE = "voice-design"
-python scripts\tts\qwen3tts\server.py
+python servers\tts\qwen3tts\server.py
 ```
 
 You can also pass `--mode voice-design` instead of setting `TOMORI_TTS_MODE`.

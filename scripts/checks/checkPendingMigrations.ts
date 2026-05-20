@@ -14,9 +14,9 @@
  *   2  — script error (DB connection failed, migrations dir missing, etc.)
  *
  * Usage:
- *   bun run scripts/maintenance/checkPendingMigrations.ts                       (DB-aware: pending only)
- *   bun run scripts/maintenance/checkPendingMigrations.ts --all                 (no DB: scan every up-migration)
- *   bun run scripts/maintenance/checkPendingMigrations.ts --changed-since REF   (no DB: only migrations added since REF)
+ *   bun run scripts/checks/checkPendingMigrations.ts                       (DB-aware: pending only)
+ *   bun run scripts/checks/checkPendingMigrations.ts --all                 (no DB: scan every up-migration)
+ *   bun run scripts/checks/checkPendingMigrations.ts --changed-since REF   (no DB: only migrations added since REF)
  *
  * The CI deploy gate uses --changed-since because GitHub-hosted runners don't
  * hold production DB credentials at the pre-Terraform stage. Local pre-push

@@ -11,13 +11,13 @@ This audit records which completed refactor phases produced real responsibility-
 Run the lightweight facade scan with:
 
 ```bash
-bun run audit-refactor-integrity
+bun run scripts/archived/checkRefactorIntegrity.ts
 ```
 
-For CI or pre-merge blocking, use:
+For strict CI or pre-merge blocking, use:
 
 ```bash
-bun run scripts/maintenance/checkRefactorIntegrity.ts --strict
+bun run scripts/archived/checkRefactorIntegrity.ts --strict
 ```
 
 The script flags:
@@ -138,7 +138,7 @@ A barrel that delegates to a sibling file matching `**/core/*Implementation.ts`,
 
 If you find yourself wanting to create such a sibling, the right move is to split the sibling's contents into named-responsibility modules (`fooHistory.ts`, `fooMemories.ts`, etc.) and have the barrel re-export from those instead. The `core/*Implementation.ts` pattern is detected by the audit script (see "Local Check" above).
 
-`bun run scripts/maintenance/checkRefactorIntegrity.ts --strict` flags facade-shaped barrels via `thin facade to large file` and `thin facade to legacy file`. Allowlisting a barrel means adding it to the table below with rationale, not silencing the script.
+`bun run scripts/archived/checkRefactorIntegrity.ts --strict` flags facade-shaped barrels via `thin facade to large file` and `thin facade to legacy file`. Allowlisting a barrel means adding it to the table below with rationale, not silencing the script.
 
 ### Approved barrels
 

@@ -7,71 +7,65 @@ This guide covers the DB regression harness introduced in Phase 2 (#4a). The har
 ## TL;DR
 
 ```bash
-# Create the test database (one-time)
-createdb tomodb_test
-
-# Run the DB regression harness
-POSTGRES_DB=tomodb_test bun test tests/regression/db/
-
-# Or keep test DB credentials separate
-bun --env-file=.env.test test tests/regression/db/
+# Run all tests — DB tests run automatically when Postgres is reachable
+bun run test
 ```
 
-## Why a separate test database?
+No manual database creation is required. `bun run test` detects a local Postgres connection, creates a disposable `tomoribot_test_<id>` database, runs all 189 tests against it, and drops the database on exit.
 
-The harness inserts and deletes rows during each run. Running it against your development database would corrupt live data. The `POSTGRES_DB` env var guard in `tests/regression/db/setup/testDb.ts` prevents the tests from running unless the database name matches `TEST_POSTGRES_DB` (default: `tomodb_test`).
+## How automatic provisioning works
 
-## Setup
+`bun run test` invokes `scripts/checks/runTests.ts`, which:
 
-### 1. Create the test database
+1. Looks for Postgres credentials in `POSTGRES_PASSWORD`, `DATABASE_URL`, or `POSTGRES_URL`.
+2. If credentials exist, probes the connection (5-second timeout).
+3. On success, creates a disposable `tomoribot_test_<id>` database via the `postgres` maintenance database.
+4. Spawns `bun test tests/` with `TEST_DB_READY=1` and `POSTGRES_DB=<name>` injected into the child environment.
+5. Drops the database on clean exit, `SIGINT` (Ctrl+C), or `SIGTERM`.
 
-```bash
-# PostgreSQL must be running and your POSTGRES_USER must have CREATE DATABASE rights
-createdb -U postgres tomodb_test
-```
+If no Postgres credentials are found or the connection probe fails, `bun test tests/` still runs — the 89 DB regression tests skip gracefully and the 100 unit tests still pass.
 
-### 2. Environment variables
+## Minimum setup
 
-The harness inherits all `POSTGRES_*` env vars from your shell. You can also provide `TEST_POSTGRES_*` values so the bot's normal `.env` can keep pointing at the development database while the harness points at the disposable test database.
+The only required environment variable is `POSTGRES_PASSWORD` (or a full `DATABASE_URL`). All other variables default to local Postgres:
 
-| Variable | Required | Default |
-|---|---|---|
-| `POSTGRES_PASSWORD` or `TEST_POSTGRES_PASSWORD` | Yes | — |
-| `POSTGRES_DB` | Yes unless `TEST_POSTGRES_DB` is set | `tomodb` |
-| `TEST_POSTGRES_DB` | No | `tomodb_test` |
-| `POSTGRES_HOST` or `TEST_POSTGRES_HOST` | No | `localhost` |
-| `POSTGRES_PORT` or `TEST_POSTGRES_PORT` | No | `5432` |
-| `POSTGRES_USER` or `TEST_POSTGRES_USER` | No | `postgres` |
+| Variable | Default |
+|---|---|
+| `POSTGRES_PASSWORD` | *required* |
+| `POSTGRES_HOST` | `localhost` |
+| `POSTGRES_PORT` | `5432` |
+| `POSTGRES_USER` | `postgres` |
+| `POSTGRES_MAINTENANCE_DB` | `postgres` |
 
-Example `.env.test`:
+A minimal `.env` for contributors:
 
 ```env
-TEST_POSTGRES_HOST=localhost
-TEST_POSTGRES_PORT=5432
-TEST_POSTGRES_USER=postgres
-TEST_POSTGRES_PASSWORD=your_password
-TEST_POSTGRES_DB=tomodb_test
+POSTGRES_PASSWORD=your_local_postgres_password
 ```
 
-### 3. Schema bootstrap
-
-The harness calls `initializeDatabase()` in each `beforeAll` — the same function the bot calls at startup. If the test database is empty, the schema is created automatically on first run.
-
-## Running the tests
+## Running tests
 
 ```bash
-# Run only DB regression tests
-POSTGRES_DB=tomodb_test bun test tests/regression/db/
+# Run all tests (DB tests provisioned automatically when Postgres is reachable)
+bun run test
 
-# Run with a dedicated test env file
-bun --env-file=.env.test test tests/regression/db/
+# Run a single domain without the wrapper (requires TEST_DB_READY=1)
+TEST_DB_READY=1 POSTGRES_DB=<existing-db> POSTGRES_PASSWORD=<pw> bun test tests/regression/db/persona.regression.test.ts
 
-# Run all tests (DB tests skip automatically when POSTGRES_DB != tomodb_test)
-bun test tests/
-
-# Run a single domain
-POSTGRES_DB=tomodb_test bun test tests/regression/db/user.regression.test.ts
+# Run only unit tests (no DB needed)
+bun test tests/unit/
 ```
+
+## How DB_TESTS_AVAILABLE works
+
+`tests/regression/db/setup/testDb.ts` exports `DB_TESTS_AVAILABLE`, which is true only when:
+
+- `POSTGRES_PASSWORD` (or `TEST_POSTGRES_PASSWORD`) is set, **and**
+- `TEST_DB_READY=1` is present in the environment.
+
+`TEST_DB_READY=1` is set exclusively by `runTests.ts` after it has successfully created and verified the disposable database. This prevents the harness from running against a development or production database if `bun test tests/regression/db/` is invoked directly.
+
+All DB regression `describe` blocks call `describe.skipIf(!DB_TESTS_AVAILABLE)` so they skip cleanly instead of failing when run without the wrapper.
 
 ## Test file map
 
@@ -97,7 +91,7 @@ The harness inserts minimal rows using the `_rt_` prefix (regression test) for a
 | Registration write test user | `_rt_user_reg_001` |
 | Personal memory test user | `_rt_user_alt_001` |
 
-Fixtures are inserted in `beforeAll` and cleaned up in `afterAll` via cascade deletes. The `setup/fixtures.ts` module returns internal DB IDs (`FixtureRefs`) for tests that need them.
+Fixtures are inserted in `beforeAll` and cleaned up in `afterAll` via cascade deletes. Because the wrapper creates a fresh disposable database per run, each test run starts from a clean schema.
 
 ## Adding coverage for new functions
 
@@ -120,14 +114,12 @@ Each test file has at least one `it.skip("[REGRESSION PROBE] ...")` block. To co
 
 ## CI integration
 
-The test database configuration in CI (`.github/workflows/`) should set:
+CI sets `POSTGRES_PASSWORD` and `POSTGRES_HOST` in the job environment. `bun run test` detects the credentials, provisions a fresh disposable database per run, and drops it after tests complete — no static `tomodb_test` database or manual CI setup is required.
 
-```yaml
-env:
-  POSTGRES_DB: tomodb_test
-  POSTGRES_PASSWORD: ${{ secrets.TEST_POSTGRES_PASSWORD }}
-```
+See `.github/workflows/validation.yml` for the current service container and env configuration.
 
-Equivalent CI setups may use `TEST_POSTGRES_DB` and `TEST_POSTGRES_PASSWORD` instead; the harness maps those to the runtime `POSTGRES_*` variables before the DB client is created.
+## Safety guards
 
-The `bun test tests/` command then auto-discovers and runs the regression harness alongside unit tests.
+- The wrapper only creates/drops databases on local hosts (`localhost`, `127.0.0.1`, `::1`, `postgres`, `tomoribot-db`, `host.docker.internal`). Set `TOMORI_TESTS_ALLOW_NONLOCAL_DB=true` to override for a disposable remote instance.
+- `RUN_ENV=production` causes the wrapper to abort immediately.
+- If Postgres is unreachable (connection probe times out in 5 s), the wrapper falls back to skip mode — tests run without DB, 89 DB tests skip.

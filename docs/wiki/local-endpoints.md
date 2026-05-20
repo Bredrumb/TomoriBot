@@ -18,7 +18,7 @@ Configure via `/custom-endpoints` in Discord, pointing at your local endpoint UR
 
 TomoriBot ships a ready-to-use ComfyUI workflow for txt2img and img2img. Use `/help custom-endpoint` to learn how to create a TomoriBot-compatible ComfyUI workflow for images and videos as well.
 
-- **Workflow file**: [`scripts/comfyui-workflows/`](../../scripts/comfyui-workflows/)
+- **Workflow file**: [`assets/comfyui-workflows/`](../../assets/comfyui-workflows/)
 - Upload the `.json` workflow during `/config custom-endpoints add` (capability: `image`, API style: `comfyui`)
 - ComfyUI must be reachable on the network, TomoriBot polls its `/history` endpoint until the image is ready
 
@@ -28,9 +28,9 @@ Three reference FastAPI wrapper servers are included, each exposing a `/synthesi
 
 | Engine | Folder | Model | Strength |
 |--------|--------|-------|---------|
-| [Chatterbox](https://github.com/resemble-ai/chatterbox) | [`scripts/tts/chatterbox/`](../../scripts/tts/chatterbox/) | Chatterbox Turbo | English, lightweight, expressive bracket tags |
-| [Qwen3-TTS](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base) | [`scripts/tts/qwen3tts/`](../../scripts/tts/qwen3tts/) | Qwen3-TTS 1.7B Base | Large but accurate multilingual reference-audio cloning (RECOMMENDED) |
-| [IrodoriTTS](https://huggingface.co/Aratako/Irodori-TTS-500M-v2) | [`scripts/tts/irodoritts/`](../../scripts/tts/irodoritts/) | Irodori-TTS 500M v2 | Japanese-focused reference-audio cloning, styles with emojis |
+| [Chatterbox](https://github.com/resemble-ai/chatterbox) | [`servers/tts/chatterbox/`](../../servers/tts/chatterbox/) | Chatterbox Turbo | English, lightweight, expressive bracket tags |
+| [Qwen3-TTS](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base) | [`servers/tts/qwen3tts/`](../../servers/tts/qwen3tts/) | Qwen3-TTS 1.7B Base | Large but accurate multilingual reference-audio cloning (RECOMMENDED) |
+| [IrodoriTTS](https://huggingface.co/Aratako/Irodori-TTS-500M-v2) | [`servers/tts/irodoritts/`](../../servers/tts/irodoritts/) | Irodori-TTS 500M v2 | Japanese-focused reference-audio cloning, styles with emojis |
 
 Each folder contains a `server.py` and `requirements.txt`. Start the server, then register it in Discord with `/config custom-endpoints add` (capability: `speech`). Upload a short reference audio clip via `/speech voice-add` and assign it to a persona with `/speech voice-assign`. The clip can be in any audio format (TomoriBot automatically converts it to mono WAV), but it is strongly recommended to use a 10-20 second clip with no background music.
 
@@ -40,7 +40,7 @@ ElevenLabs is also supported as a cloud TTS/STT option via `/speech elevenlabs`.
 
 A reference WhisperX server is included for transcribing audio attachments sent to TomoriBot.
 
-- **Server script**: [`scripts/stt/whisperx_server.py`](../../scripts/stt/whisperx_server.py)
+- **Server script**: [`servers/stt/whisperx_server.py`](../../servers/stt/whisperx_server.py)
 - Exposes the standard OpenAI `/v1/audio/transcriptions` endpoint shape
 - Compatible alternatives: whisper.cpp HTTP mode, KoboldCPP STT
 

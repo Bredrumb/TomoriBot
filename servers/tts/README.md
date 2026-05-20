@@ -22,8 +22,8 @@ Run these commands from the repo root. Swap in the folder name for the engine yo
 
 ```powershell
 # 1. Create and activate a virtual environment inside the engine folder
-python -m venv scripts\tts\chatterbox\.venv
-scripts\tts\chatterbox\.venv\Scripts\Activate.ps1
+python -m venv servers\tts\chatterbox\.venv
+servers\tts\chatterbox\.venv\Scripts\Activate.ps1
 
 # 2. Upgrade pip
 python -m pip install -U pip
@@ -31,13 +31,13 @@ python -m pip install -U pip
 # 3. Install dependencies
 #    Chatterbox: install numpy first (pkuseg build-time dependency)
 python -m pip install numpy
-python -m pip install -r scripts\tts\chatterbox\requirements.txt
+python -m pip install -r servers\tts\chatterbox\requirements.txt
 
 # 4. (GPU only) Reinstall PyTorch with CUDA support — skip for CPU-only installs
 pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124
 
 # 5. Start the server
-python scripts\tts\chatterbox\server.py
+python servers\tts\chatterbox\server.py
 ```
 
 > **CUDA version**: use `cu118` or `cu121` in the index URL above if your driver targets an older toolkit.
@@ -58,4 +58,4 @@ After the server is running, register it with `/provider custom-endpoint add`:
 
 Chatterbox defaults to Turbo. Use `/speech chatterbox parameters` to disable Turbo and send standard-model `cfg_weight` and `exaggeration` values with generated voice messages.
 
-Qwen3-TTS defaults to auto mode. One server URL can handle both clone and VoiceDesign requests: the server detects clone requests by `ref_audio`, detects VoiceDesign requests by `instruct`, and swaps the loaded model when needed. Start VoiceDesign only with `TOMORI_TTS_MODE=voice-design python scripts/tts/qwen3tts/server.py` or `python scripts/tts/qwen3tts/server.py --mode voice-design`. In TomoriBot, set persona prompts with `/speech voice-design set`; generated tool calls send that prompt as `instruct`.
+Qwen3-TTS defaults to auto mode. One server URL can handle both clone and VoiceDesign requests: the server detects clone requests by `ref_audio`, detects VoiceDesign requests by `instruct`, and swaps the loaded model when needed. Start VoiceDesign only with `TOMORI_TTS_MODE=voice-design python servers/tts/qwen3tts/server.py` or `python servers/tts/qwen3tts/server.py --mode voice-design`. In TomoriBot, set persona prompts with `/speech voice-design set`; generated tool calls send that prompt as `instruct`.

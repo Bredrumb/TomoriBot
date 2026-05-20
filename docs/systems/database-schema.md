@@ -200,7 +200,7 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 
 `ExportRepository.exportServerData()` reads the split tables directly and emits the flat composed shape. `ImportRepository.importServerConfig()` partitions that same flat payload back into split-table patch objects and writes through the typed `ConfigRepository.update*Config()` methods; all required and optional split-table update results must succeed before the import reports success and invalidates the Tomori state cache.
 
-`scripts/maintenance/checkSchemaDrift.ts` validates export coverage per split config table rather than comparing against a `tomori_configs` mirror. It also verifies that `serverConfigExportSchema` is exactly the union of the per-table export slices and that every exported key is selected, emitted, and restored. Runtime-state tables such as `api_key_rotation_runtime_state` and `persona_autoch_runtime_state` remain explicitly excluded from export/import.
+`scripts/checks/checkSchemaDrift.ts` validates export coverage per split config table rather than comparing against a `tomori_configs` mirror. It also verifies that `serverConfigExportSchema` is exactly the union of the per-table export slices and that every exported key is selected, emitted, and restored. Runtime-state tables such as `api_key_rotation_runtime_state` and `persona_autoch_runtime_state` remain explicitly excluded from export/import.
 
 ### NovelAI profile tags
 
@@ -350,11 +350,11 @@ src/db/migrations/
 
 ### Running migrations manually
 
-```sh
-bun run db:migrate
-```
+Migrations run automatically at bot startup via `initializeDatabase`. If you need to apply migrations without starting the bot (e.g. troubleshooting), invoke the script directly:
 
-The same runner fires automatically at bot startup, so manual invocation is only needed for deployment pipelines or troubleshooting.
+```sh
+bun run scripts/db/migrate.ts
+```
 
 ### Rollback discipline
 
@@ -383,7 +383,7 @@ The static files are startup-safe:
 - Guarded `DO $$ ... $$` blocks for conditional constraint/index/column changes
 
 Startup schema execution is shared through `src/utils/db/initializeDatabase.ts`. The bot entry point and
-`bun run vl-db` both use this path, so fresh-install validation exercises the same schema, optional RAG schema,
+`bun run db:lifecycle` both use this path, so fresh-install validation exercises the same schema, optional RAG schema,
 ST preset schema, and seed data load as runtime startup.
 
 ## Operational Notes
@@ -391,4 +391,4 @@ ST preset schema, and seed data load as runtime startup.
 - `cleanup_expired_cooldowns()` is defined in schema and used by startup cleanup + optional pg_cron.
 - Quota cleanup helpers exist for old image/text/video quota rows (`cleanup_old_image_quotas()`, `cleanup_old_text_quotas()`, `cleanup_old_video_quotas()`).
 - RAG tables are intentionally separate so local development can run without pgvector unless enabled.
-- `bun run vl-db` creates a disposable database on the configured local PostgreSQL server, validates fresh schema/seed initialization twice, smoke-tests backup/restore and DB maintenance scripts, runs `nuke-db` against only that disposable DB, and verifies re-initialization afterward.
+- `bun run db:lifecycle` creates a disposable database on the configured local PostgreSQL server, validates fresh schema/seed initialization twice, smoke-tests backup/restore and DB maintenance scripts, runs `nuke-db` against only that disposable DB, and verifies re-initialization afterward.

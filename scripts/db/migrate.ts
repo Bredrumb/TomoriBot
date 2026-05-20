@@ -7,7 +7,6 @@
  * developer tooling).
  *
  * Usage:
- *   bun run db:migrate
  *   bun run scripts/db/migrate.ts
  */
 import { config } from "dotenv";

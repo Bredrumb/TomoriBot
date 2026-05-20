@@ -2339,4 +2339,366 @@ END $$;
 SELECT add_column_if_not_exists('saved_provider_configs', 'llm_max_output_tokens', 'INTEGER', 'NULL');
 SELECT add_column_if_not_exists('user_saved_provider_configs', 'llm_max_output_tokens', 'INTEGER', 'NULL');
 
+-- ============================================================
+-- Server Config Split Tables (migration 002)
+-- Command-aligned config tables extracted from the legacy tomori_configs god table.
+-- Each table owns one command domain and FKs to servers(server_id) ON DELETE CASCADE.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS server_chat_configs (
+  server_id                        INT         PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
+  humanizer_degree                 INT         NOT NULL DEFAULT 1,
+  message_fetch_limit              INT         NOT NULL DEFAULT 80,
+  send_message_limit               INT         NOT NULL DEFAULT 0,
+  match_limit                      INT         NOT NULL DEFAULT 3,
+  cascade_limit                    INT         NOT NULL DEFAULT 3,
+  timezone_offset                  INT         NOT NULL DEFAULT 0,
+  self_debug_enabled               BOOLEAN     NOT NULL DEFAULT false,
+  system_prompt                    TEXT,
+  context_note                     TEXT,
+  context_note_depth               INT         NOT NULL DEFAULT 0,
+  llm_stop_strings                 TEXT[]      NOT NULL DEFAULT '{}',
+  llm_stop_speaker_pattern_enabled BOOLEAN     NOT NULL DEFAULT false,
+  llm_max_output_tokens            INT,
+  llm_top_p                        REAL        NOT NULL DEFAULT 0.95,
+  llm_top_k                        INT         NOT NULL DEFAULT 0,
+  llm_frequency_penalty            REAL        NOT NULL DEFAULT 0.0,
+  llm_presence_penalty             REAL        NOT NULL DEFAULT 0.0,
+  llm_min_p                        REAL        NOT NULL DEFAULT 0.05,
+  llm_logit_biases                 JSONB       NOT NULL DEFAULT '[]'::JSONB,
+  fallback_model_refs              JSONB       NOT NULL DEFAULT '[]'::JSONB,
+  created_at                       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_server_chat_configs_timestamp ON server_chat_configs;
+CREATE TRIGGER update_server_chat_configs_timestamp
+  BEFORE UPDATE ON server_chat_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TABLE IF NOT EXISTS server_notice_embeds_configs (
+  server_id              INT      PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
+  tool_notice_hidden_keys TEXT[]  NOT NULL DEFAULT '{}',
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_server_notice_embeds_configs_timestamp ON server_notice_embeds_configs;
+CREATE TRIGGER update_server_notice_embeds_configs_timestamp
+  BEFORE UPDATE ON server_notice_embeds_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TABLE IF NOT EXISTS server_member_permissions_configs (
+  server_id                          INT     PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
+  server_memteaching_enabled         BOOLEAN NOT NULL DEFAULT true,
+  attribute_memteaching_enabled      BOOLEAN NOT NULL DEFAULT false,
+  sampledialogue_memteaching_enabled BOOLEAN NOT NULL DEFAULT false,
+  self_teaching_enabled              BOOLEAN NOT NULL DEFAULT true,
+  personal_memories_enabled          BOOLEAN NOT NULL DEFAULT true,
+  hide_impersonation_embeds          BOOLEAN NOT NULL DEFAULT false,
+  prompt_snapshot_enabled            BOOLEAN NOT NULL DEFAULT false,
+  created_at                         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_server_member_permissions_configs_timestamp ON server_member_permissions_configs;
+CREATE TRIGGER update_server_member_permissions_configs_timestamp
+  BEFORE UPDATE ON server_member_permissions_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TABLE IF NOT EXISTS server_channel_scope_configs (
+  server_id                   INT      PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
+  rp_channel_ids              TEXT[]   NOT NULL DEFAULT '{}',
+  private_channel_ids         TEXT[]   NOT NULL DEFAULT '{}',
+  crosschannel_blocklist_ids  TEXT[]   NOT NULL DEFAULT '{}',
+  stm_privacy_bypass          BOOLEAN  NOT NULL DEFAULT false,
+  thought_log_channel_disc_id TEXT,
+  created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_server_channel_scope_configs_timestamp ON server_channel_scope_configs;
+CREATE TRIGGER update_server_channel_scope_configs_timestamp
+  BEFORE UPDATE ON server_channel_scope_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TABLE IF NOT EXISTS server_welcome_configs (
+  server_id               INT  PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
+  welcome_channel_disc_id TEXT,
+  welcome_prompt          TEXT,
+  welcome_persona_id      INT  REFERENCES personas(persona_id) ON DELETE SET NULL,
+  created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_server_welcome_configs_timestamp ON server_welcome_configs;
+CREATE TRIGGER update_server_welcome_configs_timestamp
+  BEFORE UPDATE ON server_welcome_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TABLE IF NOT EXISTS server_trigger_behavior_configs (
+  server_id               INT     PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
+  always_reply_enabled    BOOLEAN NOT NULL DEFAULT false,
+  deliberate_trigger_mode BOOLEAN NOT NULL DEFAULT false,
+  cooldown_type           INT     NOT NULL DEFAULT 0,
+  cooldown_length         INT     NOT NULL DEFAULT 5,
+  created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_server_trigger_behavior_configs_timestamp ON server_trigger_behavior_configs;
+CREATE TRIGGER update_server_trigger_behavior_configs_timestamp
+  BEFORE UPDATE ON server_trigger_behavior_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+-- autoch_persona_overrides JSONB was here in migration 002; replaced by
+-- server_auto_trigger_persona_overrides junction table in migration 013.
+CREATE TABLE IF NOT EXISTS server_auto_trigger_configs (
+  server_id            INT    PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
+  autoch_disc_ids      TEXT[] NOT NULL DEFAULT '{}',
+  autoch_threshold     INT    NOT NULL DEFAULT 0,
+  autoch_threshold_max INT    NOT NULL DEFAULT 0,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_server_auto_trigger_configs_timestamp ON server_auto_trigger_configs;
+CREATE TRIGGER update_server_auto_trigger_configs_timestamp
+  BEFORE UPDATE ON server_auto_trigger_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TABLE IF NOT EXISTS server_capabilities_configs (
+  server_id              INT     PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
+  emoji_usage_enabled    BOOLEAN NOT NULL DEFAULT true,
+  sticker_usage_enabled  BOOLEAN NOT NULL DEFAULT true,
+  web_search_enabled     BOOLEAN NOT NULL DEFAULT true,
+  manage_message_enabled BOOLEAN NOT NULL DEFAULT true,
+  thread_creation_enabled BOOLEAN NOT NULL DEFAULT true,
+  imagegen_enabled       BOOLEAN NOT NULL DEFAULT true,
+  videogen_enabled       BOOLEAN NOT NULL DEFAULT false,
+  voice_message_enabled  BOOLEAN NOT NULL DEFAULT true,
+  tool_use_enabled       BOOLEAN NOT NULL DEFAULT true,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_server_capabilities_configs_timestamp ON server_capabilities_configs;
+CREATE TRIGGER update_server_capabilities_configs_timestamp
+  BEFORE UPDATE ON server_capabilities_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TABLE IF NOT EXISTS server_novelai_imagegen_configs (
+  server_id              INT       PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
+  nai_preset_name        TEXT,
+  nai_style_tags         TEXT[]    NOT NULL DEFAULT '{"8k","absurdres","masterpiece","best quality","good quality","newest"}',
+  nai_negative_tags      TEXT[]    NOT NULL DEFAULT '{"lowres","worst quality","low quality","bad quality","old","oldest","unfinished","scan artifacts","jpeg artifacts","jaggy lines","unclear","sketch","blurry","bad anatomy","very displeasing","displeasing","bad hands","bad fingers","missing fingers","bad proportions","bad perspective","bad eyes","bad pupils","multiple heads","extra faces","many arms","poorly drawn face","poorly drawn hands","fused hands","bad feet","too many legs","malformed limbs","extra arms","multiple ears","extra digits","fewer digits","twitter username","username","watermark","signature","2koma","4koma","comic"}',
+  nai_sampler            TEXT,
+  nai_steps              SMALLINT,
+  nai_scale              REAL,
+  nai_noise_schedule     TEXT,
+  nai_cfg_rescale        REAL,
+  nai_diffusion_model_id INT       REFERENCES image_diffusion_models(diffusion_model_id) ON DELETE SET NULL,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_server_novelai_imagegen_configs_timestamp ON server_novelai_imagegen_configs;
+CREATE TRIGGER update_server_novelai_imagegen_configs_timestamp
+  BEFORE UPDATE ON server_novelai_imagegen_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TABLE IF NOT EXISTS server_nsfw_configs (
+  server_id                      INT     PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
+  uncensor_injection_enabled     BOOLEAN NOT NULL DEFAULT false,
+  uncensor_unicode_space_enabled BOOLEAN NOT NULL DEFAULT false,
+  uncensor_sanitize_enabled      BOOLEAN NOT NULL DEFAULT false,
+  created_at                     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_server_nsfw_configs_timestamp ON server_nsfw_configs;
+CREATE TRIGGER update_server_nsfw_configs_timestamp
+  BEFORE UPDATE ON server_nsfw_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TABLE IF NOT EXISTS server_speech_configs (
+  server_id                  INT     PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
+  voice_transcript_chat_mode BOOLEAN NOT NULL DEFAULT true,
+  chatterbox_turbo_enabled   BOOLEAN NOT NULL DEFAULT true,
+  chatterbox_cfg_weight      REAL    NOT NULL DEFAULT 0.5,
+  chatterbox_exaggeration    REAL    NOT NULL DEFAULT 0.5,
+  created_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_server_speech_configs_timestamp ON server_speech_configs;
+CREATE TRIGGER update_server_speech_configs_timestamp
+  BEFORE UPDATE ON server_speech_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TABLE IF NOT EXISTS server_byok_configs (
+  server_id      INT     PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
+  user_byok_mode BOOLEAN NOT NULL DEFAULT false,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_server_byok_configs_timestamp ON server_byok_configs;
+CREATE TRIGGER update_server_byok_configs_timestamp
+  BEFORE UPDATE ON server_byok_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TABLE IF NOT EXISTS server_memory_configs (
+  server_id              INT     PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
+  memory_tagging_enabled BOOLEAN NOT NULL DEFAULT false,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_server_memory_configs_timestamp ON server_memory_configs;
+CREATE TRIGGER update_server_memory_configs_timestamp
+  BEFORE UPDATE ON server_memory_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+-- ============================================================
+-- Server Model Configs (migration 006)
+-- Model-selection FKs and deprecated BYOK credential mirrors extracted
+-- from tomori_configs. The deprecated columns are kept until #14.5.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS server_model_configs (
+  server_id                           INT         PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
+  llm_id                              INT         REFERENCES llms(llm_id) ON DELETE SET NULL,
+  embedding_model_id                  INT         REFERENCES embedding_models(embedding_model_id) ON DELETE SET NULL,
+  diffusion_model_id                  INT         REFERENCES image_diffusion_models(diffusion_model_id) ON DELETE SET NULL,
+  video_model_id                      INT         REFERENCES video_generation_models(video_model_id) ON DELETE SET NULL,
+  vision_llm_id                       INT         REFERENCES llms(llm_id) ON DELETE SET NULL,
+  -- DEPRECATED Phase 1.5: credential mirrors — drop in #14.5.
+  api_key                             BYTEA,
+  key_version                         INT         NOT NULL DEFAULT 1,
+  llm_temperature                     REAL        NOT NULL DEFAULT 1.0,
+  thinking_level                      TEXT        NOT NULL DEFAULT 'auto',
+  llm_disabled_params                 TEXT[]      NOT NULL DEFAULT '{}',
+  -- DEPRECATED Phase 3: legacy inline custom endpoint fields — drop in #14.5.
+  custom_endpoint_url                 TEXT,
+  custom_model_name                   TEXT,
+  custom_num_ctx                      INT,
+  fallback_llm_ids                    JSONB       NOT NULL DEFAULT '[]'::JSONB,
+  -- DEPRECATED Phase 3: OpenRouter other-model capability cache — drop in #14.5.
+  other_model_codename                TEXT,
+  other_model_capabilities            JSONB,
+  other_model_capabilities_fetched_at TIMESTAMPTZ,
+  -- DEPRECATED: superseded by server_notice_embeds_configs.tool_notice_hidden_keys.
+  hide_respond_embed                  BOOLEAN     NOT NULL DEFAULT false,
+  created_at                          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_server_model_configs_timestamp ON server_model_configs;
+CREATE TRIGGER update_server_model_configs_timestamp
+  BEFORE UPDATE ON server_model_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+-- ============================================================
+-- Auto-trigger persona override junction table (migration 013)
+-- Replaces autoch_persona_overrides JSONB on server_auto_trigger_configs.
+-- Gains ON DELETE CASCADE when a persona is deleted.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS server_auto_trigger_persona_overrides (
+  server_id       INT  NOT NULL,
+  channel_disc_id TEXT NOT NULL,
+  persona_id      INT  NOT NULL,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (server_id, channel_disc_id),
+  FOREIGN KEY (server_id)  REFERENCES servers(server_id)   ON DELETE CASCADE,
+  FOREIGN KEY (persona_id) REFERENCES personas(persona_id) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- Persona Config Split Tables (migration 003)
+-- Command-aligned config tables extracted from the personas table.
+-- Each FKs to personas(persona_id) ON DELETE CASCADE.
+-- elevenlabs_voice_* columns were in the original migration but
+-- were dropped by migration 010 and must not appear here.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS persona_context_note_configs (
+  persona_id         INT PRIMARY KEY REFERENCES personas(persona_id) ON DELETE CASCADE,
+  context_note       TEXT,
+  context_note_depth INT  NOT NULL DEFAULT 0,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_persona_context_note_configs_timestamp ON persona_context_note_configs;
+CREATE TRIGGER update_persona_context_note_configs_timestamp
+  BEFORE UPDATE ON persona_context_note_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TABLE IF NOT EXISTS persona_voice_configs (
+  persona_id                INT PRIMARY KEY REFERENCES personas(persona_id) ON DELETE CASCADE,
+  speech_voice_sample_id    INT REFERENCES voice_samples(sample_id) ON DELETE SET NULL,
+  speech_voice_id           TEXT,
+  speech_voice_name         TEXT,
+  speech_voice_design_prompt TEXT,
+  created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_persona_voice_configs_timestamp ON persona_voice_configs;
+CREATE TRIGGER update_persona_voice_configs_timestamp
+  BEFORE UPDATE ON persona_voice_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TABLE IF NOT EXISTS persona_imagegen_configs (
+  persona_id      INT    PRIMARY KEY REFERENCES personas(persona_id) ON DELETE CASCADE,
+  nai_tags        TEXT[] NOT NULL DEFAULT '{}',
+  nai_char_ref_url TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_persona_imagegen_configs_timestamp ON persona_imagegen_configs;
+CREATE TRIGGER update_persona_imagegen_configs_timestamp
+  BEFORE UPDATE ON persona_imagegen_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TABLE IF NOT EXISTS persona_textgen_configs (
+  persona_id      INT      PRIMARY KEY REFERENCES personas(persona_id) ON DELETE CASCADE,
+  nai_attg_author TEXT,
+  nai_attg_title  TEXT,
+  nai_attg_tags   TEXT,
+  nai_attg_genre  TEXT,
+  nai_attg_stars  SMALLINT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_persona_textgen_configs_timestamp ON persona_textgen_configs;
+CREATE TRIGGER update_persona_textgen_configs_timestamp
+  BEFORE UPDATE ON persona_textgen_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+-- ============================================================
+-- User Personalization Configs (migration 004)
+-- User-scoped personalization fields extracted from the users table.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS user_personalization_configs (
+  user_id                            INT     PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+  shortterm_cache_crossserver_opt_in BOOLEAN NOT NULL DEFAULT false,
+  nai_char_tags                      TEXT[]  NOT NULL DEFAULT '{}',
+  nai_char_ref_url                   TEXT,
+  impersonation_prompt               TEXT,
+  personal_dtm                       TEXT    NOT NULL DEFAULT 'follow',
+  created_at                         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_user_personalization_configs_timestamp ON user_personalization_configs;
+CREATE TRIGGER update_user_personalization_configs_timestamp
+  BEFORE UPDATE ON user_personalization_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
 -- Memory tag filtering toggle (May 2026)

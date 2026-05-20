@@ -1,23 +1,25 @@
 /**
- * Test database configuration for DB regression harness.
+ * Test database configuration for the DB regression harness.
  *
- * Tests only run when the effective test DB name matches TEST_POSTGRES_DB
- * (default: "tomodb_test").
- * This prevents the harness from writing fixture data into a development or
- * production database when run without the correct environment.
+ * DB tests are enabled automatically when `bun run test` detects a reachable
+ * local Postgres instance and provisions a disposable database. The wrapper
+ * (scripts/checks/runTests.ts) sets TEST_DB_READY=1 and POSTGRES_DB to
+ * the disposable database name before spawning bun test.
  *
- * To run: POSTGRES_DB=tomodb_test bun test tests/regression/db/
- * Or:     bun --env-file=.env.test test tests/regression/db/
+ * To run only DB regression tests (assumes wrapper has provisioned the DB):
+ *   bun run test
+ *
+ * To target a specific pre-existing database manually:
+ *   TEST_DB_READY=1 POSTGRES_DB=<name> POSTGRES_PASSWORD=<pw> bun test tests/regression/db/
  */
 import { SQL } from "bun";
 import { initializeDatabase } from "@/utils/db/initializeDatabase";
 
-const testDbName = process.env.TEST_POSTGRES_DB ?? "tomodb_test";
 const effectiveHost = process.env.TEST_POSTGRES_HOST ?? process.env.POSTGRES_HOST ?? "localhost";
 const effectivePort = process.env.TEST_POSTGRES_PORT ?? process.env.POSTGRES_PORT ?? "5432";
 const effectiveUser = process.env.TEST_POSTGRES_USER ?? process.env.POSTGRES_USER ?? "postgres";
 const effectivePassword = process.env.TEST_POSTGRES_PASSWORD ?? process.env.POSTGRES_PASSWORD;
-const currentDbName = process.env.POSTGRES_DB ?? (process.env.TEST_POSTGRES_DB ? testDbName : "tomodb");
+const effectiveDatabase = process.env.POSTGRES_DB ?? "tomodb";
 
 // Keep the application singleton DB client pointed at the same test database as
 // the direct fixture client below. dbRead/dbWrite import the singleton lazily, so
@@ -25,27 +27,29 @@ const currentDbName = process.env.POSTGRES_DB ?? (process.env.TEST_POSTGRES_DB ?
 process.env.POSTGRES_HOST = effectiveHost;
 process.env.POSTGRES_PORT = effectivePort;
 process.env.POSTGRES_USER = effectiveUser;
-process.env.POSTGRES_DB = currentDbName;
+process.env.POSTGRES_DB = effectiveDatabase;
 if (effectivePassword) process.env.POSTGRES_PASSWORD = effectivePassword;
 
 /**
- * True only when the environment is pointing at the designated test database.
- * All regression describe blocks call describe.skipIf(!DB_TESTS_AVAILABLE).
+ * True when the runTests.ts wrapper has provisioned a disposable database for
+ * this run (TEST_DB_READY=1) and credentials are present. Prevents the harness
+ * from writing fixture data into a development or production database when
+ * tests are invoked directly without the wrapper.
  */
-export const DB_TESTS_AVAILABLE = Boolean(effectivePassword) && currentDbName === testDbName;
+export const DB_TESTS_AVAILABLE = Boolean(effectivePassword) && process.env.TEST_DB_READY === "1";
 
 /**
  * A direct SQL client for the test database, used exclusively for fixture
  * insertion and cleanup. Test assertions call the real dbRead/dbWrite functions
  * which use the global sql singleton from client.ts — those must also be pointed
- * at the test DB via POSTGRES_DB env var.
+ * at the test DB via POSTGRES_DB env var (set by the wrapper).
  */
 export const testSql = new SQL({
   hostname: effectiveHost,
   port: Number(effectivePort),
   username: effectiveUser,
   password: effectivePassword ?? "dummy",
-  database: testDbName,
+  database: effectiveDatabase,
 });
 
 /**

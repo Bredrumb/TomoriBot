@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 config();
 
 // ---------------------------------------------------------------------------
-// scripts/maintenance/backupData.ts
+// scripts/devtools/backupData.ts
 //   bun run backup                            → create a bundle in backups/
 //   bun run restore-backup --latest           → restore from the newest bundle
 //   bun run restore-backup --from <dir>       → restore from a specific bundle
@@ -30,9 +30,13 @@ if (mode !== "--backup" && mode !== "--restore") {
 // Shared helper: build DATABASE_URL from .env vars
 // ---------------------------------------------------------------------------
 
-async function runExternalCommand(command: string, args: string[]): Promise<void> {
+async function runExternalCommand(
+  command: string,
+  args: string[],
+  options: { stdout?: "inherit" | "ignore" } = {},
+): Promise<void> {
   const subprocess = Bun.spawn([command, ...args], {
-    stdout: "inherit",
+    stdout: options.stdout ?? "inherit",
     stderr: "inherit",
   });
 
@@ -294,7 +298,8 @@ async function runRestore(bundlePath: string): Promise<void> {
   const dbUrl = resolveDatabaseUrl();
   log.info("Restoring database from dump (running psql)...");
   try {
-    await runExternalCommand("psql", [dbUrl, "-v", "ON_ERROR_STOP=1", "-f", dbDumpPath]);
+    const nullDevice = process.platform === "win32" ? "NUL" : "/dev/null";
+    await runExternalCommand("psql", ["--quiet", "-o", nullDevice, dbUrl, "-v", "ON_ERROR_STOP=1", "-f", dbDumpPath]);
     log.success("Database restored successfully.");
   } catch (_error) {
     log.error("psql restore failed. Ensure psql is installed and in your PATH.");

@@ -91,9 +91,9 @@ Before merging:
 bun run check
 bun run lint
 bun run check-locales
-bun run vl-db
+bun run db:lifecycle
 ```
 
-`bun run vl-db` requires a local disposable PostgreSQL target, CREATE/DROP database permission, and PostgreSQL client tools (`pg_dump`/`psql`). It creates and drops its own temporary database, then tests fresh initialization plus backup/restore and DB maintenance scripts.
+`bun run db:lifecycle` requires a local disposable PostgreSQL target, CREATE/DROP database permission, and PostgreSQL client tools (`pg_dump`/`psql`). It creates and drops its own temporary database, then tests fresh initialization plus backup/restore and DB maintenance scripts.
 
 And test command/event/tool flow in Discord.
