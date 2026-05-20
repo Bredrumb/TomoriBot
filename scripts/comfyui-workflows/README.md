@@ -42,6 +42,31 @@ The workflow uses these TomoriBot placeholders:
 - `{TOMORI_INPAINT_MASK_THRESHOLD}`
 - `{TOMORI_INPAINT_MASK_GROW}`
 - `{TOMORI_INPAINT_MASK_FEATHER}`
+- `{TOMORI_INPAINT_SUBTRACT_FACE_MASK}`
+- `{TOMORI_INPAINT_FACE_MASK_PROMPT}`
+- `{TOMORI_INPAINT_FACE_MASK_THRESHOLD}`
+- `{TOMORI_INPAINT_FACE_MASK_GROW}`
+- `{TOMORI_INPAINT_FACE_MASK_FEATHER}`
+- `{TOMORI_INPAINT_SUBTRACT_CLOTHING_MASK}`
+- `{TOMORI_INPAINT_CLOTHING_MASK_PROMPT}`
+- `{TOMORI_INPAINT_CLOTHING_MASK_THRESHOLD}`
+- `{TOMORI_INPAINT_CLOTHING_MASK_GROW}`
+- `{TOMORI_INPAINT_CLOTHING_MASK_FEATHER}`
+- `{TOMORI_INPAINT_SUBTRACT_ARMS_MASK}`
+- `{TOMORI_INPAINT_ARMS_MASK_PROMPT}`
+- `{TOMORI_INPAINT_ARMS_MASK_THRESHOLD}`
+- `{TOMORI_INPAINT_ARMS_MASK_GROW}`
+- `{TOMORI_INPAINT_ARMS_MASK_FEATHER}`
+- `{TOMORI_INPAINT_SUBTRACT_NECK_MASK}`
+- `{TOMORI_INPAINT_NECK_MASK_PROMPT}`
+- `{TOMORI_INPAINT_NECK_MASK_THRESHOLD}`
+- `{TOMORI_INPAINT_NECK_MASK_GROW}`
+- `{TOMORI_INPAINT_NECK_MASK_FEATHER}`
+- `{TOMORI_INPAINT_SUBTRACT_SKIN_MASK}`
+- `{TOMORI_INPAINT_SKIN_MASK_PROMPT}`
+- `{TOMORI_INPAINT_SKIN_MASK_THRESHOLD}`
+- `{TOMORI_INPAINT_SKIN_MASK_GROW}`
+- `{TOMORI_INPAINT_SKIN_MASK_FEATHER}`
 - `{TOMORI_INPAINT_EXTEND_DIRECTION}`
 - `{TOMORI_INPAINT_EXTEND_PIXELS}`
 - `{TOMORI_INPAINT_EXTEND_X}`
@@ -51,6 +76,10 @@ The workflow uses these TomoriBot placeholders:
 - `{TOMORI_INPAINT_EXTEND_PADDING}`
 
 Required ComfyUI custom nodes/models are encoded in the workflow itself through
-its node class names and model filenames. If ComfyUI rejects the prompt, install
+its node class names and model filenames. The default workflow also uses
+`ComfyUI-Inpaint-CropAndStitch` for normal target inpainting, via
+`InpaintCropImproved` and `InpaintStitchImproved`, so masked edits are cropped,
+inpainted at focused local resolution, then stitched back into the original
+image. If ComfyUI rejects the prompt, install
 the missing nodes/models named in the ComfyUI error output, then re-upload the
 same workflow JSON in TomoriBot.

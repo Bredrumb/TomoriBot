@@ -6,11 +6,13 @@ import type {
   ProviderNativeVideoGenerationResult,
 } from "@/types/provider/featureInterfaces";
 import { randomInt } from "node:crypto";
+import sharp from "sharp";
 import { buildCustomHeaders } from "@/providers/custom/customOpenAICompatibleUtils";
 import { log } from "@/utils/misc/logger";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 
 type ComfyUiGenerationMode = "image" | "video";
+type ComfyUiInpaintMaskContent = "fill" | "latent_noise";
 
 interface ComfyUiReferenceImage {
   mimeType: string;
@@ -55,6 +57,7 @@ type ComfyUiWorkflowSupports = {
   img2img: boolean;
   inpaint: boolean;
 };
+type RgbColor = { r: number; g: number; b: number };
 
 const DEFAULT_COMFYUI_WORKFLOW_SUPPORTS: ComfyUiWorkflowSupports = {
   txt2img: true,
@@ -72,6 +75,38 @@ type ComfyUiInpaintSettings = {
   extendGrow: number;
   extendFeather: number;
   extendPadding: number;
+};
+
+type ComfyUiMaskProtectionSettings = {
+  enabled: boolean;
+  maskPrompt: string;
+  maskThreshold: number;
+  maskGrow: number;
+  maskFeather: number;
+  clothingMaskPrompt: string;
+  clothingMaskThreshold: number;
+  clothingMaskGrow: number;
+  clothingMaskFeather: number;
+  armsMaskPrompt: string;
+  armsMaskThreshold: number;
+  armsMaskGrow: number;
+  armsMaskFeather: number;
+  neckMaskPrompt: string;
+  neckMaskThreshold: number;
+  neckMaskGrow: number;
+  neckMaskFeather: number;
+  skinMaskPrompt: string;
+  skinMaskThreshold: number;
+  skinMaskGrow: number;
+  skinMaskFeather: number;
+  legsMaskPrompt: string;
+  legsMaskThreshold: number;
+  legsMaskGrow: number;
+  legsMaskFeather: number;
+  feetMaskPrompt: string;
+  feetMaskThreshold: number;
+  feetMaskGrow: number;
+  feetMaskFeather: number;
 };
 
 const COMFYUI_IMAGE_TARGET_AREA = (() => {
@@ -174,6 +209,17 @@ function readOptionalStringEnv(name: string): string | null {
   return trimmed ? trimmed : null;
 }
 
+function normalizeComfyUiInpaintMaskContent(value: string | null | undefined): ComfyUiInpaintMaskContent | null {
+  const normalized = value?.trim().toLowerCase().replace(/[-\s]+/g, "_") ?? "";
+  if (normalized === "fill") {
+    return "fill";
+  }
+  if (normalized === "latent_noise" || normalized === "latent" || normalized === "noise") {
+    return "latent_noise";
+  }
+  return null;
+}
+
 function normalizeComfyUiInpaintPreset(preset: string | null | undefined): string | null {
   const normalized = preset?.trim().toLowerCase().replace(/[-\s]+/g, "_") ?? "";
   if (!normalized) {
@@ -245,7 +291,7 @@ function isComfyUiClothingMaskPrompt(maskPrompt: string | null | undefined): boo
 function normalizeComfyUiTargetMaskPrompt(maskPrompt: string): string {
   const normalized = maskPrompt.trim();
   if (isComfyUiHairMaskPrompt(normalized)) {
-    return "hair, excluding face and skin";
+    return "hair";
   }
   if (isComfyUiClothingMaskPrompt(normalized)) {
     return `${normalized}, excluding face, skin, hair, eyes, and neck`;
@@ -254,6 +300,263 @@ function normalizeComfyUiTargetMaskPrompt(maskPrompt: string): string {
     return "both eyes";
   }
   return normalized;
+}
+
+function shouldSubtractComfyUiFaceMask(options: ComfyUiGenerationOptions): boolean {
+  return (
+    options.inpaint === true &&
+    normalizeComfyUiMaskMode(options.inpaintMaskMode) === "target" &&
+    normalizeComfyUiInpaintMode(options.inpaintMode) !== "extend" &&
+    inferComfyUiInpaintPreset(options) !== "background" &&
+    isComfyUiHairMaskPrompt(options.maskPrompt)
+  );
+}
+
+function resolveComfyUiMaskProtectionSettings(options: ComfyUiGenerationOptions): ComfyUiMaskProtectionSettings {
+  if (!shouldSubtractComfyUiFaceMask(options)) {
+    return {
+      enabled: false,
+      maskPrompt: "",
+      maskThreshold: 0,
+      maskGrow: 0,
+      maskFeather: 0,
+      clothingMaskPrompt: "",
+      clothingMaskThreshold: 0,
+      clothingMaskGrow: 0,
+      clothingMaskFeather: 0,
+      armsMaskPrompt: "",
+      armsMaskThreshold: 0,
+      armsMaskGrow: 0,
+      armsMaskFeather: 0,
+      neckMaskPrompt: "",
+      neckMaskThreshold: 0,
+      neckMaskGrow: 0,
+      neckMaskFeather: 0,
+      skinMaskPrompt: "",
+      skinMaskThreshold: 0,
+      skinMaskGrow: 0,
+      skinMaskFeather: 0,
+      legsMaskPrompt: "",
+      legsMaskThreshold: 0,
+      legsMaskGrow: 0,
+      legsMaskFeather: 0,
+      feetMaskPrompt: "",
+      feetMaskThreshold: 0,
+      feetMaskGrow: 0,
+      feetMaskFeather: 0,
+    };
+  }
+
+  return {
+    enabled: true,
+    maskPrompt: "face",
+    maskThreshold: clampNumber(
+      readOptionalNumberEnv("COMFYUI_INPAINT_FACE_MASK_THRESHOLD") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_FACE_MASK_THRESHOLD") ??
+        0.42,
+      0,
+      1,
+    ),
+    maskGrow: clampNumber(
+      readOptionalNumberEnv("COMFYUI_INPAINT_FACE_MASK_GROW") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_FACE_MASK_GROW") ??
+        2,
+      0,
+      128,
+    ),
+    maskFeather: clampNumber(
+      readOptionalNumberEnv("COMFYUI_INPAINT_FACE_MASK_FEATHER") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_FACE_MASK_FEATHER") ??
+        1,
+      0,
+      100,
+    ),
+    clothingMaskPrompt:
+      readOptionalStringEnv("COMFYUI_INPAINT_CLOTHING_MASK_PROMPT") ??
+      readOptionalStringEnv("COMFYUI_INPAINT_BODY_MASK_PROMPT") ??
+      readOptionalStringEnv("ANIMA3_INPAINT_CLOTHING_MASK_PROMPT") ??
+      readOptionalStringEnv("ANIMA3_INPAINT_BODY_MASK_PROMPT") ??
+      "clothing",
+    clothingMaskThreshold: clampNumber(
+      readOptionalNumberEnv("COMFYUI_INPAINT_CLOTHING_MASK_THRESHOLD") ??
+        readOptionalNumberEnv("COMFYUI_INPAINT_BODY_MASK_THRESHOLD") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_CLOTHING_MASK_THRESHOLD") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_BODY_MASK_THRESHOLD") ??
+        0.42,
+      0,
+      1,
+    ),
+    clothingMaskGrow: clampNumber(
+      readOptionalNumberEnv("COMFYUI_INPAINT_CLOTHING_MASK_GROW") ??
+        readOptionalNumberEnv("COMFYUI_INPAINT_BODY_MASK_GROW") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_CLOTHING_MASK_GROW") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_BODY_MASK_GROW") ??
+        2,
+      0,
+      128,
+    ),
+    clothingMaskFeather: clampNumber(
+      readOptionalNumberEnv("COMFYUI_INPAINT_CLOTHING_MASK_FEATHER") ??
+        readOptionalNumberEnv("COMFYUI_INPAINT_BODY_MASK_FEATHER") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_CLOTHING_MASK_FEATHER") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_BODY_MASK_FEATHER") ??
+        1,
+      0,
+      100,
+    ),
+    armsMaskPrompt:
+      readOptionalStringEnv("COMFYUI_INPAINT_ARMS_MASK_PROMPT") ??
+      readOptionalStringEnv("ANIMA3_INPAINT_ARMS_MASK_PROMPT") ??
+      "arms",
+    armsMaskThreshold: clampNumber(
+      readOptionalNumberEnv("COMFYUI_INPAINT_ARMS_MASK_THRESHOLD") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_ARMS_MASK_THRESHOLD") ??
+        0.42,
+      0,
+      1,
+    ),
+    armsMaskGrow: clampNumber(
+      readOptionalNumberEnv("COMFYUI_INPAINT_ARMS_MASK_GROW") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_ARMS_MASK_GROW") ??
+        2,
+      0,
+      128,
+    ),
+    armsMaskFeather: clampNumber(
+      readOptionalNumberEnv("COMFYUI_INPAINT_ARMS_MASK_FEATHER") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_ARMS_MASK_FEATHER") ??
+        1,
+      0,
+      100,
+    ),
+    neckMaskPrompt:
+      readOptionalStringEnv("COMFYUI_INPAINT_NECK_MASK_PROMPT") ??
+      readOptionalStringEnv("ANIMA3_INPAINT_NECK_MASK_PROMPT") ??
+      "neck",
+    neckMaskThreshold: clampNumber(
+      readOptionalNumberEnv("COMFYUI_INPAINT_NECK_MASK_THRESHOLD") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_NECK_MASK_THRESHOLD") ??
+        0.36,
+      0,
+      1,
+    ),
+    neckMaskGrow: clampNumber(
+      readOptionalNumberEnv("COMFYUI_INPAINT_NECK_MASK_GROW") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_NECK_MASK_GROW") ??
+        4,
+      0,
+      128,
+    ),
+    neckMaskFeather: clampNumber(
+      readOptionalNumberEnv("COMFYUI_INPAINT_NECK_MASK_FEATHER") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_NECK_MASK_FEATHER") ??
+        2,
+      0,
+      100,
+    ),
+    skinMaskPrompt:
+      readOptionalStringEnv("COMFYUI_INPAINT_SKIN_MASK_PROMPT") ??
+      readOptionalStringEnv("ANIMA3_INPAINT_SKIN_MASK_PROMPT") ??
+      "shoulders",
+    skinMaskThreshold: clampNumber(
+      readOptionalNumberEnv("COMFYUI_INPAINT_SKIN_MASK_THRESHOLD") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_SKIN_MASK_THRESHOLD") ??
+        0.42,
+      0,
+      1,
+    ),
+    skinMaskGrow: clampNumber(
+      readOptionalNumberEnv("COMFYUI_INPAINT_SKIN_MASK_GROW") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_SKIN_MASK_GROW") ??
+        1,
+      0,
+      128,
+    ),
+    skinMaskFeather: clampNumber(
+      readOptionalNumberEnv("COMFYUI_INPAINT_SKIN_MASK_FEATHER") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_SKIN_MASK_FEATHER") ??
+        1,
+      0,
+      100,
+    ),
+    legsMaskPrompt:
+      readOptionalStringEnv("COMFYUI_INPAINT_LEGS_MASK_PROMPT") ??
+      readOptionalStringEnv("ANIMA3_INPAINT_LEGS_MASK_PROMPT") ??
+      "legs",
+    legsMaskThreshold: clampNumber(
+      readOptionalNumberEnv("COMFYUI_INPAINT_LEGS_MASK_THRESHOLD") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_LEGS_MASK_THRESHOLD") ??
+        0.42,
+      0,
+      1,
+    ),
+    legsMaskGrow: clampNumber(
+      readOptionalNumberEnv("COMFYUI_INPAINT_LEGS_MASK_GROW") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_LEGS_MASK_GROW") ??
+        1,
+      0,
+      128,
+    ),
+    legsMaskFeather: clampNumber(
+      readOptionalNumberEnv("COMFYUI_INPAINT_LEGS_MASK_FEATHER") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_LEGS_MASK_FEATHER") ??
+        1,
+      0,
+      100,
+    ),
+    feetMaskPrompt:
+      readOptionalStringEnv("COMFYUI_INPAINT_FEET_MASK_PROMPT") ??
+      readOptionalStringEnv("ANIMA3_INPAINT_FEET_MASK_PROMPT") ??
+      "feet",
+    feetMaskThreshold: clampNumber(
+      readOptionalNumberEnv("COMFYUI_INPAINT_FEET_MASK_THRESHOLD") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_FEET_MASK_THRESHOLD") ??
+        0.42,
+      0,
+      1,
+    ),
+    feetMaskGrow: clampNumber(
+      readOptionalNumberEnv("COMFYUI_INPAINT_FEET_MASK_GROW") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_FEET_MASK_GROW") ??
+        1,
+      0,
+      128,
+    ),
+    feetMaskFeather: clampNumber(
+      readOptionalNumberEnv("COMFYUI_INPAINT_FEET_MASK_FEATHER") ??
+        readOptionalNumberEnv("ANIMA3_INPAINT_FEET_MASK_FEATHER") ??
+        1,
+      0,
+      100,
+    ),
+  };
+}
+
+function resolveComfyUiInpaintMaskContent(
+  options: ComfyUiGenerationOptions,
+  inpaint: boolean,
+  maskMode: string,
+): ComfyUiInpaintMaskContent {
+  const requestedOverride = normalizeComfyUiInpaintMaskContent(
+    readOptionalStringEnv("COMFYUI_INPAINT_MASK_CONTENT") ??
+      readOptionalStringEnv("ANIMA3_INPAINT_MASK_CONTENT"),
+  );
+  const hairOverride = normalizeComfyUiInpaintMaskContent(
+    readOptionalStringEnv("COMFYUI_HAIR_RECOLOR_MASK_CONTENT") ??
+      readOptionalStringEnv("ANIMA3_HAIR_RECOLOR_MASK_CONTENT"),
+  );
+  const useHairRecolorContent =
+    inpaint &&
+    maskMode === "target" &&
+    normalizeComfyUiInpaintMode(options.inpaintMode) !== "extend" &&
+    inferComfyUiInpaintPreset(options) !== "background" &&
+    isComfyUiHairMaskPrompt(options.maskPrompt);
+
+  if (useHairRecolorContent) {
+    return hairOverride ?? requestedOverride ?? "fill";
+  }
+
+  return requestedOverride ?? "fill";
 }
 
 function resolveComfyUiInpaintSettings(options: ComfyUiGenerationOptions): ComfyUiInpaintSettings {
@@ -302,14 +605,15 @@ function resolveComfyUiInpaintSettings(options: ComfyUiGenerationOptions): Comfy
   // Hair recolors were frequently too sparse or noisy. Give them a slightly
   // wider but still bounded detection profile.
   const hairRecolorAdjustments =
-    inferredPreset === "tight_recolor" && hairMaskPrompt && inpaintMode !== "extend"
+    inferredPreset !== "background" && hairMaskPrompt && inpaintMode !== "extend"
       ? {
-          // Balance between over-selecting subject vs empty detections.
-          maskThreshold: Math.min(baseMaskThreshold, 0.45),
-          maskGrow: Math.min(baseMaskGrow, 3),
-          maskFeather: Math.min(baseMaskFeather, 2),
-          cfg: 9,
-          referenceDenoise: 0.72,
+          // Hair masks need to catch small strands; face subtraction handles
+          // protecting nearby facial pixels in workflows that use the protection placeholders.
+          maskThreshold: Math.min(baseMaskThreshold, 0.42),
+          maskGrow: Math.max(baseMaskGrow, 10),
+          maskFeather: Math.max(baseMaskFeather, 8),
+          cfg: 5,
+          referenceDenoise: 0.8,
         }
       : null;
 
@@ -322,6 +626,17 @@ function resolveComfyUiInpaintSettings(options: ComfyUiGenerationOptions): Comfy
           maskFeather: Math.min(baseMaskFeather, 3),
           cfg: 10,
           referenceDenoise: 0.72,
+        }
+      : null;
+
+  const broadStructureRecolorAdjustments =
+    inferredPreset === "broad_recolor" && !clothingMaskPrompt && !hairMaskPrompt && inpaintMode !== "extend"
+      ? {
+          // Larger non-clothing masks need the source pose/scene to dominate;
+          // crop-and-stitch keeps structure anchored, so denoise can carry the
+          // visible color change while CFG stays moderate.
+          cfg: 6,
+          referenceDenoise: 0.68,
         }
       : null;
 
@@ -367,6 +682,7 @@ function resolveComfyUiInpaintSettings(options: ComfyUiGenerationOptions): Comfy
     cfg: clampNumber(
       hairExtendAdjustments?.cfg ??
         clothingRecolorAdjustments?.cfg ??
+        broadStructureRecolorAdjustments?.cfg ??
         hairRecolorAdjustments?.cfg ??
         options.cfg ??
         readOptionalNumberEnv("COMFYUI_INPAINT_CFG") ??
@@ -378,6 +694,7 @@ function resolveComfyUiInpaintSettings(options: ComfyUiGenerationOptions): Comfy
     referenceDenoise: clampNumber(
       hairExtendAdjustments?.referenceDenoise ??
         clothingRecolorAdjustments?.referenceDenoise ??
+        broadStructureRecolorAdjustments?.referenceDenoise ??
         hairRecolorAdjustments?.referenceDenoise ??
         options.referenceDenoise ??
         options.denoise ??
@@ -479,6 +796,48 @@ function resolveComfyUiWorkflowMaskPrompt(
   return maskPrompt;
 }
 
+function stripComfyUiHairRecolorPreservationClauses(prompt: string, maskPrompt: string | null | undefined): string {
+  if (!isComfyUiHairMaskPrompt(maskPrompt)) {
+    return prompt;
+  }
+
+  const hairShapeTerms =
+    String.raw`(?:hair(?:style)?|haircut|braid|braids|bangs|fringe|parting|silhouette|shape|strand\s+layout)`;
+  const optionalExisting = String.raw`(?:the\s+)?(?:existing\s+)?`;
+  const joinedHairShapeTerms = String.raw`${optionalExisting}${hairShapeTerms}(?:\s+and\s+${optionalExisting}${hairShapeTerms})*`;
+  const preserveClause = new RegExp(String.raw`\s*,?\s*(?:while\s+)?preserv(?:e|ing)\s+${joinedHairShapeTerms}\.?`, "gi");
+  const keepClause = new RegExp(String.raw`\s*,?\s*(?:keep|keeping)\s+${joinedHairShapeTerms}\.?`, "gi");
+
+  return prompt
+    .replace(preserveClause, "")
+    .replace(keepClause, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+,/g, ",")
+    .replace(/,\s*$/, "")
+    .trim();
+}
+
+function stripComfyUiNegativeInpaintClauses(prompt: string): string {
+  return prompt
+    .replace(/\s*,?\s*\b(?:not|no|without)\s+[^,.]+/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+,/g, ",")
+    .replace(/,\s*$/, "")
+    .trim();
+}
+
+function strengthenComfyUiHairRecolorPrompt(prompt: string, maskPrompt: string | null | undefined): string {
+  if (!isComfyUiHairMaskPrompt(maskPrompt) || !/\b(?:color|colour|recolor|recolour|red|orange|yellow|green|blue|purple|pink|white|black|brown|blonde|grey|gray)\b/i.test(prompt)) {
+    return prompt;
+  }
+
+  if (/\b(?:red|orange|red-orange|red orange|ginger|copper|auburn)\b/i.test(prompt)) {
+    return `${prompt}, vivid red-orange hair dye, saturated red-orange hair color, red-orange tones throughout, natural shading`;
+  }
+
+  return `${prompt}, strong visible color change, natural shading`;
+}
+
 function normalizeComfyUiExtendDirection(direction: string | null | undefined): string {
   const normalized = direction?.trim().toLowerCase() || "down";
   return [
@@ -566,9 +925,10 @@ function buildComfyUiPromptWithDefaults(
     qualityPrefix,
     `localized inpainting edit for the masked ${maskPrompt}: ${prompt}`,
     "change only the masked area",
-    "recolor-only edit when changing colors or materials: keep the same object identity, same garment type, same cut, same fit, same seams, same folds, same silhouette, and same shading structure",
-    "do not redesign or replace the masked object unless the user explicitly asks for a redesign",
-    "do not alter any unmasked regions, including face, skin, clothing, pose, body, or background",
+    "recolor-only edit when changing colors or materials",
+    "use the source image as the structure guide",
+    "keep clothing and accessories from the source image unchanged",
+    "keep all unmasked regions exactly as in the source image",
     "if the user prompt mentions full-scene or full-character details, treat those as style hints for the masked area only",
     "preserve the unmasked image exactly, same lighting and style",
   ].join(", ");
@@ -669,7 +1029,6 @@ function buildComfyUiNegativePrompt(options: ComfyUiGenerationOptions, inpaint: 
       "changed body anatomy",
       "changed pose",
       "changed face",
-      "changed hairstyle shape",
       "new pattern not requested",
       "logo added",
       "text added",
@@ -852,6 +1211,15 @@ function isComfyUiDiagnosticAsset(asset: ComfyUiAsset): boolean {
   return isComfyUiInpaintMaskAsset(asset) || isComfyUiInpaintResultDebugAsset(asset);
 }
 
+function isComfyUiFinalInpaintMaskAsset(asset: ComfyUiAsset): boolean {
+  const filename = asset.filename.toLowerCase();
+  return (
+    isComfyUiInpaintMaskAsset(asset) &&
+    !filename.startsWith(`${COMFYUI_INPAINT_MASK_FILENAME_PREFIX}_detected`) &&
+    !filename.startsWith(`${COMFYUI_INPAINT_MASK_FILENAME_PREFIX}_overlay`)
+  );
+}
+
 function getComfyUiDiagnosticLabel(asset: ComfyUiAsset): string {
   const filename = asset.filename.toLowerCase();
   if (isComfyUiInpaintResultDebugAsset(asset)) {
@@ -874,6 +1242,119 @@ function describeComfyUiAssets(files: ComfyUiAsset[]): string {
     .slice(0, 10)
     .map((file) => [file.subfolder, file.filename].filter(Boolean).join("/"))
     .join(", ");
+}
+
+function parseComfyUiRecolorTargetColor(prompt: string): RgbColor | null {
+  const normalized = prompt.toLowerCase();
+  const colorPatterns: Array<[RegExp, RgbColor]> = [
+    [/\bred[-\s]?orange\b|\borange[-\s]?red\b|\bcopper\b|\bginger\b|\bauburn\b/, { r: 229, g: 83, b: 24 }],
+    [/\borange\b|\btabby\b/, { r: 230, g: 116, b: 28 }],
+    [/\bred\b/, { r: 210, g: 42, b: 42 }],
+    [/\byellow\b|\bgold(?:en)?\b/, { r: 232, g: 188, b: 48 }],
+    [/\bgreen\b|\bemerald\b/, { r: 38, g: 168, b: 96 }],
+    [/\bcyan\b|\bteal\b/, { r: 26, g: 174, b: 180 }],
+    [/\bblue\b/, { r: 54, g: 116, b: 220 }],
+    [/\bpurple\b|\bviolet\b/, { r: 132, g: 72, b: 190 }],
+    [/\bpink\b|\bmagenta\b/, { r: 224, g: 92, b: 154 }],
+    [/\bbrown\b/, { r: 128, g: 77, b: 42 }],
+    [/\bblack\b/, { r: 28, g: 25, b: 24 }],
+    [/\bwhite\b/, { r: 236, g: 232, b: 220 }],
+    [/\bgrey\b|\bgray\b|\bsilver\b/, { r: 150, g: 150, b: 150 }],
+  ];
+
+  return colorPatterns.find(([pattern]) => pattern.test(normalized))?.[1] ?? null;
+}
+
+function shouldUseComfyUiMaskedTintReference(options: ComfyUiGenerationOptions): boolean {
+  const maskMode = normalizeComfyUiMaskMode(options.inpaintMaskMode);
+  const inpaintPreset = inferComfyUiInpaintPreset(options);
+  const inpaintMode = normalizeComfyUiInpaintMode(options.inpaintMode);
+  const hairMaskPrompt = isComfyUiHairMaskPrompt(options.maskPrompt);
+  const broadStructureRecolor =
+    inpaintPreset === "broad_recolor" &&
+    !isComfyUiClothingMaskPrompt(options.maskPrompt) &&
+    !hairMaskPrompt;
+  const hairRecolor = inpaintPreset === "tight_recolor" && hairMaskPrompt;
+
+  return (
+    options.mode === "image" &&
+    options.inpaint === true &&
+    maskMode === "target" &&
+    inpaintMode !== "extend" &&
+    (broadStructureRecolor || hairRecolor) &&
+    parseComfyUiRecolorTargetColor(options.prompt) !== null
+  );
+}
+
+function extractComfyUiReferenceImageBuffer(options: ComfyUiGenerationOptions): Buffer | null {
+  if (options.referenceImageDataUrl) {
+    const base64 = options.referenceImageDataUrl.replace(/^data:[^;]+;base64,/i, "");
+    return Buffer.from(base64, "base64");
+  }
+
+  const firstReferenceImage = options.referenceImages?.[0];
+  return firstReferenceImage ? Buffer.from(firstReferenceImage.data, "base64") : null;
+}
+
+async function buildComfyUiMaskedTintReferenceImage(
+  options: ComfyUiGenerationOptions,
+  generatedImageBuffer: Buffer,
+  maskBuffer: Buffer,
+): Promise<Buffer | null> {
+  const targetColor = parseComfyUiRecolorTargetColor(options.prompt);
+  const sourceBuffer = extractComfyUiReferenceImageBuffer(options);
+  if (!targetColor || !sourceBuffer) {
+    return null;
+  }
+
+  const metadata = await sharp(generatedImageBuffer).metadata();
+  if (!metadata.width || !metadata.height) {
+    return null;
+  }
+
+  const width = metadata.width;
+  const height = metadata.height;
+  const [source, mask] = await Promise.all([
+    sharp(sourceBuffer)
+      .resize(width, height, { fit: "cover", position: "center" })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true }),
+    sharp(maskBuffer).resize(width, height, { fit: "fill" }).greyscale().raw().toBuffer(),
+  ]);
+
+  const pixels = Buffer.from(source.data);
+  const targetLuma = 0.2126 * targetColor.r + 0.7152 * targetColor.g + 0.0722 * targetColor.b;
+  const safeTargetLuma = Math.max(targetLuma, 1);
+
+  for (let pixelIndex = 0, maskIndex = 0; pixelIndex < pixels.length; pixelIndex += 4, maskIndex += 1) {
+    const rawMaskAlpha = (mask[maskIndex] ?? 0) / 255;
+    if (rawMaskAlpha <= 0.35) {
+      continue;
+    }
+    const maskAlpha = (rawMaskAlpha - 0.35) / 0.65;
+
+    const sourceR = pixels[pixelIndex] ?? 0;
+    const sourceG = pixels[pixelIndex + 1] ?? 0;
+    const sourceB = pixels[pixelIndex + 2] ?? 0;
+    const sourceLuma = 0.2126 * sourceR + 0.7152 * sourceG + 0.0722 * sourceB;
+    const shade = Math.max(0.2, Math.min(1.45, sourceLuma / safeTargetLuma));
+    const blend = Math.min(0.9, maskAlpha * 0.85);
+
+    pixels[pixelIndex] = Math.round(sourceR * (1 - blend) + Math.min(255, targetColor.r * shade) * blend);
+    pixels[pixelIndex + 1] = Math.round(sourceG * (1 - blend) + Math.min(255, targetColor.g * shade) * blend);
+    pixels[pixelIndex + 2] = Math.round(sourceB * (1 - blend) + Math.min(255, targetColor.b * shade) * blend);
+  }
+
+  return sharp(pixels, {
+    raw: {
+      width,
+      height,
+      channels: 4,
+    },
+  })
+    .png()
+    .toBuffer();
 }
 
 function stringifyWorkflowPlaceholder(value: WorkflowPlaceholderValue): string {
@@ -935,6 +1416,102 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function deepCloneWorkflow(workflow: Record<string, unknown>): ComfyUiWorkflow {
   return structuredClone(workflow) as ComfyUiWorkflow;
+}
+
+function isComfyUiNodeLink(value: unknown): value is [string, number] {
+  return Array.isArray(value) && typeof value[0] === "string" && typeof value[1] === "number";
+}
+
+function readComfyUiBooleanValue(value: unknown): boolean | null {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") {
+      return true;
+    }
+    if (normalized === "false") {
+      return false;
+    }
+  }
+
+  return null;
+}
+
+function rewriteComfyUiNodeReferences(workflow: ComfyUiWorkflow, fromNodeId: string, toLink: [string, number]): number {
+  let rewritten = 0;
+
+  for (const node of Object.values(workflow)) {
+    if (!isRecord(node) || !isRecord(node.inputs)) {
+      continue;
+    }
+
+    for (const [inputName, inputValue] of Object.entries(node.inputs)) {
+      if (isComfyUiNodeLink(inputValue) && inputValue[0] === fromNodeId) {
+        node.inputs[inputName] = [...toLink];
+        rewritten += 1;
+      }
+    }
+  }
+
+  return rewritten;
+}
+
+function foldConstantComfyUiConditionals(workflow: ComfyUiWorkflow): number {
+  let totalRewritten = 0;
+
+  for (let pass = 0; pass < 10; pass += 1) {
+    const constantBooleans = new Map<string, boolean>();
+    for (const [nodeId, node] of Object.entries(workflow)) {
+      if (!isRecord(node) || !isRecord(node.inputs) || typeof node.class_type !== "string") {
+        continue;
+      }
+
+      if (node.class_type.toLowerCase().includes("impactconvertdatatype")) {
+        const value = readComfyUiBooleanValue(node.inputs.value);
+        if (value !== null) {
+          constantBooleans.set(nodeId, value);
+        }
+      }
+    }
+
+    let passRewritten = 0;
+    for (const [nodeId, node] of Object.entries(workflow)) {
+      if (!isRecord(node) || !isRecord(node.inputs) || typeof node.class_type !== "string") {
+        continue;
+      }
+
+      if (!node.class_type.toLowerCase().includes("impactconditionalbranch")) {
+        continue;
+      }
+
+      const cond = node.inputs.cond;
+      if (!isComfyUiNodeLink(cond)) {
+        continue;
+      }
+
+      const condValue = constantBooleans.get(cond[0]);
+      if (condValue === undefined) {
+        continue;
+      }
+
+      const selectedInput = condValue ? node.inputs.tt_value : node.inputs.ff_value;
+      if (!isComfyUiNodeLink(selectedInput)) {
+        continue;
+      }
+
+      passRewritten += rewriteComfyUiNodeReferences(workflow, nodeId, selectedInput);
+    }
+
+    totalRewritten += passRewritten;
+    if (passRewritten === 0) {
+      break;
+    }
+  }
+
+  return totalRewritten;
 }
 
 function hasComfyUiVisualWorkflowShape(workflow: ComfyUiWorkflow): boolean {
@@ -1064,7 +1641,9 @@ function buildComfyUiPlaceholderMap(
   const promptOptions = workflowMaskPrompt === maskPrompt ? options : { ...options, maskPrompt: workflowMaskPrompt };
   const rawInpaintSettings = resolveComfyUiInpaintSettings(options);
   const inpaintSettings = resolveComfyUiEffectiveInpaintSettings(rawInpaintSettings, inpaint, maskMode);
+  const protectionSettings = resolveComfyUiMaskProtectionSettings({ ...options, inpaint });
   const denoise = resolveComfyUiEffectiveDenoise(options, inpaint, maskMode);
+  const inpaintMaskContent = resolveComfyUiInpaintMaskContent(options, inpaint, maskMode);
   const inpaintMode = inpaint ? normalizeComfyUiInpaintMode(options.inpaintMode) : "normal";
   const inpaintPreset = inpaint ? inferComfyUiInpaintPreset(options) : "";
   const maskPromptIsHair = isComfyUiHairMaskPrompt(maskPrompt);
@@ -1105,6 +1684,49 @@ function buildComfyUiPlaceholderMap(
     TOMORI_INPAINT_INVERT_MASK: invertInpaintMask,
     TOMORI_INPAINT_MODE: inpaintMode,
     TOMORI_MASK_PROMPT: workflowMaskPrompt,
+    TOMORI_INPAINT_MASK_CONTENT: inpaintMaskContent,
+    TOMORI_INPAINT_USE_LATENT_NOISE_MASK_CONTENT: inpaintMaskContent === "latent_noise",
+    TOMORI_INPAINT_SUBTRACT_FACE_MASK: protectionSettings.enabled,
+    TOMORI_INPAINT_PROTECT_MASK_PROMPT: protectionSettings.maskPrompt,
+    TOMORI_INPAINT_FACE_MASK_PROMPT: protectionSettings.maskPrompt,
+    TOMORI_INPAINT_FACE_MASK_THRESHOLD: protectionSettings.maskThreshold,
+    TOMORI_INPAINT_FACE_MASK_GROW: protectionSettings.maskGrow,
+    TOMORI_INPAINT_FACE_MASK_FEATHER: protectionSettings.maskFeather,
+    TOMORI_INPAINT_SUBTRACT_CLOTHING_MASK: protectionSettings.enabled,
+    TOMORI_INPAINT_CLOTHING_MASK_PROMPT: protectionSettings.clothingMaskPrompt,
+    TOMORI_INPAINT_CLOTHING_MASK_THRESHOLD: protectionSettings.clothingMaskThreshold,
+    TOMORI_INPAINT_CLOTHING_MASK_GROW: protectionSettings.clothingMaskGrow,
+    TOMORI_INPAINT_CLOTHING_MASK_FEATHER: protectionSettings.clothingMaskFeather,
+    TOMORI_INPAINT_SUBTRACT_ARMS_MASK: protectionSettings.enabled,
+    TOMORI_INPAINT_ARMS_MASK_PROMPT: protectionSettings.armsMaskPrompt,
+    TOMORI_INPAINT_ARMS_MASK_THRESHOLD: protectionSettings.armsMaskThreshold,
+    TOMORI_INPAINT_ARMS_MASK_GROW: protectionSettings.armsMaskGrow,
+    TOMORI_INPAINT_ARMS_MASK_FEATHER: protectionSettings.armsMaskFeather,
+    TOMORI_INPAINT_SUBTRACT_NECK_MASK: protectionSettings.enabled,
+    TOMORI_INPAINT_NECK_MASK_PROMPT: protectionSettings.neckMaskPrompt,
+    TOMORI_INPAINT_NECK_MASK_THRESHOLD: protectionSettings.neckMaskThreshold,
+    TOMORI_INPAINT_NECK_MASK_GROW: protectionSettings.neckMaskGrow,
+    TOMORI_INPAINT_NECK_MASK_FEATHER: protectionSettings.neckMaskFeather,
+    TOMORI_INPAINT_SUBTRACT_SKIN_MASK: protectionSettings.enabled,
+    TOMORI_INPAINT_SKIN_MASK_PROMPT: protectionSettings.skinMaskPrompt,
+    TOMORI_INPAINT_SKIN_MASK_THRESHOLD: protectionSettings.skinMaskThreshold,
+    TOMORI_INPAINT_SKIN_MASK_GROW: protectionSettings.skinMaskGrow,
+    TOMORI_INPAINT_SKIN_MASK_FEATHER: protectionSettings.skinMaskFeather,
+    TOMORI_INPAINT_SUBTRACT_LEGS_MASK: false,
+    TOMORI_INPAINT_LEGS_MASK_PROMPT: protectionSettings.legsMaskPrompt,
+    TOMORI_INPAINT_LEGS_MASK_THRESHOLD: protectionSettings.legsMaskThreshold,
+    TOMORI_INPAINT_LEGS_MASK_GROW: protectionSettings.legsMaskGrow,
+    TOMORI_INPAINT_LEGS_MASK_FEATHER: protectionSettings.legsMaskFeather,
+    TOMORI_INPAINT_SUBTRACT_FEET_MASK: false,
+    TOMORI_INPAINT_FEET_MASK_PROMPT: protectionSettings.feetMaskPrompt,
+    TOMORI_INPAINT_FEET_MASK_THRESHOLD: protectionSettings.feetMaskThreshold,
+    TOMORI_INPAINT_FEET_MASK_GROW: protectionSettings.feetMaskGrow,
+    TOMORI_INPAINT_FEET_MASK_FEATHER: protectionSettings.feetMaskFeather,
+    TOMORI_INPAINT_SUBTRACT_BODY_MASK: protectionSettings.enabled,
+    TOMORI_INPAINT_BODY_MASK_PROMPT: protectionSettings.clothingMaskPrompt,
+    TOMORI_INPAINT_BODY_MASK_THRESHOLD: protectionSettings.clothingMaskThreshold,
+    TOMORI_INPAINT_BODY_MASK_GROW: protectionSettings.clothingMaskGrow,
+    TOMORI_INPAINT_BODY_MASK_FEATHER: protectionSettings.clothingMaskFeather,
     TOMORI_GROUNDINGDINO_MODEL:
       readOptionalStringEnv("COMFYUI_GROUNDINGDINO_MODEL") ??
       readOptionalStringEnv("ANIMA3_GROUNDINGDINO_MODEL") ??
@@ -1169,7 +1791,11 @@ async function generateWithComfyUi(
   }
 
   const seed = options.seed ?? generateComfyUiSeed();
-  const generationOptions = { ...options, seed };
+  const sanitizedPrompt = stripComfyUiNegativeInpaintClauses(
+    stripComfyUiHairRecolorPreservationClauses(options.prompt, options.maskPrompt),
+  );
+  const strengthenedPrompt = strengthenComfyUiHairRecolorPrompt(sanitizedPrompt || options.prompt, options.maskPrompt);
+  const generationOptions = { ...options, prompt: strengthenedPrompt, seed };
   const dimensions = buildComfyUiDimensions(generationOptions);
   const referencePayload = buildComfyUiReferencePayload(generationOptions.referenceImages ?? []);
   const placeholders = buildComfyUiPlaceholderMap(endpoint, generationOptions, dimensions, referencePayload);
@@ -1183,6 +1809,7 @@ async function generateWithComfyUi(
   }
 
   const preparedWorkflow = replaceWorkflowPlaceholders(workflow, placeholders) as ComfyUiWorkflow;
+  const constantConditionalRewrites = foldConstantComfyUiConditionals(preparedWorkflow);
   const defaultsApplied =
     generationOptions.mode === "image" ? applyComfyUiImageInputDefaults(preparedWorkflow, generationOptions) : 0;
   if (generationOptions.mode === "image") {
@@ -1207,6 +1834,7 @@ async function generateWithComfyUi(
         cfg: inpaintSettings.cfg,
         referenceDenoise: denoise,
         defaultsApplied,
+        constantConditionalRewrites,
       })}`,
     );
   }
@@ -1265,7 +1893,8 @@ async function generateWithComfyUi(
         ...(output.gifs ?? []),
         ...(output.videos ?? []),
       ]);
-      if (files.length > 0) {
+      const finalFiles = generationOptions.mode === "image" ? files.filter((file) => !isComfyUiDiagnosticAsset(file)) : files;
+      if (finalFiles.length > 0) {
         return { files, seed };
       }
     }
@@ -1337,7 +1966,7 @@ export async function generateCustomImageViaEndpoint(params: {
   } = params;
 
   if (endpoint.api_style === "comfyui") {
-    const { files, seed: comfyUiSeed } = await generateWithComfyUi(endpoint, apiKey, {
+    const imageGenerationOptions = {
       mode: "image",
       prompt,
       aspectRatio,
@@ -1354,11 +1983,12 @@ export async function generateCustomImageViaEndpoint(params: {
       inpaintExtendGrow,
       inpaintExtendFeather,
       inpaintExtendPadding,
-    });
+    } satisfies ComfyUiGenerationOptions;
+    let { files, seed: comfyUiSeed } = await generateWithComfyUi(endpoint, apiKey, imageGenerationOptions);
     const includeDiagnostics = inpaint === true;
-    const diagnosticFiles = includeDiagnostics ? files.filter(isComfyUiDiagnosticAsset) : [];
-    const imageFiles = files.filter((file) => !isComfyUiDiagnosticAsset(file));
-    const firstFile = imageFiles[0];
+    let diagnosticFiles = includeDiagnostics ? files.filter(isComfyUiDiagnosticAsset) : [];
+    let imageFiles = files.filter((file) => !isComfyUiDiagnosticAsset(file));
+    let firstFile = imageFiles[0];
     if (!firstFile) {
       const outputList = describeComfyUiAssets(files);
       throw new Error(
@@ -1367,7 +1997,41 @@ export async function generateCustomImageViaEndpoint(params: {
         }`,
       );
     }
-    const imageBuffer = await downloadComfyUiAsset(endpoint, apiKey, firstFile);
+    let imageBuffer = await downloadComfyUiAsset(endpoint, apiKey, firstFile);
+    let usedTintReference = false;
+    const finalMaskFile = diagnosticFiles.find(isComfyUiFinalInpaintMaskAsset);
+    if (finalMaskFile && shouldUseComfyUiMaskedTintReference(imageGenerationOptions)) {
+      const finalMaskBuffer = await downloadComfyUiAsset(endpoint, apiKey, finalMaskFile);
+      const tintReferenceBuffer = await buildComfyUiMaskedTintReferenceImage(
+        imageGenerationOptions,
+        imageBuffer,
+        finalMaskBuffer,
+      );
+      if (tintReferenceBuffer) {
+        const tintedReferenceOptions = {
+          ...imageGenerationOptions,
+          referenceImages: undefined,
+          referenceImageDataUrl: `data:image/png;base64,${tintReferenceBuffer.toString("base64")}`,
+          seed: comfyUiSeed,
+        } satisfies ComfyUiGenerationOptions;
+        const tintedReferenceResult = await generateWithComfyUi(endpoint, apiKey, tintedReferenceOptions);
+        files = tintedReferenceResult.files;
+        comfyUiSeed = tintedReferenceResult.seed;
+        diagnosticFiles = includeDiagnostics ? files.filter(isComfyUiDiagnosticAsset) : [];
+        imageFiles = files.filter((file) => !isComfyUiDiagnosticAsset(file));
+        firstFile = imageFiles[0];
+        if (!firstFile) {
+          const outputList = describeComfyUiAssets(files);
+          throw new Error(
+            `ComfyUI tinted-reference workflow returned only diagnostic image outputs and no final image output.${
+              outputList ? ` Returned files: ${outputList}` : ""
+            }`,
+          );
+        }
+        imageBuffer = await downloadComfyUiAsset(endpoint, apiKey, firstFile);
+        usedTintReference = true;
+      }
+    }
     const diagnosticOptions = {
       mode: "image" as const,
       prompt,
@@ -1392,7 +2056,16 @@ export async function generateCustomImageViaEndpoint(params: {
       inpaint === true,
       diagnosticMaskMode,
     );
+    const diagnosticProtectionSettings = resolveComfyUiMaskProtectionSettings({
+      ...diagnosticOptions,
+      inpaint: inpaint === true,
+    });
     const diagnosticReferenceDenoise = resolveComfyUiEffectiveDenoise(
+      diagnosticOptions,
+      inpaint === true,
+      diagnosticMaskMode,
+    );
+    const diagnosticMaskContent = resolveComfyUiInpaintMaskContent(
       diagnosticOptions,
       inpaint === true,
       diagnosticMaskMode,
@@ -1412,6 +2085,38 @@ export async function generateCustomImageViaEndpoint(params: {
       `mask_mode=${diagnosticMaskMode}`,
       `preset=${inferComfyUiInpaintPreset(diagnosticOptions)}`,
       `mode=${normalizeComfyUiInpaintMode(inpaintMode)}`,
+      `mask_content=${diagnosticMaskContent}`,
+      `masked_tint_reference=${usedTintReference}`,
+      `subtract_face_mask=${diagnosticProtectionSettings.enabled}`,
+      ...(diagnosticProtectionSettings.enabled
+        ? [
+            `face_mask_prompt=${JSON.stringify(diagnosticProtectionSettings.maskPrompt)}`,
+            `face_threshold=${diagnosticProtectionSettings.maskThreshold}`,
+            `face_grow=${diagnosticProtectionSettings.maskGrow}`,
+            `face_feather=${diagnosticProtectionSettings.maskFeather}`,
+            `subtract_body_mask=${diagnosticProtectionSettings.enabled}`,
+            `subtract_clothing_mask=${diagnosticProtectionSettings.enabled}`,
+            `clothing_mask_prompt=${JSON.stringify(diagnosticProtectionSettings.clothingMaskPrompt)}`,
+            `clothing_threshold=${diagnosticProtectionSettings.clothingMaskThreshold}`,
+            `clothing_grow=${diagnosticProtectionSettings.clothingMaskGrow}`,
+            `clothing_feather=${diagnosticProtectionSettings.clothingMaskFeather}`,
+            `arms_mask_prompt=${JSON.stringify(diagnosticProtectionSettings.armsMaskPrompt)}`,
+            `arms_threshold=${diagnosticProtectionSettings.armsMaskThreshold}`,
+            `arms_grow=${diagnosticProtectionSettings.armsMaskGrow}`,
+            `arms_feather=${diagnosticProtectionSettings.armsMaskFeather}`,
+            `neck_mask_prompt=${JSON.stringify(diagnosticProtectionSettings.neckMaskPrompt)}`,
+            `neck_threshold=${diagnosticProtectionSettings.neckMaskThreshold}`,
+            `neck_grow=${diagnosticProtectionSettings.neckMaskGrow}`,
+            `neck_feather=${diagnosticProtectionSettings.neckMaskFeather}`,
+            `subtract_skin_mask=${diagnosticProtectionSettings.enabled}`,
+            `skin_mask_prompt=${JSON.stringify(diagnosticProtectionSettings.skinMaskPrompt)}`,
+            `skin_threshold=${diagnosticProtectionSettings.skinMaskThreshold}`,
+            `skin_grow=${diagnosticProtectionSettings.skinMaskGrow}`,
+            `skin_feather=${diagnosticProtectionSettings.skinMaskFeather}`,
+            "subtract_legs_mask=false",
+            "subtract_feet_mask=false",
+          ]
+        : []),
       `extend_direction=${normalizeComfyUiExtendDirection(inpaintExtendDirection)}`,
       `threshold=${diagnosticInpaintSettings.maskThreshold}`,
       `grow=${diagnosticInpaintSettings.maskGrow}`,

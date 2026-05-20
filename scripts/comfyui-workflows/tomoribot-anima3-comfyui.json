@@ -269,7 +269,7 @@
         0
       ],
       "mask": [
-        "227",
+        "268",
         0
       ],
       "noise_mask": true
@@ -283,12 +283,12 @@
         0
       ],
       "positive": [
-        "6",
+        "195",
         0
       ],
       "negative": [
-        "7",
-        0
+        "195",
+        1
       ],
       "latent_image": [
         "204",
@@ -359,7 +359,7 @@
     "class_type": "MaskToImage",
     "inputs": {
       "mask": [
-        "227",
+        "268",
         0
       ]
     }
@@ -378,11 +378,11 @@
     "class_type": "SetLatentNoiseMask",
     "inputs": {
       "samples": [
-        "179",
-        0
+        "195",
+        2
       ],
       "mask": [
-        "227",
+        "268",
         0
       ]
     }
@@ -435,7 +435,7 @@
       "y": 0,
       "resize_source": true,
       "mask": [
-        "227",
+        "268",
         0
       ]
     }
@@ -593,7 +593,7 @@
     "class_type": "InvertMask",
     "inputs": {
       "mask": [
-        "200",
+        "236",
         0
       ]
     }
@@ -606,7 +606,7 @@
         0
       ],
       "ff_value": [
-        "200",
+        "236",
         0
       ],
       "cond": [
@@ -666,7 +666,7 @@
         0
       ],
       "ff_value": [
-        "197",
+        "276",
         0
       ],
       "cond": [
@@ -690,6 +690,588 @@
       "lerp_alpha": 1,
       "decay_factor": 1,
       "fill_holes": true
+    }
+  },
+  "232": {
+    "class_type": "GroundingDinoSAMSegment (segment anything)",
+    "inputs": {
+      "sam_model": [
+        "192",
+        0
+      ],
+      "grounding_dino_model": [
+        "193",
+        0
+      ],
+      "image": [
+        "178",
+        0
+      ],
+      "prompt": "{TOMORI_INPAINT_FACE_MASK_PROMPT}",
+      "threshold": "{TOMORI_INPAINT_FACE_MASK_THRESHOLD}"
+    }
+  },
+  "233": {
+    "class_type": "GrowMaskWithBlur",
+    "inputs": {
+      "mask": [
+        "232",
+        1
+      ],
+      "expand": "{TOMORI_INPAINT_FACE_MASK_GROW}",
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_INPAINT_FACE_MASK_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true
+    }
+  },
+  "234": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "200",
+        0
+      ],
+      "source": [
+        "256",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "operation": "subtract"
+    }
+  },
+  "235": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_INPAINT_SUBTRACT_FACE_MASK}"
+    }
+  },
+  "236": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "234",
+        0
+      ],
+      "ff_value": [
+        "200",
+        0
+      ],
+      "cond": [
+        "235",
+        3
+      ]
+    }
+  },
+  "237": {
+    "class_type": "GroundingDinoSAMSegment (segment anything)",
+    "inputs": {
+      "sam_model": [
+        "192",
+        0
+      ],
+      "grounding_dino_model": [
+        "193",
+        0
+      ],
+      "image": [
+        "178",
+        0
+      ],
+      "prompt": "{TOMORI_INPAINT_CLOTHING_MASK_PROMPT}",
+      "threshold": "{TOMORI_INPAINT_CLOTHING_MASK_THRESHOLD}"
+    }
+  },
+  "238": {
+    "class_type": "GrowMaskWithBlur",
+    "inputs": {
+      "mask": [
+        "237",
+        1
+      ],
+      "expand": "{TOMORI_INPAINT_CLOTHING_MASK_GROW}",
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_INPAINT_CLOTHING_MASK_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true
+    }
+  },
+  "239": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "233",
+        0
+      ],
+      "source": [
+        "241",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "operation": "or"
+    }
+  },
+  "240": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_INPAINT_SUBTRACT_CLOTHING_MASK}"
+    }
+  },
+  "241": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "238",
+        0
+      ],
+      "ff_value": [
+        "233",
+        0
+      ],
+      "cond": [
+        "240",
+        3
+      ]
+    }
+  },
+  "242": {
+    "class_type": "GroundingDinoSAMSegment (segment anything)",
+    "inputs": {
+      "sam_model": [
+        "192",
+        0
+      ],
+      "grounding_dino_model": [
+        "193",
+        0
+      ],
+      "image": [
+        "178",
+        0
+      ],
+      "prompt": "{TOMORI_INPAINT_ARMS_MASK_PROMPT}",
+      "threshold": "{TOMORI_INPAINT_ARMS_MASK_THRESHOLD}"
+    }
+  },
+  "243": {
+    "class_type": "GrowMaskWithBlur",
+    "inputs": {
+      "mask": [
+        "242",
+        1
+      ],
+      "expand": "{TOMORI_INPAINT_ARMS_MASK_GROW}",
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_INPAINT_ARMS_MASK_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true
+    }
+  },
+  "244": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_INPAINT_SUBTRACT_ARMS_MASK}"
+    }
+  },
+  "245": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "243",
+        0
+      ],
+      "ff_value": [
+        "233",
+        0
+      ],
+      "cond": [
+        "244",
+        3
+      ]
+    }
+  },
+  "246": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "239",
+        0
+      ],
+      "source": [
+        "245",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "operation": "or"
+    }
+  },
+  "247": {
+    "class_type": "GroundingDinoSAMSegment (segment anything)",
+    "inputs": {
+      "sam_model": [
+        "192",
+        0
+      ],
+      "grounding_dino_model": [
+        "193",
+        0
+      ],
+      "image": [
+        "178",
+        0
+      ],
+      "prompt": "{TOMORI_INPAINT_NECK_MASK_PROMPT}",
+      "threshold": "{TOMORI_INPAINT_NECK_MASK_THRESHOLD}"
+    }
+  },
+  "248": {
+    "class_type": "GrowMaskWithBlur",
+    "inputs": {
+      "mask": [
+        "247",
+        1
+      ],
+      "expand": "{TOMORI_INPAINT_NECK_MASK_GROW}",
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_INPAINT_NECK_MASK_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true
+    }
+  },
+  "249": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_INPAINT_SUBTRACT_NECK_MASK}"
+    }
+  },
+  "250": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "248",
+        0
+      ],
+      "ff_value": [
+        "233",
+        0
+      ],
+      "cond": [
+        "249",
+        3
+      ]
+    }
+  },
+  "251": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "246",
+        0
+      ],
+      "source": [
+        "250",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "operation": "or"
+    }
+  },
+  "252": {
+    "class_type": "GroundingDinoSAMSegment (segment anything)",
+    "inputs": {
+      "sam_model": [
+        "192",
+        0
+      ],
+      "grounding_dino_model": [
+        "193",
+        0
+      ],
+      "image": [
+        "178",
+        0
+      ],
+      "prompt": "{TOMORI_INPAINT_SKIN_MASK_PROMPT}",
+      "threshold": "{TOMORI_INPAINT_SKIN_MASK_THRESHOLD}"
+    }
+  },
+  "253": {
+    "class_type": "GrowMaskWithBlur",
+    "inputs": {
+      "mask": [
+        "252",
+        1
+      ],
+      "expand": "{TOMORI_INPAINT_SKIN_MASK_GROW}",
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_INPAINT_SKIN_MASK_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true
+    }
+  },
+  "254": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_INPAINT_SUBTRACT_SKIN_MASK}"
+    }
+  },
+  "255": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "253",
+        0
+      ],
+      "ff_value": [
+        "233",
+        0
+      ],
+      "cond": [
+        "254",
+        3
+      ]
+    }
+  },
+  "256": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "251",
+        0
+      ],
+      "source": [
+        "255",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "operation": "or"
+    }
+  },
+  "266": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "178",
+        0
+      ],
+      "source": [
+        "197",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "resize_source": true,
+      "mask": [
+        "268",
+        0
+      ]
+    }
+  },
+  "267": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "227",
+        0
+      ],
+      "source": [
+        "256",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "operation": "subtract"
+    }
+  },
+  "268": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "227",
+        0
+      ],
+      "ff_value": [
+        "227",
+        0
+      ],
+      "cond": [
+        "235",
+        3
+      ]
+    }
+  },
+  "269": {
+    "class_type": "InpaintCropImproved",
+    "inputs": {
+      "image": [
+        "178",
+        0
+      ],
+      "downscale_algorithm": "bilinear",
+      "upscale_algorithm": "bicubic",
+      "preresize": false,
+      "preresize_mode": "ensure minimum resolution",
+      "preresize_min_width": 1024,
+      "preresize_min_height": 1024,
+      "preresize_max_width": 4096,
+      "preresize_max_height": 4096,
+      "mask_fill_holes": true,
+      "mask_expand_pixels": 0,
+      "mask_invert": false,
+      "mask_blend_pixels": 16,
+      "mask_hipass_filter": 0.1,
+      "extend_for_outpainting": false,
+      "extend_up_factor": 1,
+      "extend_down_factor": 1,
+      "extend_left_factor": 1,
+      "extend_right_factor": 1,
+      "context_from_mask_extend_factor": 2.25,
+      "output_resize_to_target_size": true,
+      "output_target_width": 1024,
+      "output_target_height": 1024,
+      "output_padding": "128",
+      "device_mode": "gpu (much faster)",
+      "mask": [
+        "268",
+        0
+      ]
+    }
+  },
+  "270": {
+    "class_type": "InpaintModelConditioning",
+    "inputs": {
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "vae": [
+        "17",
+        0
+      ],
+      "pixels": [
+        "269",
+        1
+      ],
+      "mask": [
+        "269",
+        2
+      ],
+      "noise_mask": true
+    }
+  },
+  "271": {
+    "class_type": "SetLatentNoiseMask",
+    "inputs": {
+      "samples": [
+        "270",
+        2
+      ],
+      "mask": [
+        "269",
+        2
+      ]
+    }
+  },
+  "272": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "16",
+        0
+      ],
+      "positive": [
+        "270",
+        0
+      ],
+      "negative": [
+        "270",
+        1
+      ],
+      "latent_image": [
+        "271",
+        0
+      ],
+      "seed": "{TOMORI_SEED}",
+      "steps": 28,
+      "cfg": "{TOMORI_INPAINT_CFG}",
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": "{TOMORI_INPAINT_DENOISE}"
+    }
+  },
+  "273": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "272",
+        0
+      ],
+      "vae": [
+        "17",
+        0
+      ]
+    }
+  },
+  "274": {
+    "class_type": "InpaintStitchImproved",
+    "inputs": {
+      "stitcher": [
+        "269",
+        0
+      ],
+      "inpainted_image": [
+        "273",
+        0
+      ]
+    }
+  },
+  "275": {
+    "class_type": "ImpactCompare",
+    "inputs": {
+      "a": "{TOMORI_INPAINT_PRESET}",
+      "b": "broad_recolor",
+      "cmp": "a = b"
+    }
+  },
+  "276": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "274",
+        0
+      ],
+      "ff_value": [
+        "266",
+        0
+      ],
+      "cond": [
+        "275",
+        0
+      ]
     }
   }
 }
