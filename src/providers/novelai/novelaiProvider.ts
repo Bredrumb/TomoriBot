@@ -42,6 +42,7 @@ import { getNovelaiToolAdapter } from "./novelaiToolAdapter";
 import { usesOpenAIEndpoint, validateNovelAIApiKey } from "./novelaiService";
 import { novelaiProviderInfo } from "./providerInfo";
 import { getActiveTemperature } from "@/utils/provider/samplingControl";
+import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 
 /**
  * Gets the default NovelAI model with a robust fallback chain:
@@ -220,11 +221,12 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
 
       const {
         builtInTools: availableBuiltInTools,
-        mcpFunctionNames,
+        mcpFunctionNames: availableMcpFunctionNames,
         totalCount,
       } = await getAvailableToolsWithMCP("novelai", toolStateForContext);
 
       let finalBuiltInTools = availableBuiltInTools;
+      let finalMcpFunctionNames = availableMcpFunctionNames;
       if (streamingContext) {
         const minimalContext = {
           streamContext: streamingContext,
@@ -249,15 +251,23 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
         );
       }
 
+      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } =
+        applyDeliberateToolAllowlist({
+          providerLabel: "NovelAI provider",
+          builtInTools: finalBuiltInTools,
+          mcpFunctionNames: finalMcpFunctionNames,
+          allowedToolNames: streamingContext?.deliberateToolAllowedNames,
+        }));
+
       const novelaiAdapter = getNovelaiToolAdapter();
       const allToolsConfig = await novelaiAdapter.getAllToolsInProviderFormat(
         finalBuiltInTools,
         tomoriState.server_id,
-        mcpFunctionNames,
+        finalMcpFunctionNames,
       );
 
       log.info(
-        `NovelAI provider tools loaded: ${finalBuiltInTools.length} built-in + ${mcpFunctionNames.length} MCP = ${totalCount} total tools`,
+        `NovelAI provider tools loaded: ${finalBuiltInTools.length} built-in + ${finalMcpFunctionNames.length} MCP = ${totalCount} total tools`,
       );
 
       return allToolsConfig;

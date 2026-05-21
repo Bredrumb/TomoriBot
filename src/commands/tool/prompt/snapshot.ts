@@ -1,4 +1,4 @@
-import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
+import type { ChatInputCommandInteraction, Client, Message, SlashCommandSubcommandBuilder } from "discord.js";
 import { AttachmentBuilder, EmbedBuilder, MessageFlags } from "discord.js";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -14,7 +14,7 @@ import { getCachedChannelLlm } from "@/utils/cache/channelLlmCache";
 import { loadSavedProviderConfig } from "@/utils/db/dbRead";
 import { buildContext } from "@/utils/text/contextBuilder";
 import { getCachedActivePreset } from "@/utils/cache/stPresetCache";
-import { getCachedPrivacyLevel } from "@/utils/cache/userCache";
+import { getCachedPrivacyLevel, getCachedUserRow } from "@/utils/cache/userCache";
 import { normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { PrivacyLevel, type UserRow, type TomoriState } from "@/types/db/schema";
@@ -50,6 +50,12 @@ import {
 } from "@/utils/provider/thinkingControl";
 import { buildProviderStopStrings } from "@/providers/utils/stopStrings";
 import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
+import {
+  filterDeliberateToolNames,
+  getDeliberateToolIntentResult,
+  getFollowUpToolIntentResult,
+  resolveDeliberateToolMode,
+} from "@/utils/tools/deliberateToolMode";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -62,6 +68,23 @@ const YOUTUBE_URL_PATTERNS = [
   /(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/i,
   /(?:https?:\/\/)?(?:www\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/i,
 ];
+
+const SNAPSHOT_SUPPORTED_VIDEO_MIME_TYPES = [
+  "video/mp4",
+  "video/mpeg",
+  "video/mov",
+  "video/avi",
+  "video/x-flv",
+  "video/mpg",
+  "video/webm",
+  "video/wmv",
+  "video/3gpp",
+];
+
+type SnapshotToolFilter = {
+  disabledByDeliberateMode: boolean;
+  allowedToolNames: string[];
+};
 
 // ─── Tail directive helpers (mirrors cost.ts / tomoriChat.ts) ─────────────────
 
@@ -104,6 +127,106 @@ function insertBeforeLatestDialoguePair(
   }
   const insertAt = dialogueIndexes.length >= 2 ? dialogueIndexes[1] : dialogueIndexes[0];
   contextSegments.splice(insertAt, 0, injectedItem);
+}
+
+function isSnapshotImageAttachment(contentType: string | null | undefined): boolean {
+  return (
+    contentType?.startsWith("image/png") ||
+    contentType?.startsWith("image/jpeg") ||
+    contentType?.startsWith("image/webp") ||
+    contentType?.startsWith("image/heic") ||
+    contentType?.startsWith("image/heif") ||
+    contentType?.startsWith("image/gif") ||
+    false
+  );
+}
+
+function isSnapshotAudioAttachment(contentType: string | null | undefined): boolean {
+  return Boolean(contentType?.startsWith("audio/"));
+}
+
+function isSnapshotVideoAttachment(contentType: string | null | undefined): boolean {
+  return Boolean(contentType && SNAPSHOT_SUPPORTED_VIDEO_MIME_TYPES.some((type) => contentType.startsWith(type)));
+}
+
+function getSnapshotRecentToolAffordanceNames(
+  recentMessages: Message[],
+  currentMessageId: string,
+  clientUserId?: string | null,
+): string[] {
+  const toolNames: string[] = [];
+
+  const lookbackMessages = recentMessages
+    .filter((recentMessage) => recentMessage.id !== currentMessageId)
+    .slice(-8)
+    .reverse();
+
+  for (const msg of lookbackMessages) {
+    const isPersonaOutput = Boolean(msg.webhookId) || (Boolean(clientUserId) && msg.author.id === clientUserId);
+
+    if (!isPersonaOutput) {
+      const recentIntentResult = getDeliberateToolIntentResult(msg.content);
+      toolNames.push(...recentIntentResult.allowedToolNames);
+      if (toolNames.length > 0) break;
+      continue;
+    }
+
+    const attachments = [...msg.attachments.values()];
+
+    if (attachments.some((attachment) => isSnapshotAudioAttachment(attachment.contentType))) {
+      toolNames.push("generate_voice_message");
+    }
+
+    if (attachments.some((attachment) => isSnapshotImageAttachment(attachment.contentType))) {
+      toolNames.push("generate_image", "generate_image_nai");
+    }
+
+    if (attachments.some((attachment) => isSnapshotVideoAttachment(attachment.contentType))) {
+      toolNames.push("generate_video");
+    }
+
+    if (toolNames.length > 0) break;
+  }
+
+  return Array.from(new Set(toolNames));
+}
+
+async function buildSnapshotToolFilter(params: {
+  messagesArray: Message[];
+  clientUserId?: string | null;
+  persona: TomoriState;
+  invokingUserData: UserRow;
+}): Promise<SnapshotToolFilter | null> {
+  const { messagesArray, clientUserId, persona, invokingUserData } = params;
+  const latestUserMessage = [...messagesArray]
+    .reverse()
+    .find((message) => !message.webhookId && message.author.id !== clientUserId);
+
+  const latestUserRow =
+    latestUserMessage && latestUserMessage.author.id !== invokingUserData.user_disc_id
+      ? await getCachedUserRow(latestUserMessage.author.id)
+      : invokingUserData;
+  const deliberateToolModeActive = resolveDeliberateToolMode(
+    persona.config.deliberate_tool_mode,
+    latestUserRow?.personal_deliberate_tool_mode ?? "follow",
+  );
+
+  if (!deliberateToolModeActive) return null;
+
+  const intentText = latestUserMessage?.content ?? "";
+  const directIntent = getDeliberateToolIntentResult(intentText, persona.config.deliberate_tool_triggers);
+  const followUpIntent = getFollowUpToolIntentResult(
+    intentText,
+    latestUserMessage
+      ? getSnapshotRecentToolAffordanceNames(messagesArray, latestUserMessage.id, clientUserId)
+      : [],
+  );
+  const allowedToolNames = Array.from(new Set([...directIntent.allowedToolNames, ...followUpIntent.allowedToolNames]));
+
+  return {
+    disabledByDeliberateMode: allowedToolNames.length === 0,
+    allowedToolNames,
+  };
 }
 
 // ─── Subcommand registration ──────────────────────────────────────────────────
@@ -308,6 +431,14 @@ export async function execute(
     //      used by the live chat pipeline in tomoriChat.ts so snapshot reflects
     //      exactly what the LLM would actually see
     const { sliced: messagesArray } = sliceMessagesAtResetMarker(allMessagesArray);
+    const snapshotToolFilter = fetchTools && format === "json"
+      ? await buildSnapshotToolFilter({
+          messagesArray,
+          clientUserId: client.user?.id,
+          persona: effectivePersona,
+          invokingUserData: userData,
+        })
+      : null;
 
     // 11. Build persona nickname index for webhook attribution
     const personaByNickname = new Map<string, TomoriState>();
@@ -606,7 +737,7 @@ export async function execute(
     let toolsData: Array<Record<string, unknown>> | null = null;
     if (fetchTools && format === "json") {
       try {
-        toolsData = await fetchProviderTools(effectivePersona, providerName);
+        toolsData = await fetchProviderTools(effectivePersona, providerName, snapshotToolFilter);
       } catch (toolError) {
         log.warn(
           `Failed to fetch tools for prompt snapshot (provider=${providerName}): ${(toolError as Error).message}`,
@@ -682,6 +813,9 @@ export async function execute(
       }
     } else {
       descriptionParts.push(localizer(locale, "commands.tool.prompt.snapshot.dm_hint_try_text"));
+      if (fetchTools) {
+        descriptionParts.push(localizer(locale, "commands.tool.prompt.snapshot.dm_tools_filtering_note"));
+      }
     }
     const dmDescription = descriptionParts.join("\n\n");
 
@@ -1034,8 +1168,9 @@ async function buildJsonSnapshot(
     if (!(key in requestData)) requestData[key] = value;
   }
 
-  // 4. Append provider-formatted tools when requested
-  if (toolsData && toolsData.length > 0) {
+  // 4. Append provider-formatted tools when requested, including an empty list
+  //    when per-turn filtering deliberately suppresses every tool.
+  if (toolsData) {
     requestData.tools = toolsData;
   }
 
@@ -1081,14 +1216,19 @@ function selectToolAdapter(providerName: string): MCPCapableToolAdapter {
 
 /**
  * Mirrors the tool-list assembly that `<Provider>Provider.getTools` does at
- * runtime — minus the `streamingContext` filter, which requires a live Discord
- * channel that doesn't exist for a snapshot. Returns the provider's native tool
- * JSON (OpenAI function spec for OpenAI-compat, Gemini schema for Google, etc.).
+ * runtime, including the deliberate-mode per-turn allowlist when it can be
+ * reconstructed from the latest visible user message. Returns the provider's
+ * native tool JSON (OpenAI function spec for OpenAI-compat, Gemini schema for
+ * Google, etc.).
  */
-async function fetchProviderTools(persona: TomoriState, providerName: string): Promise<Array<Record<string, unknown>>> {
+async function fetchProviderTools(
+  persona: TomoriState,
+  providerName: string,
+  toolFilter?: SnapshotToolFilter | null,
+): Promise<Array<Record<string, unknown>>> {
   const activeLlm = persona.persona_llm ?? persona.llm;
 
-  if (!activeLlm.has_tools) {
+  if (!activeLlm.has_tools || toolFilter?.disabledByDeliberateMode) {
     return [];
   }
 
@@ -1127,7 +1267,13 @@ async function fetchProviderTools(persona: TomoriState, providerName: string): P
   };
 
   // 1. Ask registry which built-in tools + MCP functions pass feature-flag gates
-  const { builtInTools, mcpFunctionNames } = await getAvailableToolsWithMCP(providerName, toolStateForContext);
+  let { builtInTools, mcpFunctionNames } = await getAvailableToolsWithMCP(providerName, toolStateForContext);
+
+  if (toolFilter?.allowedToolNames.length) {
+    const allowedSet = new Set(toolFilter.allowedToolNames);
+    builtInTools = builtInTools.filter((tool) => allowedSet.has(tool.name));
+    mcpFunctionNames = filterDeliberateToolNames(mcpFunctionNames, toolFilter.allowedToolNames);
+  }
 
   // 2. Route through the provider adapter to get native tool shape
   const adapter = selectToolAdapter(providerName);

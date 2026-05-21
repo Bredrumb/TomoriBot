@@ -69,6 +69,7 @@ import { openrouterProviderInfo } from "./providerInfo";
 import { buildRuntimeLogitBiasMapForLlm } from "@/utils/provider/logitBiasResolver";
 import { resolveEffectiveOpenRouterSeesYouTube } from "@/utils/provider/openrouterModelCapabilities";
 import { buildActiveSamplingParams, getActiveTemperature } from "@/utils/provider/samplingControl";
+import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 
 /**
  * Gets the default OpenRouter model with a robust fallback chain:
@@ -487,12 +488,13 @@ export class OpenrouterProvider
       // Use centralized tool filtering (built-in + MCP with feature flags)
       const {
         builtInTools: availableBuiltInTools,
-        mcpFunctionNames,
+        mcpFunctionNames: availableMcpFunctionNames,
         totalCount,
       } = await getAvailableToolsWithMCP("openrouter", toolStateForContext);
 
       // Apply streaming context filtering if available
       let finalBuiltInTools = availableBuiltInTools;
+      let finalMcpFunctionNames = availableMcpFunctionNames;
       if (streamingContext) {
         // Create a minimal ToolContext for context-aware availability checking
         const minimalContext = {
@@ -519,16 +521,24 @@ export class OpenrouterProvider
         );
       }
 
+      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } =
+        applyDeliberateToolAllowlist({
+          providerLabel: "OpenRouter provider",
+          builtInTools: finalBuiltInTools,
+          mcpFunctionNames: finalMcpFunctionNames,
+          allowedToolNames: streamingContext?.deliberateToolAllowedNames,
+        }));
+
       // Use the enhanced tool adapter to get all tools (built-in + MCP)
       const openrouterAdapter = getOpenrouterToolAdapter();
       const allToolsConfig = await openrouterAdapter.getAllToolsInOpenrouterFormat(
         finalBuiltInTools,
         tomoriState.server_id,
-        mcpFunctionNames,
+        finalMcpFunctionNames,
       );
 
       log.info(
-        `OpenRouter provider tools loaded: ${finalBuiltInTools.length} built-in + ${mcpFunctionNames.length} MCP = ${totalCount} total tools (centralized filtering applied)`,
+        `OpenRouter provider tools loaded: ${finalBuiltInTools.length} built-in + ${finalMcpFunctionNames.length} MCP = ${totalCount} total tools (centralized filtering applied)`,
       );
 
       return allToolsConfig;

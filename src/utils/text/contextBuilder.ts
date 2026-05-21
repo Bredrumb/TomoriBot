@@ -1055,6 +1055,7 @@ export interface BuildContextParams {
   seesVideos?: boolean;
   hasVisionTool?: boolean;
   explicitLongTermMemoryIntent?: boolean;
+  toolsDisabledForTurn?: boolean;
   /**
    * When `true`, skips the `DEFAULT_SYSTEM_PROMPT` fallback in the humanizer block.
    * Set by the routing wrapper when a SillyTavern preset is active and no custom
@@ -1092,7 +1093,11 @@ export async function buildContext(params: BuildContextParams): Promise<BuildCon
 
   // Skip preset routing for user impersonation
   if (!paramsWithMap.isUserImpersonation) {
-    const tomoriStateForPreset = params.snapshot?.tomoriState ?? (await loadTomoriState(params.guildId));
+    const rawTomoriStateForPreset = params.snapshot?.tomoriState ?? (await loadTomoriState(params.guildId));
+    const tomoriStateForPreset =
+      params.toolsDisabledForTurn && rawTomoriStateForPreset
+        ? { ...rawTomoriStateForPreset, llm: { ...rawTomoriStateForPreset.llm, has_tools: false } }
+        : rawTomoriStateForPreset;
     const serverId = tomoriStateForPreset?.server_id;
     if (serverId) {
       const presetData = await getCachedActivePreset(serverId);
@@ -1209,6 +1214,7 @@ async function buildContextNative({
   seesVideos: seesVideosOverride,
   hasVisionTool = false,
   explicitLongTermMemoryIntent: explicitLongTermMemoryIntentOverride,
+  toolsDisabledForTurn = false,
   suppressDefaultSystemPrompt = false,
   messageIdMap,
 }: BuildContextParams): Promise<{
@@ -1233,7 +1239,11 @@ async function buildContextNative({
     unicodeSpacesEnabled: tomoriConfig.uncensor_unicode_space_enabled,
     sanitizeEnabled: tomoriConfig.uncensor_sanitize_enabled,
   };
-  const tomoriState = snapshot?.tomoriState ?? (await loadTomoriState(guildId));
+  const rawTomoriState = snapshot?.tomoriState ?? (await loadTomoriState(guildId));
+  const tomoriState =
+    toolsDisabledForTurn && rawTomoriState
+      ? { ...rawTomoriState, llm: { ...rawTomoriState.llm, has_tools: false } }
+      : rawTomoriState;
   const toolPromptMacroResolver = createToolPromptMacroResolver({
     provider: tomoriState?.llm?.llm_provider,
     stateForContext:

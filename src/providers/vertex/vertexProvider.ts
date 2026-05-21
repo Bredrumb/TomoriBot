@@ -68,6 +68,7 @@ import { callGoogleStructuredJSON } from "../google/googleStructuredOutput";
 import { generateConversationSummaryGoogle, generateRoleplaySummaryGoogle } from "../google/compactGenerator";
 import { generatePresetFromPrompt } from "../google/presetGenerator";
 import { getActiveTemperature, isParamDisabled } from "@/utils/provider/samplingControl";
+import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 
 /**
  * Gets the default Vertex model with a robust fallback chain:
@@ -403,12 +404,13 @@ export class VertexProvider
 
       const {
         builtInTools: availableBuiltInTools,
-        mcpFunctionNames,
+        mcpFunctionNames: availableMcpFunctionNames,
         totalCount,
       } = await getAvailableToolsWithMCP("vertex", toolStateForContext);
 
       // Apply streaming context filtering if available
       let finalBuiltInTools = availableBuiltInTools;
+      let finalMcpFunctionNames = availableMcpFunctionNames;
       if (streamingContext) {
         const minimalContext = {
           streamContext: streamingContext,
@@ -433,16 +435,24 @@ export class VertexProvider
         );
       }
 
+      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } =
+        applyDeliberateToolAllowlist({
+          providerLabel: "Vertex provider",
+          builtInTools: finalBuiltInTools,
+          mcpFunctionNames: finalMcpFunctionNames,
+          allowedToolNames: streamingContext?.deliberateToolAllowedNames,
+        }));
+
       // Use the Vertex tool adapter to get all tools in Gemini format
       const vertexAdapter = getVertexToolAdapter();
       const allToolsConfig = await vertexAdapter.getAllToolsInProviderFormat(
         finalBuiltInTools,
         tomoriState.server_id,
-        mcpFunctionNames,
+        finalMcpFunctionNames,
       );
 
       log.info(
-        `Vertex provider tools loaded: ${finalBuiltInTools.length} built-in + ${mcpFunctionNames.length} MCP = ${totalCount} total tools`,
+        `Vertex provider tools loaded: ${finalBuiltInTools.length} built-in + ${finalMcpFunctionNames.length} MCP = ${totalCount} total tools`,
       );
 
       return allToolsConfig;

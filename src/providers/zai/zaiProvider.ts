@@ -57,6 +57,7 @@ import type { StreamingContext } from "@/types/tool/interfaces";
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "@/tools/toolRegistry";
 import { log } from "@/utils/misc/logger";
 import { buildRuntimeLogitBiasMapForLlm } from "@/utils/provider/logitBiasResolver";
+import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 
 const DEFAULT_ZAI_MODEL = "zai/glm-4.7";
 
@@ -210,11 +211,12 @@ export class ZaiProvider
 
       const {
         builtInTools: availableBuiltInTools,
-        mcpFunctionNames,
+        mcpFunctionNames: availableMcpFunctionNames,
         totalCount,
       } = await getAvailableToolsWithMCP("zai", toolStateForContext);
 
       let finalBuiltInTools = availableBuiltInTools;
+      let finalMcpFunctionNames = availableMcpFunctionNames;
       if (streamingContext) {
         const minimalContext = {
           streamContext: streamingContext,
@@ -239,15 +241,23 @@ export class ZaiProvider
         );
       }
 
+      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } =
+        applyDeliberateToolAllowlist({
+          providerLabel: "Z.ai provider",
+          builtInTools: finalBuiltInTools,
+          mcpFunctionNames: finalMcpFunctionNames,
+          allowedToolNames: streamingContext?.deliberateToolAllowedNames,
+        }));
+
       const adapter = getZaiToolAdapter();
       const allToolsConfig = await adapter.getAllToolsInOpenAICompatibleFormat(
         finalBuiltInTools,
         tomoriState.server_id,
-        mcpFunctionNames,
+        finalMcpFunctionNames,
       );
 
       log.info(
-        `Z.ai provider tools loaded: ${finalBuiltInTools.length} built-in + ${mcpFunctionNames.length} MCP = ${totalCount} total tools`,
+        `Z.ai provider tools loaded: ${finalBuiltInTools.length} built-in + ${finalMcpFunctionNames.length} MCP = ${totalCount} total tools`,
       );
 
       return allToolsConfig;

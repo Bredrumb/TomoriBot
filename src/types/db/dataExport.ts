@@ -74,6 +74,7 @@ export const personalSettingsExportDataSchema = z.object({
   // Behavioral preferences (added since initial schema)
   privacy_level: z.nativeEnum(PrivacyLevel).optional(),
   personal_dtm: z.enum(["off", "follow", "on"]).optional(),
+  personal_deliberate_tool_mode: z.enum(["off", "follow", "on"]).optional(),
   shortterm_cache_crossserver_opt_in: z.boolean().optional(),
 });
 
@@ -155,6 +156,9 @@ export const serverConfigExportSchema = z.object({
   send_message_limit: z.number().int().min(0).max(40).optional(),
   always_reply_enabled: z.boolean().optional(),
   deliberate_trigger_mode: z.boolean().optional(),
+  deliberate_tool_mode: z.boolean().optional(),
+  deliberate_tool_context_turns: z.number().int().min(0).max(10).nullable().optional(),
+  deliberate_tool_triggers: z.record(z.string(), z.array(z.string())).optional(),
   cooldown_type: z.number().int().min(0).max(4).optional(),
   cooldown_length: z.number().int().min(1).max(86400).optional(),
   stm_privacy_bypass: z.boolean().optional(),

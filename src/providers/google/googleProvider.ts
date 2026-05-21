@@ -58,6 +58,7 @@ import { getCachedDefaultLLM, isLLMCacheReady } from "../../utils/cache/llmCache
 import { loadDefaultModelForProvider, loadAvailableModelsForProvider } from "../../utils/db/dbRead";
 import { googleProviderInfo } from "./providerInfo";
 import { getActiveTemperature, isParamDisabled } from "@/utils/provider/samplingControl";
+import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 
 /**
  * Gets the default Google Gemini model with a robust fallback chain:
@@ -395,12 +396,13 @@ export class GoogleProvider
       // Use centralized tool filtering (built-in + MCP with feature flags)
       const {
         builtInTools: availableBuiltInTools,
-        mcpFunctionNames,
+        mcpFunctionNames: availableMcpFunctionNames,
         totalCount,
       } = await getAvailableToolsWithMCP("google", toolStateForContext);
 
       // Apply streaming context filtering if available
       let finalBuiltInTools = availableBuiltInTools;
+      let finalMcpFunctionNames = availableMcpFunctionNames;
       if (streamingContext) {
         // Create a minimal ToolContext for context-aware availability checking
         const minimalContext = {
@@ -429,17 +431,25 @@ export class GoogleProvider
         );
       }
 
+      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } =
+        applyDeliberateToolAllowlist({
+          providerLabel: "Google provider",
+          builtInTools: finalBuiltInTools,
+          mcpFunctionNames: finalMcpFunctionNames,
+          allowedToolNames: streamingContext?.deliberateToolAllowedNames,
+        }));
+
       // Use the enhanced tool adapter to get all tools (built-in + MCP)
       // Pass the pre-filtered MCP function names to ensure centralized filtering
       const googleAdapter = getGoogleToolAdapter();
       const allToolsConfig = await googleAdapter.getAllToolsInGoogleFormat(
         finalBuiltInTools,
         tomoriState.server_id,
-        mcpFunctionNames, // Pass filtered MCP functions from centralized filtering
+        finalMcpFunctionNames, // Pass filtered MCP functions from centralized filtering
       );
 
       log.info(
-        `Google provider tools loaded: ${finalBuiltInTools.length} built-in + ${mcpFunctionNames.length} MCP = ${totalCount} total tools (centralized filtering applied)`,
+        `Google provider tools loaded: ${finalBuiltInTools.length} built-in + ${finalMcpFunctionNames.length} MCP = ${totalCount} total tools (centralized filtering applied)`,
       );
 
       return allToolsConfig;

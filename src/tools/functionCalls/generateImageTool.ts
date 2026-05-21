@@ -33,7 +33,7 @@ import { safeDownload } from "@/utils/security/safeDownload";
 export class GenerateImageTool extends BaseTool {
   name = "generate_image";
   description =
-    "Generate an AI image using the active provider's native image model. Provide a detailed text prompt describing what image you want to create. If you provide a media_id or target_identity reference, focus the prompt on edits or additions only and avoid re-describing the reference image. You can also specify an aspect ratio (default is 1:1). After generating, the image will be sent directly to the Discord channel.";
+    "Generate an AI image using the active provider's native image model. Use this only when the user explicitly asks you to make, draw, generate, create, edit, or continue an image; do not call it for casual visual discussion. If the user asks you to make/draw/generate an image and this tool is available, call this tool instead of only describing the image. Provide a detailed text prompt describing what image you want to create. If you provide a media_id or target_identity reference, focus the prompt on edits or additions only and avoid re-describing the reference image. You can also specify an aspect ratio (default is 1:1). After generating, the image will be sent directly to the Discord channel.";
   category = "utility" as const;
   requiresFeatureFlag = "image_gen";
 

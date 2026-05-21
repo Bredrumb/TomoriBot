@@ -64,6 +64,14 @@ import { localizer, getSupportedLocales, getLocaleSubKeys } from "../../utils/te
 import { escapeRegExp, normalizeCustomEmojisForLlm } from "../../utils/text/stringHelper";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTermMemoryIntent";
+import {
+  getDeliberateToolIntentResult,
+  getFollowUpToolIntentResult,
+  resolveDeliberateToolContextTurns,
+  resolveDeliberateToolMode,
+  type DeliberateToolIntentMatch,
+} from "@/utils/tools/deliberateToolMode";
+import { routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
 import { sql } from "@/utils/db/client";
 import { loadEmojiStickerCache } from "../../utils/cache/emojiStickerCache";
 import { getLinkedMatrixRoom, pendingMatrixReplyChannels, sendMatrixTypingIndicator } from "@/utils/matrix";
@@ -1540,6 +1548,85 @@ function formatAttachmentSystemHint(filename: string, messageId: string): string
 
 function formatAudioAttachmentHint(filename: string): string {
   return `[System: An audio file named \`${filename}\` was sent here but was not transcribed.]`;
+}
+
+function getRecentToolAffordanceNames(
+  recentMessages: Message[],
+  currentMessageId: string,
+  clientUserId?: string | null,
+): string[] {
+  const toolNames: string[] = [];
+
+  const lookbackMessages = recentMessages
+    .filter((recentMessage) => recentMessage.id !== currentMessageId)
+    .slice(-8)
+    .reverse();
+
+  for (const msg of lookbackMessages) {
+    const isPersonaOutput = Boolean(msg.webhookId) || (Boolean(clientUserId) && msg.author.id === clientUserId);
+
+    if (!isPersonaOutput) {
+      const recentIntentResult = getDeliberateToolIntentResult(msg.content);
+      toolNames.push(...recentIntentResult.allowedToolNames);
+      if (toolNames.length > 0) break;
+      continue;
+    }
+
+    const attachments = [...msg.attachments.values()];
+
+    if (attachments.some(isAudioAttachment)) {
+      toolNames.push("generate_voice_message");
+    }
+
+    if (attachments.some((attachment) => isSupportedImageAttachmentContentType(attachment.contentType))) {
+      toolNames.push("generate_image", "generate_image_nai");
+    }
+
+    if (attachments.some((attachment) => isSupportedVideoAttachmentContentType(attachment.contentType))) {
+      toolNames.push("generate_video");
+    }
+
+    if (toolNames.length > 0) break;
+  }
+
+  return Array.from(new Set(toolNames));
+}
+
+type RetainedToolAffordance = {
+  remainingTurns: number;
+};
+
+const retainedToolAffordancesByChannel = new Map<string, Map<string, RetainedToolAffordance>>();
+
+function retainSuccessfulToolAffordance(channelId: string, toolName: string, turns: number): void {
+  if (turns <= 0) return;
+
+  let channelAffordances = retainedToolAffordancesByChannel.get(channelId);
+  if (!channelAffordances) {
+    channelAffordances = new Map<string, RetainedToolAffordance>();
+    retainedToolAffordancesByChannel.set(channelId, channelAffordances);
+  }
+
+  channelAffordances.set(toolName, { remainingTurns: turns });
+}
+
+function consumeRetainedToolAffordanceNames(channelId: string): string[] {
+  const channelAffordances = retainedToolAffordancesByChannel.get(channelId);
+  if (!channelAffordances) return [];
+
+  const toolNames = [...channelAffordances.keys()];
+  for (const [toolName, affordance] of channelAffordances.entries()) {
+    affordance.remainingTurns -= 1;
+    if (affordance.remainingTurns <= 0) {
+      channelAffordances.delete(toolName);
+    }
+  }
+
+  if (channelAffordances.size === 0) {
+    retainedToolAffordancesByChannel.delete(channelId);
+  }
+
+  return toolNames;
 }
 
 function buildRecentMessageMetadataInline(createdAt: number): string {
@@ -5467,6 +5554,95 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
           // Must be `let` so the fallback model loop can swap in a different llm for each attempt.
           let effectiveTomoriState = isRpChannel ? { ...tomoriState, config: effectiveTomoriConfig } : tomoriState;
 
+          const deliberateToolModeActive = resolveDeliberateToolMode(
+            effectiveTomoriState.config.deliberate_tool_mode,
+            userRow?.personal_deliberate_tool_mode ?? "follow",
+          );
+          const deliberateToolIntentText =
+            reminderData && (reminderRecipientID || reminderData.self_reminder)
+              ? `${message.content}\n${reminderData.reminder_purpose}`
+              : message.content;
+          const deliberateToolIntentResult = getDeliberateToolIntentResult(
+            deliberateToolIntentText,
+            effectiveTomoriState.config.deliberate_tool_triggers,
+          );
+          const deliberateToolAllowedNames = [...deliberateToolIntentResult.allowedToolNames];
+          const deliberateToolTriggerMatches: DeliberateToolIntentMatch[] = [...deliberateToolIntentResult.matches];
+          const followUpToolIntentResult = getFollowUpToolIntentResult(
+            deliberateToolIntentText,
+            getRecentToolAffordanceNames(relevantMessagesArray, message.id, client.user?.id),
+          );
+          deliberateToolAllowedNames.push(...followUpToolIntentResult.allowedToolNames);
+          deliberateToolAllowedNames.push(...(streamingContext.endTurnAfterTools ?? []));
+          deliberateToolTriggerMatches.push(...followUpToolIntentResult.matches);
+          const retainedToolNames = consumeRetainedToolAffordanceNames(channel.id);
+          if (deliberateToolModeActive) {
+            deliberateToolAllowedNames.push(...retainedToolNames);
+            deliberateToolTriggerMatches.push(
+              ...retainedToolNames.map((toolName) => ({
+                toolName,
+                trigger: "recent successful tool",
+                source: "follow-up" as const,
+              })),
+            );
+          }
+          if (reminderData && (reminderRecipientID || reminderData.self_reminder)) {
+            if (/\b(voice|audio|speech|say\s+(?:it|this)\s+out\s+loud|spoken)\b/i.test(reminderData.reminder_purpose)) {
+              deliberateToolAllowedNames.push("generate_voice_message");
+              deliberateToolTriggerMatches.push({
+                toolName: "generate_voice_message",
+                trigger: "voice reminder delivery",
+                source: "built-in",
+              });
+            }
+
+            const createTaskIndex = deliberateToolAllowedNames.indexOf("create_task");
+            if (createTaskIndex !== -1) {
+              deliberateToolAllowedNames.splice(createTaskIndex, 1);
+            }
+          }
+          const deliberateToolTriggerMatchByToolName = new Map<string, DeliberateToolIntentMatch>();
+          for (const match of deliberateToolTriggerMatches) {
+            if (
+              deliberateToolAllowedNames.includes(match.toolName) &&
+              !deliberateToolTriggerMatchByToolName.has(match.toolName)
+            ) {
+              deliberateToolTriggerMatchByToolName.set(match.toolName, match);
+            }
+          }
+          const deliberateToolIntent =
+            deliberateToolAllowedNames.length > 0 || (streamingContext.endTurnAfterTools?.length ?? 0) > 0;
+          const toolsDisabledByDeliberateMode =
+            !streamingContext.disableAllTools && deliberateToolModeActive && !deliberateToolIntent;
+
+          if (toolsDisabledByDeliberateMode) {
+            streamingContext.disableAllTools = true;
+            log.info(
+              `Deliberate tool mode: suppressing tools for turn in channel ${channel.id} (no explicit tool intent)`,
+            );
+          } else if (
+            deliberateToolModeActive &&
+            !streamingContext.disableAllTools &&
+            deliberateToolAllowedNames.length > 0
+          ) {
+            streamingContext.deliberateToolAllowedNames = Array.from(new Set(deliberateToolAllowedNames));
+            log.info(
+              `Deliberate tool mode: allowing scoped tools for turn in channel ${channel.id}: ${streamingContext.deliberateToolAllowedNames.join(", ")}`,
+            );
+          }
+
+          if (streamingContext.disableAllTools && effectiveTomoriState.llm.has_tools) {
+            effectiveTomoriState = {
+              ...effectiveTomoriState,
+              llm: {
+                ...effectiveTomoriState.llm,
+                has_tools: false,
+              },
+            };
+            tomoriState = effectiveTomoriState;
+            personaSnapshot = { ...personaSnapshot, tomoriState: effectiveTomoriState };
+          }
+
           // Load emojis and stickers from 5-minute in-memory cache (lazy sync included)
           if (!isDMChannel && guild && currentPersona.server_id) {
             const { emojis, stickers } = await loadEmojiStickerCache(
@@ -5687,6 +5863,7 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
               seesVideos: effectiveContextSeesVideos,
               // Vision tool available when: vision model configured AND chat model can't see images
               hasVisionTool: !!tomoriState?.vision_llm && !(effectiveContextSeesImages ?? tomoriState?.llm.sees_images),
+              toolsDisabledForTurn: streamingContext.disableAllTools,
               messageIdMap,
             });
             contextSegments = appendInjectedContextItems(contextBuild.contextItems, injectedContextItems);
@@ -6607,7 +6784,13 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
                         `Trying fallback ${fi + 1}/${fallbackChain.length}: ${fallbackCodename}`,
                     );
 
-                    effectiveTomoriState = { ...effectiveTomoriState, llm: entry.model };
+                    effectiveTomoriState = {
+                      ...effectiveTomoriState,
+                      llm: {
+                        ...entry.model,
+                        has_tools: streamingContext.disableAllTools ? false : entry.model.has_tools,
+                      },
+                    };
 
                     const fallbackProviderName = entry.model.llm_provider.toLowerCase();
                     if (fallbackProviderName !== primaryProvider) {
@@ -6684,7 +6867,7 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
                         ...effectiveTomoriState.llm,
                         llm_codename: ep.model_name ?? ep.label,
                         llm_provider: "custom",
-                        has_tools: ep.has_tools,
+                        has_tools: streamingContext.disableAllTools ? false : ep.has_tools,
                         sees_images: ep.sees_images,
                         sees_videos: ep.sees_videos,
                         supports_structoutput: ep.supports_structoutput,
@@ -7113,8 +7296,52 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
                   }
 
                   const functionCallStart = Date.now();
-                  const toolResult = await ToolRegistry.executeTool(funcName, funcCall.args || {}, toolContext);
+                  const deliberateAllowedSet = streamingContext.deliberateToolAllowedNames?.length
+                    ? new Set(streamingContext.deliberateToolAllowedNames)
+                    : null;
+                  const isBlockedByDeliberateAllowlist =
+                    deliberateToolModeActive && deliberateAllowedSet !== null && !deliberateAllowedSet.has(funcName);
+                  const toolResult = isBlockedByDeliberateAllowlist
+                    ? {
+                        success: false,
+                        error: `Tool "${funcName}" was not exposed for this deliberate tool mode turn.`,
+                        data: {
+                          status: "blocked_by_deliberate_tool_mode",
+                          functionName: funcName,
+                          allowedToolNames: [...deliberateAllowedSet],
+                        },
+                      }
+                    : await ToolRegistry.executeTool(funcName, funcCall.args || {}, toolContext);
                   const functionCallDuration = Date.now() - functionCallStart;
+                  const deliberateToolTriggerMatch = deliberateToolTriggerMatchByToolName.get(funcName);
+                  if (isBlockedByDeliberateAllowlist) {
+                    log.warn(
+                      `Deliberate tool mode blocked unexposed tool call "${funcName}" in channel ${channel.id}. Allowed: ${[...deliberateAllowedSet].join(", ")}`,
+                    );
+                  }
+                  if (toolResult.success) {
+                    retainSuccessfulToolAffordance(
+                      channel.id,
+                      funcName,
+                      resolveDeliberateToolContextTurns(effectiveTomoriState.config.deliberate_tool_context_turns),
+                    );
+                  }
+
+                  if (deliberateToolModeActive && deliberateToolTriggerMatch) {
+                    const safeTrigger = deliberateToolTriggerMatch.trigger.replace(/`/g, "'");
+                    await routeHiddenToolNotice(
+                      toolContext,
+                      {
+                        color: ColorCode.INFO,
+                        titleKey: "genai.thought_log.title",
+                        description:
+                          `Tool \`${funcName}\` was used after deliberate tool mode exposed it.\n` +
+                          `Trigger: \`${safeTrigger}\`\n` +
+                          `Source: ${deliberateToolTriggerMatch.source}`,
+                      },
+                      "Deliberate tool trigger log",
+                    );
+                  }
 
                   // Log function call timing (especially long-running ones)
                   if (functionCallDuration > 5000) {
@@ -7399,6 +7626,7 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
                         seesVideos: effectiveContextSeesVideos,
                         hasVisionTool:
                           !!tomoriState?.vision_llm && !(effectiveContextSeesImages ?? tomoriState?.llm.sees_images),
+                        toolsDisabledForTurn: streamingContext.disableAllTools,
                         messageIdMap: rebuildMessageIdMap,
                       });
                       contextSegments = appendInjectedContextItems(contextBuild.contextItems, injectedContextItems);
@@ -7673,6 +7901,7 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
                         seesVideos: effectiveContextSeesVideos,
                         hasVisionTool:
                           !!tomoriState?.vision_llm && !(effectiveContextSeesImages ?? tomoriState?.llm.sees_images),
+                        toolsDisabledForTurn: streamingContext.disableAllTools,
                         messageIdMap: rebuildMessageIdMap,
                       });
                       contextSegments = appendInjectedContextItems(contextBuild.contextItems, injectedContextItems);

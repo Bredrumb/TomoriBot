@@ -86,7 +86,28 @@ export async function ensureDiscordUserMention(params: {
     );
 
     if (relevantMessages.size === 0) {
-      log.warn(`No bot or webhook messages found after ${contextLabel}`);
+      log.warn(`No bot or webhook messages found after ${contextLabel}; sending fallback mention`);
+
+      if (!("send" in channel)) {
+        log.warn(`Cannot send fallback mention for ${contextLabel}: channel does not support sending`);
+        return;
+      }
+
+      const mentionToken = `<@${targetUserId}>`;
+      const sentViaFallback = fallbackSender ? await fallbackSender(mentionToken) : false;
+
+      if (!sentViaFallback) {
+        await (channel as SendableChannel).send({
+          content: mentionToken,
+          allowedMentions: {
+            users: [targetUserId],
+            roles: [],
+            parse: [],
+          },
+        });
+      }
+
+      log.info(`Added fallback mention for ${contextLabel}`);
       return;
     }
 

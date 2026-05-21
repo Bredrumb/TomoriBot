@@ -19,6 +19,9 @@ SELECT add_column_if_not_exists('tomori_configs', 'prompt_snapshot_enabled', 'BO
 SELECT add_column_if_not_exists('tomori_configs', 'llm_stop_strings', 'TEXT[]', 'ARRAY[]::TEXT[]');
 SELECT add_column_if_not_exists('tomori_configs', 'llm_stop_speaker_pattern_enabled', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('tomori_configs', 'thread_creation_enabled', 'BOOLEAN', 'true');
+SELECT add_column_if_not_exists('tomori_configs', 'deliberate_tool_mode', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('tomori_configs', 'deliberate_tool_context_turns', 'INTEGER', 'NULL');
+SELECT add_column_if_not_exists('users', 'personal_deliberate_tool_mode', 'TEXT', '''follow''');
 
 -- Ensure all required columns exist in saved_provider_configs table
 SELECT add_column_if_not_exists('saved_provider_configs', 'fallback_model_refs', 'JSONB', '''[]''::JSONB');
