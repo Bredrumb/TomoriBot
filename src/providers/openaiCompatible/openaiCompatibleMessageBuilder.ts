@@ -331,9 +331,25 @@ async function convertImagePartToOpenAIContentPart(
       },
     };
   } catch (error) {
-    log.warn(`Failed to fetch image: ${part.uri}`, {
-      error: error instanceof Error ? error.message : String(error),
-    });
+    const fallback = (part as { fallbackUri?: string }).fallbackUri;
+    if (fallback && fallback !== part.uri) {
+      try {
+        const optimized = await fetchAndOptimizeImage(fallback, part.mimeType);
+        log.info(`OpenAICompatible: Image loaded via fallback CDN URL ${fallback}`);
+        return {
+          type: "image_url",
+          image_url: { url: `data:${optimized.mimeType};base64,${optimized.data}` },
+        };
+      } catch (fallbackErr) {
+        log.warn(`OpenAICompatible: Image processing error (proxy + CDN both failed) ${part.uri}`, {
+          error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+        });
+      }
+    } else {
+      log.warn(`Failed to fetch image: ${part.uri}`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
     return null;
   }
 }

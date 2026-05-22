@@ -1072,9 +1072,22 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
                 });
               }
             } catch (imgErr) {
-              log.warn(`GoogleStreamAdapter: Image processing error ${part.uri}`, {
-                error: imgErr instanceof Error ? imgErr.message : String(imgErr),
-              });
+              const fallback = (part as { fallbackUri?: string }).fallbackUri;
+              if (fallback && fallback !== part.uri) {
+                try {
+                  const optimized = await fetchAndOptimizeImage(fallback, part.mimeType);
+                  geminiParts.push({ inlineData: { mimeType: optimized.mimeType, data: optimized.data } });
+                  log.info(`GoogleStreamAdapter: Image loaded via fallback CDN URL ${fallback}`);
+                } catch (fallbackErr) {
+                  log.warn(`GoogleStreamAdapter: Image processing error (proxy + CDN both failed) ${part.uri}`, {
+                    error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+                  });
+                }
+              } else {
+                log.warn(`GoogleStreamAdapter: Image processing error ${part.uri}`, {
+                  error: imgErr instanceof Error ? imgErr.message : String(imgErr),
+                });
+              }
             }
           } else if (part.type === "image" && "inlineData" in part && part.inlineData) {
             // Handle images that already have base64 data (e.g., from profile picture tool)

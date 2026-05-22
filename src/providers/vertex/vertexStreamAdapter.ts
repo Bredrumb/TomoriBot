@@ -1073,9 +1073,22 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
                 });
               }
             } catch (imgErr) {
-              log.warn(`VertexStreamAdapter: Image processing error ${part.uri}`, {
-                error: imgErr instanceof Error ? imgErr.message : String(imgErr),
-              });
+              const fallback = (part as { fallbackUri?: string }).fallbackUri;
+              if (fallback && fallback !== part.uri) {
+                try {
+                  const optimized = await fetchAndOptimizeImage(fallback, part.mimeType);
+                  geminiParts.push({ inlineData: { mimeType: optimized.mimeType, data: optimized.data } });
+                  log.info(`VertexStreamAdapter: Image loaded via fallback CDN URL ${fallback}`);
+                } catch (fallbackErr) {
+                  log.warn(`VertexStreamAdapter: Image processing error (proxy + CDN both failed) ${part.uri}`, {
+                    error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+                  });
+                }
+              } else {
+                log.warn(`VertexStreamAdapter: Image processing error ${part.uri}`, {
+                  error: imgErr instanceof Error ? imgErr.message : String(imgErr),
+                });
+              }
             }
           } else if (part.type === "image" && "inlineData" in part && part.inlineData) {
             const inlineData = part.inlineData as {

@@ -48,9 +48,26 @@ export interface PendingBoomerang {
     content: string;
     timestamp: string;
   }>;
+  /**
+   * Override for the opening lines of the boomerang context injection.
+   * Defaults to the cross-channel "You have just returned from channel X." narrative.
+   */
+  introText?: string;
+  /** Override for the closing instruction line of the boomerang context injection. */
+  outroText?: string;
 }
 
 const pendingBoomerangs = new Map<string, PendingBoomerang>();
+
+/**
+ * Store a pending boomerang for a given source channel.
+ * Exposed so other tools (e.g. create_thread) can register boomerangs
+ * without duplicating the map or the consume/build logic.
+ * @param boomerang - The boomerang payload to store
+ */
+export function storePendingBoomerang(boomerang: PendingBoomerang): void {
+  pendingBoomerangs.set(boomerang.sourceChannelId, boomerang);
+}
 
 function inferTargetChannelFromTask(task: unknown): string | undefined {
   if (typeof task !== "string") {
@@ -107,14 +124,16 @@ export function buildBoomerangContext(boomerang: PendingBoomerang): StructuredCo
 
   const resultStr = boomerang.success ? "Success" : `Failed: ${boomerang.error ?? "unknown error"}`;
 
-  let contextText =
-    `[System: You have just returned from channel \`${boomerang.targetChannelName}\`.\n` +
-    `Report back naturally on what happened there.\n` +
-    `Outcome: ${resultStr}.`;
+  const intro =
+    boomerang.introText ??
+    `You have just returned from channel \`${boomerang.targetChannelName}\`.\nReport back naturally on what happened there.`;
+  const outro = boomerang.outroText ?? "Now continue the conversation here with a concise update.";
+
+  let contextText = `[System: ${intro}\nOutcome: ${resultStr}.`;
   if (messagesBlock) {
     contextText += `\nHere is what was happening in channel \`${boomerang.targetChannelName}\` (last 10 messages, oldest first):\n${messagesBlock}`;
   }
-  contextText += "\nNow continue the conversation here with a concise update.]";
+  contextText += `\n${outro}]`;
 
   return [
     {

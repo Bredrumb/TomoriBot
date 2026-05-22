@@ -2271,9 +2271,25 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
 
                 log.success(`Successfully added image to message`);
               } catch (imgErr) {
-                log.warn(`Error processing image: ${part.uri}`, {
-                  error: imgErr instanceof Error ? imgErr.message : String(imgErr),
-                });
+                const fallback = (part as { fallbackUri?: string }).fallbackUri;
+                if (fallback && fallback !== part.uri) {
+                  try {
+                    const optimized = await fetchAndOptimizeImage(fallback, part.mimeType);
+                    imageTargetParts.push({
+                      type: "image_url",
+                      image_url: { url: `data:${optimized.mimeType};base64,${optimized.data}` },
+                    });
+                    log.info(`OpenrouterStreamAdapter: Image loaded via fallback CDN URL ${fallback}`);
+                  } catch (fallbackErr) {
+                    log.warn(`OpenrouterStreamAdapter: Image processing error (proxy + CDN both failed) ${part.uri}`, {
+                      error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+                    });
+                  }
+                } else {
+                  log.warn(`Error processing image: ${part.uri}`, {
+                    error: imgErr instanceof Error ? imgErr.message : String(imgErr),
+                  });
+                }
               }
             }
           } else if (part.type === "video") {

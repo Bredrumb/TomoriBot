@@ -12,7 +12,7 @@ export interface TriggerConfig {
  */
 export type ContextPart =
   | { type: "text"; text: string }
-  | { type: "image"; uri: string; mimeType: string } // URI could be a public URL or a data URI
+  | { type: "image"; uri: string; mimeType: string; fallbackUri?: string } // URI could be a public URL or a data URI; fallbackUri tried on fetch failure
   | { type: "video"; uri: string; mimeType: string; isYouTubeLink?: boolean }; // Video support with YouTube detection
 
 export interface ConversationUserReference {

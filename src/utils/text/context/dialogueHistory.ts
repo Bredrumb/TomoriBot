@@ -216,7 +216,12 @@ async function appendImageParts(params: Parameters<typeof appendMediaParts>[0]):
       }
 
       if (attachment.mimeType) {
-        params.parts.push({ type: "image", uri: attachment.proxyUrl, mimeType: attachment.mimeType });
+        params.parts.push({
+          type: "image",
+          uri: attachment.proxyUrl,
+          mimeType: attachment.mimeType,
+          ...(attachment.url !== attachment.proxyUrl && { fallbackUri: attachment.url }),
+        });
       } else {
         log.warn(
           `Skipping image attachment due to missing mimeType: ${attachment.filename} from user ${params.msg.authorName}`,
