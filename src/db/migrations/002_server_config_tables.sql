@@ -276,18 +276,74 @@ CREATE TRIGGER update_server_auto_trigger_configs_timestamp
   BEFORE UPDATE ON server_auto_trigger_configs
   FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
-INSERT INTO server_auto_trigger_configs (
-  server_id, autoch_disc_ids, autoch_persona_overrides, autoch_threshold, autoch_threshold_max
-)
-SELECT
-  server_id,
-  COALESCE(autoch_disc_ids, '{}'),
-  COALESCE(autoch_persona_overrides, '[]'::JSONB),
-  COALESCE(autoch_threshold, 0),
-  COALESCE(autoch_threshold_max, 0)
-FROM tomori_configs
-WHERE server_id IS NOT NULL
-ON CONFLICT (server_id) DO NOTHING;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'server_auto_trigger_configs'
+      AND column_name = 'autoch_persona_overrides'
+  ) THEN
+    INSERT INTO server_auto_trigger_configs (
+      server_id, autoch_disc_ids, autoch_persona_overrides, autoch_threshold, autoch_threshold_max
+    )
+    SELECT
+      server_id,
+      COALESCE(autoch_disc_ids, '{}'),
+      COALESCE(autoch_persona_overrides, '[]'::JSONB),
+      COALESCE(autoch_threshold, 0),
+      COALESCE(autoch_threshold_max, 0)
+    FROM tomori_configs
+    WHERE server_id IS NOT NULL
+    ON CONFLICT (server_id) DO NOTHING;
+  ELSE
+    INSERT INTO server_auto_trigger_configs (
+      server_id, autoch_disc_ids, autoch_threshold, autoch_threshold_max
+    )
+    SELECT
+      server_id,
+      COALESCE(autoch_disc_ids, '{}'),
+      COALESCE(autoch_threshold, 0),
+      COALESCE(autoch_threshold_max, 0)
+    FROM tomori_configs
+    WHERE server_id IS NOT NULL
+    ON CONFLICT (server_id) DO NOTHING;
+
+    IF to_regclass('public.server_auto_trigger_persona_overrides') IS NOT NULL
+      AND EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'tomori_configs'
+          AND column_name = 'autoch_persona_overrides'
+      )
+    THEN
+      INSERT INTO server_auto_trigger_persona_overrides (server_id, channel_disc_id, persona_id)
+      SELECT
+        tc.server_id,
+        (entry->>'channel_disc_id')::TEXT,
+        COALESCE(entry->>'persona_id', entry->>'tomori_id')::INT
+      FROM tomori_configs tc
+      CROSS JOIN LATERAL JSONB_ARRAY_ELEMENTS(
+        CASE
+          WHEN JSONB_TYPEOF(tc.autoch_persona_overrides) = 'array'
+            THEN tc.autoch_persona_overrides
+          ELSE '[]'::JSONB
+        END
+      ) AS entry
+      WHERE
+        tc.server_id IS NOT NULL
+        AND (entry->>'channel_disc_id') IS NOT NULL
+        AND (entry->>'channel_disc_id') <> ''
+        AND COALESCE(entry->>'persona_id', entry->>'tomori_id') ~ '^\d+$'
+        AND EXISTS (
+          SELECT 1 FROM personas p WHERE p.persona_id = COALESCE(entry->>'persona_id', entry->>'tomori_id')::INT
+        )
+      ON CONFLICT (server_id, channel_disc_id) DO NOTHING;
+    END IF;
+  END IF;
+END $$;
 
 -- ── server_capabilities_configs ──────────────────────────────────────────────
 -- Uniform boolean cluster managed by /capabilities manage and /capabilities toggle.

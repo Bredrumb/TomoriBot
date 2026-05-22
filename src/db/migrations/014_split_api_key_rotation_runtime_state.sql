@@ -30,21 +30,36 @@ FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 
 -- 3. Backfill all existing keys — every api_key_rotation row gets a runtime state row.
-INSERT INTO api_key_rotation_runtime_state (
-  rotation_key_id, usage_count, error_count,
-  last_used_at, last_error_at, last_error_type, last_error_message, updated_at
-)
-SELECT
-  rotation_key_id,
-  COALESCE(usage_count, 0),
-  COALESCE(error_count, 0),
-  last_used_at,
-  last_error_at,
-  last_error_type,
-  last_error_message,
-  COALESCE(updated_at, CURRENT_TIMESTAMP)
-FROM api_key_rotation
-ON CONFLICT (rotation_key_id) DO NOTHING;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'api_key_rotation'
+      AND column_name = 'usage_count'
+  ) THEN
+    INSERT INTO api_key_rotation_runtime_state (
+      rotation_key_id, usage_count, error_count,
+      last_used_at, last_error_at, last_error_type, last_error_message, updated_at
+    )
+    SELECT
+      rotation_key_id,
+      COALESCE(usage_count, 0),
+      COALESCE(error_count, 0),
+      last_used_at,
+      last_error_at,
+      last_error_type,
+      last_error_message,
+      COALESCE(updated_at, CURRENT_TIMESTAMP)
+    FROM api_key_rotation
+    ON CONFLICT (rotation_key_id) DO NOTHING;
+  ELSE
+    INSERT INTO api_key_rotation_runtime_state (rotation_key_id)
+    SELECT rotation_key_id
+    FROM api_key_rotation
+    ON CONFLICT (rotation_key_id) DO NOTHING;
+  END IF;
+END $$;
 
 -- 4. Drop telemetry columns from api_key_rotation (config table stays lean).
 ALTER TABLE api_key_rotation DROP COLUMN IF EXISTS usage_count;

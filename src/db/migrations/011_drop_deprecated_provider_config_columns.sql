@@ -15,69 +15,89 @@
 -- This mirrors the seed.sql backfill block which ran on every startup during
 -- the rollout period; running it here ensures correctness before the drop.
 
-UPDATE saved_provider_configs
-SET fallback_model_refs = COALESCE((
-    SELECT jsonb_agg(
-        jsonb_build_object(
-            'type', 'llm',
-            'id', fallback_entry.value::INTEGER
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'saved_provider_configs'
+      AND column_name = 'fallback_llm_ids'
+  ) THEN
+    UPDATE saved_provider_configs
+    SET fallback_model_refs = COALESCE((
+        SELECT jsonb_agg(
+            jsonb_build_object(
+                'type', 'llm',
+                'id', fallback_entry.value::INTEGER
+            )
+            ORDER BY fallback_entry.ordinality
         )
-        ORDER BY fallback_entry.ordinality
-    )
-    FROM jsonb_array_elements_text(
-        CASE
-            WHEN jsonb_typeof(COALESCE(saved_provider_configs.fallback_llm_ids, '[]'::JSONB)) = 'array'
-                THEN COALESCE(saved_provider_configs.fallback_llm_ids, '[]'::JSONB)
-            ELSE '[]'::JSONB
-        END
-    ) WITH ORDINALITY AS fallback_entry(value, ordinality)
-), '[]'::JSONB)
-WHERE (
-        CASE
-            WHEN jsonb_typeof(COALESCE(saved_provider_configs.fallback_model_refs, '[]'::JSONB)) = 'array'
-                THEN jsonb_array_length(COALESCE(saved_provider_configs.fallback_model_refs, '[]'::JSONB))
-            ELSE 0
-        END
-    ) = 0
-  AND (
-        CASE
-            WHEN jsonb_typeof(COALESCE(saved_provider_configs.fallback_llm_ids, '[]'::JSONB)) = 'array'
-                THEN jsonb_array_length(COALESCE(saved_provider_configs.fallback_llm_ids, '[]'::JSONB))
-            ELSE 0
-        END
-    ) > 0;
+        FROM jsonb_array_elements_text(
+            CASE
+                WHEN jsonb_typeof(COALESCE(saved_provider_configs.fallback_llm_ids, '[]'::JSONB)) = 'array'
+                    THEN COALESCE(saved_provider_configs.fallback_llm_ids, '[]'::JSONB)
+                ELSE '[]'::JSONB
+            END
+        ) WITH ORDINALITY AS fallback_entry(value, ordinality)
+    ), '[]'::JSONB)
+    WHERE (
+            CASE
+                WHEN jsonb_typeof(COALESCE(saved_provider_configs.fallback_model_refs, '[]'::JSONB)) = 'array'
+                    THEN jsonb_array_length(COALESCE(saved_provider_configs.fallback_model_refs, '[]'::JSONB))
+                ELSE 0
+            END
+        ) = 0
+      AND (
+            CASE
+                WHEN jsonb_typeof(COALESCE(saved_provider_configs.fallback_llm_ids, '[]'::JSONB)) = 'array'
+                    THEN jsonb_array_length(COALESCE(saved_provider_configs.fallback_llm_ids, '[]'::JSONB))
+                ELSE 0
+            END
+        ) > 0;
+  END IF;
+END $$;
 
-UPDATE user_saved_provider_configs
-SET fallback_model_refs = COALESCE((
-    SELECT jsonb_agg(
-        jsonb_build_object(
-            'type', 'llm',
-            'id', fallback_entry.value::INTEGER
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'user_saved_provider_configs'
+      AND column_name = 'fallback_llm_ids'
+  ) THEN
+    UPDATE user_saved_provider_configs
+    SET fallback_model_refs = COALESCE((
+        SELECT jsonb_agg(
+            jsonb_build_object(
+                'type', 'llm',
+                'id', fallback_entry.value::INTEGER
+            )
+            ORDER BY fallback_entry.ordinality
         )
-        ORDER BY fallback_entry.ordinality
-    )
-    FROM jsonb_array_elements_text(
-        CASE
-            WHEN jsonb_typeof(COALESCE(user_saved_provider_configs.fallback_llm_ids, '[]'::JSONB)) = 'array'
-                THEN COALESCE(user_saved_provider_configs.fallback_llm_ids, '[]'::JSONB)
-            ELSE '[]'::JSONB
-        END
-    ) WITH ORDINALITY AS fallback_entry(value, ordinality)
-), '[]'::JSONB)
-WHERE (
-        CASE
-            WHEN jsonb_typeof(COALESCE(user_saved_provider_configs.fallback_model_refs, '[]'::JSONB)) = 'array'
-                THEN jsonb_array_length(COALESCE(user_saved_provider_configs.fallback_model_refs, '[]'::JSONB))
-            ELSE 0
-        END
-    ) = 0
-  AND (
-        CASE
-            WHEN jsonb_typeof(COALESCE(user_saved_provider_configs.fallback_llm_ids, '[]'::JSONB)) = 'array'
-                THEN jsonb_array_length(COALESCE(user_saved_provider_configs.fallback_llm_ids, '[]'::JSONB))
-            ELSE 0
-        END
-    ) > 0;
+        FROM jsonb_array_elements_text(
+            CASE
+                WHEN jsonb_typeof(COALESCE(user_saved_provider_configs.fallback_llm_ids, '[]'::JSONB)) = 'array'
+                    THEN COALESCE(user_saved_provider_configs.fallback_llm_ids, '[]'::JSONB)
+                ELSE '[]'::JSONB
+            END
+        ) WITH ORDINALITY AS fallback_entry(value, ordinality)
+    ), '[]'::JSONB)
+    WHERE (
+            CASE
+                WHEN jsonb_typeof(COALESCE(user_saved_provider_configs.fallback_model_refs, '[]'::JSONB)) = 'array'
+                    THEN jsonb_array_length(COALESCE(user_saved_provider_configs.fallback_model_refs, '[]'::JSONB))
+                ELSE 0
+            END
+        ) = 0
+      AND (
+            CASE
+                WHEN jsonb_typeof(COALESCE(user_saved_provider_configs.fallback_llm_ids, '[]'::JSONB)) = 'array'
+                    THEN jsonb_array_length(COALESCE(user_saved_provider_configs.fallback_llm_ids, '[]'::JSONB))
+                ELSE 0
+            END
+        ) > 0;
+  END IF;
+END $$;
 
 -- Drop deprecated columns from saved_provider_configs
 ALTER TABLE saved_provider_configs DROP COLUMN IF EXISTS custom_endpoint_url;

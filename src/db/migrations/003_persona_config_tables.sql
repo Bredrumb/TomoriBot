@@ -57,6 +57,9 @@ BEGIN
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_name = 'personas' AND column_name = 'elevenlabs_voice_id'
+  ) AND EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'persona_voice_configs' AND column_name = 'elevenlabs_voice_id'
   ) THEN
     INSERT INTO persona_voice_configs (
       persona_id, speech_voice_sample_id, speech_voice_id, speech_voice_name,
@@ -70,6 +73,22 @@ BEGIN
       speech_voice_design_prompt,
       elevenlabs_voice_id,
       elevenlabs_voice_name
+    FROM personas
+    ON CONFLICT (persona_id) DO NOTHING;
+  ELSIF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'personas' AND column_name = 'elevenlabs_voice_id'
+  ) THEN
+    INSERT INTO persona_voice_configs (
+      persona_id, speech_voice_sample_id, speech_voice_id, speech_voice_name,
+      speech_voice_design_prompt
+    )
+    SELECT
+      persona_id,
+      speech_voice_sample_id,
+      COALESCE(NULLIF(TRIM(speech_voice_id), ''), elevenlabs_voice_id),
+      COALESCE(NULLIF(TRIM(speech_voice_name), ''), elevenlabs_voice_name),
+      speech_voice_design_prompt
     FROM personas
     ON CONFLICT (persona_id) DO NOTHING;
   ELSE
