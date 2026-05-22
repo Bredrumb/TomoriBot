@@ -25,6 +25,7 @@ import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilena
 import { getCachedPresetAvatar } from "../../utils/image/avatarHelper";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage";
+import { dedupeTriggerWords, normalizeTriggerWord } from "@/utils/text/triggerWords";
 
 function isUniqueViolation(error: unknown): boolean {
   return (
@@ -47,26 +48,11 @@ type PersonaDefaultTargetType = "default" | "alter";
 const DEFAULT_TARGET_TYPE: PersonaDefaultTargetType = "default";
 
 function normalizeForComparison(value: string): string {
-  return value.trim().toLowerCase();
+  return normalizeTriggerWord(value);
 }
 
 function dedupeCaseInsensitive(values: string[]): string[] {
-  const deduped: string[] = [];
-  const seen = new Set<string>();
-  for (const value of values) {
-    const trimmed = value.trim();
-    if (trimmed.length === 0) {
-      continue;
-    }
-
-    const normalized = normalizeForComparison(trimmed);
-    if (seen.has(normalized)) {
-      continue;
-    }
-    seen.add(normalized);
-    deduped.push(trimmed);
-  }
-  return deduped;
+  return dedupeTriggerWords(values, { lowercase: false });
 }
 
 function resolvePresetTriggerWords(preset: TomoriPresetRow, locale: string): string[] {

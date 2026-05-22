@@ -5,7 +5,6 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { CooldownType } from "@/types/db/schema";
 import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
@@ -154,17 +153,7 @@ export async function execute(
     }
 
     // 7. Check if channel already has these exact settings
-    const [existingEntry] = await sql<
-      Array<{
-        cooldown_type: CooldownType | null;
-        cooldown_length: number | null;
-      }>
-    >`
-			SELECT cooldown_type, cooldown_length
-			FROM channel_whitelist
-			WHERE server_id = ${tomoriState.server_id}
-			AND channel_disc_id = ${channel.id}
-		`;
+    const existingEntry = await whitelistRepository.getChannelWhitelist(tomoriState.server_id, channel.id);
 
     const currentCooldownType =
       existingEntry?.cooldown_type !== null && existingEntry?.cooldown_length !== null

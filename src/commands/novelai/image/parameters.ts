@@ -7,7 +7,7 @@ import {
 } from "discord.js";
 import type { SelectOption } from "@/types/discord/modal";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { sql } from "@/utils/db/client";
+import { configRepository } from "@/utils/db/repositories";
 import {
   DEFAULT_NAI_CFG_RESCALE,
   DEFAULT_NAI_IMAGE_NOISE_SCHEDULE,
@@ -428,19 +428,15 @@ export async function execute(
       return;
     }
 
-    const updated = await sql<Array<{ server_id: number }>>`
-			UPDATE server_novelai_imagegen_configs
-			SET
-				nai_sampler = ${samplerValidation.value},
-				nai_steps = ${stepsValidation.value},
-				nai_scale = ${scaleValidation.value},
-				nai_noise_schedule = ${noiseScheduleValidation.value},
-				nai_cfg_rescale = ${cfgRescaleValidation.value}
-			WHERE server_id = ${tomoriState.server_id}
-			RETURNING server_id
-		`;
+    const updated = await configRepository.updateNovelaiImagegenConfig(tomoriState.server_id, {
+      nai_sampler: samplerValidation.value,
+      nai_steps: stepsValidation.value,
+      nai_scale: scaleValidation.value,
+      nai_noise_schedule: noiseScheduleValidation.value,
+      nai_cfg_rescale: cfgRescaleValidation.value,
+    });
 
-    if (!updated.length) {
+    if (!updated) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",

@@ -232,6 +232,24 @@ export class WhitelistRepository {
   }
 
   /**
+   * Returns one channel whitelist row for exact settings comparisons.
+   *
+   * @param serverId      - Internal server DB ID
+   * @param channelDiscId - Discord channel snowflake
+   */
+  async getChannelWhitelist(serverId: number, channelDiscId: string): Promise<ChannelWhitelistRow | null> {
+    const [result] = await sql`
+      SELECT *
+      FROM channel_whitelist
+      WHERE server_id = ${serverId}
+        AND channel_disc_id = ${channelDiscId}
+      LIMIT 1
+    `;
+
+    return (result as ChannelWhitelistRow | undefined) ?? null;
+  }
+
+  /**
    * Remove a channel from the whitelist.
    *
    * @param serverId      - Internal server DB ID

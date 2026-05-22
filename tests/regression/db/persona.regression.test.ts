@@ -132,6 +132,28 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
     }
   });
 
+  it("addSampleDialoguePair appends TEXT[] dialogue arrays", async () => {
+    await testSql`
+      UPDATE personas
+      SET
+        sample_dialogues_in = ARRAY[]::TEXT[],
+        sample_dialogues_out = ARRAY[]::TEXT[]
+      WHERE persona_id = ${refs.personaId}
+    `;
+
+    const added = await personaRepository.addSampleDialoguePair(refs.personaId, ["_rt_added_in"], ["_rt_added_out"]);
+    expect(added).toBe(true);
+
+    const [row] = await testSql<Array<{ sample_dialogues_in: string[]; sample_dialogues_out: string[] }>>`
+      SELECT sample_dialogues_in, sample_dialogues_out
+      FROM personas
+      WHERE persona_id = ${refs.personaId}
+    `;
+
+    expect(row.sample_dialogues_in).toEqual(["_rt_added_in"]);
+    expect(row.sample_dialogues_out).toEqual(["_rt_added_out"]);
+  });
+
   // ── loadPersonaConfigRow ─────────────────────────────────────────────────
 
   it("loadPersonaConfigRow returns the fixture persona_config row", async () => {
@@ -144,6 +166,28 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
   it("loadPersonaConfigRow returns null for unknown persona", async () => {
     const config = await personaRepository.loadPersonaConfig(999_999_999);
     expect(config).toBeNull();
+  });
+
+  it("trigger config writes strip surrounding quote characters", async () => {
+    const originalConfig = await personaRepository.loadPersonaConfig(refs.personaId);
+    const originalTriggers = [...(originalConfig?.trigger_words ?? [])];
+
+    try {
+      const added = await personaRepository.addTrigger(refs.personaId, [
+        '"_rt_quoted_trigger"',
+        "`_rt_quoted_trigger`",
+        "'_rt_second_quoted_trigger'",
+      ]);
+      expect(added).toBe(true);
+
+      const config = await personaRepository.loadPersonaConfig(refs.personaId);
+      expect(config?.trigger_words).toContain("_rt_quoted_trigger");
+      expect(config?.trigger_words).toContain("_rt_second_quoted_trigger");
+      expect(config?.trigger_words).not.toContain('"_rt_quoted_trigger"');
+      expect(config?.trigger_words).not.toContain("`_rt_quoted_trigger`");
+    } finally {
+      await personaRepository.removeTrigger(refs.personaId, originalTriggers);
+    }
   });
 
   // ── updateTomori ─────────────────────────────────────────────────────────

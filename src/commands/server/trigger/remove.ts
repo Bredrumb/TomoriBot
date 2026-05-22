@@ -21,6 +21,7 @@ import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import type { CheckboxGroupOption, ModalCheckboxGroupField, SelectOption } from "@/types/discord/modal";
 import { personaRepository } from "@/utils/db/repositories";
+import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 
 const TRIGGER_MODAL_CUSTOM_ID = "server_triggerremove_trigger_modal";
 const TRIGGER_SELECT_ID = "trigger_select";
@@ -253,7 +254,7 @@ async function handlePaginatedTriggerRemovalFallback(
   guildId: string,
 ): Promise<boolean> {
   const triggerOptions: SelectOption[] = currentTriggerWords.map((trigger, index) => ({
-    label: safeSelectOptionText(trigger, 50),
+    label: safeSelectOptionText(formatTriggerWordForDisplay(trigger), 50),
     value: index.toString(),
   }));
 
@@ -410,7 +411,7 @@ function buildTriggerCheckboxGroups(currentTriggerWords: string[]): ModalCheckbo
     const chunk = currentTriggerWords.slice(i, i + MAX_OPTIONS_PER_GROUP);
     const groupIndex = Math.floor(i / MAX_OPTIONS_PER_GROUP);
     const options: CheckboxGroupOption[] = chunk.map((triggerWord, offset) => ({
-      label: safeSelectOptionText(triggerWord, 50),
+      label: safeSelectOptionText(formatTriggerWordForDisplay(triggerWord), 50),
       value: (i + offset).toString(),
       default: true,
     }));
@@ -436,5 +437,9 @@ function formatTriggerList(triggerWords: string[]): string {
   const maxVisible = 10;
   const visibleWords = triggerWords.slice(0, maxVisible);
   const suffix = triggerWords.length > maxVisible ? ", ..." : "";
-  return `${visibleWords.map((triggerWord) => `\`${triggerWord}\``).join(", ")}${suffix}`;
+  return `${visibleWords.map((triggerWord) => `\`${formatTriggerWordForDisplay(triggerWord)}\``).join(", ")}${suffix}`;
+}
+
+function formatTriggerWordForDisplay(triggerWord: string): string {
+  return normalizeTriggerWord(triggerWord, { lowercase: false });
 }

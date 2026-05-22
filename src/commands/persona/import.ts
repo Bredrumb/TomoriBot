@@ -19,6 +19,7 @@ import { personaRepository } from "@/utils/db/repositories";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 import { safeDownload } from "@/utils/security/safeDownload";
+import { dedupeTriggerWords, normalizeTriggerWord, parseTriggerWordListInput } from "@/utils/text/triggerWords";
 import { resolvePersonaAvatarPublicUrl, uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage";
 
 /**
@@ -88,26 +89,7 @@ function parseJsonAttachment(buffer: Buffer): unknown {
 }
 
 function parseCommaSeparatedTriggers(input: string): string[] {
-  const parsedTriggers = input
-    .split(/[,\u3001]/)
-    .map((trigger) => trigger.trim())
-    .filter((trigger) => trigger.length > 0);
-
-  return dedupeTriggers(parsedTriggers);
-}
-
-function dedupeTriggers(triggers: string[]): string[] {
-  const uniqueTriggers: string[] = [];
-  const seenTriggers = new Set<string>();
-  for (const trigger of triggers) {
-    const normalizedTrigger = trigger.toLowerCase();
-    if (!seenTriggers.has(normalizedTrigger)) {
-      seenTriggers.add(normalizedTrigger);
-      uniqueTriggers.push(trigger);
-    }
-  }
-
-  return uniqueTriggers;
+  return parseTriggerWordListInput(input, { lowercase: false });
 }
 
 function normalizePersonaName(name: string): string {
@@ -657,9 +639,9 @@ export async function execute(
     const additionalTriggers = additionalTriggersInput ? parseCommaSeparatedTriggers(additionalTriggersInput) : [];
     const mergedPresetData: PresetExportData = {
       ...presetDataFromFile,
-      trigger_words: dedupeTriggers(
-        [...presetDataFromFile.trigger_words, ...additionalTriggers].map((trigger) => trigger.trim()),
-      ),
+      trigger_words: dedupeTriggerWords([...presetDataFromFile.trigger_words, ...additionalTriggers], {
+        lowercase: false,
+      }),
     };
     const mergedPresetValidation = presetRepository.validatePresetData(mergedPresetData);
     if (!mergedPresetValidation.valid || !mergedPresetValidation.data) {
@@ -967,13 +949,13 @@ export async function execute(
       const allTriggerWords = new Set<string>();
       for (const persona of allPersonas) {
         for (const trigger of persona.trigger_words ?? []) {
-          allTriggerWords.add(trigger.toLowerCase());
+          allTriggerWords.add(normalizeTriggerWord(trigger));
         }
       }
 
       // 11d. Remove overlapping triggers from the import
       const importTriggers = presetData.trigger_words ?? [];
-      const uniqueTriggers = importTriggers.filter((trigger) => !allTriggerWords.has(trigger.toLowerCase()));
+      const uniqueTriggers = importTriggers.filter((trigger) => !allTriggerWords.has(normalizeTriggerWord(trigger)));
 
       // Track if there are no triggers (we'll warn but still allow import)
       const hasNoTriggers = uniqueTriggers.length === 0;

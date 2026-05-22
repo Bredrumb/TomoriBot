@@ -10,6 +10,7 @@ import { localizer } from "@/utils/text/localizer";
 import { formatBooleanLocalized } from "@/utils/text/processors/formatters";
 import { formatLlmDisplayLabel } from "@/utils/provider/modelDisplay";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
+import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 import {
   ATTRIBUTE_TRUNCATE_LENGTH,
   DIALOGUE_TRUNCATE_LENGTH,
@@ -97,7 +98,7 @@ export async function showPersonaStatus(
 
   const personaTriggersValue =
     selectedPersona.trigger_words.length > 0
-      ? selectedPersona.trigger_words.map((t) => `\`${t}\``).join(", ")
+      ? selectedPersona.trigger_words.map((t) => `\`${normalizeTriggerWord(t, { lowercase: false })}\``).join(", ")
       : localizer(locale, "commands.choices.none");
 
   const naiTagsValue =

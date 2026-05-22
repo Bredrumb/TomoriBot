@@ -13,6 +13,7 @@ import { providerIsApiFamily } from "@/utils/chat/toolLoop";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
 import type { ChatIncoming } from "@/utils/chat/types";
 import { determineMatchingPersonas, isSelfTriggerMessage } from "@/utils/chat/triggerProcessor";
+import { parseTriggerWordListInput } from "@/utils/text/triggerWords";
 
 type ProviderFixtureName = "google" | "openrouter" | "novelai";
 
@@ -220,6 +221,85 @@ describe("chat regression harness", () => {
     const personas = fixture.personas.map((persona) => makeTomoriState(fixture, persona));
 
     expect(isSelfTriggerMessage(message, personas)).toBe(true);
+  });
+
+  it("normalizes quoted trigger input before storage", () => {
+    expect(parseTriggerWordListInput('"Quetz", `Tomo`, quetz')).toEqual(["quetz", "tomo"]);
+  });
+
+  it("matches legacy stored trigger words with surrounding quotes", () => {
+    const client = makeClient();
+    const fixture: ConversationFixture = {
+      id: "quoted-trigger-legacy",
+      provider: "google",
+      description: "legacy quoted trigger values still route to the expected persona",
+      message: {
+        authorId: "user_quoted_trigger",
+        authorName: "Quoted Trigger User",
+        content: "quetz, are you there?",
+        mentionedUserIds: [],
+      },
+      state: {
+        deliberateTriggerMode: false,
+        alwaysReplyEnabled: false,
+        autochDiscIds: [],
+        autochPersonaOverrides: [],
+        autochCounter: 0,
+        autochNextTarget: 0,
+      },
+      personas: [
+        {
+          id: 1,
+          nickname: "Tomori",
+          isAlter: false,
+          triggers: ["tomori"],
+        },
+        {
+          id: 2,
+          nickname: "Quetz",
+          isAlter: true,
+          triggers: ['"quetz"'],
+        },
+      ],
+      triggerContext: {
+        isReplyToBot: false,
+        replyPersonaId: null,
+        isBotMentioned: false,
+        isAutoMsgHit: false,
+        isAlwaysReply: false,
+        autoTriggerPersonaId: null,
+        alwaysReplyFallbackPersonaId: null,
+        deliberateTriggerMode: false,
+        isAutochatDtmExemptChannel: false,
+        allowedPersonaIds: null,
+      },
+    };
+    const message = makeMessage(fixture, client);
+    const personas = fixture.personas.map((persona) => makeTomoriState(fixture, persona));
+    const mainPersona = personas.find((persona) => !persona.is_alter);
+
+    if (!mainPersona) {
+      throw new Error("Quoted trigger fixture is missing a main persona");
+    }
+
+    expect(
+      determineMatchingPersonas(
+        message,
+        personas,
+        client,
+        fixture.triggerContext.isReplyToBot,
+        null,
+        fixture.triggerContext.isBotMentioned,
+        fixture.triggerContext.isAutoMsgHit,
+        fixture.triggerContext.isAlwaysReply,
+        fixture.triggerContext.autoTriggerPersonaId,
+        fixture.triggerContext.alwaysReplyFallbackPersonaId,
+        fixture.triggerContext.deliberateTriggerMode,
+        fixture.triggerContext.isAutochatDtmExemptChannel,
+        null,
+      ).map((persona) => persona.persona_nickname),
+    ).toEqual(["Quetz"]);
+    expect(shouldBotReply(message, mainPersona, personas)).toBe(true);
   });
 
   it("acquireChannelLockForTurn sets isLocked and releaseChannelLockAndReplayQueue clears it", () => {

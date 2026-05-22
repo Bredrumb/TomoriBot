@@ -243,7 +243,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
     try {
       const [updated] = await sql`
         UPDATE server_memories
-        SET content = ${content}, tags = ${sql.array(tags)}, updated_at = NOW()
+        SET content = ${content}, tags = ${sql.array(tags, "TEXT")}, updated_at = NOW()
         WHERE server_memory_id = ${serverMemoryId}
         RETURNING server_memory_id
       `;
@@ -297,7 +297,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
         for (const memory of memories) {
           await tx`
             INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, tags)
-            VALUES (${serverId}, ${personaId}, ${personaLineageId}, ${taughtByUserId}, ${memory}, ${sql.array(tags)})
+            VALUES (${serverId}, ${personaId}, ${personaLineageId}, ${taughtByUserId}, ${memory}, ${sql.array(tags, "TEXT")})
           `;
         }
       });
@@ -686,7 +686,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
     try {
       const [newMemory] = await sql`
         INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, tags)
-        VALUES (${serverId}, ${personaId}, ${personaLineageId}, ${taughtByUserId}, ${content}, ${sql.array(tags)})
+        VALUES (${serverId}, ${personaId}, ${personaLineageId}, ${taughtByUserId}, ${content}, ${sql.array(tags, "TEXT")})
         RETURNING *
       `;
 

@@ -1151,7 +1151,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
       INSERT INTO server_auto_trigger_configs (
         server_id, autoch_disc_ids, autoch_threshold, autoch_threshold_max
       ) VALUES (
-        ${serverId}, ${sql.array(row.autoch_disc_ids)},
+        ${serverId}, ${sql.array(row.autoch_disc_ids, "TEXT")},
         ${row.autoch_threshold}, ${row.autoch_threshold_max}
       )
       ON CONFLICT (server_id) DO UPDATE SET

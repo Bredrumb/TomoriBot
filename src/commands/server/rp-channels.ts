@@ -16,7 +16,6 @@ import {
   buildChecklistPageActionRows,
   collectCheckedIds,
   formatChecklistChannelMentions,
-  formatTextArrayLiteral,
   loadGuildTextChecklistChannels,
   type ChecklistChannelTarget,
 } from "@/utils/discord/channelChecklistManager";
@@ -329,10 +328,7 @@ async function persistUpdate(
   }
 
   const updated = await configRepository.updateChannelScopeConfig(tomoriState.server_id, {
-    rp_channel_ids: formatTextArrayLiteral([...nextSelectedIds])
-      .replace(/::text\[\]/g, "")
-      .split(",")
-      .map((v) => v.trim()) as unknown as string[],
+    rp_channel_ids: [...nextSelectedIds],
   });
 
   if (!updated) {

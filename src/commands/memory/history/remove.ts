@@ -15,7 +15,6 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { isRagAvailable } from "@/utils/db/ragAvailability";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -225,24 +224,7 @@ export async function execute(
 
       // 6. Query history-extracted documents for the selected scope
       const selectionInteraction = personaSelectionInteraction ?? interaction;
-      const documents =
-        targetPersonaId === null
-          ? await sql<Array<{ document_id: number; document_name: string }>>`
-						SELECT document_id, document_name
-						FROM documents
-						WHERE server_id = ${tomoriState.server_id}
-						  AND persona_id IS NULL
-						  AND source_type = 'history'
-						ORDER BY created_at DESC
-					`
-          : await sql<Array<{ document_id: number; document_name: string }>>`
-						SELECT document_id, document_name
-						FROM documents
-						WHERE server_id = ${tomoriState.server_id}
-						  AND persona_id = ${targetPersonaId}
-						  AND source_type = 'history'
-						ORDER BY created_at DESC
-					`;
+      const documents = await serverMemoryRepository.loadHistoryDocuments(tomoriState.server_id, targetPersonaId);
 
       if (!documents || documents.length === 0) {
         if (personaSelectionInteraction) {

@@ -122,7 +122,6 @@ export async function execute(
     });
   }
 }
-
 async function executeSinglePageBlocklist(
   interaction: ChatInputCommandInteraction,
   locale: string,
@@ -465,10 +464,7 @@ async function persistBlocklistUpdate(
   }
 
   const updated = await configRepository.updateChannelScopeConfig(tomoriState.server_id, {
-    crosschannel_blocklist_ids: formatTextArrayLiteral([...nextBlockedIds])
-      .replace(/::text\[\]/g, "")
-      .split(",")
-      .map((v) => v.trim()) as unknown as string[],
+    crosschannel_blocklist_ids: [...nextBlockedIds],
   });
 
   if (!updated) {
@@ -528,8 +524,4 @@ function formatChannelMentionList(
       channelLookup.has(channelId) ? `<#${channelId}>` : `${localizer(locale, "general.unknown")} (${channelId})`,
     )
     .join(", ");
-}
-
-function formatTextArrayLiteral(items: string[]): string {
-  return `{${items.map((item) => `"${item.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
 }

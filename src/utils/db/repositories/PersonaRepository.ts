@@ -38,6 +38,7 @@ import { llmProviderRepo } from "@/utils/db/repositories/LlmProviderRepository";
 import { type MemoryValidationResult, getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { getUnconfiguredLlm } from "@/utils/provider/unconfiguredLlm";
 import { log } from "@/utils/misc/logger";
+import { dedupeTriggerWords } from "@/utils/text/triggerWords";
 import type { IRepository } from "./IRepository";
 
 // ── persona config table row shapes ─────────────────────────────────
@@ -245,7 +246,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     try {
       const result = await sql`
         UPDATE personas
-        SET attribute_list = array_cat(attribute_list, ${sql.array(attributes)})
+        SET attribute_list = array_cat(attribute_list, ${sql.array(attributes, "TEXT")})
         WHERE persona_id = ${personaId}
         RETURNING *
       `;
@@ -382,20 +383,50 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       await Promise.all([
         sql`
           INSERT INTO persona_imagegen_configs (persona_id, nai_tags)
-          VALUES (${personaId}, ${sql.array(tags)})
+          VALUES (${personaId}, ${sql.array(tags, "TEXT")})
           ON CONFLICT (persona_id) DO UPDATE SET
             nai_tags   = EXCLUDED.nai_tags,
             updated_at = NOW()
         `,
         sql`
           UPDATE personas
-          SET nai_tags = ${sql.array(tags)}, updated_at = NOW()
+          SET nai_tags = ${sql.array(tags, "TEXT")}, updated_at = NOW()
           WHERE persona_id = ${personaId}
         `,
       ]);
       return true;
     } catch (e) {
       log.error(`Error setting NAI tags for persona ${personaId}:`, e);
+      return false;
+    }
+  }
+
+  /**
+   * Replace the persona's NovelAI character reference image URL.
+   * Writes both the split imagegen config row and the legacy personas column.
+   *
+   * @param personaId - Internal persona DB ID
+   * @param refUrl    - Stored reference URL/path, or null to clear
+   */
+  async setNaiCharRef(personaId: number, refUrl: string | null): Promise<boolean> {
+    try {
+      await Promise.all([
+        sql`
+          INSERT INTO persona_imagegen_configs (persona_id, nai_char_ref_url)
+          VALUES (${personaId}, ${refUrl})
+          ON CONFLICT (persona_id) DO UPDATE SET
+            nai_char_ref_url = EXCLUDED.nai_char_ref_url,
+            updated_at       = NOW()
+        `,
+        sql`
+          UPDATE personas
+          SET nai_char_ref_url = ${refUrl}, updated_at = NOW()
+          WHERE persona_id = ${personaId}
+        `,
+      ]);
+      return true;
+    } catch (e) {
+      log.error(`Error setting NAI character reference for persona ${personaId}:`, e);
       return false;
     }
   }
@@ -410,8 +441,8 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     try {
       const result = await sql`
         UPDATE personas
-        SET sample_dialogues_in = array_cat(sample_dialogues_in, ${sql.array(inputs)}),
-            sample_dialogues_out = array_cat(sample_dialogues_out, ${sql.array(outputs)})
+        SET sample_dialogues_in = array_cat(sample_dialogues_in, ${sql.array(inputs, "TEXT")}),
+            sample_dialogues_out = array_cat(sample_dialogues_out, ${sql.array(outputs, "TEXT")})
         WHERE persona_id = ${personaId}
         RETURNING persona_id
       `;
@@ -510,6 +541,21 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
+  async countMainPersonasForServer(serverId: number): Promise<number> {
+    try {
+      const [row] = await sql<Array<{ main_count: number | string }>>`
+        SELECT COUNT(*)::int AS main_count
+        FROM personas
+        WHERE server_id = ${serverId}
+          AND is_alter = false
+      `;
+      return Number(row?.main_count ?? 0);
+    } catch (e) {
+      log.error(`Error counting main personas for server ${serverId}:`, e);
+      return 0;
+    }
+  }
+
   async renamePersona(personaId: number, newName: string): Promise<boolean> {
     try {
       const result = await sql`
@@ -522,6 +568,23 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     } catch (e) {
       log.error(`Error renaming persona ${personaId}:`, e);
       return false;
+    }
+  }
+
+  async hasNicknameConflict(serverId: number, excludedPersonaId: number, nickname: string): Promise<boolean> {
+    try {
+      const rows = await sql<Array<{ persona_id: number }>>`
+        SELECT persona_id
+        FROM personas
+        WHERE server_id = ${serverId}
+          AND persona_id <> ${excludedPersonaId}
+          AND lower(btrim(persona_nickname)) = lower(btrim(${nickname}))
+        LIMIT 1
+      `;
+      return rows.length > 0;
+    } catch (e) {
+      log.error(`Error checking persona nickname conflict for server ${serverId}:`, e);
+      return true;
     }
   }
 
@@ -621,12 +684,12 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       VALUES (
         ${params.serverId},
         ${params.nickname},
-        ${sql.array(params.attributes)},
-        ${sql.array(params.sampleDialoguesIn)},
-        ${sql.array(params.sampleDialoguesOut)},
+        ${sql.array(params.attributes, "TEXT")},
+        ${sql.array(params.sampleDialoguesIn, "TEXT")},
+        ${sql.array(params.sampleDialoguesOut, "TEXT")},
         true,
         ${params.personaLineageId ?? 0},
-        ${sql.array(params.naiTags ?? [])},
+        ${sql.array(params.naiTags ?? [], "TEXT")},
         ${params.naiCharRefUrl ?? null},
         ${params.naiAttgAuthor ?? null},
         ${params.naiAttgTitle ?? null},
@@ -641,9 +704,14 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   async addTrigger(personaId: number, triggers: string[]): Promise<boolean> {
     try {
+      const normalizedTriggers = dedupeTriggerWords(triggers, { lowercase: false });
+      if (normalizedTriggers.length === 0) {
+        return true;
+      }
+
       const result = await sql`
         INSERT INTO persona_configs (persona_id, trigger_words)
-        VALUES (${personaId}, ${sql.array(triggers)})
+        VALUES (${personaId}, ${sql.array(normalizedTriggers, "TEXT")})
         ON CONFLICT (persona_id) DO UPDATE
         SET trigger_words = array_cat(persona_configs.trigger_words, EXCLUDED.trigger_words)
         RETURNING *
@@ -665,9 +733,10 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    */
   async removeTrigger(personaId: number, triggersRemaining: string[]): Promise<boolean> {
     try {
+      const normalizedTriggersRemaining = dedupeTriggerWords(triggersRemaining, { lowercase: false });
       const result = await sql`
         INSERT INTO persona_configs (persona_id, trigger_words)
-        VALUES (${personaId}, ${sql.array(triggersRemaining)})
+        VALUES (${personaId}, ${sql.array(normalizedTriggersRemaining, "TEXT")})
         ON CONFLICT (persona_id) DO UPDATE
         SET trigger_words = EXCLUDED.trigger_words
         RETURNING *
@@ -689,9 +758,10 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    */
   async setPersonaConfig(personaId: number, triggers: string[], prompt: string | null): Promise<boolean> {
     try {
+      const normalizedTriggers = dedupeTriggerWords(triggers, { lowercase: false });
       await sql`
         INSERT INTO persona_configs (persona_id, trigger_words, persona_prompt)
-        VALUES (${personaId}, ${sql.array(triggers)}, ${prompt})
+        VALUES (${personaId}, ${sql.array(normalizedTriggers, "TEXT")}, ${prompt})
         ON CONFLICT (persona_id) DO UPDATE
         SET trigger_words  = EXCLUDED.trigger_words,
             persona_prompt = EXCLUDED.persona_prompt
@@ -1011,7 +1081,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   private async sqlUpsertPersonaImagegenConfigs(row: PersonaImagegenConfigsRow): Promise<void> {
     await sql`
       INSERT INTO persona_imagegen_configs (persona_id, nai_tags, nai_char_ref_url)
-      VALUES (${row.persona_id}, ${sql.array(row.nai_tags)}, ${row.nai_char_ref_url})
+      VALUES (${row.persona_id}, ${sql.array(row.nai_tags, "TEXT")}, ${row.nai_char_ref_url})
       ON CONFLICT (persona_id) DO UPDATE SET
         nai_tags       = EXCLUDED.nai_tags,
         nai_char_ref_url = EXCLUDED.nai_char_ref_url,
@@ -1064,7 +1134,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   private async sqlDualWriteImagegenToTomoris(row: PersonaImagegenConfigsRow): Promise<void> {
     await sql`
       UPDATE personas SET
-        nai_tags         = ${sql.array(row.nai_tags)},
+        nai_tags         = ${sql.array(row.nai_tags, "TEXT")},
         nai_char_ref_url = ${row.nai_char_ref_url},
         updated_at       = NOW()
       WHERE persona_id = ${row.persona_id}

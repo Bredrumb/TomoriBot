@@ -11,7 +11,7 @@ import { createStandardEmbed, sendStandardEmbed } from "@/utils/discord/embedHel
 import { sendUserTranscriptViaWebhook } from "@/utils/discord/webhook/webhookCore";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
-import { createScreamingRegex, isMatrixRelayMessage, isRealUserLikeMessage } from "@/utils/chat/triggerProcessor";
+import { doesMessageMatchTrigger, isMatrixRelayMessage, isRealUserLikeMessage } from "@/utils/chat/triggerProcessor";
 import { isActiveNaturalStopTurn, selfReplySuppressionUntil } from "@/utils/chat/channelQueue";
 import { cleanupTextQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { evaluateAdmissionQueueAndTriggerGate } from "@/utils/chat/admissionQueue";
@@ -568,15 +568,7 @@ async function shouldBlockReplyToOtherBot(args: {
     earlyAllPersonas.some((persona) => {
       const triggers = persona.trigger_words ?? [];
 
-      return triggers.some((trigger: string) => {
-        if (trigger.startsWith("<@")) {
-          return message.mentions.users.has(trigger.replace(/[<@!>]/g, ""));
-        }
-        if (/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(trigger)) {
-          return message.content.includes(trigger);
-        }
-        return createScreamingRegex(trigger).test(message.content);
-      });
+      return triggers.some((trigger: string) => doesMessageMatchTrigger(message, trigger));
     });
 
   return isBotDirectlyAddressed ? null : "reply_to_other_bot";

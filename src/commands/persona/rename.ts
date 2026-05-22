@@ -14,7 +14,7 @@ import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "
 import type { UserRow, ErrorContext, TomoriState } from "../../types/db/schema";
 import type { ModalResult, SelectOption } from "../../types/discord/modal";
 import { personaRepository } from "@/utils/db/repositories";
-import { sql } from "@/utils/db/client";
+import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 
 // Constants for validation
 const NICKNAME_MIN_LENGTH = 2;
@@ -188,15 +188,12 @@ export async function execute(
       return;
     }
 
-    const duplicateNameRows = await sql<Array<{ persona_id: number }>>`
-			SELECT persona_id
-			FROM personas
-			WHERE server_id = ${selectedPersona.server_id}
-			  AND persona_id <> ${selectedPersona.persona_id}
-			  AND lower(btrim(persona_nickname)) = lower(btrim(${newNickname}))
-			LIMIT 1
-		`;
-    if (duplicateNameRows.length > 0) {
+    const hasNicknameConflict = await personaRepository.hasNicknameConflict(
+      selectedPersona.server_id,
+      selectedPersona.persona_id,
+      newNickname,
+    );
+    if (hasNicknameConflict) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.persona.name_conflict_title",
         descriptionKey: "commands.persona.name_conflict_description",
@@ -242,7 +239,7 @@ export async function execute(
     let triggerUpdateNeeded = false;
 
     // Case-insensitive check if the nickname exists
-    if (!currentTriggers.some((trigger) => trigger.toLowerCase() === newNickname.toLowerCase())) {
+    if (!currentTriggers.some((trigger) => normalizeTriggerWord(trigger) === normalizeTriggerWord(newNickname))) {
       triggerUpdateNeeded = true;
       log.info(`Adding new nickname '${newNickname}' to trigger words for tomori ${selectedPersona.persona_id}`);
     } else {

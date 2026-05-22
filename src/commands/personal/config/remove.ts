@@ -1,11 +1,10 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { localizer } from "@/utils/text/localizer";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow } from "@/types/db/schema";
-import { invalidateUserCache } from "@/utils/cache/userCache";
+import { userRepository } from "@/utils/db/repositories";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
@@ -25,7 +24,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,
-  _userData: UserRow,
+  userData: UserRow,
   locale: string,
 ): Promise<void> {
   try {
@@ -40,17 +39,17 @@ export async function execute(
       return;
     }
 
-    const updatedUsers = await sql<Array<{ user_id: number }>>`
-      UPDATE users
-      SET
-        user_nickname = ${interaction.user.username},
-        language_pref = 'en-US',
-        impersonation_prompt = NULL
-      WHERE user_disc_id = ${interaction.user.id}
-      RETURNING user_id
-    `;
+    const userId = userData.user_id;
+    const updatedUser =
+      userId === undefined
+        ? null
+        : await userRepository.update(userId, {
+            user_nickname: interaction.user.username,
+            language_pref: "en-US",
+            impersonation_prompt: null,
+          });
 
-    if (!updatedUsers.length) {
+    if (!updatedUser) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.data.delete.no_data_title",
         descriptionKey: "commands.data.delete.no_data_description",
@@ -59,8 +58,6 @@ export async function execute(
       });
       return;
     }
-
-    invalidateUserCache(interaction.user.id);
 
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.data.delete.success_personal_settings_title",

@@ -3,15 +3,23 @@ import { DMChannel } from "discord.js";
 import type { AssembledServerConfig, TomoriState } from "@/types/db/schema";
 import { isMatrixBridgeWebhookUsername } from "@/utils/bridges";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
+import { normalizeTriggerWord } from "@/utils/text/triggerWords";
+
+const NEVER_MATCH_REGEX = /a^/i;
 
 /**
  * Creates a regex that matches a trigger word with "screaming" support.
  * Allows repeated letters, e.g. "Lilja" matches "Liiiljaaaa".
  */
 export function createScreamingRegex(trigger: string): RegExp {
+  const normalizedTrigger = normalizeTriggerWord(trigger, { lowercase: false });
+  if (!normalizedTrigger) {
+    return NEVER_MATCH_REGEX;
+  }
+
   let pattern = "";
 
-  for (const char of trigger) {
+  for (const char of normalizedTrigger) {
     if (/[a-zA-Z]/.test(char)) {
       pattern += `${char}+`;
     } else {
@@ -23,9 +31,14 @@ export function createScreamingRegex(trigger: string): RegExp {
 }
 
 function createDeliberateTriggerRegex(trigger: string): RegExp {
+  const normalizedTrigger = normalizeTriggerWord(trigger, { lowercase: false });
+  if (!normalizedTrigger) {
+    return NEVER_MATCH_REGEX;
+  }
+
   let pattern = "";
 
-  for (const char of trigger) {
+  for (const char of normalizedTrigger) {
     if (/[a-zA-Z]/.test(char)) {
       pattern += `${char}+`;
     } else if (/\s/.test(char)) {
@@ -39,18 +52,25 @@ function createDeliberateTriggerRegex(trigger: string): RegExp {
 }
 
 export function getDeliberateTriggerMatch(content: string, trigger: string): RegExpMatchArray | null {
-  const fullTriggerMatch = content.match(createDeliberateTriggerRegex(trigger));
+  const normalizedTrigger = normalizeTriggerWord(trigger, { lowercase: false });
+  if (!normalizedTrigger) {
+    return null;
+  }
+
+  const fullTriggerMatch = content.match(createDeliberateTriggerRegex(normalizedTrigger));
   if (fullTriggerMatch) {
     return fullTriggerMatch;
   }
 
-  const firstTriggerWord = trigger.split(/\s+/)[0]?.trim() ?? trigger;
-  if (!firstTriggerWord || firstTriggerWord === trigger) {
+  const firstTriggerWord = normalizedTrigger.split(/\s+/)[0]?.trim() ?? normalizedTrigger;
+  if (!firstTriggerWord || firstTriggerWord === normalizedTrigger) {
     return null;
   }
 
-  const isJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(trigger);
-  const hasFullTriggerMatch = isJapanese ? content.includes(trigger) : createScreamingRegex(trigger).test(content);
+  const isJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(normalizedTrigger);
+  const hasFullTriggerMatch = isJapanese
+    ? content.includes(normalizedTrigger)
+    : createScreamingRegex(normalizedTrigger).test(content);
   if (!hasFullTriggerMatch) {
     return null;
   }
@@ -59,8 +79,13 @@ export function getDeliberateTriggerMatch(content: string, trigger: string): Reg
 }
 
 export function getTriggerFirstMatchIndex(message: Message, trigger: string, deliberateOnly = false): number {
-  if (trigger.startsWith("<@")) {
-    const userId = trigger.replace(/[<@!>]/g, "");
+  const normalizedTrigger = normalizeTriggerWord(trigger, { lowercase: false });
+  if (!normalizedTrigger) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  if (normalizedTrigger.startsWith("<@")) {
+    const userId = normalizedTrigger.replace(/[<@!>]/g, "");
     if (!message.mentions.users.has(userId)) {
       return Number.POSITIVE_INFINITY;
     }
@@ -71,18 +96,22 @@ export function getTriggerFirstMatchIndex(message: Message, trigger: string, del
   }
 
   if (deliberateOnly) {
-    const deliberateMatch = getDeliberateTriggerMatch(message.content, trigger);
+    const deliberateMatch = getDeliberateTriggerMatch(message.content, normalizedTrigger);
     return deliberateMatch?.index ?? Number.POSITIVE_INFINITY;
   }
 
-  const isJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(trigger);
+  const isJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(normalizedTrigger);
   if (isJapanese) {
-    const index = message.content.indexOf(trigger);
+    const index = message.content.indexOf(normalizedTrigger);
     return index >= 0 ? index : Number.POSITIVE_INFINITY;
   }
 
-  const match = message.content.match(createScreamingRegex(trigger));
+  const match = message.content.match(createScreamingRegex(normalizedTrigger));
   return match?.index ?? Number.POSITIVE_INFINITY;
+}
+
+export function doesMessageMatchTrigger(message: Message, trigger: string, deliberateOnly = false): boolean {
+  return getTriggerFirstMatchIndex(message, trigger, deliberateOnly) !== Number.POSITIVE_INFINITY;
 }
 
 export function isMatrixRelayMessage(message: Pick<Message, "webhookId" | "author">): boolean {

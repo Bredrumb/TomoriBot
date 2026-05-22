@@ -14,6 +14,7 @@ import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import { validateMemoryContent, getMemoryLimits } from "@/utils/misc/memoryLimits";
 import type { SelectOption } from "@/types/discord/modal";
 import { personaRepository } from "@/utils/db/repositories";
+import { normalizeTriggerWord, parseTriggerWordListInput } from "@/utils/text/triggerWords";
 
 // Get memory limits from environment variables
 const memoryLimits = getMemoryLimits();
@@ -28,7 +29,8 @@ const MAX_TEXT_INPUT_LENGTH = Math.min(
   Math.max(1, memoryLimits.maxTriggerWords * (memoryLimits.maxMemoryLength + 1)),
 );
 
-const formatTriggerList = (triggers: string[]): string => triggers.map((trigger) => `\`${trigger}\``).join(", ");
+const formatTriggerList = (triggers: string[]): string =>
+  triggers.map((trigger) => `\`${normalizeTriggerWord(trigger, { lowercase: false })}\``).join(", ");
 
 // Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
@@ -147,19 +149,7 @@ export async function execute(
 
     const currentTriggerWords = selectedPersona.trigger_words ?? [];
 
-    const parsedTriggers = triggerInput
-      .split(/[,\u3001]/)
-      .map((trigger) => trigger.trim().toLowerCase())
-      .filter((trigger) => trigger.length > 0);
-
-    const uniqueTriggers: string[] = [];
-    const seenTriggers = new Set<string>();
-    for (const trigger of parsedTriggers) {
-      if (!seenTriggers.has(trigger)) {
-        seenTriggers.add(trigger);
-        uniqueTriggers.push(trigger);
-      }
-    }
+    const uniqueTriggers = parseTriggerWordListInput(triggerInput);
 
     if (uniqueTriggers.length === 0) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -192,7 +182,7 @@ export async function execute(
       }
     }
 
-    const existingTriggers = new Set(currentTriggerWords.map((trigger) => trigger.toLowerCase()));
+    const existingTriggers = new Set(currentTriggerWords.map((trigger) => normalizeTriggerWord(trigger)));
     const newTriggers = uniqueTriggers.filter((trigger) => !existingTriggers.has(trigger));
 
     if (newTriggers.length === 0) {

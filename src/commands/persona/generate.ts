@@ -25,6 +25,7 @@ import {
 import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 import { presetExportDataSchema, PRESET_EXPORT_VERSION } from "../../types/preset/presetExport";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
+import { dedupeTriggerWords } from "@/utils/text/triggerWords";
 import type { PresetExport } from "../../types/preset/presetExport";
 import type { ModalComponent } from "../../types/discord/modal";
 import type { ToolContext } from "../../types/tool/interfaces";
@@ -41,22 +42,7 @@ const ADDITIONAL_INST_ID = "additional_inst";
 const FILE_UPLOAD_ID = "avatar_image";
 
 function parsePersonaNameInput(input: string): string[] {
-  const parsedNames = input
-    .split(/[,\u3001]/)
-    .map((name) => name.trim())
-    .filter((name) => name.length > 0);
-
-  const uniqueNames: string[] = [];
-  const seenNames = new Set<string>();
-  for (const name of parsedNames) {
-    const normalizedName = name.toLowerCase();
-    if (!seenNames.has(normalizedName)) {
-      seenNames.add(normalizedName);
-      uniqueNames.push(name);
-    }
-  }
-
-  return uniqueNames;
+  return dedupeTriggerWords(input.split(/[,\u3001]/), { lowercase: false });
 }
 
 /**

@@ -1,12 +1,11 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { localizer } from "@/utils/text/localizer";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow } from "@/types/db/schema";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { configRepository } from "@/utils/db/repositories";
+import { configRepository, serverRepository } from "@/utils/db/repositories";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
@@ -55,13 +54,7 @@ export async function execute(
     }
 
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
-    const serverRows = await sql<Array<{ server_id: number }>>`
-      SELECT server_id
-      FROM servers
-      WHERE server_disc_id = ${serverDiscId}
-      LIMIT 1
-    `;
-    const serverId = serverRows[0]?.server_id;
+    const serverId = await serverRepository.loadServerIdByDiscId(serverDiscId);
     if (!serverId) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.data.delete.no_server_data_title",

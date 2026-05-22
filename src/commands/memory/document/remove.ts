@@ -6,7 +6,6 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { isRagAvailable } from "@/utils/db/ragAvailability";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -190,22 +189,7 @@ export async function execute(
       }
 
       const selectionInteraction = personaSelectionInteraction ?? interaction;
-      const documents =
-        targetPersonaId === null
-          ? await sql<Array<{ document_id: number; document_name: string }>>`
-						SELECT document_id, document_name
-						FROM documents
-						WHERE server_id = ${tomoriState.server_id}
-						  AND persona_id IS NULL
-						ORDER BY created_at DESC
-					`
-          : await sql<Array<{ document_id: number; document_name: string }>>`
-						SELECT document_id, document_name
-						FROM documents
-						WHERE server_id = ${tomoriState.server_id}
-						  AND persona_id = ${targetPersonaId}
-						ORDER BY created_at DESC
-					`;
+      const documents = await serverMemoryRepository.loadDocuments(tomoriState.server_id, targetPersonaId);
 
       if (!documents || documents.length === 0) {
         if (personaSelectionInteraction) {

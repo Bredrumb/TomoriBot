@@ -28,6 +28,7 @@ import { invalidateStPresetCache } from "@/utils/cache/stPresetCache";
 import { validatePersonaConfigFields } from "@/utils/db/sqlSecurity";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import type { SillyTavernCardMetadata } from "@/utils/image/pngMetadata";
+import { dedupeTriggerWords, normalizeTriggerWord, stripSurroundingTriggerQuotes } from "@/utils/text/triggerWords";
 
 // ── SillyTavern conversion private types ──────────────────────────────────────
 
@@ -309,7 +310,7 @@ export class PresetRepository {
     const seen = new Set<string>();
 
     const pushUnique = (value: string) => {
-      const normalized = value.trim().toLowerCase();
+      const normalized = normalizeTriggerWord(value);
       if (!normalized || seen.has(normalized)) return;
       seen.add(normalized);
       triggers.push(normalized);
@@ -947,11 +948,16 @@ export class PresetRepository {
       return { valid: false, error: "commands.persona.import.error_invalid_format" };
     }
 
-    if (validated.data.sample_dialogues_in.length !== validated.data.sample_dialogues_out.length) {
+    const normalizedData: PresetExportData = {
+      ...validated.data,
+      trigger_words: dedupeTriggerWords(validated.data.trigger_words, { lowercase: false }),
+    };
+
+    if (normalizedData.sample_dialogues_in.length !== normalizedData.sample_dialogues_out.length) {
       return { valid: false, error: "commands.persona.import.error_dialogue_mismatch" };
     }
 
-    return { valid: true, data: validated.data };
+    return { valid: true, data: normalizedData };
   }
 
   /**
@@ -1053,7 +1059,7 @@ export class PresetRepository {
       this.pickStringFromCard(cardData, rootData, "name") ??
       this.pickStringFromCard(cardData, rootData, "char_name") ??
       "Imported Persona";
-    const normalizedName = this.capitalizeFirstLetter(name);
+    const normalizedName = this.capitalizeFirstLetter(stripSurroundingTriggerQuotes(name));
 
     const sections: ContentSection[] = [];
 

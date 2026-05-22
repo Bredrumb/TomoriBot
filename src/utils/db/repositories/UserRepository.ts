@@ -847,7 +847,7 @@ export class UserRepository implements IRepository<UserExportShape> {
         user_id, shortterm_cache_crossserver_opt_in, nai_char_tags,
         nai_char_ref_url, impersonation_prompt, personal_dtm
       ) VALUES (
-        ${userId}, ${data.shortterm_cache_crossserver_opt_in}, ${sql.array(data.nai_char_tags)},
+        ${userId}, ${data.shortterm_cache_crossserver_opt_in}, ${sql.array(data.nai_char_tags, "TEXT")},
         ${data.nai_char_ref_url ?? null}, ${data.impersonation_prompt ?? null},
         ${data.personal_dtm ?? "follow"}
       )

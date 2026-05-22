@@ -7,7 +7,6 @@
 
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -72,19 +71,6 @@ function getVideoModelDisplayName(
 
   const description = model?.model_description?.trim();
   return description && description.length > 0 ? description : null;
-}
-
-async function loadVideoModelById(
-  videoModelId: number,
-): Promise<Pick<VideoGenerationModelRow, "video_model_id" | "codename" | "model_description"> | null> {
-  const [row] = await sql<Array<Pick<VideoGenerationModelRow, "video_model_id" | "codename" | "model_description">>>`
-    SELECT video_model_id, codename, model_description
-    FROM video_generation_models
-    WHERE video_model_id = ${videoModelId}
-    LIMIT 1
-  `;
-
-  return row ?? null;
 }
 
 // Configure the subcommand
@@ -159,8 +145,8 @@ export async function execute(
 
       const currentSelectedId = tomoriState.config.video_model_id ?? null;
       const [selectedConfiguredModel, previousModel] = await Promise.all([
-        loadVideoModelById(selectedSavedConfig.video_model_id),
-        currentSelectedId ? loadVideoModelById(currentSelectedId) : Promise.resolve(null),
+        llmModelRepo.loadVideoGenerationModelById(selectedSavedConfig.video_model_id),
+        currentSelectedId ? llmModelRepo.loadVideoGenerationModelById(currentSelectedId) : Promise.resolve(null),
       ]);
       const selectedModelName =
         getVideoModelDisplayName(selectedConfiguredModel) ?? getProviderDisplayName(selectedProvider);
@@ -341,7 +327,7 @@ export async function execute(
 
     // 14. Success message with previous model name
     const previousModel = tomoriState.config.video_model_id
-      ? await loadVideoModelById(tomoriState.config.video_model_id)
+      ? await llmModelRepo.loadVideoGenerationModelById(tomoriState.config.video_model_id)
       : null;
 
     const successOptions = {

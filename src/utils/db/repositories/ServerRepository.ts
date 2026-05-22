@@ -23,6 +23,7 @@ import { log } from "@/utils/misc/logger";
 import { keyManager } from "@/utils/security/keyManager";
 import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/contextBuilder";
 import { getBaseTriggerWords } from "@/utils/text/localizer";
+import { dedupeTriggerWords } from "@/utils/text/triggerWords";
 import type { IRepository } from "./IRepository";
 
 // ── Managed webhook types ──────────────────────────────────────────────────────
@@ -574,16 +575,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
           presetRows[0]?.preset_trigger_words?.filter(
             (trigger): trigger is string => typeof trigger === "string" && trigger.trim().length > 0,
           ) ?? [];
-        const dedupedPresetTriggers: string[] = [];
-        const seenPresetTriggers = new Set<string>();
-        for (const trigger of presetTriggerCandidates) {
-          const normalized = trigger.trim().toLowerCase();
-          if (seenPresetTriggers.has(normalized)) {
-            continue;
-          }
-          seenPresetTriggers.add(normalized);
-          dedupedPresetTriggers.push(trigger.trim());
-        }
+        const dedupedPresetTriggers = dedupeTriggerWords(presetTriggerCandidates, { lowercase: false });
 
         const defaultTriggers =
           dedupedPresetTriggers.length > 0 ? dedupedPresetTriggers : getBaseTriggerWords(validConfig.locale);
@@ -1303,7 +1295,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
       const result = await sql`
         DELETE FROM personalization_blacklist
         WHERE server_id = ${serverId}
-          AND user_disc_id = ANY(${sql.array(userDiscIds)})
+          AND user_disc_id = ANY(${sql.array(userDiscIds, "TEXT")})
         RETURNING server_id
       `;
       return result.length;
@@ -1447,7 +1439,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
         ${row.send_message_limit}, ${row.match_limit}, ${row.cascade_limit},
         ${row.timezone_offset}, ${row.self_debug_enabled}, ${row.system_prompt},
         ${row.context_note}, ${row.context_note_depth},
-        ${sql.array(row.llm_stop_strings)}, ${row.llm_stop_speaker_pattern_enabled},
+        ${sql.array(row.llm_stop_strings, "TEXT")}, ${row.llm_stop_speaker_pattern_enabled},
         ${row.llm_max_output_tokens}, ${row.llm_top_p}, ${row.llm_top_k},
         ${row.llm_frequency_penalty}, ${row.llm_presence_penalty}, ${row.llm_min_p},
         ${logitBiasesJson}::JSONB, ${fallbackRefsJson}::JSONB
@@ -1480,7 +1472,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
   private async sqlUpsertNoticeEmbedsConfigs(serverId: number, row: ServerNoticeEmbedsConfigsRow): Promise<void> {
     await sql`
       INSERT INTO server_notice_embeds_configs (server_id, tool_notice_hidden_keys)
-      VALUES (${serverId}, ${sql.array(row.tool_notice_hidden_keys)})
+      VALUES (${serverId}, ${sql.array(row.tool_notice_hidden_keys, "TEXT")})
       ON CONFLICT (server_id) DO UPDATE SET
         tool_notice_hidden_keys = EXCLUDED.tool_notice_hidden_keys,
         updated_at              = NOW()
@@ -1520,8 +1512,8 @@ export class ServerRepository implements IRepository<ServerExportShape> {
         server_id, rp_channel_ids, private_channel_ids, crosschannel_blocklist_ids,
         stm_privacy_bypass, thought_log_channel_disc_id
       ) VALUES (
-        ${serverId}, ${sql.array(row.rp_channel_ids)}, ${sql.array(row.private_channel_ids)},
-        ${sql.array(row.crosschannel_blocklist_ids)}, ${row.stm_privacy_bypass},
+        ${serverId}, ${sql.array(row.rp_channel_ids, "TEXT")}, ${sql.array(row.private_channel_ids, "TEXT")},
+        ${sql.array(row.crosschannel_blocklist_ids, "TEXT")}, ${row.stm_privacy_bypass},
         ${row.thought_log_channel_disc_id}
       )
       ON CONFLICT (server_id) DO UPDATE SET

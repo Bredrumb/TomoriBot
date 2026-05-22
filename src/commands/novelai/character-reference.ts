@@ -6,9 +6,7 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { invalidateUserCache } from "@/utils/cache/userCache";
-import { sql } from "@/utils/db/client";
-import { personaRepository } from "@/utils/db/repositories";
+import { personaRepository, userRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { convertToPNG } from "@/utils/image/imageProcessor";
@@ -21,10 +19,6 @@ import type { TomoriState, UserRow } from "@/types/db/schema";
 
 const TARGET_ME = "me";
 const TARGET_PERSONA = "persona";
-
-type StoredRefRow = {
-  nai_char_ref_url: string | null;
-};
 
 type UploadPreparationResult =
   | { success: true; buffer: Buffer }
@@ -140,34 +134,22 @@ async function replaceStoredCharReference(options: {
   return true;
 }
 
-async function loadCurrentUserCharRef(userDiscId: string): Promise<string | null> {
-  const rows = await sql<Array<StoredRefRow>>`
-		SELECT nai_char_ref_url
-		FROM users
-		WHERE user_disc_id = ${userDiscId}
-		LIMIT 1
-	`;
-
-  return rows[0]?.nai_char_ref_url ?? null;
-}
-
-async function loadCurrentPersonaCharRef(personaId: number): Promise<string | null> {
-  const rows = await sql<Array<StoredRefRow>>`
-		SELECT nai_char_ref_url
-		FROM personas
-		WHERE persona_id = ${personaId}
-		LIMIT 1
-	`;
-
-  return rows[0]?.nai_char_ref_url ?? null;
-}
-
 async function handleUserTarget(
   interaction: ChatInputCommandInteraction,
   locale: string,
   userData: UserRow,
   imageAttachment: Attachment | null,
 ): Promise<void> {
+  const userId = userData.user_id;
+  if (userId === undefined) {
+    await replyInfoEmbed(interaction, locale, {
+      titleKey: "general.errors.update_failed_title",
+      descriptionKey: "general.errors.update_failed_description",
+      color: ColorCode.ERROR,
+    });
+    return;
+  }
+
   let pngBuffer: Buffer | null = null;
 
   if (imageAttachment) {
@@ -184,24 +166,17 @@ async function handleUserTarget(
     pngBuffer = prepared.buffer;
   }
 
-  const previousRef = await loadCurrentUserCharRef(userData.user_disc_id);
+  const previousRef = userData.nai_char_ref_url ?? null;
   const updated = await replaceStoredCharReference({
     entityType: "users",
     entityId: userData.user_disc_id,
     previousRef,
     nextBuffer: pngBuffer,
     persistNextRef: async (nextRef) => {
-      const rows = await sql<Array<{ user_id: number }>>`
-				UPDATE users
-				SET nai_char_ref_url = ${nextRef}
-				WHERE user_disc_id = ${userData.user_disc_id}
-				RETURNING user_id
-			`;
-      return rows.length > 0;
+      const updatedUser = await userRepository.update(userId, { nai_char_ref_url: nextRef });
+      return updatedUser !== null;
     },
-    onPersistSuccess: () => {
-      invalidateUserCache(userData.user_disc_id);
-    },
+    onPersistSuccess: () => undefined,
   });
 
   if (!updated) {
@@ -239,6 +214,7 @@ async function handlePersonaTarget(
     return;
   }
 
+  const personaId = selectedPersona.persona_id;
   const guildId = interaction.guild.id;
   let pngBuffer: Buffer | null = null;
 
@@ -256,20 +232,14 @@ async function handlePersonaTarget(
     pngBuffer = prepared.buffer;
   }
 
-  const previousRef = await loadCurrentPersonaCharRef(selectedPersona.persona_id);
+  const previousRef = selectedPersona.nai_char_ref_url ?? null;
   const updated = await replaceStoredCharReference({
     entityType: "personas",
-    entityId: selectedPersona.persona_id,
+    entityId: personaId,
     previousRef,
     nextBuffer: pngBuffer,
     persistNextRef: async (nextRef) => {
-      const rows = await sql<Array<{ persona_id: number }>>`
-				UPDATE personas
-				SET nai_char_ref_url = ${nextRef}
-				WHERE persona_id = ${selectedPersona.persona_id}
-				RETURNING persona_id
-			`;
-      return rows.length > 0;
+      return personaRepository.setNaiCharRef(personaId, nextRef);
     },
     onPersistSuccess: () => {
       invalidateTomoriStateCache(guildId);

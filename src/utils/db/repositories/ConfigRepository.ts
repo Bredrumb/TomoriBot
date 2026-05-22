@@ -36,6 +36,29 @@ import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
+const TEXT_ARRAY_CONFIG_COLUMNS = new Set([
+  "autoch_disc_ids",
+  "crosschannel_blocklist_ids",
+  "llm_disabled_params",
+  "llm_stop_strings",
+  "nai_negative_tags",
+  "nai_style_tags",
+  "private_channel_ids",
+  "rp_channel_ids",
+  "tool_notice_hidden_keys",
+]);
+
+const JSONB_CONFIG_COLUMNS = new Set([
+  "fallback_llm_ids",
+  "fallback_model_refs",
+  "llm_logit_biases",
+  "other_model_capabilities",
+]);
+
+function toPostgresTextArrayLiteral(values: readonly unknown[]): string {
+  return `{${values.map((value) => `"${String(value).replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
+}
+
 // ── config table row shapes ───────────────────────────────────────────
 
 /** Row shape for server_capabilities_configs (Phase 6). */
@@ -757,8 +780,12 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
 
         // 1. Update direct columns on server_auto_trigger_configs (if any provided).
         if (hasColumns) {
-          const setParts = columnEntries.map(([k], i) => `${k} = $${i + 1}`);
-          const values: unknown[] = [...columnEntries.map(([, v]) => v), serverId];
+          const setParts: string[] = [];
+          const values: SqlParameterArray = [];
+          columnEntries.forEach(([key, value]) => {
+            this.pushUpdateValue(key, value, setParts, values);
+          });
+          values.push(serverId);
           await tx.unsafe(
             `UPDATE server_auto_trigger_configs SET ${setParts.join(", ")} WHERE server_id = $${values.length}`,
             values as never[],
@@ -872,19 +899,18 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     const entries = Object.entries(patch).filter(([, v]) => v !== undefined);
     if (entries.length === 0) return false;
 
-    const setParts: string[] = [];
-    const values: SqlParameterArray = [];
-
-    entries.forEach(([key, value], index) => {
-      setParts.push(`${key} = $${index + 1}`);
-      values.push(value as never);
-    });
-
-    const setClause = setParts.join(", ");
-    values.push(serverId);
-    const serverIdIndex = values.length;
-
     try {
+      const setParts: string[] = [];
+      const values: SqlParameterArray = [];
+
+      entries.forEach(([key, value]) => {
+        this.pushUpdateValue(key, value, setParts, values);
+      });
+
+      const setClause = setParts.join(", ");
+      values.push(serverId);
+      const serverIdIndex = values.length;
+
       // sql.unsafe is intentional: tableName is dynamic (13 split-config tables) and cannot
       // be expressed as a typed sql`` identifier; sql(patch) for SET also requires a static
       // template tag so mixing both with a dynamic table name forces sql.unsafe here.
@@ -897,6 +923,32 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
       log.error(`Error updating ${tableName} for server_id: ${serverId}:`, error);
       return false;
     }
+  }
+
+  private pushUpdateValue(key: string, value: unknown, setParts: string[], values: SqlParameterArray): void {
+    const placeholder = `$${values.length + 1}`;
+
+    if (TEXT_ARRAY_CONFIG_COLUMNS.has(key)) {
+      if (!Array.isArray(value)) {
+        throw new Error(`Expected string array for ${key}`);
+      }
+      setParts.push(`${key} = ${placeholder}::TEXT[]`);
+      values.push(toPostgresTextArrayLiteral(value));
+      return;
+    }
+
+    if (JSONB_CONFIG_COLUMNS.has(key)) {
+      setParts.push(`${key} = ${placeholder}::JSONB`);
+      values.push(value === null ? null : JSON.stringify(value));
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      throw new Error(`Array-valued config column ${key} needs explicit SQL type handling`);
+    }
+
+    setParts.push(`${key} = ${placeholder}`);
+    values.push(value as never);
   }
 
   // ── IRepository contract ───────────────────────────────────────────────────
@@ -1074,8 +1126,8 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
         nai_sampler, nai_steps, nai_scale, nai_noise_schedule, nai_cfg_rescale,
         nai_diffusion_model_id
       ) VALUES (
-        ${serverId}, ${row.nai_preset_name}, ${sql.array(row.nai_style_tags)},
-        ${sql.array(row.nai_negative_tags)}, ${row.nai_sampler}, ${row.nai_steps},
+        ${serverId}, ${row.nai_preset_name}, ${sql.array(row.nai_style_tags, "TEXT")},
+        ${sql.array(row.nai_negative_tags, "TEXT")}, ${row.nai_sampler}, ${row.nai_steps},
         ${row.nai_scale}, ${row.nai_noise_schedule}, ${row.nai_cfg_rescale},
         ${row.nai_diffusion_model_id}
       )

@@ -22,13 +22,13 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Preset import - regression", () => {
     await cleanupFixtures(testSql);
   });
 
-  it("imports main-branch preset trigger words into persona_configs", async () => {
+  it("imports normalized main-branch preset trigger words into persona_configs", async () => {
     const presetData: PresetExportData = {
       tomori_nickname: "_rt_imported_persona",
       attribute_list: ["_rt_import_attr"],
       sample_dialogues_in: ["_rt_user_line"],
       sample_dialogues_out: ["_rt_persona_line"],
-      trigger_words: ["_rt_legacy_trigger"],
+      trigger_words: ['"_rt_legacy_trigger"', "`_rt_legacy_trigger`", "_rt_second_legacy_trigger"],
       persona_prompt: "_rt_persona_prompt",
       persona_lineage_id: refs.personaLineageId,
       nai_tags: [],
@@ -51,7 +51,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Preset import - regression", () => {
       LIMIT 1
     `;
 
-    expect(personaConfig?.trigger_words).toEqual(["_rt_legacy_trigger"]);
+    expect(personaConfig?.trigger_words).toEqual(["_rt_legacy_trigger", "_rt_second_legacy_trigger"]);
     expect(personaConfig?.persona_prompt).toBe("_rt_persona_prompt");
   });
 });

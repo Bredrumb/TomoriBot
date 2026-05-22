@@ -45,7 +45,6 @@ export async function loadGuildTextChecklistChannels(guild: Guild): Promise<Chec
     return a.name.localeCompare(b.name);
   });
 }
-
 export function buildChannelCheckboxGroups(params: {
   channels: ChecklistChannelTarget[];
   selectedIds: Set<string>;
@@ -144,8 +143,4 @@ export function formatChecklistChannelMentions(
       knownIds.has(channelId) ? `<#${channelId}>` : `${localizer(locale, "general.unknown")} (${channelId})`,
     )
     .join(", ");
-}
-
-export function formatTextArrayLiteral(items: string[]): string {
-  return `{${items.map((item) => `"${item.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
 }

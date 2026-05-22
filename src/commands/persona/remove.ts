@@ -12,7 +12,6 @@ import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import type { UserRow } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
 import { personaRepository } from "@/utils/db/repositories";
-import { sql } from "../../utils/db/client";
 import { deletePersonaAvatarFromStorage } from "../../utils/storage/avatarStorage";
 
 // Constants for modal configuration
@@ -143,13 +142,7 @@ export async function execute(
     // 8. Delete selected persona from database.
     // For non-alter duplicate-tagged rows, ensure at least one main persona remains.
     if (!personaToRemove.is_alter) {
-      const [mainCountRow] = await sql<Array<{ main_count: number | string }>>`
-				SELECT COUNT(*)::int AS main_count
-				FROM personas
-				WHERE server_id = ${personaToRemove.server_id}
-				  AND is_alter = false
-			`;
-      const mainCount = Number(mainCountRow?.main_count ?? 0);
+      const mainCount = await personaRepository.countMainPersonasForServer(personaToRemove.server_id);
       if (mainCount <= 1) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "general.errors.update_failed_title",

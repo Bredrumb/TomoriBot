@@ -151,7 +151,7 @@ export class ImportRepository {
       for (const memory of memories) {
         await sql`
           INSERT INTO personal_memories (user_id, persona_lineage_id, content, tags)
-            VALUES (${targetUserId}, ${personaLineageId}, ${memory.content}, ${sql.array(memory.tags)})
+            VALUES (${targetUserId}, ${personaLineageId}, ${memory.content}, ${sql.array(memory.tags, "TEXT")})
         `;
       }
 
@@ -505,7 +505,7 @@ export class ImportRepository {
       for (const memory of memories) {
         await sql`
           INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, tags)
-          VALUES (${serverId}, ${insertTomoriId}, ${targetPersonaLineageId}, ${userId}, ${memory.content}, ${sql.array(memory.tags)})
+          VALUES (${serverId}, ${insertTomoriId}, ${targetPersonaLineageId}, ${userId}, ${memory.content}, ${sql.array(memory.tags, "TEXT")})
         `;
       }
 

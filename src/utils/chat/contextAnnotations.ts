@@ -12,6 +12,7 @@ import { formatTimestampInline } from "@/utils/text/contextBuilder";
 import { getSupportedLocales, localizer } from "@/utils/text/localizer";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
+import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 
 const REACTION_CONTEXT_ENABLED = parseBooleanEnvFlag(process.env.REACTION_CONTEXT_ENABLED, true);
 const REACTION_CONTEXT_MAX_API_CALLS_PER_TURN = parseIntegerEnvFlag(
@@ -83,9 +84,10 @@ export function stripAtPersonaTriggers(content: string, allPersonas: TomoriState
     const triggers = persona.trigger_words ?? [];
 
     for (const trigger of triggers) {
-      if (!trigger) continue;
-      const pattern = new RegExp(`(?<![\\w])@${escapeRegExp(trigger)}`, "gi");
-      result = result.replace(pattern, trigger);
+      const normalizedTrigger = normalizeTriggerWord(trigger, { lowercase: false });
+      if (!normalizedTrigger) continue;
+      const pattern = new RegExp(`(?<![\\w])@${escapeRegExp(normalizedTrigger)}`, "gi");
+      result = result.replace(pattern, normalizedTrigger);
     }
   }
   return result;

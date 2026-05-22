@@ -81,7 +81,7 @@ export class PersonalMemoryRepository implements IRepository<PersonalMemoryExpor
     try {
       const [updated] = await sql`
         UPDATE personal_memories
-        SET content = ${content}, tags = ${sql.array(tags)}, updated_at = NOW()
+        SET content = ${content}, tags = ${sql.array(tags, "TEXT")}, updated_at = NOW()
         WHERE personal_memory_id = ${personalMemoryId}
         RETURNING personal_memory_id
       `;
@@ -192,7 +192,7 @@ export class PersonalMemoryRepository implements IRepository<PersonalMemoryExpor
         for (const memory of memories) {
           await tx`
             INSERT INTO personal_memories (user_id, persona_lineage_id, content, tags)
-            VALUES (${userId}, ${personaLineageId}, ${memory}, ${sql.array(tags)})
+            VALUES (${userId}, ${personaLineageId}, ${memory}, ${sql.array(tags, "TEXT")})
           `;
         }
       });
@@ -254,7 +254,7 @@ export class PersonalMemoryRepository implements IRepository<PersonalMemoryExpor
     try {
       const [insertedMemory] = await sql`
         INSERT INTO personal_memories (user_id, persona_lineage_id, content, tags)
-        VALUES (${userId}, ${personaLineageId}, ${content}, ${sql.array(tags)})
+        VALUES (${userId}, ${personaLineageId}, ${content}, ${sql.array(tags, "TEXT")})
         RETURNING *
       `;
 

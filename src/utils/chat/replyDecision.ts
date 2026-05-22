@@ -5,9 +5,9 @@ import { pendingMatrixReplyChannels } from "@/utils/bridges/matrix";
 import { isMatrixBridgeWebhookUsername } from "@/utils/bridges";
 import { log } from "@/utils/misc/logger";
 import {
-  createScreamingRegex,
   getAutochatAssignedPersonaId,
   getDeliberateTriggerMatch,
+  getTriggerFirstMatchIndex,
   isAutochatAlwaysReplyChannelActive,
   isAutochatConfiguredChannel,
   isAutochatCounterHit,
@@ -16,6 +16,7 @@ import {
 } from "@/utils/chat/triggerProcessor";
 import { getSelfReplyChainState } from "@/utils/chat/selfReplyState";
 import { resolveReferencedWebhookTarget } from "@/utils/chat/webhookIdentity";
+import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 
 const DEFAULT_CASCADE_LIMIT = 3;
 const MAX_CASCADE_LIMIT = 10;
@@ -158,21 +159,27 @@ export function shouldBotReply(
     const triggers = persona.trigger_words ?? [];
 
     for (const trigger of triggers) {
+      const normalizedTrigger = normalizeTriggerWord(trigger, { lowercase: false });
+      if (!normalizedTrigger) {
+        continue;
+      }
+
       let matched = false;
       let isDeliberate = false;
 
-      if (trigger.startsWith("<@")) {
-        const userId = trigger.replace(/[<@!>]/g, "");
+      if (normalizedTrigger.startsWith("<@")) {
+        const userId = normalizedTrigger.replace(/[<@!>]/g, "");
         matched = message.mentions.users.has(userId);
         isDeliberate = true;
       } else {
-        const isJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(trigger);
-        matched = isJapanese ? message.content.includes(trigger) : createScreamingRegex(trigger).test(message.content);
+        matched = getTriggerFirstMatchIndex(message, normalizedTrigger) !== Number.POSITIVE_INFINITY;
         const isPersonaDtmExempt =
           isAutoTriggerChannel &&
           (autochatPersonaId === null ? !persona.is_alter : autochatPersonaId === persona.persona_id);
         isDeliberate =
-          isDtmActive && !isPersonaDtmExempt ? getDeliberateTriggerMatch(message.content, trigger) !== null : true;
+          isDtmActive && !isPersonaDtmExempt
+            ? getDeliberateTriggerMatch(message.content, normalizedTrigger) !== null
+            : true;
       }
 
       if (matched) {
