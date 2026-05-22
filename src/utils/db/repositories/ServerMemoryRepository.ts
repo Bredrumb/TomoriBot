@@ -346,7 +346,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
     serverDiscId?: string,
   ): Promise<ServerMemoryRow | null> {
     log.info(
-      `Tomori is attempting to self-learn a server memory for server ID ${serverId}, tomori ID ${personaId}, lineage ${personaLineageId} (triggered by user ID ${taughtByUserId}): "${content.substring(0, 50)}..."`,
+      `Tomori is attempting to learn a server memory for server ID ${serverId}, tomori ID ${personaId}, lineage ${personaLineageId} (triggered by user ID ${taughtByUserId}): "${content.substring(0, 50)}..."`,
     );
 
     const contentValidation = validateMemoryContent(content);

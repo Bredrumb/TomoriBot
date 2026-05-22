@@ -82,7 +82,10 @@ export async function execute(
       return;
     }
 
-    const initialBlockedIds = new Set(tomoriState.config.crosschannel_blocklist_ids ?? []);
+    const availableChannelIds = new Set(availableChannels.map((c) => c.id));
+    const initialBlockedIds = new Set(
+      (tomoriState.config.crosschannel_blocklist_ids ?? []).filter((id) => availableChannelIds.has(id)),
+    );
 
     if (availableChannels.length <= CHANNELS_PER_PAGE) {
       await executeSinglePageBlocklist(

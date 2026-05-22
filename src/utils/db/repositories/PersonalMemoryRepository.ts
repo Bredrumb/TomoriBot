@@ -234,7 +234,7 @@ export class PersonalMemoryRepository implements IRepository<PersonalMemoryExpor
     tags: string[] = [],
   ): Promise<PersonalMemoryRow | null> {
     log.info(
-      `Tomori is attempting to self-learn a personal memory for user ${userId} in lineage ${personaLineageId}: "${content.substring(0, 50)}..."`,
+      `Tomori is attempting to learn a personal memory for user ${userId} in lineage ${personaLineageId}: "${content.substring(0, 50)}..."`,
     );
 
     const contentValidation = validateMemoryContent(content);

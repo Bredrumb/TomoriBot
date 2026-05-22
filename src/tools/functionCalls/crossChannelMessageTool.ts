@@ -112,7 +112,7 @@ export function buildBoomerangContext(boomerang: PendingBoomerang): StructuredCo
     `Report back naturally on what happened there.\n` +
     `Outcome: ${resultStr}.`;
   if (messagesBlock) {
-    contextText += `\nHere is what was happening in channel \`${boomerang.targetChannelName}\` (last 10 messages, newest first):\n${messagesBlock}`;
+    contextText += `\nHere is what was happening in channel \`${boomerang.targetChannelName}\` (last 10 messages, oldest first):\n${messagesBlock}`;
   }
   contextText += "\nNow continue the conversation here with a concise update.]";
 
@@ -440,7 +440,7 @@ export class CrossChannelMessageTool extends BaseTool {
         };
       }
 
-      // Newest-first from Discord; truncate at refresh embed boundary
+      // Discord returns newest-first; truncate at refresh embed boundary, then reverse to chronological order
       const messagesArray = [...recentMessages.values()];
       const filteredMessages: Message[] = [];
       for (const m of messagesArray) {
@@ -452,12 +452,12 @@ export class CrossChannelMessageTool extends BaseTool {
         }
         filteredMessages.push(m);
       }
+      filteredMessages.reverse();
 
       const formattedMessages = await Promise.all(
         filteredMessages.map(async (m) => ({
           author: await resolveContextAuthorLabel(m, {
             guildId: context.guildId,
-            tomoriNickname: context.tomoriState.persona_nickname,
             personalMemoriesEnabled: context.tomoriState.config.personal_memories_enabled,
           }),
           content: m.content
@@ -589,7 +589,7 @@ export class CrossChannelMessageTool extends BaseTool {
           const recentMessages = await targetChannel.messages.fetch({
             limit: 10,
           });
-          // Discord returns newest-first; truncate at refresh embed boundary
+          // Discord returns newest-first; truncate at refresh embed boundary, then reverse to chronological order
           const messagesArray = [...recentMessages.values()];
           const filteredMessages: Message[] = [];
           for (const m of messagesArray) {
@@ -602,11 +602,11 @@ export class CrossChannelMessageTool extends BaseTool {
             }
             filteredMessages.push(m);
           }
+          filteredMessages.reverse();
           targetMessages = await Promise.all(
             filteredMessages.map(async (m) => ({
               author: await resolveContextAuthorLabel(m, {
                 guildId: context.guildId,
-                tomoriNickname: context.tomoriState.persona_nickname,
                 personalMemoriesEnabled: context.tomoriState.config.personal_memories_enabled,
               }),
               content: m.content

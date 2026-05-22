@@ -74,7 +74,10 @@ export async function execute(
       return;
     }
 
-    const initialSelectedIds = new Set(tomoriState.config.private_channel_ids ?? []);
+    const availableChannelIds = new Set(availableChannels.map((c) => c.id));
+    const initialSelectedIds = new Set(
+      (tomoriState.config.private_channel_ids ?? []).filter((id) => availableChannelIds.has(id)),
+    );
 
     if (availableChannels.length <= CHECKLIST_CHANNELS_PER_PAGE) {
       await executeSinglePage(

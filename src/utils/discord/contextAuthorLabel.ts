@@ -7,7 +7,6 @@ import { log } from "@/utils/misc/logger";
 
 type ResolveContextAuthorLabelOptions = {
   guildId?: string | null;
-  tomoriNickname?: string | null;
   personalMemoriesEnabled?: boolean;
 };
 
@@ -48,8 +47,10 @@ export async function resolveContextAuthorLabel(
     return webhookName || message.author.username || "Unknown";
   }
 
+  // For direct bot messages (non-webhook), we can't know which persona authored them,
+  // so use the bot's actual username rather than the currently active persona's nickname.
   if (message.client.user && message.author.id === message.client.user.id) {
-    return options.tomoriNickname?.trim() || message.author.username || "Tomori";
+    return message.author.username || "Tomori";
   }
 
   if (guildId && guildId !== "DM") {
