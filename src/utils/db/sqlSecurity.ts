@@ -10,8 +10,8 @@
  * When new columns are added to a schema, they become writable here without any manual update.
  */
 
-import { userSchema, tomoriSchema, assembledServerConfigSchema } from "../../types/db/schema";
-import type { UserRow, TomoriRow, AssembledServerConfig } from "../../types/db/schema";
+import { userSchema, tomoriSchema, assembledServerConfigSchema, personaConfigSchema } from "../../types/db/schema";
+import type { UserRow, TomoriRow, AssembledServerConfig, PersonaConfigRow } from "../../types/db/schema";
 import { log } from "../misc/logger";
 
 /**
@@ -39,6 +39,12 @@ const ALLOWED_TOMORI_CONFIG_FIELDS = schemaKeysExcluding<AssembledServerConfig>(
   "tomori_config_id", // primary key
   "persona_id", // FK anchor
   "server_id", // FK anchor
+  "created_at",
+  "updated_at",
+]);
+
+const ALLOWED_PERSONA_CONFIG_FIELDS = schemaKeysExcluding<PersonaConfigRow>(personaConfigSchema, [
+  "persona_id", // FK anchor / primary key
   "created_at",
   "updated_at",
 ]);
@@ -95,6 +101,23 @@ export function validateTomoriConfigFields(fields: string[]): void {
 }
 
 /**
+ * Validates that all provided field names are whitelisted for PersonaConfig table updates.
+ * Throws an error if any field is not allowed to prevent SQL injection.
+ *
+ * @param fields - Array of field names to validate
+ * @throws Error if any field name is not whitelisted
+ */
+export function validatePersonaConfigFields(fields: string[]): void {
+  for (const field of fields) {
+    if (!ALLOWED_PERSONA_CONFIG_FIELDS.has(field as keyof PersonaConfigRow)) {
+      const error = `Security violation: Invalid field name '${field}' for PersonaConfig table update. Allowed fields: ${Array.from(ALLOWED_PERSONA_CONFIG_FIELDS).join(", ")}`;
+      log.error(error);
+      throw new Error(error);
+    }
+  }
+}
+
+/**
  * Get all allowed field names for User table (for documentation/debugging purposes)
  */
 export function getAllowedUserFields(): readonly string[] {
@@ -113,4 +136,11 @@ export function getAllowedTomoriFields(): readonly string[] {
  */
 export function getAllowedTomoriConfigFields(): readonly string[] {
   return Array.from(ALLOWED_TOMORI_CONFIG_FIELDS);
+}
+
+/**
+ * Get all allowed field names for PersonaConfig table (for documentation/debugging purposes)
+ */
+export function getAllowedPersonaConfigFields(): readonly string[] {
+  return Array.from(ALLOWED_PERSONA_CONFIG_FIELDS);
 }

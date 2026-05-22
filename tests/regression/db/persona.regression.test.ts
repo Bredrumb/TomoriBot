@@ -60,6 +60,78 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
     expect(personas).toHaveLength(0);
   });
 
+  it("swapPersona promotes the alter row without mixing persona details", async () => {
+    const alterName = `_rt_swap_alter_${Date.now()}`;
+    const mainAttribute = "_rt_main_attr";
+    const alterAttribute = "_rt_alter_attr";
+    let alterPersonaId: number | null = null;
+
+    await testSql`
+      UPDATE personas
+      SET
+        attribute_list = ARRAY[${mainAttribute}]::TEXT[],
+        sample_dialogues_in = ARRAY['_rt_main_in']::TEXT[],
+        sample_dialogues_out = ARRAY['_rt_main_out']::TEXT[]
+      WHERE persona_id = ${refs.personaId}
+    `;
+
+    const [alterRow] = await testSql<Array<{ persona_id: number }>>`
+      INSERT INTO personas (
+        server_id,
+        persona_nickname,
+        attribute_list,
+        sample_dialogues_in,
+        sample_dialogues_out,
+        is_alter
+      )
+      VALUES (
+        ${refs.serverId},
+        ${alterName},
+        ARRAY[${alterAttribute}]::TEXT[],
+        ARRAY['_rt_alter_in']::TEXT[],
+        ARRAY['_rt_alter_out']::TEXT[],
+        true
+      )
+      RETURNING persona_id
+    `;
+    alterPersonaId = alterRow.persona_id;
+
+    try {
+      const swapped = await personaRepository.swapPersona(refs.personaId, alterPersonaId);
+      expect(swapped).toBe(true);
+
+      const personas = await personaRepository.loadAllForServer(FIXTURE_IDS.serverDiscId);
+      const promotedAlter = personas.find((persona) => persona.persona_id === alterPersonaId);
+      const formerMain = personas.find((persona) => persona.persona_id === refs.personaId);
+
+      expect(promotedAlter?.is_alter).toBe(false);
+      expect(promotedAlter?.persona_nickname).toBe(alterName);
+      expect(promotedAlter?.attribute_list).toContain(alterAttribute);
+      expect(promotedAlter?.sample_dialogues_in).toContain("_rt_alter_in");
+      expect(promotedAlter?.sample_dialogues_out).toContain("_rt_alter_out");
+
+      expect(formerMain?.is_alter).toBe(true);
+      expect(formerMain?.persona_nickname).toBe("_rt_persona");
+      expect(formerMain?.attribute_list).toContain(mainAttribute);
+      expect(formerMain?.sample_dialogues_in).toContain("_rt_main_in");
+      expect(formerMain?.sample_dialogues_out).toContain("_rt_main_out");
+    } finally {
+      if (alterPersonaId !== null) {
+        await personaRepository.swapPersona(alterPersonaId, refs.personaId);
+        await testSql`DELETE FROM personas WHERE persona_id = ${alterPersonaId}`;
+      }
+
+      await testSql`
+        UPDATE personas
+        SET
+          attribute_list = ARRAY[]::TEXT[],
+          sample_dialogues_in = ARRAY[]::TEXT[],
+          sample_dialogues_out = ARRAY[]::TEXT[]
+        WHERE persona_id = ${refs.personaId}
+      `;
+    }
+  });
+
   // ── loadPersonaConfigRow ─────────────────────────────────────────────────
 
   it("loadPersonaConfigRow returns the fixture persona_config row", async () => {

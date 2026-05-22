@@ -203,6 +203,35 @@ function isAvatarUpdateRateLimited(status: number, errorText: string): boolean {
   return /AVATAR_RATE_LIMIT/i.test(errorText) || /RATE_LIMIT/i.test(errorText) || /too fast/i.test(errorText);
 }
 
+async function persistImportedMainAvatar(serverDiscId: string, avatarImageBuffer: Buffer): Promise<void> {
+  const mainPersona = (await personaRepository.loadAllForServer(serverDiscId)).find((persona) => !persona.is_alter);
+
+  if (!mainPersona?.persona_id) {
+    log.warn(`Failed to locate main persona while persisting imported avatar for server ${serverDiscId}`);
+    return;
+  }
+
+  const storedAvatarUrl = await uploadPersonaAvatarToStorage({
+    personaId: mainPersona.persona_id,
+    serverDiscId,
+    label: "main import",
+    buffer: avatarImageBuffer,
+  });
+
+  if (!storedAvatarUrl) {
+    log.warn(`Failed to store imported main avatar for persona ${mainPersona.persona_id}`);
+    return;
+  }
+
+  const avatarUpdated = await personaRepository.setAvatar(mainPersona.persona_id, storedAvatarUrl);
+  if (!avatarUpdated) {
+    log.warn(`Failed to persist imported main avatar for persona ${mainPersona.persona_id}`);
+    return;
+  }
+
+  invalidateTomoriStateCache(serverDiscId);
+}
+
 /**
  * Configure the 'import' subcommand
  */
@@ -858,6 +887,7 @@ export async function execute(
           embeds: [successEmbed],
           files: [avatarAttachment],
         });
+        await persistImportedMainAvatar(serverDiscId, avatarImageBuffer);
       } else {
         await interaction.channel.send({
           embeds: [successEmbed],

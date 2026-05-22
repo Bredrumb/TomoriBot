@@ -525,23 +525,41 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
-  async swapPersona(personaId1: number, personaId2: number): Promise<boolean> {
+  async swapPersona(mainPersonaId: number, alterPersonaId: number): Promise<boolean> {
     try {
       await sql.transaction(async (tx) => {
+        const rows = await tx<Array<{ persona_id: number; server_id: number; is_alter: boolean }>>`
+          SELECT persona_id, server_id, is_alter
+          FROM personas
+          WHERE persona_id IN (${mainPersonaId}, ${alterPersonaId})
+          FOR UPDATE
+        `;
+
+        const mainPersona = rows.find((row) => row.persona_id === mainPersonaId);
+        const alterPersona = rows.find((row) => row.persona_id === alterPersonaId);
+
+        if (!mainPersona || !alterPersona || mainPersona.server_id !== alterPersona.server_id) {
+          throw new Error("Persona swap requires two personas from the same server.");
+        }
+
+        if (mainPersona.is_alter || !alterPersona.is_alter) {
+          throw new Error("Persona swap requires the first persona to be main and the second persona to be an alter.");
+        }
+
         await tx`
           UPDATE personas
           SET is_alter = true
-          WHERE persona_id = ${personaId2}
+          WHERE persona_id = ${mainPersonaId}
         `;
         await tx`
           UPDATE personas
           SET is_alter = false
-          WHERE persona_id = ${personaId1}
+          WHERE persona_id = ${alterPersonaId}
         `;
       });
       return true;
     } catch (e) {
-      log.error(`Error swapping personas ${personaId1} and ${personaId2}:`, e);
+      log.error(`Error swapping personas ${mainPersonaId} and ${alterPersonaId}:`, e);
       return false;
     }
   }

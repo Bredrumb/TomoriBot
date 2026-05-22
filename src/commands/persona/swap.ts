@@ -12,7 +12,6 @@ import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import type { UserRow } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
 import { personaRepository } from "@/utils/db/repositories";
-import { downloadImage } from "../../utils/image/avatarHelper";
 import { convertToPNG } from "../../utils/image/imageProcessor";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 import {
@@ -59,6 +58,31 @@ function isAvatarUpdateRateLimited(status: number, errorText: string): boolean {
   }
 
   return /AVATAR_RATE_LIMIT/i.test(errorText) || /RATE_LIMIT/i.test(errorText) || /too fast/i.test(errorText);
+}
+
+async function resolveCurrentBotAvatarUrl(
+  client: Client,
+  interaction: ChatInputCommandInteraction,
+): Promise<string | null> {
+  if (!interaction.guild) {
+    return client.user?.displayAvatarURL({ size: 1024, extension: "png", forceStatic: true }) ?? null;
+  }
+
+  const fetchedBotMember = client.user
+    ? await interaction.guild.members.fetch({ user: client.user.id, force: true }).catch((error) => {
+        log.warn(
+          `Failed to fetch fresh bot member avatar for swap: ${error instanceof Error ? error.message : "Unknown error"}`,
+        );
+        return null;
+      })
+    : null;
+
+  return (
+    fetchedBotMember?.displayAvatarURL({ size: 1024, extension: "png", forceStatic: true }) ??
+    interaction.guild.members.me?.displayAvatarURL({ size: 1024, extension: "png", forceStatic: true }) ??
+    client.user?.displayAvatarURL({ size: 1024, extension: "png", forceStatic: true }) ??
+    null
+  );
 }
 
 // Constants for modal configuration
@@ -198,21 +222,14 @@ export async function execute(
     const previousMainAvatarUrl = mainPersona.webhook_avatar_url;
 
     // 8. Capture current bot avatar BEFORE swapping (represents former main persona)
-    const formerMainAvatarUrl =
-      interaction.guild.members.me?.displayAvatarURL({
-        size: 1024,
-        extension: "png",
-        forceStatic: true,
-      }) ??
-      _client.user?.displayAvatarURL({
-        size: 1024,
-        extension: "png",
-        forceStatic: true,
-      });
+    const liveFormerMainAvatarUrl = await resolveCurrentBotAvatarUrl(_client, interaction);
+    const formerMainAvatarReference = liveFormerMainAvatarUrl ?? previousMainAvatarUrl;
+    const formerMainAvatarDisplayUrl =
+      formerMainAvatarReference && /^https?:\/\//i.test(formerMainAvatarReference) ? formerMainAvatarReference : null;
     let formerMainAvatarBuffer: Buffer | null = null;
-    if (formerMainAvatarUrl) {
+    if (formerMainAvatarReference) {
       try {
-        formerMainAvatarBuffer = await downloadImage(formerMainAvatarUrl);
+        formerMainAvatarBuffer = await loadStoredPersonaAvatarBuffer(formerMainAvatarReference);
       } catch (downloadError) {
         log.warn(
           `Failed to prefetch former main avatar for embed (non-fatal): ${downloadError instanceof Error ? downloadError.message : "Unknown error"}`,
@@ -223,7 +240,10 @@ export async function execute(
     // 9. Swap is_alter flags in database.
     // Trigger words are persona-scoped in persona_configs and do not need migration.
     // biome-ignore lint/style/noNonNullAssertion: guaranteed by prior checks
-    await personaRepository.swapPersona(mainPersona.persona_id!, selectedAlter.persona_id!);
+    const swapSucceeded = await personaRepository.swapPersona(mainPersona.persona_id!, selectedAlter.persona_id!);
+    if (!swapSucceeded) {
+      throw new Error("Persona swap database update failed.");
+    }
 
     // 10. Try to update nickname and avatar separately (non-fatal if fails)
     let avatarSwapSuccess = false;
@@ -366,8 +386,8 @@ export async function execute(
         name: avatarFilename,
       });
       successEmbed.setImage(`attachment://${avatarFilename}`);
-    } else if (formerMainAvatarUrl) {
-      successEmbed.setImage(formerMainAvatarUrl);
+    } else if (formerMainAvatarDisplayUrl) {
+      successEmbed.setImage(formerMainAvatarDisplayUrl);
     }
 
     // Add footer warning to keep embed (used for avatar URL storage)
@@ -384,7 +404,7 @@ export async function execute(
     });
 
     // 14. Extract former main's avatar URL from success embed and store it
-    if (formerMainAvatarUrl) {
+    if (formerMainAvatarReference) {
       try {
         const sentEmbed = reply.embeds[0];
         const s3StoredUrl =
@@ -397,7 +417,7 @@ export async function execute(
               })
             : null;
         newFormerMainS3Url = s3StoredUrl;
-        const storedAvatarUrl = s3StoredUrl ?? sentEmbed?.image?.url ?? null;
+        const storedAvatarUrl = s3StoredUrl ?? sentEmbed?.image?.url ?? previousMainAvatarUrl ?? null;
         newFormerMainAvatarUrl = storedAvatarUrl;
 
         if (storedAvatarUrl) {

@@ -25,7 +25,7 @@ import {
 } from "@/types/preset/presetExport";
 import { log } from "@/utils/misc/logger";
 import { invalidateStPresetCache } from "@/utils/cache/stPresetCache";
-import { validateTomoriConfigFields } from "@/utils/db/sqlSecurity";
+import { validatePersonaConfigFields } from "@/utils/db/sqlSecurity";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import type { SillyTavernCardMetadata } from "@/utils/image/pngMetadata";
 
@@ -802,11 +802,11 @@ export class PresetRepository {
       }
       const validatedImportData = importValidation.data;
 
-      // 1. Validate trigger_words field for SQL security
+      // 1. Validate persona-scoped config fields for SQL security.
       try {
-        validateTomoriConfigFields(["trigger_words"]);
+        validatePersonaConfigFields(["trigger_words", "persona_prompt"]);
       } catch (error) {
-        log.error("Config field validation failed during preset import:", error);
+        log.error("Persona config field validation failed during preset import:", error);
         return { success: false, error: "commands.persona.import.error_invalid_config" };
       }
 
