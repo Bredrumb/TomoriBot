@@ -215,6 +215,7 @@ const COMFYUI_INPAINT_PRESETS: Record<string, ComfyUiInpaintSettings> = {
 const COMFYUI_MAX_RANDOM_SEED = 2 ** 32;
 const COMFYUI_INPAINT_MASK_FILENAME_PREFIX = "tomoribot_inpaint_mask";
 const COMFYUI_INPAINT_RESULT_DEBUG_FILENAME_PREFIX = "tomoribot_inpaint_result_debug";
+const COMFYUI_OUTPAINT_INACTIVE_EXTEND_FACTOR = 0.01;
 const COMFYUI_BASE_NEGATIVE_PROMPT =
   "low quality, worst quality, low detail, bad drawing, bad quality, oldest, (score_3, score_2, score_1:0.25), jpeg artifacts, watermark, signature, artist name, missing head, missing limb, bad anatomy, bad proportions, bad hands, missing fingers, spiral eyes, multiple views, duplicate face, extra face, second character, collage, inset image, tiny subject, distant subject, small subject, excessive empty space, subject too small";
 const COMFYUI_CLOTHING_SEGMENT_CATEGORIES: ComfyUiClothingSegmentCategory[] = [
@@ -1226,6 +1227,24 @@ function getComfyUiDirectionalOutpaintFactors(direction: string): {
     down: direction === "down" || direction === "down_left" || direction === "down_right" || direction === "all" ? 1 : 0,
     left: direction === "left" || direction === "down_left" || direction === "up_left" || direction === "all" ? 1 : 0,
     right: direction === "right" || direction === "down_right" || direction === "up_right" || direction === "all" ? 1 : 0,
+  };
+}
+
+function getComfyUiWorkflowOutpaintFactors(
+  direction: string,
+  outpaint: boolean,
+): {
+  up: number;
+  down: number;
+  left: number;
+  right: number;
+} {
+  const factors = getComfyUiDirectionalOutpaintFactors(direction);
+  return {
+    up: outpaint && factors.up > 0 ? factors.up : COMFYUI_OUTPAINT_INACTIVE_EXTEND_FACTOR,
+    down: outpaint && factors.down > 0 ? factors.down : COMFYUI_OUTPAINT_INACTIVE_EXTEND_FACTOR,
+    left: outpaint && factors.left > 0 ? factors.left : COMFYUI_OUTPAINT_INACTIVE_EXTEND_FACTOR,
+    right: outpaint && factors.right > 0 ? factors.right : COMFYUI_OUTPAINT_INACTIVE_EXTEND_FACTOR,
   };
 }
 
@@ -2312,7 +2331,7 @@ function buildComfyUiPlaceholderMap(
   const outpaintPixels = resolveComfyUiOutpaintPixels(options);
   const effectiveExtendPixels = outpaint ? outpaintPixels : inpaintSettings.extendPixels;
   const extendOffset = resolveComfyUiExtendOffset(extendDirection, effectiveExtendPixels);
-  const outpaintFactors = getComfyUiDirectionalOutpaintFactors(extendDirection);
+  const workflowOutpaintFactors = getComfyUiWorkflowOutpaintFactors(extendDirection, outpaint);
   const outpaintLayout = outpaint
     ? buildComfyUiOutpaintLayout(options, dimensions.source, dimensions.output, extendDirection)
     : null;
@@ -2375,10 +2394,10 @@ function buildComfyUiPlaceholderMap(
     TOMORI_OUTPAINT_MASK_SOURCE_Y: outpaintLayout?.maskSourceY ?? 0,
     TOMORI_OUTPAINT_MASK_SOURCE_WIDTH: outpaintLayout?.maskSourceWidth ?? dimensions.source.width,
     TOMORI_OUTPAINT_MASK_SOURCE_HEIGHT: outpaintLayout?.maskSourceHeight ?? dimensions.source.height,
-    TOMORI_OUTPAINT_EXTEND_UP_FACTOR: outpaint ? outpaintFactors.up : 0,
-    TOMORI_OUTPAINT_EXTEND_DOWN_FACTOR: outpaint ? outpaintFactors.down : 0,
-    TOMORI_OUTPAINT_EXTEND_LEFT_FACTOR: outpaint ? outpaintFactors.left : 0,
-    TOMORI_OUTPAINT_EXTEND_RIGHT_FACTOR: outpaint ? outpaintFactors.right : 0,
+    TOMORI_OUTPAINT_EXTEND_UP_FACTOR: workflowOutpaintFactors.up,
+    TOMORI_OUTPAINT_EXTEND_DOWN_FACTOR: workflowOutpaintFactors.down,
+    TOMORI_OUTPAINT_EXTEND_LEFT_FACTOR: workflowOutpaintFactors.left,
+    TOMORI_OUTPAINT_EXTEND_RIGHT_FACTOR: workflowOutpaintFactors.right,
     TOMORI_MASK_PROMPT: workflowMaskPrompt,
     TOMORI_INPAINT_MASK_CONTENT: inpaintMaskContent,
     TOMORI_INPAINT_USE_LATENT_NOISE_MASK_CONTENT: inpaintMaskContent === "latent_noise",
@@ -2930,6 +2949,10 @@ export async function generateCustomImageViaEndpoint(params: {
           diagnosticOutpaintDirection,
         )
       : null;
+    const diagnosticWorkflowOutpaintFactors = getComfyUiWorkflowOutpaintFactors(
+      diagnosticOutpaintDirection,
+      diagnosticOutpaint,
+    );
     const finalImageMetadata = await sharp(imageBuffer).metadata().catch(() => null);
     const finalImageWidth = finalImageMetadata?.width ?? null;
     const finalImageHeight = finalImageMetadata?.height ?? null;
@@ -2964,6 +2987,7 @@ export async function generateCustomImageViaEndpoint(params: {
             `outpaint_strategy=${diagnosticOutpaintLayout.strategy}`,
             `outpaint_source_scale=${diagnosticOutpaintLayout.sourceScale}`,
             `outpaint_overlap=${diagnosticOutpaintLayout.overlap}`,
+            `outpaint_extend_factors=${diagnosticWorkflowOutpaintFactors.up}/${diagnosticWorkflowOutpaintFactors.down}/${diagnosticWorkflowOutpaintFactors.left}/${diagnosticWorkflowOutpaintFactors.right}`,
             `outpaint_source_placement=${diagnosticOutpaintLayout.placedSourceX}x${diagnosticOutpaintLayout.placedSourceY}+${diagnosticOutpaintLayout.placedSourceWidth}x${diagnosticOutpaintLayout.placedSourceHeight}`,
             `outpaint_mask_source_rect=${diagnosticOutpaintLayout.maskSourceX}x${diagnosticOutpaintLayout.maskSourceY}+${diagnosticOutpaintLayout.maskSourceWidth}x${diagnosticOutpaintLayout.maskSourceHeight}`,
           ]
