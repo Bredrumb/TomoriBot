@@ -161,7 +161,7 @@ export class GenerateImageTool extends BaseTool {
       outpaint_zoom_scale: {
         type: "number",
         description:
-          "Optional for outpaint_strategy='zoom_out': scale for placing the original image inside the expanded canvas, from 0.5 to 0.95. Ignored by full_canvas and edge_extend strategies.",
+          "Optional for zoom-out outpainting: scale for placing the original image inside the expanded canvas, from 0.5 to 0.95. Applies to full_canvas/zoom_out requests and is ignored by edge_extend.",
       },
       target_identity: {
         type: "string",

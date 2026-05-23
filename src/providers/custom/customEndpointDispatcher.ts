@@ -1179,36 +1179,30 @@ function normalizeComfyUiOutpaintStrategy(value: string | null | undefined): Com
   return null;
 }
 
+function isComfyUiZoomOutPrompt(prompt: string): boolean {
+  return /\b(?:zoom out|pull back|wider shot|wide shot|wide[-\s]?angle(?: shot)?|wide framing|wider view|wide view|more distant shot|full[-\s]?body|full outfit|whole outfit|entire outfit|entire silhouette)\b/i.test(
+    prompt,
+  );
+}
+
 function resolveComfyUiOutpaintStrategy(options: ComfyUiGenerationOptions): ComfyUiOutpaintStrategy {
   const explicitStrategy = normalizeComfyUiOutpaintStrategy(options.outpaintStrategy);
   if (explicitStrategy) {
-    return explicitStrategy === "zoom_out" && !shouldUseComfyUiShrinkZoomOut() ? "edge_extend" : explicitStrategy;
+    return explicitStrategy === "zoom_out" ? "full_canvas" : explicitStrategy;
   }
 
   const defaultStrategy = normalizeComfyUiOutpaintStrategy(
     readOptionalStringEnv("COMFYUI_OUTPAINT_STRATEGY") ?? readOptionalStringEnv("ANIMA3_OUTPAINT_STRATEGY"),
   );
   if (defaultStrategy) {
-    return defaultStrategy === "zoom_out" && !shouldUseComfyUiShrinkZoomOut() ? "edge_extend" : defaultStrategy;
+    return defaultStrategy === "zoom_out" ? "full_canvas" : defaultStrategy;
   }
 
-  if (
-    /\b(?:zoom out|pull back|wider shot|wide shot|wide[-\s]?angle(?: shot)?|wide framing|wider view|wide view|more distant shot|full[-\s]?body|full outfit|whole outfit|entire outfit|entire silhouette)\b/i.test(
-      options.prompt,
-    )
-  ) {
-    return shouldUseComfyUiShrinkZoomOut() ? "zoom_out" : "full_canvas";
+  if (isComfyUiZoomOutPrompt(options.prompt)) {
+    return "full_canvas";
   }
 
   return "edge_extend";
-}
-
-function shouldUseComfyUiShrinkZoomOut(): boolean {
-  return (
-    readOptionalBooleanEnv("COMFYUI_OUTPAINT_ENABLE_SHRINK_ZOOM") ??
-    readOptionalBooleanEnv("ANIMA3_OUTPAINT_ENABLE_SHRINK_ZOOM") ??
-    false
-  );
 }
 
 function resolveComfyUiOutpaintOverlap(options: ComfyUiGenerationOptions): number {
@@ -1232,6 +1226,27 @@ function resolveComfyUiOutpaintZoomScale(options: ComfyUiGenerationOptions, dire
     0.5,
     0.95,
   );
+}
+
+function shouldScaleComfyUiOutpaintSource(
+  options: ComfyUiGenerationOptions,
+  strategy: ComfyUiOutpaintStrategy,
+  direction: string,
+): boolean {
+  if (strategy === "zoom_out") {
+    return true;
+  }
+  if (strategy !== "full_canvas") {
+    return false;
+  }
+  if (options.outpaintZoomScale !== null && options.outpaintZoomScale !== undefined) {
+    return true;
+  }
+  const explicitStrategy = normalizeComfyUiOutpaintStrategy(options.outpaintStrategy);
+  if (explicitStrategy === "zoom_out") {
+    return true;
+  }
+  return normalizeComfyUiExtendDirection(direction) === "all" && isComfyUiZoomOutPrompt(options.prompt);
 }
 
 function getComfyUiDirectionalOutpaintFactors(direction: string): {
@@ -1278,7 +1293,7 @@ function getComfyUiLayoutOutpaintFactors(
   left: number;
   right: number;
 } {
-  if (!layout || layout.strategy !== "zoom_out" || !outpaint || outpaintPixels <= 0) {
+  if (!layout || layout.sourceScale >= 1 || !outpaint || outpaintPixels <= 0) {
     return getComfyUiWorkflowOutpaintFactors(fallbackDirection, outpaint);
   }
 
@@ -1356,26 +1371,27 @@ function buildComfyUiOutpaintLayout(
 ): ComfyUiOutpaintLayout {
   const strategy = resolveComfyUiOutpaintStrategy(options);
   const factors = getComfyUiDirectionalOutpaintFactors(direction);
-  const sourceScale = strategy === "zoom_out" ? resolveComfyUiOutpaintZoomScale(options, direction) : 1;
+  const scaleSource = shouldScaleComfyUiOutpaintSource(options, strategy, direction);
+  const sourceScale = scaleSource ? resolveComfyUiOutpaintZoomScale(options, direction) : 1;
   const placedSourceWidth =
-    strategy === "zoom_out"
+    scaleSource
       ? Math.min(sourceDimensions.width, roundDownToNearestMultiple(sourceDimensions.width * sourceScale, COMFYUI_DIMENSION_MULTIPLE))
       : sourceDimensions.width;
   const placedSourceHeight =
-    strategy === "zoom_out"
+    scaleSource
       ? Math.min(
           sourceDimensions.height,
           roundDownToNearestMultiple(sourceDimensions.height * sourceScale, COMFYUI_DIMENSION_MULTIPLE),
         )
       : sourceDimensions.height;
   const placedSourceX =
-    strategy === "zoom_out"
+    scaleSource
       ? resolveComfyUiOutpaintAxisPlacement(outputDimensions.width, placedSourceWidth, factors.left > 0, factors.right > 0)
       : factors.left > 0
         ? Math.max(0, outputDimensions.width - sourceDimensions.width - factors.right * resolveComfyUiOutpaintPixels(options))
         : 0;
   const placedSourceY =
-    strategy === "zoom_out"
+    scaleSource
       ? resolveComfyUiOutpaintAxisPlacement(outputDimensions.height, placedSourceHeight, factors.up > 0, factors.down > 0)
       : factors.up > 0
         ? Math.max(0, outputDimensions.height - sourceDimensions.height - factors.down * resolveComfyUiOutpaintPixels(options))
@@ -1410,7 +1426,7 @@ function buildComfyUiOutpaintLayout(
   };
 }
 
-function buildComfyUiOutpaintDirectionPrompt(direction: string): string[] {
+function buildComfyUiOutpaintDirectionPrompt(direction: string, scaleSource = false): string[] {
   const normalizedDirection = normalizeComfyUiExtendDirection(direction);
   if (normalizedDirection.startsWith("down")) {
     return [
@@ -1434,7 +1450,9 @@ function buildComfyUiOutpaintDirectionPrompt(direction: string): string[] {
     ];
   }
   return [
-    "treat all-direction outpainting as a border expansion around the fixed source image, not as a full redraw or subject rescale",
+    scaleSource
+      ? "treat all-direction zoom-out outpainting as a wider view around the scaled source image, not as a full redraw"
+      : "treat all-direction outpainting as a border expansion around the fixed source image, not as a full redraw or subject rescale",
     "continue each original edge outward only from content that touches that edge",
   ];
 }
@@ -1466,17 +1484,24 @@ function buildComfyUiPromptWithDefaults(
   if (isComfyUiOutpaint(options)) {
     const normalizedDirection = normalizeComfyUiExtendDirection(options.inpaintExtendDirection);
     const outpaintStrategy = resolveComfyUiOutpaintStrategy(options);
+    const scaleSource = shouldScaleComfyUiOutpaintSource(options, outpaintStrategy, normalizedDirection);
     const direction = normalizedDirection.replaceAll("_", " ");
     return [
       qualityPrefix,
       `canvas outpainting edit: ${prompt}`,
       `extend the image ${direction} beyond the original canvas`,
       ...(outpaintStrategy === "full_canvas"
-        ? [
-            "full-canvas outpainting: place the original image unchanged on a larger canvas",
-            "mask only the newly revealed canvas area plus a small edge overlap",
-            "fill the masked expanded canvas as one coherent image, then preserve the original source area",
-          ]
+        ? scaleSource
+          ? [
+              "zoom-out full-canvas outpainting: place the original image smaller inside a larger canvas",
+              "mask the newly revealed canvas around the scaled source plus a small edge overlap",
+              "fill the masked expanded canvas as one coherent pulled-back view, then preserve the scaled source area",
+            ]
+          : [
+              "full-canvas outpainting: place the original image unchanged on a larger canvas",
+              "mask only the newly revealed canvas area plus a small edge overlap",
+              "fill the masked expanded canvas as one coherent image, then preserve the original source area",
+            ]
         : outpaintStrategy === "zoom_out"
         ? [
             "zoom-out outpainting: the original image is placed smaller inside a larger canvas",
@@ -1484,7 +1509,7 @@ function buildComfyUiPromptWithDefaults(
             "keep the scaled source image as the composition anchor and complete missing nearby context around it",
           ]
         : ["edge-extension outpainting: keep the original source scale and continue only beyond the original edges"]),
-      ...buildComfyUiOutpaintDirectionPrompt(normalizedDirection),
+      ...buildComfyUiOutpaintDirectionPrompt(normalizedDirection, scaleSource),
       "continue the visible background, lighting, perspective, and environment naturally into the newly added canvas area",
       "only continue the existing subject where it is visibly cropped by the original image edge",
       "most added canvas should be surrounding scene, not new character anatomy",
