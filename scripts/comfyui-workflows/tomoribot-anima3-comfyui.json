@@ -1633,7 +1633,7 @@
     "class_type": "ImageCompositeMasked",
     "inputs": {
       "destination": [
-        "302",
+        "318",
         0
       ],
       "source": [
@@ -1736,7 +1736,7 @@
       "cfg": "{TOMORI_INPAINT_CFG}",
       "sampler_name": "euler",
       "scheduler": "simple",
-      "denoise": "{TOMORI_INPAINT_DENOISE}"
+      "denoise": 1
     }
   },
   "310": {
@@ -1840,6 +1840,19 @@
       "value": 1,
       "width": "{TOMORI_OUTPAINT_MASK_SOURCE_WIDTH}",
       "height": "{TOMORI_OUTPAINT_MASK_SOURCE_HEIGHT}"
+    }
+  },
+  "318": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "178",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": "{TOMORI_WIDTH}",
+      "height": "{TOMORI_HEIGHT}",
+      "crop": "center"
     }
   }
 }
