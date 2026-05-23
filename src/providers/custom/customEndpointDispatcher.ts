@@ -2106,6 +2106,19 @@ function deepCloneWorkflow(workflow: Record<string, unknown>): ComfyUiWorkflow {
   return structuredClone(workflow) as ComfyUiWorkflow;
 }
 
+function workflowContainsPlaceholder(value: unknown, placeholder: string): boolean {
+  if (typeof value === "string") {
+    return value.includes(`{${placeholder}}`);
+  }
+  if (Array.isArray(value)) {
+    return value.some((item) => workflowContainsPlaceholder(item, placeholder));
+  }
+  if (isRecord(value)) {
+    return Object.values(value).some((childValue) => workflowContainsPlaceholder(childValue, placeholder));
+  }
+  return false;
+}
+
 function isComfyUiNodeLink(value: unknown): value is [string, number] {
   return Array.isArray(value) && typeof value[0] === "string" && typeof value[1] === "number";
 }
@@ -2209,6 +2222,20 @@ function hasActiveComfyUiOutpaintNode(workflow: ComfyUiWorkflow): boolean {
     }
     return node.class_type.toLowerCase().includes("inpaintcrop") && node.inputs.extend_for_outpainting === true;
   });
+}
+
+function assertComfyUiFullCanvasOutpaintWorkflow(savedWorkflow: ComfyUiWorkflow): void {
+  if (workflowContainsPlaceholder(savedWorkflow, "TOMORI_OUTPAINT_FULL_CANVAS")) {
+    return;
+  }
+
+  throw new Error(
+    [
+      "The active ComfyUI workflow does not expose a full-canvas outpaint branch.",
+      "Add a branch gated by {TOMORI_OUTPAINT_FULL_CANVAS}, or set COMFYUI_OUTPAINT_STRATEGY=edge_extend to keep using CropAndStitch outpainting.",
+      "Full-canvas outpainting must avoid InpaintCropImproved/InpaintStitchImproved and feed the expanded canvas plus border mask directly into inpaint conditioning.",
+    ].join(" "),
+  );
 }
 
 function hasComfyUiVisualWorkflowShape(workflow: ComfyUiWorkflow): boolean {
@@ -2661,6 +2688,9 @@ async function generateWithComfyUi(
   }
   if (generationOptions.mode === "image") {
     assertComfyUiWorkflowSupportsRequest(generationOptions, workflowSupports);
+  }
+  if (outpaint && outpaintStrategy === "full_canvas") {
+    assertComfyUiFullCanvasOutpaintWorkflow(workflow);
   }
 
   const preparedWorkflow = replaceWorkflowPlaceholders(workflow, placeholders) as ComfyUiWorkflow;
