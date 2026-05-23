@@ -116,8 +116,8 @@
         0
       ],
       "upscale_method": "lanczos",
-      "width": "{TOMORI_WIDTH}",
-      "height": "{TOMORI_HEIGHT}",
+      "width": "{TOMORI_SOURCE_WIDTH}",
+      "height": "{TOMORI_SOURCE_HEIGHT}",
       "crop": "center"
     }
   },
@@ -390,8 +390,8 @@
   "205": {
     "class_type": "EmptyImage",
     "inputs": {
-      "width": "{TOMORI_WIDTH}",
-      "height": "{TOMORI_HEIGHT}",
+      "width": "{TOMORI_SOURCE_WIDTH}",
+      "height": "{TOMORI_SOURCE_HEIGHT}",
       "batch_size": 1,
       "color": 0
     }
@@ -399,8 +399,8 @@
   "206": {
     "class_type": "EmptyImage",
     "inputs": {
-      "width": "{TOMORI_WIDTH}",
-      "height": "{TOMORI_HEIGHT}",
+      "width": "{TOMORI_SOURCE_WIDTH}",
+      "height": "{TOMORI_SOURCE_HEIGHT}",
       "batch_size": 1,
       "color": 16711680
     }
@@ -1140,11 +1140,11 @@
       "mask_invert": false,
       "mask_blend_pixels": 16,
       "mask_hipass_filter": 0.1,
-      "extend_for_outpainting": false,
-      "extend_up_factor": 1,
-      "extend_down_factor": 1,
-      "extend_left_factor": 1,
-      "extend_right_factor": 1,
+      "extend_for_outpainting": "{TOMORI_OUTPAINT}",
+      "extend_up_factor": "{TOMORI_OUTPAINT_EXTEND_UP_FACTOR}",
+      "extend_down_factor": "{TOMORI_OUTPAINT_EXTEND_DOWN_FACTOR}",
+      "extend_left_factor": "{TOMORI_OUTPAINT_EXTEND_LEFT_FACTOR}",
+      "extend_right_factor": "{TOMORI_OUTPAINT_EXTEND_RIGHT_FACTOR}",
       "context_from_mask_extend_factor": 2.25,
       "output_resize_to_target_size": true,
       "output_target_width": "{TOMORI_WIDTH}",
@@ -1277,8 +1277,8 @@
   "277": {
     "class_type": "EmptyImage",
     "inputs": {
-      "width": "{TOMORI_WIDTH}",
-      "height": "{TOMORI_HEIGHT}",
+      "width": "{TOMORI_SOURCE_WIDTH}",
+      "height": "{TOMORI_SOURCE_HEIGHT}",
       "batch_size": 1,
       "color": "{TOMORI_RECOLOR_TARGET_COLOR}"
     }

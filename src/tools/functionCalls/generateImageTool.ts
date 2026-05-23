@@ -51,7 +51,7 @@ export class GenerateImageTool extends BaseTool {
       prompt: {
         type: "string",
         description:
-          "A detailed text description of the image you want to generate. For text-to-image, expand the user's idea into a complete, visually interesting final image: specify a single main subject or group, setting, action/pose, outfit, hair/eye colors when relevant, color palette, lighting, mood, camera framing, subject scale, and art style. For single-object prompts, specify a close or medium-close composition where the object is clearly visible and not tiny in an empty canvas. Avoid character sheets, multiple views, duplicate panels, or reference-sheet layouts unless the user explicitly asks for them. For normal image-to-image, describe the desired new similar image, using the reference only as loose inspiration; include the requested changes and enough scene/style detail for a fresh result. For inpainting, write only the local edit request for the masked area, such as 'change hair to blonde with natural shading' or 'make the irises emerald green with brighter highlights'. Do not include negative inpaint clauses like 'not black', 'no grey', or 'without stripes'; mention only the desired replacement color/material/pattern. For hair recolor inpainting, keep it color-only and do not add preservation clauses naming hairstyle parts like braids, bangs, or parting. Avoid full-scene or full-character descriptions in inpainting prompts. For background-mode inpainting, state the desired new surroundings strongly: color, environment, location, atmosphere, lighting, or setting; avoid naming old surroundings that should not remain. For recolors, name the desired new color/material strongly. For recolor inpainting, treat it as color-only unless the user explicitly asks for redesign: preserve garment/object type, shape, fit, seams, folds, and overall structure. Do not re-describe the whole subject/reference image for inpainting, and do not put the mask target there unless it is needed to explain the edit.",
+          "A detailed text description of the image you want to generate. For text-to-image, expand the user's idea into a complete, visually interesting final image: specify a single main subject or group, setting, action/pose, outfit, hair/eye colors when relevant, color palette, lighting, mood, camera framing, subject scale, and art style. For single-object prompts, specify a close or medium-close composition where the object is clearly visible and not tiny in an empty canvas. Avoid character sheets, multiple views, duplicate panels, or reference-sheet layouts unless the user explicitly asks for them. For normal image-to-image, describe the desired new similar image, using the reference only as loose inspiration; include the requested changes and enough scene/style detail for a fresh result. For inpainting, write only the local edit request for the masked area, such as 'change hair to blonde with natural shading' or 'make the irises emerald green with brighter highlights'. For outpainting, describe what should plausibly continue into the newly revealed canvas beyond the requested edge; preserve the original image and do not reframe it. Do not include negative inpaint clauses like 'not black', 'no grey', or 'without stripes'; mention only the desired replacement color/material/pattern. For hair recolor inpainting, keep it color-only and do not add preservation clauses naming hairstyle parts like braids, bangs, or parting. Avoid full-scene or full-character descriptions in inpainting prompts. For background-mode inpainting, state the desired new surroundings strongly: color, environment, location, atmosphere, lighting, or setting; avoid naming old surroundings that should not remain. For recolors, name the desired new color/material strongly. For recolor inpainting, treat it as color-only unless the user explicitly asks for redesign: preserve garment/object type, shape, fit, seams, folds, and overall structure. Do not re-describe the whole subject/reference image for inpainting, and do not put the mask target there unless it is needed to explain the edit.",
       },
       media_id: {
         type: "string",
@@ -128,19 +128,24 @@ export class GenerateImageTool extends BaseTool {
       inpaint_mode: {
         type: "string",
         description:
-          "Optional: Inpaint behavior. Use 'normal' to edit the detected region itself, or 'extend' when the edit must grow beyond the current silhouette into nearby space, such as lengthening hair, extending clothing, or adding a dangling accessory.",
-        enum: ["normal", "extend"],
+          "Optional: Inpaint behavior. Use 'normal' to edit the detected region itself, 'extend' when the edit must grow beyond the current silhouette into nearby space, or 'outpaint' when the image canvas itself should be expanded to reveal more beyond an edge.",
+        enum: ["normal", "extend", "outpaint"],
+      },
+      outpaint: {
+        type: "boolean",
+        description:
+          "Optional: Set true when the user asks to extend the image canvas itself upward, downward, left, right, or around the image to see more beyond what was cropped. Requires media_id or target_identity. This is different from normal inpainting or silhouette extension.",
       },
       extend_direction: {
         type: "string",
         description:
-          "Optional for inpaint_mode='extend': Direction to extend the editable mask from the detected region.",
+          "Optional for inpaint_mode='extend', inpaint_mode='outpaint', or outpaint=true: Direction to extend. For outpainting, this is the image edge to reveal more beyond.",
         enum: ["down", "up", "left", "right", "down_left", "down_right", "up_left", "up_right", "all"],
       },
       extend_pixels: {
         type: "number",
         description:
-          "Optional for inpaint_mode='extend': Approximate number of pixels to extend the editable mask from the detected region. Use 64-128 for small accessories or hair/clothing extensions, higher for broad extensions.",
+          "Optional for inpaint_mode='extend', inpaint_mode='outpaint', or outpaint=true: Approximate number of pixels to extend. Use 64-128 for small silhouette extensions and 192-384 for canvas outpainting.",
       },
       target_identity: {
         type: "string",
@@ -186,7 +191,13 @@ export class GenerateImageTool extends BaseTool {
     if (typeof args.mask_mode === "string" || typeof args.mask_prompt === "string" || typeof args.inpaint_preset === "string") {
       return true;
     }
-    if (typeof args.inpaint_mode === "string" && args.inpaint_mode.toLowerCase() === "extend") {
+    if (typeof args.inpaint_mode === "string" && ["extend", "outpaint"].includes(args.inpaint_mode.toLowerCase())) {
+      return true;
+    }
+    if (args.outpaint === true) {
+      return true;
+    }
+    if (typeof args.outpaint === "string" && args.outpaint.toLowerCase() === "true") {
       return true;
     }
     if (args.inpaint === true) {
@@ -197,6 +208,16 @@ export class GenerateImageTool extends BaseTool {
     }
 
     return false;
+  }
+
+  private shouldUseOutpaint(args: Record<string, unknown>): boolean {
+    if (args.outpaint === true) {
+      return true;
+    }
+    if (typeof args.outpaint === "string" && args.outpaint.toLowerCase() === "true") {
+      return true;
+    }
+    return typeof args.inpaint_mode === "string" && args.inpaint_mode.toLowerCase() === "outpaint";
   }
 
   private formatNoticeValue(value: string, maxLength = 120): string {
@@ -782,7 +803,8 @@ export class GenerateImageTool extends BaseTool {
     let aspectRatio = requestedAspectRatio || "1:1";
     const usesReferences = !!(messageId || targetIdentity);
     const inpaint = this.shouldUseInpaint(args);
-    const maskPrompt = (args.mask_prompt as string | undefined)?.trim() || null;
+    const outpaint = this.shouldUseOutpaint(args);
+    const maskPrompt = (args.mask_prompt as string | undefined)?.trim() || (outpaint ? "main foreground object" : null);
     const maskThreshold = this.parseClampedNumber(args.mask_threshold, 0, 1);
     const maskGrow = this.parseClampedNumber(args.mask_grow, 0, 128);
     const maskFeather = this.parseClampedNumber(args.mask_feather, 0, 100);
@@ -793,7 +815,7 @@ export class GenerateImageTool extends BaseTool {
     const denoise = this.parseClampedNumber(args.denoise, 0, 1);
     const maskMode = typeof args.mask_mode === "string" ? args.mask_mode : null;
     const inpaintPreset = typeof args.inpaint_preset === "string" ? args.inpaint_preset : null;
-    const inpaintMode = typeof args.inpaint_mode === "string" ? args.inpaint_mode : null;
+    const inpaintMode = outpaint ? "outpaint" : typeof args.inpaint_mode === "string" ? args.inpaint_mode : null;
     const extendDirection = typeof args.extend_direction === "string" ? args.extend_direction : null;
     const extendPixels = this.parseClampedNumber(args.extend_pixels, 0, 512);
 
@@ -809,7 +831,7 @@ export class GenerateImageTool extends BaseTool {
         error: "Inpaint requires media_id or target_identity.",
       };
     }
-    if (inpaint && !maskPrompt) {
+    if (inpaint && !outpaint && !maskPrompt) {
       return {
         success: false,
         error: "Inpaint requires mask_prompt describing the existing region to edit.",
@@ -976,6 +998,9 @@ export class GenerateImageTool extends BaseTool {
           maskGrow: inpaint ? maskGrow : null,
           maskFeather: inpaint ? maskFeather : null,
           clothingSegmentCategories: inpaint ? clothingSegmentCategories : null,
+          outpaint: inpaint ? outpaint : null,
+          extendDirection: inpaint ? extendDirection : null,
+          extendPixels: inpaint ? extendPixels : null,
           cfg: inpaint ? cfg : null,
           denoise: usesReferences ? denoise : null,
         })}`,
@@ -1003,6 +1028,7 @@ export class GenerateImageTool extends BaseTool {
             inpaintMaskMode: maskMode,
             inpaintPreset,
             inpaintMode,
+            outpaint,
             inpaintExtendDirection: extendDirection,
             inpaintExtendPixels: extendPixels,
             clothingSegmentCategories,
@@ -1029,6 +1055,7 @@ export class GenerateImageTool extends BaseTool {
               inpaintMaskMode: maskMode,
               inpaintPreset,
               inpaintMode,
+              outpaint,
               inpaintExtendDirection: extendDirection,
               inpaintExtendPixels: extendPixels,
               clothingSegmentCategories,

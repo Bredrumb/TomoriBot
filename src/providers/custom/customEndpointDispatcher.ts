@@ -13,6 +13,7 @@ import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 
 type ComfyUiGenerationMode = "image" | "video";
 type ComfyUiInpaintMaskContent = "fill" | "latent_noise";
+type ComfyUiInpaintMode = "normal" | "extend" | "outpaint";
 type ComfyUiClothingSegmentCategory =
   | "Hat"
   | "Hair"
@@ -60,6 +61,7 @@ interface ComfyUiGenerationOptions {
   inpaintMaskMode?: string | null;
   inpaintMode?: string | null;
   inpaintPreset?: string | null;
+  outpaint?: boolean | null;
   inpaintExtendDirection?: string | null;
   inpaintExtendPixels?: number | null;
   inpaintExtendGrow?: number | null;
@@ -360,7 +362,7 @@ function inferComfyUiInpaintPreset(options: ComfyUiGenerationOptions): string {
     return "background";
   }
 
-  if (normalizeComfyUiInpaintMode(options.inpaintMode) === "extend") {
+  if (normalizeComfyUiInpaintMode(options) !== "normal") {
     return "extend";
   }
 
@@ -536,7 +538,7 @@ function shouldSubtractComfyUiFaceMask(options: ComfyUiGenerationOptions): boole
   return (
     options.inpaint === true &&
     normalizeComfyUiMaskMode(options.inpaintMaskMode) === "target" &&
-    normalizeComfyUiInpaintMode(options.inpaintMode) !== "extend" &&
+    normalizeComfyUiInpaintMode(options) === "normal" &&
     inferComfyUiInpaintPreset(options) !== "background" &&
     isComfyUiHairMaskPrompt(options.maskPrompt)
   );
@@ -778,7 +780,7 @@ function resolveComfyUiInpaintMaskContent(
   const useHairRecolorContent =
     inpaint &&
     maskMode === "target" &&
-    normalizeComfyUiInpaintMode(options.inpaintMode) !== "extend" &&
+    normalizeComfyUiInpaintMode(options) === "normal" &&
     inferComfyUiInpaintPreset(options) !== "background" &&
     isComfyUiHairMaskPrompt(options.maskPrompt);
 
@@ -795,7 +797,7 @@ function resolveComfyUiInpaintSettings(options: ComfyUiGenerationOptions): Comfy
   const eyeMaskPrompt = isComfyUiEyeMaskPrompt(options.maskPrompt);
   const hairMaskPrompt = isComfyUiHairMaskPrompt(options.maskPrompt);
   const clothingMaskPrompt = isComfyUiClothingMaskPrompt(options.maskPrompt);
-  const inpaintMode = normalizeComfyUiInpaintMode(options.inpaintMode);
+  const inpaintMode = normalizeComfyUiInpaintMode(options);
 
   const baseMaskThreshold = clampNumber(
     options.maskThreshold ??
@@ -975,8 +977,21 @@ function resolveComfyUiInpaintSettings(options: ComfyUiGenerationOptions): Comfy
   };
 }
 
-function normalizeComfyUiInpaintMode(mode: string | null | undefined): "normal" | "extend" {
-  return mode?.trim().toLowerCase() === "extend" ? "extend" : "normal";
+function normalizeComfyUiInpaintMode(
+  modeOrOptions: string | null | undefined | Pick<ComfyUiGenerationOptions, "inpaintMode" | "outpaint">,
+): ComfyUiInpaintMode {
+  if (typeof modeOrOptions === "object" && modeOrOptions !== null) {
+    if (modeOrOptions.outpaint === true) {
+      return "outpaint";
+    }
+    return normalizeComfyUiInpaintMode(modeOrOptions.inpaintMode);
+  }
+
+  const normalized = modeOrOptions?.trim().toLowerCase() ?? "";
+  if (normalized === "outpaint") {
+    return "outpaint";
+  }
+  return normalized === "extend" ? "extend" : "normal";
 }
 
 function normalizeComfyUiMaskMode(mode: string | null | undefined): "target" | "background" {
@@ -1126,6 +1141,53 @@ function resolveComfyUiExtendOffset(direction: string, pixels: number): { x: num
   }
 }
 
+function isComfyUiOutpaint(options: Pick<ComfyUiGenerationOptions, "inpaintMode" | "outpaint">): boolean {
+  return normalizeComfyUiInpaintMode(options) === "outpaint";
+}
+
+function resolveComfyUiOutpaintPixels(options: ComfyUiGenerationOptions): number {
+  return clampNumber(
+    options.inpaintExtendPixels ??
+      readOptionalNumberEnv("COMFYUI_OUTPAINT_PIXELS") ??
+      readOptionalNumberEnv("ANIMA3_OUTPAINT_PIXELS") ??
+      256,
+    0,
+    1024,
+  );
+}
+
+function getComfyUiDirectionalOutpaintFactors(direction: string): {
+  up: number;
+  down: number;
+  left: number;
+  right: number;
+} {
+  return {
+    up: direction === "up" || direction === "up_left" || direction === "up_right" || direction === "all" ? 1 : 0,
+    down: direction === "down" || direction === "down_left" || direction === "down_right" || direction === "all" ? 1 : 0,
+    left: direction === "left" || direction === "down_left" || direction === "up_left" || direction === "all" ? 1 : 0,
+    right: direction === "right" || direction === "down_right" || direction === "up_right" || direction === "all" ? 1 : 0,
+  };
+}
+
+function buildComfyUiOutpaintDimensions(
+  sourceDimensions: { width: number; height: number },
+  direction: string,
+  pixels: number,
+): { width: number; height: number } {
+  const factors = getComfyUiDirectionalOutpaintFactors(direction);
+  return {
+    width: roundToNearestMultiple(
+      sourceDimensions.width + pixels * factors.left + pixels * factors.right,
+      COMFYUI_DIMENSION_MULTIPLE,
+    ),
+    height: roundToNearestMultiple(
+      sourceDimensions.height + pixels * factors.up + pixels * factors.down,
+      COMFYUI_DIMENSION_MULTIPLE,
+    ),
+  };
+}
+
 function buildComfyUiPromptWithDefaults(
   options: ComfyUiGenerationOptions,
   inpaint: boolean,
@@ -1150,6 +1212,20 @@ function buildComfyUiPromptWithDefaults(
   }
 
   const maskPrompt = options.maskPrompt?.trim() || "masked region";
+  if (isComfyUiOutpaint(options)) {
+    const direction = normalizeComfyUiExtendDirection(options.inpaintExtendDirection).replaceAll("_", " ");
+    return [
+      qualityPrefix,
+      `canvas outpainting edit: ${prompt}`,
+      `extend the image ${direction} beyond the original canvas`,
+      "continue the visible scene naturally into the newly added canvas area",
+      "preserve the original source image area exactly in place",
+      "match the original lighting, perspective, camera angle, line style, color palette, and texture",
+      "no frame, no border, no blank padding, no duplicated edge pattern",
+      "the new content should connect seamlessly to the existing image edge",
+    ].join(", ");
+  }
+
   if (maskMode === "background") {
     const protectedRegion = invertMask ? maskPrompt : "main foreground subject";
     const editableRegion = invertMask
@@ -1240,6 +1316,22 @@ function buildComfyUiNegativePrompt(options: ComfyUiGenerationOptions, inpaint: 
   }
 
   const negativeParts = [COMFYUI_BASE_NEGATIVE_PROMPT, "unrequested changes, changed unmasked area"];
+  if (isComfyUiOutpaint(options)) {
+    negativeParts.push(
+      "moved original image",
+      "resized original image content",
+      "cropped original image content",
+      "changed original source area",
+      "visible seam",
+      "hard border",
+      "blank padding",
+      "empty extension",
+      "mirrored edge",
+      "repeated edge artifacts",
+    );
+    return negativeParts.join(", ");
+  }
+
   if (maskMode === "background") {
     negativeParts.push(
       "changed protected foreground subject",
@@ -1536,7 +1628,7 @@ function shouldUseComfyUiMaskedTintReference(options: ComfyUiGenerationOptions):
 
   const maskMode = normalizeComfyUiMaskMode(options.inpaintMaskMode);
   const inpaintPreset = inferComfyUiInpaintPreset(options);
-  const inpaintMode = normalizeComfyUiInpaintMode(options.inpaintMode);
+  const inpaintMode = normalizeComfyUiInpaintMode(options);
   const hairMaskPrompt = isComfyUiHairMaskPrompt(options.maskPrompt);
   const hairRecolor = inpaintPreset !== "background" && hairMaskPrompt;
 
@@ -1562,7 +1654,7 @@ function shouldUseComfyUiDifferentialDiffusion(options: ComfyUiGenerationOptions
     options.mode === "image" &&
     options.inpaint === true &&
     normalizeComfyUiMaskMode(options.inpaintMaskMode) === "target" &&
-    normalizeComfyUiInpaintMode(options.inpaintMode) !== "extend" &&
+    normalizeComfyUiInpaintMode(options) === "normal" &&
     inferComfyUiInpaintPreset(options) !== "background" &&
     (isComfyUiClothingMaskPrompt(options.maskPrompt) || isComfyUiHairMaskPrompt(options.maskPrompt))
   );
@@ -1587,7 +1679,7 @@ function shouldUseComfyUiClothingParser(options: ComfyUiGenerationOptions): bool
     options.mode === "image" &&
     options.inpaint === true &&
     normalizeComfyUiMaskMode(options.inpaintMaskMode) === "target" &&
-    normalizeComfyUiInpaintMode(options.inpaintMode) !== "extend" &&
+    normalizeComfyUiInpaintMode(options) === "normal" &&
     inferComfyUiInpaintPreset(options) !== "background" &&
     isComfyUiHairMaskPrompt(options.maskPrompt) &&
     !explicitClothingCategories
@@ -1617,7 +1709,7 @@ function shouldUseComfyUiClothingParserProtection(options: ComfyUiGenerationOpti
     options.mode === "image" &&
     options.inpaint === true &&
     normalizeComfyUiMaskMode(options.inpaintMaskMode) === "target" &&
-    normalizeComfyUiInpaintMode(options.inpaintMode) !== "extend" &&
+    normalizeComfyUiInpaintMode(options) === "normal" &&
     inferComfyUiInpaintPreset(options) !== "background" &&
     isComfyUiHairMaskPrompt(options.maskPrompt)
   );
@@ -1635,7 +1727,7 @@ function shouldUseComfyUiRmbgBackgroundMask(options: ComfyUiGenerationOptions): 
     options.mode === "image" &&
     options.inpaint === true &&
     normalizeComfyUiMaskMode(options.inpaintMaskMode) === "background" &&
-    normalizeComfyUiInpaintMode(options.inpaintMode) !== "extend"
+    normalizeComfyUiInpaintMode(options) === "normal"
   );
 }
 
@@ -1908,7 +2000,7 @@ function applyComfyUiImageInputDefaults(
 function buildComfyUiPlaceholderMap(
   endpoint: CustomEndpointRow,
   options: ComfyUiGenerationOptions,
-  dimensions: { width: number; height: number },
+  dimensions: { source: { width: number; height: number }; output: { width: number; height: number } },
   referencePayload: Array<Record<string, unknown>>,
 ): Record<string, WorkflowPlaceholderValue> {
   const referenceImageDataUrl = buildReferenceImageDataUrl(options);
@@ -1923,6 +2015,7 @@ function buildComfyUiPlaceholderMap(
   const promptOptions = workflowMaskPrompt === maskPrompt ? options : { ...options, maskPrompt: workflowMaskPrompt };
   const rawInpaintSettings = resolveComfyUiInpaintSettings(options);
   const inpaintSettings = resolveComfyUiEffectiveInpaintSettings(rawInpaintSettings, inpaint, maskMode);
+  const outpaint = inpaint && isComfyUiOutpaint(options);
   const protectionSettings = resolveComfyUiMaskProtectionSettings({ ...options, inpaint });
   const denoise = resolveComfyUiEffectiveDenoise(options, inpaint, maskMode);
   const inpaintMaskContent = resolveComfyUiInpaintMaskContent(options, inpaint, maskMode);
@@ -1959,7 +2052,7 @@ function buildComfyUiPlaceholderMap(
       readOptionalBooleanEnv("ANIMA3_INPAINT_SUBTRACT_CLOTHING_MASK") ??
       readOptionalBooleanEnv("ANIMA3_INPAINT_SUBTRACT_BODY_MASK") ??
       true);
-  const inpaintMode = inpaint ? normalizeComfyUiInpaintMode(options.inpaintMode) : "normal";
+  const inpaintMode = inpaint ? normalizeComfyUiInpaintMode(options) : "normal";
   const inpaintPreset = inpaint ? inferComfyUiInpaintPreset(options) : "";
   const maskPromptIsHair = isComfyUiHairMaskPrompt(maskPrompt);
   const requestedExtendDirection = normalizeComfyUiExtendDirection(options.inpaintExtendDirection);
@@ -1967,7 +2060,10 @@ function buildComfyUiPlaceholderMap(
     inpaintMode === "extend" && maskPromptIsHair && requestedExtendDirection === "all"
       ? "down"
       : requestedExtendDirection;
-  const extendOffset = resolveComfyUiExtendOffset(extendDirection, inpaintSettings.extendPixels);
+  const outpaintPixels = resolveComfyUiOutpaintPixels(options);
+  const effectiveExtendPixels = outpaint ? outpaintPixels : inpaintSettings.extendPixels;
+  const extendOffset = resolveComfyUiExtendOffset(extendDirection, effectiveExtendPixels);
+  const outpaintFactors = getComfyUiDirectionalOutpaintFactors(extendDirection);
   const placeholderMap: Record<string, WorkflowPlaceholderValue> = {
     TOMORI_PROMPT: options.prompt,
     TOMORI_PROMPT_WITH_DEFAULTS: buildComfyUiPromptWithDefaults(
@@ -1983,9 +2079,15 @@ function buildComfyUiPlaceholderMap(
     TOMORI_MODE: options.mode,
     TOMORI_IMAGE_MODE: inpaint ? "inpaint" : hasReference ? "img2img" : "txt2img",
     TOMORI_ASPECT_RATIO: options.aspectRatio ?? (options.mode === "video" ? "16:9" : "1:1"),
-    TOMORI_WIDTH: dimensions.width,
-    TOMORI_HEIGHT: dimensions.height,
-    TOMORI_SIZE: `${dimensions.width}x${dimensions.height}`,
+    TOMORI_WIDTH: dimensions.output.width,
+    TOMORI_HEIGHT: dimensions.output.height,
+    TOMORI_SOURCE_WIDTH: dimensions.source.width,
+    TOMORI_SOURCE_HEIGHT: dimensions.source.height,
+    TOMORI_OUTPUT_WIDTH: dimensions.output.width,
+    TOMORI_OUTPUT_HEIGHT: dimensions.output.height,
+    TOMORI_SIZE: `${dimensions.output.width}x${dimensions.output.height}`,
+    TOMORI_SOURCE_SIZE: `${dimensions.source.width}x${dimensions.source.height}`,
+    TOMORI_OUTPUT_SIZE: `${dimensions.output.width}x${dimensions.output.height}`,
     TOMORI_SEED: seed,
     TOMORI_HAS_REFERENCE_IMAGE: hasReference,
     TOMORI_REFERENCE_IMAGE_DATA_URL: referenceImageDataUrl ?? "",
@@ -1998,6 +2100,13 @@ function buildComfyUiPlaceholderMap(
     TOMORI_INPAINT_PRESET: inpaintPreset,
     TOMORI_INPAINT_INVERT_MASK: invertInpaintMask,
     TOMORI_INPAINT_MODE: inpaintMode,
+    TOMORI_OUTPAINT: outpaint,
+    TOMORI_OUTPAINT_DIRECTION: extendDirection,
+    TOMORI_OUTPAINT_PIXELS: outpaintPixels,
+    TOMORI_OUTPAINT_EXTEND_UP_FACTOR: outpaint ? outpaintFactors.up : 0,
+    TOMORI_OUTPAINT_EXTEND_DOWN_FACTOR: outpaint ? outpaintFactors.down : 0,
+    TOMORI_OUTPAINT_EXTEND_LEFT_FACTOR: outpaint ? outpaintFactors.left : 0,
+    TOMORI_OUTPAINT_EXTEND_RIGHT_FACTOR: outpaint ? outpaintFactors.right : 0,
     TOMORI_MASK_PROMPT: workflowMaskPrompt,
     TOMORI_INPAINT_MASK_CONTENT: inpaintMaskContent,
     TOMORI_INPAINT_USE_LATENT_NOISE_MASK_CONTENT: inpaintMaskContent === "latent_noise",
@@ -2114,7 +2223,7 @@ function buildComfyUiPlaceholderMap(
     TOMORI_INPAINT_MASK_GROW: inpaintSettings.maskGrow,
     TOMORI_INPAINT_MASK_FEATHER: inpaintSettings.maskFeather,
     TOMORI_INPAINT_EXTEND_DIRECTION: extendDirection,
-    TOMORI_INPAINT_EXTEND_PIXELS: inpaintSettings.extendPixels,
+    TOMORI_INPAINT_EXTEND_PIXELS: effectiveExtendPixels,
     TOMORI_INPAINT_EXTEND_X: extendOffset.x,
     TOMORI_INPAINT_EXTEND_Y: extendOffset.y,
     TOMORI_INPAINT_EXTEND_GROW: inpaintSettings.extendGrow,
@@ -2172,7 +2281,20 @@ async function generateWithComfyUi(
   );
   const strengthenedPrompt = strengthenComfyUiHairRecolorPrompt(sanitizedPrompt || options.prompt, options.maskPrompt);
   const generationOptions = { ...options, prompt: strengthenedPrompt, seed };
-  const dimensions = buildComfyUiDimensions(generationOptions);
+  const sourceDimensions = buildComfyUiDimensions(generationOptions);
+  const outpaint =
+    generationOptions.mode === "image" &&
+    generationOptions.inpaint === true &&
+    !!buildReferenceImageDataUrl(generationOptions) &&
+    isComfyUiOutpaint(generationOptions);
+  const outpaintDirection = normalizeComfyUiExtendDirection(generationOptions.inpaintExtendDirection);
+  const outpaintPixels = resolveComfyUiOutpaintPixels(generationOptions);
+  const dimensions = {
+    source: sourceDimensions,
+    output: outpaint
+      ? buildComfyUiOutpaintDimensions(sourceDimensions, outpaintDirection, outpaintPixels)
+      : sourceDimensions,
+  };
   const referencePayload = buildComfyUiReferencePayload(generationOptions.referenceImages ?? []);
   const placeholders = buildComfyUiPlaceholderMap(endpoint, generationOptions, dimensions, referencePayload);
   const workflowSupports = readComfyUiWorkflowSupports(endpoint);
@@ -2204,7 +2326,7 @@ async function generateWithComfyUi(
         seed,
         denoise,
         maskMode,
-        inpaintMode: normalizeComfyUiInpaintMode(generationOptions.inpaintMode),
+        inpaintMode: normalizeComfyUiInpaintMode(generationOptions),
         maskThreshold: inpaintSettings.maskThreshold,
         maskGrow: inpaintSettings.maskGrow,
         maskFeather: inpaintSettings.maskFeather,
@@ -2316,6 +2438,7 @@ export async function generateCustomImageViaEndpoint(params: {
   inpaintMaskMode?: string | null;
   inpaintMode?: string | null;
   inpaintPreset?: string | null;
+  outpaint?: boolean | null;
   inpaintExtendDirection?: string | null;
   inpaintExtendPixels?: number | null;
   inpaintExtendGrow?: number | null;
@@ -2336,6 +2459,7 @@ export async function generateCustomImageViaEndpoint(params: {
     inpaintMaskMode,
     inpaintMode,
     inpaintPreset,
+    outpaint,
     inpaintExtendDirection,
     inpaintExtendPixels,
     inpaintExtendGrow,
@@ -2357,6 +2481,7 @@ export async function generateCustomImageViaEndpoint(params: {
       inpaintMaskMode,
       inpaintMode,
       inpaintPreset,
+      outpaint,
       inpaintExtendDirection,
       inpaintExtendPixels,
       inpaintExtendGrow,
@@ -2427,6 +2552,7 @@ export async function generateCustomImageViaEndpoint(params: {
       inpaintMaskMode,
       inpaintMode,
       inpaintPreset,
+      outpaint,
       inpaintExtendDirection,
       inpaintExtendPixels,
       inpaintExtendGrow,
@@ -2487,6 +2613,8 @@ export async function generateCustomImageViaEndpoint(params: {
       0,
       1,
     );
+    const diagnosticOutpaint = isComfyUiOutpaint(diagnosticOptions);
+    const diagnosticOutpaintPixels = resolveComfyUiOutpaintPixels(diagnosticOptions);
     const diagnosticRequestedMaskPrompt = maskPrompt?.trim() || prompt;
     const diagnosticWorkflowMaskPrompt = resolveComfyUiWorkflowMaskPrompt(
       diagnosticRequestedMaskPrompt,
@@ -2501,7 +2629,9 @@ export async function generateCustomImageViaEndpoint(params: {
       `seed=${comfyUiSeed}`,
       `mask_mode=${diagnosticMaskMode}`,
       `preset=${inferComfyUiInpaintPreset(diagnosticOptions)}`,
-      `mode=${normalizeComfyUiInpaintMode(inpaintMode)}`,
+      `mode=${normalizeComfyUiInpaintMode(diagnosticOptions)}`,
+      `outpaint=${diagnosticOutpaint}`,
+      `outpaint_pixels=${diagnosticOutpaintPixels}`,
       `mask_content=${diagnosticMaskContent}`,
       `differential_diffusion=${diagnosticDifferentialDiffusion}`,
       `differential_diffusion_strength=${diagnosticDifferentialDiffusionStrength}`,
