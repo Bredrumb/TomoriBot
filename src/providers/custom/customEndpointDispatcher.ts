@@ -15,7 +15,7 @@ import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 type ComfyUiGenerationMode = "image" | "video";
 type ComfyUiInpaintMaskContent = "fill" | "latent_noise";
 type ComfyUiInpaintMode = "normal" | "extend" | "outpaint";
-type ComfyUiOutpaintStrategy = "edge_extend" | "zoom_out";
+type ComfyUiOutpaintStrategy = "edge_extend" | "zoom_out" | "full_canvas";
 type ComfyUiClothingSegmentCategory =
   | "Hat"
   | "Hair"
@@ -1167,6 +1167,9 @@ function normalizeComfyUiOutpaintStrategy(value: string | null | undefined): Com
   if (!normalized) {
     return null;
   }
+  if (["full_canvas", "canvas", "canvas_inpaint", "novelai", "novelai_style"].includes(normalized)) {
+    return "full_canvas";
+  }
   if (["zoom_out", "zoomout", "pull_back", "shrink", "reframe"].includes(normalized)) {
     return "zoom_out";
   }
@@ -1180,6 +1183,13 @@ function resolveComfyUiOutpaintStrategy(options: ComfyUiGenerationOptions): Comf
   const explicitStrategy = normalizeComfyUiOutpaintStrategy(options.outpaintStrategy);
   if (explicitStrategy) {
     return explicitStrategy === "zoom_out" && !shouldUseComfyUiShrinkZoomOut() ? "edge_extend" : explicitStrategy;
+  }
+
+  const defaultStrategy = normalizeComfyUiOutpaintStrategy(
+    readOptionalStringEnv("COMFYUI_OUTPAINT_STRATEGY") ?? readOptionalStringEnv("ANIMA3_OUTPAINT_STRATEGY"),
+  );
+  if (defaultStrategy) {
+    return defaultStrategy === "zoom_out" && !shouldUseComfyUiShrinkZoomOut() ? "edge_extend" : defaultStrategy;
   }
 
   if (
@@ -1461,7 +1471,13 @@ function buildComfyUiPromptWithDefaults(
       qualityPrefix,
       `canvas outpainting edit: ${prompt}`,
       `extend the image ${direction} beyond the original canvas`,
-      ...(outpaintStrategy === "zoom_out"
+      ...(outpaintStrategy === "full_canvas"
+        ? [
+            "full-canvas outpainting: place the original image unchanged on a larger canvas",
+            "mask only the newly revealed canvas area plus a small edge overlap",
+            "fill the masked expanded canvas as one coherent image, then preserve the original source area",
+          ]
+        : outpaintStrategy === "zoom_out"
         ? [
             "zoom-out outpainting: the original image is placed smaller inside a larger canvas",
             "fill the newly revealed surrounding canvas around the scaled source image",
@@ -2373,6 +2389,7 @@ function buildComfyUiPlaceholderMap(
   const outpaintLayout = outpaint
     ? buildComfyUiOutpaintLayout(options, dimensions.source, dimensions.output, extendDirection)
     : null;
+  const outpaintStrategy = outpaintLayout?.strategy ?? "edge_extend";
   const workflowOutpaintFactors = getComfyUiLayoutOutpaintFactors(
     outpaintLayout,
     dimensions.output,
@@ -2423,8 +2440,11 @@ function buildComfyUiPlaceholderMap(
     TOMORI_INPAINT_INVERT_MASK: invertInpaintMask,
     TOMORI_INPAINT_MODE: inpaintMode,
     TOMORI_OUTPAINT: outpaint,
-    TOMORI_OUTPAINT_STRATEGY: outpaintLayout?.strategy ?? "edge_extend",
-    TOMORI_OUTPAINT_ZOOM_OUT: outpaintLayout?.strategy === "zoom_out",
+    TOMORI_OUTPAINT_STRATEGY: outpaintStrategy,
+    TOMORI_OUTPAINT_FULL_CANVAS: outpaintStrategy === "full_canvas",
+    TOMORI_OUTPAINT_EDGE_EXTEND: outpaintStrategy === "edge_extend",
+    TOMORI_OUTPAINT_USE_CROP_STITCH: outpaintStrategy !== "full_canvas",
+    TOMORI_OUTPAINT_ZOOM_OUT: outpaintStrategy === "zoom_out",
     TOMORI_OUTPAINT_SOURCE_SCALE: outpaintLayout?.sourceScale ?? 1,
     TOMORI_OUTPAINT_OVERLAP: outpaintLayout?.overlap ?? 0,
     TOMORI_OUTPAINT_DIRECTION: extendDirection,
@@ -2623,6 +2643,7 @@ async function generateWithComfyUi(
     generationOptions.inpaint === true &&
     !!buildReferenceImageDataUrl(generationOptions) &&
     isComfyUiOutpaint(generationOptions);
+  const outpaintStrategy = outpaint ? resolveComfyUiOutpaintStrategy(generationOptions) : "edge_extend";
   const outpaintDirection = normalizeComfyUiExtendDirection(generationOptions.inpaintExtendDirection);
   const outpaintPixels = resolveComfyUiOutpaintPixels(generationOptions);
   const dimensions = {
@@ -2645,12 +2666,12 @@ async function generateWithComfyUi(
   const preparedWorkflow = replaceWorkflowPlaceholders(workflow, placeholders) as ComfyUiWorkflow;
   const constantConditionalRewrites = foldConstantComfyUiConditionals(preparedWorkflow);
   const prunedOutpaintDiagnosticSaves = outpaint ? pruneComfyUiOutpaintDiagnosticSaveNodes(preparedWorkflow) : 0;
-  if (outpaint && !hasActiveComfyUiOutpaintNode(preparedWorkflow)) {
+  if (outpaint && outpaintStrategy !== "full_canvas" && !hasActiveComfyUiOutpaintNode(preparedWorkflow)) {
     throw new Error(
       [
         "This ComfyUI workflow does not have active outpainting support.",
         "Update the stored endpoint workflow or configure workflow_path/COMFYUI_WORKFLOW_JSON_PATH to the latest tomoribot-anima3-comfyui.json.",
-        "The active workflow must expose InpaintCropImproved extend_for_outpainting with the TOMORI_OUTPAINT placeholders.",
+        "The active workflow must expose InpaintCropImproved extend_for_outpainting with the TOMORI_OUTPAINT placeholders, or use TOMORI_OUTPAINT_FULL_CANVAS for full-canvas outpainting.",
       ].join(" "),
     );
   }
@@ -2674,7 +2695,7 @@ async function generateWithComfyUi(
         maskMode,
         inpaintMode: normalizeComfyUiInpaintMode(generationOptions),
         outpaint,
-        outpaintStrategy: outpaint ? placeholders.TOMORI_OUTPAINT_STRATEGY : null,
+        outpaintStrategy: outpaint ? outpaintStrategy : null,
         requestedOutpaintStrategy: generationOptions.outpaintStrategy ?? null,
         outpaintDirection: outpaint ? placeholders.TOMORI_OUTPAINT_DIRECTION : null,
         maskThreshold: inpaintSettings.maskThreshold,

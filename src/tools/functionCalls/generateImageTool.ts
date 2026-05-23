@@ -139,8 +139,8 @@ export class GenerateImageTool extends BaseTool {
       outpaint_strategy: {
         type: "string",
         description:
-          "Optional for outpainting: Use 'edge_extend' to preserve the original source scale and add pixels beyond one or more edges. Use 'zoom_out' when the user asks to zoom out, pull the camera back, make a wider shot, show the full body/outfit, or place the original image smaller inside a larger generated scene.",
-        enum: ["edge_extend", "zoom_out"],
+          "Optional for outpainting: Use 'full_canvas' for NovelAI-style expanded-canvas inpainting when the ComfyUI workflow supports it. Use 'edge_extend' to preserve the original source scale and add pixels beyond one or more edges. Use 'zoom_out' only when the workflow supports placing the original image smaller inside a larger generated scene.",
+        enum: ["full_canvas", "edge_extend", "zoom_out"],
       },
       extend_direction: {
         type: "string",
@@ -161,7 +161,7 @@ export class GenerateImageTool extends BaseTool {
       outpaint_zoom_scale: {
         type: "number",
         description:
-          "Optional for outpaint_strategy='zoom_out': scale for placing the original image inside the expanded canvas, from 0.5 to 0.95. Smaller values reveal more surroundings but preserve less source resolution.",
+          "Optional for outpaint_strategy='zoom_out': scale for placing the original image inside the expanded canvas, from 0.5 to 0.95. Ignored by full_canvas and edge_extend strategies.",
       },
       target_identity: {
         type: "string",
@@ -277,8 +277,11 @@ export class GenerateImageTool extends BaseTool {
 
   private resolveOutpaintStrategy(prompt: string, strategy: string | null): string | null {
     const normalizedStrategy = strategy?.trim().toLowerCase().replace(/[-\s]+/g, "_") ?? "";
-    if (normalizedStrategy === "edge_extend" || normalizedStrategy === "zoom_out") {
+    if (normalizedStrategy === "full_canvas" || normalizedStrategy === "edge_extend" || normalizedStrategy === "zoom_out") {
       return normalizedStrategy;
+    }
+    if (/\b(?:full[-\s]?canvas|novelai[-\s]?style|expanded[-\s]?canvas)\b/i.test(prompt)) {
+      return "full_canvas";
     }
     if (
       /\b(?:zoom out|pull back|wider shot|wide shot|wide[-\s]?angle(?: shot)?|wide framing|wider view|wide view|more distant shot|full[-\s]?body|full outfit|whole outfit|entire outfit|entire silhouette)\b/i.test(
