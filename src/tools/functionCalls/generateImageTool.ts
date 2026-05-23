@@ -51,7 +51,7 @@ export class GenerateImageTool extends BaseTool {
       prompt: {
         type: "string",
         description:
-          "A detailed text description of the image you want to generate. For text-to-image, expand the user's idea into a complete, visually interesting final image: specify a single main subject or group, setting, action/pose, outfit, hair/eye colors when relevant, color palette, lighting, mood, camera framing, subject scale, and art style. For single-object prompts, specify a close or medium-close composition where the object is clearly visible and not tiny in an empty canvas. Avoid character sheets, multiple views, duplicate panels, or reference-sheet layouts unless the user explicitly asks for them. For normal image-to-image, describe the desired new similar image, using the reference only as loose inspiration; include the requested changes and enough scene/style detail for a fresh result. For inpainting, write only the local edit request for the masked area, such as 'change hair to blonde with natural shading' or 'make the irises emerald green with brighter highlights'. For outpainting, describe what should plausibly continue into the newly revealed canvas beyond the requested edge; preserve the original image and do not reframe it. Do not include negative inpaint clauses like 'not black', 'no grey', or 'without stripes'; mention only the desired replacement color/material/pattern. For hair recolor inpainting, keep it color-only and do not add preservation clauses naming hairstyle parts like braids, bangs, or parting. Avoid full-scene or full-character descriptions in inpainting prompts. For background-mode inpainting, state the desired new surroundings strongly: color, environment, location, atmosphere, lighting, or setting; avoid naming old surroundings that should not remain. For recolors, name the desired new color/material strongly. For recolor inpainting, treat it as color-only unless the user explicitly asks for redesign: preserve garment/object type, shape, fit, seams, folds, and overall structure. Do not re-describe the whole subject/reference image for inpainting, and do not put the mask target there unless it is needed to explain the edit.",
+          "A detailed text description of the image you want to generate. For text-to-image, expand the user's idea into a complete, visually interesting final image: specify a single main subject or group, setting, action/pose, outfit, hair/eye colors when relevant, color palette, lighting, mood, camera framing, subject scale, and art style. For single-object prompts, specify a close or medium-close composition where the object is clearly visible and not tiny in an empty canvas. Avoid character sheets, multiple views, duplicate panels, or reference-sheet layouts unless the user explicitly asks for them. For normal image-to-image, describe the desired new similar image, using the reference only as loose inspiration; include the requested changes and enough scene/style detail for a fresh result. For inpainting, write only the local edit request for the masked area, such as 'change hair to blonde with natural shading' or 'make the irises emerald green with brighter highlights'. For outpainting, describe only what should plausibly continue into the newly revealed canvas beyond the requested edge; preserve the original image and do not reframe it. Do not ask for a new full-body image, duplicate subject, second character, giant face, giant torso, or unrelated character body parts in the added border. Do not include negative inpaint clauses like 'not black', 'no grey', or 'without stripes'; mention only the desired replacement color/material/pattern. For hair recolor inpainting, keep it color-only and do not add preservation clauses naming hairstyle parts like braids, bangs, or parting. Avoid full-scene or full-character descriptions in inpainting prompts. For background-mode inpainting, state the desired new surroundings strongly: color, environment, location, atmosphere, lighting, or setting; avoid naming old surroundings that should not remain. For recolors, name the desired new color/material strongly. For recolor inpainting, treat it as color-only unless the user explicitly asks for redesign: preserve garment/object type, shape, fit, seams, folds, and overall structure. Do not re-describe the whole subject/reference image for inpainting, and do not put the mask target there unless it is needed to explain the edit.",
       },
       media_id: {
         type: "string",
@@ -139,7 +139,7 @@ export class GenerateImageTool extends BaseTool {
       extend_direction: {
         type: "string",
         description:
-          "Optional for inpaint_mode='extend', inpaint_mode='outpaint', or outpaint=true: Direction to extend. For outpainting, this is the image edge to reveal more beyond.",
+          "Optional for inpaint_mode='extend', inpaint_mode='outpaint', or outpaint=true: Direction to extend. For outpainting, this is the image edge to reveal more beyond. Use 'down' for legs, feet, lower body, floor, or ground; 'up' for sky, ceiling, headroom, or top of the head; left/right for side context. Use 'all' only when the user explicitly wants a general zoom-out or all-direction expansion.",
         enum: ["down", "up", "left", "right", "down_left", "down_right", "up_left", "up_right", "all"],
       },
       extend_pixels: {
@@ -218,6 +218,26 @@ export class GenerateImageTool extends BaseTool {
       return true;
     }
     return typeof args.inpaint_mode === "string" && args.inpaint_mode.toLowerCase() === "outpaint";
+  }
+
+  private resolveOutpaintDirection(prompt: string, direction: string | null): string | null {
+    if (direction && direction !== "all") {
+      return direction;
+    }
+    const normalizedPrompt = prompt.toLowerCase();
+    const explicitlyAllDirections = /\b(?:all directions|all sides|every side|around the whole image|zoom out)\b/.test(
+      normalizedPrompt,
+    );
+    if (explicitlyAllDirections) {
+      return direction;
+    }
+    if (/\b(?:legs?|feet|foot|shoes?|boots?|lower body|full[-\s]?body|entire silhouette|floor|ground)\b/.test(normalizedPrompt)) {
+      return "down";
+    }
+    if (/\b(?:sky|clouds?|ceiling|headroom|top of (?:the )?head|above)\b/.test(normalizedPrompt)) {
+      return "up";
+    }
+    return direction;
   }
 
   private formatNoticeValue(value: string, maxLength = 120): string {
@@ -816,7 +836,8 @@ export class GenerateImageTool extends BaseTool {
     const maskMode = typeof args.mask_mode === "string" ? args.mask_mode : null;
     const inpaintPreset = typeof args.inpaint_preset === "string" ? args.inpaint_preset : null;
     const inpaintMode = outpaint ? "outpaint" : typeof args.inpaint_mode === "string" ? args.inpaint_mode : null;
-    const extendDirection = typeof args.extend_direction === "string" ? args.extend_direction : null;
+    const rawExtendDirection = typeof args.extend_direction === "string" ? args.extend_direction : null;
+    const extendDirection = outpaint ? this.resolveOutpaintDirection(prompt, rawExtendDirection) : rawExtendDirection;
     const extendPixels = this.parseClampedNumber(args.extend_pixels, 0, 512);
 
     if (rawMediaId && !messageId) {

@@ -1219,9 +1219,12 @@ function buildComfyUiPromptWithDefaults(
       qualityPrefix,
       `canvas outpainting edit: ${prompt}`,
       `extend the image ${direction} beyond the original canvas`,
-      "continue the visible scene naturally into the newly added canvas area",
+      "continue the visible background, lighting, perspective, and environment naturally into the newly added canvas area",
+      "only continue the existing subject where it is visibly cropped by the original image edge",
+      "most added canvas should be surrounding scene, not new character anatomy",
       "preserve the original source image area exactly in place",
       "match the original lighting, perspective, camera angle, line style, color palette, and texture",
+      "do not create a duplicate character, second face, giant face, giant torso, giant limb, or unrelated character body parts in the added border",
       "no frame, no border, no blank padding, no duplicated edge pattern",
       "the new content should connect seamlessly to the existing image edge",
     ].join(", ");
@@ -1329,6 +1332,16 @@ function buildComfyUiNegativePrompt(options: ComfyUiGenerationOptions, inpaint: 
       "empty extension",
       "mirrored edge",
       "repeated edge artifacts",
+      "duplicate character",
+      "second character",
+      "extra face",
+      "giant face",
+      "giant torso",
+      "giant body",
+      "giant limb",
+      "unrelated body parts",
+      "new character in border",
+      "cropped duplicate person",
     );
     return negativeParts.join(", ");
   }
