@@ -134,7 +134,7 @@ export class GenerateImageTool extends BaseTool {
       outpaint: {
         type: "boolean",
         description:
-          "Optional: Set true when the user asks to extend the image canvas itself upward, downward, left, right, or around the image to see more beyond what was cropped. Requires media_id or target_identity. This is different from normal inpainting or silhouette extension.",
+          "Optional: Set true when the user asks to extend the image canvas itself upward, downward, left, right, or around the image to see more beyond what was cropped. Requires media_id or target_identity. Do not also set inpaint=true; outpaint uses the required inpaint-style provider workflow internally. This is different from normal inpainting or silhouette extension.",
       },
       outpaint_strategy: {
         type: "string",
@@ -234,6 +234,13 @@ export class GenerateImageTool extends BaseTool {
       return true;
     }
     return typeof args.inpaint_mode === "string" && args.inpaint_mode.toLowerCase() === "outpaint";
+  }
+
+  private isExplicitInpaintTrue(args: Record<string, unknown>): boolean {
+    if (args.inpaint === true) {
+      return true;
+    }
+    return typeof args.inpaint === "string" && args.inpaint.toLowerCase() === "true";
   }
 
   private resolveOutpaintDirection(prompt: string, direction: string | null): string | null {
@@ -860,6 +867,7 @@ export class GenerateImageTool extends BaseTool {
     const usesReferences = !!(messageId || targetIdentity);
     const inpaint = this.shouldUseInpaint(args);
     const outpaint = this.shouldUseOutpaint(args);
+    const explicitInpaint = this.isExplicitInpaintTrue(args);
     const maskPrompt = (args.mask_prompt as string | undefined)?.trim() || (outpaint ? "main foreground object" : null);
     const maskThreshold = this.parseClampedNumber(args.mask_threshold, 0, 1);
     const maskGrow = this.parseClampedNumber(args.mask_grow, 0, 128);
@@ -890,6 +898,13 @@ export class GenerateImageTool extends BaseTool {
       return {
         success: false,
         error: "Inpaint requires media_id or target_identity.",
+      };
+    }
+    if (outpaint && explicitInpaint) {
+      return {
+        success: false,
+        error:
+          "Outpaint requests must not also set inpaint=true. Use outpaint=true or inpaint_mode='outpaint' by itself; the ComfyUI provider will use the required inpaint-style workflow internally.",
       };
     }
     if (inpaint && !outpaint && !maskPrompt) {

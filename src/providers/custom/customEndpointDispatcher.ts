@@ -1779,6 +1779,40 @@ function getComfyUiDiagnosticLabel(asset: ComfyUiAsset): string {
   return "ComfyUI diagnostic";
 }
 
+function isComfyUiDiagnosticSaveImageNode(node: unknown): boolean {
+  if (!isRecord(node) || !isRecord(node.inputs) || typeof node.class_type !== "string") {
+    return false;
+  }
+  if (!node.class_type.toLowerCase().includes("saveimage")) {
+    return false;
+  }
+
+  const filenamePrefix = typeof node.inputs.filename_prefix === "string" ? node.inputs.filename_prefix.toLowerCase() : "";
+  return (
+    filenamePrefix.startsWith(COMFYUI_INPAINT_MASK_FILENAME_PREFIX) ||
+    filenamePrefix.startsWith(COMFYUI_INPAINT_RESULT_DEBUG_FILENAME_PREFIX)
+  );
+}
+
+function isComfyUiOutpaintDiagnosticSaveImageNode(node: unknown): boolean {
+  if (!isRecord(node) || !isRecord(node.inputs)) {
+    return false;
+  }
+  const filenamePrefix = typeof node.inputs.filename_prefix === "string" ? node.inputs.filename_prefix.toLowerCase() : "";
+  return filenamePrefix.includes("_outpaint");
+}
+
+function pruneComfyUiOutpaintDiagnosticSaveNodes(workflow: ComfyUiWorkflow): number {
+  let removed = 0;
+  for (const [nodeId, node] of Object.entries(workflow)) {
+    if (isComfyUiDiagnosticSaveImageNode(node) && !isComfyUiOutpaintDiagnosticSaveImageNode(node)) {
+      delete workflow[nodeId];
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
 function describeComfyUiAssets(files: ComfyUiAsset[]): string {
   return files
     .slice(0, 10)
@@ -2546,6 +2580,7 @@ async function generateWithComfyUi(
 
   const preparedWorkflow = replaceWorkflowPlaceholders(workflow, placeholders) as ComfyUiWorkflow;
   const constantConditionalRewrites = foldConstantComfyUiConditionals(preparedWorkflow);
+  const prunedOutpaintDiagnosticSaves = outpaint ? pruneComfyUiOutpaintDiagnosticSaveNodes(preparedWorkflow) : 0;
   if (outpaint && !hasActiveComfyUiOutpaintNode(preparedWorkflow)) {
     throw new Error(
       [
@@ -2581,6 +2616,7 @@ async function generateWithComfyUi(
         referenceDenoise: denoise,
         defaultsApplied,
         constantConditionalRewrites,
+        prunedOutpaintDiagnosticSaves,
       })}`,
     );
   }
