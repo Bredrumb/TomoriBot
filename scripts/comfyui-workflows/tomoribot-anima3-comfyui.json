@@ -1576,7 +1576,7 @@
     "class_type": "ImpactConditionalBranch",
     "inputs": {
       "tt_value": [
-        "310",
+        "313",
         0
       ],
       "ff_value": [
@@ -1769,6 +1769,26 @@
         0
       ],
       "filename_prefix": "{TOMORI_INPAINT_MASK_FILENAME_PREFIX}_outpaint"
+    }
+  },
+  "313": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "273",
+        0
+      ],
+      "source": [
+        "178",
+        0
+      ],
+      "x": "{TOMORI_OUTPAINT_SOURCE_X}",
+      "y": "{TOMORI_OUTPAINT_SOURCE_Y}",
+      "resize_source": false,
+      "mask": [
+        "300",
+        0
+      ]
     }
   }
 }
