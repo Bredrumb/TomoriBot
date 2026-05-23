@@ -7,6 +7,7 @@ import type {
 } from "@/types/provider/featureInterfaces";
 import { randomInt } from "node:crypto";
 import { readFileSync } from "node:fs";
+import sharp from "sharp";
 import { buildCustomHeaders } from "@/providers/custom/customOpenAICompatibleUtils";
 import { log } from "@/utils/misc/logger";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
@@ -2633,6 +2634,28 @@ export async function generateCustomImageViaEndpoint(params: {
     );
     const diagnosticOutpaint = isComfyUiOutpaint(diagnosticOptions);
     const diagnosticOutpaintPixels = resolveComfyUiOutpaintPixels(diagnosticOptions);
+    const diagnosticSourceDimensions = buildComfyUiDimensions(diagnosticOptions);
+    const diagnosticOutpaintDirection = normalizeComfyUiExtendDirection(inpaintExtendDirection);
+    const diagnosticOutputDimensions = diagnosticOutpaint
+      ? buildComfyUiOutpaintDimensions(
+          diagnosticSourceDimensions,
+          diagnosticOutpaintDirection,
+          diagnosticOutpaintPixels,
+        )
+      : diagnosticSourceDimensions;
+    const finalImageMetadata = await sharp(imageBuffer).metadata().catch(() => null);
+    const finalImageWidth = finalImageMetadata?.width ?? null;
+    const finalImageHeight = finalImageMetadata?.height ?? null;
+    if (
+      diagnosticOutpaint &&
+      finalImageWidth !== null &&
+      finalImageHeight !== null &&
+      (finalImageWidth < diagnosticOutputDimensions.width || finalImageHeight < diagnosticOutputDimensions.height)
+    ) {
+      throw new Error(
+        `ComfyUI outpaint returned a non-expanded final image (${finalImageWidth}x${finalImageHeight}); expected about ${diagnosticOutputDimensions.width}x${diagnosticOutputDimensions.height}. Check that the active workflow routes TOMORI_OUTPAINT to InpaintStitchImproved before SaveImage.`,
+      );
+    }
     const diagnosticRequestedMaskPrompt = maskPrompt?.trim() || prompt;
     const diagnosticWorkflowMaskPrompt = resolveComfyUiWorkflowMaskPrompt(
       diagnosticRequestedMaskPrompt,
@@ -2650,6 +2673,9 @@ export async function generateCustomImageViaEndpoint(params: {
       `mode=${normalizeComfyUiInpaintMode(diagnosticOptions)}`,
       `outpaint=${diagnosticOutpaint}`,
       `outpaint_pixels=${diagnosticOutpaintPixels}`,
+      `source_size=${diagnosticSourceDimensions.width}x${diagnosticSourceDimensions.height}`,
+      `expected_output_size=${diagnosticOutputDimensions.width}x${diagnosticOutputDimensions.height}`,
+      `final_output_size=${finalImageWidth ?? "unknown"}x${finalImageHeight ?? "unknown"}`,
       `mask_content=${diagnosticMaskContent}`,
       `differential_diffusion=${diagnosticDifferentialDiffusion}`,
       `differential_diffusion_strength=${diagnosticDifferentialDiffusionStrength}`,
@@ -2706,7 +2732,7 @@ export async function generateCustomImageViaEndpoint(params: {
     const diagnosticImages = await Promise.all(
       diagnosticFiles.map(async (file) => {
         const diagnosticBuffer = await downloadComfyUiAsset(endpoint, apiKey, file);
-        const label = getComfyUiDiagnosticLabel(file);
+        const label = `${diagnosticOutpaint ? "Outpaint" : "Inpaint"} ${getComfyUiDiagnosticLabel(file).toLowerCase()}`;
         return {
           label,
           imageData: diagnosticBuffer.toString("base64"),
