@@ -4,7 +4,6 @@ export default {
   personal: {
     description: `あなたの個人的な設定を管理します`,
     custom_models: {
-      description: `自分用のラベル付きカスタムエンドポイントを管理します。`,
       add: {
         description: `個人用カスタムエンドポイントに1機能を登録します。`,
         label_description: `一致する機能で共有するバンドル用ラベル。例: ComfyUI。`,
@@ -28,26 +27,11 @@ export default {
       },
       remove: {
         description: `個人用カスタムエンドポイントから選んだ機能を削除します。`,
-        label_description: `バンドル用ラベル。チェックを外した機能だけ削除されます。`,
-        capability_description: `削除する機能。`,
         none_title: `登録済みカスタムエンドポイントがありません`,
         none_description: `まだ個人用カスタムエンドポイントの登録はありません。`,
         too_many_title: `登録済みカスタムエンドポイントが多すぎます`,
         too_many_description: `1つのモーダルで編集するには登録済みカスタムエンドポイントが多すぎます。先に数を減らしてから再試行してください。最大グループ数: {max_groups}。`,
         modal_title: `個人用カスタムエンドポイントを削除`,
-        checkbox_description: `登録を残すエンドポイントはチェックしたままにし、削除したいエンドポイントだけチェックを外してください。`,
-        checkbox_text_label: `登録済みテキストエンドポイント`,
-        checkbox_text_label_continued: `登録済みテキストエンドポイント（続き）`,
-        checkbox_embedding_label: `登録済み埋め込みエンドポイント`,
-        checkbox_embedding_label_continued: `登録済み埋め込みエンドポイント（続き）`,
-        checkbox_image_label: `登録済み画像エンドポイント`,
-        checkbox_image_label_continued: `登録済み画像エンドポイント（続き）`,
-        checkbox_video_label: `登録済み動画エンドポイント`,
-        checkbox_video_label_continued: `登録済み動画エンドポイント（続き）`,
-        checkbox_speech_label: `登録済み音声エンドポイント`,
-        checkbox_speech_label_continued: `登録済み音声エンドポイント（続き）`,
-        checkbox_transcription_label: `登録済み文字起こしエンドポイント`,
-        checkbox_transcription_label_continued: `登録済み文字起こしエンドポイント（続き）`,
         capability_text: `テキスト`,
         capability_embedding: `埋め込み`,
         capability_image: `画像`,
@@ -61,7 +45,6 @@ export default {
       },
     },
     openrouter_models: {
-      description: `自分用の保存済みOpenRouterモデル登録を管理します。`,
       add: {
         description: `個人用プロバイダー一覧にOpenRouterモデルコードネームを登録します。`,
         capability_description: `このモデルを追加するOpenRouter機能リストを選びます。`,
@@ -87,8 +70,6 @@ export default {
         success_title: `個人用OpenRouterモデルを削除しました`,
         success_description: `個人用プロバイダー一覧から次のOpenRouter登録を削除しました: {models_removed}。`,
         success_still_referenced_description: `個人用プロバイダー一覧から次のOpenRouter登録を削除しました: {models_removed}。すでにそれらを使っている既存の選択はそのまま残るため、不要なら手動で切り替えてください。`,
-        already_available_title: `組み込みモデルです`,
-        already_available_description: `OpenRouter モデル \`{model_name}\` は組み込みモデルなので、このコマンドでは削除できません。`,
       },
     },
     "openrouter-model": {
@@ -116,11 +97,6 @@ export default {
       description: `あなたの個人AIプロバイダーを管理します。`,
       no_saved_title: `個人プロバイダーがありません`,
       no_saved_description: `保存された個人プロバイダーがまだありません。\`/personal provider add\` で追加してください。`,
-      capability_text: `テキスト`,
-      capability_embedding: `埋め込み`,
-      capability_image: `画像`,
-      capability_video: `動画`,
-      capability_vision: `ビジョン`,
       model_success_title: `個人モデルを更新しました`,
       add: {
         description: `個人用プロバイダーAPIキーを追加または更新します。`,
@@ -206,9 +182,6 @@ export default {
     },
     parameters: {
       description: `個人プロバイダーのサンプラー設定を調整します。`,
-      provider_description: `任意: 保存済みの個人プロバイダーを選択します。未指定の場合は有効な個人テキストプロバイダーを使用します。`,
-      no_provider_title: `個人プロバイダーが選択されていません`,
-      no_provider_description: `先に個人プロバイダーを保存するか、個人テキストプロバイダーを有効化してください。`,
       success_title: `個人サンプラーを更新しました`,
       success_description: `{provider} の個人サンプラー設定を更新しました: {settings}`,
     },
@@ -372,12 +345,6 @@ export default {
       off_option: `オフ`,
       follow_option: `サーバーに従う`,
       on_option: `オン`,
-      off_title: `個人DTM：オフ`,
-      off_description: `サーバー設定に関わらず、あなたのDTMは**無効**です。サーバーがDTMを有効にしていても、通常のトリガーワードが使用できます。`,
-      follow_title: `個人DTM：サーバーに従う`,
-      follow_description: `DTMの動作が**サーバー設定に従う**ようになりました。サーバーがDTMを有効にしている場合は直接的な呼びかけが必要になり、そうでない場合は通常のトリガーワードが使用できます。`,
-      on_title: `個人DTM：オン`,
-      on_description: `サーバー設定に関わらず、DTMが**常に有効**です。直接的な呼びかけのみ機能します：\`@{trigger}\`プレフィックス、リプライ、Discordメンション、または\`/bot respond\`。`,
     },
   },
 };

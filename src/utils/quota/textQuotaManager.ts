@@ -144,12 +144,8 @@ export async function checkTextQuota(serverId: number, userDiscId: string): Prom
     // 1. Get quota configuration
     const config = await getTextQuotaConfig(serverId);
 
-    // 2. If quota system is disabled, allow all
-    if (!config.enabled) {
-      return { allowed: true };
-    }
-
-    // 3. Check user daily quota first (most common limit)
+    // 2. Check user daily quota first (most common limit)
+    // Note: daily_user_quota === 0 means unlimited (handled inside checkUserDailyTextQuota)
     const userCheck = await checkUserDailyTextQuota(serverId, userDiscId, config);
     if (!userCheck.allowed) {
       return userCheck;

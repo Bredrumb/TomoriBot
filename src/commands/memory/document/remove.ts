@@ -164,8 +164,7 @@ export async function execute(
         });
 
         if (!personaSelection.success) {
-          if (personaSelection.reason === "cancelled" || personaSelection.reason === "fatal") return;
-          continue;
+          return;
         }
         if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
           return;
@@ -208,6 +207,7 @@ export async function execute(
             descriptionKey: "commands.forget.document.none_description",
             color: ColorCode.WARN,
           });
+          return;
         }
         continue;
       }
@@ -235,6 +235,9 @@ export async function execute(
       // Handle modal outcome - keep the persona picker loop alive when the modal closes
       if (modalResult.outcome !== "submit") {
         log.info(`Document removal modal ${modalResult.outcome} for user ${userData.user_id}`);
+        if (scope === "serverwide") {
+          return;
+        }
         await replyComponentsV2Status(
           interaction,
           locale,
@@ -302,6 +305,9 @@ export async function execute(
         },
         "general.pagination.reloading_persona_picker",
       );
+      if (scope === "serverwide") {
+        return;
+      }
     }
   } catch (error) {
     const context: ErrorContext = {

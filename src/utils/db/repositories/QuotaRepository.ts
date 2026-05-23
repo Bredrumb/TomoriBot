@@ -149,8 +149,8 @@ export async function resetServerwideTextPeriod(serverId: number, resetDays: num
 export async function incrementTextQuota(serverId: number, userDiscId: string): Promise<void> {
   try {
     const config = await getOrCreateTextConfig(serverId);
-    const shouldIncrementUser = config.enabled && config.daily_user_quota > 0;
-    const shouldIncrementServerwide = config.enabled && config.serverwide_quota > 0;
+    const shouldIncrementUser = config.daily_user_quota > 0;
+    const shouldIncrementServerwide = config.serverwide_quota > 0;
     if (!shouldIncrementUser && !shouldIncrementServerwide) return;
 
     const today = new Date().toISOString().split("T")[0];

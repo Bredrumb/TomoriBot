@@ -153,8 +153,7 @@ export async function execute(
           onSelect: async () => {},
         });
         if (!personaSelection.success) {
-          if (personaSelection.reason === "cancelled" || personaSelection.reason === "fatal") return;
-          continue;
+          return;
         }
         if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) return;
 
@@ -296,8 +295,7 @@ export async function execute(
         onSelect: async () => {},
       });
       if (!personaSelection.success) {
-        if (personaSelection.reason === "cancelled" || personaSelection.reason === "fatal") return;
-        continue;
+        return;
       }
       if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) return;
 

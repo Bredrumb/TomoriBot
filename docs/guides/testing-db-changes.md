@@ -11,7 +11,7 @@ This guide covers the DB regression harness introduced in Phase 2 (#4a). The har
 bun run test
 ```
 
-No manual database creation is required. `bun run test` detects a local Postgres connection, creates a disposable `tomoribot_test_<id>` database, runs all 189 tests against it, and drops the database on exit.
+No manual database creation is required. `bun run test` detects a local Postgres connection, creates a disposable `tomoribot_test_<id>` database, runs the full test suite against it, and drops the database on exit.
 
 ## How automatic provisioning works
 
@@ -23,7 +23,7 @@ No manual database creation is required. `bun run test` detects a local Postgres
 4. Spawns `bun test tests/` with `TEST_DB_READY=1` and `POSTGRES_DB=<name>` injected into the child environment.
 5. Drops the database on clean exit, `SIGINT` (Ctrl+C), or `SIGTERM`.
 
-If no Postgres credentials are found or the connection probe fails, `bun test tests/` still runs — the 89 DB regression tests skip gracefully and the 100 unit tests still pass.
+If no Postgres credentials are found or the connection probe fails, `bun test tests/` still runs — DB regression tests skip gracefully and unit tests still pass.
 
 ## Minimum setup
 
@@ -74,7 +74,7 @@ All DB regression `describe` blocks call `describe.skipIf(!DB_TESTS_AVAILABLE)` 
 | `user.regression.test.ts` | UserRepository | `loadUserRow`, `registerUser`, `setPrivacyLevel`, `updateUser` |
 | `persona.regression.test.ts` | PersonaRepository | `loadTomoriState`, `loadAllPersonasForServer`, `loadPersonaConfigRow`, `updateTomori` |
 | `memory.regression.test.ts` | ServerMemory + PersonalMemory | `addServerMemoryByTomori`, `addPersonalMemoryByTomori`, `loadPersonalMemoriesForUserLineage` |
-| `config.regression.test.ts` | ConfigRepository | `loadTomoriState` (config portion), `updateTomoriConfig` |
+| `config.regression.test.ts` | ConfigRepository | `loadTomoriState` (config portion), split config updates, `updateCapabilitiesAndMemberPermissionsConfig` |
 | `llm.regression.test.ts` | LlmRepository | `loadAvailableLlms`, `loadLlmById`, `getLlmsByIds`, `loadSmartestModel`, `loadUniqueProviders` |
 | `server.regression.test.ts` | ServerRepository | `isBlacklisted`, blacklist write/clear cycle |
 | `tool-rag.regression.test.ts` | ToolRepository + RagRepository | `getBraveApiKeyStatus`, guild MCP config read, `detectRagAvailability` |
@@ -101,6 +101,12 @@ Fixtures are inserted in `beforeAll` and cleaned up in `afterAll` via cascade de
 4. If the function reads after a write, add a second `it` block that calls the read function and confirms it reflects the change.
 
 If the function belongs to a new repository not yet covered, add a new `*.regression.test.ts` file following the existing pattern.
+
+## Command config mapping contracts
+
+Split-config commands should also have pure unit coverage when they translate UI choices into repository write patches. Use `tests/unit/commands/configCommandMappings.test.ts` for checkbox or dynamic mapping contracts such as `/capabilities manage` and `/server member-permissions`.
+
+Prefer extracting a typed write-plan helper from the command module over mocking Discord interactions. The unit test should assert both the repository method target and the table-owned patch shape, then DB regression tests should cover any mixed-table repository write that needs transaction protection.
 
 ## Verifying the harness catches regressions
 

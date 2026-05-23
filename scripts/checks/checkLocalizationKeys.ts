@@ -989,7 +989,10 @@ async function extractExpectedCommandMetadataKeys(): Promise<ExpectedMetadataKey
             const filePath = join(subPath, groupFile.name);
             const content = await readFile(filePath, "utf-8");
             const nameMatch = content.match(/setName\("([^"]+)"\)/);
-            const subcommandName = nameMatch?.[1] ?? groupFile.name.replace(/\.ts$/, "");
+
+            // Skip non-command files (type/config mapping helpers with no setName call)
+            if (!nameMatch) continue;
+            const subcommandName = nameMatch[1];
 
             expectedKeys.push({
               key: `commands.${catName}.${sub.name}.${subcommandName}.description`,
@@ -1014,7 +1017,11 @@ async function extractExpectedCommandMetadataKeys(): Promise<ExpectedMetadataKey
         const relativePath = `src/commands/${catName}/${sub.name}`;
         const content = await readFile(subPath, "utf-8");
         const nameMatch = content.match(/setName\("([^"]+)"\)/);
-        const subcommandName = nameMatch?.[1] ?? sub.name.replace(/\.ts$/, "");
+
+        // Skip non-command files (type/config mapping helpers with no setName call)
+        if (!nameMatch) continue;
+        const subcommandName = nameMatch[1];
+
         expectedKeys.push({
           key: `commands.${catName}.${subcommandName}.description`,
           file: relativePath,

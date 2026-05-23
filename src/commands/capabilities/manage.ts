@@ -11,17 +11,15 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
-import type {
-  UserRow,
-  ErrorContext,
-  AssembledServerConfig,
-  ServerCapabilitiesConfigRow,
-  ServerMemberPermissionsConfigRow,
-} from "@/types/db/schema";
+import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { configRepository } from "@/utils/db/repositories";
 import { hasOptApiKey } from "@/utils/security/crypto";
 import { ELEVENLABS_SERVICE_NAME } from "@/utils/audio/elevenLabsAccount";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
+import {
+  buildCapabilitiesManageConfigWritePlan,
+  getCapabilitiesManagePermissionDefinitions,
+} from "./manageConfigMapping";
 
 const PERMISSIONS_MAX_OPTIONS_PER_GROUP = 10;
 
@@ -34,140 +32,6 @@ const PERMISSIONS_CHECKBOX_ID = "config_permissions_checkbox";
 // Rule 21: Configure the subcommand — no options needed, UI is a checkbox modal
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("manage").setDescription(localizer("en-US", "commands.capabilities.manage.description"));
-
-type BooleanColumn<T> = {
-  [K in keyof T]-?: T[K] extends boolean ? K : never;
-}[keyof T];
-
-type CapabilityColumn = BooleanColumn<ServerCapabilitiesConfigRow>;
-type MemberPermissionColumn = BooleanColumn<ServerMemberPermissionsConfigRow>;
-
-/**
- * Defines all configurable permissions for the checkbox modal.
- * Each entry maps a checkbox value to its owning split config table.
- */
-interface PermissionDefinitionBase {
-  /** Value used as the checkbox option identifier */
-  value: string;
-  /** Locale key for the option label */
-  labelKey: string;
-  /** Locale key for the short option description shown in the checkbox */
-  descKey: string;
-  /** Extracts current state from a config row */
-  getState: (config: AssembledServerConfig) => boolean;
-  /** If true, this option is only shown when an ElevenLabs key is configured */
-  requiresElevenLabs?: boolean;
-}
-
-type PermissionDefinition =
-  | (PermissionDefinitionBase & {
-      table: "memberPermissions";
-      /** The server_member_permissions_configs column to update */
-      dbColumn: MemberPermissionColumn;
-    })
-  | (PermissionDefinitionBase & {
-      table: "capabilities";
-      /** The server_capabilities_configs column to update */
-      dbColumn: CapabilityColumn;
-    });
-
-type PermissionChange =
-  | {
-      table: "memberPermissions";
-      dbColumn: MemberPermissionColumn;
-      isEnabled: boolean;
-      label: string;
-    }
-  | {
-      table: "capabilities";
-      dbColumn: CapabilityColumn;
-      isEnabled: boolean;
-      label: string;
-    };
-
-const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
-  {
-    value: "selfteaching",
-    table: "memberPermissions",
-    dbColumn: "self_teaching_enabled",
-    labelKey: "commands.capabilities.manage.selfteaching_option",
-    descKey: "commands.capabilities.manage.selfteaching_desc",
-    getState: (c) => c.self_teaching_enabled,
-  },
-  {
-    value: "personalization",
-    table: "memberPermissions",
-    dbColumn: "personal_memories_enabled",
-    labelKey: "commands.capabilities.manage.personalization_option",
-    descKey: "commands.capabilities.manage.personalization_desc",
-    getState: (c) => c.personal_memories_enabled,
-  },
-  {
-    value: "emojiusage",
-    table: "capabilities",
-    dbColumn: "emoji_usage_enabled",
-    labelKey: "commands.capabilities.manage.emojiusage_option",
-    descKey: "commands.capabilities.manage.emojiusage_desc",
-    getState: (c) => c.emoji_usage_enabled,
-  },
-  {
-    value: "stickerusage",
-    table: "capabilities",
-    dbColumn: "sticker_usage_enabled",
-    labelKey: "commands.capabilities.manage.stickerusage_option",
-    descKey: "commands.capabilities.manage.stickerusage_desc",
-    getState: (c) => c.sticker_usage_enabled,
-  },
-  {
-    value: "websearch",
-    table: "capabilities",
-    dbColumn: "web_search_enabled",
-    labelKey: "commands.capabilities.manage.websearch_option",
-    descKey: "commands.capabilities.manage.websearch_desc",
-    getState: (c) => c.web_search_enabled,
-  },
-  {
-    value: "managemessage",
-    table: "capabilities",
-    dbColumn: "manage_message_enabled",
-    labelKey: "commands.capabilities.manage.managemessage_option",
-    descKey: "commands.capabilities.manage.managemessage_desc",
-    getState: (c) => c.manage_message_enabled,
-  },
-  {
-    value: "threadcreation",
-    table: "capabilities",
-    dbColumn: "thread_creation_enabled",
-    labelKey: "commands.capabilities.manage.threadcreation_option",
-    descKey: "commands.capabilities.manage.threadcreation_desc",
-    getState: (c) => c.thread_creation_enabled,
-  },
-  {
-    value: "imagegen",
-    table: "capabilities",
-    dbColumn: "imagegen_enabled",
-    labelKey: "commands.capabilities.manage.imagegen_option",
-    descKey: "commands.capabilities.manage.imagegen_desc",
-    getState: (c) => c.imagegen_enabled,
-  },
-  {
-    value: "videogen",
-    table: "capabilities",
-    dbColumn: "videogen_enabled",
-    labelKey: "commands.capabilities.manage.videogen_option",
-    descKey: "commands.capabilities.manage.videogen_desc",
-    getState: (c) => c.videogen_enabled,
-  },
-  {
-    value: "voicemessage",
-    table: "capabilities",
-    dbColumn: "voice_message_enabled",
-    labelKey: "commands.capabilities.manage.voicemessage_option",
-    descKey: "commands.capabilities.manage.voicemessage_desc",
-    getState: (c) => c.voice_message_enabled ?? true,
-    requiresElevenLabs: true,
-  },
-];
 
 /**
  * Configures various permissions for Tomori's behavior on the server using
@@ -219,13 +83,11 @@ export async function execute(
     }
 
     // 3. Determine which permissions to show (voicemessage requires ElevenLabs key)
-    let activeDefinitions = PERMISSION_DEFINITIONS;
+    let includeElevenLabs = true;
     if (tomoriState.server_id) {
-      const hasElevenLabsKey = await hasOptApiKey(tomoriState.server_id, ELEVENLABS_SERVICE_NAME);
-      if (!hasElevenLabsKey) {
-        activeDefinitions = PERMISSION_DEFINITIONS.filter((def) => !def.requiresElevenLabs);
-      }
+      includeElevenLabs = await hasOptApiKey(tomoriState.server_id, ELEVENLABS_SERVICE_NAME);
     }
+    const activeDefinitions = getCapabilitiesManagePermissionDefinitions({ includeElevenLabs });
 
     // 4. Build checkbox options, pre-checking currently-enabled permissions
     const checkboxOptions: CheckboxGroupOption[] = activeDefinitions.map((def) => ({
@@ -283,30 +145,11 @@ export async function execute(
         newlyEnabled.add(selectedValue);
       }
     }
-    const changes: PermissionChange[] = [];
-
-    for (const def of activeDefinitions) {
-      const wasEnabled = def.getState(tomoriState.config);
-      const willBeEnabled = newlyEnabled.has(def.value);
-      if (wasEnabled !== willBeEnabled) {
-        const label = localizer(locale, def.labelKey);
-        if (def.table === "memberPermissions") {
-          changes.push({
-            table: def.table,
-            dbColumn: def.dbColumn,
-            isEnabled: willBeEnabled,
-            label,
-          });
-        } else {
-          changes.push({
-            table: def.table,
-            dbColumn: def.dbColumn,
-            isEnabled: willBeEnabled,
-            label,
-          });
-        }
-      }
-    }
+    const writePlan = buildCapabilitiesManageConfigWritePlan(tomoriState.config, newlyEnabled, { includeElevenLabs });
+    const changes = writePlan.changes.map((change) => ({
+      ...change,
+      label: localizer(locale, change.labelKey),
+    }));
 
     // 7. If nothing changed, say so and exit
     if (changes.length === 0) {
@@ -319,22 +162,12 @@ export async function execute(
     }
 
     // 8. Apply changed permissions to the owning split config tables.
-    const memberPermissionsPatch: Partial<ServerMemberPermissionsConfigRow> = {};
-    const capabilitiesPatch: Partial<ServerCapabilitiesConfigRow> = {};
-    for (const change of changes) {
-      if (change.table === "memberPermissions") {
-        memberPermissionsPatch[change.dbColumn] = change.isEnabled;
-      } else {
-        capabilitiesPatch[change.dbColumn] = change.isEnabled;
-      }
-    }
-
     const updateTargets: Array<{
       tableName: "server_member_permissions_configs" | "server_capabilities_configs";
       columns: string[];
     }> = [];
 
-    const memberPermissionColumns = Object.keys(memberPermissionsPatch);
+    const memberPermissionColumns = Object.keys(writePlan.patch.memberPermissions);
     if (memberPermissionColumns.length > 0) {
       updateTargets.push({
         tableName: "server_member_permissions_configs",
@@ -342,7 +175,7 @@ export async function execute(
       });
     }
 
-    const capabilityColumns = Object.keys(capabilitiesPatch);
+    const capabilityColumns = Object.keys(writePlan.patch.capabilities);
     if (capabilityColumns.length > 0) {
       updateTargets.push({
         tableName: "server_capabilities_configs",
@@ -350,10 +183,7 @@ export async function execute(
       });
     }
 
-    const updated = await configRepository.updateCapabilitiesAndMemberPermissionsConfig(tomoriState.server_id, {
-      capabilities: capabilitiesPatch,
-      memberPermissions: memberPermissionsPatch,
-    });
+    const updated = await configRepository[writePlan.method](tomoriState.server_id, writePlan.patch);
 
     if (!updated) {
       const context: ErrorContext = {

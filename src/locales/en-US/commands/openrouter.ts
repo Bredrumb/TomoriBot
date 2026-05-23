@@ -4,7 +4,6 @@ export default {
   openrouter: {
     description: `Manage OpenRouter-specific models and settings.`,
     models: {
-      description: `Manage saved OpenRouter model registrations.`,
       add: {
         description: `Register an OpenRouter model codename for this server.`,
         capability_description: `Which OpenRouter capability list to add this model to.`,
@@ -43,8 +42,6 @@ export default {
         success_title: `OpenRouter Model Removed`,
         success_description: `Removed these OpenRouter registrations from this server: {models_removed}.`,
         success_still_referenced_description: `Removed these OpenRouter registrations from this server: {models_removed}. Existing selections that already use any of them were left unchanged, so switch away from them manually if you no longer want to use them.`,
-        already_available_title: `Built-In Model`,
-        already_available_description: `OpenRouter model \`{model_name}\` is a built-in model and cannot be removed with this command.`,
       },
     },
     model: {

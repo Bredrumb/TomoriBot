@@ -119,6 +119,39 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Config — regression", () => {
     expect(row.nai_negative_tags).toEqual(["_rt_negative"]);
   });
 
+  it("updateCapabilitiesAndMemberPermissionsConfig writes each column to its owning split table", async () => {
+    const result = await configRepository.updateCapabilitiesAndMemberPermissionsConfig(refs.serverId, {
+      memberPermissions: {
+        personal_memories_enabled: false,
+        self_teaching_enabled: false,
+      },
+      capabilities: {
+        imagegen_enabled: false,
+      },
+    });
+    expect(result).toBe(true);
+
+    const [row] = await testSql<
+      Array<{
+        personal_memories_enabled: boolean;
+        self_teaching_enabled: boolean;
+        imagegen_enabled: boolean;
+      }>
+    >`
+      SELECT
+        smpc.personal_memories_enabled,
+        smpc.self_teaching_enabled,
+        scc.imagegen_enabled
+      FROM server_member_permissions_configs smpc
+      JOIN server_capabilities_configs scc USING (server_id)
+      WHERE smpc.server_id = ${refs.serverId}
+    `;
+
+    expect(row.personal_memories_enabled).toBe(false);
+    expect(row.self_teaching_enabled).toBe(false);
+    expect(row.imagegen_enabled).toBe(false);
+  });
+
   it("updateTomoriConfig returns null for unknown server", async () => {
     const result = await configRepository.updateChatConfig(999_999_999, { humanizer_degree: 1 });
     expect(result).toBe(false);

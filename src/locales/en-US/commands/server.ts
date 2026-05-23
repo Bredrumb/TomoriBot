@@ -351,8 +351,6 @@ Leave everything unchecked to keep this persona unrestricted in all channels.`,
         success_description: `**{persona_name}** can now only trigger in **{selected_count}** channel(s): {selected_channels}`,
         success_clear_title: `Persona Whitelist Cleared`,
         success_clear_description: `**{persona_name}** is no longer restricted to specific channels and can trigger in all channels again.`,
-        main_persona_description: `Main Persona`,
-        alter_persona_description: `Alter Persona`,
       },
       role: {
         description: `Add or remove whitelisted roles that can trigger the bot`,

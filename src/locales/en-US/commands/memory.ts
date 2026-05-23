@@ -37,8 +37,6 @@ export default {
         model_incompatible_description: `The current model does not support structured output, which is required for history extraction. Please switch to a compatible model using \`/config model text\`.`,
         no_embedding_model_title: `No Embedding Model Set`,
         no_embedding_model_description: `An embedding model is not configured. Please set one using \`/config model embedding\`.`,
-        no_api_key_title: `No API Key Set`,
-        no_api_key_description: `Saved embedding provider credentials are required to extract and embed history. Please use \`/config provider add\`.`,
         no_messages_title: `No Messages Found`,
         no_messages_description: `No messages were found in this channel to extract knowledge from.`,
         no_facts_extracted_title: `No Facts Extracted`,

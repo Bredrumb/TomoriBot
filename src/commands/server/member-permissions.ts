@@ -5,18 +5,17 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
-import { localizer } from "../../utils/text/localizer";
-import { log, ColorCode } from "../../utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
-import type {
-  ServerMemberPermissionsConfigRow,
-  AssembledServerConfig,
-  UserRow,
-  ErrorContext,
-} from "../../types/db/schema";
+import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionHelper";
 import { configRepository } from "@/utils/db/repositories";
 import type { CheckboxGroupOption } from "@/types/discord/modal";
+import type { ErrorContext, UserRow } from "@/types/db/schema";
+import { log, ColorCode } from "@/utils/misc/logger";
+import { localizer } from "@/utils/text/localizer";
+import {
+  buildServerMemberPermissionsConfigWritePlan,
+  SERVER_MEMBER_PERMISSION_DEFINITIONS,
+} from "./memberPermissionsConfigMapping";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -29,52 +28,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
   subcommand
     .setName("member-permissions")
     .setDescription(localizer("en-US", "commands.server.member-permissions.description"));
-
-/**
- * Defines all configurable member teaching permissions for the checkbox modal.
- */
-type MemberPermissionColumn = {
-  [K in keyof ServerMemberPermissionsConfigRow]-?: ServerMemberPermissionsConfigRow[K] extends boolean ? K : never;
-}[keyof ServerMemberPermissionsConfigRow];
-
-interface MemberPermissionDefinition {
-  value: string;
-  dbColumn: MemberPermissionColumn;
-  labelKey: string;
-  descKey: string;
-  getState: (config: AssembledServerConfig) => boolean;
-}
-
-const MEMBER_PERMISSION_DEFINITIONS: MemberPermissionDefinition[] = [
-  {
-    value: "servermemories",
-    dbColumn: "server_memteaching_enabled",
-    labelKey: "commands.server.member-permissions.servermemories_option",
-    descKey: "commands.server.member-permissions.servermemories_desc",
-    getState: (c) => c.server_memteaching_enabled,
-  },
-  {
-    value: "attributelist",
-    dbColumn: "attribute_memteaching_enabled",
-    labelKey: "commands.server.member-permissions.attributelist_option",
-    descKey: "commands.server.member-permissions.attributelist_desc",
-    getState: (c) => c.attribute_memteaching_enabled,
-  },
-  {
-    value: "sampledialogues",
-    dbColumn: "sampledialogue_memteaching_enabled",
-    labelKey: "commands.server.member-permissions.sampledialogues_option",
-    descKey: "commands.server.member-permissions.sampledialogues_desc",
-    getState: (c) => c.sampledialogue_memteaching_enabled,
-  },
-  {
-    value: "promptsnapshot",
-    dbColumn: "prompt_snapshot_enabled",
-    labelKey: "commands.server.member-permissions.promptsnapshot_option",
-    descKey: "commands.server.member-permissions.promptsnapshot_desc",
-    getState: (c) => c.prompt_snapshot_enabled,
-  },
-];
 
 /**
  * Configures which Teach permissions members with no Manage Server permissions have,
@@ -121,7 +74,7 @@ export async function execute(
     }
 
     // 3. Build checkbox options, pre-checking currently-allowed permissions
-    const checkboxOptions: CheckboxGroupOption[] = MEMBER_PERMISSION_DEFINITIONS.map((def) => ({
+    const checkboxOptions: CheckboxGroupOption[] = SERVER_MEMBER_PERMISSION_DEFINITIONS.map((def) => ({
       label: localizer(locale, def.labelKey),
       value: def.value,
       description: localizer(locale, def.descKey),
@@ -160,23 +113,11 @@ export async function execute(
 
     // 5. Determine which permissions changed
     const newlyEnabled = new Set(modalResult.multiValues?.[MEMBERPERMISSIONS_CHECKBOX_ID] ?? []);
-    const changes: Array<{
-      dbColumn: MemberPermissionColumn;
-      isEnabled: boolean;
-      label: string;
-    }> = [];
-
-    for (const def of MEMBER_PERMISSION_DEFINITIONS) {
-      const wasEnabled = def.getState(tomoriState.config);
-      const willBeEnabled = newlyEnabled.has(def.value);
-      if (wasEnabled !== willBeEnabled) {
-        changes.push({
-          dbColumn: def.dbColumn,
-          isEnabled: willBeEnabled,
-          label: localizer(locale, def.labelKey),
-        });
-      }
-    }
+    const writePlan = buildServerMemberPermissionsConfigWritePlan(tomoriState.config, newlyEnabled);
+    const changes = writePlan.changes.map((change) => ({
+      ...change,
+      label: localizer(locale, change.labelKey),
+    }));
 
     // 6. If nothing changed, say so and exit
     if (changes.length === 0) {
@@ -189,12 +130,7 @@ export async function execute(
     }
 
     // 7. Apply all changed permissions to the database in a single update
-    const patch: Partial<ServerMemberPermissionsConfigRow> = {};
-    for (const change of changes) {
-      patch[change.dbColumn] = change.isEnabled;
-    }
-
-    const updated = await configRepository.updateMemberPermissionsConfig(tomoriState.server_id, patch);
+    const updated = await configRepository[writePlan.method](tomoriState.server_id, writePlan.patch);
 
     if (!updated) {
       const context: ErrorContext = {

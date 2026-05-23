@@ -4,7 +4,6 @@ export default {
   openrouter: {
     description: `OpenRouter専用のモデルと設定を管理します。`,
     models: {
-      description: `保存済みOpenRouterモデル登録を管理します。`,
       add: {
         description: `このサーバー用にOpenRouterモデルコードネームを登録します。`,
         capability_description: `このモデルを追加するOpenRouter機能リストを選びます。`,
@@ -43,8 +42,6 @@ export default {
         success_title: `OpenRouterモデルを削除しました`,
         success_description: `このサーバーから次のOpenRouter登録を削除しました: {models_removed}。`,
         success_still_referenced_description: `このサーバーから次のOpenRouter登録を削除しました: {models_removed}。すでにそれらを使っている既存の選択はそのまま残るため、不要なら手動で切り替えてください。`,
-        already_available_title: `組み込みモデルです`,
-        already_available_description: `OpenRouter モデル \`{model_name}\` は組み込みモデルなので、このコマンドでは削除できません。`,
       },
     },
     model: {

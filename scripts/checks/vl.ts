@@ -71,6 +71,10 @@ const TEST_FILE_META: Record<string, { displayName: string; hint: string }> = {
     displayName: "User Repository",
     hint: "Run `bun test tests/regression/db/user.regression.test.ts`",
   },
+  "configCommandMappings.test.ts": {
+    displayName: "Config Command Mapping Contracts",
+    hint: "Run `bun test tests/unit/commands/configCommandMappings.test.ts`",
+  },
   "chunkProcessor.test.ts": {
     displayName: "Sentence Chunk Splitter",
     hint: "Run `bun test tests/unit/processors/chunkProcessor.test.ts`",
@@ -82,6 +86,14 @@ const TEST_FILE_META: Record<string, { displayName: string; hint: string }> = {
   "mentionProcessor.test.ts": {
     displayName: "Mention & Template Sanitizer",
     hint: "Run `bun test tests/unit/processors/mentionProcessor.test.ts`",
+  },
+  "generationTurnFallback.test.ts": {
+    displayName: "Generation Turn Fallback",
+    hint: "Run `bun test tests/unit/processors/generationTurnFallback.test.ts`",
+  },
+  "preset-import.regression.test.ts": {
+    displayName: "Preset Import",
+    hint: "Run `bun test tests/regression/preset-import.regression.test.ts`",
   },
 };
 
@@ -285,7 +297,7 @@ async function main() {
     "Schema Drift Check": "Ensure `schema.sql` and your Zod types in `src/types/db/schema.ts` are in sync. See the check output for the specific mismatch (column missing from schema.sql, export coverage gap, or INSERT column count mismatch).",
     "DB Lifecycle Validation": "Check the detailed logs above. Your migration might be invalid or nuke-db failed.",
     "Localization Keys":
-      "Run `bun run prune-locales` or ensure your English keys exist in the Japanese translation file.",
+      "Missing Japanese equivalents are fine to push — run `bun run prune-locales` to clean up orphaned keys, or add the missing `ja` entries to get a clean run.",
   };
 
   const getHint = (name: string) => {
@@ -304,6 +316,8 @@ async function main() {
       console.log(`  [🟢] ${r.name}${summary}`);
     } else if (r.isWarning) {
       console.log(`  [🟡] ${r.name} (Warning)${summary}${hintText}`);
+    } else if (!r.fatal && r.exitCode !== 0) {
+      console.log(`  [🟠] ${r.name} (Safe to push — fix when possible)${summary}${hintText}`);
     } else {
       console.log(`  [🔴] ${r.name} (Failed)${summary}${hintText}`);
     }

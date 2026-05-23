@@ -351,8 +351,6 @@ RP設定を無効化したチャンネル **{disabled_count}** 件: {disabled_ch
         success_description: `**{persona_name}** は今後 **{selected_count}** 個のチャンネルでのみトリガーできます: {selected_channels}`,
         success_clear_title: `ペルソナホワイトリストを解除しました`,
         success_clear_description: `**{persona_name}** は特定チャンネルへの制限が解除され、再び全チャンネルでトリガーできます。`,
-        main_persona_description: `メインペルソナ`,
-        alter_persona_description: `オルタペルソナ`,
       },
       role: {
         description: `ボットをトリガーできるロールホワイトリストを追加・削除`,
