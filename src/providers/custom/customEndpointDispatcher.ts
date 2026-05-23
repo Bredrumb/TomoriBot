@@ -2074,6 +2074,8 @@ function buildComfyUiPlaceholderMap(
   const effectiveExtendPixels = outpaint ? outpaintPixels : inpaintSettings.extendPixels;
   const extendOffset = resolveComfyUiExtendOffset(extendDirection, effectiveExtendPixels);
   const outpaintFactors = getComfyUiDirectionalOutpaintFactors(extendDirection);
+  const outpaintSourceX = outpaint ? outpaintPixels * outpaintFactors.left : 0;
+  const outpaintSourceY = outpaint ? outpaintPixels * outpaintFactors.up : 0;
   const placeholderMap: Record<string, WorkflowPlaceholderValue> = {
     TOMORI_PROMPT: options.prompt,
     TOMORI_PROMPT_WITH_DEFAULTS: buildComfyUiPromptWithDefaults(
@@ -2113,6 +2115,8 @@ function buildComfyUiPlaceholderMap(
     TOMORI_OUTPAINT: outpaint,
     TOMORI_OUTPAINT_DIRECTION: extendDirection,
     TOMORI_OUTPAINT_PIXELS: outpaintPixels,
+    TOMORI_OUTPAINT_SOURCE_X: outpaintSourceX,
+    TOMORI_OUTPAINT_SOURCE_Y: outpaintSourceY,
     TOMORI_OUTPAINT_EXTEND_UP_FACTOR: outpaint ? outpaintFactors.up : 0,
     TOMORI_OUTPAINT_EXTEND_DOWN_FACTOR: outpaint ? outpaintFactors.down : 0,
     TOMORI_OUTPAINT_EXTEND_LEFT_FACTOR: outpaint ? outpaintFactors.left : 0,
@@ -2633,6 +2637,9 @@ export async function generateCustomImageViaEndpoint(params: {
       1,
     );
     const diagnosticOutpaint = isComfyUiOutpaint(diagnosticOptions);
+    if (diagnosticOutpaint) {
+      diagnosticFiles = diagnosticFiles.filter((file) => file.filename.toLowerCase().includes("_outpaint"));
+    }
     const diagnosticOutpaintPixels = resolveComfyUiOutpaintPixels(diagnosticOptions);
     const diagnosticSourceDimensions = buildComfyUiDimensions(diagnosticOptions);
     const diagnosticOutpaintDirection = normalizeComfyUiExtendDirection(inpaintExtendDirection);
