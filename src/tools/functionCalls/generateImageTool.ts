@@ -145,7 +145,7 @@ export class GenerateImageTool extends BaseTool {
       extend_direction: {
         type: "string",
         description:
-          "Optional for inpaint_mode='extend', inpaint_mode='outpaint', or outpaint=true: Direction to extend. For outpainting, this is the image edge to reveal more beyond. Use 'all' when the user asks to zoom out, pull back, make a wider shot, or expand in all directions. Use 'down' for legs, feet, lower body, full outfit, floor, or ground only when the user asks to reveal that lower area without asking to zoom out. Use 'up' for sky, ceiling, headroom, or top of the head; left/right for side context.",
+          "Optional for inpaint_mode='extend', inpaint_mode='outpaint', or outpaint=true: Direction to extend. For outpainting, this is the image edge to reveal more beyond. Use 'all' when the user asks to zoom out, pull back, make a wider or wide-angle shot, or expand in all directions. Use 'down' for legs, feet, lower body, full outfit, floor, or ground only when the user asks to reveal that lower area without asking to zoom out. Use 'up' for sky, ceiling, headroom, or top of the head; left/right for side context.",
         enum: ["down", "up", "left", "right", "down_left", "down_right", "up_left", "up_right", "all"],
       },
       extend_pixels: {
@@ -243,14 +243,18 @@ export class GenerateImageTool extends BaseTool {
     return typeof args.inpaint === "string" && args.inpaint.toLowerCase() === "true";
   }
 
-  private resolveOutpaintDirection(prompt: string, direction: string | null): string | null {
+  private resolveOutpaintDirection(prompt: string, direction: string | null, strategy: string | null): string | null {
+    if (strategy === "zoom_out") {
+      return "all";
+    }
     if (direction && direction !== "all") {
       return direction;
     }
     const normalizedPrompt = prompt.toLowerCase();
-    const explicitlyZoomOut = /\b(?:zoom out|pull back|wider shot|wide shot|wide framing|more distant shot)\b/.test(
-      normalizedPrompt,
-    );
+    const explicitlyZoomOut =
+      /\b(?:zoom out|pull back|wider shot|wide shot|wide[-\s]?angle(?: shot)?|wide framing|wider view|wide view|more distant shot)\b/.test(
+        normalizedPrompt,
+      );
     const explicitlyAllDirections = /\b(?:all directions|all sides|every side|around the whole image)\b/.test(
       normalizedPrompt,
     );
@@ -277,13 +281,21 @@ export class GenerateImageTool extends BaseTool {
       return normalizedStrategy;
     }
     if (
-      /\b(?:zoom out|pull back|wider shot|wide shot|wide framing|more distant shot|full[-\s]?body|full outfit|whole outfit|entire outfit|entire silhouette)\b/i.test(
+      /\b(?:zoom out|pull back|wider shot|wide shot|wide[-\s]?angle(?: shot)?|wide framing|wider view|wide view|more distant shot|full[-\s]?body|full outfit|whole outfit|entire outfit|entire silhouette)\b/i.test(
         prompt,
       )
     ) {
       return "zoom_out";
     }
     return null;
+  }
+
+  private formatOutpaintDirection(direction: string | null): string {
+    const normalized = direction?.trim().toLowerCase() || "down";
+    if (normalized === "all") {
+      return "all directions";
+    }
+    return normalized.replaceAll("_", " ");
   }
 
   private formatNoticeValue(value: string, maxLength = 120): string {
@@ -883,11 +895,13 @@ export class GenerateImageTool extends BaseTool {
     const maskMode = typeof args.mask_mode === "string" ? args.mask_mode : null;
     const inpaintPreset = typeof args.inpaint_preset === "string" ? args.inpaint_preset : null;
     const inpaintMode = outpaint ? "outpaint" : typeof args.inpaint_mode === "string" ? args.inpaint_mode : null;
-    const rawExtendDirection = typeof args.extend_direction === "string" ? args.extend_direction : null;
-    const extendDirection = outpaint ? this.resolveOutpaintDirection(prompt, rawExtendDirection) : rawExtendDirection;
-    const extendPixels = this.parseClampedNumber(args.extend_pixels, 0, 512);
     const rawOutpaintStrategy = typeof args.outpaint_strategy === "string" ? args.outpaint_strategy : null;
     const outpaintStrategy = outpaint ? this.resolveOutpaintStrategy(prompt, rawOutpaintStrategy) : rawOutpaintStrategy;
+    const rawExtendDirection = typeof args.extend_direction === "string" ? args.extend_direction : null;
+    const extendDirection = outpaint
+      ? this.resolveOutpaintDirection(prompt, rawExtendDirection, outpaintStrategy)
+      : rawExtendDirection;
+    const extendPixels = this.parseClampedNumber(args.extend_pixels, 0, 512);
     const outpaintOverlap = this.parseClampedNumber(args.outpaint_overlap, 0, 256);
     const outpaintZoomScale = this.parseClampedNumber(args.outpaint_zoom_scale, 0.5, 0.95);
 
@@ -951,16 +965,25 @@ export class GenerateImageTool extends BaseTool {
         const referenceSourceCount = Number(messageId ? 1 : 0) + Number(targetIdentity ? 1 : 0);
         const referencedMessageUrl = messageId ? buildReferencedMessageUrl(context, messageId) : null;
         const extraNoticeLines: string[] = [];
-        const imageModeKey = inpaint
-          ? "genai.image.mode_inpaint"
-          : usesReferences
-            ? "genai.image.mode_img2img"
-            : "genai.image.mode_txt2img";
+        const imageModeKey = outpaint
+          ? "genai.image.mode_outpaint"
+          : inpaint
+            ? "genai.image.mode_inpaint"
+            : usesReferences
+              ? "genai.image.mode_img2img"
+              : "genai.image.mode_txt2img";
         extraNoticeLines.push(
           localizer(context.locale, "genai.image.notice_mode_line", {
             mode: localizer(context.locale, imageModeKey),
           }),
         );
+        if (outpaint) {
+          extraNoticeLines.push(
+            localizer(context.locale, "genai.image.notice_outpaint_direction_line", {
+              direction: this.formatOutpaintDirection(extendDirection),
+            }),
+          );
+        }
         if (inpaint && maskPrompt) {
           extraNoticeLines.push(`Mask: \`${this.formatNoticeValue(maskPrompt)}\``);
         }

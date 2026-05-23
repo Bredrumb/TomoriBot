@@ -240,6 +240,7 @@ export default {
       notice_model_line: `**Model:** {model}`,
       notice_prompt_line: `**Prompt:** {prompt}`,
       notice_mode_line: `**Mode:** {mode}`,
+      notice_outpaint_direction_line: `**Outpaint direction:** {direction}`,
       notice_reference_line: `Reference: {message_url}`,
       notice_character_prompt_line: `**Character {index}:** {prompt}`,
       notice_nai_tags_help_line: `Use \`/novelai image-tags\` to help me generate better NovelAI images.`,
@@ -247,6 +248,7 @@ export default {
       mode_txt2img: `Text to image`,
       mode_img2img: `Image to image`,
       mode_inpaint: `Inpainting`,
+      mode_outpaint: `Outpainting`,
       generating_footer: `This may take a moment depending on provider load.`,
     },
     vision: {

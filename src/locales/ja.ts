@@ -240,6 +240,7 @@ export default {
       notice_model_line: `**モデル:** {model}`,
       notice_prompt_line: `**プロンプト:** {prompt}`,
       notice_mode_line: `**モード:** {mode}`,
+      notice_outpaint_direction_line: `**アウトペイント方向:** {direction}`,
       notice_reference_line: `参照元: {message_url}`,
       notice_character_prompt_line: `**キャラクター {index}:** {prompt}`,
       notice_nai_tags_help_line: `より良いNovelAI画像を生成するには \`/novelai image-tags\` を使ってください。`,
@@ -247,6 +248,7 @@ export default {
       mode_txt2img: `テキストから画像`,
       mode_img2img: `画像から画像`,
       mode_inpaint: `インペイント`,
+      mode_outpaint: `アウトペイント`,
       generating_footer: `プロバイダーの混雑状況によって少し時間がかかる場合があります。`,
     },
     vision: {
