@@ -2653,7 +2653,7 @@ export async function generateCustomImageViaEndpoint(params: {
       (finalImageWidth < diagnosticOutputDimensions.width || finalImageHeight < diagnosticOutputDimensions.height)
     ) {
       throw new Error(
-        `ComfyUI outpaint returned a non-expanded final image (${finalImageWidth}x${finalImageHeight}); expected about ${diagnosticOutputDimensions.width}x${diagnosticOutputDimensions.height}. Check that the active workflow routes TOMORI_OUTPAINT to InpaintStitchImproved before SaveImage.`,
+        `ComfyUI outpaint returned a non-expanded final image (${finalImageWidth}x${finalImageHeight}); expected about ${diagnosticOutputDimensions.width}x${diagnosticOutputDimensions.height}. Check that the active workflow routes TOMORI_OUTPAINT to the expanded outpaint decode before SaveImage.`,
       );
     }
     const diagnosticRequestedMaskPrompt = maskPrompt?.trim() || prompt;
