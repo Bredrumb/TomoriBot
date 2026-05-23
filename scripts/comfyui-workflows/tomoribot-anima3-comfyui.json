@@ -1576,7 +1576,7 @@
     "class_type": "ImpactConditionalBranch",
     "inputs": {
       "tt_value": [
-        "313",
+        "315",
         0
       ],
       "ff_value": [
@@ -1665,11 +1665,11 @@
         0
       ],
       "source": [
-        "300",
+        "317",
         0
       ],
-      "x": "{TOMORI_OUTPAINT_SOURCE_X}",
-      "y": "{TOMORI_OUTPAINT_SOURCE_Y}",
+      "x": "{TOMORI_OUTPAINT_MASK_SOURCE_X}",
+      "y": "{TOMORI_OUTPAINT_MASK_SOURCE_Y}",
       "operation": "subtract"
     }
   },
@@ -1775,7 +1775,7 @@
     "class_type": "ImageCompositeMasked",
     "inputs": {
       "destination": [
-        "273",
+        "310",
         0
       ],
       "source": [
@@ -1789,6 +1789,57 @@
         "300",
         0
       ]
+    }
+  },
+  "314": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_OUTPAINT_FULL_CANVAS}"
+    }
+  },
+  "315": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "313",
+        0
+      ],
+      "ff_value": [
+        "316",
+        0
+      ],
+      "cond": [
+        "314",
+        3
+      ]
+    }
+  },
+  "316": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "274",
+        0
+      ],
+      "source": [
+        "178",
+        0
+      ],
+      "x": "{TOMORI_OUTPAINT_SOURCE_X}",
+      "y": "{TOMORI_OUTPAINT_SOURCE_Y}",
+      "resize_source": false,
+      "mask": [
+        "300",
+        0
+      ]
+    }
+  },
+  "317": {
+    "class_type": "SolidMask",
+    "inputs": {
+      "value": 1,
+      "width": "{TOMORI_OUTPAINT_MASK_SOURCE_WIDTH}",
+      "height": "{TOMORI_OUTPAINT_MASK_SOURCE_HEIGHT}"
     }
   }
 }
