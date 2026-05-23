@@ -2509,6 +2509,10 @@ function buildComfyUiPlaceholderMap(
     TOMORI_OUTPAINT_PLACED_SOURCE_HEIGHT: outpaintLayout?.placedSourceHeight ?? dimensions.source.height,
     TOMORI_OUTPAINT_MASK_SOURCE_X: outpaintLayout?.maskSourceX ?? 0,
     TOMORI_OUTPAINT_MASK_SOURCE_Y: outpaintLayout?.maskSourceY ?? 0,
+    TOMORI_OUTPAINT_PROTECTED_SOURCE_X:
+      outpaintLayout ? Math.max(0, outpaintLayout.maskSourceX - outpaintLayout.placedSourceX) : 0,
+    TOMORI_OUTPAINT_PROTECTED_SOURCE_Y:
+      outpaintLayout ? Math.max(0, outpaintLayout.maskSourceY - outpaintLayout.placedSourceY) : 0,
     TOMORI_OUTPAINT_MASK_SOURCE_WIDTH: outpaintLayout?.maskSourceWidth ?? dimensions.source.width,
     TOMORI_OUTPAINT_MASK_SOURCE_HEIGHT: outpaintLayout?.maskSourceHeight ?? dimensions.source.height,
     TOMORI_OUTPAINT_EXTEND_UP_FACTOR: workflowOutpaintFactors.up,
