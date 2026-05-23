@@ -1179,18 +1179,26 @@ function normalizeComfyUiOutpaintStrategy(value: string | null | undefined): Com
 function resolveComfyUiOutpaintStrategy(options: ComfyUiGenerationOptions): ComfyUiOutpaintStrategy {
   const explicitStrategy = normalizeComfyUiOutpaintStrategy(options.outpaintStrategy);
   if (explicitStrategy) {
-    return explicitStrategy;
+    return explicitStrategy === "zoom_out" && !shouldUseComfyUiShrinkZoomOut() ? "edge_extend" : explicitStrategy;
   }
 
   if (
-    /\b(?:zoom out|pull back|wider shot|wide shot|wide framing|more distant shot|full[-\s]?body|full outfit|whole outfit|entire outfit|entire silhouette)\b/i.test(
+    /\b(?:zoom out|pull back|wider shot|wide shot|wide[-\s]?angle(?: shot)?|wide framing|wider view|wide view|more distant shot|full[-\s]?body|full outfit|whole outfit|entire outfit|entire silhouette)\b/i.test(
       options.prompt,
     )
   ) {
-    return "zoom_out";
+    return shouldUseComfyUiShrinkZoomOut() ? "zoom_out" : "edge_extend";
   }
 
   return "edge_extend";
+}
+
+function shouldUseComfyUiShrinkZoomOut(): boolean {
+  return (
+    readOptionalBooleanEnv("COMFYUI_OUTPAINT_ENABLE_SHRINK_ZOOM") ??
+    readOptionalBooleanEnv("ANIMA3_OUTPAINT_ENABLE_SHRINK_ZOOM") ??
+    false
+  );
 }
 
 function resolveComfyUiOutpaintOverlap(options: ComfyUiGenerationOptions): number {
@@ -2665,6 +2673,10 @@ async function generateWithComfyUi(
         denoise,
         maskMode,
         inpaintMode: normalizeComfyUiInpaintMode(generationOptions),
+        outpaint,
+        outpaintStrategy: outpaint ? placeholders.TOMORI_OUTPAINT_STRATEGY : null,
+        requestedOutpaintStrategy: generationOptions.outpaintStrategy ?? null,
+        outpaintDirection: outpaint ? placeholders.TOMORI_OUTPAINT_DIRECTION : null,
         maskThreshold: inpaintSettings.maskThreshold,
         maskGrow: inpaintSettings.maskGrow,
         maskFeather: inpaintSettings.maskFeather,

@@ -984,7 +984,7 @@ export class GenerateImageTool extends BaseTool {
             }),
           );
         }
-        if (inpaint && maskPrompt) {
+        if (inpaint && !outpaint && maskPrompt) {
           extraNoticeLines.push(`Mask: \`${this.formatNoticeValue(maskPrompt)}\``);
         }
         if (referencedMessageUrl) {
