@@ -1197,7 +1197,7 @@ function resolveComfyUiOutpaintStrategy(options: ComfyUiGenerationOptions): Comf
       options.prompt,
     )
   ) {
-    return shouldUseComfyUiShrinkZoomOut() ? "zoom_out" : "edge_extend";
+    return shouldUseComfyUiShrinkZoomOut() ? "zoom_out" : "full_canvas";
   }
 
   return "edge_extend";

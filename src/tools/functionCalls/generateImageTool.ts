@@ -288,7 +288,7 @@ export class GenerateImageTool extends BaseTool {
         prompt,
       )
     ) {
-      return "zoom_out";
+      return "full_canvas";
     }
     return null;
   }
