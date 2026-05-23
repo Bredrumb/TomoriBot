@@ -136,16 +136,32 @@ export class GenerateImageTool extends BaseTool {
         description:
           "Optional: Set true when the user asks to extend the image canvas itself upward, downward, left, right, or around the image to see more beyond what was cropped. Requires media_id or target_identity. This is different from normal inpainting or silhouette extension.",
       },
+      outpaint_strategy: {
+        type: "string",
+        description:
+          "Optional for outpainting: Use 'edge_extend' to preserve the original source scale and add pixels beyond one or more edges. Use 'zoom_out' when the user asks to zoom out, pull the camera back, make a wider shot, show the full body/outfit, or place the original image smaller inside a larger generated scene.",
+        enum: ["edge_extend", "zoom_out"],
+      },
       extend_direction: {
         type: "string",
         description:
-          "Optional for inpaint_mode='extend', inpaint_mode='outpaint', or outpaint=true: Direction to extend. For outpainting, this is the image edge to reveal more beyond. Use 'down' for legs, feet, lower body, floor, or ground; 'up' for sky, ceiling, headroom, or top of the head; left/right for side context. Use 'all' only when the user explicitly wants a general zoom-out or all-direction expansion.",
+          "Optional for inpaint_mode='extend', inpaint_mode='outpaint', or outpaint=true: Direction to extend. For outpainting, this is the image edge to reveal more beyond. Use 'down' for legs, feet, lower body, full outfit, floor, or ground; 'up' for sky, ceiling, headroom, or top of the head; left/right for side context. If the user says zoom out but also asks to see legs, feet, lower body, or full outfit, use 'down' instead of 'all'. Use 'all' only when the user explicitly wants a general all-direction background expansion.",
         enum: ["down", "up", "left", "right", "down_left", "down_right", "up_left", "up_right", "all"],
       },
       extend_pixels: {
         type: "number",
         description:
           "Optional for inpaint_mode='extend', inpaint_mode='outpaint', or outpaint=true: Approximate number of pixels to extend. Use 64-128 for small silhouette extensions and 192-384 for canvas outpainting.",
+      },
+      outpaint_overlap: {
+        type: "number",
+        description:
+          "Optional for outpainting: pixels of the original image edge that may be included in the editable transition mask before the original is composited back. Use 16-48 for smoother joins; default is provider-configured.",
+      },
+      outpaint_zoom_scale: {
+        type: "number",
+        description:
+          "Optional for outpaint_strategy='zoom_out': scale for placing the original image inside the expanded canvas, from 0.5 to 0.95. Smaller values reveal more surroundings but preserve less source resolution.",
       },
       target_identity: {
         type: "string",
@@ -225,19 +241,39 @@ export class GenerateImageTool extends BaseTool {
       return direction;
     }
     const normalizedPrompt = prompt.toLowerCase();
-    const explicitlyAllDirections = /\b(?:all directions|all sides|every side|around the whole image|zoom out)\b/.test(
-      normalizedPrompt,
-    );
-    if (explicitlyAllDirections) {
-      return direction;
-    }
-    if (/\b(?:legs?|feet|foot|shoes?|boots?|lower body|full[-\s]?body|entire silhouette|floor|ground)\b/.test(normalizedPrompt)) {
+
+    if (
+      /\b(?:legs?|feet|foot|shoes?|boots?|knees?|calves|thighs?|lower body|lower half|full[-\s]?body|full outfit|whole outfit|entire outfit|entire silhouette|floor|ground|below|underneath)\b/.test(
+        normalizedPrompt,
+      )
+    ) {
       return "down";
     }
     if (/\b(?:sky|clouds?|ceiling|headroom|top of (?:the )?head|above)\b/.test(normalizedPrompt)) {
       return "up";
     }
+    const explicitlyAllDirections = /\b(?:all directions|all sides|every side|around the whole image|zoom out)\b/.test(
+      normalizedPrompt,
+    );
+    if (explicitlyAllDirections) {
+      return "all";
+    }
     return direction;
+  }
+
+  private resolveOutpaintStrategy(prompt: string, strategy: string | null): string | null {
+    const normalizedStrategy = strategy?.trim().toLowerCase().replace(/[-\s]+/g, "_") ?? "";
+    if (normalizedStrategy === "edge_extend" || normalizedStrategy === "zoom_out") {
+      return normalizedStrategy;
+    }
+    if (
+      /\b(?:zoom out|pull back|wider shot|wide shot|wide framing|more distant shot|full[-\s]?body|full outfit|whole outfit|entire outfit|entire silhouette)\b/i.test(
+        prompt,
+      )
+    ) {
+      return "zoom_out";
+    }
+    return null;
   }
 
   private formatNoticeValue(value: string, maxLength = 120): string {
@@ -839,6 +875,10 @@ export class GenerateImageTool extends BaseTool {
     const rawExtendDirection = typeof args.extend_direction === "string" ? args.extend_direction : null;
     const extendDirection = outpaint ? this.resolveOutpaintDirection(prompt, rawExtendDirection) : rawExtendDirection;
     const extendPixels = this.parseClampedNumber(args.extend_pixels, 0, 512);
+    const rawOutpaintStrategy = typeof args.outpaint_strategy === "string" ? args.outpaint_strategy : null;
+    const outpaintStrategy = outpaint ? this.resolveOutpaintStrategy(prompt, rawOutpaintStrategy) : rawOutpaintStrategy;
+    const outpaintOverlap = this.parseClampedNumber(args.outpaint_overlap, 0, 256);
+    const outpaintZoomScale = this.parseClampedNumber(args.outpaint_zoom_scale, 0.5, 0.95);
 
     if (rawMediaId && !messageId) {
       return {
@@ -1020,6 +1060,9 @@ export class GenerateImageTool extends BaseTool {
           maskFeather: inpaint ? maskFeather : null,
           clothingSegmentCategories: inpaint ? clothingSegmentCategories : null,
           outpaint: inpaint ? outpaint : null,
+          outpaintStrategy: inpaint ? outpaintStrategy : null,
+          outpaintOverlap: inpaint ? outpaintOverlap : null,
+          outpaintZoomScale: inpaint ? outpaintZoomScale : null,
           extendDirection: inpaint ? extendDirection : null,
           extendPixels: inpaint ? extendPixels : null,
           cfg: inpaint ? cfg : null,
@@ -1050,6 +1093,9 @@ export class GenerateImageTool extends BaseTool {
             inpaintPreset,
             inpaintMode,
             outpaint,
+            outpaintStrategy,
+            outpaintOverlap,
+            outpaintZoomScale,
             inpaintExtendDirection: extendDirection,
             inpaintExtendPixels: extendPixels,
             clothingSegmentCategories,
@@ -1077,6 +1123,9 @@ export class GenerateImageTool extends BaseTool {
               inpaintPreset,
               inpaintMode,
               outpaint,
+              outpaintStrategy,
+              outpaintOverlap,
+              outpaintZoomScale,
               inpaintExtendDirection: extendDirection,
               inpaintExtendPixels: extendPixels,
               clothingSegmentCategories,

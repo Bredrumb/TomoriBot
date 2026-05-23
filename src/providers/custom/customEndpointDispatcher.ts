@@ -15,6 +15,7 @@ import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 type ComfyUiGenerationMode = "image" | "video";
 type ComfyUiInpaintMaskContent = "fill" | "latent_noise";
 type ComfyUiInpaintMode = "normal" | "extend" | "outpaint";
+type ComfyUiOutpaintStrategy = "edge_extend" | "zoom_out";
 type ComfyUiClothingSegmentCategory =
   | "Hat"
   | "Hair"
@@ -63,6 +64,9 @@ interface ComfyUiGenerationOptions {
   inpaintMode?: string | null;
   inpaintPreset?: string | null;
   outpaint?: boolean | null;
+  outpaintStrategy?: string | null;
+  outpaintOverlap?: number | null;
+  outpaintZoomScale?: number | null;
   inpaintExtendDirection?: string | null;
   inpaintExtendPixels?: number | null;
   inpaintExtendGrow?: number | null;
@@ -1157,6 +1161,60 @@ function resolveComfyUiOutpaintPixels(options: ComfyUiGenerationOptions): number
   );
 }
 
+function normalizeComfyUiOutpaintStrategy(value: string | null | undefined): ComfyUiOutpaintStrategy | null {
+  const normalized = value?.trim().toLowerCase().replace(/[-\s]+/g, "_") ?? "";
+  if (!normalized) {
+    return null;
+  }
+  if (["zoom_out", "zoomout", "pull_back", "shrink", "reframe"].includes(normalized)) {
+    return "zoom_out";
+  }
+  if (["edge_extend", "extend_edges", "pad", "padding", "outpaint"].includes(normalized)) {
+    return "edge_extend";
+  }
+  return null;
+}
+
+function resolveComfyUiOutpaintStrategy(options: ComfyUiGenerationOptions): ComfyUiOutpaintStrategy {
+  const explicitStrategy = normalizeComfyUiOutpaintStrategy(options.outpaintStrategy);
+  if (explicitStrategy) {
+    return explicitStrategy;
+  }
+
+  if (
+    /\b(?:zoom out|pull back|wider shot|wide shot|wide framing|more distant shot|full[-\s]?body|full outfit|whole outfit|entire outfit|entire silhouette)\b/i.test(
+      options.prompt,
+    )
+  ) {
+    return "zoom_out";
+  }
+
+  return "edge_extend";
+}
+
+function resolveComfyUiOutpaintOverlap(options: ComfyUiGenerationOptions): number {
+  return clampNumber(
+    options.outpaintOverlap ??
+      readOptionalNumberEnv("COMFYUI_OUTPAINT_OVERLAP") ??
+      readOptionalNumberEnv("ANIMA3_OUTPAINT_OVERLAP") ??
+      32,
+    0,
+    256,
+  );
+}
+
+function resolveComfyUiOutpaintZoomScale(options: ComfyUiGenerationOptions, direction: string): number {
+  const defaultScale = direction === "all" ? 0.72 : 0.82;
+  return clampNumber(
+    options.outpaintZoomScale ??
+      readOptionalNumberEnv("COMFYUI_OUTPAINT_ZOOM_SCALE") ??
+      readOptionalNumberEnv("ANIMA3_OUTPAINT_ZOOM_SCALE") ??
+      defaultScale,
+    0.5,
+    0.95,
+  );
+}
+
 function getComfyUiDirectionalOutpaintFactors(direction: string): {
   up: number;
   down: number;
@@ -1169,6 +1227,10 @@ function getComfyUiDirectionalOutpaintFactors(direction: string): {
     left: direction === "left" || direction === "down_left" || direction === "up_left" || direction === "all" ? 1 : 0,
     right: direction === "right" || direction === "down_right" || direction === "up_right" || direction === "all" ? 1 : 0,
   };
+}
+
+function roundDownToNearestMultiple(value: number, multiple: number): number {
+  return Math.max(multiple, Math.floor(value / multiple) * multiple);
 }
 
 function buildComfyUiOutpaintDimensions(
@@ -1187,6 +1249,126 @@ function buildComfyUiOutpaintDimensions(
       COMFYUI_DIMENSION_MULTIPLE,
     ),
   };
+}
+
+type ComfyUiOutpaintLayout = {
+  strategy: ComfyUiOutpaintStrategy;
+  sourceScale: number;
+  overlap: number;
+  placedSourceX: number;
+  placedSourceY: number;
+  placedSourceWidth: number;
+  placedSourceHeight: number;
+  maskSourceX: number;
+  maskSourceY: number;
+  maskSourceWidth: number;
+  maskSourceHeight: number;
+};
+
+function resolveComfyUiOutpaintAxisPlacement(
+  outputSize: number,
+  placedSize: number,
+  extendStart: boolean,
+  extendEnd: boolean,
+): number {
+  if (extendStart && !extendEnd) {
+    return outputSize - placedSize;
+  }
+  if (extendEnd && !extendStart) {
+    return 0;
+  }
+  return Math.max(0, Math.floor((outputSize - placedSize) / 2));
+}
+
+function buildComfyUiOutpaintLayout(
+  options: ComfyUiGenerationOptions,
+  sourceDimensions: { width: number; height: number },
+  outputDimensions: { width: number; height: number },
+  direction: string,
+): ComfyUiOutpaintLayout {
+  const strategy = resolveComfyUiOutpaintStrategy(options);
+  const factors = getComfyUiDirectionalOutpaintFactors(direction);
+  const sourceScale = strategy === "zoom_out" ? resolveComfyUiOutpaintZoomScale(options, direction) : 1;
+  const placedSourceWidth =
+    strategy === "zoom_out"
+      ? Math.min(sourceDimensions.width, roundDownToNearestMultiple(sourceDimensions.width * sourceScale, COMFYUI_DIMENSION_MULTIPLE))
+      : sourceDimensions.width;
+  const placedSourceHeight =
+    strategy === "zoom_out"
+      ? Math.min(
+          sourceDimensions.height,
+          roundDownToNearestMultiple(sourceDimensions.height * sourceScale, COMFYUI_DIMENSION_MULTIPLE),
+        )
+      : sourceDimensions.height;
+  const placedSourceX =
+    strategy === "zoom_out"
+      ? resolveComfyUiOutpaintAxisPlacement(outputDimensions.width, placedSourceWidth, factors.left > 0, factors.right > 0)
+      : factors.left > 0
+        ? Math.max(0, outputDimensions.width - sourceDimensions.width - factors.right * resolveComfyUiOutpaintPixels(options))
+        : 0;
+  const placedSourceY =
+    strategy === "zoom_out"
+      ? resolveComfyUiOutpaintAxisPlacement(outputDimensions.height, placedSourceHeight, factors.up > 0, factors.down > 0)
+      : factors.up > 0
+        ? Math.max(0, outputDimensions.height - sourceDimensions.height - factors.down * resolveComfyUiOutpaintPixels(options))
+        : 0;
+  const rawOverlap = resolveComfyUiOutpaintOverlap(options);
+  const overlap = Math.min(rawOverlap, Math.floor(Math.min(placedSourceWidth, placedSourceHeight) / 3));
+  const leftPad = placedSourceX;
+  const topPad = placedSourceY;
+  const rightPad = outputDimensions.width - placedSourceX - placedSourceWidth;
+  const bottomPad = outputDimensions.height - placedSourceY - placedSourceHeight;
+  const maskInsetLeft = leftPad > 0 ? overlap : 0;
+  const maskInsetTop = topPad > 0 ? overlap : 0;
+  const maskInsetRight = rightPad > 0 ? overlap : 0;
+  const maskInsetBottom = bottomPad > 0 ? overlap : 0;
+  const maskSourceX = placedSourceX + maskInsetLeft;
+  const maskSourceY = placedSourceY + maskInsetTop;
+  const maskSourceWidth = Math.max(1, placedSourceWidth - maskInsetLeft - maskInsetRight);
+  const maskSourceHeight = Math.max(1, placedSourceHeight - maskInsetTop - maskInsetBottom);
+
+  return {
+    strategy,
+    sourceScale,
+    overlap,
+    placedSourceX,
+    placedSourceY,
+    placedSourceWidth,
+    placedSourceHeight,
+    maskSourceX,
+    maskSourceY,
+    maskSourceWidth,
+    maskSourceHeight,
+  };
+}
+
+function buildComfyUiOutpaintDirectionPrompt(direction: string): string[] {
+  const normalizedDirection = normalizeComfyUiExtendDirection(direction);
+  if (normalizedDirection.startsWith("down")) {
+    return [
+      "the newly added canvas is below the original bottom edge",
+      "continue bottom-edge content downward from the existing crop",
+      "if clothing, legs, feet, floor, or ground are cropped at the bottom edge, extend those lower-body and ground details naturally below the original image",
+      "do not fill a downward extension mainly with sky, clouds, or unrelated scenery unless those elements already touch the bottom edge",
+    ];
+  }
+  if (normalizedDirection.startsWith("up")) {
+    return [
+      "the newly added canvas is above the original top edge",
+      "continue top-edge content upward from the existing crop",
+      "if sky, ceiling, hair, headwear, or headroom are cropped at the top edge, extend those details naturally above the original image",
+    ];
+  }
+  if (normalizedDirection === "left" || normalizedDirection === "right") {
+    return [
+      `the newly added canvas is on the ${normalizedDirection} side of the original image`,
+      `continue ${normalizedDirection}-edge content outward from the existing crop`,
+    ];
+  }
+  return [
+    "treat all-direction outpainting as a border expansion around the fixed source image, not as a full redraw or subject rescale",
+    "continue each original edge outward only from content that touches that edge",
+  ];
 }
 
 function buildComfyUiPromptWithDefaults(
@@ -1214,11 +1396,21 @@ function buildComfyUiPromptWithDefaults(
 
   const maskPrompt = options.maskPrompt?.trim() || "masked region";
   if (isComfyUiOutpaint(options)) {
-    const direction = normalizeComfyUiExtendDirection(options.inpaintExtendDirection).replaceAll("_", " ");
+    const normalizedDirection = normalizeComfyUiExtendDirection(options.inpaintExtendDirection);
+    const outpaintStrategy = resolveComfyUiOutpaintStrategy(options);
+    const direction = normalizedDirection.replaceAll("_", " ");
     return [
       qualityPrefix,
       `canvas outpainting edit: ${prompt}`,
       `extend the image ${direction} beyond the original canvas`,
+      ...(outpaintStrategy === "zoom_out"
+        ? [
+            "zoom-out outpainting: the original image is placed smaller inside a larger canvas",
+            "fill the newly revealed surrounding canvas around the scaled source image",
+            "keep the scaled source image as the composition anchor and complete missing nearby context around it",
+          ]
+        : ["edge-extension outpainting: keep the original source scale and continue only beyond the original edges"]),
+      ...buildComfyUiOutpaintDirectionPrompt(normalizedDirection),
       "continue the visible background, lighting, perspective, and environment naturally into the newly added canvas area",
       "only continue the existing subject where it is visibly cropped by the original image edge",
       "most added canvas should be surrounding scene, not new character anatomy",
@@ -2087,8 +2279,13 @@ function buildComfyUiPlaceholderMap(
   const effectiveExtendPixels = outpaint ? outpaintPixels : inpaintSettings.extendPixels;
   const extendOffset = resolveComfyUiExtendOffset(extendDirection, effectiveExtendPixels);
   const outpaintFactors = getComfyUiDirectionalOutpaintFactors(extendDirection);
-  const outpaintSourceX = outpaint ? outpaintPixels * outpaintFactors.left : 0;
-  const outpaintSourceY = outpaint ? outpaintPixels * outpaintFactors.up : 0;
+  const outpaintLayout = outpaint
+    ? buildComfyUiOutpaintLayout(options, dimensions.source, dimensions.output, extendDirection)
+    : null;
+  const workflowSourceWidth = outpaintLayout?.placedSourceWidth ?? dimensions.source.width;
+  const workflowSourceHeight = outpaintLayout?.placedSourceHeight ?? dimensions.source.height;
+  const outpaintSourceX = outpaintLayout?.placedSourceX ?? 0;
+  const outpaintSourceY = outpaintLayout?.placedSourceY ?? 0;
   const placeholderMap: Record<string, WorkflowPlaceholderValue> = {
     TOMORI_PROMPT: options.prompt,
     TOMORI_PROMPT_WITH_DEFAULTS: buildComfyUiPromptWithDefaults(
@@ -2106,8 +2303,10 @@ function buildComfyUiPlaceholderMap(
     TOMORI_ASPECT_RATIO: options.aspectRatio ?? (options.mode === "video" ? "16:9" : "1:1"),
     TOMORI_WIDTH: dimensions.output.width,
     TOMORI_HEIGHT: dimensions.output.height,
-    TOMORI_SOURCE_WIDTH: dimensions.source.width,
-    TOMORI_SOURCE_HEIGHT: dimensions.source.height,
+    TOMORI_SOURCE_WIDTH: workflowSourceWidth,
+    TOMORI_SOURCE_HEIGHT: workflowSourceHeight,
+    TOMORI_ORIGINAL_SOURCE_WIDTH: dimensions.source.width,
+    TOMORI_ORIGINAL_SOURCE_HEIGHT: dimensions.source.height,
     TOMORI_OUTPUT_WIDTH: dimensions.output.width,
     TOMORI_OUTPUT_HEIGHT: dimensions.output.height,
     TOMORI_SIZE: `${dimensions.output.width}x${dimensions.output.height}`,
@@ -2126,10 +2325,22 @@ function buildComfyUiPlaceholderMap(
     TOMORI_INPAINT_INVERT_MASK: invertInpaintMask,
     TOMORI_INPAINT_MODE: inpaintMode,
     TOMORI_OUTPAINT: outpaint,
+    TOMORI_OUTPAINT_STRATEGY: outpaintLayout?.strategy ?? "edge_extend",
+    TOMORI_OUTPAINT_ZOOM_OUT: outpaintLayout?.strategy === "zoom_out",
+    TOMORI_OUTPAINT_SOURCE_SCALE: outpaintLayout?.sourceScale ?? 1,
+    TOMORI_OUTPAINT_OVERLAP: outpaintLayout?.overlap ?? 0,
     TOMORI_OUTPAINT_DIRECTION: extendDirection,
     TOMORI_OUTPAINT_PIXELS: outpaintPixels,
     TOMORI_OUTPAINT_SOURCE_X: outpaintSourceX,
     TOMORI_OUTPAINT_SOURCE_Y: outpaintSourceY,
+    TOMORI_OUTPAINT_PLACED_SOURCE_X: outpaintLayout?.placedSourceX ?? 0,
+    TOMORI_OUTPAINT_PLACED_SOURCE_Y: outpaintLayout?.placedSourceY ?? 0,
+    TOMORI_OUTPAINT_PLACED_SOURCE_WIDTH: outpaintLayout?.placedSourceWidth ?? dimensions.source.width,
+    TOMORI_OUTPAINT_PLACED_SOURCE_HEIGHT: outpaintLayout?.placedSourceHeight ?? dimensions.source.height,
+    TOMORI_OUTPAINT_MASK_SOURCE_X: outpaintLayout?.maskSourceX ?? 0,
+    TOMORI_OUTPAINT_MASK_SOURCE_Y: outpaintLayout?.maskSourceY ?? 0,
+    TOMORI_OUTPAINT_MASK_SOURCE_WIDTH: outpaintLayout?.maskSourceWidth ?? dimensions.source.width,
+    TOMORI_OUTPAINT_MASK_SOURCE_HEIGHT: outpaintLayout?.maskSourceHeight ?? dimensions.source.height,
     TOMORI_OUTPAINT_EXTEND_UP_FACTOR: outpaint ? outpaintFactors.up : 0,
     TOMORI_OUTPAINT_EXTEND_DOWN_FACTOR: outpaint ? outpaintFactors.down : 0,
     TOMORI_OUTPAINT_EXTEND_LEFT_FACTOR: outpaint ? outpaintFactors.left : 0,
@@ -2475,6 +2686,9 @@ export async function generateCustomImageViaEndpoint(params: {
   inpaintMode?: string | null;
   inpaintPreset?: string | null;
   outpaint?: boolean | null;
+  outpaintStrategy?: string | null;
+  outpaintOverlap?: number | null;
+  outpaintZoomScale?: number | null;
   inpaintExtendDirection?: string | null;
   inpaintExtendPixels?: number | null;
   inpaintExtendGrow?: number | null;
@@ -2496,6 +2710,9 @@ export async function generateCustomImageViaEndpoint(params: {
     inpaintMode,
     inpaintPreset,
     outpaint,
+    outpaintStrategy,
+    outpaintOverlap,
+    outpaintZoomScale,
     inpaintExtendDirection,
     inpaintExtendPixels,
     inpaintExtendGrow,
@@ -2518,6 +2735,9 @@ export async function generateCustomImageViaEndpoint(params: {
       inpaintMode,
       inpaintPreset,
       outpaint,
+      outpaintStrategy,
+      outpaintOverlap,
+      outpaintZoomScale,
       inpaintExtendDirection,
       inpaintExtendPixels,
       inpaintExtendGrow,
@@ -2589,6 +2809,9 @@ export async function generateCustomImageViaEndpoint(params: {
       inpaintMode,
       inpaintPreset,
       outpaint,
+      outpaintStrategy,
+      outpaintOverlap,
+      outpaintZoomScale,
       inpaintExtendDirection,
       inpaintExtendPixels,
       inpaintExtendGrow,
@@ -2663,6 +2886,14 @@ export async function generateCustomImageViaEndpoint(params: {
           diagnosticOutpaintPixels,
         )
       : diagnosticSourceDimensions;
+    const diagnosticOutpaintLayout = diagnosticOutpaint
+      ? buildComfyUiOutpaintLayout(
+          diagnosticOptions,
+          diagnosticSourceDimensions,
+          diagnosticOutputDimensions,
+          diagnosticOutpaintDirection,
+        )
+      : null;
     const finalImageMetadata = await sharp(imageBuffer).metadata().catch(() => null);
     const finalImageWidth = finalImageMetadata?.width ?? null;
     const finalImageHeight = finalImageMetadata?.height ?? null;
@@ -2692,6 +2923,15 @@ export async function generateCustomImageViaEndpoint(params: {
       `preset=${inferComfyUiInpaintPreset(diagnosticOptions)}`,
       `mode=${normalizeComfyUiInpaintMode(diagnosticOptions)}`,
       `outpaint=${diagnosticOutpaint}`,
+      ...(diagnosticOutpaintLayout
+        ? [
+            `outpaint_strategy=${diagnosticOutpaintLayout.strategy}`,
+            `outpaint_source_scale=${diagnosticOutpaintLayout.sourceScale}`,
+            `outpaint_overlap=${diagnosticOutpaintLayout.overlap}`,
+            `outpaint_source_placement=${diagnosticOutpaintLayout.placedSourceX}x${diagnosticOutpaintLayout.placedSourceY}+${diagnosticOutpaintLayout.placedSourceWidth}x${diagnosticOutpaintLayout.placedSourceHeight}`,
+            `outpaint_mask_source_rect=${diagnosticOutpaintLayout.maskSourceX}x${diagnosticOutpaintLayout.maskSourceY}+${diagnosticOutpaintLayout.maskSourceWidth}x${diagnosticOutpaintLayout.maskSourceHeight}`,
+          ]
+        : []),
       `outpaint_pixels=${diagnosticOutpaintPixels}`,
       `source_size=${diagnosticSourceDimensions.width}x${diagnosticSourceDimensions.height}`,
       `expected_output_size=${diagnosticOutputDimensions.width}x${diagnosticOutputDimensions.height}`,
