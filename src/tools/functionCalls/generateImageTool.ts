@@ -6,6 +6,7 @@
 
 import { AttachmentBuilder } from "discord.js";
 import { GoogleGenAI } from "@google/genai";
+import sharp from "sharp";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import { resolveAvatarByIdentity } from "@/utils/discord/avatarResolver";
@@ -28,6 +29,11 @@ import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import type { ProviderNativeImageGenerationResult } from "@/types/provider/featureInterfaces";
+import { optimizeImageBuffer } from "@/utils/image/imageProcessor";
+
+const IMAGE_REFERENCE_MAX_COUNT = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_COUNT ?? "3", 10);
+const IMAGE_REFERENCE_MAX_TOTAL_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_TOTAL_BYTES ?? "6291456", 10);
+const IMAGE_REFERENCE_TINY_MAX_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_TINY_MAX_BYTES ?? "950000", 10);
 
 /**
  * Tool for generating images using the active provider's native image API
@@ -61,6 +67,26 @@ export class GenerateImageTool extends BaseTool {
         type: "string",
         description:
           "Optional: Short phrase describing the existing region to edit when inpaint is true, such as 'cat', 'fur', 'chair', 'blue chest piece', or 'background'. Keep this to the object/area that should be masked. Do not describe the requested change here; for example, use 'cat' or 'fur', not 'a super fluffy orange tabby kitten'.",
+      },
+      clothing_segment_categories: {
+        type: "array",
+        description:
+          "Optional for ComfyUI inpainting when mask_prompt is clothing-related: exact ComfyUI-RMBG ClothesSegment categories to mask. Use this when the user names a specific clothing part. For partially visible dresses, use ['Upper-clothes'] because the RMBG Dress class is temporarily disabled. Examples: ['Upper-clothes'] for a dress/shirt/top/hoodie/jacket, ['Pants'] for pants/shorts, ['Skirt'] for a skirt, ['Scarf'] for a scarf, or multiple categories for a full outfit. Omit for non-clothing masks.",
+        items: {
+          type: "string",
+          enum: [
+            "Hat",
+            "Sunglasses",
+            "Upper-clothes",
+            "Skirt",
+            "Belt",
+            "Pants",
+            "Bag",
+            "Scarf",
+            "Left-shoe",
+            "Right-shoe",
+          ],
+        },
       },
       mask_threshold: {
         type: "number",
@@ -392,12 +418,12 @@ export class GenerateImageTool extends BaseTool {
       }> = [];
 
       // 2. Extract images from direct attachments
-      const imageAttachments = message.attachments.filter((attachment) => attachment.contentType?.startsWith("image/"));
+      const imageAttachments = message.attachments.filter((attachment) => this.isLikelyImageAttachment(attachment));
 
       for (const attachment of imageAttachments.values()) {
         imageUrls.push({
           url: attachment.url,
-          mimeType: attachment.contentType || "image/jpeg",
+          mimeType: attachment.contentType || this.inferImageMimeType(attachment.name || attachment.url || ""),
           source: `attachment: ${attachment.name}`,
         });
       }
@@ -467,11 +493,11 @@ export class GenerateImageTool extends BaseTool {
           }
 
           // Convert to base64
-          const base64ImageData = imageResponse.buffer.toString("base64");
+          const optimized = await optimizeImageBuffer(imageResponse.buffer, imageInfo.mimeType);
 
           inlineDataArray.push({
-            mimeType: imageInfo.mimeType,
-            data: base64ImageData,
+            mimeType: optimized.mimeType,
+            data: optimized.data,
           });
 
           log.info(`Successfully converted image from ${imageInfo.source} to base64`);
@@ -752,13 +778,17 @@ export class GenerateImageTool extends BaseTool {
     const rawMediaId = args.media_id as string | undefined;
     const messageId = this.resolveMediaId(rawMediaId, context);
     const targetIdentity = (args.target_identity as string | undefined) ?? (args.user_id as string | undefined);
-    const aspectRatio = (args.aspect_ratio as string) || "1:1";
+    const requestedAspectRatio = typeof args.aspect_ratio === "string" ? args.aspect_ratio : null;
+    let aspectRatio = requestedAspectRatio || "1:1";
     const usesReferences = !!(messageId || targetIdentity);
     const inpaint = this.shouldUseInpaint(args);
     const maskPrompt = (args.mask_prompt as string | undefined)?.trim() || null;
     const maskThreshold = this.parseClampedNumber(args.mask_threshold, 0, 1);
     const maskGrow = this.parseClampedNumber(args.mask_grow, 0, 128);
     const maskFeather = this.parseClampedNumber(args.mask_feather, 0, 100);
+    const clothingSegmentCategories = Array.isArray(args.clothing_segment_categories)
+      ? args.clothing_segment_categories.filter((category): category is string => typeof category === "string")
+      : null;
     const cfg = this.parseClampedNumber(args.cfg, 0, 30);
     const denoise = this.parseClampedNumber(args.denoise, 0, 1);
     const maskMode = typeof args.mask_mode === "string" ? args.mask_mode : null;
@@ -882,7 +912,9 @@ export class GenerateImageTool extends BaseTool {
         log.info(`Using ${messageImages.length} reference image(s) from message ${messageId} for generation`);
       }
 
-      if (targetIdentity) {
+      const allowAvatarReference = !!targetIdentity && !(inpaint && !!messageId);
+
+      if (targetIdentity && allowAvatarReference) {
         try {
           const avatarData = await resolveAvatarByIdentity(targetIdentity, context, {
             forceStatic: false,
@@ -914,6 +946,24 @@ export class GenerateImageTool extends BaseTool {
         }
       }
 
+      const normalizedReferenceImages = await this.normalizeReferenceImages(referenceImages, {
+        keepAtLeastOne: inpaint,
+      });
+      if (normalizedReferenceImages.length !== referenceImages.length) {
+        log.info(
+          `Reference images normalized from ${referenceImages.length} to ${normalizedReferenceImages.length} to avoid oversized requests`,
+        );
+      }
+      referenceImages.length = 0;
+      referenceImages.push(...normalizedReferenceImages);
+      if (inpaint && !requestedAspectRatio && referenceImages.length > 0) {
+        const referenceAspectRatio = await this.inferReferenceImageAspectRatio(referenceImages[0]);
+        if (referenceAspectRatio) {
+          aspectRatio = referenceAspectRatio;
+          log.info(`Inpaint aspect ratio inferred from reference image: ${aspectRatio}`);
+        }
+      }
+
       // Call appropriate provider API
       log.info(
         `Generating image with ${executionProvider} via ${displayModelName}: "${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}" (aspect ratio: ${aspectRatio})`,
@@ -925,6 +975,7 @@ export class GenerateImageTool extends BaseTool {
           maskThreshold: inpaint ? maskThreshold : null,
           maskGrow: inpaint ? maskGrow : null,
           maskFeather: inpaint ? maskFeather : null,
+          clothingSegmentCategories: inpaint ? clothingSegmentCategories : null,
           cfg: inpaint ? cfg : null,
           denoise: usesReferences ? denoise : null,
         })}`,
@@ -940,22 +991,54 @@ export class GenerateImageTool extends BaseTool {
           : null;
 
       if (creds.customEndpoint) {
-        const result = await generateCustomImageViaEndpoint({
-          endpoint: creds.customEndpoint,
-          apiKey,
-          prompt,
-          aspectRatio,
-          referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
-          inpaint,
-          maskPrompt,
-          inpaintMaskMode: maskMode,
-          inpaintPreset,
-          inpaintMode,
-          inpaintExtendDirection: extendDirection,
-          inpaintExtendPixels: extendPixels,
-        });
-        generatedImageData = result.imageData;
-        await this.sendDiagnosticImagesToThoughtLog(context, result.diagnosticImages, prompt);
+        try {
+          const result = await generateCustomImageViaEndpoint({
+            endpoint: creds.customEndpoint,
+            apiKey,
+            prompt,
+            aspectRatio,
+            referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+            inpaint,
+            maskPrompt,
+            inpaintMaskMode: maskMode,
+            inpaintPreset,
+            inpaintMode,
+            inpaintExtendDirection: extendDirection,
+            inpaintExtendPixels: extendPixels,
+            clothingSegmentCategories,
+          });
+          generatedImageData = result.imageData;
+          await this.sendDiagnosticImagesToThoughtLog(context, result.diagnosticImages, prompt);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          const tooLarge =
+            msg.toLowerCase().includes("request entity too large") ||
+            msg.includes("413") ||
+            msg.toLowerCase().includes("payload too large");
+          if (tooLarge && referenceImages.length > 0) {
+            log.warn("Custom endpoint request was too large; retrying with tiny single-reference payload");
+            const tinyRef = await this.buildTinyReferenceImage(referenceImages[0]);
+            const retryResult = await generateCustomImageViaEndpoint({
+              endpoint: creds.customEndpoint,
+              apiKey,
+              prompt,
+              aspectRatio,
+              referenceImages: [tinyRef],
+              inpaint,
+              maskPrompt,
+              inpaintMaskMode: maskMode,
+              inpaintPreset,
+              inpaintMode,
+              inpaintExtendDirection: extendDirection,
+              inpaintExtendPixels: extendPixels,
+              clothingSegmentCategories,
+            });
+            generatedImageData = retryResult.imageData;
+            await this.sendDiagnosticImagesToThoughtLog(context, retryResult.diagnosticImages, prompt);
+          } else {
+            throw err;
+          }
+        }
       } else if (nativeImageProvider) {
         const result = await nativeImageProvider.generateNativeImage({
           apiKey,
@@ -1171,5 +1254,147 @@ export class GenerateImageTool extends BaseTool {
     }
 
     return response.buffer.toString("base64");
+  }
+  private inferImageMimeType(urlOrName: string, fallback = "image/jpeg"): string {
+    const lower = urlOrName.toLowerCase();
+    if (lower.endsWith(".png")) return "image/png";
+    if (lower.endsWith(".webp")) return "image/webp";
+    if (lower.endsWith(".gif")) return "image/gif";
+    if (lower.endsWith(".bmp")) return "image/bmp";
+    if (lower.endsWith(".avif")) return "image/avif";
+    if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+    return fallback;
+  }
+
+  private isLikelyImageAttachment(attachment: { contentType?: string | null; name?: string | null; url?: string }): boolean {
+    if (attachment.contentType?.startsWith("image/")) {
+      return true;
+    }
+    const inferred = this.inferImageMimeType(attachment.name || attachment.url || "", "");
+    return inferred.startsWith("image/");
+  }
+
+  private async normalizeReferenceImages(
+    referenceImages: Array<{ mimeType: string; data: string }>,
+    options?: { keepAtLeastOne?: boolean },
+  ): Promise<Array<{ mimeType: string; data: string }>> {
+    const normalized: Array<{ mimeType: string; data: string }> = [];
+    let totalBytes = 0;
+    const capped = referenceImages.slice(0, IMAGE_REFERENCE_MAX_COUNT);
+    if (referenceImages.length > IMAGE_REFERENCE_MAX_COUNT) {
+      log.warn(
+        `Reference image count ${referenceImages.length} exceeded cap ${IMAGE_REFERENCE_MAX_COUNT}; keeping first ${IMAGE_REFERENCE_MAX_COUNT}`,
+      );
+    }
+
+    for (const ref of capped) {
+      try {
+        const raw = Buffer.from(ref.data, "base64");
+        const optimized = await optimizeImageBuffer(raw, ref.mimeType || "image/jpeg");
+        const optimizedBytes = Buffer.byteLength(optimized.data, "base64");
+        if (totalBytes + optimizedBytes > IMAGE_REFERENCE_MAX_TOTAL_BYTES) {
+          if (normalized.length === 0 && options?.keepAtLeastOne) {
+            log.warn(
+              `Keeping first oversize reference image (${optimizedBytes} bytes) for inpaint fallback to avoid empty reference set`,
+            );
+            normalized.push({
+              mimeType: optimized.mimeType,
+              data: optimized.data,
+            });
+            totalBytes += optimizedBytes;
+            continue;
+          }
+          log.warn(
+            `Skipping reference image (${optimizedBytes} bytes) to stay under total cap ${IMAGE_REFERENCE_MAX_TOTAL_BYTES} bytes`,
+          );
+          continue;
+        }
+        totalBytes += optimizedBytes;
+        normalized.push({
+          mimeType: optimized.mimeType,
+          data: optimized.data,
+        });
+      } catch (err) {
+        log.warn("Failed to normalize one reference image, skipping it", err as Error);
+      }
+    }
+
+    if (normalized.length === 0 && referenceImages.length > 0) {
+      const first = referenceImages[0];
+      const fallbackBytes = Buffer.byteLength(first.data, "base64");
+      if (fallbackBytes <= IMAGE_REFERENCE_MAX_TOTAL_BYTES || options?.keepAtLeastOne) {
+        if (fallbackBytes > IMAGE_REFERENCE_MAX_TOTAL_BYTES) {
+          log.warn(`Keeping oversize fallback reference image (${fallbackBytes} bytes) because keepAtLeastOne=true`);
+        }
+        normalized.push(first);
+      }
+    }
+
+    return normalized;
+  }
+
+  private async buildTinyReferenceImage(referenceImage: {
+    mimeType: string;
+    data: string;
+  }): Promise<{ mimeType: string; data: string }> {
+    const input = Buffer.from(referenceImage.data, "base64");
+    let quality = 72;
+    for (const maxDim of [1024, 896, 768, 640, 512]) {
+      const encoded = await sharp(input)
+        .resize({
+          width: maxDim,
+          height: maxDim,
+          fit: "inside",
+          withoutEnlargement: true,
+        })
+        .jpeg({ quality, mozjpeg: true })
+        .toBuffer();
+      if (encoded.byteLength <= IMAGE_REFERENCE_TINY_MAX_BYTES) {
+        return {
+          mimeType: "image/jpeg",
+          data: encoded.toString("base64"),
+        };
+      }
+      quality = Math.max(45, quality - 8);
+    }
+
+    const finalBuffer = await sharp(input)
+      .resize({
+        width: 512,
+        height: 512,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: 42, mozjpeg: true })
+      .toBuffer();
+    return {
+      mimeType: "image/jpeg",
+      data: finalBuffer.toString("base64"),
+    };
+  }
+
+  private async inferReferenceImageAspectRatio(referenceImage: { mimeType: string; data: string }): Promise<string | null> {
+    try {
+      const metadata = await sharp(Buffer.from(referenceImage.data, "base64")).metadata();
+      if (!metadata.width || !metadata.height) {
+        return null;
+      }
+      const divisor = this.greatestCommonDivisor(metadata.width, metadata.height);
+      return `${Math.round(metadata.width / divisor)}:${Math.round(metadata.height / divisor)}`;
+    } catch (err) {
+      log.warn("Failed to infer reference image aspect ratio", err as Error);
+      return null;
+    }
+  }
+
+  private greatestCommonDivisor(a: number, b: number): number {
+    let x = Math.abs(Math.round(a));
+    let y = Math.abs(Math.round(b));
+    while (y !== 0) {
+      const next = x % y;
+      x = y;
+      y = next;
+    }
+    return x || 1;
   }
 }
