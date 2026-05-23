@@ -1248,6 +1248,37 @@ function getComfyUiWorkflowOutpaintFactors(
   };
 }
 
+function getComfyUiLayoutOutpaintFactors(
+  layout: ComfyUiOutpaintLayout | null,
+  outputDimensions: { width: number; height: number },
+  fallbackDirection: string,
+  outpaint: boolean,
+  outpaintPixels: number,
+): {
+  up: number;
+  down: number;
+  left: number;
+  right: number;
+} {
+  if (!layout || layout.strategy !== "zoom_out" || !outpaint || outpaintPixels <= 0) {
+    return getComfyUiWorkflowOutpaintFactors(fallbackDirection, outpaint);
+  }
+
+  const leftPad = layout.placedSourceX;
+  const topPad = layout.placedSourceY;
+  const rightPad = outputDimensions.width - layout.placedSourceX - layout.placedSourceWidth;
+  const bottomPad = outputDimensions.height - layout.placedSourceY - layout.placedSourceHeight;
+  const toFactor = (pixels: number): number =>
+    pixels > 0 ? Math.max(COMFYUI_OUTPAINT_INACTIVE_EXTEND_FACTOR, pixels / outpaintPixels) : COMFYUI_OUTPAINT_INACTIVE_EXTEND_FACTOR;
+
+  return {
+    up: toFactor(topPad),
+    down: toFactor(bottomPad),
+    left: toFactor(leftPad),
+    right: toFactor(rightPad),
+  };
+}
+
 function roundDownToNearestMultiple(value: number, multiple: number): number {
   return Math.max(multiple, Math.floor(value / multiple) * multiple);
 }
@@ -2331,10 +2362,16 @@ function buildComfyUiPlaceholderMap(
   const outpaintPixels = resolveComfyUiOutpaintPixels(options);
   const effectiveExtendPixels = outpaint ? outpaintPixels : inpaintSettings.extendPixels;
   const extendOffset = resolveComfyUiExtendOffset(extendDirection, effectiveExtendPixels);
-  const workflowOutpaintFactors = getComfyUiWorkflowOutpaintFactors(extendDirection, outpaint);
   const outpaintLayout = outpaint
     ? buildComfyUiOutpaintLayout(options, dimensions.source, dimensions.output, extendDirection)
     : null;
+  const workflowOutpaintFactors = getComfyUiLayoutOutpaintFactors(
+    outpaintLayout,
+    dimensions.output,
+    extendDirection,
+    outpaint,
+    outpaintPixels,
+  );
   const workflowSourceWidth = outpaintLayout?.placedSourceWidth ?? dimensions.source.width;
   const workflowSourceHeight = outpaintLayout?.placedSourceHeight ?? dimensions.source.height;
   const outpaintSourceX = outpaintLayout?.placedSourceX ?? 0;
@@ -2949,9 +2986,12 @@ export async function generateCustomImageViaEndpoint(params: {
           diagnosticOutpaintDirection,
         )
       : null;
-    const diagnosticWorkflowOutpaintFactors = getComfyUiWorkflowOutpaintFactors(
+    const diagnosticWorkflowOutpaintFactors = getComfyUiLayoutOutpaintFactors(
+      diagnosticOutpaintLayout,
+      diagnosticOutputDimensions,
       diagnosticOutpaintDirection,
       diagnosticOutpaint,
+      diagnosticOutpaintPixels,
     );
     const finalImageMetadata = await sharp(imageBuffer).metadata().catch(() => null);
     const finalImageWidth = finalImageMetadata?.width ?? null;

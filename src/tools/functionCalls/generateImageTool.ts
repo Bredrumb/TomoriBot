@@ -145,7 +145,7 @@ export class GenerateImageTool extends BaseTool {
       extend_direction: {
         type: "string",
         description:
-          "Optional for inpaint_mode='extend', inpaint_mode='outpaint', or outpaint=true: Direction to extend. For outpainting, this is the image edge to reveal more beyond. Use 'down' for legs, feet, lower body, full outfit, floor, or ground; 'up' for sky, ceiling, headroom, or top of the head; left/right for side context. If the user says zoom out but also asks to see legs, feet, lower body, or full outfit, use 'down' instead of 'all'. Use 'all' only when the user explicitly wants a general all-direction background expansion.",
+          "Optional for inpaint_mode='extend', inpaint_mode='outpaint', or outpaint=true: Direction to extend. For outpainting, this is the image edge to reveal more beyond. Use 'all' when the user asks to zoom out, pull back, make a wider shot, or expand in all directions. Use 'down' for legs, feet, lower body, full outfit, floor, or ground only when the user asks to reveal that lower area without asking to zoom out. Use 'up' for sky, ceiling, headroom, or top of the head; left/right for side context.",
         enum: ["down", "up", "left", "right", "down_left", "down_right", "up_left", "up_right", "all"],
       },
       extend_pixels: {
@@ -248,6 +248,15 @@ export class GenerateImageTool extends BaseTool {
       return direction;
     }
     const normalizedPrompt = prompt.toLowerCase();
+    const explicitlyZoomOut = /\b(?:zoom out|pull back|wider shot|wide shot|wide framing|more distant shot)\b/.test(
+      normalizedPrompt,
+    );
+    const explicitlyAllDirections = /\b(?:all directions|all sides|every side|around the whole image)\b/.test(
+      normalizedPrompt,
+    );
+    if (explicitlyZoomOut || explicitlyAllDirections) {
+      return "all";
+    }
 
     if (
       /\b(?:legs?|feet|foot|shoes?|boots?|knees?|calves|thighs?|lower body|lower half|full[-\s]?body|full outfit|whole outfit|entire outfit|entire silhouette|floor|ground|below|underneath)\b/.test(
@@ -258,12 +267,6 @@ export class GenerateImageTool extends BaseTool {
     }
     if (/\b(?:sky|clouds?|ceiling|headroom|top of (?:the )?head|above)\b/.test(normalizedPrompt)) {
       return "up";
-    }
-    const explicitlyAllDirections = /\b(?:all directions|all sides|every side|around the whole image|zoom out)\b/.test(
-      normalizedPrompt,
-    );
-    if (explicitlyAllDirections) {
-      return "all";
     }
     return direction;
   }
