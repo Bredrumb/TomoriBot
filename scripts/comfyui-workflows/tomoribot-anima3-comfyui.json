@@ -342,7 +342,7 @@
     "class_type": "GrowMaskWithBlur",
     "inputs": {
       "mask": [
-        "215",
+        "301",
         0
       ],
       "expand": "{TOMORI_INPAINT_MASK_GROW}",
@@ -679,7 +679,7 @@
     "class_type": "GrowMaskWithBlur",
     "inputs": {
       "mask": [
-        "215",
+        "301",
         0
       ],
       "expand": 0,
@@ -1585,6 +1585,37 @@
       ],
       "cond": [
         "297",
+        3
+      ]
+    }
+  },
+  "299": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_OUTPAINT}"
+    }
+  },
+  "300": {
+    "class_type": "SolidMask",
+    "inputs": {
+      "value": 1,
+      "width": "{TOMORI_SOURCE_WIDTH}",
+      "height": "{TOMORI_SOURCE_HEIGHT}"
+    }
+  },
+  "301": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "300",
+        0
+      ],
+      "ff_value": [
+        "215",
+        0
+      ],
+      "cond": [
+        "299",
         3
       ]
     }
