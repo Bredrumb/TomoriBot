@@ -1888,6 +1888,15 @@ function foldConstantComfyUiConditionals(workflow: ComfyUiWorkflow): number {
   return totalRewritten;
 }
 
+function hasActiveComfyUiOutpaintNode(workflow: ComfyUiWorkflow): boolean {
+  return Object.values(workflow).some((node) => {
+    if (!isRecord(node) || !isRecord(node.inputs) || typeof node.class_type !== "string") {
+      return false;
+    }
+    return node.class_type.toLowerCase().includes("inpaintcrop") && node.inputs.extend_for_outpainting === true;
+  });
+}
+
 function hasComfyUiVisualWorkflowShape(workflow: ComfyUiWorkflow): boolean {
   return Array.isArray(workflow.nodes) || Array.isArray(workflow.links) || Array.isArray(workflow.groups);
 }
@@ -2308,6 +2317,15 @@ async function generateWithComfyUi(
 
   const preparedWorkflow = replaceWorkflowPlaceholders(workflow, placeholders) as ComfyUiWorkflow;
   const constantConditionalRewrites = foldConstantComfyUiConditionals(preparedWorkflow);
+  if (outpaint && !hasActiveComfyUiOutpaintNode(preparedWorkflow)) {
+    throw new Error(
+      [
+        "This ComfyUI workflow does not have active outpainting support.",
+        "Update the stored endpoint workflow or configure workflow_path/COMFYUI_WORKFLOW_JSON_PATH to the latest tomoribot-anima3-comfyui.json.",
+        "The active workflow must expose InpaintCropImproved extend_for_outpainting with the TOMORI_OUTPAINT placeholders.",
+      ].join(" "),
+    );
+  }
   const defaultsApplied =
     generationOptions.mode === "image" ? applyComfyUiImageInputDefaults(preparedWorkflow, generationOptions) : 0;
   if (generationOptions.mode === "image") {
