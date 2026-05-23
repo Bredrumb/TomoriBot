@@ -666,7 +666,7 @@
         0
       ],
       "ff_value": [
-        "276",
+        "298",
         0
       ],
       "cond": [
@@ -1564,6 +1564,29 @@
     "class_type": "ImpactConvertDataType",
     "inputs": {
       "value": "{TOMORI_INPAINT_USE_RMBG_BACKGROUND_MASK}"
+    }
+  },
+  "297": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_OUTPAINT}"
+    }
+  },
+  "298": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "274",
+        0
+      ],
+      "ff_value": [
+        "276",
+        0
+      ],
+      "cond": [
+        "297",
+        3
+      ]
     }
   }
 }
