@@ -68,10 +68,16 @@ a non-error result *and* the loop falls through (rare; defensive).
   loop.
 - On error: classifies the error (rate-limit vs api-error),
   `recordKeyError(...)`, rotates to the next rotation key (up to
-  `MAX_KEY_ATTEMPTS`).
-- Emits each stream result to `responseSink.emitStreamResult`.
-- On non-error or last attempt: calls `responseSink.finalize(result)` and
-  returns.
+- Suppresses user-facing stream errors while another rotation key or model
+  fallback can still be tried.
+- Holds non-final failed model attempts out of `responseSink.emitStreamResult`
+  so their details can be summarized by the fallback notice instead of posted
+  as public errors.
+- On completed model fallback: sends the compact `Fallback Used` button notice
+  with the earlier failure chain available on demand, unless a stop/follow-up
+  interrupt is pending for the channel.
+- On non-error or last attempt: emits only final error results, calls
+  `responseSink.finalize(result)`, and returns.
 - On thrown error: calls `responseSink.emitError(error)` and finalizes with
   an `error` result.
 

@@ -8,6 +8,7 @@
  * Export contract: toExportShape / fromExportShape are required by IRepository
  * and consumed by the Phase 6 (#16.7) export pipeline composition.
  */
+import type { SQL } from "bun";
 import type {
   ErrorContext,
   AssembledServerConfig,
@@ -737,6 +738,49 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     return this.executeUpdate("server_member_permissions_configs", serverId, patch);
   }
 
+  async updateCapabilitiesAndMemberPermissionsConfig(
+    serverId: number,
+    patch: {
+      capabilities?: Partial<ServerCapabilitiesConfigRow>;
+      memberPermissions?: Partial<ServerMemberPermissionsConfigRow>;
+    },
+  ): Promise<boolean> {
+    const capabilitiesPatch = patch.capabilities ?? {};
+    const memberPermissionsPatch = patch.memberPermissions ?? {};
+    const hasCapabilitiesPatch = Object.values(capabilitiesPatch).some((value) => value !== undefined);
+    const hasMemberPermissionsPatch = Object.values(memberPermissionsPatch).some((value) => value !== undefined);
+
+    if (!hasCapabilitiesPatch && !hasMemberPermissionsPatch) return false;
+
+    try {
+      await sql.begin(async (tx: SQL) => {
+        if (hasMemberPermissionsPatch) {
+          const updated = await this.executeUpdate(
+            "server_member_permissions_configs",
+            serverId,
+            memberPermissionsPatch,
+            tx,
+          );
+          if (!updated) {
+            throw new Error(`server_member_permissions_configs row not found for server_id ${serverId}`);
+          }
+        }
+
+        if (hasCapabilitiesPatch) {
+          const updated = await this.executeUpdate("server_capabilities_configs", serverId, capabilitiesPatch, tx);
+          if (!updated) {
+            throw new Error(`server_capabilities_configs row not found for server_id ${serverId}`);
+          }
+        }
+      });
+
+      return true;
+    } catch (error) {
+      log.error(`Error updating capabilities/member permissions configs for server_id: ${serverId}:`, error);
+      return false;
+    }
+  }
+
   async updateNoticeEmbedsConfig(serverId: number, patch: Partial<ServerNoticeEmbedsConfigRow>): Promise<boolean> {
     return this.executeUpdate("server_notice_embeds_configs", serverId, patch);
   }
@@ -895,7 +939,12 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     }
   }
 
-  private async executeUpdate(tableName: string, serverId: number, patch: Record<string, unknown>): Promise<boolean> {
+  private async executeUpdate(
+    tableName: string,
+    serverId: number,
+    patch: Record<string, unknown>,
+    sqlClient: SQL = sql,
+  ): Promise<boolean> {
     const entries = Object.entries(patch).filter(([, v]) => v !== undefined);
     if (entries.length === 0) return false;
 
@@ -914,7 +963,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
       // sql.unsafe is intentional: tableName is dynamic (13 split-config tables) and cannot
       // be expressed as a typed sql`` identifier; sql(patch) for SET also requires a static
       // template tag so mixing both with a dynamic table name forces sql.unsafe here.
-      const result = await sql.unsafe(
+      const result = await sqlClient.unsafe(
         `UPDATE ${tableName} SET ${setClause} WHERE server_id = $${serverIdIndex} RETURNING server_id`,
         values,
       );

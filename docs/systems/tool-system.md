@@ -65,7 +65,7 @@ Current `create_thread` runtime notes:
 - target channels must be regular text or announcement channels; the tool fails closed for DMs, voice channels, forums, media channels, and existing threads
 - runtime requires bot `ViewChannel`, `CreatePublicThreads`, and `SendMessagesInThreads`; it also verifies the invoking member can view the target channel
 - alter persona and user-impersonation turns send the starter message through a bot-managed webhook in the target channel; main persona turns use a normal bot message
-- `/config tools manage` controls availability through `server_capabilities_configs.thread_creation_enabled`
+- `/capabilities manage` controls availability through `server_capabilities_configs.thread_creation_enabled`
 
 Current `generate_image_nai` runtime notes:
 

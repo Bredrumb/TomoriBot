@@ -32,7 +32,7 @@ export default {
       labels_field: `Labels And Removal`,
       labels_value: `A label groups every capability under one custom provider bundle. {server_remove_command} and {personal_remove_command} remove only the capabilities you uncheck. {server_provider_remove_command} and {personal_provider_remove_command} delete the whole labeled bundle.`,
       comfyui_page1_title: `ComfyUI Setup`,
-      comfyui_page1_description: `This guide assumes ComfyUI is already installed and running. Page 1 covers the minimum setup to reach a working \`/config custom-endpoint add\` or \`/personal custom-endpoint add\` registration. You may also use the ready-to-use [ComfyUI workflows](https://github.com/Bredrumb/TomoriBot/tree/main/scripts/comfyui-workflows) from the GitHub repository instead.`,
+      comfyui_page1_description: `This guide assumes ComfyUI is already installed and running. Page 1 covers the minimum setup to reach a working \`/config custom-endpoint add\` or \`/personal custom-endpoint add\` registration. You may also use the ready-to-use [ComfyUI workflows](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows) from the GitHub repository instead.`,
       comfyui_page1_workflow_field: `1. Build The Workflow`,
       comfyui_page1_workflow_value: `Create and test the workflow in ComfyUI first. For images, the MVP should end in \`SaveImage\` so TomoriBot can download the finished file. A minimal image graph is usually: \`CheckpointLoaderSimple\` -> positive/negative \`CLIPTextEncode\` -> \`EmptyLatentImage\` -> \`KSampler\` -> \`VAEDecode\` -> \`SaveImage\`.`,
       comfyui_page1_placeholders_field: `2. Add Placeholders`,
@@ -70,7 +70,7 @@ export default {
       description: `Learn how speech generation works.`,
       engine_description: `Choose a speech engine guide.`,
       docs_title: `Full Docs`,
-      docs_description: `See the [TTS docs](https://github.com/Bredrumb/TomoriBot/tree/main/docs/integrations/tts) and the [scripts README](https://github.com/Bredrumb/TomoriBot/blob/main/scripts/tts/README.md) on GitHub for copy-paste setup commands and wrapper notes.`,
+      docs_description: `See the [TTS docs](https://github.com/Bredrumb/TomoriBot/tree/main/docs/integrations/tts) and the [servers README](https://github.com/Bredrumb/TomoriBot/blob/main/servers/tts/README.md) on GitHub for copy-paste setup commands and wrapper notes.`,
       overview: {
         title: `Speech Setup Overview`,
         description: `Speech endpoints let TomoriBot send native Discord voice messages using either a local clone server or ElevenLabs. For local voice cloning, any audio format is accepted (auto-converted to mono WAV). It is recommended to use 10-20 second clips with no background music.`,
@@ -91,7 +91,7 @@ ElevenLabs: run {elevenlabs}, then use {voice_assign} later for more personas.
         steps_title: `Setup Steps`,
         steps_description: `**Prerequisites**: Python 3.10+, CUDA 12.x + drivers (optional, for GPU)
 
-1. Download the [TTS scripts](https://github.com/Bredrumb/TomoriBot/tree/main/scripts/tts) from the GitHub repository to your machine.
+1. Download the [TTS servers](https://github.com/Bredrumb/TomoriBot/tree/main/servers/tts) from the GitHub repository to your machine.
 2. Navigate to the downloaded \`chatterbox\` folder, then create and activate a Python \`.venv\`.
 3. Install numpy first (build dep): \`pip install numpy\`, then install \`requirements.txt\`.
 4. *(GPU only)* Reinstall PyTorch: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
@@ -108,7 +108,7 @@ ElevenLabs: run {elevenlabs}, then use {voice_assign} later for more personas.
 • SoX installed system-wide (Windows: \`scoop install sox\`, macOS: \`brew install sox\`)
 • CUDA 12.x + drivers (optional, for GPU)
 
-1. Download the [TTS scripts](https://github.com/Bredrumb/TomoriBot/tree/main/scripts/tts) from GitHub to your machine.
+1. Download the [TTS servers](https://github.com/Bredrumb/TomoriBot/tree/main/servers/tts) from GitHub to your machine.
 2. Navigate to the downloaded \`qwen3tts\` folder, create and activate a Python \`.venv\`.
 3. Install \`requirements.txt\`.
 4. *(GPU)* Reinstall PyTorch: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
@@ -123,7 +123,7 @@ ElevenLabs: run {elevenlabs}, then use {voice_assign} later for more personas.
         steps_title: `Setup Steps`,
         steps_description: `**Prerequisites**: Python 3.10+, CUDA 12.x + drivers (optional, for GPU)
 
-1. Download the [TTS scripts](https://github.com/Bredrumb/TomoriBot/tree/main/scripts/tts) from the GitHub repository to your machine.
+1. Download the [TTS servers](https://github.com/Bredrumb/TomoriBot/tree/main/servers/tts) from the GitHub repository to your machine.
 2. Navigate to the downloaded \`irodoritts\` folder, then create and activate a Python \`.venv\`.
 3. Install \`requirements.txt\`.
 4. Install irodori-tts via the patch script (upstream packaging bugs require this):
@@ -145,12 +145,12 @@ Linux/macOS: \`bash install-irodori.sh\`
       description: `Learn how audio transcription works.`,
       engine_description: `Choose a transcription engine guide.`,
       docs_title: `Full Docs`,
-      docs_description: `See the [Transcription docs](https://github.com/Bredrumb/TomoriBot/tree/main/docs/integrations/transcription) and [STT README](https://github.com/Bredrumb/TomoriBot/blob/main/scripts/stt/README.md) on GitHub.`,
+      docs_description: `See the [Transcription docs](https://github.com/Bredrumb/TomoriBot/tree/main/docs/integrations/transcription) and [STT README](https://github.com/Bredrumb/TomoriBot/blob/main/servers/stt/README.md) on GitHub.`,
       overview: {
         title: `Transcription Setup Overview`,
         description: `Transcription endpoints turn user audio attachments into text for background conversation context. Visible transcript posting is controlled separately by {speech_transcripts}.`,
         steps_title: `Recommended Path`,
-        steps_description: `Start with WhisperX: run the reference server in \`scripts/stt\`, register it with {custom_endpoint_add}, then select it with {model_transcription}. ElevenLabs users can run {elevenlabs}.
+        steps_description: `Start with WhisperX: run the reference server in \`servers/stt\`, register it with {custom_endpoint_add}, then select it with {model_transcription}. ElevenLabs users can run {elevenlabs}.
 
 **Per-engine setup guides:**
 • WhisperX → \`/help transcription engine:WhisperX\`
@@ -166,7 +166,7 @@ Linux/macOS: \`bash install-irodori.sh\`
 • FFmpeg installed system-wide (required for audio decoding)
 • CUDA 12.x + drivers (optional, for GPU acceleration)
 
-1. Download the [STT scripts](https://github.com/Bredrumb/TomoriBot/tree/main/scripts/stt) from the GitHub repository to your machine.
+1. Download the [STT servers](https://github.com/Bredrumb/TomoriBot/tree/main/servers/stt) from the GitHub repository to your machine.
 2. Navigate to the downloaded \`stt\` folder, then create and activate a Python \`.venv\`.
 3. Install \`requirements-whisperx.txt\`.
 4. *(GPU only)* Reinstall PyTorch with CUDA support:

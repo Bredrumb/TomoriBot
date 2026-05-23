@@ -7,6 +7,7 @@ import os
 import sys
 import tempfile
 import threading
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -56,6 +57,8 @@ DTYPE = os.getenv("QWEN3TTS_DTYPE", "bfloat16" if torch.cuda.is_available() else
 USE_FLASH_ATTENTION = os.getenv("QWEN3TTS_FLASH_ATTENTION", "0") == "1"
 MAX_TEXT_CHARS = int(os.getenv("TOMORI_TTS_MAX_TEXT_CHARS", "2000"))
 DEFAULT_INSTRUCT = os.getenv("TOMORI_TTS_DEFAULT_INSTRUCT", "").strip()
+LOG_PAYLOADS = os.getenv("TOMORI_TTS_LOG_PAYLOADS", "0") == "1"
+LOG_PREVIEW_CHARS = int(os.getenv("TOMORI_TTS_LOG_PREVIEW_CHARS", "240"))
 
 LANGUAGE_NAMES = {
   "zh": "Chinese",
@@ -100,6 +103,17 @@ def decode_ref_audio(raw_base64: str, directory: str) -> str:
   ref_path = Path(directory) / "reference.wav"
   ref_path.write_bytes(audio_bytes)
   return str(ref_path)
+
+
+def log_info(message: str) -> None:
+  print(f"[Qwen3TTS] {message}", flush=True)
+
+
+def preview_for_log(text: str) -> str:
+  escaped = text.replace("\r", "\\r").replace("\n", "\\n")
+  if LOG_PAYLOADS or len(escaped) <= LOG_PREVIEW_CHARS:
+    return escaped
+  return f"{escaped[:LOG_PREVIEW_CHARS]}..."
 
 
 def resolve_dtype() -> torch.dtype:
@@ -164,10 +178,12 @@ def load_model_for_mode(mode: str) -> None:
     return
 
   if model is not None:
+    log_info(f"Unloading active model mode={model_mode} before loading mode={mode}")
     unload_model()
 
   from qwen_tts import Qwen3TTSModel
 
+  model_id = model_id_for_mode(mode)
   kwargs: dict = {
     "device_map": DEVICE_MAP,
     "dtype": resolve_dtype(),
@@ -175,8 +191,13 @@ def load_model_for_mode(mode: str) -> None:
   if USE_FLASH_ATTENTION:
     kwargs["attn_implementation"] = "flash_attention_2"
 
-  model = Qwen3TTSModel.from_pretrained(model_id_for_mode(mode), **kwargs)
+  load_started_at = time.perf_counter()
+  log_info(
+    f"Loading model mode={mode} model_id={model_id} device_map={DEVICE_MAP} dtype={DTYPE} flash_attention={USE_FLASH_ATTENTION}"
+  )
+  model = Qwen3TTSModel.from_pretrained(model_id, **kwargs)
   model_mode = mode
+  log_info(f"Model loaded mode={mode} elapsed_ms={int((time.perf_counter() - load_started_at) * 1000)}")
 
 
 def infer_request_mode(payload: SynthesizeRequest) -> str:
@@ -245,6 +266,7 @@ def health() -> dict[str, str]:
 
 @app.post("/synthesize")
 def synthesize(payload: SynthesizeRequest) -> Response:
+  request_started_at = time.perf_counter()
   text = payload.text.strip()
   if not text:
     raise HTTPException(status_code=400, detail="text is required.")
@@ -256,13 +278,28 @@ def synthesize(payload: SynthesizeRequest) -> Response:
 
     with model_lock:
       request_mode = resolve_request_mode(payload)
+      language = resolve_language(payload.language)
+      design_instruct = resolve_design_instruct(payload) if request_mode == "voice-design" else ""
+      log_info(
+        f"/synthesize received mode={request_mode} server_mode={MODE} text_chars={len(text)} "
+        f"instruct_chars={len(design_instruct)} ref_audio_chars={len(payload.ref_audio or '')} language={language} "
+        f"active_model={model_mode or 'none'} payload_log={'full' if LOG_PAYLOADS else 'preview'}"
+      )
+      log_info(f"Text {'full' if LOG_PAYLOADS else 'preview'}: {preview_for_log(text)}")
+      if request_mode == "voice-design":
+        log_info(f"Instruct {'full' if LOG_PAYLOADS else 'preview'}: {preview_for_log(design_instruct)}")
+
       load_model_for_mode(request_mode)
 
       if request_mode == "voice-design":
+        generation_started_at = time.perf_counter()
         wavs, sample_rate = model.generate_voice_design(
           text=text,
-          language=resolve_language(payload.language),
-          instruct=resolve_design_instruct(payload),
+          language=language,
+          instruct=design_instruct,
+        )
+        log_info(
+          f"VoiceDesign generation finished sample_rate={sample_rate} elapsed_ms={int((time.perf_counter() - generation_started_at) * 1000)}"
         )
       else:
         if not payload.ref_audio or not payload.ref_audio.strip():
@@ -270,15 +307,20 @@ def synthesize(payload: SynthesizeRequest) -> Response:
 
         ref_text = payload.ref_text.strip() if payload.ref_text else ""
         ref_path = decode_ref_audio(payload.ref_audio, temp_dir)
+        generation_started_at = time.perf_counter()
         wavs, sample_rate = model.generate_voice_clone(
           text=text,
-          language=resolve_language(payload.language),
+          language=language,
           ref_audio=ref_path,
           ref_text=ref_text,
           x_vector_only_mode=ref_text == "",
         )
+        log_info(
+          f"Clone generation finished sample_rate={sample_rate} elapsed_ms={int((time.perf_counter() - generation_started_at) * 1000)}"
+        )
 
     sf.write(str(output_path), wavs[0], int(sample_rate))
+    log_info(f"/synthesize completed elapsed_ms={int((time.perf_counter() - request_started_at) * 1000)}")
     return Response(content=output_path.read_bytes(), media_type="audio/wav")
 
 

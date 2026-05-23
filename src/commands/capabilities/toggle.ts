@@ -63,7 +63,7 @@ export async function execute(
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
         metadata: {
-          command: "config tools toggle",
+          command: "capabilities toggle",
           toolUseEnabled: isEnabled,
           targetTable: "server_capabilities_configs",
         },
@@ -96,11 +96,11 @@ export async function execute(
       serverId: (await getCachedTomoriState(serverDiscId))?.server_id,
       errorType: "CommandExecutionError",
       metadata: {
-        command: "config tools toggle",
+        command: "capabilities toggle",
         options: interaction.options?.data,
       },
     };
-    await log.error("Error in /config tools toggle command", error as Error, context);
+    await log.error("Error in /capabilities toggle command", error as Error, context);
 
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",

@@ -46,4 +46,15 @@ Register it the same way as the clone wrapper, but select the VoiceDesign voice 
 
 Set each persona's natural-language voice description with `/speech voice-design set`. Remove it with `/speech voice-design remove`. During generation, TomoriBot sends that prompt in the `/synthesize` JSON body as `instruct`; when the tool includes `voice_instructions`, those one-off delivery notes are appended to the instruct text for that message only. The wrapper still accepts `ref_text` or `TOMORI_TTS_DEFAULT_INSTRUCT` as fallbacks for manual testing or single-voice deployments.
 
+## Debugging VoiceDesign Requests
+
+TomoriBot logs VoiceDesign `/synthesize` requests with endpoint metadata, script length, instruct length, and short script/instruct previews. Set `TTS_VOICE_DESIGN_LOG_PAYLOADS=true` in the bot `.env` to print the full script and full `instruct` payload before the request is sent.
+
+The Qwen3-TTS wrapper also logs each request's inferred mode, text length, instruct length, active model, and generation timing. Set `TOMORI_TTS_LOG_PAYLOADS=1` before starting `server.py` to print the full request text and instruct prompt in the wrapper logs; otherwise it prints previews controlled by `TOMORI_TTS_LOG_PREVIEW_CHARS`.
+
+```powershell
+$env:TOMORI_TTS_LOG_PAYLOADS = "1"
+python servers\tts\qwen3tts\server.py --mode auto
+```
+
 When vLLM-Omni or another stable hosted serving path supports this model, prefer documenting that as the production path and keep this wrapper as a reference implementation.

@@ -264,7 +264,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
           "- Users can also ask you to speak or say something out loud (triggers the voice message tool)\n\n";
       } else if (!voiceEnabled) {
         capabilitiesContent +=
-          "Voice messages are **disabled** by server configuration. An admin can re-enable with `/config tools manage`.\n\n";
+          "Voice messages are **disabled** by server configuration. An admin can re-enable with `/capabilities manage`.\n\n";
       } else {
         capabilitiesContent +=
           "Voice messages are not configured for this persona. An admin can assign a voice with `/config speech voice-assign`.\n\n";
@@ -447,17 +447,17 @@ export class ReviewCapabilitiesTool extends BaseTool {
       if (!config.imagegen_enabled)
         disabledFeatures.push({
           feature: "image generation",
-          command: "/config tools manage (permission: imagegen)",
+          command: "/capabilities manage (permission: imagegen)",
         });
       if (!config.videogen_enabled)
         disabledFeatures.push({
           feature: "video generation",
-          command: "/config tools manage (permission: videogen)",
+          command: "/capabilities manage (permission: videogen)",
         });
       if (!config.thread_creation_enabled)
         disabledFeatures.push({
           feature: "thread creation",
-          command: "/config tools manage (permission: threadcreation)",
+          command: "/capabilities manage (permission: threadcreation)",
         });
       if (!config.sticker_usage_enabled)
         disabledFeatures.push({
@@ -666,7 +666,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         settingsContent += "Image generation is enabled but no diffusion model is set.\n";
         settingsContent += "- Configure with `/config model image` to activate\n\n";
       } else {
-        settingsContent += "Image generation is **disabled**. Enable with `/config tools manage`.\n\n";
+        settingsContent += "Image generation is **disabled**. Enable with `/capabilities manage`.\n\n";
       }
 
       // 6b-1b. Video Generation Configuration
@@ -679,7 +679,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         settingsContent += "Video generation is enabled but no video model is set.\n";
         settingsContent += "- Configure with `/config model video` to activate\n\n";
       } else {
-        settingsContent += "Video generation is **disabled**. Enable with `/config tools manage`.\n\n";
+        settingsContent += "Video generation is **disabled**. Enable with `/capabilities manage`.\n\n";
       }
 
       // 6b-2. Voice System Configuration
@@ -704,7 +704,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         settingsContent += `- Assign a voice with \`/config speech voice-assign\`\n\n`;
       } else {
         settingsContent += `Voice messages are **disabled** by server configuration.\n`;
-        settingsContent += `- Re-enable with \`/config tools manage\`\n\n`;
+        settingsContent += `- Re-enable with \`/capabilities manage\`\n\n`;
       }
 
       // 6b-3. SillyTavern Preset Configuration

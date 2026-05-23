@@ -5,11 +5,17 @@ import { stripTtsUnsupportedEmojiAttempts } from "@/utils/text/emojiHelper";
 import { log } from "@/utils/misc/logger";
 import type { TtsCloneErrorKind, TtsCloneResult } from "@/providers/custom/styles/ttsCloningAdapter";
 
+function isEnabledEnv(value: string | undefined): boolean {
+  return value === "true" || value === "1";
+}
+
 /** Timeout for /synthesize requests, shared with clone-style local TTS. */
 const TTS_VOICE_DESIGN_TIMEOUT_MS =
   Number.parseInt(process.env.TTS_CLONE_TIMEOUT_MS ?? "", 10) > 0
     ? Number.parseInt(process.env.TTS_CLONE_TIMEOUT_MS ?? "", 10)
     : 120_000;
+const TTS_VOICE_DESIGN_LOG_PAYLOADS = isEnabledEnv(process.env.TTS_VOICE_DESIGN_LOG_PAYLOADS);
+const TTS_VOICE_DESIGN_LOG_PREVIEW_CHARS = 240;
 
 /** Regex matching any bracket-tag in the form [content]. */
 const ANY_BRACKET_TAG_REGEX = /\[([^\]\r\n]{1,40})\]/g;
@@ -80,6 +86,12 @@ function stringifyErrorDetail(detail: unknown): string | null {
   }
 }
 
+function previewForLog(text: string): string {
+  const escaped = text.replace(/\r/g, "\\r").replace(/\n/g, "\\n");
+  if (TTS_VOICE_DESIGN_LOG_PAYLOADS || escaped.length <= TTS_VOICE_DESIGN_LOG_PREVIEW_CHARS) return escaped;
+  return `${escaped.slice(0, TTS_VOICE_DESIGN_LOG_PREVIEW_CHARS)}...`;
+}
+
 /**
  * Prepares text for instruct/voice-design TTS endpoints.
  *
@@ -138,15 +150,16 @@ export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignR
     };
   }
 
+  const instruct = cleanedVoiceInstructions
+    ? `${cleanedDesignPrompt}\n\nFor this message only: ${cleanedVoiceInstructions}`
+    : cleanedDesignPrompt;
   const body: Record<string, unknown> = {
     text: processedScript,
     // VoiceDesign requests deliberately omit ref_audio/ref_text. Some FastAPI
     // wrappers type those fields as optional strings but still reject explicit
     // JSON null, and omitting unused clone fields makes the request shape the
     // server's auto mode can reliably distinguish from voice cloning.
-    instruct: cleanedVoiceInstructions
-      ? `${cleanedDesignPrompt}\n\nFor this message only: ${cleanedVoiceInstructions}`
-      : cleanedDesignPrompt,
+    instruct,
   };
 
   const endpointUrl = endpoint.endpoint_url.replace(/\/+$/, "");
@@ -156,6 +169,17 @@ export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignR
   }
 
   let response: Response;
+  const requestStartedAt = Date.now();
+  log.info(
+    `[TtsVoiceDesign] Sending /synthesize | endpoint="${endpoint.display_name}" label="${endpoint.label}" url="${endpointUrl}" mode=${getTtsVoiceMode(endpoint)} scriptChars=${processedScript.length} instructChars=${instruct.length} oneOffInstructionChars=${cleanedVoiceInstructions.length} timeoutMs=${TTS_VOICE_DESIGN_TIMEOUT_MS} payloadLog=${TTS_VOICE_DESIGN_LOG_PAYLOADS ? "full" : "preview"}`,
+  );
+  log.info(
+    `[TtsVoiceDesign] Script ${TTS_VOICE_DESIGN_LOG_PAYLOADS ? "full" : "preview"}: ${previewForLog(processedScript)}`,
+  );
+  log.info(
+    `[TtsVoiceDesign] Instruct ${TTS_VOICE_DESIGN_LOG_PAYLOADS ? "full" : "preview"}: ${previewForLog(instruct)}`,
+  );
+
   try {
     const abortController = new AbortController();
     const timer = setTimeout(() => abortController.abort(), TTS_VOICE_DESIGN_TIMEOUT_MS);
@@ -171,7 +195,11 @@ export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignR
     }
   } catch (error) {
     const isTimeout = error instanceof Error && error.name === "AbortError";
-    log.warn(`[TtsVoiceDesign] Request to ${endpointUrl}/synthesize ${isTimeout ? "timed out" : "failed"}`, error);
+    const elapsedMs = Date.now() - requestStartedAt;
+    log.warn(
+      `[TtsVoiceDesign] Request to ${endpointUrl}/synthesize ${isTimeout ? "timed out" : "failed"} after ${elapsedMs}ms`,
+      error,
+    );
     return {
       success: false,
       errorKind: (isTimeout ? "timeout" : "request_failed") satisfies TtsCloneErrorKind,
@@ -191,6 +219,9 @@ export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignR
     log.warn(`[TtsVoiceDesign] ${endpointUrl}/synthesize returned error: ${errorDetails}`);
     return { success: false, errorKind: "request_failed", details: errorDetails };
   }
+  log.info(
+    `[TtsVoiceDesign] /synthesize responded status=${response.status} contentType="${response.headers.get("content-type") ?? "unknown"}" elapsedMs=${Date.now() - requestStartedAt}`,
+  );
 
   const rawContentType = response.headers.get("content-type") ?? "audio/wav";
   const contentType = rawContentType.split(";")[0].trim();

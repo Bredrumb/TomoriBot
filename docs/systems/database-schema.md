@@ -56,12 +56,12 @@ All SQL is inlined as `private` methods directly on the owning Repository class.
 
 - `server_chat_configs` — `/config humanizer`, `/config message-fetch-limit`, `/model` parameters, `cascade_limit`, `match_limit`, `context_note`, `context_note_depth`
 - `server_notice_embeds_configs` — `/config notice-embeds visibility`
-- `server_member_permissions_configs` — `/server member-permissions`
+- `server_member_permissions_configs` — `/server member-permissions`; `/capabilities manage` also writes `self_teaching_enabled` and `personal_memories_enabled`
 - `server_channel_scope_configs` — `/server rp-channels`, `/server private-channels`, `/server crosschannel-blocklist`, thought-log channel
 - `server_welcome_configs` — `/server welcome-channel`
 - `server_trigger_behavior_configs` — `/server always-reply`, `/server deliberate-trigger-mode`, cooldown settings (`ServerScheduleRepository`)
 - `server_auto_trigger_configs` — `/server auto-trigger` channels + threshold (`ServerScheduleRepository`)
-- `server_capabilities_configs` — `/capabilities manage`, `/capabilities toggle`
+- `server_capabilities_configs` — `/capabilities manage` feature/tool toggles, `/capabilities toggle`
 - `server_novelai_imagegen_configs` — `/novelai` image parameters, `nai_style_tags`, `nai_negative_tags`, `nai_diffusion_model_id`
 - `server_nsfw_configs` — `/nsfw` jailbreak toggles
 - `server_speech_configs` — `/speech` Chatterbox parameters, `chatterbox_turbo_enabled`, `chatterbox_cfg_weight`, `chatterbox_exaggeration`
@@ -190,6 +190,7 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 - `server_novelai_imagegen_configs.nai_negative_tags` stores server-wide NovelAI negative tags; an empty array falls back to the `NAI_IMAGE_NEGATIVE_PROMPT` env value.
 - `server_novelai_imagegen_configs.nai_diffusion_model_id` stores the dedicated NovelAI image-model selection for `generate_image_nai`; `NULL` means NovelAI image generation is disabled until a NovelAI model is explicitly selected again.
 - `server_novelai_imagegen_configs.nai_sampler`, `nai_steps`, `nai_scale`, `nai_noise_schedule`, and `nai_cfg_rescale` store optional server overrides for NovelAI image generation params; `NULL` means use the env fallback.
+- `server_member_permissions_configs.self_teaching_enabled` and `server_member_permissions_configs.personal_memories_enabled` are exposed in `/capabilities manage` because they gate core bot behavior, but they remain in the member-permissions split table with the other teaching/privacy toggles.
 - `server_capabilities_configs.videogen_enabled` gates both slash-command and tool-driven video generation exposure. The DB default is `false`, so video generation starts disabled until explicitly enabled.
 - `persona_context_note_configs.context_note` stores a per-persona author's note. Takes priority over `server_chat_configs.context_note` at inference when non-null.
 - `persona_context_note_configs.context_note_depth` stores the injection depth for the persona-specific note, using the same semantics as `server_chat_configs.context_note_depth`.

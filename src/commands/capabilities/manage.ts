@@ -11,12 +11,17 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
-import type { UserRow, ErrorContext, AssembledServerConfig } from "@/types/db/schema";
+import type {
+  UserRow,
+  ErrorContext,
+  AssembledServerConfig,
+  ServerCapabilitiesConfigRow,
+  ServerMemberPermissionsConfigRow,
+} from "@/types/db/schema";
 import { configRepository } from "@/utils/db/repositories";
 import { hasOptApiKey } from "@/utils/security/crypto";
 import { ELEVENLABS_SERVICE_NAME } from "@/utils/audio/elevenLabsAccount";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
-import type { ServerCapabilitiesConfigsRow } from "@/utils/db/repositories/ConfigRepository";
 
 const PERMISSIONS_MAX_OPTIONS_PER_GROUP = 10;
 
@@ -30,15 +35,20 @@ const PERMISSIONS_CHECKBOX_ID = "config_permissions_checkbox";
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("manage").setDescription(localizer("en-US", "commands.capabilities.manage.description"));
 
+type BooleanColumn<T> = {
+  [K in keyof T]-?: T[K] extends boolean ? K : never;
+}[keyof T];
+
+type CapabilityColumn = BooleanColumn<ServerCapabilitiesConfigRow>;
+type MemberPermissionColumn = BooleanColumn<ServerMemberPermissionsConfigRow>;
+
 /**
  * Defines all configurable permissions for the checkbox modal.
- * Each entry maps a checkbox value to its DB column and locale keys.
+ * Each entry maps a checkbox value to its owning split config table.
  */
-interface PermissionDefinition {
+interface PermissionDefinitionBase {
   /** Value used as the checkbox option identifier */
   value: string;
-  /** The split server config column to update */
-  dbColumn: string;
   /** Locale key for the option label */
   labelKey: string;
   /** Locale key for the short option description shown in the checkbox */
@@ -49,9 +59,36 @@ interface PermissionDefinition {
   requiresElevenLabs?: boolean;
 }
 
+type PermissionDefinition =
+  | (PermissionDefinitionBase & {
+      table: "memberPermissions";
+      /** The server_member_permissions_configs column to update */
+      dbColumn: MemberPermissionColumn;
+    })
+  | (PermissionDefinitionBase & {
+      table: "capabilities";
+      /** The server_capabilities_configs column to update */
+      dbColumn: CapabilityColumn;
+    });
+
+type PermissionChange =
+  | {
+      table: "memberPermissions";
+      dbColumn: MemberPermissionColumn;
+      isEnabled: boolean;
+      label: string;
+    }
+  | {
+      table: "capabilities";
+      dbColumn: CapabilityColumn;
+      isEnabled: boolean;
+      label: string;
+    };
+
 const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   {
     value: "selfteaching",
+    table: "memberPermissions",
     dbColumn: "self_teaching_enabled",
     labelKey: "commands.capabilities.manage.selfteaching_option",
     descKey: "commands.capabilities.manage.selfteaching_desc",
@@ -59,6 +96,7 @@ const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   },
   {
     value: "personalization",
+    table: "memberPermissions",
     dbColumn: "personal_memories_enabled",
     labelKey: "commands.capabilities.manage.personalization_option",
     descKey: "commands.capabilities.manage.personalization_desc",
@@ -66,6 +104,7 @@ const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   },
   {
     value: "emojiusage",
+    table: "capabilities",
     dbColumn: "emoji_usage_enabled",
     labelKey: "commands.capabilities.manage.emojiusage_option",
     descKey: "commands.capabilities.manage.emojiusage_desc",
@@ -73,6 +112,7 @@ const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   },
   {
     value: "stickerusage",
+    table: "capabilities",
     dbColumn: "sticker_usage_enabled",
     labelKey: "commands.capabilities.manage.stickerusage_option",
     descKey: "commands.capabilities.manage.stickerusage_desc",
@@ -80,6 +120,7 @@ const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   },
   {
     value: "websearch",
+    table: "capabilities",
     dbColumn: "web_search_enabled",
     labelKey: "commands.capabilities.manage.websearch_option",
     descKey: "commands.capabilities.manage.websearch_desc",
@@ -87,6 +128,7 @@ const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   },
   {
     value: "managemessage",
+    table: "capabilities",
     dbColumn: "manage_message_enabled",
     labelKey: "commands.capabilities.manage.managemessage_option",
     descKey: "commands.capabilities.manage.managemessage_desc",
@@ -94,6 +136,7 @@ const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   },
   {
     value: "threadcreation",
+    table: "capabilities",
     dbColumn: "thread_creation_enabled",
     labelKey: "commands.capabilities.manage.threadcreation_option",
     descKey: "commands.capabilities.manage.threadcreation_desc",
@@ -101,6 +144,7 @@ const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   },
   {
     value: "imagegen",
+    table: "capabilities",
     dbColumn: "imagegen_enabled",
     labelKey: "commands.capabilities.manage.imagegen_option",
     descKey: "commands.capabilities.manage.imagegen_desc",
@@ -108,6 +152,7 @@ const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   },
   {
     value: "videogen",
+    table: "capabilities",
     dbColumn: "videogen_enabled",
     labelKey: "commands.capabilities.manage.videogen_option",
     descKey: "commands.capabilities.manage.videogen_desc",
@@ -115,6 +160,7 @@ const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   },
   {
     value: "voicemessage",
+    table: "capabilities",
     dbColumn: "voice_message_enabled",
     labelKey: "commands.capabilities.manage.voicemessage_option",
     descKey: "commands.capabilities.manage.voicemessage_desc",
@@ -237,21 +283,28 @@ export async function execute(
         newlyEnabled.add(selectedValue);
       }
     }
-    const changes: Array<{
-      dbColumn: string;
-      isEnabled: boolean;
-      label: string;
-    }> = [];
+    const changes: PermissionChange[] = [];
 
     for (const def of activeDefinitions) {
       const wasEnabled = def.getState(tomoriState.config);
       const willBeEnabled = newlyEnabled.has(def.value);
       if (wasEnabled !== willBeEnabled) {
-        changes.push({
-          dbColumn: def.dbColumn,
-          isEnabled: willBeEnabled,
-          label: localizer(locale, def.labelKey),
-        });
+        const label = localizer(locale, def.labelKey);
+        if (def.table === "memberPermissions") {
+          changes.push({
+            table: def.table,
+            dbColumn: def.dbColumn,
+            isEnabled: willBeEnabled,
+            label,
+          });
+        } else {
+          changes.push({
+            table: def.table,
+            dbColumn: def.dbColumn,
+            isEnabled: willBeEnabled,
+            label,
+          });
+        }
       }
     }
 
@@ -265,40 +318,69 @@ export async function execute(
       return;
     }
 
-    // 8. Apply each changed permission to the database.
+    // 8. Apply changed permissions to the owning split config tables.
+    const memberPermissionsPatch: Partial<ServerMemberPermissionsConfigRow> = {};
+    const capabilitiesPatch: Partial<ServerCapabilitiesConfigRow> = {};
     for (const change of changes) {
-      const patch: Partial<ServerCapabilitiesConfigsRow> = {
-        [change.dbColumn as keyof ServerCapabilitiesConfigsRow]: change.isEnabled,
-      };
-      const updated = await configRepository.updateCapabilitiesConfig(tomoriState.server_id, patch);
-
-      if (!updated) {
-        const context: ErrorContext = {
-          personaId: tomoriState.persona_id,
-          serverId: tomoriState.server_id,
-          userId: userData.user_id,
-          errorType: "DatabaseUpdateError",
-          metadata: {
-            command: "config permissions",
-            guildId: interaction.guild?.id ?? interaction.user.id,
-            dbColumn: change.dbColumn,
-            isEnabled: change.isEnabled,
-            targetTable: "server_capabilities_configs",
-          },
-        };
-        await log.error(
-          `Failed to update permission column: ${change.dbColumn}`,
-          new Error("Database update returned no rows"),
-          context,
-        );
-
-        await replyInfoEmbed(modalInteraction, locale, {
-          titleKey: "general.errors.update_failed_title",
-          descriptionKey: "general.errors.update_failed_description",
-          color: ColorCode.ERROR,
-        });
-        return;
+      if (change.table === "memberPermissions") {
+        memberPermissionsPatch[change.dbColumn] = change.isEnabled;
+      } else {
+        capabilitiesPatch[change.dbColumn] = change.isEnabled;
       }
+    }
+
+    const updateTargets: Array<{
+      tableName: "server_member_permissions_configs" | "server_capabilities_configs";
+      columns: string[];
+    }> = [];
+
+    const memberPermissionColumns = Object.keys(memberPermissionsPatch);
+    if (memberPermissionColumns.length > 0) {
+      updateTargets.push({
+        tableName: "server_member_permissions_configs",
+        columns: memberPermissionColumns,
+      });
+    }
+
+    const capabilityColumns = Object.keys(capabilitiesPatch);
+    if (capabilityColumns.length > 0) {
+      updateTargets.push({
+        tableName: "server_capabilities_configs",
+        columns: capabilityColumns,
+      });
+    }
+
+    const updated = await configRepository.updateCapabilitiesAndMemberPermissionsConfig(tomoriState.server_id, {
+      capabilities: capabilitiesPatch,
+      memberPermissions: memberPermissionsPatch,
+    });
+
+    if (!updated) {
+      const context: ErrorContext = {
+        personaId: tomoriState.persona_id,
+        serverId: tomoriState.server_id,
+        userId: userData.user_id,
+        errorType: "DatabaseUpdateError",
+        metadata: {
+          command: "capabilities manage",
+          guildId: interaction.guild?.id ?? interaction.user.id,
+          updateTargets,
+        },
+      };
+      await log.error(
+        `Failed to update capability config columns: ${updateTargets
+          .map((target) => `${target.tableName}.${target.columns.join(",")}`)
+          .join("; ")}`,
+        new Error("Database update returned no rows"),
+        context,
+      );
+
+      await replyInfoEmbed(modalInteraction, locale, {
+        titleKey: "general.errors.update_failed_title",
+        descriptionKey: "general.errors.update_failed_description",
+        color: ColorCode.ERROR,
+      });
+      return;
     }
 
     // 9. Invalidate cache so next message picks up the fresh config
@@ -342,12 +424,12 @@ export async function execute(
       personaId: personaIdForError,
       errorType: "CommandExecutionError",
       metadata: {
-        command: "config permissions",
+        command: "capabilities manage",
         guildId: interaction.guild?.id ?? interaction.user.id,
         executorDiscordId: interaction.user.id,
       },
     };
-    await log.error(`Error executing /config tools manage for user ${userData.user_disc_id}`, error as Error, context);
+    await log.error(`Error executing /capabilities manage for user ${userData.user_disc_id}`, error as Error, context);
 
     // 12. Inform user of unknown error
     // Use modalInteraction (auto-deferred) if available since the original

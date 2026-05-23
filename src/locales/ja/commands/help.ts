@@ -32,7 +32,7 @@ export default {
       labels_field: `ラベルと削除`,
       labels_value: `1つのラベルは対応する全機能をまとめたカスタムプロバイダーバンドルです。{server_remove_command} と {personal_remove_command} はチェックを外した機能だけ削除します。{server_provider_remove_command} と {personal_provider_remove_command} はそのラベル全体を削除します。`,
       comfyui_page1_title: `ComfyUI セットアップ`,
-      comfyui_page1_description: `このガイドでは、ComfyUI がすでにインストール済みかつ起動中である前提で進めます。1ページ目では、\`/config custom-endpoint add\` または \`/personal custom-endpoint add\` まで到達する最小構成を説明します。または、GitHubリポジトリにあるそのまま使える[ComfyUIワークフロー](https://github.com/Bredrumb/TomoriBot/tree/main/scripts/comfyui-workflows)を使用することもできます。`,
+      comfyui_page1_description: `このガイドでは、ComfyUI がすでにインストール済みかつ起動中である前提で進めます。1ページ目では、\`/config custom-endpoint add\` または \`/personal custom-endpoint add\` まで到達する最小構成を説明します。または、GitHubリポジトリにあるそのまま使える[ComfyUIワークフロー](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows)を使用することもできます。`,
       comfyui_page1_workflow_field: `1. ワークフローを作る`,
       comfyui_page1_workflow_value: `まず ComfyUI 側でワークフローを作成し、正常に動くことを確認してください。画像用 MVP では、TomoriBot が完成ファイルを取得できるよう最後を \`SaveImage\` で終える必要があります。最小構成の画像グラフは通常、\`CheckpointLoaderSimple\` -> positive/negative \`CLIPTextEncode\` -> \`EmptyLatentImage\` -> \`KSampler\` -> \`VAEDecode\` -> \`SaveImage\` です。`,
       comfyui_page1_placeholders_field: `2. プレースホルダーを入れる`,
@@ -70,7 +70,7 @@ export default {
       description: `音声生成の設定方法を確認します。`,
       engine_description: `音声エンジンのガイドを選択します。`,
       docs_title: `詳細ドキュメント`,
-      docs_description: `コピー用のセットアップ手順とラッパーの注意点については、GitHub上の[TTSドキュメント](https://github.com/Bredrumb/TomoriBot/tree/main/docs/integrations/tts)と[スクリプトのREADME](https://github.com/Bredrumb/TomoriBot/blob/main/scripts/tts/README.md)を確認してください。`,
+      docs_description: `コピー用のセットアップ手順とラッパーの注意点については、GitHub上の[TTSドキュメント](https://github.com/Bredrumb/TomoriBot/tree/main/docs/integrations/tts)と[サーバーのREADME](https://github.com/Bredrumb/TomoriBot/blob/main/servers/tts/README.md)を確認してください。`,
       overview: {
         title: `音声生成の概要`,
         description: `音声エンドポイントを使うと、ローカル音声クローンまたはElevenLabsでDiscordボイスメッセージを送信できます。ローカルクローンの場合、どの音声形式でも自動でモノラルWAVに変換されます。BGMなしの10〜20秒のクリップを推奨します。`,
@@ -91,7 +91,7 @@ ElevenLabs: {elevenlabs} を実行し、追加ペルソナは後で {voice_assig
         steps_title: `設定手順`,
         steps_description: `**前提条件**: Python 3.10+、CUDA 12.x + ドライバー（任意、GPU 用）
 
-1. GitHubリポジトリからマシンに [TTSスクリプト](https://github.com/Bredrumb/TomoriBot/tree/main/scripts/tts) をダウンロードします。
+1. GitHubリポジトリからマシンに [TTSサーバー](https://github.com/Bredrumb/TomoriBot/tree/main/servers/tts) をダウンロードします。
 2. ダウンロードした \`chatterbox\` フォルダに移動し、Python \`.venv\` を作成して有効化します。
 3. numpy を先にインストールします: \`pip install numpy\`、その後 \`requirements.txt\` をインストールします。
 4. *(GPU のみ)* PyTorch を再インストールします: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
@@ -108,7 +108,7 @@ ElevenLabs: {elevenlabs} を実行し、追加ペルソナは後で {voice_assig
 • SoX をシステムにインストール（Windows: \`scoop install sox\`、macOS: \`brew install sox\`）
 • CUDA 12.x + ドライバー（任意、GPU 用）
 
-1. GitHubからマシンに [TTSスクリプト](https://github.com/Bredrumb/TomoriBot/tree/main/scripts/tts) をダウンロードします。
+1. GitHubからマシンに [TTSサーバー](https://github.com/Bredrumb/TomoriBot/tree/main/servers/tts) をダウンロードします。
 2. ダウンロードした \`qwen3tts\` フォルダに移動し、Python \`.venv\` を作成して有効化します。
 3. \`requirements.txt\` をインストールします。
 4. *(GPU)* PyTorch を再インストール: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
@@ -123,7 +123,7 @@ ElevenLabs: {elevenlabs} を実行し、追加ペルソナは後で {voice_assig
         steps_title: `設定手順`,
         steps_description: `**前提条件**: Python 3.10+、CUDA 12.x + ドライバー（任意、GPU 用）
 
-1. GitHubからマシンに [TTSスクリプト](https://github.com/Bredrumb/TomoriBot/tree/main/scripts/tts) をダウンロードします。
+1. GitHubからマシンに [TTSサーバー](https://github.com/Bredrumb/TomoriBot/tree/main/servers/tts) をダウンロードします。
 2. ダウンロードした \`irodoritts\` フォルダに移動し、Python \`.venv\` を作成して有効化します。
 3. \`requirements.txt\` をインストールします。
 4. パッチスクリプトで irodori-tts をインストール（上流のバグ対処）:
@@ -145,12 +145,12 @@ Linux/macOS: \`bash install-irodori.sh\`
       description: `音声文字起こしの設定方法を確認します。`,
       engine_description: `文字起こしエンジンのガイドを選択します。`,
       docs_title: `詳細ドキュメント`,
-      docs_description: `ローカルサーバー設定の詳細については、GitHub上の[Transcriptionドキュメント](https://github.com/Bredrumb/TomoriBot/tree/main/docs/integrations/transcription)と[STTのREADME](https://github.com/Bredrumb/TomoriBot/blob/main/scripts/stt/README.md)を確認してください。`,
+      docs_description: `ローカルサーバー設定の詳細については、GitHub上の[Transcriptionドキュメント](https://github.com/Bredrumb/TomoriBot/tree/main/docs/integrations/transcription)と[STTのREADME](https://github.com/Bredrumb/TomoriBot/blob/main/servers/stt/README.md)を確認してください。`,
       overview: {
         title: `文字起こしの概要`,
         description: `文字起こしエンドポイントは、音声添付を内部会話コンテキスト用のテキストに変換します。見える形で投稿する字幕は {speech_transcripts} で別途制御します。`,
         steps_title: `推奨経路`,
-        steps_description: `まず WhisperX を推奨します。\`scripts/stt\` の参照サーバーを起動し、{custom_endpoint_add} で登録してから {model_transcription} で選択します。ElevenLabs ユーザーは {elevenlabs} を実行します。
+        steps_description: `まず WhisperX を推奨します。\`servers/stt\` の参照サーバーを起動し、{custom_endpoint_add} で登録してから {model_transcription} で選択します。ElevenLabs ユーザーは {elevenlabs} を実行します。
 
 **エンジン別設定ガイド:**
 • WhisperX → \`/help transcription engine:WhisperX\`
@@ -166,7 +166,7 @@ Linux/macOS: \`bash install-irodori.sh\`
 • FFmpeg をシステムにインストール（必須）
 • CUDA 12.x + ドライバー（任意、GPU 高速化用）
 
-1. GitHubからマシンに [STTスクリプト](https://github.com/Bredrumb/TomoriBot/tree/main/scripts/stt) をダウンロードします。
+1. GitHubからマシンに [STTサーバー](https://github.com/Bredrumb/TomoriBot/tree/main/servers/stt) をダウンロードします。
 2. ダウンロードした \`stt\` フォルダに移動し、Python \`.venv\` を作成して有効化します。
 3. \`requirements-whisperx.txt\` をインストールします。
 4. *(GPU)* CUDA 対応 PyTorch を再インストール:

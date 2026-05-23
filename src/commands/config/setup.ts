@@ -573,7 +573,7 @@ export async function execute(
       // NovelAI auto-disable: flip emoji and sticker usage off immediately after setup.
       // The schema defaults both to true, but NovelAI's token budget makes them
       // counterproductive — they consume context without the model being able to use them.
-      // The user is notified in the success embed and can re-enable via /config tools manage.
+      // The user is notified in the success embed and can re-enable via /capabilities manage.
       // Load the newly-created TomoriState once and reuse for both the NovelAI
       // capability auto-disable and the emoji/sticker sync below — avoids a
       // duplicate cache fetch and gives us the internal server_id.

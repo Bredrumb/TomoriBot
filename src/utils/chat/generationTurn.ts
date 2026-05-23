@@ -1,12 +1,15 @@
 import type { FallbackEntry, LlmRow, TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
+import type { ToolContext } from "@/types/tool/interfaces";
 import { getCachedChannelLlm } from "@/utils/cache/channelLlmCache";
 import { getGeminiTokenLimits } from "@/utils/cache/geminiCapabilityCache";
 import { getNovelAITokenLimits } from "@/utils/cache/novelaiCapabilityCache";
 import { getCachedContextTokens, refreshNovelAISubscription } from "@/utils/cache/novelaiSubscriptionCache";
 import { getOpenRouterTokenLimits, isOpenRouterCapabilityCacheReady } from "@/utils/cache/openrouterCapabilityCache";
 import { llmProviderRepo } from "@/utils/db/repositories";
+import { type FallbackNoticeAttempt, sendFallbackModelUsageNotice } from "@/utils/discord/fallbackModelNotice";
+import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { log } from "@/utils/misc/logger";
 import { getProviderForTomori, ProviderFactory } from "@/utils/provider/providerFactory";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
@@ -32,11 +35,6 @@ interface GenerationAttempt {
   rotationKeyId: number | null;
 }
 
-interface FallbackFailure {
-  modelCodename: string;
-  errorCode: string;
-}
-
 const OPENROUTER_LENGTH_EMPTY_RETRY_DROP_PAIRS = parseIntegerEnvFlag(
   process.env.OPENROUTER_LENGTH_EMPTY_RETRY_DROP_PAIRS,
   2,
@@ -54,10 +52,11 @@ export async function runGenerationTurn(
 
   try {
     const attempts = await buildGenerationAttempts(context);
-    const failures: FallbackFailure[] = [];
+    const failures: FallbackNoticeAttempt[] = [];
     const baseContextItems = context.contextItems;
 
     for (const [index, attempt] of attempts.entries()) {
+      const hasPendingModelFallback = index < attempts.length - 1;
       context.tomoriState = attempt.tomoriState;
       context.contextItems = await prepareProviderContextItems({
         contextItems: baseContextItems,
@@ -69,9 +68,10 @@ export async function runGenerationTurn(
 
       // Key rotation inner loop: try multiple keys for this attempt before giving up.
       let rotationKeyId = attempt.rotationKeyId;
-      const excludedKeyIds = new Set<number>(rotationKeyId != null ? [rotationKeyId] : []);
+      const excludedKeyIds = new Set<number>();
       let result!: GenerationTurnResult;
       let keyAttemptCount = 0;
+      context.streamingContext.rotationKeyRetriesUsed = false;
 
       while (true) {
         keyAttemptCount++;
@@ -79,6 +79,11 @@ export async function runGenerationTurn(
           log.warn(`Exceeded MAX_KEY_ATTEMPTS (${MAX_KEY_ATTEMPTS}) for ${attempt.label}.`);
           break;
         }
+
+        const retryExcludedKeyIds = getRetryExcludedKeyIds(excludedKeyIds, rotationKeyId);
+        const hasFallbackKey = await hasAvailableRotationKey(attempt.tomoriState, retryExcludedKeyIds);
+        context.streamingContext.suppressUserErrors = hasFallbackKey || hasPendingModelFallback;
+        context.streamingContext.forceModelFallback = hasPendingModelFallback;
 
         result = await runToolLoop({
           context,
@@ -92,11 +97,10 @@ export async function runGenerationTurn(
           break;
         }
 
-        // On error: check if another rotation key is available before falling to model fallback.
-        const hasFallbackKey = await hasAvailableRotationKey(attempt.tomoriState, [...Array.from(excludedKeyIds)]);
         if (!hasFallbackKey) break;
 
         // Record error for the key that just failed, then rotate to the next one.
+        context.streamingContext.rotationKeyRetriesUsed = true;
         if (rotationKeyId != null) {
           const errorCode = extractErrorCode(result.streamResults.at(-1));
           const errorType = errorCode.includes("rate_limit") || errorCode.includes("429") ? "rate_limit" : "api_error";
@@ -114,13 +118,16 @@ export async function runGenerationTurn(
         );
       }
 
-      for (const streamResult of result.streamResults) {
-        await responseSink.emitStreamResult(streamResult);
-      }
-
       if (result.status !== "error" || index === attempts.length - 1) {
-        if (index > 0 && result.status !== "error") {
+        if (index > 0 && shouldSendFallbackNotice(context, result)) {
           log.info(`Fallback generation succeeded with ${attempt.label} after ${failures.length} failed attempt(s).`);
+          await sendFallbackNoticeIfNeeded(context, attempt, failures);
+        }
+        context.streamingContext.suppressUserErrors = false;
+        context.streamingContext.forceModelFallback = false;
+
+        if (result.status === "error") {
+          await emitStreamErrors(responseSink, result.streamResults);
         }
         await responseSink.finalize(result);
         return result;
@@ -137,9 +144,13 @@ export async function runGenerationTurn(
       streamResults: [],
       personaResponses: [],
     };
+    context.streamingContext.suppressUserErrors = false;
+    context.streamingContext.forceModelFallback = false;
     await responseSink.finalize(skipped);
     return skipped;
   } catch (error) {
+    context.streamingContext.suppressUserErrors = false;
+    context.streamingContext.forceModelFallback = false;
     await responseSink.emitError(error);
     const result: GenerationTurnResult = {
       status: "error",
@@ -154,16 +165,79 @@ export async function runGenerationTurn(
 async function buildGenerationAttempts(context: ChatTurnContext): Promise<GenerationAttempt[]> {
   const primaryState = await resolvePrimaryTomoriState(context);
   const attempts: GenerationAttempt[] = [await createAttempt("primary", primaryState)];
-  const fallbackEntries = primaryState.fallback_chain ?? [];
+  const fallbackEntries =
+    primaryState.fallback_chain ?? primaryState.fallback_llms?.map((model) => ({ kind: "llm" as const, model })) ?? [];
 
   for (const [index, entry] of fallbackEntries.entries()) {
-    const fallback = await createFallbackAttempt(primaryState, entry, index + 1);
-    if (fallback) {
-      attempts.push(fallback);
+    try {
+      const fallback = await createFallbackAttempt(primaryState, entry, index + 1);
+      if (fallback) {
+        attempts.push(fallback);
+      }
+    } catch (error) {
+      log.warn(`Skipping fallback ${index + 1}: failed to prepare provider config.`, error as Error);
     }
   }
 
   return attempts;
+}
+
+function getRetryExcludedKeyIds(excludedKeyIds: Set<number>, rotationKeyId: number | null): number[] {
+  const ids = new Set(excludedKeyIds);
+  if (rotationKeyId != null) {
+    ids.add(rotationKeyId);
+  }
+  return [...ids];
+}
+
+async function emitStreamErrors(responseSink: ChatResponseSink, streamResults: StreamResult[]): Promise<void> {
+  for (const streamResult of streamResults) {
+    if (streamResult.status === "error") {
+      await responseSink.emitStreamResult(streamResult);
+    }
+  }
+}
+
+async function sendFallbackNoticeIfNeeded(
+  context: ChatTurnContext,
+  attempt: GenerationAttempt,
+  failures: FallbackNoticeAttempt[],
+): Promise<void> {
+  if (context.isUserImpersonation || failures.length === 0) {
+    return;
+  }
+
+  await sendFallbackModelUsageNotice({
+    context: {
+      channel: context.channel as ToolContext["channel"],
+      client: context.client,
+      message: context.message,
+      tomoriState: context.tomoriState,
+      locale: context.locale,
+      provider: attempt.provider.getInfo().name,
+      webhook: context.responseTarget?.webhook,
+      personaUsername: context.responseTarget?.personaUsername,
+      personaAvatarUrl: context.responseTarget?.personaAvatarUrl,
+    },
+    failures,
+    successModel: attempt.successModel,
+  });
+}
+
+function shouldSendFallbackNotice(context: ChatTurnContext, result: GenerationTurnResult): boolean {
+  if (result.status !== "completed") {
+    return false;
+  }
+
+  if (!StreamOrchestrator.hasStopRequest(context.channel.id)) {
+    return true;
+  }
+
+  log.info(
+    `Skipping fallback model notice for channel ${context.channel.id} because a stop or follow-up interrupt is pending.`,
+  );
+  StreamOrchestrator.clearStopRequest(context.channel.id);
+  return false;
 }
 
 async function resolvePrimaryTomoriState(context: ChatTurnContext): Promise<TomoriState> {
