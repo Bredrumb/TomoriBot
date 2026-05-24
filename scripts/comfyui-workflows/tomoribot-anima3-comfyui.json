@@ -1626,14 +1626,14 @@
       "width": "{TOMORI_WIDTH}",
       "height": "{TOMORI_HEIGHT}",
       "batch_size": 1,
-      "color": 0
+      "color": "{TOMORI_OUTPAINT_UNDERPAINT_COLOR}"
     }
   },
   "303": {
     "class_type": "ImageCompositeMasked",
     "inputs": {
       "destination": [
-        "318",
+        "302",
         0
       ],
       "source": [

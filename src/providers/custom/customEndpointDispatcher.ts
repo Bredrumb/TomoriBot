@@ -1306,6 +1306,18 @@ function resolveComfyUiOutpaintBackgroundFeather(): number {
   );
 }
 
+function resolveComfyUiOutpaintUnderpaintColor(): number {
+  return Math.round(
+    clampNumber(
+      readOptionalNumberEnv("COMFYUI_OUTPAINT_UNDERPAINT_COLOR") ??
+        readOptionalNumberEnv("ANIMA3_OUTPAINT_UNDERPAINT_COLOR") ??
+        8421504,
+      0,
+      16777215,
+    ),
+  );
+}
+
 function resolveComfyUiOutpaintZoomScale(options: ComfyUiGenerationOptions, direction: string): number {
   const amountDefaults = getComfyUiOutpaintAmountDefaults(resolveComfyUiOutpaintAmount(options));
   const defaultScale = direction === "all" ? amountDefaults.zoomScaleAll : amountDefaults.zoomScaleOneSide;
@@ -2621,6 +2633,7 @@ function buildComfyUiPlaceholderMap(
     TOMORI_OUTPAINT_SUBJECT_MASK_GROW: resolveComfyUiOutpaintSubjectMaskGrow(),
     TOMORI_OUTPAINT_SUBJECT_MASK_FEATHER: resolveComfyUiOutpaintSubjectMaskFeather(),
     TOMORI_OUTPAINT_BACKGROUND_FEATHER: resolveComfyUiOutpaintBackgroundFeather(),
+    TOMORI_OUTPAINT_UNDERPAINT_COLOR: resolveComfyUiOutpaintUnderpaintColor(),
     TOMORI_OUTPAINT_EXTEND_UP_FACTOR: workflowOutpaintFactors.up,
     TOMORI_OUTPAINT_EXTEND_DOWN_FACTOR: workflowOutpaintFactors.down,
     TOMORI_OUTPAINT_EXTEND_LEFT_FACTOR: workflowOutpaintFactors.left,
@@ -3232,6 +3245,7 @@ export async function generateCustomImageViaEndpoint(params: {
             `outpaint_overlap=${diagnosticOutpaintLayout.overlap}`,
             `outpaint_preserve=${diagnosticOutpaintLayout.sourceScale < 1 ? "subject" : "inner_source"}`,
             `outpaint_background_preserve=${diagnosticOutpaintLayout.sourceScale < 1 ? "soft_inner_source" : "inner_source"}`,
+            `outpaint_underpaint=neutral`,
             `outpaint_extend_factors=${diagnosticWorkflowOutpaintFactors.up}/${diagnosticWorkflowOutpaintFactors.down}/${diagnosticWorkflowOutpaintFactors.left}/${diagnosticWorkflowOutpaintFactors.right}`,
             `outpaint_source_placement=${diagnosticOutpaintLayout.placedSourceX}x${diagnosticOutpaintLayout.placedSourceY}+${diagnosticOutpaintLayout.placedSourceWidth}x${diagnosticOutpaintLayout.placedSourceHeight}`,
             `outpaint_mask_source_rect=${diagnosticOutpaintLayout.maskSourceX}x${diagnosticOutpaintLayout.maskSourceY}+${diagnosticOutpaintLayout.maskSourceWidth}x${diagnosticOutpaintLayout.maskSourceHeight}`,
