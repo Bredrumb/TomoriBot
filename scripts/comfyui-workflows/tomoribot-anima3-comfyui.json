@@ -1779,14 +1779,14 @@
         0
       ],
       "source": [
-        "178",
+        "332",
         0
       ],
-      "x": "{TOMORI_OUTPAINT_SOURCE_X}",
-      "y": "{TOMORI_OUTPAINT_SOURCE_Y}",
+      "x": 0,
+      "y": 0,
       "resize_source": false,
       "mask": [
-        "323",
+        "333",
         0
       ]
     }
@@ -1989,6 +1989,15 @@
       "right": "{TOMORI_OUTPAINT_PAD_RIGHT}",
       "bottom": "{TOMORI_OUTPAINT_PAD_BOTTOM}",
       "feathering": "{TOMORI_OUTPAINT_PAD_FEATHER}"
+    }
+  },
+  "333": {
+    "class_type": "InvertMask",
+    "inputs": {
+      "mask": [
+        "332",
+        1
+      ]
     }
   }
 }
