@@ -16,6 +16,7 @@ type ComfyUiGenerationMode = "image" | "video";
 type ComfyUiInpaintMaskContent = "fill" | "latent_noise";
 type ComfyUiInpaintMode = "normal" | "extend" | "outpaint";
 type ComfyUiOutpaintStrategy = "edge_extend" | "zoom_out" | "full_canvas";
+type ComfyUiOutpaintAmount = "slight" | "moderate" | "large" | "dramatic";
 type ComfyUiClothingSegmentCategory =
   | "Hat"
   | "Hair"
@@ -65,6 +66,7 @@ interface ComfyUiGenerationOptions {
   inpaintPreset?: string | null;
   outpaint?: boolean | null;
   outpaintStrategy?: string | null;
+  outpaintAmount?: string | null;
   outpaintOverlap?: number | null;
   outpaintZoomScale?: number | null;
   inpaintExtendDirection?: string | null;
@@ -1151,12 +1153,70 @@ function isComfyUiOutpaint(options: Pick<ComfyUiGenerationOptions, "inpaintMode"
   return normalizeComfyUiInpaintMode(options) === "outpaint";
 }
 
+function normalizeComfyUiOutpaintAmount(value: string | null | undefined): ComfyUiOutpaintAmount | null {
+  const normalized = value?.trim().toLowerCase().replace(/[-\s]+/g, "_") ?? "";
+  if (!normalized) {
+    return null;
+  }
+  if (["slight", "small", "subtle", "little", "a_little", "tiny", "minimal"].includes(normalized)) {
+    return "slight";
+  }
+  if (["moderate", "medium", "normal", "default", "regular"].includes(normalized)) {
+    return "moderate";
+  }
+  if (["large", "wide", "strong", "more"].includes(normalized)) {
+    return "large";
+  }
+  if (["dramatic", "very_large", "huge", "extreme", "maximum", "max"].includes(normalized)) {
+    return "dramatic";
+  }
+  return null;
+}
+
+function inferComfyUiOutpaintAmount(prompt: string): ComfyUiOutpaintAmount | null {
+  if (/\b(?:a little|little bit|slightly|slight|subtle|small amount|tiny bit|just a bit|zoom out a bit)\b/i.test(prompt)) {
+    return "slight";
+  }
+  if (/\b(?:dramatic|huge|extreme|way out|far away|very wide|much wider|zoom way out)\b/i.test(prompt)) {
+    return "dramatic";
+  }
+  if (/\b(?:large amount|zoom out more|much more|wider view|wide view)\b/i.test(prompt)) {
+    return "large";
+  }
+  return null;
+}
+
+function resolveComfyUiOutpaintAmount(options: ComfyUiGenerationOptions): ComfyUiOutpaintAmount {
+  return (
+    normalizeComfyUiOutpaintAmount(options.outpaintAmount) ??
+    normalizeComfyUiOutpaintAmount(readOptionalStringEnv("COMFYUI_OUTPAINT_AMOUNT")) ??
+    normalizeComfyUiOutpaintAmount(readOptionalStringEnv("ANIMA3_OUTPAINT_AMOUNT")) ??
+    inferComfyUiOutpaintAmount(options.prompt) ??
+    "moderate"
+  );
+}
+
+function getComfyUiOutpaintAmountDefaults(amount: ComfyUiOutpaintAmount): { pixels: number; zoomScaleAll: number; zoomScaleOneSide: number } {
+  switch (amount) {
+    case "slight":
+      return { pixels: 96, zoomScaleAll: 0.9, zoomScaleOneSide: 0.92 };
+    case "large":
+      return { pixels: 256, zoomScaleAll: 0.74, zoomScaleOneSide: 0.82 };
+    case "dramatic":
+      return { pixels: 384, zoomScaleAll: 0.62, zoomScaleOneSide: 0.74 };
+    case "moderate":
+    default:
+      return { pixels: 160, zoomScaleAll: 0.84, zoomScaleOneSide: 0.88 };
+  }
+}
+
 function resolveComfyUiOutpaintPixels(options: ComfyUiGenerationOptions): number {
+  const amountDefaults = getComfyUiOutpaintAmountDefaults(resolveComfyUiOutpaintAmount(options));
   return clampNumber(
     options.inpaintExtendPixels ??
       readOptionalNumberEnv("COMFYUI_OUTPAINT_PIXELS") ??
       readOptionalNumberEnv("ANIMA3_OUTPAINT_PIXELS") ??
-      256,
+      amountDefaults.pixels,
     0,
     1024,
   );
@@ -1237,7 +1297,8 @@ function resolveComfyUiOutpaintSubjectMaskFeather(): number {
 }
 
 function resolveComfyUiOutpaintZoomScale(options: ComfyUiGenerationOptions, direction: string): number {
-  const defaultScale = direction === "all" ? 0.72 : 0.82;
+  const amountDefaults = getComfyUiOutpaintAmountDefaults(resolveComfyUiOutpaintAmount(options));
+  const defaultScale = direction === "all" ? amountDefaults.zoomScaleAll : amountDefaults.zoomScaleOneSide;
   return clampNumber(
     options.outpaintZoomScale ??
       readOptionalNumberEnv("COMFYUI_OUTPAINT_ZOOM_SCALE") ??
@@ -2527,6 +2588,7 @@ function buildComfyUiPlaceholderMap(
     TOMORI_OUTPAINT_EDGE_EXTEND: outpaintStrategy === "edge_extend",
     TOMORI_OUTPAINT_USE_CROP_STITCH: outpaintStrategy !== "full_canvas",
     TOMORI_OUTPAINT_ZOOM_OUT: outpaintStrategy === "zoom_out",
+    TOMORI_OUTPAINT_AMOUNT: resolveComfyUiOutpaintAmount(options),
     TOMORI_OUTPAINT_SOURCE_SCALE: outpaintLayout?.sourceScale ?? 1,
     TOMORI_OUTPAINT_OVERLAP: outpaintLayout?.overlap ?? 0,
     TOMORI_OUTPAINT_DIRECTION: extendDirection,
@@ -2904,6 +2966,7 @@ export async function generateCustomImageViaEndpoint(params: {
   inpaintPreset?: string | null;
   outpaint?: boolean | null;
   outpaintStrategy?: string | null;
+  outpaintAmount?: string | null;
   outpaintOverlap?: number | null;
   outpaintZoomScale?: number | null;
   inpaintExtendDirection?: string | null;
@@ -2928,6 +2991,7 @@ export async function generateCustomImageViaEndpoint(params: {
     inpaintPreset,
     outpaint,
     outpaintStrategy,
+    outpaintAmount,
     outpaintOverlap,
     outpaintZoomScale,
     inpaintExtendDirection,
@@ -2953,6 +3017,7 @@ export async function generateCustomImageViaEndpoint(params: {
       inpaintPreset,
       outpaint,
       outpaintStrategy,
+      outpaintAmount,
       outpaintOverlap,
       outpaintZoomScale,
       inpaintExtendDirection,
@@ -3027,6 +3092,7 @@ export async function generateCustomImageViaEndpoint(params: {
       inpaintPreset,
       outpaint,
       outpaintStrategy,
+      outpaintAmount,
       outpaintOverlap,
       outpaintZoomScale,
       inpaintExtendDirection,
@@ -3150,6 +3216,7 @@ export async function generateCustomImageViaEndpoint(params: {
       ...(diagnosticOutpaintLayout
         ? [
             `outpaint_strategy=${diagnosticOutpaintLayout.strategy}`,
+            `outpaint_amount=${resolveComfyUiOutpaintAmount(diagnosticOptions)}`,
             `outpaint_source_scale=${diagnosticOutpaintLayout.sourceScale}`,
             `outpaint_overlap=${diagnosticOutpaintLayout.overlap}`,
             `outpaint_preserve=${diagnosticOutpaintLayout.sourceScale < 1 ? "subject" : "inner_source"}`,

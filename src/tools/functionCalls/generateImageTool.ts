@@ -142,6 +142,12 @@ export class GenerateImageTool extends BaseTool {
           "Optional for outpainting: Use 'full_canvas' for NovelAI-style expanded-canvas inpainting when the ComfyUI workflow supports it. Use 'edge_extend' to preserve the original source scale and add pixels beyond one or more edges. Use 'zoom_out' only when the workflow supports placing the original image smaller inside a larger generated scene.",
         enum: ["full_canvas", "edge_extend", "zoom_out"],
       },
+      outpaint_amount: {
+        type: "string",
+        description:
+          "Optional preset for how much canvas to reveal during outpainting. Use 'slight' when the user asks to zoom out a little or only wants a small amount of extra context. Use 'moderate' for the default amount. Use 'large' for a clear wider/fuller view. Use 'dramatic' only for a very far zoom-out or huge expansion.",
+        enum: ["slight", "moderate", "large", "dramatic"],
+      },
       extend_direction: {
         type: "string",
         description:
@@ -900,6 +906,7 @@ export class GenerateImageTool extends BaseTool {
     const inpaintMode = outpaint ? "outpaint" : typeof args.inpaint_mode === "string" ? args.inpaint_mode : null;
     const rawOutpaintStrategy = typeof args.outpaint_strategy === "string" ? args.outpaint_strategy : null;
     const outpaintStrategy = outpaint ? this.resolveOutpaintStrategy(prompt, rawOutpaintStrategy) : rawOutpaintStrategy;
+    const outpaintAmount = typeof args.outpaint_amount === "string" ? args.outpaint_amount : null;
     const rawExtendDirection = typeof args.extend_direction === "string" ? args.extend_direction : null;
     const extendDirection = outpaint
       ? this.resolveOutpaintDirection(prompt, rawExtendDirection, outpaintStrategy)
@@ -1105,6 +1112,7 @@ export class GenerateImageTool extends BaseTool {
           clothingSegmentCategories: inpaint ? clothingSegmentCategories : null,
           outpaint: inpaint ? outpaint : null,
           outpaintStrategy: inpaint ? outpaintStrategy : null,
+          outpaintAmount: inpaint ? outpaintAmount : null,
           outpaintOverlap: inpaint ? outpaintOverlap : null,
           outpaintZoomScale: inpaint ? outpaintZoomScale : null,
           extendDirection: inpaint ? extendDirection : null,
@@ -1138,6 +1146,7 @@ export class GenerateImageTool extends BaseTool {
             inpaintMode,
             outpaint,
             outpaintStrategy,
+            outpaintAmount,
             outpaintOverlap,
             outpaintZoomScale,
             inpaintExtendDirection: extendDirection,
@@ -1168,6 +1177,7 @@ export class GenerateImageTool extends BaseTool {
               inpaintMode,
               outpaint,
               outpaintStrategy,
+              outpaintAmount,
               outpaintOverlap,
               outpaintZoomScale,
               inpaintExtendDirection: extendDirection,

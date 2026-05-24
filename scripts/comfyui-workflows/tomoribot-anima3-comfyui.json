@@ -1693,7 +1693,7 @@
         0
       ],
       "mask": [
-        "305",
+        "325",
         0
       ],
       "noise_mask": true
@@ -1707,7 +1707,7 @@
         2
       ],
       "mask": [
-        "305",
+        "325",
         0
       ]
     }
@@ -1756,7 +1756,7 @@
     "class_type": "MaskToImage",
     "inputs": {
       "mask": [
-        "305",
+        "325",
         0
       ]
     }
@@ -1911,6 +1911,39 @@
       ],
       "ff_value": [
         "320",
+        0
+      ],
+      "cond": [
+        "322",
+        3
+      ]
+    }
+  },
+  "324": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "304",
+        0
+      ],
+      "source": [
+        "321",
+        0
+      ],
+      "x": "{TOMORI_OUTPAINT_SOURCE_X}",
+      "y": "{TOMORI_OUTPAINT_SOURCE_Y}",
+      "operation": "subtract"
+    }
+  },
+  "325": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "324",
+        0
+      ],
+      "ff_value": [
+        "305",
         0
       ],
       "cond": [
