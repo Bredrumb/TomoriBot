@@ -204,6 +204,9 @@ export class ExportRepository {
           COALESCE(scc.send_message_limit, 0)                       AS send_message_limit,
           COALESCE(stbc.always_reply_enabled, false)                AS always_reply_enabled,
           COALESCE(stbc.deliberate_trigger_mode, false)             AS deliberate_trigger_mode,
+          COALESCE(stbc.deliberate_tool_mode, false)                AS deliberate_tool_mode,
+          stbc.deliberate_tool_context_turns                         AS deliberate_tool_context_turns,
+          COALESCE(stbc.deliberate_tool_triggers, '{}'::JSONB)      AS deliberate_tool_triggers,
           COALESCE(stbc.cooldown_type, 0)                           AS cooldown_type,
           COALESCE(stbc.cooldown_length, 5)                         AS cooldown_length,
           COALESCE(scsc.stm_privacy_bypass, false)                  AS stm_privacy_bypass,
@@ -224,6 +227,7 @@ export class ExportRepository {
           COALESCE(scac.tool_use_enabled, true)                     AS tool_use_enabled,
           COALESCE(smpc.prompt_snapshot_enabled, false)             AS prompt_snapshot_enabled,
           COALESCE(smemoc.memory_tagging_enabled, false)            AS memory_tagging_enabled,
+          COALESCE(smemoc.channel_memory_enabled, false)            AS channel_memory_enabled,
           swc.welcome_prompt                                         AS welcome_prompt
         FROM personas t
         LEFT JOIN server_model_configs smc               ON smc.server_id   = t.server_id
@@ -371,6 +375,9 @@ export class ExportRepository {
             send_message_limit: configData.send_message_limit,
             always_reply_enabled: configData.always_reply_enabled,
             deliberate_trigger_mode: configData.deliberate_trigger_mode,
+            deliberate_tool_mode: configData.deliberate_tool_mode,
+            deliberate_tool_context_turns: configData.deliberate_tool_context_turns ?? null,
+            deliberate_tool_triggers: configData.deliberate_tool_triggers ?? {},
             cooldown_type: configData.cooldown_type,
             cooldown_length: configData.cooldown_length,
             stm_privacy_bypass: configData.stm_privacy_bypass,
@@ -391,6 +398,7 @@ export class ExportRepository {
             tool_use_enabled: configData.tool_use_enabled,
             prompt_snapshot_enabled: configData.prompt_snapshot_enabled,
             memory_tagging_enabled: configData.memory_tagging_enabled,
+            channel_memory_enabled: configData.channel_memory_enabled,
             welcome_prompt: configData.welcome_prompt ?? null,
           },
           server_memories: sanitizedServerMemories,
@@ -473,7 +481,7 @@ export class ExportRepository {
       // 1. Query user settings including NovelAI character fields and behavioral preferences
       const rows = await sql`
         SELECT user_nickname, language_pref, impersonation_prompt, nai_char_tags, nai_char_ref_url,
-               privacy_level, personal_dtm, shortterm_cache_crossserver_opt_in
+               privacy_level, personal_dtm, personal_deliberate_tool_mode, shortterm_cache_crossserver_opt_in
         FROM users
         WHERE user_disc_id = ${userDiscId}
         LIMIT 1
@@ -498,6 +506,7 @@ export class ExportRepository {
           nai_char_ref_url: userData.nai_char_ref_url ?? null,
           privacy_level: userData.privacy_level ?? undefined,
           personal_dtm: userData.personal_dtm ?? undefined,
+          personal_deliberate_tool_mode: userData.personal_deliberate_tool_mode ?? undefined,
           shortterm_cache_crossserver_opt_in: userData.shortterm_cache_crossserver_opt_in ?? undefined,
         },
       };

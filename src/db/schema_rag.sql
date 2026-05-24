@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS documents (
 -- Add persona_id column for existing databases
 SELECT add_column_if_not_exists('documents', 'persona_id', 'INTEGER');
 
+-- Channel tag filtering for documents (May 2026)
+SELECT add_column_if_not_exists('documents', 'channel_tags', 'TEXT[]', 'ARRAY[]::TEXT[]');
+
 -- Normalize stale persona references to serverwide scope (existing pre-scope rows are already NULL)
 UPDATE documents
 SET persona_id = NULL

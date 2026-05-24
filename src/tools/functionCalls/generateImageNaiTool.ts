@@ -132,7 +132,7 @@ interface SuggestTagsResponse {
 export class GenerateImageNaiTool extends BaseTool {
   name = "generate_image_nai";
   description =
-    "Generate an anime-styled AI image with NovelAI diffusion's uncensored models. Put shared scene, background, composition, camera, lighting, atmosphere, and style tags in 'prompt'. Use 'characters' for visible people in the image, and describe each character fully in that character's 'tags'.";
+    "Generate an anime-styled AI image with NovelAI diffusion's uncensored models. Use this only when the user explicitly asks you to make, draw, generate, create, edit, or continue an image; do not call it for casual visual discussion. If the user asks you to make/draw/generate an image and this tool is available, call this tool instead of only describing the image. Put shared scene, background, composition, camera, lighting, atmosphere, and style tags in 'prompt'. Use 'characters' for visible people in the image, and describe each character fully in that character's 'tags'.";
   category = "utility" as const;
   requiresFeatureFlag = "image_gen";
   requiresFollowUp = true; // Allow model to generate a text response after image is sent, preventing orphaned self-reply

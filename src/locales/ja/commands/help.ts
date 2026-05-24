@@ -71,13 +71,96 @@ export default {
       engine_description: `音声エンジンのガイドを選択します。`,
       docs_title: `詳細ドキュメント`,
       docs_description: `コピー用のセットアップ手順とラッパーの注意点については、GitHub上の[TTSドキュメント](https://github.com/Bredrumb/TomoriBot/tree/main/docs/integrations/tts)と[サーバーのREADME](https://github.com/Bredrumb/TomoriBot/blob/main/servers/tts/README.md)を確認してください。`,
+      overview: {
+        title: `音声生成の概要`,
+        description: `音声エンドポイントを使うと、ローカル音声クローンまたはElevenLabsでDiscordボイスメッセージを送信できます。ローカルクローンの場合、どの音声形式でも自動でモノラルWAVに変換されます。BGMなしの10〜20秒のクリップを推奨します。`,
+        steps_title: `設定フロー`,
+        steps_description: `ローカル: ラッパーサーバーを起動し、{custom_endpoint_add} で登録、{model_speech} で選択、{voice_add} でサンプル追加、{voice_assign} で割り当てます。
+
+ElevenLabs: {elevenlabs} を実行し、追加ペルソナは後で {voice_assign} を使います。
+
+**エンジン別設定ガイド:**
+• Chatterbox-Turbo → \`/help speech engine:Chatterbox-Turbo\`
+• Qwen3-TTS → \`/help speech engine:Qwen3-TTS\`
+• IrodoriTTS → \`/help speech engine:IrodoriTTS\`
+• ElevenLabs → \`/help speech engine:ElevenLabs\``,
+      },
+      chatterbox: {
+        title: `Chatterbox-Turbo 音声`,
+        description: `Chatterbox-Turbo は高速・軽量な英語専用の音声クローンサーバーです。\`[excited]\`・\`[whisper]\` のような角括弧デリバリータグで発話スタイルを制御できます。TomoriBotがこれらのタグをそのまま送信できるように、登録時は **Script Markup（スクリプトマークアップ）** を **Bracket Tags（角括弧タグ）** に設定してください。`,
+        steps_title: `設定手順`,
+        steps_description: `**前提条件**: Python 3.10+、CUDA 12.x + ドライバー（任意、GPU 用）
+
+1. GitHubリポジトリからマシンに [TTSサーバー](https://github.com/Bredrumb/TomoriBot/tree/main/servers/tts) をダウンロードします。
+2. ダウンロードした \`chatterbox\` フォルダに移動し、Python \`.venv\` を作成して有効化します。
+3. numpy を先にインストールします: \`pip install numpy\`、その後 \`requirements.txt\` をインストールします。
+4. *(GPU のみ)* PyTorch を再インストールします: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
+5. \`server.py\` を起動します。
+6. {custom_endpoint_add} で登録します。Capability（機能）は \`Speech\`、API Style（API スタイル）は \`TTS-Clone\`、Script Markup（スクリプトマークアップ）は \`Bracket Tags\` を選択します。
+7. {model_speech} で選択し、{voice_add} と {voice_assign} を実行します。`,
+      },
+      qwen3tts: {
+        title: `Qwen3-TTS 音声`,
+        description: `Qwen3-TTS 12Hz Base は中国語・英語・日本語・韓国語・ドイツ語・フランス語・ロシア語・ポルトガル語・スペイン語・イタリア語の 10 言語に対応した多言語音声クローンサーバーです。同じ Qwen3-TTS サーバーで、自然言語の声質説明を使う VoiceDesign モデルを起動したり、1つのエンドポイントURLでクローンと VoiceDesign のリクエストを自動判定したりできます。どのモードも感情マークアップなしのプレーンテキストのみ受け付けます。登録時は **Script Markup（スクリプトマークアップ）** を **Plain（通常テキスト）** に設定してください。`,
+        steps_title: `設定手順`,
+        steps_description: `**前提条件**
+• Python 3.10+
+• SoX をシステムにインストール（Windows: \`scoop install sox\`、macOS: \`brew install sox\`）
+• CUDA 12.x + ドライバー（任意、GPU 用）
+
+1. GitHubからマシンに [TTSサーバー](https://github.com/Bredrumb/TomoriBot/tree/main/servers/tts) をダウンロードします。
+2. ダウンロードした \`qwen3tts\` フォルダに移動し、Python \`.venv\` を作成して有効化します。
+3. \`requirements.txt\` をインストールします。
+4. *(GPU)* PyTorch を再インストール: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
+5. *(任意)* 高速化のため flash-attn をインストール — 手順 4 の後 \`pip install wheel\`、次に \`pip install flash-attn --no-build-isolation\` (Winは20-40分)。初回はスキップ。
+6. 音声クローンには \`server.py\`、Qwen3-TTS VoiceDesign のみには \`server.py --mode voice-design\`、1つのURLでリクエストごとにクローン/VoiceDesignを判定するには \`server.py --mode auto\` を起動します。
+7. {custom_endpoint_add} で登録: Capability（機能）は \`Speech\`、API Style（API スタイル）は \`TTS-Clone\`、Script Markup（スクリプトマークアップ）は \`Plain\` を選択。VoiceDesign では音声ソースモードに \`VoiceDesign\` を選ぶと、TomoriBot が自動的に instruct 対応として扱います。auto モードでは、同じサーバーURLを指すクローン用と VoiceDesign 用のエンドポイントを登録できます。
+8. {model_speech} で選択します。クローンモードでは {voice_add} と {voice_assign}、VoiceDesign では各ペルソナに {voice_design_set} を実行します。`,
+      },
+      irodoritts: {
+        title: `IrodoriTTS 音声`,
+        description: `IrodoriTTS は日本語特化の音声クローンサーバーです。テキスト中に埋め込んだ絵文字（例: 😊 = 喜び、😢 = 悲しみ）を感情キューとして読み取ります。登録時は **Script Markup（スクリプトマークアップ）** を **Emoji Markers（絵文字マーカー）** に設定してください。TomoriBot が角括弧タグを除去し、モデルが期待する絵文字マーカーだけを残します。`,
+        steps_title: `設定手順`,
+        steps_description: `**前提条件**: Python 3.10+、CUDA 12.x + ドライバー（任意、GPU 用）
+
+1. GitHubからマシンに [TTSサーバー](https://github.com/Bredrumb/TomoriBot/tree/main/servers/tts) をダウンロードします。
+2. ダウンロードした \`irodoritts\` フォルダに移動し、Python \`.venv\` を作成して有効化します。
+3. \`requirements.txt\` をインストールします。
+4. パッチスクリプトで irodori-tts をインストール（上流のバグ対処）:
+Windows: \`install-irodori.ps1\`
+Linux/macOS: \`bash install-irodori.sh\`
+5. *(GPU)* PyTorch を再インストール: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
+6. \`server.py\` を起動します。
+7. {custom_endpoint_add} で登録: Capability（機能）は \`Speech\`、API Style（API スタイル）は \`TTS-Clone\`、Script Markup（スクリプトマークアップ）は \`Emoji Markers\` を選択。
+8. {model_speech} で選択し、{voice_add} と {voice_assign} を実行します。`,
+      },
+      elevenlabs: {
+        title: `ElevenLabs 音声`,
+        description: `ElevenLabs も同じ音声エンドポイント機構を使いますが、ショートカットコマンドで設定できます。`,
+        steps_title: `設定手順`,
+        steps_description: `{elevenlabs} に ElevenLabs APIキーを指定して実行します。音声生成と文字起こしエンドポイントを登録・選択します。その後 {voice_assign} で各ペルソナに声を割り当てます。`,
+      },
     },
     transcription: {
       description: `音声文字起こしの設定方法を確認します。`,
       engine_description: `文字起こしエンジンのガイドを選択します。`,
       docs_title: `詳細ドキュメント`,
       docs_description: `ローカルサーバー設定の詳細については、GitHub上の[Transcriptionドキュメント](https://github.com/Bredrumb/TomoriBot/tree/main/docs/integrations/transcription)と[STTのREADME](https://github.com/Bredrumb/TomoriBot/blob/main/servers/stt/README.md)を確認してください。`,
+      overview: {
+        title: `文字起こしの概要`,
+        description: `文字起こしエンドポイントは、音声添付を内部会話コンテキスト用のテキストに変換します。見える形で投稿する字幕は {speech_transcripts} で別途制御します。`,
+        steps_title: `推奨経路`,
+        steps_description: `まず WhisperX を推奨します。\`servers/stt\` の参照サーバーを起動し、{custom_endpoint_add} で登録してから {model_transcription} で選択します。ElevenLabs ユーザーは {elevenlabs} を実行します。
+
+**エンジン別設定ガイド:**
+• WhisperX → \`/help transcription engine:WhisperX\`
+• KoboldCPP → \`/help transcription engine:KoboldCPP\`
+• ElevenLabs → \`/help transcription engine:ElevenLabs\``,
+      },
       whisperx: {
+        title: `WhisperX 文字起こし`,
+        description: `WhisperX は推奨ローカルSTT経路です。FFmpeg のシステムインストールが必要で、CUDA による GPU 高速化にも対応しています。`,
+        steps_title: `設定手順`,
         steps_description: `**前提条件**
 • Python 3.10+
 • FFmpeg をシステムにインストール（必須）
@@ -103,6 +186,18 @@ GPU は **float16** · CPU は **int8**（バイト数が半分なので CPU RAM
 \`large-v3-turbo\` — VRAM 約2–3 GB / RAM 約1.5 GB *(VRAM が少ない場合に推奨)*
 
 文字起こしは約100言語に対応（自動検出）。`,
+      },
+      koboldcpp: {
+        title: `KoboldCPP 文字起こし`,
+        description: `KoboldCPP のSTT対応は、利用しているビルドが公開するHTTPエンドポイント形状に依存します。`,
+        steps_title: `設定メモ`,
+        steps_description: `OpenAI互換の \`/v1/audio/transcriptions\` を公開している場合は {custom_endpoint_add} で登録できます。異なるエンドポイントだけの場合は、専用アダプターが入るまでラッパーを使ってください。`,
+      },
+      elevenlabs: {
+        title: `ElevenLabs 文字起こし`,
+        description: `ElevenLabs の文字起こしは音声ショートカットで自動登録されます。`,
+        steps_title: `設定手順`,
+        steps_description: `{elevenlabs} を実行します。音声生成と文字起こしの両方を登録・選択します。チャットに見える字幕を投稿したい場合だけ {speech_transcripts} を使います。`,
       },
     },
     "custom-endpoint": {
@@ -832,6 +927,24 @@ MCPサーバーはブラウザ拡張機能やサードパーティアプリと�
       warning_title: `⚠️ コンテンツ警告`,
       warning_description: `年齢制限コマンドは **成人向けのコンテンツ** を含む場合があります。これらのコマンドは18歳以上の利用者を対象としています。責任を持って使用し、Discordコミュニティガイドラインを守ってください。`,
       footer: `その他のヘルプについては \`/help\` を使用して、利用可能なコマンドをご確認ください。`,
+    },
+    "deliberate-tool-mode": {
+      description: `明示的ツールモードでツール利用がどう変わるかを学ぶ`,
+      title: `明示的ツールモードガイド`,
+      embed_description: `明示的ツールモードは、メッセージがツールを必要としているように見える場合だけ、通常会話ターンにツール宣言を含めます。`,
+      what_title: `何をするか`,
+      what_description: `明示的ツールモードが有効な場合、まずメッセージに明示的なツール意図があるか確認します。意図が見つからない場合、そのターンではツール宣言を外します。これによりプロンプト量が減り、小型・ローカルモデルの応答が速くなります。`,
+      intent_title: `ツール意図として扱われるもの`,
+      intent_description: `組み込みトリガーは、リマインダー、Web検索、メモリー更新、クロスチャンネルメッセージ、画像・動画・音声生成、メディア解析、スレッド作成、メッセージ操作などの一般的な依頼を扱います。
+
+最近の文脈がツールを示している場合は、\`do that again but angrier\`、\`same thing but softer\`、音声メッセージ依頼の後の \`pretty please?\` などのフォローアップ表現も使えます。`,
+      custom_title: `カスタムトリガーフレーズ`,
+      custom_description: `サーバー管理者は {triggerCommand} でリテラルなフレーズを追加できます。たとえば \`pic\`、\`img\`、\`pfp\` を画像生成に対応させたり、サーバー独自の言い回しを適切なツール対象へ対応させたりできます。`,
+      control_title: `制御とログ`,
+      control_description: `- サーバー管理者は {serverDtm} で切り替えられます
+- ユーザーは {personalDtm} で自分向けに上書きできます
+- {thoughtLogs} で思考ログチャンネルが設定されている場合、明示的ツールモードで実際に使われたツールと、そのツールを表示させたトリガーがそこに記録されます`,
+      footer: `明示的ツールモードは、どのツールをモデルに見せるかを決めます。見せられたツールを実際に呼ぶかどうかは、モデル側の判断です。`,
     },
   },
 };

@@ -33,6 +33,8 @@ export async function buildServerMemoryContextItem(params: {
   botName: string;
   personalMemoriesEnabled: boolean;
   conversationCorpus: string | null;
+  channelName: string;
+  channelMemoryEnabled: boolean;
   client: Client;
   convertMentions: MentionConverter;
 }): Promise<StructuredContextItem | null> {
@@ -58,15 +60,27 @@ export async function buildServerMemoryContextItem(params: {
       ORDER BY created_at DESC
     `;
 
-    const filteredServerRows = params.conversationCorpus
-      ? serverMemoryRows.filter(
-          (row) =>
-            (row.tags ?? []).length > 0 &&
-            (row.tags ?? []).some((tag) =>
-              params.conversationCorpus?.includes(tag.replace(/^["']+|["']+$/g, "").toLowerCase()),
-            ),
-        )
-      : serverMemoryRows;
+    const filteredServerRows = serverMemoryRows.filter((row) => {
+      const normalized = (row.tags ?? []).map((t) => t.replace(/^["']+|["']+$/g, ""));
+      const channelTags = normalized.filter((t) => t.startsWith("#"));
+      const contentTags = normalized.filter((t) => !t.startsWith("#"));
+
+      // Channel tags gate first: if present and channel_memory_enabled, channel must match
+      if (params.channelMemoryEnabled && channelTags.length > 0) {
+        const channelAllowed = channelTags.some((t) => t.slice(1).toLowerCase() === params.channelName.toLowerCase());
+        if (!channelAllowed) return false;
+        // Channel matched with no content tags — sufficient to include without corpus check
+        if (contentTags.length === 0) return true;
+      }
+
+      // Content tags: if corpus filtering is active, memories must have a matching content tag
+      if (params.conversationCorpus) {
+        if (contentTags.length === 0) return false;
+        return contentTags.some((tag) => params.conversationCorpus?.includes(tag.toLowerCase()));
+      }
+
+      return true;
+    });
 
     serverMemoryLines = filteredServerRows.map((row) =>
       formatMemoryWithId(row.server_memory_id, row.content, row.tags ?? []),

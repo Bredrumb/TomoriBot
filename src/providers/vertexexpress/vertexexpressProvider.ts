@@ -52,6 +52,7 @@ import { createVertexexpressClient } from "@/providers/vertexexpress/vertexexpre
 import { vertexexpressProviderInfo } from "@/providers/vertexexpress/providerInfo";
 import { VertexexpressStreamAdapter } from "@/providers/vertexexpress/vertexexpressStreamAdapter";
 import { getVertexexpressToolAdapter } from "@/providers/vertexexpress/vertexexpressToolAdapter";
+import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 
 async function getDefaultVertexexpressModel(): Promise<string> {
   const providerName = "vertexexpress";
@@ -293,11 +294,12 @@ export class VertexexpressProvider
 
       const {
         builtInTools: availableBuiltInTools,
-        mcpFunctionNames,
+        mcpFunctionNames: availableMcpFunctionNames,
         totalCount,
       } = await getAvailableToolsWithMCP("vertexexpress", toolStateForContext);
 
       let finalBuiltInTools = availableBuiltInTools;
+      let finalMcpFunctionNames = availableMcpFunctionNames;
       if (streamingContext) {
         const minimalContext = {
           streamContext: streamingContext,
@@ -322,15 +324,22 @@ export class VertexexpressProvider
         );
       }
 
+      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } = applyDeliberateToolAllowlist({
+        providerLabel: "Vertex AI Express provider",
+        builtInTools: finalBuiltInTools,
+        mcpFunctionNames: finalMcpFunctionNames,
+        allowedToolNames: streamingContext?.deliberateToolAllowedNames,
+      }));
+
       const adapter = getVertexexpressToolAdapter();
       const allToolsConfig = await adapter.getAllToolsInProviderFormat(
         finalBuiltInTools,
         tomoriState.server_id,
-        mcpFunctionNames,
+        finalMcpFunctionNames,
       );
 
       log.info(
-        `Vertex AI Express provider tools loaded: ${finalBuiltInTools.length} built-in + ${mcpFunctionNames.length} MCP = ${totalCount} total tools`,
+        `Vertex AI Express provider tools loaded: ${finalBuiltInTools.length} built-in + ${finalMcpFunctionNames.length} MCP = ${totalCount} total tools`,
       );
 
       return allToolsConfig;

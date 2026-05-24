@@ -657,31 +657,39 @@ function extractDynamicTemplateKeys(content: string, availableKeys: Set<string>)
     const variable = match[2]; // e.g., "errorKey"
     const suffix = match[3]; // e.g., "" (empty in most cases)
 
-    // Extract the variable name (strip any property access or array indexing)
-    const variableName = variable.split(/[.[]/)[0];
+    // Extract the variable name (strip any property access, array indexing, or nullish coalesce)
+    // e.g. `userData.personal_dtm ?? "follow"` -> base variable is the whole expression's first ident
+    const variableName = variable.split(/[.[\s?]/)[0];
 
-    // Look for string assignments to this variable in the same file
-    // Patterns like: errorKey = "invalid_image_description"
-    const assignmentPattern = new RegExp(`${variableName}\\s*=\\s*["']([a-zA-Z0-9._-]+)["']`, "g");
-
-    let assignmentMatch = assignmentPattern.exec(content);
-    while (assignmentMatch !== null) {
-      const assignedValue = assignmentMatch[1];
-      // Construct the full key
+    // Look for literal values bound to this variable through any of: assignment, nullish coalesce,
+    // addChoices({ value: "literal" }) options on slash commands, or simple = / === comparisons.
+    for (const assignedValue of resolveAssignedStringValues(content, variableName)) {
       const fullKey = `${prefix}${assignedValue}${suffix}`;
+      if (availableKeys.has(fullKey)) matchedKeys.push(fullKey);
+    }
 
-      // Check if this constructed key exists in available keys
-      if (availableKeys.has(fullKey)) {
-        matchedKeys.push(fullKey);
-      }
-
-      assignmentMatch = assignmentPattern.exec(content);
+    for (const literal of extractNullishFallbackLiterals(variable)) {
+      const fullKey = `${prefix}${literal}${suffix}`;
+      if (availableKeys.has(fullKey)) matchedKeys.push(fullKey);
     }
 
     match = templatePattern.exec(content);
   }
 
   return matchedKeys;
+}
+
+// Pulls "follow" out of expressions like `userData.personal_dtm ?? "follow"`.
+// Lets dynamic keys whose only literal source is the fallback survive pruning.
+function extractNullishFallbackLiterals(variableExpression: string): string[] {
+  const literals: string[] = [];
+  const pattern = /\?\?\s*["'`]([a-zA-Z0-9._-]+)["'`]/g;
+  let match = pattern.exec(variableExpression);
+  while (match !== null) {
+    literals.push(match[1]);
+    match = pattern.exec(variableExpression);
+  }
+  return literals;
 }
 
 /**
@@ -714,6 +722,23 @@ function resolveAssignedStringValues(content: string, variableName: string): str
       resolvedValues.add(parts.join(""));
     }
     concatMatch = concatAssignmentPattern.exec(content);
+  }
+
+  // Discord slash-command builders bind the value set via .addChoices({ name, value: "literal" }).
+  // When that value later flows into a template literal (e.g. `key.${selectedMode}_title`), the
+  // assignment search above misses it because the binding happens via interaction.options.getString.
+  // Collect every `value: "literal"` inside an addChoices(...) block.
+  const addChoicesPattern = /\.addChoices\s*\(([\s\S]*?)\)/g;
+  let addChoicesMatch = addChoicesPattern.exec(content);
+  while (addChoicesMatch !== null) {
+    const choicesBlock = addChoicesMatch[1];
+    const valuePattern = /value\s*:\s*["']([a-zA-Z0-9._-]+)["']/g;
+    let valueMatch = valuePattern.exec(choicesBlock);
+    while (valueMatch !== null) {
+      resolvedValues.add(valueMatch[1]);
+      valueMatch = valuePattern.exec(choicesBlock);
+    }
+    addChoicesMatch = addChoicesPattern.exec(content);
   }
 
   return Array.from(resolvedValues);

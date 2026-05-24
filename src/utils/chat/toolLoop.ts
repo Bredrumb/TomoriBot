@@ -3,8 +3,10 @@ import type { ToolContext } from "@/types/tool/interfaces";
 import { ToolRegistry } from "@/tools/toolRegistry";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
+import { routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { providerUsesApiFamily } from "@/utils/provider/providerInfoRegistry";
+import { retainSuccessfulToolAffordance } from "@/utils/tools/deliberateToolMode";
 import {
   channelLocks,
   incrementChannelFollowUpCount,
@@ -220,8 +222,7 @@ async function executeToolCall(
     return { kind: "abort", status: "stopped_by_user" };
   }
 
-  const startedAt = Date.now();
-  const toolResult = await ToolRegistry.executeTool(functionName, functionCall.args ?? {}, {
+  const toolContext: ToolContext = {
     channel: params.context.channel as ToolContext["channel"],
     client: params.context.client,
     message: params.context.message,
@@ -241,8 +242,60 @@ async function executeToolCall(
     contextItems: params.context.contextItems,
     messageIdMap: params.context.messageIdMap,
     showKillHint: iteration >= SOFT_WARN_ITERATION_THRESHOLD,
-  });
+  };
+
+  // 1. Deliberate-tool-mode allowlist enforcement. When mode is active and
+  // the model attempts a tool that wasn't exposed for this turn, short-circuit
+  // with a synthetic failure response (visible to the model) so it can adapt.
+  const allowedNames = params.context.streamingContext.deliberateToolAllowedNames;
+  const deliberateAllowedSet = allowedNames?.length ? new Set(allowedNames) : null;
+  const isBlockedByDeliberateAllowlist =
+    params.context.deliberateToolModeActive && deliberateAllowedSet !== null && !deliberateAllowedSet.has(functionName);
+
+  const startedAt = Date.now();
+  const toolResult = isBlockedByDeliberateAllowlist
+    ? {
+        success: false,
+        error: `Tool "${functionName}" was not exposed for this deliberate tool mode turn.`,
+        data: {
+          status: "blocked_by_deliberate_tool_mode",
+          functionName,
+          allowedToolNames: deliberateAllowedSet ? [...deliberateAllowedSet] : [],
+        },
+      }
+    : await ToolRegistry.executeTool(functionName, functionCall.args ?? {}, toolContext);
+
+  if (isBlockedByDeliberateAllowlist) {
+    log.warn(
+      `Deliberate tool mode blocked unexposed tool call "${functionName}" in channel ${params.context.channel.id}. Allowed: ${
+        deliberateAllowedSet ? [...deliberateAllowedSet].join(", ") : ""
+      }`,
+    );
+  } else if (toolResult.success) {
+    // 2. Retain successful tool affordance so short follow-up turns ("do it
+    // again", "one more") keep the same tool exposed for N additional turns.
+    retainSuccessfulToolAffordance(params.context.channel.id, functionName, params.context.deliberateToolContextTurns);
+  }
   log.info(`Function call completed: ${functionName} (${Date.now() - startedAt}ms)`);
+
+  // 3. When deliberate-tool-mode admitted the tool via a specific trigger,
+  // post a hidden notice (thought-log only) explaining why it fired.
+  const deliberateToolTriggerMatch = params.context.deliberateToolTriggerMatchByToolName.get(functionName);
+  if (params.context.deliberateToolModeActive && deliberateToolTriggerMatch && !isBlockedByDeliberateAllowlist) {
+    const safeTrigger = deliberateToolTriggerMatch.trigger.replace(/`/g, "'");
+    await routeHiddenToolNotice(
+      toolContext,
+      {
+        color: ColorCode.INFO,
+        titleKey: "genai.thought_log.title",
+        description:
+          `Tool \`${functionName}\` was used after deliberate tool mode exposed it.\n` +
+          `Trigger: \`${safeTrigger}\`\n` +
+          `Source: ${deliberateToolTriggerMatch.source}`,
+      },
+      "Deliberate tool trigger log",
+    );
+  }
 
   if (toolResult.success && handleEnhancedContextRestart(params, toolResult.data)) {
     return { kind: "restart" };

@@ -158,6 +158,8 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       botName,
       personalMemoriesEnabled: tomoriConfig.personal_memories_enabled,
       conversationCorpus,
+      channelName,
+      channelMemoryEnabled: tomoriConfig.channel_memory_enabled,
       client,
       convertMentions,
     });
@@ -248,7 +250,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
 
   await appendOptionalItem(
     contextItems,
-    buildServerDocumentContextItem({ tomoriState, simplifiedMessageHistory, triggererUserId }),
+    buildServerDocumentContextItem({ tomoriState, simplifiedMessageHistory, triggererUserId, channelName }),
   );
   await appendConditioningContext({
     contextItems,

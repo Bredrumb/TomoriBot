@@ -294,15 +294,27 @@ async function buildUserDetailLines(
       activeLineageId,
       true,
     );
-    const filteredPersonalRows = params.conversationCorpus
-      ? personalMemoryRows.filter(
-          (row) =>
-            (row.tags ?? []).length > 0 &&
-            (row.tags ?? []).some((tag) =>
-              params.conversationCorpus?.includes(tag.replace(/^["']+|["']+$/g, "").toLowerCase()),
-            ),
-        )
-      : personalMemoryRows;
+    const filteredPersonalRows = personalMemoryRows.filter((row) => {
+      const normalized = (row.tags ?? []).map((t) => t.replace(/^["']+|["']+$/g, ""));
+      const channelTags = normalized.filter((t) => t.startsWith("#"));
+      const contentTags = normalized.filter((t) => !t.startsWith("#"));
+
+      // Channel tags gate first: if present and channel_memory_enabled, channel must match
+      if (params.tomoriConfig.channel_memory_enabled && channelTags.length > 0) {
+        const channelAllowed = channelTags.some((t) => t.slice(1).toLowerCase() === params.channelName.toLowerCase());
+        if (!channelAllowed) return false;
+        // Channel matched with no content tags — sufficient to include without corpus check
+        if (contentTags.length === 0) return true;
+      }
+
+      // Content tags: if corpus filtering is active, memories must have a matching content tag
+      if (params.conversationCorpus) {
+        if (contentTags.length === 0) return false;
+        return contentTags.some((tag) => params.conversationCorpus?.includes(tag.toLowerCase()));
+      }
+
+      return true;
+    });
     if (filteredPersonalRows.length > 0) {
       const processedMemories = await Promise.all(
         filteredPersonalRows.map(async (memoryRow, index) => {

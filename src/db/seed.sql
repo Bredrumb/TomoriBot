@@ -2,6 +2,9 @@ SELECT add_column_if_not_exists('llms', 'is_scoped_registration', 'BOOLEAN', 'fa
 SELECT add_column_if_not_exists('image_diffusion_models', 'is_scoped_registration', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('video_generation_models', 'is_scoped_registration', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('embedding_models', 'is_scoped_registration', 'BOOLEAN', 'false');
+-- Deliberate tool mode columns live in server_trigger_behavior_configs (per-domain split, May 2026).
+-- channel_memory_enabled lives in server_memory_configs (per-domain split, May 2026).
+SELECT add_column_if_not_exists('users', 'personal_deliberate_tool_mode', 'TEXT', '''follow''');
 
 -- Ensure all required columns exist in saved_provider_configs table
 SELECT add_column_if_not_exists('saved_provider_configs', 'fallback_model_refs', 'JSONB', '''[]''::JSONB');

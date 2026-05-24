@@ -679,8 +679,11 @@ export async function execute(
     // 7. Normalize supported ST preset formats (modern Prompt Manager or legacy text-completions)
     const normalizedPreset = normalizePresetShape(rawPreset);
     if (!normalizedPreset) {
-      await interaction.editReply({
-        content: localizer(locale, "commands.st-preset.import.not_a_preset"),
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.st-preset.import.not_a_preset_title",
+        descriptionKey: "commands.st-preset.import.not_a_preset_description",
+        color: ColorCode.ERROR,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }

@@ -137,6 +137,38 @@ async function loadLocaleSlices(): Promise<LocaleSlice[]> {
   return slices;
 }
 
+/**
+ * Loads the allowlist of keys/prefixes the pruner must never delete.
+ * The allowlist exists because the static scanner has known blind spots
+ * (joined-string roots, cross-function plumbing, property access in templates).
+ * Treat it as the load-bearing safety net — not the scanner.
+ */
+async function loadAllowlist(): Promise<{ preservedPrefixes: string[]; preservedKeys: Set<string> }> {
+  const allowlistPath = join(process.cwd(), "scripts", "devtools", "locale-prune-allowlist.json");
+  try {
+    const raw = await readFile(allowlistPath, "utf-8");
+    const parsed = JSON.parse(raw) as { preservedPrefixes?: string[]; preservedKeys?: string[] };
+    return {
+      preservedPrefixes: parsed.preservedPrefixes ?? [],
+      preservedKeys: new Set(parsed.preservedKeys ?? []),
+    };
+  } catch {
+    log.warn(`No allowlist found at ${allowlistPath} — pruning without safety net.`);
+    return { preservedPrefixes: [], preservedKeys: new Set() };
+  }
+}
+
+function isAllowlisted(
+  key: string,
+  allowlist: { preservedPrefixes: string[]; preservedKeys: Set<string> },
+): boolean {
+  if (allowlist.preservedKeys.has(key)) return true;
+  for (const prefix of allowlist.preservedPrefixes) {
+    if (key === prefix || key.startsWith(`${prefix}.`)) return true;
+  }
+  return false;
+}
+
 async function main(): Promise<void> {
   const isDryRun = process.argv.includes("--dry-run");
 
@@ -147,11 +179,17 @@ async function main(): Promise<void> {
   // 1. Identify unused keys via the same analysis used by check-locales
   log.info("Running locale analysis to identify unused keys…");
   const results = await analyzeLocalizationKeys();
-  const unusedKeys = results.unusedKeys.map(({ key }) => key);
-  log.info(`Found ${unusedKeys.length} unused keys to prune`);
+  const allowlist = await loadAllowlist();
+  const allUnusedKeys = results.unusedKeys.map(({ key }) => key);
+  const unusedKeys = allUnusedKeys.filter((key) => !isAllowlisted(key, allowlist));
+  const skippedCount = allUnusedKeys.length - unusedKeys.length;
+
+  log.info(
+    `Found ${allUnusedKeys.length} unused keys total; ${skippedCount} protected by allowlist; ${unusedKeys.length} eligible to prune`,
+  );
 
   if (unusedKeys.length === 0) {
-    log.success("Nothing to prune — locale files are already clean.");
+    log.success("Nothing to prune — locale files are already clean (or fully allowlisted).");
     return;
   }
 

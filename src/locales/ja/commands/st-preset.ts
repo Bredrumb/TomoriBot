@@ -11,7 +11,8 @@ export default {
       file_too_large_description: `プリセットファイルは{max_size} MB以下にしてください。`,
       download_failed: `添付ファイルのダウンロードに失敗しました。もう一度お試しください。`,
       invalid_json: `ファイルを有効なJSONとして解析できませんでした。`,
-      not_a_preset: `これは対応しているSillyTavernプリセットではないようです — Prompt Manager の\`prompts\`配列、または legacy の\`context.story_string\` + \`sysprompt.content\` が必要です。`,
+      not_a_preset_title: `未対応のプリセット形式`,
+      not_a_preset_description: `これは対応しているSillyTavernプリセットではないようです。対応しているのは **Chat Completions** プリセットのみです — Prompt Manager の \`prompts\` 配列、または \`context.story_string\` + \`sysprompt.content\` を使った旧形式のみです。\n\n**Text-completions プリセット**（\`instruct\` ブロックを使用するもの）は対応していません。`,
       no_nodes: `このプリセットに使用可能なプロンプトノードが見つかりませんでした。`,
       success_title: `プリセットをインポートしました`,
       success_description: `**{name}**をインポートしました。

@@ -37,9 +37,10 @@ export async function buildServerDocumentContextItem(params: {
   tomoriState: TomoriState | null | undefined;
   simplifiedMessageHistory: SimplifiedMessageForContext[];
   triggererUserId?: number;
+  channelName?: string | null;
 }): Promise<StructuredContextItem | null> {
   try {
-    const { tomoriState, simplifiedMessageHistory, triggererUserId } = params;
+    const { tomoriState, simplifiedMessageHistory, triggererUserId, channelName } = params;
     if (!isRagAvailable() || memoryGuard.getStatus() === "critical" || !tomoriState?.server_id) {
       return null;
     }
@@ -69,6 +70,8 @@ export async function buildServerDocumentContextItem(params: {
       return null;
     }
 
+    const channelFilter = tomoriState.config.channel_memory_enabled && channelName ? channelName : null;
+
     const chunks = await ragRepository.retrieveRelevantChunks({
       serverId: tomoriState.server_id,
       personaId: tomoriState.persona_id ?? null,
@@ -77,6 +80,7 @@ export async function buildServerDocumentContextItem(params: {
       apiKey: creds.apiKey,
       maxResults: DOCUMENT_MAX_RESULTS,
       minSimilarity: DOCUMENT_MIN_SIMILARITY,
+      channelName: channelFilter,
     });
 
     const documentContext = ragRepository.formatChunksForPrompt(chunks);

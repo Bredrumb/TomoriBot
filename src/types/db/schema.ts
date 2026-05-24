@@ -44,6 +44,7 @@ export const userSchema = z.object({
   impersonation_prompt: z.string().nullable().optional(), // Added March 2026 - Global user-owned prompt for user impersonation replies
   shortterm_cache_crossserver_opt_in: z.boolean().default(false), // Short-term memory cross-server sharing
   personal_dtm: z.enum(["off", "follow", "on"]).default("follow"), // Added April 2026 - User-scoped DTM tri-state: 'off' (always disabled), 'follow' (server setting), 'on' (always enabled)
+  personal_deliberate_tool_mode: z.enum(["off", "follow", "on"]).default("follow"), // Added May 2026 - User-scoped deliberate tool mode tri-state
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -398,6 +399,69 @@ function normalizeStringArray(value: unknown): string[] {
   return source.filter((item): item is string => typeof item === "string" && item.length > 0);
 }
 
+export const deliberateToolTriggerEntrySchema = z.union([
+  z.string(),
+  z.object({
+    type: z.enum(["literal", "regex"]),
+    value: z.string(),
+  }),
+]);
+
+function normalizeDeliberateToolTriggers(
+  value: unknown,
+): Record<string, Array<string | { type: "literal" | "regex"; value: string }>> {
+  let source: unknown = value;
+  if (typeof source === "string") {
+    try {
+      source = JSON.parse(source);
+    } catch {
+      return {};
+    }
+  }
+
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    return {};
+  }
+
+  const normalized: Record<string, Array<string | { type: "literal" | "regex"; value: string }>> = {};
+  for (const [target, triggers] of Object.entries(source)) {
+    if (!Array.isArray(triggers)) continue;
+    const seen = new Set<string>();
+    const normalizedTriggers: Array<string | { type: "literal" | "regex"; value: string }> = [];
+    for (const trigger of triggers) {
+      if (typeof trigger === "string") {
+        const normalizedTrigger = trigger.replace(/\s+/g, " ").trim().toLowerCase();
+        const key = `literal:${normalizedTrigger}`;
+        if (normalizedTrigger.length > 0 && !seen.has(key)) {
+          seen.add(key);
+          normalizedTriggers.push(normalizedTrigger);
+        }
+        continue;
+      }
+
+      if (!trigger || typeof trigger !== "object" || Array.isArray(trigger)) continue;
+      const triggerEntry = trigger as { type?: unknown; value?: unknown };
+      if (triggerEntry.type !== "literal" && triggerEntry.type !== "regex") continue;
+      if (typeof triggerEntry.value !== "string") continue;
+      const normalizedValue =
+        triggerEntry.type === "literal"
+          ? triggerEntry.value.replace(/\s+/g, " ").trim().toLowerCase()
+          : triggerEntry.value.trim();
+      const key = `${triggerEntry.type}:${normalizedValue}`;
+      if (normalizedValue.length > 0 && !seen.has(key)) {
+        seen.add(key);
+        normalizedTriggers.push({ type: triggerEntry.type, value: normalizedValue });
+      }
+    }
+
+    if (normalizedTriggers.length > 0) {
+      normalized[target] = normalizedTriggers;
+    }
+  }
+
+  return normalized;
+}
+
 function normalizeDisabledLlmParams(value: unknown): SupportedParamValue[] {
   let source: unknown = value;
   if (typeof source === "string") {
@@ -578,6 +642,12 @@ export const serverTriggerBehaviorConfigSchema = z.object({
   server_id: z.number().int(),
   always_reply_enabled: z.boolean().default(false),
   deliberate_trigger_mode: z.boolean().default(false),
+  deliberate_tool_mode: z.boolean().default(false), // Added May 2026 - Tools require explicit tool intent when enabled
+  deliberate_tool_context_turns: z.number().int().min(0).max(10).nullable().default(null), // Added May 2026 - Successful tools remain available for this many following channel turns; NULL uses env default
+  deliberate_tool_triggers: z.preprocess(
+    (value) => normalizeDeliberateToolTriggers(value),
+    z.record(z.string(), z.array(deliberateToolTriggerEntrySchema)).default({}),
+  ), // Added May 2026 - Server-defined deliberate tool trigger phrases by tool target
   cooldown_type: z.number().int().default(0),
   cooldown_length: z.number().int().default(5),
   created_at: z.date().optional(),
@@ -612,6 +682,7 @@ export type ServerByokConfigRow = z.infer<typeof serverByokConfigSchema>;
 export const serverMemoryConfigSchema = z.object({
   server_id: z.number().int(),
   memory_tagging_enabled: z.boolean().default(false),
+  channel_memory_enabled: z.boolean().default(false), // Added May 2026 - Per-channel memory scoping toggle
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });

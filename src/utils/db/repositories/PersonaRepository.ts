@@ -1307,6 +1307,8 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         -- 10. server_trigger_behavior_configs
         stbc.always_reply_enabled, stbc.deliberate_trigger_mode,
         stbc.cooldown_type, stbc.cooldown_length,
+        stbc.deliberate_tool_mode, stbc.deliberate_tool_context_turns,
+        stbc.deliberate_tool_triggers,
         -- 11. server_novelai_imagegen_configs
         snaic.nai_preset_name, snaic.nai_style_tags, snaic.nai_negative_tags,
         snaic.nai_sampler, snaic.nai_steps, snaic.nai_scale,
@@ -1314,7 +1316,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         -- 12. server_byok_configs
         sbyok.user_byok_mode,
         -- 13. server_memory_configs
-        smem.memory_tagging_enabled,
+        smem.memory_tagging_enabled, smem.channel_memory_enabled,
         -- server_welcome_configs (backward compat; not part of the 13-schema composition)
         swc.welcome_channel_disc_id, swc.welcome_prompt, swc.welcome_persona_id
       FROM servers s
@@ -1406,6 +1408,8 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         -- 10. server_trigger_behavior_configs
         stbc.always_reply_enabled, stbc.deliberate_trigger_mode,
         stbc.cooldown_type, stbc.cooldown_length,
+        stbc.deliberate_tool_mode, stbc.deliberate_tool_context_turns,
+        stbc.deliberate_tool_triggers,
         -- 11. server_novelai_imagegen_configs
         snaic.nai_preset_name, snaic.nai_style_tags, snaic.nai_negative_tags,
         snaic.nai_sampler, snaic.nai_steps, snaic.nai_scale,
@@ -1413,7 +1417,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         -- 12. server_byok_configs
         sbyok.user_byok_mode,
         -- 13. server_memory_configs
-        smem.memory_tagging_enabled,
+        smem.memory_tagging_enabled, smem.channel_memory_enabled,
         -- server_welcome_configs (backward compat; not part of the 13-schema composition)
         swc.welcome_channel_disc_id, swc.welcome_prompt, swc.welcome_persona_id
       FROM personas t

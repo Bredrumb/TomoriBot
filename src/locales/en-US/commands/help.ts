@@ -71,13 +71,96 @@ export default {
       engine_description: `Choose a speech engine guide.`,
       docs_title: `Full Docs`,
       docs_description: `See the [TTS docs](https://github.com/Bredrumb/TomoriBot/tree/main/docs/integrations/tts) and the [servers README](https://github.com/Bredrumb/TomoriBot/blob/main/servers/tts/README.md) on GitHub for copy-paste setup commands and wrapper notes.`,
+      overview: {
+        title: `Speech Setup Overview`,
+        description: `Speech endpoints let TomoriBot send native Discord voice messages using either a local clone server or ElevenLabs. For local voice cloning, any audio format is accepted (auto-converted to mono WAV). It is recommended to use 10-20 second clips with no background music.`,
+        steps_title: `Setup Flow`,
+        steps_description: `Local: start a wrapper server, register it with {custom_endpoint_add}, select it with {model_speech}, upload a sample with {voice_add}, then assign it with {voice_assign}.
+
+ElevenLabs: run {elevenlabs}, then use {voice_assign} later for more personas.
+
+**Per-engine setup guides:**
+• Chatterbox-Turbo → \`/help speech engine:Chatterbox-Turbo\`
+• Qwen3-TTS → \`/help speech engine:Qwen3-TTS\`
+• IrodoriTTS → \`/help speech engine:IrodoriTTS\`
+• ElevenLabs → \`/help speech engine:ElevenLabs\``,
+      },
+      chatterbox: {
+        title: `Chatterbox-Turbo Speech`,
+        description: `Chatterbox-Turbo is a fast, lightweight English-only voice clone server. It supports bracket-style delivery tags such as \`[excited]\` or \`[whisper]\` to shape delivery — register it with **Script Markup** set to **Bracket Tags** so TomoriBot passes those tags through intact.`,
+        steps_title: `Setup Steps`,
+        steps_description: `**Prerequisites**: Python 3.10+, CUDA 12.x + drivers (optional, for GPU)
+
+1. Download the [TTS servers](https://github.com/Bredrumb/TomoriBot/tree/main/servers/tts) from the GitHub repository to your machine.
+2. Navigate to the downloaded \`chatterbox\` folder, then create and activate a Python \`.venv\`.
+3. Install numpy first (build dep): \`pip install numpy\`, then install \`requirements.txt\`.
+4. *(GPU only)* Reinstall PyTorch: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
+5. Start \`server.py\`.
+6. Register with {custom_endpoint_add}: select \`Speech\` for capability, \`TTS-Clone\` for API Style, and \`Bracket Tags\` for Script Markup.
+7. Select with {model_speech}, then run {voice_add} and {voice_assign}.`,
+      },
+      qwen3tts: {
+        title: `Qwen3-TTS Speech`,
+        description: `Qwen3-TTS 12Hz Base is a multilingual voice clone server supporting 10 languages: Chinese, English, Japanese, Korean, German, French, Russian, Portuguese, Spanish, and Italian. The bundled Qwen3-TTS server can also run the VoiceDesign model for natural-language voice descriptions, or auto-switch between clone and VoiceDesign requests on one endpoint URL. All modes expect plain speech text only — no emotion markup. Register them with **Script Markup** set to **Plain**.`,
+        steps_title: `Setup Steps`,
+        steps_description: `**Prerequisites**
+• Python 3.10+
+• SoX installed system-wide (Windows: \`scoop install sox\`, macOS: \`brew install sox\`)
+• CUDA 12.x + drivers (optional, for GPU)
+
+1. Download the [TTS servers](https://github.com/Bredrumb/TomoriBot/tree/main/servers/tts) from GitHub to your machine.
+2. Navigate to the downloaded \`qwen3tts\` folder, create and activate a Python \`.venv\`.
+3. Install \`requirements.txt\`.
+4. *(GPU)* Reinstall PyTorch: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
+5. *(Optional)* Install flash-attn for speed — requires step 4, \`pip install wheel\`, then \`pip install flash-attn --no-build-isolation\` (takes 20-40m on Win). Skip initially.
+6. Start \`server.py\` for voice cloning, \`server.py --mode voice-design\` for Qwen3-TTS VoiceDesign only, or \`server.py --mode auto\` to detect clone vs VoiceDesign from each request on one URL.
+7. Register with {custom_endpoint_add}: select \`Speech\` capability, \`TTS-Clone\` API Style, and \`Plain\` Script Markup. For VoiceDesign, choose \`VoiceDesign\` as the voice source mode; TomoriBot treats it as instruct-capable automatically. In auto mode, you can register clone and VoiceDesign endpoints that point to the same server URL.
+8. Select with {model_speech}. For clone mode, run {voice_add} and {voice_assign}; for VoiceDesign, run {voice_design_set} for each persona.`,
+      },
+      irodoritts: {
+        title: `IrodoriTTS Speech`,
+        description: `IrodoriTTS is a Japanese-specialized voice clone server. It reads emoji characters embedded in the speech text as emotion cues (e.g. 😊 for happy, 😢 for sad). Register it with **Script Markup** set to **Emoji Markers** — TomoriBot strips bracket tags before sending, leaving only the emoji markers the model expects.`,
+        steps_title: `Setup Steps`,
+        steps_description: `**Prerequisites**: Python 3.10+, CUDA 12.x + drivers (optional, for GPU)
+
+1. Download the [TTS servers](https://github.com/Bredrumb/TomoriBot/tree/main/servers/tts) from the GitHub repository to your machine.
+2. Navigate to the downloaded \`irodoritts\` folder, then create and activate a Python \`.venv\`.
+3. Install \`requirements.txt\`.
+4. Install irodori-tts via the patch script (upstream packaging bugs require this):
+Windows: \`install-irodori.ps1\`
+Linux/macOS: \`bash install-irodori.sh\`
+5. *(GPU only)* Reinstall PyTorch: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
+6. Start \`server.py\`.
+7. Register with {custom_endpoint_add}: select \`Speech\` for capability, \`TTS-Clone\` for API Style, and \`Emoji Markers\` for Script Markup.
+8. Select with {model_speech}, then run {voice_add} and {voice_assign}.`,
+      },
+      elevenlabs: {
+        title: `ElevenLabs Speech`,
+        description: `ElevenLabs uses the same speech endpoint system, but setup is handled by a shortcut command.`,
+        steps_title: `Setup Steps`,
+        steps_description: `Run {elevenlabs} with your ElevenLabs API key. It registers speech and transcription endpoints and selects them. Then use {voice_assign} to assign a voice to each persona.`,
+      },
     },
     transcription: {
       description: `Learn how audio transcription works.`,
       engine_description: `Choose a transcription engine guide.`,
       docs_title: `Full Docs`,
       docs_description: `See the [Transcription docs](https://github.com/Bredrumb/TomoriBot/tree/main/docs/integrations/transcription) and [STT README](https://github.com/Bredrumb/TomoriBot/blob/main/servers/stt/README.md) on GitHub.`,
+      overview: {
+        title: `Transcription Setup Overview`,
+        description: `Transcription endpoints turn user audio attachments into text for background conversation context. Visible transcript posting is controlled separately by {speech_transcripts}.`,
+        steps_title: `Recommended Path`,
+        steps_description: `Start with WhisperX: run the reference server in \`servers/stt\`, register it with {custom_endpoint_add}, then select it with {model_transcription}. ElevenLabs users can run {elevenlabs}.
+
+**Per-engine setup guides:**
+• WhisperX → \`/help transcription engine:WhisperX\`
+• KoboldCPP → \`/help transcription engine:KoboldCPP\`
+• ElevenLabs → \`/help transcription engine:ElevenLabs\``,
+      },
       whisperx: {
+        title: `WhisperX Transcription`,
+        description: `WhisperX is the recommended local STT path. It requires FFmpeg on your system and supports GPU acceleration via CUDA.`,
+        steps_title: `Setup Steps`,
         steps_description: `**Prerequisites**
 • Python 3.10+
 • FFmpeg installed system-wide (required for audio decoding)
@@ -103,6 +186,18 @@ GPU runs **float16** · CPU runs **int8** (half the bytes, so CPU RAM < GPU VRAM
 \`large-v3-turbo\` — ~2–3 GB VRAM / ~1.5 GB RAM *(recommended for limited VRAM)*
 
 Transcription supports ~100 languages (auto-detected).`,
+      },
+      koboldcpp: {
+        title: `KoboldCPP Transcription`,
+        description: `KoboldCPP STT support depends on the HTTP endpoint shape exposed by your build.`,
+        steps_title: `Setup Notes`,
+        steps_description: `If your KoboldCPP build exposes an OpenAI-compatible \`/v1/audio/transcriptions\` endpoint, register it with {custom_endpoint_add}. If it only exposes a different endpoint, use a wrapper until TomoriBot has a dedicated adapter.`,
+      },
+      elevenlabs: {
+        title: `ElevenLabs Transcription`,
+        description: `ElevenLabs transcription is registered automatically by the speech shortcut.`,
+        steps_title: `Setup Steps`,
+        steps_description: `Run {elevenlabs}. It registers both speech and transcription endpoints and selects them. Use {speech_transcripts} only if you want transcripts visibly posted in chat.`,
       },
     },
     "custom-endpoint": {
@@ -819,6 +914,24 @@ If a command is restricted and the channel isn't marked NSFW, you won't be able 
       warning_title: `⚠️ Content Warning`,
       warning_description: `Age-restricted commands may contain **mature or explicit content**. These commands are intended for adult users only. Use responsibly and respect Discord's Community Guidelines.`,
       footer: `For more help, use \`/help\` to see all available commands.`,
+    },
+    "deliberate-tool-mode": {
+      description: `Learn how deliberate tool mode changes tool availability`,
+      title: `Deliberate Tool Mode Guide`,
+      embed_description: `Deliberate Tool Mode keeps tool declarations out of ordinary chat turns unless the message looks like it needs a tool.`,
+      what_title: `What It Does`,
+      what_description: `When deliberate tool mode is active, I first check the message for explicit tool intent. If no intent is found, tool declarations are removed for that turn, which reduces prompt size and helps smaller/local models answer faster.`,
+      intent_title: `What Counts As Tool Intent`,
+      intent_description: `Built-in triggers cover common requests like reminders, web search, memory updates, cross-channel messages, image/video/voice generation, media analysis, thread creation, and message actions.
+
+Follow-up wording also works when recent context points to a tool, such as \`do that again but angrier\`, \`same thing but softer\`, or \`pretty please?\` after a voice-message request.`,
+      custom_title: `Custom Trigger Phrases`,
+      custom_description: `Server managers can add literal phrases with {triggerCommand}. For example, \`pic\`, \`img\`, or \`pfp\` can expose image generation, while server-specific slang can map to whichever tool target fits.`,
+      control_title: `Controls And Logs`,
+      control_description: `- Server managers toggle it with {serverDtm}
+- Users can override it for themselves with {personalDtm}
+- If a thought-log channel is configured with {thoughtLogs}, successful deliberate-mode tool calls are logged there with the trigger that exposed the tool`,
+      footer: `Deliberate tool mode decides which tools are shown to the model. The model still has to actually choose to call the exposed tool.`,
     },
   },
 };

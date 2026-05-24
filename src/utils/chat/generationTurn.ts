@@ -163,14 +163,15 @@ export async function runGenerationTurn(
 }
 
 async function buildGenerationAttempts(context: ChatTurnContext): Promise<GenerationAttempt[]> {
+  const disableAllTools = !!context.streamingContext.disableAllTools;
   const primaryState = await resolvePrimaryTomoriState(context);
-  const attempts: GenerationAttempt[] = [await createAttempt("primary", primaryState)];
+  const attempts: GenerationAttempt[] = [await createAttempt("primary", primaryState, undefined, disableAllTools)];
   const fallbackEntries =
     primaryState.fallback_chain ?? primaryState.fallback_llms?.map((model) => ({ kind: "llm" as const, model })) ?? [];
 
   for (const [index, entry] of fallbackEntries.entries()) {
     try {
-      const fallback = await createFallbackAttempt(primaryState, entry, index + 1);
+      const fallback = await createFallbackAttempt(primaryState, entry, index + 1, disableAllTools);
       if (fallback) {
         attempts.push(fallback);
       }
@@ -180,6 +181,15 @@ async function buildGenerationAttempts(context: ChatTurnContext): Promise<Genera
   }
 
   return attempts;
+}
+
+// Must run before provider.createConfig — providers eagerly attach the full tool
+// list and the streaming path won't strip them if has_tools flips later.
+function applyDeliberateToolKillSwitch(state: TomoriState, disableAllTools: boolean): TomoriState {
+  if (disableAllTools && state.llm.has_tools) {
+    return { ...state, llm: { ...state.llm, has_tools: false } };
+  }
+  return state;
 }
 
 function getRetryExcludedKeyIds(excludedKeyIds: Set<number>, rotationKeyId: number | null): number[] {
@@ -271,6 +281,7 @@ async function createFallbackAttempt(
   primaryState: TomoriState,
   entry: FallbackEntry,
   fallbackIndex: number,
+  disableAllTools: boolean,
 ): Promise<GenerationAttempt | null> {
   if (entry.kind === "custom_endpoint") {
     const customProviderName = `custom:s${primaryState.server_id}:${entry.endpoint.label}`;
@@ -299,38 +310,46 @@ async function createFallbackAttempt(
         supports_structoutput: entry.endpoint.supports_structoutput,
       },
     };
-    return await createAttempt(`fallback ${fallbackIndex}: ${entry.endpoint.label}`, state, "custom");
+    return await createAttempt(`fallback ${fallbackIndex}: ${entry.endpoint.label}`, state, "custom", disableAllTools);
   }
 
   let state: TomoriState = { ...primaryState, llm: entry.model };
   if (entry.model.llm_provider.toLowerCase() !== primaryState.llm.llm_provider.toLowerCase()) {
     state = await applySavedProviderConfig(state, entry.model.llm_provider);
   }
-  return await createAttempt(`fallback ${fallbackIndex}: ${entry.model.llm_codename}`, state);
+  return await createAttempt(
+    `fallback ${fallbackIndex}: ${entry.model.llm_codename}`,
+    state,
+    undefined,
+    disableAllTools,
+  );
 }
 
 async function createAttempt(
   label: string,
   tomoriState: TomoriState,
   forcedProviderName?: string,
+  disableAllTools = false,
 ): Promise<GenerationAttempt> {
+  const effectiveState = applyDeliberateToolKillSwitch(tomoriState, disableAllTools);
+
   const provider = forcedProviderName
     ? await ProviderFactory.getProviderByName(forcedProviderName)
-    : await getProviderForTomori(tomoriState);
+    : await getProviderForTomori(effectiveState);
 
   // 1. Try the rotation pool first; fall back to the server's own encrypted key.
-  const rotationSelection = await selectApiKey(tomoriState);
-  const apiKey = rotationSelection ? rotationSelection.apiKey : await resolveApiKey(tomoriState);
+  const rotationSelection = await selectApiKey(effectiveState);
+  const apiKey = rotationSelection ? rotationSelection.apiKey : await resolveApiKey(effectiveState);
   const rotationKeyId = rotationSelection?.rotationKeyId ?? null;
 
-  const providerConfig = await provider.createConfig(tomoriState, apiKey);
+  const providerConfig = await provider.createConfig(effectiveState, apiKey);
 
   return {
     label,
-    tomoriState,
+    tomoriState: effectiveState,
     provider,
     providerConfig,
-    successModel: tomoriState.llm,
+    successModel: effectiveState.llm,
     rotationKeyId,
   };
 }

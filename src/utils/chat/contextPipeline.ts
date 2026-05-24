@@ -9,6 +9,15 @@ import { buildForcedMentionsForUser } from "@/utils/discord/mentionHelper";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { log } from "@/utils/misc/logger";
 import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTermMemoryIntent";
+import {
+  consumeRetainedToolAffordanceNames,
+  type DeliberateToolIntentMatch,
+  getDeliberateToolIntentResult,
+  getFollowUpToolIntentResult,
+  getRecentToolAffordanceNames,
+  resolveDeliberateToolContextTurns,
+  resolveDeliberateToolMode,
+} from "@/utils/tools/deliberateToolMode";
 import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
 import { buildContext, type SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
@@ -41,6 +50,7 @@ import {
 } from "@/utils/chat/contextMedia";
 import { processEmbedsFromMessage } from "@/utils/chat/contextEmbeds";
 import { getCachedImpersonatedUserIdForWebhook } from "@/utils/chat/webhookIdentity";
+import type { StreamingContext } from "@/types/tool/interfaces";
 import type { ChatTurn, ChatTurnContext } from "@/utils/chat/types";
 
 /**
@@ -51,7 +61,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   const { client, message } = incoming;
   const channel = message.channel;
   const messageIdMap = new MessageIdMap();
-  const streamingContext = {
+  const streamingContext: StreamingContext = {
     disableYouTubeProcessing: false,
     disableProfilePictureProcessing: false,
     disableGifProcessing: false,
@@ -105,6 +115,109 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     }
   }
 
+  // 1. Resolve deliberate tool mode + intent allowlist for this turn.
+  // Mirrors main's tomoriChat.ts wiring (~lines 5557–5645). MUST run before
+  // buildContext() so any has_tools override flows into context synthesis
+  // (e.g. memories.ts:243 gates STM tool affordance text on has_tools).
+  // Combines: user-intent matches, follow-up matches from recent message
+  // content/attachments, retained affordances from prior successful tool
+  // calls, and reminder-driven hints.
+  const deliberateToolModeActive = resolveDeliberateToolMode(
+    turn.persona.config.deliberate_tool_mode,
+    turn.userRow.personal_deliberate_tool_mode ?? "follow",
+  );
+  const reminderData = incoming.reminderData;
+  const reminderRecipientID = incoming.reminderRecipientID;
+  const deliberateToolIntentText =
+    reminderData && (reminderRecipientID || reminderData.self_reminder)
+      ? `${message.content}\n${reminderData.reminder_purpose}`
+      : message.content;
+  const deliberateToolIntentResult = getDeliberateToolIntentResult(
+    deliberateToolIntentText,
+    turn.persona.config.deliberate_tool_triggers,
+  );
+  const deliberateToolAllowedNames = [...deliberateToolIntentResult.allowedToolNames];
+  const deliberateToolTriggerMatches: DeliberateToolIntentMatch[] = [...deliberateToolIntentResult.matches];
+
+  const followUpToolIntentResult = getFollowUpToolIntentResult(
+    deliberateToolIntentText,
+    getRecentToolAffordanceNames(history.rawMessages, message.id, client.user?.id),
+  );
+  deliberateToolAllowedNames.push(...followUpToolIntentResult.allowedToolNames);
+  deliberateToolAllowedNames.push(...(streamingContext.endTurnAfterTools ?? []));
+  deliberateToolTriggerMatches.push(...followUpToolIntentResult.matches);
+
+  const retainedToolNames = consumeRetainedToolAffordanceNames(channel.id);
+  if (deliberateToolModeActive) {
+    deliberateToolAllowedNames.push(...retainedToolNames);
+    deliberateToolTriggerMatches.push(
+      ...retainedToolNames.map((toolName) => ({
+        toolName,
+        trigger: "recent successful tool",
+        source: "follow-up" as const,
+      })),
+    );
+  }
+
+  // 2. Reminder-driven adjustments: voice/audio reminders should auto-expose
+  // generate_voice_message, and create_task is suppressed during reminder
+  // execution (we don't want the bot to schedule a nested reminder).
+  if (reminderData && (reminderRecipientID || reminderData.self_reminder)) {
+    if (/\b(voice|audio|speech|say\s+(?:it|this)\s+out\s+loud|spoken)\b/i.test(reminderData.reminder_purpose)) {
+      deliberateToolAllowedNames.push("generate_voice_message");
+      deliberateToolTriggerMatches.push({
+        toolName: "generate_voice_message",
+        trigger: "voice reminder delivery",
+        source: "built-in",
+      });
+    }
+
+    const createTaskIndex = deliberateToolAllowedNames.indexOf("create_task");
+    if (createTaskIndex !== -1) {
+      deliberateToolAllowedNames.splice(createTaskIndex, 1);
+    }
+  }
+
+  const deliberateToolTriggerMatchByToolName = new Map<string, DeliberateToolIntentMatch>();
+  for (const match of deliberateToolTriggerMatches) {
+    if (
+      deliberateToolAllowedNames.includes(match.toolName) &&
+      !deliberateToolTriggerMatchByToolName.has(match.toolName)
+    ) {
+      deliberateToolTriggerMatchByToolName.set(match.toolName, match);
+    }
+  }
+
+  // 3. Fail-closed gate: when deliberate-tool mode is active and the turn
+  // shows no explicit tool intent, suppress all tools for the turn. This is
+  // the universal "tools off unless asked" semantic from main. Otherwise,
+  // when intent is detected, surface a scoped allowlist for provider
+  // adapters to filter their tool exposure list.
+  const deliberateToolIntent =
+    deliberateToolAllowedNames.length > 0 || (streamingContext.endTurnAfterTools?.length ?? 0) > 0;
+  const toolsDisabledByDeliberateMode =
+    !streamingContext.disableAllTools && deliberateToolModeActive && !deliberateToolIntent;
+
+  if (toolsDisabledByDeliberateMode) {
+    streamingContext.disableAllTools = true;
+    log.info(`Deliberate tool mode: suppressing tools for turn in channel ${channel.id} (no explicit tool intent)`);
+  } else if (deliberateToolModeActive && !streamingContext.disableAllTools && deliberateToolAllowedNames.length > 0) {
+    streamingContext.deliberateToolAllowedNames = Array.from(new Set(deliberateToolAllowedNames));
+    log.info(
+      `Deliberate tool mode: allowing scoped tools for turn in channel ${channel.id}: ${streamingContext.deliberateToolAllowedNames.join(", ")}`,
+    );
+  }
+
+  // 4. Derive an effective persona with has_tools=false when tools are
+  // suppressed for the turn. Every provider's tool-list builder gates on
+  // persona.llm.has_tools, so this is the universal kill switch; the
+  // streamingContext.disableAllTools flag alone is only honored by a couple
+  // of specific tools (NovelAI provider, interactWithRecentMessageTool).
+  const effectivePersona =
+    streamingContext.disableAllTools && turn.persona.llm.has_tools
+      ? { ...turn.persona, llm: { ...turn.persona.llm, has_tools: false } }
+      : turn.persona;
+
   const contextBuild = await buildContext({
     guildId: turn.serverDiscId,
     serverName: turn.serverName,
@@ -121,13 +234,13 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     triggererName: turn.triggererName,
     triggererUserId: turn.userRow.user_id,
     emojiStrings: assets.emojiStrings,
-    tomoriNickname: turn.persona.persona_nickname,
-    tomoriAttributes: turn.persona.attribute_list,
-    tomoriConfig: turn.persona.config,
-    personaPrompt: turn.persona.persona_prompt ?? null,
-    personaLineageId: turn.persona.persona_lineage_id,
+    tomoriNickname: effectivePersona.persona_nickname,
+    tomoriAttributes: effectivePersona.attribute_list,
+    tomoriConfig: effectivePersona.config,
+    personaPrompt: effectivePersona.persona_prompt ?? null,
+    personaLineageId: effectivePersona.persona_lineage_id,
     isDMChannel: turn.isDMChannel,
-    snapshot: { ...turn.requestSnapshot, tomoriState: turn.persona },
+    snapshot: { ...turn.requestSnapshot, tomoriState: effectivePersona },
     preloadedEmojis: assets.loadedEmojis,
     preloadedStickers: assets.loadedStickers,
     isUserImpersonation: incoming.isUserImpersonation,
@@ -137,9 +250,13 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     explicitLongTermMemoryIntent: streamingContext.explicitLongTermMemoryIntent,
     seesImages: effectiveSeesImages,
     seesVideos: effectiveSeesVideos,
-    hasVisionTool: !!turn.persona.vision_llm && !(effectiveSeesImages ?? turn.persona.llm.sees_images),
+    hasVisionTool: !!effectivePersona.vision_llm && !(effectiveSeesImages ?? effectivePersona.llm.sees_images),
     messageIdMap,
   });
+
+  const deliberateToolContextTurns = resolveDeliberateToolContextTurns(
+    effectivePersona.config.deliberate_tool_context_turns,
+  );
 
   const contextItems = appendTailDirectives({
     turn,
@@ -168,9 +285,9 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     isUserImpersonation: incoming.isUserImpersonation,
     impersonatedUserId: incoming.impersonatedUserId,
     allPersonas: turn.allPersonas,
-    currentPersona: turn.persona,
-    tomoriState: turn.persona,
-    requestSnapshot: { ...turn.requestSnapshot, tomoriState: turn.persona },
+    currentPersona: effectivePersona,
+    tomoriState: effectivePersona,
+    requestSnapshot: { ...turn.requestSnapshot, tomoriState: effectivePersona },
     contextItems,
     simplifiedMessages: history.simplifiedMessages,
     streamingContext,
@@ -189,6 +306,9 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     shouldApplyTextQuota: turn.shouldApplyTextQuota,
     textQuotaTriggerKey: turn.textQuotaTriggerKey,
     textQuotaState: turn.textQuotaState,
+    deliberateToolModeActive,
+    deliberateToolContextTurns,
+    deliberateToolTriggerMatchByToolName,
   };
 }
 
@@ -236,6 +356,7 @@ async function buildSimplifiedHistory(
   userIds: Set<string>;
   matrixUsers: Map<string, string>;
   syntheticUsers: Map<string, { displayName: string; type: "persona" | "webhook" }>;
+  rawMessages: Message[];
 }> {
   const channel = turn.lockedTurn.admission.channel;
   const fetchLimit = normalizeMessageFetchLimit(turn.persona.config.message_fetch_limit);
@@ -359,7 +480,7 @@ async function buildSimplifiedHistory(
     );
   }
 
-  return { simplifiedMessages, userIds, matrixUsers, syntheticUsers };
+  return { simplifiedMessages, userIds, matrixUsers, syntheticUsers, rawMessages: messages };
 }
 
 async function simplifyMessage(

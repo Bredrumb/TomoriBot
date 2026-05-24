@@ -3,7 +3,7 @@ import { SUPPORTED_PARAM_VALUES } from "@/constants/supportedParams";
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_VALUES } from "@/constants/thinkingLevels";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { logitBiasEntrySchema } from "@/types/provider/logitBias";
-import { PrivacyLevel } from "@/types/db/schema";
+import { PrivacyLevel, deliberateToolTriggerEntrySchema } from "@/types/db/schema";
 
 /**
  * Version identifier for export/import format
@@ -74,6 +74,7 @@ export const personalSettingsExportDataSchema = z.object({
   // Behavioral preferences (added since initial schema)
   privacy_level: z.nativeEnum(PrivacyLevel).optional(),
   personal_dtm: z.enum(["off", "follow", "on"]).optional(),
+  personal_deliberate_tool_mode: z.enum(["off", "follow", "on"]).optional(),
   shortterm_cache_crossserver_opt_in: z.boolean().optional(),
 });
 
@@ -205,6 +206,9 @@ export const serverAutoTriggerConfigExportSchema = z.object({});
 export const serverTriggerBehaviorConfigExportSchema = z.object({
   always_reply_enabled: z.boolean().optional(),
   deliberate_trigger_mode: z.boolean().optional(),
+  deliberate_tool_mode: z.boolean().optional(), // Added May 2026
+  deliberate_tool_context_turns: z.number().int().min(0).max(10).nullable().optional(), // Added May 2026
+  deliberate_tool_triggers: z.record(z.string(), z.array(deliberateToolTriggerEntrySchema)).optional(), // Added May 2026 - keyed by tool target, values are literal strings or {type, value} entries (regex). Shared schema with DB row to prevent drift.
   cooldown_type: z.number().int().min(0).max(4).optional(),
   cooldown_length: z.number().int().min(1).max(86400).optional(),
 });
@@ -232,6 +236,7 @@ export const serverByokConfigExportSchema = z.object({
 /** Portable server_memory_configs export fields. */
 export const serverMemoryConfigExportSchema = z.object({
   memory_tagging_enabled: z.boolean().optional(),
+  channel_memory_enabled: z.boolean().optional(),
 });
 
 /**

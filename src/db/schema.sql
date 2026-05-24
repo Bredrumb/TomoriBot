@@ -509,6 +509,10 @@ SELECT add_column_if_not_exists('persona_configs', 'punish_conditioning_enabled'
 -- Add hidden notice embed registry (April 2026)
 -- Stores hidden notice keys only; missing entries remain visible by default
 
+-- Deliberate tool trigger phrases + context turns (May 2026, contributor PR from main)
+-- Migrated from legacy tomori_configs to server_trigger_behavior_configs during the Phase 6 split.
+-- The per-domain CREATE TABLE statement and idempotent column migrations live with that table below.
+
 -- Add LLM sampling parameter columns (February 2026)
 -- DEPRECATED Phase 1.5 Pass B: all sampler columns are now canonical in saved_provider_configs
 -- llm_top_p: Nucleus sampling — probability mass threshold (0.95=default, 0.0=most restricted)
@@ -533,6 +537,8 @@ SELECT add_column_if_not_exists('persona_configs', 'punish_conditioning_enabled'
 
 -- Add tool-use master toggle (April 2026)
 -- When FALSE, has_tools is artificially overridden to false in the pipeline for all models
+-- Note: tool_use_enabled now lives in server_capabilities_configs (per-domain split).
+-- Deliberate tool mode columns now live in server_trigger_behavior_configs (per-domain split).
 
 CREATE TABLE IF NOT EXISTS persona_presets (
   persona_preset_id SERIAL PRIMARY KEY,
@@ -698,6 +704,9 @@ BEGIN
   END IF;
 END;
 $$;
+
+-- Personal deliberate tool mode (May 2026) - User-scoped tri-state: 'off', 'follow' (default), 'on'
+SELECT add_column_if_not_exists('users', 'personal_deliberate_tool_mode', 'TEXT', '''follow''');
 
 -- Create updated_at trigger for users table
 DROP TRIGGER IF EXISTS update_users_timestamp ON users;
@@ -2437,14 +2446,20 @@ CREATE TRIGGER update_server_welcome_configs_timestamp
   FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
 CREATE TABLE IF NOT EXISTS server_trigger_behavior_configs (
-  server_id               INT     PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
-  always_reply_enabled    BOOLEAN NOT NULL DEFAULT false,
-  deliberate_trigger_mode BOOLEAN NOT NULL DEFAULT false,
-  cooldown_type           INT     NOT NULL DEFAULT 0,
-  cooldown_length         INT     NOT NULL DEFAULT 5,
-  created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  server_id                     INT     PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
+  always_reply_enabled          BOOLEAN NOT NULL DEFAULT false,
+  deliberate_trigger_mode       BOOLEAN NOT NULL DEFAULT false,
+  deliberate_tool_mode          BOOLEAN NOT NULL DEFAULT false,
+  deliberate_tool_context_turns INTEGER,
+  deliberate_tool_triggers      JSONB   NOT NULL DEFAULT '{}'::JSONB,
+  cooldown_type                 INT     NOT NULL DEFAULT 0,
+  cooldown_length               INT     NOT NULL DEFAULT 5,
+  created_at                    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+SELECT add_column_if_not_exists('server_trigger_behavior_configs', 'deliberate_tool_mode', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('server_trigger_behavior_configs', 'deliberate_tool_context_turns', 'INTEGER', 'NULL');
+SELECT add_column_if_not_exists('server_trigger_behavior_configs', 'deliberate_tool_triggers', 'JSONB', '''{}''::JSONB');
 
 DROP TRIGGER IF EXISTS update_server_trigger_behavior_configs_timestamp ON server_trigger_behavior_configs;
 CREATE TRIGGER update_server_trigger_behavior_configs_timestamp
@@ -2551,9 +2566,11 @@ CREATE TRIGGER update_server_byok_configs_timestamp
 CREATE TABLE IF NOT EXISTS server_memory_configs (
   server_id              INT     PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
   memory_tagging_enabled BOOLEAN NOT NULL DEFAULT false,
+  channel_memory_enabled BOOLEAN NOT NULL DEFAULT false,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+SELECT add_column_if_not_exists('server_memory_configs', 'channel_memory_enabled', 'BOOLEAN', 'false');
 
 DROP TRIGGER IF EXISTS update_server_memory_configs_timestamp ON server_memory_configs;
 CREATE TRIGGER update_server_memory_configs_timestamp
@@ -2702,3 +2719,4 @@ CREATE TRIGGER update_user_personalization_configs_timestamp
   FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
 -- Memory tag filtering toggle (May 2026)
+-- Note: memory_tagging_enabled and channel_memory_enabled now live in server_memory_configs (per-domain split).

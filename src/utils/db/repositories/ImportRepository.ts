@@ -201,6 +201,7 @@ export class ImportRepository {
           nai_char_ref_url = EXCLUDED.nai_char_ref_url,
           privacy_level = COALESCE(${importData.privacy_level ?? null}, users.privacy_level),
           personal_dtm = COALESCE(${importData.personal_dtm ?? null}, users.personal_dtm),
+          personal_deliberate_tool_mode = COALESCE(${importData.personal_deliberate_tool_mode ?? null}, users.personal_deliberate_tool_mode),
           shortterm_cache_crossserver_opt_in = COALESCE(${importData.shortterm_cache_crossserver_opt_in ?? null}, users.shortterm_cache_crossserver_opt_in)
         RETURNING user_id
       `;
@@ -216,6 +217,7 @@ export class ImportRepository {
       if (naiCharRefUrl) fieldsCount++;
       if (importData.privacy_level !== undefined) fieldsCount++;
       if (importData.personal_dtm !== undefined) fieldsCount++;
+      if (importData.personal_deliberate_tool_mode !== undefined) fieldsCount++;
       if (importData.shortterm_cache_crossserver_opt_in !== undefined) fieldsCount++;
 
       return { success: true, itemsImported: { configFieldsCount: fieldsCount } };
@@ -364,12 +366,24 @@ export class ImportRepository {
 
         config.always_reply_enabled !== undefined ||
         config.deliberate_trigger_mode !== undefined ||
+        config.deliberate_tool_mode !== undefined ||
+        config.deliberate_tool_context_turns !== undefined ||
+        config.deliberate_tool_triggers !== undefined ||
         config.cooldown_type !== undefined ||
         config.cooldown_length !== undefined
           ? configRepository.updateTriggerBehaviorConfig(serverId, {
               ...(config.always_reply_enabled !== undefined && { always_reply_enabled: config.always_reply_enabled }),
               ...(config.deliberate_trigger_mode !== undefined && {
                 deliberate_trigger_mode: config.deliberate_trigger_mode,
+              }),
+              ...(config.deliberate_tool_mode !== undefined && {
+                deliberate_tool_mode: config.deliberate_tool_mode,
+              }),
+              ...(config.deliberate_tool_context_turns !== undefined && {
+                deliberate_tool_context_turns: config.deliberate_tool_context_turns,
+              }),
+              ...(config.deliberate_tool_triggers !== undefined && {
+                deliberate_tool_triggers: config.deliberate_tool_triggers,
               }),
               ...(config.cooldown_type !== undefined && { cooldown_type: config.cooldown_type }),
               ...(config.cooldown_length !== undefined && { cooldown_length: config.cooldown_length }),
@@ -404,8 +418,15 @@ export class ImportRepository {
           ? configRepository.updateByokConfig(serverId, { user_byok_mode: config.user_byok_mode })
           : Promise.resolve(true),
 
-        config.memory_tagging_enabled !== undefined
-          ? configRepository.updateMemoryConfig(serverId, { memory_tagging_enabled: config.memory_tagging_enabled })
+        config.memory_tagging_enabled !== undefined || config.channel_memory_enabled !== undefined
+          ? configRepository.updateMemoryConfig(serverId, {
+              ...(config.memory_tagging_enabled !== undefined && {
+                memory_tagging_enabled: config.memory_tagging_enabled,
+              }),
+              ...(config.channel_memory_enabled !== undefined && {
+                channel_memory_enabled: config.channel_memory_enabled,
+              }),
+            })
           : Promise.resolve(true),
 
         config.welcome_prompt !== undefined

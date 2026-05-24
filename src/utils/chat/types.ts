@@ -9,6 +9,7 @@ import type {
   ThoughtLogPayload,
 } from "@/types/provider/interfaces";
 import type { StreamingContext } from "@/types/tool/interfaces";
+import type { DeliberateToolIntentMatch } from "@/utils/tools/deliberateToolMode";
 import type { ThoughtLogOwner } from "@/utils/discord/thoughtLog";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
@@ -209,6 +210,12 @@ export interface ChatTurnContext {
   textQuotaTriggerKey: string;
   textQuotaState: TextQuotaTriggerState | null;
   responseTarget?: ChatResponseTarget;
+  /** Whether deliberate-tool-mode is gating this turn (server flag OR user override). */
+  deliberateToolModeActive: boolean;
+  /** Resolved per-turn context window for retained-affordance carryover. */
+  deliberateToolContextTurns: number;
+  /** Map of tool name -> the trigger match that admitted it (used for hidden-notice routing). */
+  deliberateToolTriggerMatchByToolName: Map<string, DeliberateToolIntentMatch>;
 }
 
 export interface ChatResponseTarget {

@@ -89,6 +89,14 @@ export async function showPersonalStatus(
         inline: true,
       },
       {
+        nameKey: "commands.tool.status.field_personal_deliberate_tool_mode",
+        value: localizer(
+          locale,
+          `commands.personal.deliberatetoolmode.${userData.personal_deliberate_tool_mode ?? "follow"}_option`,
+        ),
+        inline: true,
+      },
+      {
         nameKey: "commands.tool.status.field_crossserver_stm",
         value: formatBooleanLocalized(userData.shortterm_cache_crossserver_opt_in ?? false, locale),
         inline: true,

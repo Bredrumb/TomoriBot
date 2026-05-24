@@ -3,6 +3,8 @@
 export default {
   choices: {
     always: `Always`,
+    enable: `Enable`,
+    disable: `Disable`,
     enabled: `Enabled`,
     disabled: `Disabled`,
     none: `None`,

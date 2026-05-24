@@ -10,6 +10,7 @@ import type { ModalResult } from "../../../types/discord/modal";
 
 const MODAL_CUSTOM_ID = "memory_tagging_set_modal";
 const TAGGING_SELECT_ID = "tagging_select";
+const CHANNEL_TAGGING_SELECT_ID = "channel_tagging_select";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("set").setDescription(localizer("en-US", "commands.memory.tagging.set.description"));
@@ -84,6 +85,17 @@ export async function execute(
             { label: "Disabled", value: "false" },
           ],
         },
+        {
+          customId: CHANNEL_TAGGING_SELECT_ID,
+          labelKey: "commands.memory.tagging.set.channel_select_label",
+          descriptionKey: "commands.memory.tagging.set.channel_select_description",
+          placeholder: "commands.memory.tagging.set.channel_select_placeholder",
+          required: true,
+          options: [
+            { label: "Enabled", value: "true" },
+            { label: "Disabled", value: "false" },
+          ],
+        },
       ],
     });
 
@@ -94,7 +106,11 @@ export async function execute(
 
     const modalInteraction = modalResult.interaction;
     const selectedValue = modalResult.values?.[TAGGING_SELECT_ID];
-    if (selectedValue !== "true" && selectedValue !== "false") {
+    const channelValue = modalResult.values?.[CHANNEL_TAGGING_SELECT_ID];
+    if (
+      (selectedValue !== "true" && selectedValue !== "false") ||
+      (channelValue !== "true" && channelValue !== "false")
+    ) {
       await replyInfoEmbed(modalInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -104,9 +120,11 @@ export async function execute(
     }
 
     const enabled = selectedValue === "true";
+    const channelEnabled = channelValue === "true";
 
     const updated = await configRepository.updateMemoryConfig(tomoriState.server_id, {
       memory_tagging_enabled: enabled,
+      channel_memory_enabled: channelEnabled,
     });
 
     if (!updated) {
@@ -121,14 +139,12 @@ export async function execute(
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
     log.success(
-      `Memory tagging set to ${enabled} for server ${tomoriState.server_id} by user ${userData.user_disc_id}`,
+      `Memory tagging set to ${enabled}, channel memory set to ${channelEnabled} for server ${tomoriState.server_id} by user ${userData.user_disc_id}`,
     );
 
     await replyInfoEmbed(modalInteraction, locale, {
       titleKey: "commands.memory.tagging.set.success_title",
-      descriptionKey: enabled
-        ? "commands.memory.tagging.set.success_enabled_description"
-        : "commands.memory.tagging.set.success_disabled_description",
+      descriptionKey: "commands.memory.tagging.set.success_description",
       color: ColorCode.SUCCESS,
     });
   } catch (error) {

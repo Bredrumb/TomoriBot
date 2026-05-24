@@ -11,7 +11,8 @@ export default {
       file_too_large_description: `The preset file must be under {max_size} MB.`,
       download_failed: `Failed to download the attachment. Please try again.`,
       invalid_json: `The file could not be parsed as valid JSON.`,
-      not_a_preset: `This doesn't look like a supported SillyTavern preset — expected a Prompt Manager \`prompts\` array or legacy \`context.story_string\` + \`sysprompt.content\`.`,
+      not_a_preset_title: `Unsupported Preset Format`,
+      not_a_preset_description: `This doesn't look like a supported SillyTavern preset. Only **Chat Completions** presets are supported — either a Prompt Manager \`prompts\` array, or an older preset with \`context.story_string\` + \`sysprompt.content\`.\n\n**Text-completions presets** (which use an \`instruct\` block) are not supported.`,
       no_nodes: `No usable prompt nodes were found in this preset.`,
       success_title: `Preset Imported`,
       success_description: `**{name}** has been imported.

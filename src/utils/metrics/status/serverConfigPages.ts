@@ -25,6 +25,7 @@ import {
   MAX_PROMPT_PREVIEW,
 } from "@/utils/metrics/status/sharedFormatters";
 import { CooldownType } from "@/types/db/schema";
+import { resolveDeliberateToolContextTurns } from "@/utils/tools/deliberateToolMode";
 
 interface OptApiKeyStatusRow {
   service_name: string;
@@ -189,6 +190,16 @@ export async function showServerConfigStatus(
       {
         nameKey: "commands.tool.status.field_deliberate_trigger",
         value: formatBooleanLocalized(config.deliberate_trigger_mode ?? false, locale),
+        inline: true,
+      },
+      {
+        nameKey: "commands.tool.status.field_deliberate_tool_mode",
+        value: formatBooleanLocalized(config.deliberate_tool_mode ?? false, locale),
+        inline: true,
+      },
+      {
+        nameKey: "commands.tool.status.field_deliberate_tool_context_turns",
+        value: resolveDeliberateToolContextTurns(config.deliberate_tool_context_turns).toString(),
         inline: true,
       },
       {
