@@ -1614,7 +1614,7 @@ function buildComfyUiPromptWithDefaults(
       ...(scaleSource
         ? [
             "the area around and behind the subject should look like one continuous scene, not a pasted image frame",
-            "do not create a square backdrop, inset panel, visible source rectangle, poster border, duplicate subject, plush toy, sheep animal, or wall of wool clouds",
+            "do not create a square backdrop, inset panel, visible source rectangle, poster border, duplicate subject, or unrelated foreground objects",
           ]
         : []),
       "only continue the existing subject where it is visibly cropped by the original image edge",
