@@ -1939,7 +1939,7 @@
     "class_type": "ImpactConditionalBranch",
     "inputs": {
       "tt_value": [
-        "329",
+        "324",
         0
       ],
       "ff_value": [
@@ -1949,56 +1949,6 @@
       "cond": [
         "322",
         3
-      ]
-    }
-  },
-  "326": {
-    "class_type": "SolidMask",
-    "inputs": {
-      "value": 0,
-      "width": "{TOMORI_WIDTH}",
-      "height": "{TOMORI_HEIGHT}"
-    }
-  },
-  "327": {
-    "class_type": "MaskComposite",
-    "inputs": {
-      "destination": [
-        "326",
-        0
-      ],
-      "source": [
-        "317",
-        0
-      ],
-      "x": "{TOMORI_OUTPAINT_MASK_SOURCE_X}",
-      "y": "{TOMORI_OUTPAINT_MASK_SOURCE_Y}",
-      "operation": "or"
-    }
-  },
-  "328": {
-    "class_type": "GrowMaskWithBlur",
-    "inputs": {
-      "mask": [
-        "327",
-        0
-      ],
-      "expand": 0,
-      "incremental_expandrate": 0,
-      "tapered_corners": true,
-      "flip_input": false,
-      "blur_radius": "{TOMORI_OUTPAINT_BACKGROUND_FEATHER}",
-      "lerp_alpha": 1,
-      "decay_factor": 1,
-      "fill_holes": true
-    }
-  },
-  "329": {
-    "class_type": "InvertMask",
-    "inputs": {
-      "mask": [
-        "328",
-        0
       ]
     }
   }

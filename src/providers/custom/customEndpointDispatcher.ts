@@ -1296,16 +1296,6 @@ function resolveComfyUiOutpaintSubjectMaskFeather(): number {
   );
 }
 
-function resolveComfyUiOutpaintBackgroundFeather(): number {
-  return clampNumber(
-    readOptionalNumberEnv("COMFYUI_OUTPAINT_BACKGROUND_FEATHER") ??
-      readOptionalNumberEnv("ANIMA3_OUTPAINT_BACKGROUND_FEATHER") ??
-      48,
-    0,
-    256,
-  );
-}
-
 function resolveComfyUiOutpaintUnderpaintColor(): number {
   return Math.round(
     clampNumber(
@@ -1603,8 +1593,9 @@ function buildComfyUiPromptWithDefaults(
         ? scaleSource
           ? [
               "zoom-out full-canvas outpainting: place the original image smaller inside a larger canvas",
-              "mask the newly revealed canvas around the scaled source plus a small edge overlap",
-              "fill the masked expanded canvas as one coherent pulled-back view, then preserve the scaled source area",
+              "preserve only the main foreground subject and regenerate the surrounding background",
+              "use the original background as visual context, but do not keep it as a rectangular panel",
+              "fill the masked expanded canvas as one coherent pulled-back view that matches the original background mood, lighting, palette, and style",
             ]
           : [
               "full-canvas outpainting: place the original image unchanged on a larger canvas",
@@ -1620,6 +1611,12 @@ function buildComfyUiPromptWithDefaults(
         : ["edge-extension outpainting: keep the original source scale and continue only beyond the original edges"]),
       ...buildComfyUiOutpaintDirectionPrompt(normalizedDirection, scaleSource),
       "continue the visible background, lighting, perspective, and environment naturally into the newly added canvas area",
+      ...(scaleSource
+        ? [
+            "the area around and behind the subject should look like one continuous scene, not a pasted image frame",
+            "do not create a square backdrop, inset panel, visible source rectangle, poster border, duplicate subject, plush toy, sheep animal, or wall of wool clouds",
+          ]
+        : []),
       "only continue the existing subject where it is visibly cropped by the original image edge",
       "most added canvas should be surrounding scene, not new character anatomy",
       "preserve the original source image area exactly in place",
@@ -2632,7 +2629,6 @@ function buildComfyUiPlaceholderMap(
     TOMORI_OUTPAINT_PRESERVE_SUBJECT_ONLY: !!outpaintLayout && outpaintLayout.sourceScale < 1,
     TOMORI_OUTPAINT_SUBJECT_MASK_GROW: resolveComfyUiOutpaintSubjectMaskGrow(),
     TOMORI_OUTPAINT_SUBJECT_MASK_FEATHER: resolveComfyUiOutpaintSubjectMaskFeather(),
-    TOMORI_OUTPAINT_BACKGROUND_FEATHER: resolveComfyUiOutpaintBackgroundFeather(),
     TOMORI_OUTPAINT_UNDERPAINT_COLOR: resolveComfyUiOutpaintUnderpaintColor(),
     TOMORI_OUTPAINT_EXTEND_UP_FACTOR: workflowOutpaintFactors.up,
     TOMORI_OUTPAINT_EXTEND_DOWN_FACTOR: workflowOutpaintFactors.down,
@@ -3244,7 +3240,7 @@ export async function generateCustomImageViaEndpoint(params: {
             `outpaint_source_scale=${diagnosticOutpaintLayout.sourceScale}`,
             `outpaint_overlap=${diagnosticOutpaintLayout.overlap}`,
             `outpaint_preserve=${diagnosticOutpaintLayout.sourceScale < 1 ? "subject" : "inner_source"}`,
-            `outpaint_background_preserve=${diagnosticOutpaintLayout.sourceScale < 1 ? "soft_inner_source" : "inner_source"}`,
+            `outpaint_background_preserve=${diagnosticOutpaintLayout.sourceScale < 1 ? "regenerate_from_context" : "inner_source"}`,
             `outpaint_underpaint=neutral`,
             `outpaint_extend_factors=${diagnosticWorkflowOutpaintFactors.up}/${diagnosticWorkflowOutpaintFactors.down}/${diagnosticWorkflowOutpaintFactors.left}/${diagnosticWorkflowOutpaintFactors.right}`,
             `outpaint_source_placement=${diagnosticOutpaintLayout.placedSourceX}x${diagnosticOutpaintLayout.placedSourceY}+${diagnosticOutpaintLayout.placedSourceWidth}x${diagnosticOutpaintLayout.placedSourceHeight}`,
