@@ -1180,7 +1180,11 @@ function inferComfyUiOutpaintAmount(prompt: string): ComfyUiOutpaintAmount | nul
   if (/\b(?:dramatic|huge|extreme|way out|far away|very wide|much wider|zoom way out)\b/i.test(prompt)) {
     return "dramatic";
   }
-  if (/\b(?:large amount|zoom out more|much more|wider view|wide view)\b/i.test(prompt)) {
+  if (
+    /\b(?:large amount|zoom out more|much more|wider view|wide view|full[-\s]?body|full outfit|whole outfit|entire outfit|entire silhouette|head[-\s]?to[-\s]?toe|legs?|feet|lower body|lower half)\b/i.test(
+      prompt,
+    )
+  ) {
     return "large";
   }
   return null;
@@ -1616,6 +1620,8 @@ function buildComfyUiPromptWithDefaults(
       ...(scaleSource
         ? [
             "continue any recognizable source setting elements visible in the original image instead of replacing the setting with a new motif",
+            "continue cropped clothing, limbs, or lower-body details only as far as the expanded canvas naturally allows",
+            "do not compress anatomy, create tiny limbs, or add a separate small body to force a full-body view",
             "the area around and behind the subject should look like one continuous scene, not a pasted image frame",
             "do not create a square backdrop, inset panel, visible source rectangle, poster border, duplicate subject, or unrelated foreground objects",
           ]
