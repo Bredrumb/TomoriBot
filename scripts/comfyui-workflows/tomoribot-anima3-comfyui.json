@@ -1693,8 +1693,8 @@
         0
       ],
       "mask": [
-        "332",
-        1
+        "337",
+        0
       ],
       "noise_mask": true
     }
@@ -1707,8 +1707,8 @@
         2
       ],
       "mask": [
-        "332",
-        1
+        "337",
+        0
       ]
     }
   },
@@ -1801,7 +1801,7 @@
     "class_type": "ImpactConditionalBranch",
     "inputs": {
       "tt_value": [
-        "310",
+        "338",
         0
       ],
       "ff_value": [
@@ -2042,6 +2042,60 @@
         "333",
         0
       ]
+    }
+  },
+  "337": {
+    "class_type": "GrowMaskWithBlur",
+    "inputs": {
+      "mask": [
+        "325",
+        0
+      ],
+      "expand": 0,
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_OUTPAINT_BLEND_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true
+    }
+  },
+  "338": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "310",
+        0
+      ],
+      "source": [
+        "178",
+        0
+      ],
+      "x": "{TOMORI_OUTPAINT_SOURCE_X}",
+      "y": "{TOMORI_OUTPAINT_SOURCE_Y}",
+      "resize_source": false,
+      "mask": [
+        "339",
+        0
+      ]
+    }
+  },
+  "339": {
+    "class_type": "GrowMaskWithBlur",
+    "inputs": {
+      "mask": [
+        "320",
+        0
+      ],
+      "expand": 0,
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_OUTPAINT_CENTER_PRESERVE_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true
     }
   }
 }

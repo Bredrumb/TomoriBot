@@ -1282,7 +1282,7 @@ function resolveComfyUiOutpaintOverlap(options: ComfyUiGenerationOptions): numbe
     options.outpaintOverlap ??
       readOptionalNumberEnv("COMFYUI_OUTPAINT_OVERLAP") ??
       readOptionalNumberEnv("ANIMA3_OUTPAINT_OVERLAP") ??
-      32,
+      48,
     0,
     256,
   );
@@ -1315,6 +1315,26 @@ function resolveComfyUiOutpaintPadFeather(): number {
       32,
     0,
     256,
+  );
+}
+
+function resolveComfyUiOutpaintBlendFeather(): number {
+  return clampNumber(
+    readOptionalNumberEnv("COMFYUI_OUTPAINT_BLEND_FEATHER") ??
+      readOptionalNumberEnv("ANIMA3_OUTPAINT_BLEND_FEATHER") ??
+      12,
+    0,
+    64,
+  );
+}
+
+function resolveComfyUiOutpaintCenterPreserveFeather(): number {
+  return clampNumber(
+    readOptionalNumberEnv("COMFYUI_OUTPAINT_CENTER_PRESERVE_FEATHER") ??
+      readOptionalNumberEnv("ANIMA3_OUTPAINT_CENTER_PRESERVE_FEATHER") ??
+      10,
+    0,
+    64,
   );
 }
 
@@ -1547,9 +1567,9 @@ function buildComfyUiOutpaintLayout(
         : 0;
   const rawOverlap = resolveComfyUiOutpaintOverlap(options);
   const zoomOutOverlapCap = clampNumber(
-    readOptionalNumberEnv("COMFYUI_OUTPAINT_ZOOM_MAX_OVERLAP") ?? readOptionalNumberEnv("ANIMA3_OUTPAINT_ZOOM_MAX_OVERLAP") ?? 32,
+    readOptionalNumberEnv("COMFYUI_OUTPAINT_ZOOM_MAX_OVERLAP") ?? readOptionalNumberEnv("ANIMA3_OUTPAINT_ZOOM_MAX_OVERLAP") ?? 48,
     0,
-    64,
+    96,
   );
   const overlap = Math.min(rawOverlap, Math.floor(Math.min(placedSourceWidth, placedSourceHeight) / 3));
   const effectiveOverlap = scaleSource ? Math.min(overlap, zoomOutOverlapCap) : overlap;
@@ -2705,6 +2725,8 @@ function buildComfyUiPlaceholderMap(
     TOMORI_OUTPAINT_PAD_RIGHT: outpaintPadRight,
     TOMORI_OUTPAINT_PAD_BOTTOM: outpaintPadBottom,
     TOMORI_OUTPAINT_PAD_FEATHER: outpaintPadFeather,
+    TOMORI_OUTPAINT_BLEND_FEATHER: resolveComfyUiOutpaintBlendFeather(),
+    TOMORI_OUTPAINT_CENTER_PRESERVE_FEATHER: resolveComfyUiOutpaintCenterPreserveFeather(),
     TOMORI_OUTPAINT_GUIDE_BLUR_RADIUS: resolveComfyUiOutpaintGuideBlurRadius(),
     TOMORI_OUTPAINT_GUIDE_BLUR_SIGMA: resolveComfyUiOutpaintGuideBlurSigma(),
     TOMORI_OUTPAINT_DENOISE: resolveComfyUiOutpaintDenoise(),
@@ -3358,10 +3380,12 @@ export async function generateCustomImageViaEndpoint(params: {
             `outpaint_amount=${resolveComfyUiOutpaintAmount(diagnosticOptions)}`,
             `outpaint_source_scale=${diagnosticOutpaintLayout.sourceScale}`,
             `outpaint_overlap=${diagnosticOutpaintLayout.overlap}`,
-            "outpaint_preserve=inner_source",
+            "outpaint_preserve=center_source",
             "outpaint_background_preserve=edge_context",
             `outpaint_pad=${diagnosticOutpaintPadLeft}/${diagnosticOutpaintPadTop}/${diagnosticOutpaintPadRight}/${diagnosticOutpaintPadBottom}`,
             `outpaint_pad_feather=${diagnosticOutpaintPadFeather}`,
+            `outpaint_blend_feather=${resolveComfyUiOutpaintBlendFeather()}`,
+            `outpaint_center_preserve_feather=${resolveComfyUiOutpaintCenterPreserveFeather()}`,
             "outpaint_underpaint=blurred_source_guide",
             `outpaint_guide_blur=${resolveComfyUiOutpaintGuideBlurRadius()}/${resolveComfyUiOutpaintGuideBlurSigma()}`,
             `outpaint_denoise=${resolveComfyUiOutpaintDenoise()}`,
