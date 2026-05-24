@@ -1300,6 +1300,16 @@ function resolveComfyUiOutpaintSubjectMaskFeather(): number {
   );
 }
 
+function resolveComfyUiOutpaintPadFeather(): number {
+  return clampNumber(
+    readOptionalNumberEnv("COMFYUI_OUTPAINT_PAD_FEATHER") ??
+      readOptionalNumberEnv("ANIMA3_OUTPAINT_PAD_FEATHER") ??
+      32,
+    0,
+    256,
+  );
+}
+
 function resolveComfyUiOutpaintUnderpaintColor(): number {
   return Math.round(
     clampNumber(
@@ -1599,9 +1609,9 @@ function buildComfyUiPromptWithDefaults(
         ? scaleSource
           ? [
               "zoom-out full-canvas outpainting: place the original image smaller inside a larger canvas",
-              "preserve only the main foreground subject and regenerate the surrounding background",
-              "use the original background as visual context, but do not keep it as a rectangular panel",
-              "fill the masked expanded canvas as one coherent pulled-back view that matches the original background mood, lighting, palette, and style",
+              "preserve the original image content except for a small feathered edge transition",
+              "continue the visible background beyond the original image edges instead of replacing the original setting",
+              "fill the padded canvas as one coherent pulled-back view that matches the original background mood, lighting, palette, and style",
             ]
           : [
               "full-canvas outpainting: place the original image unchanged on a larger canvas",
@@ -2581,6 +2591,16 @@ function buildComfyUiPlaceholderMap(
   const workflowSourceHeight = outpaintLayout?.placedSourceHeight ?? dimensions.source.height;
   const outpaintSourceX = outpaintLayout?.placedSourceX ?? 0;
   const outpaintSourceY = outpaintLayout?.placedSourceY ?? 0;
+  const outpaintPadLeft = outpaintLayout?.placedSourceX ?? 0;
+  const outpaintPadTop = outpaintLayout?.placedSourceY ?? 0;
+  const outpaintPadRight = outpaintLayout
+    ? Math.max(0, dimensions.output.width - outpaintLayout.placedSourceX - outpaintLayout.placedSourceWidth)
+    : 0;
+  const outpaintPadBottom = outpaintLayout
+    ? Math.max(0, dimensions.output.height - outpaintLayout.placedSourceY - outpaintLayout.placedSourceHeight)
+    : 0;
+  const largestOutpaintPad = Math.max(outpaintPadLeft, outpaintPadTop, outpaintPadRight, outpaintPadBottom);
+  const outpaintPadFeather = largestOutpaintPad > 0 ? Math.min(resolveComfyUiOutpaintPadFeather(), largestOutpaintPad) : 0;
   const placeholderMap: Record<string, WorkflowPlaceholderValue> = {
     TOMORI_PROMPT: options.prompt,
     TOMORI_PROMPT_WITH_DEFAULTS: buildComfyUiPromptWithDefaults(
@@ -2636,6 +2656,11 @@ function buildComfyUiPlaceholderMap(
     TOMORI_OUTPAINT_PLACED_SOURCE_Y: outpaintLayout?.placedSourceY ?? 0,
     TOMORI_OUTPAINT_PLACED_SOURCE_WIDTH: outpaintLayout?.placedSourceWidth ?? dimensions.source.width,
     TOMORI_OUTPAINT_PLACED_SOURCE_HEIGHT: outpaintLayout?.placedSourceHeight ?? dimensions.source.height,
+    TOMORI_OUTPAINT_PAD_LEFT: outpaintPadLeft,
+    TOMORI_OUTPAINT_PAD_TOP: outpaintPadTop,
+    TOMORI_OUTPAINT_PAD_RIGHT: outpaintPadRight,
+    TOMORI_OUTPAINT_PAD_BOTTOM: outpaintPadBottom,
+    TOMORI_OUTPAINT_PAD_FEATHER: outpaintPadFeather,
     TOMORI_OUTPAINT_MASK_SOURCE_X: outpaintLayout?.maskSourceX ?? 0,
     TOMORI_OUTPAINT_MASK_SOURCE_Y: outpaintLayout?.maskSourceY ?? 0,
     TOMORI_OUTPAINT_PROTECTED_SOURCE_X:
@@ -2644,7 +2669,7 @@ function buildComfyUiPlaceholderMap(
       outpaintLayout ? Math.max(0, outpaintLayout.maskSourceY - outpaintLayout.placedSourceY) : 0,
     TOMORI_OUTPAINT_MASK_SOURCE_WIDTH: outpaintLayout?.maskSourceWidth ?? dimensions.source.width,
     TOMORI_OUTPAINT_MASK_SOURCE_HEIGHT: outpaintLayout?.maskSourceHeight ?? dimensions.source.height,
-    TOMORI_OUTPAINT_PRESERVE_SUBJECT_ONLY: !!outpaintLayout && outpaintLayout.sourceScale < 1,
+    TOMORI_OUTPAINT_PRESERVE_SUBJECT_ONLY: false,
     TOMORI_OUTPAINT_SUBJECT_MASK_GROW: resolveComfyUiOutpaintSubjectMaskGrow(),
     TOMORI_OUTPAINT_SUBJECT_MASK_FEATHER: resolveComfyUiOutpaintSubjectMaskFeather(),
     TOMORI_OUTPAINT_UNDERPAINT_COLOR: resolveComfyUiOutpaintUnderpaintColor(),
@@ -3242,6 +3267,34 @@ export async function generateCustomImageViaEndpoint(params: {
       diagnosticMaskMode,
       prompt,
     );
+    const diagnosticOutpaintPadLeft = diagnosticOutpaintLayout?.placedSourceX ?? 0;
+    const diagnosticOutpaintPadTop = diagnosticOutpaintLayout?.placedSourceY ?? 0;
+    const diagnosticOutpaintPadRight = diagnosticOutpaintLayout
+      ? Math.max(
+          0,
+          diagnosticOutputDimensions.width -
+            diagnosticOutpaintLayout.placedSourceX -
+            diagnosticOutpaintLayout.placedSourceWidth,
+        )
+      : 0;
+    const diagnosticOutpaintPadBottom = diagnosticOutpaintLayout
+      ? Math.max(
+          0,
+          diagnosticOutputDimensions.height -
+            diagnosticOutpaintLayout.placedSourceY -
+            diagnosticOutpaintLayout.placedSourceHeight,
+        )
+      : 0;
+    const diagnosticLargestOutpaintPad = Math.max(
+      diagnosticOutpaintPadLeft,
+      diagnosticOutpaintPadTop,
+      diagnosticOutpaintPadRight,
+      diagnosticOutpaintPadBottom,
+    );
+    const diagnosticOutpaintPadFeather =
+      diagnosticLargestOutpaintPad > 0
+        ? Math.min(resolveComfyUiOutpaintPadFeather(), diagnosticLargestOutpaintPad)
+        : 0;
     const diagnosticDetails = [
       `mask_prompt=${JSON.stringify(diagnosticWorkflowMaskPrompt)}`,
       ...(diagnosticWorkflowMaskPrompt !== diagnosticRequestedMaskPrompt
@@ -3258,9 +3311,11 @@ export async function generateCustomImageViaEndpoint(params: {
             `outpaint_amount=${resolveComfyUiOutpaintAmount(diagnosticOptions)}`,
             `outpaint_source_scale=${diagnosticOutpaintLayout.sourceScale}`,
             `outpaint_overlap=${diagnosticOutpaintLayout.overlap}`,
-            `outpaint_preserve=${diagnosticOutpaintLayout.sourceScale < 1 ? "subject" : "inner_source"}`,
-            `outpaint_background_preserve=${diagnosticOutpaintLayout.sourceScale < 1 ? "regenerate_from_context" : "inner_source"}`,
-            `outpaint_underpaint=neutral`,
+            "outpaint_preserve=inner_source",
+            "outpaint_background_preserve=edge_context",
+            `outpaint_pad=${diagnosticOutpaintPadLeft}/${diagnosticOutpaintPadTop}/${diagnosticOutpaintPadRight}/${diagnosticOutpaintPadBottom}`,
+            `outpaint_pad_feather=${diagnosticOutpaintPadFeather}`,
+            "outpaint_underpaint=padded_source",
             `outpaint_extend_factors=${diagnosticWorkflowOutpaintFactors.up}/${diagnosticWorkflowOutpaintFactors.down}/${diagnosticWorkflowOutpaintFactors.left}/${diagnosticWorkflowOutpaintFactors.right}`,
             `outpaint_source_placement=${diagnosticOutpaintLayout.placedSourceX}x${diagnosticOutpaintLayout.placedSourceY}+${diagnosticOutpaintLayout.placedSourceWidth}x${diagnosticOutpaintLayout.placedSourceHeight}`,
             `outpaint_mask_source_rect=${diagnosticOutpaintLayout.maskSourceX}x${diagnosticOutpaintLayout.maskSourceY}+${diagnosticOutpaintLayout.maskSourceWidth}x${diagnosticOutpaintLayout.maskSourceHeight}`,
