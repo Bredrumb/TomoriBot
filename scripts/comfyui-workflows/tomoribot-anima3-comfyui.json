@@ -1801,7 +1801,7 @@
     "class_type": "ImpactConditionalBranch",
     "inputs": {
       "tt_value": [
-        "338",
+        "310",
         0
       ],
       "ff_value": [
@@ -2059,26 +2059,6 @@
       "lerp_alpha": 1,
       "decay_factor": 1,
       "fill_holes": true
-    }
-  },
-  "338": {
-    "class_type": "ImageCompositeMasked",
-    "inputs": {
-      "destination": [
-        "310",
-        0
-      ],
-      "source": [
-        "178",
-        0
-      ],
-      "x": "{TOMORI_OUTPAINT_SOURCE_X}",
-      "y": "{TOMORI_OUTPAINT_SOURCE_Y}",
-      "resize_source": false,
-      "mask": [
-        "331",
-        0
-      ]
     }
   }
 }

@@ -1282,7 +1282,7 @@ function resolveComfyUiOutpaintOverlap(options: ComfyUiGenerationOptions): numbe
     options.outpaintOverlap ??
       readOptionalNumberEnv("COMFYUI_OUTPAINT_OVERLAP") ??
       readOptionalNumberEnv("ANIMA3_OUTPAINT_OVERLAP") ??
-      64,
+      96,
     0,
     256,
   );
@@ -1328,7 +1328,7 @@ function resolveComfyUiOutpaintBlendFeather(): number {
   return clampNumber(
     readOptionalNumberEnv("COMFYUI_OUTPAINT_BLEND_FEATHER") ??
       readOptionalNumberEnv("ANIMA3_OUTPAINT_BLEND_FEATHER") ??
-      24,
+      48,
     0,
     128,
   );
@@ -1563,7 +1563,7 @@ function buildComfyUiOutpaintLayout(
         : 0;
   const rawOverlap = resolveComfyUiOutpaintOverlap(options);
   const zoomOutOverlapCap = clampNumber(
-    readOptionalNumberEnv("COMFYUI_OUTPAINT_ZOOM_MAX_OVERLAP") ?? readOptionalNumberEnv("ANIMA3_OUTPAINT_ZOOM_MAX_OVERLAP") ?? 64,
+    readOptionalNumberEnv("COMFYUI_OUTPAINT_ZOOM_MAX_OVERLAP") ?? readOptionalNumberEnv("ANIMA3_OUTPAINT_ZOOM_MAX_OVERLAP") ?? 96,
     0,
     192,
   );
@@ -2734,7 +2734,7 @@ function buildComfyUiPlaceholderMap(
       outpaintLayout ? Math.max(0, outpaintLayout.maskSourceY - outpaintLayout.placedSourceY) : 0,
     TOMORI_OUTPAINT_MASK_SOURCE_WIDTH: outpaintLayout?.maskSourceWidth ?? dimensions.source.width,
     TOMORI_OUTPAINT_MASK_SOURCE_HEIGHT: outpaintLayout?.maskSourceHeight ?? dimensions.source.height,
-    TOMORI_OUTPAINT_PRESERVE_SUBJECT_ONLY: true,
+    TOMORI_OUTPAINT_PRESERVE_SUBJECT_ONLY: false,
     TOMORI_OUTPAINT_SUBJECT_MASK_GROW: resolveComfyUiOutpaintSubjectMaskGrow(),
     TOMORI_OUTPAINT_SUBJECT_MASK_FEATHER: resolveComfyUiOutpaintSubjectMaskFeather(),
     TOMORI_OUTPAINT_UNDERPAINT_COLOR: resolveComfyUiOutpaintUnderpaintColor(),
@@ -3376,7 +3376,7 @@ export async function generateCustomImageViaEndpoint(params: {
             `outpaint_amount=${resolveComfyUiOutpaintAmount(diagnosticOptions)}`,
             `outpaint_source_scale=${diagnosticOutpaintLayout.sourceScale}`,
             `outpaint_overlap=${diagnosticOutpaintLayout.overlap}`,
-            "outpaint_preserve=subject",
+            "outpaint_preserve=inner_source",
             "outpaint_background_preserve=edge_context",
             `outpaint_pad=${diagnosticOutpaintPadLeft}/${diagnosticOutpaintPadTop}/${diagnosticOutpaintPadRight}/${diagnosticOutpaintPadBottom}`,
             `outpaint_pad_feather=${diagnosticOutpaintPadFeather}`,
