@@ -139,7 +139,7 @@ export class GenerateImageTool extends BaseTool {
       outpaint_strategy: {
         type: "string",
         description:
-          "Optional for outpainting: Use 'full_canvas' for NovelAI-style expanded-canvas inpainting when the ComfyUI workflow supports it. Use 'edge_extend' to preserve the original source scale and add pixels beyond one or more edges. Use 'zoom_out' only when the workflow supports placing the original image smaller inside a larger generated scene.",
+          "Optional for outpainting: Use 'full_canvas' for all-direction expansion, zoom-out, pull-back, or NovelAI-style expanded-canvas inpainting when the ComfyUI workflow supports it. Use 'edge_extend' only for one-edge or small directional extensions where the original source scale must be preserved. Use 'zoom_out' only when the workflow supports placing the original image smaller inside a larger generated scene.",
         enum: ["full_canvas", "edge_extend", "zoom_out"],
       },
       outpaint_amount: {

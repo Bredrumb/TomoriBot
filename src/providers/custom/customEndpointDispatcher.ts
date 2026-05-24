@@ -1237,7 +1237,7 @@ function normalizeComfyUiOutpaintStrategy(value: string | null | undefined): Com
   if (["zoom_out", "zoomout", "pull_back", "shrink", "reframe"].includes(normalized)) {
     return "zoom_out";
   }
-  if (["edge_extend", "extend_edges", "pad", "padding", "outpaint"].includes(normalized)) {
+  if (["edge_extend", "extend_edges", "pad", "padding", "crop_stitch", "crop_and_stitch"].includes(normalized)) {
     return "edge_extend";
   }
   return null;
@@ -1250,8 +1250,13 @@ function isComfyUiZoomOutPrompt(prompt: string): boolean {
 }
 
 function resolveComfyUiOutpaintStrategy(options: ComfyUiGenerationOptions): ComfyUiOutpaintStrategy {
+  const direction = normalizeComfyUiExtendDirection(options.inpaintExtendDirection);
+  const allDirectionOutpaint = direction === "all";
   const explicitStrategy = normalizeComfyUiOutpaintStrategy(options.outpaintStrategy);
   if (explicitStrategy) {
+    if (explicitStrategy === "edge_extend" && allDirectionOutpaint) {
+      return "full_canvas";
+    }
     return explicitStrategy === "zoom_out" ? "full_canvas" : explicitStrategy;
   }
 
@@ -1259,10 +1264,13 @@ function resolveComfyUiOutpaintStrategy(options: ComfyUiGenerationOptions): Comf
     readOptionalStringEnv("COMFYUI_OUTPAINT_STRATEGY") ?? readOptionalStringEnv("ANIMA3_OUTPAINT_STRATEGY"),
   );
   if (defaultStrategy) {
+    if (defaultStrategy === "edge_extend" && allDirectionOutpaint) {
+      return "full_canvas";
+    }
     return defaultStrategy === "zoom_out" ? "full_canvas" : defaultStrategy;
   }
 
-  if (isComfyUiZoomOutPrompt(options.prompt)) {
+  if (allDirectionOutpaint || isComfyUiZoomOutPrompt(options.prompt)) {
     return "full_canvas";
   }
 
