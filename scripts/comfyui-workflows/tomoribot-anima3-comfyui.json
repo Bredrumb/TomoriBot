@@ -1689,7 +1689,7 @@
         0
       ],
       "pixels": [
-        "332",
+        "336",
         0
       ],
       "mask": [
@@ -1997,6 +1997,50 @@
       "mask": [
         "332",
         1
+      ]
+    }
+  },
+  "334": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "178",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": "{TOMORI_WIDTH}",
+      "height": "{TOMORI_HEIGHT}",
+      "crop": "center"
+    }
+  },
+  "335": {
+    "class_type": "ImageBlur",
+    "inputs": {
+      "image": [
+        "334",
+        0
+      ],
+      "blur_radius": "{TOMORI_OUTPAINT_GUIDE_BLUR_RADIUS}",
+      "sigma": "{TOMORI_OUTPAINT_GUIDE_BLUR_SIGMA}"
+    }
+  },
+  "336": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "335",
+        0
+      ],
+      "source": [
+        "332",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "resize_source": false,
+      "mask": [
+        "333",
+        0
       ]
     }
   }

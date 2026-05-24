@@ -1318,6 +1318,28 @@ function resolveComfyUiOutpaintPadFeather(): number {
   );
 }
 
+function resolveComfyUiOutpaintGuideBlurRadius(): number {
+  return Math.round(
+    clampNumber(
+      readOptionalNumberEnv("COMFYUI_OUTPAINT_GUIDE_BLUR_RADIUS") ??
+        readOptionalNumberEnv("ANIMA3_OUTPAINT_GUIDE_BLUR_RADIUS") ??
+        24,
+      1,
+      31,
+    ),
+  );
+}
+
+function resolveComfyUiOutpaintGuideBlurSigma(): number {
+  return clampNumber(
+    readOptionalNumberEnv("COMFYUI_OUTPAINT_GUIDE_BLUR_SIGMA") ??
+      readOptionalNumberEnv("ANIMA3_OUTPAINT_GUIDE_BLUR_SIGMA") ??
+      6,
+    0.1,
+    10,
+  );
+}
+
 function resolveComfyUiOutpaintUnderpaintColor(): number {
   return Math.round(
     clampNumber(
@@ -2669,6 +2691,8 @@ function buildComfyUiPlaceholderMap(
     TOMORI_OUTPAINT_PAD_RIGHT: outpaintPadRight,
     TOMORI_OUTPAINT_PAD_BOTTOM: outpaintPadBottom,
     TOMORI_OUTPAINT_PAD_FEATHER: outpaintPadFeather,
+    TOMORI_OUTPAINT_GUIDE_BLUR_RADIUS: resolveComfyUiOutpaintGuideBlurRadius(),
+    TOMORI_OUTPAINT_GUIDE_BLUR_SIGMA: resolveComfyUiOutpaintGuideBlurSigma(),
     TOMORI_OUTPAINT_MASK_SOURCE_X: outpaintLayout?.maskSourceX ?? 0,
     TOMORI_OUTPAINT_MASK_SOURCE_Y: outpaintLayout?.maskSourceY ?? 0,
     TOMORI_OUTPAINT_PROTECTED_SOURCE_X:
@@ -3323,7 +3347,8 @@ export async function generateCustomImageViaEndpoint(params: {
             "outpaint_background_preserve=edge_context",
             `outpaint_pad=${diagnosticOutpaintPadLeft}/${diagnosticOutpaintPadTop}/${diagnosticOutpaintPadRight}/${diagnosticOutpaintPadBottom}`,
             `outpaint_pad_feather=${diagnosticOutpaintPadFeather}`,
-            "outpaint_underpaint=padded_source",
+            "outpaint_underpaint=blurred_source_guide",
+            `outpaint_guide_blur=${resolveComfyUiOutpaintGuideBlurRadius()}/${resolveComfyUiOutpaintGuideBlurSigma()}`,
             `outpaint_extend_factors=${diagnosticWorkflowOutpaintFactors.up}/${diagnosticWorkflowOutpaintFactors.down}/${diagnosticWorkflowOutpaintFactors.left}/${diagnosticWorkflowOutpaintFactors.right}`,
             `outpaint_source_placement=${diagnosticOutpaintLayout.placedSourceX}x${diagnosticOutpaintLayout.placedSourceY}+${diagnosticOutpaintLayout.placedSourceWidth}x${diagnosticOutpaintLayout.placedSourceHeight}`,
             `outpaint_mask_source_rect=${diagnosticOutpaintLayout.maskSourceX}x${diagnosticOutpaintLayout.maskSourceY}+${diagnosticOutpaintLayout.maskSourceWidth}x${diagnosticOutpaintLayout.maskSourceHeight}`,
