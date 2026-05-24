@@ -1649,7 +1649,7 @@ function buildComfyUiPromptWithDefaults(
         ? scaleSource
           ? [
               "zoom-out full-canvas outpainting: place the original image smaller inside a larger canvas",
-              "preserve the original image content except for a small feathered edge transition",
+              "preserve the main source subject and central composition without preserving the old image rectangle as a panel",
               "continue the visible background beyond the original image edges instead of replacing the original setting",
               "fill the padded canvas as one coherent pulled-back view that matches the original background mood, lighting, palette, and style",
             ]
