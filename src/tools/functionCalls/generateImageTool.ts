@@ -145,7 +145,7 @@ export class GenerateImageTool extends BaseTool {
       outpaint_amount: {
         type: "string",
         description:
-          "Optional preset for how much canvas to reveal during outpainting. Use 'slight' when the user asks to zoom out a little or only wants a small amount of extra context. Use 'moderate' for the default amount. Use 'large' for a clear wider/fuller view, full outfit, visible legs, lower body, or head-to-toe requests. Use 'dramatic' only for a very far zoom-out or huge expansion. Do not pair slight/moderate amounts with full-body promises; ask for more of the outfit/body/environment as space allows instead.",
+          "Optional preset for how much canvas to reveal during outpainting. Use 'slight' when the user asks to zoom out a little or only wants a modest amount of extra context. Use 'moderate' for a clear wider pullback. Use 'large' for a fuller view, full outfit, visible legs, lower body, or head-to-toe requests. Use 'dramatic' only for a very far zoom-out or huge expansion. Do not pair slight/moderate amounts with full-body promises; ask for more of the outfit/body/environment as space allows instead.",
         enum: ["slight", "moderate", "large", "dramatic"],
       },
       extend_direction: {

@@ -1736,7 +1736,7 @@
       "cfg": "{TOMORI_INPAINT_CFG}",
       "sampler_name": "euler",
       "scheduler": "simple",
-      "denoise": 1
+      "denoise": "{TOMORI_OUTPAINT_DENOISE}"
     }
   },
   "310": {

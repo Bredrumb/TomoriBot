@@ -1203,14 +1203,14 @@ function resolveComfyUiOutpaintAmount(options: ComfyUiGenerationOptions): ComfyU
 function getComfyUiOutpaintAmountDefaults(amount: ComfyUiOutpaintAmount): { pixels: number; zoomScaleAll: number; zoomScaleOneSide: number } {
   switch (amount) {
     case "slight":
-      return { pixels: 96, zoomScaleAll: 0.9, zoomScaleOneSide: 0.92 };
+      return { pixels: 160, zoomScaleAll: 0.84, zoomScaleOneSide: 0.88 };
     case "large":
-      return { pixels: 256, zoomScaleAll: 0.74, zoomScaleOneSide: 0.82 };
-    case "dramatic":
       return { pixels: 384, zoomScaleAll: 0.62, zoomScaleOneSide: 0.74 };
+    case "dramatic":
+      return { pixels: 512, zoomScaleAll: 0.54, zoomScaleOneSide: 0.66 };
     case "moderate":
     default:
-      return { pixels: 160, zoomScaleAll: 0.84, zoomScaleOneSide: 0.88 };
+      return { pixels: 256, zoomScaleAll: 0.74, zoomScaleOneSide: 0.82 };
   }
 }
 
@@ -1337,6 +1337,16 @@ function resolveComfyUiOutpaintGuideBlurSigma(): number {
       6,
     0.1,
     10,
+  );
+}
+
+function resolveComfyUiOutpaintDenoise(): number {
+  return clampNumber(
+    readOptionalNumberEnv("COMFYUI_OUTPAINT_DENOISE") ??
+      readOptionalNumberEnv("ANIMA3_OUTPAINT_DENOISE") ??
+      0.86,
+    0.5,
+    1,
   );
 }
 
@@ -1776,6 +1786,10 @@ function buildComfyUiNegativePrompt(options: ComfyUiGenerationOptions, inpaint: 
       "changed original source area",
       "visible seam",
       "hard border",
+      "dark outer frame",
+      "black outer border",
+      "matte border",
+      "vignette frame",
       "blank padding",
       "empty extension",
       "mirrored edge",
@@ -2693,6 +2707,7 @@ function buildComfyUiPlaceholderMap(
     TOMORI_OUTPAINT_PAD_FEATHER: outpaintPadFeather,
     TOMORI_OUTPAINT_GUIDE_BLUR_RADIUS: resolveComfyUiOutpaintGuideBlurRadius(),
     TOMORI_OUTPAINT_GUIDE_BLUR_SIGMA: resolveComfyUiOutpaintGuideBlurSigma(),
+    TOMORI_OUTPAINT_DENOISE: resolveComfyUiOutpaintDenoise(),
     TOMORI_OUTPAINT_MASK_SOURCE_X: outpaintLayout?.maskSourceX ?? 0,
     TOMORI_OUTPAINT_MASK_SOURCE_Y: outpaintLayout?.maskSourceY ?? 0,
     TOMORI_OUTPAINT_PROTECTED_SOURCE_X:
@@ -3349,6 +3364,7 @@ export async function generateCustomImageViaEndpoint(params: {
             `outpaint_pad_feather=${diagnosticOutpaintPadFeather}`,
             "outpaint_underpaint=blurred_source_guide",
             `outpaint_guide_blur=${resolveComfyUiOutpaintGuideBlurRadius()}/${resolveComfyUiOutpaintGuideBlurSigma()}`,
+            `outpaint_denoise=${resolveComfyUiOutpaintDenoise()}`,
             `outpaint_extend_factors=${diagnosticWorkflowOutpaintFactors.up}/${diagnosticWorkflowOutpaintFactors.down}/${diagnosticWorkflowOutpaintFactors.left}/${diagnosticWorkflowOutpaintFactors.right}`,
             `outpaint_source_placement=${diagnosticOutpaintLayout.placedSourceX}x${diagnosticOutpaintLayout.placedSourceY}+${diagnosticOutpaintLayout.placedSourceWidth}x${diagnosticOutpaintLayout.placedSourceHeight}`,
             `outpaint_mask_source_rect=${diagnosticOutpaintLayout.maskSourceX}x${diagnosticOutpaintLayout.maskSourceY}+${diagnosticOutpaintLayout.maskSourceWidth}x${diagnosticOutpaintLayout.maskSourceHeight}`,
