@@ -1282,7 +1282,7 @@ function resolveComfyUiOutpaintOverlap(options: ComfyUiGenerationOptions): numbe
     options.outpaintOverlap ??
       readOptionalNumberEnv("COMFYUI_OUTPAINT_OVERLAP") ??
       readOptionalNumberEnv("ANIMA3_OUTPAINT_OVERLAP") ??
-      96,
+      32,
     0,
     256,
   );
@@ -1308,29 +1308,13 @@ function resolveComfyUiOutpaintSubjectMaskFeather(): number {
   );
 }
 
-function resolveComfyUiOutpaintPadFeather(largestPad = 0): number {
-  const configuredFeather =
-    readOptionalNumberEnv("COMFYUI_OUTPAINT_PAD_FEATHER") ?? readOptionalNumberEnv("ANIMA3_OUTPAINT_PAD_FEATHER");
-  if (configuredFeather !== null && configuredFeather !== undefined) {
-    return clampNumber(configuredFeather, 0, 256);
-  }
-
-  const adaptiveFeather =
-    largestPad > 0 ? clampNumber(Math.round(largestPad * 0.6), 64, 192) : 96;
+function resolveComfyUiOutpaintPadFeather(): number {
   return clampNumber(
-    adaptiveFeather,
+    readOptionalNumberEnv("COMFYUI_OUTPAINT_PAD_FEATHER") ??
+      readOptionalNumberEnv("ANIMA3_OUTPAINT_PAD_FEATHER") ??
+      32,
     0,
     256,
-  );
-}
-
-function resolveComfyUiOutpaintBlendFeather(): number {
-  return clampNumber(
-    readOptionalNumberEnv("COMFYUI_OUTPAINT_BLEND_FEATHER") ??
-      readOptionalNumberEnv("ANIMA3_OUTPAINT_BLEND_FEATHER") ??
-      48,
-    0,
-    128,
   );
 }
 
@@ -1563,9 +1547,9 @@ function buildComfyUiOutpaintLayout(
         : 0;
   const rawOverlap = resolveComfyUiOutpaintOverlap(options);
   const zoomOutOverlapCap = clampNumber(
-    readOptionalNumberEnv("COMFYUI_OUTPAINT_ZOOM_MAX_OVERLAP") ?? readOptionalNumberEnv("ANIMA3_OUTPAINT_ZOOM_MAX_OVERLAP") ?? 96,
+    readOptionalNumberEnv("COMFYUI_OUTPAINT_ZOOM_MAX_OVERLAP") ?? readOptionalNumberEnv("ANIMA3_OUTPAINT_ZOOM_MAX_OVERLAP") ?? 32,
     0,
-    192,
+    64,
   );
   const overlap = Math.min(rawOverlap, Math.floor(Math.min(placedSourceWidth, placedSourceHeight) / 3));
   const effectiveOverlap = scaleSource ? Math.min(overlap, zoomOutOverlapCap) : overlap;
@@ -2660,8 +2644,7 @@ function buildComfyUiPlaceholderMap(
     ? Math.max(0, dimensions.output.height - outpaintLayout.placedSourceY - outpaintLayout.placedSourceHeight)
     : 0;
   const largestOutpaintPad = Math.max(outpaintPadLeft, outpaintPadTop, outpaintPadRight, outpaintPadBottom);
-  const outpaintPadFeather =
-    largestOutpaintPad > 0 ? Math.min(resolveComfyUiOutpaintPadFeather(largestOutpaintPad), largestOutpaintPad) : 0;
+  const outpaintPadFeather = largestOutpaintPad > 0 ? Math.min(resolveComfyUiOutpaintPadFeather(), largestOutpaintPad) : 0;
   const placeholderMap: Record<string, WorkflowPlaceholderValue> = {
     TOMORI_PROMPT: options.prompt,
     TOMORI_PROMPT_WITH_DEFAULTS: buildComfyUiPromptWithDefaults(
@@ -2722,7 +2705,6 @@ function buildComfyUiPlaceholderMap(
     TOMORI_OUTPAINT_PAD_RIGHT: outpaintPadRight,
     TOMORI_OUTPAINT_PAD_BOTTOM: outpaintPadBottom,
     TOMORI_OUTPAINT_PAD_FEATHER: outpaintPadFeather,
-    TOMORI_OUTPAINT_BLEND_FEATHER: resolveComfyUiOutpaintBlendFeather(),
     TOMORI_OUTPAINT_GUIDE_BLUR_RADIUS: resolveComfyUiOutpaintGuideBlurRadius(),
     TOMORI_OUTPAINT_GUIDE_BLUR_SIGMA: resolveComfyUiOutpaintGuideBlurSigma(),
     TOMORI_OUTPAINT_DENOISE: resolveComfyUiOutpaintDenoise(),
@@ -3358,7 +3340,7 @@ export async function generateCustomImageViaEndpoint(params: {
     );
     const diagnosticOutpaintPadFeather =
       diagnosticLargestOutpaintPad > 0
-        ? Math.min(resolveComfyUiOutpaintPadFeather(diagnosticLargestOutpaintPad), diagnosticLargestOutpaintPad)
+        ? Math.min(resolveComfyUiOutpaintPadFeather(), diagnosticLargestOutpaintPad)
         : 0;
     const diagnosticDetails = [
       `mask_prompt=${JSON.stringify(diagnosticWorkflowMaskPrompt)}`,
@@ -3380,7 +3362,6 @@ export async function generateCustomImageViaEndpoint(params: {
             "outpaint_background_preserve=edge_context",
             `outpaint_pad=${diagnosticOutpaintPadLeft}/${diagnosticOutpaintPadTop}/${diagnosticOutpaintPadRight}/${diagnosticOutpaintPadBottom}`,
             `outpaint_pad_feather=${diagnosticOutpaintPadFeather}`,
-            `outpaint_blend_feather=${resolveComfyUiOutpaintBlendFeather()}`,
             "outpaint_underpaint=blurred_source_guide",
             `outpaint_guide_blur=${resolveComfyUiOutpaintGuideBlurRadius()}/${resolveComfyUiOutpaintGuideBlurSigma()}`,
             `outpaint_denoise=${resolveComfyUiOutpaintDenoise()}`,
