@@ -1405,16 +1405,27 @@ function getComfyUiLayoutOutpaintFactors(
   };
 }
 
-function roundDownToNearestMultiple(value: number, multiple: number): number {
-  return Math.max(multiple, Math.floor(value / multiple) * multiple);
-}
-
 function buildComfyUiOutpaintDimensions(
+  options: ComfyUiGenerationOptions,
   sourceDimensions: { width: number; height: number },
   direction: string,
   pixels: number,
 ): { width: number; height: number } {
+  const strategy = resolveComfyUiOutpaintStrategy(options);
   const factors = getComfyUiDirectionalOutpaintFactors(direction);
+  if (shouldScaleComfyUiOutpaintSource(options, strategy, direction)) {
+    const sourceScale = resolveComfyUiOutpaintZoomScale(options, direction);
+    return {
+      width:
+        factors.left > 0 || factors.right > 0
+          ? roundToNearestMultiple(sourceDimensions.width / sourceScale, COMFYUI_DIMENSION_MULTIPLE)
+          : sourceDimensions.width,
+      height:
+        factors.up > 0 || factors.down > 0
+          ? roundToNearestMultiple(sourceDimensions.height / sourceScale, COMFYUI_DIMENSION_MULTIPLE)
+          : sourceDimensions.height,
+    };
+  }
   return {
     width: roundToNearestMultiple(
       sourceDimensions.width + pixels * factors.left + pixels * factors.right,
@@ -1466,17 +1477,8 @@ function buildComfyUiOutpaintLayout(
   const factors = getComfyUiDirectionalOutpaintFactors(direction);
   const scaleSource = shouldScaleComfyUiOutpaintSource(options, strategy, direction);
   const sourceScale = scaleSource ? resolveComfyUiOutpaintZoomScale(options, direction) : 1;
-  const placedSourceWidth =
-    scaleSource
-      ? Math.min(sourceDimensions.width, roundDownToNearestMultiple(sourceDimensions.width * sourceScale, COMFYUI_DIMENSION_MULTIPLE))
-      : sourceDimensions.width;
-  const placedSourceHeight =
-    scaleSource
-      ? Math.min(
-          sourceDimensions.height,
-          roundDownToNearestMultiple(sourceDimensions.height * sourceScale, COMFYUI_DIMENSION_MULTIPLE),
-        )
-      : sourceDimensions.height;
+  const placedSourceWidth = sourceDimensions.width;
+  const placedSourceHeight = sourceDimensions.height;
   const placedSourceX =
     scaleSource
       ? resolveComfyUiOutpaintAxisPlacement(outputDimensions.width, placedSourceWidth, factors.left > 0, factors.right > 0)
@@ -2821,7 +2823,7 @@ async function generateWithComfyUi(
   const dimensions = {
     source: sourceDimensions,
     output: outpaint
-      ? buildComfyUiOutpaintDimensions(sourceDimensions, outpaintDirection, outpaintPixels)
+      ? buildComfyUiOutpaintDimensions(generationOptions, sourceDimensions, outpaintDirection, outpaintPixels)
       : sourceDimensions,
   };
   const referencePayload = buildComfyUiReferencePayload(generationOptions.referenceImages ?? []);
@@ -3185,6 +3187,7 @@ export async function generateCustomImageViaEndpoint(params: {
     const diagnosticOutpaintDirection = normalizeComfyUiExtendDirection(inpaintExtendDirection);
     const diagnosticOutputDimensions = diagnosticOutpaint
       ? buildComfyUiOutpaintDimensions(
+          diagnosticOptions,
           diagnosticSourceDimensions,
           diagnosticOutpaintDirection,
           diagnosticOutpaintPixels,
