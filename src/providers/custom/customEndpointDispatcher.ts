@@ -1493,7 +1493,7 @@ function buildComfyUiOutpaintLayout(
         : 0;
   const rawOverlap = resolveComfyUiOutpaintOverlap(options);
   const zoomOutOverlapCap = clampNumber(
-    readOptionalNumberEnv("COMFYUI_OUTPAINT_ZOOM_MAX_OVERLAP") ?? readOptionalNumberEnv("ANIMA3_OUTPAINT_ZOOM_MAX_OVERLAP") ?? 12,
+    readOptionalNumberEnv("COMFYUI_OUTPAINT_ZOOM_MAX_OVERLAP") ?? readOptionalNumberEnv("ANIMA3_OUTPAINT_ZOOM_MAX_OVERLAP") ?? 32,
     0,
     64,
   );

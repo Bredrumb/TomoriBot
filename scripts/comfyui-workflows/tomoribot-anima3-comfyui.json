@@ -1906,7 +1906,7 @@
     "class_type": "ImpactConditionalBranch",
     "inputs": {
       "tt_value": [
-        "321",
+        "331",
         0
       ],
       "ff_value": [
@@ -1927,7 +1927,7 @@
         0
       ],
       "source": [
-        "321",
+        "331",
         0
       ],
       "x": "{TOMORI_OUTPAINT_SOURCE_X}",
@@ -1950,6 +1950,31 @@
         "322",
         3
       ]
+    }
+  },
+  "330": {
+    "class_type": "InvertMask",
+    "inputs": {
+      "mask": [
+        "320",
+        0
+      ]
+    }
+  },
+  "331": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "321",
+        0
+      ],
+      "source": [
+        "330",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "operation": "subtract"
     }
   }
 }
