@@ -1786,7 +1786,7 @@
       "y": "{TOMORI_OUTPAINT_SOURCE_Y}",
       "resize_source": false,
       "mask": [
-        "320",
+        "323",
         0
       ]
     }
@@ -1877,6 +1877,46 @@
       "x": "{TOMORI_OUTPAINT_PROTECTED_SOURCE_X}",
       "y": "{TOMORI_OUTPAINT_PROTECTED_SOURCE_Y}",
       "operation": "or"
+    }
+  },
+  "321": {
+    "class_type": "GrowMaskWithBlur",
+    "inputs": {
+      "mask": [
+        "194",
+        1
+      ],
+      "expand": "{TOMORI_OUTPAINT_SUBJECT_MASK_GROW}",
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_OUTPAINT_SUBJECT_MASK_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true
+    }
+  },
+  "322": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_OUTPAINT_PRESERVE_SUBJECT_ONLY}"
+    }
+  },
+  "323": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "321",
+        0
+      ],
+      "ff_value": [
+        "320",
+        0
+      ],
+      "cond": [
+        "322",
+        3
+      ]
     }
   }
 }

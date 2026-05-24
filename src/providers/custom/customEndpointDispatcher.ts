@@ -1216,6 +1216,26 @@ function resolveComfyUiOutpaintOverlap(options: ComfyUiGenerationOptions): numbe
   );
 }
 
+function resolveComfyUiOutpaintSubjectMaskGrow(): number {
+  return clampNumber(
+    readOptionalNumberEnv("COMFYUI_OUTPAINT_SUBJECT_MASK_GROW") ??
+      readOptionalNumberEnv("ANIMA3_OUTPAINT_SUBJECT_MASK_GROW") ??
+      8,
+    0,
+    64,
+  );
+}
+
+function resolveComfyUiOutpaintSubjectMaskFeather(): number {
+  return clampNumber(
+    readOptionalNumberEnv("COMFYUI_OUTPAINT_SUBJECT_MASK_FEATHER") ??
+      readOptionalNumberEnv("ANIMA3_OUTPAINT_SUBJECT_MASK_FEATHER") ??
+      8,
+    0,
+    64,
+  );
+}
+
 function resolveComfyUiOutpaintZoomScale(options: ComfyUiGenerationOptions, direction: string): number {
   const defaultScale = direction === "all" ? 0.72 : 0.82;
   return clampNumber(
@@ -1397,15 +1417,21 @@ function buildComfyUiOutpaintLayout(
         ? Math.max(0, outputDimensions.height - sourceDimensions.height - factors.down * resolveComfyUiOutpaintPixels(options))
         : 0;
   const rawOverlap = resolveComfyUiOutpaintOverlap(options);
+  const zoomOutOverlapCap = clampNumber(
+    readOptionalNumberEnv("COMFYUI_OUTPAINT_ZOOM_MAX_OVERLAP") ?? readOptionalNumberEnv("ANIMA3_OUTPAINT_ZOOM_MAX_OVERLAP") ?? 12,
+    0,
+    64,
+  );
   const overlap = Math.min(rawOverlap, Math.floor(Math.min(placedSourceWidth, placedSourceHeight) / 3));
+  const effectiveOverlap = scaleSource ? Math.min(overlap, zoomOutOverlapCap) : overlap;
   const leftPad = placedSourceX;
   const topPad = placedSourceY;
   const rightPad = outputDimensions.width - placedSourceX - placedSourceWidth;
   const bottomPad = outputDimensions.height - placedSourceY - placedSourceHeight;
-  const maskInsetLeft = leftPad > 0 ? overlap : 0;
-  const maskInsetTop = topPad > 0 ? overlap : 0;
-  const maskInsetRight = rightPad > 0 ? overlap : 0;
-  const maskInsetBottom = bottomPad > 0 ? overlap : 0;
+  const maskInsetLeft = leftPad > 0 ? effectiveOverlap : 0;
+  const maskInsetTop = topPad > 0 ? effectiveOverlap : 0;
+  const maskInsetRight = rightPad > 0 ? effectiveOverlap : 0;
+  const maskInsetBottom = bottomPad > 0 ? effectiveOverlap : 0;
   const maskSourceX = placedSourceX + maskInsetLeft;
   const maskSourceY = placedSourceY + maskInsetTop;
   const maskSourceWidth = Math.max(1, placedSourceWidth - maskInsetLeft - maskInsetRight);
@@ -1414,7 +1440,7 @@ function buildComfyUiOutpaintLayout(
   return {
     strategy,
     sourceScale,
-    overlap,
+    overlap: effectiveOverlap,
     placedSourceX,
     placedSourceY,
     placedSourceWidth,
@@ -2381,7 +2407,12 @@ function buildComfyUiPlaceholderMap(
   const referenceImageDataUrl = buildReferenceImageDataUrl(options);
   const hasReference = !!referenceImageDataUrl;
   const inpaint = hasReference && options.inpaint === true;
-  const maskPrompt = options.maskPrompt?.trim() || options.prompt;
+  const requestedMaskPrompt = options.maskPrompt?.trim() || options.prompt;
+  const outpaint = inpaint && isComfyUiOutpaint(options);
+  const maskPrompt =
+    outpaint && /^main foreground object$/i.test(requestedMaskPrompt)
+      ? inferComfyUiForegroundMaskPrompt(options.prompt)
+      : requestedMaskPrompt;
   const seed = options.seed ?? generateComfyUiSeed();
   const firstReferenceImage = referencePayload[0];
   const maskMode = inpaint ? normalizeComfyUiMaskMode(options.inpaintMaskMode) : "target";
@@ -2390,7 +2421,6 @@ function buildComfyUiPlaceholderMap(
   const promptOptions = workflowMaskPrompt === maskPrompt ? options : { ...options, maskPrompt: workflowMaskPrompt };
   const rawInpaintSettings = resolveComfyUiInpaintSettings(options);
   const inpaintSettings = resolveComfyUiEffectiveInpaintSettings(rawInpaintSettings, inpaint, maskMode);
-  const outpaint = inpaint && isComfyUiOutpaint(options);
   const protectionSettings = resolveComfyUiMaskProtectionSettings({ ...options, inpaint });
   const denoise = resolveComfyUiEffectiveDenoise(options, inpaint, maskMode);
   const inpaintMaskContent = resolveComfyUiInpaintMaskContent(options, inpaint, maskMode);
@@ -2515,6 +2545,9 @@ function buildComfyUiPlaceholderMap(
       outpaintLayout ? Math.max(0, outpaintLayout.maskSourceY - outpaintLayout.placedSourceY) : 0,
     TOMORI_OUTPAINT_MASK_SOURCE_WIDTH: outpaintLayout?.maskSourceWidth ?? dimensions.source.width,
     TOMORI_OUTPAINT_MASK_SOURCE_HEIGHT: outpaintLayout?.maskSourceHeight ?? dimensions.source.height,
+    TOMORI_OUTPAINT_PRESERVE_SUBJECT_ONLY: !!outpaintLayout && outpaintLayout.sourceScale < 1,
+    TOMORI_OUTPAINT_SUBJECT_MASK_GROW: resolveComfyUiOutpaintSubjectMaskGrow(),
+    TOMORI_OUTPAINT_SUBJECT_MASK_FEATHER: resolveComfyUiOutpaintSubjectMaskFeather(),
     TOMORI_OUTPAINT_EXTEND_UP_FACTOR: workflowOutpaintFactors.up,
     TOMORI_OUTPAINT_EXTEND_DOWN_FACTOR: workflowOutpaintFactors.down,
     TOMORI_OUTPAINT_EXTEND_LEFT_FACTOR: workflowOutpaintFactors.left,
@@ -3119,6 +3152,7 @@ export async function generateCustomImageViaEndpoint(params: {
             `outpaint_strategy=${diagnosticOutpaintLayout.strategy}`,
             `outpaint_source_scale=${diagnosticOutpaintLayout.sourceScale}`,
             `outpaint_overlap=${diagnosticOutpaintLayout.overlap}`,
+            `outpaint_preserve=${diagnosticOutpaintLayout.sourceScale < 1 ? "subject" : "inner_source"}`,
             `outpaint_extend_factors=${diagnosticWorkflowOutpaintFactors.up}/${diagnosticWorkflowOutpaintFactors.down}/${diagnosticWorkflowOutpaintFactors.left}/${diagnosticWorkflowOutpaintFactors.right}`,
             `outpaint_source_placement=${diagnosticOutpaintLayout.placedSourceX}x${diagnosticOutpaintLayout.placedSourceY}+${diagnosticOutpaintLayout.placedSourceWidth}x${diagnosticOutpaintLayout.placedSourceHeight}`,
             `outpaint_mask_source_rect=${diagnosticOutpaintLayout.maskSourceX}x${diagnosticOutpaintLayout.maskSourceY}+${diagnosticOutpaintLayout.maskSourceWidth}x${diagnosticOutpaintLayout.maskSourceHeight}`,
