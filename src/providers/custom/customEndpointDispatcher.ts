@@ -1622,6 +1622,8 @@ function buildComfyUiPromptWithDefaults(
             "continue any recognizable source setting elements visible in the original image instead of replacing the setting with a new motif",
             "continue cropped clothing, limbs, or lower-body details only as far as the expanded canvas naturally allows",
             "do not compress anatomy, create tiny limbs, or add a separate small body to force a full-body view",
+            "keep only the foreground subject or subjects already present in the source image or explicitly requested by the user",
+            "treat ambiguous shapes behind the foreground subject or subjects as background texture, not as an extra person or creature",
             "the area around and behind the subject should look like one continuous scene, not a pasted image frame",
             "do not create a square backdrop, inset panel, visible source rectangle, poster border, duplicate subject, or unrelated foreground objects",
           ]
@@ -1747,6 +1749,13 @@ function buildComfyUiNegativePrompt(options: ComfyUiGenerationOptions, inpaint: 
       "giant limb",
       "unrelated body parts",
       "new character in border",
+      "unrequested character behind subject",
+      "unrequested person behind subject",
+      "unrequested creature behind subject",
+      "unrequested background character",
+      "unrequested partial body behind subject",
+      "unrequested face in background",
+      "unrequested body silhouette in background",
       "cropped duplicate person",
     );
     return negativeParts.join(", ");
