@@ -82,7 +82,7 @@ export async function runGenerationTurn(
 
         const retryExcludedKeyIds = getRetryExcludedKeyIds(excludedKeyIds, rotationKeyId);
         const hasFallbackKey = await hasAvailableRotationKey(attempt.tomoriState, retryExcludedKeyIds);
-        context.streamingContext.suppressUserErrors = hasFallbackKey || hasPendingModelFallback;
+        setStreamUserErrorSuppression(context, hasFallbackKey || hasPendingModelFallback);
         context.streamingContext.forceModelFallback = hasPendingModelFallback;
 
         result = await runToolLoop({
@@ -123,7 +123,7 @@ export async function runGenerationTurn(
           log.info(`Fallback generation succeeded with ${attempt.label} after ${failures.length} failed attempt(s).`);
           await sendFallbackNoticeIfNeeded(context, attempt, failures);
         }
-        context.streamingContext.suppressUserErrors = false;
+        setStreamUserErrorSuppression(context, false);
         context.streamingContext.forceModelFallback = false;
 
         if (result.status === "error") {
@@ -144,12 +144,12 @@ export async function runGenerationTurn(
       streamResults: [],
       personaResponses: [],
     };
-    context.streamingContext.suppressUserErrors = false;
+    setStreamUserErrorSuppression(context, false);
     context.streamingContext.forceModelFallback = false;
     await responseSink.finalize(skipped);
     return skipped;
   } catch (error) {
-    context.streamingContext.suppressUserErrors = false;
+    setStreamUserErrorSuppression(context, false);
     context.streamingContext.forceModelFallback = false;
     await responseSink.emitError(error);
     const result: GenerationTurnResult = {
@@ -160,6 +160,10 @@ export async function runGenerationTurn(
     await responseSink.finalize(result);
     return result;
   }
+}
+
+function setStreamUserErrorSuppression(context: ChatTurnContext, temporarySuppressed: boolean): void {
+  context.streamingContext.suppressUserErrors = temporarySuppressed || !context.shouldSurfaceUserErrors;
 }
 
 async function buildGenerationAttempts(context: ChatTurnContext): Promise<GenerationAttempt[]> {
@@ -213,7 +217,7 @@ async function sendFallbackNoticeIfNeeded(
   attempt: GenerationAttempt,
   failures: FallbackNoticeAttempt[],
 ): Promise<void> {
-  if (context.isUserImpersonation || failures.length === 0) {
+  if (context.isUserImpersonation || failures.length === 0 || !context.shouldSurfaceUserErrors) {
     return;
   }
 

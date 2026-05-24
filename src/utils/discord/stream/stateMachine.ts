@@ -387,7 +387,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
   ): Promise<StreamResult & { messageSentCount?: number }> {
     this.clearInactivityTimer(state);
     if (this.isStreamTimedOut(state)) {
-      if (!isUserImpersonationStreamContext(context)) {
+      if (!context.suppressUserErrors && !isUserImpersonationStreamContext(context)) {
         await sendStandardEmbed(context.channel, context.locale, {
           titleKey: "genai.stream.inactivity_timeout_title",
           descriptionKey: "genai.stream.inactivity_timeout_description",

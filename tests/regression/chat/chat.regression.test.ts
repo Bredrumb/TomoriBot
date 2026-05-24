@@ -9,6 +9,7 @@ import {
   getOrCreateChannelLockEntry,
   releaseChannelLockAndReplayQueue,
 } from "@/utils/chat/channelQueue";
+import { shouldSurfaceChatUserErrors } from "@/utils/chat/errorVisibility";
 import { providerIsApiFamily } from "@/utils/chat/toolLoop";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
 import type { ChatIncoming } from "@/utils/chat/types";
@@ -225,6 +226,121 @@ describe("chat regression harness", () => {
 
   it("normalizes quoted trigger input before storage", () => {
     expect(parseTriggerWordListInput('"Quetz", `Tomo`, quetz')).toEqual(["quetz", "tomo"]);
+  });
+
+  it("keeps passive autochat-style turns quiet for user-facing error embeds", () => {
+    const client = makeClient();
+    const fixture = conversations[0];
+    const message = makeMessage(
+      {
+        ...fixture,
+        id: "passive_error_visibility",
+        message: {
+          ...fixture.message,
+          content: "just a normal chat message",
+          mentionedUserIds: [],
+        },
+      },
+      client,
+    );
+    const personas = fixture.personas.map((persona) => makeTomoriState(fixture, persona));
+    const incoming: ChatIncoming = {
+      client,
+      message,
+      isFromQueue: false,
+      retryCount: 0,
+      skipLock: false,
+      isPersonaJob: false,
+      isUserImpersonation: false,
+      textQuotaSource: "user",
+    };
+
+    expect(
+      shouldSurfaceChatUserErrors({
+        incoming,
+        client,
+        message,
+        isDMChannel: false,
+        allPersonas: personas,
+      }),
+    ).toBe(false);
+  });
+
+  it("surfaces user-facing error embeds for deliberate chat triggers", () => {
+    const client = makeClient();
+    const fixture = conversations[0];
+    const message = makeMessage(
+      {
+        ...fixture,
+        id: "direct_error_visibility",
+        message: {
+          ...fixture.message,
+          content: "Tomori, are you there?",
+          mentionedUserIds: [],
+        },
+      },
+      client,
+    );
+    const personas = fixture.personas.map((persona) => makeTomoriState(fixture, persona));
+    const incoming: ChatIncoming = {
+      client,
+      message,
+      isFromQueue: false,
+      retryCount: 0,
+      skipLock: false,
+      isPersonaJob: false,
+      isUserImpersonation: false,
+      textQuotaSource: "user",
+    };
+
+    expect(
+      shouldSurfaceChatUserErrors({
+        incoming,
+        client,
+        message,
+        isDMChannel: false,
+        allPersonas: personas,
+      }),
+    ).toBe(true);
+  });
+
+  it("lets internal triggers explicitly suppress user-facing error embeds", () => {
+    const client = makeClient();
+    const fixture = conversations[0];
+    const message = makeMessage(
+      {
+        ...fixture,
+        id: "explicit_suppressed_error_visibility",
+        message: {
+          ...fixture.message,
+          content: "Tomori, are you there?",
+          mentionedUserIds: [],
+        },
+      },
+      client,
+    );
+    const personas = fixture.personas.map((persona) => makeTomoriState(fixture, persona));
+    const incoming: ChatIncoming = {
+      client,
+      message,
+      isFromQueue: false,
+      retryCount: 0,
+      skipLock: false,
+      isPersonaJob: false,
+      isUserImpersonation: false,
+      textQuotaSource: "system",
+      shouldSurfaceUserErrors: false,
+    };
+
+    expect(
+      shouldSurfaceChatUserErrors({
+        incoming,
+        client,
+        message,
+        isDMChannel: false,
+        allPersonas: personas,
+      }),
+    ).toBe(false);
   });
 
   it("matches legacy stored trigger words with surrounding quotes", () => {

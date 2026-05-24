@@ -51,7 +51,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
   let thoughtLog: GenerationTurnResult["thoughtLog"];
 
   for (let iteration = 0; iteration < MAX_FUNCTION_CALL_ITERATIONS; iteration++) {
-    if (iteration === SOFT_WARN_ITERATION_THRESHOLD) {
+    if (iteration === SOFT_WARN_ITERATION_THRESHOLD && params.context.shouldSurfaceUserErrors) {
       await sendStandardEmbed(
         params.context.channel as Parameters<typeof sendStandardEmbed>[0],
         params.context.locale,
@@ -128,12 +128,14 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
     }
   }
 
-  await sendStandardEmbed(params.context.channel as Parameters<typeof sendStandardEmbed>[0], params.context.locale, {
-    color: ColorCode.WARN,
-    titleKey: "genai.max_iterations_title",
-    descriptionKey: "genai.max_iterations_streaming_description",
-    footerKey: "genai.generic_error_footer",
-  });
+  if (params.context.shouldSurfaceUserErrors) {
+    await sendStandardEmbed(params.context.channel as Parameters<typeof sendStandardEmbed>[0], params.context.locale, {
+      color: ColorCode.WARN,
+      titleKey: "genai.max_iterations_title",
+      descriptionKey: "genai.max_iterations_streaming_description",
+      footerKey: "genai.generic_error_footer",
+    });
+  }
   return buildResult("timeout", params.context, streamResults, finalText, detailsText, thoughtLog);
 }
 
@@ -239,6 +241,7 @@ async function executeToolCall(
     activePersonaId: params.context.currentPersona.persona_id ?? undefined,
     isUserImpersonation: params.context.isUserImpersonation,
     impersonatedUserId: params.context.impersonatedUserId,
+    suppressProgressNotices: !params.context.shouldSurfaceUserErrors || undefined,
     contextItems: params.context.contextItems,
     messageIdMap: params.context.messageIdMap,
     showKillHint: iteration >= SOFT_WARN_ITERATION_THRESHOLD,
@@ -371,6 +374,10 @@ async function emitToolErrorLoop(context: ChatTurnContext): Promise<void> {
   if (context.isUserImpersonation) {
     throw new Error("User impersonation aborted: model failed too many tool calls in a row.");
   }
+  if (!context.shouldSurfaceUserErrors) {
+    log.warn(`Suppressing tool error loop embed for non-deliberate chat turn ${context.message.id}`);
+    return;
+  }
   await sendStandardEmbed(
     context.channel as Parameters<typeof sendStandardEmbed>[0],
     context.locale,
@@ -397,6 +404,7 @@ function queueStopResponseIfPresent(context: ChatTurnContext): void {
     llmOverrideCodename: context.turn.lockedTurn.admission.incoming.llmOverrideCodename,
     selectedPersonaId: context.currentPersona.persona_id ?? undefined,
     textQuotaTriggerKey: context.textQuotaTriggerKey,
+    shouldSurfaceUserErrors: true,
   });
 }
 

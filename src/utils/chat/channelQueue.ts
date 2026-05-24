@@ -42,6 +42,7 @@ export type QueuedMessage = {
   textQuotaUserDiscId?: string;
   manualSystemPrompt?: string;
   manualPrefill?: string;
+  shouldSurfaceUserErrors?: boolean;
   injectedContextItems?: StructuredContextItem[];
   forcedMentions?: ForcedMention[];
   manualTriggerInvoker?: ManualTriggerInvoker;
@@ -253,6 +254,7 @@ export function queuePersonaJobsAtFront(args: {
   textQuotaSource: TextQuotaSource;
   textQuotaTriggerKey: string;
   textQuotaUserDiscId: string;
+  shouldSurfaceUserErrors?: boolean;
   injectedContextItems?: StructuredContextItem[];
   forcedMentions?: ForcedMention[];
 }): void {
@@ -269,6 +271,7 @@ export function queuePersonaJobsAtFront(args: {
       textQuotaSource: args.textQuotaSource,
       textQuotaTriggerKey: args.textQuotaTriggerKey,
       textQuotaUserDiscId: args.textQuotaUserDiscId,
+      shouldSurfaceUserErrors: args.shouldSurfaceUserErrors,
       injectedContextItems: args.injectedContextItems,
       forcedMentions: args.forcedMentions,
     });
@@ -287,6 +290,7 @@ export function queueStopResponseAtFront(args: {
   llmOverrideCodename?: string;
   selectedPersonaId?: number;
   textQuotaTriggerKey: string;
+  shouldSurfaceUserErrors?: boolean;
 }): void {
   const lockEntry = channelLocks.get(args.channelId);
   if (!lockEntry) {
@@ -302,6 +306,7 @@ export function queueStopResponseAtFront(args: {
     selectedPersonaId: args.selectedPersonaId,
     textQuotaSource: "system",
     textQuotaTriggerKey: args.textQuotaTriggerKey,
+    shouldSurfaceUserErrors: args.shouldSurfaceUserErrors,
   });
 
   log.info(
@@ -350,6 +355,7 @@ export function queueFollowUpForLockedTurn(args: {
   textQuotaUserDiscId: string;
   manualStreamingContextOverrides: QueuedMessage["manualStreamingContextOverrides"];
   isNaturalStopMessage: boolean;
+  shouldSurfaceUserErrors?: boolean;
 }): boolean {
   if (
     !args.lockEntry.isLocked ||
@@ -376,6 +382,7 @@ export function queueFollowUpForLockedTurn(args: {
       textQuotaSource: args.textQuotaSource,
       textQuotaTriggerKey: args.textQuotaTriggerKey,
       textQuotaUserDiscId: args.textQuotaUserDiscId,
+      shouldSurfaceUserErrors: args.shouldSurfaceUserErrors,
       manualStreamingContextOverrides: args.manualStreamingContextOverrides,
     });
 
@@ -399,6 +406,7 @@ export function queueFollowUpForLockedTurn(args: {
     textQuotaSource: args.textQuotaSource,
     textQuotaTriggerKey: args.textQuotaTriggerKey,
     textQuotaUserDiscId: args.textQuotaUserDiscId,
+    shouldSurfaceUserErrors: args.shouldSurfaceUserErrors,
     manualStreamingContextOverrides: args.manualStreamingContextOverrides,
   });
 

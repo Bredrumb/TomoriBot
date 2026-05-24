@@ -67,7 +67,7 @@ function getServerIdFromContext(context?: ToolContext): number | undefined {
  * @param searchType - Type of search that was attempted
  */
 async function sendApiKeyErrorEmbed(context?: ToolContext, searchType = "search") {
-  if (!context?.channel) return;
+  if (!context?.channel || context.suppressProgressNotices) return;
 
   try {
     await sendStandardEmbed(

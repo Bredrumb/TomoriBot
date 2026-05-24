@@ -97,16 +97,18 @@ export class StreamUiUpdater {
         throw new Error("User impersonation stopped because the response exceeded the streaming message limit.");
       }
 
-      await sendStandardEmbed(context.channel, context.locale, {
-        titleKey: "genai.stream.flush_limit_title",
-        descriptionKey: "genai.stream.flush_limit_description",
-        color: ColorCode.WARN,
-      }).catch((embedError) => {
-        log.warn(
-          "Failed to send flush limit warning embed",
-          embedError instanceof Error ? embedError : new Error(String(embedError)),
-        );
-      });
+      if (!context.suppressUserErrors) {
+        await sendStandardEmbed(context.channel, context.locale, {
+          titleKey: "genai.stream.flush_limit_title",
+          descriptionKey: "genai.stream.flush_limit_description",
+          color: ColorCode.WARN,
+        }).catch((embedError) => {
+          log.warn(
+            "Failed to send flush limit warning embed",
+            embedError instanceof Error ? embedError : new Error(String(embedError)),
+          );
+        });
+      }
 
       this.deps.requestStop(context.channel.id, "flush_limit");
       return null;

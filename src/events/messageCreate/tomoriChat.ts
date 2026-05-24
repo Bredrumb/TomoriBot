@@ -77,6 +77,7 @@ export async function tomoriChat(input: TomoriChatInput): Promise<void> {
           textQuotaUserDiscId: queued.textQuotaUserDiscId,
           manualSystemPrompt: queued.manualSystemPrompt,
           manualPrefill: queued.manualPrefill,
+          shouldSurfaceUserErrors: queued.shouldSurfaceUserErrors,
           injectedContextItems: queued.injectedContextItems,
           forcedMentions: queued.forcedMentions,
           manualTriggerInvoker: queued.manualTriggerInvoker,

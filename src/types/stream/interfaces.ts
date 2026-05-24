@@ -108,7 +108,7 @@ export interface StreamContext {
   // Provider context
   provider: string;
   locale: string;
-  suppressUserErrors?: boolean; // Suppress user-facing error embeds during key-rotation retries
+  suppressUserErrors?: boolean; // Suppress user-facing error embeds during retries or non-deliberate chat turns
   rotationKeyRetriesUsed?: boolean; // True if one or more rotation-key retries were attempted
   replyNoticeState?: { attempted: boolean; sent: boolean }; // Tracks the standalone alter reply notice across tool-call stream retries
 

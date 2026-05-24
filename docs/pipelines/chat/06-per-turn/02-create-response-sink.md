@@ -59,20 +59,20 @@ The `ChatResponseTarget` returned by `prepare` (see
     `resolvePersonaWebhookIdentity`.
   - **Main persona / DM / unsupported channel:** returns `undefined`.
 - Sends a webhook-error embed (cooldown-throttled per channel) if webhook
-  creation failed.
+  creation failed and the turn is deliberate enough to surface user errors.
 - Updates the channel lock's `activeTurnState` with this turn's persona ID
   and impersonation flags; clears `isInToolCallChain`.
 
 **On `emitStreamResult(result)`:**
 
 - Logs and renders an error embed via `sendStandardEmbed` if `result.status
-  === "error"`.
+  === "error"` and `context.shouldSurfaceUserErrors` is true.
 
 **On `emitError(error)`:**
 
 - Renders an error embed (or re-throws if `isUserImpersonation`, since
   impersonation errors must not surface as the impersonated user's
-  "message").
+  "message"). Non-deliberate turns log the failure and stay quiet in chat.
 
 **On `finalize(result)`:**
 

@@ -140,6 +140,7 @@ export class ReminderProcessor {
         isPersonaJob: false,
         isUserImpersonation: false,
         textQuotaSource: "system",
+        shouldSurfaceUserErrors: true,
         // Tasks (self_reminder) may spawn follow-up tasks; user reminders block create_task to prevent loops
         manualStreamingContextOverrides: isSelfReminder ? undefined : { disableReminderTool: true },
       });

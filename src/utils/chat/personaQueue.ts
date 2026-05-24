@@ -16,6 +16,7 @@ export function queueAdditionalPersonaTurns(args: {
   textQuotaSource: TextQuotaSource;
   textQuotaTriggerKey: string;
   textQuotaUserDiscId: string;
+  shouldSurfaceUserErrors?: boolean;
   injectedContextItems?: StructuredContextItem[];
   forcedMentions?: ForcedMention[];
 }): TomoriState[] {
@@ -55,6 +56,7 @@ export function queueAdditionalPersonaTurns(args: {
       textQuotaSource: args.textQuotaSource,
       textQuotaTriggerKey: args.textQuotaTriggerKey,
       textQuotaUserDiscId: args.textQuotaUserDiscId,
+      shouldSurfaceUserErrors: args.shouldSurfaceUserErrors,
       injectedContextItems: args.injectedContextItems,
       forcedMentions: args.forcedMentions,
     });

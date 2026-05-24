@@ -175,6 +175,7 @@ export class RandomTriggerProcessor {
         isUserImpersonation: false,
         textQuotaSource: "system",
         textQuotaTriggerKey: `random:${triggerId}:${lastMessage.id}`,
+        shouldSurfaceUserErrors: false,
         manualSystemPrompt: trigger.custom_prompt ?? undefined,
       });
 

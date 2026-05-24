@@ -382,6 +382,10 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
    * Send the standard DuckDuckGo rate-limit embed when all fallbacks are exhausted.
    */
   private async sendDuckDuckGoRateLimitEmbed(context: MCPExecutionContext): Promise<void> {
+    if (context.suppressProgressNotices) {
+      return;
+    }
+
     await sendStandardEmbed(
       context.channel,
       context.locale,

@@ -119,7 +119,7 @@ async function resolveResponseTarget(context: ChatTurnContext): Promise<ChatResp
 
   const webhookResult = await getOrCreateWebhook(webhookTargetChannel as BaseGuildTextChannel);
   if (!webhookResult.webhook) {
-    if (webhookResult.errorReason) {
+    if (webhookResult.errorReason && context.shouldSurfaceUserErrors) {
       await sendWebhookErrorEmbed(
         channel as BaseGuildTextChannel | AnyThreadChannel,
         context.locale,
@@ -181,6 +181,10 @@ async function emitGenerationError(context: ChatTurnContext, error: unknown): Pr
   if (context.isUserImpersonation) {
     throw error instanceof Error ? error : new Error("User impersonation failed before a reply could be sent.");
   }
+  if (!context.shouldSurfaceUserErrors) {
+    log.warn(`Suppressing generation error embed for non-deliberate chat turn ${context.message.id}`);
+    return;
+  }
 
   await sendStandardEmbed(
     context.channel as Parameters<typeof sendStandardEmbed>[0],
@@ -216,6 +220,7 @@ export async function handleStopResponse(originalStopMessage: Message, client: C
       isManuallyTriggered: true,
       forceReason: false,
       isStopResponse: true,
+      shouldSurfaceUserErrors: true,
     });
   } catch (error) {
     log.error("Failed to handle stop response:", error);

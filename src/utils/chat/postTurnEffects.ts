@@ -80,6 +80,7 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
     manualPrefill: incoming.manualPrefill,
     naiContinuationPrefill: lastStreamResult?.naiContinuationPrefill,
     emptyResponseFinishReason: streamResultData?.finishReason === "length" ? "length" : undefined,
+    shouldSurfaceUserErrors: context.shouldSurfaceUserErrors,
     injectedContextItems: retryInjectedContextItems,
     forcedMentions: incoming.forcedMentions,
     manualTriggerInvoker: incoming.manualTriggerInvoker,
@@ -262,6 +263,7 @@ function scheduleBoomerangFollowUp(context: ChatTurnContext): void {
         isUserImpersonation: boomerang.isUserImpersonation === true,
         impersonatedUserId: boomerang.impersonatedUserId,
         textQuotaSource: "system",
+        shouldSurfaceUserErrors: context.shouldSurfaceUserErrors,
         injectedContextItems: buildBoomerangContext(boomerang),
         manualStreamingContextOverrides: { disableCrossChannelMessage: true },
       });

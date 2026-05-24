@@ -23,6 +23,7 @@ import {
   type ChatAccessState,
 } from "@/utils/chat/admissionGuards";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
+import { shouldSurfaceChatUserErrors } from "@/utils/chat/errorVisibility";
 import type { ChatIncoming, NonRunnableChatAdmission } from "@/utils/chat/types";
 
 type RateLimitedChannel = Parameters<typeof enforceGlobalRateLimit>[0]["channel"];
@@ -68,6 +69,13 @@ async function evaluateLockedChannelAdmission(args: {
   if (incoming.skipLock) {
     return null;
   }
+  const shouldSurfaceUserErrors = shouldSurfaceChatUserErrors({
+    incoming,
+    client,
+    message,
+    isDMChannel: channelScope.isDMChannel,
+    allPersonas: earlyAllPersonas,
+  });
 
   const channelId = message.channel.id;
   const lockEntry = getOrCreateChannelLockEntry(channelId, channelScope.serverDiscId);
@@ -115,6 +123,7 @@ async function evaluateLockedChannelAdmission(args: {
       textQuotaUserDiscId,
       manualStreamingContextOverrides: followUpOverrides,
       isNaturalStopMessage: args.isNaturalStopMessage,
+      shouldSurfaceUserErrors: true,
     })
   ) {
     return ignored("locked_follow_up_queued");
@@ -167,6 +176,7 @@ async function evaluateLockedChannelAdmission(args: {
       guild: channelScope.guild,
       client,
       messageId: message.id,
+      notifyUser: shouldSurfaceUserErrors,
     });
     if (!rateLimitAllowed) {
       return ignored("locked_rate_limited");
@@ -186,6 +196,7 @@ async function evaluateLockedChannelAdmission(args: {
       author: message.author,
       locale: cooldownLocale,
       botName: earlyTomoriState.persona_nickname,
+      notifyUser: shouldSurfaceUserErrors,
     });
     if (rejectedByCooldown) {
       log.info(`Message ${message.id} rejected before queuing due to cooldown.`);
@@ -212,6 +223,7 @@ async function evaluateLockedChannelAdmission(args: {
       textQuotaUserDiscId,
       manualSystemPrompt: incoming.manualSystemPrompt,
       manualPrefill: incoming.manualPrefill,
+      shouldSurfaceUserErrors,
       injectedContextItems: incoming.injectedContextItems,
       forcedMentions: incoming.forcedMentions,
       manualTriggerInvoker: incoming.manualTriggerInvoker,

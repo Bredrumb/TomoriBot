@@ -71,6 +71,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     disableMessageMetadataContext: false,
     forceReason: incoming.forceReason,
     isManuallyTriggered: incoming.isManuallyTriggered,
+    suppressUserErrors: !turn.shouldSurfaceUserErrors,
     disableAllTools: incoming.isUserImpersonation,
     naiContinuationPrefill: incoming.naiContinuationPrefill,
     messageIdMap,
@@ -80,6 +81,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   if (incoming.manualStreamingContextOverrides) {
     Object.assign(streamingContext, incoming.manualStreamingContextOverrides);
   }
+  streamingContext.suppressUserErrors = !turn.shouldSurfaceUserErrors || streamingContext.suppressUserErrors === true;
 
   const assets = await loadPersonaAssets(turn);
   const history = await buildSimplifiedHistory(turn, messageIdMap);
@@ -306,6 +308,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     shouldApplyTextQuota: turn.shouldApplyTextQuota,
     textQuotaTriggerKey: turn.textQuotaTriggerKey,
     textQuotaState: turn.textQuotaState,
+    shouldSurfaceUserErrors: turn.shouldSurfaceUserErrors,
     deliberateToolModeActive,
     deliberateToolContextTurns,
     deliberateToolTriggerMatchByToolName,

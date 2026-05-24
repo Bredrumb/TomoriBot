@@ -13,7 +13,7 @@ import { createStandardEmbed, sendStandardEmbed } from "@/utils/discord/embedHel
 import { ColorCode, log } from "@/utils/misc/logger";
 import { checkTextQuota } from "@/utils/quota/textQuotaManager";
 import { checkServerRateLimit, checkUserRateLimit } from "@/utils/security/rateLimiter";
-import { escapeRegExp } from "@/utils/text/processors/regexUtils";
+import { isBaseTriggerWordMatch } from "@/utils/chat/errorVisibility";
 import {
   buildTextQuotaResetInfo,
   textQuotaTriggerStates,
@@ -21,13 +21,6 @@ import {
 } from "@/utils/chat/textQuotaState";
 import { getServerActiveMessageCount, getUserActiveMessageCount } from "@/utils/chat/channelActivity";
 import { resolveReferencedWebhookTarget } from "@/utils/chat/webhookIdentity";
-
-const BASE_TRIGGER_WORDS = process.env.BASE_TRIGGER_WORDS?.split(",").map((word) => word.trim()) || [
-  "tomori",
-  "tomo",
-  "トモリ",
-  "ともり",
-];
 
 export interface ChatAccessState {
   whitelistStatus: Awaited<ReturnType<typeof getCachedWhitelistStatus>> | null;
@@ -42,6 +35,7 @@ export interface DirectChatTriggerValidation {
   isReplyToBot: boolean;
   replyPersona: TomoriState | null;
   isBotMentioned: boolean;
+  isDirectUserIntent: boolean;
   isUserImpersonation: boolean;
   impersonatedUserId?: string;
 }
@@ -54,6 +48,7 @@ export async function enforceGlobalRateLimit(params: {
   messageId: string;
   userActiveCountAdjustment?: number;
   serverActiveCountAdjustment?: number;
+  notifyUser?: boolean;
 }): Promise<boolean> {
   const {
     userDiscId,
@@ -64,6 +59,7 @@ export async function enforceGlobalRateLimit(params: {
     messageId,
     userActiveCountAdjustment = 0,
     serverActiveCountAdjustment = 0,
+    notifyUser = true,
   } = params;
 
   const userActiveCount = Math.max(getUserActiveMessageCount(userDiscId) + userActiveCountAdjustment, 0);
@@ -74,10 +70,11 @@ export async function enforceGlobalRateLimit(params: {
       `User ${userDiscId} exceeded rate limit (${currentCount}/${userRateCheck.maxLimit} active messages). Dropping message ${messageId}.`,
     );
 
-    const tempUserRow = await getCachedUserRow(userDiscId);
-    const userLocale = tempUserRow?.language_pref ?? guild?.preferredLocale ?? "en-US";
-
-    await sendUserRateLimitDM(userDiscId, client, userLocale, currentCount);
+    if (notifyUser) {
+      const tempUserRow = await getCachedUserRow(userDiscId);
+      const userLocale = tempUserRow?.language_pref ?? guild?.preferredLocale ?? "en-US";
+      await sendUserRateLimitDM(userDiscId, client, userLocale, currentCount);
+    }
 
     return false;
   }
@@ -90,9 +87,10 @@ export async function enforceGlobalRateLimit(params: {
       `Server ${serverDiscId} exceeded rate limit (${currentCount}/${serverRateCheck.maxLimit} active messages). Dropping message ${messageId}.`,
     );
 
-    const serverLocale = guild?.preferredLocale ?? "en-US";
-
-    await sendServerRateLimitEmbed(channel, serverLocale, currentCount);
+    if (notifyUser) {
+      const serverLocale = guild?.preferredLocale ?? "en-US";
+      await sendServerRateLimitEmbed(channel, serverLocale, currentCount);
+    }
 
     return false;
   }
@@ -110,6 +108,7 @@ export async function rejectOnMessageTriggerCooldown(params: {
   author: User;
   locale: string;
   botName: string;
+  notifyUser?: boolean;
 }): Promise<boolean> {
   const cooldownResult = await cooldownRepository.checkMessageTriggerCooldownWithWhitelist(
     params.serverDiscId,
@@ -124,18 +123,20 @@ export async function rejectOnMessageTriggerCooldown(params: {
     return false;
   }
 
-  const footerKey = cooldownRepository.getCooldownTypeFooterKey(cooldownResult.cooldownType);
-  await sendCooldownDM(
-    params.author,
-    params.locale,
-    "general.message_cooldown_title",
-    "general.message_cooldown",
-    {
-      seconds: cooldownResult.remainingSeconds.toString(),
-      botName: params.botName,
-    },
-    footerKey,
-  );
+  if (params.notifyUser !== false) {
+    const footerKey = cooldownRepository.getCooldownTypeFooterKey(cooldownResult.cooldownType);
+    await sendCooldownDM(
+      params.author,
+      params.locale,
+      "general.message_cooldown_title",
+      "general.message_cooldown",
+      {
+        seconds: cooldownResult.remainingSeconds.toString(),
+        botName: params.botName,
+      },
+      footerKey,
+    );
+  }
   log.info(
     `Message trigger cooldown active for ${
       cooldownResult.cooldownType === CooldownType.PER_USER
@@ -174,6 +175,7 @@ export async function checkTextQuotaForAdmission(params: {
   userDiscId: string;
   channel: TextChannel | DMChannel | BaseGuildTextChannel | AnyThreadChannel | BaseGuildVoiceChannel;
   locale: string;
+  notifyUser?: boolean;
 }): Promise<{ allowed: true; state: TextQuotaTriggerState | null } | { allowed: false; state: null }> {
   if (!params.shouldApplyTextQuota) {
     return { allowed: true, state: null };
@@ -207,15 +209,17 @@ export async function checkTextQuotaForAdmission(params: {
       descriptionKey = "genai.text_serverwide_quota_exceeded_description";
     }
 
-    await sendStandardEmbed(params.channel, params.locale, {
-      color: ColorCode.ERROR,
-      titleKey: "genai.text_quota_exceeded_title",
-      descriptionKey,
-      descriptionVars: {
-        reset_info: resetInfo,
-      },
-      footerKey: "genai.text_quota_exceeded_footer",
-    });
+    if (params.notifyUser !== false) {
+      await sendStandardEmbed(params.channel, params.locale, {
+        color: ColorCode.ERROR,
+        titleKey: "genai.text_quota_exceeded_title",
+        descriptionKey,
+        descriptionVars: {
+          reset_info: resetInfo,
+        },
+        footerKey: "genai.text_quota_exceeded_footer",
+      });
+    }
     return { allowed: false, state: null };
   }
 
@@ -351,6 +355,7 @@ export async function validateDirectChatTrigger(params: {
   const isReplyToPersona = isReplyToBot || !!replyPersona;
   const isBaseTriggerWord = isBaseTriggerWordMatch(params.message.content);
   const isBotMentioned = !!(params.client.user && params.message.mentions.users.has(params.client.user.id));
+  const isDirectUserIntent = isBaseTriggerWord || isReplyToPersona || isBotMentioned;
   const shouldValidateState =
     isBaseTriggerWord ||
     isReplyToPersona ||
@@ -393,6 +398,7 @@ export async function validateDirectChatTrigger(params: {
       isReplyToBot,
       replyPersona,
       isBotMentioned,
+      isDirectUserIntent,
       isUserImpersonation,
       impersonatedUserId,
     };
@@ -411,6 +417,7 @@ export async function validateDirectChatTrigger(params: {
       isReplyToBot,
       replyPersona,
       isBotMentioned,
+      isDirectUserIntent,
       isUserImpersonation,
       impersonatedUserId,
     };
@@ -421,25 +428,10 @@ export async function validateDirectChatTrigger(params: {
     isReplyToBot,
     replyPersona,
     isBotMentioned,
+    isDirectUserIntent,
     isUserImpersonation,
     impersonatedUserId,
   };
-}
-
-function isBaseTriggerWordMatch(content: string): boolean {
-  for (const baseWord of BASE_TRIGGER_WORDS) {
-    if (/[\u3040-\u30FF\u4E00-\u9FFF]/.test(baseWord)) {
-      if (content.includes(baseWord)) {
-        return true;
-      }
-    } else {
-      const regex = new RegExp(`\\b${escapeRegExp(baseWord)}\\b`, "i");
-      if (regex.test(content)) {
-        return true;
-      }
-    }
-  }
-  return false;
 }
 
 async function sendUserRateLimitDM(

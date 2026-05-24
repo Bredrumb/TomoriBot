@@ -48,6 +48,7 @@ export function normalizeChatInvocation(input: TomoriChatInput): ChatIncoming {
     manualPrefill: input.manualPrefill,
     naiContinuationPrefill: input.naiContinuationPrefill,
     emptyResponseFinishReason: input.emptyResponseFinishReason,
+    shouldSurfaceUserErrors: input.shouldSurfaceUserErrors,
     injectedContextItems: input.injectedContextItems,
     forcedMentions: input.forcedMentions,
     manualTriggerInvoker: input.manualTriggerInvoker,
@@ -324,7 +325,12 @@ async function evaluateAudioTranscriptionAdmission(args: {
     `Audio transcription failed for message ${message.id}: ${transcriptionResult.failureReason ?? "unknown"}${transcriptionResult.failureDetails ? ` (${transcriptionResult.failureDetails})` : ""}`,
   );
   if (message.content.trim().length === 0) {
+    const shouldSurfaceTranscriptionFailure =
+      incoming.shouldSurfaceUserErrors ??
+      (Boolean(incoming.manualTriggerInvoker || incoming.reminderRecipientID || incoming.reminderData?.self_reminder) ||
+        message.channel.type === ChannelType.DM);
     if (
+      shouldSurfaceTranscriptionFailure &&
       transcriptionResult.failureReason !== "no_endpoint" &&
       transcriptionResult.failureReason !== "missing_api_key"
     ) {
@@ -462,8 +468,11 @@ async function resolveAdmissionChannelScope(
     };
   }
 
-  let shouldShowError = Boolean(incoming.isManuallyTriggered);
-  if (!shouldShowError && message.content) {
+  const hasExplicitErrorVisibility = typeof incoming.shouldSurfaceUserErrors === "boolean";
+  let shouldShowError =
+    incoming.shouldSurfaceUserErrors ??
+    Boolean(incoming.manualTriggerInvoker || incoming.reminderRecipientID || incoming.reminderData?.self_reminder);
+  if (!hasExplicitErrorVisibility && !shouldShowError && message.content) {
     shouldShowError = BASE_TRIGGER_WORDS.some((baseWord) => {
       if (/[\u3040-\u30FF\u4E00-\u9FFF]/.test(baseWord)) {
         return message.content.includes(baseWord);
@@ -471,10 +480,10 @@ async function resolveAdmissionChannelScope(
       return new RegExp(`\\b${escapeRegExp(baseWord)}\\b`, "i").test(message.content);
     });
   }
-  if (!shouldShowError && client.user && message.mentions.users.has(client.user.id)) {
+  if (!hasExplicitErrorVisibility && !shouldShowError && client.user && message.mentions.users.has(client.user.id)) {
     shouldShowError = true;
   }
-  if (!shouldShowError && message.reference?.messageId) {
+  if (!hasExplicitErrorVisibility && !shouldShowError && message.reference?.messageId) {
     try {
       const referenceMessage = await message.channel.messages.fetch(message.reference.messageId);
       if (referenceMessage && referenceMessage.author.id === client.user?.id) {

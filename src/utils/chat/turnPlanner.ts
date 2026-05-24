@@ -22,6 +22,7 @@ import {
   validateDirectChatTrigger,
 } from "@/utils/chat/admissionGuards";
 import { channelLocks, setActiveChannelTurnState } from "@/utils/chat/channelQueue";
+import { shouldSurfaceChatUserErrors } from "@/utils/chat/errorVisibility";
 import { queueAdditionalPersonaTurns } from "@/utils/chat/personaQueue";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
 import {
@@ -61,6 +62,14 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
   const fallbackPersona = mainPersona ?? allPersonas[0] ?? null;
   const tomoriState = admission.tomoriState ?? fallbackPersona;
   if (!tomoriState) {
+    const shouldSurfaceNoStateError = shouldSurfaceChatUserErrors({
+      incoming,
+      client,
+      message,
+      isDMChannel,
+      allPersonas,
+    });
+    incoming.shouldSurfaceUserErrors = shouldSurfaceNoStateError;
     // Surface the "not set up" error when the user directly triggered Tomori,
     // rather than failing silently — validateDirectChatTrigger handles null state.
     await validateDirectChatTrigger({
@@ -70,7 +79,7 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
       allPersonas,
       tomoriState: null,
       isDMChannel,
-      isManuallyTriggered: incoming.isManuallyTriggered,
+      isManuallyTriggered: shouldSurfaceNoStateError && incoming.isManuallyTriggered,
       userDiscId,
       serverDiscId,
       locale: admission.locale ?? "en-US",
@@ -115,6 +124,16 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     incoming.isUserImpersonation = true;
     incoming.impersonatedUserId = directTrigger.impersonatedUserId;
   }
+  const shouldSurfaceUserErrors = shouldSurfaceChatUserErrors({
+    incoming,
+    client,
+    message,
+    isDMChannel,
+    allPersonas,
+    isReplyToBotOrPersona: directTrigger.isReplyToBot || Boolean(directTrigger.replyPersona),
+    isBotMentioned: directTrigger.isBotMentioned,
+  });
+  incoming.shouldSurfaceUserErrors = shouldSurfaceUserErrors;
 
   if (!isDMChannel && tomoriState.config.thought_log_channel_disc_id === channel.id) {
     log.info(`Skipping normal chat trigger in configured thought-log channel ${channel.id}.`);
@@ -168,6 +187,7 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     channel,
     locale,
     isDMChannel,
+    shouldSurfaceUserErrors,
   });
   if (!credentialPolicy) {
     return { lockedTurn, turns: [] };
@@ -196,11 +216,26 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     return { lockedTurn, turns: [] };
   }
 
-  if (!(await enforceTurnGuards(lockedTurn, tomoriState, userRow, personasToRespond, credentialPolicy.source))) {
+  if (
+    !(await enforceTurnGuards(
+      lockedTurn,
+      tomoriState,
+      userRow,
+      personasToRespond,
+      credentialPolicy.source,
+      shouldSurfaceUserErrors,
+    ))
+  ) {
     return { lockedTurn, turns: [] };
   }
 
-  const textQuota = await prepareTextQuota(lockedTurn, tomoriState, credentialPolicy.source, userRow);
+  const textQuota = await prepareTextQuota(
+    lockedTurn,
+    tomoriState,
+    credentialPolicy.source,
+    userRow,
+    shouldSurfaceUserErrors,
+  );
   if (!textQuota.allowed) {
     return { lockedTurn, turns: [] };
   }
@@ -233,6 +268,7 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
       textQuotaSource: incoming.textQuotaSource,
       textQuotaTriggerKey: textQuota.triggerKey,
       textQuotaUserDiscId: incoming.textQuotaUserDiscId ?? cooldownUserDiscId,
+      shouldSurfaceUserErrors,
       injectedContextItems: incoming.injectedContextItems,
       forcedMentions: incoming.forcedMentions,
     });
@@ -288,6 +324,7 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     shouldApplyTextQuota: textQuota.shouldApply,
     textQuotaTriggerKey: textQuota.triggerKey,
     textQuotaState: textQuota.state,
+    shouldSurfaceUserErrors,
     forcedMentions: incoming.forcedMentions,
     isUserImpersonation: incoming.isUserImpersonation,
     impersonatedUserId: incoming.impersonatedUserId,
@@ -382,6 +419,7 @@ async function resolveTextCredentialPolicy(params: {
   channel: Message["channel"];
   locale: string;
   isDMChannel: boolean;
+  shouldSurfaceUserErrors: boolean;
 }): Promise<{
   source: "server" | "personal";
   personalRoutingUserId: number | null;
@@ -403,11 +441,15 @@ async function resolveTextCredentialPolicy(params: {
     };
   } catch (error) {
     if (error instanceof PersonalProviderRequiredError) {
-      await sendStandardEmbed(params.channel as SendableChannel, params.locale, {
-        color: ColorCode.ERROR,
-        titleKey: "general.errors.personal_provider_required_title",
-        descriptionKey: "general.errors.personal_provider_required_description",
-      });
+      if (params.shouldSurfaceUserErrors) {
+        await sendStandardEmbed(params.channel as SendableChannel, params.locale, {
+          color: ColorCode.ERROR,
+          titleKey: "general.errors.personal_provider_required_title",
+          descriptionKey: "general.errors.personal_provider_required_description",
+        });
+      } else {
+        log.warn("Suppressing personal-provider-required embed for non-deliberate chat turn.", error);
+      }
       return null;
     }
     if (error instanceof CredentialUnavailableError) {
@@ -421,20 +463,24 @@ async function resolveTextCredentialPolicy(params: {
       }
       const isPersonalError = error.source === "personal";
       const isMissingConfig = error.reason === "no_saved_config" || error.reason === "missing_model_id";
-      await sendStandardEmbed(params.channel as SendableChannel, params.locale, {
-        color: ColorCode.ERROR,
-        titleKey: isPersonalError
-          ? "general.errors.personal_provider_credentials_error_title"
-          : isMissingConfig
-            ? "general.errors.api_key_missing_title"
-            : "general.errors.api_key_error_title",
-        descriptionKey: isPersonalError
-          ? "general.errors.personal_provider_credentials_error_description"
-          : isMissingConfig
-            ? "general.errors.api_key_missing_description"
-            : "general.errors.api_key_error_description",
-        ...(params.isDMChannel && !isPersonalError ? { footerKey: "general.errors.tomori_not_setup_dm_footer" } : {}),
-      });
+      if (params.shouldSurfaceUserErrors) {
+        await sendStandardEmbed(params.channel as SendableChannel, params.locale, {
+          color: ColorCode.ERROR,
+          titleKey: isPersonalError
+            ? "general.errors.personal_provider_credentials_error_title"
+            : isMissingConfig
+              ? "general.errors.api_key_missing_title"
+              : "general.errors.api_key_error_title",
+          descriptionKey: isPersonalError
+            ? "general.errors.personal_provider_credentials_error_description"
+            : isMissingConfig
+              ? "general.errors.api_key_missing_description"
+              : "general.errors.api_key_error_description",
+          ...(params.isDMChannel && !isPersonalError ? { footerKey: "general.errors.tomori_not_setup_dm_footer" } : {}),
+        });
+      } else {
+        log.warn("Suppressing credential error embed for non-deliberate chat turn.", error);
+      }
       return null;
     }
     throw error;
@@ -545,6 +591,7 @@ async function enforceTurnGuards(
   userRow: UserRow,
   personasToRespond: TomoriState[],
   textCredentialSource: "server" | "personal",
+  shouldSurfaceUserErrors: boolean,
 ): Promise<boolean> {
   const admission = lockedTurn.admission;
   const incoming = admission.incoming;
@@ -564,6 +611,7 @@ async function enforceTurnGuards(
       messageId: message.id,
       userActiveCountAdjustment: -1,
       serverActiveCountAdjustment: -1,
+      notifyUser: shouldSurfaceUserErrors,
     });
     if (!rateLimitAllowed) return false;
   }
@@ -582,6 +630,7 @@ async function enforceTurnGuards(
       author: message.author,
       locale: admission.locale,
       botName: tomoriState.persona_nickname,
+      notifyUser: shouldSurfaceUserErrors,
     });
     if (rejectedByCooldown) return false;
 
@@ -620,6 +669,7 @@ async function prepareTextQuota(
   tomoriState: TomoriState,
   textCredentialSource: "server" | "personal",
   userRow: UserRow,
+  shouldSurfaceUserErrors: boolean,
 ): Promise<{ allowed: boolean; shouldApply: boolean; triggerKey: string; state: TextQuotaTriggerState | null }> {
   const incoming = lockedTurn.admission.incoming;
   const triggerKey = incoming.textQuotaTriggerKey ?? lockedTurn.admission.message.id;
@@ -639,6 +689,7 @@ async function prepareTextQuota(
     userDiscId: incoming.textQuotaUserDiscId ?? lockedTurn.admission.cooldownUserDiscId ?? userRow.user_disc_id,
     channel: lockedTurn.admission.channel as SendableChannel,
     locale: lockedTurn.admission.locale,
+    notifyUser: shouldSurfaceUserErrors,
   });
 
   return {

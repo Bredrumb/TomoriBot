@@ -48,7 +48,9 @@ non-runnable dispositions.
 - **`$whoami` easter egg** — sends an info embed to the channel and returns
   `ignore` when content === `"$whoami"`.
 - **Audio transcription failure embed** — sends a user-visible warn embed when
-  STT fails with an attributable reason and the message has no text content.
+  STT fails with an attributable reason, the message has no text content, and
+  the turn is allowed to surface user errors. Passive guild messages stay
+  quiet.
 - **Suppression cleanup** — clears `selfReplySuppressionUntil` entries that
   have expired.
 - **Text-quota state cleanup** — `cleanupTextQuotaTriggerStates()` prunes stale

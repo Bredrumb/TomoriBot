@@ -55,6 +55,7 @@ export interface TomoriChatInput {
   manualPrefill?: string;
   naiContinuationPrefill?: string;
   emptyResponseFinishReason?: string;
+  shouldSurfaceUserErrors?: boolean;
   injectedContextItems?: StructuredContextItem[];
   forcedMentions?: ForcedMention[];
   manualTriggerInvoker?: ManualTriggerInvoker;
@@ -85,6 +86,7 @@ export interface ChatIncoming {
   manualPrefill?: string;
   naiContinuationPrefill?: string;
   emptyResponseFinishReason?: string;
+  shouldSurfaceUserErrors?: boolean;
   injectedContextItems?: StructuredContextItem[];
   forcedMentions?: ForcedMention[];
   manualTriggerInvoker?: ManualTriggerInvoker;
@@ -166,6 +168,7 @@ export interface ChatTurn {
   shouldApplyTextQuota: boolean;
   textQuotaTriggerKey: string;
   textQuotaState: TextQuotaTriggerState | null;
+  shouldSurfaceUserErrors: boolean;
   forcedMentions?: ForcedMention[];
   isUserImpersonation: boolean;
   impersonatedUserId?: string;
@@ -209,6 +212,7 @@ export interface ChatTurnContext {
   shouldApplyTextQuota: boolean;
   textQuotaTriggerKey: string;
   textQuotaState: TextQuotaTriggerState | null;
+  shouldSurfaceUserErrors: boolean;
   responseTarget?: ChatResponseTarget;
   /** Whether deliberate-tool-mode is gating this turn (server flag OR user override). */
   deliberateToolModeActive: boolean;
