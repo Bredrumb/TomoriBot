@@ -1140,7 +1140,7 @@
       "mask_invert": false,
       "mask_blend_pixels": 16,
       "mask_hipass_filter": 0.1,
-      "extend_for_outpainting": "{TOMORI_OUTPAINT}",
+      "extend_for_outpainting": "{TOMORI_OUTPAINT_USE_CROP_STITCH}",
       "extend_up_factor": "{TOMORI_OUTPAINT_EXTEND_UP_FACTOR}",
       "extend_down_factor": "{TOMORI_OUTPAINT_EXTEND_DOWN_FACTOR}",
       "extend_left_factor": "{TOMORI_OUTPAINT_EXTEND_LEFT_FACTOR}",
