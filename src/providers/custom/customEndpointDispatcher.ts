@@ -1280,7 +1280,7 @@ function resolveComfyUiOutpaintSubjectMaskGrow(): number {
   return clampNumber(
     readOptionalNumberEnv("COMFYUI_OUTPAINT_SUBJECT_MASK_GROW") ??
       readOptionalNumberEnv("ANIMA3_OUTPAINT_SUBJECT_MASK_GROW") ??
-      8,
+      2,
     0,
     64,
   );
@@ -1290,7 +1290,7 @@ function resolveComfyUiOutpaintSubjectMaskFeather(): number {
   return clampNumber(
     readOptionalNumberEnv("COMFYUI_OUTPAINT_SUBJECT_MASK_FEATHER") ??
       readOptionalNumberEnv("ANIMA3_OUTPAINT_SUBJECT_MASK_FEATHER") ??
-      8,
+      2,
     0,
     64,
   );
@@ -1613,13 +1613,14 @@ function buildComfyUiPromptWithDefaults(
       "continue the visible background, lighting, perspective, and environment naturally into the newly added canvas area",
       ...(scaleSource
         ? [
+            "continue any recognizable source setting elements visible in the original image instead of replacing the setting with a new motif",
             "the area around and behind the subject should look like one continuous scene, not a pasted image frame",
             "do not create a square backdrop, inset panel, visible source rectangle, poster border, duplicate subject, or unrelated foreground objects",
           ]
         : []),
       "only continue the existing subject where it is visibly cropped by the original image edge",
       "most added canvas should be surrounding scene, not new character anatomy",
-      "preserve the original source image area exactly in place",
+      scaleSource ? "preserve the main foreground subject exactly in place" : "preserve the original source image area exactly in place",
       "match the original lighting, perspective, camera angle, line style, color palette, and texture",
       "do not create a duplicate character, second face, giant face, giant torso, giant limb, or unrelated character body parts in the added border",
       "no frame, no border, no blank padding, no duplicated edge pattern",
