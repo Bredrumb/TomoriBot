@@ -1693,8 +1693,8 @@
         0
       ],
       "mask": [
-        "332",
-        1
+        "337",
+        0
       ],
       "noise_mask": true
     }
@@ -1707,8 +1707,8 @@
         2
       ],
       "mask": [
-        "332",
-        1
+        "337",
+        0
       ]
     }
   },
@@ -2042,6 +2042,23 @@
         "333",
         0
       ]
+    }
+  },
+  "337": {
+    "class_type": "GrowMaskWithBlur",
+    "inputs": {
+      "mask": [
+        "325",
+        0
+      ],
+      "expand": 0,
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_OUTPAINT_BLEND_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true
     }
   }
 }
