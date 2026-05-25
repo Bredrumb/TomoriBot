@@ -795,6 +795,17 @@ export const tomoriPresetSchema = z.object({
   persona_preset_id: z.number(),
   persona_preset_name: z.string(),
   persona_preset_desc: z.string(),
+  preset_lineage_id: z
+    .preprocess((value) => {
+      if (typeof value === "bigint") {
+        return Number(value);
+      }
+      if (typeof value === "string" && value.trim() !== "") {
+        return Number(value);
+      }
+      return value;
+    }, z.number().int().nonnegative().nullable())
+    .optional(),
   preset_attribute_list: z.array(z.string()).default([]),
   preset_sample_dialogues_in: z.array(z.string()).default([]),
   preset_sample_dialogues_out: z.array(z.string()).default([]),

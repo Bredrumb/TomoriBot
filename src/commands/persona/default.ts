@@ -91,7 +91,29 @@ function resolveAvailablePersonaName(defaultName: string, triggerWords: string[]
   return null;
 }
 
+function normalizePresetLineageId(value: unknown): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === "bigint") {
+    return Number(value);
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  return null;
+}
+
 function resolvePresetLineageId(preset: TomoriPresetRow): number | null {
+  const explicitLineageId = normalizePresetLineageId(preset.preset_lineage_id);
+  if (explicitLineageId !== null) {
+    return explicitLineageId;
+  }
+
   const avatarPath = (preset.preset_avatar_path ?? "").trim().toLowerCase();
   if (avatarPath.length > 0) {
     const fileName = avatarPath.split(/[\\/]/).pop() ?? "";
@@ -394,6 +416,11 @@ export async function execute(
         return;
       }
 
+      const presetSyncUpdated = await personaRepository.setOfficialPresetSyncState(targetPersonaId, selectedPreset);
+      if (!presetSyncUpdated) {
+        log.warn(`Failed to record official preset sync state for persona ${targetPersonaId}`);
+      }
+
       invalidateTomoriStateCache(serverDiscId);
 
       // 11c. Update guild avatar/nickname only for main/default target
@@ -630,6 +657,11 @@ export async function execute(
         color: ColorCode.ERROR,
       });
       return;
+    }
+
+    const presetSyncUpdated = await personaRepository.setOfficialPresetSyncState(newAlterId, selectedPreset);
+    if (!presetSyncUpdated) {
+      log.warn(`Failed to record official preset sync state for alter persona ${newAlterId}`);
     }
 
     const descriptionParts = [

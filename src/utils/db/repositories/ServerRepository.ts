@@ -564,9 +564,13 @@ export class ServerRepository implements IRepository<ServerExportShape> {
         const selectedEmbeddingModelId = selectedEmbeddingModel ? selectedEmbeddingModel.embedding_model_id : null;
 
         const presetRows = await tx<
-          Array<{ preset_trigger_words: string[] | null; persona_preset_desc: string | null }>
+          Array<{
+            preset_trigger_words: string[] | null;
+            persona_preset_desc: string | null;
+            preset_lineage_id: number | string | bigint | null;
+          }>
         >`
-          SELECT preset_trigger_words, persona_preset_desc
+          SELECT preset_trigger_words, persona_preset_desc, preset_lineage_id
           FROM persona_presets
           WHERE persona_preset_id = ${validConfig.presetId}
           LIMIT 1
@@ -590,29 +594,26 @@ export class ServerRepository implements IRepository<ServerExportShape> {
           RETURNING *
         `;
 
-        // 2. Create Tomori instance with preset including description
+        // 2. Create Tomori instance with the selected official preset.
         const [tomori] = await tx`
           INSERT INTO personas (
             server_id,
             persona_nickname,
             attribute_list,
             sample_dialogues_in,
-            sample_dialogues_out
+            sample_dialogues_out,
+            persona_lineage_id
           )
           VALUES (
             ${server.server_id},
             ${validConfig.tomoriName},
-            (
-              SELECT
-                array_prepend(
-                  '{bot}''s Description: ' || persona_preset_desc,
-                  preset_attribute_list
-                )
-              FROM persona_presets
-              WHERE persona_preset_id = ${validConfig.presetId}
-            ),
+            (SELECT preset_attribute_list FROM persona_presets WHERE persona_preset_id = ${validConfig.presetId}),
             (SELECT preset_sample_dialogues_in FROM persona_presets WHERE persona_preset_id = ${validConfig.presetId}),
-            (SELECT preset_sample_dialogues_out FROM persona_presets WHERE persona_preset_id = ${validConfig.presetId})
+            (SELECT preset_sample_dialogues_out FROM persona_presets WHERE persona_preset_id = ${validConfig.presetId}),
+            COALESCE(
+              (SELECT preset_lineage_id FROM persona_presets WHERE persona_preset_id = ${validConfig.presetId}),
+              nextval('persona_lineage_id_seq')
+            )
           )
           RETURNING *
         `;
@@ -663,6 +664,42 @@ export class ServerRepository implements IRepository<ServerExportShape> {
           INSERT INTO persona_configs (persona_id, trigger_words, persona_prompt)
           VALUES (${tomori.persona_id}, ${triggerWordsArrayLiteral}::text[], ${presetPersonaPrompt})
           ON CONFLICT (persona_id) DO NOTHING
+        `;
+
+        await tx`
+          INSERT INTO persona_preset_sync_state (
+            persona_id,
+            preset_lineage_id,
+            preset_language,
+            sync_mode,
+            base_snapshot,
+            last_synced_at
+          )
+          SELECT
+            ${tomori.persona_id},
+            preset_lineage_id,
+            preset_language,
+            'auto',
+            jsonb_build_object(
+              'persona_preset_name', persona_preset_name,
+              'preset_language', preset_language,
+              'attribute_list', to_jsonb(COALESCE(preset_attribute_list, ARRAY[]::TEXT[])),
+              'sample_dialogues_in', to_jsonb(COALESCE(preset_sample_dialogues_in, ARRAY[]::TEXT[])),
+              'sample_dialogues_out', to_jsonb(COALESCE(preset_sample_dialogues_out, ARRAY[]::TEXT[])),
+              'trigger_words', to_jsonb(COALESCE(preset_trigger_words, ARRAY[]::TEXT[])),
+              'persona_prompt', persona_preset_desc
+            ),
+            CURRENT_TIMESTAMP
+          FROM persona_presets
+          WHERE persona_preset_id = ${validConfig.presetId}
+            AND preset_lineage_id IS NOT NULL
+          ON CONFLICT (persona_id) DO UPDATE
+          SET
+            preset_lineage_id = EXCLUDED.preset_lineage_id,
+            preset_language = EXCLUDED.preset_language,
+            sync_mode = 'auto',
+            base_snapshot = EXCLUDED.base_snapshot,
+            last_synced_at = CURRENT_TIMESTAMP
         `;
 
         // Seed the saved_provider_configs row for the provider registered at setup.

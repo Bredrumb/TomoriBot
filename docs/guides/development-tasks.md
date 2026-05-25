@@ -80,8 +80,11 @@ Important:
 ## 8) Add a New Persona Preset
 
 1. Add preset row in `src/db/seed.sql` (`persona_presets`).
-2. Add optional avatar path (stored under `src/db/img/`).
-3. Validate via `/persona import` and persona cache behavior.
+2. Assign a stable `preset_lineage_id` for official preset sync. Reuse the same lineage across locale variants of the same character.
+3. Add optional avatar path (stored under `src/db/img/`).
+4. Validate via `/persona import` and persona cache behavior.
+
+When editing an existing official preset, update the seeded row only. Servers with an automatic preset baseline will receive the new canonical content on next seed run for fields they have not edited or removed; appended local attributes, trigger words, and sample dialogues are preserved.
 
 ## Development Checklist
 

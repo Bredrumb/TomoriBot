@@ -24,6 +24,7 @@ import {
   type PersonaConfigRow,
   type AssembledServerConfig,
   type TomoriRow,
+  type TomoriPresetRow,
   type TomoriState,
 } from "@/types/db/schema";
 import type { PersonaAutochRuntimeStateRow } from "@/types/db/schema";
@@ -93,6 +94,16 @@ export type PersonaConfigBundle = {
  */
 export type PersonaExportShape = {
   personas: PersonaConfigBundle[];
+};
+
+type PresetSyncSnapshot = {
+  persona_preset_name: string;
+  preset_language: string;
+  attribute_list: string[];
+  sample_dialogues_in: string[];
+  sample_dialogues_out: string[];
+  trigger_words: string[];
+  persona_prompt: string;
 };
 
 /** Fields where SQL NULL carries semantic meaning ("not configured") and must not be coerced to undefined. */
@@ -643,6 +654,63 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   }
 
   /**
+   * Records the official preset baseline used by seed-time sync.
+   * Future seed updates can then rebase untouched content while preserving
+   * server-local additions, edits, and removals.
+   *
+   * @param personaId - Internal persona DB ID
+   * @param preset - Official preset row that was just applied
+   */
+  async setOfficialPresetSyncState(personaId: number, preset: TomoriPresetRow): Promise<boolean> {
+    const presetLineageId = this.normalizePresetLineageId(preset.preset_lineage_id);
+    if (presetLineageId === null) {
+      return true;
+    }
+
+    const baseSnapshot: PresetSyncSnapshot = {
+      persona_preset_name: preset.persona_preset_name,
+      preset_language: preset.preset_language,
+      attribute_list: preset.preset_attribute_list,
+      sample_dialogues_in: preset.preset_sample_dialogues_in,
+      sample_dialogues_out: preset.preset_sample_dialogues_out,
+      trigger_words: preset.preset_trigger_words,
+      persona_prompt: preset.persona_preset_desc,
+    };
+
+    try {
+      await sql`
+        INSERT INTO persona_preset_sync_state (
+          persona_id,
+          preset_lineage_id,
+          preset_language,
+          sync_mode,
+          base_snapshot,
+          last_synced_at
+        )
+        VALUES (
+          ${personaId},
+          ${presetLineageId},
+          ${preset.preset_language},
+          'auto',
+          ${JSON.stringify(baseSnapshot)}::jsonb,
+          CURRENT_TIMESTAMP
+        )
+        ON CONFLICT (persona_id) DO UPDATE
+        SET
+          preset_lineage_id = EXCLUDED.preset_lineage_id,
+          preset_language = EXCLUDED.preset_language,
+          sync_mode = 'auto',
+          base_snapshot = EXCLUDED.base_snapshot,
+          last_synced_at = CURRENT_TIMESTAMP
+      `;
+      return true;
+    } catch (error) {
+      log.error(`Error setting official preset sync state for persona ${personaId}:`, error);
+      return false;
+    }
+  }
+
+  /**
    * Creates an alter persona row and returns the inserted row.
    * Intentionally does not catch DB errors so callers can preserve
    * unique-violation handling for user-facing name-conflict replies.
@@ -688,7 +756,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         ${sql.array(params.sampleDialoguesIn, "TEXT")},
         ${sql.array(params.sampleDialoguesOut, "TEXT")},
         true,
-        ${params.personaLineageId ?? 0},
+        COALESCE(${params.personaLineageId ?? null}::bigint, nextval('persona_lineage_id_seq')),
         ${sql.array(params.naiTags ?? [], "TEXT")},
         ${params.naiCharRefUrl ?? null},
         ${params.naiAttgAuthor ?? null},
@@ -1186,6 +1254,23 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       result[key] = value === null && !MEANINGFULLY_NULLABLE_CONFIG_FIELDS.has(key) ? undefined : value;
     }
     return result;
+  }
+
+  private normalizePresetLineageId(value: unknown): number | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (typeof value === "bigint") {
+      return Number(value);
+    }
+    if (typeof value === "string" && value.trim() !== "") {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+    return null;
   }
 
   /**
