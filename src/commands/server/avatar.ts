@@ -341,6 +341,8 @@ export async function execute(
         const result = await updateGuildAvatar(interaction.guild.id, null);
 
         if (result.success) {
+          await personaRepository.markOfficialPresetAvatarManual(selectedPersona.persona_id);
+
           // Quota already reserved at step 5 - no increment needed
           await replyInfoEmbed(responseInteraction, locale, {
             titleKey: "commands.server.avatar.removed_title",
@@ -367,7 +369,10 @@ export async function execute(
           await deletePersonaAvatarFromStorage(selectedPersona.webhook_avatar_url);
         }
 
-        await personaRepository.setAvatar(selectedPersona.persona_id, null);
+        const avatarUpdated = await personaRepository.setAvatar(selectedPersona.persona_id, null);
+        if (avatarUpdated) {
+          await personaRepository.markOfficialPresetAvatarManual(selectedPersona.persona_id);
+        }
 
         invalidateTomoriStateCache(interaction.guild.id);
 
@@ -431,6 +436,8 @@ export async function execute(
       const updateResult = await updateGuildAvatar(interaction.guild.id, avatarDataUri);
 
       if (updateResult.success) {
+        await personaRepository.markOfficialPresetAvatarManual(selectedPersona.persona_id);
+
         // Quota already reserved at step 5 - no increment needed
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "commands.server.avatar.success_title",
@@ -493,7 +500,10 @@ export async function execute(
           await deletePersonaAvatarFromStorage(selectedPersona.webhook_avatar_url);
         }
 
-        await personaRepository.setAvatar(selectedPersona.persona_id, persistedAvatarUrl);
+        const avatarUpdated = await personaRepository.setAvatar(selectedPersona.persona_id, persistedAvatarUrl);
+        if (avatarUpdated) {
+          await personaRepository.markOfficialPresetAvatarManual(selectedPersona.persona_id);
+        }
       }
 
       invalidateTomoriStateCache(interaction.guild.id);

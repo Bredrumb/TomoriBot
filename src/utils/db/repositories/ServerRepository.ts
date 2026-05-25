@@ -672,6 +672,8 @@ export class ServerRepository implements IRepository<ServerExportShape> {
             preset_lineage_id,
             preset_language,
             sync_mode,
+            avatar_sync_mode,
+            avatar_source_path,
             base_snapshot,
             last_synced_at
           )
@@ -680,9 +682,12 @@ export class ServerRepository implements IRepository<ServerExportShape> {
             preset_lineage_id,
             preset_language,
             'auto',
+            'auto',
+            preset_avatar_path,
             jsonb_build_object(
               'persona_preset_name', persona_preset_name,
               'preset_language', preset_language,
+              'preset_avatar_path', preset_avatar_path,
               'attribute_list', to_jsonb(COALESCE(preset_attribute_list, ARRAY[]::TEXT[])),
               'sample_dialogues_in', to_jsonb(COALESCE(preset_sample_dialogues_in, ARRAY[]::TEXT[])),
               'sample_dialogues_out', to_jsonb(COALESCE(preset_sample_dialogues_out, ARRAY[]::TEXT[])),
@@ -698,6 +703,10 @@ export class ServerRepository implements IRepository<ServerExportShape> {
             preset_lineage_id = EXCLUDED.preset_lineage_id,
             preset_language = EXCLUDED.preset_language,
             sync_mode = 'auto',
+            avatar_sync_mode = 'auto',
+            avatar_source_path = EXCLUDED.avatar_source_path,
+            avatar_source_hash = NULL,
+            avatar_synced_at = NULL,
             base_snapshot = EXCLUDED.base_snapshot,
             last_synced_at = CURRENT_TIMESTAMP
         `;

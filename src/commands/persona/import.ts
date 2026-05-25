@@ -211,7 +211,18 @@ async function persistImportedMainAvatar(serverDiscId: string, avatarImageBuffer
     return;
   }
 
+  await personaRepository.markOfficialPresetAvatarManual(mainPersona.persona_id);
   invalidateTomoriStateCache(serverDiscId);
+}
+
+async function markMainPersonaAvatarManual(serverDiscId: string): Promise<void> {
+  const mainPersona = (await personaRepository.loadAllForServer(serverDiscId)).find((persona) => !persona.is_alter);
+
+  if (!mainPersona?.persona_id) {
+    return;
+  }
+
+  await personaRepository.markOfficialPresetAvatarManual(mainPersona.persona_id);
 }
 
 /**
@@ -687,6 +698,9 @@ export async function execute(
 
       // Invalidate cache so next message gets fresh persona/config
       invalidateTomoriStateCache(serverDiscId);
+      if (!isDM) {
+        await markMainPersonaAvatarManual(serverDiscId);
+      }
 
       // 12. Try to set TomoriBot's server-specific avatar and nickname (guild-only, non-fatal if fails)
       let avatarUpdateSucceeded = false;

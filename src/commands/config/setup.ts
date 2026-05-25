@@ -13,7 +13,7 @@ import { encryptApiKey } from "../../utils/security/crypto";
 import { configRepository, llmModelRepo, personaRepository, serverRepository } from "@/utils/db/repositories";
 
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { getCachedPresetAvatar } from "@/utils/image/avatarHelper";
+import { getCachedPresetAvatar, getPresetAvatarBuffer, hashAvatarBuffer } from "@/utils/image/avatarHelper";
 import { lazySyncGuildEmojis } from "@/utils/cache/emojiLazySync";
 import { lazySyncGuildStickers } from "@/utils/cache/stickerLazySync";
 import { formatLlmDisplayLabel } from "@/utils/provider/modelDisplay";
@@ -624,9 +624,12 @@ export async function execute(
         try {
           // 1. Try to get cached preset avatar
           const cachedAvatar = getCachedPresetAvatar(selectedPresetId);
+          const presetAvatarBuffer = cachedAvatar ? null : await getPresetAvatarBuffer(presetRow);
 
           // 2. Prepare avatar value (base64 data URI or null)
-          const avatarValue = cachedAvatar || null;
+          const avatarValue =
+            cachedAvatar ??
+            (presetAvatarBuffer ? `data:image/png;base64,${presetAvatarBuffer.toString("base64")}` : null);
 
           // 3. Update guild avatar via Discord API
           const endpoint = `https://discord.com/api/v10/guilds/${interaction.guild.id}/members/@me`;
@@ -640,10 +643,36 @@ export async function execute(
           });
 
           if (response.ok) {
-            const actionDescription = cachedAvatar
+            const actionDescription = avatarValue
               ? `Set preset avatar for "${selectedPresetOption.name}"`
               : "Reset guild avatar to bot default";
             log.info(`${actionDescription} for guild ${interaction.guild.id} during setup`);
+
+            if (newTomoriState?.persona_id && avatarValue) {
+              const hashBuffer = presetAvatarBuffer ?? (await getPresetAvatarBuffer(presetRow));
+              const avatarHash = hashBuffer ? hashAvatarBuffer(hashBuffer) : null;
+              if (avatarHash) {
+                const avatarSyncMarked = await personaRepository.markOfficialPresetAvatarSynced(
+                  newTomoriState.persona_id,
+                  presetRow,
+                  avatarHash,
+                );
+                if (!avatarSyncMarked) {
+                  log.warn(`Failed to record preset avatar sync state during setup for ${newTomoriState.persona_id}`);
+                }
+              }
+            } else if (newTomoriState?.persona_id && !presetRow.preset_avatar_path?.trim()) {
+              const avatarSyncMarked = await personaRepository.markOfficialPresetAvatarSynced(
+                newTomoriState.persona_id,
+                presetRow,
+                null,
+              );
+              if (!avatarSyncMarked) {
+                log.warn(
+                  `Failed to record preset avatar reset sync state during setup for ${newTomoriState.persona_id}`,
+                );
+              }
+            }
           } else {
             avatarUpdateFailed = true;
             log.warn(`Failed to update guild avatar during setup: ${response.status} ${response.statusText}`);

@@ -43,6 +43,7 @@ This folder is organized by topic instead of numeric filenames.
 - [`ai/expression-handling.md`](./ai/expression-handling.md)
 - [`ai/text-flushing-and-chunking.md`](./ai/text-flushing-and-chunking.md)
 - [`ai/multi-persona.md`](./ai/multi-persona.md)
+- [`ai/persona-presets.md`](./ai/persona-presets.md)
 - [`ai/rag.md`](./ai/rag.md)
 - [`ai/context-assembly.md`](./ai/context-assembly.md)
 - [`ai/conditioning-memory.md`](./ai/conditioning-memory.md)

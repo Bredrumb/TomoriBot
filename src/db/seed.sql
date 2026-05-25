@@ -1490,6 +1490,7 @@ WITH preset_sync_candidates AS (
     jsonb_build_object(
       'persona_preset_name', COALESCE(old_pp.persona_preset_name, pp.persona_preset_name),
       'preset_language', COALESCE(old_pp.preset_language, pp.preset_language),
+      'preset_avatar_path', COALESCE(old_pp.preset_avatar_path, pp.preset_avatar_path),
       'attribute_list', to_jsonb(COALESCE(old_pp.preset_attribute_list, pp.preset_attribute_list, ARRAY[]::TEXT[])),
       'sample_dialogues_in', to_jsonb(COALESCE(old_pp.preset_sample_dialogues_in, pp.preset_sample_dialogues_in, ARRAY[]::TEXT[])),
       'sample_dialogues_out', to_jsonb(COALESCE(old_pp.preset_sample_dialogues_out, pp.preset_sample_dialogues_out, ARRAY[]::TEXT[])),
@@ -1588,6 +1589,8 @@ INSERT INTO persona_preset_sync_state (
   preset_lineage_id,
   preset_language,
   sync_mode,
+  avatar_sync_mode,
+  avatar_source_path,
   base_snapshot
 )
 SELECT
@@ -1595,6 +1598,8 @@ SELECT
   preset_lineage_id,
   preset_language,
   'auto',
+  'auto',
+  base_snapshot ->> 'preset_avatar_path',
   base_snapshot
 FROM ranked_preset_sync_candidates
 WHERE row_num = 1
@@ -1615,6 +1620,7 @@ WITH preset_sync_targets AS (
     COALESCE(pc.trigger_words, ARRAY[]::TEXT[]) AS current_trigger_words,
     pc.persona_prompt AS current_persona_prompt,
     pp.persona_preset_name,
+    pp.preset_avatar_path,
     pp.preset_attribute_list AS new_attribute_list,
     pp.preset_sample_dialogues_in AS new_sample_dialogues_in,
     pp.preset_sample_dialogues_out AS new_sample_dialogues_out,
@@ -1707,6 +1713,7 @@ preset_sync_merged AS (
     jsonb_build_object(
       'persona_preset_name', persona_preset_name,
       'preset_language', preset_language,
+      'preset_avatar_path', preset_avatar_path,
       'attribute_list', to_jsonb(COALESCE(new_attribute_list, ARRAY[]::TEXT[])),
       'sample_dialogues_in', to_jsonb(COALESCE(new_sample_dialogues_in, ARRAY[]::TEXT[])),
       'sample_dialogues_out', to_jsonb(COALESCE(new_sample_dialogues_out, ARRAY[]::TEXT[])),

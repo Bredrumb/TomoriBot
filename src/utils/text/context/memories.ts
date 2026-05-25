@@ -65,12 +65,12 @@ export async function buildServerMemoryContextItem(params: {
       const channelTags = normalized.filter((t) => t.startsWith("#"));
       const contentTags = normalized.filter((t) => !t.startsWith("#"));
 
-      // Channel tags gate first: if present and channel_memory_enabled, channel must match
+      // Channel tags gate: if present and channel_memory_enabled, channel must match.
+      // Channel and content filters are independent — channel match does not exempt a memory
+      // from the content/corpus check below (per baetican's intended design).
       if (params.channelMemoryEnabled && channelTags.length > 0) {
         const channelAllowed = channelTags.some((t) => t.slice(1).toLowerCase() === params.channelName.toLowerCase());
         if (!channelAllowed) return false;
-        // Channel matched with no content tags — sufficient to include without corpus check
-        if (contentTags.length === 0) return true;
       }
 
       // Content tags: if corpus filtering is active, memories must have a matching content tag

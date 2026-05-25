@@ -99,6 +99,7 @@ export type PersonaExportShape = {
 type PresetSyncSnapshot = {
   persona_preset_name: string;
   preset_language: string;
+  preset_avatar_path: string | null;
   attribute_list: string[];
   sample_dialogues_in: string[];
   sample_dialogues_out: string[];
@@ -667,9 +668,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       return true;
     }
 
+    const presetAvatarPath = this.normalizePresetAvatarPath(preset.preset_avatar_path);
     const baseSnapshot: PresetSyncSnapshot = {
       persona_preset_name: preset.persona_preset_name,
       preset_language: preset.preset_language,
+      preset_avatar_path: presetAvatarPath,
       attribute_list: preset.preset_attribute_list,
       sample_dialogues_in: preset.preset_sample_dialogues_in,
       sample_dialogues_out: preset.preset_sample_dialogues_out,
@@ -684,6 +687,10 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
           preset_lineage_id,
           preset_language,
           sync_mode,
+          avatar_sync_mode,
+          avatar_source_path,
+          avatar_source_hash,
+          avatar_synced_at,
           base_snapshot,
           last_synced_at
         )
@@ -692,6 +699,10 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
           ${presetLineageId},
           ${preset.preset_language},
           'auto',
+          'auto',
+          ${presetAvatarPath},
+          NULL,
+          NULL,
           ${JSON.stringify(baseSnapshot)}::jsonb,
           CURRENT_TIMESTAMP
         )
@@ -700,12 +711,56 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
           preset_lineage_id = EXCLUDED.preset_lineage_id,
           preset_language = EXCLUDED.preset_language,
           sync_mode = 'auto',
+          avatar_sync_mode = 'auto',
+          avatar_source_path = EXCLUDED.avatar_source_path,
+          avatar_source_hash = NULL,
+          avatar_synced_at = NULL,
           base_snapshot = EXCLUDED.base_snapshot,
           last_synced_at = CURRENT_TIMESTAMP
       `;
       return true;
     } catch (error) {
       log.error(`Error setting official preset sync state for persona ${personaId}:`, error);
+      return false;
+    }
+  }
+
+  async markOfficialPresetAvatarSynced(
+    personaId: number,
+    preset: TomoriPresetRow,
+    avatarSourceHash: string | null,
+  ): Promise<boolean> {
+    const presetAvatarPath = this.normalizePresetAvatarPath(preset.preset_avatar_path);
+
+    try {
+      const result = await sql`
+        UPDATE persona_preset_sync_state
+        SET
+          avatar_sync_mode = 'auto',
+          avatar_source_path = ${presetAvatarPath},
+          avatar_source_hash = ${avatarSourceHash},
+          avatar_synced_at = CURRENT_TIMESTAMP
+        WHERE persona_id = ${personaId}
+        RETURNING persona_id
+      `;
+      return result.length > 0;
+    } catch (error) {
+      log.error(`Error marking official preset avatar synced for persona ${personaId}:`, error);
+      return false;
+    }
+  }
+
+  async markOfficialPresetAvatarManual(personaId: number): Promise<boolean> {
+    try {
+      const result = await sql`
+        UPDATE persona_preset_sync_state
+        SET avatar_sync_mode = 'manual'
+        WHERE persona_id = ${personaId}
+        RETURNING persona_id
+      `;
+      return result.length > 0;
+    } catch (error) {
+      log.error(`Error marking official preset avatar manual for persona ${personaId}:`, error);
       return false;
     }
   }
@@ -1271,6 +1326,14 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       return value;
     }
     return null;
+  }
+
+  private normalizePresetAvatarPath(value: unknown): string | null {
+    if (typeof value !== "string") {
+      return null;
+    }
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
   }
 
   /**

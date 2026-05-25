@@ -358,24 +358,22 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   }
 
   /**
-   * Loads a single preset row by exact name match, returning only the ID and name.
-   * Used by setup to validate and retrieve the preset ID after modal submission.
+   * Loads a single preset row by exact name match.
+   * Used by setup to validate and retrieve preset metadata after modal submission.
    *
    * @param presetName - Exact preset name to look up
-   * @returns Object with preset ID and name, or null if not found
+   * @returns Preset row, or null if not found
    */
-  async loadPresetByName(
-    presetName: string,
-  ): Promise<{ persona_preset_id: number; persona_preset_name: string } | null> {
+  async loadPresetByName(presetName: string): Promise<TomoriPresetRow | null> {
     try {
       const [row] = await sql`
-        SELECT persona_preset_id, persona_preset_name
+        SELECT *
         FROM persona_presets
         WHERE persona_preset_name = ${presetName}
         LIMIT 1
       `;
       if (!row) return null;
-      return { persona_preset_id: Number(row.persona_preset_id), persona_preset_name: String(row.persona_preset_name) };
+      return row as TomoriPresetRow;
     } catch (error) {
       log.error(`Error loading preset by name "${presetName}":`, error);
       return null;

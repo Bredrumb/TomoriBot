@@ -631,13 +631,53 @@ CREATE TABLE IF NOT EXISTS persona_preset_sync_state (
   preset_lineage_id BIGINT NOT NULL,
   preset_language TEXT NOT NULL DEFAULT 'en-US',
   sync_mode TEXT NOT NULL DEFAULT 'auto',
+  avatar_sync_mode TEXT NOT NULL DEFAULT 'auto',
+  avatar_source_path TEXT,
+  avatar_source_hash TEXT,
+  avatar_synced_at TIMESTAMP,
   base_snapshot JSONB NOT NULL DEFAULT '{}'::JSONB,
   last_synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (persona_id) REFERENCES personas(persona_id) ON DELETE CASCADE,
-  CHECK (sync_mode IN ('auto', 'manual', 'forked'))
+  CHECK (sync_mode IN ('auto', 'manual', 'forked')),
+  CHECK (avatar_sync_mode IN ('auto', 'manual'))
 );
+
+ALTER TABLE persona_preset_sync_state
+  ADD COLUMN IF NOT EXISTS avatar_sync_mode TEXT NOT NULL DEFAULT 'auto';
+
+ALTER TABLE persona_preset_sync_state
+  ADD COLUMN IF NOT EXISTS avatar_source_path TEXT;
+
+ALTER TABLE persona_preset_sync_state
+  ADD COLUMN IF NOT EXISTS avatar_source_hash TEXT;
+
+ALTER TABLE persona_preset_sync_state
+  ADD COLUMN IF NOT EXISTS avatar_synced_at TIMESTAMP;
+
+DO $$
+BEGIN
+  ALTER TABLE persona_preset_sync_state
+    ADD CONSTRAINT chk_persona_preset_sync_state_avatar_sync_mode
+    CHECK (avatar_sync_mode IN ('auto', 'manual'));
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+UPDATE persona_preset_sync_state
+SET avatar_source_path = COALESCE(
+  base_snapshot ->> 'preset_avatar_path',
+  CASE preset_lineage_id
+    WHEN 4 THEN 'src/db/img/default.png'
+    WHEN 716 THEN 'src/db/img/bratty.png'
+    WHEN 1770 THEN 'src/db/img/gloomy.png'
+    WHEN 3585 THEN 'src/db/img/shy.png'
+    WHEN 50 THEN 'src/db/img/blind.png'
+    ELSE NULL
+  END
+)
+WHERE avatar_source_path IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_persona_preset_sync_state_lineage
   ON persona_preset_sync_state(preset_lineage_id, preset_language);

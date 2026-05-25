@@ -86,6 +86,8 @@ Important:
 
 When editing an existing official preset, update the seeded row only. Servers with an automatic preset baseline will receive the new canonical content on next seed run for fields they have not edited or removed; appended local attributes, trigger words, and sample dialogues are preserved.
 
+Preset avatars sync after Discord is ready, not during `seed.sql`, because main persona avatars require a Discord API update and alter avatars require storage. Use a new avatar file path for the first shipped avatar replacement that must reach older installs without hash metadata; after `avatar_source_hash` has been recorded, same-path image edits can be detected.
+
 ## Development Checklist
 
 Before merging:

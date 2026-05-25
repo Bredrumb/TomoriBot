@@ -6,8 +6,6 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import path from "node:path";
-import { readFile } from "node:fs/promises";
 import { configRepository, personaRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { localizer, getBaseTriggerWords, getDefaultBotName } from "../../utils/text/localizer";
@@ -22,7 +20,7 @@ import {
 } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
-import { getCachedPresetAvatar } from "../../utils/image/avatarHelper";
+import { getCachedPresetAvatar, getPresetAvatarBuffer, hashAvatarBuffer } from "../../utils/image/avatarHelper";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage";
 import { dedupeTriggerWords, normalizeTriggerWord } from "@/utils/text/triggerWords";
@@ -130,48 +128,6 @@ function resolvePresetLineageId(preset: TomoriPresetRow): number | null {
   if (normalizedName.includes("professional")) return 50;
   if (normalizedName.includes("default") || normalizedName.includes("boyish")) return 4;
   return null;
-}
-
-function decodeBase64DataUri(dataUri: string): Buffer | null {
-  const base64Marker = "base64,";
-  const markerIndex = dataUri.indexOf(base64Marker);
-  if (markerIndex === -1) {
-    return null;
-  }
-
-  const base64Payload = dataUri.slice(markerIndex + base64Marker.length).trim();
-  if (base64Payload.length === 0) {
-    return null;
-  }
-
-  try {
-    return Buffer.from(base64Payload, "base64");
-  } catch {
-    return null;
-  }
-}
-
-async function getPresetAvatarBuffer(preset: TomoriPresetRow): Promise<Buffer | null> {
-  const cachedAvatarDataUri = getCachedPresetAvatar(preset.persona_preset_id);
-  if (cachedAvatarDataUri) {
-    const decoded = decodeBase64DataUri(cachedAvatarDataUri);
-    if (decoded) {
-      return decoded;
-    }
-  }
-
-  const presetAvatarPath = preset.preset_avatar_path?.trim();
-  if (!presetAvatarPath) {
-    return null;
-  }
-
-  try {
-    const absolutePath = path.join(process.cwd(), presetAvatarPath);
-    return await readFile(absolutePath);
-  } catch (error) {
-    log.warn(`Failed to load preset avatar file "${presetAvatarPath}" for preset ${preset.persona_preset_id}`, error);
-    return null;
-  }
 }
 
 // Configure the subcommand
@@ -427,6 +383,7 @@ export async function execute(
       const isDM = !interaction.guild;
       let avatarUpdateFailed = false;
       let nicknameUpdateFailed = false;
+      let presetAvatarBuffer: Buffer | null = null;
 
       if (!isDM) {
         try {
@@ -446,8 +403,13 @@ export async function execute(
 
           if (interaction.guild) {
             const cachedAvatar = getCachedPresetAvatar(selectedPreset.persona_preset_id);
+            if (!cachedAvatar) {
+              presetAvatarBuffer = await getPresetAvatarBuffer(selectedPreset);
+            }
 
-            const avatarValue = cachedAvatar || null;
+            const avatarValue =
+              cachedAvatar ??
+              (presetAvatarBuffer ? `data:image/png;base64,${presetAvatarBuffer.toString("base64")}` : null);
             const endpoint = `https://discord.com/api/v10/guilds/${interaction.guild.id}/members/@me`;
             const response = await fetch(endpoint, {
               method: "PATCH",
@@ -459,10 +421,34 @@ export async function execute(
             });
 
             if (response.ok) {
-              const actionDescription = cachedAvatar
+              const actionDescription = avatarValue
                 ? `Set preset avatar for "${selectedPreset.persona_preset_name}"`
                 : "Reset guild avatar to bot default";
               log.info(`${actionDescription} for guild ${interaction.guild.id} after applying preset`);
+
+              if (avatarValue) {
+                presetAvatarBuffer = presetAvatarBuffer ?? (await getPresetAvatarBuffer(selectedPreset));
+                const avatarHash = presetAvatarBuffer ? hashAvatarBuffer(presetAvatarBuffer) : null;
+                if (avatarHash) {
+                  const avatarSyncMarked = await personaRepository.markOfficialPresetAvatarSynced(
+                    targetPersonaId,
+                    selectedPreset,
+                    avatarHash,
+                  );
+                  if (!avatarSyncMarked) {
+                    log.warn(`Failed to record official preset avatar sync state for persona ${targetPersonaId}`);
+                  }
+                }
+              } else if (!selectedPreset.preset_avatar_path?.trim()) {
+                const avatarSyncMarked = await personaRepository.markOfficialPresetAvatarSynced(
+                  targetPersonaId,
+                  selectedPreset,
+                  null,
+                );
+                if (!avatarSyncMarked) {
+                  log.warn(`Failed to record official preset avatar reset sync state for persona ${targetPersonaId}`);
+                }
+              }
             } else {
               avatarUpdateFailed = true;
               log.warn(`Failed to update guild avatar: ${response.status} ${response.statusText}`);
@@ -506,7 +492,7 @@ export async function execute(
       footerParts.push(localizer(locale, "commands.persona.import.refresh_reminder"));
       successEmbed.setFooter({ text: footerParts.join(" • ") });
 
-      const presetAvatarBuffer = await getPresetAvatarBuffer(selectedPreset);
+      presetAvatarBuffer = presetAvatarBuffer ?? (await getPresetAvatarBuffer(selectedPreset));
       let avatarAttachment: AttachmentBuilder | null = null;
       if (presetAvatarBuffer) {
         const sanitizedNickname = sanitizeAttachmentFilenamePart(resolvedPersonaName, {
@@ -732,6 +718,15 @@ export async function execute(
         const avatarUpdated = await personaRepository.setAvatar(newAlterId, storedAvatarUrl);
         if (!avatarUpdated) {
           log.warn(`Failed to persist preset avatar for alter persona ${newAlterId}`);
+        } else {
+          const avatarSyncMarked = await personaRepository.markOfficialPresetAvatarSynced(
+            newAlterId,
+            selectedPreset,
+            hashAvatarBuffer(presetAvatarBuffer),
+          );
+          if (!avatarSyncMarked) {
+            log.warn(`Failed to record official preset avatar sync state for alter persona ${newAlterId}`);
+          }
         }
       } else {
         log.warn(`Failed to persist preset avatar for alter persona ${newAlterId}`);

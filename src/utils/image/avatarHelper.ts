@@ -4,6 +4,7 @@
  */
 
 import type { Client, Guild } from "discord.js";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { TomoriPresetRow } from "../../types/db/schema";
@@ -192,6 +193,59 @@ export function validatePNGBuffer(
  * Key: preset_id, Value: base64 data URI string (or null if no avatar)
  */
 const presetAvatarCache = new Map<number, string | null>();
+
+type PresetAvatarInput = Pick<TomoriPresetRow, "persona_preset_id" | "persona_preset_name" | "preset_avatar_path">;
+
+export function decodeBase64DataUri(dataUri: string): Buffer | null {
+  const base64Marker = "base64,";
+  const markerIndex = dataUri.indexOf(base64Marker);
+  if (markerIndex === -1) {
+    return null;
+  }
+
+  const base64Payload = dataUri.slice(markerIndex + base64Marker.length).trim();
+  if (base64Payload.length === 0) {
+    return null;
+  }
+
+  try {
+    return Buffer.from(base64Payload, "base64");
+  } catch {
+    return null;
+  }
+}
+
+export function hashAvatarBuffer(buffer: Buffer): string {
+  return createHash("sha256").update(buffer).digest("hex");
+}
+
+export async function getPresetAvatarBuffer(preset: PresetAvatarInput): Promise<Buffer | null> {
+  const cachedAvatarDataUri = getCachedPresetAvatar(preset.persona_preset_id);
+  if (cachedAvatarDataUri) {
+    const decoded = decodeBase64DataUri(cachedAvatarDataUri);
+    if (decoded) {
+      return decoded;
+    }
+  }
+
+  const presetAvatarPath = preset.preset_avatar_path?.trim();
+  if (!presetAvatarPath) {
+    return null;
+  }
+
+  try {
+    const absolutePath = path.join(process.cwd(), presetAvatarPath);
+    return await readFile(absolutePath);
+  } catch (error) {
+    log.warn(`Failed to load preset avatar file "${presetAvatarPath}" for preset ${preset.persona_preset_id}`, error);
+    return null;
+  }
+}
+
+export async function getPresetAvatarHash(preset: PresetAvatarInput): Promise<string | null> {
+  const avatarBuffer = await getPresetAvatarBuffer(preset);
+  return avatarBuffer ? hashAvatarBuffer(avatarBuffer) : null;
+}
 
 /**
  * Initializes the preset avatar cache by loading all preset avatars into memory
