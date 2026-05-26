@@ -115,7 +115,7 @@ both the stream orchestrator (writes chunks) and the generation stage (calls
   [webhook manager](../../../systems/) <!-- TBD-XREF:legacy --> (currently
   `webhookManager.ts` / `webhook/webhookCore.ts`).
 - Stream-orchestrator-side rendering and chunking lives in
-  [stream pipeline](../../provider/) <!-- TBD-XREF:sibling --> (currently in
+  [provider pipeline](../../provider/) (currently also in
   `docs/ai/streaming.md` <!-- TBD-XREF:legacy --> and
   `docs/ai/text-flushing-and-chunking.md` <!-- TBD-XREF:legacy -->).
 

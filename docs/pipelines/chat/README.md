@@ -68,8 +68,8 @@ tomoriChat(TomoriChatInput)
 - **Per-turn stage 01 (build context)** delegates to the
   [context-build pipeline](../context-build/) <!-- TBD-XREF:sibling -->.
 - **Per-turn stage 03 (generation)** delegates to the
-  [tool-loop pipeline](../tool-loop/) <!-- TBD-XREF:sibling --> and the
-  [provider pipeline](../provider/) <!-- TBD-XREF:sibling -->.
+  [tool-loop pipeline](../tool-loop/) and the
+  [provider pipeline](../provider/).
 - **Per-turn stage 04 (post-turn effects)** writes to
   [memory](../memory/) <!-- TBD-XREF:sibling --> and may schedule cross-channel
   work via the boomerang mechanism in `crossChannelMessageTool`.

@@ -12,8 +12,7 @@ Run the LLM call for this turn, with two layers of resilience: a **model
 fallback chain** (primary model + any configured fallback entries) and, per
 attempt, an **API-key rotation loop** (cycles through saved rotation keys
 before giving up). Each attempt delegates the actual streaming + tool-call
-dispatch to the [tool-loop pipeline](../../tool-loop/)
-<!-- TBD-XREF:sibling -->. Emits stream results to the sink and finalizes
+dispatch to the [tool-loop pipeline](../../tool-loop/). Emits stream results to the sink and finalizes
 with the first non-error result (or the last attempt's result if all fail).
 
 ## Input
@@ -62,8 +61,7 @@ a non-error result *and* the loop falls through (rare; defensive).
 
 **Per-attempt execution (key rotation inner loop):**
 
-- Calls `runToolLoop(...)` — see [tool-loop pipeline](../../tool-loop/)
-  <!-- TBD-XREF:sibling -->.
+- Calls `runToolLoop(...)` — see [tool-loop pipeline](../../tool-loop/).
 - On success: `recordKeySuccess(rotationKeyId)`, break out of the rotation
   loop.
 - On error: classifies the error (rate-limit vs api-error),
@@ -104,8 +102,8 @@ The stage is a coordinator over several plugin-relevant subsystems:
 
 | Subsystem | Helper | Plugin-relevance |
 |---|---|---|
-| Provider dispatch | `ProviderFactory.getProviderByName`, `getProviderForTomori` | The provider plugin contract is the seam — see [provider pipeline](../../provider/) <!-- TBD-XREF:sibling --> |
-| Tool execution | `runToolLoop` | See [tool-loop pipeline](../../tool-loop/) <!-- TBD-XREF:sibling --> |
+| Provider dispatch | `ProviderFactory.getProviderByName`, `getProviderForTomori` | The provider plugin contract is the seam — see [provider pipeline](../../provider/) |
+| Tool execution | `runToolLoop` | See [tool-loop pipeline](../../tool-loop/) |
 | Key rotation | `selectApiKey`, `recordKeySuccess`, `recordKeyError`, `hasAvailableRotationKey` | Internal — rotation-key schema is core, not plugin-relevant |
 | Fallback chain | `createFallbackAttempt`, `applySavedProviderConfig` | The fallback-entry schema (`FallbackEntry` union: `model` or `custom_endpoint`) is the data-model seam |
 | Context truncation | `truncateDialogueHistory` | Per-provider token-limit table is the registration surface |
@@ -132,11 +130,7 @@ Plus `MAX_KEY_ATTEMPTS` from `keyRotation.ts`.
 ## Related docs
 
 - Tool execution loop: → [tool-loop pipeline](../../tool-loop/)
-  <!-- TBD-XREF:sibling -->
 - Provider streaming + adapter pattern: → [provider pipeline](../../provider/)
-  <!-- TBD-XREF:sibling --> (currently in `docs/ai/streaming.md`
-  <!-- TBD-XREF:legacy --> and `docs/ai/providers.md`
-  <!-- TBD-XREF:legacy -->)
 - Key rotation: → no dedicated doc yet; `keyRotation.ts` helper only
 - Fallback chain schema: → `docs/systems/database-schema.md`
   <!-- TBD-XREF:legacy --> (`fallback_chain` column)
