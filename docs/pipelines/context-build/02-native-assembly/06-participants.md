@@ -1,4 +1,6 @@
-# Stage 06 — `buildUsersInConversationContextItem`
+---
+title: "02.6: Participants"
+---
 
 The densest single contributor: list every conversation participant with
 per-user details (presence, roles, **personal memories**, reminders),
@@ -145,7 +147,7 @@ collapse-when-many-users, show-roles-only-for-mods) would either:
 
 ## Related docs
 
-- Server memories (parallel): [`03-server-memories.md`](./03-server-memories.md)
+- Server memories (parallel): [`03-server-memories.md`](./03-server-memories)
 - User presence (helper, `history.ts`): covered in
   [native-assembly README](./README.md#shared-helpers-used-across-contributors).
 - Display-name resolution: → no dedicated doc;

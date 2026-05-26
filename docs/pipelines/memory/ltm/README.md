@@ -1,4 +1,6 @@
-# LTM Sub-Pipeline
+---
+title: "LTM Sub-Pipeline"
+---
 
 Handles persistent, database-backed memory writes initiated by the LLM via
 tool calls during the tool-loop. Two tools cover the full CRUD surface:
@@ -31,8 +33,8 @@ tool calls during the tool-loop. Two tools cover the full CRUD surface:
 
 ## Cross-references
 
-- Intent gate that routes toward LTM tools: → [memory pipeline README](../README.md)
-- Tool-loop that executes these tools: → [tool-loop Stage 02 `executeToolCall`](../../tool-loop/02-execute-tool-call.md)
-- Read side (server memories): → [context-build server-memory stage](../../context-build/02-native-assembly/03-server-memories.md)
-- Read side (personal memories): → [context-build personal-memory stage](../../context-build/02-native-assembly/07-personal-memories.md)
+- Intent gate that routes toward LTM tools: → [memory pipeline README](../README)
+- Tool-loop that executes these tools: → [tool-loop Stage 02 `executeToolCall`](../../tool-loop/02-execute-tool-call)
+- Read side (server memories): → [context-build server-memory stage](../../context-build/02-native-assembly/03-server-memories)
+- Read side (personal memories): → [context-build personal-memory stage](../../context-build/02-native-assembly/07-personal-memories)
 - Memory ID formatting used in context: → `src/utils/memory/memoryId.ts` (`formatMemoryWithId`)

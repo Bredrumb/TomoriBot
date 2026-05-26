@@ -1,4 +1,6 @@
-# Stage 03 — `handleEnhancedContextRestart`
+---
+title: "03: Enhanced Context Restart"
+---
 
 Consume a context-enrichment restart signal from a tool response and mutate
 the live context before the loop continues.

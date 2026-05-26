@@ -1,4 +1,6 @@
-# Stage 06 — `sendBufferSegment`
+---
+title: "06: Segment Normalization"
+---
 
 Normalizes a flushed text segment — cleaning LLM output artifacts, resolving Discord mentions, enforcing the speaker guard, and managing output prefill — before handing it to stage 07 for Discord delivery.
 

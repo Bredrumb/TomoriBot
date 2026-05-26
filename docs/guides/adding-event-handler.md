@@ -1,4 +1,6 @@
-# Adding an Event Handler
+---
+title: "Adding an Event Handler"
+---
 
 This guide walks through adding a new Discord event handler in TomoriBot.
 
@@ -23,4 +25,4 @@ Then trigger the event in Discord (join a server, send a message, etc.) and conf
 
 ## Related Docs
 
-- [`docs/subsystems/event-system.md`](../subsystems/event-system.md) — event registration pattern, handler conventions
+- [`docs/subsystems/event-system.md`](../subsystems/event-system) — event registration pattern, handler conventions

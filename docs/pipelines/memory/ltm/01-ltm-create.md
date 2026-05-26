@@ -1,4 +1,6 @@
-# LTM Stage 01 — `MemoryTool.execute` (LTM create)
+---
+title: "LTM 01: Memory Creation"
+---
 
 LLM-initiated creation of a new persistent memory — server-wide or
 user-specific — written to the database.
@@ -117,7 +119,7 @@ After a successful write:
 ## Related docs
 
 - LTM update/delete that acts on the ID assigned here: → [`ltm/02-ltm-update-delete.md`](02-ltm-update-delete.md)
-- Context-build stage that reads server memories: → [context-build server-memory stage](../../../context-build/02-native-assembly/03-server-memories.md)
-- Context-build stage that reads personal memories: → [context-build personal-memory stage](../../../context-build/02-native-assembly/07-personal-memories.md)
+- Context-build stage that reads server memories: → [context-build server-memory stage](../../../context-build/02-native-assembly/03-server-memories)
+- Context-build stage that reads personal memories: → [context-build personal-memory stage](../../../context-build/02-native-assembly/07-personal-memories)
 - Memory ID format seen by the LLM: → `src/utils/memory/memoryId.ts`
 - Privacy level schema: → `src/types/db/schema.ts` (`PrivacyLevel` enum)

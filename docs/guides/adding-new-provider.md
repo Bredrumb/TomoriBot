@@ -1,4 +1,6 @@
-# Add a New AI Provider
+---
+title: "Add a New AI Provider"
+---
 
 This is the current implementation guide for adding a provider to TomoriBot.
 

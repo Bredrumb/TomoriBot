@@ -1,4 +1,6 @@
-# Stage 01 — `normalizeChatInvocation`
+---
+title: "01: Input Normalization"
+---
 
 Defensive input normalization at the chat pipeline's entry boundary.
 

@@ -1,4 +1,6 @@
-# Native Assembly
+---
+title: "02: Native Assembly"
+---
 
 Fixed-order contributor pipeline. Each numbered file in this folder
 documents one contributor that appends to the shared `contextItems` list.
@@ -11,7 +13,7 @@ prompt, and the LLM cares about that order.
 
 Walk the numbered files in sequence — they describe the prompt top-to-bottom
 as the LLM will see it. The chat pipeline's
-[`buildChatTurnContext`](../../chat/06-per-turn/01-build-context.md) appends
+[`buildChatTurnContext`](../../chat/06-per-turn/01-build-context) appends
 tail directives *after* this output, so the actual prompt the LLM sees is:
 
 ```
@@ -34,17 +36,17 @@ tail directives *after* this output, so the actual prompt the LLM sees is:
 
 | # | Contributor | File | Output tag | Skipped when |
 |---|-------------|------|-----------|--------------|
-| 01 | Prompt items | [`01-prompt-items.md`](./01-prompt-items.md) | `SYSTEM_HUMANIZER_RULES`, `SYSTEM_PERSONA_PROMPT`, `SYSTEM_PERSONALITY` | (always emits at least one in non-impersonation) |
-| 02 | Server info | [`02-server-info.md`](./02-server-info.md) | `KNOWLEDGE_SERVER_INFO` | (always emits) |
-| 03 | Server memories | [`03-server-memories.md`](./03-server-memories.md) | `KNOWLEDGE_SERVER_MEMORIES` | impersonation; no memories |
-| 04 | Server emojis | [`04-server-emojis.md`](./04-server-emojis.md) | `KNOWLEDGE_SERVER_EMOJIS` | DM; `emoji_usage_enabled=false`; no guild emojis |
-| 05 | Server stickers | [`05-server-stickers.md`](./05-server-stickers.md) | `KNOWLEDGE_SERVER_STICKERS` | DM; impersonation; `sticker_usage_enabled=false` |
-| 06 | Participants | [`06-participants.md`](./06-participants.md) | `KNOWLEDGE_USERS_IN_CONVERSATION` | empty `userList` |
-| 07 | Short-term memory | [`07-short-term-memory.md`](./07-short-term-memory.md) | `KNOWLEDGE_SHORT_TERM_MEMORY` | no triggering user ID |
-| 08 | RAG documents | [`08-rag-documents.md`](./08-rag-documents.md) | `KNOWLEDGE_SERVER_DOCUMENTS` | RAG unavailable; no docs; memory pressure critical |
-| 09 | Conditioning | [`09-conditioning.md`](./09-conditioning.md) | `KNOWLEDGE_SERVER_CONDITIONING` | impersonation; conditioning disabled; no persona lineage |
-| 10 | Sample dialogues | [`10-sample-dialogues.md`](./10-sample-dialogues.md) | `DIALOGUE_SAMPLE` | impersonation; mismatched/empty arrays |
-| 11 | Dialogue history | [`11-dialogue-history.md`](./11-dialogue-history.md) | `DIALOGUE_HISTORY`, `CONTEXT_NOTE_INJECTION` | empty history (no-op) |
+| 01 | Prompt items | [`01-prompt-items.md`](./01-prompt-items) | `SYSTEM_HUMANIZER_RULES`, `SYSTEM_PERSONA_PROMPT`, `SYSTEM_PERSONALITY` | (always emits at least one in non-impersonation) |
+| 02 | Server info | [`02-server-info.md`](./02-server-info) | `KNOWLEDGE_SERVER_INFO` | (always emits) |
+| 03 | Server memories | [`03-server-memories.md`](./03-server-memories) | `KNOWLEDGE_SERVER_MEMORIES` | impersonation; no memories |
+| 04 | Server emojis | [`04-server-emojis.md`](./04-server-emojis) | `KNOWLEDGE_SERVER_EMOJIS` | DM; `emoji_usage_enabled=false`; no guild emojis |
+| 05 | Server stickers | [`05-server-stickers.md`](./05-server-stickers) | `KNOWLEDGE_SERVER_STICKERS` | DM; impersonation; `sticker_usage_enabled=false` |
+| 06 | Participants | [`06-participants.md`](./06-participants) | `KNOWLEDGE_USERS_IN_CONVERSATION` | empty `userList` |
+| 07 | Short-term memory | [`07-short-term-memory.md`](./07-short-term-memory) | `KNOWLEDGE_SHORT_TERM_MEMORY` | no triggering user ID |
+| 08 | RAG documents | [`08-rag-documents.md`](./08-rag-documents) | `KNOWLEDGE_SERVER_DOCUMENTS` | RAG unavailable; no docs; memory pressure critical |
+| 09 | Conditioning | [`09-conditioning.md`](./09-conditioning) | `KNOWLEDGE_SERVER_CONDITIONING` | impersonation; conditioning disabled; no persona lineage |
+| 10 | Sample dialogues | [`10-sample-dialogues.md`](./10-sample-dialogues) | `DIALOGUE_SAMPLE` | impersonation; mismatched/empty arrays |
+| 11 | Dialogue history | [`11-dialogue-history.md`](./11-dialogue-history) | `DIALOGUE_HISTORY`, `CONTEXT_NOTE_INJECTION` | empty history (no-op) |
 
 ## Output shape
 

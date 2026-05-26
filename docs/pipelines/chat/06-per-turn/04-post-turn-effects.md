@@ -1,4 +1,6 @@
-# Per-Turn Stage 04 — `runPostTurnEffects`
+---
+title: "06.4: Post-Turn Effects"
+---
 
 Side-effect sequence after generation completes.
 
@@ -121,7 +123,7 @@ extend or replace:
 | Empty-response retry | `maybeScheduleEmptyResponseRetry` | Retry policy (provider-specific) — extension via per-provider hook |
 | Text-quota consumption | `incrementTextQuota` | Quota-manager subsystem; plugins shipping their own quotas would add hooks here |
 | Self-reply bookkeeping | `setLastRespondedPersona`, `getSelfReplyChainState` | Cascade-trigger limit semantics; coupled to stage 05 |
-| Short-term memory write | `storeShortTermMemory` | → [memory pipeline — STM Stage 01](../../memory/stm/01-passive-capture.md) |
+| Short-term memory write | `storeShortTermMemory` | → [memory pipeline — STM Stage 01](../../memory/stm/01-passive-capture) |
 | Thought-log emission | `sendThoughtLogEmbed`, `sendAttributionOnlyEmbed` | New "logging channel kinds" plug in here |
 | Boomerang follow-up | `consumePendingBoomerang`, `buildBoomerangContext` | Cross-channel-tool-specific; one plugin (the cross-channel tool) owns the pending-boomerang state |
 
@@ -149,7 +151,7 @@ follow-up if operational tuning becomes useful.
 
 ## Related docs
 
-- Short-term memory: → [memory pipeline](../../memory/) — see [STM Stage 01](../../memory/stm/01-passive-capture.md) for the write path
+- Short-term memory: → [memory pipeline](../../memory/) — see [STM Stage 01](../../memory/stm/01-passive-capture) for the write path
 - Thought log: → no dedicated doc; `thoughtLog.ts` helper only
 - Boomerang / cross-channel tool: → no dedicated doc;
   `crossChannelMessageTool.ts` helper only

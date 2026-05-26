@@ -1,4 +1,6 @@
-# 13. Security & Privacy
+---
+title: "Security & Privacy"
+---
 
 This document describes TomoriBot's current (2026) security and privacy behavior based on the active codebase.
 

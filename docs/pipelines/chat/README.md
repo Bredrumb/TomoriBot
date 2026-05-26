@@ -1,4 +1,6 @@
-# Chat Pipeline
+---
+title: "Chat Pipeline"
+---
 
 The chat pipeline turns a single Discord `messageCreate` event into zero, one, or
 many persona replies. It is the spine of TomoriBot — most other AI subsystems
@@ -54,11 +56,11 @@ tomoriChat(TomoriChatInput)
 
 | # | Stage | File | Mission |
 |---|-------|------|---------|
-| 01 | `normalizeChatInvocation` | [`01-normalize-invocation.md`](./01-normalize-invocation.md) | Defensive input normalization. |
-| 02 | `evaluateChatAdmission` | [`02-evaluate-admission.md`](./02-evaluate-admission.md) | Decide if/how this message turns into a generation. |
-| 03 | `handleChatDisposition` | [`03-handle-disposition.md`](./03-handle-disposition.md) | Terminal handler for non-run dispositions. |
-| 04 | `runWithChannelLock` | [`04-channel-lock.md`](./04-channel-lock.md) | Per-channel mutex + typing keepalive + queue replay. |
-| 05 | `planChatTurns` | [`05-plan-turns.md`](./05-plan-turns.md) | Persona selection + per-turn state assembly. |
+| 01 | `normalizeChatInvocation` | [`01-normalize-invocation.md`](./01-normalize-invocation) | Defensive input normalization. |
+| 02 | `evaluateChatAdmission` | [`02-evaluate-admission.md`](./02-evaluate-admission) | Decide if/how this message turns into a generation. |
+| 03 | `handleChatDisposition` | [`03-handle-disposition.md`](./03-handle-disposition) | Terminal handler for non-run dispositions. |
+| 04 | `runWithChannelLock` | [`04-channel-lock.md`](./04-channel-lock) | Per-channel mutex + typing keepalive + queue replay. |
+| 05 | `planChatTurns` | [`05-plan-turns.md`](./05-plan-turns) | Persona selection + per-turn state assembly. |
 | 06 | per-turn loop | [`06-per-turn/`](./06-per-turn/) | Iterated once per responding persona. |
 
 ## Cross-references
@@ -79,7 +81,7 @@ tomoriChat(TomoriChatInput)
 - Messages arriving while a channel is locked are either **enqueued for replay
   after lock release**, **converted to a follow-up interrupt** (if eligible),
   **converted to a natural-stop signal** (if matching stop phrasing), or
-  **dropped** — full decision tree in [`04-channel-lock.md`](./04-channel-lock.md).
+  **dropped** — full decision tree in [`04-channel-lock.md`](./04-channel-lock).
 - Three recursive re-entries into `tomoriChat()` are by design:
   empty-response retry (with `skipLock=true`), stop-response generation (after
   lock release, via `handleStopResponse`), and boomerang follow-up (with

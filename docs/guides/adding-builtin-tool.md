@@ -1,4 +1,6 @@
-# Adding a Built-In Tool
+---
+title: "Adding a Built-In Tool"
+---
 
 This guide walks through adding a new built-in tool that the LLM can call during tool-loop execution.
 
@@ -25,7 +27,7 @@ This guide walks through adding a new built-in tool that the LLM can call during
 ## Notes on Feature-Gated Tools
 
 If the tool should be toggled by a server config field, see
-[`docs/guides/adding-feature-flag-tool.md`](./adding-feature-flag-tool.md) for the full flag-mapping steps.
+[`docs/guides/adding-feature-flag-tool.md`](./adding-feature-flag-tool) for the full flag-mapping steps.
 
 ## Quality Gate
 
@@ -39,4 +41,4 @@ Then test the tool by prompting the bot in a way that triggers it and checking t
 ## Related Docs
 
 - [`docs/pipelines/tool-loop/`](../pipelines/tool-loop/) — how tools are dispatched and results assembled
-- [`docs/guides/adding-feature-flag-tool.md`](./adding-feature-flag-tool.md) — gating a tool behind a feature flag
+- [`docs/guides/adding-feature-flag-tool.md`](./adding-feature-flag-tool) — gating a tool behind a feature flag

@@ -1,4 +1,6 @@
-# Stage 01 — `streamOnce`
+---
+title: "01: Stream Once"
+---
 
 One provider generation pass, wrapped with a rolling AbortController SDK timeout.
 

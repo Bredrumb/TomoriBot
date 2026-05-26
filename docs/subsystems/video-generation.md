@@ -1,4 +1,6 @@
-# Video Generation
+---
+title: "Video Generation"
+---
 
 This document summarizes the current video generation stack.
 

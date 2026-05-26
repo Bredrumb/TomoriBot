@@ -1,4 +1,6 @@
-# Testing Chat Changes
+---
+title: "Testing Chat Changes"
+---
 
 This guide covers the chat regression harness introduced in Phase 5 (#12a). The harness protects the highest-risk chat decision behavior across the chat coordinator and generation-stage refactors.
 

@@ -1,4 +1,6 @@
-# Stage 03 — `buildServerMemoryContextItem`
+---
+title: "02.3: Server Memories"
+---
 
 Persona-scoped long-term server memories.
 
@@ -88,9 +90,9 @@ seam:
 ## Related docs
 
 - Personal memories (per-user) → stage 06 participants
-  ([`06-participants.md`](./06-participants.md))
+  ([`06-participants.md`](./06-participants))
 - Short-term memory cache → stage 07
-  ([`07-short-term-memory.md`](./07-short-term-memory.md))
+  ([`07-short-term-memory.md`](./07-short-term-memory))
 - Memory tagging system: → no dedicated doc yet; the feature is implemented
   inline here and in `personalMemoryRepository.loadForUserLineage`.
 - Memory-update tools (referenced by IDs): tool registry (→ [tool-loop pipeline](../../../tool-loop/))

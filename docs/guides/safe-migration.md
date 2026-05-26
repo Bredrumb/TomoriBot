@@ -1,10 +1,12 @@
-# Safe Migration Guide for Self-Hosters
+---
+title: "Safe Migration Guide for Self-Hosters"
+---
 
 When you `git pull` new code and restart TomoriBot, the bot automatically runs database schema migrations on boot. This is powerful — it means you don't have to manually manage SQL updates — but it also means destructive operations can silently affect your data. This guide shows you how to protect yourself before pulling.
 
 ## Why this matters
 
-TomoriBot's migration runner (in `src/db/migrationRunner.ts`) executes all unapplied migrations in version order. Migrations are **forward-only**: if something goes wrong, the runner does not auto-rollback. Most migrations are safe expansions (new columns, new tables), but per the project's [design policy (OD-R-6)](../../plans/refactor/shared/open-decisions.md), destructive operations such as `DROP COLUMN` or `DROP TABLE` are permitted. If a destructive migration runs without a backup, you lose data permanently. When in doubt, back up first.
+TomoriBot's migration runner (in `src/db/migrationRunner.ts`) executes all unapplied migrations in version order. Migrations are **forward-only**: if something goes wrong, the runner does not auto-rollback. Most migrations are safe expansions (new columns, new tables), but per the project's [design policy (OD-R-6)](../../plans/refactor/shared/open-decisions), destructive operations such as `DROP COLUMN` or `DROP TABLE` are permitted. If a destructive migration runs without a backup, you lose data permanently. When in doubt, back up first.
 
 ## Pre-pull checklist
 
@@ -157,6 +159,6 @@ The migration runner's forward-only design is intentional: rollback files (`.dow
 
 ## See also
 
-- [Database schema documentation](../systems/database-schema.md) — learn the current schema structure
+- [Database schema documentation](../systems/database-schema) — learn the current schema structure
 - [Design Decision OD-R-6 (Down-migration shape)](../../plans/refactor/shared/open-decisions.md#od-r-6-down-migration-shape) — technical rationale for migration safety policy
 - [Bun documentation](https://bun.sh) — learn Bun runtime fundamentals

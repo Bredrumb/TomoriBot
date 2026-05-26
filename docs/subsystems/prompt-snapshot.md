@@ -1,4 +1,6 @@
-# Prompt Snapshot (`/tool prompt snapshot`)
+---
+title: "Prompt Snapshot"
+---
 
 The prompt-snapshot command produces a runtime-faithful dump of the exact prompt TomoriBot would send to the LLM for a given channel + persona combination. It's aimed at server admins and prompt engineers who want to debug or reproduce what the bot is "seeing" at any point in time.
 
@@ -122,8 +124,8 @@ The live chat pipeline in `tomoriChat.ts` has inline helpers for these. Rather t
 ## Related docs
 
 - [`pipelines/context-build/`](../pipelines/context-build/) — how `buildContext()` orders, tags, and injects context items
-- [`sillytavern/preset-system.md`](../integrations/sillytavern/preset-system.md) — preset-based reordering respected by snapshot
-- [`tool-system.md`](./tool-system.md) — how tool registry + MCP integration feed `fetch_tools`
+- [`sillytavern/preset-system.md`](../integrations/sillytavern/preset-system) — preset-based reordering respected by snapshot
+- [`tool-system.md`](./tool-system) — how tool registry + MCP integration feed `fetch_tools`
 
 ## Source
 

@@ -1,4 +1,6 @@
-﻿# Logit Bias
+---
+title: "Logit Bias"
+---
 
 This document describes TomoriBot's `/config logit-bias` design and runtime behavior.
 

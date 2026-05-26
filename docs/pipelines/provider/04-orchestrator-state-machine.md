@@ -1,4 +1,6 @@
-# Stage 04 — `executeStream`
+---
+title: "04: Orchestrator State Machine"
+---
 
 Drives the provider generator as a state machine, routing each `ProcessedChunk` and resolving stop signals, timeouts, and stream completion into a `StreamResult`.
 
@@ -117,5 +119,5 @@ After this stage:
 - Error embed rendering: `src/utils/discord/stream/errorUi.ts`
 - Empty-response detection: `wasEmptyStreamResponse` in `src/utils/discord/stream/thoughtLog.ts`
 - Stage 05 (text path from this stage): → [`05-buffer-management.md`](05-buffer-management.md)
-- Tool-loop consumer of `StreamResult`: → [tool-loop pipeline — Stage 01](../tool-loop/01-stream-once.md)
+- Tool-loop consumer of `StreamResult`: → [tool-loop pipeline — Stage 01](../tool-loop/01-stream-once)
 - `StreamResult` type: `src/types/provider/interfaces.ts:88`

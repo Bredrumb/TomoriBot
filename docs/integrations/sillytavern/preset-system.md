@@ -1,4 +1,6 @@
-﻿# SillyTavern Preset System
+---
+title: "SillyTavern Preset System"
+---
 
 > Import and use SillyTavern (ST) presets to control how TomoriBot assembles LLM prompts.
 
@@ -12,7 +14,7 @@ SillyTavern presets are JSON files that define:
 4. **Template macros** — variables like `{{setvar::X::Y}}` / `{{getvar::X}}` for dynamic content
 5. **Per-node enable/disable** — users toggle individual prompt nodes on or off
 
-This is distinct from [SillyTavern Card Import](./card-support.md), which imports character data (description, personality, sample dialogues). Presets control *how the prompt is structured*, not *what character data exists*.
+This is distinct from [SillyTavern Card Import](./card-support), which imports character data (description, personality, sample dialogues). Presets control *how the prompt is structured*, not *what character data exists*.
 
 ## How It Works (User Perspective)
 
@@ -20,7 +22,7 @@ This is distinct from [SillyTavern Card Import](./card-support.md), which import
 2. The preset becomes active for that server
 3. On every LLM call, the context builder detects the active preset and rearranges blocks accordingly
 4. The `/sysprompt` and personality settings still apply — the preset controls *where* they appear, not *whether* they exist
-5. If no preset is active, the system uses the native fixed context assembly (see [Context Assembly](../ai/context-assembly.md))
+5. If no preset is active, the system uses the native fixed context assembly (see [Context Assembly](../ai/context-assembly))
 6. Removing or deactivating the preset reverts to native assembly instantly
 
 ## Current Status

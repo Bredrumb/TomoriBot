@@ -1,4 +1,6 @@
-# Stage 11 — `appendDialogueHistoryContext`
+---
+title: "02.11: Dialogue History"
+---
 
 The actual recent message history as alternating user/model items. The
 bottom of the prompt, immediately above the LLM's next response.

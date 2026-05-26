@@ -1,4 +1,6 @@
-# 22. Discord Message Components V2
+---
+title: "Discord Message Components V2"
+---
 
 Since 2025, message components got a lot more powerful, allowing for more interactive and dynamic user experiences. This document outlines the key features and improvements introduced in this version.
 

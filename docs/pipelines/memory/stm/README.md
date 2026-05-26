@@ -1,4 +1,6 @@
-# STM Sub-Pipeline
+---
+title: "STM Sub-Pipeline"
+---
 
 Manages the short-term memory cache — an in-process `Map` that stores the
 last 10 conversation turns per channel/persona pair. Two write paths exist:
@@ -27,7 +29,7 @@ last 10 conversation turns per channel/persona pair. Two write paths exist:
 
 ## Cross-references
 
-- Intent gate that may suppress stage 02: → [memory pipeline README](../README.md)
-- Read side (both stages): → [context-build STM stage](../../context-build/02-native-assembly/04-stm-memories.md)
-- Tool-loop that triggers stage 02: → [tool-loop Stage 02 `executeToolCall`](../../tool-loop/02-execute-tool-call.md)
-- Post-turn effects that trigger stage 01: → [chat per-turn Stage 04](../../chat/06-per-turn/04-post-turn-effects.md)
+- Intent gate that may suppress stage 02: → [memory pipeline README](../README)
+- Read side (both stages): → [context-build STM stage](../../context-build/02-native-assembly/04-stm-memories)
+- Tool-loop that triggers stage 02: → [tool-loop Stage 02 `executeToolCall`](../../tool-loop/02-execute-tool-call)
+- Post-turn effects that trigger stage 01: → [chat per-turn Stage 04](../../chat/06-per-turn/04-post-turn-effects)

@@ -1,4 +1,6 @@
-# Per-Turn Stage 01 — `buildChatTurnContext`
+---
+title: "06.1: Build Context"
+---
 
 Assemble the LLM-visible prompt for one persona turn.
 

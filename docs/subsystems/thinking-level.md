@@ -1,4 +1,6 @@
-# Thinking Level
+---
+title: "Thinking Level"
+---
 
 This page describes how TomoriBot's provider-scoped `thinking_level` preference works today.
 
@@ -236,7 +238,7 @@ Do not silently ignore the feature without documenting the decision.
 
 See also:
 
-- [`../guides/adding-new-provider.md`](../guides/adding-new-provider.md)
+- [`../guides/adding-new-provider.md`](../guides/adding-new-provider)
 
 ## Official Source Links
 

@@ -1,4 +1,6 @@
-# STM Stage 02 — `UpdateShortTermMemoryTool.execute` → `updateShortTermMemorySummary`
+---
+title: "STM 02: Summary Upgrade"
+---
 
 LLM-initiated replacement of the crude conversation in the STM cache with a
 compact, LLM-authored summary.
@@ -32,7 +34,7 @@ Silent operation — no embed or user-facing message is sent.
 - `context: ToolContext` — provides `userId`, `channel.id`, `guildId`,
   `tomoriState.persona_id`, `tomoriState.persona_lineage_id`.
 - `context.streamContext.explicitLongTermMemoryIntent` — if `true`, this tool
-  is not offered (see intent gate in [memory README](../README.md)).
+  is not offered (see intent gate in [memory README](../README)).
 - `context.streamContext.disableShortTermMemoryUpdate` — if `true`, execution
   is blocked (per-turn deduplication guard).
 
@@ -89,7 +91,7 @@ After a successful execute:
 
 ## Related docs
 
-- Intent gate that may suppress this tool: → [memory pipeline README — intent detection gate](../README.md)
+- Intent gate that may suppress this tool: → [memory pipeline README — intent detection gate](../README)
 - STM passive capture that this stage supersedes for context rendering: → [`stm/01-passive-capture.md`](01-passive-capture.md)
-- Tool-loop that invokes this stage: → [tool-loop Stage 02 `executeToolCall`](../../../tool-loop/02-execute-tool-call.md)
-- Read side that prefers `summary` over `messages`: → [context-build STM stage](../../../context-build/02-native-assembly/04-stm-memories.md)
+- Tool-loop that invokes this stage: → [tool-loop Stage 02 `executeToolCall`](../../../tool-loop/02-execute-tool-call)
+- Read side that prefers `summary` over `messages`: → [context-build STM stage](../../../context-build/02-native-assembly/04-stm-memories)

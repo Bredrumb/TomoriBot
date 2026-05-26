@@ -1,4 +1,6 @@
-# 19. Cooldown System (Current Behavior)
+---
+title: "Cooldown System"
+---
 
 This document describes the currently implemented cooldown behavior.
 

@@ -1,4 +1,6 @@
-# Stage 04 — `buildResult`
+---
+title: "04: Build Result"
+---
 
 Assemble the final `GenerationTurnResult` from accumulated state.
 
@@ -112,7 +114,7 @@ After this stage runs:
 ## Related docs
 
 - Result consumer: → `responseSink.finalize` in
-  [`docs/pipelines/chat/06-per-turn/02-create-response-sink.md`](../chat/06-per-turn/02-create-response-sink.md)
+  [`docs/pipelines/chat/06-per-turn/02-create-response-sink.md`](../chat/06-per-turn/02-create-response-sink)
 - Post-turn effects (reads `personaResponses`): →
-  [`docs/pipelines/chat/06-per-turn/04-post-turn-effects.md`](../chat/06-per-turn/04-post-turn-effects.md)
+  [`docs/pipelines/chat/06-per-turn/04-post-turn-effects.md`](../chat/06-per-turn/04-post-turn-effects)
 - Tool-loop coordinator: → [`README.md`](README.md)

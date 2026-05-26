@@ -1,4 +1,6 @@
-# ElevenLabs Speech
+---
+title: "ElevenLabs Speech"
+---
 
 Use `/speech elevenlabs` to connect ElevenLabs. The command validates the key, writes both custom endpoint rows, selects them as active, and can assign a voice to one persona.
 

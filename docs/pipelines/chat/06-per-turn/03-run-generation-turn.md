@@ -1,4 +1,6 @@
-# Per-Turn Stage 03 — `runGenerationTurn`
+---
+title: "06.3: Generation Turn"
+---
 
 Drive the provider call with model fallback and API-key rotation.
 
@@ -130,5 +132,5 @@ Plus `MAX_KEY_ATTEMPTS` from `keyRotation.ts`.
 - Tool execution loop: → [tool-loop pipeline](../../tool-loop/)
 - Provider streaming + adapter pattern: → [provider pipeline](../../provider/)
 - Key rotation: → no dedicated doc yet; `keyRotation.ts` helper only
-- Fallback chain schema: → [`docs/subsystems/database-schema.md`](../../../subsystems/database-schema.md) (`fallback_chain` column)
+- Fallback chain schema: → [`docs/subsystems/database-schema.md`](../../../subsystems/database-schema) (`fallback_chain` column)
 - Personal-provider runtime substitution: → [provider pipeline](../../provider/)

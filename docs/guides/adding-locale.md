@@ -1,4 +1,6 @@
-# Adding a New Locale
+---
+title: "Adding a New Locale"
+---
 
 This guide walks through adding support for a new display language in TomoriBot.
 
@@ -16,7 +18,7 @@ This guide walks through adding support for a new display language in TomoriBot.
 
 - Keys follow dot-notation: `commands.{category}.{subcommand}.{key}`
 - Auto-localization for command options uses specific key patterns — see
-  [`docs/subsystems/localization.md`](../subsystems/localization.md) for the full naming convention.
+  [`docs/subsystems/localization.md`](../subsystems/localization) for the full naming convention.
 - The locale scanner reads comments too. If a comment contains a locale key example, write it
   in split form (`"m.room" + ".message"`) rather than joined — the scanner will otherwise count it
   as a real key and flag false parity failures.
@@ -31,4 +33,4 @@ bun run lint            # Biome formatting
 
 ## Related Docs
 
-- [`docs/subsystems/localization.md`](../subsystems/localization.md) — key naming, `localizer()` API, locale discovery
+- [`docs/subsystems/localization.md`](../subsystems/localization) — key naming, `localizer()` API, locale discovery

@@ -1,4 +1,6 @@
-# Stage 01 — `startStream` (context assembly)
+---
+title: "01: Context Assembly"
+---
 
 Translates the provider-agnostic `StructuredContextItem[]` into a provider-native API request and opens the HTTP streaming connection.
 
@@ -90,7 +92,7 @@ After context assembly completes (before the generator loop begins):
 ## Related docs
 
 - Context items that arrive here: → [context-build pipeline](../context-build/)
-- Function history that is replayed here: → [tool-loop pipeline — Stage 02 `executeToolCall`](../tool-loop/02-execute-tool-call.md)
+- Function history that is replayed here: → [tool-loop pipeline — Stage 02 `executeToolCall`](../tool-loop/02-execute-tool-call)
 - Type definitions: `StructuredContextItem` → `src/types/misc/context.ts`; `StreamConfig` / `StreamContext` → `src/types/stream/interfaces.ts`
 - Provider adapter registry: `src/utils/provider/providerInfoRegistry.ts`
 - Adding a new provider end-to-end: → `docs/guides/adding-new-provider.md`

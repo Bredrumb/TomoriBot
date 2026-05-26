@@ -1,4 +1,6 @@
-# 1. Introduction to TomoriBot
+---
+title: "Introduction to TomoriBot"
+---
 
 TomoriBot is a TypeScript + Bun Discord AI chatbot focused on configurable personalities, memory, and tool use.
 
@@ -38,7 +40,7 @@ Commands are loaded from folders under `src/commands/` (currently 17 top-level c
 
 ## Documentation Layout
 
-- Index: [`docs/README.md`](../README.md)
+- Index: [`docs/README.md`](../README)
 - Core: [`core/`](./)
 - Systems: [`systems/`](../systems/)
 - AI: [`ai/`](../ai/)
@@ -47,6 +49,6 @@ Commands are loaded from folders under `src/commands/` (currently 17 top-level c
 
 ## Read Next
 
-- Start with [getting-started.md](./getting-started.md)
-- Then [architecture.md](./architecture.md)
-- Then [entry-point.md](./entry-point.md)
+- Start with [getting-started.md](./getting-started)
+- Then [architecture.md](./architecture)
+- Then [entry-point.md](./entry-point)

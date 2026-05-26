@@ -1,4 +1,6 @@
-# Stage 03 — `handleChatDisposition`
+---
+title: "03: Chat Disposition"
+---
 
 Terminal handler for non-run dispositions.
 

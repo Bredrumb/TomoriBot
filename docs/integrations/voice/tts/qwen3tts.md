@@ -1,4 +1,6 @@
-# Qwen3-TTS
+---
+title: "Qwen3-TTS"
+---
 
 Use `servers/tts/qwen3tts/server.py` for both Qwen3-TTS 12Hz 1.7B modes. By default it starts in auto mode, which chooses the Base voice-clone model or VoiceDesign model from each request shape.
 

@@ -1,4 +1,6 @@
-# whisper.cpp Transcription
+---
+title: "whisper.cpp Transcription"
+---
 
 whisper.cpp can be used when its HTTP server exposes an OpenAI-compatible `POST /v1/audio/transcriptions` endpoint.
 

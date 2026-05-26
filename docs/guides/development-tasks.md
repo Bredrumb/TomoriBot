@@ -1,4 +1,6 @@
-# Development Tasks
+---
+title: "Development Tasks"
+---
 
 Quick navigation for common TomoriBot implementation tasks and coding conventions.
 
@@ -8,14 +10,14 @@ Each guide below is self-contained with steps, notes, and a quality gate.
 
 | Task | Guide |
 |---|---|
-| Add a slash command | [`adding-slash-command.md`](./adding-slash-command.md) |
-| Add an event handler | [`adding-event-handler.md`](./adding-event-handler.md) |
-| Add a built-in tool | [`adding-builtin-tool.md`](./adding-builtin-tool.md) |
-| Add a DB column | [`adding-db-column.md`](./adding-db-column.md) |
-| Add a locale | [`adding-locale.md`](./adding-locale.md) |
-| Add a new AI provider | [`adding-new-provider.md`](./adding-new-provider.md) |
-| Add a feature flag-controlled tool | [`adding-feature-flag-tool.md`](./adding-feature-flag-tool.md) |
-| Add a persona preset | [`adding-persona-preset.md`](./adding-persona-preset.md) |
+| Add a slash command | [`adding-slash-command.md`](./adding-slash-command) |
+| Add an event handler | [`adding-event-handler.md`](./adding-event-handler) |
+| Add a built-in tool | [`adding-builtin-tool.md`](./adding-builtin-tool) |
+| Add a DB column | [`adding-db-column.md`](./adding-db-column) |
+| Add a locale | [`adding-locale.md`](./adding-locale) |
+| Add a new AI provider | [`adding-new-provider.md`](./adding-new-provider) |
+| Add a feature flag-controlled tool | [`adding-feature-flag-tool.md`](./adding-feature-flag-tool) |
+| Add a persona preset | [`adding-persona-preset.md`](./adding-persona-preset) |
 
 ## Development Checklist
 
@@ -73,7 +75,7 @@ const VALUE = Number.parseInt(process.env.CONFIG_VAR || "10", 10);
 
 - Use Bun SQL template literals for queries.
 - Keep schema migrations idempotent (`IF NOT EXISTS`, helper functions, guarded blocks).
-- For DB model details, see [`docs/subsystems/database-schema.md`](../subsystems/database-schema.md).
+- For DB model details, see [`docs/subsystems/database-schema.md`](../subsystems/database-schema).
 
 ### Cache-Safe Write Pattern
 
@@ -83,7 +85,7 @@ When a write affects cached reads:
 2. Then invalidate affected cache key(s).
 
 Do not invalidate before failed writes, and do not manually mutate cached objects.
-See [`docs/subsystems/caching.md`](../subsystems/caching.md) for the cache map and invalidation APIs.
+See [`docs/subsystems/caching.md`](../subsystems/caching) for the cache map and invalidation APIs.
 
 ### Logging and Error Handling
 
@@ -95,4 +97,4 @@ See [`docs/subsystems/caching.md`](../subsystems/caching.md) for the cache map a
 
 - Slash commands only (no legacy prefix command surface).
 - All user-facing text must be localized via `localizer()`.
-- Follow interaction timing patterns in [`docs/subsystems/command-system.md`](../subsystems/command-system.md).
+- Follow interaction timing patterns in [`docs/subsystems/command-system.md`](../subsystems/command-system).

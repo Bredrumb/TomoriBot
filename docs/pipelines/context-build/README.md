@@ -1,4 +1,6 @@
-# Context-Build Pipeline
+---
+title: "Context-Build Pipeline"
+---
 
 Assembles the LLM-visible prompt — every system message, every memory, every
 sample dialogue, every historical message — into a `StructuredContextItem[]`
@@ -8,7 +10,7 @@ list ready for a provider.
 `src/utils/text/context/builder.ts:buildContext()`
 
 **Triggered by:** the chat per-turn stage
-[`buildChatTurnContext`](../chat/06-per-turn/01-build-context.md), and any
+[`buildChatTurnContext`](../chat/06-per-turn/01-build-context), and any
 other caller that needs an LLM prompt for a given persona + history snapshot
 (import/export, snapshot tooling, structured-output flows).
 
@@ -53,20 +55,20 @@ buildContextNative(BuildContextParams)        ← fixed-order assembly
 
 | # | Stage | File | Mission |
 |---|-------|------|---------|
-| 01 | `buildContext` (routing) | [`01-preset-routing.md`](./01-preset-routing.md) | Decide native vs. preset-reassembly path. |
+| 01 | `buildContext` (routing) | [`01-preset-routing.md`](./01-preset-routing) | Decide native vs. preset-reassembly path. |
 | 02 | `buildContextNative` (assembly) | [`02-native-assembly/`](./02-native-assembly/) | Fixed-order contributor assembly. |
 
 ## Cross-references
 
 - **Producer:** the chat pipeline's per-turn
-  [`buildChatTurnContext`](../chat/06-per-turn/01-build-context.md) constructs
+  [`buildChatTurnContext`](../chat/06-per-turn/01-build-context) constructs
   the `BuildContextParams` and consumes the returned `BuildContextResult`.
 - **Consumer:** the [provider pipeline](../provider/) consumes `contextItems` as the LLM prompt; the
   chat pipeline appends `tailDirectives` from this pipeline alongside its own
   before passing to the provider.
 - **SillyTavern presets:** preset reassembly lives in
   `src/utils/text/presetContextBuilder.ts` (called from the routing wrapper).
-  See also [`docs/integrations/sillytavern/preset-system.md`](../../integrations/sillytavern/preset-system.md) for the user-facing system.
+  See also [`docs/integrations/sillytavern/preset-system.md`](../../integrations/sillytavern/preset-system) for the user-facing system.
 - **Tool prompt macros:** `{short_term_memory_tool}`, `{sticker_tool}`,
   `{memory_tool}`, etc. are expanded by `toolPromptMacroResolver` from
   `src/utils/tools/toolPromptMacros.ts`. Used across contributors.

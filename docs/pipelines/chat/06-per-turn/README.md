@@ -1,7 +1,9 @@
-# Per-Turn Loop
+---
+title: "06: Per-Turn Loop"
+---
 
 This folder documents the **body of the loop** in
-[`tomoriChat.ts`](../README.md) — the four stages that execute once per
+[`tomoriChat.ts`](../README) — the four stages that execute once per
 responding persona inside `runWithChannelLock`.
 
 ## Loop semantics
@@ -34,10 +36,10 @@ for (const turn of turnPlan.turns) {
 
 | # | Stage | File | Mission |
 |---|-------|------|---------|
-| 01 | `buildChatTurnContext` | [`01-build-context.md`](./01-build-context.md) | Assemble the LLM-visible prompt for this turn. |
-| 02 | `createChatResponseSink` | [`02-create-response-sink.md`](./02-create-response-sink.md) | Resolve Discord delivery target + emit/finalize callbacks. |
-| 03 | `runGenerationTurn` | [`03-run-generation-turn.md`](./03-run-generation-turn.md) | Drive provider call with fallback chain + key rotation. |
-| 04 | `runPostTurnEffects` | [`04-post-turn-effects.md`](./04-post-turn-effects.md) | Run the post-generation side-effect sequence. |
+| 01 | `buildChatTurnContext` | [`01-build-context.md`](./01-build-context) | Assemble the LLM-visible prompt for this turn. |
+| 02 | `createChatResponseSink` | [`02-create-response-sink.md`](./02-create-response-sink) | Resolve Discord delivery target + emit/finalize callbacks. |
+| 03 | `runGenerationTurn` | [`03-run-generation-turn.md`](./03-run-generation-turn) | Drive provider call with fallback chain + key rotation. |
+| 04 | `runPostTurnEffects` | [`04-post-turn-effects.md`](./04-post-turn-effects) | Run the post-generation side-effect sequence. |
 
 ## Cross-references
 

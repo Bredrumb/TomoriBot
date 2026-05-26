@@ -1,11 +1,13 @@
-# 24. NovelAI Provider Limitations
+---
+title: "NovelAI Provider Limitations"
+---
 
 This document catalogs every feature, tool, and context block that is deliberately disabled or reduced for the NovelAI provider compared to Google Gemini and OpenRouter. All exclusions fall into one of two root causes:
 
 1. **Text-only model** — GLM 4.6 has no vision or image understanding capability.
 2. **Token budget** — NovelAI's API has a hard token cap that creates a practical quality threshold around ~2800 tokens of system prompt. Exceeding it degrades output quality noticeably.
 
-See also: [`tool-calling.md`](./tool-calling.md) for how prompt-based tool calling itself works.
+See also: [`tool-calling.md`](./tool-calling) for how prompt-based tool calling itself works.
 
 ---
 

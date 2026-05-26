@@ -1,4 +1,6 @@
-# Stage 02 — `buildServerInfoContextItem`
+---
+title: "02.2: Server Info"
+---
 
 The "where am I" framing — server name and description.
 

@@ -1,4 +1,6 @@
-# Stage 07 — `sendSegment` → `sendSinglePayload`
+---
+title: "07: Discord Delivery"
+---
 
 Delivers a normalized text segment to Discord, applying typing simulation and routing through webhooks for persona mode.
 

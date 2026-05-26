@@ -1,4 +1,6 @@
-# Stage 02 — `startStream` (raw chunk generation)
+---
+title: "02: Raw Chunk Generation"
+---
 
 Opens the provider's HTTP stream and yields a `RawStreamChunk` for each token delivery, with provider-specific pre-processing applied before each yield.
 

@@ -1,4 +1,6 @@
-# KoboldCPP Transcription
+---
+title: "KoboldCPP Transcription"
+---
 
 KoboldCPP has Whisper-based STT support, but endpoint shape can vary by build. TomoriBot's Phase 4 adapter expects OpenAI-compatible `POST /v1/audio/transcriptions`.
 

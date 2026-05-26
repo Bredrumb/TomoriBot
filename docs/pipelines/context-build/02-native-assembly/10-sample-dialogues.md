@@ -1,4 +1,6 @@
-# Stage 10 — `buildSampleDialogueContextItems`
+---
+title: "02.10: Sample Dialogues"
+---
 
 Few-shot example dialogues to anchor the LLM's voice.
 
@@ -87,4 +89,4 @@ ST card conversion).
 - Uncensor system: → no dedicated doc;
   `src/utils/text/uncensor.ts` helper only
 - ST preset sample-dialogue handling:
-  [`docs/integrations/sillytavern/preset-system.md`](../../../integrations/sillytavern/preset-system.md)
+  [`docs/integrations/sillytavern/preset-system.md`](../../../integrations/sillytavern/preset-system)

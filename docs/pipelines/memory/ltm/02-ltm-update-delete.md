@@ -1,4 +1,6 @@
-# LTM Stage 02 — `UpdateLongTermMemoryTool.execute` (LTM update/delete)
+---
+title: "LTM 02: Memory Update & Delete"
+---
 
 LLM-initiated replacement or deletion of an existing persistent memory,
 identified by the `ID:N` shown in the LLM's context.
@@ -108,6 +110,6 @@ After a successful delete:
 ## Related docs
 
 - Stage that creates the memories updated here: → [`ltm/01-ltm-create.md`](01-ltm-create.md)
-- Context-build stages that read these memories: → [server](../../../context-build/02-native-assembly/03-server-memories.md) / [personal](../../../context-build/02-native-assembly/07-personal-memories.md)
+- Context-build stages that read these memories: → [server](../../../context-build/02-native-assembly/03-server-memories) / [personal](../../../context-build/02-native-assembly/07-personal-memories)
 - Privacy level schema: → `src/types/db/schema.ts` (`PrivacyLevel` enum)
 - Bridge user detection: → `src/utils/bridges/index.ts`

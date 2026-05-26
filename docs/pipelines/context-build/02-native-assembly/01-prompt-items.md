@@ -1,4 +1,6 @@
-# Stage 01 — `buildPromptContextItems`
+---
+title: "02.1: Prompt Items"
+---
 
 The top of the context list — the LLM's identity framing.
 
@@ -90,4 +92,4 @@ After this stage runs:
 - Mention conversion: covered in
   [native-assembly README](./README.md#shared-helpers-used-across-contributors).
 - SillyTavern preset reassembly: → preset-routing stage
-  [`01-preset-routing.md`](../01-preset-routing.md)
+  [`01-preset-routing.md`](../01-preset-routing)

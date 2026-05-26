@@ -1,4 +1,6 @@
-# 21. SillyTavern Card Import Support
+---
+title: "SillyTavern Card Import Support"
+---
 
 This document describes how `/persona import` handles SillyTavern character cards from either:
 

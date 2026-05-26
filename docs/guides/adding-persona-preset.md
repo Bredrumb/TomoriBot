@@ -1,4 +1,6 @@
-# Adding a Persona Preset
+---
+title: "Adding a Persona Preset"
+---
 
 This guide covers how to add a new official persona preset to TomoriBot's seed data.
 
@@ -37,5 +39,5 @@ Then run a local seed against a dev database and verify the preset appears corre
 
 ## Related Docs
 
-- [`docs/subsystems/persona-presets.md`](../subsystems/persona-presets.md) — preset lineage model, sync behavior, avatar sync timing
+- [`docs/subsystems/persona-presets.md`](../subsystems/persona-presets) — preset lineage model, sync behavior, avatar sync timing
 - [`docs/pipelines/memory/`](../pipelines/memory/) — how persona conditioning flows into context

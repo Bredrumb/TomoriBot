@@ -1,4 +1,6 @@
-# Local & Self-Hosted Endpoints
+---
+title: "Local & Self-Hosted Endpoints"
+---
 
 ### Local LLM (Text / Embeddings)
 

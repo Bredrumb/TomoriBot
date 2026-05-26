@@ -1,4 +1,6 @@
-# Stage 04 — `runWithChannelLock`
+---
+title: "04: Channel Lock"
+---
 
 Per-channel mutex wrapper around the per-turn body.
 

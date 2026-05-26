@@ -1,4 +1,6 @@
-# 5. Database Schema and Data Model
+---
+title: "Database Schema and Data Model"
+---
 
 This document summarizes the current PostgreSQL schema used by TomoriBot.
 

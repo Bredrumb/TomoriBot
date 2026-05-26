@@ -200,10 +200,12 @@ async function runLint(): Promise<ResultItem> {
 async function runAudit(): Promise<ResultItem> {
   console.log(`> Running Dependency Audit (bun audit)...`);
 
-  // We use cmd.exe on Windows for bun audit to prevent pipe hangs, just in case
-  let command = ["bun", "audit"];
+  // --filter . scopes audit to the root bot package only, excluding workspace
+  // packages (e.g. apps/docs Astro build deps) from blocking the pipeline.
+  // We use cmd.exe on Windows for bun audit to prevent pipe hangs, just in case.
+  let command = ["bun", "audit", "--filter", "."];
   if (process.platform === "win32") {
-    command = ["cmd.exe", "/d", "/s", "/c", "bun audit"];
+    command = ["cmd.exe", "/d", "/s", "/c", "bun audit --filter ."];
   }
 
   const proc = spawn(command, { stdout: "pipe", stderr: "pipe" });

@@ -1,4 +1,6 @@
-# Built-In Tool Reference for Prompt Customization
+---
+title: "Built-In Tool Reference for Prompt Customization"
+---
 
 If you customize TomoriBot's system prompt, persona instructions, or external provider prompt templates, prefer the stable prompt macros below instead of hardcoding tool names.
 

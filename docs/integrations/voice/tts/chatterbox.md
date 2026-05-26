@@ -1,4 +1,6 @@
-# Chatterbox TTS
+---
+title: "Chatterbox TTS"
+---
 
 Use `servers/tts/chatterbox/server.py` for a local clone endpoint. It defaults to Chatterbox-Turbo, preserving bracket delivery tags and matching TomoriBot's fastest current behavior.
 

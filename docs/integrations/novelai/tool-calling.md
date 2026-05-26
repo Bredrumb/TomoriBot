@@ -1,4 +1,6 @@
-# 23. NovelAI GLM 4.6 Tool Calling
+---
+title: "NovelAI GLM 4.6 Tool Calling"
+---
 
 ## Overview
 

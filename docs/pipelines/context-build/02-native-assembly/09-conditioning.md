@@ -1,4 +1,6 @@
-# Stage 09 — `buildConditioningContextItem`
+---
+title: "02.9: Conditioning"
+---
 
 Reward/punish reinforcement memory — what the bot has been thanked for and
 what it has been corrected on.
@@ -96,4 +98,4 @@ that exists).
 - Conditioning system: → no dedicated doc;
   `src/utils/conditioning/conditioning.ts` helper only
 - Conditioning tools (reward/punish actions): tool registry (→ [tool-loop pipeline](../../../tool-loop/))
-- Server memories (parallel): [`03-server-memories.md`](./03-server-memories.md)
+- Server memories (parallel): [`03-server-memories.md`](./03-server-memories)

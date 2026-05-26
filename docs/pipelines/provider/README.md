@@ -1,8 +1,10 @@
-# Provider Pipeline
+---
+title: "Provider Pipeline"
+---
 
 Streams an LLM response from a provider API to one or more Discord messages, handling all text processing, delivery timing, and stop signals between the provider's HTTP stream and Discord's message API.
 
-The pipeline is entered from [tool-loop stage 01 — `streamOnce`](../tool-loop/01-stream-once.md) via
+The pipeline is entered from [tool-loop stage 01 — `streamOnce`](../tool-loop/01-stream-once) via
 `LLMProvider.streamToDiscord()`. That facade method constructs a `StreamAdapter` and a `StreamConfig`,
 then hands both to `StreamOrchestrator.streamToDiscord()`, which drives the remaining stages.
 
@@ -83,13 +85,13 @@ tool-loop pipeline ─► LLMProvider.streamToDiscord()
 
 ## Cross-references
 
-- **Caller:** [tool-loop pipeline — Stage 01 `streamOnce`](../tool-loop/01-stream-once.md) —
+- **Caller:** [tool-loop pipeline — Stage 01 `streamOnce`](../tool-loop/01-stream-once) —
   the direct entry point for `LLMProvider.streamToDiscord()`
-- **Upstream caller:** [chat per-turn Stage 03 `runGenerationTurn`](../chat/06-per-turn/03-run-generation-turn.md) —
+- **Upstream caller:** [chat per-turn Stage 03 `runGenerationTurn`](../chat/06-per-turn/03-run-generation-turn) —
   orchestrates the model + key fallback loop that calls the tool-loop
-- **Feeds into:** [tool-loop pipeline — Stage 04 `buildResult`](../tool-loop/04-build-result.md) —
+- **Feeds into:** [tool-loop pipeline — Stage 04 `buildResult`](../tool-loop/04-build-result) —
   consumes the `StreamResult` this pipeline returns
-- **Memory write:** [tool-loop pipeline — Stage 04](../tool-loop/04-build-result.md) routes
+- **Memory write:** [tool-loop pipeline — Stage 04](../tool-loop/04-build-result) routes
   `StreamResult.accumulatedText` and `detailsContent` to short-term memory cache writes
 
 ## Pipeline-wide concerns

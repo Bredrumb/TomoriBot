@@ -1,4 +1,6 @@
-# Adding a Slash Command
+---
+title: "Adding a Slash Command"
+---
 
 This guide walks through the full process of creating a new slash command in TomoriBot.
 
@@ -23,7 +25,7 @@ This guide walks through the full process of creating a new slash command in Tom
    - Fast commands can call `reply()` immediately.
    - Async/heavy commands must call `deferReply()` before any await.
    - Modal and pagination helpers must NOT be pre-deferred — they handle acknowledgement internally.
-   - For full timing patterns and representative command groups, see [`docs/subsystems/command-system.md`](../subsystems/command-system.md).
+   - For full timing patterns and representative command groups, see [`docs/subsystems/command-system.md`](../subsystems/command-system).
 
 6. The command auto-registers on next startup — `commandLoader.ts` discovers any `.ts` file placed in the correct `src/commands/` subfolder.
 
@@ -83,5 +85,5 @@ Current commands that define or inspire the v2 design direction:
 
 ## Related Docs
 
-- [`docs/subsystems/command-system.md`](../subsystems/command-system.md) — interaction timing rules, pagination helpers, modal patterns
-- [`docs/subsystems/localization.md`](../subsystems/localization.md) — key naming conventions, `localizer()` API
+- [`docs/subsystems/command-system.md`](../subsystems/command-system) — interaction timing rules, pagination helpers, modal patterns
+- [`docs/subsystems/localization.md`](../subsystems/localization) — key naming conventions, `localizer()` API

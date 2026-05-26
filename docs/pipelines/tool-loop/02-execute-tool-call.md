@@ -1,4 +1,6 @@
-# Stage 02 — `executeToolCall`
+---
+title: "02: Execute Tool Call"
+---
 
 Validate, gate, dispatch, and record one tool call from the provider.
 

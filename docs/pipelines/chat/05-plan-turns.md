@@ -1,4 +1,6 @@
-# Stage 05 — `planChatTurns`
+---
+title: "05: Turn Planning"
+---
 
 Persona selection + per-turn state assembly.
 
@@ -120,5 +122,5 @@ gating completes, not a wholesale override.
 
 - Credential resolution: → [provider pipeline](../provider/).
 - Autochat / DTM / always-reply mode semantics: → folded into `triggerProcessor.ts`; no dedicated doc yet.
-- Cooldown types and behavior: → [`docs/subsystems/cooldowns.md`](../../subsystems/cooldowns.md).
+- Cooldown types and behavior: → [`docs/subsystems/cooldowns.md`](../../subsystems/cooldowns).
 - Text quota: → no dedicated doc yet; quota-manager helper only.

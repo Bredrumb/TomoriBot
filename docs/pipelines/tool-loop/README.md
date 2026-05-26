@@ -1,4 +1,6 @@
-# Tool-Loop Pipeline (post-phase-5.5d shape)
+---
+title: "Tool-Loop Pipeline"
+---
 
 `runToolLoop` drives the streaming + tool-dispatch loop for one LLM generation
 attempt. It is called by `runGenerationTurn` (chat per-turn stage 03) once per
@@ -75,7 +77,7 @@ runToolLoop(ToolLoopParams)
 - **Caller:** chat per-turn stage 03 — `runGenerationTurn` in
   `src/utils/chat/generationTurn.ts` calls `runToolLoop` per model-fallback
   attempt. See
-  [`docs/pipelines/chat/06-per-turn/03-run-generation-turn.md`](../chat/06-per-turn/03-run-generation-turn.md).
+  [`docs/pipelines/chat/06-per-turn/03-run-generation-turn.md`](../chat/06-per-turn/03-run-generation-turn).
 - **Provider streaming:** each iteration delegates actual LLM I/O to the
   provider pipeline. See
   [`docs/pipelines/provider/`](../provider/).

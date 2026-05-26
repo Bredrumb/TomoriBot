@@ -1,4 +1,6 @@
-# Stage 04 — `buildServerEmojiContextItem`
+---
+title: "02.4: Server Emojis"
+---
 
 List of the server's custom emojis with metadata, framed for LLM use.
 
@@ -87,8 +89,8 @@ the native-assembly README's extension-point discussion for the
 
 ## Related docs
 
-- Sticker contributor: [`05-server-stickers.md`](./05-server-stickers.md)
+- Sticker contributor: [`05-server-stickers.md`](./05-server-stickers)
 - Emoji metadata sources: → no dedicated doc; the `/refresh` command
   and `refreshEmojis` event handler populate it
 - Persona asset pre-loading (chat pipeline):
-  [`buildChatTurnContext`](../../chat/06-per-turn/01-build-context.md)
+  [`buildChatTurnContext`](../../chat/06-per-turn/01-build-context)

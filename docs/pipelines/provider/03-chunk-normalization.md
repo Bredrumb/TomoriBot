@@ -1,4 +1,6 @@
-# Stage 03 — `processChunk`
+---
+title: "03: Chunk Normalization"
+---
 
 Converts a provider-native `RawStreamChunk` into the uniform `ProcessedChunk` shape the orchestrator routes.
 

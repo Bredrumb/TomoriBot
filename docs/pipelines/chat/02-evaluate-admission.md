@@ -1,4 +1,6 @@
-# Stage 02 — `evaluateChatAdmission`
+---
+title: "02: Admission Check"
+---
 
 The gatekeeper. Decides if/how a message becomes a generation turn.
 

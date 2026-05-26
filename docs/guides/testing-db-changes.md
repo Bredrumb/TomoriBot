@@ -1,4 +1,6 @@
-# Testing DB Changes
+---
+title: "Testing DB Changes"
+---
 
 This guide covers the DB regression harness introduced in Phase 2 (#4a). The harness protects the data-access layer during the repository migration (#4b) and any future DB-touching work.
 

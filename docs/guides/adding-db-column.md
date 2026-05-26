@@ -1,4 +1,6 @@
-# Adding a DB Column
+---
+title: "Adding a DB Column"
+---
 
 This guide walks through adding a new column to an existing TomoriBot database table.
 
@@ -39,5 +41,5 @@ bun run db:lifecycle  # full schema lifecycle test (requires local PostgreSQL)
 
 ## Related Docs
 
-- [`docs/subsystems/database-schema.md`](../subsystems/database-schema.md) — full schema reference and column index
-- [`docs/subsystems/caching.md`](../subsystems/caching.md) — cache map and invalidation APIs
+- [`docs/subsystems/database-schema.md`](../subsystems/database-schema) — full schema reference and column index
+- [`docs/subsystems/caching.md`](../subsystems/caching) — cache map and invalidation APIs

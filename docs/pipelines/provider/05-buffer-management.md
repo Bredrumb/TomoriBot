@@ -1,4 +1,6 @@
-# Stage 05 — `processTextChunk`
+---
+title: "05: Buffer Management"
+---
 
 Accumulates streamed text into semantic buffers and flushes discrete segments to stage 06 when a delivery boundary is detected.
 

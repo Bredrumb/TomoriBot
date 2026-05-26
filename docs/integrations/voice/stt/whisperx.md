@@ -1,4 +1,6 @@
-# WhisperX Transcription
+---
+title: "WhisperX Transcription"
+---
 
 WhisperX is the recommended beginner-friendly local transcription path.
 

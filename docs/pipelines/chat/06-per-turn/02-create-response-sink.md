@@ -1,4 +1,6 @@
-# Per-Turn Stage 02 — `createChatResponseSink`
+---
+title: "06.2: Response Sink"
+---
 
 Resolve the Discord delivery target and produce the sink callbacks that
 generation will write through.

@@ -1,4 +1,6 @@
-﻿# Modal Input Components
+---
+title: "Modal Input Components"
+---
 
 Discord introduced new interactive input components for modals beyond the original Text Input. These components enable richer form-like experiences with structured selection inputs.
 

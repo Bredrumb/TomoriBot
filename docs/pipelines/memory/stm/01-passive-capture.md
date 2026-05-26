@@ -1,4 +1,6 @@
-# STM Stage 01 — `writeShortTermMemory` → `storeShortTermMemory`
+---
+title: "STM 01: Passive Capture"
+---
 
 Captures the completed conversation turn into the in-process short-term
 memory cache immediately after generation finishes.
@@ -92,7 +94,7 @@ After this stage runs for a non-empty, non-stop generation result:
 
 ## Related docs
 
-- This stage's output is consumed by: → [context-build STM stage](../../../context-build/02-native-assembly/04-stm-memories.md)
+- This stage's output is consumed by: → [context-build STM stage](../../../context-build/02-native-assembly/04-stm-memories)
 - STM summary upgrade that replaces the crude messages written here: → [`stm/02-summary-upgrade.md`](02-summary-upgrade.md)
-- Post-turn effects that call this stage: → [chat per-turn Stage 04](../../../chat/06-per-turn/04-post-turn-effects.md)
+- Post-turn effects that call this stage: → [chat per-turn Stage 04](../../../chat/06-per-turn/04-post-turn-effects)
 - `ShortTermMemoryEntry` type: `src/utils/cache/shortTermMemoryCache.ts:37`

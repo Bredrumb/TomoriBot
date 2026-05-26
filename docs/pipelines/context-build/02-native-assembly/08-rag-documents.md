@@ -1,4 +1,6 @@
-# Stage 08 — `buildServerDocumentContextItem`
+---
+title: "02.8: RAG Documents"
+---
 
 pgvector-backed long-term retrieval over server-uploaded documents.
 
@@ -90,7 +92,7 @@ After this stage runs:
 - RAG availability + repository: → no dedicated doc;
   `ragAvailability.ts` and `ragRepository.ts` helpers only
 - Capability credentials (server vs personal): → folded into stage 05 of
-  the chat pipeline ([`05-plan-turns.md`](../../chat/05-plan-turns.md))
-- Embedding models: → [`docs/subsystems/database-schema.md`](../../../subsystems/database-schema.md) (embedding_models table)
+  the chat pipeline ([`05-plan-turns.md`](../../chat/05-plan-turns))
+- Embedding models: → [`docs/subsystems/database-schema.md`](../../../subsystems/database-schema) (embedding_models table)
 - Document upload + chunking: → no dedicated doc;
   `insertDocumentWithChunks` in `serverMemoryRepository` only

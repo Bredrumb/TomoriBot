@@ -1,4 +1,6 @@
-# Voice System
+---
+title: "Voice System"
+---
 
 TomoriBot has a bidirectional voice pipeline:
 
@@ -28,5 +30,5 @@ Audio attachments are transcribed only when a `transcription` endpoint is config
 
 Local setup guides:
 
-- [TTS](./tts/README.md)
-- [Transcription](./transcription/README.md)
+- [TTS](./tts/README)
+- [Transcription](./transcription/README)

@@ -1,4 +1,6 @@
-# Supported Providers
+---
+title: "Supported Providers"
+---
 
 If you don't have the workstation to host your own models, TomoriBot supports a wide range of LLM providers, image generation APIs, voice services, and search tools, as well as features to mix-and-match them. There are plans to add in more providers.
 

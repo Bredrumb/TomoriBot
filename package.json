@@ -34,6 +34,9 @@
     "db:lifecycle": "bun scripts/checks/validateLifecycle.ts",
     "vl": "bun run scripts/checks/vl.ts"
   },
+  "workspaces": [
+    "apps/*"
+  ],
   "author": "Bredrumb",
   "license": "ISC",
   "dependencies": {
@@ -80,6 +83,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.10",
+    "picocolors": "^1.1.1",
     "@types/ffmpeg-static": "^5.1.0",
     "@types/jszip": "^3.4.1",
     "@types/pdf-parse": "^1.1.5",

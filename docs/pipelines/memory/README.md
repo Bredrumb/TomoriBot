@@ -1,4 +1,6 @@
-# Memory Pipeline
+---
+title: "Memory Pipeline"
+---
 
 Handles all memory writes that occur within or around a chat turn: detecting
 whether the user explicitly wants something remembered long-term, capturing
@@ -89,11 +91,11 @@ incoming user message
 
 ## Cross-references
 
-- **Caller (write trigger):** [chat per-turn Stage 04 `runPostTurnEffects`](../chat/06-per-turn/04-post-turn-effects.md) — issues the passive STM write after every successful generation turn
-- **Caller (tool trigger):** [tool-loop pipeline — Stage 02 `executeToolCall`](../tool-loop/02-execute-tool-call.md) — executes the memory tool calls that drive both the STM upgrade and all LTM writes
-- **Read side (STM):** [context-build Stage 02-04 `buildShortTermMemoryContext`](../context-build/02-native-assembly/04-stm-memories.md) — reads STM cache entries built by this pipeline
-- **Read side (LTM — server):** [context-build `buildServerMemoryContext`](../context-build/02-native-assembly/03-server-memories.md) — reads server memories written by `ltm/01-ltm-create.md`
-- **Read side (LTM — personal):** [context-build `buildPersonalMemoryContext`](../context-build/02-native-assembly/07-personal-memories.md) — reads personal memories written by `ltm/01-ltm-create.md`
+- **Caller (write trigger):** [chat per-turn Stage 04 `runPostTurnEffects`](../chat/06-per-turn/04-post-turn-effects) — issues the passive STM write after every successful generation turn
+- **Caller (tool trigger):** [tool-loop pipeline — Stage 02 `executeToolCall`](../tool-loop/02-execute-tool-call) — executes the memory tool calls that drive both the STM upgrade and all LTM writes
+- **Read side (STM):** [context-build Stage 02-04 `buildShortTermMemoryContext`](../context-build/02-native-assembly/04-stm-memories) — reads STM cache entries built by this pipeline
+- **Read side (LTM — server):** [context-build `buildServerMemoryContext`](../context-build/02-native-assembly/03-server-memories) — reads server memories written by `ltm/01-ltm-create.md`
+- **Read side (LTM — personal):** [context-build `buildPersonalMemoryContext`](../context-build/02-native-assembly/07-personal-memories) — reads personal memories written by `ltm/01-ltm-create.md`
 
 ## Pipeline-wide concerns
 

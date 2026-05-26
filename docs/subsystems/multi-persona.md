@@ -1,4 +1,6 @@
-﻿# 17. Multi-Persona System
+---
+title: "Multi-Persona System"
+---
 
 This document describes TomoriBot's multi-persona system: how main and alter personas are stored, triggered, and rendered (webhooks, embeds, stickers, reminders), plus operational details and limitations.
 
@@ -12,7 +14,7 @@ TomoriBot supports **one main persona** plus **multiple alter personas** per ser
 - **Shared config**: all personas in a server share the same server-scoped config tables (`server_*_configs`).
 - **Sequential responses**: if multiple personas match a trigger, they respond one-by-one via the channel queue.
 
-Official bundled character presets have their own sync behavior for seeded text and avatars. See [Persona Presets](./persona-presets.md).
+Official bundled character presets have their own sync behavior for seeded text and avatars. See [Persona Presets](./persona-presets).
 
 ## Data Model
 

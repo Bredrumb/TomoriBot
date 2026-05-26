@@ -1,4 +1,6 @@
-# Stage 05 — `buildServerStickerContextItem`
+---
+title: "02.5: Server Stickers"
+---
 
 List of the server's custom stickers with metadata, framed for tool use.
 
@@ -87,7 +89,7 @@ After this stage runs:
 
 ## Related docs
 
-- Emoji contributor: [`04-server-emojis.md`](./04-server-emojis.md)
+- Emoji contributor: [`04-server-emojis.md`](./04-server-emojis)
 - Sticker tool execution: tool registry (→ [tool-loop pipeline](../../../tool-loop/))
 - Tool-prompt macros: covered in
   [native-assembly README](./README.md#shared-helpers-used-across-contributors).

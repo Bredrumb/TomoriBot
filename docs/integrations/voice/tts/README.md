@@ -1,4 +1,6 @@
-# TTS Integration
+---
+title: "TTS Integration"
+---
 
 TomoriBot treats speech as a custom endpoint capability. Local engines run outside the bot as HTTP servers and implement `POST /synthesize`; most clone engines receive text plus the configured reference audio sample.
 

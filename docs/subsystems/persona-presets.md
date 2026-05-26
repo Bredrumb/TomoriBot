@@ -1,4 +1,6 @@
-# Persona Presets
+---
+title: "Persona Presets"
+---
 
 Official persona presets are seeded from `src/db/seed.sql` into `persona_presets`. They are the canonical definitions for bundled characters such as Tomori/Rose, Temari, Aphel, Lilya, and Nerine.
 

@@ -1,4 +1,6 @@
-# NovelAI Inpainting Pipeline
+---
+title: "NovelAI Inpainting Pipeline"
+---
 
 ## Overview
 

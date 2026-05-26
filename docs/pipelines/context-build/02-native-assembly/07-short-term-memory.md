@@ -1,4 +1,6 @@
-# Stage 07 — `buildShortTermMemoryContext`
+---
+title: "02.7: Short-Term Memory"
+---
 
 Recent conversation snippets from the in-memory STM cache, plus tool-hint
 emission for the LLM to maintain it.
@@ -121,4 +123,4 @@ After this stage runs:
 - STM tool definition: tool registry (→ [tool-loop pipeline](../../../tool-loop/))
 - `update_short_term_memory` tool execution: → folded into stage 03 of
   the chat per-turn loop
-  ([`03-run-generation-turn.md`](../../chat/06-per-turn/03-run-generation-turn.md))
+  ([`03-run-generation-turn.md`](../../chat/06-per-turn/03-run-generation-turn))

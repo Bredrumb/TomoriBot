@@ -1,4 +1,6 @@
-# 6. Event System
+---
+title: "Event System"
+---
 
 TomoriBot routes Discord events through one dispatcher: `src/handlers/eventHandler.ts`.
 

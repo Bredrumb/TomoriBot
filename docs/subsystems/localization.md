@@ -1,4 +1,6 @@
-# 12. Localization System (i18n)
+---
+title: "Localization System"
+---
 
 TomoriBot localizes user-facing text through locale files in `src/locales/`.
 

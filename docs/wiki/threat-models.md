@@ -1,4 +1,6 @@
-# Threat Models
+---
+title: "Threat Models"
+---
 
 This document outlines the threat model for TomoriBot using the STRIDE framework and groups risks by attack vector.
 

@@ -1,4 +1,6 @@
-# Tool Status Command
+---
+title: "Tool Status Command"
+---
 
 `/tool status` is the read-only snapshot command for durable personal, server, and persona state.
 
