@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-2 -->
-
 # Phase 2 #4b Cache Invalidation Audit
 
 This audit records the pre-migration cache invalidation surface for the repository-pattern refactor. During caller migration, each DB write that currently requires manual invalidation should move that invalidation into the repository method that owns the write.

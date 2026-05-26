@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Memory Pipeline
 
 Handles all memory writes that occur within or around a chat turn: detecting

@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Per-Turn Stage 04 — `runPostTurnEffects`
 
 Side-effect sequence after generation completes.

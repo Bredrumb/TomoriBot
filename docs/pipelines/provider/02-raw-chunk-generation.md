@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Stage 02 — `startStream` (raw chunk generation)
 
 Opens the provider's HTTP stream and yields a `RawStreamChunk` for each token delivery, with provider-specific pre-processing applied before each yield.

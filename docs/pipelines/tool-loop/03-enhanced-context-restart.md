@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Stage 03 — `handleEnhancedContextRestart`
 
 Consume a context-enrichment restart signal from a tool response and mutate

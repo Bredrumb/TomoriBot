@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Per-Turn Loop
 
 This folder documents the **body of the loop** in
@@ -43,8 +41,7 @@ for (const turn of turnPlan.turns) {
 
 ## Cross-references
 
-- Stage 01 delegates to the [context-build pipeline](../../context-build/)
-  <!-- TBD-XREF:sibling -->.
+- Stage 01 delegates to the [context-build pipeline](../../context-build/).
 - Stage 03 delegates to the [tool-loop pipeline](../../tool-loop/)
   and the [provider pipeline](../../provider/).
 - Stage 04 writes to [memory](../../memory/) and

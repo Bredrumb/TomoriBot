@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5c -->
-
 # Stage 05 — `buildServerStickerContextItem`
 
 List of the server's custom stickers with metadata, framed for tool use.
@@ -90,7 +88,6 @@ After this stage runs:
 ## Related docs
 
 - Emoji contributor: [`04-server-emojis.md`](./04-server-emojis.md)
-- Sticker tool execution: tool registry
-  (currently `docs/systems/tool-system.md` <!-- TBD-XREF:legacy -->)
+- Sticker tool execution: tool registry (→ [tool-loop pipeline](../../../tool-loop/))
 - Tool-prompt macros: covered in
   [native-assembly README](./README.md#shared-helpers-used-across-contributors).

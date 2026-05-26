@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Stage 05 — `processTextChunk`
 
 Accumulates streamed text into semantic buffers and flushes discrete segments to stage 06 when a delivery boundary is detected.

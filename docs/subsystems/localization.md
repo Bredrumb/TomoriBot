@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-1 -->
-
 # 12. Localization System (i18n)
 
 TomoriBot localizes user-facing text through locale files in `src/locales/`.

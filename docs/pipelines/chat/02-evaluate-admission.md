@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Stage 02 — `evaluateChatAdmission`
 
 The gatekeeper. Decides if/how a message becomes a generation turn.

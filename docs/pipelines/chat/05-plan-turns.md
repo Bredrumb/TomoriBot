@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Stage 05 — `planChatTurns`
 
 Persona selection + per-turn state assembly.
@@ -120,12 +118,7 @@ gating completes, not a wholesale override.
 
 ## Related docs
 
-- Credential resolution: → [provider pipeline](../provider/)
-  (currently in `docs/ai/providers.md`
-  <!-- TBD-XREF:legacy --> and `docs/ai/personal-providers.md`
-  <!-- TBD-XREF:legacy -->).
-- Autochat / DTM / always-reply mode semantics: → folded into per-persona
-  trigger-processor docs <!-- TBD-XREF:sibling -->.
-- Cooldown types and behavior: → `docs/systems/cooldown-system.md`
-  <!-- TBD-XREF:legacy -->.
+- Credential resolution: → [provider pipeline](../provider/).
+- Autochat / DTM / always-reply mode semantics: → folded into `triggerProcessor.ts`; no dedicated doc yet.
+- Cooldown types and behavior: → [`docs/subsystems/cooldowns.md`](../../subsystems/cooldowns.md).
 - Text quota: → no dedicated doc yet; quota-manager helper only.

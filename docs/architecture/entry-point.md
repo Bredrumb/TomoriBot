@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-1 -->
-
 # 4. Entry Point and Initialization Flow
 
 `src/index.ts` is a thin orchestrator. All initialization logic lives in `src/init/` modules.

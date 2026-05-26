@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5a -->
-
 # 7. Command System
 
 TomoriBot uses Discord slash commands loaded dynamically from `src/commands/`.
@@ -357,7 +355,7 @@ Rules:
 
 `/generate video` is a modal-driven async generation command. It validates `videogen_enabled`, provider capability, API key, configured `video_model_id`, and server quota before polling the selected provider until the MP4 result is ready.
 
-Forward-looking command rewrite guidance lives in `docs/commands-v2/`. Those docs define target UX and naming conventions only; the runtime loader and current implementation still use the existing `src/commands/` structure.
+Forward-looking command rewrite guidance (naming conventions, checklist-style settings pattern, migration map) is now part of `docs/guides/adding-slash-command.md`. The runtime loader and current implementation still use the existing `src/commands/` structure.
 
 ## Adding a New Command
 

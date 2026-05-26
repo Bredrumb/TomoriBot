@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Per-Turn Stage 03 — `runGenerationTurn`
 
 Drive the provider call with model fallback and API-key rotation.
@@ -107,7 +105,7 @@ The stage is a coordinator over several plugin-relevant subsystems:
 | Key rotation | `selectApiKey`, `recordKeySuccess`, `recordKeyError`, `hasAvailableRotationKey` | Internal — rotation-key schema is core, not plugin-relevant |
 | Fallback chain | `createFallbackAttempt`, `applySavedProviderConfig` | The fallback-entry schema (`FallbackEntry` union: `model` or `custom_endpoint`) is the data-model seam |
 | Context truncation | `truncateDialogueHistory` | Per-provider token-limit table is the registration surface |
-| Personal-provider routing | `applyPersonalProviderSelectionsToTomoriState` | BYOK substitution; see personal-providers doc <!-- TBD-XREF:legacy --> |
+| Personal-provider routing | `applyPersonalProviderSelectionsToTomoriState` | BYOK substitution; see [provider pipeline](../../provider/) |
 
 **The stage itself is internal** — its job is to orchestrate the
 "attempt with fallback + key rotation" pattern. Plugins wanting to:
@@ -132,7 +130,5 @@ Plus `MAX_KEY_ATTEMPTS` from `keyRotation.ts`.
 - Tool execution loop: → [tool-loop pipeline](../../tool-loop/)
 - Provider streaming + adapter pattern: → [provider pipeline](../../provider/)
 - Key rotation: → no dedicated doc yet; `keyRotation.ts` helper only
-- Fallback chain schema: → `docs/systems/database-schema.md`
-  <!-- TBD-XREF:legacy --> (`fallback_chain` column)
-- Personal-provider runtime substitution: → `docs/ai/personal-providers.md`
-  <!-- TBD-XREF:legacy -->
+- Fallback chain schema: → [`docs/subsystems/database-schema.md`](../../../subsystems/database-schema.md) (`fallback_chain` column)
+- Personal-provider runtime substitution: → [provider pipeline](../../provider/)

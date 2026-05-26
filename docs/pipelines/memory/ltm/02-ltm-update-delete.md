@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # LTM Stage 02 — `UpdateLongTermMemoryTool.execute` (LTM update/delete)
 
 LLM-initiated replacement or deletion of an existing persistent memory,

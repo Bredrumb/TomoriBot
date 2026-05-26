@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # STM Sub-Pipeline
 
 Manages the short-term memory cache — an in-process `Map` that stores the

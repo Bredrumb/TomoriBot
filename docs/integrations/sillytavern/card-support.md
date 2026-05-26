@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5a -->
-
 # 21. SillyTavern Card Import Support
 
 This document describes how `/persona import` handles SillyTavern character cards from either:

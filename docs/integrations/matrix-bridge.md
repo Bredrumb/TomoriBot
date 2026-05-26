@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5c -->
-
 # 25. Matrix Bridge & Bridge Utilities
 
 This document describes TomoriBot's Matrix bridge implementation — what it does, why it was built the way it was, and how the codebase is organized to keep bridge concerns cleanly separated from core Discord logic.

@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Stage 04 — `runWithChannelLock`
 
 Per-channel mutex wrapper around the per-turn body.
@@ -125,8 +123,6 @@ than monkey-patching the stage.
 
 - Queue policy decision tree: lives in `evaluateAdmissionQueueAndTriggerGate`
   (stage 02 helper); → admission-queue helper doc TBD if it grows.
-- Stop request mechanics: → stream orchestrator
-  <!-- TBD-XREF:sibling --> (currently documented in
-  `docs/ai/streaming.md` <!-- TBD-XREF:legacy -->).
+- Stop request mechanics: → [provider pipeline](../provider/) (stream orchestrator stage).
 - Follow-up interrupt semantics: → folded into stage 05 docs (follow-up
   eligibility gating).

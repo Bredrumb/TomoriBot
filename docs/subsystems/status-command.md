@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5c -->
-
 # Tool Status Command
 
 `/tool status` is the read-only snapshot command for durable personal, server, and persona state.

@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Stage 02 — `executeToolCall`
 
 Validate, gate, dispatch, and record one tool call from the provider.
@@ -140,7 +138,7 @@ After this stage runs:
 
 ## Related docs
 
-- Tool registry: → `docs/systems/tool-system.md` <!-- TBD-XREF:legacy -->
+- Tool registry: → [`README.md`](README.md)
 - Enhanced-context restart: → [stage 03 — `handleEnhancedContextRestart`](03-enhanced-context-restart.md)
 - Deliberate tool mode: → `src/utils/tools/deliberateToolMode.ts`
 - Tool-loop coordinator: → [`README.md`](README.md)

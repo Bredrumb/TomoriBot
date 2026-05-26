@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Stage 07 — `sendSegment` → `sendSinglePayload`
 
 Delivers a normalized text segment to Discord, applying typing simulation and routing through webhooks for persona mode.
@@ -129,4 +127,4 @@ After this stage (per successful send):
 - Message chunking: `src/utils/text/processors/chunkProcessor.ts`
 - `HumanizerDegree` enum: `src/types/db/schema.ts`
 - `DISCORD_STREAMING_CONSTANTS`: `src/types/stream/types.ts:15`
-- Multi-persona webhook behavior: `docs/ai/multi-persona.md` <!-- TBD-XREF:legacy -->
+- Multi-persona webhook behavior: `docs/subsystems/multi-persona.md` (webhook-persona pipeline TBD)

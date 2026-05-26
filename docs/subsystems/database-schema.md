@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: phase-6-step-16.8e -->
-
 # 5. Database Schema and Data Model
 
 This document summarizes the current PostgreSQL schema used by TomoriBot.

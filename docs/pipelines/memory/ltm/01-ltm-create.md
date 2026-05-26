@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # LTM Stage 01 — `MemoryTool.execute` (LTM create)
 
 LLM-initiated creation of a new persistent memory — server-wide or

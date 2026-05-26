@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # LTM Sub-Pipeline
 
 Handles persistent, database-backed memory writes initiated by the LLM via

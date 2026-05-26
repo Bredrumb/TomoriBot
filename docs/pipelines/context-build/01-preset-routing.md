@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5c -->
-
 # Stage 01 — `buildContext` (preset routing wrapper)
 
 Decide whether to use native fixed-order assembly or to reassemble its output
@@ -76,7 +74,6 @@ plugin work goes there, not here.
 
 - Native assembly: [`02-native-assembly/`](./02-native-assembly/)
 - SillyTavern preset system:
-  `docs/integrations/sillytavern-preset-system.md`
-  <!-- TBD-XREF:legacy -->
+  [`docs/integrations/sillytavern/preset-system.md`](../../../integrations/sillytavern/preset-system.md)
 - Random-choice macros: → folded into this doc; no dedicated page (small
   feature)

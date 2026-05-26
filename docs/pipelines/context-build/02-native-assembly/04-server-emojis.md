@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5c -->
-
 # Stage 04 — `buildServerEmojiContextItem`
 
 List of the server's custom emojis with metadata, framed for LLM use.

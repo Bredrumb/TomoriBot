@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Per-Turn Stage 02 — `createChatResponseSink`
 
 Resolve the Discord delivery target and produce the sink callbacks that
@@ -112,12 +110,9 @@ both the stream orchestrator (writes chunks) and the generation stage (calls
 **Related but non-sink extensibility:**
 
 - Webhook creation/fetch policy lives in `getOrCreateWebhook` in
-  [webhook manager](../../../systems/) <!-- TBD-XREF:legacy --> (currently
-  `webhookManager.ts` / `webhook/webhookCore.ts`).
+  webhook manager (currently `webhookManager.ts` / `webhook/webhookCore.ts`; no dedicated subsystems doc yet).
 - Stream-orchestrator-side rendering and chunking lives in
-  [provider pipeline](../../provider/) (currently also in
-  `docs/ai/streaming.md` <!-- TBD-XREF:legacy --> and
-  `docs/ai/text-flushing-and-chunking.md` <!-- TBD-XREF:legacy -->).
+  [provider pipeline](../../provider/).
 
 ## Configuration
 
@@ -128,9 +123,6 @@ both the stream orchestrator (writes chunks) and the generation stage (calls
 ## Related docs
 
 - Stream consumption: → [provider pipeline](../../provider/)
-  <!-- TBD-XREF:sibling -->
-- Webhook lifecycle and fallback: → [webhook subsystem](../../../subsystems/)
-  <!-- TBD-XREF:sibling --> (currently in webhook helper files; no dedicated
+- Webhook lifecycle and fallback: → webhook subsystem (currently in webhook helper files; no dedicated
   doc yet)
-- Multi-persona delivery identity: → `docs/ai/multi-persona.md`
-  <!-- TBD-XREF:legacy -->
+- Multi-persona delivery identity: → `docs/subsystems/multi-persona.md` (webhook-persona pipeline TBD)

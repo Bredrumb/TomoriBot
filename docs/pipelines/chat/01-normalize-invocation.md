@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Stage 01 — `normalizeChatInvocation`
 
 Defensive input normalization at the chat pipeline's entry boundary.

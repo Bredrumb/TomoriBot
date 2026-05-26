@@ -53,6 +53,7 @@ tmpclaude*
 *PLAN*.md
 *HANDOVER*.md
 *REFERENCES*.md
+!docs/**
 crash*/
 .prompts/
 .antigravitycli/

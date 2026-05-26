@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5c -->
-
 # Stage 01 — `buildPromptContextItems`
 
 The top of the context list — the LLM's identity framing.

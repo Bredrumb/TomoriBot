@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Stage 01 — `streamOnce`
 
 One provider generation pass, wrapped with a rolling AbortController SDK timeout.

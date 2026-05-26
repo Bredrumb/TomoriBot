@@ -121,8 +121,8 @@ The live chat pipeline in `tomoriChat.ts` has inline helpers for these. Rather t
 
 ## Related docs
 
-- [`context-assembly.md`](../ai/context-assembly.md) — how `buildContext()` orders, tags, and injects context items
-- [`sillytavern-preset-system.md`](../integrations/sillytavern-preset-system.md) — preset-based reordering respected by snapshot
+- [`pipelines/context-build/`](../pipelines/context-build/) — how `buildContext()` orders, tags, and injects context items
+- [`sillytavern/preset-system.md`](../integrations/sillytavern/preset-system.md) — preset-based reordering respected by snapshot
 - [`tool-system.md`](./tool-system.md) — how tool registry + MCP integration feed `fetch_tools`
 
 ## Source

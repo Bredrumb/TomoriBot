@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Stage 03 — `processChunk`
 
 Converts a provider-native `RawStreamChunk` into the uniform `ProcessedChunk` shape the orchestrator routes.

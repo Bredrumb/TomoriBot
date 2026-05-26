@@ -1,6 +1,6 @@
 # Contributing to TomoriBot
 
-Thanks for your interest in contributing! This guide covers what you need to know before opening a PR. For local setup (database, providers, Discord token), see [`docs/core/getting-started.md`](../docs/core/getting-started.md).
+Thanks for your interest in contributing! This guide covers what you need to know before opening a PR. For local setup (database, providers, Discord token), see [`docs/architecture/getting-started.md`](../docs/architecture/getting-started.md).
 
 ## Branching
 

@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5c -->
-
 # Stage 03 — `buildServerMemoryContextItem`
 
 Persona-scoped long-term server memories.
@@ -95,5 +93,4 @@ seam:
   ([`07-short-term-memory.md`](./07-short-term-memory.md))
 - Memory tagging system: → no dedicated doc yet; the feature is implemented
   inline here and in `personalMemoryRepository.loadForUserLineage`.
-- Memory-update tools (referenced by IDs): tool registry (currently
-  `docs/systems/tool-system.md` <!-- TBD-XREF:legacy -->)
+- Memory-update tools (referenced by IDs): tool registry (→ [tool-loop pipeline](../../../tool-loop/))

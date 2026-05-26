@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5c -->
-
 # Stage 02 — `buildServerInfoContextItem`
 
 The "where am I" framing — server name and description.

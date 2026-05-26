@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Per-Turn Stage 01 — `buildChatTurnContext`
 
 Assemble the LLM-visible prompt for one persona turn.
@@ -17,8 +15,7 @@ the closure that stages 02–04 read and mutate.
 
 This stage is the **thin chat-side wrapper** around a much larger inner
 pipeline. The heavy lifting (mentions, memories, RAG, persona prompt,
-participants, dialogue history) lives in [context-build](../../context-build/)
-<!-- TBD-XREF:sibling -->.
+participants, dialogue history) lives in [context-build](../../context-build/).
 
 ## Input
 
@@ -101,8 +98,6 @@ appropriate seam depends on whether the change is per-message
 ## Related docs
 
 - Inner pipeline: → [context-build](../../context-build/)
-  <!-- TBD-XREF:sibling -->
 - Tail directive priorities: → folded into context-build docs
-  <!-- TBD-XREF:sibling -->
 - Embed classification: → no dedicated doc; `embedClassifier.ts` helper only
 - Voice transcripts: → no dedicated doc yet

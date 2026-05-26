@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Chat Pipeline
 
 The chat pipeline turns a single Discord `messageCreate` event into zero, one, or

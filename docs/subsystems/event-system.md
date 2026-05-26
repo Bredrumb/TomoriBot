@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # 6. Event System
 
 TomoriBot routes Discord events through one dispatcher: `src/handlers/eventHandler.ts`.

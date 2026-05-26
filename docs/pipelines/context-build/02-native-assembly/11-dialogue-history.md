@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5c -->
-
 # Stage 11 — `appendDialogueHistoryContext`
 
 The actual recent message history as alternating user/model items. The
@@ -151,8 +149,7 @@ the role mapping + text/media emission. → plugin plan candidate.
 - History helpers (`history.ts`): covered in
   [native-assembly README](./README.md#shared-helpers-used-across-contributors).
 - Message-ID map: → no dedicated doc; `messageIdMap.ts` helper only
-- Image-analysis tool: tool registry
-  (currently `docs/systems/tool-system.md` <!-- TBD-XREF:legacy -->)
+- Image-analysis tool: tool registry (→ [tool-loop pipeline](../../../tool-loop/))
 - `increase_media_context` tool: tool registry (same source)
 - Memory-pressure media-window shrinking:
   → no dedicated doc; `src/utils/security/rateLimiter.ts` helper only

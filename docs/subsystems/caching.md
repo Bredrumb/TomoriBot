@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5a -->
-
 # 16. In-Memory Caching System
 
 This document reflects current cache layers in `src/utils/cache/` and related modules.

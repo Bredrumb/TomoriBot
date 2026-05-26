@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5c -->
-
 # Stage 06 — `buildUsersInConversationContextItem`
 
 The densest single contributor: list every conversation participant with

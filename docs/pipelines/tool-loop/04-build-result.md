@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Stage 04 — `buildResult`
 
 Assemble the final `GenerationTurnResult` from accumulated state.

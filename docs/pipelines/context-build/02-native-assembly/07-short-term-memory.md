@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5c -->
-
 # Stage 07 — `buildShortTermMemoryContext`
 
 Recent conversation snippets from the in-memory STM cache, plus tool-hint
@@ -120,8 +118,7 @@ After this stage runs:
 
 - Short-term memory cache: → no dedicated doc;
   `shortTermMemoryCache.ts` helper only
-- STM tool definition: tool registry
-  (currently `docs/systems/tool-system.md` <!-- TBD-XREF:legacy -->)
+- STM tool definition: tool registry (→ [tool-loop pipeline](../../../tool-loop/))
 - `update_short_term_memory` tool execution: → folded into stage 03 of
   the chat per-turn loop
   ([`03-run-generation-turn.md`](../../chat/06-per-turn/03-run-generation-turn.md))

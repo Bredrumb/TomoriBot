@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Stage 03 — `handleChatDisposition`
 
 Terminal handler for non-run dispositions.

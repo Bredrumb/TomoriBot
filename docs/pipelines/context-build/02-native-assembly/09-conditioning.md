@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5c -->
-
 # Stage 09 — `buildConditioningContextItem`
 
 Reward/punish reinforcement memory — what the bot has been thanked for and
@@ -97,6 +95,5 @@ that exists).
 
 - Conditioning system: → no dedicated doc;
   `src/utils/conditioning/conditioning.ts` helper only
-- Conditioning tools (reward/punish actions): tool registry
-  (currently `docs/systems/tool-system.md` <!-- TBD-XREF:legacy -->)
+- Conditioning tools (reward/punish actions): tool registry (→ [tool-loop pipeline](../../../tool-loop/))
 - Server memories (parallel): [`03-server-memories.md`](./03-server-memories.md)

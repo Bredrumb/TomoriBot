@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5c -->
-
 # Native Assembly
 
 Fixed-order contributor pipeline. Each numbered file in this folder

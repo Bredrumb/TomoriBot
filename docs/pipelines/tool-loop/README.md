@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Tool-Loop Pipeline (post-phase-5.5d shape)
 
 `runToolLoop` drives the streaming + tool-dispatch loop for one LLM generation
@@ -82,9 +80,7 @@ runToolLoop(ToolLoopParams)
   provider pipeline. See
   [`docs/pipelines/provider/`](../provider/).
 - **Tool registry:** `ToolRegistry.executeTool` is the dispatch surface in
-  `src/tools/toolRegistry.ts`. See
-  [`docs/systems/tool-system.md`](../../systems/tool-system.md)
-  <!-- TBD-XREF:legacy --> for the pre-refactor overview.
+  `src/tools/toolRegistry.ts`.
 
 ## Pipeline-wide concerns
 

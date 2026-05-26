@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # STM Stage 02 — `UpdateShortTermMemoryTool.execute` → `updateShortTermMemorySummary`
 
 LLM-initiated replacement of the crude conversation in the STM cache with a

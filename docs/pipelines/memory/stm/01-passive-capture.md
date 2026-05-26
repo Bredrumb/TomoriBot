@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # STM Stage 01 — `writeShortTermMemory` → `storeShortTermMemory`
 
 Captures the completed conversation turn into the in-process short-term

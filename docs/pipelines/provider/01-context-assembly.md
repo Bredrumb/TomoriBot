@@ -1,5 +1,3 @@
-<!-- ARCH-ALIGNMENT: prereq-phase-5.5d -->
-
 # Stage 01 — `startStream` (context assembly)
 
 Translates the provider-agnostic `StructuredContextItem[]` into a provider-native API request and opens the HTTP streaming connection.

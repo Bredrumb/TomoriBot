@@ -189,7 +189,7 @@ Primary files:
 - `src/utils/security/safeDownload.ts`
 
 Controls include:
-- Command and message cooldown system (see `docs/systems/cooldown-system.md`)
+- Command and message cooldown system (see `docs/subsystems/cooldowns.md`)
 - Production-only message concurrency limits per user/server
 - Daily in-memory quotas for persona/import/document/avatar operations
 - Stream flood guard (`MAX_FLUSH_COUNT`)
@@ -219,7 +219,7 @@ TomoriBot implements several controls to mitigate supply chain risks during deve
 
 ## Related Docs
 
-- `docs/systems/database-schema.md`
-- `docs/systems/caching.md`
-- `docs/systems/cooldown-system.md`
-- `docs/ai/rag.md` (document memory gating and limits)
+- `docs/subsystems/database-schema.md`
+- `docs/subsystems/caching.md`
+- `docs/subsystems/cooldowns.md`
+- `docs/pipelines/context-build/02-native-assembly/08-rag-documents.md` (document memory gating and limits)
