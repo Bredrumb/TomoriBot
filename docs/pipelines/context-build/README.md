@@ -63,8 +63,7 @@ buildContextNative(BuildContextParams)        ← fixed-order assembly
 - **Producer:** the chat pipeline's per-turn
   [`buildChatTurnContext`](../chat/06-per-turn/01-build-context.md) constructs
   the `BuildContextParams` and consumes the returned `BuildContextResult`.
-- **Consumer:** the [provider pipeline](../provider/)
-  <!-- TBD-XREF:sibling --> consumes `contextItems` as the LLM prompt; the
+- **Consumer:** the [provider pipeline](../provider/) consumes `contextItems` as the LLM prompt; the
   chat pipeline appends `tailDirectives` from this pipeline alongside its own
   before passing to the provider.
 - **SillyTavern presets:** preset reassembly lives in

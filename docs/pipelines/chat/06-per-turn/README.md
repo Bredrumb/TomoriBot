@@ -47,5 +47,5 @@ for (const turn of turnPlan.turns) {
   <!-- TBD-XREF:sibling -->.
 - Stage 03 delegates to the [tool-loop pipeline](../../tool-loop/)
   and the [provider pipeline](../../provider/).
-- Stage 04 writes to [memory](../../memory/) <!-- TBD-XREF:sibling --> and
+- Stage 04 writes to [memory](../../memory/) and
   schedules boomerang follow-ups via `crossChannelMessageTool`.
