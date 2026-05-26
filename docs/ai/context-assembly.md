@@ -53,6 +53,7 @@ All callers pass a single `BuildContextParams` object (exported from `contextBui
 | `triggererName` | `string` | Display name of the user who triggered the response |
 | `tomoriNickname` | `string` | Bot's display name (persona-aware) |
 | `tomoriAttributes` | `string[]` | Personality attribute lines |
+| `publicPersonaAttributes` | `{ personaId; personaName; attributes }[]` | Public attributes from other personas triggered by the same original message |
 | `tomoriConfig` | `AssembledServerConfig` | Server-level bot configuration (assembled from split tables) |
 | `personaPrompt` | `string \| null` | Persona-specific system prompt |
 | `snapshot` | `RequestSnapshot` | Pre-loaded caches (tomoriState, etc.) |
@@ -90,16 +91,17 @@ The `metadataTag` is a stable interface between the native builder and the prese
 |-----|---------|-------------|---------------|
 | `SYSTEM_HUMANIZER_RULES` | 1 | System prompt + persona prompt | `/sysprompt`, `/persona` |
 | `SYSTEM_PERSONALITY` | 2 | Personality attributes | `/persona attribute add`, `/persona attribute edit`, `/persona attribute remove` |
-| `KNOWLEDGE_SERVER_INFO` | 3 | Server name, description, channel info | Automatic (Discord metadata) |
-| `KNOWLEDGE_SERVER_MEMORIES` | 4 | Server-level memories | `/memory server add`, `/memory server edit`, `/memory server remove` |
-| `KNOWLEDGE_SERVER_EMOJIS` | 5 | Available custom emojis | `/server initialize expressions` |
-| `KNOWLEDGE_SERVER_STICKERS` | 6 | Available stickers | `/server initialize expressions` |
-| `KNOWLEDGE_USERS_IN_CONVERSATION` | 7 | User list + personal memories + status + reminders + time/channel info | `/memory personal add`, `/memory personal edit`, `/memory personal remove` |
-| `KNOWLEDGE_SHORT_TERM_MEMORY` | 8 | Recent conversation summaries from other channels (STM) | `/personal cache` |
-| `KNOWLEDGE_SERVER_DOCUMENTS` | 9 | RAG document chunks | `/memory document add`, `/memory history import`, `/memory document remove` |
-| `KNOWLEDGE_SERVER_CONDITIONING` | 10 | Reward/punish conditioning guidance for the active persona | `/conditioning reward`, `/conditioning punish`, `/conditioning manage` |
-| `DIALOGUE_SAMPLE` | 11 | Sample dialogue pairs | `/persona sample-dialogue add`, `/persona sample-dialogue edit`, `/persona sample-dialogue remove` |
-| `DIALOGUE_HISTORY` | 12 | Actual conversation history | `/config message-fetch-limit` |
+| `SYSTEM_PUBLIC_PERSONA_ATTRIBUTES` | 3 | Public attributes from other triggered personas | `/persona attribute add`, `/persona attribute edit` |
+| `KNOWLEDGE_SERVER_INFO` | 4 | Server name, description, channel info | Automatic (Discord metadata) |
+| `KNOWLEDGE_SERVER_MEMORIES` | 5 | Server-level memories | `/memory server add`, `/memory server edit`, `/memory server remove` |
+| `KNOWLEDGE_SERVER_EMOJIS` | 6 | Available custom emojis | `/server initialize expressions` |
+| `KNOWLEDGE_SERVER_STICKERS` | 7 | Available stickers | `/server initialize expressions` |
+| `KNOWLEDGE_USERS_IN_CONVERSATION` | 8 | User list + personal memories + status + reminders + time/channel info | `/memory personal add`, `/memory personal edit`, `/memory personal remove` |
+| `KNOWLEDGE_SHORT_TERM_MEMORY` | 9 | Recent conversation summaries from other channels (STM) | `/personal cache` |
+| `KNOWLEDGE_SERVER_DOCUMENTS` | 10 | RAG document chunks | `/memory document add`, `/memory history import`, `/memory document remove` |
+| `KNOWLEDGE_SERVER_CONDITIONING` | 11 | Reward/punish conditioning guidance for the active persona | `/conditioning reward`, `/conditioning punish`, `/conditioning manage` |
+| `DIALOGUE_SAMPLE` | 12 | Sample dialogue pairs | `/persona sample-dialogue add`, `/persona sample-dialogue edit`, `/persona sample-dialogue remove` |
+| `DIALOGUE_HISTORY` | 13 | Actual conversation history | `/config message-fetch-limit` |
 
 ## Native Assembly Order
 
@@ -110,23 +112,26 @@ All blocks marked with `*` are conditional (only included when enabled/available
  1.  System prompt (/sysprompt)                          [SYSTEM_HUMANIZER_RULES]
  2.  Persona prompt (/persona)*                          [SYSTEM_HUMANIZER_RULES]
  3.  Personality attributes (/persona attribute add|edit)* [SYSTEM_PERSONALITY]
- 4.  Server info = server name + description              [KNOWLEDGE_SERVER_INFO]
- 5.  Server memories (/memory server add|edit)*           [KNOWLEDGE_SERVER_MEMORIES]
- 6.  Server emojis*                                       [KNOWLEDGE_SERVER_EMOJIS]
- 7.  Server stickers*                                     [KNOWLEDGE_SERVER_STICKERS]
- 8.  Users in conversation = user list + personal         [KNOWLEDGE_USERS_IN_CONVERSATION]
+ 4.  Other triggered personas' public attributes*          [SYSTEM_PUBLIC_PERSONA_ATTRIBUTES]
+ 5.  Server info = server name + description              [KNOWLEDGE_SERVER_INFO]
+ 6.  Server memories (/memory server add|edit)*           [KNOWLEDGE_SERVER_MEMORIES]
+ 7.  Server emojis*                                       [KNOWLEDGE_SERVER_EMOJIS]
+ 8.  Server stickers*                                     [KNOWLEDGE_SERVER_STICKERS]
+ 9.  Users in conversation = user list + personal         [KNOWLEDGE_USERS_IN_CONVERSATION]
      memories + status + reminders + time/channel info
- 9.  Short-term memory (STM) = other-channel summaries*   [KNOWLEDGE_SHORT_TERM_MEMORY]
-10.  RAG documents*                                       [KNOWLEDGE_SERVER_DOCUMENTS]
-11.  Conditioning guidance*                               [KNOWLEDGE_SERVER_CONDITIONING]
-12.  Sample dialogues*                                    [DIALOGUE_SAMPLE]
-13.  Conversation history                                 [DIALOGUE_HISTORY]
+10.  Short-term memory (STM) = other-channel summaries*   [KNOWLEDGE_SHORT_TERM_MEMORY]
+11.  RAG documents*                                       [KNOWLEDGE_SERVER_DOCUMENTS]
+12.  Conditioning guidance*                               [KNOWLEDGE_SERVER_CONDITIONING]
+13.  Sample dialogues*                                    [DIALOGUE_SAMPLE]
+14.  Conversation history                                 [DIALOGUE_HISTORY]
      + Tail directives (appended to last history item)
 ```
 
 **Design note:** Volatile content (RAG, conversation history) is placed at the bottom deliberately. LLM providers like Gemini cache context from the top, so keeping stable blocks higher maximizes cache hits across requests.
 
 The system prompt is skipped entirely for user impersonation requests (bot-specific personality should not leak).
+
+Public persona attributes are only drawn from other personas that matched the same original trigger. They are formatted under `Other triggered personas' public attributes:` and each attribute is mention/template-converted with its owning persona name, so `{bot}` resolves to the public attribute's owner rather than the currently responding persona.
 
 ## Preset-Driven Assembly
 

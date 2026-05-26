@@ -77,8 +77,16 @@ export async function showPersonaStatus(
 
   const personaServerMemoryList = selectedPersona.server_memories ?? [];
 
-  const attributesCount = selectedPersona.attribute_list.length;
-  const attributesValue = formatBulletList(selectedPersona.attribute_list, locale, ATTRIBUTE_TRUNCATE_LENGTH);
+  const displayedAttributes =
+    selectedPersona.persona_attributes.length > 0
+      ? selectedPersona.persona_attributes.map((attribute) =>
+          attribute.is_public
+            ? `${attribute.attribute_text} ${localizer(locale, "commands.tool.status.attribute_public_suffix")}`
+            : attribute.attribute_text,
+        )
+      : selectedPersona.attribute_list;
+  const attributesCount = displayedAttributes.length;
+  const attributesValue = formatBulletList(displayedAttributes, locale, ATTRIBUTE_TRUNCATE_LENGTH);
 
   const dialogueCount = Math.max(
     selectedPersona.sample_dialogues_in.length,

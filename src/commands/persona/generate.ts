@@ -23,7 +23,11 @@ import {
   embedMetadataInPNG,
 } from "../../utils/image/pngMetadata";
 import { presetRepository } from "@/utils/db/repositories/PresetRepository";
-import { presetExportDataSchema, PRESET_EXPORT_VERSION } from "../../types/preset/presetExport";
+import {
+  buildGeneratedPresetAttributePublicFlags,
+  presetExportDataSchema,
+  PRESET_EXPORT_VERSION,
+} from "../../types/preset/presetExport";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 import { dedupeTriggerWords } from "@/utils/text/triggerWords";
 import type { PresetExport } from "../../types/preset/presetExport";
@@ -644,6 +648,11 @@ export async function execute(
 
     genResult.preset.tomori_nickname = characterName;
     genResult.preset.trigger_words = parsedNames;
+    if (Array.isArray(genResult.preset.attribute_list)) {
+      genResult.preset.attribute_public_flags = buildGeneratedPresetAttributePublicFlags(
+        genResult.preset.attribute_list,
+      );
+    }
 
     // 14. Validate generated data against schema
     const validationResult = presetExportDataSchema.safeParse(genResult.preset);

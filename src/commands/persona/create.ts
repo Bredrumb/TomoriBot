@@ -16,7 +16,11 @@ import { safeDownload } from "../../utils/security/safeDownload";
 import { getServerAvatar } from "../../utils/image/avatarHelper";
 import { centerCropToSquare } from "../../utils/image/imageProcessor";
 import { embedMetadataInPNG } from "../../utils/image/pngMetadata";
-import { presetExportDataSchema, PRESET_EXPORT_VERSION } from "../../types/preset/presetExport";
+import {
+  buildPrivateAttributePublicFlags,
+  presetExportDataSchema,
+  PRESET_EXPORT_VERSION,
+} from "../../types/preset/presetExport";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 import { dedupeTriggerWords } from "@/utils/text/triggerWords";
 import type { PresetExport, PresetExportData } from "../../types/preset/presetExport";
@@ -338,6 +342,7 @@ export async function execute(
     const presetData: PresetExportData = {
       tomori_nickname: characterName,
       attribute_list: [characterDesc],
+      attribute_public_flags: buildPrivateAttributePublicFlags([characterDesc]),
       // biome-ignore lint/style/noNonNullAssertion: Both or neither has to exist
       sample_dialogues_in: hasSampleDialogue ? [exampleUser!] : [],
       // biome-ignore lint/style/noNonNullAssertion: Both or neither has to exist

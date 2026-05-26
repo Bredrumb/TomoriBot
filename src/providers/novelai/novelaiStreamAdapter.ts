@@ -183,6 +183,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
   private static readonly SYSTEM_INSTRUCTION_TAGS_BASE: ContextItemTag[] = [
     ContextItemTag.SYSTEM_INSTRUCTION_BLOCK,
     ContextItemTag.SYSTEM_PERSONALITY,
+    ContextItemTag.SYSTEM_PUBLIC_PERSONA_ATTRIBUTES,
     ContextItemTag.SYSTEM_HUMANIZER_RULES,
     ContextItemTag.SYSTEM_PERSONA_PROMPT,
     ContextItemTag.KNOWLEDGE_SERVER_INFO,

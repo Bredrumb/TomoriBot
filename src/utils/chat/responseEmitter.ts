@@ -70,6 +70,7 @@ export function createChatResponseSink(context: ChatTurnContext): ChatResponseSi
       if (lockEntry) {
         setActiveChannelTurnState(lockEntry, {
           activePersonaId: context.currentPersona.persona_id ?? undefined,
+          triggeredPersonaIds: context.turn.triggeredPersonaIds,
           followUpEligible: context.currentPersona.persona_id !== undefined,
           isUserImpersonation: context.isUserImpersonation,
           impersonatedUserId: context.impersonatedUserId,

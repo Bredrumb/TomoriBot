@@ -30,7 +30,7 @@ Key columns:
 - `persona_id`: the persona being synced.
 - `preset_lineage_id` + `preset_language`: which official preset row to mirror.
 - `sync_mode`: content sync mode. `auto` means seed updates may rebase preset text fields.
-- `base_snapshot`: previous official text baseline used to detect local edits.
+- `base_snapshot`: previous official text baseline used to detect local edits, including `attribute_public_flags`.
 - `avatar_sync_mode`: avatar-only sync mode. `auto` mirrors official avatar updates; `manual` preserves a server's explicit avatar override.
 - `avatar_source_path`: preset avatar path last used as baseline.
 - `avatar_source_hash`: SHA-256 hash of the preset avatar image last applied or initialized.
@@ -52,6 +52,12 @@ For the main/default target, `/persona default` replaces the main persona's offi
 
 For `type=alter`, `/persona default` creates an alter persona, records a sync baseline, uploads a copy of the preset avatar through avatar storage, and stores the resulting reference in `personas.webhook_avatar_url`.
 
+### Import/export cards
+
+Native Tomori preset exports include `attribute_public_flags`, aligned 1:1 with `attribute_list`. Older Tomori preset files that do not have this field remain valid; import normalizes them to all-private flags before writing `persona_attributes`.
+
+`/persona generate` emits the canonical six generated attributes and marks only the generated Appearance attribute public. `/persona create` emits an explicit all-private flag array because its single freeform description is not guaranteed to be an appearance-only field. SillyTavern card conversion also defaults converted attributes to private because ST cards do not carry Tomori public visibility metadata.
+
 ## Text Sync
 
 Text sync runs as part of `seed.sql`.
@@ -67,14 +73,18 @@ The seed then bootstraps sync state for clear legacy matches by:
 For personas in `sync_mode = 'auto'`, seed rebases these fields:
 
 - `personas.attribute_list`
+- `persona_attributes.attribute_text`
+- `persona_attributes.is_public`
 - `personas.sample_dialogues_in`
 - `personas.sample_dialogues_out`
 - `persona_configs.trigger_words`
 - `persona_configs.persona_prompt`
 
-Array fields preserve append-only local additions. If a server's current value still starts with the previous official baseline, TomoriBot replaces that prefix with the new official baseline and keeps the local tail.
+Array fields preserve append-only local additions. If a server's current value still starts with the previous official baseline, TomoriBot replaces that prefix with the new official baseline and keeps the local tail. Attribute visibility flags follow the same split: official prefix flags come from the new preset, while locally appended attributes keep their current visibility.
 
 Edits/removals are preserved. If a field no longer matches the old baseline prefix, that field is left unchanged.
+
+Official Tomori presets mark their first appearance-style attribute public. Public attributes can be shown to other personas triggered by the same message; all other seeded attributes remain private unless edited.
 
 ## Avatar Sync
 

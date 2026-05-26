@@ -892,6 +892,10 @@ type TagLabel = {
 const TAG_LABELS: Record<string, TagLabel> = {
   [ContextItemTag.SYSTEM_INSTRUCTION_BLOCK]: { title: "System Instruction Block", hint: "system-managed" },
   [ContextItemTag.SYSTEM_PERSONALITY]: { title: "Persona Attributes", hint: "/persona attribute" },
+  [ContextItemTag.SYSTEM_PUBLIC_PERSONA_ATTRIBUTES]: {
+    title: "Other Personas' Public Attributes",
+    hint: "/persona attribute",
+  },
   [ContextItemTag.SYSTEM_HUMANIZER_RULES]: { title: "System Prompt", hint: "/config system-prompt" },
   [ContextItemTag.SYSTEM_PERSONA_PROMPT]: { title: "Persona Prompt", hint: "/persona prompt" },
   [ContextItemTag.SYSTEM_FUNCTION_GUIDE]: { title: "Function Guide", hint: "system-managed" },

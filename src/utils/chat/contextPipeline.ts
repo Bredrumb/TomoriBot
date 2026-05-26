@@ -219,6 +219,22 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     streamingContext.disableAllTools && turn.persona.llm.has_tools
       ? { ...turn.persona, llm: { ...turn.persona.llm, has_tools: false } }
       : turn.persona;
+  const triggeredPersonaIdSet = new Set(turn.triggeredPersonaIds);
+  const publicPersonaAttributes = turn.allPersonas
+    .filter(
+      (persona) =>
+        typeof persona.persona_id === "number" &&
+        persona.persona_id !== effectivePersona.persona_id &&
+        triggeredPersonaIdSet.has(persona.persona_id),
+    )
+    .map((persona) => ({
+      personaId: persona.persona_id as number,
+      personaName: persona.persona_nickname,
+      attributes: (persona.persona_attributes ?? [])
+        .filter((attribute) => attribute.is_public)
+        .map((attribute) => attribute.attribute_text),
+    }))
+    .filter((persona) => persona.attributes.length > 0);
 
   const contextBuild = await buildContext({
     guildId: turn.serverDiscId,
@@ -238,6 +254,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     emojiStrings: assets.emojiStrings,
     tomoriNickname: effectivePersona.persona_nickname,
     tomoriAttributes: effectivePersona.attribute_list,
+    publicPersonaAttributes,
     tomoriConfig: effectivePersona.config,
     personaPrompt: effectivePersona.persona_prompt ?? null,
     personaLineageId: effectivePersona.persona_lineage_id,

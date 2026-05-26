@@ -38,6 +38,7 @@ export function normalizeChatInvocation(input: TomoriChatInput): ChatIncoming {
     reminderRecipientID: input.reminderRecipientID,
     reminderData: input.reminderData,
     selectedPersonaId: input.selectedPersonaId,
+    triggeredPersonaIds: input.triggeredPersonaIds,
     isPersonaJob: input.isPersonaJob ?? false,
     isUserImpersonation: input.isUserImpersonation ?? false,
     impersonatedUserId: input.impersonatedUserId,

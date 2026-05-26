@@ -1016,6 +1016,7 @@ export async function execute(
             serverId: mainPersona.server_id,
             nickname: presetData.tomori_nickname,
             attributes: presetData.attribute_list,
+            attributePublicFlags: presetData.attribute_public_flags,
             sampleDialoguesIn: presetData.sample_dialogues_in,
             sampleDialoguesOut: presetData.sample_dialogues_out,
             personaLineageId: identityMode === "preserve" ? importedLineageId : null,

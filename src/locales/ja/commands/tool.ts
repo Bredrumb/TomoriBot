@@ -265,6 +265,7 @@ export default {
       export_footer_server_config: `完全な値を表示するには \`/server config export\` を使用してください`,
       field_global_personal_memories_with_count: `グローバル個人メモリ ({current}/{max} 枠使用中)`,
       field_attributes_with_count: `属性 ({current}/{max} 枠使用中)`,
+      attribute_public_suffix: `[公開]`,
       field_sample_dialogues_with_count: `サンプル対話 ({current}/{max} 枠使用中)`,
       field_persona_personal_memories_with_count: `ペルソナ個人メモリ ({current}/{max} 枠使用中)`,
       field_persona_server_memories_with_count: `ペルソナサーバーメモリ ({current}/{max} 枠使用中)`,

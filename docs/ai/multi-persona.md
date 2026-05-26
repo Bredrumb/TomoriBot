@@ -92,10 +92,11 @@ High-level flow (per incoming message):
 2. Queue additional personas to ensure sequential replies.
 3. For each persona:
    - Build context from shared history.
+   - Add public attributes from the other personas matched by the same original trigger.
    - Use isolated function-call history per persona.
    - Stream response with persona-specific webhook settings if applicable.
 
-**Important limitation**: later personas **do not** see earlier persona responses in their context (deferred for future refactor).
+Public attributes are not memories and are not server-wide. They are carried through queued persona jobs as `triggeredPersonaIds`, so the first and later queued responders see the same original trigger set. Private attributes remain visible only to their owning persona. Later personas still **do not** see earlier persona responses in their context (deferred for future refactor).
 
 ## Self-Reply Trigger System
 
@@ -430,7 +431,8 @@ Behavior:
 
 ### Persona Memory Editing
 
-- `/persona attribute add|edit|remove` manages `attribute_list` for a selected persona.
+- `/persona attribute add|edit|remove` manages ordered `persona_attributes` for a selected persona and mirrors text into `personas.attribute_list` for compatibility.
+- Attribute add/edit modals include a public checkbox. Public attributes are exposed to other personas triggered by the same message; `{bot}` inside that text resolves to the attribute owner's name.
 - `/persona sample-dialogue add|edit|remove` manages the paired `sample_dialogues_in/out` arrays for a selected persona.
 - Edit flows reuse the existing persona picker and item selector, then show a confirmation button before opening a prefilled edit modal.
 

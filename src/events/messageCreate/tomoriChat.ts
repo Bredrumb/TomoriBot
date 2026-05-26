@@ -69,6 +69,7 @@ export async function tomoriChat(input: TomoriChatInput): Promise<void> {
           llmOverrideCodename: queued.llmOverrideCodename,
           isStopResponse: queued.isStopResponse,
           selectedPersonaId: queued.selectedPersonaId,
+          triggeredPersonaIds: queued.triggeredPersonaIds,
           isPersonaJob: queued.isPersonaJob,
           isUserImpersonation: queued.isUserImpersonation,
           impersonatedUserId: queued.impersonatedUserId,

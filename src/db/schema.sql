@@ -153,6 +153,44 @@ SELECT add_column_if_not_exists('personas', 'nai_char_ref_url', 'TEXT');
 -- elevenlabs_voice_id / elevenlabs_voice_name were added here (March 2026) and
 -- dropped by migration 010_complete_speech_voice_migration.sql (Phase 6 Step #14.2).
 
+CREATE TABLE IF NOT EXISTS persona_attributes (
+  attribute_id SERIAL PRIMARY KEY,
+  persona_id INT NOT NULL,
+  attribute_order INT NOT NULL,
+  attribute_text TEXT NOT NULL,
+  is_public BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (persona_id) REFERENCES personas(persona_id) ON DELETE CASCADE,
+  UNIQUE (persona_id, attribute_order),
+  CHECK (attribute_order >= 1)
+);
+
+CREATE INDEX IF NOT EXISTS idx_persona_attributes_persona_public
+  ON persona_attributes(persona_id, is_public, attribute_order);
+
+INSERT INTO persona_attributes (persona_id, attribute_order, attribute_text, is_public)
+SELECT
+  p.persona_id,
+  attr.ord::INT,
+  attr.attribute_text,
+  false
+FROM personas p
+CROSS JOIN LATERAL unnest(COALESCE(p.attribute_list, ARRAY[]::TEXT[]))
+  WITH ORDINALITY AS attr(attribute_text, ord)
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM persona_attributes pa
+  WHERE pa.persona_id = p.persona_id
+)
+ON CONFLICT (persona_id, attribute_order) DO NOTHING;
+
+DROP TRIGGER IF EXISTS update_persona_attributes_timestamp ON persona_attributes;
+CREATE TRIGGER update_persona_attributes_timestamp
+BEFORE UPDATE ON persona_attributes
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
 -- Create lineage sequence (start high so reserved low IDs stay available)
 CREATE SEQUENCE IF NOT EXISTS persona_lineage_id_seq
 	INCREMENT BY 1
@@ -546,6 +584,7 @@ CREATE TABLE IF NOT EXISTS persona_presets (
   persona_preset_desc TEXT NOT NULL,
   preset_lineage_id BIGINT,
   preset_attribute_list TEXT[] DEFAULT '{}',
+  preset_attribute_public_flags BOOLEAN[] DEFAULT '{}',
   preset_sample_dialogues_in TEXT[] DEFAULT '{}', -- array index is soft id of sample dialogue pairs
   preset_sample_dialogues_out TEXT[] DEFAULT '{}',
   preset_language TEXT NOT NULL,
@@ -561,6 +600,7 @@ DROP TRIGGER IF EXISTS update_persona_presets_timestamp ON persona_presets;
 SELECT add_column_if_not_exists('persona_presets', 'preset_avatar_path', 'TEXT');
 SELECT add_column_if_not_exists('persona_presets', 'preset_trigger_words', 'TEXT[]', 'ARRAY[]::TEXT[]');
 SELECT add_column_if_not_exists('persona_presets', 'preset_lineage_id', 'BIGINT');
+SELECT add_column_if_not_exists('persona_presets', 'preset_attribute_public_flags', 'BOOLEAN[]', 'ARRAY[]::BOOLEAN[]');
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_persona_presets_lineage_language_unique
   ON persona_presets(preset_lineage_id, preset_language)
@@ -613,6 +653,32 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
+CREATE OR REPLACE FUNCTION persona_preset_rebase_bool_array(
+  current_bool_array BOOLEAN[],
+  current_text_array TEXT[],
+  old_base_text_array TEXT[],
+  new_base_bool_array BOOLEAN[]
+) RETURNS BOOLEAN[] AS $$
+DECLARE
+  current_flags BOOLEAN[] := COALESCE(current_bool_array, ARRAY[]::BOOLEAN[]);
+  current_values TEXT[] := COALESCE(current_text_array, ARRAY[]::TEXT[]);
+  old_base_values TEXT[] := COALESCE(old_base_text_array, ARRAY[]::TEXT[]);
+  new_base_flags BOOLEAN[] := COALESCE(new_base_bool_array, ARRAY[]::BOOLEAN[]);
+  current_len INT := COALESCE(array_length(current_values, 1), 0);
+  old_base_len INT := COALESCE(array_length(old_base_values, 1), 0);
+  local_tail BOOLEAN[] := ARRAY[]::BOOLEAN[];
+  idx INT;
+BEGIN
+  IF current_len > old_base_len THEN
+    FOR idx IN (old_base_len + 1)..current_len LOOP
+      local_tail := array_append(local_tail, COALESCE(current_flags[idx], false));
+    END LOOP;
+  END IF;
+
+  RETURN new_base_flags || local_tail;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
 CREATE OR REPLACE FUNCTION persona_preset_snapshot_text_array(
   snapshot JSONB,
   snapshot_key TEXT
@@ -623,6 +689,22 @@ BEGIN
   END IF;
 
   RETURN ARRAY(SELECT jsonb_array_elements_text(snapshot -> snapshot_key));
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION persona_preset_snapshot_bool_array(
+  snapshot JSONB,
+  snapshot_key TEXT
+) RETURNS BOOLEAN[] AS $$
+BEGIN
+  IF snapshot IS NULL OR jsonb_typeof(snapshot -> snapshot_key) <> 'array' THEN
+    RETURN ARRAY[]::BOOLEAN[];
+  END IF;
+
+  RETURN ARRAY(
+    SELECT item.value::BOOLEAN
+    FROM jsonb_array_elements_text(snapshot -> snapshot_key) AS item(value)
+  );
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 

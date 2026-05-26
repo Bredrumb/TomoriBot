@@ -265,6 +265,7 @@ I have built-in features to help reduce costs from abusers or spammers in your s
       export_footer_server_config: `Use \`/server config export\` to view full values`,
       field_global_personal_memories_with_count: `Global Personal Memory ({current} out of {max} slots used)`,
       field_attributes_with_count: `Attributes ({current} out of {max} slots used)`,
+      attribute_public_suffix: `[public]`,
       field_sample_dialogues_with_count: `Sample Dialogues ({current} out of {max} slots used)`,
       field_persona_personal_memories_with_count: `Persona Personal Memories ({current} out of {max} slots used)`,
       field_persona_server_memories_with_count: `Persona Server Memories ({current} out of {max} slots used)`,

@@ -35,6 +35,7 @@ const ATTRIBUTE_SELECT_ID = "attribute_select";
  */
 async function performAttributeRemoval(
   tomoriState: TomoriState,
+  selectedIndex: number,
   attributeToRemove: string,
   userData: UserRow,
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
@@ -42,7 +43,7 @@ async function performAttributeRemoval(
   suppressSuccessReply = false,
 ): Promise<boolean> {
   // biome-ignore lint/style/noNonNullAssertion: tomoriState.persona_id is always valid after validation
-  const ok = await personaRepository.removeAttribute(tomoriState.persona_id!, attributeToRemove);
+  const ok = await personaRepository.removeAttributeAt(tomoriState.persona_id!, selectedIndex + 1);
   if (!ok) {
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
@@ -246,6 +247,7 @@ export async function execute(
       // Perform the database update - let helper functions manage interaction state
       const removalSucceeded = await performAttributeRemoval(
         selectedPersona,
+        selectedIndex,
         attributeToRemove,
         userData,
         modalSubmitInteraction,

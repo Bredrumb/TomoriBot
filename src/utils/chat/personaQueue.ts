@@ -10,6 +10,7 @@ export function queueAdditionalPersonaTurns(args: {
   lockEntry: ChannelLockEntry;
   message: Message;
   personasToRespond: TomoriState[];
+  triggeredPersonaIds: number[];
   forceReason?: boolean;
   reasoningQuery?: string;
   llmOverrideCodename?: string;
@@ -50,6 +51,7 @@ export function queueAdditionalPersonaTurns(args: {
         personaName: queuedPersona.persona.persona_nickname,
         selectedPersonaId: queuedPersona.selectedPersonaId,
       })),
+      triggeredPersonaIds: args.triggeredPersonaIds,
       forceReason: args.forceReason,
       reasoningQuery: args.reasoningQuery,
       llmOverrideCodename: args.llmOverrideCodename,

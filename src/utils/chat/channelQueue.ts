@@ -34,6 +34,7 @@ export type QueuedMessage = {
   isStopResponse?: boolean;
   isFollowUp?: boolean;
   selectedPersonaId?: number;
+  triggeredPersonaIds?: number[];
   isPersonaJob?: boolean;
   isUserImpersonation?: boolean;
   impersonatedUserId?: string;
@@ -60,6 +61,7 @@ export interface ChannelLockEntry {
   userDiscId?: string;
   currentIsPersonaJob?: boolean;
   activePersonaId?: number;
+  activeTriggeredPersonaIds?: number[];
   activeIsUserImpersonation?: boolean;
   activeImpersonatedUserId?: string;
   followUpEligible?: boolean;
@@ -109,6 +111,7 @@ export async function runWithChannelLock<T>(
     userDiscId,
     isPersonaJob: admission.incoming.isPersonaJob,
     selectedPersonaId: admission.incoming.selectedPersonaId,
+    triggeredPersonaIds: admission.incoming.triggeredPersonaIds,
     isCommandTriggered: admission.incoming.isManuallyTriggered ?? false,
   });
 
@@ -177,6 +180,7 @@ export function releaseStaleChannelLockIfExpired(channelId: string, lockEntry: C
   lockEntry.userDiscId = undefined;
   lockEntry.currentIsPersonaJob = false;
   lockEntry.activePersonaId = undefined;
+  lockEntry.activeTriggeredPersonaIds = undefined;
   lockEntry.activeIsUserImpersonation = undefined;
   lockEntry.activeImpersonatedUserId = undefined;
   lockEntry.followUpEligible = false;
@@ -193,6 +197,7 @@ export function acquireChannelLockForTurn(
     userDiscId: string;
     isPersonaJob: boolean;
     selectedPersonaId?: number;
+    triggeredPersonaIds?: number[];
     isCommandTriggered: boolean;
   },
 ): void {
@@ -202,6 +207,7 @@ export function acquireChannelLockForTurn(
   lockEntry.userDiscId = args.userDiscId;
   lockEntry.currentIsPersonaJob = args.isPersonaJob;
   lockEntry.activePersonaId = args.selectedPersonaId;
+  lockEntry.activeTriggeredPersonaIds = args.triggeredPersonaIds;
   lockEntry.activeIsUserImpersonation = undefined;
   lockEntry.activeImpersonatedUserId = undefined;
   lockEntry.followUpEligible = false;
@@ -213,12 +219,14 @@ export function setActiveChannelTurnState(
   lockEntry: ChannelLockEntry,
   args: {
     activePersonaId?: number;
+    triggeredPersonaIds?: number[];
     followUpEligible: boolean;
     isUserImpersonation?: boolean;
     impersonatedUserId?: string;
   },
 ): void {
   lockEntry.activePersonaId = args.activePersonaId;
+  lockEntry.activeTriggeredPersonaIds = args.triggeredPersonaIds;
   lockEntry.followUpEligible = args.followUpEligible;
   lockEntry.activeIsUserImpersonation = args.isUserImpersonation || undefined;
   lockEntry.activeImpersonatedUserId = args.impersonatedUserId;
@@ -248,6 +256,7 @@ export function queuePersonaJobsAtFront(args: {
   lockEntry: ChannelLockEntry;
   message: Message;
   personaJobs: Array<{ personaName: string; selectedPersonaId: number }>;
+  triggeredPersonaIds: number[];
   forceReason?: boolean;
   reasoningQuery?: string;
   llmOverrideCodename?: string;
@@ -267,6 +276,7 @@ export function queuePersonaJobsAtFront(args: {
       reasoningQuery: args.reasoningQuery,
       llmOverrideCodename: args.llmOverrideCodename,
       selectedPersonaId: queuedPersona.selectedPersonaId,
+      triggeredPersonaIds: args.triggeredPersonaIds,
       isPersonaJob: true,
       textQuotaSource: args.textQuotaSource,
       textQuotaTriggerKey: args.textQuotaTriggerKey,
@@ -377,6 +387,7 @@ export function queueFollowUpForLockedTurn(args: {
       forceReason: false,
       isFollowUp: true,
       selectedPersonaId: args.lockEntry.activePersonaId,
+      triggeredPersonaIds: args.lockEntry.activeTriggeredPersonaIds,
       isUserImpersonation: args.lockEntry.activeIsUserImpersonation,
       impersonatedUserId: args.lockEntry.activeImpersonatedUserId,
       textQuotaSource: args.textQuotaSource,
@@ -401,6 +412,7 @@ export function queueFollowUpForLockedTurn(args: {
     forceReason: false,
     isFollowUp: true,
     selectedPersonaId: args.lockEntry.activePersonaId,
+    triggeredPersonaIds: args.lockEntry.activeTriggeredPersonaIds,
     isUserImpersonation: args.lockEntry.activeIsUserImpersonation,
     impersonatedUserId: args.lockEntry.activeImpersonatedUserId,
     textQuotaSource: args.textQuotaSource,

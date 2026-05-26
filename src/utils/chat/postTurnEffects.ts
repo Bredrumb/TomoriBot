@@ -70,6 +70,7 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
     reminderRecipientID: incoming.reminderRecipientID,
     reminderData: incoming.reminderData,
     selectedPersonaId: context.currentPersona.persona_id ?? incoming.selectedPersonaId,
+    triggeredPersonaIds: context.turn.triggeredPersonaIds,
     isPersonaJob: context.isPersonaJob,
     isUserImpersonation: context.isUserImpersonation,
     impersonatedUserId: context.impersonatedUserId,

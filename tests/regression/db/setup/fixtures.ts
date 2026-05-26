@@ -89,9 +89,12 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
   // renamed personas or changed config into the next harness run.
   await db`
     UPDATE personas
-    SET persona_nickname = '_rt_persona'
+    SET
+      persona_nickname = '_rt_persona',
+      attribute_list = ARRAY[]::TEXT[]
     WHERE persona_id = ${personaId}
   `;
+  await db`DELETE FROM persona_attributes WHERE persona_id = ${personaId}`;
 
   // 3. Server-scoped split config rows.
   for (const table of SERVER_CONFIG_TABLES) {

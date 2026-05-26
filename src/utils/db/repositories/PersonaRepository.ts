@@ -21,6 +21,7 @@ import {
   type FallbackModelRef,
   type LlmRow,
   type NaiPresetRow,
+  type PersonaAttributeRow,
   type PersonaConfigRow,
   type AssembledServerConfig,
   type TomoriRow,
@@ -101,11 +102,16 @@ type PresetSyncSnapshot = {
   preset_language: string;
   preset_avatar_path: string | null;
   attribute_list: string[];
+  attribute_public_flags: boolean[];
   sample_dialogues_in: string[];
   sample_dialogues_out: string[];
   trigger_words: string[];
   persona_prompt: string;
 };
+
+function normalizeAttributePublicFlags(attributes: string[], flags?: boolean[]): boolean[] {
+  return attributes.map((_attribute, index) => flags?.[index] ?? false);
+}
 
 /** Fields where SQL NULL carries semantic meaning ("not configured") and must not be coerced to undefined. */
 const MEANINGFULLY_NULLABLE_CONFIG_FIELDS = new Set([
@@ -198,7 +204,14 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
           t.persona_nickname,
           t.webhook_avatar_url,
           t.is_alter,
-          t.attribute_list,
+          COALESCE(
+            (
+              SELECT array_agg(pa.attribute_text ORDER BY pa.attribute_order)
+              FROM persona_attributes pa
+              WHERE pa.persona_id = t.persona_id
+            ),
+            t.attribute_list
+          ) AS attribute_list,
           t.persona_lineage_id,
           pc.persona_prompt
         FROM personas t
@@ -254,45 +267,246 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   // ── persona operations ─────────────────────────────────────────────────────
 
-  async addAttributes(personaId: number, attributes: string[]): Promise<boolean> {
+  async replaceAttributes(personaId: number, attributes: string[], publicFlags?: boolean[]): Promise<boolean> {
     try {
-      const result = await sql`
-        UPDATE personas
-        SET attribute_list = array_cat(attribute_list, ${sql.array(attributes, "TEXT")})
-        WHERE persona_id = ${personaId}
-        RETURNING *
-      `;
-      return result.length > 0;
+      const flags = normalizeAttributePublicFlags(attributes, publicFlags);
+      return await sql.transaction(async (tx) => {
+        await tx`DELETE FROM persona_attributes WHERE persona_id = ${personaId}`;
+
+        for (let index = 0; index < attributes.length; index++) {
+          await tx`
+            INSERT INTO persona_attributes (persona_id, attribute_order, attribute_text, is_public)
+            VALUES (${personaId}, ${index + 1}, ${attributes[index]}, ${flags[index]})
+          `;
+        }
+
+        const result = await tx`
+          UPDATE personas
+          SET
+            attribute_list = ${sql.array(attributes, "TEXT")},
+            updated_at = NOW()
+          WHERE persona_id = ${personaId}
+          RETURNING persona_id
+        `;
+        return result.length > 0;
+      });
+    } catch (e) {
+      log.error(`Error replacing attributes for persona ${personaId}:`, e);
+      return false;
+    }
+  }
+
+  async addAttributes(personaId: number, attributes: string[], isPublic = false): Promise<boolean> {
+    if (attributes.length === 0) {
+      return true;
+    }
+
+    try {
+      return await sql.transaction(async (tx) => {
+        await tx`
+          INSERT INTO persona_attributes (persona_id, attribute_order, attribute_text, is_public)
+          SELECT
+            p.persona_id,
+            attr.ord::INT,
+            attr.attribute_text,
+            false
+          FROM personas p
+          CROSS JOIN LATERAL unnest(COALESCE(p.attribute_list, ARRAY[]::TEXT[]))
+            WITH ORDINALITY AS attr(attribute_text, ord)
+          WHERE p.persona_id = ${personaId}
+            AND NOT EXISTS (
+              SELECT 1
+              FROM persona_attributes pa
+              WHERE pa.persona_id = p.persona_id
+            )
+          ON CONFLICT (persona_id, attribute_order) DO NOTHING
+        `;
+
+        const [orderRow] = await tx<Array<{ max_order: number }>>`
+          SELECT COALESCE(MAX(attribute_order), 0)::INT AS max_order
+          FROM persona_attributes
+          WHERE persona_id = ${personaId}
+        `;
+        const maxOrder = orderRow?.max_order ?? 0;
+
+        for (let index = 0; index < attributes.length; index++) {
+          await tx`
+            INSERT INTO persona_attributes (persona_id, attribute_order, attribute_text, is_public)
+            VALUES (${personaId}, ${maxOrder + index + 1}, ${attributes[index]}, ${isPublic})
+          `;
+        }
+
+        const result = await tx`
+          UPDATE personas p
+          SET
+            attribute_list = COALESCE(
+              (
+                SELECT array_agg(pa.attribute_text ORDER BY pa.attribute_order)
+                FROM persona_attributes pa
+                WHERE pa.persona_id = p.persona_id
+              ),
+              ARRAY[]::TEXT[]
+            ),
+            updated_at = NOW()
+          WHERE p.persona_id = ${personaId}
+          RETURNING p.persona_id
+        `;
+        return result.length > 0;
+      });
     } catch (e) {
       log.error(`Error adding attributes for persona ${personaId}:`, e);
       return false;
     }
   }
 
-  async editAttributeAt(personaId: number, index1Based: number, newAttribute: string): Promise<boolean> {
+  async editAttributeAt(
+    personaId: number,
+    index1Based: number,
+    newAttribute: string,
+    isPublic?: boolean,
+  ): Promise<boolean> {
     try {
-      const result = await sql`
-        UPDATE personas
-        SET attribute_list[${index1Based}] = ${newAttribute}
-        WHERE persona_id = ${personaId}
-        RETURNING persona_id
-      `;
-      return result.length > 0;
+      return await sql.transaction(async (tx) => {
+        await tx`
+          INSERT INTO persona_attributes (persona_id, attribute_order, attribute_text, is_public)
+          SELECT
+            p.persona_id,
+            attr.ord::INT,
+            attr.attribute_text,
+            false
+          FROM personas p
+          CROSS JOIN LATERAL unnest(COALESCE(p.attribute_list, ARRAY[]::TEXT[]))
+            WITH ORDINALITY AS attr(attribute_text, ord)
+          WHERE p.persona_id = ${personaId}
+            AND NOT EXISTS (
+              SELECT 1
+              FROM persona_attributes pa
+              WHERE pa.persona_id = p.persona_id
+            )
+          ON CONFLICT (persona_id, attribute_order) DO NOTHING
+        `;
+
+        const result = await tx`
+          UPDATE persona_attributes
+          SET
+            attribute_text = ${newAttribute},
+            is_public = COALESCE(${isPublic ?? null}::BOOLEAN, is_public),
+            updated_at = NOW()
+          WHERE persona_id = ${personaId}
+            AND attribute_order = ${index1Based}
+          RETURNING persona_id
+        `;
+        if (result.length === 0) {
+          return false;
+        }
+
+        await tx`
+          UPDATE personas p
+          SET
+            attribute_list = COALESCE(
+              (
+                SELECT array_agg(pa.attribute_text ORDER BY pa.attribute_order)
+                FROM persona_attributes pa
+                WHERE pa.persona_id = p.persona_id
+              ),
+              ARRAY[]::TEXT[]
+            ),
+            updated_at = NOW()
+          WHERE p.persona_id = ${personaId}
+        `;
+        return true;
+      });
     } catch (e) {
       log.error(`Error editing attribute at index ${index1Based} for persona ${personaId}:`, e);
       return false;
     }
   }
 
+  async removeAttributeAt(personaId: number, index1Based: number): Promise<boolean> {
+    try {
+      return await sql.transaction(async (tx) => {
+        await tx`
+          INSERT INTO persona_attributes (persona_id, attribute_order, attribute_text, is_public)
+          SELECT
+            p.persona_id,
+            attr.ord::INT,
+            attr.attribute_text,
+            false
+          FROM personas p
+          CROSS JOIN LATERAL unnest(COALESCE(p.attribute_list, ARRAY[]::TEXT[]))
+            WITH ORDINALITY AS attr(attribute_text, ord)
+          WHERE p.persona_id = ${personaId}
+            AND NOT EXISTS (
+              SELECT 1
+              FROM persona_attributes pa
+              WHERE pa.persona_id = p.persona_id
+            )
+          ON CONFLICT (persona_id, attribute_order) DO NOTHING
+        `;
+
+        const rows = await tx<Array<Pick<PersonaAttributeRow, "attribute_text" | "is_public">>>`
+          SELECT attribute_text, is_public
+          FROM persona_attributes
+          WHERE persona_id = ${personaId}
+          ORDER BY attribute_order
+        `;
+        if (index1Based < 1 || index1Based > rows.length) {
+          return false;
+        }
+
+        const remainingRows = rows.filter((_row, index) => index + 1 !== index1Based);
+        await tx`DELETE FROM persona_attributes WHERE persona_id = ${personaId}`;
+        for (let index = 0; index < remainingRows.length; index++) {
+          const row = remainingRows[index];
+          await tx`
+            INSERT INTO persona_attributes (persona_id, attribute_order, attribute_text, is_public)
+            VALUES (${personaId}, ${index + 1}, ${row.attribute_text}, ${row.is_public})
+          `;
+        }
+
+        const result = await tx`
+          UPDATE personas
+          SET
+            attribute_list = ${sql.array(
+              remainingRows.map((row) => row.attribute_text),
+              "TEXT",
+            )},
+            updated_at = NOW()
+          WHERE persona_id = ${personaId}
+          RETURNING persona_id
+        `;
+        return result.length > 0;
+      });
+    } catch (e) {
+      log.error(`Error removing attribute at index ${index1Based} for persona ${personaId}:`, e);
+      return false;
+    }
+  }
+
   async removeAttribute(personaId: number, attributeToRemove: string): Promise<boolean> {
     try {
-      const result = await sql`
-        UPDATE personas
-        SET attribute_list = array_remove(attribute_list, ${attributeToRemove})
+      const [row] = await sql<Array<{ attribute_order: number }>>`
+        SELECT attribute_order
+        FROM persona_attributes
         WHERE persona_id = ${personaId}
-        RETURNING *
+          AND attribute_text = ${attributeToRemove}
+        ORDER BY attribute_order
+        LIMIT 1
       `;
-      return result.length > 0;
+      if (!row) {
+        const [personaRow] = await sql<Array<{ attribute_list: string[] }>>`
+          SELECT attribute_list
+          FROM personas
+          WHERE persona_id = ${personaId}
+          LIMIT 1
+        `;
+        const mirrorIndex = personaRow?.attribute_list?.indexOf(attributeToRemove) ?? -1;
+        if (mirrorIndex < 0) {
+          return false;
+        }
+        return await this.removeAttributeAt(personaId, mirrorIndex + 1);
+      }
+      return await this.removeAttributeAt(personaId, row.attribute_order);
     } catch (e) {
       log.error(`Error removing attribute for persona ${personaId}:`, e);
       return false;
@@ -674,6 +888,10 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       preset_language: preset.preset_language,
       preset_avatar_path: presetAvatarPath,
       attribute_list: preset.preset_attribute_list,
+      attribute_public_flags: normalizeAttributePublicFlags(
+        preset.preset_attribute_list,
+        preset.preset_attribute_public_flags,
+      ),
       sample_dialogues_in: preset.preset_sample_dialogues_in,
       sample_dialogues_out: preset.preset_sample_dialogues_out,
       trigger_words: preset.preset_trigger_words,
@@ -776,6 +994,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     serverId: number;
     nickname: string;
     attributes: string[];
+    attributePublicFlags?: boolean[];
     sampleDialoguesIn: string[];
     sampleDialoguesOut: string[];
     personaLineageId?: number | null;
@@ -787,41 +1006,56 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     naiAttgGenre?: string | null;
     naiAttgStars?: number | null;
   }): Promise<TomoriRow | null> {
-    const [row] = await sql`
-      INSERT INTO personas (
-        server_id,
-        persona_nickname,
-        attribute_list,
-        sample_dialogues_in,
-        sample_dialogues_out,
-        is_alter,
-        persona_lineage_id,
-        nai_tags,
-        nai_char_ref_url,
-        nai_attg_author,
-        nai_attg_title,
-        nai_attg_tags,
-        nai_attg_genre,
-        nai_attg_stars
-      )
-      VALUES (
-        ${params.serverId},
-        ${params.nickname},
-        ${sql.array(params.attributes, "TEXT")},
-        ${sql.array(params.sampleDialoguesIn, "TEXT")},
-        ${sql.array(params.sampleDialoguesOut, "TEXT")},
-        true,
-        COALESCE(${params.personaLineageId ?? null}::bigint, nextval('persona_lineage_id_seq')),
-        ${sql.array(params.naiTags ?? [], "TEXT")},
-        ${params.naiCharRefUrl ?? null},
-        ${params.naiAttgAuthor ?? null},
-        ${params.naiAttgTitle ?? null},
-        ${params.naiAttgTags ?? null},
-        ${params.naiAttgGenre ?? null},
-        ${params.naiAttgStars ?? null}
-      )
-      RETURNING *
-    `;
+    const row = await sql.transaction(async (tx) => {
+      const [insertedRow] = await tx`
+        INSERT INTO personas (
+          server_id,
+          persona_nickname,
+          attribute_list,
+          sample_dialogues_in,
+          sample_dialogues_out,
+          is_alter,
+          persona_lineage_id,
+          nai_tags,
+          nai_char_ref_url,
+          nai_attg_author,
+          nai_attg_title,
+          nai_attg_tags,
+          nai_attg_genre,
+          nai_attg_stars
+        )
+        VALUES (
+          ${params.serverId},
+          ${params.nickname},
+          ${sql.array(params.attributes, "TEXT")},
+          ${sql.array(params.sampleDialoguesIn, "TEXT")},
+          ${sql.array(params.sampleDialoguesOut, "TEXT")},
+          true,
+          COALESCE(${params.personaLineageId ?? null}::bigint, nextval('persona_lineage_id_seq')),
+          ${sql.array(params.naiTags ?? [], "TEXT")},
+          ${params.naiCharRefUrl ?? null},
+          ${params.naiAttgAuthor ?? null},
+          ${params.naiAttgTitle ?? null},
+          ${params.naiAttgTags ?? null},
+          ${params.naiAttgGenre ?? null},
+          ${params.naiAttgStars ?? null}
+        )
+        RETURNING *
+      `;
+      if (!insertedRow?.persona_id) {
+        return null;
+      }
+
+      const flags = normalizeAttributePublicFlags(params.attributes, params.attributePublicFlags);
+      for (let index = 0; index < params.attributes.length; index++) {
+        await tx`
+          INSERT INTO persona_attributes (persona_id, attribute_order, attribute_text, is_public)
+          VALUES (${insertedRow.persona_id}, ${index + 1}, ${params.attributes[index]}, ${flags[index]})
+        `;
+      }
+
+      return insertedRow;
+    });
     return row ? (row as unknown as TomoriRow) : null;
   }
 
@@ -987,9 +1221,16 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
     try {
       const [tomoriResult] = await sql`
-        SELECT array_length(attribute_list, 1) as attribute_count
-        FROM personas
-        WHERE persona_id = ${personaId}
+        SELECT GREATEST(
+          COALESCE((
+            SELECT COUNT(*)::INT
+            FROM persona_attributes pa
+            WHERE pa.persona_id = p.persona_id
+          ), 0),
+          COALESCE(array_length(p.attribute_list, 1), 0)
+        ) AS attribute_count
+        FROM personas p
+        WHERE p.persona_id = ${personaId}
       `;
 
       const currentCount = tomoriResult?.attribute_count || 0;
@@ -2027,6 +2268,32 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
           const personaIds: number[] = (tomoriRows as TomoriRow[])
             .map((r) => r.persona_id)
             .filter((id): id is number => typeof id === "number");
+          const personaAttributeRows =
+            personaIds.length > 0
+              ? await sql`
+                SELECT attribute_id, persona_id, attribute_order, attribute_text, is_public, created_at, updated_at
+                FROM persona_attributes
+                WHERE persona_id = ANY(${sql.array(personaIds, "int4")})
+                ORDER BY persona_id, attribute_order
+              `
+              : [];
+          const attributesByPersonaId = new Map<number, PersonaAttributeRow[]>();
+          for (const row of personaAttributeRows) {
+            const personaId = row.persona_id as number;
+            const parsedAttribute: PersonaAttributeRow = {
+              attribute_id: row.attribute_id as number,
+              persona_id: personaId,
+              attribute_order: row.attribute_order as number,
+              attribute_text: row.attribute_text as string,
+              is_public: (row.is_public as boolean) ?? false,
+              created_at: row.created_at as Date | undefined,
+              updated_at: row.updated_at as Date | undefined,
+            };
+            const existing = attributesByPersonaId.get(personaId) ?? [];
+            existing.push(parsedAttribute);
+            attributesByPersonaId.set(personaId, existing);
+          }
+
           const autochRuntimeRows =
             personaIds.length > 0
               ? await sql`
@@ -2100,9 +2367,16 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
               autoch_counter: 0,
               autoch_next_target: 0,
             };
+            const personaAttributes = attributesByPersonaId.get(personaId) ?? [];
+            const attributeList =
+              personaAttributes.length > 0
+                ? personaAttributes.map((attribute) => attribute.attribute_text)
+                : ((tomoriRow.attribute_list as string[] | undefined) ?? []);
 
             const combinedState = {
               ...tomoriRow,
+              attribute_list: attributeList,
+              persona_attributes: personaAttributes,
               config: configData,
               llm: llmData,
               trigger_words: personaConfig?.trigger_words ?? [],

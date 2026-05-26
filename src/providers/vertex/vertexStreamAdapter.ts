@@ -94,6 +94,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
     ContextItemTag.SYSTEM_HUMANIZER_RULES,
     ContextItemTag.SYSTEM_PERSONA_PROMPT,
     ContextItemTag.SYSTEM_PERSONALITY,
+    ContextItemTag.SYSTEM_PUBLIC_PERSONA_ATTRIBUTES,
     ContextItemTag.KNOWLEDGE_SERVER_INFO,
     ContextItemTag.KNOWLEDGE_SERVER_EMOJIS,
     ContextItemTag.KNOWLEDGE_SERVER_STICKERS,

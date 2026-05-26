@@ -618,6 +618,24 @@ export class ServerRepository implements IRepository<ServerExportShape> {
           RETURNING *
         `;
 
+        await tx`
+          INSERT INTO persona_attributes (persona_id, attribute_order, attribute_text, is_public)
+          SELECT
+            ${tomori.persona_id},
+            attr.ord::INT,
+            attr.attribute_text,
+            COALESCE(pp.preset_attribute_public_flags[attr.ord::INT], false)
+          FROM persona_presets pp
+          CROSS JOIN LATERAL unnest(COALESCE(pp.preset_attribute_list, ARRAY[]::TEXT[]))
+            WITH ORDINALITY AS attr(attribute_text, ord)
+          WHERE pp.persona_preset_id = ${validConfig.presetId}
+          ON CONFLICT (persona_id, attribute_order) DO UPDATE
+          SET
+            attribute_text = EXCLUDED.attribute_text,
+            is_public = EXCLUDED.is_public,
+            updated_at = NOW()
+        `;
+
         // Format trigger words as PostgreSQL array
         const triggerWordsArrayLiteral = `{${defaultTriggers.map((t) => `"${t.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
 
@@ -689,6 +707,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
               'preset_language', preset_language,
               'preset_avatar_path', preset_avatar_path,
               'attribute_list', to_jsonb(COALESCE(preset_attribute_list, ARRAY[]::TEXT[])),
+              'attribute_public_flags', to_jsonb(COALESCE(preset_attribute_public_flags, ARRAY[]::BOOLEAN[])),
               'sample_dialogues_in', to_jsonb(COALESCE(preset_sample_dialogues_in, ARRAY[]::TEXT[])),
               'sample_dialogues_out', to_jsonb(COALESCE(preset_sample_dialogues_out, ARRAY[]::TEXT[])),
               'trigger_words', to_jsonb(COALESCE(preset_trigger_words, ARRAY[]::TEXT[])),

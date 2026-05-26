@@ -240,10 +240,15 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     return { lockedTurn, turns: [] };
   }
 
+  const triggeredPersonaIds =
+    incoming.triggeredPersonaIds ??
+    personasToRespond.map((persona) => persona.persona_id).filter((personaId): personaId is number => !!personaId);
+
   const lockEntry = channelLocks.get(lockedTurn.channelId);
   if (lockEntry) {
     setActiveChannelTurnState(lockEntry, {
       activePersonaId: personasToRespond[0]?.persona_id ?? undefined,
+      triggeredPersonaIds,
       followUpEligible: personasToRespond[0]?.persona_id !== undefined,
       isUserImpersonation: incoming.isUserImpersonation,
       impersonatedUserId: incoming.impersonatedUserId,
@@ -262,6 +267,7 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
       lockEntry,
       message,
       personasToRespond,
+      triggeredPersonaIds,
       forceReason: incoming.forceReason,
       reasoningQuery: incoming.reasoningQuery,
       llmOverrideCodename: incoming.llmOverrideCodename,
@@ -328,6 +334,7 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     forcedMentions: incoming.forcedMentions,
     isUserImpersonation: incoming.isUserImpersonation,
     impersonatedUserId: incoming.impersonatedUserId,
+    triggeredPersonaIds,
   }));
 
   log.info(

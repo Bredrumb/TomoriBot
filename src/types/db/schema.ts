@@ -99,6 +99,17 @@ export const tomoriSchema = z.object({
 });
 export type TomoriRow = z.infer<typeof tomoriSchema>;
 
+export const personaAttributeSchema = z.object({
+  attribute_id: z.number().optional(),
+  persona_id: z.number().int(),
+  attribute_order: z.number().int().min(1),
+  attribute_text: z.string(),
+  is_public: z.boolean().default(false),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type PersonaAttributeRow = z.infer<typeof personaAttributeSchema>;
+
 /**
  * Runtime autochat counters for a persona (Phase 6 Step #16B).
  * Separated from personas so identity rows are not mutated on every message tick.
@@ -807,6 +818,7 @@ export const tomoriPresetSchema = z.object({
     }, z.number().int().nonnegative().nullable())
     .optional(),
   preset_attribute_list: z.array(z.string()).default([]),
+  preset_attribute_public_flags: z.array(z.boolean()).default([]),
   preset_sample_dialogues_in: z.array(z.string()).default([]),
   preset_sample_dialogues_out: z.array(z.string()).default([]),
   preset_language: z.string(),
@@ -1321,6 +1333,7 @@ export type TomoriState = TomoriRow & {
   llm: LlmRow; // Added LLM information
   trigger_words: string[]; // Persona-scoped trigger words from persona_configs
   persona_prompt: string | null; // Optional persona-specific prompt appended after system prompt
+  persona_attributes: PersonaAttributeRow[]; // Ordered persona attributes with public/private visibility
   reward_conditioning_enabled: boolean; // Persona-scoped reward conditioning injection toggle
   punish_conditioning_enabled: boolean; // Persona-scoped punish conditioning injection toggle
   server_memories: string[]; // Changed to string array to match implementation
@@ -1343,6 +1356,7 @@ export const tomoriStateSchema = tomoriSchema.extend({
   llm: llmSchema, // Added LLM schema validation
   trigger_words: z.array(z.string()).default([]),
   persona_prompt: z.string().nullable().default(null),
+  persona_attributes: z.array(personaAttributeSchema).default([]),
   reward_conditioning_enabled: z.boolean().default(true),
   punish_conditioning_enabled: z.boolean().default(true),
   server_memories: z.array(z.string()).default([]), // Changed to array of strings

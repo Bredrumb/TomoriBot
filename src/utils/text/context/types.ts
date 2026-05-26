@@ -54,6 +54,11 @@ export interface BuildContextParams {
   emojiStrings?: string[];
   tomoriNickname: string;
   tomoriAttributes: string[];
+  publicPersonaAttributes?: Array<{
+    personaId: number;
+    personaName: string;
+    attributes: string[];
+  }>;
   tomoriConfig: AssembledServerConfig;
   personaPrompt?: string | null;
   personaLineageId?: number;

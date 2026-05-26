@@ -862,6 +862,7 @@ SELECT
   persona_preset_name,
   persona_preset_desc,
   preset_attribute_list,
+  preset_attribute_public_flags,
   preset_sample_dialogues_in,
   preset_sample_dialogues_out,
   preset_language,
@@ -1478,6 +1479,26 @@ ON CONFLICT (persona_preset_name) DO UPDATE SET
   preset_lineage_id = EXCLUDED.preset_lineage_id,
   updated_at = CURRENT_TIMESTAMP;
 
+WITH official_attribute_flags AS (
+  SELECT
+    pp.persona_preset_id,
+    ARRAY(
+      SELECT (attr.ord = 1)
+      FROM unnest(COALESCE(pp.preset_attribute_list, ARRAY[]::TEXT[]))
+        WITH ORDINALITY AS attr(attribute_text, ord)
+      ORDER BY attr.ord
+    )::BOOLEAN[] AS public_flags
+  FROM persona_presets pp
+  WHERE pp.preset_lineage_id IN (4, 716, 1770, 3585, 50)
+)
+UPDATE persona_presets pp
+SET
+  preset_attribute_public_flags = official_attribute_flags.public_flags,
+  updated_at = CURRENT_TIMESTAMP
+FROM official_attribute_flags
+WHERE pp.persona_preset_id = official_attribute_flags.persona_preset_id
+  AND pp.preset_attribute_public_flags IS DISTINCT FROM official_attribute_flags.public_flags;
+
 -- Bootstrap official preset sync state for existing personas whose lineage or
 -- current content matches a seeded preset. The baseline is the current seed row;
 -- field-level sync below preserves server edits/removals because they no longer
@@ -1492,6 +1513,7 @@ WITH preset_sync_candidates AS (
       'preset_language', COALESCE(old_pp.preset_language, pp.preset_language),
       'preset_avatar_path', COALESCE(old_pp.preset_avatar_path, pp.preset_avatar_path),
       'attribute_list', to_jsonb(COALESCE(old_pp.preset_attribute_list, pp.preset_attribute_list, ARRAY[]::TEXT[])),
+      'attribute_public_flags', to_jsonb(COALESCE(old_pp.preset_attribute_public_flags, pp.preset_attribute_public_flags, ARRAY[]::BOOLEAN[])),
       'sample_dialogues_in', to_jsonb(COALESCE(old_pp.preset_sample_dialogues_in, pp.preset_sample_dialogues_in, ARRAY[]::TEXT[])),
       'sample_dialogues_out', to_jsonb(COALESCE(old_pp.preset_sample_dialogues_out, pp.preset_sample_dialogues_out, ARRAY[]::TEXT[])),
       'trigger_words', to_jsonb(COALESCE(old_pp.preset_trigger_words, pp.preset_trigger_words, ARRAY[]::TEXT[])),
@@ -1615,6 +1637,14 @@ WITH preset_sync_targets AS (
     ps.preset_language,
     ps.base_snapshot,
     p.attribute_list AS current_attribute_list,
+    COALESCE(
+      (
+        SELECT array_agg(pa.is_public ORDER BY pa.attribute_order)
+        FROM persona_attributes pa
+        WHERE pa.persona_id = ps.persona_id
+      ),
+      ARRAY[]::BOOLEAN[]
+    ) AS current_attribute_public_flags,
     p.sample_dialogues_in AS current_sample_dialogues_in,
     p.sample_dialogues_out AS current_sample_dialogues_out,
     COALESCE(pc.trigger_words, ARRAY[]::TEXT[]) AS current_trigger_words,
@@ -1622,6 +1652,7 @@ WITH preset_sync_targets AS (
     pp.persona_preset_name,
     pp.preset_avatar_path,
     pp.preset_attribute_list AS new_attribute_list,
+    pp.preset_attribute_public_flags AS new_attribute_public_flags,
     pp.preset_sample_dialogues_in AS new_sample_dialogues_in,
     pp.preset_sample_dialogues_out AS new_sample_dialogues_out,
     pp.preset_trigger_words AS new_trigger_words,
@@ -1670,6 +1701,36 @@ preset_sync_merged AS (
     END AS merged_attribute_list,
     CASE
       WHEN persona_preset_array_starts_with(
+          current_attribute_list,
+          persona_preset_snapshot_text_array(base_snapshot, 'attribute_list')
+        )
+        THEN persona_preset_rebase_bool_array(
+          current_attribute_public_flags,
+          current_attribute_list,
+          persona_preset_snapshot_text_array(base_snapshot, 'attribute_list'),
+          new_attribute_public_flags
+        )
+      WHEN current_persona_prompt IS NOT DISTINCT FROM (base_snapshot ->> 'persona_prompt')
+        AND persona_preset_array_starts_with(
+          current_attribute_list,
+          array_prepend(
+            '{bot}''s Description: ' || (base_snapshot ->> 'persona_prompt'),
+            persona_preset_snapshot_text_array(base_snapshot, 'attribute_list')
+          )
+        )
+        THEN persona_preset_rebase_bool_array(
+          current_attribute_public_flags,
+          current_attribute_list,
+          array_prepend(
+            '{bot}''s Description: ' || (base_snapshot ->> 'persona_prompt'),
+            persona_preset_snapshot_text_array(base_snapshot, 'attribute_list')
+          ),
+          new_attribute_public_flags
+        )
+      ELSE current_attribute_public_flags
+    END AS merged_attribute_public_flags,
+    CASE
+      WHEN persona_preset_array_starts_with(
           current_sample_dialogues_in,
           persona_preset_snapshot_text_array(base_snapshot, 'sample_dialogues_in')
         )
@@ -1715,6 +1776,7 @@ preset_sync_merged AS (
       'preset_language', preset_language,
       'preset_avatar_path', preset_avatar_path,
       'attribute_list', to_jsonb(COALESCE(new_attribute_list, ARRAY[]::TEXT[])),
+      'attribute_public_flags', to_jsonb(COALESCE(new_attribute_public_flags, ARRAY[]::BOOLEAN[])),
       'sample_dialogues_in', to_jsonb(COALESCE(new_sample_dialogues_in, ARRAY[]::TEXT[])),
       'sample_dialogues_out', to_jsonb(COALESCE(new_sample_dialogues_out, ARRAY[]::TEXT[])),
       'trigger_words', to_jsonb(COALESCE(new_trigger_words, ARRAY[]::TEXT[])),
@@ -1737,6 +1799,30 @@ updated_personas AS (
       OR p.sample_dialogues_out IS DISTINCT FROM m.merged_sample_dialogues_out
     )
   RETURNING p.persona_id
+),
+upserted_persona_attributes AS (
+  INSERT INTO persona_attributes (persona_id, attribute_order, attribute_text, is_public)
+  SELECT
+    m.persona_id,
+    attr.ord::INT,
+    attr.attribute_text,
+    COALESCE(m.merged_attribute_public_flags[attr.ord::INT], false)
+  FROM preset_sync_merged m
+  CROSS JOIN LATERAL unnest(COALESCE(m.merged_attribute_list, ARRAY[]::TEXT[]))
+    WITH ORDINALITY AS attr(attribute_text, ord)
+  ON CONFLICT (persona_id, attribute_order) DO UPDATE
+  SET
+    attribute_text = EXCLUDED.attribute_text,
+    is_public = EXCLUDED.is_public,
+    updated_at = CURRENT_TIMESTAMP
+  RETURNING persona_id
+),
+deleted_stale_persona_attributes AS (
+  DELETE FROM persona_attributes pa
+  USING preset_sync_merged m
+  WHERE pa.persona_id = m.persona_id
+    AND pa.attribute_order > COALESCE(array_length(m.merged_attribute_list, 1), 0)
+  RETURNING pa.persona_id
 ),
 updated_persona_configs AS (
   INSERT INTO persona_configs (persona_id, trigger_words, persona_prompt)

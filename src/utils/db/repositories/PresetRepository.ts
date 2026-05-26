@@ -15,6 +15,7 @@ import {
   PRESET_EXPORT_VERSION,
   PRESET_MAX_ATTRIBUTES,
   UNPAIRED_SAMPLE_DIALOGUE_SENTINEL,
+  buildPrivateAttributePublicFlags,
   presetExportSchema,
   presetExportDataSchema,
   type PresetExport,
@@ -29,6 +30,7 @@ import { validatePersonaConfigFields } from "@/utils/db/sqlSecurity";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import type { SillyTavernCardMetadata } from "@/utils/image/pngMetadata";
 import { dedupeTriggerWords, normalizeTriggerWord, stripSurroundingTriggerQuotes } from "@/utils/text/triggerWords";
+import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
 
 // ── SillyTavern conversion private types ──────────────────────────────────────
 
@@ -737,6 +739,19 @@ export class PresetRepository {
         personaPrompt = personaConfigRows[0].persona_prompt ?? null;
       }
 
+      const attributeRows = await sql<Array<{ attribute_text: string; is_public: boolean }>>`
+        SELECT attribute_text, is_public
+        FROM persona_attributes
+        WHERE persona_id = ${presetData.persona_id}
+        ORDER BY attribute_order
+      `;
+      const exportedAttributes =
+        attributeRows.length > 0
+          ? attributeRows.map((row) => row.attribute_text)
+          : ((presetData.attribute_list as string[] | undefined) ?? []);
+      const exportedPublicFlags =
+        attributeRows.length > 0 ? attributeRows.map((row) => row.is_public) : exportedAttributes.map(() => false);
+
       // 4. Build export object with metadata (includes NovelAI persona fields)
       const exportData: PresetExport = {
         version: PRESET_EXPORT_VERSION,
@@ -744,7 +759,8 @@ export class PresetRepository {
         exported_at: new Date().toISOString(),
         data: {
           tomori_nickname: presetData.persona_nickname,
-          attribute_list: presetData.attribute_list || [],
+          attribute_list: exportedAttributes,
+          attribute_public_flags: exportedPublicFlags,
           sample_dialogues_in: presetData.sample_dialogues_in || [],
           sample_dialogues_out: presetData.sample_dialogues_out || [],
           trigger_words: triggerWords || [],
@@ -901,6 +917,15 @@ export class PresetRepository {
         throw error;
       }
 
+      const attributesUpdated = await personaRepository.replaceAttributes(
+        mainTomoriId,
+        validatedImportData.attribute_list,
+        validatedImportData.attribute_public_flags,
+      );
+      if (!attributesUpdated) {
+        return { success: false, error: "commands.persona.import.error_import_failed" };
+      }
+
       // 7. Update persona-scoped trigger words + optional persona prompt
       const importedPersonaPrompt =
         typeof validatedImportData.persona_prompt === "string" ? validatedImportData.persona_prompt : null;
@@ -951,7 +976,13 @@ export class PresetRepository {
     const normalizedData: PresetExportData = {
       ...validated.data,
       trigger_words: dedupeTriggerWords(validated.data.trigger_words, { lowercase: false }),
+      attribute_public_flags:
+        validated.data.attribute_public_flags ?? buildPrivateAttributePublicFlags(validated.data.attribute_list),
     };
+
+    if (normalizedData.attribute_public_flags?.length !== normalizedData.attribute_list.length) {
+      return { valid: false, error: "commands.persona.import.error_attribute_flags_mismatch" };
+    }
 
     if (normalizedData.sample_dialogues_in.length !== normalizedData.sample_dialogues_out.length) {
       return { valid: false, error: "commands.persona.import.error_dialogue_mismatch" };

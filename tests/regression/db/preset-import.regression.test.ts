@@ -26,6 +26,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Preset import - regression", () => {
     const presetData: PresetExportData = {
       tomori_nickname: "_rt_imported_persona",
       attribute_list: ["_rt_import_attr"],
+      attribute_public_flags: [true],
       sample_dialogues_in: ["_rt_user_line"],
       sample_dialogues_out: ["_rt_persona_line"],
       trigger_words: ['"_rt_legacy_trigger"', "`_rt_legacy_trigger`", "_rt_second_legacy_trigger"],
@@ -53,5 +54,20 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Preset import - regression", () => {
 
     expect(personaConfig?.trigger_words).toEqual(["_rt_legacy_trigger", "_rt_second_legacy_trigger"]);
     expect(personaConfig?.persona_prompt).toBe("_rt_persona_prompt");
+
+    const attributeRows = await testSql<Array<{ attribute_text: string; is_public: boolean }>>`
+      SELECT attribute_text, is_public
+      FROM persona_attributes
+      WHERE persona_id = ${refs.personaId}
+      ORDER BY attribute_order
+    `;
+
+    expect(attributeRows).toEqual([{ attribute_text: "_rt_import_attr", is_public: true }]);
+
+    const exportResult = await presetRepository.exportPresetData(FIXTURE_IDS.serverDiscId);
+    expect(exportResult.success).toBe(true);
+    if (exportResult.success) {
+      expect(exportResult.data.data.attribute_public_flags).toEqual([true]);
+    }
   });
 });

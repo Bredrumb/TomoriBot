@@ -45,6 +45,7 @@ export interface TomoriChatInput {
   reminderRecipientID?: string;
   reminderData?: ChatReminderData;
   selectedPersonaId?: number;
+  triggeredPersonaIds?: number[];
   isPersonaJob?: boolean;
   isUserImpersonation?: boolean;
   impersonatedUserId?: string;
@@ -76,6 +77,7 @@ export interface ChatIncoming {
   reminderRecipientID?: string;
   reminderData?: ChatReminderData;
   selectedPersonaId?: number;
+  triggeredPersonaIds?: number[];
   isPersonaJob: boolean;
   isUserImpersonation: boolean;
   impersonatedUserId?: string;
@@ -172,6 +174,7 @@ export interface ChatTurn {
   forcedMentions?: ForcedMention[];
   isUserImpersonation: boolean;
   impersonatedUserId?: string;
+  triggeredPersonaIds: number[];
 }
 
 export interface ChatTurnContext {

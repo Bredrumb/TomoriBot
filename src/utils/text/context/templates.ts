@@ -96,6 +96,11 @@ export async function buildPromptContextItems(params: {
   guildId: string;
   botName: string;
   tomoriAttributes: string[];
+  publicPersonaAttributes?: Array<{
+    personaId: number;
+    personaName: string;
+    attributes: string[];
+  }>;
   tomoriConfig: AssembledServerConfig;
   personaPrompt?: string | null;
   isUserImpersonation: boolean;
@@ -191,6 +196,46 @@ export async function buildPromptContextItems(params: {
       ],
       metadataTag: ContextItemTag.SYSTEM_PERSONALITY,
     });
+
+    const publicAttributeSections: string[] = [];
+    for (const publicPersona of params.publicPersonaAttributes ?? []) {
+      const convertedAttributes: string[] = [];
+      for (const attribute of publicPersona.attributes) {
+        const trimmedAttribute = attribute.trim();
+        if (!trimmedAttribute) continue;
+
+        convertedAttributes.push(
+          await params.convertMentions(
+            await params.toolPromptMacroResolver.expand(trimmedAttribute),
+            params.client,
+            params.guildId,
+            "User",
+            publicPersona.personaName,
+            params.tomoriConfig.personal_memories_enabled,
+            params.snapshot,
+          ),
+        );
+      }
+
+      if (convertedAttributes.length > 0) {
+        publicAttributeSections.push(
+          `${publicPersona.personaName}:\n${convertedAttributes.map((line) => `- ${line}`).join("\n")}`,
+        );
+      }
+    }
+
+    if (publicAttributeSections.length > 0) {
+      contextItems.push({
+        role: "system",
+        parts: [
+          {
+            type: "text",
+            text: `Other triggered personas' public attributes:\n${publicAttributeSections.join("\n\n")}`,
+          },
+        ],
+        metadataTag: ContextItemTag.SYSTEM_PUBLIC_PERSONA_ATTRIBUTES,
+      });
+    }
   }
 
   return contextItems;

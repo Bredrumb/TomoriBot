@@ -20,6 +20,7 @@ const MODAL_CUSTOM_ID = "teach_attribute_add_modal";
 const PERSONA_SELECT_ID = "persona_select";
 const ATTRIBUTE_INPUT_ID = "attribute_input";
 const ATTRIBUTE_FILE_UPLOAD_ID = "attribute_file_upload";
+const ATTRIBUTE_PUBLIC_ID = "attribute_public";
 
 // Rule 21: Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
@@ -152,6 +153,13 @@ export async function execute(
           maxValues: 1,
           required: false,
         },
+        {
+          kind: "checkbox",
+          customId: ATTRIBUTE_PUBLIC_ID,
+          labelKey: "commands.teach.attribute.public_checkbox_label",
+          descriptionKey: "commands.teach.attribute.public_checkbox_description",
+          default: false,
+        },
       ],
     });
 
@@ -180,6 +188,7 @@ export async function execute(
     }
 
     const typedAttribute = modalResult.values?.[ATTRIBUTE_INPUT_ID]?.trim() ?? "";
+    const isPublicAttribute = modalResult.values?.[ATTRIBUTE_PUBLIC_ID] === "true";
     const uploadedTextFile = modalResult.attachments?.[ATTRIBUTE_FILE_UPLOAD_ID];
     const pendingAttributes: string[] = [];
 
@@ -290,7 +299,7 @@ export async function execute(
     }
 
     // 14. Update target persona row in the database
-    const ok = await personaRepository.addAttributes(selectedPersona.persona_id, attributesToAdd);
+    const ok = await personaRepository.addAttributes(selectedPersona.persona_id, attributesToAdd, isPublicAttribute);
 
     if (!ok) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -318,9 +327,21 @@ export async function execute(
         attributesToAdd.length > 1 || uploadedTextFile
           ? {
               added_count: attributesToAdd.length.toString(),
+              visibility: localizer(
+                locale,
+                isPublicAttribute
+                  ? "commands.teach.attribute.visibility_public"
+                  : "commands.teach.attribute.visibility_private",
+              ),
             }
           : {
               attribute: attributesToAdd[0],
+              visibility: localizer(
+                locale,
+                isPublicAttribute
+                  ? "commands.teach.attribute.visibility_public"
+                  : "commands.teach.attribute.visibility_private",
+              ),
             },
       color: ColorCode.SUCCESS,
     });

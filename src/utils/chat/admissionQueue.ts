@@ -215,6 +215,7 @@ async function evaluateLockedChannelAdmission(args: {
       reasoningQuery: incoming.reasoningQuery,
       llmOverrideCodename: incoming.llmOverrideCodename,
       selectedPersonaId: incoming.selectedPersonaId,
+      triggeredPersonaIds: incoming.triggeredPersonaIds,
       isPersonaJob: incoming.isPersonaJob,
       isUserImpersonation: incoming.isUserImpersonation || undefined,
       impersonatedUserId: incoming.impersonatedUserId,

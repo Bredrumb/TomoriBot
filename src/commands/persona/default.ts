@@ -328,20 +328,24 @@ export async function execute(
       // 11a. Update main persona and trigger words
       const personaUpdatePayload: Partial<TomoriRow> = {
         persona_nickname: resolvedPersonaName,
-        attribute_list: selectedPreset.preset_attribute_list,
         sample_dialogues_in: selectedPreset.preset_sample_dialogues_in,
         sample_dialogues_out: selectedPreset.preset_sample_dialogues_out,
       };
       if (shouldUseResolvedLineageId && resolvedLineageId !== null) {
         personaUpdatePayload.persona_lineage_id = resolvedLineageId;
       }
-      const [updatedTomoriResult, personaConfigUpdated] = await Promise.all([
+      const [updatedTomoriResult, attributesUpdated, personaConfigUpdated] = await Promise.all([
         personaRepository.update(targetPersonaId, personaUpdatePayload),
+        personaRepository.replaceAttributes(
+          targetPersonaId,
+          selectedPreset.preset_attribute_list,
+          selectedPreset.preset_attribute_public_flags,
+        ),
         personaRepository.setPersonaConfig(targetPersonaId, presetTriggerWords, presetPersonaPrompt),
       ]);
 
       // 11b. Validate the result
-      if (!updatedTomoriResult || !personaConfigUpdated) {
+      if (!updatedTomoriResult || !attributesUpdated || !personaConfigUpdated) {
         const context: ErrorContext = {
           userId: userData.user_id,
           serverId: tomoriState.server_id,
@@ -359,7 +363,9 @@ export async function execute(
           new Error(
             !updatedTomoriResult
               ? "PersonaRepository.update returned null"
-              : "PersonaRepository.setPersonaConfig returned false",
+              : !attributesUpdated
+                ? "PersonaRepository.replaceAttributes returned false"
+                : "PersonaRepository.setPersonaConfig returned false",
           ),
           context,
         );
@@ -588,6 +594,7 @@ export async function execute(
       serverId: tomoriState.server_id,
       nickname: resolvedAlterName,
       attributes: selectedPreset.preset_attribute_list,
+      attributePublicFlags: selectedPreset.preset_attribute_public_flags,
       sampleDialoguesIn: selectedPreset.preset_sample_dialogues_in,
       sampleDialoguesOut: selectedPreset.preset_sample_dialogues_out,
       personaLineageId: shouldUseResolvedLineageId ? resolvedLineageId : null,

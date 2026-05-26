@@ -30,6 +30,7 @@ const EDIT_MODAL_CUSTOM_ID = "persona_attribute_edit_value_modal";
 const ATTRIBUTE_SELECT_ID = "attribute_select";
 const ATTRIBUTE_PART1_ID = "attribute_part1";
 const ATTRIBUTE_PART2_ID = "attribute_part2";
+const ATTRIBUTE_PUBLIC_ID = "attribute_public";
 const ATTRIBUTE_PART_MAX_LENGTH = 4000; // Discord text input character limit
 
 const memoryLimits = getMemoryLimits();
@@ -42,6 +43,7 @@ async function performAttributeEdit(
   selectedPersona: TomoriState,
   selectedIndex: number,
   newAttribute: string,
+  isPublic: boolean,
   userData: UserRow,
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
   locale: string,
@@ -58,7 +60,7 @@ async function performAttributeEdit(
   }
 
   const pgIndex = selectedIndex + 1;
-  const updated = await personaRepository.editAttributeAt(selectedPersona.persona_id, pgIndex, newAttribute);
+  const updated = await personaRepository.editAttributeAt(selectedPersona.persona_id, pgIndex, newAttribute, isPublic);
 
   if (!updated) {
     const context: ErrorContext = {
@@ -96,6 +98,10 @@ async function performAttributeEdit(
       descriptionKey: "commands.persona.attribute.edit.success_description",
       descriptionVars: {
         attribute: formatAttributePreview(newAttribute, 96),
+        visibility: localizer(
+          locale,
+          isPublic ? "commands.teach.attribute.visibility_public" : "commands.teach.attribute.visibility_private",
+        ),
       },
       color: ColorCode.SUCCESS,
     });
@@ -262,6 +268,9 @@ export async function execute(
 
       const selectedIndex = Number.parseInt(selectedIndexRaw, 10);
       const selectedAttribute = currentAttributes[selectedIndex];
+      const selectedAttributeIsPublic =
+        selectedPersona.persona_attributes?.find((attribute) => attribute.attribute_order === selectedIndex + 1)
+          ?.is_public ?? false;
       if (!selectedAttribute) {
         await replyInfoEmbed(selectModalInteraction, locale, {
           titleKey: "general.errors.operation_failed_title",
@@ -325,6 +334,13 @@ export async function execute(
             maxLength: ATTRIBUTE_PART_MAX_LENGTH,
             value: attributeParts[1] || undefined,
           },
+          {
+            kind: "checkbox",
+            customId: ATTRIBUTE_PUBLIC_ID,
+            labelKey: "commands.persona.attribute.edit.public_checkbox_label",
+            descriptionKey: "commands.persona.attribute.edit.public_checkbox_description",
+            default: selectedAttributeIsPublic,
+          },
         ],
       });
 
@@ -344,6 +360,7 @@ export async function execute(
       const editedPart1 = editModalResult.values?.[ATTRIBUTE_PART1_ID]?.trim() ?? "";
       const editedPart2 = editModalResult.values?.[ATTRIBUTE_PART2_ID]?.trim() ?? "";
       const editedAttribute = combineModalPromptParts([editedPart1, editedPart2], ATTRIBUTE_PART_MAX_LENGTH);
+      const editedIsPublic = editModalResult.values?.[ATTRIBUTE_PUBLIC_ID] === "true";
       if (!editModalInteraction) {
         log.error("Attribute edit modal unexpectedly missing interaction");
         return;
@@ -363,7 +380,7 @@ export async function execute(
         continue;
       }
 
-      if (editedAttribute === selectedAttribute.trim()) {
+      if (editedAttribute === selectedAttribute.trim() && editedIsPublic === selectedAttributeIsPublic) {
         await replyInfoEmbed(editModalInteraction, locale, {
           titleKey: "commands.persona.attribute.edit.no_changes_title",
           descriptionKey: "commands.persona.attribute.edit.no_changes_description",
@@ -392,6 +409,7 @@ export async function execute(
         selectedPersona,
         selectedIndex,
         editedAttribute,
+        editedIsPublic,
         userData,
         editModalInteraction,
         locale,
@@ -410,6 +428,12 @@ export async function execute(
         ColorCode.SUCCESS,
         {
           attribute: formatAttributePreview(editedAttribute, 96),
+          visibility: localizer(
+            locale,
+            editedIsPublic
+              ? "commands.teach.attribute.visibility_public"
+              : "commands.teach.attribute.visibility_private",
+          ),
         },
         "general.pagination.reloading_persona_picker",
       );

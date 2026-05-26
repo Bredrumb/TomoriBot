@@ -154,6 +154,50 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
     expect(row.sample_dialogues_out).toEqual(["_rt_added_out"]);
   });
 
+  it("attribute helpers keep persona_attributes and attribute_list mirrored", async () => {
+    try {
+      expect(
+        await personaRepository.replaceAttributes(refs.personaId, ["_rt_private", "_rt_public"], [false, true]),
+      ).toBe(true);
+
+      let personas = await personaRepository.loadAllForServer(FIXTURE_IDS.serverDiscId);
+      let persona = personas.find((item) => item.persona_id === refs.personaId);
+      expect(persona?.attribute_list).toEqual(["_rt_private", "_rt_public"]);
+      expect(persona?.persona_attributes.map((attribute) => attribute.is_public)).toEqual([false, true]);
+
+      expect(await personaRepository.addAttributes(refs.personaId, ["_rt_added_public"], true)).toBe(true);
+      expect(await personaRepository.editAttributeAt(refs.personaId, 1, "_rt_private_edited", true)).toBe(true);
+      expect(await personaRepository.removeAttributeAt(refs.personaId, 2)).toBe(true);
+
+      personas = await personaRepository.loadAllForServer(FIXTURE_IDS.serverDiscId);
+      persona = personas.find((item) => item.persona_id === refs.personaId);
+      expect(persona?.attribute_list).toEqual(["_rt_private_edited", "_rt_added_public"]);
+      expect(persona?.persona_attributes.map((attribute) => attribute.is_public)).toEqual([true, true]);
+
+      const [mirrorRow] = await testSql<Array<{ attribute_list: string[] }>>`
+        SELECT attribute_list
+        FROM personas
+        WHERE persona_id = ${refs.personaId}
+      `;
+      expect(mirrorRow.attribute_list).toEqual(["_rt_private_edited", "_rt_added_public"]);
+    } finally {
+      await personaRepository.replaceAttributes(refs.personaId, []);
+    }
+  });
+
+  it("preset public-flag rebase preserves locally appended tail flags", async () => {
+    const [row] = await testSql<Array<{ flags: boolean[] }>>`
+      SELECT persona_preset_rebase_bool_array(
+        ARRAY[false, true, true]::BOOLEAN[],
+        ARRAY['_rt_old_base', '_rt_local_public', '_rt_local_public_2']::TEXT[],
+        ARRAY['_rt_old_base']::TEXT[],
+        ARRAY[true, false]::BOOLEAN[]
+      ) AS flags
+    `;
+
+    expect(row.flags).toEqual([true, false, true, true]);
+  });
+
   // ── loadPersonaConfigRow ─────────────────────────────────────────────────
 
   it("loadPersonaConfigRow returns the fixture persona_config row", async () => {
