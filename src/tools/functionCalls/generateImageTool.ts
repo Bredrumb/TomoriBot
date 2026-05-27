@@ -71,7 +71,7 @@ export class GenerateImageTool extends BaseTool {
       clothing_segment_categories: {
         type: "array",
         description:
-          "Optional for ComfyUI inpainting when mask_prompt is clothing-related: exact ComfyUI-RMBG ClothesSegment categories to mask. Use this when the user names a specific clothing part. For partially visible dresses, use ['Upper-clothes'] because the RMBG Dress class is temporarily disabled. Examples: ['Upper-clothes'] for a dress/shirt/top/hoodie/jacket, ['Pants'] for pants/shorts, ['Skirt'] for a skirt, ['Scarf'] for a scarf, or multiple categories for a full outfit. Omit for non-clothing masks.",
+          "Optional for ComfyUI inpainting when mask_prompt is clothing-related: exact ComfyUI-RMBG ClothesSegment categories to mask. Use this when the user names a specific clothing part. For dresses, include ['Dress', 'Upper-clothes', 'Skirt'] so the parser can catch both bodice and skirt regions. Examples: ['Upper-clothes'] for a shirt/top/hoodie/jacket, ['Pants'] for pants/shorts, ['Skirt'] for a skirt, ['Scarf'] for a scarf, or multiple categories for a full outfit. Omit for non-clothing masks.",
         items: {
           type: "string",
           enum: [
@@ -79,6 +79,7 @@ export class GenerateImageTool extends BaseTool {
             "Sunglasses",
             "Upper-clothes",
             "Skirt",
+            "Dress",
             "Belt",
             "Pants",
             "Bag",
@@ -87,6 +88,11 @@ export class GenerateImageTool extends BaseTool {
             "Right-shoe",
           ],
         },
+      },
+      clothing_mode: {
+        type: "boolean",
+        description:
+          "Optional for ComfyUI inpainting: set true when the edit target is clothing, a worn accessory, or a fashion item so the workflow uses the clothing parser instead of generic object detection. Good targets include shirts, skirts, pants, shoes, hats, glasses, scarves, bags, belts, outfits, jewelry, and paired accessories. Use clothing_segment_categories too when an exact ClothesSegment category exists. Omit or set false for hair, face, skin, background, props, and non-worn objects.",
       },
       mask_threshold: {
         type: "number",
@@ -147,6 +153,26 @@ export class GenerateImageTool extends BaseTool {
         description:
           "Optional preset for how much canvas to reveal during outpainting. Use 'slight' when the user asks to zoom out a little or only wants a modest amount of extra context. Use 'moderate' for a clear wider pullback. Use 'large' for a fuller view, full outfit, visible legs, lower body, or head-to-toe requests. Use 'dramatic' only for a very far zoom-out or huge expansion. Do not pair slight/moderate amounts with full-body promises; ask for more of the outfit/body/environment as space allows instead.",
         enum: ["slight", "moderate", "large", "dramatic"],
+      },
+      outpaint_left_prompt: {
+        type: "string",
+        description:
+          "Optional for outpainting left: describe what should continue beyond the left edge. Use when extending left/all and the left side needs specific edge context. Describe edge continuation, not a whole new image.",
+      },
+      outpaint_right_prompt: {
+        type: "string",
+        description:
+          "Optional for outpainting right: describe what should continue beyond the right edge. Use when extending right/all and the right side needs specific edge context. Describe edge continuation, not a whole new image.",
+      },
+      outpaint_top_prompt: {
+        type: "string",
+        description:
+          "Optional for outpainting upward: describe what should continue above the image, such as sky, ceiling, headroom, or top-edge environment. Use when extending up/all.",
+      },
+      outpaint_bottom_prompt: {
+        type: "string",
+        description:
+          "Optional for outpainting downward: describe what should continue below the image, such as ground, floor, lower body, or objects touching the bottom edge. Use when extending down/all; do not promise a full body unless the requested outpaint amount leaves enough room.",
       },
       extend_direction: {
         type: "string",
@@ -325,6 +351,23 @@ export class GenerateImageTool extends BaseTool {
     return Math.min(max, Math.max(min, parsed));
   }
 
+  private parseOptionalBoolean(value: unknown): boolean | null {
+    if (typeof value === "boolean") {
+      return value;
+    }
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === "true") {
+        return true;
+      }
+      if (normalized === "false") {
+        return false;
+      }
+    }
+
+    return null;
+  }
+
   private resolveMediaId(rawMediaId: string | undefined, context: ToolContext): string | undefined {
     if (!rawMediaId) {
       return undefined;
@@ -391,7 +434,7 @@ export class GenerateImageTool extends BaseTool {
       await thoughtLogChannel.send({
         content: [
           `**Image generation diagnostic:** ${diagnostic.label}`,
-          ...(diagnostic.details ? [`Settings: ${diagnostic.details}`] : []),
+          ...(diagnostic.details ? [`**Settings**\n${diagnostic.details}`] : []),
           `Source: ${sourceLine}`,
           `Prompt: ${promptPreview}`,
         ].join("\n"),
@@ -899,6 +942,7 @@ export class GenerateImageTool extends BaseTool {
     const clothingSegmentCategories = Array.isArray(args.clothing_segment_categories)
       ? args.clothing_segment_categories.filter((category): category is string => typeof category === "string")
       : null;
+    const clothingMode = this.parseOptionalBoolean(args.clothing_mode);
     const cfg = this.parseClampedNumber(args.cfg, 0, 30);
     const denoise = this.parseClampedNumber(args.denoise, 0, 1);
     const maskMode = typeof args.mask_mode === "string" ? args.mask_mode : null;
@@ -914,6 +958,12 @@ export class GenerateImageTool extends BaseTool {
     const extendPixels = this.parseClampedNumber(args.extend_pixels, 0, 512);
     const outpaintOverlap = this.parseClampedNumber(args.outpaint_overlap, 0, 256);
     const outpaintZoomScale = this.parseClampedNumber(args.outpaint_zoom_scale, 0.5, 0.95);
+    const outpaintLeftPrompt = typeof args.outpaint_left_prompt === "string" ? args.outpaint_left_prompt.trim() || null : null;
+    const outpaintRightPrompt =
+      typeof args.outpaint_right_prompt === "string" ? args.outpaint_right_prompt.trim() || null : null;
+    const outpaintTopPrompt = typeof args.outpaint_top_prompt === "string" ? args.outpaint_top_prompt.trim() || null : null;
+    const outpaintBottomPrompt =
+      typeof args.outpaint_bottom_prompt === "string" ? args.outpaint_bottom_prompt.trim() || null : null;
 
     if (rawMediaId && !messageId) {
       return {
@@ -1109,12 +1159,22 @@ export class GenerateImageTool extends BaseTool {
           maskThreshold: inpaint ? maskThreshold : null,
           maskGrow: inpaint ? maskGrow : null,
           maskFeather: inpaint ? maskFeather : null,
+          clothingMode: inpaint ? clothingMode : null,
           clothingSegmentCategories: inpaint ? clothingSegmentCategories : null,
           outpaint: inpaint ? outpaint : null,
           outpaintStrategy: inpaint ? outpaintStrategy : null,
           outpaintAmount: inpaint ? outpaintAmount : null,
           outpaintOverlap: inpaint ? outpaintOverlap : null,
           outpaintZoomScale: inpaint ? outpaintZoomScale : null,
+          outpaintDirectionalPrompts:
+            inpaint && outpaint
+              ? {
+                  left: outpaintLeftPrompt !== null,
+                  right: outpaintRightPrompt !== null,
+                  top: outpaintTopPrompt !== null,
+                  bottom: outpaintBottomPrompt !== null,
+                }
+              : null,
           extendDirection: inpaint ? extendDirection : null,
           extendPixels: inpaint ? extendPixels : null,
           cfg: inpaint ? cfg : null,
@@ -1149,8 +1209,13 @@ export class GenerateImageTool extends BaseTool {
             outpaintAmount,
             outpaintOverlap,
             outpaintZoomScale,
+            outpaintLeftPrompt,
+            outpaintRightPrompt,
+            outpaintTopPrompt,
+            outpaintBottomPrompt,
             inpaintExtendDirection: extendDirection,
             inpaintExtendPixels: extendPixels,
+            clothingMode,
             clothingSegmentCategories,
           });
           generatedImageData = result.imageData;
@@ -1180,8 +1245,13 @@ export class GenerateImageTool extends BaseTool {
               outpaintAmount,
               outpaintOverlap,
               outpaintZoomScale,
+              outpaintLeftPrompt,
+              outpaintRightPrompt,
+              outpaintTopPrompt,
+              outpaintBottomPrompt,
               inpaintExtendDirection: extendDirection,
               inpaintExtendPixels: extendPixels,
+              clothingMode,
               clothingSegmentCategories,
             });
             generatedImageData = retryResult.imageData;
