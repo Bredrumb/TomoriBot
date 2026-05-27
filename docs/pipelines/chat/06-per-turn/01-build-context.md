@@ -77,6 +77,12 @@ After this stage runs:
 - The `messageIdMap` is populated with every message ID the LLM will see.
 - `streamingContext.explicitLongTermMemoryIntent` reflects whether the
   triggering message mentions long-term memory phrasing.
+- `streamingContext.replyNoticeState` is initialized to
+  `{ attempted: false, sent: false }` when `incoming.isFromQueue` is true
+  and the turn's persona is an alter. This is the only place where
+  `replyNoticeState` is set; without it the alter "Replying to…" embed in
+  stage 07 is suppressed (the presence of the object is the enable-switch,
+  not its field values).
 
 ## Extension points
 

@@ -19,13 +19,18 @@ The transformation pipeline runs in this order:
    or `...`) are held in `state.pendingOrphanPunctuation` and prepended to the next non-empty
    segment instead of being sent standalone, preventing jarring single-character messages.
 
-2. **Custom emoji deduplication** (`filterDuplicateCustomEmojis`) — removes duplicate server
-   custom emoji uses within a single segment to prevent the LLM from spamming a single emoji.
+2. **Custom emoji deduplication** (`filterDuplicateCustomEmojis`) — strips any custom emoji
+   shortcode (`:name:`) from the segment if the same emoji was already used in a recent bot
+   message (lookback window controlled by `EMOJI_UNIQUE_LOOKBACK`, default 5). History is stored
+   in converted Discord format (`<:name:id>`), so the filter normalises that form to shortcodes
+   before comparison.
 
 3. **LLM output cleaning** (`cleanLLMOutput`) — strips the bot's own name-prefix if the model
-   writes it (e.g., `"Tomori: hello"` → `"hello"`), enforces emoji usage rules (removes or
-   preserves emoji based on `emojiUsageEnabled`), and optionally uncensors Unicode space
-   characters and sanitizes encoded content.
+   writes it (e.g., `"Tomori: hello"` → `"hello"`), converts `:name:` shortcodes to full Discord
+   custom emoji syntax (`<:name:id>`) using the server emoji list, removes all emoji when
+   `emojiUsageEnabled` is `false`, strips unresolved shortcodes when no emoji list is available
+   (RP channels, cache failures), and optionally uncensors Unicode space characters and sanitizes
+   encoded content.
 
 4. **Guild mention resolution** (`resolveGuildMentions`) — converts name-based handle references
    in the text (e.g., `@alice`) to Discord snowflake mentions (`<@1234567890>`) using the mention
@@ -83,8 +88,8 @@ After this stage (per segment):
   called — no empty Discord messages are sent.
 - If the speaker guard fired, `state` contains the queued stop and the segment sent to Discord is
   the truncated pre-guard portion only.
-- Custom emoji deduplication was applied — no custom emoji appears more than once within the
-  segment as delivered.
+- Custom emoji deduplication was applied — no custom emoji that appeared in a recent bot message
+  (within the lookback window) is present in the segment as delivered.
 
 ## Extension points
 

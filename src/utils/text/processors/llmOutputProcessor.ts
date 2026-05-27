@@ -198,6 +198,9 @@ export function cleanLLMOutput(
       cleanedText = cleanedText.replace(new RegExp(escapeRegExp(key), "g"), emoji);
     }
   } else {
+    // No emoji list available (RP channel, empty server, cache failure) — strip any shortcodes the
+    // LLM emitted so they don't appear as literal ":name:" text in the Discord output.
+    cleanedText = cleanedText.replace(/:(?=[^:]*[a-zA-Z_])[\w-]+:/g, "");
     log.info(
       `[cleanLLMOutput] Emoji conversion skipped. emojiUsageEnabled: ${emojiUsageEnabled}, emojiStrings length: ${emojiStrings?.length || 0}`,
     );
@@ -212,7 +215,9 @@ export function cleanLLMOutput(
     cleanedText = cleanedText.replace(prefixPattern, "");
   }
 
-  cleanedText = cleanedText.replace(/\s+:[a-zA-Z0-9_~]+:\s+/g, " ");
+  // Strip any leftover unresolved shortcodes (unknown emoji names that had no match in the server
+  // list). The pattern covers mid-sentence positions as well as start/end of string.
+  cleanedText = cleanedText.replace(/(?:^|\s):[a-zA-Z0-9_~]+:(?=\s|$)/gm, " ").trim();
   cleanedText = replaceMentionHandles(cleanedText, mentionMap, mentionIdSet);
 
   return cleanedText.replace(/\n([^:]+):$/, "");

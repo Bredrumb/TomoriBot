@@ -66,17 +66,9 @@ export async function execute(
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   // 3. Get comment content from slash command option
-  const rawContent = interaction.options.getString("content", true);
+  const commentContent = interaction.options.getString("content", true);
 
-  // 4. Resolve :emojiName: patterns into Discord custom emoji syntax if found in guild
-  const commentContent = rawContent.replace(/:(\w+):/g, (match, name) => {
-    const emoji = interaction.guild?.emojis.cache.find((e) => e.name === name);
-    if (!emoji) return match;
-    // Animated emojis use <a:name:id>, static use <:name:id>
-    return emoji.animated ? `<a:${emoji.name}:${emoji.id}>` : `<:${emoji.name}:${emoji.id}>`;
-  });
-
-  // 5. Create embed with comment content
+  // 4. Create embed with comment content
   const embed = new EmbedBuilder().setDescription(commentContent).setColor(ColorCode.INFO);
 
   // 6. Add footer showing who created the comment (with profile picture)

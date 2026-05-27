@@ -83,6 +83,12 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   }
   streamingContext.suppressUserErrors = !turn.shouldSurfaceUserErrors || streamingContext.suppressUserErrors === true;
 
+  // Initialize reply notice state for alter personas responding from the queue so
+  // the "Replying to..." embed fires before the first webhook chunk is sent.
+  if (incoming.isFromQueue && turn.persona.is_alter) {
+    streamingContext.replyNoticeState = { attempted: false, sent: false };
+  }
+
   const assets = await loadPersonaAssets(turn);
   const history = await buildSimplifiedHistory(turn, messageIdMap);
 
