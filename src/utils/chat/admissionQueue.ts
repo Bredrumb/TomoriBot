@@ -236,6 +236,19 @@ async function evaluateLockedChannelAdmission(args: {
       injectedContextItems: incoming.injectedContextItems,
       forcedMentions: incoming.forcedMentions,
       manualTriggerInvoker: incoming.manualTriggerInvoker,
+      reminderRecipientID: incoming.reminderRecipientID,
+      reminderData: incoming.reminderData,
+      manualStreamingContextOverrides: incoming.manualStreamingContextOverrides
+        ? {
+            ...(incoming.manualStreamingContextOverrides.disableCrossChannelMessage
+              ? { disableCrossChannelMessage: true }
+              : {}),
+            ...(incoming.manualStreamingContextOverrides.disableRecentMessageReplyTool
+              ? { disableRecentMessageReplyTool: true }
+              : {}),
+            ...(incoming.manualStreamingContextOverrides.disableReminderTool ? { disableReminderTool: true } : {}),
+          }
+        : undefined,
     },
   });
 

@@ -29,6 +29,7 @@ import { isParamDisabled } from "@/utils/provider/samplingControl";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { localizer } from "@/utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
+import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import { buildProviderStopStrings } from "@/providers/utils/stopStrings";
 
 export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
@@ -43,6 +44,10 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
   private insideThinkBlock = false;
   private pendingThinkBlockThoughtText = "";
   private speakerGuardEnabled = false;
+  // Persona-label fallback closer for `<think>` blocks. When the model's reasoning
+  // bleeds into `delta.content` without a `</think>` tag, the persona's speaker
+  // label (e.g. "Nerine:") marks the structural boundary where the real reply begins.
+  private personaSpeakerLabelRegex: RegExp | null = null;
 
   constructor(private readonly options: OpenAICompatibleStreamAdapterOptions) {
     super({
@@ -61,6 +66,14 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     this.accumulatedReasoningContent = "";
     this.insideThinkBlock = false;
     this.pendingThinkBlockThoughtText = "";
+    // 1. Build a persona-label matcher used as a fallback `</think>` closer.
+    //    Matches the persona name at start-of-string or after a newline, followed by ":" or "："
+    //    (half/full-width colon). Required at a line boundary to keep false positives low —
+    //    mid-sentence mentions like "as Nerine would" won't trigger.
+    const personaName = context.tomoriState.persona_nickname?.trim();
+    this.personaSpeakerLabelRegex = personaName
+      ? new RegExp(`(?:^|\\n)\\s*${escapeRegExp(personaName)}\\s*[:：]`, "i")
+      : null;
 
     const apiUrl = this.options.resolveApiUrl(openAICompatibleConfig);
     if (!apiUrl) {
@@ -563,8 +576,13 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
           break;
         }
 
+        // Layer 1 fix: stray `</think>` with no observed opener.
+        // The text preceding it is reasoning that leaked into `delta.content`
+        // (typical of DeepSeek-family models that emit reasoning via
+        // `reasoning_content` but tokenize the closing tag into content).
+        // Route the orphaned prefix into thoughts instead of emitting it as visible output.
         if (endIdx !== -1 && (startIdx === -1 || endIdx < startIdx)) {
-          output += text.slice(cursor, endIdx);
+          this.captureThinkBlockThoughtText(text.slice(cursor, endIdx));
           cursor = endIdx + "</think>".length;
           continue;
         }
@@ -575,16 +593,47 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
           cursor = startIdx + "<think>".length;
         }
       } else {
+        const remaining = text.slice(cursor);
         const endIdx = text.indexOf("</think>", cursor);
-        if (endIdx === -1) {
-          this.captureThinkBlockThoughtText(text.slice(cursor));
-          cursor = text.length;
-          break;
+
+        // Layer 2: persona-label fallback closer.
+        // If reasoning has run long without an explicit `</think>` but the persona's
+        // speaker label appears at a line boundary, treat that label position as the
+        // implicit close of the think block. The label belongs to the real reply.
+        const personaMatch = this.personaSpeakerLabelRegex ? this.personaSpeakerLabelRegex.exec(remaining) : null;
+        // Only honor the persona closer when we've already captured some thought
+        // text — guards against the model uttering its own name at the very start
+        // of a reasoning block.
+        const personaCloserActive = personaMatch !== null && this.pendingThinkBlockThoughtText.length > 0;
+        const personaCloseAbsIdx = personaCloserActive ? cursor + (personaMatch?.index ?? 0) : -1;
+
+        // Whichever closer (real tag or persona label) appears first wins.
+        const useExplicitCloser = endIdx !== -1 && (personaCloseAbsIdx === -1 || endIdx <= personaCloseAbsIdx);
+        const usePersonaCloser = personaCloseAbsIdx !== -1 && (endIdx === -1 || personaCloseAbsIdx < endIdx);
+
+        if (useExplicitCloser) {
+          this.captureThinkBlockThoughtText(text.slice(cursor, endIdx));
+          this.insideThinkBlock = false;
+          cursor = endIdx + "</think>".length;
+          continue;
         }
 
-        this.captureThinkBlockThoughtText(text.slice(cursor, endIdx));
-        this.insideThinkBlock = false;
-        cursor = endIdx + "</think>".length;
+        if (usePersonaCloser) {
+          // Persona label found — capture everything before it as thought,
+          // then drop back into content mode so the label and remainder stream normally.
+          log.warn(
+            `${this.options.adapterName}: <think> block closed implicitly by persona speaker label (no </think> tag observed)`,
+          );
+          this.captureThinkBlockThoughtText(text.slice(cursor, personaCloseAbsIdx));
+          this.insideThinkBlock = false;
+          cursor = personaCloseAbsIdx;
+          continue;
+        }
+
+        // Neither closer present — buffer the whole remainder as thought.
+        this.captureThinkBlockThoughtText(remaining);
+        cursor = text.length;
+        break;
       }
     }
 

@@ -149,6 +149,8 @@ export default {
       personal_memory_footer_manage: `個人記憶は\`/memory personal\`で管理できます。`,
       personal_memory_footer_personalization_disabled: `この記憶は保存されましたが、現在このサーバーではパーソナライズ機能が無効になっているため、すぐには効果がありません。全文は\`/memory personal export\`で確認できます。\`/personal privacy\`でオプトアウトできます。`,
       personal_memory_footer_user_blacklisted: `この記憶は保存されましたが、対象のユーザーは現在このサーバーのパーソナライズ機能のブラックリストに登録されているため、すぐには効果がありません。全文は\`/memory personal export\`で確認できます。\`/personal privacy\`でオプトアウトできます。`,
+      expand_memory_button: `全文を表示`,
+      expand_memory_title: `記憶の全文`,
     },
   },
 };

@@ -123,7 +123,7 @@ export class ReminderProcessor {
 
       suppressNextSelfReply(channel.id);
 
-      await tomoriChat({
+      const disposition = await tomoriChat({
         client: this.client,
         message: lastMessage,
         isFromQueue: false,
@@ -145,9 +145,26 @@ export class ReminderProcessor {
         manualStreamingContextOverrides: isSelfReminder ? undefined : { disableReminderTool: true },
       });
 
-      log.info(`tomoriChat call completed for reminder ${reminder.reminder_id}`);
+      log.info(`tomoriChat call completed for reminder ${reminder.reminder_id} (disposition: ${disposition})`);
 
-      if (!isSelfReminder && isBridgeUserId(reminder.user_discord_id)) {
+      // 1. If the chat call was rejected before it could run (ignored/blocked/error), do not delete
+      //    the DB row — let the next reconcile cycle retry. Without this guard, a reminder that fires
+      //    while the channel is in a transient blocked/ignored state would be lost forever.
+      if (disposition !== "run" && disposition !== "queued") {
+        log.warn(
+          `Reminder ${reminder.reminder_id} not executed (disposition: ${disposition}); leaving DB row intact for next reconcile cycle.`,
+        );
+        return;
+      }
+
+      // 2. "queued" means the reminder is waiting behind a busy channel. The queued replay carries
+      //    the reminder context (reminderRecipientID/reminderData on QueuedMessage) and will execute
+      //    later, so we still delete/reschedule the DB row to prevent the reconcile loop from
+      //    double-firing. But we skip the post-reminder mention fallback below — firing it now would
+      //    mention the user before the queued reply actually lands.
+      const isQueued = disposition === "queued";
+
+      if (!isQueued && !isSelfReminder && isBridgeUserId(reminder.user_discord_id)) {
         await sendMatrixReminderMention(
           channel,
           reminder,
@@ -155,7 +172,7 @@ export class ReminderProcessor {
           reminderStartTime,
           this.client.user?.id ?? "",
         );
-      } else if (!isSelfReminder) {
+      } else if (!isQueued && !isSelfReminder) {
         await this.ensureReminderRecipientMention(channel, reminder, lastMessage.id, reminderStartTime);
       }
 

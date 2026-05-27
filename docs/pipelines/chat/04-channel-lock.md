@@ -77,7 +77,15 @@ The callback receives `LockedChatTurn`:
   `setImmediate` — stop-response generation runs *after* lock release so the
   stop response itself can acquire the lock.
 - Pops the next message from `messageQueue` (FIFO). If present, schedules
-  `processQueuedMessage(next)` via `setImmediate`.
+  `processQueuedMessage(next)` via `setImmediate`. The `QueuedMessage` shape
+  mirrors the cross-cutting fields of `TomoriChatInput` that affect *what* the
+  bot will say on replay — including reminder context
+  (`reminderRecipientID`, `reminderData`) and the streaming-context overrides
+  (`disableCrossChannelMessage`, `disableRecentMessageReplyTool`,
+  `disableReminderTool`). Any new input field that influences generation must
+  also be added to `QueuedMessage` and threaded through `processQueuedMessage`,
+  otherwise the queued replay will be a silently-degraded copy of the original
+  call.
 
 **`skipLock=true` path:**
 

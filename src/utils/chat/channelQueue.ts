@@ -3,6 +3,7 @@ import type { ForcedMention } from "@/types/discord/mentions";
 import type { TomoriState } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
 import type { StreamingContext } from "@/types/tool/interfaces";
+import type { ChatReminderData } from "@/utils/chat/types";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { log } from "@/utils/misc/logger";
@@ -49,8 +50,10 @@ export type QueuedMessage = {
   manualTriggerInvoker?: ManualTriggerInvoker;
   manualStreamingContextOverrides?: Pick<
     StreamingContext,
-    "disableCrossChannelMessage" | "disableRecentMessageReplyTool"
+    "disableCrossChannelMessage" | "disableRecentMessageReplyTool" | "disableReminderTool"
   >;
+  reminderRecipientID?: string;
+  reminderData?: ChatReminderData;
 };
 
 export interface ChannelLockEntry {

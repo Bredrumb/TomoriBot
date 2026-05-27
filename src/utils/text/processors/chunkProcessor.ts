@@ -39,6 +39,60 @@ function shouldMergeEmojiRun(previousEmojiTag: string | null, nextEmojiTag: stri
   return previousPrefix === nextPrefix;
 }
 
+// List markers we treat as a "this line labels the emoji" prefix.
+// Requires whitespace after the marker so things like "1.5" or "v2.0" don't match.
+const LIST_MARKER_REGEX = /^\s*(?:\d+[.)]|[-*•])\s+/;
+// Used to strip other custom-emoji tags out of the surrounding text when
+// deciding whether the current emoji is actually flanked by *prose*.
+const EMOJI_TAG_GLOBAL_REGEX = /<a?:[^:]+:[^>]+>/g;
+// Sentence-terminating punctuation in EN + JA. If the text immediately before
+// the emoji ends in one of these, the emoji isn't really "mid-sentence".
+const TERMINAL_PUNCTUATION_REGEX = /[.!?。！？]$/;
+
+/**
+ * Decides whether a custom Discord emoji should be folded inline with surrounding
+ * text rather than isolated into its own emoji-run message.
+ *
+ * Two carve-outs return true (= inline); everything else falls back to the default
+ * isolation behavior in Pass 4:
+ *   1. List item — the emoji's line starts with a list marker (e.g. "1. ", "- "),
+ *      so list numbering stays attached to the emoji it labels.
+ *   2. Mid-sentence — non-emoji text exists on both sides of the emoji on the same
+ *      line, AND the text immediately before does not end in sentence-terminating
+ *      punctuation. Prevents splitting natural prose like
+ *      "I really like :Soup:, don't you?" into 3 messages.
+ *
+ * @param sourceText - Full original input text (used to find line boundaries)
+ * @param emojiStart - Absolute index of the emoji tag's opening "<" in sourceText
+ * @param emojiLength - Byte length of the emoji tag (including "<" and ">")
+ * @returns true if the emoji should be merged into adjacent text, false to isolate
+ */
+function shouldEmojiStayInline(sourceText: string, emojiStart: number, emojiLength: number): boolean {
+  // 1. Locate the \n-delimited line that contains this emoji
+  const lineStart = sourceText.lastIndexOf("\n", emojiStart - 1) + 1;
+  const nextNewline = sourceText.indexOf("\n", emojiStart);
+  const lineEnd = nextNewline === -1 ? sourceText.length : nextNewline;
+  const line = sourceText.substring(lineStart, lineEnd);
+
+  // 2. List-item carve-out — entire line is treated as one unit
+  if (LIST_MARKER_REGEX.test(line)) return true;
+
+  // 3. Mid-sentence carve-out — require prose on BOTH sides, sans other emojis
+  const beforeOnLine = sourceText.substring(lineStart, emojiStart);
+  const afterOnLine = sourceText.substring(emojiStart + emojiLength, lineEnd);
+
+  // Strip sibling emoji tags so adjacent emojis don't count as "surrounding text"
+  const beforeStripped = beforeOnLine.replace(EMOJI_TAG_GLOBAL_REGEX, "").trimEnd();
+  const afterStripped = afterOnLine.replace(EMOJI_TAG_GLOBAL_REGEX, "").trim();
+
+  // 3a. Both sides must contain non-whitespace, non-emoji content
+  if (beforeStripped.length === 0 || afterStripped.length === 0) return false;
+  // 3b. The preceding fragment must not be a completed sentence ("Wow! :Smile:")
+  if (TERMINAL_PUNCTUATION_REGEX.test(beforeStripped)) return false;
+
+  return true;
+}
+
 function detectAndProtectMarkdownLinks(text: string): {
   protectedText: string;
   markdownLinks: string[];
@@ -477,6 +531,7 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
     | "text"
     | "code"
     | "emoji"
+    | "emoji_inline"
     | "url"
     | "quoted"
     | "parenthesized"
@@ -646,11 +701,16 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
           end: block.start + emojiMatch.index,
         });
       }
+      // 1. Compute absolute index of this emoji within the original inputText
+      const emojiAbsStart = block.start + emojiMatch.index;
+      // 2. Classify: "emoji_inline" gets folded into adjacent text in Pass 3;
+      //    plain "emoji" keeps the existing isolate-into-emoji-run behavior in Pass 4.
+      const isInline = shouldEmojiStayInline(inputText, emojiAbsStart, emojiMatch[0].length);
       processedBlocks.push({
         content: emojiMatch[0],
-        type: "emoji",
-        start: block.start + emojiMatch.index,
-        end: block.start + emojiMatch.index + emojiMatch[0].length,
+        type: isInline ? "emoji_inline" : "emoji",
+        start: emojiAbsStart,
+        end: emojiAbsStart + emojiMatch[0].length,
       });
       lastIndex = emojiMatch.index + emojiMatch[0].length;
     }
@@ -677,17 +737,19 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
       currentBlock.type === "markdown_italic" ||
       currentBlock.type === "markdown_strikethrough" ||
       currentBlock.type === "markdown_inline_code" ||
-      currentBlock.type === "markdown_link";
+      currentBlock.type === "markdown_link" ||
+      // Inline emojis (mid-sentence or list-item) merge with neighboring text
+      // so e.g. "I like :Soup:, you?" stays as one chunk, and "1. :Soup:"
+      // keeps the list marker attached to its emoji.
+      currentBlock.type === "emoji_inline";
 
     if (isSemanticBlock) {
       let mergedContent = "";
 
-      if (
-        i > 0 &&
-        processedBlocks[i - 1].type === "text" &&
-        mergedBlocks.length > 0 &&
-        mergedBlocks[mergedBlocks.length - 1].type === "text"
-      ) {
+      // Pop the previous block iff it's already a text block — this is true both for
+      // raw text and for prior semantic blocks (they get pushed AS text, see below).
+      // Chaining works: text → quoted → emoji_inline → bold → text all flows into one chunk.
+      if (mergedBlocks.length > 0 && mergedBlocks[mergedBlocks.length - 1].type === "text") {
         const prevBlock = mergedBlocks.pop();
         if (prevBlock) mergedContent += prevBlock.content;
       }
@@ -774,7 +836,10 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
       case "text": {
         let textToAdd = block.content.trim();
         if (prevBlockWasEmoji) {
-          // Strip leading sentence-ending punctuation orphaned by the emoji split
+          // Strip leading sentence-ending punctuation orphaned by the emoji split.
+          // Still needed for trailing-emoji prose like "That was amazing! :Smile:"
+          // where the emoji is intentionally isolated (not "emoji_inline") and the
+          // following text fragment would otherwise begin with an orphan "!".
           textToAdd = textToAdd.replace(/^[.!?。]+(?=\s|$)/, "");
         }
         prevBlockWasEmoji = false;

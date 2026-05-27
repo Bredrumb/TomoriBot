@@ -239,28 +239,62 @@ export async function getUserPresenceDetails(
 
     if (member.presence.activities && member.presence.activities.length > 0) {
       const activityDetails = member.presence.activities.map((activity) => {
+        // 1. Diagnostic log so we can see exactly what the gateway delivered
+        //    (useful for third-party RPC apps like Last.fm whose payload shape changes upstream)
+        const assets = activity.assets as { largeText?: string | null; smallText?: string | null } | null | undefined;
+        const largeText = assets?.largeText?.trim() || null;
+        const smallText = assets?.smallText?.trim() || null;
+        log.info(
+          `Activity found for ${member?.user.username}: type=${activity.type} name="${activity.name}" details="${activity.details ?? ""}" state="${activity.state ?? ""}" emoji="${activity.emoji?.name ?? ""}" largeText="${largeText ?? ""}" smallText="${smallText ?? ""}" appId="${activity.applicationId ?? ""}"`,
+        );
+
+        // 2. Compose extra fields once so each case can surface asset text uniformly
+        const timeSpent = getTimeSpent(activity.timestamps?.start, activity.timestamps?.end);
+        const appendAssetText = (base: string): string => {
+          const extras: string[] = [];
+          if (largeText && !base.includes(largeText)) extras.push(largeText);
+          if (smallText && !base.includes(smallText)) extras.push(smallText);
+          return extras.length > 0 ? `${base} [${extras.join(" / ")}]` : base;
+        };
+
         switch (activity.type) {
-          case 0:
-            return `Playing ${activity.name}${activity.details ? ` (${activity.details})` : ""}${getTimeSpent(activity.timestamps?.start, activity.timestamps?.end)}`;
+          case 0: {
+            // Playing — surface details, state, and any asset hover text
+            const segments: string[] = [`Playing ${activity.name}`];
+            if (activity.details) segments.push(activity.details);
+            if (activity.state) segments.push(activity.state);
+            return appendAssetText(segments.join(" — ")) + timeSpent;
+          }
           case 1:
-            return `Streaming ${activity.name}${getTimeSpent(activity.timestamps?.start, activity.timestamps?.end)}`;
+            return appendAssetText(`Streaming ${activity.name}`) + timeSpent;
           case 2:
             if (activity.name === "Spotify" && activity.details && activity.state) {
-              return `Listening to ${activity.details} by ${activity.state} on Spotify${getTimeSpent(activity.timestamps?.start, activity.timestamps?.end)}`;
+              return `Listening to ${activity.details} by ${activity.state} on Spotify${timeSpent}`;
             }
 
             if (activity.details && activity.state) {
-              return `Listening to ${activity.state} - ${activity.details} on ${activity.name}${getTimeSpent(activity.timestamps?.start, activity.timestamps?.end)}`;
+              return (
+                appendAssetText(`Listening to ${activity.state} - ${activity.details} on ${activity.name}`) + timeSpent
+              );
             }
-            return `Listening to ${activity.name}${getTimeSpent(activity.timestamps?.start, activity.timestamps?.end)}`;
+            return appendAssetText(`Listening to ${activity.name}`) + timeSpent;
           case 3:
-            return `Watching ${activity.name}${getTimeSpent(activity.timestamps?.start, activity.timestamps?.end)}`;
-          case 4:
-            return activity.state || "Custom status";
+            return appendAssetText(`Watching ${activity.name}`) + timeSpent;
+          case 4: {
+            // 3. Custom Status — pull every field Discord still exposes
+            //    (some RPC clients now ride this slot with details/assets populated)
+            const parts: string[] = [];
+            if (activity.emoji?.name) parts.push(activity.emoji.name);
+            if (activity.state) parts.push(activity.state);
+            if (activity.details && !parts.includes(activity.details)) parts.push(activity.details);
+            if (largeText && !parts.includes(largeText)) parts.push(largeText);
+            if (smallText && !parts.includes(smallText)) parts.push(smallText);
+            return parts.length > 0 ? `Custom status: ${parts.join(" — ")}` : "Custom status";
+          }
           case 5:
-            return `Competing in ${activity.name}${getTimeSpent(activity.timestamps?.start, activity.timestamps?.end)}`;
+            return appendAssetText(`Competing in ${activity.name}`) + timeSpent;
           default:
-            return activity.name;
+            return appendAssetText(activity.name);
         }
       });
 

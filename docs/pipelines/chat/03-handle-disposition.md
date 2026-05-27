@@ -13,6 +13,14 @@ emits `log.warn` for errors and `log.info` for ignore/queued/blocked. Exists as
 a named stage (rather than being inlined into the coordinator) precisely so
 disposition handling has a single seam to grow into.
 
+Separately, the coordinator (`tomoriChat`) returns the final
+`ChatAdmissionDisposition` to its caller (`"run"` after a successful turn,
+otherwise the disposition reported by stage 02). Callers that schedule work
+externally — notably the reminder processor (`src/timers/reminderProcessor.ts`)
+— inspect this return value to decide whether to delete the source DB row,
+treat it as in-flight (queued), or leave it for the next reconcile cycle
+(ignore/blocked/error). The Discord `messageCreate` handler discards the value.
+
 ## Input
 
 `NonRunnableChatAdmission` (from stage 02, when `disposition !== "run"`).

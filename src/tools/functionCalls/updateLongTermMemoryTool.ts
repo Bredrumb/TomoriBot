@@ -11,7 +11,7 @@ import { PrivacyLevel } from "../../types/db/schema";
 import { validateMemoryContent } from "@/utils/misc/memoryLimits";
 import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { invalidateUserCache } from "../../utils/cache/userCache";
-import { sendStandardEmbed } from "../../utils/discord/embedHelper";
+import { sendMemoryEmbedWithExpand } from "../../utils/discord/expandableMemoryNotice";
 import { convertMentions } from "../../utils/text/contextBuilder";
 import { sanitizeUnknownTemplatePlaceholders } from "@/utils/text/processors/mentionProcessor";
 import { personalMemoryRepository, serverMemoryRepository, userRepository } from "@/utils/db/repositories";
@@ -227,7 +227,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
               tomoriState?.config.personal_memories_enabled,
             );
 
-            await sendStandardEmbed(
+            await sendMemoryEmbedWithExpand(
               context.channel,
               context.locale,
               {
@@ -246,6 +246,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
                 },
                 footerKey: "genai.self_teach.server_memory_footer",
               },
+              processedMemoryContent,
               {
                 webhook: context.webhook,
                 personaUsername: context.personaUsername,
@@ -299,7 +300,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
             tomoriState?.config.personal_memories_enabled,
           );
 
-          await sendStandardEmbed(
+          await sendMemoryEmbedWithExpand(
             context.channel,
             context.locale,
             {
@@ -318,6 +319,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
               },
               footerKey: "genai.self_teach.server_memory_footer",
             },
+            processedMemoryContent,
             {
               webhook: context.webhook,
               personaUsername: context.personaUsername,
@@ -480,7 +482,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
           tomoriState?.config.personal_memories_enabled,
         );
 
-        await sendStandardEmbed(
+        await sendMemoryEmbedWithExpand(
           context.channel,
           context.locale,
           {
@@ -501,6 +503,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
             },
             footerKey,
           },
+          processedMemoryContent,
           {
             webhook: context.webhook,
             personaUsername: context.personaUsername,
@@ -551,7 +554,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
         tomoriState?.config.personal_memories_enabled,
       );
 
-      await sendStandardEmbed(
+      await sendMemoryEmbedWithExpand(
         context.channel,
         context.locale,
         {
@@ -572,6 +575,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
           },
           footerKey,
         },
+        processedMemoryContent,
         {
           webhook: context.webhook,
           personaUsername: context.personaUsername,

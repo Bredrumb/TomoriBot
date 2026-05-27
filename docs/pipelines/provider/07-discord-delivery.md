@@ -53,6 +53,63 @@ payload. It handles:
 - **Progress notification** — `context.onStreamProgress?.()` is called after a successful send,
   resetting the rolling SDK timeout in the tool-loop pipeline.
 
+## Chunking behavior (`chunkMessage`)
+
+`chunkMessage()` (`src/utils/text/processors/chunkProcessor.ts`) is the function that converts a
+single normalized text segment into one or more Discord-safe messages. It runs as a multi-pass
+parser that classifies the input into typed blocks, then emits chunks.
+
+### Preserved spans
+
+The parser locates and protects regions whose internal structure must not be split mid-region.
+A chunk break can only happen at the boundary *between* such regions, never inside:
+
+- Fenced code blocks (``` ``` ```) — kept whole; split across multiple messages only if a single
+  block exceeds the chunk limit, in which case the opening fence + language tag is repeated on
+  each subsequent chunk so syntax highlighting survives.
+- URLs (matched outside markdown link parens) — never split.
+- Markdown spans: bold (`**` / `__`), italic (`*` / `_`), strikethrough (`~~`),
+  inline code (`` ` ``), and links (`[text](url)`).
+- Quoted strings: English `"..."` and Japanese `「...」`.
+- Balanced parentheses `(...)`.
+- Discord custom emoji tags `<:name:id>` and `<a:name:id>`.
+
+### Emoji isolation and runs
+
+By default, every custom emoji block is **isolated** — flushed into its own Discord message rather
+than carried inline with surrounding text. Consecutive emojis are merged into a single
+"emoji-run" message **iff** their normalized names share the same prefix (length controlled by
+`EMOJI_RUN_PREFIX_LENGTH`, default 3; the regex `[^a-z0-9]` strips separators before slicing).
+This produces Discord's large-emoji rendering for reaction-style messages, while keeping
+unrelated emoji packs in separate messages.
+
+Two carve-outs override the default isolation and fold the emoji inline with adjacent text:
+
+1. **Mid-sentence** — non-emoji text exists on both sides of the emoji on the same `\n`-delimited
+   line, AND the text immediately before does not end in sentence-terminating punctuation
+   (`. ! ? 。 ！ ？`). Example: `"I really like :Soup:, don't you?"` → one chunk.
+2. **List item** — the emoji's line begins with a list marker (`\d+[.)] ` or `- ` / `* ` / `• `).
+   Example: `"1. :Soup:\n2. :Smile:"` → list numbering stays attached to each emoji.
+
+Trailing emojis after a completed sentence (`"That was amazing! :Soup:"`) and leading emojis
+(`":Soup: looks tasty"`) intentionally remain isolated — the carve-outs target structural
+contexts, not stylistic prose.
+
+### Humanizer interaction
+
+`HumanizerDegree` (a `TomoriState.config` field) controls how the resulting blocks emit as
+messages after parsing:
+
+| Degree | Behavior |
+|---|---|
+| `NONE` (0) | Aggregated delivery — chunks join into one message at flush boundaries (see Mission §) |
+| `LIGHT` / `MEDIUM` (1–2) | Each paragraph (`\n+`-separated) becomes its own Discord message |
+| `HEAVY` (3) | Each sentence becomes its own message; sentence splitting uses an abbreviation-aware regex (`createSentenceSplitRegex`) to avoid breaking on "Mr.", "e.g.", numbered references, etc. |
+
+Standalone-punctuation chunks (a chunk that is purely `.,!?;:。！？、，` after trimming) are
+merged into the previous or next chunk by `mergeStandalonePunctuationChunks`, preventing orphan
+punctuation messages.
+
 ## Input
 
 - `segment: string` — normalized text from stage 06.

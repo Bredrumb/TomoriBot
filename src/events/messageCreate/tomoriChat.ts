@@ -9,7 +9,7 @@ import {
 } from "@/utils/chat/channelQueue";
 import { buildChatTurnContext } from "@/utils/chat/contextPipeline";
 import { runGenerationTurn } from "@/utils/chat/generationTurn";
-import type { TomoriChatInput } from "@/utils/chat/types";
+import type { ChatAdmissionDisposition, TomoriChatInput } from "@/utils/chat/types";
 import { runPostTurnEffects } from "@/utils/chat/postTurnEffects";
 import { createChatResponseSink, handleStopResponse } from "@/utils/chat/responseEmitter";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
@@ -30,13 +30,13 @@ export {
  * `src/utils/chat/` so helper files are not auto-registered as messageCreate
  * handlers by the shallow event dispatcher.
  */
-export async function tomoriChat(input: TomoriChatInput): Promise<void> {
+export async function tomoriChat(input: TomoriChatInput): Promise<ChatAdmissionDisposition> {
   const incoming = normalizeChatInvocation(input);
 
   const admission = await evaluateChatAdmission(incoming);
   if (admission.disposition !== "run") {
     await handleChatDisposition(admission);
-    return;
+    return admission.disposition;
   }
 
   await runWithChannelLock(
@@ -68,6 +68,8 @@ export async function tomoriChat(input: TomoriChatInput): Promise<void> {
           reasoningQuery: queued.reasoningQuery,
           llmOverrideCodename: queued.llmOverrideCodename,
           isStopResponse: queued.isStopResponse,
+          reminderRecipientID: queued.reminderRecipientID,
+          reminderData: queued.reminderData,
           selectedPersonaId: queued.selectedPersonaId,
           triggeredPersonaIds: queued.triggeredPersonaIds,
           isPersonaJob: queued.isPersonaJob,
@@ -83,12 +85,14 @@ export async function tomoriChat(input: TomoriChatInput): Promise<void> {
           forcedMentions: queued.forcedMentions,
           manualTriggerInvoker: queued.manualTriggerInvoker,
           manualStreamingContextOverrides: queued.manualStreamingContextOverrides,
-        }),
+        }).then(() => {}),
     },
   );
+
+  return "run";
 }
 
 /** Thin event-dispatch adapter — satisfies EventFunction(client, ...args) called by the event loader. */
 export default async function messageCreateHandler(client: Client, message: Message): Promise<void> {
-  return tomoriChat({ client, message, isFromQueue: false });
+  await tomoriChat({ client, message, isFromQueue: false });
 }

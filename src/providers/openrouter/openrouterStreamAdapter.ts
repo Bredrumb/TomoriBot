@@ -19,6 +19,7 @@ import { ContextItemTag, type StructuredContextItem } from "../../types/misc/con
 import { log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
+import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import {
   getOpenRouterCapabilities,
   getOpenRouterSupportedParameters,
@@ -190,6 +191,14 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
   private speakerGuardPendingTail = "";
   private streamedTextTail = "";
   private speakerGuardEnabled = false;
+  // Mirror of the OpenAI-compatible adapter's <think>-leak guard.
+  // Some OpenRouter backends (notably DeepSeek-family models) fold reasoning
+  // tokens into `delta.content` instead of `delta.reasoning`, occasionally
+  // emitting a bare `</think>` closer or never closing at all. We strip these
+  // here so they don't reach the user as visible prose.
+  private insideThinkBlock = false;
+  private pendingThinkBlockThoughtText = "";
+  private personaSpeakerLabelRegex: RegExp | null = null;
 
   constructor() {
     super({
@@ -408,6 +417,13 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     this.speakerGuardPendingTail = "";
     this.streamedTextTail = "";
     this.speakerGuardEnabled = false;
+    this.insideThinkBlock = false;
+    this.pendingThinkBlockThoughtText = "";
+    // Persona-label fallback closer — see stripThinkBlocks().
+    const personaNickname = context.tomoriState.persona_nickname?.trim();
+    this.personaSpeakerLabelRegex = personaNickname
+      ? new RegExp(`(?:^|\\n)\\s*${escapeRegExp(personaNickname)}\\s*[:：]`, "i")
+      : null;
 
     // Cast config to OpenrouterStreamConfig to access provider-specific fields
     const openrouterConfig = config as OpenrouterStreamConfig;
@@ -882,7 +898,8 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           const chunksToEmit = this.splitChunkWithTextAndToolSignals(normalizedChunk);
 
           for (const chunkToEmit of chunksToEmit) {
-            const deduplicatedChunk = this.deduplicateChunkTextAgainstRecentStream(chunkToEmit);
+            const strippedChunk = this.stripThinkBlocksFromChunkContent(chunkToEmit);
+            const deduplicatedChunk = this.deduplicateChunkTextAgainstRecentStream(strippedChunk);
             const guardResult = this.applySpeakerBoundaryFallbackGuard(deduplicatedChunk);
 
             if (this.shouldFlushSpeakerGuardTailBeforeNonTextChunk(guardResult.chunk)) {
@@ -995,6 +1012,135 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       }
       yield this.createProviderErrorChunk(error);
     }
+  }
+
+  /**
+   * Strip `<think>...</think>` blocks that leak into `delta.content` (some OpenRouter
+   * backends emit reasoning here instead of `delta.reasoning`). Captured thought text
+   * is appended to the chunk's `delta.reasoning` so `processChunk` surfaces it as a
+   * ThoughtLogEntry rather than visible prose.
+   *
+   * Includes the same two safeguards as the OpenAI-compatible adapter:
+   *   1. Stray `</think>` with no opener routes preceding text to thoughts (not content).
+   *   2. Persona speaker label (e.g. "Nerine:") at a line boundary acts as an implicit
+   *      `</think>` when the model fails to close cleanly.
+   */
+  private stripThinkBlocksFromChunkContent(chunk: OpenrouterStreamChunk): OpenrouterStreamChunk {
+    const firstChoice = chunk.choices?.[0];
+    const content = firstChoice?.delta?.content;
+    if (!firstChoice?.delta || typeof content !== "string" || content.length === 0) {
+      return chunk;
+    }
+
+    const beforeCapturedLen = this.pendingThinkBlockThoughtText.length;
+    const strippedContent = this.stripThinkBlocks(content);
+    const capturedDelta = this.pendingThinkBlockThoughtText.slice(beforeCapturedLen);
+
+    if (strippedContent === content && capturedDelta.length === 0) {
+      return chunk;
+    }
+
+    // 1. Surface any captured think-block text as reasoning on this chunk so the
+    //    downstream ThoughtLogEntry flow picks it up. Drain pending buffer here —
+    //    we only want to surface what was captured in *this* chunk, but it's safer
+    //    to flush everything pending whenever we have an opportunity.
+    const drainedThoughtText = this.pendingThinkBlockThoughtText;
+    this.pendingThinkBlockThoughtText = "";
+
+    const existingReasoning = typeof firstChoice.delta.reasoning === "string" ? firstChoice.delta.reasoning : "";
+    const mergedReasoning =
+      drainedThoughtText.length > 0
+        ? existingReasoning.length > 0
+          ? `${existingReasoning}${drainedThoughtText}`
+          : drainedThoughtText
+        : (firstChoice.delta.reasoning ?? undefined);
+
+    return {
+      ...chunk,
+      choices: [
+        {
+          ...firstChoice,
+          delta: {
+            ...firstChoice.delta,
+            content: strippedContent,
+            reasoning: mergedReasoning,
+          },
+        },
+        ...(chunk.choices?.slice(1) ?? []),
+      ],
+    };
+  }
+
+  /**
+   * Stateful `<think>` block stripper. Maintains `insideThinkBlock` across chunks
+   * and buffers captured thought text in `pendingThinkBlockThoughtText` for the
+   * caller to drain.
+   */
+  private stripThinkBlocks(text: string): string {
+    if (!text) {
+      return "";
+    }
+
+    let output = "";
+    let cursor = 0;
+
+    while (cursor < text.length) {
+      if (!this.insideThinkBlock) {
+        const startIdx = text.indexOf("<think>", cursor);
+        const endIdx = text.indexOf("</think>", cursor);
+
+        if (startIdx === -1 && endIdx === -1) {
+          output += text.slice(cursor);
+          break;
+        }
+
+        // Layer 1: stray `</think>` with no observed opener — route preceding text to thoughts.
+        if (endIdx !== -1 && (startIdx === -1 || endIdx < startIdx)) {
+          this.pendingThinkBlockThoughtText += text.slice(cursor, endIdx);
+          cursor = endIdx + "</think>".length;
+          continue;
+        }
+
+        if (startIdx !== -1) {
+          output += text.slice(cursor, startIdx);
+          this.insideThinkBlock = true;
+          cursor = startIdx + "<think>".length;
+        }
+      } else {
+        const remaining = text.slice(cursor);
+        const endIdx = text.indexOf("</think>", cursor);
+
+        // Layer 2: persona-label fallback closer.
+        const personaMatch = this.personaSpeakerLabelRegex ? this.personaSpeakerLabelRegex.exec(remaining) : null;
+        const personaCloserActive = personaMatch !== null && this.pendingThinkBlockThoughtText.length > 0;
+        const personaCloseAbsIdx = personaCloserActive ? cursor + (personaMatch?.index ?? 0) : -1;
+
+        const useExplicitCloser = endIdx !== -1 && (personaCloseAbsIdx === -1 || endIdx <= personaCloseAbsIdx);
+        const usePersonaCloser = personaCloseAbsIdx !== -1 && (endIdx === -1 || personaCloseAbsIdx < endIdx);
+
+        if (useExplicitCloser) {
+          this.pendingThinkBlockThoughtText += text.slice(cursor, endIdx);
+          this.insideThinkBlock = false;
+          cursor = endIdx + "</think>".length;
+          continue;
+        }
+
+        if (usePersonaCloser) {
+          log.warn("OpenRouter: <think> block closed implicitly by persona speaker label (no </think> tag observed)");
+          this.pendingThinkBlockThoughtText += text.slice(cursor, personaCloseAbsIdx);
+          this.insideThinkBlock = false;
+          cursor = personaCloseAbsIdx;
+          continue;
+        }
+
+        // Neither closer present — buffer the whole remainder.
+        this.pendingThinkBlockThoughtText += remaining;
+        cursor = text.length;
+        break;
+      }
+    }
+
+    return output;
   }
 
   private deduplicateChunkTextAgainstRecentStream(chunk: OpenrouterStreamChunk): OpenrouterStreamChunk {

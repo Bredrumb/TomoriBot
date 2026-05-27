@@ -105,7 +105,7 @@ export class MemoryTool extends BaseTool {
       targetUserArg?.trim() || legacyTargetUserNicknameArg?.trim() || legacyTargetUserDiscordIdArg?.trim();
 
     // Import database functions
-    const { sendStandardEmbed } = await import("../../utils/discord/embedHelper");
+    const { sendMemoryEmbedWithExpand } = await import("../../utils/discord/expandableMemoryNotice");
     const { ColorCode } = await import("../../utils/misc/logger");
     const { convertMentions } = await import("../../utils/text/contextBuilder");
     const { sanitizeUnknownTemplatePlaceholders } = await import("@/utils/text/processors/mentionProcessor");
@@ -326,8 +326,11 @@ export class MemoryTool extends BaseTool {
             tomoriState?.config.personal_memories_enabled,
           );
 
-          // Send notification embed to the channel
-          await sendStandardEmbed(
+          // Send notification embed to the channel.
+          // The expand helper attaches a "Show Full Memory" button when the
+          // processed content exceeds 200 chars (the embed truncation threshold),
+          // letting users read the full memory ephemerally without channel clutter.
+          await sendMemoryEmbedWithExpand(
             context.channel,
             context.locale,
             {
@@ -345,6 +348,7 @@ export class MemoryTool extends BaseTool {
               },
               footerKey: "genai.self_teach.server_memory_footer",
             },
+            processedMemoryContent,
             {
               webhook: context.webhook,
               personaUsername: context.personaUsername,
@@ -502,9 +506,11 @@ export class MemoryTool extends BaseTool {
           // Done before the notification embed so cache is always fresh even if embed fails
           invalidateUserCache(resolvedTargetUserId as string);
 
-          // Send notification embed (non-fatal: missing permissions won't block the memory save)
+          // Send notification embed (non-fatal: missing permissions won't block the memory save).
+          // The expand helper attaches a "Show Full Memory" button when the
+          // processed content exceeds 200 chars (the embed truncation threshold).
           try {
-            await sendStandardEmbed(
+            await sendMemoryEmbedWithExpand(
               context.channel,
               context.locale,
               {
@@ -524,6 +530,7 @@ export class MemoryTool extends BaseTool {
                 },
                 footerKey: personalMemoryFooterKey,
               },
+              processedMemoryContent,
               {
                 webhook: context.webhook,
                 personaUsername: context.personaUsername,
