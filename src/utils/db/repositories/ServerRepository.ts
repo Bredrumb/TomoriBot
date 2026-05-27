@@ -1730,6 +1730,169 @@ export class ServerRepository implements IRepository<ServerExportShape> {
     return { emojiCount, stickerCount };
   }
 
+  // ── Nuke (full or persona-preserving wipe) ───────────────────────────────────
+
+  /**
+   * Server-scoped tables wiped in preserve-personas mode.
+   *
+   * Maintenance rule: when a new table is added with a
+   * `REFERENCES servers(server_id)` FK that is NOT inside the persona subtree
+   * AND is not intentionally preserved (like `server_memories`), add it here.
+   *
+   * Excluded by design:
+   *  - `personas` and the persona subtree (`persona_*` tables) — preserved
+   *  - `server_memories` — preserved per product decision
+   *  - `error_logs` — uses ON DELETE SET NULL; nuke leaves history intact
+   *  - `discord_managed_webhooks` — keyed by `guild_disc_id` (handled separately)
+   *  - `documents` — has nullable `persona_id`; serverwide rows handled separately
+   */
+  private static readonly PRESERVE_MODE_WIPE_TABLES: readonly string[] = [
+    // Server config tables
+    "server_chat_configs",
+    "server_model_configs",
+    "server_notice_embeds_configs",
+    "server_member_permissions_configs",
+    "server_channel_scope_configs",
+    "server_welcome_configs",
+    "server_trigger_behavior_configs",
+    "server_auto_trigger_configs",
+    "server_auto_trigger_persona_overrides",
+    "server_capabilities_configs",
+    "server_novelai_imagegen_configs",
+    "server_nsfw_configs",
+    "server_speech_configs",
+    "server_byok_configs",
+    "server_memory_configs",
+    // Whitelists / blacklists
+    "channel_whitelist",
+    "role_whitelist",
+    "channel_persona_whitelist",
+    "personalization_blacklist",
+    // Quotas
+    "image_quota_configs",
+    "image_quotas",
+    "image_serverwide_quotas",
+    "text_quota_configs",
+    "text_quotas",
+    "text_serverwide_quotas",
+    "video_quota_configs",
+    "video_quotas",
+    "video_serverwide_quotas",
+    // API keys / providers
+    "opt_api_keys",
+    "api_key_rotation",
+    "saved_provider_configs",
+    "nai_presets",
+    // History / triggers / scheduling
+    "conditioning_history",
+    "reminders",
+    "random_triggers",
+    // Integrations / overrides
+    "matrix_channel_links",
+    "channel_llm_overrides",
+    "guild_mcp_servers",
+    "custom_endpoints",
+    // Model registrations
+    "openrouter_model_registrations",
+    "openrouter_embedding_model_registrations",
+    "openrouter_image_model_registrations",
+    "openrouter_video_model_registrations",
+    // Misc server-scoped
+    "system_prompt_presets",
+    "server_emojis",
+    "server_stickers",
+    "voice_samples",
+    "personal_spotlights",
+  ];
+
+  /**
+   * Lists every managed webhook for a guild with its decrypted token, so the
+   * caller can delete the webhook on Discord's side before the DB row is wiped.
+   *
+   * @param guildDiscId - Discord guild snowflake
+   * @returns Array of `{ webhookDiscId, token }` pairs; failed decryptions are skipped (with a warn log)
+   */
+  async listManagedWebhooksDecrypted(guildDiscId: string): Promise<Array<{ webhookDiscId: string; token: string }>> {
+    try {
+      const rows = (await sql`
+        SELECT managed_webhook_id, guild_disc_id, kind, channel_disc_id, webhook_disc_id,
+               webhook_token, key_version, created_at, updated_at
+        FROM discord_managed_webhooks
+        WHERE guild_disc_id = ${guildDiscId}
+      `) as ManagedDiscordWebhookRow[];
+
+      const decrypted: Array<{ webhookDiscId: string; token: string }> = [];
+      for (const row of rows) {
+        const token = await this.sqlDecryptManagedWebhookToken(row);
+        if (token) {
+          decrypted.push({ webhookDiscId: row.webhook_disc_id, token });
+        }
+      }
+      return decrypted;
+    } catch (error) {
+      log.error(`[Nuke] Failed to list managed webhooks for guild ${guildDiscId}`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Wipes a server's data. Two modes:
+   *
+   *  - **Full nuke** (`preservePersonas: false`): single
+   *    `DELETE FROM servers WHERE server_id = ?` — all `ON DELETE CASCADE`
+   *    children (personas, configs, memories, etc.) drop atomically.
+   *
+   *  - **Preserve personas** (`preservePersonas: true`): leaves the `servers`
+   *    row, the persona subtree, and `server_memories` intact. Selectively
+   *    deletes from every other server-scoped table (see
+   *    `PRESERVE_MODE_WIPE_TABLES`) plus special-cases for
+   *    `discord_managed_webhooks` (keyed by `guild_disc_id`) and `documents`
+   *    (only serverwide rows, i.e. `persona_id IS NULL`).
+   *
+   * Discord-side webhook cleanup (calling `webhook.delete()` on Discord) is the
+   * caller's responsibility — use `listManagedWebhooksDecrypted` beforehand.
+   *
+   * @param serverId - Internal server DB ID
+   * @param serverDiscId - Discord guild snowflake (needed for webhook table)
+   * @param options.preservePersonas - When true, keep personas + their subtree
+   * @returns `true` if any rows were affected (false implies the server row was already missing)
+   */
+  async nukeServer(serverId: number, serverDiscId: string, options: { preservePersonas: boolean }): Promise<boolean> {
+    try {
+      if (!options.preservePersonas) {
+        // 1. Full nuke — cascade-delete via the servers row
+        const result = await sql`DELETE FROM servers WHERE server_id = ${serverId}`;
+        return result.count > 0;
+      }
+
+      // 2. Preserve mode — atomic selective wipe inside a transaction
+      let totalDeleted = 0;
+      await sql.transaction(async (tx) => {
+        // 2a. Wipe every server-scoped table in the maintained list
+        for (const table of ServerRepository.PRESERVE_MODE_WIPE_TABLES) {
+          // table name is a constant from a private allowlist, not user input — safe to interpolate
+          const result = await tx.unsafe(`DELETE FROM ${table} WHERE server_id = $1`, [serverId]);
+          totalDeleted += result.count ?? 0;
+        }
+        // 2b. discord_managed_webhooks is keyed by guild_disc_id, not server_id
+        const whResult = await tx`
+          DELETE FROM discord_managed_webhooks WHERE guild_disc_id = ${serverDiscId}
+        `;
+        totalDeleted += whResult.count ?? 0;
+        // 2c. Documents: only wipe serverwide rows; persona-scoped docs stay
+        const docResult = await tx`
+          DELETE FROM documents WHERE server_id = ${serverId} AND persona_id IS NULL
+        `;
+        totalDeleted += docResult.count ?? 0;
+      });
+
+      return totalDeleted > 0;
+    } catch (error) {
+      log.error(`[Nuke] Failed to nuke server ${serverId} (preserve=${options.preservePersonas})`, error);
+      throw error;
+    }
+  }
+
   private async sqlUpsertWelcomeConfigs(serverId: number, row: ServerWelcomeConfigsRow): Promise<void> {
     await sql`
       INSERT INTO server_welcome_configs (server_id, welcome_channel_disc_id, welcome_prompt, welcome_persona_id)
