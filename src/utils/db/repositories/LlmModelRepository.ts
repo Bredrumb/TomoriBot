@@ -402,6 +402,23 @@ export class LlmModelRepository {
     }
   }
 
+  /**
+   * Returns the set of provider names (lowercased) that have at least one
+   * non-deprecated free model, so callers can badge those providers in UI.
+   */
+  async loadProvidersWithFreeModels(): Promise<Set<string>> {
+    try {
+      const rows = await sql`
+        SELECT DISTINCT llm_provider FROM llms
+        WHERE is_free = true AND is_deprecated = false
+      `;
+      return new Set(rows.map((row: { llm_provider: string }) => row.llm_provider.toLowerCase()));
+    } catch (error) {
+      log.error("Error loading providers with free models:", error);
+      return new Set();
+    }
+  }
+
   // ── embedding model catalog ────────────────────────────────────────────────
 
   /**

@@ -447,6 +447,7 @@ export default {
       timezone_out_of_range: `エラー: タイムゾーンオフセットは{min}から{max}の間でなければなりません。入力値: {provided}`,
       api_key_invalid: `エラー: 提供されたAPIキーは短すぎるか無効です。`,
       api_key_validating: `APIキーを検証中...`,
+      api_key_validating_description: `プロバイダー側でご認証情報を検証しています。お待ちください。`,
       api_key_invalid_api: `エラー: プロバイダーがAPIキーを拒否しました。正しいか確認してください。`,
       preset_invalid: `エラー: 無効なペルソナ名です。利用可能なペルソナ名を正確に入力してください: {available}`,
       config_invalid: `エラー: 内部設定の検証に失敗しました。これを報告してください。`,

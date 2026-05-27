@@ -56,7 +56,11 @@ export async function execute(
     return;
   }
 
-  const uniqueProviders = ((await llmModelRepo.loadUniqueProviders()) ?? []).filter(
+  const [rawProviders, freeProviders] = await Promise.all([
+    llmModelRepo.loadUniqueProviders(),
+    llmModelRepo.loadProvidersWithFreeModels(),
+  ]);
+  const uniqueProviders = (rawProviders ?? []).filter(
     (provider) => provider.toLowerCase() !== "custom" && !isCustomProvider(provider),
   );
   if (!uniqueProviders.length) {
@@ -73,14 +77,18 @@ export async function execute(
   const savedProviders = await llmProviderRepo.loadSavedProviderConfigs(tomoriState.server_id);
   const savedProviderNames = new Set(savedProviders.map((cfg) => cfg.provider.toLowerCase()));
 
+  const freeSuffix = localizer(locale, "commands.provider.add.free_suffix");
   const alreadyExistingSuffix = localizer(locale, "commands.provider.add.already_existing_suffix");
 
   const providerSelectOptions: SelectOption[] = uniqueProviders.map((provider) => {
     const isExisting = savedProviderNames.has(provider.toLowerCase());
+    const isFree = freeProviders.has(provider.toLowerCase());
+    const baseName = getProviderDisplayName(provider);
+    const label = [baseName, isFree && `(${freeSuffix})`, isExisting && `(${alreadyExistingSuffix})`]
+      .filter(Boolean)
+      .join(" ");
     return {
-      label: isExisting
-        ? `${getProviderDisplayName(provider)} (${alreadyExistingSuffix})`
-        : getProviderDisplayName(provider),
+      label,
       value: provider.toLowerCase(),
       description: isExisting ? localizer(locale, "commands.provider.add.already_existing_description") : undefined,
     };

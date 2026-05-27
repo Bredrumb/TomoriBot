@@ -72,6 +72,9 @@ Steps in execution order:
    - `suppressProgressNotices` — set when `shouldSurfaceUserErrors` is false
    - `contextItems`, `messageIdMap` — live references (tools may read these)
    - `showKillHint` — true once `iteration >= SOFT_WARN_ITERATION_THRESHOLD`
+   - `abortSignal` — the turn-level `AbortSignal` from `getChannelTurnAbortSignal`.
+     Tools that forward this to their `fetch` calls get true HTTP-level
+     cancellation when `/bot kill` fires.
 
 4. **Deliberate-tool-mode allowlist gate** — if
    `context.deliberateToolModeActive` is true and `deliberateToolAllowedNames`
@@ -83,8 +86,21 @@ Steps in execution order:
    This is model-visible (returned as a tool response) so the model can adapt
    its next turn without a user-facing error.
 
-5. **`ToolRegistry.executeTool(functionName, args, toolContext)`** — actual
-   dispatch. See `src/tools/toolRegistry.ts:216`. Returns `ToolResult`:
+5. **`ToolRegistry.executeTool` with timeout + kill race** — actual dispatch,
+   wrapped in a `Promise.race` against two cancellation promises:
+   - **Timeout promise** — resolves after `TOOL_EXECUTION_TIMEOUT_MS` (default
+     5 min) with a synthetic `{ success: false, error: "timed out" }` result.
+     The timer is fresh per tool call, so a chain of fast tools is unaffected.
+   - **Kill promise** — resolves immediately if the turn-level `AbortSignal`
+     fires (i.e., `/bot kill` was used while the tool was running).
+
+   After the race, if `StreamOrchestrator.hasStopRequest` is true (kill was
+   requested), the stage returns `{kind: "abort", status: "stopped_by_user"}`
+   immediately — the failed result is never fed back to the model. For a plain
+   timeout (no kill), the `{ success: false }` result is returned normally so
+   the model can handle it gracefully.
+
+   Returns `ToolResult`:
    ```ts
    { success: boolean; data?: unknown; error?: string;
      message?: string; endTurn?: boolean; imageMetadata?: … }
@@ -125,6 +141,11 @@ After this stage runs:
   response with enriched context.
 - `consecutiveToolErrors` in the outer loop is reset to `0` on `success ===
   true` or `kind === "restart"`.
+- If `/bot kill` fired during tool execution, `kind === "abort"` is returned
+  immediately — no history entry is added and the model never sees the failed
+  tool result.
+- A tool timeout (no `/bot kill`) returns `kind === "history"` with
+  `success: false` — the model is informed and can decide how to proceed.
 - Tool execution duration is logged at `INFO` level
   (`"Function call completed: ${name} (${ms}ms)"`).
 
@@ -134,9 +155,16 @@ After this stage runs:
 |---|---|
 | `ToolRegistry.executeTool` | The tool registration contract is the seam — A plugin adding a new tool registers it with the `ToolRegistry`. → plugin plan candidate |
 | Deliberate-tool-mode allowlist (`deliberateToolAllowedNames`) | Internal — controlled by `turnPlanner`; tool plugins declare their trigger patterns, not the gating logic |
+| `ToolContext.abortSignal` | Tools that forward this to their `fetch` calls gain free cancellation on `/bot kill`. New tools should always thread it through. |
 | `ToolContext` shape | The context contract — tools depend on its fields; adding a field here widens the contract for all tools |
 | `retainSuccessfulToolAffordance` | Internal — deliberate-tool-mode retention window; operational parameter, not plugin-relevant |
 | `handleEnhancedContextRestart` | See [stage 03](03-enhanced-context-restart.md) — the `context_restart_*` namespace is the seam |
+
+## Configuration
+
+| Env var | Default | Minimum | Purpose |
+|---|---|---|---|
+| `TOOL_EXECUTION_TIMEOUT_MS` | `300000` (5 min) | `10000` (10 s) | Per-tool execution timeout; resets fresh for every tool call in a chain |
 
 ## Related docs
 

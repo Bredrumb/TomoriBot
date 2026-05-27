@@ -253,6 +253,7 @@ async function main() {
     schemaDriftResult,
     dbLifecycleResult,
     localesResult,
+    localeLengthsResult,
   ] = await Promise.all([
     runCheck("Type Check (bun run check)", ["bun", "run", "check"], true),
     runLint(),
@@ -266,6 +267,15 @@ async function main() {
       ? runCheck("DB Lifecycle Validation (bun run db:lifecycle)", ["bun", "run", "db:lifecycle"], true)
       : Promise.resolve<ResultItem>({ name: "DB Lifecycle Validation", exitCode: null, fatal: true, skippedReason: "No local DB configured" }),
     runCheck("Localization Keys (bun run check-locales)", ["bun", "run", "check-locales"], false),
+    // Discord length limits are a hard blocker: modal placeholders/descriptions and command
+    // descriptions get silently truncated by Discord beyond their max length, so any
+    // violation here must block the PR gate (fatal: true) — unlike the broader locale
+    // parity check above, which tolerates missing Japanese translations.
+    runCheck(
+      "Localization Discord Limits (bun run check-locale-lengths)",
+      ["bun", "run", "check-locale-lengths"],
+      true,
+    ),
   ]);
 
   const results: ResultItem[] = [
@@ -277,6 +287,7 @@ async function main() {
     schemaDriftResult,
     dbLifecycleResult,
     localesResult,
+    localeLengthsResult,
   ];
 
   console.log("\n====================================");
@@ -300,6 +311,8 @@ async function main() {
     "DB Lifecycle Validation": "Check the detailed logs above. Your migration might be invalid or nuke-db failed.",
     "Localization Keys":
       "Missing Japanese equivalents are fine to push — run `bun run prune-locales` to clean up orphaned keys, or add the missing `ja` entries to get a clean run.",
+    "Localization Discord Limits":
+      "Discord truncates modal placeholders (>100 chars), modal titles (>45), and command descriptions (>100). Shorten the listed locale strings — both `en-US` and `ja` sides must fit.",
   };
 
   const getHint = (name: string) => {

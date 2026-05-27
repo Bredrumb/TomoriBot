@@ -177,9 +177,10 @@ export async function execute(
     }
 
     // Load dynamic data for the modal
-    const [uniqueProviders, presetOptions] = await Promise.all([
+    const [uniqueProviders, presetOptions, freeProviders] = await Promise.all([
       llmModelRepo.loadUniqueProviders(),
       configRepository.loadPresetOptionsByLocale(locale, 100),
+      llmModelRepo.loadProvidersWithFreeModels(),
     ]);
 
     // Check if we have the required data
@@ -202,13 +203,17 @@ export async function execute(
     }
 
     // Create provider options for the select menu
+    const freeSuffix = localizer(locale, "commands.provider.add.free_suffix");
     const providerSelectOptions: SelectOption[] = uniqueProviders
       .filter((provider) => provider.toLowerCase() !== "custom" && !isCustomProvider(provider))
-      .map((provider) => ({
-        label: getProviderDisplayName(provider),
-        value: provider,
-        description: undefined,
-      }));
+      .map((provider) => {
+        const isFree = freeProviders.has(provider.toLowerCase());
+        return {
+          label: isFree ? `${getProviderDisplayName(provider)} (${freeSuffix})` : getProviderDisplayName(provider),
+          value: provider,
+          description: undefined,
+        };
+      });
     providerSelectOptions.push({
       label: localizer(locale, "commands.config.setup.api_provider_custom_endpoint_label"),
       value: SETUP_CUSTOM_ENDPOINT_PROVIDER,
@@ -387,7 +392,7 @@ export async function execute(
         // Test the API key with a real API call using provider factory
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "commands.config.setup.api_key_validating",
-          descriptionKey: "commands.config.setup.api_key_validating",
+          description: localizer(locale, "commands.config.setup.api_key_validating_description"),
           color: ColorCode.INFO,
         });
 

@@ -151,6 +151,9 @@ export interface ToolContext {
 
   // Opaque message ID map for resolving media_N/ref_N keys back to Discord snowflake IDs
   messageIdMap?: MessageIdMap;
+
+  /** Turn-level AbortSignal. Tools should forward this to their fetch/HTTP calls for true cancellation on /bot kill. */
+  abortSignal?: AbortSignal;
 }
 
 /**

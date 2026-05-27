@@ -297,8 +297,12 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
         config: requestConfig,
       });
 
-      // Yield each chunk
+      // Yield each chunk; bail out immediately if the external abort signal fired.
       for await (const chunkResponse of stream) {
+        if (context.abortSignal?.aborted) {
+          log.warn(`Google stream aborting for channel ${context.channel.id}: external abort signal received.`);
+          return;
+        }
         const normalizedChunk = this.normalizeGoogleStreamChunk(chunkResponse);
         const chunksToEmit = this.splitChunkWithTextAndFunctionCalls(normalizedChunk);
 

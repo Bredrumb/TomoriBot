@@ -51,9 +51,13 @@ The callback receives `LockedChatTurn`:
 - Looks up or creates a `ChannelLockEntry` keyed by `channelId` in the in-memory
   `channelLocks` map.
 - Forcibly releases the lock if older than `CHANNEL_LOCK_TIMEOUT_MS` (default
-  180s, configurable via env). Logs a warning and clears the existing queue.
+  180s, configurable via env). Logs a warning, aborts the turn abort controller,
+  fires the stream kill callback, and clears the existing queue.
 - Sets `isLocked = true`, records `lockedAt`, `currentMessageId`, `userDiscId`,
   persona-job/persona-id/command-triggered flags.
+- Creates a **fresh `AbortController`** (`activeTurnAbortController`) for this
+  turn. Its signal is passed to tools via `ToolContext.abortSignal` so HTTP-level
+  cancellation propagates on `/bot kill`.
 
 **During the callback:**
 
@@ -65,6 +69,8 @@ The callback receives `LockedChatTurn`:
 **Lock release (always runs via `finally`):**
 
 - Clears `isLocked`, `lockedAt`, all active-turn state.
+- Aborts `activeTurnAbortController` and clears `activeStreamKill` — ensures no
+  stale kill handles survive across turns.
 - Stops the typing keepalive.
 - Checks `StreamOrchestrator.getAndClearStopContext(channelId)`. If present,
   schedules `handleStopResponse(originalStopMessage, client)` via
@@ -92,6 +98,29 @@ After this stage's `finally` block runs:
   call stack stays shallow even under heavy queue pressure.
 - A pending stop-response (if any) was scheduled *before* the queue replay, so
   the stop response runs first.
+
+## `/bot kill` mechanics
+
+`forceKillChannelStream(channelId)` is the single entry point for hard-killing
+an active turn. It does both:
+
+1. **Abort the turn controller** (`activeTurnAbortController.abort()`) — if a
+   tool is executing, the `killPromise` in `executeToolCall`'s race fires
+   immediately, returning `{kind: "abort", status: "stopped_by_user"}`. The
+   channel lock releases as normal via the `finally` block of `runWithChannelLock`.
+2. **Fire the stream kill callback** (`activeStreamKill(...)`) — if the LLM is
+   mid-stream, this simultaneously calls `abortController.abort()` (cancels the
+   HTTP request) and rejects the `Promise.race` in `streamOnce`, causing it to
+   return `{status: "timeout"}`.
+
+`/bot kill` in `src/commands/bot/kill.ts` additionally calls
+`StreamOrchestrator.requestStop` before `forceKillChannelStream`, and
+`clearChannelProcessingQueue` to drain the message queue — so neither the
+current turn nor any queued messages continue processing.
+
+`activeStreamKill` is registered by `toolLoop.ts/streamOnce` at the start of
+each provider call and cleared in `finally`. `activeTurnAbortController` is
+created in `acquireChannelLockForTurn` and cleared on release.
 
 ## Extension points
 

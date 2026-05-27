@@ -20,6 +20,7 @@
     "lint": "biome check --fix",
     "check": "bunx tsc --noEmit",
     "check-locales": "bun run scripts/checks/checkLocalizationKeys.ts",
+    "check-locale-lengths": "bun run scripts/checks/checkLocalizationKeys.ts --strict-lengths",
     "check-schema": "bun run scripts/checks/checkSchemaDrift.ts",
     "list-unused-locales": "bun run scripts/checks/checkLocalizationKeys.ts --list-unused",
     "prune-locales": "bun run scripts/devtools/pruneLocaleKeys.ts",

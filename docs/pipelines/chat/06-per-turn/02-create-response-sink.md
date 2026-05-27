@@ -65,8 +65,14 @@ The `ChatResponseTarget` returned by `prepare` (see
 
 **On `emitStreamResult(result)`:**
 
-- Logs and renders an error embed via `sendStandardEmbed` if `result.status
-  === "error"` and `context.shouldSurfaceUserErrors` is true.
+- No-ops if `result.status !== "error"`.
+- If `result.data` is a `ProviderError` (has `type` + `retryable`), returns
+  immediately — the state machine's `StreamErrorUi.handleProviderError` already
+  sent the specific embed (e.g. "🔴️ Provider Content Filter"). Sending again
+  here would double-send.
+- Otherwise (unexpected non-`ProviderError` data), logs and renders the generic
+  "Generation Error" embed via `sendStandardEmbed`, gated on
+  `context.shouldSurfaceUserErrors`.
 
 **On `emitError(error)`:**
 

@@ -1,5 +1,5 @@
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
-import type { ToolContext } from "@/types/tool/interfaces";
+import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { ToolRegistry } from "@/tools/toolRegistry";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
@@ -9,9 +9,11 @@ import { providerUsesApiFamily } from "@/utils/provider/providerInfoRegistry";
 import { retainSuccessfulToolAffordance } from "@/utils/tools/deliberateToolMode";
 import {
   channelLocks,
+  getChannelTurnAbortSignal,
   incrementChannelFollowUpCount,
   queueStopResponseAtFront,
   resetChannelFollowUpCount,
+  setChannelStreamKill,
   setChannelToolCallChainActive,
 } from "@/utils/chat/channelQueue";
 import {
@@ -25,6 +27,7 @@ const MAX_FUNCTION_CALL_ITERATIONS = parseIntegerEnvFlag(process.env.BOT_MAX_FUN
 const SOFT_WARN_ITERATION_THRESHOLD = 20;
 const MAX_CONSECUTIVE_TOOL_ERRORS = parseIntegerEnvFlag(process.env.BOT_MAX_CONSECUTIVE_TOOL_ERRORS, 5, 1);
 const STREAM_SDK_CALL_TIMEOUT_MS = parseIntegerEnvFlag(process.env.STREAM_SDK_CALL_TIMEOUT_MS, 120000, 10000);
+const TOOL_EXECUTION_TIMEOUT_MS = parseIntegerEnvFlag(process.env.TOOL_EXECUTION_TIMEOUT_MS, 300000, 10000);
 const TOOLS_SUPPRESS_FOLLOWUP_AFTER_PRETOOL_TEXT = new Set(["update_short_term_memory"]);
 
 export interface ToolLoopParams {
@@ -144,16 +147,19 @@ async function streamOnce(
   accumulatedModelParts: Array<Record<string, unknown>>,
   functionHistory: ToolHistoryEntry[],
 ): Promise<StreamResult> {
+  const channelId = params.context.channel.id;
   const abortController = new AbortController();
   params.context.streamingContext.abortSignal = abortController.signal;
   let timeoutId: NodeJS.Timeout | null = null;
-  let timeoutReject: ((reason?: unknown) => void) | null = null;
+
+  // Unified kill: aborts the HTTP request AND rejects the Promise.race.
+  // Stored on the lock entry so /bot kill and stale-lock release can trigger it externally.
+  let killStream: ((reason: Error) => void) | null = null;
 
   const refreshTimeout = () => {
     if (timeoutId) clearTimeout(timeoutId);
     timeoutId = setTimeout(() => {
-      abortController.abort();
-      timeoutReject?.(new Error("SDK_CALL_TIMEOUT: provider streamToDiscord call timed out."));
+      killStream?.(new Error("SDK_CALL_TIMEOUT: provider streamToDiscord call timed out."));
     }, STREAM_SDK_CALL_TIMEOUT_MS);
   };
   params.context.streamingContext.onStreamProgress = refreshTimeout;
@@ -180,7 +186,12 @@ async function streamOnce(
         params.context.responseTarget?.prefixStrippingName,
       ),
       new Promise<never>((_, reject) => {
-        timeoutReject = reject;
+        // Register the kill callback with the lock entry so external callers can trigger it.
+        killStream = (reason: Error) => {
+          abortController.abort();
+          reject(reason);
+        };
+        setChannelStreamKill(channelId, killStream);
       }),
     ]);
   } catch (error) {
@@ -191,6 +202,7 @@ async function streamOnce(
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
     params.context.streamingContext.onStreamProgress = undefined;
+    setChannelStreamKill(channelId, null);
   }
 }
 
@@ -224,6 +236,7 @@ async function executeToolCall(
     return { kind: "abort", status: "stopped_by_user" };
   }
 
+  const turnAbortSignal = getChannelTurnAbortSignal(params.context.channel.id);
   const toolContext: ToolContext = {
     channel: params.context.channel as ToolContext["channel"],
     client: params.context.client,
@@ -245,6 +258,7 @@ async function executeToolCall(
     contextItems: params.context.contextItems,
     messageIdMap: params.context.messageIdMap,
     showKillHint: iteration >= SOFT_WARN_ITERATION_THRESHOLD,
+    abortSignal: turnAbortSignal,
   };
 
   // 1. Deliberate-tool-mode allowlist enforcement. When mode is active and
@@ -256,6 +270,22 @@ async function executeToolCall(
     params.context.deliberateToolModeActive && deliberateAllowedSet !== null && !deliberateAllowedSet.has(functionName);
 
   const startedAt = Date.now();
+
+  // Build a promise that resolves immediately if /bot kill fires (turn abort signal).
+  const killPromise: Promise<ToolResult> | null = turnAbortSignal
+    ? new Promise<ToolResult>((resolve) => {
+        if (turnAbortSignal.aborted) {
+          resolve({ success: false, error: `Tool "${functionName}" was killed.` });
+          return;
+        }
+        turnAbortSignal.addEventListener(
+          "abort",
+          () => resolve({ success: false, error: `Tool "${functionName}" was killed.` }),
+          { once: true },
+        );
+      })
+    : null;
+
   const toolResult = isBlockedByDeliberateAllowlist
     ? {
         success: false,
@@ -266,7 +296,25 @@ async function executeToolCall(
           allowedToolNames: deliberateAllowedSet ? [...deliberateAllowedSet] : [],
         },
       }
-    : await ToolRegistry.executeTool(functionName, functionCall.args ?? {}, toolContext);
+    : await Promise.race([
+        ToolRegistry.executeTool(functionName, functionCall.args ?? {}, toolContext),
+        new Promise<ToolResult>((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                success: false,
+                error: `Tool "${functionName}" timed out after ${TOOL_EXECUTION_TIMEOUT_MS / 1000}s.`,
+              }),
+            TOOL_EXECUTION_TIMEOUT_MS,
+          ),
+        ),
+        ...(killPromise ? [killPromise] : []),
+      ]);
+
+  // If /bot kill fired, exit the turn immediately — don't feed the failed result back to the model.
+  if (StreamOrchestrator.hasStopRequest(params.context.channel.id)) {
+    return { kind: "abort", status: "stopped_by_user" };
+  }
 
   if (isBlockedByDeliberateAllowlist) {
     log.warn(

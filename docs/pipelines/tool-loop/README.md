@@ -125,4 +125,5 @@ pre-tool text rather than continuing to a follow-up generation.
 | `MAX_FUNCTION_CALL_ITERATIONS` | `BOT_MAX_FUNCTION_CALL_ITERATIONS` env | `100` | Hard ceiling; loop exits with `buildResult("timeout")` |
 | `SOFT_WARN_ITERATION_THRESHOLD` | Hardcoded | `20` | Sends "still working" embed once at this iteration if `shouldSurfaceUserErrors` |
 | `MAX_CONSECUTIVE_TOOL_ERRORS` | `BOT_MAX_CONSECUTIVE_TOOL_ERRORS` env | `5` | Consecutive tool failures before `emitToolErrorLoop` + `buildResult("error")` |
-| `STREAM_SDK_CALL_TIMEOUT_MS` | `STREAM_SDK_CALL_TIMEOUT_MS` env | `120000` | Per-call SDK timeout (rolling; see stage 01) |
+| `STREAM_SDK_CALL_TIMEOUT_MS` | `STREAM_SDK_CALL_TIMEOUT_MS` env | `120000` | Per-call SDK inactivity timeout (rolling; see stage 01) |
+| `TOOL_EXECUTION_TIMEOUT_MS` | `TOOL_EXECUTION_TIMEOUT_MS` env | `300000` | Per-tool execution timeout; fresh per tool call — chains are unaffected (see stage 02) |

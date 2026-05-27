@@ -49,8 +49,14 @@ long but active stream is not killed — only a truly stalled one is. Returns a
   `refreshTimeout` callback before the call and resets it to `undefined` in the
   `finally` block. Provider adapters call this on each token delivery to prevent
   the timeout from firing on active streams.
-- **Clears the timeout** (`clearTimeout(timeoutId)`) in the `finally` block
-  regardless of success or error.
+- **Registers `killStream` on the channel lock entry** via
+  `setChannelStreamKill(channelId, killStream)`. `killStream` is a unified
+  callback that both calls `abortController.abort()` *and* rejects the
+  `Promise.race` — ensuring the HTTP request is cancelled and the race unblocks
+  simultaneously. This is what `/bot kill` triggers via `forceKillChannelStream`.
+- **Clears the timeout and the kill registration** (`clearTimeout`,
+  `setChannelStreamKill(channelId, null)`) in the `finally` block regardless of
+  success or error.
 
 ## Invariants
 
@@ -58,6 +64,8 @@ After this stage runs:
 
 - `params.context.streamingContext.onStreamProgress` is `undefined` — the
   heartbeat reference is always cleaned up.
+- The channel lock's `activeStreamKill` is `null` — the kill callback is
+  always deregistered in `finally`.
 - If the result status is `"timeout"`, it originated from the SDK-call
   timeout race (error message prefix `"SDK_CALL_TIMEOUT:"`), not from a
   provider-specific timeout mechanism.

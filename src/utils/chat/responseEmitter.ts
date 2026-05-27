@@ -7,6 +7,7 @@ import { ColorCode, log } from "@/utils/misc/logger";
 import { channelLocks, setActiveChannelTurnState, setChannelToolCallChainActive } from "@/utils/chat/channelQueue";
 import { cacheUserImpersonationWebhook, resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
 import type { ChatResponseSink, ChatResponseTarget, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
+import type { ProviderError } from "@/types/stream/interfaces";
 
 const WEBHOOK_ERROR_COOLDOWN_MS = parseIntegerEnvFlag(process.env.WEBHOOK_ERROR_COOLDOWN_MS, 600000, 1000);
 const webhookErrorCooldowns = new Map<string, number>();
@@ -81,6 +82,10 @@ export function createChatResponseSink(context: ChatTurnContext): ChatResponseSi
     },
     async emitStreamResult(result) {
       if (result.status !== "error") return;
+      // ProviderErrors are already surfaced by the state machine's handleProviderError.
+      // Calling emitGenerationError here would send a second, generic embed on top of the
+      // specific one (e.g. "🔴️ Provider Content Filter" + "Generation Error"). Skip it.
+      if (isProviderError(result.data)) return;
       await emitGenerationError(context, result.data);
     },
     async emitError(error: unknown) {
@@ -174,6 +179,16 @@ function supportsWebhookDelivery(channel: ChatTurnContext["channel"]): boolean {
     channel.type === ChannelType.PublicThread ||
     channel.type === ChannelType.PrivateThread ||
     channel.type === ChannelType.AnnouncementThread
+  );
+}
+
+function isProviderError(value: unknown): value is ProviderError {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    "retryable" in value &&
+    typeof (value as ProviderError).retryable === "boolean"
   );
 }
 

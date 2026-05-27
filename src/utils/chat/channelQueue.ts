@@ -70,6 +70,10 @@ export interface ChannelLockEntry {
   typingKeepaliveTimer: NodeJS.Timeout | null;
   followUpCount: number;
   messageQueue: QueuedMessage[];
+  /** Callback that aborts the active HTTP request and rejects the stream Promise.race. Set by toolLoop, cleared on release. */
+  activeStreamKill?: ((reason: Error) => void) | null;
+  /** AbortController for the entire turn (streaming + tools). Aborted by /bot kill; signal forwarded to tools via ToolContext. */
+  activeTurnAbortController: AbortController | null;
 }
 
 export const channelLocks = new Map<string, ChannelLockEntry>();
@@ -162,6 +166,7 @@ export function getOrCreateChannelLockEntry(channelId: string, serverDiscId: str
     typingKeepaliveTimer: null,
     followUpCount: 0,
     messageQueue: [],
+    activeTurnAbortController: null,
   };
   channelLocks.set(channelId, fresh);
   return fresh;
@@ -175,6 +180,10 @@ export function releaseStaleChannelLockIfExpired(channelId: string, lockEntry: C
   log.warn(
     `Channel ${channelId} lock is stale (locked since ${new Date(lockEntry.lockedAt).toISOString()} for message ${lockEntry.currentMessageId}). Forcibly releasing. Previous queue length: ${lockEntry.messageQueue.length}`,
   );
+  lockEntry.activeTurnAbortController?.abort();
+  lockEntry.activeTurnAbortController = null;
+  lockEntry.activeStreamKill?.(new Error("SDK_CALL_TIMEOUT: stale lock forcibly released"));
+  lockEntry.activeStreamKill = null;
   stopDiscordTypingKeepalive(channelId, lockEntry, "stale_lock_release");
   lockEntry.isLocked = false;
   lockEntry.userDiscId = undefined;
@@ -213,6 +222,8 @@ export function acquireChannelLockForTurn(
   lockEntry.followUpEligible = false;
   lockEntry.isInToolCallChain = false;
   lockEntry.isCommandTriggered = args.isCommandTriggered;
+  lockEntry.activeTurnAbortController?.abort();
+  lockEntry.activeTurnAbortController = new AbortController();
 }
 
 export function setActiveChannelTurnState(
@@ -462,6 +473,9 @@ export function releaseChannelLockAndReplayQueue(args: {
   args.lockEntry.followUpEligible = false;
   args.lockEntry.isInToolCallChain = false;
   args.lockEntry.isCommandTriggered = false;
+  args.lockEntry.activeStreamKill = null;
+  args.lockEntry.activeTurnAbortController?.abort();
+  args.lockEntry.activeTurnAbortController = null;
   stopDiscordTypingKeepalive(args.channelId, args.lockEntry, "lock_released");
   log.info(`Channel ${args.channelId} lock released for message ${args.completedMessageId}.`);
 
@@ -551,6 +565,48 @@ export function isChannelProcessingLocked(channelId: string): boolean {
     return false;
   }
   return true;
+}
+
+/**
+ * Registers (or clears) the active stream kill callback for a channel.
+ * Called by toolLoop when a new SDK call starts or finishes.
+ * @param channelId - Target channel
+ * @param fn - Callback that aborts the HTTP request and rejects the Promise.race, or null to clear
+ */
+export function setChannelStreamKill(channelId: string, fn: ((reason: Error) => void) | null): void {
+  const lockEntry = channelLocks.get(channelId);
+  if (lockEntry) {
+    lockEntry.activeStreamKill = fn;
+  }
+}
+
+/**
+ * Returns the turn-level AbortSignal for a channel, used to cancel tool execution.
+ * @param channelId - Target channel
+ */
+export function getChannelTurnAbortSignal(channelId: string): AbortSignal | undefined {
+  return channelLocks.get(channelId)?.activeTurnAbortController?.signal;
+}
+
+/**
+ * Force-kills the active turn for a channel (used by /bot kill).
+ * Aborts the turn-level controller (cancels tool execution) and the stream kill (cancels HTTP + unblocks Promise.race).
+ * @param channelId - Target channel
+ * @returns true if anything was killed
+ */
+export function forceKillChannelStream(channelId: string): boolean {
+  const lockEntry = channelLocks.get(channelId);
+  if (!lockEntry) return false;
+  let killed = false;
+  if (lockEntry.activeTurnAbortController) {
+    lockEntry.activeTurnAbortController.abort();
+    killed = true;
+  }
+  if (lockEntry.activeStreamKill) {
+    lockEntry.activeStreamKill(new Error("SDK_CALL_TIMEOUT: killed by /bot kill"));
+    killed = true;
+  }
+  return killed;
 }
 
 export function clearChannelProcessingQueue(channelId: string): number {

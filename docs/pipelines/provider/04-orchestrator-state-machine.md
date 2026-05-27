@@ -75,7 +75,10 @@ interface StreamResult {
 - **Stop-request mutation** — `clearStopRequest(channelId)` is called on exit paths that consumed
   a stop. The stop registry is a shared module-level map in `stopRequests.ts`.
 - **Error embed** — when `chunk.type === "error"` and `!context.suppressUserErrors`, calls
-  `StreamErrorUi.handleProviderError()` which sends a Discord embed to the channel.
+  `StreamErrorUi.handleProviderError()` which sends a Discord embed to the channel. This is the
+  **sole** embed send path for `ProviderError` types — the downstream response sink
+  (`emitStreamResult` in `responseEmitter.ts`) deliberately skips the generic fallback embed when
+  `result.data` is a `ProviderError`, to avoid double-sending.
 - **Timeout embed** — when the inactivity timer fires and user errors are not suppressed, sends
   a timeout embed via `sendStandardEmbed()`.
 - **Progress callback** — calls `context.onStreamProgress?.()` on each chunk to reset the

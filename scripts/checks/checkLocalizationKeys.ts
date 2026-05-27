@@ -69,6 +69,45 @@ interface CommandDescriptionViolation {
   locale: string;
 }
 
+/**
+ * Discord enforces different length caps for each modal component slot. These are derived
+ * from `src/utils/discord/ui/interactionCore.ts` (setLabel → 45, setPlaceholder → 100,
+ * setTitle → 45) — `descriptionKey` shares the placeholder cap because the code at
+ * line 664 truncates it via `description.substring(0, 100)` when no explicit placeholder
+ * is supplied.
+ */
+const MODAL_KIND_LIMITS = {
+  title: 45,
+  label: 45,
+  description: 100,
+  placeholder: 100,
+} as const;
+type ModalKind = keyof typeof MODAL_KIND_LIMITS;
+
+/**
+ * A locale key that flows into a modal component at runtime, traced from a source file.
+ * Tracked per (kind, key) so the same key used as both label and placeholder is reported
+ * with both context-specific caps.
+ */
+interface ModalKeyUsage {
+  key: string;
+  kind: ModalKind;
+  files: Set<string>;
+}
+
+/**
+ * Length violation for a source-traced modal component key.
+ */
+interface ModalUsageViolation {
+  key: string;
+  kind: ModalKind;
+  maxLength: number;
+  value: string;
+  length: number;
+  locale: string;
+  files: Set<string>;
+}
+
 interface ExpectedMetadataKey {
   key: string;
   file: string;
@@ -88,6 +127,7 @@ interface AnalysisResult {
   modalTitleViolations: ModalTitleViolation[];
   modalDescriptionViolations: ModalDescriptionViolation[];
   commandDescriptionViolations: CommandDescriptionViolation[];
+  modalUsageViolations: ModalUsageViolation[];
 }
 
 /**
@@ -301,9 +341,10 @@ function isModalTitleKey(key: string): boolean {
  * @returns True if the key is used for a modal description
  */
 function isModalDescriptionKey(key: string): boolean {
-  // Pattern 1: *.modal_description (direct underscore separator)
-  // Pattern 2: *.modal.*_description (nested with field name)
-  return /\.modal_description$|\.modal\.[a-z_]+_description$/.test(key);
+  // Pattern 1: *.modal_description (bare leaf)
+  // Pattern 2: *.{field}_modal_description (field-scoped leaf, e.g. prompt_modal_description)
+  // Pattern 3: *.modal.{field}_description (nested under a `modal` sub-object)
+  return /(?:[._])modal_description$|\.modal\.[a-z_]+_description$/.test(key);
 }
 
 /**
@@ -511,8 +552,10 @@ async function checkModalDescriptionLengths(
 ): Promise<ModalDescriptionViolation[]> {
   const violations: ModalDescriptionViolation[] = [];
 
-  // Discord modal description constraint
-  const MAX_LENGTH = 97;
+  // Discord modal placeholder constraint — `setPlaceholder` accepts up to 100 chars.
+  // Anything beyond is silently truncated by `interactionCore.ts` via `substring(0, 100)`,
+  // so we treat >100 as a hard violation rather than allowing a smaller safety margin.
+  const MAX_LENGTH = 100;
 
   for (const [localeName, keys] of localeKeys) {
     // Filter to only modal description keys
@@ -543,6 +586,170 @@ async function checkModalDescriptionLengths(
       }
     } catch (error) {
       log.error(`Failed to check modal descriptions in locale: ${localeName}`, error);
+    }
+  }
+
+  return violations;
+}
+
+/**
+ * Walks backward from `idx` to find the nearest unmatched `{` and forward to its matching `}`.
+ * Used to scope-confine modal-component property lookups so we don't accidentally pick up
+ * sibling properties from adjacent object literals on the page.
+ *
+ * Caveat: a naive character-by-character brace counter doesn't strip braces inside strings,
+ * template literals, or comments. In practice this is safe for modal field specs because
+ * locale keys are short dot-separated identifiers — no embedded braces — and the surrounding
+ * TS code in command files keeps each modal field on its own object literal block.
+ */
+function findEnclosingObjectRange(content: string, idx: number): { start: number; end: number } | null {
+  let depth = 0;
+  let start = -1;
+  for (let i = idx - 1; i >= 0; i--) {
+    const ch = content[i];
+    if (ch === "}") depth++;
+    else if (ch === "{") {
+      if (depth === 0) {
+        start = i;
+        break;
+      }
+      depth--;
+    }
+  }
+  if (start === -1) return null;
+
+  depth = 0;
+  for (let i = start; i < content.length; i++) {
+    const ch = content[i];
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return { start, end: i + 1 };
+    }
+  }
+  return null;
+}
+
+/**
+ * Source-traces locale keys that flow into Discord modal components at runtime. Unlike
+ * the name-pattern checks above (`isModalDescriptionKey`, etc.), this scanner identifies
+ * keys by their *usage* — finding object literals that match the `ModalComponent` shape
+ * from `src/types/discord/modal.ts` — and binds each key to its Discord cap based on the
+ * prop it's assigned to.
+ *
+ * Detection rules:
+ * 1. `modalTitleKey: "literal"` anywhere → title (cap 45). Prop name is unambiguous;
+ *    no scope confinement needed.
+ * 2. Object literal that contains both `customId:` and `labelKey:` props at the same
+ *    scope level → it's a `ModalComponent` per the type union. Within that literal:
+ *    - `labelKey: "literal"` → label (cap 45)
+ *    - `descriptionKey: "literal"` → description (cap 100; truncated as placeholder)
+ *    - `placeholder: "commands.*"` → placeholder (cap 100; only `commands.*` literals
+ *      are treated as locale keys, matching the runtime check at interactionCore.ts:671-674)
+ */
+async function extractModalComponentUsages(): Promise<Map<string, ModalKeyUsage>> {
+  const usages = new Map<string, ModalKeyUsage>();
+  const srcPath = join(process.cwd(), "src");
+
+  // Composite-key map so the same locale key tracked as both `label` and `placeholder`
+  // produces two independent usage entries (each with its own cap).
+  const add = (key: string, kind: ModalKind, file: string): void => {
+    const compositeKey = `${kind}::${key}`;
+    let entry = usages.get(compositeKey);
+    if (!entry) {
+      entry = { key, kind, files: new Set() };
+      usages.set(compositeKey, entry);
+    }
+    entry.files.add(file);
+  };
+
+  const glob = new Glob("**/*.ts");
+  for await (const file of glob.scan(srcPath)) {
+    if (file.includes("locales/")) continue;
+
+    const filePath = join(srcPath, file);
+    let content: string;
+    try {
+      content = await readFile(filePath, "utf-8");
+    } catch {
+      continue;
+    }
+
+    // 1. modalTitleKey is unambiguous — no enclosing-scope check needed.
+    const titlePattern = /\bmodalTitleKey\s*:\s*["']([a-zA-Z0-9._-]+)["']/g;
+    let titleMatch: RegExpExecArray | null = titlePattern.exec(content);
+    while (titleMatch !== null) {
+      add(titleMatch[1], "title", file);
+      titleMatch = titlePattern.exec(content);
+    }
+
+    // 2. Modal field components: discriminator is an object literal with both `customId:` and `labelKey:`.
+    // Iterate each customId occurrence, scope-confine to its enclosing object, then inspect siblings.
+    const customIdPattern = /\bcustomId\s*:/g;
+    let customIdMatch: RegExpExecArray | null = customIdPattern.exec(content);
+    while (customIdMatch !== null) {
+      const range = findEnclosingObjectRange(content, customIdMatch.index);
+      if (range) {
+        const obj = content.substring(range.start, range.end);
+
+        const labelMatch = obj.match(/\blabelKey\s*:\s*["']([a-zA-Z0-9._-]+)["']/);
+        if (labelMatch) {
+          add(labelMatch[1], "label", file);
+
+          const descMatch = obj.match(/\bdescriptionKey\s*:\s*["']([a-zA-Z0-9._-]+)["']/);
+          if (descMatch) add(descMatch[1], "description", file);
+
+          // Only `commands.*` placeholders are locale keys per interactionCore.ts:671-674;
+          // anything else is a literal display string and out of scope for this check.
+          const placeholderMatch = obj.match(/\bplaceholder\s*:\s*["'](commands\.[a-zA-Z0-9._-]+)["']/);
+          if (placeholderMatch) add(placeholderMatch[1], "placeholder", file);
+        }
+      }
+      customIdMatch = customIdPattern.exec(content);
+    }
+  }
+
+  return usages;
+}
+
+/**
+ * Resolves each traced modal usage against the locale strings and flags any whose value
+ * exceeds the Discord cap for its slot. Skips keys missing from a locale — the parity
+ * check already covers those.
+ */
+async function checkModalComponentUsageLengths(
+  usages: Map<string, ModalKeyUsage>,
+  localeKeys: Map<string, Set<string>>,
+): Promise<ModalUsageViolation[]> {
+  const violations: ModalUsageViolation[] = [];
+
+  for (const [localeName, keysInLocale] of localeKeys) {
+    let stringValues: Map<string, string>;
+    try {
+      const localeObject = await loadMergedLocale(localeName);
+      stringValues = extractStringValues(localeObject);
+    } catch (error) {
+      log.error(`Failed to load locale for modal usage check: ${localeName}`, error);
+      continue;
+    }
+
+    for (const usage of usages.values()) {
+      const resolved = resolveLocalizationKey(usage.key, keysInLocale) ?? usage.key;
+      const value = stringValues.get(resolved);
+      if (!value) continue;
+
+      const maxLength = MODAL_KIND_LIMITS[usage.kind];
+      if (value.length > maxLength) {
+        violations.push({
+          key: usage.key,
+          kind: usage.kind,
+          maxLength,
+          value,
+          length: value.length,
+          locale: localeName,
+          files: new Set(usage.files),
+        });
+      }
     }
   }
 
@@ -1226,6 +1433,8 @@ export async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
   const modalTitleViolations = await checkModalTitleLengths(localeKeys);
   const modalDescriptionViolations = await checkModalDescriptionLengths(localeKeys);
   const commandDescriptionViolations = await checkCommandDescriptionLengths(localeKeys);
+  const modalUsages = await extractModalComponentUsages();
+  const modalUsageViolations = await checkModalComponentUsageLengths(modalUsages, localeKeys);
   const referencedKeysMap = await extractReferencedKeys(availableKeys);
   const referencedKeys = new Set(referencedKeysMap.keys());
 
@@ -1277,6 +1486,7 @@ export async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
     modalTitleViolations,
     modalDescriptionViolations,
     commandDescriptionViolations,
+    modalUsageViolations,
   };
 }
 
@@ -1289,6 +1499,7 @@ function displayResults(results: AnalysisResult): void {
     results.modalTitleViolations.length > 0 ||
     results.modalDescriptionViolations.length > 0 ||
     results.commandDescriptionViolations.length > 0 ||
+    results.modalUsageViolations.length > 0 ||
     results.missingKeys.length > 0;
 
   // Clean run — single summary line
@@ -1328,13 +1539,46 @@ function displayResults(results: AnalysisResult): void {
   }
 
   if (results.modalDescriptionViolations.length > 0) {
-    console.log("\n📏 MODAL DESCRIPTION LENGTH VIOLATIONS (Must be ≤99 characters for Discord):");
+    console.log("\n📏 MODAL DESCRIPTION LENGTH VIOLATIONS (Must be ≤100 characters — Discord truncates beyond this):");
     console.log("-".repeat(60));
     for (const { key, value, length, locale } of results.modalDescriptionViolations.sort((a, b) =>
       a.key.localeCompare(b.key),
     )) {
       console.log(`  ⚠️  ${key} [${locale}]`);
       console.log(`     ❌ Too long: "${value}" (${length} characters)`);
+    }
+  }
+
+  if (results.modalUsageViolations.length > 0) {
+    // Group by kind so each Discord cap is its own section — readers see "all label
+    // violations" together rather than mixed in with placeholders and titles.
+    const KIND_HEADERS: Record<ModalKind, string> = {
+      title: "📏 MODAL TITLE USAGE VIOLATIONS (setTitle cap: ≤45 chars)",
+      label: "📏 MODAL LABEL USAGE VIOLATIONS (setLabel cap: ≤45 chars)",
+      description: "📏 MODAL DESCRIPTION USAGE VIOLATIONS (setPlaceholder cap: ≤100 chars — truncated by interactionCore.ts)",
+      placeholder: "📏 MODAL PLACEHOLDER USAGE VIOLATIONS (setPlaceholder cap: ≤100 chars)",
+    };
+
+    const byKind = new Map<ModalKind, ModalUsageViolation[]>();
+    for (const v of results.modalUsageViolations) {
+      const list = byKind.get(v.kind) ?? [];
+      list.push(v);
+      byKind.set(v.kind, list);
+    }
+
+    for (const kind of ["title", "label", "description", "placeholder"] as ModalKind[]) {
+      const list = byKind.get(kind);
+      if (!list || list.length === 0) continue;
+      console.log(`\n${KIND_HEADERS[kind]}:`);
+      console.log("-".repeat(60));
+      for (const { key, value, length, maxLength, locale, files } of list.sort((a, b) =>
+        a.key.localeCompare(b.key),
+      )) {
+        const filesPreview = Array.from(files).slice(0, 2).join(", ") + (files.size > 2 ? "..." : "");
+        console.log(`  ⚠️  ${key} [${locale}] (cap ${maxLength})`);
+        console.log(`     ❌ Too long: "${value}" (${length} characters)`);
+        console.log(`     📁 Used in: ${filesPreview}`);
+      }
     }
   }
 
@@ -1392,9 +1636,60 @@ function displayUnusedKeys(unusedKeys: KeyUsage[]): void {
 /**
  * Main execution
  */
+/**
+ * Length-only fast path used by `bun run vl` so that Discord limit violations
+ * (modal titles, modal descriptions, command descriptions) block the PR gate
+ * without paying for the full unused/parity source scan.
+ */
+async function runStrictLengthsOnly(): Promise<void> {
+  const { localeKeys } = await loadAvailableKeys();
+  const modalTitleViolations = await checkModalTitleLengths(localeKeys);
+  const modalDescriptionViolations = await checkModalDescriptionLengths(localeKeys);
+  const commandDescriptionViolations = await checkCommandDescriptionLengths(localeKeys);
+  const modalUsages = await extractModalComponentUsages();
+  const modalUsageViolations = await checkModalComponentUsageLengths(modalUsages, localeKeys);
+
+  const total =
+    modalTitleViolations.length +
+    modalDescriptionViolations.length +
+    commandDescriptionViolations.length +
+    modalUsageViolations.length;
+
+  if (total === 0) {
+    console.log(
+      `✅ Discord length limits OK (titles, descriptions, command descriptions, ${modalUsages.size} traced modal slots)`,
+    );
+    return;
+  }
+
+  // Reuse the same display formatting as the full report by funnelling violations
+  // through displayResults() with empty sets for the other categories.
+  displayResults({
+    missingKeys: [],
+    unusedKeys: [],
+    referencedKeys: new Set(),
+    availableKeys: new Set(),
+    localeKeys,
+    parityIssues: [],
+    modalTitleViolations,
+    modalDescriptionViolations,
+    commandDescriptionViolations,
+    modalUsageViolations,
+  });
+
+  process.exit(1);
+}
+
 async function main(): Promise<void> {
   try {
     const listUnused = process.argv.includes("--list-unused");
+    const strictLengths = process.argv.includes("--strict-lengths");
+
+    if (strictLengths) {
+      await runStrictLengthsOnly();
+      return;
+    }
+
     const results = await analyzeLocalizationKeys();
 
     if (listUnused) {
@@ -1410,7 +1705,8 @@ async function main(): Promise<void> {
       results.parityIssues.length > 0 ||
       results.modalTitleViolations.length > 0 ||
       results.modalDescriptionViolations.length > 0 ||
-      results.commandDescriptionViolations.length > 0
+      results.commandDescriptionViolations.length > 0 ||
+      results.modalUsageViolations.length > 0
     ) {
       process.exit(1);
     }

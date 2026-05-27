@@ -14,6 +14,7 @@ export default {
       provider_label: `対象プロバイダー`,
       provider_description: `認証情報を追加またはローテーションするプロバイダーを選択してください。`,
       provider_placeholder: `プロバイダーを選択...`,
+      free_suffix: `Free`,
       already_existing_suffix: `Already Existing`,
       already_existing_description: `このプロバイダーは既に設定済みです。送信すると認証情報が更新されます。`,
       custom_deprecated_description: `/config custom-endpoint add に移動しました。リダイレクト案内を見るときだけ選択してください。`,
