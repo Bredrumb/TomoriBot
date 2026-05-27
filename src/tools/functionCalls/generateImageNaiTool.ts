@@ -1234,6 +1234,7 @@ export class GenerateImageNaiTool extends BaseTool {
           orientation,
           imageParams: effectiveImageParams,
           characterPayload,
+          abortSignal: context.abortSignal,
         });
       }
 

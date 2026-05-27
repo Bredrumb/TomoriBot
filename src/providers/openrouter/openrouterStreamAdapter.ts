@@ -1374,6 +1374,8 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
 
       const errorCode = (openrouterChunk.error as { code?: string | number }).code;
       const errorMessage = (openrouterChunk.error as { message?: string }).message || "OpenRouter API error";
+      const normalizedCode =
+        typeof errorCode === "string" || typeof errorCode === "number" ? String(errorCode) : "unknown";
 
       // Check for malformed tool call errors (model produced invalid tool call structure)
       // These occur when the model generates null/invalid values where strings are expected
@@ -1413,14 +1415,17 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         };
       }
 
-      // For other errors, return as error
+      // Use the shared code→type mapper so SSE-injected errors get the same
+      // type/retryable treatment as HTTP-level errors (e.g. 503 → provider_overloaded).
+      const { type: errorType, retryable } = this.mapErrorCodeToType(normalizedCode, errorMessage);
+
       return {
         type: "error",
         error: {
-          type: "api_error",
+          type: errorType,
           message: errorMessage,
-          code: typeof errorCode === "string" || typeof errorCode === "number" ? String(errorCode) : "unknown",
-          retryable: false,
+          code: normalizedCode,
+          retryable,
           originalError: openrouterChunk.error,
         } as ProviderError,
       };
@@ -1812,6 +1817,44 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
   }
 
   /**
+   * Map a resolved error code and message to a ProviderError type and retryable flag.
+   * Used by both handleProviderError (thrown exceptions) and processChunk (SSE-injected errors)
+   * so both paths stay in sync.
+   */
+  private mapErrorCodeToType(
+    finalCode: string,
+    finalMessage: string,
+  ): { type: ProviderError["type"]; retryable: boolean } {
+    if (finalCode.includes("400") || finalMessage.includes("400")) {
+      return { type: "api_error", retryable: false };
+    } else if (finalCode.includes("401") || finalMessage.includes("401")) {
+      return { type: "api_error", retryable: false };
+    } else if (finalCode.includes("402") || finalMessage.includes("402")) {
+      return { type: "rate_limit", retryable: false }; // Insufficient credits
+    } else if (finalCode.includes("413") || finalMessage.includes("413")) {
+      return { type: "api_error", retryable: false }; // Payload too large
+    } else if (finalCode.includes("404") || finalMessage.includes("404")) {
+      return { type: "api_error", retryable: false };
+    } else if (finalCode.includes("408") || finalMessage.includes("408")) {
+      return { type: "timeout", retryable: true };
+    } else if (finalCode.includes("429") || finalMessage.includes("429")) {
+      return { type: "rate_limit", retryable: true };
+    } else if (
+      finalCode.includes("502") ||
+      finalCode.includes("503") ||
+      finalMessage.includes("502") ||
+      finalMessage.includes("503")
+    ) {
+      return { type: "provider_overloaded", retryable: true };
+    } else if (finalMessage.toLowerCase().includes("timeout")) {
+      return { type: "timeout", retryable: true };
+    } else if (finalMessage.toLowerCase().includes("content")) {
+      return { type: "content_blocked", retryable: false };
+    }
+    return { type: "unknown", retryable: false };
+  }
+
+  /**
    * Handle OpenRouter-specific errors using official error codes
    */
   handleProviderError(error: unknown): ProviderError {
@@ -1914,68 +1957,23 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     const finalMessage = String(extractedMessage || errorMessage || "Unknown error");
     const finalCode = errorCode || "unknown";
 
-    // Map common HTTP status codes and OpenRouter error codes
-    let errorType: ProviderError["type"] = "unknown";
-    let retryable = false;
-
     // Special case: Privacy policy / data policy error
-    // This occurs when the model requires allowing data for training but user's
-    // OpenRouter privacy settings block it
     if (
       finalMessage.includes("data policy") ||
       finalMessage.includes("Paid model training") ||
       finalMessage.includes("openrouter.ai/settings/privacy")
     ) {
-      errorType = "api_error";
-      retryable = false;
-      // Return enhanced error message with instructions
       return {
-        type: errorType,
+        type: "api_error",
         message: `OpenRouter Privacy Policy Error: The selected model requires allowing data for paid model training, but your account privacy settings block this.\n\nTo fix this:\n1. Go to https://openrouter.ai/settings/privacy\n2. Adjust your "Data Policy" settings to allow this model\n3. Or choose a different model that matches your privacy preferences\n\nOriginal error: ${finalMessage}`,
         code: finalCode,
-        retryable,
+        retryable: false,
         originalError: error,
         userMessage: extractedMessage,
       };
     }
 
-    // Status code mapping (from error messages or codes)
-    if (finalCode.includes("400") || finalMessage.includes("400")) {
-      errorType = "api_error";
-      retryable = false;
-    } else if (finalCode.includes("401") || finalMessage.includes("401")) {
-      errorType = "api_error";
-      retryable = false;
-    } else if (finalCode.includes("402") || finalMessage.includes("402")) {
-      errorType = "rate_limit"; // Insufficient credits
-      retryable = false;
-    } else if (finalCode.includes("413") || finalMessage.includes("413")) {
-      errorType = "api_error"; // Payload too large
-      retryable = false;
-    } else if (finalCode.includes("404") || finalMessage.includes("404")) {
-      errorType = "api_error";
-      retryable = false;
-    } else if (finalCode.includes("408") || finalMessage.includes("408")) {
-      errorType = "timeout";
-      retryable = true;
-    } else if (finalCode.includes("429") || finalMessage.includes("429")) {
-      errorType = "rate_limit";
-      retryable = true;
-    } else if (
-      finalCode.includes("502") ||
-      finalCode.includes("503") ||
-      finalMessage.includes("502") ||
-      finalMessage.includes("503")
-    ) {
-      errorType = "provider_overloaded";
-      retryable = true;
-    } else if (finalMessage.toLowerCase().includes("timeout")) {
-      errorType = "timeout";
-      retryable = true;
-    } else if (finalMessage.toLowerCase().includes("content")) {
-      errorType = "content_blocked";
-      retryable = false;
-    }
+    const { type: errorType, retryable } = this.mapErrorCodeToType(finalCode, finalMessage);
 
     return {
       type: errorType,

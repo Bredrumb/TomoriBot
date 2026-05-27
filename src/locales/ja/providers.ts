@@ -103,6 +103,16 @@ export default {
 1. https://openrouter.ai/settings/privacy にアクセス
 2. 「Data Policy」設定を調整してこのモデルを許可
 3. またはプライバシー設定に一致する別のモデルを選択`,
+      "400_default_message": `OpenRouterへの無効なリクエストです`,
+      "401_default_message": `OpenRouterのAPIキーが無効または期限切れです`,
+      "402_default_message": `OpenRouterアカウントのクレジットが不足しています`,
+      "403_default_message": `アクセスが拒否されました。OpenRouterアカウントの設定を確認してください`,
+      "408_default_message": `OpenRouterリクエストがタイムアウトしました`,
+      "429_default_message": `OpenRouterのレート制限を超えました。しばらく待ってから再試行してください`,
+      "500_default_message": `OpenRouterで内部サーバーエラーが発生しました`,
+      "502_default_message": `上流のAIプロバイダーが一時的に利用できません`,
+      "503_default_message": `上流のAIモデルが現在過負荷状態です`,
+      "504_default_message": `上流モデルへのリクエストがタイムアウトしました`,
       unknown_default_message: `予期しないエラーが発生しました`,
     },
     anthropic: {

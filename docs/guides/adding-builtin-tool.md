@@ -22,7 +22,14 @@ This guide walks through adding a new built-in tool that the LLM can call during
    - `requiresPermissions` — restrict to certain Discord permission levels
    - `requiresFollowUp` — signal that the tool result needs a follow-up generation turn
 
-5. The tool is auto-discovered by `toolInitializer.ts` at startup — no manual registration is needed.
+5. Forward `context.abortSignal` to every HTTP call the tool makes:
+   - Pass `signal: context.abortSignal` to raw `fetch` calls.
+   - Pass `externalSignal: context.abortSignal` to `safeDownload` calls.
+   - Pass it through any helper option that accepts an `AbortSignal`.
+
+   This gives `/bot kill` true HTTP-level cancellation. Without it, the underlying request keeps running even after the turn is stopped.
+
+6. The tool is auto-discovered by `toolInitializer.ts` at startup — no manual registration is needed.
 
 ## Notes on Feature-Gated Tools
 

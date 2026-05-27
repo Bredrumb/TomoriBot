@@ -280,6 +280,7 @@ export class GenerateImageTool extends BaseTool {
           const imageResponse = await safeDownload(imageInfo.url, {
             maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
             timeoutMs: 15_000,
+            externalSignal: context.abortSignal,
           });
           if (!imageResponse.success || !imageResponse.buffer) {
             log.warn(`Failed to fetch image from ${imageInfo.source}: ${imageResponse.details ?? imageResponse.error}`);
@@ -327,6 +328,7 @@ export class GenerateImageTool extends BaseTool {
     prompt: string,
     aspectRatio: string,
     referenceImages?: Array<{ mimeType: string; data: string }>,
+    abortSignal?: AbortSignal,
   ): Promise<{ imageData: string | null; mimeType: string | null }> {
     // Helpful debug log for provider/model combo
     log.info(
@@ -413,6 +415,7 @@ export class GenerateImageTool extends BaseTool {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(requestPayload),
+      signal: abortSignal,
     });
 
     if (!response.ok) {
@@ -478,6 +481,7 @@ export class GenerateImageTool extends BaseTool {
         const imageResponse = await safeDownload(imageUrl, {
           maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
           timeoutMs: 15_000,
+          externalSignal: abortSignal,
         });
         if (imageResponse.success && imageResponse.buffer) {
           const mimeType = imageResponse.contentType?.split(";")[0] || null;
@@ -662,7 +666,7 @@ export class GenerateImageTool extends BaseTool {
           const avatarData = await resolveAvatarByIdentity(targetIdentity, context, {
             forceStatic: false,
           });
-          const avatarBase64 = await this.fetchAndConvertImageToBase64(avatarData.avatarUrl);
+          const avatarBase64 = await this.fetchAndConvertImageToBase64(avatarData.avatarUrl, context.abortSignal);
           referenceImages.push({
             mimeType: "image/png",
             data: avatarBase64,
@@ -723,6 +727,7 @@ export class GenerateImageTool extends BaseTool {
           prompt,
           aspectRatio,
           referenceImages.length > 0 ? referenceImages : undefined,
+          context.abortSignal,
         );
         generatedImageData = result.imageData;
       } else if (imageGenerationImplementation === "google") {
@@ -902,10 +907,11 @@ export class GenerateImageTool extends BaseTool {
   /**
    * Fetch an image URL and convert to base64 (used for profile pictures)
    */
-  private async fetchAndConvertImageToBase64(imageUrl: string): Promise<string> {
+  private async fetchAndConvertImageToBase64(imageUrl: string, abortSignal?: AbortSignal): Promise<string> {
     const response = await safeDownload(imageUrl, {
       maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
       timeoutMs: 15_000,
+      externalSignal: abortSignal,
     });
     if (!response.success || !response.buffer) {
       throw new Error(`Failed to fetch image: ${response.details ?? response.error ?? "unknown error"}`);

@@ -103,6 +103,16 @@ The selected model requires allowing data for paid model training, but your Open
 1. Visit https://openrouter.ai/settings/privacy
 2. Adjust your "Data Policy" settings to allow this model
 3. Or select a different model that matches your privacy preferences`,
+      "400_default_message": `Invalid request sent to OpenRouter`,
+      "401_default_message": `Your OpenRouter API key is invalid or expired`,
+      "402_default_message": `Your OpenRouter account has insufficient credits`,
+      "403_default_message": `Access denied — check your OpenRouter account settings`,
+      "408_default_message": `The OpenRouter request timed out`,
+      "429_default_message": `OpenRouter rate limit exceeded, please wait before retrying`,
+      "500_default_message": `OpenRouter encountered an internal server error`,
+      "502_default_message": `The upstream AI provider is temporarily unavailable`,
+      "503_default_message": `The upstream AI model is currently overloaded`,
+      "504_default_message": `The upstream model request timed out`,
       unknown_default_message: `An unexpected error occurred`,
     },
     anthropic: {

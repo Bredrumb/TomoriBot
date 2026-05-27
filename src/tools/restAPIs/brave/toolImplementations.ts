@@ -171,7 +171,7 @@ export async function brave_web_search(
     log.info(`Executing brave_web_search for query: "${searchParams.q}"`);
 
     // Execute search
-    const result = await braveWebSearch(searchParams, { serverId });
+    const result = await braveWebSearch(searchParams, { serverId, signal: context?.abortSignal });
 
     if (!result.success || !result.data) {
       // Check for specific error types
@@ -254,7 +254,7 @@ export async function brave_image_search(args: Record<string, unknown>, context?
     log.info(`Executing brave_image_search for query: "${searchParams.q}"`);
 
     // Execute search
-    const result = await braveImageSearch(searchParams, { serverId });
+    const result = await braveImageSearch(searchParams, { serverId, signal: context?.abortSignal });
 
     if (!result.success || !result.data) {
       // Check for specific error types
@@ -737,7 +737,7 @@ export async function brave_video_search(
     log.info(`Executing brave_video_search for query: "${searchParams.q}"`);
 
     // Execute search
-    const result = await braveVideoSearch(searchParams, { serverId });
+    const result = await braveVideoSearch(searchParams, { serverId, signal: context?.abortSignal });
 
     if (!result.success || !result.data) {
       // Check for specific error types
@@ -808,7 +808,7 @@ export async function brave_news_search(
     log.info(`Executing brave_news_search for query: "${searchParams.q}"`);
 
     // Execute search
-    const result = await braveNewsSearch(searchParams, { serverId });
+    const result = await braveNewsSearch(searchParams, { serverId, signal: context?.abortSignal });
 
     if (!result.success || !result.data) {
       // Check for specific error types

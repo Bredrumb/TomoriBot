@@ -402,6 +402,7 @@ export class AnalyzeImageTool extends BaseTool {
         const imageResponse = await safeDownload(imageInfo.url, {
           maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
           timeoutMs: 15_000,
+          externalSignal: context.abortSignal,
         });
         if (!imageResponse.success || !imageResponse.buffer) {
           log.warn(`Failed to fetch image from ${imageInfo.source}: ${imageResponse.details ?? imageResponse.error}`);
