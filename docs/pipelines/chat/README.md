@@ -1,5 +1,8 @@
 ---
 title: "Chat Pipeline"
+sidebar:
+  groupLabel: "Chat"
+  order: 100
 ---
 
 The chat pipeline turns a single Discord `messageCreate` event into zero, one, or

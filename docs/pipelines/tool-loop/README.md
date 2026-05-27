@@ -1,5 +1,8 @@
 ---
 title: "Tool-Loop Pipeline"
+sidebar:
+  groupLabel: "Tool Loop"
+  order: 300
 ---
 
 `runToolLoop` drives the streaming + tool-dispatch loop for one LLM generation

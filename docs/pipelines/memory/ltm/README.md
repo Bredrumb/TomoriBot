@@ -1,5 +1,8 @@
 ---
 title: "LTM Sub-Pipeline"
+sidebar:
+  groupLabel: "LTM"
+  order: 520
 ---
 
 Handles persistent, database-backed memory writes initiated by the LLM via

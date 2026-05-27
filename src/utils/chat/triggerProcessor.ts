@@ -195,6 +195,66 @@ export function isAutochatCounterHit(tomoriState: TomoriState, channelId: string
   );
 }
 
+/**
+ * Checks whether a message contains an explicit trigger pointing to a persona
+ * other than the currently active one. Used during follow-up admission to detect
+ * cross-persona intent before the full turn planner runs.
+ *
+ * Covers all three explicit-trigger signal paths:
+ * 1. Trigger words matching a different persona
+ * 2. Bot mention or reply-to-bot message → main persona
+ * 3. Reply to a webhook persona message → that persona
+ *
+ * @param message - The incoming Discord message
+ * @param allPersonas - All known personas for this server
+ * @param activePersonaId - The persona_id currently streaming/responding
+ */
+export function hasExplicitCrossPersonaTrigger(
+  message: Message,
+  allPersonas: TomoriState[],
+  activePersonaId: number,
+): boolean {
+  const mainPersona = allPersonas.find((p) => !p.is_alter);
+
+  // Build nickname → persona lookup for webhook/reply resolution
+  const personaByNickname = new Map<string, TomoriState>();
+  for (const persona of allPersonas) {
+    const key = persona.persona_nickname?.toLowerCase();
+    if (key && !personaByNickname.has(key)) personaByNickname.set(key, persona);
+  }
+
+  const clientUserId = message.client.user?.id;
+
+  // 1. Bot mention or reply-to-bot triggers the main persona
+  const isBotMentioned = clientUserId ? message.mentions.users.has(clientUserId) : false;
+  const refMessage = message.reference?.messageId
+    ? message.channel.messages.cache.get(message.reference.messageId)
+    : undefined;
+  const isReplyToBot = refMessage ? refMessage.author.id === clientUserId : false;
+  if ((isBotMentioned || isReplyToBot) && mainPersona?.persona_id !== activePersonaId) {
+    return true;
+  }
+
+  // 2. Reply to a webhook persona message triggers that persona
+  if (refMessage?.webhookId) {
+    const webhookPersona = personaByNickname.get(refMessage.author.username.toLowerCase());
+    if (webhookPersona && webhookPersona.persona_id !== activePersonaId) {
+      return true;
+    }
+  }
+
+  // 3. Trigger words for any persona other than the active one
+  for (const persona of allPersonas) {
+    if (persona.persona_id === activePersonaId) continue;
+    const triggers = persona.trigger_words ?? [];
+    if (triggers.some((trigger) => doesMessageMatchTrigger(message, trigger))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export function determineMatchingPersonas(
   message: Message,
   allPersonas: TomoriState[],

@@ -1,5 +1,7 @@
 ---
 title: "Architecture Overview"
+sidebar:
+  order: 3
 ---
 
 TomoriBot is a modular Discord bot with provider-agnostic AI execution, centralized tool routing, and PostgreSQL-backed state.

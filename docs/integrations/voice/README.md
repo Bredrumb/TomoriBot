@@ -1,5 +1,7 @@
 ---
 title: "Voice System"
+sidebar:
+  groupLabel: "Voice"
 ---
 
 TomoriBot has a bidirectional voice pipeline:

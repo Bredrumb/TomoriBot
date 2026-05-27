@@ -1,5 +1,7 @@
 ---
 title: "Transcription Integration"
+sidebar:
+  groupLabel: "STT"
 ---
 
 TomoriBot treats speech-to-text as the `transcription` custom endpoint capability. Audio attachments are transcribed in the background and added to conversation context when an active transcription endpoint exists.

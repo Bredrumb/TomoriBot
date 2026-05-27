@@ -57,6 +57,23 @@ Each persona checks its own trigger list in `persona_configs.trigger_words`. The
 
 If multiple personas match, they respond in deterministic order based on where their trigger first appears in the message. The per-message count is capped by `/config trigger-match-limit`.
 
+### Follow-up behavior during active streaming
+
+When a persona is mid-stream and a new message arrives, TomoriBot checks whether the message carries an explicit trigger for a **different** persona before deciding to treat it as a follow-up:
+
+- **Explicit cross-persona trigger detected** (any of the three signals below) → the message is **not** treated as a follow-up. It queues as a normal busy-channel message and routes to the correct persona once the current turn ends.
+- **No cross-persona trigger** → the message becomes a follow-up interrupt, continuing with the active persona.
+
+The three explicit-trigger signals that cause this bypass:
+
+| Signal | Target persona |
+|---|---|
+| Trigger word match | The persona whose `trigger_words` matched |
+| `@Bot` mention or reply to a bot message | Main persona |
+| Reply to a webhook persona message | The persona whose nickname matches the webhook author |
+
+This ensures that explicitly addressing Persona A mid-stream never causes Persona B to respond again instead.
+
 ### Manual triggers
 
 Manual triggers can specify `selectedPersonaId`. In that case, **only that persona responds** (fallbacks apply if missing).

@@ -1,5 +1,8 @@
 ---
 title: "Provider Pipeline"
+sidebar:
+  groupLabel: "Provider"
+  order: 400
 ---
 
 Streams an LLM response from a provider API to one or more Discord messages, handling all text processing, delivery timing, and stop signals between the provider's HTTP stream and Discord's message API.

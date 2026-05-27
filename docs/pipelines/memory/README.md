@@ -1,5 +1,8 @@
 ---
 title: "Memory Pipeline"
+sidebar:
+  groupLabel: "Memory"
+  order: 500
 ---
 
 Handles all memory writes that occur within or around a chat turn: detecting

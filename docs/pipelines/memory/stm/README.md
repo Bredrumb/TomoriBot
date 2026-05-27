@@ -1,5 +1,8 @@
 ---
 title: "STM Sub-Pipeline"
+sidebar:
+  groupLabel: "STM"
+  order: 510
 ---
 
 Manages the short-term memory cache — an in-process `Map` that stores the

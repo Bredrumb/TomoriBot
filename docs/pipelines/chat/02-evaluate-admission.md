@@ -80,7 +80,7 @@ Extensibility lives in the helpers it calls:
 |---|---|---|---|
 | `isMatrixRelayMessage`, `isRealUserLikeMessage` | `triggerProcessor.ts` | Trigger-source classification | A new bridge plugin would extend trigger detection here |
 | `transcribeMessageAudioAttachment` | `audioAttachmentTranscription.ts` | STT dispatch | STT providers register via `customEndpointService` — existing mechanism, not chat-specific |
-| `evaluateAdmissionQueueAndTriggerGate` | `admissionQueue.ts` | Channel-busy + trigger gate decision tree | → plugin plan candidate if plugins want to add admission policies |
+| `evaluateAdmissionQueueAndTriggerGate` | `admissionQueue.ts` | Channel-busy + trigger gate decision tree; includes cross-persona trigger guard that bypasses the follow-up path when the incoming message explicitly targets a different persona than the active one | → plugin plan candidate if plugins want to add admission policies |
 | `getSelfReplyChainOriginUser`, `updateSelfReplyChainState` | `selfReplyState.ts` | Self-reply chain memory | Internal — tightly coupled to cascade-trigger limit semantics |
 
 **The stage itself is internal** — there is no current seam for "replace

@@ -1,5 +1,7 @@
 ---
 title: "Getting Started with TomoriBot Development"
+sidebar:
+  order: 2
 ---
 
 This guide sets up TomoriBot locally with Bun + PostgreSQL.

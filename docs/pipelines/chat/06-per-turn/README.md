@@ -1,5 +1,7 @@
 ---
 title: "06: Per-Turn Loop"
+sidebar:
+  groupLabel: "06: Per-Turn"
 ---
 
 This folder documents the **body of the loop** in

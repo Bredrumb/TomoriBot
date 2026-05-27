@@ -4,6 +4,7 @@ import { CooldownType } from "@/types/db/schema";
 import { getCachedUserRow } from "@/utils/cache/userCache";
 import { log } from "@/utils/misc/logger";
 import {
+  hasExplicitCrossPersonaTrigger,
   isAutochatCounterChannelActive,
   isAutochatOverrideChannel,
   isAutochatQualifyingMessage,
@@ -110,9 +111,16 @@ async function evaluateLockedChannelAdmission(args: {
       : {}),
     disableRecentMessageReplyTool: true,
   };
+  // Skip follow-up path if the message explicitly targets a different persona.
+  // activePersonaId must be set (i.e. turn state is established) for this to apply.
+  const hasCrossPersonaTrigger =
+    lockEntry.activePersonaId !== undefined &&
+    hasExplicitCrossPersonaTrigger(message, earlyAllPersonas, lockEntry.activePersonaId);
+
   if (
     !incoming.isStopResponse &&
     !incoming.isPersonaJob &&
+    !hasCrossPersonaTrigger &&
     queueFollowUpForLockedTurn({
       lockEntry,
       channelId,

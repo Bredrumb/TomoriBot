@@ -1,5 +1,8 @@
 ---
 title: "Introduction to TomoriBot"
+sidebar:
+  groupLabel: "Introduction"
+  order: 1
 ---
 
 TomoriBot is a TypeScript + Bun Discord AI chatbot focused on configurable personalities, memory, and tool use.
@@ -37,15 +40,6 @@ TomoriBot is a TypeScript + Bun Discord AI chatbot focused on configurable perso
 Commands are loaded from folders under `src/commands/` (currently 25 top-level categories):
 
 - `bot`, `capabilities`, `conditioning`, `config`, `contribute`, `donate`, `generate`, `help`, `legal`, `mcp`, `memory`, `model`, `novelai`, `nsfw`, `openrouter`, `optional-key`, `persona`, `personal`, `provider`, `scheduled-task`, `server`, `speech`, `st-preset`, `support`, `tool`
-
-## Documentation Layout
-
-- Index: [`docs/README.md`](../README)
-- Architecture: [`architecture/`](./)
-- Pipelines: [`pipelines/`](../pipelines/)
-- Subsystems: [`subsystems/`](../subsystems/)
-- Integrations: [`integrations/`](../integrations/)
-- Guides: [`guides/`](../guides/)
 
 ## Read Next
 

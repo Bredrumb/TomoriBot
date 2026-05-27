@@ -1,5 +1,7 @@
 ---
 title: "Entry Point and Initialization Flow"
+sidebar:
+  order: 4
 ---
 
 `src/index.ts` is a thin orchestrator. All initialization logic lives in `src/init/` modules.

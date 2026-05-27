@@ -1,5 +1,8 @@
 ---
 title: "Context-Build Pipeline"
+sidebar:
+  groupLabel: "Context Build"
+  order: 200
 ---
 
 Assembles the LLM-visible prompt — every system message, every memory, every

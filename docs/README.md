@@ -9,7 +9,7 @@ go to `pipelines/` for the authoritative per-stage reference.
 
 High-level orientation: what TomoriBot is, how it starts up, and how data is modelled.
 
-- [`architecture/introduction.md`](./architecture/introduction)
+- [`architecture/README.md`](./architecture/)
 - [`architecture/getting-started.md`](./architecture/getting-started)
 - [`architecture/architecture.md`](./architecture/architecture)
 - [`architecture/entry-point.md`](./architecture/entry-point)
@@ -88,6 +88,6 @@ Other guides:
 - [`guides/testing-chat-changes.md`](./guides/testing-chat-changes)
 - [`guides/safe-migration.md`](./guides/safe-migration)
 
-## Refactor Record
+## Wiki
 
-- [`architecture/refactor-record.md`](./architecture/refactor-record) — Historical record of the plugin-architecture-prerequisite refactor (Phases 1–5.5e): module restructuring, behavioral verification, DB layer reorganization, and cache invalidation ownership.
+- [`wiki/refactor-record.md`](./wiki/refactor-record) — Historical record of the plugin-architecture-prerequisite refactor (Phases 1–5.5e): module restructuring, behavioral verification, DB layer reorganization, and cache invalidation ownership.

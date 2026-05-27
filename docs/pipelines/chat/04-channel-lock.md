@@ -134,7 +134,7 @@ Replacing this stage from a plugin would risk breaking those guarantees.
 | Helper | What a plugin might do | Plugin-relevance |
 |---|---|---|
 | `enqueueBusyChannelMessage`, `queuePersonaJobsAtFront`, `queueStopResponseAtFront` | Add a new "queue at front" entry type | → plugin plan candidate; today these are call-site-specific |
-| `queueFollowUpForLockedTurn` | Change follow-up interrupt eligibility rules | Internal — coupled to `MAX_FOLLOW_UP_INTERRUPTS` and the tool-call-chain flag |
+| `queueFollowUpForLockedTurn` | Change follow-up interrupt eligibility rules | Internal — coupled to `MAX_FOLLOW_UP_INTERRUPTS`, the tool-call-chain flag, and the cross-persona trigger guard (see `hasExplicitCrossPersonaTrigger` in `triggerProcessor.ts`) |
 | `requestNaturalStopForLockedTurn` | Add a new "soft stop" signal type | Internal — coupled to `StreamOrchestrator.requestStop` semantics |
 | `clearQueuedSelfReplyWork` | Customize what gets cleared on natural stop | Internal — coupled to `isSelfTriggerMessage` and persona-job semantics |
 
