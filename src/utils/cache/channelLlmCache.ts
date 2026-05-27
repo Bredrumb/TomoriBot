@@ -15,12 +15,19 @@ import { log } from "@/utils/misc/logger";
 import {
   getChannelLlmCacheEntry,
   getChannelLlmCacheSize,
+  clearChannelLlmCache,
   invalidateAllChannelLlmCacheForServer,
   invalidateChannelLlmCache,
   setChannelLlmCache,
 } from "@/utils/cache/channelLlmCacheStore";
 
-export { getChannelLlmCacheSize, invalidateAllChannelLlmCacheForServer, invalidateChannelLlmCache, setChannelLlmCache };
+export {
+  clearChannelLlmCache,
+  getChannelLlmCacheSize,
+  invalidateAllChannelLlmCacheForServer,
+  invalidateChannelLlmCache,
+  setChannelLlmCache,
+};
 
 /**
  * Gets the channel-level LLM override for a given server/channel pair.

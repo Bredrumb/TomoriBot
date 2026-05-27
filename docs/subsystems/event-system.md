@@ -38,9 +38,9 @@ TomoriBot routes Discord events through one dispatcher: `src/handlers/eventHandl
 
 ### Message event
 
-`messageCreate` -> `events/messageCreate/tomoriChat.ts` -> `utils/chat/invocation.ts` -> `utils/chat/admission.ts` -> `utils/chat/channelQueue.ts` -> turn planning/context/response/generation/post-turn stages under `utils/chat/`.
+`messageCreate` -> `events/messageCreate/tomoriChat.ts` -> `utils/chat/admission.ts` (normalize + admit) -> `utils/chat/channelQueue.ts` -> turn planning/context/response/generation/post-turn stages under `utils/chat/`.
 
-The dispatcher shallow-scans direct `.ts` files under `src/events/messageCreate/`, so helper modules for chat orchestration must not live beside `tomoriChat.ts`. Subfolders under `src/events/<eventName>/` are not scanned. Chat-specific helpers belong under `src/utils/chat/`; invocation normalization lives in `src/utils/chat/invocation.ts`, reply/no-reply admission lives in `src/utils/chat/admission.ts`, channel locks/queues live in `src/utils/chat/channelQueue.ts`, trigger/reply/persona-routing decisions live in `src/utils/chat/triggerProcessor.ts`, webhook/embed emission helpers live in `src/utils/chat/responseEmitter.ts`, and chat-only utility helpers live under `src/utils/chat/helpers/`.
+The dispatcher shallow-scans direct `.ts` files under `src/events/messageCreate/`, so helper modules for chat orchestration must not live beside `tomoriChat.ts`. Subfolders under `src/events/<eventName>/` are not scanned. Chat-specific helpers belong under `src/utils/chat/`; invocation normalization and reply/no-reply admission live in `src/utils/chat/admission.ts`, channel locks/queues live in `src/utils/chat/channelQueue.ts`, trigger/reply/persona-routing decisions live in `src/utils/chat/triggerProcessor.ts`, webhook/embed emission helpers live in `src/utils/chat/responseEmitter.ts`, and chat-only utility helpers live under `src/utils/chat/helpers/`.
 
 Current message preprocessing enriches fetched history before `buildContext()`:
 - reply-reference system annotations (opaque `ref_N` handle + full quoted content)

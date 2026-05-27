@@ -60,3 +60,11 @@ export function getCachedVoiceTranscript(messageId: string): VoiceTranscriptEntr
 export function setCachedVoiceTranscript(messageId: string, transcript: string, source: "user_stt" | "tts"): void {
   cache.set(messageId, { transcript, source, cachedAt: Date.now() });
 }
+
+export function clearVoiceTranscriptCache(): void {
+  cache.clear();
+}
+
+export function getVoiceTranscriptCacheSize(): number {
+  return cache.size;
+}

@@ -17,7 +17,7 @@ import {
   sendToolProgressNotice,
 } from "@/utils/discord/toolProgressNotice";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
-import { checkVideoQuota, incrementVideoQuota } from "../../utils/quota/videoQuotaManager";
+import { checkVideoQuota, incrementVideoQuota, type VideoQuotaCheckResult } from "../../utils/quota/videoQuotaManager";
 import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
 import { generateCustomVideoViaEndpoint } from "@/providers/custom/customEndpointDispatcher";
 import { formatCustomEndpointModelDisplay } from "@/utils/provider/customProviderUtils";
@@ -261,51 +261,11 @@ export class GenerateVideoTool extends BaseTool {
       };
     }
 
-    // 3. Check video generation quota
     const userDiscId = context.userId || context.message?.author.id || "";
     if (!userDiscId) {
       return {
         success: false,
         error: "Unable to identify user for quota checking",
-      };
-    }
-
-    const quotaCheck = await checkVideoQuota(context.tomoriState.server_id, userDiscId);
-
-    if (!quotaCheck.allowed) {
-      let errorMessage = "";
-      let resetInfo = "";
-
-      if (quotaCheck.resetTime) {
-        const now = new Date();
-        const hoursUntilReset = Math.ceil((quotaCheck.resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
-
-        if (hoursUntilReset < 24) {
-          resetInfo = localizer(context.locale, "tools.generate_video.quota_resets_in_hours", {
-            hours: hoursUntilReset.toString(),
-          });
-        } else {
-          const daysUntilReset = Math.ceil(hoursUntilReset / 24);
-          resetInfo = localizer(context.locale, "tools.generate_video.quota_resets_in_days", {
-            days: daysUntilReset.toString(),
-          });
-        }
-      }
-
-      if (quotaCheck.reason === "user_quota_exceeded") {
-        errorMessage = localizer(context.locale, "tools.generate_video.user_quota_exceeded", { reset_info: resetInfo });
-      } else if (quotaCheck.reason === "serverwide_quota_exceeded") {
-        errorMessage = localizer(context.locale, "tools.generate_video.serverwide_quota_exceeded", {
-          reset_info: resetInfo,
-        });
-      } else {
-        errorMessage = localizer(context.locale, "tools.generate_video.quota_exceeded_generic");
-      }
-
-      return {
-        success: false,
-        error: "Video generation quota exceeded",
-        message: errorMessage,
       };
     }
 
@@ -328,11 +288,59 @@ export class GenerateVideoTool extends BaseTool {
       };
     }
 
+    // Default to allowed; overwritten below for server-credential users
+    let quotaCheck: VideoQuotaCheckResult = { allowed: true };
+
     try {
-      // 5. Get the video model codename from database
+      // 5. Resolve credentials first so we can skip server quota for personal BYOK users
       const creds = await resolveCapabilityCredentials(context.tomoriState.server_id, "video", {
         userId: context.internalUserId ?? null,
       });
+
+      // Personal BYOK users bring their own API quota — bypass server quota entirely
+      if (creds.source === "server") {
+        quotaCheck = await checkVideoQuota(context.tomoriState.server_id, userDiscId);
+      }
+
+      if (!quotaCheck.allowed) {
+        let errorMessage = "";
+        let resetInfo = "";
+
+        if (quotaCheck.resetTime) {
+          const now = new Date();
+          const hoursUntilReset = Math.ceil((quotaCheck.resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
+
+          if (hoursUntilReset < 24) {
+            resetInfo = localizer(context.locale, "tools.generate_video.quota_resets_in_hours", {
+              hours: hoursUntilReset.toString(),
+            });
+          } else {
+            const daysUntilReset = Math.ceil(hoursUntilReset / 24);
+            resetInfo = localizer(context.locale, "tools.generate_video.quota_resets_in_days", {
+              days: daysUntilReset.toString(),
+            });
+          }
+        }
+
+        if (quotaCheck.reason === "user_quota_exceeded") {
+          errorMessage = localizer(context.locale, "tools.generate_video.user_quota_exceeded", {
+            reset_info: resetInfo,
+          });
+        } else if (quotaCheck.reason === "serverwide_quota_exceeded") {
+          errorMessage = localizer(context.locale, "tools.generate_video.serverwide_quota_exceeded", {
+            reset_info: resetInfo,
+          });
+        } else {
+          errorMessage = localizer(context.locale, "tools.generate_video.quota_exceeded_generic");
+        }
+
+        return {
+          success: false,
+          error: "Video generation quota exceeded",
+          message: errorMessage,
+        };
+      }
+
       const videoModelId = getResolvedCapabilityModelId(creds, "video") ?? context.tomoriState.config.video_model_id;
 
       if (!videoModelId) {
@@ -497,8 +505,10 @@ export class GenerateVideoTool extends BaseTool {
 
       log.success("Successfully generated and sent video to Discord");
 
-      // 13. Increment quota after successful generation
-      await incrementVideoQuota(context.tomoriState.server_id, userDiscId);
+      // 13. Increment quota after successful generation (server providers only)
+      if (creds.source === "server") {
+        await incrementVideoQuota(context.tomoriState.server_id, userDiscId);
+      }
 
       // 14. Build success message
       let successMessage = `Successfully generated and sent video to Discord (message ID: ${sentMessage.id}). The video has been created based on your prompt${

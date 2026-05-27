@@ -60,6 +60,7 @@ Grouped commands are represented by folders:
 ## Current Top-Level Categories
 
 - `bot`
+- `capabilities`
 - `conditioning`
 - `config`
 - `contribute`
@@ -67,11 +68,20 @@ Grouped commands are represented by folders:
 - `generate`
 - `help`
 - `legal`
+- `mcp`
 - `memory`
+- `model`
 - `novelai`
+- `nsfw`
+- `openrouter`
+- `optional-key`
 - `persona`
 - `personal`
+- `provider`
+- `scheduled-task`
 - `server`
+- `speech`
+- `st-preset`
 - `support`
 - `tool`
 
@@ -363,7 +373,7 @@ Forward-looking command rewrite guidance (naming conventions, checklist-style se
 
 1. Add a `.ts` file under the correct command category/group path.
 2. Export `configureSubcommand` and `execute`.
-3. Add locale keys in `src/locales/en-US.ts` and `src/locales/ja.ts`.
+3. Add locale keys in both locale trees (`src/locales/en-US/` and `src/locales/ja/`). Command keys live in `commands/{category}.ts` within each locale directory.
 4. Run:
    - `bun run check-locales`
    - `bun run check`

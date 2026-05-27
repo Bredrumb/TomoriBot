@@ -16,7 +16,7 @@ import {
   sendToolProgressNotice,
 } from "@/utils/discord/toolProgressNotice";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
-import { checkImageQuota, incrementImageQuota } from "../../utils/quota/imageQuotaManager";
+import { checkImageQuota, incrementImageQuota, type QuotaCheckResult } from "../../utils/quota/imageQuotaManager";
 import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
 import { resolveNativeImageGenerationCapability } from "@/utils/provider/providerCapabilityResolver";
 import { generateCustomImageViaEndpoint } from "@/providers/custom/customEndpointDispatcher";
@@ -521,53 +521,11 @@ export class GenerateImageTool extends BaseTool {
       };
     }
 
-    // Check image generation quota BEFORE generating
     const userDiscId = context.userId || context.message?.author.id || "";
     if (!userDiscId) {
       return {
         success: false,
         error: "Unable to identify user for quota checking",
-      };
-    }
-
-    const quotaCheck = await checkImageQuota(context.tomoriState.server_id, userDiscId);
-
-    if (!quotaCheck.allowed) {
-      // Build user-friendly error message based on quota type
-      let errorMessage = "";
-      let resetInfo = "";
-
-      if (quotaCheck.resetTime) {
-        const now = new Date();
-        const resetTime = quotaCheck.resetTime;
-        const hoursUntilReset = Math.ceil((resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
-
-        if (hoursUntilReset < 24) {
-          resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_hours", {
-            hours: hoursUntilReset.toString(),
-          });
-        } else {
-          const daysUntilReset = Math.ceil(hoursUntilReset / 24);
-          resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_days", {
-            days: daysUntilReset.toString(),
-          });
-        }
-      }
-
-      if (quotaCheck.reason === "user_quota_exceeded") {
-        errorMessage = localizer(context.locale, "tools.generate_image.user_quota_exceeded", { reset_info: resetInfo });
-      } else if (quotaCheck.reason === "serverwide_quota_exceeded") {
-        errorMessage = localizer(context.locale, "tools.generate_image.serverwide_quota_exceeded", {
-          reset_info: resetInfo,
-        });
-      } else {
-        errorMessage = localizer(context.locale, "tools.generate_image.quota_exceeded_generic");
-      }
-
-      return {
-        success: false,
-        error: "Image generation quota exceeded",
-        message: errorMessage,
       };
     }
 
@@ -578,11 +536,61 @@ export class GenerateImageTool extends BaseTool {
     const aspectRatio = (args.aspect_ratio as string) || "1:1";
     const usesReferences = !!(messageId || targetIdentity);
 
+    // Default to allowed; overwritten below for server-credential users
+    let quotaCheck: QuotaCheckResult = { allowed: true };
+
     try {
-      // Get the diffusion model codename from database
+      // Resolve credentials first so we can skip server quota for personal BYOK users
       const creds = await resolveCapabilityCredentials(context.tomoriState.server_id, "image-standard", {
         userId: context.internalUserId ?? null,
       });
+
+      // Personal BYOK users bring their own API quota — bypass server quota entirely
+      if (creds.source === "server") {
+        quotaCheck = await checkImageQuota(context.tomoriState.server_id, userDiscId);
+      }
+
+      if (!quotaCheck.allowed) {
+        // Build user-friendly error message based on quota type
+        let errorMessage = "";
+        let resetInfo = "";
+
+        if (quotaCheck.resetTime) {
+          const now = new Date();
+          const resetTime = quotaCheck.resetTime;
+          const hoursUntilReset = Math.ceil((resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
+
+          if (hoursUntilReset < 24) {
+            resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_hours", {
+              hours: hoursUntilReset.toString(),
+            });
+          } else {
+            const daysUntilReset = Math.ceil(hoursUntilReset / 24);
+            resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_days", {
+              days: daysUntilReset.toString(),
+            });
+          }
+        }
+
+        if (quotaCheck.reason === "user_quota_exceeded") {
+          errorMessage = localizer(context.locale, "tools.generate_image.user_quota_exceeded", {
+            reset_info: resetInfo,
+          });
+        } else if (quotaCheck.reason === "serverwide_quota_exceeded") {
+          errorMessage = localizer(context.locale, "tools.generate_image.serverwide_quota_exceeded", {
+            reset_info: resetInfo,
+          });
+        } else {
+          errorMessage = localizer(context.locale, "tools.generate_image.quota_exceeded_generic");
+        }
+
+        return {
+          success: false,
+          error: "Image generation quota exceeded",
+          message: errorMessage,
+        };
+      }
+
       const diffusionModelId =
         getResolvedCapabilityModelId(creds, "image-standard") ?? context.tomoriState.config.diffusion_model_id;
 
@@ -829,8 +837,10 @@ export class GenerateImageTool extends BaseTool {
 
       log.success("Successfully generated and sent image to Discord");
 
-      // Increment quota after successful generation
-      await incrementImageQuota(context.tomoriState.server_id, userDiscId);
+      // Increment quota after successful generation (server providers only)
+      if (creds.source === "server") {
+        await incrementImageQuota(context.tomoriState.server_id, userDiscId);
+      }
 
       // Note: We intentionally DO NOT include imageMetadata for generated images
       // because Discord CDN URLs are protected and cannot be fetched by external

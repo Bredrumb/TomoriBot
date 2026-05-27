@@ -24,7 +24,7 @@ Discord Gateway
 
 chat pipeline
   -> readable messageCreate coordinator (src/events/messageCreate/tomoriChat.ts)
-  -> typed invocation normalization (src/utils/chat/invocation.ts)
+  -> typed invocation normalization (src/utils/chat/admission.ts)
   -> reply/no-reply admission decision (src/utils/chat/admission.ts)
   -> channel queue and lock management (src/utils/chat/channelQueue.ts)
   -> turn planning and persona routing (src/utils/chat/turnPlanner.ts)
@@ -78,7 +78,7 @@ chat pipeline
 - Schema: `src/db/schema.sql`
 - Optional RAG schema: `src/db/schema_rag.sql`
 - Repository boundary: `src/utils/db/repositories/*`
-  - 19 Repository classes implement `IRepository<TExport>` with `toExportShape()` / `fromExportShape()`. Each owns one clear domain; SQL is inlined as private methods with no sibling SQL files.
+  - 23 Repository classes implement `IRepository<TExport>` with `toExportShape()` / `fromExportShape()`. Each owns one clear domain; SQL is inlined as private methods with no sibling SQL files.
   - `src/utils/db/repositories/index.ts` re-exports repository instances and shared types only — no free-function shims. Callers import repository instances directly (e.g. `import { personaRepository } from "@/utils/db/repositories"`).
   - The former public DB god-file entry points and all `*ReadSql.ts`/`*WriteSql.ts` sibling files have been removed.
 - Core caches in `src/utils/cache/*` (Tomori state, user, expression data, whitelist, short-term memory, model/capability caches)

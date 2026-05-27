@@ -316,3 +316,11 @@ export async function initializePresetAvatarCache(presets: TomoriPresetRow[]): P
 export function getCachedPresetAvatar(presetId: number): string | null {
   return presetAvatarCache.get(presetId) ?? null;
 }
+
+export function clearPresetAvatarCache(): void {
+  presetAvatarCache.clear();
+}
+
+export function getPresetAvatarCacheSize(): number {
+  return presetAvatarCache.size;
+}

@@ -2,7 +2,11 @@ import type { ToolContext } from "@/types/tool/interfaces";
 import type { Webhook } from "discord.js";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { log } from "@/utils/misc/logger";
-import { resolvePersonaAvatarPublicUrl } from "@/utils/storage/avatarStorage";
+import {
+  isLocalPersonaAvatarPath,
+  loadStoredPersonaAvatarDataUri,
+  resolvePersonaAvatarPublicUrl,
+} from "@/utils/storage/avatarStorage";
 import { normalizeUserTargetInput, resolveUserTarget } from "@/utils/discord/targetResolver";
 
 export type ResolvedAvatarData = {
@@ -294,10 +298,19 @@ async function resolvePersonaAvatar(
 
   if (persona.is_alter) {
     avatarUrl = resolvePersonaAvatarPublicUrl(persona.webhook_avatar_url) ?? null;
+    // For local-path avatars (non-production without a public base URL), fall back to loading
+    // the stored file as a data URI so downstream callers can still use the image.
+    if (!avatarUrl && persona.webhook_avatar_url && isLocalPersonaAvatarPath(persona.webhook_avatar_url)) {
+      avatarUrl = (await loadStoredPersonaAvatarDataUri(persona.webhook_avatar_url)) ?? null;
+    }
   } else {
+    // Use the bot's guild-specific member avatar (custom per-server avatar if set, else global).
+    // guild.members.me is the bot's GuildMember object, whose displayAvatarURL() already
+    // prefers the server avatar over the global one.
     const guild = context.client.guilds.cache.get(guildId);
+    const botMember = guild?.members.me;
     avatarUrl =
-      guild?.iconURL({
+      botMember?.displayAvatarURL({
         size: 1024,
         extension: "png",
         forceStatic: options.forceStatic,

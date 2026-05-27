@@ -17,7 +17,7 @@ TomoriBot is a TypeScript + Bun Discord AI chatbot focused on configurable perso
 - RAG document memory
   - Optional in local/dev (auto-detected via pgvector), always enabled in production
 - Localization
-  - `en-US` and `ja` loaded from `src/locales/*.ts`
+  - `en-US` and `ja` loaded from `src/locales/{locale}/` directory trees
 - Security
   - Encrypted key storage, key-version rotation support, and optional AWS Secrets Manager loading
 - Optional Matrix bridge
@@ -34,16 +34,16 @@ TomoriBot is a TypeScript + Bun Discord AI chatbot focused on configurable perso
 
 ## Current Command Surface
 
-Commands are loaded from folders under `src/commands/` (currently 17 top-level categories):
+Commands are loaded from folders under `src/commands/` (currently 25 top-level categories):
 
-- `bot`, `conditioning`, `config`, `contribute`, `donate`, `generate`, `help`, `legal`, `memory`, `novelai`, `optional-key`, `persona`, `personal`, `server`, `st-preset`, `support`, `tool`
+- `bot`, `capabilities`, `conditioning`, `config`, `contribute`, `donate`, `generate`, `help`, `legal`, `mcp`, `memory`, `model`, `novelai`, `nsfw`, `openrouter`, `optional-key`, `persona`, `personal`, `provider`, `scheduled-task`, `server`, `speech`, `st-preset`, `support`, `tool`
 
 ## Documentation Layout
 
 - Index: [`docs/README.md`](../README)
-- Core: [`core/`](./)
-- Systems: [`systems/`](../systems/)
-- AI: [`ai/`](../ai/)
+- Architecture: [`architecture/`](./)
+- Pipelines: [`pipelines/`](../pipelines/)
+- Subsystems: [`subsystems/`](../subsystems/)
 - Integrations: [`integrations/`](../integrations/)
 - Guides: [`guides/`](../guides/)
 

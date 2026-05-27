@@ -728,6 +728,25 @@ export function clearExpiredEntries(): void {
 }
 
 /**
+ * Clear all short-term memories.
+ *
+ * This is intentionally not used by normal cache invalidation paths because STM
+ * is user-visible conversational state. It exists for explicit emergency memory
+ * pressure handling where the operator has opted into sacrificing STM.
+ */
+export function clearShortTermMemoryCache(): void {
+  try {
+    const clearedCount = cache.size;
+    cache.clear();
+    stats.invalidations += clearedCount;
+  } catch (error) {
+    log.error("[shortTermMemoryCache] Failed to clear all short-term memory entries", error, {
+      errorType: "CACHE_CLEAR_ERROR",
+    });
+  }
+}
+
+/**
  * Get cache statistics for monitoring performance
  *
  * @returns Cache hit/miss/store/invalidation/expiration stats

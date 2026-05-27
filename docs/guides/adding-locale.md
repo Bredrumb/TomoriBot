@@ -6,7 +6,7 @@ This guide walks through adding support for a new display language in TomoriBot.
 
 ## Steps
 
-1. Create `src/locales/{locale}.ts`, mirroring the key structure of an existing locale file (`en-US.ts` is the canonical reference).
+1. Create `src/locales/{locale}/` directory. Copy the file/folder structure from `src/locales/en-US/` — the top-level `.ts` files (`bridges.ts`, `commands.ts`, `general.ts`, `providers.ts`, `tools.ts`) plus the `commands/` sub-folder with one file per command category. `en-US` is the canonical reference for key structure.
 
 2. Ensure every required key exists in the new file. Missing keys will cause `check-locales` to fail.
 

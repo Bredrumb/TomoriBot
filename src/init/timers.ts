@@ -40,7 +40,7 @@ export function initTimers(client: Client): void {
     import("@/timers/memoryMonitor")
       .then(({ initializeMemoryMonitor }) => {
         client.once("clientReady", () => {
-          initializeMemoryMonitor();
+          initializeMemoryMonitor(client);
           log.success("Memory monitoring system initialized");
         });
       })

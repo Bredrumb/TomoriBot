@@ -35,6 +35,10 @@ export function getChannelLlmCacheSize(): number {
   return channelLlmCache.size;
 }
 
+export function clearChannelLlmCache(): void {
+  channelLlmCache.clear();
+}
+
 export function invalidateAllChannelLlmCacheForServer(serverId: number): void {
   const prefix = `${serverId}:`;
   for (const key of channelLlmCache.keys()) {

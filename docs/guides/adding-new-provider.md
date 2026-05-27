@@ -271,8 +271,8 @@ When adding a provider, update the user-facing setup/help copy in the same chang
 Minimum reminders:
 
 - update `/help api-key` provider choices in `src/commands/help/api-key.ts`
-- add localized `/help api-key` copy in both `src/locales/en-US.ts` and `src/locales/ja.ts`
-- review the `/config params` success embed strings in `src/locales/en-US.ts` and `src/locales/ja.ts`
+- add localized `/help api-key` copy in both locale trees (`src/locales/en-US/` and `src/locales/ja/`)
+- review the `/config params` success embed strings in both locale trees
 - keep those `/config params` provider lists accurate per parameter; do not add a provider unless that exact saved setting is wired through the provider runtime
 - if the provider changes onboarding guidance, also review `/help setup`
 - if the provider changes pricing guidance or model-tag expectations, review `/help cost` and any related help text

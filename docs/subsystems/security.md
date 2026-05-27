@@ -195,9 +195,18 @@ Controls include:
 - Production-only message concurrency limits per user/server
 - Daily in-memory quotas for persona/import/document/avatar operations
 - Stream flood guard (`MAX_FLUSH_COUNT`)
-- Memory pressure guard with warning/critical modes and emergency cooldown
+- Memory pressure guard with warning/critical modes, emergency cooldown, and automatic recoverable-cache clearing
 - Safe attachment download with max size + timeout + response validation
 - Media download limits for provider-returned videos and Gemini/Vertex inline video context are configurable through `PROVIDER_VIDEO_DOWNLOAD_MAX_MB` and `VIDEO_CONTEXT_MAX_INLINE_MB`.
+
+Critical memory behavior:
+
+- `memoryGuard` enters emergency mode when RSS reaches `MEMORY_CRITICAL_THRESHOLD`
+  of `CONTAINER_MEMORY_LIMIT_MB`.
+- Emergency mode disables media processing and triggers `clearEmergencyCaches()`.
+- Cache clearing preserves non-expired short-term memory by default; operators can
+  opt into full STM clearing with `EMERGENCY_CACHE_CLEAR_INCLUDE_STM=true`.
+- Forced GC runs after cache clearing when the runtime exposes `global.gc`.
 
 ## Supply Chain Security
 

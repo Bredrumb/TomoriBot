@@ -104,7 +104,19 @@ Caching reduces repeated DB/API calls and helps meet Discord interaction timing 
 - Warmed at startup from preset rows
 - No TTL; refresh via restart/re-init
 
-### 12) Persona picker avatar session cache (transient, in `utils/discord/ui/personaPagination.ts`)
+### 12) Voice transcript cache (`utils/audio/voiceTranscriptCache.ts`)
+
+- Key: Discord message ID
+- Stores STT/TTS transcript text for older audio messages in history
+- Default TTL: `VOICE_TRANSCRIPT_CACHE_TTL_MINUTES` (default 120)
+
+### 13) Markdown table render cache (`utils/text/markdownTableCache.ts`)
+
+- Key: Discord message ID
+- Stores original markdown behind rendered table images
+- Default TTL: `MARKDOWN_TABLE_CACHE_TTL_MINUTES` (default 120)
+
+### 14) Persona picker avatar session cache (transient, in `utils/discord/ui/personaPagination.ts`)
 
 Unlike the caches above, this one is **not** stored in `src/utils/cache/`. It is an ephemeral
 `Map<number, AvatarCacheEntry>` created per command invocation and discarded when the command finishes.
@@ -144,6 +156,37 @@ Common examples:
 - emoji/sticker update events -> `invalidateEmojiStickerCache(serverId)`
 - persona webhook/avatar changes -> webhook invalidation helpers
 
+## Emergency Memory Cleanup
+
+When `memoryGuard` enters critical emergency mode, the memory monitor runs
+`clearEmergencyCaches()` before forced GC. This clears recoverable DB/API-backed
+caches plus volatile Discord.js message/user/presence/voice-state caches. Short-term
+memory is preserved by default; only expired STM entries are swept.
+
+Default emergency behavior:
+
+- Clears: Tomori state, user, whitelist, channel LLM, emoji/sticker, guild MCP,
+  personal spotlight, ST preset, webhook, webhook identity, NovelAI subscription,
+  OpenRouter on-demand capability, preset avatar, voice transcript, markdown table,
+  and volatile Discord.js message/bot-user/presence/voice-state caches.
+- Preserves: non-expired short-term memory, static LLM model cache, static provider
+  capability maps, command registries, MCP connections, active channel locks, and
+  other runtime coordination state.
+- Emits `log.metric("emergency_cache_clear", ...)` and `log.metric("memory_emergency_entered", ...)`
+  so CloudWatch/Grafana can correlate cache eviction with RSS pressure.
+
+Operational knobs:
+
+```env
+EMERGENCY_CACHE_CLEAR_ENABLED=true
+EMERGENCY_CACHE_CLEAR_INCLUDE_STM=false
+EMERGENCY_CACHE_CLEAR_DISCORD_VOLATILE=true
+EMERGENCY_COOLDOWN_MS=60000
+```
+
+`EMERGENCY_CACHE_CLEAR_INCLUDE_STM=true` should be treated as a last-resort setting
+because STM is conversational state, not merely a database read-through cache.
+
 ## Anti-Patterns to Avoid
 
 - Invalidating before write success
@@ -158,6 +201,9 @@ TOMORI_STATE_CACHE_TTL_MINUTES=10
 USER_CACHE_TTL_MINUTES=30
 EMOJI_STICKER_CACHE_TTL_MINUTES=10
 CHANNEL_WHITELIST_CACHE_TTL_MINUTES=5
+EMERGENCY_CACHE_CLEAR_ENABLED=true
+EMERGENCY_CACHE_CLEAR_INCLUDE_STM=false
+EMERGENCY_CACHE_CLEAR_DISCORD_VOLATILE=true
 SHORT_TERM_MEMORY_TTL_HOURS=2
 SHORT_TERM_MEMORY_SUMMARY_TTL_HOURS=4
 SHORT_TERM_MEMORY_MAX_SUMMARY_LENGTH=500

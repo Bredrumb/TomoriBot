@@ -18,7 +18,7 @@ bun test tests/
 
 The first harness is fixture-driven and targets chat decision functions:
 
-- `shouldBotReply()` in `src/utils/chat/admission.ts` for reply/no-reply decisions
+- `shouldBotReply()` in `src/utils/chat/replyDecision.ts` for reply/no-reply decisions
 - `determineMatchingPersonas()` in `src/utils/chat/triggerProcessor.ts` for persona routing and deterministic ordering
 
 Fixtures live in `tests/regression/chat/fixtures/conversations.json`. Expected decisions live in `tests/regression/chat/fixtures/expected-decisions.json`.

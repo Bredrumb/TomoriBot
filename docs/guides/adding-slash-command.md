@@ -16,7 +16,7 @@ This guide walks through the full process of creating a new slash command in Tom
 
 3. Use `localizer("en-US", ...)` for command description and options so the loader can auto-register locale strings.
 
-4. Add locale keys to both `src/locales/en-US.ts` and `src/locales/ja.ts`.
+4. Add locale keys to both locales. Command keys live in `src/locales/{locale}/commands/{category}.ts`. Other key types live in the matching top-level file (`general.ts`, `tools.ts`, etc.) under `src/locales/{locale}/`.
    - Option descriptions: `{option_name}_description`
    - Choice labels: `{choice_value}_option`
    - Do NOT use `{option_name}_option` for option descriptions — it silently fails auto-localization.

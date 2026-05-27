@@ -11,31 +11,35 @@ This document summarizes the current PostgreSQL schema used by TomoriBot.
 
 ## Data Access Boundary
 
-The Phase 2 repository layer lives under `src/utils/db/repositories/`. All 19 repository classes implement the shared `IRepository<TExport>` contract:
+The Phase 2 repository layer lives under `src/utils/db/repositories/`. All 23 repository classes implement the shared `IRepository<TExport>` contract:
 
 | Repository | Domain |
 |---|---|
 | `ConfigRepository` | Server/persona config reads + writes, NAI presets |
-| `CooldownRepository` | Cooldown checks, cooldown writes, cleanup |
 | `ConditioningMemoryRepository` | Reward/punish conditioning history |
+| `CooldownRepository` | Cooldown checks, cooldown writes, cleanup |
+| `ErrorLogRepository` | Error log inserts (thin shim; avoids circular import with logger) |
 | `ExportRepository` | All data export operations (personal, server, memories, settings) |
 | `ImportRepository` | All data import operations + cache invalidation |
 | `LlmModelRepository` | Global model catalog (text, embedding, diffusion, video) |
 | `LlmOverrideRepository` | Channel/persona LLM override assignments + fallback refs |
 | `LlmProviderRepository` | Saved provider configs, custom endpoints, OpenRouter registrations |
+| `McpRepository` | MCP server configurations |
 | `PersonalMemoryRepository` | User + persona lineage scoped personal memories |
 | `PersonaRepository` | Persona state loading + writes (`personas`, `persona_configs`) |
 | `PresetRepository` | TomoriBot preset export/import + SillyTavern preset CRUD + ST card conversion |
+| `QuotaRepository` | Image, text, and video generation quota tracking |
 | `RagRepository` | RAG document and chunk storage |
 | `ServerMemoryRepository` | Server-wide shared memories |
 | `ServerRepository` | Server identity: setup, emojis/stickers, webhooks, blacklist |
 | `ServerScheduleRepository` | Reminder + random-trigger scheduling |
 | `ShortTermMemoryRepository` | Short-term per-channel/user conversation memory |
+| `SpeechRepository` | Speech (TTS/STT) server configuration |
 | `ToolRepository` | Tool configurations and API key status |
 | `UserRepository` | User registration, privacy, personalization, spotlight |
 | `WhitelistRepository` | Channel, persona, and role whitelist rules |
 
-Application code imports repository instances from `src/utils/db/repositories/index.ts`. That file re-exports all 19 instances and a small set of shared types; it contains no free functions. The former public DB god files (`dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, `dataImportV2.ts`) have been removed.
+Application code imports repository instances from `src/utils/db/repositories/index.ts`. That file re-exports all 23 instances and a small set of shared types; it contains no free functions. The former public DB god files (`dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, `dataImportV2.ts`) have been removed.
 
 ### SQL convention
 

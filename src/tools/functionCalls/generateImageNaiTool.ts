@@ -24,7 +24,7 @@ import {
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { sql } from "../../utils/db/client";
 import { decryptApiKey } from "../../utils/security/crypto";
-import { checkImageQuota, incrementImageQuota } from "../../utils/quota/imageQuotaManager";
+import { checkImageQuota, incrementImageQuota, type QuotaCheckResult } from "../../utils/quota/imageQuotaManager";
 import { extractImagesFromMessage } from "../../utils/image/imageExtractor";
 import { segmentImage } from "../../utils/image/segmentationService";
 import { resolveNaiImageParams, type EffectiveNaiImageParams } from "@/utils/image/naiImageParams";
@@ -879,53 +879,11 @@ export class GenerateImageNaiTool extends BaseTool {
       };
     }
 
-    // 2. Check image generation quota
     const userDiscId = context.userId || context.message?.author.id || "";
     if (!userDiscId) {
       return {
         success: false,
         error: "Unable to identify user for quota checking",
-      };
-    }
-
-    const quotaCheck = await checkImageQuota(context.tomoriState.server_id, userDiscId);
-
-    if (!quotaCheck.allowed) {
-      // Build user-friendly error message based on quota type
-      let errorMessage = "";
-      let resetInfo = "";
-
-      if (quotaCheck.resetTime) {
-        const now = new Date();
-        const resetTime = quotaCheck.resetTime;
-        const hoursUntilReset = Math.ceil((resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
-
-        if (hoursUntilReset < 24) {
-          resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_hours", {
-            hours: hoursUntilReset.toString(),
-          });
-        } else {
-          const daysUntilReset = Math.ceil(hoursUntilReset / 24);
-          resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_days", {
-            days: daysUntilReset.toString(),
-          });
-        }
-      }
-
-      if (quotaCheck.reason === "user_quota_exceeded") {
-        errorMessage = localizer(context.locale, "tools.generate_image.user_quota_exceeded", { reset_info: resetInfo });
-      } else if (quotaCheck.reason === "serverwide_quota_exceeded") {
-        errorMessage = localizer(context.locale, "tools.generate_image.serverwide_quota_exceeded", {
-          reset_info: resetInfo,
-        });
-      } else {
-        errorMessage = localizer(context.locale, "tools.generate_image.quota_exceeded_generic");
-      }
-
-      return {
-        success: false,
-        error: "Image generation quota exceeded",
-        message: errorMessage,
       };
     }
 
@@ -949,10 +907,61 @@ export class GenerateImageNaiTool extends BaseTool {
       };
     }
 
+    // Default to allowed; overwritten below for server-credential users
+    let quotaCheck: QuotaCheckResult = { allowed: true };
+
     try {
+      // Resolve credentials first so we can skip server quota for personal BYOK users
       const creds = await resolveCapabilityCredentials(context.tomoriState.server_id, "image-nai", {
         userId: context.internalUserId ?? null,
       });
+
+      // Personal BYOK users bring their own API quota — bypass server quota entirely
+      if (creds.source === "server") {
+        quotaCheck = await checkImageQuota(context.tomoriState.server_id, userDiscId);
+      }
+
+      if (!quotaCheck.allowed) {
+        // Build user-friendly error message based on quota type
+        let errorMessage = "";
+        let resetInfo = "";
+
+        if (quotaCheck.resetTime) {
+          const now = new Date();
+          const resetTime = quotaCheck.resetTime;
+          const hoursUntilReset = Math.ceil((resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
+
+          if (hoursUntilReset < 24) {
+            resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_hours", {
+              hours: hoursUntilReset.toString(),
+            });
+          } else {
+            const daysUntilReset = Math.ceil(hoursUntilReset / 24);
+            resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_days", {
+              days: daysUntilReset.toString(),
+            });
+          }
+        }
+
+        if (quotaCheck.reason === "user_quota_exceeded") {
+          errorMessage = localizer(context.locale, "tools.generate_image.user_quota_exceeded", {
+            reset_info: resetInfo,
+          });
+        } else if (quotaCheck.reason === "serverwide_quota_exceeded") {
+          errorMessage = localizer(context.locale, "tools.generate_image.serverwide_quota_exceeded", {
+            reset_info: resetInfo,
+          });
+        } else {
+          errorMessage = localizer(context.locale, "tools.generate_image.quota_exceeded_generic");
+        }
+
+        return {
+          success: false,
+          error: "Image generation quota exceeded",
+          message: errorMessage,
+        };
+      }
+
       const resolvedConfig = {
         ...context.tomoriState.config,
         nai_diffusion_model_id:
@@ -1248,8 +1257,10 @@ export class GenerateImageNaiTool extends BaseTool {
 
       log.success(`Successfully ${isInpaintMode ? "inpainted" : "generated"} and sent NAI image to Discord`);
 
-      // 8. Increment quota after successful generation
-      await incrementImageQuota(context.tomoriState.server_id, userDiscId);
+      // 8. Increment quota after successful generation (server providers only)
+      if (creds.source === "server") {
+        await incrementImageQuota(context.tomoriState.server_id, userDiscId);
+      }
 
       // Build success message with remaining quota info
       let successMessage: string;

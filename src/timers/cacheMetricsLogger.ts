@@ -14,20 +14,28 @@
  */
 
 import type { Client } from "discord.js";
+import { getVoiceTranscriptCacheSize } from "@/utils/audio/voiceTranscriptCache";
 import { getChannelLlmCacheSize } from "@/utils/cache/channelLlmCacheStore";
 import { getWhitelistCacheStats } from "@/utils/cache/channelWhitelistCache";
 import { getEmojiStickerCacheStats } from "@/utils/cache/emojiStickerCache";
 import { getGuildMcpConfigCacheStats } from "@/utils/cache/guildMcpConfigCache";
 import { getLLMCacheSize } from "@/utils/cache/llmCache";
 import { getNovelaiSubscriptionCacheSize } from "@/utils/cache/novelaiSubscriptionCache";
-import { getOpenRouterCapabilityCacheSize } from "@/utils/cache/openrouterCapabilityCache";
+import {
+  getOpenRouterCapabilityCacheSize,
+  getOpenRouterOnDemandCapabilityCacheSize,
+} from "@/utils/cache/openrouterCapabilityCache";
+import { getPersonalSpotlightCacheStats } from "@/utils/cache/personalSpotlightCache";
 import { getShortTermMemoryCacheStats } from "@/utils/cache/shortTermMemoryCache";
 import { getStPresetCacheStats } from "@/utils/cache/stPresetCache";
 import { getTomoriStateCacheStats } from "@/utils/cache/tomoriStateCache";
 import { getUserCacheStats } from "@/utils/cache/userCache";
+import { getWebhookIdentityCacheSize } from "@/utils/chat/webhookIdentity";
 import { getWebhookCacheSizes } from "@/utils/discord/webhook/cache";
+import { getPresetAvatarCacheSize } from "@/utils/image/avatarHelper";
 import { log } from "@/utils/misc/logger";
 import { memoryGuard } from "@/utils/security/rateLimiter";
+import { getMarkdownTableCacheSize } from "@/utils/text/markdownTableCache";
 
 /**
  * Default sampling cadence when CACHE_METRICS_INTERVAL_MS is not set.
@@ -105,6 +113,7 @@ export function collectCacheMetricsSnapshot(client: Client): Record<string, numb
   const guildMcp = getGuildMcpConfigCacheStats();
   const stPreset = getStPresetCacheStats();
   const webhook = getWebhookCacheSizes();
+  const personalSpotlight = getPersonalSpotlightCacheStats();
   const memCheck = memoryGuard.checkMemory();
 
   return {
@@ -116,9 +125,14 @@ export function collectCacheMetricsSnapshot(client: Client): Record<string, numb
     channelLlm: getChannelLlmCacheSize(),
     emojiSticker: emojiSticker.cacheSize,
     guildMcpConfig: guildMcp.cacheSize,
+    personalSpotlight: personalSpotlight.size,
     stPreset: stPreset.size,
+    presetAvatar: getPresetAvatarCacheSize(),
+    voiceTranscript: getVoiceTranscriptCacheSize(),
+    markdownTable: getMarkdownTableCacheSize(),
     llmCache: getLLMCacheSize(),
     openrouterCapability: getOpenRouterCapabilityCacheSize(),
+    openrouterOnDemandCapability: getOpenRouterOnDemandCapabilityCacheSize(),
     novelaiSubscription: getNovelaiSubscriptionCacheSize(),
 
     // Webhook manager (no TTL — watch for unbounded growth)
@@ -127,6 +141,7 @@ export function collectCacheMetricsSnapshot(client: Client): Record<string, numb
     webhookMutationLocks: webhook.webhookMutationLocks,
     webhookAvatarState: webhook.webhookAvatarState,
     persistedManagedWebhookIds: webhook.persistedManagedWebhookIds,
+    webhookIdentity: getWebhookIdentityCacheSize(),
 
     // Discord.js client caches
     ...collectDiscordCacheSizes(client),

@@ -573,6 +573,15 @@ export class PeekProfilePictureTool extends BaseTool {
    */
   private async fetchAndConvertImageToBase64(avatarUrl: string): Promise<string> {
     try {
+      // Data URIs (e.g. local preset avatars) are already base64-encoded — decode directly.
+      if (avatarUrl.startsWith("data:")) {
+        const markerIndex = avatarUrl.indexOf("base64,");
+        if (markerIndex === -1) {
+          throw new Error("Avatar image processing failed: unsupported data URI format (no base64 payload)");
+        }
+        return avatarUrl.slice(markerIndex + "base64,".length).trim();
+      }
+
       // Fetch the image from Discord CDN with bounded download checks
       const response = await safeDownload(avatarUrl, {
         maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,

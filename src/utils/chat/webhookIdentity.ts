@@ -30,6 +30,14 @@ export function cacheUserImpersonationWebhook(webhookId: string, userId: string)
   cacheWebhookRelay(webhookId, userId, "user_impersonation");
 }
 
+export function clearWebhookIdentityCache(): void {
+  webhookRelayCache.clear();
+}
+
+export function getWebhookIdentityCacheSize(): number {
+  return webhookRelayCache.size;
+}
+
 function getCachedWebhookRelay(webhookId: string | null | undefined): CachedWebhookRelay | null {
   if (!webhookId) {
     return null;

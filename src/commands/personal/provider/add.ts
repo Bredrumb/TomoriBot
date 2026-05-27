@@ -19,6 +19,7 @@ import type { ErrorContext, UserRow } from "@/types/db/schema";
 import type { ModalComponent, SelectOption } from "@/types/discord/modal";
 import { buildUserSavedProviderConfigFromExistingOrDefaults } from "@/utils/provider/savedProviderConfig";
 import { isCustomProvider } from "@/utils/discord/customProviderModal";
+import { commandRegistry } from "@/utils/discord/commandRegistry";
 
 const MODAL_CUSTOM_ID = "personal_provider_add_modal";
 const PROVIDER_SELECT_ID = "provider_select";
@@ -64,7 +65,9 @@ export async function execute(
     return;
   }
 
-  const providerChoices = getAllProviderChoices().filter((choice) => !isCustomProvider(choice.value));
+  const providerChoices = getAllProviderChoices().filter(
+    (choice) => !isCustomProvider(choice.value) && choice.value !== "custom",
+  );
   const existingProviders = new Set(
     (await llmProviderRepo.loadUserSavedProviderConfigs(userData.user_id)).map((row) => row.provider),
   );
@@ -73,6 +76,11 @@ export async function execute(
     label: existingProviders.has(choice.value) ? `${choice.name} (${existingSuffix})` : choice.name,
     value: choice.value,
   }));
+  providerOptions.push({
+    label: getProviderDisplayName("custom"),
+    value: "custom",
+    description: localizer(locale, "commands.personal.provider.add.custom_deprecated_description"),
+  });
 
   try {
     const modalComponents: ModalComponent[] = [
@@ -89,7 +97,7 @@ export async function execute(
         labelKey: "commands.personal.provider.add.api_key_label",
         descriptionKey: "commands.personal.provider.add.api_key_description",
         placeholder: "commands.personal.provider.add.api_key_placeholder",
-        required: true,
+        required: false,
         style: TextInputStyle.Short,
         maxLength: 200,
       },
@@ -112,7 +120,25 @@ export async function execute(
 
     const selectedProvider = modalResult.values?.[PROVIDER_SELECT_ID]?.trim().toLowerCase();
     const apiKeyInput = modalResult.values?.[API_KEY_INPUT_ID]?.trim();
-    if (!selectedProvider || !apiKeyInput) {
+    if (!selectedProvider) {
+      return;
+    }
+
+    if (selectedProvider === "custom") {
+      await replyInfoEmbed(modalResult.interaction, locale, {
+        titleKey: "commands.personal.provider.add.custom_moved_title",
+        descriptionKey: "commands.personal.provider.add.custom_moved_description",
+        descriptionVars: {
+          custom_models_add_command: commandRegistry.getCommandMention("personal", "custom-endpoint", "add"),
+          model_text_command: commandRegistry.getCommandMention("personal", "provider", "model-text"),
+          help_custom_models_command: commandRegistry.getCommandMention("help", "custom-endpoint"),
+        },
+        color: ColorCode.WARN,
+      });
+      return;
+    }
+
+    if (!apiKeyInput) {
       return;
     }
 
