@@ -122,11 +122,11 @@ export async function extractImagesFromMessage(messageId: string, context: ToolC
   const imageAttachments = message.attachments.filter((attachment) => isLikelyImageAttachment(attachment));
 
   for (const attachment of imageAttachments.values()) {
-      imageUrls.push({
-        url: attachment.url,
-        mimeType: attachment.contentType || inferImageMimeType(attachment.name || attachment.url || ""),
-        source: `attachment: ${attachment.name}`,
-      });
+    imageUrls.push({
+      url: attachment.url,
+      mimeType: attachment.contentType || inferImageMimeType(attachment.name || attachment.url || ""),
+      source: `attachment: ${attachment.name}`,
+    });
   }
 
   // 3. Embed images and thumbnails
