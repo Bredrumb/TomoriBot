@@ -42,7 +42,7 @@ const IMAGE_REFERENCE_MAX_SINGLE_BYTES = Number.parseInt(process.env.IMAGE_REFER
 export class GenerateImageTool extends BaseTool {
   name = "generate_image";
   description =
-    "Generate, edit, or extend an image. Use text-to-image for new images, img2img for loose reference-based generations, inpaint for localized edits, and outpaint for canvas expansion. The generated image is sent directly to Discord.";
+    "Generate, edit, or outpaint an image. Sends the result directly to Discord.";
   category = "utility" as const;
   requiresFeatureFlag = "image_gen";
 
@@ -54,27 +54,26 @@ export class GenerateImageTool extends BaseTool {
       prompt: {
         type: "string",
         description:
-          "Main image prompt. For new images, describe the final composition. For img2img, describe the desired new image using the reference loosely. For inpaint, describe only the local replacement. For outpaint, describe what should continue into the new canvas; use directional prompt fields for edge-specific details.",
+          "Describe the desired image. For inpaint, describe only the local replacement. For outpaint, describe what should continue into the new canvas.",
       },
       media_id: {
         type: "string",
         description:
-          "Optional media reference ID such as media_1. Use for img2img, inpaint, or outpaint; omit for text-to-image.",
+          "Reference media ID such as media_1. Use for img2img, inpaint, or outpaint.",
       },
       inpaint: {
         type: "boolean",
-        description:
-          "Set true only for localized edits to a referenced image. Do not set this for outpaint requests.",
+        description: "Set true only for localized edits. Do not set for outpaint.",
       },
       mask_prompt: {
         type: "string",
         description:
-          "Optional: Short, generic phrase naming the existing region to edit when inpaint is true, such as 'cat', 'fur', 'chair', 'body', 'dress', or 'background'. Use the simplest segmenter-friendly noun possible and avoid possessives, relationships, adjectives, or full descriptions. For example, use 'body', not 'the baby's body'; use 'cat' or 'fur', not 'a super fluffy orange tabby kitten'. Do not describe the requested change here.",
+          "For inpaint: simplest generic noun for the existing target. Use 'body', 'dress', 'earring', or 'background'; avoid possessives/adjectives like 'the baby's body'. Do not describe the requested change.",
       },
       clothing_segment_categories: {
         type: "array",
         description:
-          "Optional clothing-parser categories for clothing inpaint targets. For dresses, include Dress, Upper-clothes, and Skirt. Omit for non-clothing masks.",
+          "Clothing-parser categories for clothing targets. For dresses, include Dress, Upper-clothes, and Skirt.",
         items: {
           type: "string",
           enum: [
@@ -95,93 +94,85 @@ export class GenerateImageTool extends BaseTool {
       clothing_mode: {
         type: "boolean",
         description:
-          "Set true for clothing, worn accessories, fashion items, jewelry, or paired wearable items so the clothing parser is used.",
+          "Set true for clothing, worn accessories, jewelry, or paired wearable items.",
       },
       mask_threshold: {
         type: "number",
-        description: "Optional inpaint detection threshold. Lower is broader; higher is stricter.",
+        description: "Inpaint detection threshold. Lower is broader; higher is stricter.",
       },
       mask_grow: {
         type: "number",
-        description: "Optional mask expansion in pixels. Small values are precise; larger values give edits more room.",
+        description: "Mask expansion in pixels.",
       },
       mask_feather: {
         type: "number",
-        description: "Optional mask feather in pixels. Low values keep crisp edges; higher values blend more.",
+        description: "Mask feather in pixels.",
       },
       cfg: {
         type: "number",
-        description: "Optional prompt guidance. Higher follows the prompt more strongly; lower preserves reference structure.",
+        description: "Prompt guidance. Higher follows the prompt more strongly.",
       },
       denoise: {
         type: "number",
-        description: "Optional img2img/inpaint strength from 0 to 1. Lower preserves more; higher changes more.",
+        description: "Img2img/inpaint strength from 0 to 1. Lower preserves more.",
       },
       mask_mode: {
         type: "string",
         description:
-          "Use 'target' to edit the detected mask_prompt region. Use 'background' to edit surroundings while protecting the named foreground object.",
+          "Use target to edit the mask_prompt region; background edits surroundings while protecting it.",
         enum: ["target", "background"],
       },
       inpaint_preset: {
         type: "string",
-        description:
-          "Optional inpaint category. Prefer presets over raw tuning: tight_recolor, broad_recolor, background, or extend.",
+        description: "Inpaint category. Prefer presets over raw tuning.",
         enum: ["small_detail", "tight_recolor", "broad_recolor", "background", "extend"],
       },
       inpaint_mode: {
         type: "string",
-        description:
-          "Optional inpaint behavior: normal edits the mask, extend grows nearby content, outpaint expands the canvas.",
+        description: "Inpaint behavior: normal edits the mask, extend grows nearby content, outpaint expands canvas.",
         enum: ["normal", "extend", "outpaint"],
       },
       outpaint: {
         type: "boolean",
         description:
-          "Set true to expand the image canvas beyond one or more edges. Requires media_id or target_identity. Do not also set inpaint=true.",
+          "Set true to expand the canvas. Requires media_id or target_identity. Do not also set inpaint=true.",
       },
       outpaint_strategy: {
         type: "string",
-        description:
-          "Optional outpaint strategy. full_canvas is the default. edge_extend and zoom_out are accepted provider hints.",
+        description: "Outpaint strategy. full_canvas is the default.",
         enum: ["full_canvas", "edge_extend", "zoom_out"],
       },
       outpaint_amount: {
         type: "string",
         description:
-          "Optional canvas expansion preset. Use slight for a small reveal, moderate for a wider pullback, large for lower body/full outfit requests, and dramatic for a far zoom-out.",
+          "Canvas expansion preset: slight, moderate, large, or dramatic.",
         enum: ["slight", "moderate", "large", "dramatic"],
       },
       outpaint_left_prompt: {
         type: "string",
-        description:
-          "Optional left-edge outpaint guidance. Describe only what should continue beyond the left edge.",
+        description: "Left-edge outpaint guidance.",
       },
       outpaint_right_prompt: {
         type: "string",
-        description:
-          "Optional right-edge outpaint guidance. Describe only what should continue beyond the right edge.",
+        description: "Right-edge outpaint guidance.",
       },
       outpaint_top_prompt: {
         type: "string",
-        description:
-          "Optional top-edge outpaint guidance, such as sky, ceiling, headroom, or top-edge environment.",
+        description: "Top-edge outpaint guidance.",
       },
       outpaint_bottom_prompt: {
         type: "string",
-        description:
-          "Optional bottom-edge outpaint guidance, such as ground, floor, lower body, or objects touching the bottom edge.",
+        description: "Bottom-edge outpaint guidance.",
       },
       extend_direction: {
         type: "string",
         description:
-          "Optional extension direction. Use all for zoom-out/pull-back requests, or one edge for directional expansions.",
+          "Extension direction. Use all for zoom-out/pull-back requests, or one edge for directional expansions.",
         enum: ["down", "up", "left", "right", "down_left", "down_right", "up_left", "up_right", "all"],
       },
       extend_pixels: {
         type: "number",
-        description:
-          "Optional approximate extension size in pixels. Usually prefer outpaint_amount for canvas outpainting.",
+        description: "Approximate extension size in pixels. Prefer outpaint_amount when possible.",
       },
       outpaint_overlap: {
         type: "number",
@@ -194,11 +185,11 @@ export class GenerateImageTool extends BaseTool {
       target_identity: {
         type: "string",
         description:
-          "Optional user/persona identity whose avatar should be used as a reference. Do not combine with media_id unless requested.",
+          "User/persona identity whose avatar should be used as a reference.",
       },
       aspect_ratio: {
         type: "string",
-        description: "Optional: The aspect ratio for the generated image. Default is '1:1' (square).",
+        description: "Aspect ratio. Default is 1:1.",
         enum: ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"],
       },
     },
