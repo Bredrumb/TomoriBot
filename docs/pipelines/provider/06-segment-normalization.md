@@ -27,9 +27,10 @@ The transformation pipeline runs in this order:
 
 3. **LLM output cleaning** (`cleanLLMOutput`) — strips the bot's own name-prefix if the model
    writes it (e.g., `"Tomori: hello"` → `"hello"`), converts `:name:` shortcodes to full Discord
-   custom emoji syntax (`<:name:id>`) using the server emoji list, removes all emoji when
-   `emojiUsageEnabled` is `false`, strips unresolved shortcodes when no emoji list is available
-   (RP channels, cache failures), and optionally uncensors Unicode space characters and sanitizes
+   custom emoji syntax (`<:name:id>`) using the server emoji list, strips unresolved shortcodes by
+   default, optionally preserves unresolved shortcodes when
+   `EMOJI_PRESERVE_UNRESOLVED_SHORTCODES=true`, removes all emoji attempts when
+   `emojiUsageEnabled` is `false`, and optionally uncensors Unicode space characters and sanitizes
    encoded content.
 
 4. **Guild mention resolution** (`resolveGuildMentions`) — converts name-based handle references
@@ -110,6 +111,7 @@ After this stage (per segment):
 | `TomoriState.config` | `uncensor_unicode_space_enabled` | `false` | Replaces Unicode 0x2800 braille blank with regular space in output |
 | `TomoriState.config` | `uncensor_sanitize_enabled` | `false` | Strips encoded characters that bypass content filters |
 | `StreamConfig` | `emojiUsageEnabled` | from `TomoriState` | Passed through to `cleanLLMOutput`; controls custom emoji presence |
+| Env var | `EMOJI_PRESERVE_UNRESOLVED_SHORTCODES` | `false` | When true, unresolved `:name:` emoji shortcodes are sent as literal text instead of being stripped |
 
 ## Related docs
 

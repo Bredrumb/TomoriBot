@@ -1,9 +1,85 @@
 import { describe, expect, it } from "bun:test";
 import {
+  cleanLLMOutput,
   findMarkdownCodeRanges,
   isGenericSpeakerStopLabel,
   truncateBeforeGenericSpeakerLine,
 } from "@/utils/text/processors/llmOutputProcessor";
+
+// ─── cleanLLMOutput ─────────────────────────────────────────────────────────
+
+const PRESERVE_UNRESOLVED_EMOJI_SHORTCODES_ENV = "EMOJI_PRESERVE_UNRESOLVED_SHORTCODES";
+
+function withPreserveUnresolvedShortcodes(value: string | undefined, assertion: () => void): void {
+  const previous = process.env[PRESERVE_UNRESOLVED_EMOJI_SHORTCODES_ENV];
+  if (value === undefined) {
+    delete process.env[PRESERVE_UNRESOLVED_EMOJI_SHORTCODES_ENV];
+  } else {
+    process.env[PRESERVE_UNRESOLVED_EMOJI_SHORTCODES_ENV] = value;
+  }
+
+  try {
+    assertion();
+  } finally {
+    if (previous === undefined) {
+      delete process.env[PRESERVE_UNRESOLVED_EMOJI_SHORTCODES_ENV];
+    } else {
+      process.env[PRESERVE_UNRESOLVED_EMOJI_SHORTCODES_ENV] = previous;
+    }
+  }
+}
+
+describe("cleanLLMOutput", () => {
+  const emojiStrings = ["<:hiroi1:1401852839730348033>", "<a:dance:123456789012345678>"];
+
+  it("converts known server emoji shortcodes to Discord emoji tags", () => {
+    expect(cleanLLMOutput(":hiroi1:", "Tomori", emojiStrings)).toBe("<:hiroi1:1401852839730348033>");
+  });
+
+  it("strips unresolved emoji shortcodes by default when an emoji list is available", () => {
+    withPreserveUnresolvedShortcodes(undefined, () => {
+      expect(cleanLLMOutput(":LILYESHYPER:\n:GOTTEM:", "Tomori", emojiStrings)).toBe("");
+    });
+  });
+
+  it("strips unresolved emoji shortcodes by default when no emoji list is available", () => {
+    withPreserveUnresolvedShortcodes(undefined, () => {
+      expect(cleanLLMOutput("hello :LILYESHYPER:", "Tomori", [])).toBe("hello");
+    });
+  });
+
+  it("strips unresolved Discord emoji tags by default", () => {
+    withPreserveUnresolvedShortcodes(undefined, () => {
+      expect(cleanLLMOutput("<:unknown:123456789012345678>", "Tomori", emojiStrings)).toBe("");
+    });
+  });
+
+  it("preserves unresolved emoji shortcodes when preservation is enabled", () => {
+    withPreserveUnresolvedShortcodes("true", () => {
+      expect(cleanLLMOutput(":LILYESHYPER:\n:GOTTEM:", "Tomori", emojiStrings)).toBe(":LILYESHYPER:\n:GOTTEM:");
+    });
+  });
+
+  it("preserves unresolved emoji shortcodes without an emoji list when preservation is enabled", () => {
+    withPreserveUnresolvedShortcodes("true", () => {
+      expect(cleanLLMOutput("hello :LILYESHYPER:", "Tomori", [])).toBe("hello :LILYESHYPER:");
+    });
+  });
+
+  it("preserves unresolved Discord emoji tags when preservation is enabled", () => {
+    withPreserveUnresolvedShortcodes("true", () => {
+      expect(cleanLLMOutput("<:unknown:123456789012345678>", "Tomori", emojiStrings)).toBe(
+        "<:unknown:123456789012345678>",
+      );
+    });
+  });
+
+  it("strips emoji shortcodes when emoji usage is disabled", () => {
+    withPreserveUnresolvedShortcodes("true", () => {
+      expect(cleanLLMOutput("hello :LILYESHYPER:", "Tomori", emojiStrings, false)).toBe("hello");
+    });
+  });
+});
 
 // ─── findMarkdownCodeRanges ──────────────────────────────────────────────────
 

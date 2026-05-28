@@ -264,8 +264,18 @@ export async function crawl4aiCrawlWithCookies(
       };
     }
 
-    // 1. Prefer fit_markdown (mirrors /md f=fit output); fall back to raw.
-    const markdown = result.markdown?.fit_markdown ?? result.markdown?.raw_markdown ?? "";
+    const fitLen = result.markdown?.fit_markdown?.length ?? 0;
+    const rawLen = result.markdown?.raw_markdown?.length ?? 0;
+    log.info(`${SERVICE_NAME} /crawl response: fit_markdown=${fitLen}chars raw_markdown=${rawLen}chars`);
+
+    // Respect the requested filter mode: raw requests read raw_markdown directly;
+    // fit (default) prefers fit_markdown and falls back to raw_markdown.
+    // Use || (not ??) because /crawl returns fit_markdown as "" (not null) when
+    // pruning removes all content, and ?? does not fall through on empty strings.
+    const markdown =
+      request.f === "raw"
+        ? result.markdown?.raw_markdown || ""
+        : result.markdown?.fit_markdown || result.markdown?.raw_markdown || "";
 
     return {
       success: true,

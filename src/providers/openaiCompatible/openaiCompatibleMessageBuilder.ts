@@ -73,7 +73,27 @@ export async function buildOpenAICompatibleMessages(
         continue;
       }
 
-      if (part.type !== "image" || !options.seesImages) {
+      if (part.type === "video") {
+        // Generic OpenAI-compatible endpoints don't support video embedding.
+        // Add a text placeholder so the model is aware a video was attached.
+        contentParts.push({
+          type: "text",
+          text: "[System: A video is attached to this message that this model cannot process.]",
+        });
+        continue;
+      }
+
+      if (part.type !== "image") {
+        continue;
+      }
+      if (!options.seesImages) {
+        // Image part present but model cannot process it — add a text placeholder
+        // so the model is still aware an image was attached. This can happen when
+        // context was built with images included for a vision-capable fallback model.
+        contentParts.push({
+          type: "text",
+          text: "[System: An image is attached to this message that this model cannot process.]",
+        });
         continue;
       }
 

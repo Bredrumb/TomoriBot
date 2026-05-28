@@ -51,13 +51,16 @@ function buildEndpoint(path: `/${string}`, baseUrl: string): string {
   return endpoint.toString();
 }
 
-function buildHeaders(): HeadersInit {
-  return {
+function buildHeaders(includeContentType = true): HeadersInit {
+  const headers: Record<string, string> = {
     Accept: "application/json,text/html",
     "Accept-Encoding": "gzip",
-    "Content-Type": "application/json",
     "User-Agent": USER_AGENT,
   };
+  if (includeContentType) {
+    headers["Content-Type"] = "application/json";
+  }
+  return headers;
 }
 
 function createAbortController(
@@ -97,7 +100,7 @@ export async function isBrowserlessAvailable(force = false): Promise<boolean> {
     const response = await fetch(buildEndpoint("/pressure", baseUrl), {
       method: "GET",
       signal: controller.signal,
-      headers: buildHeaders(),
+      headers: buildHeaders(false),
     });
 
     if (!response.ok) {
@@ -161,11 +164,16 @@ export async function browserlessContent(
   try {
     log.info(`${SERVICE_NAME} /content request: url="${request.url}"`);
 
+    const payload = {
+      ...request,
+      gotoOptions: request.gotoOptions ?? { waitUntil: "networkidle2" },
+    };
+
     const response = await fetch(buildEndpoint("/content", baseUrl), {
       method: "POST",
       headers: buildHeaders(),
       signal: controller.signal,
-      body: JSON.stringify(request),
+      body: JSON.stringify(payload),
     });
 
     const responseText = await response.text();
@@ -210,7 +218,7 @@ export async function getBrowserlessPressure(
     const response = await fetch(buildEndpoint("/pressure", baseUrl), {
       method: "GET",
       signal: controller.signal,
-      headers: buildHeaders(),
+      headers: buildHeaders(false),
     });
     const data = (await response.json().catch(() => ({}))) as BrowserlessPressureResponse;
     return { success: response.ok && isPressureAvailable(data), data, statusCode: response.status };

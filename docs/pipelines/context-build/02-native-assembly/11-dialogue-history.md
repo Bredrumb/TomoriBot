@@ -16,10 +16,15 @@ with three orthogonal concerns interleaved:
 1. **Role mapping** — persona-authored → `model`; user impersonation flips
    the impersonated user → `model`; everyone else → `user`.
 2. **Media + vision dispatch** — within the media window, attach images
-   and videos as binary parts when the model can see them; outside the
+   and videos as binary parts when the build flags allow them; outside the
    window or without vision, emit `[System: contains N image(s)]` hints
    with optional `{image_analysis_tool}` or `increase_media_context`
-   guidance.
+   guidance. **Note:** `seesImagesOverride`/`seesVideosOverride` may be
+   elevated above the primary model's capability when a fallback model in
+   the chain supports that media type (see `contextPipeline.ts`). In that
+   case, binary parts are embedded so the fallback model has the URI data;
+   providers that cannot process the parts emit a text placeholder instead
+   of silently skipping them.
 3. **Context-note injection** — if `context_note` is configured, inject
    `[System: ${note}]` at `context_note_depth` messages from the end of
    history.
@@ -37,8 +42,12 @@ Substantial — see signature in `dialogueHistory.ts:25-44`. Notable:
   `context_note`)
 - `mediaContextWindow: number | undefined` — override; falls back to
   `memoryGuard.getMediaWindow()`
-- `seesImagesOverride`, `seesVideosOverride` — chat pipeline passes live
-  OpenRouter capability flags here (overriding stale DB values)
+- `seesImagesOverride`, `seesVideosOverride` — the chat pipeline resolves
+  these from two sources and passes the result here (overriding stale DB
+  values): (1) live OpenRouter capability flags for OpenRouter models, and
+  (2) elevation to `true` when the primary model cannot see that media type
+  but any model in `fallback_chain`/`fallback_llms` can — so fallback
+  attempts receive full URI data rather than text-only hints
 - `hasVisionTool: boolean` — whether the active persona has a vision tool
   configured (changes the "can't see image" framing)
 - `isUserImpersonation`, `impersonatedUserId`
@@ -122,8 +131,8 @@ After this stage runs:
 | `tomoriConfig` | `context_note`, `context_note_depth` | Context-note injection |
 | `tomoriConfig` | `uncensor_unicode_space_enabled`, `uncensor_sanitize_enabled` | Drives uncensor transforms |
 | `tomoriState` | `context_note`, `context_note_depth` | Persona-level override of tomoriConfig values |
-| `tomoriState` | `llm.sees_images`, `llm.sees_videos` | Default vision capability |
-| `tomoriState` | `vision_llm` | Whether a vision tool is configured |
+| `tomoriState` | `llm.sees_images`, `llm.sees_videos` | Default vision capability; may be overridden upward by `seesImagesOverride`/`seesVideosOverride` when a fallback model in the chain supports that media type |
+| `tomoriState` | `vision_llm` | Whether a vision tool is configured (kept independent of the override — `hasVisionTool` always reflects the primary model's actual capability) |
 | Memory pressure | `memoryGuard.getMediaWindow()` | Dynamic media-window shrink under load |
 
 ## Extension points

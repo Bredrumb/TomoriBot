@@ -123,6 +123,32 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     }
   }
 
+  // If the primary model cannot see images/videos but any fallback can, build
+  // context with those media parts included so fallback attempts have the URI data.
+  // effectiveSeesImages/Videos are kept unchanged for the hasVisionTool flag below.
+  const primarySeesImages = effectiveSeesImages ?? activeLlm.sees_images;
+  const primarySeesVideos = effectiveSeesVideos ?? activeLlm.sees_videos;
+  let contextBuildSeesImages: boolean | undefined = effectiveSeesImages;
+  let contextBuildSeesVideos: boolean | undefined = effectiveSeesVideos;
+  if (!primarySeesImages || !primarySeesVideos) {
+    const fallbackEntries =
+      turn.persona.fallback_chain ??
+      turn.persona.fallback_llms?.map((model) => ({ kind: "llm" as const, model })) ??
+      [];
+    if (
+      !primarySeesImages &&
+      fallbackEntries.some((e) => (e.kind === "llm" ? e.model.sees_images : e.endpoint.sees_images))
+    ) {
+      contextBuildSeesImages = true;
+    }
+    if (
+      !primarySeesVideos &&
+      fallbackEntries.some((e) => (e.kind === "llm" ? e.model.sees_videos : e.endpoint.sees_videos))
+    ) {
+      contextBuildSeesVideos = true;
+    }
+  }
+
   // 1. Resolve deliberate tool mode + intent allowlist for this turn.
   // Mirrors main's tomoriChat.ts wiring (~lines 5557–5645). MUST run before
   // buildContext() so any has_tools override flows into context synthesis
@@ -273,8 +299,8 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     impersonatedUserNickname,
     impersonatedUserPrompt,
     explicitLongTermMemoryIntent: streamingContext.explicitLongTermMemoryIntent,
-    seesImages: effectiveSeesImages,
-    seesVideos: effectiveSeesVideos,
+    seesImages: contextBuildSeesImages,
+    seesVideos: contextBuildSeesVideos,
     hasVisionTool: !!effectivePersona.vision_llm && !(effectiveSeesImages ?? effectivePersona.llm.sees_images),
     messageIdMap,
   });

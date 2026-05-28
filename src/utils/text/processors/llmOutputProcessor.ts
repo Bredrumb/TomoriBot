@@ -3,8 +3,23 @@ import { applyUncensorOutputTransforms } from "@/utils/text/uncensor";
 import { escapeRegExp } from "./regexUtils";
 import { replaceMentionHandles } from "./mentionProcessor";
 
+const PRESERVE_UNRESOLVED_EMOJI_SHORTCODES_ENV = "EMOJI_PRESERVE_UNRESOLVED_SHORTCODES";
+
 function findMatchingBacktickRun(text: string, startIndex: number, delimiter: string): number {
   return text.indexOf(delimiter, startIndex);
+}
+
+function parseBooleanEnvFlag(value: string | undefined, defaultValue: boolean): boolean {
+  if (typeof value !== "string") return defaultValue;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return defaultValue;
+  if (normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on") return true;
+  if (normalized === "false" || normalized === "0" || normalized === "no" || normalized === "off") return false;
+  return defaultValue;
+}
+
+function shouldPreserveUnresolvedEmojiShortcodes(): boolean {
+  return parseBooleanEnvFlag(process.env[PRESERVE_UNRESOLVED_EMOJI_SHORTCODES_ENV], false);
 }
 
 /**
@@ -98,7 +113,7 @@ export function truncateBeforeGenericSpeakerLine(
 
 /**
  * Cleans raw LLM output for Discord display: removes leaked system blocks, normalises
- * whitespace, resolves Discord emoji shortcodes, strips bot-name prefixes, and resolves
+ * whitespace, resolves known Discord emoji shortcodes, strips bot-name prefixes, and resolves
  * @mention handles.
  * @param text - Raw text from LLM
  * @param botName - Optional bot name to remove from response prefix
@@ -121,6 +136,7 @@ export function cleanLLMOutput(
     sanitizeEnabled?: boolean;
   },
 ): string {
+  const preserveUnresolvedEmojiShortcodes = shouldPreserveUnresolvedEmojiShortcodes();
   let cleanedText = applyUncensorOutputTransforms(text, uncensorOptions)
     .replace(/\[system:[\s\S]*?\]/gi, "")
     .replace(/\[system:[\s\S]*$/gi, "");
@@ -183,24 +199,27 @@ export function cleanLLMOutput(
 
     cleanedText = cleanedText.replace(
       /<(a?):([^:>]+):?>/g,
-      (_match, _animated, name) => emojiNameMap.get(name.toLowerCase()) ?? "",
+      (match, _animated, name) =>
+        emojiNameMap.get(name.toLowerCase()) ?? (preserveUnresolvedEmojiShortcodes ? match : ""),
     );
 
-    cleanedText = cleanedText.replace(/<(a?):([^:>]+):([^>]+)>/g, (_match, animated, name, id) => {
+    cleanedText = cleanedText.replace(/<(a?):([^:>]+):([^>]+)>/g, (match, animated, name, id) => {
       const full = `<${animated}:${name}:${id}>`;
       if (validEmojiSet.has(full)) return full;
       const canonical = emojiNameMap.get(name.toLowerCase());
       if (canonical) return canonical;
-      return "";
+      return preserveUnresolvedEmojiShortcodes ? match : "";
     });
 
     for (const [key, emoji] of preserved.entries()) {
       cleanedText = cleanedText.replace(new RegExp(escapeRegExp(key), "g"), emoji);
     }
   } else {
-    // No emoji list available (RP channel, empty server, cache failure) — strip any shortcodes the
-    // LLM emitted so they don't appear as literal ":name:" text in the Discord output.
-    cleanedText = cleanedText.replace(/:(?=[^:]*[a-zA-Z_])[\w-]+:/g, "");
+    // No emoji list available (RP channel, empty server, cache failure). Default to strict
+    // cleanup unless the deployment explicitly opts into preserving unresolved shortcodes.
+    if (!preserveUnresolvedEmojiShortcodes) {
+      cleanedText = cleanedText.replace(/:(?=[^:]*[a-zA-Z_])[\w-]+:/g, "");
+    }
     log.info(
       `[cleanLLMOutput] Emoji conversion skipped. emojiUsageEnabled: ${emojiUsageEnabled}, emojiStrings length: ${emojiStrings?.length || 0}`,
     );
@@ -215,9 +234,14 @@ export function cleanLLMOutput(
     cleanedText = cleanedText.replace(prefixPattern, "");
   }
 
-  // Strip any leftover unresolved shortcodes (unknown emoji names that had no match in the server
-  // list). The pattern covers mid-sentence positions as well as start/end of string.
-  cleanedText = cleanedText.replace(/(?:^|\s):[a-zA-Z0-9_~]+:(?=\s|$)/gm, " ").trim();
+  if (!preserveUnresolvedEmojiShortcodes) {
+    // Strip any leftover unresolved shortcodes (unknown emoji names that had no match in the
+    // server list). The pattern covers mid-sentence positions as well as start/end of string.
+    cleanedText = cleanedText.replace(/(?:^|\s):[a-zA-Z0-9_~]+:(?=\s|$)/gm, " ").trim();
+  } else {
+    cleanedText = cleanedText.trim();
+  }
+
   cleanedText = replaceMentionHandles(cleanedText, mentionMap, mentionIdSet);
 
   return cleanedText.replace(/\n([^:]+):$/, "");

@@ -15,6 +15,8 @@ import type {
   OpenAICompatibleStreamConfig,
   OpenAICompatibleToolCallDelta,
 } from "@/providers/openaiCompatible/openaiCompatibleTypes";
+import { ReasoningContentSpillGuard } from "@/providers/utils/reasoningContentSpillGuard";
+import { ThinkBlockContentStripper } from "@/providers/utils/thinkBlockContentStripper";
 import type { FunctionCall, ThoughtLogEntry } from "@/types/provider/interfaces";
 import type {
   ProcessedChunk,
@@ -38,16 +40,13 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
   private static readonly STREAM_TEXT_MIN_DEDUP_CHARS = 8;
 
   private readonly toolCallAccumulator = new Map<number, OpenAICompatibleAccumulatedToolCall>();
+  private readonly thinkBlockStripper: ThinkBlockContentStripper;
+  private readonly reasoningContentSpillGuard: ReasoningContentSpillGuard;
   private speakerGuardPendingTail = "";
   private streamedTextTail = "";
   private accumulatedReasoningContent = "";
-  private insideThinkBlock = false;
   private pendingThinkBlockThoughtText = "";
   private speakerGuardEnabled = false;
-  // Persona-label fallback closer for `<think>` blocks. When the model's reasoning
-  // bleeds into `delta.content` without a `</think>` tag, the persona's speaker
-  // label (e.g. "Nerine:") marks the structural boundary where the real reply begins.
-  private personaSpeakerLabelRegex: RegExp | null = null;
 
   constructor(private readonly options: OpenAICompatibleStreamAdapterOptions) {
     super({
@@ -55,6 +54,11 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       version: options.version ?? "1.0.0",
       supportsFunctionCalling: true,
     });
+    this.thinkBlockStripper = new ThinkBlockContentStripper({
+      loggerName: options.adapterName,
+      captureThoughts: options.captureThinkBlocksAsThoughts,
+    });
+    this.reasoningContentSpillGuard = new ReasoningContentSpillGuard(options.adapterName);
   }
 
   async *startStream(config: StreamConfig, context: StreamContext): AsyncGenerator<RawStreamChunk, void, unknown> {
@@ -64,16 +68,17 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     this.toolCallAccumulator.clear();
     this.streamedTextTail = "";
     this.accumulatedReasoningContent = "";
-    this.insideThinkBlock = false;
     this.pendingThinkBlockThoughtText = "";
+    this.reasoningContentSpillGuard.reset();
     // 1. Build a persona-label matcher used as a fallback `</think>` closer.
     //    Matches the persona name at start-of-string or after a newline, followed by ":" or "："
     //    (half/full-width colon). Required at a line boundary to keep false positives low —
     //    mid-sentence mentions like "as Nerine would" won't trigger.
     const personaName = context.tomoriState.persona_nickname?.trim();
-    this.personaSpeakerLabelRegex = personaName
+    const personaSpeakerLabelRegex = personaName
       ? new RegExp(`(?:^|\\n)\\s*${escapeRegExp(personaName)}\\s*[:：]`, "i")
       : null;
+    this.thinkBlockStripper.reset(personaSpeakerLabelRegex);
 
     const apiUrl = this.options.resolveApiUrl(openAICompatibleConfig);
     if (!apiUrl) {
@@ -260,7 +265,8 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
 
       for await (const chunk of streamOpenAICompatibleSseChunks(response)) {
         const sanitizedChunk = this.stripThinkBlocksFromChunkContent(chunk);
-        const chunksToEmit = this.splitChunkWithTextAndToolSignals(sanitizedChunk);
+        const spillGuardedChunk = this.applyReasoningContentSpillGuard(sanitizedChunk);
+        const chunksToEmit = this.splitChunkWithTextAndToolSignals(spillGuardedChunk);
 
         for (const chunkToEmit of chunksToEmit) {
           const deduplicatedChunk = this.deduplicateChunkTextAgainstRecentStream(chunkToEmit);
@@ -309,6 +315,16 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
         }
       }
 
+      const flushedSpillChunk = this.flushReasoningContentSpillGuardToChunk(config.model);
+      if (flushedSpillChunk) {
+        yield flushedSpillChunk;
+      }
+
+      const flushedThinkChunk = this.flushThinkStripperToChunk(config.model);
+      if (flushedThinkChunk) {
+        yield flushedThinkChunk;
+      }
+
       if (this.speakerGuardEnabled && this.speakerGuardPendingTail.length > 0) {
         yield this.wrapChunk(
           {
@@ -326,6 +342,11 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
         this.speakerGuardPendingTail = "";
       }
     } catch (error) {
+      const flushedSpillChunk = this.flushReasoningContentSpillGuardToChunk(config.model);
+      if (flushedSpillChunk) {
+        yield flushedSpillChunk;
+      }
+
       if (this.speakerGuardEnabled && this.speakerGuardPendingTail.length > 0) {
         yield this.wrapChunk(
           {
@@ -341,6 +362,11 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
           config.model,
         );
         this.speakerGuardPendingTail = "";
+      }
+
+      const flushedThinkChunk = this.flushThinkStripperToChunk(config.model);
+      if (flushedThinkChunk) {
+        yield flushedThinkChunk;
       }
 
       yield this.createProviderErrorChunk(error);
@@ -538,8 +564,12 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       return chunk;
     }
 
-    const strippedContent = this.stripThinkBlocks(content);
-    if (strippedContent === content) {
+    const stripped = this.thinkBlockStripper.strip(content);
+    if (stripped.thoughtText.length > 0) {
+      this.pendingThinkBlockThoughtText += stripped.thoughtText;
+    }
+
+    if (!stripped.changed) {
       return chunk;
     }
 
@@ -550,102 +580,12 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
           ...firstChoice,
           delta: {
             ...firstChoice.delta,
-            content: strippedContent,
+            content: stripped.visibleText,
           },
         },
         ...(chunk.choices?.slice(1) ?? []),
       ],
     };
-  }
-
-  private stripThinkBlocks(text: string): string {
-    if (!text) {
-      return "";
-    }
-
-    let output = "";
-    let cursor = 0;
-
-    while (cursor < text.length) {
-      if (!this.insideThinkBlock) {
-        const startIdx = text.indexOf("<think>", cursor);
-        const endIdx = text.indexOf("</think>", cursor);
-
-        if (startIdx === -1 && endIdx === -1) {
-          output += text.slice(cursor);
-          break;
-        }
-
-        // Layer 1 fix: stray `</think>` with no observed opener.
-        // The text preceding it is reasoning that leaked into `delta.content`
-        // (typical of DeepSeek-family models that emit reasoning via
-        // `reasoning_content` but tokenize the closing tag into content).
-        // Route the orphaned prefix into thoughts instead of emitting it as visible output.
-        if (endIdx !== -1 && (startIdx === -1 || endIdx < startIdx)) {
-          this.captureThinkBlockThoughtText(text.slice(cursor, endIdx));
-          cursor = endIdx + "</think>".length;
-          continue;
-        }
-
-        if (startIdx !== -1) {
-          output += text.slice(cursor, startIdx);
-          this.insideThinkBlock = true;
-          cursor = startIdx + "<think>".length;
-        }
-      } else {
-        const remaining = text.slice(cursor);
-        const endIdx = text.indexOf("</think>", cursor);
-
-        // Layer 2: persona-label fallback closer.
-        // If reasoning has run long without an explicit `</think>` but the persona's
-        // speaker label appears at a line boundary, treat that label position as the
-        // implicit close of the think block. The label belongs to the real reply.
-        const personaMatch = this.personaSpeakerLabelRegex ? this.personaSpeakerLabelRegex.exec(remaining) : null;
-        // Only honor the persona closer when we've already captured some thought
-        // text — guards against the model uttering its own name at the very start
-        // of a reasoning block.
-        const personaCloserActive = personaMatch !== null && this.pendingThinkBlockThoughtText.length > 0;
-        const personaCloseAbsIdx = personaCloserActive ? cursor + (personaMatch?.index ?? 0) : -1;
-
-        // Whichever closer (real tag or persona label) appears first wins.
-        const useExplicitCloser = endIdx !== -1 && (personaCloseAbsIdx === -1 || endIdx <= personaCloseAbsIdx);
-        const usePersonaCloser = personaCloseAbsIdx !== -1 && (endIdx === -1 || personaCloseAbsIdx < endIdx);
-
-        if (useExplicitCloser) {
-          this.captureThinkBlockThoughtText(text.slice(cursor, endIdx));
-          this.insideThinkBlock = false;
-          cursor = endIdx + "</think>".length;
-          continue;
-        }
-
-        if (usePersonaCloser) {
-          // Persona label found — capture everything before it as thought,
-          // then drop back into content mode so the label and remainder stream normally.
-          log.warn(
-            `${this.options.adapterName}: <think> block closed implicitly by persona speaker label (no </think> tag observed)`,
-          );
-          this.captureThinkBlockThoughtText(text.slice(cursor, personaCloseAbsIdx));
-          this.insideThinkBlock = false;
-          cursor = personaCloseAbsIdx;
-          continue;
-        }
-
-        // Neither closer present — buffer the whole remainder as thought.
-        this.captureThinkBlockThoughtText(remaining);
-        cursor = text.length;
-        break;
-      }
-    }
-
-    return output;
-  }
-
-  private captureThinkBlockThoughtText(text: string): void {
-    if (this.options.captureThinkBlocksAsThoughts === false || !text) {
-      return;
-    }
-
-    this.pendingThinkBlockThoughtText += text;
   }
 
   private consumePendingThinkBlockThoughts(): ThoughtLogEntry[] {
@@ -677,6 +617,98 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       ...chunk,
       thoughts,
     };
+  }
+
+  private applyReasoningContentSpillGuard(chunk: OpenAICompatibleStreamChunk): OpenAICompatibleStreamChunk {
+    const firstChoice = chunk.choices?.[0];
+    if (!firstChoice?.delta) {
+      return chunk;
+    }
+
+    this.reasoningContentSpillGuard.observeReasoning(firstChoice.delta.reasoning_content);
+
+    const content = firstChoice.delta.content;
+    if (typeof content !== "string" || content.length === 0) {
+      return chunk;
+    }
+
+    const guardResult = this.reasoningContentSpillGuard.filterContent(content);
+    if (!guardResult.changed) {
+      return chunk;
+    }
+
+    const existingReasoning =
+      typeof firstChoice.delta.reasoning_content === "string" ? firstChoice.delta.reasoning_content : "";
+    const mergedReasoning = guardResult.spilledThought
+      ? existingReasoning
+        ? `${existingReasoning}${guardResult.spilledThought}`
+        : guardResult.spilledThought
+      : (firstChoice.delta.reasoning_content ?? undefined);
+
+    return {
+      ...chunk,
+      choices: [
+        {
+          ...firstChoice,
+          delta: {
+            ...firstChoice.delta,
+            content: guardResult.content,
+            reasoning_content: mergedReasoning,
+          },
+        },
+        ...(chunk.choices?.slice(1) ?? []),
+      ],
+    };
+  }
+
+  private flushReasoningContentSpillGuardToChunk(model: string): RawStreamChunk | null {
+    const guardResult = this.reasoningContentSpillGuard.flush();
+    if (!guardResult.changed || !guardResult.content) {
+      return null;
+    }
+
+    return this.wrapChunk(
+      {
+        choices: [
+          {
+            index: 0,
+            delta: {
+              content: guardResult.content,
+            },
+          },
+        ],
+      },
+      model,
+    );
+  }
+
+  private flushThinkStripperToChunk(model: string): RawStreamChunk | null {
+    const stripped = this.thinkBlockStripper.flush();
+    if (!stripped.changed) {
+      return null;
+    }
+
+    if (stripped.thoughtText.length > 0) {
+      this.pendingThinkBlockThoughtText += stripped.thoughtText;
+    }
+
+    if (!stripped.visibleText && !stripped.thoughtText) {
+      return null;
+    }
+
+    return this.wrapChunk(
+      {
+        choices: [
+          {
+            index: 0,
+            delta: {
+              content: stripped.visibleText,
+            },
+          },
+        ],
+      },
+      model,
+    );
   }
 
   private deduplicateChunkTextAgainstRecentStream(chunk: OpenAICompatibleStreamChunk): OpenAICompatibleStreamChunk {

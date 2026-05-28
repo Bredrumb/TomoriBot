@@ -141,6 +141,15 @@ Important:
 
 - provider tool conversion is not fully generic across vendors
 - if you add nested tool-schema support or other serializer behavior, update all provider tool adapters consistently
+- **image/video placeholder contract** — do not silently skip image or video
+  parts when `seesImages`/`seesVideos` is false. The context pipeline may
+  embed media parts even for non-vision primary models when a fallback model
+  in the chain supports that media type. When your adapter encounters a part
+  it cannot render, push a `{ type: "text", text: "[System: An image/video is
+  attached to this message that this model cannot process.]" }` entry so the
+  model is still aware the media exists. See
+  `openaiCompatibleMessageBuilder.ts` and `openrouterStreamAdapter.ts` for
+  the reference pattern.
 
 ### Reasoning output contract
 
@@ -644,6 +653,7 @@ When adding the next vendor in this family, verify these areas explicitly:
 - **Assistant prefills**: check whether native prefix completion requires a beta endpoint or message flag like `prefix: true`
 - **Live cost estimation**: prefer API-reported prompt token usage; use provider-specific pricing sources; document any cache-hit/miss caveats
 - **Image generation and embeddings**: only seed rows if the app runtime path is actually implemented; leave feature flags off otherwise
+- **Media placeholder contract**: when your stream adapter encounters an image or video part but `seesImages`/`seesVideos` is false, emit a text placeholder — never silently skip. Context may include media parts for fallback models even when the primary cannot render them.
 
 ### Acceptance Criteria For The Refactor
 

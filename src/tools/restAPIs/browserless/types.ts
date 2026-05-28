@@ -13,11 +13,20 @@ export interface BrowserlessCookie {
   path?: string;
 }
 
+export interface BrowserlessGotoOptions {
+  /** Puppeteer waitUntil condition. Defaults to "networkidle2" for SPA compatibility. */
+  waitUntil?: "load" | "domcontentloaded" | "networkidle0" | "networkidle2";
+  /** Navigation timeout in ms. */
+  timeout?: number;
+}
+
 export interface BrowserlessContentRequest {
   /** Absolute http/https URL to fetch with Browserless. */
   url: string;
   /** Browser-level cookies injected before navigation. */
   cookies?: BrowserlessCookie[];
+  /** Puppeteer GoTo options controlling when navigation is considered complete. */
+  gotoOptions?: BrowserlessGotoOptions;
 }
 
 export interface BrowserlessPressureResponse {

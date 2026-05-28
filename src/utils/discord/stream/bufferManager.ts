@@ -72,6 +72,19 @@ export function drainThinkBlocksFromBuffer(state: StreamState): void {
       state.buffer += afterClose;
     } else {
       const openIdx = state.buffer.indexOf("<think>");
+      const closeIdx = state.buffer.indexOf("</think>");
+
+      if (closeIdx !== -1 && (openIdx === -1 || closeIdx < openIdx)) {
+        const thinkContent = state.buffer.slice(0, closeIdx).trim();
+        if (thinkContent) {
+          state.thoughtRawSegments.push(thinkContent);
+          log.info(`Stream: Captured ${thinkContent.length} chars before stray </think> for thought log`);
+        }
+
+        state.buffer = state.buffer.slice(closeIdx + "</think>".length);
+        continue;
+      }
+
       if (openIdx === -1) {
         break;
       }
@@ -179,6 +192,14 @@ export function hasIncompleteSemanticMarkers(buffer: string): boolean {
   for (let len = THINK_OPEN.length - 1; len >= 1; len--) {
     if (buffer.endsWith(THINK_OPEN.slice(0, len))) {
       log.info("Stream: Buffer ends with partial <think> tag prefix");
+      return true;
+    }
+  }
+
+  const THINK_CLOSE = "</think>";
+  for (let len = THINK_CLOSE.length - 1; len >= 1; len--) {
+    if (buffer.endsWith(THINK_CLOSE.slice(0, len))) {
+      log.info("Stream: Buffer ends with partial </think> tag prefix");
       return true;
     }
   }

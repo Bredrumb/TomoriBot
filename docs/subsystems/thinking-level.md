@@ -200,6 +200,26 @@ Tomori behavior for detected Ollama endpoints:
 | `medium` | `reasoning_effort: "medium"` |
 | `high` | `reasoning_effort: "high"` |
 
+#### Gemma 4 thinking on KoboldCPP
+
+Tomori's `thinking_level` has **no effect** on Gemma 4 thinking over a custom endpoint. Thinking activation is controlled entirely at the KoboldCPP launch level — not at the request level via the OpenAI-compatible API.
+
+**To enable Gemma 4 thinking in KoboldCPP:**
+
+1. Use a Jinja chat template for Gemma 4 (enable "Use Jinja" and "Jinja for Tools" in the KoboldCPP UI).
+2. Launch KoboldCPP with `--jinja_kwargs='{"enable_thinking":true}'` to pass `enable_thinking=true` into the template engine. Without this flag the template defaults `enable_thinking` to `false` and no thinking tokens are emitted regardless of the template file.
+3. For 26B/31B hybrid models, alternatively hardcode `{%- set enable_thinking = true -%}` at the top of the Jinja template file.
+
+**Response-side parsing:**
+
+KoboldCPP v1.111.2+ automatically converts Gemma 4's `<|channel>thought…<channel|>` thinking tokens into the standard `reasoning_content` field for pure-text responses. Tomori's base adapter reads `reasoning_content` and routes it to the thought log channel automatically.
+
+When a tool call immediately follows the thinking block, KoboldCPP does not split the chunk and the raw tokens appear in `delta.content` instead. Tomori's `GemmaThinkingParser` (`src/providers/custom/customGemmaThinkingParser.ts`) handles this case — it strips the thinking block and routes it to thoughts before `GemmaToolCallParser` processes the tool call. Set `CUSTOM_GEMMA_THINKING_PARSER_ENABLED=false` to disable if a non-Gemma model unexpectedly produces similar token strings.
+
+**Thought log suppression:**
+
+Thought logs are suppressed for private channels (channels listed under `/server private-channels`) regardless of model or provider. Test thought log routing in a non-private channel.
+
 ### NovelAI GLM
 
 Tomori maps `thinking_level` to the GLM prompt directive:
@@ -216,16 +236,16 @@ This is a prompt-format control, not a numeric reasoning budget.
 
 Tomori intentionally does **not** auto-send a generic request-side thinking control for:
 
-- KoboldCpp
+- KoboldCPP (see Gemma 4 section above for response-side parsing)
 - llama.cpp
 - generic vLLM custom endpoints
 
 Reason:
 
-- Tomori did not wire a stable universal request parameter for those backends
-- their reasoning controls are often backend-template-specific, startup-flag-driven, or GUI-configured instead of safely generic at the request body level
+- These backends expose thinking via startup flags, Jinja template variables, or GUI settings — not via a stable, universally-supported OpenAI-compatible request field.
+- Injecting unrecognised fields into the request body can cause 400/422 errors on servers that validate strictly.
 
-So the current implementation is conservative: no invented payload fields.
+So the current implementation is conservative: configure thinking at the server level, not from Tomori's `thinking_level` preference.
 
 ## Future Provider Requirement
 

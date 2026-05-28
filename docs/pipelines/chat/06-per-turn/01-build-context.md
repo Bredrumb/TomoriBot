@@ -58,9 +58,21 @@ Key fields populated here:
 - **Reminder injection** — if the incoming carries `reminderData`, injects a
   synthetic `[System: …]` message into `simplifiedMessages` so the LLM sees
   the reminder context.
-- **OpenRouter live capability fetch** — for OpenRouter providers with a
-  ready capability cache, overrides stale `sees_images`/`sees_videos` flags
-  with live values.
+- **Media capability resolution for context build** — two overrides are
+  applied before calling `buildContext`, stored in separate
+  `contextBuildSeesImages`/`contextBuildSeesVideos` variables (distinct from
+  `effectiveSeesImages`/`effectiveSeesVideos` which are kept for the
+  `hasVisionTool` flag and must reflect the *primary* model's true
+  capability):
+  1. *OpenRouter live flags* — for OpenRouter models with a ready capability
+     cache, live `seesImages`/`seesVideos` replace stale DB values.
+  2. *Fallback-chain elevation* — if the primary model has
+     `sees_images: false` (or `sees_videos: false`) but any entry in
+     `fallback_chain`/`fallback_llms` has the capability `true`, the context
+     build flag is forced to `true` so image/video URI parts are embedded in
+     `StructuredContextItem[]`. Fallback attempts then have the full URI data
+     available; provider message builders that cannot render the parts emit a
+     text placeholder instead of silently dropping them.
 - **Impersonation identity resolution** — if `isUserImpersonation`, fetches
   the impersonated user's nickname/avatar via `resolveImpersonatedIdentity`.
 

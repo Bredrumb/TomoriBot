@@ -31,6 +31,8 @@ import { fetchAndOptimizeImage } from "../../utils/image/imageProcessor";
 import { buildOpenrouterProviderRouting } from "./providerRouting";
 import { buildOpenRouterReasoningRequest } from "@/utils/provider/thinkingControl";
 import { BaseStreamAdapter } from "../../types/stream/interfaces";
+import { ReasoningContentSpillGuard } from "@/providers/utils/reasoningContentSpillGuard";
+import { ThinkBlockContentStripper } from "@/providers/utils/thinkBlockContentStripper";
 import type {
   ProcessedChunk,
   ProviderError,
@@ -188,17 +190,11 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
   // Accumulator for reasoning_details across streaming chunks (required for Gemini models)
   // biome-ignore lint/suspicious/noExplicitAny: reasoning_details has complex nested structure that varies by provider
   private reasoningDetailsAccumulator: any[] = [];
+  private readonly thinkBlockStripper = new ThinkBlockContentStripper({ loggerName: "OpenRouter" });
+  private readonly reasoningContentSpillGuard = new ReasoningContentSpillGuard("OpenRouter");
   private speakerGuardPendingTail = "";
   private streamedTextTail = "";
   private speakerGuardEnabled = false;
-  // Mirror of the OpenAI-compatible adapter's <think>-leak guard.
-  // Some OpenRouter backends (notably DeepSeek-family models) fold reasoning
-  // tokens into `delta.content` instead of `delta.reasoning`, occasionally
-  // emitting a bare `</think>` closer or never closing at all. We strip these
-  // here so they don't reach the user as visible prose.
-  private insideThinkBlock = false;
-  private pendingThinkBlockThoughtText = "";
-  private personaSpeakerLabelRegex: RegExp | null = null;
 
   constructor() {
     super({
@@ -417,13 +413,13 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     this.speakerGuardPendingTail = "";
     this.streamedTextTail = "";
     this.speakerGuardEnabled = false;
-    this.insideThinkBlock = false;
-    this.pendingThinkBlockThoughtText = "";
-    // Persona-label fallback closer — see stripThinkBlocks().
+    this.reasoningContentSpillGuard.reset();
+    // Persona-label fallback closer for unclosed leaked think blocks.
     const personaNickname = context.tomoriState.persona_nickname?.trim();
-    this.personaSpeakerLabelRegex = personaNickname
+    const personaSpeakerLabelRegex = personaNickname
       ? new RegExp(`(?:^|\\n)\\s*${escapeRegExp(personaNickname)}\\s*[:：]`, "i")
       : null;
+    this.thinkBlockStripper.reset(personaSpeakerLabelRegex);
 
     // Cast config to OpenrouterStreamConfig to access provider-specific fields
     const openrouterConfig = config as OpenrouterStreamConfig;
@@ -899,7 +895,8 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
 
           for (const chunkToEmit of chunksToEmit) {
             const strippedChunk = this.stripThinkBlocksFromChunkContent(chunkToEmit);
-            const deduplicatedChunk = this.deduplicateChunkTextAgainstRecentStream(strippedChunk);
+            const spillGuardedChunk = this.applyReasoningContentSpillGuard(strippedChunk);
+            const deduplicatedChunk = this.deduplicateChunkTextAgainstRecentStream(spillGuardedChunk);
             const guardResult = this.applySpeakerBoundaryFallbackGuard(deduplicatedChunk);
 
             if (this.shouldFlushSpeakerGuardTailBeforeNonTextChunk(guardResult.chunk)) {
@@ -966,6 +963,30 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         }
       }
 
+      const flushedSpillChunk = this.flushReasoningContentSpillGuardToChunk();
+      if (flushedSpillChunk) {
+        yield {
+          data: flushedSpillChunk,
+          provider: "openrouter",
+          metadata: {
+            timestamp: Date.now(),
+            model: config.model,
+          },
+        };
+      }
+
+      const flushedThinkChunk = this.flushThinkStripperToChunk();
+      if (flushedThinkChunk) {
+        yield {
+          data: flushedThinkChunk,
+          provider: "openrouter",
+          metadata: {
+            timestamp: Date.now(),
+            model: config.model,
+          },
+        };
+      }
+
       if (this.speakerGuardEnabled && this.speakerGuardPendingTail.length > 0) {
         yield {
           data: {
@@ -990,6 +1011,17 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       if (controller) {
         controller.abort();
       }
+      const flushedSpillChunk = this.flushReasoningContentSpillGuardToChunk();
+      if (flushedSpillChunk) {
+        yield {
+          data: flushedSpillChunk,
+          provider: "openrouter",
+          metadata: {
+            timestamp: Date.now(),
+            model: config.model,
+          },
+        };
+      }
       if (this.speakerGuardEnabled && this.speakerGuardPendingTail.length > 0) {
         yield {
           data: {
@@ -1009,6 +1041,17 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           },
         };
         this.speakerGuardPendingTail = "";
+      }
+      const flushedThinkChunk = this.flushThinkStripperToChunk();
+      if (flushedThinkChunk) {
+        yield {
+          data: flushedThinkChunk,
+          provider: "openrouter",
+          metadata: {
+            timestamp: Date.now(),
+            model: config.model,
+          },
+        };
       }
       yield this.createProviderErrorChunk(error);
     }
@@ -1032,27 +1075,17 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       return chunk;
     }
 
-    const beforeCapturedLen = this.pendingThinkBlockThoughtText.length;
-    const strippedContent = this.stripThinkBlocks(content);
-    const capturedDelta = this.pendingThinkBlockThoughtText.slice(beforeCapturedLen);
-
-    if (strippedContent === content && capturedDelta.length === 0) {
+    const stripped = this.thinkBlockStripper.strip(content);
+    if (!stripped.changed) {
       return chunk;
     }
 
-    // 1. Surface any captured think-block text as reasoning on this chunk so the
-    //    downstream ThoughtLogEntry flow picks it up. Drain pending buffer here —
-    //    we only want to surface what was captured in *this* chunk, but it's safer
-    //    to flush everything pending whenever we have an opportunity.
-    const drainedThoughtText = this.pendingThinkBlockThoughtText;
-    this.pendingThinkBlockThoughtText = "";
-
     const existingReasoning = typeof firstChoice.delta.reasoning === "string" ? firstChoice.delta.reasoning : "";
     const mergedReasoning =
-      drainedThoughtText.length > 0
+      stripped.thoughtText.length > 0
         ? existingReasoning.length > 0
-          ? `${existingReasoning}${drainedThoughtText}`
-          : drainedThoughtText
+          ? `${existingReasoning}${stripped.thoughtText}`
+          : stripped.thoughtText
         : (firstChoice.delta.reasoning ?? undefined);
 
     return {
@@ -1062,7 +1095,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           ...firstChoice,
           delta: {
             ...firstChoice.delta,
-            content: strippedContent,
+            content: stripped.visibleText,
             reasoning: mergedReasoning,
           },
         },
@@ -1071,76 +1104,82 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  /**
-   * Stateful `<think>` block stripper. Maintains `insideThinkBlock` across chunks
-   * and buffers captured thought text in `pendingThinkBlockThoughtText` for the
-   * caller to drain.
-   */
-  private stripThinkBlocks(text: string): string {
-    if (!text) {
-      return "";
+  private applyReasoningContentSpillGuard(chunk: OpenrouterStreamChunk): OpenrouterStreamChunk {
+    const firstChoice = chunk.choices?.[0];
+    if (!firstChoice?.delta) {
+      return chunk;
     }
 
-    let output = "";
-    let cursor = 0;
+    this.reasoningContentSpillGuard.observeReasoning(firstChoice.delta.reasoning);
 
-    while (cursor < text.length) {
-      if (!this.insideThinkBlock) {
-        const startIdx = text.indexOf("<think>", cursor);
-        const endIdx = text.indexOf("</think>", cursor);
-
-        if (startIdx === -1 && endIdx === -1) {
-          output += text.slice(cursor);
-          break;
-        }
-
-        // Layer 1: stray `</think>` with no observed opener — route preceding text to thoughts.
-        if (endIdx !== -1 && (startIdx === -1 || endIdx < startIdx)) {
-          this.pendingThinkBlockThoughtText += text.slice(cursor, endIdx);
-          cursor = endIdx + "</think>".length;
-          continue;
-        }
-
-        if (startIdx !== -1) {
-          output += text.slice(cursor, startIdx);
-          this.insideThinkBlock = true;
-          cursor = startIdx + "<think>".length;
-        }
-      } else {
-        const remaining = text.slice(cursor);
-        const endIdx = text.indexOf("</think>", cursor);
-
-        // Layer 2: persona-label fallback closer.
-        const personaMatch = this.personaSpeakerLabelRegex ? this.personaSpeakerLabelRegex.exec(remaining) : null;
-        const personaCloserActive = personaMatch !== null && this.pendingThinkBlockThoughtText.length > 0;
-        const personaCloseAbsIdx = personaCloserActive ? cursor + (personaMatch?.index ?? 0) : -1;
-
-        const useExplicitCloser = endIdx !== -1 && (personaCloseAbsIdx === -1 || endIdx <= personaCloseAbsIdx);
-        const usePersonaCloser = personaCloseAbsIdx !== -1 && (endIdx === -1 || personaCloseAbsIdx < endIdx);
-
-        if (useExplicitCloser) {
-          this.pendingThinkBlockThoughtText += text.slice(cursor, endIdx);
-          this.insideThinkBlock = false;
-          cursor = endIdx + "</think>".length;
-          continue;
-        }
-
-        if (usePersonaCloser) {
-          log.warn("OpenRouter: <think> block closed implicitly by persona speaker label (no </think> tag observed)");
-          this.pendingThinkBlockThoughtText += text.slice(cursor, personaCloseAbsIdx);
-          this.insideThinkBlock = false;
-          cursor = personaCloseAbsIdx;
-          continue;
-        }
-
-        // Neither closer present — buffer the whole remainder.
-        this.pendingThinkBlockThoughtText += remaining;
-        cursor = text.length;
-        break;
-      }
+    const content = firstChoice.delta.content;
+    if (typeof content !== "string" || content.length === 0) {
+      return chunk;
     }
 
-    return output;
+    const guardResult = this.reasoningContentSpillGuard.filterContent(content);
+    if (!guardResult.changed) {
+      return chunk;
+    }
+
+    const existingReasoning = typeof firstChoice.delta.reasoning === "string" ? firstChoice.delta.reasoning : "";
+    const mergedReasoning = guardResult.spilledThought
+      ? existingReasoning
+        ? `${existingReasoning}${guardResult.spilledThought}`
+        : guardResult.spilledThought
+      : (firstChoice.delta.reasoning ?? undefined);
+
+    return {
+      ...chunk,
+      choices: [
+        {
+          ...firstChoice,
+          delta: {
+            ...firstChoice.delta,
+            content: guardResult.content,
+            reasoning: mergedReasoning,
+          },
+        },
+        ...(chunk.choices?.slice(1) ?? []),
+      ],
+    };
+  }
+
+  private flushReasoningContentSpillGuardToChunk(): OpenrouterStreamChunk | null {
+    const guardResult = this.reasoningContentSpillGuard.flush();
+    if (!guardResult.changed || !guardResult.content) {
+      return null;
+    }
+
+    return {
+      choices: [
+        {
+          index: 0,
+          delta: {
+            content: guardResult.content,
+          },
+        },
+      ],
+    };
+  }
+
+  private flushThinkStripperToChunk(): OpenrouterStreamChunk | null {
+    const stripped = this.thinkBlockStripper.flush();
+    if (!stripped.changed || (!stripped.visibleText && !stripped.thoughtText)) {
+      return null;
+    }
+
+    return {
+      choices: [
+        {
+          index: 0,
+          delta: {
+            content: stripped.visibleText,
+            reasoning: stripped.thoughtText || undefined,
+          },
+        },
+      ],
+    };
   }
 
   private deduplicateChunkTextAgainstRecentStream(chunk: OpenrouterStreamChunk): OpenrouterStreamChunk {
@@ -2270,6 +2309,10 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
             // Only process images if the model supports them
             if (!seesImages) {
               log.info(`Skipping image (model doesn't support images): ${part.uri || "[inlineData]"}`);
+              contentParts.push({
+                type: "text",
+                text: "[System: An image is attached to this message that this model cannot process.]",
+              });
               continue;
             }
 
@@ -2444,6 +2487,10 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
 
             if (!seesVideos) {
               log.info(`Skipping video (model doesn't support videos): ${part.uri}`);
+              videoTargetParts.push({
+                type: "text",
+                text: "[System: A video is attached to this message that this model cannot process.]",
+              });
               continue;
             }
 
