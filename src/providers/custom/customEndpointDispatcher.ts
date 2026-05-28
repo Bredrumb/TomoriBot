@@ -8,6 +8,15 @@ import type {
 import { randomInt } from "node:crypto";
 import { readFileSync } from "node:fs";
 import sharp from "sharp";
+import {
+  COMFYUI_INPAINT_MASK_FILENAME_PREFIX,
+  COMFYUI_INPAINT_RESULT_DEBUG_FILENAME_PREFIX,
+  describeComfyUiAssets,
+  formatComfyUiDiagnosticSection,
+  getComfyUiDiagnosticLabel,
+  isComfyUiDiagnosticAsset,
+  isComfyUiDiagnosticSaveImageNode,
+} from "@/providers/custom/customImageDiagnostics";
 import { buildCustomHeaders } from "@/providers/custom/customOpenAICompatibleUtils";
 import { log } from "@/utils/misc/logger";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
@@ -220,8 +229,6 @@ const COMFYUI_INPAINT_PRESETS: Record<string, ComfyUiInpaintSettings> = {
   },
 };
 const COMFYUI_MAX_RANDOM_SEED = 2 ** 32;
-const COMFYUI_INPAINT_MASK_FILENAME_PREFIX = "tomoribot_inpaint_mask";
-const COMFYUI_INPAINT_RESULT_DEBUG_FILENAME_PREFIX = "tomoribot_inpaint_result_debug";
 const COMFYUI_OUTPAINT_INACTIVE_EXTEND_FACTOR = 0.01;
 const COMFYUI_OUTPAINT_PRESERVE_SUBJECT_ONLY = false;
 const COMFYUI_OUTPAINT_SUBJECT_MASK_GROW = 2;
@@ -2006,50 +2013,6 @@ function buildComfyUiReferencePayload(referenceImages: ComfyUiReferenceImage[]):
   }));
 }
 
-function isComfyUiInpaintMaskAsset(asset: ComfyUiAsset): boolean {
-  return asset.filename.toLowerCase().startsWith(COMFYUI_INPAINT_MASK_FILENAME_PREFIX);
-}
-
-function isComfyUiInpaintResultDebugAsset(asset: ComfyUiAsset): boolean {
-  return asset.filename.toLowerCase().startsWith(COMFYUI_INPAINT_RESULT_DEBUG_FILENAME_PREFIX);
-}
-
-function isComfyUiDiagnosticAsset(asset: ComfyUiAsset): boolean {
-  return isComfyUiInpaintMaskAsset(asset) || isComfyUiInpaintResultDebugAsset(asset);
-}
-
-function getComfyUiDiagnosticLabel(asset: ComfyUiAsset): string {
-  const filename = asset.filename.toLowerCase();
-  if (isComfyUiInpaintResultDebugAsset(asset)) {
-    return "Inpaint result debug";
-  }
-  if (filename.startsWith(`${COMFYUI_INPAINT_MASK_FILENAME_PREFIX}_detected`)) {
-    return "Detected inpaint mask";
-  }
-  if (filename.startsWith(`${COMFYUI_INPAINT_MASK_FILENAME_PREFIX}_overlay`)) {
-    return "Inpaint mask overlay";
-  }
-  if (isComfyUiInpaintMaskAsset(asset)) {
-    return "Final inpaint mask";
-  }
-  return "ComfyUI diagnostic";
-}
-
-function isComfyUiDiagnosticSaveImageNode(node: unknown): boolean {
-  if (!isRecord(node) || !isRecord(node.inputs) || typeof node.class_type !== "string") {
-    return false;
-  }
-  if (!node.class_type.toLowerCase().includes("saveimage")) {
-    return false;
-  }
-
-  const filenamePrefix = typeof node.inputs.filename_prefix === "string" ? node.inputs.filename_prefix.toLowerCase() : "";
-  return (
-    filenamePrefix.startsWith(COMFYUI_INPAINT_MASK_FILENAME_PREFIX) ||
-    filenamePrefix.startsWith(COMFYUI_INPAINT_RESULT_DEBUG_FILENAME_PREFIX)
-  );
-}
-
 function pruneComfyUiOutpaintDiagnosticSaveNodes(workflow: ComfyUiWorkflow): number {
   let removed = 0;
   for (const [nodeId, node] of Object.entries(workflow)) {
@@ -2059,13 +2022,6 @@ function pruneComfyUiOutpaintDiagnosticSaveNodes(workflow: ComfyUiWorkflow): num
     }
   }
   return removed;
-}
-
-function describeComfyUiAssets(files: ComfyUiAsset[]): string {
-  return files
-    .slice(0, 10)
-    .map((file) => [file.subfolder, file.filename].filter(Boolean).join("/"))
-    .join(", ");
 }
 
 function parseComfyUiRecolorTargetColor(prompt: string): RgbColor | null {
@@ -3435,12 +3391,8 @@ export async function generateCustomImageViaEndpoint(params: {
       normalizeComfyUiOutpaintStagePrompt(diagnosticOptions.outpaintBottomPrompt) ? "bottom" : null,
     ].filter((label): label is string => label !== null);
     const diagnosticRmbgModel = "RMBG-2.0";
-    const formatDiagnosticSection = (title: string, rows: Array<string | null | false | undefined>): string | null => {
-      const filteredRows = rows.filter((row): row is string => typeof row === "string" && row.length > 0);
-      return filteredRows.length > 0 ? [`${title}`, ...filteredRows.map((row) => `• ${row}`)].join("\n") : null;
-    };
     const diagnosticDetails = [
-      formatDiagnosticSection("🧭 **Run**", [
+      formatComfyUiDiagnosticSection("🧭 **Run**", [
         `Mode: ${diagnosticMode}`,
         `Seed: ${comfyUiSeed}`,
         `Source: ${diagnosticSourceDimensions.width}x${diagnosticSourceDimensions.height}`,
@@ -3448,7 +3400,7 @@ export async function generateCustomImageViaEndpoint(params: {
         `Final output: ${finalImageWidth ?? "unknown"}x${finalImageHeight ?? "unknown"}`,
       ]),
       diagnosticOutpaint
-        ? formatDiagnosticSection("🖼️ **Outpaint**", [
+        ? formatComfyUiDiagnosticSection("🖼️ **Outpaint**", [
             `Direction: ${normalizeComfyUiExtendDirection(inpaintExtendDirection)}`,
             diagnosticOutpaintLayout ? `Strategy: ${diagnosticOutpaintLayout.strategy}` : null,
             `Amount: ${resolveComfyUiOutpaintAmount(diagnosticOptions)} (${diagnosticOutpaintPixels}px)`,
@@ -3466,7 +3418,7 @@ export async function generateCustomImageViaEndpoint(params: {
             `Mask: sharp padding mask, feather ${diagnosticOutpaintPadFeather}px`,
             `Preserve: ${diagnosticOutpaint && COMFYUI_OUTPAINT_PRESERVE_SUBJECT_ONLY ? "subject" : "center source"}`,
           ])
-        : formatDiagnosticSection("🎯 **Inpaint Mask**", [
+        : formatComfyUiDiagnosticSection("🎯 **Inpaint Mask**", [
             `Prompt: ${JSON.stringify(diagnosticWorkflowMaskPrompt)}`,
             diagnosticWorkflowMaskPrompt !== diagnosticRequestedMaskPrompt
               ? `Requested prompt: ${JSON.stringify(diagnosticRequestedMaskPrompt)}`
@@ -3476,7 +3428,7 @@ export async function generateCustomImageViaEndpoint(params: {
             `Content: ${diagnosticMaskContent}`,
             `Threshold / grow / feather: ${diagnosticInpaintSettings.maskThreshold} / ${diagnosticInpaintSettings.maskGrow} / ${diagnosticInpaintSettings.maskFeather}`,
           ]),
-      formatDiagnosticSection("🎛️ **Sampler**", [
+      formatComfyUiDiagnosticSection("🎛️ **Sampler**", [
         "Engine: LanPaint",
         `Steps: ${diagnosticOutpaint ? resolveComfyUiOutpaintSteps() : resolveComfyUiLanPaintSteps()}`,
         `Thinking steps: ${
@@ -3490,7 +3442,7 @@ export async function generateCustomImageViaEndpoint(params: {
       ]),
       diagnosticOutpaint
         ? null
-        : formatDiagnosticSection("🧩 **Mask Helpers**", [
+        : formatComfyUiDiagnosticSection("🧩 **Mask Helpers**", [
             `Differential diffusion: ${diagnosticDifferentialDiffusion}${
               diagnosticDifferentialDiffusion ? `, strength ${diagnosticDifferentialDiffusionStrength}` : ""
             }`,
@@ -3506,7 +3458,7 @@ export async function generateCustomImageViaEndpoint(params: {
             }`,
           ]),
       !diagnosticOutpaint && diagnosticProtectionSettings.enabled
-        ? formatDiagnosticSection("🛡️ **Protection Masks**", [
+        ? formatComfyUiDiagnosticSection("🛡️ **Protection Masks**", [
             `Face: ${JSON.stringify(diagnosticProtectionSettings.maskPrompt)} (${diagnosticProtectionSettings.maskThreshold}/${diagnosticProtectionSettings.maskGrow}/${diagnosticProtectionSettings.maskFeather})`,
             `Clothing: ${JSON.stringify(diagnosticProtectionSettings.clothingMaskPrompt)} (${diagnosticProtectionSettings.clothingMaskThreshold}/${diagnosticProtectionSettings.clothingMaskGrow}/${diagnosticProtectionSettings.clothingMaskFeather})`,
             `Arms: ${JSON.stringify(diagnosticProtectionSettings.armsMaskPrompt)} (${diagnosticProtectionSettings.armsMaskThreshold}/${diagnosticProtectionSettings.armsMaskGrow}/${diagnosticProtectionSettings.armsMaskFeather})`,

@@ -4420,7 +4420,7 @@ Use {help_matrix} for setup steps, Matrix-only command notes, and the current li
         action_remove: `remove`,
         action_list: `list`,
         tool_description: `Which tool target this trigger should expose.`,
-        trigger_description: `Literal phrase to detect in messages, such as pic or make a song.`,
+        trigger_description: `Literal phrase to detect in messages, such as pic or make a song. Use ^ to always expose this tool target.`,
         invalid_title: `Invalid Tool Trigger`,
         missing_tool_description: `Choose a tool target when adding or removing a trigger.`,
         missing_trigger_description: `Provide a trigger phrase when adding or removing a trigger.`,
