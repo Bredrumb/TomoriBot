@@ -33,7 +33,9 @@ export default {
       image_search_title: `🔍 Searching for \`{query}\` images...`,
       video_search_title: `🔍 Searching for \`{query}\` videos...`,
       news_search_title: `🔍 Searching for \`{query}\` in the news...`,
+      searxng_search_title: `🔍 Searching SearXNG for \`{query}\`...`,
       disclaimer_description: `AI-Generated Responses and Search Results may be inaccurate or incomplete, **please double-check important information**.`,
+      category_unavailable_description: `\`{category}\` search is currently unavailable. Please try again later, or ask for a text-based search instead.`,
     },
     mcp: {
       tool_invoke_title: `🔧 Using \`{function}\` from **{server}**...`,

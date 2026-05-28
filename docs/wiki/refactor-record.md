@@ -6,7 +6,7 @@ sidebar:
 
 Historical record of the plugin-architecture-prerequisite refactor (`refactor/plugin-architecture` branch, Phases 1–5.5e). Covers module restructuring decisions, behavioral verification results, DB layer reorganization, and cache invalidation ownership after the repository migration.
 
-Snapshot date: 2026-05-14
+Snapshot date: 2026-05-28
 
 ---
 
@@ -35,6 +35,7 @@ Records which refactor phases produced real responsibility-owned modules and whi
 | #11 Stream orchestrator | `streamOrchestrator.ts`, 1 line; owned modules under `src/utils/discord/stream/` are all <600 lines | Deleted `stream/core/orchestratorImplementation.ts` | Complete | Stream state machine, stop registry, buffer flushing, segment processing, message delivery, UI updates, and thought logs |
 | #12b / #12c / 5.5d Chat | `tomoriChat.ts`, ~145 lines; stage modules under `src/utils/chat/` | Deleted `turnRunner.ts`; chat implementation lives in `admission.ts`, `admissionQueue.ts`, `channelQueue.ts`, `turnPlanner.ts`, `contextPipeline.ts`, `contextAnnotations.ts`, `contextEmbeds.ts`, `contextMedia.ts`, `generationTurn.ts`, `toolLoop.ts`, `responseEmitter.ts`, `postTurnEffects.ts`, and small queue/identity helpers | Complete | Chat admission, queueing, turn planning, context, provider turn, tool loop, response, post-turn effects |
 | #13 Event handler eager-load | Not completed | N/A | Out of scope | Event loading |
+| Extra: Web-search unification (Phase 1) | Single `web_search(query, category)` BaseTool under `src/tools/webSearch/`; engine layer (`braveEngine.ts`, `duckduckgoEngine.ts`, `feloEngine.ts`, `dispatcher.ts`) implementing `WebSearchEngine` chain | `InternalBraveWebSearchTool` / `InternalBraveImageSearchTool` / `InternalBraveVideoSearchTool` / `InternalBraveNewsSearchTool` under `src/tools/restAPIs/brave/internal/braveServiceClasses.ts` — no longer LLM-visible. DDG/Felo accessed via `DuckDuckGoHandler.executeWebSearchInternal()` and `executeFeloSearchInternal()`. | Complete (Phase 1) | Engine-chain dispatch for web search; replaces the previous 4-tool Brave surface and the per-adapter Brave-key dedup logic. Phase 2 will add a `SearxngEngine` to the chain. |
 
 ### Chat Coordinator Shape
 

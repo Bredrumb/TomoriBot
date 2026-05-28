@@ -106,6 +106,11 @@ export default {
         description: `DuckDuckGo検索は現在レート制限されています。より信頼性の高い検索のために、\`サーバー管理\`権限を持つメンバーが\`/optional-key brave set\`を使用してBrave Searchを設定できます。`,
         footer: `/help api-keyで詳細を確認してください`,
       },
+      searxng_unreachable: {
+        title: `SearXNGに接続できません`,
+        description: `セルフホストのSearXNGメタ検索インスタンスが応答していません。一時的にDuckDuckGoへフォールバックします。サイドカーコンテナの起動状態と \`SEARXNG_BASE_URL\` の値を確認してください。`,
+        footer: `トラブルシュートは servers/searxng/README.md を参照`,
+      },
       operation_failed_title: `操作に失敗しました`,
       operation_failed_description: `要求された操作を完了できませんでした。もう一度お試しください。`,
       custom_endpoint_unreachable_title: `カスタムエンドポイントに接続できません`,

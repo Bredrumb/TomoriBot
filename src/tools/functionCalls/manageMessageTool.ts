@@ -153,7 +153,7 @@ export class ManageMessageTool extends BaseTool {
 
     if (!DISCORD_ID_PATTERN.test(resolvedId)) {
       const errorMessage = MessageIdMap.isOpaqueKey(normalizedValue)
-        ? "That message reference could not be resolved from the current recent-message context."
+        ? "That message reference is not present in the current recent-message context. Call `reveal_message_metadata` first to expose `ref_N` handles for recent messages, then retry with a ref from that listing."
         : `The ${fieldName} value does not look like a valid message reference or Discord message ID.`;
 
       return {

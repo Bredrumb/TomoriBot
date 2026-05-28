@@ -40,12 +40,28 @@ These are the common built-in or bundled web tools Tomori can expose when web ac
 
 Family macros below may resolve to the listed bundled tools or to compatible guild MCP replacements when admins register their own `web_search` or `url_fetcher` servers.
 
+#### Unified `web_search`
+
+A single LLM-visible tool replaces the previous four `brave_*` tools. It takes a `category` enum (`text` / `image` / `video` / `news`) and routes through an internal **engine chain** — **Brave → SearXNG → DuckDuckGo → Felo** — picking the first engine that is both available and supports the requested category. Brave and SearXNG support all four categories; DDG and Felo only support `text`. Non-text categories fall back to a friendly "category unavailable" message when no engine in the chain handles them.
+
 | Tool name | Prompt macro | Requirements | Purpose |
 |---|---|---|---|
-| `brave_web_search` | `{web_search_tool}` | `web_search_enabled`; Brave API available | Search the web for general information. |
-| `brave_image_search` | `{image_search_tool}` | `web_search_enabled`; Brave API available | Search for relevant images on the web. |
-| `brave_video_search` | `{video_search_tool}` | `web_search_enabled`; Brave API available | Search for relevant videos on the web. |
-| `brave_news_search` | `{news_search_tool}` | `web_search_enabled`; Brave API available | Search specifically for current news coverage. |
+| `web_search` | `{web_search_tool}` / `{image_search_tool}` / `{video_search_tool}` / `{news_search_tool}` | `web_search_enabled` | Search the web. The `category` arg selects text/image/video/news. The dispatcher hides engine selection from the model — saves ~400 tokens/turn vs. the previous 4-tool surface. |
 | `fetch` | `{url_fetch_tool}` | Active bundled fetch MCP server | Read a specific web page or URL in more detail. |
-| `web-search` | `{web_search_tool}` | `web_search_enabled`; active DuckDuckGo/Felo MCP search server | Free web search fallback when Brave is unavailable. |
 | `url-metadata` | `{url_metadata_tool}` | `web_search_enabled`; active DuckDuckGo/Felo MCP search server | Retrieve page metadata for a URL when a metadata-specific fetcher is available. |
+
+> **Engine-internal details:** the Brave per-category implementations live under `src/tools/restAPIs/brave/internal/` as `InternalBrave*` services consumed by `webSearch/braveEngine.ts`. They are intentionally **not** LLM-visible. The DDG/Felo paths are reached through `webSearch/duckduckgoEngine.ts` / `feloEngine.ts`, which call the MCP server directly via `DuckDuckGoHandler.executeWebSearchInternal()` / `executeFeloSearchInternal()`. SearXNG is reached through `webSearch/searxngEngine.ts`, which calls the self-hosted `/search` endpoint via `restAPIs/searxng/`. Adding a new engine = implement `WebSearchEngine` and append to the chain in `webSearch/dispatcher.ts`.
+
+#### SearXNG sidecar (optional self-hosted engine)
+
+[SearXNG](https://docs.searxng.org/) is a privacy-respecting metasearch aggregator that fronts Google, Bing, DuckDuckGo, Brave, Wikipedia, and others behind a single JSON API. Running our own instance sidesteps single-engine rate limits and scrape breakage.
+
+- **When it activates:** `SEARXNG_BASE_URL` is set AND `${SEARXNG_BASE_URL}/healthz` responds OK. The probe result is cached for `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` seconds (default 60).
+- **Where it sits in the chain:** after Brave (so a configured Brave API key still takes priority) and before DDG/Felo (so the self-hosted aggregator absorbs traffic before the public-instance fallbacks).
+- **Categories:** all four — `text`, `image`, `video`, `news`. Image results download → validate → optionally compress → post as Discord attachments, identical UX to Brave images.
+- **Deployment:**
+  - **Local (compose):** `docker compose up` starts the sidecar automatically; the bot picks it up via `SEARXNG_BASE_URL=http://searxng:8080/`.
+  - **Local (`bun run dev`):** see `servers/searxng/README.md` for the standalone `docker run` snippet.
+  - **AWS ECS:** sidecar container in the same task definition; sets `SEARXNG_BASE_URL=http://localhost:8080/` on the app container and depends on the sidecar's healthcheck.
+  - **GCP Cloud Run:** multi-container service; same `localhost:8080` access. `SEARXNG_SECRET` injected via Secret Manager.
+- **Graceful absence:** if `SEARXNG_BASE_URL` is unset OR the health probe fails, the chain reduces to `Brave → DDG → Felo` — same as Phase 1.

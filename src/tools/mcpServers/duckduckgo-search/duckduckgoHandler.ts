@@ -15,6 +15,7 @@ import type {
   MCPServerResponse,
   TypedMCPToolResult,
 } from "../../../types/tool/mcpTypes";
+import type { ToolContext } from "../../../types/tool/interfaces";
 
 /**
  * DuckDuckGo Search MCP Server Behavior Handler
@@ -93,6 +94,79 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
         },
       };
     }
+  }
+
+  /**
+   * Execute a DuckDuckGo web-search invocation directly (bypassing the LLM
+   * MCP function-dispatch path). Consumed by `webSearch/duckduckgoEngine.ts`
+   * so the unified `web_search` tool can route through DDG as an internal
+   * fallback. The built-in `tryFeloSearchFallback` inside `processWebSearch`
+   * still runs — meaning a single call here may transparently return Felo
+   * results when DDG itself is rate-limited.
+   *
+   * @param query - User search query.
+   * @param context - Full ToolContext (we synthesize the MCPExecutionContext).
+   * @returns Processed ToolResult, or null if the DDG MCP server is not
+   *          reachable / `web-search` isn't registered.
+   */
+  public async executeWebSearchInternal(query: string, context: ToolContext): Promise<TypedMCPToolResult | null> {
+    return await this.invokeMcpFunctionInternal("web-search", { query }, context);
+  }
+
+  /**
+   * Execute a Felo-search invocation directly. Used by `webSearch/feloEngine.ts`
+   * as the final-resort engine in the chain (after DDG itself fails entirely).
+   */
+  public async executeFeloSearchInternal(query: string, context: ToolContext): Promise<TypedMCPToolResult | null> {
+    return await this.invokeMcpFunctionInternal("felo-search", { query, stream: false }, context);
+  }
+
+  /**
+   * Shared helper that walks the MCP tool list, finds the named function,
+   * invokes it, and routes the result through this handler's processResult.
+   */
+  private async invokeMcpFunctionInternal(
+    functionName: "web-search" | "felo-search",
+    args: Record<string, unknown>,
+    context: ToolContext,
+  ): Promise<TypedMCPToolResult | null> {
+    const mcpManager = getMCPManager();
+    if (!mcpManager.isReady()) {
+      return null;
+    }
+
+    const mcpTools = mcpManager.getMCPTools();
+    for (const mcpTool of mcpTools) {
+      try {
+        const geminiTool = await mcpTool.tool();
+        const functionNames = geminiTool.functionDeclarations?.map((d) => d.name) ?? [];
+        if (!functionNames.includes(functionName)) {
+          continue;
+        }
+
+        const callResult = await mcpTool.callTool([{ name: functionName, args }]);
+        if (!callResult || callResult.length === 0) {
+          return null;
+        }
+
+        // 1. Synthesize the MCPExecutionContext expected by processResult.
+        const mcpContext: MCPExecutionContext = {
+          ...context,
+          serverName: this.serverName,
+          functionName,
+          originalArgs: args,
+          modifiedArgs: args,
+          executionStartTime: Date.now(),
+        };
+
+        return (await this.processResult(functionName, callResult[0], mcpContext, args)) as TypedMCPToolResult;
+      } catch (error) {
+        log.warn(`Internal MCP invocation failed for ${functionName}:`, error as Error);
+        return null;
+      }
+    }
+
+    return null;
   }
 
   /**

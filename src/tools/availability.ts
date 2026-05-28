@@ -10,7 +10,6 @@ import { resolveActiveSpeechEndpoint } from "@/utils/provider/speechEndpointReso
 import { hasOptApiKey } from "@/utils/security/crypto";
 import { configToFeatureFlags, filterToolsByFeatureFlags } from "@/utils/tools/featureFlagMapper";
 import { VOICE_TOOL_VARIANTS, type VoiceScriptMarkup } from "@/tools/functionCalls/generateVoiceMessageTool";
-import { isBraveSearchAvailable } from "@/tools/restAPIs/brave/braveSearchService";
 import { shouldUseVoiceDesignForPersona } from "@/providers/custom/styles/ttsVoiceDesignAdapter";
 
 /**
@@ -150,31 +149,22 @@ export async function getAvailableToolsWithMCP(
 
       let filteredByFeatureFlags = filterToolsByFeatureFlags(allMCPFunctionNames, featureFlags);
 
-      const braveServerIdNumber = stateForContext.server_id
-        ? Number.parseInt(stateForContext.server_id, 10)
-        : undefined;
-      const hasBraveApiKey = await isBraveSearchAvailable(braveServerIdNumber);
-      if (hasBraveApiKey) {
-        const duckduckgoSearchFunctions = [
-          "web-search",
-          "felo-search",
-          "iask-search",
-          "monica-search",
-          "fetch-url",
-          "url-metadata",
-        ];
+      // 1. Unconditionally hide the DDG/Felo/iask/monica MCP function names from the LLM.
+      //    They are now consumed only via the unified `web_search` tool through
+      //    `webSearch/duckduckgoEngine.ts` / `feloEngine.ts`. This replaces the
+      //    previous "Brave key present ⇒ filter DDG MCP functions" dedup, which
+      //    became unconditional once those names ceased to be LLM-visible.
+      const hiddenWebSearchMcpFunctions = ["web-search", "felo-search", "iask-search", "monica-search"];
+      const originalCount = filteredByFeatureFlags.length;
+      filteredByFeatureFlags = filteredByFeatureFlags.filter(
+        (functionName) => !hiddenWebSearchMcpFunctions.includes(functionName),
+      );
+      const excludedCount = originalCount - filteredByFeatureFlags.length;
 
-        const originalCount = filteredByFeatureFlags.length;
-        filteredByFeatureFlags = filteredByFeatureFlags.filter(
-          (functionName) => !duckduckgoSearchFunctions.includes(functionName),
+      if (excludedCount > 0) {
+        log.info(
+          `Excluded ${excludedCount} web-search MCP function names — now consumed only via unified web_search tool.`,
         );
-        const excludedCount = originalCount - filteredByFeatureFlags.length;
-
-        if (excludedCount > 0) {
-          log.info(
-            `Excluded ${excludedCount} DuckDuckGo search functions (Brave API key available for server ${braveServerIdNumber || "global"})`,
-          );
-        }
       }
 
       mcpFunctionNames = filteredByFeatureFlags;
@@ -218,19 +208,11 @@ export async function getAvailableToolsWithMCP(
         const guildServerTypes = new Set(enabledConfigs.map((c) => c.server_type).filter(Boolean));
 
         if (guildServerTypes.has("web_search")) {
-          const webSearchFunctions = [
-            "brave_web_search",
-            "brave_image_search",
-            "brave_video_search",
-            "brave_news_search",
-            "brave_local_search",
-            "brave_summarizer",
-            "web-search",
-            "felo-search",
-            "iask-search",
-            "monica-search",
-            "url-metadata",
-          ];
+          // 1. After the unified `web_search` tool migration the only LLM-visible
+          //    search name is `web_search` itself. The previous brave_*/DDG MCP
+          //    names are no longer LLM-visible, so we just need to dedup against
+          //    the unified tool name when a guild brings its own web_search MCP.
+          const webSearchFunctions = ["web_search", "url-metadata"];
           const beforeCount = mcpFunctionNames.length;
           mcpFunctionNames = mcpFunctionNames.filter((name) => !webSearchFunctions.includes(name));
           const excludedCount = beforeCount - mcpFunctionNames.length;

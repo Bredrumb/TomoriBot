@@ -276,6 +276,32 @@ variable "cloudflare_tunnel_token_secret_key" {
   default     = "CLOUDFLARE_TUNNEL_TOKEN"
 }
 
+# --- SearXNG sidecar (Phase 2) ---
+
+variable "enable_searxng_sidecar" {
+  description = "Enable self-hosted SearXNG sidecar in the ECS task (web-search metasearch aggregator)"
+  type        = bool
+  default     = true
+}
+
+variable "searxng_container_name" {
+  description = "Container name for the SearXNG sidecar"
+  type        = string
+  default     = "searxng"
+}
+
+variable "searxng_image" {
+  description = "Pinned SearXNG image (digest recommended)"
+  type        = string
+  default     = "searxng/searxng:latest"
+}
+
+variable "searxng_secret_key" {
+  description = "JSON key name inside tomoribot/production secret containing the SearXNG SECRET value"
+  type        = string
+  default     = "SEARXNG_SECRET"
+}
+
 variable "postgres_user" {
   description = "Postgres username"
   type        = string

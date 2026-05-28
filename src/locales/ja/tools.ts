@@ -33,7 +33,9 @@ export default {
       image_search_title: `🔍 \`{query}\` の画像を検索中...`,
       video_search_title: `🔍 \`{query}\` の動画を検索中...`,
       news_search_title: `🔍 ニュースで \`{query}\` を検索中...`,
+      searxng_search_title: `🔍 SearXNGで \`{query}\` を検索中...`,
       disclaimer_description: `AIによる生成応答と検索結果は不正確または不完全な場合があります。**重要な情報は再確認してください**。`,
+      category_unavailable_description: `\`{category}\` 検索は現在利用できません。後でもう一度お試しいただくか、テキスト検索をご利用ください。`,
     },
     mcp: {
       tool_invoke_title: `🔧 **{server}** の \`{function}\` を使用中...`,

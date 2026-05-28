@@ -106,6 +106,11 @@ export default {
         description: `DuckDuckGo search is currently rate limited. For more reliable searching, a server member with \`Manage Server\` permissions can set up Brave Search using \`/optional-key brave set\`.`,
         footer: `Learn how using /help api-key`,
       },
+      searxng_unreachable: {
+        title: `SearXNG Unreachable`,
+        description: `The self-hosted SearXNG metasearch instance isn't responding. Falling back to DuckDuckGo for now. Check that the sidecar container is running and \`SEARXNG_BASE_URL\` is correct.`,
+        footer: `See servers/searxng/README.md for troubleshooting`,
+      },
       operation_failed_title: `Operation Failed`,
       operation_failed_description: `The requested operation could not be completed. Please try again.`,
       custom_endpoint_unreachable_title: `Custom Endpoint Unreachable`,

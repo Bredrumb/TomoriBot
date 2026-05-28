@@ -37,10 +37,9 @@ monica-search
 fetch-url
 url-metadata
 fetch
-brave_news_search
 ```
 
-**Reason:** These are either redundant with other search tools already available (e.g., `brave_web_search` covers general search), or they are too token-expensive in their argument schemas and response payloads for GLM's strict prompt budget.
+**Reason:** These are either redundant with the unified `web_search` tool (which already routes text/image/video/news through the Brave → DuckDuckGo → Felo engine chain), or they are too token-expensive in their argument schemas and response payloads for GLM's strict prompt budget. The `brave_*` MCP function names are no longer LLM-visible at all post-unification, so they don't need to be in this disable list anymore.
 
 ---
 
@@ -127,7 +126,7 @@ Other providers do **not** get this fallback — they must explicitly set the fi
 | `process_gif` tool | ✅ Yes | Text-only model |
 | MCP fetch functions (`fetch`, `fetch-url`, `url-metadata`) | ✅ Yes | Token budget / redundant |
 | MCP alternative search engines | ✅ Yes | Token budget / redundant |
-| `brave_news_search` MCP | ✅ Yes | Token budget |
+| Unified `web_search` tool | ❌ Enabled | Replaces the previous 4-tool Brave surface with one categorized tool |
 | `KNOWLEDGE_SERVER_EMOJIS` context block | ✅ Yes | Text-only + token budget |
 | `KNOWLEDGE_SERVER_STICKERS` context block | ✅ Yes | Text-only + token budget |
 | STM tool hint injections | ✅ Yes | Token budget |

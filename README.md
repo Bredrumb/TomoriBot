@@ -476,6 +476,16 @@ docker compose up
 
 **Note:** Docker Compose automatically configures the database connection. The PostgreSQL service runs in development mode (no SSL) and connects to the internal Docker network.
 
+#### Self-hosted web search (SearXNG sidecar)
+
+The `web_search` tool routes through an engine chain: **Brave → SearXNG → DuckDuckGo → Felo**. There are three ways to set up SearXNG locally:
+
+1. **Docker Compose (recommended).** `docker compose up` starts the `searxng` service automatically — the bot reaches it at `http://searxng:8080/`. Set `SEARXNG_SECRET` in `.env` to any 32+ char string for production; it's auto-defaulted in dev.
+2. **Standalone Docker (when running `bun run dev`).** See `servers/searxng/README.md` for the `docker run` snippet, then set `SEARXNG_BASE_URL=http://localhost:8080/` in your shell.
+3. **No SearXNG.** Leave `SEARXNG_BASE_URL` unset — the chain falls back to `Brave → DDG → Felo` exactly as before. Nothing breaks.
+
+Per-engine timeout and the health-probe cache duration are tunable via `WEB_SEARCH_TIMEOUT_MS` and `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` (see `.env.optional.example`).
+
 #### Monitoring with Grafana (Optional)
 
 To monitor your TomoriBot instance with Grafana dashboards:

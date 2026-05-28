@@ -37,6 +37,28 @@ services:
     # - Using a managed database service with pg_cron support
     # - TomoriBot includes app-level cooldown cleanup as fallback
 
+  # SearXNG metasearch sidecar - Tomori's library research assistant
+  # Self-hosted JSON aggregator that fronts Google/Bing/DDG/Brave/Wikipedia.
+  # See servers/searxng/README.md for configuration + upgrade procedure.
+  searxng:
+    image: searxng/searxng:latest
+    container_name: tomoribot-searxng
+    volumes:
+      - ./servers/searxng:/etc/searxng:ro
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:-dev-only-not-for-production}
+      # SearXNG's startup script substitutes this into settings.yml.
+      SEARXNG_BASE_URL: http://localhost:8080/
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    networks:
+      - tomori-network
+
   # TomoriBot application - the main apartment
   tomoribot:
     build:
@@ -45,6 +67,8 @@ services:
     container_name: tomoribot-app
     depends_on:
       postgres:
+        condition: service_healthy
+      searxng:
         condition: service_healthy
     env_file: .env
     environment:
@@ -60,6 +84,8 @@ services:
       # Override RUN_ENV to 'development' for local compose to disable SSL verification
       # Production deployments to AWS ECS will use RUN_ENV=production automatically
       RUN_ENV: development
+      # Web-search SearXNG sidecar (resolved via compose DNS)
+      SEARXNG_BASE_URL: http://searxng:8080/
     restart: unless-stopped
     networks:
       - tomori-network

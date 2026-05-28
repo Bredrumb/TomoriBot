@@ -16,9 +16,13 @@ import type { ErrorContext } from "../types/db/schema";
  *
  * Auto-discovers tools from:
  * - src/tools/functionCalls/ - Built-in function call tools
- * - src/tools/restAPIs/brave/ - HTTP-based Brave Search tools
+ * - src/tools/webSearch/      - Unified web_search tool (BraveEngine + DDG/Felo chain)
  *
- * MCP tools are now handled by Google's official mcpToTool() - no manual registration needed
+ * Note: the previously LLM-visible `BraveXxxSearchTool` classes are now demoted
+ * to `restAPIs/brave/internal/` and consumed only by `webSearch/braveEngine.ts`.
+ * They are intentionally excluded from auto-discovery.
+ *
+ * MCP tools are still handled by Google's official mcpToTool() - no manual registration needed
  */
 export async function initializeTools(): Promise<void> {
   try {
@@ -40,14 +44,18 @@ export async function initializeTools(): Promise<void> {
       totalDiscovered += discovered;
     }
 
-    // 3. Auto-discover Brave Search tools
-    const braveToolsPath = path.join(process.cwd(), "src", "tools", "restAPIs", "brave");
-    const braveToolFiles = (await getAllFiles(braveToolsPath)).filter((file) => file.endsWith("braveTools.ts"));
+    // 3. Auto-discover unified webSearch tool(s).
+    //    The webSearch/ folder contains a single LLM-visible class (WebSearchTool)
+    //    plus engine-internal modules. We scan only `webSearchTool.ts` to keep
+    //    the engine modules (which export instances, not BaseTool subclasses)
+    //    out of registration.
+    const webSearchPath = path.join(process.cwd(), "src", "tools", "webSearch");
+    const webSearchFiles = (await getAllFiles(webSearchPath)).filter((file) => file.endsWith("webSearchTool.ts"));
 
-    log.info(`Scanning ${braveToolFiles.length} files in Brave tools directory...`);
+    log.info(`Scanning ${webSearchFiles.length} files in webSearch directory...`);
 
-    for (const braveFile of braveToolFiles) {
-      const discovered = await discoverAndRegisterTools(braveFile, "brave");
+    for (const wsFile of webSearchFiles) {
+      const discovered = await discoverAndRegisterTools(wsFile, "webSearch");
       totalDiscovered += discovered;
     }
 

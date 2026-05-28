@@ -76,11 +76,11 @@ When in `undecided` mode, each token is appended to `toolPreludeBuffer` and anal
 ### What the Model Should Generate (per system prompt instructions)
 
 ```xml
-<tool_call>brave_web_search
+<tool_call>web_search
 <arg_key>query</arg_key>
 <arg_value>live performances Japan February 2026</arg_value>
-<arg_key>country</arg_key>
-<arg_value>JP</arg_value>
+<arg_key>category</arg_key>
+<arg_value>text</arg_value>
 </tool_call>
 ```
 
@@ -89,18 +89,18 @@ When in `undecided` mode, each token is appended to `toolPreludeBuffer` and anal
 GLM 4.6 frequently **omits the `<tool_call>` wrapper tag** and outputs the function name directly:
 
 ```
-brave_web_search
+web_search
 <arg_key>query</arg_key>
 <arg_value>live performances Japan February 2026</arg_value>
-<arg_key>country</arg_key>
-<arg_value>JP</arg_value>
+<arg_key>category</arg_key>
+<arg_value>text</arg_value>
 ```
 
 The adapter handles this via **unwrapped tool call detection** — checking if the first line of the prelude matches a known tool name (with underscore/hyphen normalization via `normalizeToolName()`).
 
 ### Tool Name Normalization
 
-MCP tools are often registered with hyphens (e.g., `brave-web-search`) but the model outputs underscores (e.g., `brave_web_search`). The `normalizeToolName()` method tries:
+MCP tools are sometimes registered with hyphens (e.g., `web-search`) but the model outputs underscores (e.g., `web_search`). The `normalizeToolName()` method tries:
 
 1. Exact match
 2. Underscores → hyphens
@@ -140,7 +140,7 @@ You may call one or more functions to assist with the user query.
 
 You are provided with function signatures within <tools></tools> XML tags:
 <tools>
-{"name":"brave_web_search","description":"...","parameters":{...}}
+{"name":"web_search","description":"...","parameters":{...}}
 {"name":"fetch","description":"...","parameters":{...}}
 </tools>
 

@@ -73,7 +73,8 @@ chat pipeline
 - Auto-discovery: `src/tools/toolInitializer.ts`
 - Built-ins: `src/tools/functionCalls/*` (`BaseTool` classes)
 - MCP servers: `src/tools/mcpServers/*` via `mcpManager`
-- REST tools: `src/tools/restAPIs/brave/*`
+- REST tools: `src/tools/restAPIs/brave/*` (engine-internal, consumed by `webSearch/braveEngine.ts`)
+- Web-search dispatcher: `src/tools/webSearch/*` — single LLM-visible `web_search(query, category)` tool routes through a Brave → DDG → Felo engine chain
 
 ### Data + Caching
 

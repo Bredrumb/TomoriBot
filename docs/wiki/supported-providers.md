@@ -45,7 +45,11 @@ If you don't have the workstation to host your own models, TomoriBot supports a 
 
 ### Search & Web Tools
 
-| Provider | Search Type | MCP | Notes |
+The LLM sees a single unified `web_search(query, category)` tool. A dispatcher routes each call through an engine chain (Brave → SearXNG → DuckDuckGo → Felo) and returns the first successful result. Individual engines are no longer LLM-visible.
+
+| Engine | Categories | Integration | Notes |
 |----------|-------------|-----|-------|
-| **Brave Search** | Web search, news, local | ✅ | REST API integration ⚠️ Set $5 usage limit in dashboard to avoid charges |
-| **DuckDuckGo/Felo Search** | Web search, instant answers | ✅ | MCP server integration |
+| **Brave Search** | text / image / video / news | REST API | First in chain when a Brave API key is configured. ⚠️ Set a $5 usage limit in the Brave dashboard to avoid surprise charges. |
+| **SearXNG** | text / image / video / news | REST API (self-hosted sidecar) | Activates when `SEARXNG_BASE_URL` is set and the sidecar's `/healthz` is reachable. Self-hosted aggregator that proxies Google, Bing, DDG, Brave, Wikipedia, etc. See `servers/searxng/README.md`. |
+| **DuckDuckGo** | text only | MCP server | Fallback when Brave/SearXNG are unavailable; transparently cascades to Felo on rate limits. |
+| **Felo AI Search** | text only | MCP server | Final-resort text fallback. |

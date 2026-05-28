@@ -1,0 +1,92 @@
+# SearXNG configuration for TomoriBot.
+#
+# This file is mounted read-only into the searxng container at /etc/searxng/.
+# The official searxng/searxng image expects `${SEARXNG_SECRET}` to be
+# substituted at container startup — that env var is provided by docker-compose,
+# the AWS task definition, or Cloud Run.
+#
+# Reference: https://docs.searxng.org/admin/settings/index.html
+
+use_default_settings: true
+
+general:
+  debug: false
+  instance_name: "TomoriBot-SearXNG"
+  privacypolicy_url: false
+  donation_url: false
+  contact_url: false
+  enable_metrics: false
+
+server:
+  # Secret key — required by SearXNG to be non-default.
+  # Substituted from the SEARXNG_SECRET env var.
+  secret_key: "${SEARXNG_SECRET}"
+  # No rate limiter: only TomoriBot on the private network talks to this sidecar.
+  limiter: false
+  # No public UI; we only need the JSON API.
+  public_instance: false
+  image_proxy: false
+  default_locale: "en"
+  base_url: false
+  bind_address: "0.0.0.0"
+  port: 8080
+  method: "GET"
+
+ui:
+  static_use_hash: true
+  default_locale: "en"
+  query_in_title: false
+  infinite_scroll: false
+
+search:
+  safe_search: 1
+  autocomplete: ""
+  default_lang: "auto"
+  # Formats the JSON API can return. We only ever request `json`.
+  formats:
+    - html
+    - json
+
+outgoing:
+  request_timeout: 5.0
+  max_request_timeout: 10.0
+  pool_connections: 100
+  pool_maxsize: 20
+  useragent_suffix: "TomoriBot"
+
+# Curated engine list — keep this lean to bound upstream rate-limit exposure.
+# Override per-engine via this section; rely on use_default_settings for the rest.
+engines:
+  - name: google
+    disabled: false
+  - name: bing
+    disabled: false
+  - name: duckduckgo
+    disabled: false
+  - name: brave
+    disabled: false
+  - name: wikipedia
+    disabled: false
+  - name: wikidata
+    disabled: false
+  - name: qwant
+    disabled: false
+  # Image-only engines
+  - name: bing images
+    disabled: false
+  - name: google images
+    disabled: false
+  - name: duckduckgo images
+    disabled: false
+  # Video-only engines
+  - name: youtube
+    disabled: false
+  - name: bing videos
+    disabled: false
+  # News-only engines
+  - name: bing news
+    disabled: false
+  - name: google news
+    disabled: false
+  - name: duckduckgo news
+    disabled: false

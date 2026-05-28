@@ -1316,10 +1316,10 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
 
       // 4. Unwrapped tool call — model outputs function name directly without <tool_call> tag.
       //    GLM 4.6 sometimes omits the wrapper tag and generates:
-      //      brave_web_search\n<arg_key>query</arg_key>\n<arg_value>...</arg_value>
+      //      web_search\n<arg_key>query</arg_key>\n<arg_value>...</arg_value>
       //    Detect this by checking if the first line matches a known tool name.
       //    Uses normalizeToolName() to handle underscore/hyphen variations
-      //    (model outputs "brave_web_search" but tool is registered as "brave-web-search").
+      //    (model may output "web-search" but tool is registered as "web_search").
       const firstLine = trimmedStart.split("\n")[0].trim();
       if (firstLine) {
         const normalizedName = this.normalizeToolName(firstLine);
@@ -1551,8 +1551,8 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
    * Normalize a tool name from model output to match a registered tool definition.
    *
    * GLM 4.6 frequently outputs tool names that don't exactly match the registration:
-   * - Underscore/hyphen swaps: "brave_web_search" vs "brave-web-search"
-   * - Truncated prefixes: "ave_web_search" instead of "brave_web_search" (high-temp sampling drops tokens)
+   * - Underscore/hyphen swaps: "web_search" vs "web-search"
+   * - Truncated prefixes: "eb_search" instead of "web_search" (high-temp sampling drops tokens)
    *
    * Matching strategy (in priority order):
    * 1. Exact match
@@ -1582,7 +1582,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     }
 
     // 4. Suffix match — handles dropped prefix tokens from high-temperature sampling.
-    //    e.g., model outputs "ave_web_search" (missing "br"), match "brave_web_search".
+    //    e.g., model outputs "eb_search" (missing "w"), match "web_search".
     //    Also try with underscore/hyphen normalization on both sides.
     const candidates = [rawName, hyphenName, underscoreName];
     const suffixMatches = this.toolDefinitions.filter((tool) =>
