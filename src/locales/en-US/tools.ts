@@ -90,6 +90,8 @@ export default {
       processing_footer: `Large GIFs can take a bit longer`,
     },
     fetch: {
+      fetch_url_title: `🌐  Reading Webpage...`,
+      fetch_failed_description: `I couldn't fetch that page: {error}`,
       reading_title: `🌐  Reading Webpage...`,
       reading_title_page: `🌐  Reading Webpage (Page {page})...`,
       reading_description: `Fetching and reading: {url}`,

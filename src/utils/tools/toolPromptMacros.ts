@@ -92,7 +92,7 @@ const DYNAMIC_TOOL_PROMPT_MACROS = {
         availability.guildUrlFetcherToolNames,
         [/fetch/, /read/, /crawl/, /page/, /open/, /visit/, /url/],
         [/metadata/, /meta/, /head/],
-      ) || pickFirstAvailable(availability.availableToolNames, ["fetch"]),
+      ) || pickFirstAvailable(availability.availableToolNames, ["fetch_url", "fetch"]),
   },
   "{url_metadata_tool}": {
     currentTarget: "best available URL metadata tool",
@@ -102,7 +102,7 @@ const DYNAMIC_TOOL_PROMPT_MACROS = {
         availability.guildUrlFetcherToolNames,
         [/metadata/, /meta/, /head/, /headers/, /preview/, /info/],
         [/fetch/, /read/, /crawl/],
-      ) || pickFirstAvailable(availability.availableToolNames, ["url-metadata", "fetch"]),
+      ) || pickFirstAvailable(availability.availableToolNames, ["url-metadata", "fetch_url", "fetch"]),
   },
 } as const;
 
@@ -355,6 +355,7 @@ async function loadToolPromptMacroAvailability(
       "felo-search",
       "iask-search",
       "monica-search",
+      "fetch",
       "fetch-url",
       "url-metadata",
     ]);

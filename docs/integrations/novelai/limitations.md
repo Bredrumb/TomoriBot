@@ -21,6 +21,7 @@ filter because NovelAI models have `sees_images = false`.
 |------|------|--------|
 | `select_sticker_for_response` | `src/tools/functionCalls/stickerTool.ts:144` | GLM 4.6 cannot reliably generate CJK/Japanese sticker names as tool arguments — token-level instability causes garbled output. |
 | `update_short_term_memory` | `src/tools/functionCalls/updateShortTermMemoryTool.ts:56` | Token budget too constrained; the tool definition and invocation overhead is not worth the benefit at GLM's prompt size. |
+| `fetch_url` | `src/tools/fetchUrl/fetchUrlTool.ts` | Token budget too constrained for fetched-page payloads; disabled until realistic URL-fetch prompt/tool history behavior is validated. |
 | `peek_profile_picture` | `src/tools/functionCalls/peekProfilePictureTool.ts` | Requires `requiredModelCapabilities = { sees_images: true }`; NovelAI models are text-only. |
 | `process_gif` | `src/tools/functionCalls/processGifTool.ts` | Requires `requiredModelCapabilities = { sees_images: true }`; NovelAI models are text-only. |
 
@@ -39,7 +40,7 @@ url-metadata
 fetch
 ```
 
-**Reason:** These are either redundant with the unified `web_search` tool (which already routes text/image/video/news through the Brave → DuckDuckGo → Felo engine chain), or they are too token-expensive in their argument schemas and response payloads for GLM's strict prompt budget. The `brave_*` MCP function names are no longer LLM-visible at all post-unification, so they don't need to be in this disable list anymore.
+**Reason:** These are either redundant with the unified `web_search` tool (which already routes text/image/video/news through the Brave → DuckDuckGo → Felo engine chain), internal to the unified `fetch_url` path, or too token-expensive in their argument schemas and response payloads for GLM's strict prompt budget. The `brave_*` MCP function names are no longer LLM-visible at all post-unification, so they don't need to be in this disable list anymore.
 
 ---
 
@@ -124,6 +125,7 @@ Other providers do **not** get this fallback — they must explicitly set the fi
 | `update_short_term_memory` tool | ✅ Yes | Token budget |
 | `peek_profile_picture` tool | ✅ Yes | Text-only model |
 | `process_gif` tool | ✅ Yes | Text-only model |
+| Unified `fetch_url` tool | ✅ Yes | Token budget |
 | MCP fetch functions (`fetch`, `fetch-url`, `url-metadata`) | ✅ Yes | Token budget / redundant |
 | MCP alternative search engines | ✅ Yes | Token budget / redundant |
 | Unified `web_search` tool | ❌ Enabled | Replaces the previous 4-tool Brave surface with one categorized tool |

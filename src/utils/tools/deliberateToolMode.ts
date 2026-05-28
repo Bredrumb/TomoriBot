@@ -140,6 +140,7 @@ const WEB_TOOL_NAMES = [
   "brave_news_search",
   "brave_local_search",
   "brave_summarizer",
+  "fetch_url",
   "fetch",
   "url-metadata",
 ];

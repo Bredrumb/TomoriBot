@@ -17,6 +17,7 @@ import type { ErrorContext } from "../types/db/schema";
  * Auto-discovers tools from:
  * - src/tools/functionCalls/ - Built-in function call tools
  * - src/tools/webSearch/      - Unified web_search tool (BraveEngine + DDG/Felo chain)
+ * - src/tools/fetchUrl/       - Unified fetch_url tool (internal MCP fetch engine)
  *
  * Note: the previously LLM-visible `BraveXxxSearchTool` classes are now demoted
  * to `restAPIs/brave/internal/` and consumed only by `webSearch/braveEngine.ts`.
@@ -59,7 +60,19 @@ export async function initializeTools(): Promise<void> {
       totalDiscovered += discovered;
     }
 
-    // 4. Log final statistics
+    // 4. Auto-discover unified fetchUrl tool(s). As with webSearch, scan only
+    //    the public BaseTool file and keep engine modules internal.
+    const fetchUrlPath = path.join(process.cwd(), "src", "tools", "fetchUrl");
+    const fetchUrlFiles = (await getAllFiles(fetchUrlPath)).filter((file) => file.endsWith("fetchUrlTool.ts"));
+
+    log.info(`Scanning ${fetchUrlFiles.length} files in fetchUrl directory...`);
+
+    for (const fetchUrlFile of fetchUrlFiles) {
+      const discovered = await discoverAndRegisterTools(fetchUrlFile, "fetchUrl");
+      totalDiscovered += discovered;
+    }
+
+    // 5. Log final statistics
     const stats = ToolRegistry.getStats();
     log.success(
       `Auto-discovery complete: Found and registered ${totalDiscovered} tools (${stats.totalTools} total in registry)`,

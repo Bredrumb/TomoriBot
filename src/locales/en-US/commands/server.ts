@@ -637,7 +637,7 @@ Use {help_matrix} for setup steps, Matrix-only command notes, and the current li
       trigger_description: `Literal phrase to detect in messages, such as pic or make a song.`,
       trigger_placeholder: `pic`,
       regex_trigger_label: `Regex Pattern`,
-      regex_trigger_description: `Optional regex pattern to detect instead of a literal phrase. Flags are fixed to case-insensitive Unicode matching.`,
+      regex_trigger_description: `Optional regex to detect instead of a literal phrase. Matching is case-insensitive Unicode.`,
       regex_trigger_placeholder: `\\b(draw|make) me\\b`,
       remove_checkbox_label: `Configured Tool Triggers`,
       remove_checkbox_label_continued: `Configured Tool Triggers (Continued)`,

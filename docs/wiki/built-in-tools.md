@@ -47,10 +47,16 @@ A single LLM-visible tool replaces the previous four `brave_*` tools. It takes a
 | Tool name | Prompt macro | Requirements | Purpose |
 |---|---|---|---|
 | `web_search` | `{web_search_tool}` / `{image_search_tool}` / `{video_search_tool}` / `{news_search_tool}` | `web_search_enabled` | Search the web. The `category` arg selects text/image/video/news. The dispatcher hides engine selection from the model — saves ~400 tokens/turn vs. the previous 4-tool surface. |
-| `fetch` | `{url_fetch_tool}` | Active bundled fetch MCP server | Read a specific web page or URL in more detail. |
+| `fetch_url` | `{url_fetch_tool}` | `web_search_enabled`; active bundled fetch MCP server; unavailable on NovelAI | Read a specific web page or URL in more detail. Arguments mirror the bundled MCP fetch server: `url`, optional `max_length`, optional `start_index`, optional `raw`. |
 | `url-metadata` | `{url_metadata_tool}` | `web_search_enabled`; active DuckDuckGo/Felo MCP search server | Retrieve page metadata for a URL when a metadata-specific fetcher is available. |
 
 > **Engine-internal details:** the Brave per-category implementations live under `src/tools/restAPIs/brave/internal/` as `InternalBrave*` services consumed by `webSearch/braveEngine.ts`. They are intentionally **not** LLM-visible. The DDG/Felo paths are reached through `webSearch/duckduckgoEngine.ts` / `feloEngine.ts`, which call the MCP server directly via `DuckDuckGoHandler.executeWebSearchInternal()` / `executeFeloSearchInternal()`. SearXNG is reached through `webSearch/searxngEngine.ts`, which calls the self-hosted `/search` endpoint via `restAPIs/searxng/`. Adding a new engine = implement `WebSearchEngine` and append to the chain in `webSearch/dispatcher.ts`.
+
+#### Unified `fetch_url`
+
+`fetch_url` is the single bundled URL-reading tool shown to the LLM. In the Phase 1 refactor it routes only through the internal `mcp_fetch` engine, which calls the existing bundled MCP `fetch` server and reuses its result processing. The raw global MCP function name `fetch` is hidden from the LLM after centralized feature-flag filtering.
+
+Guild MCP replacements still work: if an enabled guild MCP server is registered as `url_fetcher` and exposes functions, TomoriBot hides the bundled `fetch_url` for that guild so `{url_fetch_tool}` resolves to the guild function instead.
 
 #### SearXNG sidecar (optional self-hosted engine)
 

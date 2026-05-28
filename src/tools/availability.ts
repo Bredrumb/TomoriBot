@@ -149,12 +149,11 @@ export async function getAvailableToolsWithMCP(
 
       let filteredByFeatureFlags = filterToolsByFeatureFlags(allMCPFunctionNames, featureFlags);
 
-      // 1. Unconditionally hide the DDG/Felo/iask/monica MCP function names from the LLM.
+      // 1. Unconditionally hide internal MCP function names from the LLM.
       //    They are now consumed only via the unified `web_search` tool through
-      //    `webSearch/duckduckgoEngine.ts` / `feloEngine.ts`. This replaces the
-      //    previous "Brave key present ⇒ filter DDG MCP functions" dedup, which
-      //    became unconditional once those names ceased to be LLM-visible.
-      const hiddenWebSearchMcpFunctions = ["web-search", "felo-search", "iask-search", "monica-search"];
+      //    `webSearch/duckduckgoEngine.ts` / `feloEngine.ts`; bundled `fetch`
+      //    is consumed only via `fetch_url` -> `McpFetchEngine`.
+      const hiddenWebSearchMcpFunctions = ["web-search", "felo-search", "iask-search", "monica-search", "fetch"];
       const originalCount = filteredByFeatureFlags.length;
       filteredByFeatureFlags = filteredByFeatureFlags.filter(
         (functionName) => !hiddenWebSearchMcpFunctions.includes(functionName),
@@ -178,14 +177,19 @@ export async function getAvailableToolsWithMCP(
     if (serverIdNum) {
       try {
         const guildMcpManager = getGuildMcpManager();
-        const guildFunctionNames = await guildMcpManager.getGuildMCPFunctionNames(serverIdNum);
+        const [guildFunctionNames, guildUrlFetcherFunctionNames] = await Promise.all([
+          guildMcpManager.getGuildMCPFunctionNames(serverIdNum),
+          guildMcpManager.getGuildMCPFunctionNamesByServerType(serverIdNum, "url_fetcher"),
+        ]);
 
         if (guildFunctionNames.length > 0) {
           const builtInNames = new Set(builtInTools.map((t) => t.name));
           const globalMcpNames = new Set(mcpFunctionNames);
+          const guildUrlFetcherFunctionSet = new Set(guildUrlFetcherFunctionNames);
 
           const safeGuildNames = guildFunctionNames.filter((name) => {
-            if (builtInNames.has(name) || globalMcpNames.has(name)) {
+            const isGuildFetchUrlReplacement = name === "fetch_url" && guildUrlFetcherFunctionSet.has(name);
+            if ((!isGuildFetchUrlReplacement && builtInNames.has(name)) || globalMcpNames.has(name)) {
               log.warn(`[GuildMCP] Skipping guild MCP function "${name}" - collides with built-in or global MCP tool`);
               return false;
             }
@@ -222,9 +226,26 @@ export async function getAvailableToolsWithMCP(
         }
 
         if (guildServerTypes.has("url_fetcher")) {
+          const guildUrlFetcherFunctionNames = await getGuildMcpManager().getGuildMCPFunctionNamesByServerType(
+            serverIdNum,
+            "url_fetcher",
+          );
+          const guildUrlFetcherFunctionSet = new Set(guildUrlFetcherFunctionNames);
+
+          if (guildUrlFetcherFunctionNames.length > 0) {
+            const beforeBuiltInCount = builtInTools.length;
+            builtInTools = builtInTools.filter((tool) => tool.name !== "fetch_url");
+            const excludedBuiltInCount = beforeBuiltInCount - builtInTools.length;
+            if (excludedBuiltInCount > 0) {
+              log.info("Excluded bundled fetch_url (guild has url_fetcher server type)");
+            }
+          }
+
           const fetchFunctions = ["fetch", "fetch-url"];
           const beforeCount = mcpFunctionNames.length;
-          mcpFunctionNames = mcpFunctionNames.filter((name) => !fetchFunctions.includes(name));
+          mcpFunctionNames = mcpFunctionNames.filter(
+            (name) => !fetchFunctions.includes(name) || guildUrlFetcherFunctionSet.has(name),
+          );
           const excludedCount = beforeCount - mcpFunctionNames.length;
           if (excludedCount > 0) {
             log.info(`Excluded ${excludedCount} URL fetch MCP functions (guild has url_fetcher server type)`);

@@ -82,7 +82,7 @@ export async function sendFetchProgressNotice(
     context,
     "web_fetch",
     {
-      titleKey: page > 1 ? "tools.fetch.reading_title_page" : "tools.fetch.reading_title",
+      titleKey: page > 1 ? "tools.fetch.reading_title_page" : "tools.fetch.fetch_url_title",
       titleVars: page > 1 ? { page: String(page) } : undefined,
       description,
       footerKey: "tools.fetch.reading_footer",
@@ -98,7 +98,7 @@ export async function sendFetchProgressNotice(
  * @param url - URL to validate
  * @returns Validation result with size information
  */
-async function validateFetchSize(url: string): Promise<{ allowed: boolean; reason?: string; sizeMB?: number }> {
+export async function validateFetchSize(url: string): Promise<{ allowed: boolean; reason?: string; sizeMB?: number }> {
   try {
     const maxSizeMB = FETCH_LIMITS.MAX_FETCH_SIZE_MB;
 
@@ -418,7 +418,7 @@ export class MCPExecutor {
             log.info(`Executing MCP function: ${functionName}`);
 
             // Validate fetch URL size before executing (HEAD request check)
-            if (functionName === "fetch-url" && mcpContext.modifiedArgs.url) {
+            if ((functionName === "fetch-url" || functionName === "fetch") && mcpContext.modifiedArgs.url) {
               const fetchValidation = await validateFetchSize(mcpContext.modifiedArgs.url as string);
 
               if (!fetchValidation.allowed) {

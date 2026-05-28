@@ -35,6 +35,7 @@ rather than sequenced stages.
 - [`subsystems/database-schema.md`](./subsystems/database-schema)
 - [`subsystems/event-system.md`](./subsystems/event-system)
 - [`subsystems/command-system.md`](./subsystems/command-system)
+- [`subsystems/tool-system.md`](./subsystems/tool-system)
 - [`subsystems/status-command.md`](./subsystems/status-command)
 - [`subsystems/prompt-snapshot.md`](./subsystems/prompt-snapshot)
 - [`subsystems/utils.md`](./subsystems/utils)

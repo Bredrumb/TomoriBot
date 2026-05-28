@@ -90,6 +90,8 @@ export default {
       processing_footer: `大きいGIFは少し時間がかかる場合があります`,
     },
     fetch: {
+      fetch_url_title: `🌐 Webページを読み取り中...`,
+      fetch_failed_description: `そのページを取得できませんでした: {error}`,
       reading_title: `🌐 Webページを読み取り中...`,
       reading_title_page: `🌐 Webページを読み取り中（{page}ページ目）...`,
       reading_description: `{url} を取得して内容を読み取っています`,

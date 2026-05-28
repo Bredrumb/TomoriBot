@@ -16,7 +16,7 @@ TomoriBot is a TypeScript + Bun Discord AI chatbot focused on configurable perso
 - Memory systems
   - Server memories, personal memories, short-term memory summaries, and persona-scoped conditioning memory per server
 - Tool execution
-  - Built-in tools, MCP servers, and a unified `web_search` engine chain (Brave → DDG → Felo) behind one tool registry
+  - Built-in tools, MCP servers, unified `web_search`, and unified `fetch_url` behind one tool registry
 - RAG document memory
   - Optional in local/dev (auto-detected via pgvector), always enabled in production
 - Localization

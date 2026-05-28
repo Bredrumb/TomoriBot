@@ -141,7 +141,7 @@ You may call one or more functions to assist with the user query.
 You are provided with function signatures within <tools></tools> XML tags:
 <tools>
 {"name":"web_search","description":"...","parameters":{...}}
-{"name":"fetch","description":"...","parameters":{...}}
+{"name":"create_task","description":"...","parameters":{...}}
 </tools>
 
 For each function call, output the function name and arguments within the following XML format:
@@ -199,6 +199,10 @@ With `/nothink` removed (to enable reasoning for tool use), the model may use to
 
 ### 2. Tool Call Arguments Truncation
 If the token cap hits mid-`<arg_value>`, the last argument is incomplete. The truncation recovery synthesizes `</tool_call>` but the incomplete argument may be lost.
+
+### 3. URL Fetch Tool Disabled
+
+`fetch_url` is not exposed to NovelAI initially. It is a built-in tool for other providers, but fetched-page payloads can be large enough to destabilize GLM's prompt/tool budget. Re-enable only after validating realistic fetched-page results against NovelAI's system-prompt and tool-history limits.
 
 ## File References
 

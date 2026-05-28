@@ -47,6 +47,8 @@ If you don't have the workstation to host your own models, TomoriBot supports a 
 
 The LLM sees a single unified `web_search(query, category)` tool. A dispatcher routes each call through an engine chain (Brave → SearXNG → DuckDuckGo → Felo) and returns the first successful result. Individual engines are no longer LLM-visible.
 
+For URL reading, the LLM sees `fetch_url(url, max_length?, start_index?, raw?)`. In the current Phase 1 refactor it routes through internal `mcp_fetch` only and is unavailable on NovelAI.
+
 | Engine | Categories | Integration | Notes |
 |----------|-------------|-----|-------|
 | **Brave Search** | text / image / video / news | REST API | First in chain when a Brave API key is configured. ⚠️ Set a $5 usage limit in the Brave dashboard to avoid surprise charges. |

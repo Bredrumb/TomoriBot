@@ -246,8 +246,8 @@ export function addFetchCapabilityReminder(originalResult: string): {
     // Create an enhanced response that includes fetch capability reminder
     const fetchReminder =
       urlCount > 0
-        ? `\n\n[AGENT REMINDER] You have access to the "fetch" function call to retrieve and analyze the full content of any of these ${urlCount} web URLs. If any given information snippet is not enough, use the function to retrieve more details about a specific webpage, use fetch(url="[URL]") to get the complete page content for deeper analysis.`
-        : `\n\n[AGENT REMINDER] You have access to the "fetch" function call to retrieve and analyze the full content of any web URL the user needs. Use fetch(url="[URL]") when more detailed webpage content is needed.`;
+        ? `\n\n[AGENT REMINDER] You have access to the "fetch_url" function call to retrieve and analyze the full content of any of these ${urlCount} web URLs. If any given information snippet is not enough, use the function to retrieve more details about a specific webpage, use fetch_url(url="[URL]") to get the complete page content for deeper analysis.`
+        : `\n\n[AGENT REMINDER] You have access to the "fetch_url" function call to retrieve and analyze the full content of any web URL the user needs. Use fetch_url(url="[URL]") when more detailed webpage content is needed.`;
 
     const enhancedMessage = originalResult;
 
