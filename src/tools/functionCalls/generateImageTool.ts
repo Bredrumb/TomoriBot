@@ -42,27 +42,29 @@ const IMAGE_REFERENCE_MAX_SINGLE_BYTES = Number.parseInt(process.env.IMAGE_REFER
 export class GenerateImageTool extends BaseTool {
   name = "generate_image";
   description =
-    "Generate an AI image using the active provider's native image model. Use this only when the user explicitly asks you to make, draw, generate, create, edit, or continue an image; do not call it for casual visual discussion. If the user asks you to make/draw/generate an image and this tool is available, call this tool instead of only describing the image. Provide a detailed text prompt describing what image you want to create. For text-to-image requests, creatively expand sparse user ideas into one coherent finished image with a clear subject, setting, pose, outfit, colors, mood, and lighting. If you provide a media_id or target_identity reference for normal image-to-image, treat the reference as loose inspiration and describe the desired new similar image with the requested changes clearly visible. Use inpainting instead for precise localized edits that should preserve most of the source image. For inpainting, keep the prompt tightly scoped to the masked region only and do not re-describe the whole subject/reference image. For example, use 'change hair to blonde with soft highlights' instead of a full character/scene description. Avoid negative wording in inpainting prompts: do not include clauses such as 'not black', 'no grey', or 'without stripes'; state only the desired replacement. For background-mode inpainting, describe the desired new surroundings explicitly, including the target background color, environment, location, atmosphere, lighting, or setting, plus desired replacement details rather than old surroundings to avoid. The mask_prompt must be a short phrase naming the existing region to mask, not the desired replacement. You can also specify an aspect ratio (default is 1:1). After generating, the image will be sent directly to the Discord channel.";
+    "Generate, edit, or extend an image. Use text-to-image for new images, img2img for loose reference-based generations, inpaint for localized edits, and outpaint for canvas expansion. The generated image is sent directly to Discord.";
   category = "utility" as const;
   requiresFeatureFlag = "image_gen";
 
+  // Keep these schema descriptions short. Long tool descriptions get injected into
+  // every model call and were starting to drown out the user's actual request.
   parameters: ToolParameterSchema = {
     type: "object",
     properties: {
       prompt: {
         type: "string",
         description:
-          "A detailed text description of the image you want to generate. For text-to-image, expand the user's idea into a complete, visually interesting final image: specify a single main subject or group, setting, action/pose, outfit, hair/eye colors when relevant, color palette, lighting, mood, camera framing, subject scale, and art style. For single-object prompts, specify a close or medium-close composition where the object is clearly visible and not tiny in an empty canvas. Avoid character sheets, multiple views, duplicate panels, or reference-sheet layouts unless the user explicitly asks for them. For normal image-to-image, describe the desired new similar image, using the reference only as loose inspiration; include the requested changes and enough scene/style detail for a fresh result. For inpainting, write only the local edit request for the masked area, such as 'change hair to blonde with natural shading' or 'make the irises emerald green with brighter highlights'. For outpainting, describe what should plausibly continue into the newly revealed canvas beyond the requested edge, including visible source environment details from the image or prior user prompt when available; say 'continue the dreamy soft-focus meadow with floating dandelion seeds and warm sunlight' instead of only 'show more surroundings'. Preserve the original subject and do not reframe it as a new image. Match the prompt ambition to the outpaint amount: for slight or moderate zoom-outs, ask to reveal more outfit/lower body/environment as space allows rather than promising a full-body or head-to-toe view; reserve full-body, complete legs, or head-to-toe wording for large or dramatic outpaint amounts. Do not ask for a duplicate subject, second character, giant face, giant torso, tiny limbs, or unrelated character body parts in the added border. Do not include negative inpaint clauses like 'not black', 'no grey', or 'without stripes'; mention only the desired replacement color/material/pattern. For hair recolor inpainting, keep it color-only and do not add preservation clauses naming hairstyle parts like braids, bangs, or parting. Avoid full-scene or full-character descriptions in inpainting prompts. For background-mode inpainting, state the desired new surroundings strongly: color, environment, location, atmosphere, lighting, or setting; avoid naming old surroundings that should not remain. For recolors, name the desired new color/material strongly. For recolor inpainting, treat it as color-only unless the user explicitly asks for redesign: preserve garment/object type, shape, fit, seams, folds, and overall structure. Do not re-describe the whole subject/reference image for inpainting, and do not put the mask target there unless it is needed to explain the edit.",
+          "Main image prompt. For new images, describe the final composition. For img2img, describe the desired new image using the reference loosely. For inpaint, describe only the local replacement. For outpaint, describe what should continue into the new canvas; use directional prompt fields for edge-specific details.",
       },
       media_id: {
         type: "string",
         description:
-          "Optional: The media reference ID (e.g., media_1) from the system hint for the message containing images to use as reference for image-to-image generation or inpainting. The tool will extract all images from this message and use them to guide the generation along with your prompt. If not provided, generates a new image from scratch (text-to-image).",
+          "Optional media reference ID such as media_1. Use for img2img, inpaint, or outpaint; omit for text-to-image.",
       },
       inpaint: {
         type: "boolean",
         description:
-          "Optional: Set to true when editing only a specific region of a referenced image. Requires media_id or target_identity. Use false or omit for normal image-to-image.",
+          "Set true only for localized edits to a referenced image. Do not set this for outpaint requests.",
       },
       mask_prompt: {
         type: "string",
@@ -72,7 +74,7 @@ export class GenerateImageTool extends BaseTool {
       clothing_segment_categories: {
         type: "array",
         description:
-          "Optional for ComfyUI inpainting when mask_prompt is clothing-related: exact ComfyUI-RMBG ClothesSegment categories to mask. Use this when the user names a specific clothing part. For dresses, include ['Dress', 'Upper-clothes', 'Skirt'] so the parser can catch both bodice and skirt regions. Examples: ['Upper-clothes'] for a shirt/top/hoodie/jacket, ['Pants'] for pants/shorts, ['Skirt'] for a skirt, ['Scarf'] for a scarf, or multiple categories for a full outfit. Omit for non-clothing masks.",
+          "Optional clothing-parser categories for clothing inpaint targets. For dresses, include Dress, Upper-clothes, and Skirt. Omit for non-clothing masks.",
         items: {
           type: "string",
           enum: [
@@ -93,113 +95,106 @@ export class GenerateImageTool extends BaseTool {
       clothing_mode: {
         type: "boolean",
         description:
-          "Optional for ComfyUI inpainting: set true when the edit target is clothing, a worn accessory, or a fashion item so the workflow uses the clothing parser instead of generic object detection. Good targets include shirts, skirts, pants, shoes, hats, glasses, scarves, bags, belts, outfits, jewelry, and paired accessories. Use clothing_segment_categories too when an exact ClothesSegment category exists. Omit or set false for hair, face, skin, background, props, and non-worn objects.",
+          "Set true for clothing, worn accessories, fashion items, jewelry, or paired wearable items so the clothing parser is used.",
       },
       mask_threshold: {
         type: "number",
-        description:
-          "Optional inpaint tuning: GroundingDINO/SAM detection threshold from 0 to 10. Lower values include more candidate detections; higher values make detection stricter. Use around 0.45 for precise edits, lower values for small or stubborn targets.",
+        description: "Optional inpaint detection threshold. Lower is broader; higher is stricter.",
       },
       mask_grow: {
         type: "number",
-        description:
-          "Optional inpaint tuning: mask expansion in pixels from 0 to 128. Small values like 4-8 are precise; 12-32 gives recolors room; 48+ is loose and may change surrounding areas.",
+        description: "Optional mask expansion in pixels. Small values are precise; larger values give edits more room.",
       },
       mask_feather: {
         type: "number",
-        description:
-          "Optional inpaint tuning: mask blur/feather from 0 to 100. Lower values like 2-8 preserve edges; 12-28 blends broader edits but can bleed into nearby pixels.",
+        description: "Optional mask feather in pixels. Low values keep crisp edges; higher values blend more.",
       },
       cfg: {
         type: "number",
-        description:
-          "Optional inpaint tuning: prompt guidance from 0 to 30. Use about 8-10 for most edits, 10-14 for stubborn color/material changes, lower if the result overpowers the reference.",
+        description: "Optional prompt guidance. Higher follows the prompt more strongly; lower preserves reference structure.",
       },
       denoise: {
         type: "number",
-        description:
-          "Optional img2img/inpaint tuning: strength from 0 to 1. Lower values preserve the reference more; higher values allow stronger visible changes. Normal image-to-image should usually be loose inspiration around 0.7-0.85. Try 0.3 for tiny touch-ups, 0.85-0.95 for recolors or material changes, and 0.9-1.0 for stubborn broad changes.",
+        description: "Optional img2img/inpaint strength from 0 to 1. Lower preserves more; higher changes more.",
       },
       mask_mode: {
         type: "string",
         description:
-          "Optional for inpainting: Use 'target' to edit the detected mask_prompt region itself. Use 'background' for background/setting edits. In background mode, set mask_prompt to the existing foreground object to protect, such as 'apple', 'person', 'car', or 'main foreground object'. Avoid using 'background' as the mask_prompt unless no foreground subject can be named.",
+          "Use 'target' to edit the detected mask_prompt region. Use 'background' to edit surroundings while protecting the named foreground object.",
         enum: ["target", "background"],
       },
       inpaint_preset: {
         type: "string",
         description:
-          "Optional inpaint edit category. Prefer this over hand-picking raw tuning values. Use 'tight_recolor' when the edit should stay confined to a smaller region (examples: eye color, hair color, small accessories, logos, badges, jewelry details, compact object accents). Use 'broad_recolor' when the edit should cover larger connected regions (examples: full shirt/hoodie/cardigan recolor, entire dress or skirt recolor, pants recolor, large object recolor, bigger foreground props, broad scene element recolors). Use 'background' for backdrop/setting/location edits and 'extend' for edits that grow beyond the current silhouette.",
+          "Optional inpaint category. Prefer presets over raw tuning: tight_recolor, broad_recolor, background, or extend.",
         enum: ["small_detail", "tight_recolor", "broad_recolor", "background", "extend"],
       },
       inpaint_mode: {
         type: "string",
         description:
-          "Optional: Inpaint behavior. Use 'normal' to edit the detected region itself, 'extend' when the edit must grow beyond the current silhouette into nearby space, or 'outpaint' when the image canvas itself should be expanded to reveal more beyond an edge.",
+          "Optional inpaint behavior: normal edits the mask, extend grows nearby content, outpaint expands the canvas.",
         enum: ["normal", "extend", "outpaint"],
       },
       outpaint: {
         type: "boolean",
         description:
-          "Optional: Set true when the user asks to extend the image canvas itself upward, downward, left, right, or around the image to see more beyond what was cropped. Requires media_id or target_identity. Do not also set inpaint=true; outpaint uses the required inpaint-style provider workflow internally. This is different from normal inpainting or silhouette extension.",
+          "Set true to expand the image canvas beyond one or more edges. Requires media_id or target_identity. Do not also set inpaint=true.",
       },
       outpaint_strategy: {
         type: "string",
         description:
-          "Optional for outpainting: Use 'full_canvas' for all-direction expansion, zoom-out, pull-back, or NovelAI-style expanded-canvas inpainting when the ComfyUI workflow supports it. Use 'edge_extend' only for one-edge or small directional extensions where the original source scale must be preserved. Use 'zoom_out' only when the workflow supports placing the original image smaller inside a larger generated scene.",
+          "Optional outpaint strategy. full_canvas is the default. edge_extend and zoom_out are accepted provider hints.",
         enum: ["full_canvas", "edge_extend", "zoom_out"],
       },
       outpaint_amount: {
         type: "string",
         description:
-          "Optional preset for how much canvas to reveal during outpainting. Use 'slight' when the user asks to zoom out a little or only wants a modest amount of extra context. Use 'moderate' for a clear wider pullback. Use 'large' for a fuller view, full outfit, visible legs, lower body, or head-to-toe requests. Use 'dramatic' only for a very far zoom-out or huge expansion. Do not pair slight/moderate amounts with full-body promises; ask for more of the outfit/body/environment as space allows instead.",
+          "Optional canvas expansion preset. Use slight for a small reveal, moderate for a wider pullback, large for lower body/full outfit requests, and dramatic for a far zoom-out.",
         enum: ["slight", "moderate", "large", "dramatic"],
       },
       outpaint_left_prompt: {
         type: "string",
         description:
-          "Optional for outpainting left: describe what should continue beyond the left edge. Use when extending left/all and the left side needs specific edge context. Describe edge continuation, not a whole new image.",
+          "Optional left-edge outpaint guidance. Describe only what should continue beyond the left edge.",
       },
       outpaint_right_prompt: {
         type: "string",
         description:
-          "Optional for outpainting right: describe what should continue beyond the right edge. Use when extending right/all and the right side needs specific edge context. Describe edge continuation, not a whole new image.",
+          "Optional right-edge outpaint guidance. Describe only what should continue beyond the right edge.",
       },
       outpaint_top_prompt: {
         type: "string",
         description:
-          "Optional for outpainting upward: describe what should continue above the image, such as sky, ceiling, headroom, or top-edge environment. Use when extending up/all.",
+          "Optional top-edge outpaint guidance, such as sky, ceiling, headroom, or top-edge environment.",
       },
       outpaint_bottom_prompt: {
         type: "string",
         description:
-          "Optional for outpainting downward: describe what should continue below the image, such as ground, floor, lower body, or objects touching the bottom edge. Use when extending down/all; do not promise a full body unless the requested outpaint amount leaves enough room.",
+          "Optional bottom-edge outpaint guidance, such as ground, floor, lower body, or objects touching the bottom edge.",
       },
       extend_direction: {
         type: "string",
         description:
-          "Optional for inpaint_mode='extend', inpaint_mode='outpaint', or outpaint=true: Direction to extend. For outpainting, this is the image edge to reveal more beyond. Use 'all' when the user asks to zoom out, pull back, make a wider or wide-angle shot, or expand in all directions. Use 'down' for legs, feet, lower body, full outfit, floor, or ground only when the user asks to reveal that lower area without asking to zoom out. Use 'up' for sky, ceiling, headroom, or top of the head; left/right for side context.",
+          "Optional extension direction. Use all for zoom-out/pull-back requests, or one edge for directional expansions.",
         enum: ["down", "up", "left", "right", "down_left", "down_right", "up_left", "up_right", "all"],
       },
       extend_pixels: {
         type: "number",
         description:
-          "Optional for inpaint_mode='extend', inpaint_mode='outpaint', or outpaint=true: Approximate number of pixels to extend. Use 64-128 for small silhouette extensions and 192-384 for canvas outpainting.",
+          "Optional approximate extension size in pixels. Usually prefer outpaint_amount for canvas outpainting.",
       },
       outpaint_overlap: {
         type: "number",
-        description:
-          "Optional for outpainting: pixels of the original image edge that may be included in the editable transition mask before the original is composited back. Use 16-48 for smoother joins; default is provider-configured.",
+        description: "Optional outpaint transition overlap in pixels.",
       },
       outpaint_zoom_scale: {
         type: "number",
-        description:
-          "Optional for zoom-out outpainting: scale for placing the original image inside the expanded canvas, from 0.5 to 0.95. Applies to full_canvas/zoom_out requests and is ignored by edge_extend.",
+        description: "Optional zoom-out source scale from 0.5 to 0.95.",
       },
       target_identity: {
         type: "string",
         description:
-          "Optional: User or persona identity whose profile picture/avatar should be used as a reference image. Accepts 'self', an exact persona nickname, or a natural user name from the current conversation or server. Deprecated raw IDs are still accepted at execution time for compatibility. Do not set this when media_id already points to the image to edit, unless the user explicitly asks to include the avatar/profile picture as an additional reference.",
+          "Optional user/persona identity whose avatar should be used as a reference. Do not combine with media_id unless requested.",
       },
       aspect_ratio: {
         type: "string",
@@ -1500,6 +1495,9 @@ export class GenerateImageTool extends BaseTool {
     referenceImages: Array<{ mimeType: string; data: string }>,
     options?: { keepAtLeastOne?: boolean },
   ): Promise<Array<{ mimeType: string; data: string }>> {
+    // Provider payload limits are easier to hit with Discord images than with
+    // generated references. Downscale instead of failing when a user posts a
+    // high-resolution source image, especially for inpaint/outpaint.
     const normalized: Array<{ mimeType: string; data: string }> = [];
     let totalBytes = 0;
     const capped = referenceImages.slice(0, IMAGE_REFERENCE_MAX_COUNT);
@@ -1556,7 +1554,10 @@ export class GenerateImageTool extends BaseTool {
       if (fallbackBytes <= IMAGE_REFERENCE_MAX_TOTAL_BYTES || options?.keepAtLeastOne) {
         const fallback =
           fallbackBytes > IMAGE_REFERENCE_MAX_SINGLE_BYTES || fallbackBytes > IMAGE_REFERENCE_MAX_TOTAL_BYTES
-            ? await this.buildReferenceImageWithinByteLimit(first, Math.min(IMAGE_REFERENCE_MAX_SINGLE_BYTES, IMAGE_REFERENCE_MAX_TOTAL_BYTES))
+            ? await this.buildReferenceImageWithinByteLimit(
+                first,
+                Math.min(IMAGE_REFERENCE_MAX_SINGLE_BYTES, IMAGE_REFERENCE_MAX_TOTAL_BYTES),
+              )
             : first;
         const fallbackNormalizedBytes = Buffer.byteLength(fallback.data, "base64");
         if (fallbackNormalizedBytes > IMAGE_REFERENCE_MAX_TOTAL_BYTES) {

@@ -223,6 +223,33 @@ const COMFYUI_MAX_RANDOM_SEED = 2 ** 32;
 const COMFYUI_INPAINT_MASK_FILENAME_PREFIX = "tomoribot_inpaint_mask";
 const COMFYUI_INPAINT_RESULT_DEBUG_FILENAME_PREFIX = "tomoribot_inpaint_result_debug";
 const COMFYUI_OUTPAINT_INACTIVE_EXTEND_FACTOR = 0.01;
+const COMFYUI_OUTPAINT_PRESERVE_SUBJECT_ONLY = false;
+const COMFYUI_OUTPAINT_SUBJECT_MASK_GROW = 2;
+const COMFYUI_OUTPAINT_SUBJECT_MASK_FEATHER = 2;
+const COMFYUI_LANPAINT_SUPPORTED_SAMPLERS = new Set([
+  "euler",
+  "euler_ancestral",
+  "heun",
+  "heunpp2",
+  "dpm_2",
+  "dpm_2_ancestral",
+  "dpm_fast",
+  "dpmpp_sde",
+  "dpmpp_sde_gpu",
+  "dpmpp_2m",
+  "dpmpp_2m_sde",
+  "dpmpp_2m_sde_gpu",
+  "dpmpp_3m_sde",
+  "dpmpp_3m_sde_gpu",
+  "ddpm",
+  "deis",
+  "res_multistep",
+  "res_multistep_ancestral",
+  "gradient_estimation",
+  "er_sde",
+  "seeds_2",
+  "seeds_3",
+]);
 const COMFYUI_BASE_NEGATIVE_PROMPT =
   "low quality, worst quality, low detail, bad drawing, bad quality, oldest, (score_3, score_2, score_1:0.25), jpeg artifacts, watermark, signature, artist name, missing head, missing limb, bad anatomy, bad proportions, bad hands, missing fingers, spiral eyes, multiple views, duplicate face, extra face, second character, collage, inset image, tiny subject, distant subject, small subject, excessive empty space, subject too small";
 const COMFYUI_CLOTHING_SEGMENT_CATEGORIES: ComfyUiClothingSegmentCategory[] = [
@@ -1088,6 +1115,9 @@ function isComfyUiZoomOutPrompt(prompt: string): boolean {
 function resolveComfyUiOutpaintStrategy(options: ComfyUiGenerationOptions): ComfyUiOutpaintStrategy {
   const explicitStrategy = normalizeComfyUiOutpaintStrategy(options.outpaintStrategy);
   if (explicitStrategy) {
+    // The current Anima workflow exposes LanPaint full-canvas stages for every
+    // direction. Keep accepting older strategy names from the tool API, but route
+    // them through the maintained branch instead of the old CropAndStitch path.
     return explicitStrategy === "edge_extend" || explicitStrategy === "zoom_out" ? "full_canvas" : explicitStrategy;
   }
 
@@ -1096,14 +1126,6 @@ function resolveComfyUiOutpaintStrategy(options: ComfyUiGenerationOptions): Comf
 
 function resolveComfyUiOutpaintOverlap(options: ComfyUiGenerationOptions): number {
   return clampNumber(options.outpaintOverlap ?? 16, 0, 256);
-}
-
-function resolveComfyUiOutpaintSubjectMaskGrow(): number {
-  return 2;
-}
-
-function resolveComfyUiOutpaintSubjectMaskFeather(): number {
-  return 2;
 }
 
 function resolveComfyUiOutpaintPadFeather(): number {
@@ -1192,36 +1214,16 @@ function resolveComfyUiLanPaintNumSteps(): number {
   );
 }
 
+function normalizeComfyUiLanPaintSampler(sampler: string, fallback: string): string {
+  return COMFYUI_LANPAINT_SUPPORTED_SAMPLERS.has(sampler) ? sampler : fallback;
+}
+
 function resolveComfyUiLanPaintSampler(): string {
   const sampler =
     readOptionalStringEnv("COMFYUI_LANPAINT_SAMPLER") ??
     readOptionalStringEnv("ANIMA3_LANPAINT_SAMPLER") ??
     "er_sde";
-  const supportedSamplers = new Set([
-    "euler",
-    "euler_ancestral",
-    "heun",
-    "heunpp2",
-    "dpm_2",
-    "dpm_2_ancestral",
-    "dpm_fast",
-    "dpmpp_sde",
-    "dpmpp_sde_gpu",
-    "dpmpp_2m",
-    "dpmpp_2m_sde",
-    "dpmpp_2m_sde_gpu",
-    "dpmpp_3m_sde",
-    "dpmpp_3m_sde_gpu",
-    "ddpm",
-    "deis",
-    "res_multistep",
-    "res_multistep_ancestral",
-    "gradient_estimation",
-    "er_sde",
-    "seeds_2",
-    "seeds_3",
-  ]);
-  return supportedSamplers.has(sampler) ? sampler : "er_sde";
+  return normalizeComfyUiLanPaintSampler(sampler, "er_sde");
 }
 
 function resolveComfyUiOutpaintSampler(): string {
@@ -1231,31 +1233,7 @@ function resolveComfyUiOutpaintSampler(): string {
     readOptionalStringEnv("COMFYUI_LANPAINT_SAMPLER") ??
     readOptionalStringEnv("ANIMA3_LANPAINT_SAMPLER") ??
     "euler";
-  const supportedSamplers = new Set([
-    "euler",
-    "euler_ancestral",
-    "heun",
-    "heunpp2",
-    "dpm_2",
-    "dpm_2_ancestral",
-    "dpm_fast",
-    "dpmpp_sde",
-    "dpmpp_sde_gpu",
-    "dpmpp_2m",
-    "dpmpp_2m_sde",
-    "dpmpp_2m_sde_gpu",
-    "dpmpp_3m_sde",
-    "dpmpp_3m_sde_gpu",
-    "ddpm",
-    "deis",
-    "res_multistep",
-    "res_multistep_ancestral",
-    "gradient_estimation",
-    "er_sde",
-    "seeds_2",
-    "seeds_3",
-  ]);
-  return supportedSamplers.has(sampler) ? sampler : "euler";
+  return normalizeComfyUiLanPaintSampler(sampler, "euler");
 }
 
 function resolveComfyUiLanPaintPromptMode(): "Image First" | "Prompt First" {
@@ -1279,13 +1257,6 @@ function resolveComfyUiFlorence2Attention(): "flash_attention_2" | "sdpa" | "eag
 }
 
 function shouldKeepComfyUiFlorence2ModelLoaded(): boolean {
-  return false;
-}
-
-function shouldComfyUiOutpaintPreserveSubjectOnly(outpaint: boolean): boolean {
-  if (!outpaint) {
-    return false;
-  }
   return false;
 }
 
@@ -1505,31 +1476,28 @@ function buildComfyUiOutpaintDirectionPrompt(direction: string, scaleSource = fa
   const normalizedDirection = normalizeComfyUiExtendDirection(direction);
   if (normalizedDirection.startsWith("down")) {
     return [
-      "the newly added canvas is below the original bottom edge",
-      "continue only the pixels and forms that touch the original bottom edge downward",
-      "if clothing, legs, feet, floor, or ground are cropped at the bottom edge, extend those lower-body and ground details naturally below the original image",
-      "do not fill a downward extension mainly with sky, clouds, or unrelated scenery unless those elements already touch the bottom edge",
-      "do not introduce a new horizon, camera angle, or separate scene in the lower extension",
+      "new canvas is below the original bottom edge",
+      "continue bottom-edge content downward",
+      "extend cropped lower-body, clothing, floor, or ground only when visible at the edge",
     ];
   }
   if (normalizedDirection.startsWith("up")) {
     return [
-      "the newly added canvas is above the original top edge",
-      "continue top-edge content upward from the existing crop",
-      "if sky, ceiling, hair, headwear, or headroom are cropped at the top edge, extend those details naturally above the original image",
+      "new canvas is above the original top edge",
+      "continue top-edge sky, ceiling, hair, fabric, or headroom upward",
     ];
   }
   if (normalizedDirection === "left" || normalizedDirection === "right") {
     return [
-      `the newly added canvas is on the ${normalizedDirection} side of the original image`,
-      `continue ${normalizedDirection}-edge content outward from the existing crop`,
+      `new canvas is on the ${normalizedDirection} edge`,
+      `continue ${normalizedDirection}-edge content outward`,
     ];
   }
   return [
     scaleSource
-      ? "treat all-direction zoom-out outpainting as a wider view around the scaled source image, not as a full redraw"
-      : "treat all-direction outpainting as a border expansion around the fixed source image, not as a full redraw or subject rescale",
-    "continue each original edge outward only from content that touches that edge",
+      ? "treat all-direction zoom-out as a wider view around the source image"
+      : "treat all-direction outpaint as edge continuation, not a redraw",
+    "continue each original edge outward from edge-touching content",
   ];
 }
 
@@ -1563,6 +1531,8 @@ function resolveComfyUiOutpaintStagePrompt(
 
   const leftPrompt = normalizeComfyUiOutpaintStagePrompt(options.outpaintLeftPrompt);
   const rightPrompt = normalizeComfyUiOutpaintStagePrompt(options.outpaintRightPrompt);
+  // The workflow has one horizontal LanPaint stage, so left/right guidance is
+  // collapsed only when both sides are active.
   if (factors.left > 0 && factors.right > 0 && leftPrompt && rightPrompt && leftPrompt !== rightPrompt) {
     return `left side: ${leftPrompt}; right side: ${rightPrompt}`;
   }
@@ -1580,31 +1550,30 @@ function buildComfyUiOutpaintStagePositivePrompt(
   direction: "horizontal" | "top" | "bottom",
 ): string {
   const stagePrompt = resolveComfyUiOutpaintStagePrompt(options, direction);
+  // Directional LanPaint stages get their own prompt. Keep this compact so the
+  // user prompt and optional edge prompt stay more important than our guardrails.
   const shared = [
-    `outpaint guidance: ${stagePrompt}`,
-    "use the source image as the primary reference",
-    "continue the visible edge content into the newly added canvas",
-    "match neighboring colors, lighting, perspective, depth of field, line style, texture, and anime illustration style",
-    "keep the result as one continuous scene",
+    stagePrompt,
+    "continue visible edge content into the new canvas",
+    "match color, lighting, perspective, texture, and anime style",
+    "one continuous scene",
   ];
 
   if (direction === "horizontal") {
     shared.push(
-      "extend horizontally from the left and right edges",
-      "continue edge-touching background, atmosphere, open space, structures, hair, fabric, and decorative details naturally outward",
-      "do not change the setting just because the new canvas is empty",
+      "extend horizontally from left and right edges",
+      "continue edge-touching background, atmosphere, open space, structures, hair, fabric, and details",
     );
   } else if (direction === "top") {
     shared.push(
       "extend upward from the top edge",
-      "continue edge-touching sky, lighting, architecture, hair, fabric, atmosphere, and headroom naturally upward",
+      "continue edge-touching sky, lighting, architecture, hair, fabric, atmosphere, and headroom",
     );
   } else {
     shared.push(
       "extend downward from the bottom edge",
-      "continue edge-touching ground, floor, lower environment, clothing, hair, fabric, and cropped lower-body details naturally downward",
-      "only complete legs, feet, clothing, or foreground subject details when they are visibly cropped by the original bottom edge",
-      "do not force a full-body view if the new canvas does not leave enough room",
+      "continue edge-touching ground, floor, lower environment, clothing, hair, fabric, and cropped lower-body details",
+      "complete anatomy only when visibly cropped and there is enough room",
     );
   }
 
@@ -1669,6 +1638,7 @@ function buildComfyUiPromptWithDefaults(
     const outpaintStrategy = resolveComfyUiOutpaintStrategy(options);
     const scaleSource = shouldScaleComfyUiOutpaintSource(options, outpaintStrategy, normalizedDirection);
     const direction = normalizedDirection.replaceAll("_", " ");
+    const sourcePreservation = scaleSource ? "preserve the main source subject in place" : "preserve the source image area";
     return [
       qualityPrefix,
       `canvas outpainting edit: ${prompt}`,
@@ -1676,44 +1646,28 @@ function buildComfyUiPromptWithDefaults(
       ...(outpaintStrategy === "full_canvas"
         ? scaleSource
           ? [
-              "zoom-out full-canvas outpainting: place the original image smaller inside a larger canvas",
-              "preserve the main source subject and central composition without preserving the old image rectangle as a panel",
-              "continue the visible background beyond the original image edges instead of replacing the original setting",
-              "fill the padded canvas as one coherent pulled-back view that matches the original background mood, lighting, palette, and style",
+              "zoom-out full-canvas outpainting",
+              "continue the visible background beyond the original edges",
+              "avoid treating the old image rectangle as a panel",
             ]
           : [
-              "full-canvas outpainting: place the original image unchanged on a larger canvas",
-              "mask only the newly revealed canvas area",
-              "fill the masked expanded canvas by continuing the source edge content, then preserve the original source area",
+              "full-canvas outpainting",
+              "fill only the newly revealed canvas by continuing source edges",
             ]
         : outpaintStrategy === "zoom_out"
         ? [
-            "zoom-out outpainting: the original image is placed smaller inside a larger canvas",
-            "fill the newly revealed surrounding canvas around the scaled source image",
-            "keep the scaled source image as the composition anchor and complete missing nearby context around it",
+            "zoom-out outpainting around the scaled source image",
+            "complete nearby context around the source",
           ]
-        : ["edge-extension outpainting: keep the original source scale and continue only beyond the original edges"]),
+        : ["edge-extension outpainting beyond the original edges"]),
       ...buildComfyUiOutpaintDirectionPrompt(normalizedDirection, scaleSource),
-      "continue the visible background, lighting, perspective, and environment naturally into the newly added canvas area",
-      ...(scaleSource
-        ? [
-            "continue any recognizable source setting elements visible in the original image instead of replacing the setting with a new motif",
-            "continue cropped clothing, limbs, or lower-body details only as far as the expanded canvas naturally allows",
-            "do not compress anatomy, create tiny limbs, or add a separate small body to force a full-body view",
-            "keep only the foreground subject or subjects already present in the source image or explicitly requested by the user",
-            "treat ambiguous shapes behind the foreground subject or subjects as background texture, not as an extra person or creature",
-            "the area around and behind the subject should look like one continuous scene, not a pasted image frame",
-            "do not create a square backdrop, inset panel, visible source rectangle, poster border, duplicate subject, or unrelated foreground objects",
-          ]
-        : []),
-      "only continue the existing subject where it is visibly cropped by the original image edge",
-      "most added canvas should be surrounding scene, not new character anatomy",
-      scaleSource ? "preserve the main foreground subject exactly in place" : "preserve the original source image area exactly in place",
+      "continue visible background, lighting, perspective, and environment",
+      "extend subjects only where they are cropped by the original edge",
+      "most added canvas should be surrounding scene",
+      sourcePreservation,
       "match the original lighting, perspective, camera angle, line style, color palette, and texture",
-      "do not create a duplicate character, second face, giant face, giant torso, giant limb, or unrelated character body parts in the added border",
-      "do not create a separate illustration, disconnected lower panel, different camera view, or unrelated scene in the added canvas",
-      "no frame, no border, no blank padding, no duplicated edge pattern",
-      "the new content should connect seamlessly to the existing image edge",
+      "no duplicate subject, extra face, unrelated body parts, separate panel, border, or blank padding",
+      "new content connects seamlessly to the existing image edge",
     ].join(", ");
   }
 
@@ -1739,18 +1693,15 @@ function buildComfyUiPromptWithDefaults(
     qualityPrefix,
     `localized inpainting edit for the masked ${maskPrompt}: ${prompt}`,
     "change only the masked area",
-    "recolor-only edit when changing colors or materials",
     "use the source image as the structure guide",
     ...(isComfyUiHairMaskPrompt(options.maskPrompt)
       ? [
-          "for hair recolors, change pigment only and keep the source hairstyle geometry unchanged",
-          "treat the editable mask as hair strands only, not clothing, shoulders, arms, neck, skin, or anatomy",
+          "for hair recolors, change pigment only",
+          "keep the source hairstyle geometry",
         ]
       : []),
-    "keep clothing and accessories from the source image unchanged",
-    "keep all unmasked regions exactly as in the source image",
+    "keep unmasked regions unchanged",
     "if the user prompt mentions full-scene or full-character details, treat those as style hints for the masked area only",
-    "preserve the unmasked image exactly, same lighting and style",
   ].join(", ");
 }
 
@@ -2736,7 +2687,7 @@ function buildComfyUiPlaceholderMap(
     ? buildComfyUiOutpaintLayout(options, dimensions.source, dimensions.output, extendDirection)
     : null;
   const outpaintStrategy = outpaintLayout?.strategy ?? "edge_extend";
-  const preserveSubjectOnly = shouldComfyUiOutpaintPreserveSubjectOnly(outpaint);
+  const preserveSubjectOnly = outpaint && COMFYUI_OUTPAINT_PRESERVE_SUBJECT_ONLY;
   const workflowOutpaintFactors = getComfyUiLayoutOutpaintFactors(
     outpaintLayout,
     dimensions.output,
@@ -2872,8 +2823,8 @@ function buildComfyUiPlaceholderMap(
     TOMORI_OUTPAINT_MASK_SOURCE_WIDTH: outpaintLayout?.maskSourceWidth ?? dimensions.source.width,
     TOMORI_OUTPAINT_MASK_SOURCE_HEIGHT: outpaintLayout?.maskSourceHeight ?? dimensions.source.height,
     TOMORI_OUTPAINT_PRESERVE_SUBJECT_ONLY: preserveSubjectOnly,
-    TOMORI_OUTPAINT_SUBJECT_MASK_GROW: resolveComfyUiOutpaintSubjectMaskGrow(),
-    TOMORI_OUTPAINT_SUBJECT_MASK_FEATHER: resolveComfyUiOutpaintSubjectMaskFeather(),
+    TOMORI_OUTPAINT_SUBJECT_MASK_GROW: COMFYUI_OUTPAINT_SUBJECT_MASK_GROW,
+    TOMORI_OUTPAINT_SUBJECT_MASK_FEATHER: COMFYUI_OUTPAINT_SUBJECT_MASK_FEATHER,
     TOMORI_OUTPAINT_UNDERPAINT_COLOR: resolveComfyUiOutpaintUnderpaintColor(),
     TOMORI_OUTPAINT_EXTEND_UP_FACTOR: workflowOutpaintFactors.up,
     TOMORI_OUTPAINT_EXTEND_DOWN_FACTOR: workflowOutpaintFactors.down,
@@ -3513,7 +3464,7 @@ export async function generateCustomImageViaEndpoint(params: {
               ? `Directional prompts: ${diagnosticDirectionalPromptLabels.join(", ")}`
               : null,
             `Mask: sharp padding mask, feather ${diagnosticOutpaintPadFeather}px`,
-            `Preserve: ${shouldComfyUiOutpaintPreserveSubjectOnly(diagnosticOutpaint) ? "subject" : "center source"}`,
+            `Preserve: ${diagnosticOutpaint && COMFYUI_OUTPAINT_PRESERVE_SUBJECT_ONLY ? "subject" : "center source"}`,
           ])
         : formatDiagnosticSection("🎯 **Inpaint Mask**", [
             `Prompt: ${JSON.stringify(diagnosticWorkflowMaskPrompt)}`,
