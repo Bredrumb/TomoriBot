@@ -39,6 +39,7 @@ export async function execute(
     const modelSpeech = commandRegistry.getCommandMention("model", "speech");
     const voiceAdd = commandRegistry.getCommandMention("speech", "voice-add");
     const voiceAssign = commandRegistry.getCommandMention("speech", "voice-assign");
+    const voiceDesignSet = commandRegistry.getCommandMention("speech", "voice-design", "set");
     const elevenlabs = commandRegistry.getCommandMention("speech", "elevenlabs");
     const helpTranscription = commandRegistry.getCommandMention("help", "transcription");
 
@@ -50,6 +51,7 @@ export async function execute(
         model_speech: modelSpeech,
         voice_add: voiceAdd,
         voice_assign: voiceAssign,
+        voice_design_set: voiceDesignSet,
         elevenlabs,
         help_transcription: helpTranscription,
       },
@@ -62,6 +64,7 @@ export async function execute(
             model_speech: modelSpeech,
             voice_add: voiceAdd,
             voice_assign: voiceAssign,
+            voice_design_set: voiceDesignSet,
             elevenlabs,
           }),
           inline: false,

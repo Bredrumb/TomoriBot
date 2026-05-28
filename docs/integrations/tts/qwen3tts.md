@@ -18,7 +18,7 @@ python scripts\tts\qwen3tts\server.py --mode auto
 
 Auto mode inspects each `/synthesize` request: requests with `ref_audio` use the clone model, while requests with `instruct` use the VoiceDesign model. It keeps only one model loaded at a time and swaps models when the request type changes, so the first request after a swap may be slower.
 
-In TomoriBot, select `Auto` as the speech endpoint's voice source mode when one endpoint URL should support mixed personas. Personas configured with `/speech voice-assign` use clone synthesis; personas configured with `/speech voice-design` use VoiceDesign synthesis. Voice samples and VoiceDesign prompts are kept as reusable persona data; the most recently selected voice mode becomes active without deleting the other saved setup.
+In TomoriBot, select `Auto` as the speech endpoint's voice source mode when one endpoint URL should support mixed personas. Personas configured with `/speech voice-assign` use clone synthesis; personas configured with `/speech voice-design set` use VoiceDesign synthesis. Voice samples and VoiceDesign prompts are kept as reusable persona data; the most recently selected voice mode becomes active without deleting the other saved setup.
 
 Register with `/provider custom-endpoint add`:
 
@@ -44,6 +44,6 @@ For mixed clone and VoiceDesign usage on one endpoint URL, prefer `--mode auto` 
 
 Register it the same way as the clone wrapper, but select the VoiceDesign voice source mode. TomoriBot treats VoiceDesign mode as instruct-capable automatically; the Supports Instruct checkbox does not need to be selected separately.
 
-Set each persona's natural-language voice description with `/speech voice-design`. During generation, TomoriBot sends that prompt in the `/synthesize` JSON body as `instruct`; when the tool includes `voice_instructions`, those one-off delivery notes are appended to the instruct text for that message only. The wrapper still accepts `ref_text` or `TOMORI_TTS_DEFAULT_INSTRUCT` as fallbacks for manual testing or single-voice deployments.
+Set each persona's natural-language voice description with `/speech voice-design set`. Remove it with `/speech voice-design remove`. During generation, TomoriBot sends that prompt in the `/synthesize` JSON body as `instruct`; when the tool includes `voice_instructions`, those one-off delivery notes are appended to the instruct text for that message only. The wrapper still accepts `ref_text` or `TOMORI_TTS_DEFAULT_INSTRUCT` as fallbacks for manual testing or single-voice deployments.
 
 When vLLM-Omni or another stable hosted serving path supports this model, prefer documenting that as the production path and keep this wrapper as a reference implementation.

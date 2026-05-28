@@ -351,8 +351,10 @@ function resolveLatestBundle(): string {
 // Entry point
 // ---------------------------------------------------------------------------
 
+let entryPromise: Promise<void>;
+
 if (mode === "--backup") {
-  runBackup();
+  entryPromise = runBackup();
 } else {
   // --restore mode: accept either --latest or --from <dir>
   const useLatest = args.includes("--latest");
@@ -366,5 +368,14 @@ if (mode === "--backup") {
   }
 
   const bundlePath = useLatest ? resolveLatestBundle() : args[fromIndex + 1];
-  runRestore(bundlePath);
+  entryPromise = runRestore(bundlePath);
 }
+
+entryPromise
+  .catch((error) => {
+    log.error("Script failed:", error);
+    process.exitCode = 1;
+  })
+  .finally(() => {
+    process.exit(process.exitCode ?? 0);
+  });

@@ -1130,6 +1130,7 @@ export async function addServerMemoryByTomori(
   personaLineageId: number,
   taughtByUserId: number,
   content: string,
+  tags: string[] = [],
 ): Promise<ServerMemoryRow | null> {
   // 1. Log the attempt to add a server memory.
   log.info(
@@ -1156,8 +1157,8 @@ export async function addServerMemoryByTomori(
     // 2. Insert the new memory into the server_memories table.
     // The columns now correctly match the serverMemorySchema.
     const [newMemory] = await sql`
-			INSERT INTO server_memories (server_id, tomori_id, persona_lineage_id, user_id, content)
-			VALUES (${serverId}, ${tomoriId}, ${personaLineageId}, ${taughtByUserId}, ${content})
+			INSERT INTO server_memories (server_id, tomori_id, persona_lineage_id, user_id, content, tags)
+			VALUES (${serverId}, ${tomoriId}, ${personaLineageId}, ${taughtByUserId}, ${content}, ${sql.array(tags)})
 			RETURNING *
 		`;
 
@@ -1212,6 +1213,7 @@ export async function addPersonalMemoryByTomori(
   userId: number,
   personaLineageId: number,
   content: string,
+  tags: string[] = [],
 ): Promise<PersonalMemoryRow | null> {
   // 1. Log the attempt to add a personal memory.
   log.info(
@@ -1236,8 +1238,8 @@ export async function addPersonalMemoryByTomori(
 
   try {
     const [insertedMemory] = await sql`
-			INSERT INTO personal_memories (user_id, persona_lineage_id, content)
-			VALUES (${userId}, ${personaLineageId}, ${content})
+			INSERT INTO personal_memories (user_id, persona_lineage_id, content, tags)
+			VALUES (${userId}, ${personaLineageId}, ${content}, ${sql.array(tags)})
 			RETURNING *
 		`;
 

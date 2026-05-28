@@ -22,6 +22,6 @@ Local wrappers must expose:
 - `POST /synthesize` accepting JSON `{ text, ref_audio, ref_text, instruct, language }`
 - a bare `audio/*` response content type such as `audio/wav`
 
-Clone wrappers should treat `ref_audio` as the speaker reference and `ref_text` as its transcript. Voice-design wrappers may ignore `ref_audio` and use `instruct` as the natural-language voice description; configure those prompts per persona with `/speech voice-design`.
+Clone wrappers should treat `ref_audio` as the speaker reference and `ref_text` as its transcript. Voice-design wrappers may ignore `ref_audio` and use `instruct` as the natural-language voice description; configure those prompts per persona with `/speech voice-design set`.
 
 Reference scripts are best-effort examples, not production services. Upstream model packages may break over time; fixes should be made in the wrapper scripts and documented here.

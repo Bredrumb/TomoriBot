@@ -1,5 +1,6 @@
 nul
 .venv*
+.env.test
 *.backup
 .tmp
 __pycache__/

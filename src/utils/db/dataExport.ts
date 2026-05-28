@@ -18,6 +18,7 @@ import {
   type ServerExport,
   type ExportResult,
   type PersonalityExportResult,
+  type MemoryItem,
 } from "../../types/db/dataExport";
 
 /**
@@ -41,30 +42,12 @@ function sanitizeForJson(content: string): {
   return { sanitized: cleaned, wasSanitized };
 }
 
-/**
- * Sanitizes an array of memory strings for safe JSON export
- * @param memories - Array of memory strings to sanitize
- * @param contextLabel - Label for logging (e.g., "personal memories", "server memories")
- * @returns Object with sanitized memories and count of sanitized items
- */
-function sanitizeMemories(memories: string[], contextLabel: string): { sanitized: string[]; sanitizedCount: number } {
-  // 1. Track how many memories were sanitized
-  let sanitizedCount = 0;
-
-  // 2. Sanitize each memory string
-  const sanitized = memories.map((memory, index) => {
-    const { sanitized: cleanMemory, wasSanitized } = sanitizeForJson(memory);
-
-    // 3. Log warning if sanitization occurred
-    if (wasSanitized) {
-      sanitizedCount++;
-      log.warn(`Sanitized ${contextLabel} at index ${index}: removed control characters`);
-    }
-
-    return cleanMemory;
+function sanitizeMemoryItems(items: MemoryItem[], contextLabel: string): MemoryItem[] {
+  return items.map((item, index) => {
+    const { sanitized, wasSanitized } = sanitizeForJson(item.content);
+    if (wasSanitized) log.warn(`Sanitized ${contextLabel} at index ${index}: removed control characters`);
+    return { content: sanitized, tags: item.tags };
   });
-
-  return { sanitized, sanitizedCount };
 }
 
 /**
@@ -101,7 +84,7 @@ export async function exportPersonalData(
     const memoryRows =
       includeGlobalMemories && personaLineageId !== 0
         ? await sql`
-					SELECT content
+					SELECT content, tags
 					FROM personal_memories
 					WHERE user_id = ${userData.user_id}
 					  AND (
@@ -111,17 +94,20 @@ export async function exportPersonalData(
 					ORDER BY created_at DESC, personal_memory_id DESC
 				`
         : await sql`
-					SELECT content
+					SELECT content, tags
 					FROM personal_memories
 					WHERE user_id = ${userData.user_id}
 					  AND persona_lineage_id = ${personaLineageId}
 					ORDER BY created_at DESC, personal_memory_id DESC
 				`;
 
-    const personalMemories = memoryRows.map((row: { content: string }) => row.content);
+    const rawPersonalMemories: MemoryItem[] = memoryRows.map((row: { content: string; tags: string[] | null }) => ({
+      content: row.content,
+      tags: row.tags ?? [],
+    }));
 
     // 3. Sanitize memories for safe JSON export
-    const { sanitized: sanitizedMemories } = sanitizeMemories(personalMemories, "personal memories");
+    const sanitizedMemories = sanitizeMemoryItems(rawPersonalMemories, "personal memories");
 
     // 4. Build export object
     const exportData: PersonalExport = {
@@ -249,7 +235,9 @@ export async function exportServerData(serverDiscId: string, tomoriId?: number):
 				COALESCE(tc_server.uncensor_unicode_space_enabled, tc_legacy.uncensor_unicode_space_enabled, false) as uncensor_unicode_space_enabled,
 				COALESCE(tc_server.uncensor_sanitize_enabled, tc_legacy.uncensor_sanitize_enabled, false) as uncensor_sanitize_enabled,
 				COALESCE(tc_server.tool_use_enabled, tc_legacy.tool_use_enabled, true) as tool_use_enabled,
-				COALESCE(tc_server.prompt_snapshot_enabled, tc_legacy.prompt_snapshot_enabled, false) as prompt_snapshot_enabled
+				COALESCE(tc_server.prompt_snapshot_enabled, tc_legacy.prompt_snapshot_enabled, false) as prompt_snapshot_enabled,
+				COALESCE(tc_server.memory_tagging_enabled, tc_legacy.memory_tagging_enabled, false) as memory_tagging_enabled,
+				COALESCE(tc_server.channel_memory_enabled, tc_legacy.channel_memory_enabled, false) as channel_memory_enabled
 			FROM tomoris t
 			LEFT JOIN tomori_configs tc_server ON tc_server.server_id = t.server_id
 			LEFT JOIN tomori_configs tc_legacy ON tc_legacy.tomori_id = t.tomori_id
@@ -323,23 +311,26 @@ export async function exportServerData(serverDiscId: string, tomoriId?: number):
     const memoryRows =
       targetPersonaLineageId !== null
         ? await sql`
-					SELECT content
+					SELECT content, tags
 					FROM server_memories
 					WHERE server_id = ${serverId}
 					  AND persona_lineage_id = ${targetPersonaLineageId}
 					ORDER BY created_at DESC
 				`
         : await sql`
-					SELECT content
+					SELECT content, tags
 					FROM server_memories
 					WHERE server_id = ${serverId}
 					ORDER BY created_at DESC
 				`;
 
-    const serverMemories = memoryRows.map((row: { content: string }) => row.content);
+    const rawServerMemories: MemoryItem[] = memoryRows.map((row: { content: string; tags: string[] | null }) => ({
+      content: row.content,
+      tags: row.tags ?? [],
+    }));
 
     // 5. Sanitize memories for safe JSON export
-    const { sanitized: sanitizedServerMemories } = sanitizeMemories(serverMemories, "server memories");
+    const sanitizedServerMemories = sanitizeMemoryItems(rawServerMemories, "server memories");
 
     // 6. Build export object
     const exportData: ServerExport = {
@@ -411,6 +402,8 @@ export async function exportServerData(serverDiscId: string, tomoriId?: number):
           uncensor_sanitize_enabled: configData.uncensor_sanitize_enabled,
           tool_use_enabled: configData.tool_use_enabled,
           prompt_snapshot_enabled: configData.prompt_snapshot_enabled,
+          memory_tagging_enabled: configData.memory_tagging_enabled,
+          channel_memory_enabled: configData.channel_memory_enabled,
         },
         server_memories: sanitizedServerMemories,
       },

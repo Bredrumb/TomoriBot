@@ -102,7 +102,11 @@ async function nukeDatabase(): Promise<void> {
   }
 }
 
-nukeDatabase().catch((error) => {
-  log.error("Database nuke failed:", error);
-  process.exitCode = 1;
-});
+nukeDatabase()
+  .catch((error) => {
+    log.error("Database nuke failed:", error);
+    process.exitCode = 1;
+  })
+  .finally(() => {
+    process.exit(process.exitCode ?? 0);
+  });

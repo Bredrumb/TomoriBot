@@ -267,8 +267,12 @@ async function runBackup(): Promise<void> {
   }
 }
 
-runBackup().catch((error) => {
-  log.error("Persona backup failed:");
-  console.error(error);
-  process.exit(1);
-});
+runBackup()
+  .catch((error) => {
+    log.error("Persona backup failed:");
+    console.error(error);
+    process.exitCode = 1;
+  })
+  .finally(() => {
+    process.exit(process.exitCode ?? 0);
+  });

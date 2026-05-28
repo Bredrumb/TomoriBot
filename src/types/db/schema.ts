@@ -547,6 +547,8 @@ export const tomoriConfigSchema = z.object({
   self_teaching_enabled: z.boolean().default(true),
   web_search_enabled: z.boolean().default(true), // New: Added for Web Search permission (Brave Search)
   personal_memories_enabled: z.boolean().default(true),
+  memory_tagging_enabled: z.boolean().default(false),
+  channel_memory_enabled: z.boolean().default(false),
   humanizer_degree: z.nativeEnum(HumanizerDegree).default(HumanizerDegree.LIGHT),
   thinking_level: z.enum(THINKING_LEVEL_VALUES).default(DEFAULT_THINKING_LEVEL), // Added April 2026 - General reasoning/thinking effort hint
   user_byok_mode: z.boolean().default(false), // Added April 2026 - Require per-user personal providers for user-attributed triggers
@@ -723,6 +725,7 @@ export const serverMemorySchema = z.object({
   }, z.number().int().nonnegative()),
   user_id: z.number().nullable(), // Nullable - set to NULL if user deleted
   content: z.string(),
+  tags: z.preprocess((v) => (Array.isArray(v) ? v : []), z.array(z.string().max(32)).max(5)),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -765,6 +768,7 @@ export const personalMemorySchema = z.object({
     return value;
   }, z.number().int().nonnegative()),
   content: z.string(),
+  tags: z.preprocess((v) => (Array.isArray(v) ? v : []), z.array(z.string().max(32)).max(5)),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });

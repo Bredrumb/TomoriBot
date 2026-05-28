@@ -37,6 +37,10 @@ const SELECT_MODAL_CUSTOM_ID = "memory_server_edit_select_modal";
 const EDIT_MODAL_CUSTOM_ID = "memory_server_edit_value_modal";
 const MEMORY_SELECT_ID = "memory_select";
 const MEMORY_INPUT_ID = "server_memory_input";
+const MEMORY_TAGS_INPUT_ID = "server_memory_tags_input";
+
+const MAX_TAGS = 5;
+const MAX_TAG_LENGTH = 32;
 
 const memoryLimits = getMemoryLimits();
 
@@ -48,6 +52,7 @@ async function performServerMemoryEdit(
   selectedPersona: TomoriState,
   memoryToEdit: ServerMemoryRow,
   newContent: string,
+  newTags: string[],
   userData: UserRow,
   hasManagePermission: boolean,
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
@@ -57,13 +62,13 @@ async function performServerMemoryEdit(
   const updateQuery = hasManagePermission
     ? sql`
         UPDATE server_memories
-        SET content = ${newContent}
+        SET content = ${newContent}, tags = ${sql.array(newTags)}
         WHERE server_memory_id = ${memoryToEdit.server_memory_id}
         RETURNING *
       `
     : sql`
         UPDATE server_memories
-        SET content = ${newContent}
+        SET content = ${newContent}, tags = ${sql.array(newTags)}
         WHERE server_memory_id = ${memoryToEdit.server_memory_id}
           AND user_id = ${userData.user_id}
         RETURNING *
@@ -230,7 +235,7 @@ export async function execute(
 
       const targetPersonaLineageId = selectedPersona.persona_lineage_id ?? 0;
       let memoriesQuery = sql`
-        SELECT server_memory_id, server_id, tomori_id, persona_lineage_id, user_id, content, created_at, updated_at
+        SELECT server_memory_id, server_id, tomori_id, persona_lineage_id, user_id, content, tags, created_at, updated_at
         FROM server_memories
         WHERE server_id = ${tomoriState.server_id}
           AND persona_lineage_id = ${targetPersonaLineageId}
@@ -350,6 +355,17 @@ export async function execute(
             maxLength: memoryLimits.maxMemoryLength,
             value: selectedMemory.content,
           },
+          {
+            customId: MEMORY_TAGS_INPUT_ID,
+            labelKey: "Memory Tags",
+            descriptionKey:
+              "Up to 5 comma-separated case-sensitive tags, use '/memory tagging set' to enable tagged memory",
+            placeholder: "mango,drinks,snacks",
+            style: TextInputStyle.Short,
+            required: false,
+            maxLength: MAX_TAGS * (MAX_TAG_LENGTH + 2),
+            value: (selectedMemory.tags ?? []).join(", "),
+          },
         ],
       });
 
@@ -367,6 +383,17 @@ export async function execute(
 
       const editModalInteraction = editModalResult.interaction;
       const editedMemory = editModalResult.values?.[MEMORY_INPUT_ID]?.trim() ?? "";
+      const rawTagsInput = editModalResult.values?.[MEMORY_TAGS_INPUT_ID]?.trim() ?? "";
+      const editedTags = rawTagsInput
+        ? [
+            ...new Set(
+              rawTagsInput
+                .split(",")
+                .map((t) => t.trim().replace(/^["']+|["']+$/g, ""))
+                .filter((t) => t.length > 0 && t.length <= MAX_TAG_LENGTH),
+            ),
+          ].slice(0, MAX_TAGS)
+        : [];
       if (!editModalInteraction) {
         log.error("Server memory edit modal unexpectedly missing interaction");
         return;
@@ -385,7 +412,10 @@ export async function execute(
         continue;
       }
 
-      if (editedMemory === selectedMemory.content.trim()) {
+      const existingTags = selectedMemory.tags ?? [];
+      const tagsUnchanged =
+        editedTags.length === existingTags.length && editedTags.every((t, i) => t === existingTags[i]);
+      if (editedMemory === selectedMemory.content.trim() && tagsUnchanged) {
         await replyInfoEmbed(editModalInteraction, locale, {
           titleKey: "commands.memory.server.edit.no_changes_title",
           descriptionKey: "commands.memory.server.edit.no_changes_description",
@@ -415,6 +445,7 @@ export async function execute(
         selectedPersona,
         selectedMemory,
         editedMemory,
+        editedTags,
         userData,
         hasManagePermission,
         editModalInteraction,

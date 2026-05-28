@@ -69,7 +69,8 @@ export async function execute(
         capabilitySpeech: "commands.personal.custom_models.remove.capability_speech",
         capabilityTranscription: "commands.personal.custom_models.remove.capability_transcription",
       },
-      strictRemoteValidation: true,
+      strictRemoteValidation:
+        process.env.RUN_ENV === "production" || process.env.ALLOW_PERSONAL_LOCAL_ENDPOINTS !== "true",
       loadEndpoints: loadCustomEndpointsForUser,
     });
   } catch (error) {

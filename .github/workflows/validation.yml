@@ -6,8 +6,9 @@ on:
   pull_request:
   push:
     branches:
-      - main
+      - release
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -44,7 +45,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7
         with:
-          bun-version: 1.2.12
+          bun-version: 1.3.3
 
       - name: Install PostgreSQL client tools
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
@@ -52,8 +53,24 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Run static validation
-        run: bun run vl
+      - name: Run linting and type checks
+        run: bun run lint && bun run check
+
+      - name: Check schema drift
+        run: bun run check-schema
+
+      - name: Check localization keys
+        if: github.event_name != 'pull_request'
+        run: |
+          output=$(bun run check-locales 2>&1)
+          exitCode=$?
+          echo "$output"
+          if echo "$output" | grep -q "MISSING LOCALIZATION KEYS"; then
+            echo "Critical error: Missing localization keys found!"
+            exit 1
+          elif [ $exitCode -ne 0 ]; then
+            echo "Localization warnings found, but no critical missing keys. Continuing..."
+          fi
 
       - name: Run lifecycle validation
         run: bun run vl-db

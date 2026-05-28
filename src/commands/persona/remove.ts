@@ -13,7 +13,7 @@ import type { UserRow } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
 import { loadAllPersonasForServer } from "../../utils/db/dbRead";
 import { sql } from "../../utils/db/client";
-import { deletePersonaAvatarFromS3 } from "../../utils/storage/avatarStorage";
+import { deletePersonaAvatarFromStorage } from "../../utils/storage/avatarStorage";
 
 // Constants for modal configuration
 const MODAL_CUSTOM_ID = "persona_remove_modal";
@@ -167,7 +167,7 @@ export async function execute(
 		`;
 
     if (personaToRemove.webhook_avatar_url) {
-      await deletePersonaAvatarFromS3(personaToRemove.webhook_avatar_url);
+      await deletePersonaAvatarFromStorage(personaToRemove.webhook_avatar_url);
     }
 
     // 9. Invalidate cache

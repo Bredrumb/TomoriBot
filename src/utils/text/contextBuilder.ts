@@ -1408,6 +1408,24 @@ async function buildContextNative({
     metadataTag: ContextItemTag.KNOWLEDGE_SERVER_INFO, // Tagging
   });
 
+  // Build conversation corpus once for tag-based memory filtering (used in blocks 4 and 9)
+  const conversationCorpus = tomoriConfig.memory_tagging_enabled
+    ? simplifiedMessageHistory
+        .map((m) => m.content ?? "")
+        .join(" ")
+        .toLowerCase()
+    : null;
+
+  // Returns true if the memory's channel tags (tags starting with '#') allow it in the current channel.
+  // Memories with no channel tags are always allowed. Channel tags must exactly match the channel name.
+  const isChannelAllowed = (tags: string[]): boolean => {
+    if (!tomoriConfig.channel_memory_enabled) return true;
+    const normalizedTags = tags.map((t) => t.replace(/^["']+|["']+$/g, ""));
+    const channelTags = normalizedTags.filter((t) => t.startsWith("#"));
+    if (channelTags.length === 0) return true;
+    return channelTags.some((t) => t.slice(1).toLowerCase() === channelName.toLowerCase());
+  };
+
   // 4. Server Memories / Conversation Memories
   // Skip server memories for user impersonation (bot-specific knowledge should not leak)
   if (
@@ -1423,15 +1441,27 @@ async function buildContextNative({
 
     let serverMemoryLines: string[] = [];
     try {
-      const serverMemoryRows = await sql<Array<{ server_memory_id: number; content: string }>>`
-				SELECT server_memory_id, content
+      const serverMemoryRows = await sql<Array<{ server_memory_id: number; content: string; tags: string[] | null }>>`
+				SELECT server_memory_id, content, tags
 				FROM server_memories
 				WHERE server_id = ${tomoriState.server_id}
 				  AND persona_lineage_id = ${tomoriState.persona_lineage_id}
 				ORDER BY created_at DESC
 			`;
 
-      serverMemoryLines = serverMemoryRows.map((row) => formatMemoryWithId(row.server_memory_id, row.content));
+      const filteredServerRows = serverMemoryRows.filter((row) => {
+        const tags = row.tags ?? [];
+        const normalizedTags = tags.map((t) => t.replace(/^["']+|["']+$/g, ""));
+        const contentTags = normalizedTags.filter((t) => !t.startsWith("#"));
+        const passesTagFilter = conversationCorpus
+          ? contentTags.length > 0 && contentTags.some((tag) => conversationCorpus.includes(tag.toLowerCase()))
+          : true;
+        return passesTagFilter && isChannelAllowed(tags);
+      });
+
+      serverMemoryLines = filteredServerRows.map((row) =>
+        formatMemoryWithId(row.server_memory_id, row.content, row.tags ?? []),
+      );
     } catch (error) {
       log.warn("Failed to load server memories with IDs for context", error);
       serverMemoryLines = tomoriState.server_memories;
@@ -1920,9 +1950,18 @@ async function buildContextNative({
           const activeLineageId =
             personaLineageId ?? snapshot?.tomoriState?.persona_lineage_id ?? tomoriState?.persona_lineage_id ?? 0;
           const personalMemoryRows = await loadPersonalMemoriesForUserLineage(userRow.user_id, activeLineageId, true);
-          if (personalMemoryRows.length > 0) {
+          const filteredPersonalRows = personalMemoryRows.filter((row) => {
+            const tags = row.tags ?? [];
+            const normalizedTags = tags.map((t) => t.replace(/^["']+|["']+$/g, ""));
+            const contentTags = normalizedTags.filter((t) => !t.startsWith("#"));
+            const passesTagFilter = conversationCorpus
+              ? contentTags.length > 0 && contentTags.some((tag) => conversationCorpus.includes(tag.toLowerCase()))
+              : true;
+            return passesTagFilter && isChannelAllowed(tags);
+          });
+          if (filteredPersonalRows.length > 0) {
             const processedMemories = await Promise.all(
-              personalMemoryRows.map(async (memoryRow, index) => {
+              filteredPersonalRows.map(async (memoryRow, index) => {
                 const processedMemory = await convertMentions(
                   memoryRow.content,
                   client,
@@ -1932,7 +1971,7 @@ async function buildContextNative({
                   tomoriConfig.personal_memories_enabled,
                 );
                 const memoryId = memoryRow.personal_memory_id ?? index + 1;
-                return formatMemoryWithId(memoryId, processedMemory);
+                return formatMemoryWithId(memoryId, processedMemory, memoryRow.tags ?? []);
               }),
             );
             detailLines.push(`- Memories: ${processedMemories.join("; ")}`);
@@ -2110,7 +2149,7 @@ async function buildContextNative({
     const timeOfDayPhrase = getTimeOfDayPhrase(timezoneOffset);
     const conversationContext = isDMChannel
       ? "Conversation context: Direct Message."
-      : `Conversation context: ${formatDiscordChannelReference(channelId, `#${channelName}`)}.`;
+      : `Conversation context: #${channelName}${channelId ? ` (ID: ${channelId})` : ""}.`;
     const timeContext = `Current time: ${currentTime} (${timezoneLabel}), ${timeOfDayPhrase}.`;
 
     usersInConversationText += `${conversationContext}\n${timeContext}\n]`; // Close [System: ...] block
@@ -2222,6 +2261,7 @@ async function buildContextNative({
               apiKey: creds.apiKey,
               maxResults: DOCUMENT_MAX_RESULTS,
               minSimilarity: DOCUMENT_MIN_SIMILARITY,
+              channelName: tomoriConfig.channel_memory_enabled ? channelName : undefined,
             });
 
             const documentContext = formatRetrievedChunksForPrompt(chunks);

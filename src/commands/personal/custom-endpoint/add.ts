@@ -134,12 +134,19 @@ export async function execute(
     return;
   }
 
-  // Strict validation: personal endpoints must be reachable remote hosts.
-  const urlValidation = await validateRemoteMcpUrl(endpointUrl, { strict: true });
+  // Production always enforces the blocklist. Self-hosters can opt out via ALLOW_PERSONAL_LOCAL_ENDPOINTS=true.
+  const strict = process.env.RUN_ENV === "production" || process.env.ALLOW_PERSONAL_LOCAL_ENDPOINTS !== "true";
+  const urlValidation = await validateRemoteMcpUrl(endpointUrl, { strict });
   if (!urlValidation.valid) {
+    const isLocalBlock =
+      urlValidation.failureCode === "PRODUCTION_LOCALHOST_FORBIDDEN" ||
+      urlValidation.failureCode === "PRODUCTION_BLOCKED_ADDRESS";
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.custom_endpoint_unreachable_title",
-      descriptionKey: "commands.config.custom_models.validation.unreachable",
+      descriptionKey:
+        isLocalBlock && process.env.RUN_ENV !== "production"
+          ? "commands.config.custom_models.validation.local_address_blocked"
+          : "commands.config.custom_models.validation.unreachable",
       descriptionVars: { reason: urlValidation.failureCode ?? "invalid_url" },
       color: ColorCode.ERROR,
       flags: MessageFlags.Ephemeral,
@@ -179,7 +186,7 @@ export async function execute(
         apiStyle,
         endpointUrl,
         apiKey: authToken,
-        strict: true,
+        strict,
       });
       if (!reachability.ok) {
         await replyInfoEmbed(modalSubmit, locale, {
@@ -346,7 +353,7 @@ export async function execute(
       apiStyle,
       endpointUrl,
       apiKey: authToken,
-      strict: true,
+      strict,
     });
     if (!reachability.ok) {
       await replyInfoEmbed(modalSubmit, locale, {

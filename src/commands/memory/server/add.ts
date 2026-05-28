@@ -21,6 +21,10 @@ import { dedupeCaseInsensitive, getNonEmptyNumberedLines, readTxtUpload } from "
 const MODAL_CUSTOM_ID = "teach_servermemory_add_modal";
 const MEMORY_INPUT_ID = "memory_input";
 const MEMORY_FILE_UPLOAD_ID = "server_memory_file_upload";
+const MEMORY_TAGS_INPUT_ID = "memory_tags_input";
+
+const MAX_TAGS = 5;
+const MAX_TAG_LENGTH = 32;
 
 // Get memory limits from environment variables
 const memoryLimits = getMemoryLimits();
@@ -162,6 +166,16 @@ export async function execute(
           maxValues: 1,
           required: false,
         },
+        {
+          customId: MEMORY_TAGS_INPUT_ID,
+          labelKey: "Memory Tags",
+          descriptionKey:
+            "Up to 5 comma-separated case-sensitive tags, use '/memory tagging set' to enable tagged memory",
+          placeholder: "mango,drinks,snacks",
+          style: TextInputStyle.Short,
+          required: false,
+          maxLength: MAX_TAGS * (MAX_TAG_LENGTH + 2),
+        },
       ],
     });
 
@@ -178,6 +192,17 @@ export async function execute(
     // 12. Get input from modal
     const typedMemory = modalResult.values?.[MEMORY_INPUT_ID]?.trim() ?? "";
     const uploadedTextFile = modalResult.attachments?.[MEMORY_FILE_UPLOAD_ID];
+    const rawTagsInput = modalResult.values?.[MEMORY_TAGS_INPUT_ID]?.trim() ?? "";
+    const parsedTags = rawTagsInput
+      ? [
+          ...new Set(
+            rawTagsInput
+              .split(",")
+              .map((t) => t.trim().replace(/^["']+|["']+$/g, ""))
+              .filter((t) => t.length > 0 && t.length <= MAX_TAG_LENGTH),
+          ),
+        ].slice(0, MAX_TAGS)
+      : [];
     const selectedPersonaId = modalResult.values?.persona_select;
     selectedPersona = allPersonas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
     if (!selectedPersona?.tomori_id) {
@@ -322,6 +347,7 @@ export async function execute(
         targetPersonaLineageId,
         targetUserId,
         memoriesToAdd[0] ?? "",
+        parsedTags,
       );
       insertSuccess = insertedMemory !== null;
     } else {
@@ -329,8 +355,8 @@ export async function execute(
         await sql.transaction(async (tx) => {
           for (const memory of memoriesToAdd) {
             await tx`
-							INSERT INTO server_memories (server_id, tomori_id, persona_lineage_id, user_id, content)
-							VALUES (${targetServerId}, ${targetTomoriId}, ${targetPersonaLineageId}, ${targetUserId}, ${memory})
+							INSERT INTO server_memories (server_id, tomori_id, persona_lineage_id, user_id, content, tags)
+							VALUES (${targetServerId}, ${targetTomoriId}, ${targetPersonaLineageId}, ${targetUserId}, ${memory}, ${sql.array(parsedTags)})
 						`;
           }
         });

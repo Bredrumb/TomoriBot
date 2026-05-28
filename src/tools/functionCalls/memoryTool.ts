@@ -110,6 +110,7 @@ export class MemoryTool extends BaseTool {
     const { sendStandardEmbed } = await import("../../utils/discord/embedHelper");
     const { ColorCode } = await import("../../utils/misc/logger");
     const { convertMentions } = await import("../../utils/text/contextBuilder");
+    const { sanitizeUnknownTemplatePlaceholders } = await import("../../utils/text/stringHelper");
 
     // Import memory validation functions
     const { validateMemoryContent, checkPersonalMemoryLimit, checkServerMemoryLimit } = await import(
@@ -239,7 +240,9 @@ export class MemoryTool extends BaseTool {
       }
     }
 
-    const memoryContent = memoryContentArg.trim();
+    // Sanitize unknown {word} placeholders (e.g. {bredrumb}) — the LLM sometimes wraps
+    // usernames in braces imitating {user}. Strip the braces so the name appears plainly.
+    const memoryContent = sanitizeUnknownTemplatePlaceholders(memoryContentArg.trim());
 
     // Validate memory content length after any bridge/self fallback rewrites.
     const contentValidation = validateMemoryContent(memoryContent);

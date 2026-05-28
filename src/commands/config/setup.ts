@@ -102,71 +102,90 @@ export async function execute(
 
       if (mainPersonaRows.length > 0) {
         const existingTomoriState = await loadTomoriState(serverId);
-        const providerAddMention = commandRegistry.getCommandMention("config", "provider", "add");
-        const modelTextMention = commandRegistry.getCommandMention("config", "model", "text");
-        const userByokToggleMention = commandRegistry.getCommandMention("server", "user-byok", "toggle");
-        const helpPersonalProviderMention = commandRegistry.getCommandMention("help", "personal-provider");
-        const currentModelValue =
-          existingTomoriState?.config.llm_id && existingTomoriState.llm
-            ? formatLlmDisplayLabel(
-                existingTomoriState.llm,
-                existingTomoriState.config.custom_model_name,
-                existingTomoriState.config.other_model_codename,
-              )
-            : existingTomoriState?.config.user_byok_mode
-              ? localizer(locale, "commands.choices.none_user_byok")
-              : localizer(locale, "commands.choices.none");
 
-        // 3. Main persona exists — server is fully set up, block re-setup
-        await replySummaryEmbed(interaction, locale, {
-          titleKey: "commands.config.setup.already_setup_title",
-          descriptionKey: "commands.config.setup.already_setup_summary_description",
-          color: ColorCode.WARN,
-          fields: [
-            {
-              nameKey: "commands.config.setup.current_provider_field",
-              value: currentModelValue,
-            },
-            {
-              nameKey: "commands.config.setup.current_byok_field",
-              value: localizer(
-                locale,
-                existingTomoriState?.config.user_byok_mode
-                  ? "commands.config.setup.current_byok_enabled_value"
-                  : "commands.config.setup.current_byok_disabled_value",
-                {
-                  toggle_command: userByokToggleMention,
-                },
-              ),
-            },
-            {
-              nameKey: "commands.config.setup.already_setup_next_steps_field",
-              value: localizer(locale, "commands.config.setup.already_setup_next_steps_value", {
-                provider_add_command: providerAddMention,
-                model_text_command: modelTextMention,
-                byok_toggle_command: userByokToggleMention,
-                help_personal_provider: helpPersonalProviderMention,
-              }),
-            },
-          ],
+        // 3. Main persona row exists AND state is fully valid — server is healthy, block re-setup.
+        //    If loadTomoriState returns null despite the row existing, the server is in a broken
+        //    state (missing tomori_configs row or deleted LLM). Fall through to cleanup so the
+        //    user isn't permanently locked out by a setup guard that uses a weaker health check
+        //    than the commands that actually require a healthy state.
+        if (existingTomoriState) {
+          const providerAddMention = commandRegistry.getCommandMention("config", "provider", "add");
+          const modelTextMention = commandRegistry.getCommandMention("config", "model", "text");
+          const userByokToggleMention = commandRegistry.getCommandMention("server", "user-byok", "toggle");
+          const helpPersonalProviderMention = commandRegistry.getCommandMention("help", "personal-provider");
+          const currentModelValue =
+            existingTomoriState.config.llm_id && existingTomoriState.llm
+              ? formatLlmDisplayLabel(
+                  existingTomoriState.llm,
+                  existingTomoriState.config.custom_model_name,
+                  existingTomoriState.config.other_model_codename,
+                )
+              : existingTomoriState.config.user_byok_mode
+                ? localizer(locale, "commands.choices.none_user_byok")
+                : localizer(locale, "commands.choices.none");
+
+          await replySummaryEmbed(interaction, locale, {
+            titleKey: "commands.config.setup.already_setup_title",
+            descriptionKey: "commands.config.setup.already_setup_summary_description",
+            color: ColorCode.WARN,
+            fields: [
+              {
+                nameKey: "commands.config.setup.current_provider_field",
+                value: currentModelValue,
+              },
+              {
+                nameKey: "commands.config.setup.current_byok_field",
+                value: localizer(
+                  locale,
+                  existingTomoriState.config.user_byok_mode
+                    ? "commands.config.setup.current_byok_enabled_value"
+                    : "commands.config.setup.current_byok_disabled_value",
+                  {
+                    toggle_command: userByokToggleMention,
+                  },
+                ),
+              },
+              {
+                nameKey: "commands.config.setup.already_setup_next_steps_field",
+                value: localizer(locale, "commands.config.setup.already_setup_next_steps_value", {
+                  provider_add_command: providerAddMention,
+                  model_text_command: modelTextMention,
+                  byok_toggle_command: userByokToggleMention,
+                  help_personal_provider: helpPersonalProviderMention,
+                }),
+              },
+            ],
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        // 3a. Main persona row exists but loadTomoriState returned null — broken state
+        //     (e.g. tomori_configs deleted, or llm_id points to a removed model).
+        //     Do NOT nuke personas here: alters may be perfectly healthy and only the config
+        //     row or model reference is missing. Guide the user to targeted repair commands.
+        log.warn(
+          `[Setup] Server ${serverId} has a main persona row but state validation failed — surfacing repair guidance`,
+        );
+        const modelTextMention = commandRegistry.getCommandMention("config", "model", "text");
+        const providerAddMention = commandRegistry.getCommandMention("config", "provider", "add");
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "commands.config.setup.broken_state_title",
+          descriptionKey: "commands.config.setup.broken_state_description",
+          descriptionVars: {
+            model_text_command: modelTextMention,
+            provider_add_command: providerAddMention,
+          },
+          color: ColorCode.ERROR,
           flags: MessageFlags.Ephemeral,
         });
         return;
       }
 
-      // 3a. No main persona but server data exists (orphaned alters/config).
-      //     Clean up orphaned data so setupServer can create fresh rows
-      //     without hitting unique constraint violations on tomori_configs.server_id.
-      log.warn(`[Setup] Server ${serverId} has no main persona but orphaned data exists — cleaning up for fresh setup`);
-
-      // Delete orphaned tomoris (alters without a main). CASCADE handles persona_configs.
-      // tomori_configs.tomori_id is SET NULL on delete (not cascaded), so we delete config separately.
-      await sql`
-				DELETE FROM tomoris
-				WHERE server_id = ${existingInternalServerId}
-			`;
-
-      // Delete orphaned tomori_configs to clear the server_id unique constraint
+      // 3b. No main persona row — orphaned alters or empty server entry.
+      //     Only tomori_configs is deleted to clear its server_id unique constraint; alter rows
+      //     are preserved since setupServer only inserts a new main persona (is_alter=false).
+      log.warn(`[Setup] Server ${serverId} has no main persona — clearing config, preserving alters`);
       await sql`
 				DELETE FROM tomori_configs
 				WHERE server_id = ${existingInternalServerId}
@@ -175,7 +194,7 @@ export async function execute(
       // Invalidate cache so stale persona data is not served
       invalidateTomoriStateCache(serverId);
 
-      log.info(`[Setup] Cleaned up orphaned data for server ${serverId}, proceeding with fresh setup`);
+      log.info(`[Setup] Cleared stale config for server ${serverId}, preserving alters, proceeding with fresh setup`);
     }
 
     // Load dynamic data for the modal

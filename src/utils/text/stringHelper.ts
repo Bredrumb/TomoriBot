@@ -89,6 +89,24 @@ export function createSentenceSplitRegex(): RegExp {
  * // result: "Hello, John! Welcome to Paris."
  * ```
  */
+/**
+ * Strips curly braces from unknown template placeholders in text, leaving only the inner word.
+ * Valid placeholders ({user}, {bot}, {char} and their double-brace variants) are preserved.
+ * This prevents LLM-generated `{username}` artifacts from appearing literally in stored
+ * memories or Discord messages when the model incorrectly imitates the `{user}` convention.
+ * @param text - Text that may contain erroneous `{word}` placeholders
+ * @returns Text with unknown `{word}` braces stripped, valid template vars untouched
+ */
+export function sanitizeUnknownTemplatePlaceholders(text: string): string {
+  // Double-brace form first to avoid partial matches with single-brace pass
+  const result = text.replace(/\{\{([a-zA-Z][a-zA-Z0-9_]*)\}\}/g, (_match, inner: string) =>
+    /^(user|bot|char)$/i.test(inner) ? `{{${inner}}}` : inner,
+  );
+  return result.replace(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g, (_match, inner: string) =>
+    /^(user|bot|char)$/i.test(inner) ? `{${inner}}` : inner,
+  );
+}
+
 export function replaceTemplateVariables(text: string, variables: Record<string, string | undefined>): string {
   let result = text;
   const normalizedVariables: Record<string, string | undefined> = {
@@ -1046,7 +1064,8 @@ export function replaceMentionHandles(
 
     const normalizedHandle = handle.toLowerCase();
     const ids = mentionMap.get(normalizedHandle);
-    if (!ids || ids.length !== 1) return `{${handle}}`;
+    // Fallback: show plain name without braces — {handle} would look like a stray template var
+    if (!ids || ids.length !== 1) return handle;
     return `<@${ids[0]}>`;
   });
 
@@ -1069,7 +1088,7 @@ export function replaceMentionHandles(
 
     const normalizedHandle = handle.toLowerCase();
     const ids = mentionMap.get(normalizedHandle);
-    if (!ids || ids.length !== 1) return `(${handle})`;
+    if (!ids || ids.length !== 1) return handle;
     return `<@${ids[0]}>`;
   });
 
@@ -1092,7 +1111,7 @@ export function replaceMentionHandles(
 
     const normalizedHandle = handle.toLowerCase();
     const ids = mentionMap.get(normalizedHandle);
-    if (!ids || ids.length !== 1) return `[${handle}]`;
+    if (!ids || ids.length !== 1) return handle;
     return `<@${ids[0]}>`;
   });
 

@@ -369,7 +369,8 @@ export async function execute(
 
       const updatedTomori = await updateTomori(selectedPersona.tomori_id, {
         speech_voice_id: chosenVoice?.voiceId ?? null,
-        speech_voice_name: chosenVoice?.name ?? (selectedPersona.speech_voice_design_prompt?.trim() ? "VoiceDesign" : null),
+        speech_voice_name:
+          chosenVoice?.name ?? (selectedPersona.speech_voice_design_prompt?.trim() ? "VoiceDesign" : null),
         elevenlabs_voice_id: chosenVoice?.voiceId ?? null,
         elevenlabs_voice_name: chosenVoice?.name ?? null,
         speech_voice_sample_id: null,

@@ -28,6 +28,24 @@ export const DATA_EXPORT_TYPES = {
 export type DataExportType = (typeof DATA_EXPORT_TYPES)[keyof typeof DATA_EXPORT_TYPES];
 
 /**
+ * A single memory entry. Accepts plain strings (legacy exports) or tagged objects;
+ * both forms normalise to { content, tags } on parse.
+ */
+export const memoryItemSchema = z.union([
+  z.string().transform((s) => ({ content: s, tags: [] as string[] })),
+  z.object({
+    content: z.string(),
+    tags: z.preprocess(
+      (v) =>
+        Array.isArray(v) ? v.map((t: unknown) => (typeof t === "string" ? t.replace(/^["']+|["']+$/g, "") : t)) : [],
+      z.array(z.string().max(32)).max(5),
+    ),
+  }),
+]);
+
+export type MemoryItem = { content: string; tags: string[] };
+
+/**
  * Get personal data export schema with dynamic memory limits from environment
  * Validates the structure of exported personal user data
  */
@@ -37,7 +55,7 @@ export function getPersonalExportDataSchema() {
     user_nickname: z.string().min(1).max(100),
     language_pref: z.string().min(2).max(10),
     impersonation_prompt: z.string().nullable().optional(),
-    personal_memories: z.array(z.string()).max(limits.maxPersonalMemories),
+    personal_memories: z.array(memoryItemSchema).max(limits.maxPersonalMemories),
   });
 }
 
@@ -68,7 +86,7 @@ export type PersonalSettingsExportData = z.infer<typeof personalSettingsExportDa
 export function getPersonalMemoriesExportDataSchema() {
   const limits = getMemoryLimits();
   return z.object({
-    personal_memories: z.array(z.string()).max(limits.maxPersonalMemories),
+    personal_memories: z.array(memoryItemSchema).max(limits.maxPersonalMemories),
   });
 }
 
@@ -161,6 +179,8 @@ export const serverConfigExportSchema = z.object({
   uncensor_sanitize_enabled: z.boolean().optional(),
   tool_use_enabled: z.boolean().optional(),
   prompt_snapshot_enabled: z.boolean().optional(),
+  memory_tagging_enabled: z.boolean().optional(),
+  channel_memory_enabled: z.boolean().optional(),
 });
 
 export type ServerConfigExport = z.infer<typeof serverConfigExportSchema>;
@@ -171,7 +191,7 @@ export type ServerConfigExport = z.infer<typeof serverConfigExportSchema>;
 export function getServerMemoriesExportDataSchema() {
   const limits = getMemoryLimits();
   return z.object({
-    server_memories: z.array(z.string()).max(limits.maxServerMemories),
+    server_memories: z.array(memoryItemSchema).max(limits.maxServerMemories),
   });
 }
 
@@ -194,7 +214,7 @@ export function getServerExportDataSchema() {
   const limits = getMemoryLimits();
   return z.object({
     config: serverConfigExportSchema,
-    server_memories: z.array(z.string()).max(limits.maxServerMemories),
+    server_memories: z.array(memoryItemSchema).max(limits.maxServerMemories),
   });
 }
 

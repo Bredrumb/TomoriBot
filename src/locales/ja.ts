@@ -373,7 +373,13 @@ export default {
         description: `ペルソナに音声出力用の声を割り当てます。`,
       },
       "voice-design": {
-        description: `ペルソナに VoiceDesign 用の声質プロンプトを設定します。`,
+        description: `ペルソナの VoiceDesign プロンプトを管理します。`,
+        set: {
+          description: `ペルソナに VoiceDesign 用の声質プロンプトを設定します。`,
+        },
+        remove: {
+          description: `ペルソナの VoiceDesign プロンプトを削除します。`,
+        },
       },
       elevenlabs: {
         description: `ElevenLabs の音声生成と文字起こしを接続します。`,
@@ -465,20 +471,15 @@ export default {
       voice_design: {
         description: `ペルソナに VoiceDesign 用の声質プロンプトを設定します。`,
         prompt_description: `任意の声質説明。省略すると大きめの入力欄を開きます。`,
-        clear_description: `設定ではなく、このペルソナの VoiceDesign プロンプトを削除します。`,
-        edit_description: `既存の VoiceDesign プロンプトを入力済みの欄で編集します。`,
         unsupported_endpoint_title: `VoiceDesign エンドポイントが有効ではありません`,
         unsupported_endpoint_description: `VoiceDesign プロンプトを設定する前に、Supports Instruct が有効なローカルTTSエンドポイントを選択してください。`,
         select_persona_title: `VoiceDesign を設定するペルソナを選択`,
         modal_title: `VoiceDesign プロンプト`,
-        edit_modal_title: `VoiceDesign プロンプトを編集`,
+        update_modal_title: `VoiceDesign プロンプトを更新`,
         prompt_label: `声質説明`,
         prompt_help: `話者の年齢、声色、質感、アクセント、速度、感情、話し方を説明してください。`,
         prompt_placeholder: `落ち着いた大人のナレーター。ゆっくりめで、柔らかく息成分のある、安心感のある話し方。`,
-        prompt_required_description: `VoiceDesign プロンプトを入力するか、clear を有効にして再実行してください。`,
-        invalid_combination_description: `VoiceDesign の操作は1つだけ指定してください。プロンプト設定、既存プロンプト編集、削除のいずれかを選んでください。`,
-        no_existing_prompt_title: `VoiceDesign プロンプトがありません`,
-        no_existing_prompt_description: `**{persona}** には編集する VoiceDesign プロンプトがまだありません。作成するには edit を無効にして \`/speech voice-design\` を実行してください。`,
+        prompt_required_description: `VoiceDesign プロンプトを入力してください。`,
         success_title: `VoiceDesign プロンプトを設定しました`,
         success_description: `**{persona}** はローカルボイスメッセージで次の VoiceDesign プロンプトを使用します:\n\n> {preview}`,
         cleared_title: `VoiceDesign プロンプトを削除しました`,
@@ -511,7 +512,8 @@ export default {
         file_too_large_description: `プリセットファイルは{max_size} MB以下にしてください。`,
         download_failed: `添付ファイルのダウンロードに失敗しました。もう一度お試しください。`,
         invalid_json: `ファイルを有効なJSONとして解析できませんでした。`,
-        not_a_preset: `これは対応しているSillyTavernプリセットではないようです — Prompt Manager の\`prompts\`配列、または legacy の\`context.story_string\` + \`sysprompt.content\` が必要です。`,
+        not_a_preset_title: `未対応のプリセット形式`,
+        not_a_preset_description: `これは対応しているSillyTavernプリセットではないようです。対応しているのは **Chat Completions** プリセットのみです — Prompt Manager の \`prompts\` 配列、または \`context.story_string\` + \`sysprompt.content\` を使った旧形式のみです。\n\n**Text-completions プリセット**（\`instruct\` ブロックを使用するもの）は対応していません。`,
         no_nodes: `このプリセットに使用可能なプロンプトノードが見つかりませんでした。`,
         success_title: `プリセットをインポートしました`,
         success_description: `**{name}**をインポートしました。
@@ -1584,7 +1586,7 @@ export default {
 5. *(任意)* 高速化のため flash-attn をインストール — 手順 4 の後 \`pip install wheel\`、次に \`pip install flash-attn --no-build-isolation\` (Winは20-40分)。初回はスキップ。
 6. 音声クローンには \`server.py\`、Qwen3-TTS VoiceDesign のみには \`server.py --mode voice-design\`、1つのURLでリクエストごとにクローン/VoiceDesignを判定するには \`server.py --mode auto\` を起動します。
 7. {custom_endpoint_add} で登録: Capability（機能）は \`Speech\`、API Style（API スタイル）は \`TTS-Clone\`、Script Markup（スクリプトマークアップ）は \`Plain\` を選択。VoiceDesign では音声ソースモードに \`VoiceDesign\` を選ぶと、TomoriBot が自動的に instruct 対応として扱います。auto モードでは、同じサーバーURLを指すクローン用と VoiceDesign 用のエンドポイントを登録できます。
-8. {model_speech} で選択します。クローンモードでは {voice_add} と {voice_assign}、VoiceDesign では各ペルソナに \`/speech voice-design\` を実行します。`,
+8. {model_speech} で選択します。クローンモードでは {voice_add} と {voice_assign}、VoiceDesign では各ペルソナに {voice_design_set} を実行します。`,
         },
         irodoritts: {
           title: `IrodoriTTS 音声`,
@@ -3076,8 +3078,8 @@ Prompt Guidance Rescale: {cfg_rescale}
           success_title: `カスタムエンドポイントを追加しました`,
           success_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加しました。\`/config model\` から選択できます。`,
           speech_next_steps_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加しました。次に \`/speech voice-add\` で音声サンプルを追加し、\`/speech voice-assign\` で割り当ててください。`,
-          speech_voice_design_next_steps_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加しました。次に \`/model speech\` で選択し、\`/speech voice-design\` でペルソナの声質プロンプトを設定してください。`,
-          speech_auto_next_steps_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加しました。次に \`/model speech\` で選択してください。クローン用ペルソナは \`/speech voice-add\` と \`/speech voice-assign\`、VoiceDesign 用ペルソナは \`/speech voice-design\` を使用します。`,
+          speech_voice_design_next_steps_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加しました。次に \`/model speech\` で選択し、\`/speech voice-design set\` でペルソナの声質プロンプトを設定してください。`,
+          speech_auto_next_steps_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加しました。次に \`/model speech\` で選択してください。クローン用ペルソナは \`/speech voice-add\` と \`/speech voice-assign\`、VoiceDesign 用ペルソナは \`/speech voice-design set\` を使用します。`,
         },
         edit: {
           description: `登録済みのラベル付きカスタムエンドポイントを編集します。`,
@@ -3133,6 +3135,7 @@ Prompt Guidance Rescale: {cfg_rescale}
         validation: {
           invalid_label: `ラベルは英小文字・数字・アンダースコア・ハイフンのみ使用でき、長さは1〜40文字です。`,
           unreachable: `そのエンドポイントに接続できませんでした: {reason}`,
+          local_address_blocked: `パーソナルエンドポイントはデフォルトでlocalhostとプライベートIPをブロックします。セルフホストの場合は、ローカルアドレスを許可するために \`.env\` に \`ALLOW_PERSONAL_LOCAL_ENDPOINTS=true\` を設定してください。`,
           workflow_required: `ComfyUI の画像/動画エンドポイントではワークフローJSONの添付が必要です。`,
           model_name_required: `テキストと埋め込みのエンドポイントではモデル名が必要です。`,
           transcription_model_required: `文字起こしエンドポイントには \`large-v3\` や \`whisper-1\` などのモデル識別子が必要です。`,
@@ -3524,6 +3527,8 @@ Prompt Guidance Rescale: {cfg_rescale}
         current_byok_disabled_value: `無効。個人プロバイダーが有効でない場合は、ユーザー発言でもサーバープロバイダーを使えます。{toggle_command} で切り替えられます。`,
         already_setup_next_steps_field: `次のステップ`,
         already_setup_next_steps_value: `{provider_add_command} で別のサーバープロバイダーを保存し、{model_text_command} でアクティブなテキストモデルを切り替え、{byok_toggle_command} でBYOKモードを切り替えられます。メンバー向けの個人プロバイダー手順は {help_personal_provider} を確認してください。`,
+        broken_state_title: `設定が破損しています`,
+        broken_state_description: `このサーバーにはペルソナが存在しますが、設定が不完全です。サーバー設定またはAIモデルの参照が見つからないか、削除されています。\n\n{model_text_command} で有効なモデルを割り当てるか、{provider_add_command} で新しいプロバイダーを登録してください。問題が解決しない場合は、サーバー管理者にお問い合わせください。`,
         already_setup_description: `このサーバーでは既に設定が完了しています。設定を変更するには、\`/config\`、\`/persona\`、\`/memory\`、\`/server\`などの他のコマンドを使用してください。
 
 				プロバイダーを変更したい場合は、\`/config provider add\`で新しいプロバイダーを登録し、\`/config model text\`でアクティブにしてください。`,
@@ -4387,7 +4392,7 @@ RP設定を無効化したチャンネル **{disabled_count}** 件: {disabled_ch
         conversion_error_title: `変換エラー`,
         conversion_error_description: `画像の処理に失敗しました。別の画像ファイルを試してください。`,
         api_error_title: `APIエラー`,
-        api_error_description: `Discord APIを通じてアバターの更新に失敗しました。アバターを短時間で変更しすぎたことによるレート制限が原因であることが多いです。しばらく待ってから再度お試しください。`,
+        api_error_description: `Discord APIを通じてアバターの更新に失敗しました。アバターを短時間で変更しすぎたことによるレート制限が原因であることが多いです。しばらく待ってから再度お試しください。\n-# {details}`,
         error_download_timeout: `アバターのダウンロードが15秒後にタイムアウトしました。もう一度お試しください。`,
         error_api_timeout: `Discord API呼び出しが15秒後にタイムアウトしました。もう一度お試しください。`,
       },
@@ -4990,6 +4995,7 @@ RP設定を無効化したチャンネル **{disabled_count}** 件: {disabled_ch
           scope_description: `ドキュメントをペルソナ専用にするか、サーバー全体で共有するかを選択します。`,
           scope_choice_persona: `ペルソナ`,
           scope_choice_serverwide: `サーバー全体`,
+          channels_description: `任意：特定チャンネルのみに制限（カンマ区切り、例: #general,#bot-chat）。空白の場合は全チャンネルで利用可能。`,
         },
         remove: {
           description: `ドキュメントを記憶から削除します。`,
@@ -5152,6 +5158,21 @@ RP設定を無効化したチャンネル **{disabled_count}** 件: {disabled_ch
         },
         remove: {
           description: `サーバー記憶を削除します。`,
+        },
+      },
+      tagging: {
+        description: `タグ付き記憶モードを管理します。`,
+        set: {
+          description: `タグ付き記憶モードに切り替えます`,
+          modal_title: `記憶タグ設定`,
+          select_label: `タグモード`,
+          select_description: `有効にすると会話タグで記憶をフィルタリングし、無効にするとすべての記憶を含めます。`,
+          select_placeholder: `モードを選択...`,
+          channel_select_label: `チャンネルタグ`,
+          channel_select_description: `有効にすると特定の#チャンネルに記憶をタグ付けできます。タグなしの記憶は引き続きすべてのチャンネルで機能します。`,
+          channel_select_placeholder: `モードを選択...`,
+          success_title: `記憶タグ設定が更新されました`,
+          success_description: `記憶タグ設定が保存されました。`,
         },
       },
     },

@@ -1,10 +1,11 @@
 /**
  * Persona avatar storage utilities.
  *
- * Production stores avatars in S3/CloudFront.
+ * Production stores avatars in GCS (if AVATAR_GCS_BUCKET is set) or S3 (if AVATAR_S3_BUCKET is set).
  * Non-production stores avatars on the local filesystem under data/avatars.
  */
 
+import { Storage } from "@google-cloud/storage";
 import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -19,48 +20,60 @@ type AvatarUploadOptions = {
   buffer: Buffer;
 };
 
-type AvatarStorageConfig = {
-  bucket: string;
-  region: string;
-  prefix: string;
-  publicBaseUrl: string;
-};
+type AvatarStorageConfig =
+  | { backend: "gcs"; bucket: string; prefix: string; publicBaseUrl: string }
+  | { backend: "s3"; bucket: string; prefix: string; publicBaseUrl: string; region: string };
 
 const IS_PRODUCTION = process.env.RUN_ENV === "production";
 const LOCAL_AVATAR_BASE_DIR = path.resolve(process.cwd(), "data", "avatars");
 const LOCAL_AVATAR_ROOT_PREFIX = "data/avatars/";
-let cachedClient: S3Client | null = null;
-let cachedRegion: string | null = null;
+let cachedGcsStorage: Storage | null = null;
+let cachedS3Client: S3Client | null = null;
+let cachedS3Region: string | null = null;
 
 function getAvatarStorageConfig(): AvatarStorageConfig | null {
   if (!IS_PRODUCTION) {
     return null;
   }
 
-  const bucket = process.env.AVATAR_S3_BUCKET?.trim();
-  if (!bucket) {
-    log.warn("[Avatar Storage] AVATAR_S3_BUCKET is missing; falling back to Discord CDN URLs.");
+  // GCS takes priority when AVATAR_GCS_BUCKET is set
+  const gcsBucket = process.env.AVATAR_GCS_BUCKET?.trim();
+  if (gcsBucket) {
+    const prefix = (process.env.AVATAR_GCS_PREFIX || process.env.AVATAR_S3_PREFIX || "avatars")
+      .replace(/^\/+/, "")
+      .replace(/\/+$/, "");
+    const publicBaseUrl = process.env.AVATAR_PUBLIC_BASE_URL?.trim() || `https://storage.googleapis.com/${gcsBucket}`;
+    return { backend: "gcs", bucket: gcsBucket, prefix, publicBaseUrl };
+  }
+
+  // S3 fallback
+  const s3Bucket = process.env.AVATAR_S3_BUCKET?.trim();
+  if (!s3Bucket) {
+    log.warn(
+      "[Avatar Storage] Neither AVATAR_GCS_BUCKET nor AVATAR_S3_BUCKET is set; falling back to Discord CDN URLs.",
+    );
     return null;
   }
 
   const region = process.env.AVATAR_S3_REGION?.trim() || process.env.AWS_REGION?.trim() || "us-east-1";
   const prefix = (process.env.AVATAR_S3_PREFIX || "avatars").replace(/^\/+/, "").replace(/\/+$/, "");
-  const publicBaseUrl = process.env.AVATAR_PUBLIC_BASE_URL?.trim() || `https://${bucket}.s3.${region}.amazonaws.com`;
+  const publicBaseUrl = process.env.AVATAR_PUBLIC_BASE_URL?.trim() || `https://${s3Bucket}.s3.${region}.amazonaws.com`;
+  return { backend: "s3", bucket: s3Bucket, prefix, publicBaseUrl, region };
+}
 
-  return {
-    bucket,
-    region,
-    prefix,
-    publicBaseUrl,
-  };
+function getGcsStorage(): Storage {
+  if (!cachedGcsStorage) {
+    cachedGcsStorage = new Storage();
+  }
+  return cachedGcsStorage;
 }
 
 function getS3Client(region: string): S3Client {
-  if (!cachedClient || cachedRegion !== region) {
-    cachedRegion = region;
-    cachedClient = new S3Client({ region });
+  if (!cachedS3Client || cachedS3Region !== region) {
+    cachedS3Region = region;
+    cachedS3Client = new S3Client({ region });
   }
-  return cachedClient;
+  return cachedS3Client;
 }
 
 function buildAvatarObjectKey(config: AvatarStorageConfig, options: AvatarUploadOptions): string {
@@ -107,6 +120,18 @@ function resolveLocalAvatarPath(storedPath: string): string | null {
 
 function extractKeyFromAvatarUrl(config: AvatarStorageConfig, url: string): string | null {
   try {
+    if (config.backend === "gcs") {
+      // GCS public URLs: https://storage.googleapis.com/BUCKET/PREFIX/...
+      // Strip the publicBaseUrl prefix to recover the object key.
+      const baseUrl = config.publicBaseUrl.replace(/\/+$/, "");
+      if (!url.startsWith(`${baseUrl}/`)) {
+        return null;
+      }
+      const key = url.slice(baseUrl.length + 1);
+      return key.startsWith(`${config.prefix}/`) ? key : null;
+    }
+
+    // S3: match on hostname (supports custom CDN domains, virtual-hosted style, and path-style)
     const parsed = new URL(url);
     const baseHost = new URL(config.publicBaseUrl).hostname;
     const hostname = parsed.hostname;
@@ -120,11 +145,7 @@ function extractKeyFromAvatarUrl(config: AvatarStorageConfig, url: string): stri
       }
     }
 
-    if (!pathName.startsWith(`${config.prefix}/`)) {
-      return null;
-    }
-
-    return pathName;
+    return pathName.startsWith(`${config.prefix}/`) ? pathName : null;
   } catch {
     return null;
   }
@@ -215,7 +236,7 @@ export async function loadStoredPersonaAvatarDataUri(reference: string): Promise
   return `data:image/png;base64,${buffer.toString("base64")}`;
 }
 
-export async function uploadPersonaAvatarToS3(options: AvatarUploadOptions): Promise<string | null> {
+export async function uploadPersonaAvatarToStorage(options: AvatarUploadOptions): Promise<string | null> {
   const label = options.label ? ` (${options.label})` : "";
 
   if (IS_PRODUCTION) {
@@ -225,10 +246,31 @@ export async function uploadPersonaAvatarToS3(options: AvatarUploadOptions): Pro
     }
 
     const key = buildAvatarObjectKey(config, options);
-    const client = getS3Client(config.region);
 
+    if (config.backend === "gcs") {
+      try {
+        await getGcsStorage()
+          .bucket(config.bucket)
+          .file(key)
+          .save(options.buffer, {
+            contentType: "image/png",
+            metadata: { cacheControl: "public, max-age=31536000, immutable" },
+          });
+        const publicUrl = buildPublicUrl(config, key);
+        log.success(`[Avatar Storage] Uploaded persona avatar${label} to GCS (${publicUrl})`);
+        return publicUrl;
+      } catch (error) {
+        await log.error(`[Avatar Storage] Failed to upload persona avatar${label} to GCS`, error, {
+          errorType: "GcsUploadError",
+          metadata: { bucket: config.bucket, key },
+        });
+        return null;
+      }
+    }
+
+    // S3 path
     try {
-      await client.send(
+      await getS3Client(config.region).send(
         new PutObjectCommand({
           Bucket: config.bucket,
           Key: key,
@@ -267,7 +309,7 @@ export async function uploadPersonaAvatarToS3(options: AvatarUploadOptions): Pro
   }
 }
 
-export async function deletePersonaAvatarFromS3(reference: string): Promise<boolean> {
+export async function deletePersonaAvatarFromStorage(reference: string): Promise<boolean> {
   const target = reference.trim();
   if (!target) {
     return false;
@@ -288,19 +330,29 @@ export async function deletePersonaAvatarFromS3(reference: string): Promise<bool
       return false;
     }
 
-    const client = getS3Client(config.region);
+    if (config.backend === "gcs") {
+      try {
+        await getGcsStorage().bucket(config.bucket).file(key).delete();
+        log.info(`[Avatar Storage] Deleted avatar object ${key} from GCS`);
+        return true;
+      } catch (error) {
+        log.warn(`[Avatar Storage] Failed to delete avatar object ${key} from GCS`, error);
+        return false;
+      }
+    }
 
+    // S3 path
     try {
-      await client.send(
+      await getS3Client(config.region).send(
         new DeleteObjectCommand({
           Bucket: config.bucket,
           Key: key,
         }),
       );
-      log.info(`[Avatar Storage] Deleted avatar object ${key}`);
+      log.info(`[Avatar Storage] Deleted avatar object ${key} from S3`);
       return true;
     } catch (error) {
-      log.warn(`[Avatar Storage] Failed to delete avatar object ${key}`, error);
+      log.warn(`[Avatar Storage] Failed to delete avatar object ${key} from S3`, error);
       return false;
     }
   }

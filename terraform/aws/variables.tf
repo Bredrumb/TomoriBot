@@ -406,7 +406,7 @@ variable "github_actions_allowed_refs" {
   description = "Refs allowed to assume the GitHub Actions role"
   type        = list(string)
   default = [
-    "refs/heads/main",
+    "refs/heads/release",
     "refs/heads/cicd/aws-deployment",
   ]
 }

@@ -17,9 +17,9 @@ import { convertToPNG } from "../../utils/image/imageProcessor";
 import { sql } from "../../utils/db/client";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 import {
-  deletePersonaAvatarFromS3,
+  deletePersonaAvatarFromStorage,
   loadStoredPersonaAvatarBuffer,
-  uploadPersonaAvatarToS3,
+  uploadPersonaAvatarToStorage,
 } from "../../utils/storage/avatarStorage";
 
 type DiscordApiErrorPayload = {
@@ -401,7 +401,7 @@ export async function execute(
         const sentEmbed = reply.embeds[0];
         const s3StoredUrl =
           formerMainAvatarBuffer && mainPersona.tomori_id
-            ? await uploadPersonaAvatarToS3({
+            ? await uploadPersonaAvatarToStorage({
                 personaId: mainPersona.tomori_id,
                 serverDiscId: interaction.guild.id,
                 label: "former main swap",
@@ -434,7 +434,7 @@ export async function execute(
 
     // 14b. Ensure selected alter has a stable avatar URL stored (optional)
     if (selectedAlterAvatarBuffer && selectedAlter.tomori_id) {
-      const selectedAlterS3Url = await uploadPersonaAvatarToS3({
+      const selectedAlterS3Url = await uploadPersonaAvatarToStorage({
         personaId: selectedAlter.tomori_id,
         serverDiscId: interaction.guild.id,
         label: "selected alter swap",
@@ -448,7 +448,7 @@ export async function execute(
 					WHERE tomori_id = ${selectedAlter.tomori_id}
 				`;
         if (previousSelectedAlterAvatarUrl && previousSelectedAlterAvatarUrl !== selectedAlterS3Url) {
-          await deletePersonaAvatarFromS3(previousSelectedAlterAvatarUrl);
+          await deletePersonaAvatarFromStorage(previousSelectedAlterAvatarUrl);
         }
       }
     }
@@ -459,7 +459,7 @@ export async function execute(
       newFormerMainS3Url &&
       previousMainAvatarUrl !== newFormerMainAvatarUrl
     ) {
-      await deletePersonaAvatarFromS3(previousMainAvatarUrl);
+      await deletePersonaAvatarFromStorage(previousMainAvatarUrl);
     }
 
     log.success(

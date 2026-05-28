@@ -16,7 +16,7 @@ services:
       # Set a default password to skip the "change password" screen
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
       # Allow installing plugins (needed for some advanced widgets)
-      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource,googlecloud-logging-datasource
       # PostgreSQL connection details (connects to postgres container in docker-compose.yaml)
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
@@ -29,8 +29,8 @@ services:
 volumes:
   grafana_data:
 
-# Join the network from docker-compose.yaml to access the postgres container
-# Run with: docker compose -f docker-compose.yaml -f docker-compose.monitor.yaml up
+    # Join the network from docker-compose.yaml to access the postgres container
+    # Run with: docker compose -f docker-compose.yaml -f docker-compose.monitor.yaml up
 networks:
   tomori-network:
     external: true

@@ -1,0 +1,15 @@
+# Copy to terraform.tfvars and fill in your values.
+# Never commit terraform.tfvars — it is gitignored.
+
+gcp_project_id = "your-gcp-project-id"
+gcp_region     = "us-central1"
+
+github_repo_owner = "Bredrumb"
+github_repo_name  = "TomoriBot"
+
+# Passed via TF_VAR_container_image in CI, or set manually for local apply
+container_image = "us-central1-docker.pkg.dev/your-gcp-project-id/tomoribot/tomoribot:latest"
+
+# Cloud SQL password — store this securely; it is also in the runtime secret JSON
+db_password = "change-me"
+

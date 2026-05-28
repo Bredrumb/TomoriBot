@@ -2,12 +2,9 @@
 # GitHub Actions Workflow: Deploy TomoriBot to AWS ECS
 # Note: Secret validation warnings are expected - secrets are configured in GitHub repo settings
 
-name: Deploy TomoriBot
+name: Deploy TomoriBot (AWS)
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch: # Manual trigger - allows running on any branch
+  workflow_dispatch: # Manual trigger only — GCP pipeline handles push to release
     inputs:
       environment:
         description: "Deployment environment"
@@ -33,6 +30,7 @@ jobs:
   # SECRETS VALIDATION
   validate-secrets:
     runs-on: ubuntu-24.04
+    if: vars.ACTIVE_PROVIDER == 'aws'
     steps:
       - name: Validate deployment infrastructure secrets
         run: |
@@ -80,134 +78,17 @@ jobs:
           echo "Application Secrets: Fetched from AWS at runtime"
           echo "================================================"
 
-  # PARALLEL TESTING PHASE
-  test-lint:
-    runs-on: ubuntu-24.04
+  # VALIDATION (lint, types, schema, locales, lifecycle)
+  validate:
     needs: validate-secrets
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7
-        with:
-          bun-version: 1.2.12
-
-      - name: Install dependencies
-        run: |
-          echo "Installing dependencies..."
-          bun install --frozen-lockfile
-          echo "Dependencies installed!"
-
-      - name: Run linting and type checks
-        run: |
-          echo "Running linting and TypeScript checks..."
-          bun run lint
-          bun run check
-          echo "All linting and type checks passed!"
-
-  test-locales:
-    runs-on: ubuntu-24.04
-    needs: validate-secrets
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7
-        with:
-          bun-version: 1.2.12
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Check localization keys
-        run: |
-          echo "Checking localization keys..."
-          output=$(bun run check-locales 2>&1)
-          exitCode=$?
-
-          # Always show the output
-          echo "$output"
-
-          # Check if there are missing keys (critical errors)
-          if echo "$output" | grep -q "MISSING LOCALIZATION KEYS"; then
-            echo "Critical error: Missing localization keys found!"
-            exit 1
-          elif [ $exitCode -eq 0 ]; then
-            echo "All localization checks passed!"
-          else
-            echo "Localization warnings found, but no critical missing keys. Continuing deployment..."
-          fi
-
-  test-schema:
-    runs-on: ubuntu-24.04
-    needs: validate-secrets
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7
-        with:
-          bun-version: 1.2.12
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Check schema drift
-        run: |
-          echo "Checking schema drift..."
-          bun run check-schema
-          echo "Schema drift check passed!"
-
-  test-lifecycle:
-    runs-on: ubuntu-24.04
-    needs: validate-secrets
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: tomodb
-          POSTGRES_USER: tomori
-          POSTGRES_PASSWORD: tomori_ci_password
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U tomori -d tomodb"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      POSTGRES_HOST: 127.0.0.1
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: tomori
-      POSTGRES_PASSWORD: tomori_ci_password
-      POSTGRES_DB: tomodb
-      CRYPTO_SECRET: ci_validation_crypto_secret
-      RUN_ENV: development
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7
-        with:
-          bun-version: 1.2.12
-
-      - name: Install PostgreSQL client tools
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Check fresh database and maintenance scripts
-        run: bun run validate:lifecycle
+    uses: ./.github/workflows/validation.yml
+    permissions:
+      contents: read
 
   # BUILD DOCKER IMAGE
   build-image:
     runs-on: ubuntu-24.04
-    needs: [test-lint, test-locales, test-schema, test-lifecycle]
+    needs: validate
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -224,7 +105,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7
         with:
-          bun-version: 1.2.12
+          bun-version: 1.3.3
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -338,7 +219,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7
         with:
-          bun-version: 1.2.12
+          bun-version: 1.3.3
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -730,15 +611,15 @@ jobs:
             --db-snapshot-identifier "$SNAPSHOT_ID"
 
       - name: Terraform init
-        working-directory: terraform
+        working-directory: terraform/aws
         run: terraform init
 
       - name: Terraform plan
-        working-directory: terraform
+        working-directory: terraform/aws
         run: terraform plan -input=false -var-file=terraform.ci.tfvars -out=tfplan
 
       - name: Guard against RDS destroy/replace
-        working-directory: terraform
+        working-directory: terraform/aws
         run: |
           echo "Checking plan for destructive RDS changes..."
           if terraform show -json tfplan | jq -e '.resource_changes[]
@@ -749,7 +630,7 @@ jobs:
           fi
 
       - name: Terraform apply
-        working-directory: terraform
+        working-directory: terraform/aws
         run: terraform apply -input=false -auto-approve tfplan
 
   verify-ecs-deployment:
@@ -988,7 +869,7 @@ jobs:
           # in the forum post, which Discord uses as the post's preview image
           hasImage=false
           if [ -n "$IMAGE_NAME" ]; then
-            imageUrl="https://github.com/${{ github.repository }}/raw/main/.github/release/v$VERSION/$IMAGE_NAME"
+            imageUrl="https://github.com/${{ github.repository }}/raw/release/.github/release/v$VERSION/$IMAGE_NAME"
             echo "Downloading release image: $imageUrl"
             if curl -sL --max-time 30 "$imageUrl" -o "release-post-image.png" && [ -s "release-post-image.png" ]; then
               hasImage=true

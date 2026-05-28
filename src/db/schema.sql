@@ -272,6 +272,7 @@ SELECT add_column_if_not_exists('llms', 'supports_structoutput', 'BOOLEAN', 'fal
 SELECT add_column_if_not_exists('llms', 'llm_description', 'TEXT');
 SELECT add_column_if_not_exists('llms', 'ja_description', 'TEXT');
 
+
 -- Removed updated_at trigger for llms table (static metadata, rarely changes)
 DROP TRIGGER IF EXISTS update_llms_timestamp ON llms;
 
@@ -397,6 +398,8 @@ CREATE TABLE IF NOT EXISTS tomori_configs (
   sampledialogue_memteaching_enabled BOOLEAN DEFAULT false,
   self_teaching_enabled BOOLEAN DEFAULT true,
   personal_memories_enabled BOOLEAN DEFAULT true,
+  memory_tagging_enabled BOOLEAN DEFAULT false,
+  channel_memory_enabled BOOLEAN DEFAULT false,
   imagegen_enabled BOOLEAN DEFAULT true,
   videogen_enabled BOOLEAN DEFAULT false,
   thread_creation_enabled BOOLEAN DEFAULT true,
@@ -1060,6 +1063,7 @@ CREATE TABLE IF NOT EXISTS server_memories (
   persona_lineage_id BIGINT NOT NULL, -- Shared persona identity for memory continuity across remove/re-import
   user_id INT, -- Creator of this server memory (nullable - set to NULL if user deleted)
   content TEXT NOT NULL,
+  tags TEXT[] DEFAULT '{}',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL,
@@ -1070,6 +1074,8 @@ CREATE TABLE IF NOT EXISTS server_memories (
 SELECT add_column_if_not_exists('server_memories', 'tomori_id', 'INTEGER');
 -- Add lineage scope column for existing databases
 SELECT add_column_if_not_exists('server_memories', 'persona_lineage_id', 'BIGINT');
+-- Add tags column for existing databases
+SELECT add_column_if_not_exists('server_memories', 'tags', 'TEXT[]', 'ARRAY[]::TEXT[]');
 
 -- Backfill server memories to the current main persona for each server
 DO $$
@@ -1232,10 +1238,14 @@ CREATE TABLE IF NOT EXISTS personal_memories (
   user_id INT NOT NULL,
   persona_lineage_id BIGINT NOT NULL,
   content TEXT NOT NULL,
+  tags TEXT[] DEFAULT '{}',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
+
+-- Add tags column for existing databases
+SELECT add_column_if_not_exists('personal_memories', 'tags', 'TEXT[]', 'ARRAY[]::TEXT[]');
 
 -- Create updated_at trigger for personal_memories table
 DROP TRIGGER IF EXISTS update_personal_memories_timestamp ON personal_memories;
@@ -2677,3 +2687,9 @@ END $$;
 SELECT add_column_if_not_exists('tomori_configs', 'llm_max_output_tokens', 'INTEGER', 'NULL');
 SELECT add_column_if_not_exists('saved_provider_configs', 'llm_max_output_tokens', 'INTEGER', 'NULL');
 SELECT add_column_if_not_exists('user_saved_provider_configs', 'llm_max_output_tokens', 'INTEGER', 'NULL');
+
+-- Memory tag filtering toggle (May 2026)
+SELECT add_column_if_not_exists('tomori_configs', 'memory_tagging_enabled', 'BOOLEAN', 'false');
+
+-- Channel memory toggle (May 2026)
+SELECT add_column_if_not_exists('tomori_configs', 'channel_memory_enabled', 'BOOLEAN', 'false');

@@ -49,6 +49,13 @@ export function formatVector(values: number[]): string {
   return `[${values.join(",")}]`;
 }
 
+// postgres.js passes JS arrays as plain toString() output for TEXT[] columns, which PostgreSQL
+// rejects ("Array value must start with {"). Format explicitly as a PostgreSQL array literal.
+function toPgTextArray(values: string[]): string {
+  if (values.length === 0) return "{}";
+  return `{${values.map((v) => `"${v.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`).join(",")}}`;
+}
+
 export async function insertDocumentWithChunks(params: {
   serverId: number;
   tomoriId: number | null;
@@ -64,6 +71,8 @@ export async function insertDocumentWithChunks(params: {
   embeddingFamily: string;
   /** Document origin: 'upload' (default) or 'history' */
   sourceType?: string;
+  /** Channel tags restricting retrieval to specific channels, e.g. ['#general', '#bot-chat'] */
+  channelTags?: string[];
 }): Promise<number> {
   const {
     serverId,
@@ -79,6 +88,7 @@ export async function insertDocumentWithChunks(params: {
     embeddingModelId,
     embeddingFamily,
     sourceType = "upload",
+    channelTags = [],
   } = params;
 
   if (chunks.length !== embeddings.length) {
@@ -96,7 +106,8 @@ export async function insertDocumentWithChunks(params: {
 				mime_type,
 				file_size_bytes,
 				text_content,
-				source_type
+				source_type,
+				channel_tags
 			) VALUES (
 				${serverId},
 				${tomoriId},
@@ -106,7 +117,8 @@ export async function insertDocumentWithChunks(params: {
 				${mimeType},
 				${fileSizeBytes},
 				${textContent},
-				${sourceType}
+				${sourceType},
+				${toPgTextArray(channelTags)}::text[]
 			)
 			RETURNING document_id
 		`;
@@ -153,8 +165,11 @@ export async function retrieveRelevantDocumentChunks(params: {
   maxResults: number;
   minSimilarity: number;
   batchSize?: number;
+  /** When set, excludes chunks whose document has channel_tags that don't include this channel */
+  channelName?: string | null;
 }): Promise<RetrievedDocumentChunk[]> {
-  const { serverId, tomoriId, query, embeddingModel, apiKey, maxResults, minSimilarity, batchSize } = params;
+  const { serverId, tomoriId, query, embeddingModel, apiKey, maxResults, minSimilarity, batchSize, channelName } =
+    params;
 
   if (!query.trim()) {
     return [];
@@ -174,6 +189,11 @@ export async function retrieveRelevantDocumentChunks(params: {
   }
 
   const queryVector = formatVector(queryEmbeddings[0]);
+
+  const channelFilter =
+    channelName != null
+      ? sql`AND (array_length(d.channel_tags, 1) IS NULL OR ${`#${channelName.toLowerCase()}`} = ANY(d.channel_tags))`
+      : sql``;
 
   const rows =
     tomoriId === null || tomoriId === undefined
@@ -196,6 +216,7 @@ export async function retrieveRelevantDocumentChunks(params: {
 					WHERE dc.server_id = ${serverId}
 					  AND dc.embedding_family = ${embeddingModel.model_family}
 					  AND d.tomori_id IS NULL
+					  ${channelFilter}
 					ORDER BY dc.embedding <=> ${queryVector}::vector
 					LIMIT ${maxResults}
 				`
@@ -221,6 +242,7 @@ export async function retrieveRelevantDocumentChunks(params: {
 						d.tomori_id = ${tomoriId}
 						OR d.tomori_id IS NULL
 					  )
+					  ${channelFilter}
 					ORDER BY dc.embedding <=> ${queryVector}::vector
 					LIMIT ${maxResults}
 				`;

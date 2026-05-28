@@ -239,7 +239,11 @@ async function rotateAllKeys() {
   }
 }
 
-rotateAllKeys().catch((error) => {
-  console.error("\n❌ Rotation script failed:", error);
-  process.exit(1);
-});
+rotateAllKeys()
+  .catch((error) => {
+    console.error("\n❌ Rotation script failed:", error);
+    process.exitCode = 1;
+  })
+  .finally(() => {
+    process.exit(process.exitCode ?? 0);
+  });

@@ -26,7 +26,7 @@ import {
   isLocalPersonaAvatarPath,
   loadStoredPersonaAvatarDataUri,
   resolvePersonaAvatarPublicUrl,
-  uploadPersonaAvatarToS3,
+  uploadPersonaAvatarToStorage,
 } from "@/utils/storage/avatarStorage";
 
 /**
@@ -222,7 +222,7 @@ async function storeMigratedPersonaAvatar(
   buffer: Buffer,
   label: string,
 ): Promise<string | null> {
-  const storedReference = await uploadPersonaAvatarToS3({
+  const storedReference = await uploadPersonaAvatarToStorage({
     personaId,
     serverDiscId: guildId,
     label,

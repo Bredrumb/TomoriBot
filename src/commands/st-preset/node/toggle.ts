@@ -125,13 +125,20 @@ function buildCheckboxGroups(pageNodes: StPresetNodeRow[], pageOffset: number): 
     const chunk = pageNodes.slice(i, i + MAX_OPTIONS_PER_GROUP);
     const groupIndex = Math.floor(i / MAX_OPTIONS_PER_GROUP);
 
-    const options: CheckboxGroupOption[] = chunk.map((node) => ({
-      label: node.name.length > 100 ? `${node.name.slice(0, 97)}...` : node.name,
-      value: node.identifier,
-      // Comment-only nodes show extracted comment text from inside {{// ... }} blocks
-      description: node.is_comment ? buildCommentNodeDescription(node.content) : buildNodeDescription(node.content),
-      default: node.is_enabled,
-    }));
+    const options: CheckboxGroupOption[] = chunk.map((node, chunkIdx) => {
+      const rawName = node.name.trim();
+      // Discord requires 1–100 chars; fall back to positional label for blank names
+      const nodeNumber = pageOffset + i + chunkIdx + 1;
+      const label =
+        rawName.length === 0 ? `Node ${nodeNumber}` : rawName.length > 100 ? `${rawName.slice(0, 97)}...` : rawName;
+      return {
+        label,
+        value: node.identifier,
+        // Comment-only nodes show extracted comment text from inside {{// ... }} blocks
+        description: node.is_comment ? buildCommentNodeDescription(node.content) : buildNodeDescription(node.content),
+        default: node.is_enabled,
+      };
+    });
 
     // Build a dynamic label like "Nodes 1–10" or "Nodes 51–60"
     // (pageOffset converts page-relative indices to overall node numbers)

@@ -685,7 +685,7 @@ export async function execute(
       client,
       triggererName: interaction.user.displayName || interaction.user.globalName || interaction.user.username,
       // snapshot.triggererUserRow unlocks STM context (actualTriggeringUserId guard inside buildContext)
-      snapshot: { triggererUserRow: userData },
+      snapshot: { triggererUserRow: userData, tomoriState: effectivePersona },
       tomoriNickname: selectedPersona.tomori_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
       tomoriAttributes: selectedPersona.attribute_list,
       tomoriConfig: effectivePersona.config,

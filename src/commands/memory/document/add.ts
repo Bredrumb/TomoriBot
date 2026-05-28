@@ -69,6 +69,13 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
           },
         )
         .setRequired(false),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("channels")
+        .setDescription(localizer("en-US", "commands.memory.document.add.channels_description"))
+        .setRequired(false)
+        .setMaxLength(200),
     );
 
 function validateAttachment(attachment: Attachment): {
@@ -250,8 +257,25 @@ export async function execute(
       return;
     }
 
-    // 8. Validate document name
+    // 8. Validate document name and parse optional channel tags
     const nameInput = interaction.options.getString("name", true).trim();
+    const channelsInput = interaction.options.getString("channels");
+    const channelTags: string[] = channelsInput
+      ? channelsInput
+          .split(",")
+          .map((raw) => {
+            const s = raw.trim();
+            const mention = s.match(/^<#(\d+)>$/);
+            if (mention) {
+              const resolved = _client.channels.cache.get(mention[1]);
+              return "name" in (resolved ?? {}) ? (resolved as { name: string }).name.toLowerCase() : "";
+            }
+            return s.toLowerCase().replace(/^#+/, "");
+          })
+          .filter((c) => c.length > 0 && /^[\w-]+$/.test(c))
+          .map((c) => `#${c}`)
+      : [];
+
     if (!nameInput || nameInput.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.teach.document.invalid_name_title",
@@ -565,6 +589,7 @@ export async function execute(
       embeddings,
       embeddingModelId,
       embeddingFamily: embeddingModel.model_family,
+      channelTags,
     });
 
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);

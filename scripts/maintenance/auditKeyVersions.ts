@@ -266,7 +266,11 @@ async function auditKeyVersions() {
   console.log();
 }
 
-auditKeyVersions().catch((error) => {
-  console.error("Audit failed:", error);
-  process.exit(1);
-});
+auditKeyVersions()
+  .catch((error) => {
+    console.error("Audit failed:", error);
+    process.exitCode = 1;
+  })
+  .finally(() => {
+    process.exit(process.exitCode ?? 0);
+  });

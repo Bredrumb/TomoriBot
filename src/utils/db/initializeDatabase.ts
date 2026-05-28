@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { sql as defaultSql } from "@/utils/db/client";
 import { detectRagAvailability } from "@/utils/db/ragDetection";
+import { splitSqlStatements } from "@/utils/db/sqlSplitter";
 import { log } from "@/utils/misc/logger";
 
 export interface InitializeDatabaseOptions {
@@ -43,7 +44,10 @@ function isRetryableDatabaseInitError(errorMessage: string): boolean {
 
 async function executeSqlFile(client: SQL, filePath: string): Promise<void> {
   const sqlText = await readFile(filePath, "utf-8");
-  await client.unsafe(sqlText).simple();
+  const statements = splitSqlStatements(sqlText);
+  for (const stmt of statements) {
+    await client.unsafe(stmt);
+  }
 }
 
 /**

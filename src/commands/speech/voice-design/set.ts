@@ -22,26 +22,14 @@ const MAX_VOICE_DESIGN_PROMPT_LENGTH = 1000;
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
-    .setName("voice-design")
-    .setDescription(localizer("en-US", "commands.speech.voice_design.description"))
+    .setName("set")
+    .setDescription(localizer("en-US", "commands.speech.voice-design.set.description"))
     .addStringOption((option) =>
       option
         .setName("prompt")
         .setDescription(localizer("en-US", "commands.speech.voice_design.prompt_description"))
         .setRequired(false)
         .setMaxLength(MAX_VOICE_DESIGN_PROMPT_LENGTH),
-    )
-    .addBooleanOption((option) =>
-      option
-        .setName("clear")
-        .setDescription(localizer("en-US", "commands.speech.voice_design.clear_description"))
-        .setRequired(false),
-    )
-    .addBooleanOption((option) =>
-      option
-        .setName("edit")
-        .setDescription(localizer("en-US", "commands.speech.voice_design.edit_description"))
-        .setRequired(false),
     );
 
 export async function execute(
@@ -101,19 +89,7 @@ export async function execute(
       return;
     }
 
-    const shouldClear = interaction.options.getBoolean("clear") ?? false;
-    const shouldEdit = interaction.options.getBoolean("edit") ?? false;
     const inlinePrompt = interaction.options.getString("prompt")?.trim() ?? "";
-
-    if ((shouldClear && (shouldEdit || inlinePrompt)) || (shouldEdit && inlinePrompt)) {
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "general.errors.invalid_option_title",
-        descriptionKey: "commands.speech.voice_design.invalid_combination_description",
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
 
     const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
       personas: allPersonas,
@@ -138,57 +114,13 @@ export async function execute(
       return;
     }
 
-    if (shouldClear) {
-      const voiceNameIfOtherVoiceRemains =
-        selectedPersona.speech_voice_sample_id
-          ? selectedPersona.speech_voice_name === "VoiceDesign"
-            ? "Voice Clone"
-            : selectedPersona.speech_voice_name
-          : selectedPersona.speech_voice_id?.trim()
-          ? selectedPersona.speech_voice_name
-          : null;
-
-      const updatedTomori = await updateTomori(selectedPersona.tomori_id, {
-        speech_voice_design_prompt: null,
-        speech_voice_name: voiceNameIfOtherVoiceRemains,
-      });
-
-      if (!updatedTomori) {
-        await replyInfoEmbed(personaButtonInteraction, locale, {
-          titleKey: "general.errors.update_failed_title",
-          descriptionKey: "general.errors.update_failed_description",
-          color: ColorCode.ERROR,
-        });
-        return;
-      }
-
-      invalidateTomoriStateCache(serverDiscId);
-      await replyInfoEmbed(personaButtonInteraction, locale, {
-        titleKey: "commands.speech.voice_design.cleared_title",
-        descriptionKey: "commands.speech.voice_design.cleared_description",
-        descriptionVars: { persona: selectedPersona.tomori_nickname },
-        color: ColorCode.SUCCESS,
-      });
-      return;
-    }
-
-    const existingPrompt = selectedPersona.speech_voice_design_prompt?.trim() ?? "";
-    if (shouldEdit && !existingPrompt) {
-      await replyInfoEmbed(personaButtonInteraction, locale, {
-        titleKey: "commands.speech.voice_design.no_existing_prompt_title",
-        descriptionKey: "commands.speech.voice_design.no_existing_prompt_description",
-        descriptionVars: { persona: selectedPersona.tomori_nickname },
-        color: ColorCode.WARN,
-      });
-      return;
-    }
-
     let designPrompt = inlinePrompt;
-    if (shouldEdit || !designPrompt) {
+    if (!designPrompt) {
+      const existingPrompt = selectedPersona.speech_voice_design_prompt?.trim() ?? "";
       const modalResult = await promptWithRawModal(personaButtonInteraction, locale, {
         modalCustomId: PROMPT_MODAL_ID,
-        modalTitleKey: shouldEdit
-          ? "commands.speech.voice_design.edit_modal_title"
+        modalTitleKey: existingPrompt
+          ? "commands.speech.voice_design.update_modal_title"
           : "commands.speech.voice_design.modal_title",
         components: [
           {
@@ -231,12 +163,12 @@ export async function execute(
       tomoriId: selectedPersona?.tomori_id ?? null,
       errorType: "CommandExecutionError",
       metadata: {
-        command: "speech voice-design",
+        command: "speech voice-design set",
         guildId: interaction.guild?.id ?? interaction.user.id,
         executorDiscordId: interaction.user.id,
       },
     };
-    await log.error("Error executing /speech voice-design", error as Error, context);
+    await log.error("Error executing /speech voice-design set", error as Error, context);
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",

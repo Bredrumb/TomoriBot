@@ -25,7 +25,7 @@ import { getMemoryLimits } from "../../utils/db/memoryLimits";
 import { sql } from "../../utils/db/client";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 import { safeDownload } from "@/utils/security/safeDownload";
-import { resolvePersonaAvatarPublicUrl, uploadPersonaAvatarToS3 } from "../../utils/storage/avatarStorage";
+import { resolvePersonaAvatarPublicUrl, uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage";
 
 /**
  * Maximum file size for imports (uses centralized constant)
@@ -1198,7 +1198,7 @@ export async function execute(
           files: [alterAvatarAttachment],
         });
 
-        avatarUrl = await uploadPersonaAvatarToS3({
+        avatarUrl = await uploadPersonaAvatarToStorage({
           personaId: newTomoriId,
           serverDiscId: serverDiscId,
           label: "alter import",

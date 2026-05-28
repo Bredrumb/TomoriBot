@@ -14,6 +14,7 @@ import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { invalidateUserCache } from "../../utils/cache/userCache";
 import { sendStandardEmbed } from "../../utils/discord/embedHelper";
 import { convertMentions } from "../../utils/text/contextBuilder";
+import { sanitizeUnknownTemplatePlaceholders } from "../../utils/text/stringHelper";
 import { isBlacklisted, loadUserRow, getPrivacyLevel, loadPersonalMemoriesForUserLineage } from "@/utils/db/dbRead";
 import { resolveUserTarget } from "@/utils/discord/targetResolver";
 
@@ -109,7 +110,8 @@ export class UpdateLongTermMemoryTool extends BaseTool {
     }
 
     const memoryId = Math.trunc(memoryIdArg);
-    const newContent = memoryContentArg.trim();
+    // Sanitize unknown {word} placeholders before saving (e.g. {bredrumb} → bredrumb)
+    const newContent = sanitizeUnknownTemplatePlaceholders(memoryContentArg.trim());
     const isDeleteRequested = newContent.length === 0;
 
     const contentValidation = isDeleteRequested ? { isValid: true } : validateMemoryContent(newContent);

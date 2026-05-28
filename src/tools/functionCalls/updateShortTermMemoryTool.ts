@@ -17,6 +17,7 @@
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { updateShortTermMemorySummary, MAX_SUMMARY_LENGTH } from "../../utils/cache/shortTermMemoryCache";
 import { log } from "../../utils/misc/logger";
+import { sanitizeUnknownTemplatePlaceholders } from "../../utils/text/stringHelper";
 
 export class UpdateShortTermMemoryTool extends BaseTool {
   name = "update_short_term_memory";
@@ -136,7 +137,8 @@ export class UpdateShortTermMemoryTool extends BaseTool {
       }
 
       // 3. Validate summary length (use configured max from env)
-      const trimmedSummary = summary.trim();
+      // Sanitize unknown {word} placeholders the LLM may have written (e.g. {bredrumb})
+      const trimmedSummary = sanitizeUnknownTemplatePlaceholders(summary.trim());
 
       if (trimmedSummary.length > MAX_SUMMARY_LENGTH) {
         log.info(

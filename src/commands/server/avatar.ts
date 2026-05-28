@@ -17,7 +17,7 @@ import { memoryGuard, reserveAvatarQuota } from "../../utils/security/rateLimite
 import { loadAllPersonasForServer } from "../../utils/db/dbRead";
 import { sql } from "../../utils/db/client";
 import { convertToPNG } from "../../utils/image/imageProcessor";
-import { deletePersonaAvatarFromS3, uploadPersonaAvatarToS3 } from "../../utils/storage/avatarStorage";
+import { deletePersonaAvatarFromStorage, uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage";
 import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 
 const PERSONA_SELECT_MODAL_ID = "server_avatar_persona_modal";
@@ -160,11 +160,15 @@ async function updateGuildAvatar(
 
     if (!response.ok) {
       const errorText = await response.text();
-      log.error(`Failed to update guild avatar: ${response.status} ${response.statusText} - ${errorText}`);
+      const context: ErrorContext = {
+        errorType: "DiscordApiError",
+        metadata: { guildId, httpStatus: response.status, body: errorText },
+      };
+      await log.error(`Failed to update guild avatar: ${response.status} ${response.statusText}`, undefined, context);
       return {
         success: false,
         error: "api_error",
-        details: `${response.status} ${response.statusText}`,
+        details: `${response.status} ${response.statusText}: ${errorText}`,
       };
     }
 
@@ -185,7 +189,10 @@ async function updateGuildAvatar(
     }
 
     // Handle other errors
-    log.error("Error updating guild avatar via Discord API", error);
+    await log.error("Error updating guild avatar via Discord API", error, {
+      errorType: "DiscordApiError",
+      metadata: { guildId },
+    });
     return {
       success: false,
       error: "api_error",
@@ -348,15 +355,17 @@ export async function execute(
             color: ColorCode.ERROR,
           });
         } else {
+          const baseMsg = localizer(locale, "commands.server.avatar.api_error_description");
           await replyInfoEmbed(responseInteraction, locale, {
             titleKey: "commands.server.avatar.api_error_title",
-            descriptionKey: "commands.server.avatar.api_error_description",
+            description: result.details ? `${baseMsg}\n-# ${result.details}` : baseMsg,
             color: ColorCode.ERROR,
+            descriptionVars: { details: result.details ?? "" },
           });
         }
       } else {
         if (selectedPersona.webhook_avatar_url) {
-          await deletePersonaAvatarFromS3(selectedPersona.webhook_avatar_url);
+          await deletePersonaAvatarFromStorage(selectedPersona.webhook_avatar_url);
         }
 
         await sql`
@@ -440,10 +449,12 @@ export async function execute(
           color: ColorCode.ERROR,
         });
       } else {
+        const baseMsg = localizer(locale, "commands.server.avatar.api_error_description");
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "commands.server.avatar.api_error_title",
-          descriptionKey: "commands.server.avatar.api_error_description",
+          description: updateResult.details ? `${baseMsg}\n-# ${updateResult.details}` : baseMsg,
           color: ColorCode.ERROR,
+          descriptionVars: { details: updateResult.details ?? "" },
         });
       }
     } else {
@@ -466,7 +477,7 @@ export async function execute(
         return;
       }
 
-      persistedAvatarUrl = await uploadPersonaAvatarToS3({
+      persistedAvatarUrl = await uploadPersonaAvatarToStorage({
         personaId: selectedPersona.tomori_id,
         serverDiscId: interaction.guild.id,
         label: "server avatar",
@@ -484,7 +495,7 @@ export async function execute(
 
       if (persistedAvatarUrl) {
         if (selectedPersona.webhook_avatar_url && selectedPersona.webhook_avatar_url !== persistedAvatarUrl) {
-          await deletePersonaAvatarFromS3(selectedPersona.webhook_avatar_url);
+          await deletePersonaAvatarFromStorage(selectedPersona.webhook_avatar_url);
         }
 
         await sql`

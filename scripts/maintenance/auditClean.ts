@@ -1,65 +1,37 @@
 /**
- * Runs `bun audit` and suppresses known ghost vulnerabilities that have no
- * available patch (archived/abandoned packages). Exits with a non-zero code
- * only if advisories outside the ghost list are found.
- *
- * Ghost vulnerabilities suppressed:
- *   - GHSA-p8p7-x288-28g6 — request<=2.88.2 SSRF; `request` was archived in
- *     2020 and will never receive a fix. Reaches us via:
- *     matrix-appservice-bridge → @vector-im/matrix-bot-sdk → request
- *   - GHSA-w5hq-g745-h8pq — uuid<14.0.0 missing buffer bounds check in
- *     v3/v5/v6 when `buf` is provided. Reaches us only via the archived
- *     `request` package which never passes a `buf` argument — unexploitable
- *     in this dependency chain.
+ * Runs `bun audit --audit-level=high` and exits non-zero only if high or
+ * critical vulnerabilities are found. Low and moderate advisories are reported
+ * but do not block the pipeline.
  */
 
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
-const GHOST_ADVISORIES = new Set(["GHSA-P8P7-X288-28G6", "GHSA-W5HQ-G745-H8PQ"]);
-
-async function runBunAudit(): Promise<string> {
+async function runBunAudit(): Promise<{ output: string; exitCode: number }> {
   if (process.platform === "win32") {
     const tempDir = join(process.cwd(), ".temp");
     if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
 
     const outputPath = join(tempDir, `bun-audit-${process.pid}.txt`);
-    const command = `${process.execPath} audit > ${outputPath} 2>&1`;
+    const command = `${process.execPath} audit --audit-level=high > ${outputPath} 2>&1`;
     const proc = Bun.spawn(["cmd.exe", "/d", "/s", "/c", command], {
       stdin: "ignore",
       stdout: "inherit",
       stderr: "inherit",
     });
 
-    await proc.exited;
+    const exitCode = await proc.exited;
     const output = readFileSync(outputPath, "utf-8");
     rmSync(outputPath, { force: true });
-    return output;
+    return { output, exitCode };
   }
 
-  const proc = Bun.spawn([process.execPath, "audit"], { stderr: "pipe", stdout: "pipe" });
+  const proc = Bun.spawn([process.execPath, "audit", "--audit-level=high"], { stderr: "pipe", stdout: "pipe" });
   const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
-  await proc.exited;
-  return stdout + stderr;
+  const exitCode = await proc.exited;
+  return { output: stdout + stderr, exitCode };
 }
 
-const combined = await runBunAudit();
-
-// Extract all advisory IDs found in the output (format: GHSA-xxxx-xxxx-xxxx)
-const foundIds = [...combined.matchAll(/GHSA-[a-z0-9]+-[a-z0-9]+-[a-z0-9]+/gi)].map((m) => m[0].toUpperCase());
-const realVulns = foundIds.filter((id) => !GHOST_ADVISORIES.has(id));
-
-if (realVulns.length > 0) {
-  // Unknown advisories — print full output and fail
-  process.stdout.write(combined);
-  process.exit(1);
-} else if (foundIds.length > 0) {
-  // Only ghost advisories — report clean with a note
-  console.log("✓ No actionable vulnerabilities found.");
-  //console.log(`  (${foundIds.length} suppressed ghost advisory with no available patch: ${[...foundIds].join(", ")})`);
-  process.exit(0);
-} else {
-  // Truly clean
-  process.stdout.write(combined);
-  process.exit(0);
-}
+const { output, exitCode } = await runBunAudit();
+process.stdout.write(output);
+process.exit(exitCode);

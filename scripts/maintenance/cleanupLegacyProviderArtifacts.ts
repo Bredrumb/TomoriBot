@@ -555,7 +555,11 @@ async function main(): Promise<void> {
   console.log(`- Cleared persona overrides: ${totals.clearedPersonaOverrides}`);
 }
 
-main().catch((error) => {
-  console.error("Legacy provider cleanup audit failed:", error);
-  process.exit(1);
-});
+main()
+  .catch((error) => {
+    console.error("Legacy provider cleanup audit failed:", error);
+    process.exitCode = 1;
+  })
+  .finally(() => {
+    process.exit(process.exitCode ?? 0);
+  });

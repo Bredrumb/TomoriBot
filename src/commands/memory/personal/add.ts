@@ -27,9 +27,13 @@ import { dedupeCaseInsensitive, getNonEmptyNumberedLines, readTxtUpload } from "
 const MODAL_CUSTOM_ID = "teach_personalmemory_add_modal";
 const MEMORY_INPUT_ID = "personal_memory_input";
 const MEMORY_FILE_UPLOAD_ID = "personal_memory_file_upload";
+const MEMORY_TAGS_INPUT_ID = "personal_memory_tags_input";
 const PERSONAL_SCOPE_VALUE = "persona";
 const GLOBAL_SCOPE_VALUE = "global";
 const GLOBAL_PERSONAL_MEMORY_LINEAGE_ID = 0;
+
+const MAX_TAGS = 5;
+const MAX_TAG_LENGTH = 32;
 
 // Get memory limits from environment variables
 const memoryLimits = getMemoryLimits();
@@ -163,6 +167,15 @@ export async function execute(
       maxValues: 1,
       required: false,
     });
+    modalComponents.push({
+      customId: MEMORY_TAGS_INPUT_ID,
+      labelKey: "Memory Tags",
+      descriptionKey: "Up to 5 comma-separated case-sensitive tags, use '/memory tagging set' to enable tagged memory",
+      placeholder: "mango,drinks,snacks",
+      style: TextInputStyle.Short,
+      required: false,
+      maxLength: MAX_TAGS * (MAX_TAG_LENGTH + 2),
+    });
 
     // 6. Prompt user with a modal with Component Type 18 support (Rule 10, 12, 19, 25)
     modalResult = await promptWithPaginatedModal(interaction, locale, {
@@ -184,6 +197,17 @@ export async function execute(
     // 9. Get input from modal
     const typedMemory = modalResult.values?.[MEMORY_INPUT_ID]?.trim() ?? "";
     const uploadedTextFile = modalResult.attachments?.[MEMORY_FILE_UPLOAD_ID];
+    const rawTagsInput = modalResult.values?.[MEMORY_TAGS_INPUT_ID]?.trim() ?? "";
+    const parsedTags = rawTagsInput
+      ? [
+          ...new Set(
+            rawTagsInput
+              .split(",")
+              .map((t) => t.trim().replace(/^["']+|["']+$/g, ""))
+              .filter((t) => t.length > 0 && t.length <= MAX_TAG_LENGTH),
+          ),
+        ].slice(0, MAX_TAGS)
+      : [];
     if (memoryScope === PERSONAL_SCOPE_VALUE) {
       const selectedPersonaId = modalResult.values?.persona_select;
       selectedPersona = allPersonas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
@@ -347,15 +371,20 @@ export async function execute(
     // 14. Insert lineage-scoped memory rows
     let insertSuccess = true;
     if (memoriesToAdd.length === 1) {
-      const insertedMemory = await addPersonalMemoryByTomori(targetUserId, targetLineageId, memoriesToAdd[0] ?? "");
+      const insertedMemory = await addPersonalMemoryByTomori(
+        targetUserId,
+        targetLineageId,
+        memoriesToAdd[0] ?? "",
+        parsedTags,
+      );
       insertSuccess = insertedMemory !== null;
     } else {
       try {
         await sql.transaction(async (tx) => {
           for (const memory of memoriesToAdd) {
             await tx`
-							INSERT INTO personal_memories (user_id, persona_lineage_id, content)
-							VALUES (${targetUserId}, ${targetLineageId}, ${memory})
+							INSERT INTO personal_memories (user_id, persona_lineage_id, content, tags)
+							VALUES (${targetUserId}, ${targetLineageId}, ${memory}, ${sql.array(parsedTags)})
 						`;
           }
         });

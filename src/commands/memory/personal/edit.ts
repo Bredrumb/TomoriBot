@@ -45,9 +45,13 @@ const SELECT_MODAL_CUSTOM_ID = "memory_personal_edit_select_modal";
 const EDIT_MODAL_CUSTOM_ID = "memory_personal_edit_value_modal";
 const MEMORY_SELECT_ID = "memory_select";
 const MEMORY_INPUT_ID = "personal_memory_input";
+const MEMORY_TAGS_INPUT_ID = "personal_memory_tags_input";
 const PERSONAL_SCOPE_VALUE = "persona";
 const GLOBAL_SCOPE_VALUE = "global";
 const GLOBAL_PERSONAL_MEMORY_LINEAGE_ID = 0;
+
+const MAX_TAGS = 5;
+const MAX_TAG_LENGTH = 32;
 
 const memoryLimits = getMemoryLimits();
 
@@ -58,6 +62,7 @@ function formatMemoryPreview(memory: string, maxLength = 120): string {
 async function performPersonalMemoryEdit(
   memoryToEdit: PersonalMemoryRow,
   newContent: string,
+  newTags: string[],
   userData: UserRow,
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
   locale: string,
@@ -65,7 +70,7 @@ async function performPersonalMemoryEdit(
 ): Promise<boolean> {
   const [updatedMemory] = await sql`
     UPDATE personal_memories
-    SET content = ${newContent}
+    SET content = ${newContent}, tags = ${sql.array(newTags)}
     WHERE personal_memory_id = ${memoryToEdit.personal_memory_id}
       AND user_id = ${userData.user_id}
     RETURNING *
@@ -366,6 +371,17 @@ export async function execute(
               maxLength: memoryLimits.maxMemoryLength,
               value: selectedMemory.content,
             },
+            {
+              customId: MEMORY_TAGS_INPUT_ID,
+              labelKey: "Memory Tags",
+              descriptionKey:
+                "Up to 5 comma-separated case-sensitive tags, use '/memory tagging set' to enable tagged memory",
+              placeholder: "mango,drinks,snacks",
+              style: TextInputStyle.Short,
+              required: false,
+              maxLength: MAX_TAGS * (MAX_TAG_LENGTH + 2),
+              value: (selectedMemory.tags ?? []).join(", "),
+            },
           ],
         });
 
@@ -383,6 +399,17 @@ export async function execute(
 
         const editModalInteraction = editModalResult.interaction;
         const editedMemory = editModalResult.values?.[MEMORY_INPUT_ID]?.trim() ?? "";
+        const rawTagsInput = editModalResult.values?.[MEMORY_TAGS_INPUT_ID]?.trim() ?? "";
+        const editedTags = rawTagsInput
+          ? [
+              ...new Set(
+                rawTagsInput
+                  .split(",")
+                  .map((t) => t.trim().replace(/^["']+|["']+$/g, ""))
+                  .filter((t) => t.length > 0 && t.length <= MAX_TAG_LENGTH),
+              ),
+            ].slice(0, MAX_TAGS)
+          : [];
         if (!editModalInteraction) {
           log.error("Personal memory edit modal unexpectedly missing interaction");
           return;
@@ -401,7 +428,10 @@ export async function execute(
           continue;
         }
 
-        if (editedMemory === selectedMemory.content.trim()) {
+        const existingTags = selectedMemory.tags ?? [];
+        const tagsUnchanged =
+          editedTags.length === existingTags.length && editedTags.every((t, i) => t === existingTags[i]);
+        if (editedMemory === selectedMemory.content.trim() && tagsUnchanged) {
           await replyInfoEmbed(editModalInteraction, locale, {
             titleKey: "commands.memory.personal.edit.no_changes_title",
             descriptionKey: "commands.memory.personal.edit.no_changes_description",
@@ -430,6 +460,7 @@ export async function execute(
         const editSucceeded = await performPersonalMemoryEdit(
           selectedMemory,
           editedMemory,
+          editedTags,
           userData,
           editModalInteraction,
           locale,
@@ -559,6 +590,17 @@ export async function execute(
           maxLength: memoryLimits.maxMemoryLength,
           value: selectedMemory.content,
         },
+        {
+          customId: MEMORY_TAGS_INPUT_ID,
+          labelKey: "Memory Tags",
+          descriptionKey:
+            "Up to 5 comma-separated case-sensitive tags, use '/memory tagging set' to enable tagged memory",
+          placeholder: "mango,drinks,snacks",
+          style: TextInputStyle.Short,
+          required: false,
+          maxLength: MAX_TAGS * (MAX_TAG_LENGTH + 2),
+          value: (selectedMemory.tags ?? []).join(", "),
+        },
       ],
     });
 
@@ -569,6 +611,17 @@ export async function execute(
 
     const editModalInteraction = editModalResult.interaction;
     const editedMemory = editModalResult.values?.[MEMORY_INPUT_ID]?.trim() ?? "";
+    const rawTagsInput = editModalResult.values?.[MEMORY_TAGS_INPUT_ID]?.trim() ?? "";
+    const editedTags = rawTagsInput
+      ? [
+          ...new Set(
+            rawTagsInput
+              .split(",")
+              .map((t) => t.trim())
+              .filter((t) => t.length > 0 && t.length <= MAX_TAG_LENGTH),
+          ),
+        ].slice(0, MAX_TAGS)
+      : [];
     if (!editModalInteraction) {
       log.error("Global personal memory edit modal unexpectedly missing interaction");
       return;
@@ -587,7 +640,10 @@ export async function execute(
       return;
     }
 
-    if (editedMemory === selectedMemory.content.trim()) {
+    const globalExistingTags = selectedMemory.tags ?? [];
+    const globalTagsUnchanged =
+      editedTags.length === globalExistingTags.length && editedTags.every((t, i) => t === globalExistingTags[i]);
+    if (editedMemory === selectedMemory.content.trim() && globalTagsUnchanged) {
       await replyInfoEmbed(editModalInteraction, locale, {
         titleKey: "commands.memory.personal.edit.no_changes_title",
         descriptionKey: "commands.memory.personal.edit.no_changes_description",
@@ -616,6 +672,7 @@ export async function execute(
     const editSucceeded = await performPersonalMemoryEdit(
       selectedMemory,
       editedMemory,
+      editedTags,
       userData,
       editModalInteraction,
       locale,

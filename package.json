@@ -1,6 +1,6 @@
 {
   "name": "tomoribot",
-  "version": "0.7.961",
+  "version": "0.7.96965",
   "description": "Customizable AI Assistant Discord Bot",
   "main": "./src/index.ts",
   "type": "module",
@@ -29,7 +29,7 @@
     "rotate-keys": "bun run scripts/maintenance/rotateAllKeys.ts",
     "check-keys": "bun run scripts/maintenance/checkKeys.ts",
     "setup:tokenizers": "bun run scripts/maintenance/downloadTokenizers.ts",
-    "//audit": "audit:clean suppresses GHSA-p8p7-x288-28g6 (request<=2.88.2 SSRF) — ghost vuln, no patch exists since 'request' was archived in 2020",
+    "//audit": "audit:clean runs bun audit --audit-level=high — only high/critical advisories block the pipeline",
     "audit:clean": "bun run scripts/maintenance/auditClean.ts",
     "validate:static": "bun run check && bun run lint && bun run check-locales && bun run check-schema && bun run audit:clean",
     "validate:lifecycle": "bun scripts/maintenance/validateLifecycle.ts",
@@ -42,6 +42,7 @@
     "@aws-sdk/client-s3": "^3.1011.0",
     "@aws-sdk/client-secrets-manager": "^3.1011.0",
     "@brave/brave-search-mcp-server": "2.0.80",
+    "@google-cloud/storage": "^7.19.0",
     "@google/genai": "^1.44.0",
     "@hono/node-server": "^1.19.13",
     "@modelcontextprotocol/sdk": "^1.28.0",
@@ -110,7 +111,10 @@
     "nedb": "npm:@seald-io/nedb@4.1.2",
     "tough-cookie": ">=4.1.3",
     "follow-redirects": ">=1.16.0",
-    "protobufjs": "7.5.5"
+    "protobufjs": ">=7.6.0",
+    "fast-xml-builder": ">=1.1.7",
+    "fast-uri": ">=3.1.2",
+    "sanitize-html": ">=2.17.4"
   },
   "patchedDependencies": {
     "@aws-sdk/xml-builder@3.972.11": "patches/@aws-sdk%2Fxml-builder@3.972.11.patch",

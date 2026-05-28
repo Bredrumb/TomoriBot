@@ -12,6 +12,8 @@ import { log } from "@/utils/misc/logger";
  * Optional Secrets:
  * - CRYPTO_SECRET_V1, V2, etc. for key rotation support
  * - DISCORD_WEBHOOK_URL for logging webhooks
+ * - AVATAR_GCS_BUCKET / VOICE_SAMPLE_GCS_* for GCP Cloud Storage (GCP deployments)
+ * - AVATAR_S3_BUCKET / CHARREF_S3_* for AWS S3 (AWS deployments)
  */
 export interface TomoriSecrets {
   DISCORD_TOKEN: string;
@@ -25,10 +27,16 @@ export interface TomoriSecrets {
   CRYPTO_SECRET_V2?: string; // Optional: Key rotation support
   CRYPTO_SECRET_V3?: string; // Optional: Key rotation support
   DISCORD_WEBHOOK_URL?: string; // Optional: Error logging webhook
+  // GCP Cloud Storage (set when deployed to GCP; injected as env vars by Cloud Run terraform)
+  AVATAR_GCS_BUCKET?: string;
+  AVATAR_PUBLIC_BASE_URL?: string;
+  VOICE_SAMPLE_GCS_BUCKET?: string;
+  VOICE_SAMPLE_GCS_PREFIX?: string;
+  VOICE_SAMPLE_PUBLIC_BASE_URL?: string;
+  // AWS S3 storage (set when deployed to AWS)
   AVATAR_S3_BUCKET?: string;
   AVATAR_S3_REGION?: string;
   AVATAR_S3_PREFIX?: string;
-  AVATAR_PUBLIC_BASE_URL?: string;
   CHARREF_S3_BUCKET?: string;
   CHARREF_S3_REGION?: string;
   CHARREF_S3_PREFIX?: string;
@@ -41,25 +49,23 @@ export interface TomoriSecrets {
   MATRIX_HS_TOKEN?: string; // Homeserver token (hs_token) — homeserver sends this to verify its identity
   MATRIX_APPSERVICE_PUBLIC_URL?: string; // Optional callback URL used in appservice registration for remote homeservers
   TOPGG_TOKEN?: string; // Optional: Top.gg API token for posting server stats
-  CONTAINER_MEMORY_LIMIT_MB?: string; // Optional: AWS instance memory limit in MB (default: 1024)
+  CONTAINER_MEMORY_LIMIT_MB?: string; // Optional: Container memory limit in MB (default: 1024)
   [key: string]: string | undefined; // Allow dynamic CRYPTO_SECRET_V* keys
 }
 
 /**
- * Fetches application secrets from AWS Secrets Manager (production) or process.env (development).
+ * Fetches application secrets from the appropriate backend based on environment.
  *
- * Environment-Based Behavior:
- * - Development (RUN_ENV !== 'production' OR RUN_ENV not set):
- *   - Reads secrets from process.env (loaded via dotenv)
- *   - No AWS API calls
- *   - Safe default for local users without AWS setup
+ * Resolution order:
+ * 1. Development / test-production → process.env (dotenv)
+ * 2. Production + GCP_SECRET_FILE set → mounted GCP Secret Manager volume file (JSON)
+ * 3. Production (fallback) → AWS Secrets Manager API call
  *
- * - Production (RUN_ENV === 'production'):
- *   - Fetches from AWS Secrets Manager
- *   - Region: Configurable via AWS_REGION (defaults to us-east-1)
- *   - Secret name: "tomoribot/production"
- *   - Parses JSON string and validates required fields
- *   - Auto-detects CRYPTO_SECRET_V* key versions
+ * GCP file path:
+ * - Cloud Run mounts the secret at /run/secrets/<secret_id> (configured in cloud-run.tf)
+ * - GCP_SECRET_FILE env var points to that path
+ * - File content is identical JSON shape to the AWS secret string
+ * - No SDK call needed — plain fs.readFileSync
  *
  * AWS Configuration:
  * - AWS_REGION environment variable (defaults to "us-east-1")
@@ -72,11 +78,11 @@ export interface TomoriSecrets {
  *
  * Error Handling:
  * - Missing required fields → throws error with missing key list
+ * - File read / JSON parse errors → descriptive error message
  * - AWS network/permission errors → descriptive error message
- * - Invalid JSON → parse error with guidance
  *
  * @returns {Promise<TomoriSecrets>} Object containing all application secrets
- * @throws {Error} If required secrets are missing or AWS fetch fails
+ * @throws {Error} If required secrets are missing or the secret backend fails
  *
  * @example
  * // In src/index.ts
@@ -106,80 +112,134 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
     };
 
     // Auto-detect key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
-    if (process.env.CRYPTO_SECRET_V1) {
-      secrets.CRYPTO_SECRET_V1 = process.env.CRYPTO_SECRET_V1;
-    }
-    if (process.env.CRYPTO_SECRET_V2) {
-      secrets.CRYPTO_SECRET_V2 = process.env.CRYPTO_SECRET_V2;
-    }
-    if (process.env.CRYPTO_SECRET_V3) {
-      secrets.CRYPTO_SECRET_V3 = process.env.CRYPTO_SECRET_V3;
+    for (const key of ["CRYPTO_SECRET_V1", "CRYPTO_SECRET_V2", "CRYPTO_SECRET_V3"]) {
+      if (process.env[key]) {
+        secrets[key] = process.env[key];
+      }
     }
 
-    // Optional webhook URL
-    if (process.env.DISCORD_WEBHOOK_URL) {
-      secrets.DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
-    }
+    // Optional fields — read from process.env matching the same keys as the JSON secret blob
+    const optionalEnvFields: (keyof TomoriSecrets)[] = [
+      "DISCORD_WEBHOOK_URL",
+      "AVATAR_GCS_BUCKET",
+      "AVATAR_PUBLIC_BASE_URL",
+      "VOICE_SAMPLE_GCS_BUCKET",
+      "VOICE_SAMPLE_GCS_PREFIX",
+      "VOICE_SAMPLE_PUBLIC_BASE_URL",
+      "AVATAR_S3_BUCKET",
+      "AVATAR_S3_REGION",
+      "AVATAR_S3_PREFIX",
+      "CHARREF_S3_BUCKET",
+      "CHARREF_S3_REGION",
+      "CHARREF_S3_PREFIX",
+      "CHARREF_PUBLIC_BASE_URL",
+      "MATRIX_HOMESERVER_URL",
+      "MATRIX_ACCESS_TOKEN",
+      "MATRIX_BOT_USER_ID",
+      "MATRIX_SERVER_NAME",
+      "MATRIX_HS_TOKEN",
+      "MATRIX_APPSERVICE_PUBLIC_URL",
+      "TOPGG_TOKEN",
+      "CONTAINER_MEMORY_LIMIT_MB",
+    ];
 
-    if (process.env.AVATAR_S3_BUCKET) {
-      secrets.AVATAR_S3_BUCKET = process.env.AVATAR_S3_BUCKET;
-    }
-    if (process.env.AVATAR_S3_REGION) {
-      secrets.AVATAR_S3_REGION = process.env.AVATAR_S3_REGION;
-    }
-    if (process.env.AVATAR_S3_PREFIX) {
-      secrets.AVATAR_S3_PREFIX = process.env.AVATAR_S3_PREFIX;
-    }
-    if (process.env.AVATAR_PUBLIC_BASE_URL) {
-      secrets.AVATAR_PUBLIC_BASE_URL = process.env.AVATAR_PUBLIC_BASE_URL;
-    }
-    if (process.env.CHARREF_S3_BUCKET) {
-      secrets.CHARREF_S3_BUCKET = process.env.CHARREF_S3_BUCKET;
-    }
-    if (process.env.CHARREF_S3_REGION) {
-      secrets.CHARREF_S3_REGION = process.env.CHARREF_S3_REGION;
-    }
-    if (process.env.CHARREF_S3_PREFIX) {
-      secrets.CHARREF_S3_PREFIX = process.env.CHARREF_S3_PREFIX;
-    }
-    if (process.env.CHARREF_PUBLIC_BASE_URL) {
-      secrets.CHARREF_PUBLIC_BASE_URL = process.env.CHARREF_PUBLIC_BASE_URL;
-    }
-
-    // Optional Matrix Appservice Bridge credentials
-    if (process.env.MATRIX_HOMESERVER_URL) {
-      secrets.MATRIX_HOMESERVER_URL = process.env.MATRIX_HOMESERVER_URL;
-    }
-    if (process.env.MATRIX_ACCESS_TOKEN) {
-      secrets.MATRIX_ACCESS_TOKEN = process.env.MATRIX_ACCESS_TOKEN;
-    }
-    if (process.env.MATRIX_BOT_USER_ID) {
-      secrets.MATRIX_BOT_USER_ID = process.env.MATRIX_BOT_USER_ID;
-    }
-    if (process.env.MATRIX_SERVER_NAME) {
-      secrets.MATRIX_SERVER_NAME = process.env.MATRIX_SERVER_NAME;
-    }
-    if (process.env.MATRIX_HS_TOKEN) {
-      secrets.MATRIX_HS_TOKEN = process.env.MATRIX_HS_TOKEN;
-    }
-    if (process.env.MATRIX_APPSERVICE_PUBLIC_URL) {
-      secrets.MATRIX_APPSERVICE_PUBLIC_URL = process.env.MATRIX_APPSERVICE_PUBLIC_URL;
-    }
-
-    // Optional Top.gg integration token
-    if (process.env.TOPGG_TOKEN) {
-      secrets.TOPGG_TOKEN = process.env.TOPGG_TOKEN;
-    }
-
-    // Optional infrastructure config
-    if (process.env.CONTAINER_MEMORY_LIMIT_MB) {
-      secrets.CONTAINER_MEMORY_LIMIT_MB = process.env.CONTAINER_MEMORY_LIMIT_MB;
+    for (const field of optionalEnvFields) {
+      if (process.env[field]) {
+        secrets[field] = process.env[field];
+      }
     }
 
     // Validate required fields
     validateRequiredSecrets(secrets);
 
     return secrets;
+  }
+
+  // Production + GCP: Read from the Secret Manager volume file mounted by Cloud Run
+  const gcpSecretFile = process.env.GCP_SECRET_FILE;
+  if (gcpSecretFile) {
+    log.info(`Reading secrets from GCP Secret Manager file: ${gcpSecretFile}`);
+    try {
+      // 1. Read and parse the JSON blob written by Cloud Run's secret volume mount
+      const fileContent = await Bun.file(gcpSecretFile).text();
+      if (!fileContent) {
+        throw new Error(`GCP secret file "${gcpSecretFile}" is empty. Ensure the secret version is populated.`);
+      }
+
+      const rawSecrets = JSON.parse(fileContent);
+
+      // 2. Build TomoriSecrets object from the parsed JSON
+      const secrets: TomoriSecrets = {
+        DISCORD_TOKEN: rawSecrets.DISCORD_TOKEN,
+        POSTGRES_HOST: rawSecrets.POSTGRES_HOST,
+        POSTGRES_PORT: rawSecrets.POSTGRES_PORT,
+        POSTGRES_USER: rawSecrets.POSTGRES_USER,
+        POSTGRES_PASSWORD: rawSecrets.POSTGRES_PASSWORD,
+        POSTGRES_DB: rawSecrets.POSTGRES_DB,
+        CRYPTO_SECRET: rawSecrets.CRYPTO_SECRET,
+      };
+
+      // 3. Auto-detect key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
+      for (const key of Object.keys(rawSecrets)) {
+        if (key.startsWith("CRYPTO_SECRET_V")) {
+          secrets[key] = rawSecrets[key];
+          log.info(`Detected key version: ${key}`);
+        }
+      }
+
+      // 4. Optional fields — same shape as AWS secret blob
+      const optionalFields: (keyof TomoriSecrets)[] = [
+        "DISCORD_WEBHOOK_URL",
+        "AVATAR_GCS_BUCKET",
+        "AVATAR_PUBLIC_BASE_URL",
+        "VOICE_SAMPLE_GCS_BUCKET",
+        "VOICE_SAMPLE_GCS_PREFIX",
+        "VOICE_SAMPLE_PUBLIC_BASE_URL",
+        "AVATAR_S3_BUCKET",
+        "AVATAR_S3_REGION",
+        "AVATAR_S3_PREFIX",
+        "CHARREF_S3_BUCKET",
+        "CHARREF_S3_REGION",
+        "CHARREF_S3_PREFIX",
+        "CHARREF_PUBLIC_BASE_URL",
+        "MATRIX_HOMESERVER_URL",
+        "MATRIX_ACCESS_TOKEN",
+        "MATRIX_BOT_USER_ID",
+        "MATRIX_SERVER_NAME",
+        "MATRIX_HS_TOKEN",
+        "MATRIX_APPSERVICE_PUBLIC_URL",
+        "TOPGG_TOKEN",
+        "CONTAINER_MEMORY_LIMIT_MB",
+      ];
+
+      for (const field of optionalFields) {
+        if (rawSecrets[field]) {
+          secrets[field] = rawSecrets[field];
+        }
+      }
+
+      // 5. Validate required fields
+      validateRequiredSecrets(secrets);
+
+      log.info("Successfully loaded secrets from GCP Secret Manager file");
+
+      return secrets;
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw new Error(
+          `GCP secret file "${gcpSecretFile}" contains invalid JSON. ` +
+            `Re-populate the secret with a valid JSON object.`,
+        );
+      }
+
+      // Re-throw with context for file-not-found and other I/O errors
+      log.error(
+        "Failed to read secrets from GCP Secret Manager file",
+        error instanceof Error ? error : new Error(String(error)),
+      );
+
+      throw error;
+    }
   }
 
   // Production mode: Fetch from AWS Secrets Manager
@@ -224,64 +284,35 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       }
     }
 
-    // 6. Optional webhook URL
-    if (rawSecrets.DISCORD_WEBHOOK_URL) {
-      secrets.DISCORD_WEBHOOK_URL = rawSecrets.DISCORD_WEBHOOK_URL;
-    }
+    // 6. Optional fields
+    const optionalFields: (keyof TomoriSecrets)[] = [
+      "DISCORD_WEBHOOK_URL",
+      "AVATAR_GCS_BUCKET",
+      "AVATAR_PUBLIC_BASE_URL",
+      "VOICE_SAMPLE_GCS_BUCKET",
+      "VOICE_SAMPLE_GCS_PREFIX",
+      "VOICE_SAMPLE_PUBLIC_BASE_URL",
+      "AVATAR_S3_BUCKET",
+      "AVATAR_S3_REGION",
+      "AVATAR_S3_PREFIX",
+      "CHARREF_S3_BUCKET",
+      "CHARREF_S3_REGION",
+      "CHARREF_S3_PREFIX",
+      "CHARREF_PUBLIC_BASE_URL",
+      "MATRIX_HOMESERVER_URL",
+      "MATRIX_ACCESS_TOKEN",
+      "MATRIX_BOT_USER_ID",
+      "MATRIX_SERVER_NAME",
+      "MATRIX_HS_TOKEN",
+      "MATRIX_APPSERVICE_PUBLIC_URL",
+      "TOPGG_TOKEN",
+      "CONTAINER_MEMORY_LIMIT_MB",
+    ];
 
-    if (rawSecrets.AVATAR_S3_BUCKET) {
-      secrets.AVATAR_S3_BUCKET = rawSecrets.AVATAR_S3_BUCKET;
-    }
-    if (rawSecrets.AVATAR_S3_REGION) {
-      secrets.AVATAR_S3_REGION = rawSecrets.AVATAR_S3_REGION;
-    }
-    if (rawSecrets.AVATAR_S3_PREFIX) {
-      secrets.AVATAR_S3_PREFIX = rawSecrets.AVATAR_S3_PREFIX;
-    }
-    if (rawSecrets.AVATAR_PUBLIC_BASE_URL) {
-      secrets.AVATAR_PUBLIC_BASE_URL = rawSecrets.AVATAR_PUBLIC_BASE_URL;
-    }
-    if (rawSecrets.CHARREF_S3_BUCKET) {
-      secrets.CHARREF_S3_BUCKET = rawSecrets.CHARREF_S3_BUCKET;
-    }
-    if (rawSecrets.CHARREF_S3_REGION) {
-      secrets.CHARREF_S3_REGION = rawSecrets.CHARREF_S3_REGION;
-    }
-    if (rawSecrets.CHARREF_S3_PREFIX) {
-      secrets.CHARREF_S3_PREFIX = rawSecrets.CHARREF_S3_PREFIX;
-    }
-    if (rawSecrets.CHARREF_PUBLIC_BASE_URL) {
-      secrets.CHARREF_PUBLIC_BASE_URL = rawSecrets.CHARREF_PUBLIC_BASE_URL;
-    }
-
-    // Optional Matrix Appservice Bridge credentials
-    if (rawSecrets.MATRIX_HOMESERVER_URL) {
-      secrets.MATRIX_HOMESERVER_URL = rawSecrets.MATRIX_HOMESERVER_URL;
-    }
-    if (rawSecrets.MATRIX_ACCESS_TOKEN) {
-      secrets.MATRIX_ACCESS_TOKEN = rawSecrets.MATRIX_ACCESS_TOKEN;
-    }
-    if (rawSecrets.MATRIX_BOT_USER_ID) {
-      secrets.MATRIX_BOT_USER_ID = rawSecrets.MATRIX_BOT_USER_ID;
-    }
-    if (rawSecrets.MATRIX_SERVER_NAME) {
-      secrets.MATRIX_SERVER_NAME = rawSecrets.MATRIX_SERVER_NAME;
-    }
-    if (rawSecrets.MATRIX_HS_TOKEN) {
-      secrets.MATRIX_HS_TOKEN = rawSecrets.MATRIX_HS_TOKEN;
-    }
-    if (rawSecrets.MATRIX_APPSERVICE_PUBLIC_URL) {
-      secrets.MATRIX_APPSERVICE_PUBLIC_URL = rawSecrets.MATRIX_APPSERVICE_PUBLIC_URL;
-    }
-
-    // Optional Top.gg integration token
-    if (rawSecrets.TOPGG_TOKEN) {
-      secrets.TOPGG_TOKEN = rawSecrets.TOPGG_TOKEN;
-    }
-
-    // Optional infrastructure config
-    if (rawSecrets.CONTAINER_MEMORY_LIMIT_MB) {
-      secrets.CONTAINER_MEMORY_LIMIT_MB = rawSecrets.CONTAINER_MEMORY_LIMIT_MB;
+    for (const field of optionalFields) {
+      if (rawSecrets[field]) {
+        secrets[field] = rawSecrets[field];
+      }
     }
 
     // 7. Validate required fields

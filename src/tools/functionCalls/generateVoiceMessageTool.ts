@@ -391,7 +391,7 @@ export class GenerateVoiceMessageTool extends BaseTool {
       return {
         success: false,
         error:
-          "The active speech endpoint is configured for VoiceDesign, but the active persona does not have a voice design prompt yet. A server manager can add one with /speech voice-design.",
+          "The active speech endpoint is configured for VoiceDesign, but the active persona does not have a voice design prompt yet. A server manager can add one with /speech voice-design set.",
       };
     }
 
@@ -399,7 +399,7 @@ export class GenerateVoiceMessageTool extends BaseTool {
       return {
         success: false,
         error:
-          "No voice is configured for the active persona. A server manager can set one with /speech voice-assign or /speech voice-design.",
+          "No voice is configured for the active persona. A server manager can set one with /speech voice-assign or /speech voice-design set.",
       };
     }
 
@@ -412,11 +412,7 @@ export class GenerateVoiceMessageTool extends BaseTool {
     // design prompts to older clone-only wrappers that ignore or reject instruct.
     // Auto endpoints are for mixed deployments: clone personas keep using their
     // stored samples, while VoiceDesign personas send `instruct` to the same URL.
-    if (
-      voiceDesignPrompt &&
-      speechEndpoint?.endpoint.api_style === "tts-clone" &&
-      shouldUseVoiceDesign
-    ) {
+    if (voiceDesignPrompt && speechEndpoint?.endpoint.api_style === "tts-clone" && shouldUseVoiceDesign) {
       const designResult = await synthesizeSpeechViaTtsVoiceDesign({
         endpoint: speechEndpoint.endpoint,
         script,
@@ -438,7 +434,9 @@ export class GenerateVoiceMessageTool extends BaseTool {
       const voiceMeta = await generateVoiceMessageMetadata(designResult.audioBuffer, mimeType);
 
       if (!voiceMeta) {
-        log.warn("[VoiceWaveform] TTS voice-design waveform generation returned null — falling back to plain attachment");
+        log.warn(
+          "[VoiceWaveform] TTS voice-design waveform generation returned null — falling back to plain attachment",
+        );
       }
 
       const sentMessageId = await this.sendVoiceOrFallback({
