@@ -2,7 +2,13 @@ import { log } from "@/utils/misc/logger";
 
 export const PERSONAL_DELIBERATE_TOOL_MODES = ["off", "follow", "on"] as const;
 export type PersonalDeliberateToolMode = (typeof PERSONAL_DELIBERATE_TOOL_MODES)[number];
-export type DeliberateToolTriggerMap = Record<string, string[]>;
+export type DeliberateToolTrigger =
+  | string
+  | {
+      type: "literal" | "regex";
+      value: string;
+    };
+export type DeliberateToolTriggerMap = Record<string, DeliberateToolTrigger[]>;
 
 export type DeliberateToolIntentMatchSource = "built-in" | "custom" | "follow-up";
 
@@ -51,7 +57,7 @@ function hasReminderCreationIntent(text: string): boolean {
 const TOOL_INTENT_PATTERNS: RegExp[] = [
   /\b(search|web\s*search|look\s+up|browse|google|fetch|read\s+this\s+(?:url|link|page)|open\s+this\s+(?:url|link|page))\b/i,
   /\b(latest|today|current|currently|up[- ]?to[- ]?date|news|recent)\b/i,
-  /\b(remember|save\s+(?:this|that|it)|forget|delete\s+(?:that\s+)?memory|update\s+(?:your\s+)?memory|store\s+(?:this|that|it))\b/i,
+  /\b(remember|save\s+(?:this|that|it)|forget|(?:delete|update)\s+(?:(?:this|that|your|my|the)\s+)?memory|store\s+(?:this|that|it))\b/i,
   /\b(look\s+at|analy[sz]e|inspect|describe|what(?:'s| is)\s+in)\b.*\b(image|picture|photo|pic|img|pfp|avatar|profile\s+picture|gif|video|youtube|attachment)\b/i,
   /\b(image|picture|photo|pic|img|pfp|avatar|profile\s+picture|gif|video|youtube|attachment)\b.*\b(look\s+at|analy[sz]e|inspect|describe|summari[sz]e)\b/i,
   /\b(generate|create|make|draw)\b.*\b(image|picture|photo|pic|img|pfp|video|voice|audio|speech|thread)\b/i,
@@ -204,6 +210,10 @@ export function normalizeDeliberateToolTrigger(trigger: string | null | undefine
   return (trigger ?? "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+export function normalizeDeliberateToolRegexTrigger(trigger: string | null | undefined): string {
+  return (trigger ?? "").trim();
+}
+
 function literalTriggerMatches(text: string, trigger: string): boolean {
   const normalizedTrigger = normalizeDeliberateToolTrigger(trigger);
   if (!normalizedTrigger) return false;
@@ -214,6 +224,22 @@ function literalTriggerMatches(text: string, trigger: string): boolean {
     ? new RegExp(`(^|[^\\p{L}\\p{N}_-])${escaped}($|[^\\p{L}\\p{N}_-])`, "iu")
     : new RegExp(escaped, "iu");
   return pattern.test(text);
+}
+
+function regexTriggerMatches(text: string, trigger: string): boolean {
+  const normalizedTrigger = normalizeDeliberateToolRegexTrigger(trigger);
+  if (!normalizedTrigger) return false;
+
+  try {
+    return new RegExp(normalizedTrigger, "iu").test(text);
+  } catch (error) {
+    log.warn(`Invalid custom deliberate tool regex trigger ignored: ${normalizedTrigger}`, error);
+    return false;
+  }
+}
+
+function getCustomTriggerValue(trigger: DeliberateToolTrigger): string {
+  return typeof trigger === "string" ? trigger : trigger.value;
 }
 
 export function getDeliberateToolTriggerTargetLabel(targetValue: string): string {
@@ -305,9 +331,18 @@ function getCustomDeliberateToolIntentResult(
     if (toolNames.length === 0 || !Array.isArray(triggers)) continue;
 
     for (const trigger of triggers) {
-      const normalizedTrigger = normalizeDeliberateToolTrigger(trigger);
-      if (!normalizedTrigger || !literalTriggerMatches(text, normalizedTrigger)) continue;
-      addToolMatches(allowedToolNames, matches, toolNames, normalizedTrigger, "custom");
+      if (typeof trigger === "string" || trigger.type === "literal") {
+        const normalizedTrigger = normalizeDeliberateToolTrigger(getCustomTriggerValue(trigger));
+        if (!normalizedTrigger || !literalTriggerMatches(text, normalizedTrigger)) continue;
+        addToolMatches(allowedToolNames, matches, toolNames, normalizedTrigger, "custom");
+        continue;
+      }
+
+      if (trigger.type === "regex") {
+        const normalizedTrigger = normalizeDeliberateToolRegexTrigger(trigger.value);
+        if (!normalizedTrigger || !regexTriggerMatches(text, normalizedTrigger)) continue;
+        addToolMatches(allowedToolNames, matches, toolNames, `/${normalizedTrigger}/`, "custom");
+      }
     }
   }
 

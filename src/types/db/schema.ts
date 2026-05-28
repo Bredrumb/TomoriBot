@@ -390,7 +390,15 @@ function normalizeStringArray(value: unknown): string[] {
   return source.filter((item): item is string => typeof item === "string" && item.length > 0);
 }
 
-function normalizeDeliberateToolTriggers(value: unknown): Record<string, string[]> {
+const deliberateToolTriggerEntrySchema = z.union([
+  z.string(),
+  z.object({
+    type: z.enum(["literal", "regex"]),
+    value: z.string(),
+  }),
+]);
+
+function normalizeDeliberateToolTriggers(value: unknown): Record<string, Array<string | { type: "literal" | "regex"; value: string }>> {
   let source: unknown = value;
   if (typeof source === "string") {
     try {
@@ -404,17 +412,37 @@ function normalizeDeliberateToolTriggers(value: unknown): Record<string, string[
     return {};
   }
 
-  const normalized: Record<string, string[]> = {};
+  const normalized: Record<string, Array<string | { type: "literal" | "regex"; value: string }>> = {};
   for (const [target, triggers] of Object.entries(source)) {
     if (!Array.isArray(triggers)) continue;
-    const normalizedTriggers = Array.from(
-      new Set(
-        triggers
-          .filter((trigger): trigger is string => typeof trigger === "string")
-          .map((trigger) => trigger.replace(/\s+/g, " ").trim().toLowerCase())
-          .filter((trigger) => trigger.length > 0),
-      ),
-    );
+    const seen = new Set<string>();
+    const normalizedTriggers: Array<string | { type: "literal" | "regex"; value: string }> = [];
+    for (const trigger of triggers) {
+      if (typeof trigger === "string") {
+        const normalizedTrigger = trigger.replace(/\s+/g, " ").trim().toLowerCase();
+        const key = `literal:${normalizedTrigger}`;
+        if (normalizedTrigger.length > 0 && !seen.has(key)) {
+          seen.add(key);
+          normalizedTriggers.push(normalizedTrigger);
+        }
+        continue;
+      }
+
+      if (!trigger || typeof trigger !== "object" || Array.isArray(trigger)) continue;
+      const triggerEntry = trigger as { type?: unknown; value?: unknown };
+      if (triggerEntry.type !== "literal" && triggerEntry.type !== "regex") continue;
+      if (typeof triggerEntry.value !== "string") continue;
+      const normalizedValue =
+        triggerEntry.type === "literal"
+          ? triggerEntry.value.replace(/\s+/g, " ").trim().toLowerCase()
+          : triggerEntry.value.trim();
+      const key = `${triggerEntry.type}:${normalizedValue}`;
+      if (normalizedValue.length > 0 && !seen.has(key)) {
+        seen.add(key);
+        normalizedTriggers.push({ type: triggerEntry.type, value: normalizedValue });
+      }
+    }
+
     if (normalizedTriggers.length > 0) {
       normalized[target] = normalizedTriggers;
     }
@@ -506,7 +534,7 @@ export const tomoriConfigSchema = z.object({
   deliberate_tool_context_turns: z.number().int().min(0).max(10).nullable().default(null), // Added May 2026 - Successful tools remain available for this many following channel turns; NULL uses env default
   deliberate_tool_triggers: z.preprocess(
     (value) => normalizeDeliberateToolTriggers(value),
-    z.record(z.string(), z.array(z.string())).default({}),
+    z.record(z.string(), z.array(deliberateToolTriggerEntrySchema)).default({}),
   ), // Added May 2026 - Server-defined deliberate tool trigger phrases by tool target
   cascade_limit: z.number().int().min(0).max(10).default(3), // Added January 2026, renamed April 2026 - Total additional triggers allowed after the first
   send_message_limit: z.number().int().min(0).max(40).default(0), // Added March 2026 - Max Discord messages per response (0 = unlimited, capped by MAX_FLUSH_COUNT)
