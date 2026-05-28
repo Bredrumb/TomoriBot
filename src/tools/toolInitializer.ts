@@ -17,7 +17,7 @@ import type { ErrorContext } from "../types/db/schema";
  * Auto-discovers tools from:
  * - src/tools/functionCalls/ - Built-in function call tools
  * - src/tools/webSearch/      - Unified web_search tool (BraveEngine + DDG/Felo chain)
- * - src/tools/fetchUrl/       - Unified fetch_url tool (internal MCP fetch engine)
+ * - src/tools/fetchUrl/       - Unified fetch_url tool (hidden engine chain)
  *
  * Note: the previously LLM-visible `BraveXxxSearchTool` classes are now demoted
  * to `restAPIs/brave/internal/` and consumed only by `webSearch/braveEngine.ts`.

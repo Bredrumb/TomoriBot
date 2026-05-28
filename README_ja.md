@@ -528,6 +528,16 @@ docker compose up
 
 エンジンごとのタイムアウトとヘルスプローブのキャッシュ時間は `WEB_SEARCH_TIMEOUT_MS` と `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` で調整可能（`.env.optional.example` 参照）。
 
+#### セルフホスト型URL取得レンダリング（Crawl4AIサイドカー）
+
+`fetch_url` ツールは、任意でCrawl4AIを先に試し、その後に組み込みMCP fetchエンジンへフォールバックできます。JavaScriptが多いページをブラウザレンダリング済みMarkdownとして取得したい場合に使います。
+
+1. **Docker Composeプロファイル。** `docker compose --profile fetch-crawl4ai up` でサイドカーを起動し、botコンテナ用に `.env` へ `CRAWL4AI_BASE_URL=http://crawl4ai:11235/` を設定します。
+2. **スタンドアロンDocker（`bun run dev` 利用時）。** `servers/crawl4ai/README.md` の `docker run` スニペットを参照し、シェルで `CRAWL4AI_BASE_URL=http://localhost:11235/` を設定します。
+3. **Crawl4AI なし。** `CRAWL4AI_BASE_URL` を未設定のままにすると、`fetch_url` は組み込み `mcp_fetch` のみを使用します。
+
+任意設定: `FETCH_URL_ENGINE_ORDER`, `FETCH_URL_TIMEOUT_MS`, `FETCH_URL_HEALTHCHECK_CACHE_SEC`, `CRAWL4AI_TOKEN`, `FETCH_URL_FILTER_MODE`。
+
 #### Grafanaでのモニタリング（オプション）
 
 GrafanaダッシュボードでTomoriBotインスタンスをモニタリングするには：

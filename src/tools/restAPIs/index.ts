@@ -61,3 +61,23 @@ export type {
   SearxngRequestConfig,
   SearxngApiResult,
 } from "./searxng/types";
+
+// Crawl4AI URL-fetch sidecar. Consumed only by `fetchUrl/crawl4aiEngine.ts`.
+export {
+  crawl4aiMarkdown,
+  getCrawl4aiFilterMode,
+  getCrawl4aiHealth,
+  isCrawl4aiAvailable,
+  resetCrawl4aiHealthCache,
+} from "./crawl4ai/crawl4aiService";
+
+export { crawl4ai_fetch_url } from "./crawl4ai/toolImplementations";
+
+export type {
+  Crawl4aiApiResult,
+  Crawl4aiFilterMode,
+  Crawl4aiHealthResponse,
+  Crawl4aiMarkdownRequest,
+  Crawl4aiMarkdownResponse,
+  Crawl4aiRequestConfig,
+} from "./crawl4ai/types";

@@ -47,7 +47,7 @@ If you don't have the workstation to host your own models, TomoriBot supports a 
 
 The LLM sees a single unified `web_search(query, category)` tool. A dispatcher routes each call through an engine chain (Brave → SearXNG → DuckDuckGo → Felo) and returns the first successful result. Individual engines are no longer LLM-visible.
 
-For URL reading, the LLM sees `fetch_url(url, max_length?, start_index?, raw?)`. In the current Phase 1 refactor it routes through internal `mcp_fetch` only and is unavailable on NovelAI.
+For URL reading, the LLM sees `fetch_url(url, max_length?, start_index?, raw?)`. It can route through optional Crawl4AI first, then always falls back to internal `mcp_fetch`. It is unavailable on NovelAI.
 
 | Engine | Categories | Integration | Notes |
 |----------|-------------|-----|-------|
@@ -55,3 +55,5 @@ For URL reading, the LLM sees `fetch_url(url, max_length?, start_index?, raw?)`.
 | **SearXNG** | text / image / video / news | REST API (self-hosted sidecar) | Activates when `SEARXNG_BASE_URL` is set and the sidecar's `/healthz` is reachable. Self-hosted aggregator that proxies Google, Bing, DDG, Brave, Wikipedia, etc. See `servers/searxng/README.md`. |
 | **DuckDuckGo** | text only | MCP server | Fallback when Brave/SearXNG are unavailable; transparently cascades to Felo on rate limits. |
 | **Felo AI Search** | text only | MCP server | Final-resort text fallback. |
+| **Crawl4AI** | URL fetch | REST API (self-hosted sidecar) | Optional hidden `fetch_url` engine. Activates when `CRAWL4AI_BASE_URL` is set and `/health` is reachable. Browser-renders pages and returns markdown via `/md`; falls back to `mcp_fetch` when unavailable. See `servers/crawl4ai/README.md`. |
+| **MCP Fetch** | URL fetch | Bundled MCP server | Mandatory final `fetch_url` fallback and default behavior when Crawl4AI is unset or unhealthy. |
