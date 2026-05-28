@@ -229,6 +229,8 @@ export class GenerateImageTool extends BaseTool {
     if (typeof args.inpaint_mode === "string" && ["extend", "outpaint"].includes(args.inpaint_mode.toLowerCase())) {
       return true;
     }
+    // Outpaint is implemented by providers as a reference-image edit with a
+    // generated padding mask, so it intentionally uses the inpaint-capable path.
     if (args.outpaint === true) {
       return true;
     }
@@ -1140,7 +1142,7 @@ export class GenerateImageTool extends BaseTool {
         `Generating image with ${executionProvider} via ${displayModelName}: "${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}" (aspect ratio: ${aspectRatio})`,
       );
       log.info(
-        `GenerateImageTool inpaint settings ${JSON.stringify({
+        `GenerateImageTool image edit settings ${JSON.stringify({
           inpaint,
           maskPrompt,
           maskThreshold: inpaint ? maskThreshold : null,
