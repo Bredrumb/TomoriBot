@@ -30,6 +30,12 @@ const SEARXNG_IMAGE_DISCORD_LIMIT_MB = Math.max(
   1,
   Number.parseInt(process.env.BRAVE_IMAGE_DISCORD_LIMIT_MB ?? "8", 10) || 8,
 );
+// Minimum image size in bytes — rejects tiny placeholders/error images that Discord
+// renders as raw file attachments rather than inline media (default 5 KB).
+const SEARXNG_IMAGE_MIN_SIZE_BYTES = Math.max(
+  1,
+  Number.parseInt(process.env.IMAGE_MIN_SIZE_BYTES ?? "5120", 10) || 5120,
+);
 const SEARXNG_IMAGE_COMPRESSION_TARGET_MB = Math.max(
   1,
   Number.parseInt(process.env.BRAVE_IMAGE_COMPRESSION_TARGET_MB ?? "7", 10) || 7,
@@ -37,6 +43,14 @@ const SEARXNG_IMAGE_COMPRESSION_TARGET_MB = Math.max(
 const SEARXNG_IMAGE_DOWNLOAD_MAX_MB = Math.max(
   SEARXNG_IMAGE_DISCORD_LIMIT_MB,
   Number.parseInt(process.env.BRAVE_IMAGE_DOWNLOAD_MAX_MB ?? "25", 10) || 25,
+);
+// How many valid images to actually send to Discord (default 3, max 10).
+const SEARXNG_IMAGE_COUNT = Math.min(Math.max(1, Number.parseInt(process.env.SEARXNG_IMAGE_COUNT ?? "3", 10) || 3), 10);
+// How many candidate URLs to pull from SearXNG and validate (default 10, max 20).
+// Larger than SEARXNG_IMAGE_COUNT to absorb expected hotlink-protection failures.
+const SEARXNG_IMAGE_POOL = Math.min(
+  Math.max(SEARXNG_IMAGE_COUNT, Number.parseInt(process.env.SEARXNG_IMAGE_POOL ?? "10", 10) || 10),
+  20,
 );
 
 // =============================================
@@ -209,6 +223,9 @@ async function validateImageUrl(imageUrl: string): Promise<{
     if (response.ok && response.headers.get("content-type")?.startsWith("image/")) {
       const contentLength = response.headers.get("content-length");
       const discordLimit = SEARXNG_IMAGE_DISCORD_LIMIT_MB * 1024 * 1024;
+      if (contentLength && parseInt(contentLength, 10) < SEARXNG_IMAGE_MIN_SIZE_BYTES) {
+        return { url: imageUrl, valid: false, reason: "too_small" };
+      }
       if (contentLength && parseInt(contentLength, 10) > discordLimit) {
         const compressionResult = await compressImage(imageUrl);
         if (compressionResult.success && compressionResult.buffer) {
@@ -232,15 +249,24 @@ export async function searxng_image_search(args: Record<string, unknown>, contex
       return createToolResult(false, "Invalid or missing query parameter", "Query is required");
     }
     const query = args.query;
+    // LLM-requested count caps at 10. When the LLM specifies a count, use 3×
+    // as the validation pool (capped at 30) so hotlink failures don't exhaust
+    // candidates before reaching sendCount. When no count is given, fall back
+    // to the SEARXNG_IMAGE_POOL env-var default.
+    const sendCount =
+      typeof args.count === "number" && args.count > 0 ? Math.min(Math.floor(args.count), 10) : SEARXNG_IMAGE_COUNT;
+    const pool = typeof args.count === "number" ? Math.min(sendCount * 3, 30) : SEARXNG_IMAGE_POOL;
 
     const result = await searxngSearch(query, "images", { signal: context?.abortSignal });
     if (!result.success || !result.data) {
       return createToolResult(false, "SearXNG image search failed", result.error);
     }
 
-    // 1. Filter out AVIF (Discord display issues) before validation.
+    // 1. Filter out AVIF (Discord display issues) then cap to the resolved pool
+    //    before validation. Pool is larger than the send count to absorb
+    //    expected hotlink-protection failures from aggregated engines.
     const allUrls = extractSearxngImageUrls(result.data);
-    const imageUrls = allUrls.filter((u) => !u.toLowerCase().includes(".avif"));
+    const imageUrls = allUrls.filter((u) => !u.toLowerCase().includes(".avif")).slice(0, pool);
 
     if (imageUrls.length === 0) {
       return createToolResult(false, `No accessible ${query} images found via SearXNG.`, {
@@ -305,22 +331,27 @@ export async function searxng_image_search(args: Record<string, unknown>, contex
     }
 
     if (validated.length === 0) {
+      // Soft degradation: engine succeeded but no URLs passed validation (hotlink
+      // protection, timeouts, too-small placeholders). Return success with a text
+      // listing so the dispatcher doesn't fall through to "category unavailable".
       return createToolResult(
-        false,
-        `Found ${imageUrls.length} ${query} image URLs via SearXNG, but none were accessible.`,
+        true,
+        `Found ${query} images via SearXNG but none were directly accessible. Showing result links instead.`,
         {
-          results: `No accessible ${query} images found`,
+          results: formatSearxngResults(result.data, "images"),
           imagesFiltered: failed.length,
-          status: "all_images_inaccessible",
+          status: "text_fallback",
         },
       );
     }
 
-    // 3. Build Discord attachments.
+    // 3. Build Discord attachments — cap to sendCount after validation
+    //    so pool failures don't cause us to send more than intended.
+    const toSend = validated.slice(0, sendCount);
     const attachments: AttachmentBuilder[] = [];
     const compressionFlags: boolean[] = [];
-    for (let i = 0; i < validated.length; i++) {
-      const url = validated[i];
+    for (let i = 0; i < toSend.length; i++) {
+      const url = toSend[i];
       const buf = compressedMap.get(url);
       attachments.push(new AttachmentBuilder(buf ?? url, { name: `image_${i + 1}.jpg` }));
       compressionFlags.push(Boolean(buf));

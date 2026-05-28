@@ -1,12 +1,49 @@
 /**
  * Type definitions for the Crawl4AI Docker REST API.
  *
- * TomoriBot uses only the `/md` endpoint for the hidden `fetch_url` engine.
- * Other Crawl4AI capabilities such as screenshots, PDFs, JS execution, and
- * multi-page crawling stay out of the LLM-visible tool surface.
+ * TomoriBot uses the `/md` endpoint normally and falls back to `/crawl` when
+ * CRAWL4AI_COOKIES_JSON is configured (cookie injection requires browser_config,
+ * which only the /crawl endpoint supports).
  */
 
 export type Crawl4aiFilterMode = "raw" | "fit" | "bm25" | "llm";
+
+export interface Crawl4aiCookie {
+  name: string;
+  value: string;
+  domain?: string;
+  path?: string;
+}
+
+export interface Crawl4aiCrawlRequest {
+  urls: string[];
+  browser_config?: {
+    cookies?: Crawl4aiCookie[];
+    [key: string]: unknown;
+  };
+  crawler_config?: Record<string, unknown>;
+}
+
+export interface Crawl4aiCrawlMarkdown {
+  raw_markdown?: string;
+  fit_markdown?: string;
+  markdown_with_citations?: string;
+  references_markdown?: string;
+}
+
+export interface Crawl4aiCrawlResult {
+  url: string;
+  success: boolean;
+  status_code?: number;
+  error_message?: string;
+  markdown?: Crawl4aiCrawlMarkdown;
+  html?: string;
+}
+
+export interface Crawl4aiCrawlResponse {
+  success: boolean;
+  results: Crawl4aiCrawlResult[];
+}
 
 export interface Crawl4aiMarkdownRequest {
   /** Absolute http/https URL to fetch. */

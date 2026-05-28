@@ -123,6 +123,11 @@ site's terms, robots policy, and rate limits.
 Run Browserless only on a private network. Do not expose port `3000` publicly
 without authentication and network controls.
 
+TomoriBot blocks localhost/private/internal target URLs before it calls
+Browserless unless `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`. Keep the default
+false unless the bot is in a trusted self-hosted deployment where users are
+allowed to make `fetch_url` reach internal network addresses.
+
 ## Runtime Behavior
 
 | Setting | Owner | Default |
@@ -132,6 +137,7 @@ without authentication and network controls.
 | `FETCH_URL_ENGINE_ORDER` | TomoriBot | `crawl4ai,browserless,mcp_fetch` |
 | `FETCH_URL_TIMEOUT_MS` | TomoriBot | `15000` |
 | `FETCH_URL_HEALTHCHECK_CACHE_SEC` | TomoriBot | `60` |
+| `FETCH_URL_ALLOW_PRIVATE_NETWORK` | TomoriBot | `false` |
 
 - If `BROWSERLESS_BASE_URL` is unset, the Browserless engine is skipped.
 - If `/pressure` is unreachable or reports unavailable, TomoriBot falls back to

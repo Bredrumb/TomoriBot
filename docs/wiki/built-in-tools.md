@@ -46,7 +46,7 @@ A single LLM-visible tool replaces the previous four `brave_*` tools. It takes a
 
 | Tool name | Prompt macro | Requirements | Purpose |
 |---|---|---|---|
-| `web_search` | `{web_search_tool}` / `{image_search_tool}` / `{video_search_tool}` / `{news_search_tool}` | `web_search_enabled` | Search the web. The `category` arg selects text/image/video/news. The dispatcher hides engine selection from the model — saves ~400 tokens/turn vs. the previous 4-tool surface. |
+| `web_search` | `{web_search_tool}` / `{image_search_tool}` / `{video_search_tool}` / `{news_search_tool}` | `web_search_enabled` | Search the web. The `category` arg selects text/image/video/news. Optional `count` arg sets result count (image: max 10 sent to Discord; text/video/news: max 20 in result list). The dispatcher hides engine selection from the model — saves ~400 tokens/turn vs. the previous 4-tool surface. |
 | `fetch_url` | `{url_fetch_tool}` | `web_search_enabled`; active bundled fetch path; unavailable on NovelAI | Read a specific web page or URL in more detail. Arguments mirror the bundled MCP fetch server: `url`, optional `max_length`, optional `start_index`, optional `raw`. |
 | `url-metadata` | `{url_metadata_tool}` | `web_search_enabled`; active DuckDuckGo/Felo MCP search server | Retrieve page metadata for a URL when a metadata-specific fetcher is available. |
 
@@ -54,7 +54,7 @@ A single LLM-visible tool replaces the previous four `brave_*` tools. It takes a
 
 #### Unified `fetch_url`
 
-`fetch_url` is the single bundled URL-reading tool shown to the LLM. Its dispatcher can try optional browser sidecars first, then always falls back to the internal `mcp_fetch` engine. `mcp_fetch` calls the existing bundled MCP `fetch` server and reuses its result processing. The raw global MCP function name `fetch` is hidden from the LLM after centralized feature-flag filtering.
+`fetch_url` is the single bundled URL-reading tool shown to the LLM. Its dispatcher can try optional browser sidecars first, then always falls back to the internal `mcp_fetch` engine. Before dispatch, TomoriBot blocks localhost/private/internal/reserved target URLs unless `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`; the default error message explicitly names the `FETCH_URL_ALLOW_PRIVATE_NETWORK=false` default so the bot can explain the failure to the user. `mcp_fetch` calls the existing bundled MCP `fetch` server and reuses its result processing. The raw global MCP function name `fetch` is hidden from the LLM after centralized feature-flag filtering.
 
 Guild MCP replacements still work: if an enabled guild MCP server is registered as `url_fetcher` and exposes functions, TomoriBot hides the bundled `fetch_url` for that guild so `{url_fetch_tool}` resolves to the guild function instead.
 
@@ -65,6 +65,8 @@ Guild MCP replacements still work: if an enabled guild MCP server is registered 
 - **When it activates:** `CRAWL4AI_BASE_URL` is set AND `${CRAWL4AI_BASE_URL}/health` responds OK. The probe result is cached for `FETCH_URL_HEALTHCHECK_CACHE_SEC` seconds (default 60).
 - **Where it sits in the chain:** before `mcp_fetch` by default. `FETCH_URL_ENGINE_ORDER` accepts comma-separated engine names, ignores unknown names, collapses duplicates, and always appends `mcp_fetch`.
 - **Graceful absence:** if `CRAWL4AI_BASE_URL` is unset OR the health probe fails, `fetch_url` uses `mcp_fetch` only.
+- **Private targets:** TomoriBot blocks private/internal target URLs before calling Crawl4AI unless `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`.
+- **Cookie injection:** set `CRAWL4AI_COOKIES_JSON` to a JSON array of `{name, value, domain?}` objects. When set, the engine switches from the `/md` endpoint to `/crawl` with `browser_config.cookies` — required because `/md` has no cookie field. Useful for sites requiring login (e.g. Twitter/X). See `docs/guides/setup-fetch-sidecars.md`.
 - **Deployment:** enable the compose sidecar with `docker compose --profile fetch-crawl4ai up` and set `CRAWL4AI_BASE_URL=http://crawl4ai:11235/` for the bot container. See `servers/crawl4ai/README.md`.
 
 #### Browserless sidecar (optional URL-fetch engine)
@@ -74,6 +76,8 @@ Guild MCP replacements still work: if an enabled guild MCP server is registered 
 - **When it activates:** `BROWSERLESS_BASE_URL` is set AND `${BROWSERLESS_BASE_URL}/pressure` responds OK and does not report the instance unavailable. The probe result is cached for `FETCH_URL_HEALTHCHECK_CACHE_SEC` seconds (default 60).
 - **Where it sits in the chain:** after Crawl4AI and before `mcp_fetch` by default. `FETCH_URL_ENGINE_ORDER` accepts `crawl4ai`, `browserless`, and `mcp_fetch`; unknown names are ignored, duplicates are collapsed, and `mcp_fetch` is always appended.
 - **Graceful absence:** if `BROWSERLESS_BASE_URL` is unset OR the health probe fails, `fetch_url` skips Browserless and tries the next configured engine.
+- **Private targets:** TomoriBot blocks private/internal target URLs before calling Browserless unless `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`.
+- **Cookie injection:** set `BROWSERLESS_COOKIES_JSON` to a JSON array of `{name, value, domain?}` objects. Cookies are passed directly in the `/content` request body — no endpoint switch needed. See `docs/guides/setup-fetch-sidecars.md`.
 - **Deployment:** enable the compose sidecar with `docker compose --profile fetch-browserless up` and set `BROWSERLESS_BASE_URL=http://browserless:3000/` for the bot container. See `servers/browserless/README.md`.
 - **License:** Browserless v2 is SSPL-1.0 or Browserless Commercial License. Review upstream terms before using it for commercial, proprietary, or closed-source CI deployments.
 
@@ -83,7 +87,11 @@ Guild MCP replacements still work: if an enabled guild MCP server is registered 
 
 - **When it activates:** `SEARXNG_BASE_URL` is set AND `${SEARXNG_BASE_URL}/healthz` responds OK. The probe result is cached for `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` seconds (default 60).
 - **Where it sits in the chain:** after Brave (so a configured Brave API key still takes priority) and before DDG/Felo (so the self-hosted aggregator absorbs traffic before the public-instance fallbacks).
-- **Categories:** all four — `text`, `image`, `video`, `news`. Image results download → validate → optionally compress → post as Discord attachments, identical UX to Brave images.
+- **Categories:** all four — `text`, `image`, `video`, `news`. Image results are HEAD-validated → optionally compressed → posted as Discord attachments, identical UX to Brave images.
+  - `SEARXNG_IMAGE_COUNT` (default 3, max 10) — how many valid images are sent to Discord. Overridden by the LLM's `count` arg.
+  - `SEARXNG_IMAGE_POOL` (default 10) — candidate URL pool when the LLM does **not** specify `count`. When `count` is specified, the pool is `count × 3` (capped at 30) to absorb hotlink-protection failures without depleting candidates.
+  - `IMAGE_MIN_SIZE_BYTES` (default 5120 = 5 KB) — images below this size are rejected. Filters placeholder/error images that Discord would render as raw file attachments rather than inline media. Shared with Brave image search.
+  - If all pool URLs fail validation, SearXNG returns a text listing of image result links instead of a hard failure — the dispatcher does not fall through to "category unavailable".
 - **Deployment:**
   - **Local (compose):** `docker compose up` starts the sidecar automatically; the bot picks it up via `SEARXNG_BASE_URL=http://searxng:8080/`.
   - **Local (`bun run dev`):** see `servers/searxng/README.md` for the standalone `docker run` snippet.

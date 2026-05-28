@@ -56,6 +56,7 @@ export async function executeWebSearchWithFallback(
   query: string,
   category: SearchCategory,
   context: ToolContext,
+  count?: number,
 ): Promise<ToolResult> {
   let lastError: string | undefined;
 
@@ -67,7 +68,7 @@ export async function executeWebSearchWithFallback(
     log.info(`web_search dispatch: trying engine "${engine.name}" for category="${category}"`);
 
     try {
-      const result = await engine.search(query, category, context);
+      const result = await engine.search(query, category, context, count);
       if (result.success) {
         log.success(`web_search dispatch: engine "${engine.name}" succeeded`);
         return result;

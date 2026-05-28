@@ -4,6 +4,7 @@ import { log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { executeFetchUrlWithFallback } from "./dispatcher";
 import type { FetchOpts } from "./types";
+import { validateFetchUrlTarget } from "./urlSafety";
 
 export class FetchUrlTool extends BaseTool {
   name = "fetch_url";
@@ -62,6 +63,23 @@ export class FetchUrlTool extends BaseTool {
           success: false,
           error: normalized.error,
           message: normalized.error,
+        };
+      }
+
+      const urlSafety = await validateFetchUrlTarget(normalized.url);
+      if (!urlSafety.allowed) {
+        const error = [urlSafety.error, urlSafety.details].filter(Boolean).join(" ");
+        const messageKey =
+          urlSafety.failureCode === "PRIVATE_NETWORK_BLOCKED"
+            ? "tools.fetch.private_network_blocked_description"
+            : "tools.fetch.fetch_failed_description";
+
+        return {
+          success: false,
+          error,
+          message: localizer(context.locale, messageKey, {
+            error,
+          }),
         };
       }
 

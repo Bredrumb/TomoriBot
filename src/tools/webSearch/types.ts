@@ -51,6 +51,9 @@ export interface WebSearchEngine {
    * Execute the search. Implementations are expected to return a fully
    * formed ToolResult — including any Discord side-effects (embeds /
    * attachments) the engine wants to surface.
+   *
+   * @param count - Optional result count hint from the LLM. Engines that
+   *   support it (Brave, SearXNG) use it; others silently ignore it.
    */
-  search(query: string, category: SearchCategory, context: ToolContext): Promise<ToolResult>;
+  search(query: string, category: SearchCategory, context: ToolContext, count?: number): Promise<ToolResult>;
 }

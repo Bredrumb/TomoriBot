@@ -33,7 +33,10 @@ export class WebSearchTool extends BaseTool {
     properties: {
       query: {
         type: "string" as const,
-        description: "The search query to execute.",
+        description:
+          "The search query to execute. " +
+          "For image/video/news categories use plain descriptive terms only — " +
+          "do NOT use operators like 'site:', 'filetype:', or quotes; they are ignored by media search engines and degrade results.",
       },
       category: {
         type: "string" as const,
@@ -41,6 +44,13 @@ export class WebSearchTool extends BaseTool {
           "Search category. Use 'text' for general web results (default), 'image' for pictures, " +
           "'video' for videos, 'news' for recent articles.",
         enum: SUPPORTED_CATEGORIES,
+      },
+      count: {
+        type: "number" as const,
+        description:
+          "Number of results to return. For image searches this controls how many images are sent " +
+          "to Discord (max 10). For text/news/video searches it controls the result list length " +
+          "(max 20). Omit to use the server default.",
       },
     },
     required: ["query"],
@@ -80,13 +90,18 @@ export class WebSearchTool extends BaseTool {
         ? (rawCategory as SearchCategory)
         : "text";
 
-      log.info(`web_search invoked: category=${category} query="${args.query}"`);
+      // 4. Normalize count — must be a positive integer, otherwise omit.
+      const rawCount = typeof args.count === "number" && args.count > 0 ? Math.floor(args.count) : undefined;
 
-      // 4. Hand off to the dispatcher. The dispatcher itself emits the
+      log.info(
+        `web_search invoked: category=${category} query="${args.query}"${rawCount !== undefined ? ` count=${rawCount}` : ""}`,
+      );
+
+      // 5. Hand off to the dispatcher. The dispatcher itself emits the
       //    per-engine Discord notice via the engine's underlying tool wrapper
       //    (BraveEngine reuses the Internal*Tool classes that already call
       //    sendToolNotice; DDG/Felo do it inside processWebSearch).
-      return await executeWebSearchWithFallback(args.query as string, category, context);
+      return await executeWebSearchWithFallback(args.query as string, category, context, rawCount);
     } catch (error) {
       log.error("Error in web_search tool:", error as Error);
       return {

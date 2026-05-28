@@ -8,6 +8,7 @@
 import { log } from "@/utils/misc/logger";
 import type {
   BrowserlessApiResult,
+  BrowserlessCookie,
   BrowserlessContentRequest,
   BrowserlessPressureResponse,
   BrowserlessRequestConfig,
@@ -123,6 +124,26 @@ export async function isBrowserlessAvailable(force = false): Promise<boolean> {
 
 export function resetBrowserlessHealthCache(): void {
   healthcheckCache = null;
+}
+
+/**
+ * Parse BROWSERLESS_COOKIES_JSON into a cookie array. Returns empty array if
+ * unset or malformed (logs a warning on parse failure).
+ */
+export function getBrowserlessCookies(): BrowserlessCookie[] {
+  const raw = process.env.BROWSERLESS_COOKIES_JSON?.trim();
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      log.warn("BROWSERLESS_COOKIES_JSON must be a JSON array — ignoring");
+      return [];
+    }
+    return parsed as BrowserlessCookie[];
+  } catch {
+    log.warn("BROWSERLESS_COOKIES_JSON is not valid JSON — ignoring");
+    return [];
+  }
 }
 
 export async function browserlessContent(

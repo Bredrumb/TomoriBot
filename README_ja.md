@@ -537,7 +537,7 @@ docker compose up
 3. **スタンドアロンDocker（`bun run dev` 利用時）。** `servers/crawl4ai/README.md` または `servers/browserless/README.md` の `docker run` スニペットを参照し、対応する `*_BASE_URL=http://localhost:<port>/` をシェルで設定します。
 4. **ブラウザサイドカーなし。** `CRAWL4AI_BASE_URL` と `BROWSERLESS_BASE_URL` を未設定のままにすると、`fetch_url` は組み込み `mcp_fetch` のみを使用します。
 
-デフォルトのエンジン順は `crawl4ai,browserless,mcp_fetch` です。任意設定: `FETCH_URL_ENGINE_ORDER`, `FETCH_URL_TIMEOUT_MS`, `FETCH_URL_HEALTHCHECK_CACHE_SEC`, `CRAWL4AI_TOKEN`, `FETCH_URL_FILTER_MODE`, `BROWSERLESS_TOKEN`。Browserless v2 にはSSPL/商用ライセンス条件があるため、商用またはプロプライエタリ環境で使う前に `servers/browserless/README.md` を確認してください。
+デフォルトのエンジン順は `crawl4ai,browserless,mcp_fetch` です。任意設定: `FETCH_URL_ENGINE_ORDER`, `FETCH_URL_TIMEOUT_MS`, `FETCH_URL_HEALTHCHECK_CACHE_SEC`, `FETCH_URL_ALLOW_PRIVATE_NETWORK`, `CRAWL4AI_TOKEN`, `FETCH_URL_FILTER_MODE`, `BROWSERLESS_TOKEN`。`FETCH_URL_ALLOW_PRIVATE_NETWORK=false` のままにしてください。このbotが信頼済みのセルフホスト環境で動作し、ユーザーに `fetch_url` からlocalhost/プライベート/内部ネットワークへ到達させてもよい場合だけ有効にします。Browserless v2 にはSSPL/商用ライセンス条件があるため、商用またはプロプライエタリ環境で使う前に `servers/browserless/README.md` を確認してください。
 
 #### Grafanaでのモニタリング（オプション）
 

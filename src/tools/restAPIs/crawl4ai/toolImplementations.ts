@@ -8,7 +8,12 @@
 
 import { log } from "@/utils/misc/logger";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
-import { crawl4aiMarkdown, getCrawl4aiFilterMode } from "./crawl4aiService";
+import {
+  crawl4aiCrawlWithCookies,
+  crawl4aiMarkdown,
+  getCrawl4aiCookies,
+  getCrawl4aiFilterMode,
+} from "./crawl4aiService";
 import type { Crawl4aiFilterMode } from "./types";
 
 function createToolResult(
@@ -50,13 +55,14 @@ export async function crawl4ai_fetch_url(args: Record<string, unknown>, context?
     }
 
     const filterMode = resolveFilterMode(args);
-    const result = await crawl4aiMarkdown(
-      {
-        url: args.url.trim(),
-        f: filterMode,
-      },
-      { signal: context?.abortSignal },
-    );
+    const request = { url: args.url.trim(), f: filterMode };
+    const cookies = getCrawl4aiCookies();
+    // 1. Use /crawl with browser_config when cookies are configured — /md
+    //    does not expose a cookies field so injection requires /crawl.
+    const result =
+      cookies.length > 0
+        ? await crawl4aiCrawlWithCookies(request, cookies, { signal: context?.abortSignal })
+        : await crawl4aiMarkdown(request, { signal: context?.abortSignal });
 
     if (!result.success || !result.data) {
       return createToolResult(false, "Crawl4AI URL fetch failed", result.error ?? "Unknown Crawl4AI error");

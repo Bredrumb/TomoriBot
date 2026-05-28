@@ -99,6 +99,11 @@ target site's responses. Operators are responsible for using this sidecar only
 where they have permission to fetch content and for honoring site terms,
 rate-limits, and robots expectations.
 
+TomoriBot blocks localhost/private/internal target URLs before it calls
+Crawl4AI unless `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`. Keep the default false
+unless the bot is in a trusted self-hosted deployment where users are allowed to
+make `fetch_url` reach internal network addresses.
+
 ## Internal Redis Notes
 
 The Crawl4AI Docker server includes Redis-backed job and monitoring plumbing for
@@ -116,6 +121,7 @@ deployment, keep it private to the Crawl4AI service.
 | `FETCH_URL_ENGINE_ORDER` | TomoriBot | `crawl4ai,mcp_fetch` |
 | `FETCH_URL_TIMEOUT_MS` | TomoriBot | `15000` |
 | `FETCH_URL_HEALTHCHECK_CACHE_SEC` | TomoriBot | `60` |
+| `FETCH_URL_ALLOW_PRIVATE_NETWORK` | TomoriBot | `false` |
 | `FETCH_URL_FILTER_MODE` | TomoriBot Crawl4AI `/md` requests | `fit` |
 
 `FETCH_URL_FILTER_MODE=fit` uses Crawl4AI's content filtering for cleaner

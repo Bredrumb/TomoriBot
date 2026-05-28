@@ -13,6 +13,7 @@ Any OpenAI-compatible server works out of the box using the `/custom-endpoints` 
 | [LM Studio](https://lmstudio.ai) | GUI-based; exposes a local `/v1` server |
 | [vLLM](https://github.com/vllm-project/vllm) | High-throughput GPU serving |
 | [LiteLLM](https://github.com/BerriAI/litellm) | Unified proxy over many backends |
+| [ChatMock](../guides/setup-chatmock.md) | Local OpenAI-compat bridge for Codex CLI |
 
 Configure via `/custom-endpoints` in Discord, pointing at your local endpoint URL (e.g. `http://192.168.1.10:11434/v1`).
 
@@ -47,3 +48,13 @@ A reference WhisperX server is included for transcribing audio attachments sent 
 - Compatible alternatives: whisper.cpp HTTP mode, KoboldCPP STT
 
 Register via `/custom-endpoints add` (capability: `transcription`). Use `/help transcription` in Discord for a step-by-step setup guide.
+
+### Local Search & Web Tools
+
+TomoriBot can route her built-in web tools through your own self-hosted infrastructure to avoid public API limits and improve parsing quality.
+
+| Sidecar | Tool | Purpose | Guide |
+|---------|------|---------|-------|
+| **SearXNG** | `web_search` | Privacy-respecting metasearch engine proxy to avoid rate limits | [Setup Guide](../guides/setup-searxng.md) |
+| **Crawl4AI** | `fetch_url` | Browser-rendered markdown extraction for JS-heavy sites | [Setup Guide](../guides/setup-fetch-sidecars.md) |
+| **Browserless** | `fetch_url` | Headless Chrome cluster for rendering full HTML payloads | [Setup Guide](../guides/setup-fetch-sidecars.md) |

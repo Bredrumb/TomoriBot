@@ -117,7 +117,7 @@ TomoriBot supports a wide range of LLM providers, image generation APIs, voice s
 
 ## Local & Self-Hosted Endpoints
 
-Besides APIs, you can also connect TomoriBot to your own self-hosted models. She supports local LLMs (via Ollama, KoboldCPP, LM Studio, vLLM, etc.), local image/video generation via ComfyUI, as well as local TTS and STT endpoints:
+Besides APIs, you can also connect TomoriBot to your own self-hosted models. She supports local LLMs (via Ollama, KoboldCPP, LM Studio, vLLM, etc.), local image/video generation via ComfyUI, local TTS and STT endpoints, as well as local SearXNG and Browser web fetch sidecars!
 
 **[Read the Local & Self-Hosted Endpoints guide here](docs/wiki/local-endpoints.md)**
 
@@ -373,46 +373,6 @@ Simply mention the bot in a server or use the configured trigger words to start 
 
 Or slide into TomoriBot's DMs and say hi!
 
-### Using Codex CLI with TomoriBot
-
-If you want TomoriBot to use your ChatGPT account through a local OpenAI-compatible bridge, you can run [ChatMock](https://github.com/RayBytes/ChatMock) and point TomoriBot's `custom` provider at it.
-
-#### What ChatMock does
-
-- ChatMock runs a local OpenAI-compatible API server
-- TomoriBot can use that local server through the `custom` provider
-
-#### 1. Start ChatMock
-
-Install and start ChatMock by following its instructions on GitHub:
-
-- [ChatMock repository](https://github.com/RayBytes/ChatMock)
-
-After installing, run:
-```sh
-chatmock login
-chatmock serve
-```
-
-By default, ChatMock listens on `http://127.0.0.1:8000/v1`
-
-#### 2. Configure TomoriBot to use ChatMock
-
-In Discord, configure TomoriBot's `custom` provider and use:
-
-- **Endpoint URL**: `http://127.0.0.1:8000/v1`
-- **Model Name**: the exact model string ChatMock should receive, such as `gpt-5.4` or `gpt-5.3-codex`
-
-Do **not** use bare `http://127.0.0.1:8000` because TomoriBot appends `/chat/completions` to the configured base URL
-
-Enable these capability flags for ChatMock:
-- **Function Calling / Tools**: Yes
-- **Image Understanding**: Yes
-- **Video Understanding**: No
-- **Structured Output**: Yes
-
-**Note**: Codex CLI does not allow you to change its `system` prompt so TomoriBot's `system` prompt is turned into a `user` turn in context as a workaround. Please configure the `CHATMOCK_PORT` .env variable to match your actual ChatMock port so this workaround works properly (defaults to 8000).
-
 ### Maintenance Scripts
 
 | Command | Description |
@@ -476,46 +436,13 @@ docker compose up
 
 **Note:** Docker Compose automatically configures the database connection. The PostgreSQL service runs in development mode (no SSL) and connects to the internal Docker network.
 
-#### Self-hosted web search (SearXNG sidecar)
+#### Optional Docker Sidecars
 
-The `web_search` tool routes through an engine chain: **Brave → SearXNG → DuckDuckGo → Felo**. There are three ways to set up SearXNG locally:
+TomoriBot supports optional Docker sidecars to enhance her tools and add local monitoring. See the guides below for simple setup instructions:
 
-1. **Docker Compose (recommended).** `docker compose up` starts the `searxng` service automatically — the bot reaches it at `http://searxng:8080/`. Set `SEARXNG_SECRET` in `.env` to any 32+ char string for production; it's auto-defaulted in dev.
-2. **Standalone Docker (when running `bun run dev`).** See `servers/searxng/README.md` for the `docker run` snippet, then set `SEARXNG_BASE_URL=http://localhost:8080/` in your shell.
-3. **No SearXNG.** Leave `SEARXNG_BASE_URL` unset — the chain falls back to `Brave → DDG → Felo` exactly as before. Nothing breaks.
-
-Per-engine timeout and the health-probe cache duration are tunable via `WEB_SEARCH_TIMEOUT_MS` and `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` (see `.env.optional.example`).
-
-#### Self-hosted URL fetch rendering (Crawl4AI / Browserless sidecars)
-
-The `fetch_url` tool can optionally try browser-rendering sidecars before falling back to the bundled MCP fetch engine. Use them when you want rendered content for JS-heavy pages.
-
-1. **Crawl4AI Docker Compose profile.** Start with `docker compose --profile fetch-crawl4ai up`, then set `CRAWL4AI_BASE_URL=http://crawl4ai:11235/` in `.env` for the bot container.
-2. **Browserless Docker Compose profile.** Start with `docker compose --profile fetch-browserless up`, then set `BROWSERLESS_BASE_URL=http://browserless:3000/` and `BROWSERLESS_TOKEN` in `.env` for the bot container.
-3. **Standalone Docker (when running `bun run dev`).** See `servers/crawl4ai/README.md` or `servers/browserless/README.md` for `docker run` snippets, then set the matching `*_BASE_URL=http://localhost:<port>/` in your shell.
-4. **No browser sidecar.** Leave `CRAWL4AI_BASE_URL` and `BROWSERLESS_BASE_URL` unset and `fetch_url` uses bundled `mcp_fetch` only.
-
-Default engine order is `crawl4ai,browserless,mcp_fetch`. Optional knobs: `FETCH_URL_ENGINE_ORDER`, `FETCH_URL_TIMEOUT_MS`, `FETCH_URL_HEALTHCHECK_CACHE_SEC`, `CRAWL4AI_TOKEN`, `FETCH_URL_FILTER_MODE`, and `BROWSERLESS_TOKEN`. Browserless v2 has SSPL/commercial license terms; review `servers/browserless/README.md` before using it in commercial or proprietary deployments.
-
-#### Monitoring with Grafana (Optional)
-
-To monitor your TomoriBot instance with Grafana dashboards:
-
-```sh
-# Start both TomoriBot and Grafana together
-docker compose -f docker-compose.yaml -f docker-compose.monitor.yaml up
-```
-
-This will:
-- Launch TomoriBot with PostgreSQL (on ports 15432 for DB)
-- Launch Grafana on port 3000 with auto-configured PostgreSQL datasource
-- Connect both services on the same Docker network
-
-Access Grafana at `http://localhost:3000`:
-- **Username**: `admin`
-- **Password**: Set via `GRAFANA_PASSWORD` in `.env` (defaults to `admin`)
-
-The PostgreSQL datasource is automatically configured and ready to create dashboards for monitoring bot metrics, database queries, and performance.
+- **[SearXNG Web Search Sidecar](docs/guides/setup-searxng.md)** - A self-hosted metasearch instance to bypass single-engine API limits for the `web_search` tool.
+- **[Crawl4AI & Browserless Sidecars](docs/guides/setup-fetch-sidecars.md)** - Browser-rendering sidecars to fetch and process JavaScript-heavy webpages for the `fetch_url` tool.
+- **[Local Grafana Monitoring](docs/guides/local-monitoring.md)** - Instructions on how to spin up a local Grafana dashboard to monitor TomoriBot's performance and database metrics.
 
 <!-- ROADMAP -->
 ## Roadmap

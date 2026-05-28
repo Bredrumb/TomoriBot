@@ -92,6 +92,7 @@ export default {
     fetch: {
       fetch_url_title: `🌐  Reading Webpage...`,
       fetch_failed_description: `I couldn't fetch that page: {error}`,
+      private_network_blocked_description: `I couldn't fetch that page because it points to a private or internal network address. TomoriBot blocks those by default with \`FETCH_URL_ALLOW_PRIVATE_NETWORK=false\`. {error}`,
       reading_title: `🌐  Reading Webpage...`,
       reading_title_page: `🌐  Reading Webpage (Page {page})...`,
       reading_description: `Fetching and reading: {url}`,

@@ -41,6 +41,9 @@ const BRAVE_IMAGE_DOWNLOAD_MAX_MB = Math.max(
   BRAVE_IMAGE_DISCORD_LIMIT_MB,
   Number.parseInt(process.env.BRAVE_IMAGE_DOWNLOAD_MAX_MB ?? "25", 10) || 25,
 );
+// Minimum image size in bytes — rejects tiny placeholders/error images that Discord
+// renders as raw file attachments rather than inline media (default 5 KB).
+const BRAVE_IMAGE_MIN_SIZE_BYTES = Math.max(1, Number.parseInt(process.env.IMAGE_MIN_SIZE_BYTES ?? "5120", 10) || 5120);
 
 /**
  * Extract server ID from tool context
@@ -390,9 +393,13 @@ export async function brave_image_search(args: Record<string, unknown>, context?
 
           // Check if URL is accessible and is actually an image
           if (response.ok && response.headers.get("content-type")?.startsWith("image/")) {
-            // 3. Check content size - if >8MB, attempt compression
+            // 3. Check content size - reject tiny placeholders, compress if >8MB
             const contentLength = response.headers.get("content-length");
             const discordLimit = BRAVE_IMAGE_DISCORD_LIMIT_MB * 1024 * 1024;
+
+            if (contentLength && parseInt(contentLength, 10) < BRAVE_IMAGE_MIN_SIZE_BYTES) {
+              return { url: imageUrl, valid: false, reason: "too_small" };
+            }
 
             if (contentLength && parseInt(contentLength, 10) > discordLimit) {
               log.info(`Image ${imageUrl} is ${contentLength} bytes, attempting compression...`);
@@ -658,16 +665,18 @@ export async function brave_image_search(args: Record<string, unknown>, context?
           );
         }
       } else {
-        // No valid images after validation
+        // Soft degradation: engine succeeded but no URLs passed validation (hotlink
+        // protection, timeouts, too-small placeholders). Return success with a text
+        // listing so the dispatcher doesn't fall through to "category unavailable".
         const queryTerm = args.query || "images";
+        const formattedFallback = formatBraveSearchResults(result.data, "image");
         return createToolResult(
-          false,
-          `Found ${imageUrls.length} ${queryTerm} image URLs, but none were accessible or valid. All image links appear to be broken or inaccessible.`,
+          true,
+          `Found ${queryTerm} images via Brave but none were directly accessible. Showing result links instead.`,
           {
-            results: `No accessible ${queryTerm} images found`,
-            imagesFound: imageUrls.length,
+            results: formattedFallback,
             imagesFiltered: failedUrls.length,
-            status: "all_images_inaccessible",
+            status: "text_fallback",
           },
         );
       }

@@ -6,9 +6,18 @@
  * `fetch_url`.
  */
 
+export interface BrowserlessCookie {
+  name: string;
+  value: string;
+  domain?: string;
+  path?: string;
+}
+
 export interface BrowserlessContentRequest {
   /** Absolute http/https URL to fetch with Browserless. */
   url: string;
+  /** Browser-level cookies injected before navigation. */
+  cookies?: BrowserlessCookie[];
 }
 
 export interface BrowserlessPressureResponse {

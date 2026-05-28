@@ -34,9 +34,9 @@ export class BraveEngine implements WebSearchEngine {
     return true;
   }
 
-  async search(query: string, category: SearchCategory, context: ToolContext): Promise<ToolResult> {
-    // 3. Pass the query as the `query` arg expected by the internal tool params.
-    const args: Record<string, unknown> = { query };
+  async search(query: string, category: SearchCategory, context: ToolContext, count?: number): Promise<ToolResult> {
+    // 3. Pass query and optional count as args expected by the internal tool params.
+    const args: Record<string, unknown> = { query, ...(count !== undefined && { count }) };
 
     switch (category) {
       case "text":

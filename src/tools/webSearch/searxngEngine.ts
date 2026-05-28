@@ -33,7 +33,7 @@ export class SearxngEngine implements WebSearchEngine {
     return true;
   }
 
-  async search(query: string, category: SearchCategory, context: ToolContext): Promise<ToolResult> {
+  async search(query: string, category: SearchCategory, context: ToolContext, count?: number): Promise<ToolResult> {
     // 2. Surface a "searching..." notice in Discord — parallel to the Brave engine's
     //    Internal*Tool classes that call sendToolNotice themselves.
     const noticeMeta = this.noticeMetaForCategory(category, query);
@@ -48,7 +48,7 @@ export class SearxngEngine implements WebSearchEngine {
       "SearxngEngine",
     );
 
-    const args: Record<string, unknown> = { query };
+    const args: Record<string, unknown> = { query, ...(count !== undefined && { count }) };
     switch (category) {
       case "text":
         return await searxng_web_search(args, context);

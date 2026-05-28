@@ -1,4 +1,4 @@
-import type { Client, PresenceStatus } from "discord.js";
+import { ActivityType, type Client, type PresenceStatus } from "discord.js";
 import { ContextItemTag, type ContextPart, type StructuredContextItem } from "@/types/misc/context";
 import type { SimplifiedMessageForContext } from "./types";
 import { log } from "@/utils/misc/logger";
@@ -206,11 +206,20 @@ export async function getUserPresenceDetails(
       return "Status unknown";
     }
 
+    // Log raw gateway presences cache before any member fetch, to diagnose
+    // whether the Last.fm / RPC activity is in the cache at check time
+    const rawPresence = guild.presences.cache.get(userId);
+    log.info(
+      `Presences cache for ${userId}: status=${rawPresence?.status ?? "none"} activities=[${rawPresence?.activities.map((a) => `${a.type}:${a.name}`).join(", ") ?? "none"}]`,
+    );
+
     let member: import("discord.js").GuildMember | null = null;
     if (preloadedMember && preloadedMember.id === userId) {
       member = preloadedMember;
     } else {
-      member = await guild.members.fetch({ user: userId, force: true }).catch((error) => {
+      // force:true fetches fresh member metadata (roles, nickname) via REST,
+      // but presence data is gateway-only and comes from guild.presences.cache
+      member = await guild.members.fetch({ user: userId }).catch((error) => {
         log.warn(`Failed to fetch member ${userId}: ${error}`);
         return null;
       });
@@ -241,9 +250,8 @@ export async function getUserPresenceDetails(
       const activityDetails = member.presence.activities.map((activity) => {
         // 1. Diagnostic log so we can see exactly what the gateway delivered
         //    (useful for third-party RPC apps like Last.fm whose payload shape changes upstream)
-        const assets = activity.assets as { largeText?: string | null; smallText?: string | null } | null | undefined;
-        const largeText = assets?.largeText?.trim() || null;
-        const smallText = assets?.smallText?.trim() || null;
+        const largeText = activity.assets?.largeText?.trim() || null;
+        const smallText = activity.assets?.smallText?.trim() || null;
         log.info(
           `Activity found for ${member?.user.username}: type=${activity.type} name="${activity.name}" details="${activity.details ?? ""}" state="${activity.state ?? ""}" emoji="${activity.emoji?.name ?? ""}" largeText="${largeText ?? ""}" smallText="${smallText ?? ""}" appId="${activity.applicationId ?? ""}"`,
         );
@@ -258,16 +266,16 @@ export async function getUserPresenceDetails(
         };
 
         switch (activity.type) {
-          case 0: {
-            // Playing — surface details, state, and any asset hover text
+          case ActivityType.Playing: {
+            // Surface details, state, and any asset hover text
             const segments: string[] = [`Playing ${activity.name}`];
             if (activity.details) segments.push(activity.details);
             if (activity.state) segments.push(activity.state);
             return appendAssetText(segments.join(" — ")) + timeSpent;
           }
-          case 1:
+          case ActivityType.Streaming:
             return appendAssetText(`Streaming ${activity.name}`) + timeSpent;
-          case 2:
+          case ActivityType.Listening:
             if (activity.name === "Spotify" && activity.details && activity.state) {
               return `Listening to ${activity.details} by ${activity.state} on Spotify${timeSpent}`;
             }
@@ -278,11 +286,10 @@ export async function getUserPresenceDetails(
               );
             }
             return appendAssetText(`Listening to ${activity.name}`) + timeSpent;
-          case 3:
+          case ActivityType.Watching:
             return appendAssetText(`Watching ${activity.name}`) + timeSpent;
-          case 4: {
-            // 3. Custom Status — pull every field Discord still exposes
-            //    (some RPC clients now ride this slot with details/assets populated)
+          case ActivityType.Custom: {
+            // Custom Status — some RPC clients (e.g. Last.fm) ride this slot with details/assets populated
             const parts: string[] = [];
             if (activity.emoji?.name) parts.push(activity.emoji.name);
             if (activity.state) parts.push(activity.state);
@@ -291,7 +298,7 @@ export async function getUserPresenceDetails(
             if (smallText && !parts.includes(smallText)) parts.push(smallText);
             return parts.length > 0 ? `Custom status: ${parts.join(" — ")}` : "Custom status";
           }
-          case 5:
+          case ActivityType.Competing:
             return appendAssetText(`Competing in ${activity.name}`) + timeSpent;
           default:
             return appendAssetText(activity.name);

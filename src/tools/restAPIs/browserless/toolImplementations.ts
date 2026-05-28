@@ -8,7 +8,7 @@
 
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { log } from "@/utils/misc/logger";
-import { browserlessContent } from "./browserlessService";
+import { browserlessContent, getBrowserlessCookies } from "./browserlessService";
 
 function createToolResult(
   success: boolean,
@@ -37,7 +37,11 @@ export async function browserless_fetch_url(args: Record<string, unknown>, conte
     }
 
     const url = args.url.trim();
-    const result = await browserlessContent({ url }, { signal: context?.abortSignal });
+    const cookies = getBrowserlessCookies();
+    const result = await browserlessContent(
+      { url, ...(cookies.length > 0 && { cookies }) },
+      { signal: context?.abortSignal },
+    );
 
     if (!result.success || result.data === undefined) {
       return createToolResult(false, "Browserless URL fetch failed", result.error ?? "Unknown Browserless error");

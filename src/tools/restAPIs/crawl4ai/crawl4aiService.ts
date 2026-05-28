@@ -8,6 +8,8 @@
 import { log } from "@/utils/misc/logger";
 import type {
   Crawl4aiApiResult,
+  Crawl4aiCookie,
+  Crawl4aiCrawlResponse,
   Crawl4aiFilterMode,
   Crawl4aiHealthResponse,
   Crawl4aiMarkdownRequest,
@@ -43,6 +45,26 @@ function getCrawl4aiBaseUrl(): string | null {
 function getCrawl4aiToken(): string | null {
   const raw = process.env.CRAWL4AI_TOKEN?.trim();
   return raw || null;
+}
+
+/**
+ * Parse CRAWL4AI_COOKIES_JSON into a cookie array. Returns an empty array if
+ * the env var is unset or malformed (logs a warning on parse failure).
+ */
+export function getCrawl4aiCookies(): Crawl4aiCookie[] {
+  const raw = process.env.CRAWL4AI_COOKIES_JSON?.trim();
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      log.warn("CRAWL4AI_COOKIES_JSON must be a JSON array — ignoring");
+      return [];
+    }
+    return parsed as Crawl4aiCookie[];
+  } catch {
+    log.warn("CRAWL4AI_COOKIES_JSON is not valid JSON — ignoring");
+    return [];
+  }
 }
 
 export function getCrawl4aiFilterMode(raw = process.env.FETCH_URL_FILTER_MODE): Crawl4aiFilterMode {
@@ -180,6 +202,89 @@ export async function crawl4aiMarkdown(
     }
 
     log.warn(`${SERVICE_NAME} /md request error:`, error as Error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Fetch a URL via /crawl with browser-level cookie injection.
+ * Used when CRAWL4AI_COOKIES_JSON is set — /md does not support cookies.
+ * Returns a normalised Crawl4aiMarkdownResponse so callers stay uniform.
+ */
+export async function crawl4aiCrawlWithCookies(
+  request: Crawl4aiMarkdownRequest,
+  cookies: Crawl4aiCookie[],
+  config: Crawl4aiRequestConfig = {},
+): Promise<Crawl4aiApiResult<Crawl4aiMarkdownResponse>> {
+  const baseUrl = config.baseUrl ?? getCrawl4aiBaseUrl();
+  if (!baseUrl) {
+    return { success: false, error: "CRAWL4AI_BASE_URL is not configured", statusCode: 503 };
+  }
+
+  const timeoutMs = config.timeoutMs ?? REQUEST_TIMEOUT_MS;
+  const { controller, timeoutId } = createAbortController(timeoutMs, config.signal);
+
+  try {
+    log.info(`${SERVICE_NAME} /crawl request (cookies): url="${request.url}" filter="${request.f}"`);
+
+    const response = await fetch(`${baseUrl}/crawl`, {
+      method: "POST",
+      headers: buildHeaders(),
+      signal: controller.signal,
+      body: JSON.stringify({
+        urls: [request.url],
+        // Playwright requires path alongside domain — default to "/" when omitted.
+        browser_config: { cookies: cookies.map((c) => ({ path: "/", ...c })) },
+      } satisfies import("./types").Crawl4aiCrawlRequest),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "Unknown error");
+      log.warn(`${SERVICE_NAME} /crawl failed with status ${response.status}: ${errorText}`);
+      return {
+        success: false,
+        error: `Crawl4AI /crawl request failed: ${response.statusText || response.status}`,
+        statusCode: response.status,
+      };
+    }
+
+    const data = (await response.json()) as Crawl4aiCrawlResponse;
+    const result = data.results?.[0];
+
+    if (!data.success || !result?.success) {
+      return {
+        success: false,
+        error: result?.error_message ?? "Crawl4AI /crawl returned an unsuccessful response",
+        statusCode: response.status,
+      };
+    }
+
+    // 1. Prefer fit_markdown (mirrors /md f=fit output); fall back to raw.
+    const markdown = result.markdown?.fit_markdown ?? result.markdown?.raw_markdown ?? "";
+
+    return {
+      success: true,
+      statusCode: response.status,
+      data: {
+        url: result.url,
+        filter: request.f,
+        query: request.q ?? null,
+        cache: request.c ?? null,
+        markdown,
+        success: true,
+      },
+    };
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      log.warn(`${SERVICE_NAME} /crawl timed out after ${timeoutMs}ms`);
+      return { success: false, error: "Request timed out", statusCode: 408 };
+    }
+    log.warn(`${SERVICE_NAME} /crawl request error:`, error as Error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
