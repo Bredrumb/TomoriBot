@@ -54,7 +54,7 @@ A single LLM-visible tool replaces the previous four `brave_*` tools. It takes a
 
 #### Unified `fetch_url`
 
-`fetch_url` is the single bundled URL-reading tool shown to the LLM. Its dispatcher can try the optional Crawl4AI sidecar first, then always falls back to the internal `mcp_fetch` engine. `mcp_fetch` calls the existing bundled MCP `fetch` server and reuses its result processing. The raw global MCP function name `fetch` is hidden from the LLM after centralized feature-flag filtering.
+`fetch_url` is the single bundled URL-reading tool shown to the LLM. Its dispatcher can try optional browser sidecars first, then always falls back to the internal `mcp_fetch` engine. `mcp_fetch` calls the existing bundled MCP `fetch` server and reuses its result processing. The raw global MCP function name `fetch` is hidden from the LLM after centralized feature-flag filtering.
 
 Guild MCP replacements still work: if an enabled guild MCP server is registered as `url_fetcher` and exposes functions, TomoriBot hides the bundled `fetch_url` for that guild so `{url_fetch_tool}` resolves to the guild function instead.
 
@@ -66,6 +66,16 @@ Guild MCP replacements still work: if an enabled guild MCP server is registered 
 - **Where it sits in the chain:** before `mcp_fetch` by default. `FETCH_URL_ENGINE_ORDER` accepts comma-separated engine names, ignores unknown names, collapses duplicates, and always appends `mcp_fetch`.
 - **Graceful absence:** if `CRAWL4AI_BASE_URL` is unset OR the health probe fails, `fetch_url` uses `mcp_fetch` only.
 - **Deployment:** enable the compose sidecar with `docker compose --profile fetch-crawl4ai up` and set `CRAWL4AI_BASE_URL=http://crawl4ai:11235/` for the bot container. See `servers/crawl4ai/README.md`.
+
+#### Browserless sidecar (optional URL-fetch engine)
+
+[Browserless](https://docs.browserless.io/) is an optional browser-rendered HTML sidecar used only behind `fetch_url`. TomoriBot calls Browserless `/content`, then converts the rendered HTML to markdown with Readability and Turndown.
+
+- **When it activates:** `BROWSERLESS_BASE_URL` is set AND `${BROWSERLESS_BASE_URL}/pressure` responds OK and does not report the instance unavailable. The probe result is cached for `FETCH_URL_HEALTHCHECK_CACHE_SEC` seconds (default 60).
+- **Where it sits in the chain:** after Crawl4AI and before `mcp_fetch` by default. `FETCH_URL_ENGINE_ORDER` accepts `crawl4ai`, `browserless`, and `mcp_fetch`; unknown names are ignored, duplicates are collapsed, and `mcp_fetch` is always appended.
+- **Graceful absence:** if `BROWSERLESS_BASE_URL` is unset OR the health probe fails, `fetch_url` skips Browserless and tries the next configured engine.
+- **Deployment:** enable the compose sidecar with `docker compose --profile fetch-browserless up` and set `BROWSERLESS_BASE_URL=http://browserless:3000/` for the bot container. See `servers/browserless/README.md`.
+- **License:** Browserless v2 is SSPL-1.0 or Browserless Commercial License. Review upstream terms before using it for commercial, proprietary, or closed-source CI deployments.
 
 #### SearXNG sidecar (optional self-hosted engine)
 

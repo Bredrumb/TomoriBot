@@ -486,15 +486,16 @@ The `web_search` tool routes through an engine chain: **Brave → SearXNG → Du
 
 Per-engine timeout and the health-probe cache duration are tunable via `WEB_SEARCH_TIMEOUT_MS` and `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` (see `.env.optional.example`).
 
-#### Self-hosted URL fetch rendering (Crawl4AI sidecar)
+#### Self-hosted URL fetch rendering (Crawl4AI / Browserless sidecars)
 
-The `fetch_url` tool can optionally try Crawl4AI before falling back to the bundled MCP fetch engine. Use it when you want browser-rendered markdown for JS-heavy pages.
+The `fetch_url` tool can optionally try browser-rendering sidecars before falling back to the bundled MCP fetch engine. Use them when you want rendered content for JS-heavy pages.
 
-1. **Docker Compose profile.** Start the sidecar with `docker compose --profile fetch-crawl4ai up`, then set `CRAWL4AI_BASE_URL=http://crawl4ai:11235/` in `.env` for the bot container.
-2. **Standalone Docker (when running `bun run dev`).** See `servers/crawl4ai/README.md` for the `docker run` snippet, then set `CRAWL4AI_BASE_URL=http://localhost:11235/` in your shell.
-3. **No Crawl4AI.** Leave `CRAWL4AI_BASE_URL` unset and `fetch_url` uses bundled `mcp_fetch` only.
+1. **Crawl4AI Docker Compose profile.** Start with `docker compose --profile fetch-crawl4ai up`, then set `CRAWL4AI_BASE_URL=http://crawl4ai:11235/` in `.env` for the bot container.
+2. **Browserless Docker Compose profile.** Start with `docker compose --profile fetch-browserless up`, then set `BROWSERLESS_BASE_URL=http://browserless:3000/` and `BROWSERLESS_TOKEN` in `.env` for the bot container.
+3. **Standalone Docker (when running `bun run dev`).** See `servers/crawl4ai/README.md` or `servers/browserless/README.md` for `docker run` snippets, then set the matching `*_BASE_URL=http://localhost:<port>/` in your shell.
+4. **No browser sidecar.** Leave `CRAWL4AI_BASE_URL` and `BROWSERLESS_BASE_URL` unset and `fetch_url` uses bundled `mcp_fetch` only.
 
-Optional knobs: `FETCH_URL_ENGINE_ORDER`, `FETCH_URL_TIMEOUT_MS`, `FETCH_URL_HEALTHCHECK_CACHE_SEC`, `CRAWL4AI_TOKEN`, and `FETCH_URL_FILTER_MODE`.
+Default engine order is `crawl4ai,browserless,mcp_fetch`. Optional knobs: `FETCH_URL_ENGINE_ORDER`, `FETCH_URL_TIMEOUT_MS`, `FETCH_URL_HEALTHCHECK_CACHE_SEC`, `CRAWL4AI_TOKEN`, `FETCH_URL_FILTER_MODE`, and `BROWSERLESS_TOKEN`. Browserless v2 has SSPL/commercial license terms; review `servers/browserless/README.md` before using it in commercial or proprietary deployments.
 
 #### Monitoring with Grafana (Optional)
 

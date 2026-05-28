@@ -82,6 +82,34 @@ services:
     networks:
       - tomori-network
 
+  # Browserless URL-fetch sidecar - optional browser-rendered HTML fetcher.
+  # Enable with: docker compose --profile fetch-browserless up
+  # Set BROWSERLESS_BASE_URL=http://browserless:3000/ in .env to let TomoriBot use it.
+  browserless:
+    image: ghcr.io/browserless/chromium:latest
+    container_name: tomoribot-browserless
+    profiles:
+      - fetch-browserless
+    environment:
+      TOKEN: ${BROWSERLESS_TOKEN:-tomoribot-browserless-dev-token}
+      CONCURRENT: ${BROWSERLESS_CONCURRENT:-2}
+      QUEUED: ${BROWSERLESS_QUEUED:-4}
+      HEALTH: "true"
+      MAX_CPU_PERCENT: ${BROWSERLESS_MAX_CPU_PERCENT:-90}
+      MAX_MEMORY_PERCENT: ${BROWSERLESS_MAX_MEMORY_PERCENT:-90}
+    shm_size: "2gb"
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider \"http://localhost:3000/pressure?token=$${TOKEN}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    networks:
+      - tomori-network
+
   # TomoriBot application - the main apartment
   tomoribot:
     build:
@@ -109,6 +137,9 @@ services:
       RUN_ENV: development
       # Web-search SearXNG sidecar (resolved via compose DNS)
       SEARXNG_BASE_URL: http://searxng:8080/
+      # Browserless token default for local compose. BROWSERLESS_BASE_URL stays
+      # opt-in so Browserless is skipped unless the operator configures it.
+      BROWSERLESS_TOKEN: ${BROWSERLESS_TOKEN:-tomoribot-browserless-dev-token}
     restart: unless-stopped
     networks:
       - tomori-network

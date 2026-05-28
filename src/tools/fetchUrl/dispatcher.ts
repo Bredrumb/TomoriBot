@@ -1,17 +1,20 @@
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { localizer } from "@/utils/text/localizer";
 import { log } from "@/utils/misc/logger";
+import { BrowserlessEngine } from "./browserlessEngine";
 import { Crawl4aiEngine } from "./crawl4aiEngine";
 import { McpFetchEngine } from "./mcpFetchEngine";
 import type { FetchEngine, FetchEngineName, FetchOpts } from "./types";
 
-const DEFAULT_ENGINE_ORDER: readonly FetchEngineName[] = ["crawl4ai", "mcp_fetch"];
+const DEFAULT_ENGINE_ORDER: readonly FetchEngineName[] = ["crawl4ai", "browserless", "mcp_fetch"];
 const REQUIRED_FALLBACK_ENGINE: FetchEngineName = "mcp_fetch";
 
 function createEngine(name: FetchEngineName): FetchEngine {
   switch (name) {
     case "crawl4ai":
       return new Crawl4aiEngine();
+    case "browserless":
+      return new BrowserlessEngine();
     case "mcp_fetch":
       return new McpFetchEngine();
   }
@@ -30,7 +33,7 @@ export function parseFetchUrlEngineOrder(raw = process.env.FETCH_URL_ENGINE_ORDE
       continue;
     }
 
-    if (name !== "crawl4ai" && name !== REQUIRED_FALLBACK_ENGINE) {
+    if (name !== "crawl4ai" && name !== "browserless" && name !== REQUIRED_FALLBACK_ENGINE) {
       log.warn(`Ignoring unknown fetch_url engine name "${name}" from FETCH_URL_ENGINE_ORDER`);
       continue;
     }

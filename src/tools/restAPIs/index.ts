@@ -81,3 +81,20 @@ export type {
   Crawl4aiMarkdownResponse,
   Crawl4aiRequestConfig,
 } from "./crawl4ai/types";
+
+// Browserless URL-fetch sidecar. Consumed only by `fetchUrl/browserlessEngine.ts`.
+export {
+  browserlessContent,
+  getBrowserlessPressure,
+  isBrowserlessAvailable,
+  resetBrowserlessHealthCache,
+} from "./browserless/browserlessService";
+
+export { browserless_fetch_url } from "./browserless/toolImplementations";
+
+export type {
+  BrowserlessApiResult,
+  BrowserlessContentRequest,
+  BrowserlessPressureResponse,
+  BrowserlessRequestConfig,
+} from "./browserless/types";
