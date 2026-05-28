@@ -34,6 +34,7 @@ import { optimizeImageBuffer } from "@/utils/image/imageProcessor";
 const IMAGE_REFERENCE_MAX_COUNT = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_COUNT ?? "3", 10);
 const IMAGE_REFERENCE_MAX_TOTAL_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_TOTAL_BYTES ?? "6291456", 10);
 const IMAGE_REFERENCE_TINY_MAX_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_TINY_MAX_BYTES ?? "950000", 10);
+const IMAGE_REFERENCE_MAX_SINGLE_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_SINGLE_BYTES ?? "2097152", 10);
 
 /**
  * Tool for generating images using the active provider's native image API
@@ -66,7 +67,7 @@ export class GenerateImageTool extends BaseTool {
       mask_prompt: {
         type: "string",
         description:
-          "Optional: Short phrase describing the existing region to edit when inpaint is true, such as 'cat', 'fur', 'chair', 'blue chest piece', or 'background'. Keep this to the object/area that should be masked. Do not describe the requested change here; for example, use 'cat' or 'fur', not 'a super fluffy orange tabby kitten'.",
+          "Optional: Short, generic phrase naming the existing region to edit when inpaint is true, such as 'cat', 'fur', 'chair', 'body', 'dress', or 'background'. Use the simplest segmenter-friendly noun possible and avoid possessives, relationships, adjectives, or full descriptions. For example, use 'body', not 'the baby's body'; use 'cat' or 'fur', not 'a super fluffy orange tabby kitten'. Do not describe the requested change here.",
       },
       clothing_segment_categories: {
         type: "array",
@@ -1513,27 +1514,36 @@ export class GenerateImageTool extends BaseTool {
         const raw = Buffer.from(ref.data, "base64");
         const optimized = await optimizeImageBuffer(raw, ref.mimeType || "image/jpeg");
         const optimizedBytes = Buffer.byteLength(optimized.data, "base64");
-        if (totalBytes + optimizedBytes > IMAGE_REFERENCE_MAX_TOTAL_BYTES) {
+        const effectiveMaxBytes = Math.min(
+          IMAGE_REFERENCE_MAX_SINGLE_BYTES,
+          Math.max(1, IMAGE_REFERENCE_MAX_TOTAL_BYTES - totalBytes),
+        );
+        const normalizedRef =
+          optimizedBytes > effectiveMaxBytes
+            ? await this.buildReferenceImageWithinByteLimit(optimized, effectiveMaxBytes)
+            : optimized;
+        const normalizedBytes = Buffer.byteLength(normalizedRef.data, "base64");
+        if (totalBytes + normalizedBytes > IMAGE_REFERENCE_MAX_TOTAL_BYTES) {
           if (normalized.length === 0 && options?.keepAtLeastOne) {
             log.warn(
-              `Keeping first oversize reference image (${optimizedBytes} bytes) for inpaint fallback to avoid empty reference set`,
+              `Keeping first downscaled oversize reference image (${normalizedBytes} bytes) for inpaint fallback to avoid empty reference set`,
             );
             normalized.push({
-              mimeType: optimized.mimeType,
-              data: optimized.data,
+              mimeType: normalizedRef.mimeType,
+              data: normalizedRef.data,
             });
-            totalBytes += optimizedBytes;
+            totalBytes += normalizedBytes;
             continue;
           }
           log.warn(
-            `Skipping reference image (${optimizedBytes} bytes) to stay under total cap ${IMAGE_REFERENCE_MAX_TOTAL_BYTES} bytes`,
+            `Skipping reference image (${normalizedBytes} bytes) to stay under total cap ${IMAGE_REFERENCE_MAX_TOTAL_BYTES} bytes`,
           );
           continue;
         }
-        totalBytes += optimizedBytes;
+        totalBytes += normalizedBytes;
         normalized.push({
-          mimeType: optimized.mimeType,
-          data: optimized.data,
+          mimeType: normalizedRef.mimeType,
+          data: normalizedRef.data,
         });
       } catch (err) {
         log.warn("Failed to normalize one reference image, skipping it", err as Error);
@@ -1544,14 +1554,70 @@ export class GenerateImageTool extends BaseTool {
       const first = referenceImages[0];
       const fallbackBytes = Buffer.byteLength(first.data, "base64");
       if (fallbackBytes <= IMAGE_REFERENCE_MAX_TOTAL_BYTES || options?.keepAtLeastOne) {
-        if (fallbackBytes > IMAGE_REFERENCE_MAX_TOTAL_BYTES) {
-          log.warn(`Keeping oversize fallback reference image (${fallbackBytes} bytes) because keepAtLeastOne=true`);
+        const fallback =
+          fallbackBytes > IMAGE_REFERENCE_MAX_SINGLE_BYTES || fallbackBytes > IMAGE_REFERENCE_MAX_TOTAL_BYTES
+            ? await this.buildReferenceImageWithinByteLimit(first, Math.min(IMAGE_REFERENCE_MAX_SINGLE_BYTES, IMAGE_REFERENCE_MAX_TOTAL_BYTES))
+            : first;
+        const fallbackNormalizedBytes = Buffer.byteLength(fallback.data, "base64");
+        if (fallbackNormalizedBytes > IMAGE_REFERENCE_MAX_TOTAL_BYTES) {
+          log.warn(
+            `Keeping oversize fallback reference image (${fallbackNormalizedBytes} bytes) because keepAtLeastOne=true`,
+          );
         }
-        normalized.push(first);
+        normalized.push(fallback);
       }
     }
 
     return normalized;
+  }
+
+  private async buildReferenceImageWithinByteLimit(
+    referenceImage: {
+      mimeType: string;
+      data: string;
+    },
+    maxBytes: number,
+  ): Promise<{ mimeType: string; data: string }> {
+    const input = Buffer.from(referenceImage.data, "base64");
+    let quality = 82;
+    for (const maxDim of [2048, 1792, 1536, 1280, 1024, 896, 768, 640]) {
+      const encoded = await sharp(input)
+        .rotate()
+        .resize({
+          width: maxDim,
+          height: maxDim,
+          fit: "inside",
+          withoutEnlargement: true,
+        })
+        .jpeg({ quality, mozjpeg: true })
+        .toBuffer();
+      if (encoded.byteLength <= maxBytes) {
+        log.info(
+          `Downscaled reference image to fit payload cap: max ${maxDim}px, ${encoded.byteLength} bytes <= ${maxBytes}`,
+        );
+        return {
+          mimeType: "image/jpeg",
+          data: encoded.toString("base64"),
+        };
+      }
+      quality = Math.max(45, quality - 6);
+    }
+
+    const finalBuffer = await sharp(input)
+      .rotate()
+      .resize({
+        width: 512,
+        height: 512,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: 42, mozjpeg: true })
+      .toBuffer();
+    log.warn(`Reference image still exceeds desired payload cap after downscale (${finalBuffer.byteLength} > ${maxBytes})`);
+    return {
+      mimeType: "image/jpeg",
+      data: finalBuffer.toString("base64"),
+    };
   }
 
   private async buildTinyReferenceImage(referenceImage: {
