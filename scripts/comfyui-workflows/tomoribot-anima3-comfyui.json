@@ -1,369 +1,2101 @@
 {
   "6": {
-    "inputs": {
-      "text": ["112", 0],
-      "clip": ["18", 0]
-    },
     "class_type": "CLIPTextEncode",
-    "_meta": {
-      "title": "CLIP Text Encode (Positive Prompt)"
+    "inputs": {
+      "clip": [
+        "18",
+        0
+      ],
+      "text": "{TOMORI_PROMPT_WITH_DEFAULTS}"
     }
   },
   "7": {
-    "inputs": {
-      "text": "low quality, worst quality, low detail, bad drawing, bad quality, oldest, (score_3, score_2, score_1:0.25), jpeg artifacts, watermark, signature, artist name, low detail, missing head, missing limb, bad anatomy, bad proportions, bad hands, missing fingers, spiral eyes, multiple views",
-      "clip": ["18", 0]
-    },
     "class_type": "CLIPTextEncode",
-    "_meta": {
-      "title": "Negative Prompt"
+    "inputs": {
+      "clip": [
+        "18",
+        0
+      ],
+      "text": "{TOMORI_NEGATIVE_PROMPT}"
     }
   },
   "8": {
-    "inputs": {
-      "samples": ["121", 0],
-      "vae": ["17", 0]
-    },
     "class_type": "VAEDecode",
-    "_meta": {
-      "title": "VAEデコード"
+    "inputs": {
+      "samples": [
+        "176",
+        0
+      ],
+      "vae": [
+        "17",
+        0
+      ]
     }
   },
   "16": {
+    "class_type": "UNETLoader",
     "inputs": {
       "unet_name": "anima-preview3-base.safetensors",
       "weight_dtype": "default"
-    },
-    "class_type": "UNETLoader",
-    "_meta": {
-      "title": "拡散モデルを読み込む"
     }
   },
   "17": {
-    "inputs": {
-      "vae_name": "Qwen_Image-VAE.safetensors"
-    },
     "class_type": "VAELoader",
-    "_meta": {
-      "title": "VAEを読み込む"
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
     }
   },
   "18": {
+    "class_type": "CLIPLoader",
     "inputs": {
       "clip_name": "qwen_3_06b_base.safetensors",
       "type": "stable_diffusion",
       "device": "default"
-    },
-    "class_type": "CLIPLoader",
-    "_meta": {
-      "title": "CLIPを読み込む"
-    }
-  },
-  "37": {
-    "inputs": {
-      "model_name": "realesrganX4plusAnime_v1.pt"
-    },
-    "class_type": "UpscaleModelLoader",
-    "_meta": {
-      "title": "拡大モデルを読み込む"
     }
   },
   "40": {
-    "inputs": {
-      "filename_prefix": "2026-04-23/205033",
-      "images": ["74", 0]
-    },
     "class_type": "SaveImage",
-    "_meta": {
-      "title": "画像を保存"
-    }
-  },
-  "42": {
     "inputs": {
-      "pixels": ["47", 0],
-      "vae": ["17", 0]
-    },
-    "class_type": "VAEEncode",
-    "_meta": {
-      "title": "VAEエンコード"
-    }
-  },
-  "43": {
-    "inputs": {
-      "samples": ["120", 0],
-      "vae": ["17", 0]
-    },
-    "class_type": "VAEDecode",
-    "_meta": {
-      "title": "VAEデコード"
-    }
-  },
-  "47": {
-    "inputs": {
-      "upscale_by": 1.4,
-      "rescale_method": "bilinear",
-      "upscale_model": ["37", 0],
-      "image": ["8", 0]
-    },
-    "class_type": "UpscaleImageByUsingModel",
-    "_meta": {
-      "title": "Upscale Image By (Using Model)"
-    }
-  },
-  "52": {
-    "inputs": {
-      "seed": 202611300506928
-    },
-    "class_type": "SeedGenerator",
-    "_meta": {
-      "title": "SeedGenerator"
-    }
-  },
-  "57": {
-    "inputs": {
-      "preview_markdown": "",
-      "preview_text": "",
-      "previewMode": null,
-      "source": ["112", 0]
-    },
-    "class_type": "PreviewAny",
-    "_meta": {
-      "title": "Prompt Preview"
-    }
-  },
-  "74": {
-    "inputs": {
-      "label": "saved prompt",
-      "text_value": ["112", 0],
-      "image": ["171", 0]
-    },
-    "class_type": "AddMetaData",
-    "_meta": {
-      "title": "AddMetaData (Mikey)"
-    }
-  },
-  "112": {
-    "inputs": {
-      "prompt": "masterpiece, best quality, newest, (score_9, score_8, score_7:0.25), {TOMORI_PROMPT}",
-      "seed": ["52", 0]
-    },
-    "class_type": "Wildcard Processor",
-    "_meta": {
-      "title": "Positive Prompt"
-    }
-  },
-  "120": {
-    "inputs": {
-      "eta": 0.5,
-      "sampler_name": "linear/euler",
-      "scheduler": "sgm_uniform",
-      "steps": 5,
-      "steps_to_run": -1,
-      "denoise": 0.15,
-      "cfg": 4,
-      "seed": 837826685572747,
-      "sampler_mode": "standard",
-      "bongmath": true,
-      "model": ["16", 0],
-      "positive": ["6", 0],
-      "negative": ["7", 0],
-      "latent_image": ["42", 0]
-    },
-    "class_type": "ClownsharKSampler_Beta",
-    "_meta": {
-      "title": "ClownsharKSampler"
-    }
-  },
-  "121": {
-    "inputs": {
-      "eta": 0.5,
-      "sampler_name": "linear/euler",
-      "scheduler": "sgm_uniform",
-      "steps": 30,
-      "steps_to_run": -1,
-      "denoise": 1,
-      "cfg": 4,
-      "seed": ["52", 0],
-      "sampler_mode": "standard",
-      "bongmath": true,
-      "model": ["16", 0],
-      "positive": ["6", 0],
-      "negative": ["7", 0],
-      "latent_image": ["144", 0]
-    },
-    "class_type": "ClownsharKSampler_Beta",
-    "_meta": {
-      "title": "ClownsharKSampler"
+      "images": [
+        "199",
+        0
+      ],
+      "filename_prefix": "TomoriBot_Anima3"
     }
   },
   "144": {
-    "inputs": {
-      "width": ["161", 2],
-      "height": ["162", 2],
-      "batch_size": 1
-    },
     "class_type": "EmptyLatentImage",
-    "_meta": {
-      "title": "Aspect Ratio"
-    }
-  },
-  "159": {
     "inputs": {
-      "text": "{TOMORI_WIDTH}"
-    },
-    "class_type": "CR Text",
-    "_meta": {
-      "title": "Width (from TomoriBot)"
+      "width": "{TOMORI_WIDTH}",
+      "height": "{TOMORI_HEIGHT}",
+      "batch_size": 1
     }
   },
-  "160": {
+  "176": {
+    "class_type": "KSampler",
     "inputs": {
-      "text": "{TOMORI_HEIGHT}"
-    },
-    "class_type": "CR Text",
-    "_meta": {
-      "title": "Height (from TomoriBot)"
+      "model": [
+        "16",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "latent_image": [
+        "179",
+        0
+      ],
+      "seed": "{TOMORI_SEED}",
+      "steps": 28,
+      "cfg": 5,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": "{TOMORI_IMG2IMG_DENOISE}"
     }
   },
-  "161": {
-    "inputs": {
-      "value": ["159", 0]
-    },
-    "class_type": "ImpactConvertDataType",
-    "_meta": {
-      "title": "STR to INT"
-    }
-  },
-  "162": {
-    "inputs": {
-      "value": ["160", 0]
-    },
-    "class_type": "ImpactConvertDataType",
-    "_meta": {
-      "title": "STR to INT"
-    }
-  },
-  "164": {
-    "inputs": {
-      "text": "{TOMORI_REFERENCE_IMAGE_COUNT}"
-    },
-    "class_type": "CR Text",
-    "_meta": {
-      "title": "Reference Image Count (from TomoriBot)"
-    }
-  },
-  "165": {
-    "inputs": {
-      "value": ["164", 0]
-    },
-    "class_type": "ImpactConvertDataType",
-    "_meta": {
-      "title": "STR to INT"
-    }
-  },
-  "166": {
-    "inputs": {
-      "value": 0
-    },
-    "class_type": "ImpactInt",
-    "_meta": {
-      "title": "Zero"
-    }
-  },
-  "167": {
-    "inputs": {
-      "cmp": "a > b",
-      "a": ["165", 2],
-      "b": ["166", 0]
-    },
-    "class_type": "ImpactCompare",
-    "_meta": {
-      "title": "If there is atleast one ref. image..."
-    }
-  },
-  "168": {
+  "177": {
+    "class_type": "ImageReceiver",
     "inputs": {
       "image": "163845_329810352562401_00118.png",
       "link_id": 0,
       "save_to_workflow": true,
       "image_data": "{TOMORI_REFERENCE_IMAGE_1_DATA_URL}",
       "trigger_always": false
-    },
-    "class_type": "ImageReceiver",
-    "_meta": {
-      "title": "Reference Image (from TomoriBot)"
     }
   },
-  "170": {
+  "178": {
+    "class_type": "ImageScale",
     "inputs": {
-      "width": ["161", 2],
-      "height": ["162", 2],
-      "interpolation": "lanczos",
-      "method": "keep proportion",
-      "condition": "always",
-      "multiple_of": 0,
-      "image": ["168", 0]
-    },
-    "class_type": "ImageResize+",
-    "_meta": {
-      "title": "Keep image proportion"
+      "image": [
+        "177",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": "{TOMORI_SOURCE_WIDTH}",
+      "height": "{TOMORI_SOURCE_HEIGHT}",
+      "crop": "center"
     }
   },
-  "171": {
+  "179": {
+    "class_type": "VAEEncode",
     "inputs": {
-      "cond": ["167", 0],
-      "tt_value": ["175", 0],
-      "ff_value": ["43", 0]
-    },
-    "class_type": "ImpactConditionalBranch",
-    "_meta": {
-      "title": "ImpactConditionalBranch"
+      "pixels": [
+        "178",
+        0
+      ],
+      "vae": [
+        "17",
+        0
+      ]
     }
   },
-  "173": {
+  "186": {
+    "class_type": "KSampler",
     "inputs": {
-      "tile_size": 512,
-      "overlap": 64,
-      "temporal_size": 64,
-      "temporal_overlap": 8,
-      "pixels": ["170", 0],
-      "vae": ["17", 0]
-    },
-    "class_type": "VAEEncodeTiled",
-    "_meta": {
-      "title": "VAEエンコード（タイル）"
-    }
-  },
-  "174": {
-    "inputs": {
-      "eta": 0.5,
-      "sampler_name": "linear/euler",
-      "scheduler": "sgm_uniform",
-      "steps": 24,
-      "steps_to_run": -1,
-      "denoise": 0.6,
+      "model": [
+        "16",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "latent_image": [
+        "144",
+        0
+      ],
+      "seed": "{TOMORI_SEED}",
+      "steps": 28,
       "cfg": 5,
-      "seed": 837826685572747,
-      "sampler_mode": "standard",
-      "bongmath": true,
-      "model": ["16", 0],
-      "positive": ["6", 0],
-      "negative": ["7", 0],
-      "latent_image": ["173", 0]
-    },
-    "class_type": "ClownsharKSampler_Beta",
-    "_meta": {
-      "title": "ClownsharKSampler"
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1
     }
   },
-  "175": {
-    "inputs": {
-      "samples": ["174", 0],
-      "vae": ["17", 0]
-    },
+  "187": {
     "class_type": "VAEDecode",
-    "_meta": {
-      "title": "VAEデコード"
+    "inputs": {
+      "samples": [
+        "186",
+        0
+      ],
+      "vae": [
+        "17",
+        0
+      ]
+    }
+  },
+  "188": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_REFERENCE_IMAGE_COUNT}"
+    }
+  },
+  "189": {
+    "class_type": "ImpactInt",
+    "inputs": {
+      "value": 0
+    }
+  },
+  "190": {
+    "class_type": "ImpactCompare",
+    "inputs": {
+      "a": [
+        "188",
+        2
+      ],
+      "b": [
+        "189",
+        0
+      ],
+      "cmp": "a > b"
+    }
+  },
+  "191": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "229",
+        0
+      ],
+      "ff_value": [
+        "8",
+        0
+      ],
+      "cond": [
+        "198",
+        3
+      ]
+    }
+  },
+  "192": {
+    "class_type": "SAMModelLoader (segment anything)",
+    "inputs": {
+      "model_name": "{TOMORI_SAM_MODEL}",
+      "device_mode": "AUTO"
+    }
+  },
+  "193": {
+    "class_type": "GroundingDinoModelLoader (segment anything)",
+    "inputs": {
+      "model_name": "{TOMORI_GROUNDINGDINO_MODEL}"
+    }
+  },
+  "194": {
+    "class_type": "GroundingDinoSAMSegment (segment anything)",
+    "inputs": {
+      "sam_model": [
+        "192",
+        0
+      ],
+      "grounding_dino_model": [
+        "193",
+        0
+      ],
+      "image": [
+        "178",
+        0
+      ],
+      "prompt": "{TOMORI_MASK_PROMPT}",
+      "threshold": "{TOMORI_INPAINT_MASK_THRESHOLD}"
+    }
+  },
+  "195": {
+    "class_type": "InpaintModelConditioning",
+    "inputs": {
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "vae": [
+        "17",
+        0
+      ],
+      "pixels": [
+        "281",
+        0
+      ],
+      "mask": [
+        "268",
+        0
+      ],
+      "noise_mask": true
+    }
+  },
+  "196": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "284",
+        0
+      ],
+      "positive": [
+        "195",
+        0
+      ],
+      "negative": [
+        "195",
+        1
+      ],
+      "latent_image": [
+        "204",
+        0
+      ],
+      "seed": "{TOMORI_SEED}",
+      "steps": 28,
+      "cfg": "{TOMORI_INPAINT_CFG}",
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": "{TOMORI_INPAINT_DENOISE}"
+    }
+  },
+  "197": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "196",
+        0
+      ],
+      "vae": [
+        "17",
+        0
+      ]
+    }
+  },
+  "198": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_INPAINT}"
+    }
+  },
+  "199": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "191",
+        0
+      ],
+      "ff_value": [
+        "187",
+        0
+      ],
+      "cond": [
+        "190",
+        0
+      ]
+    }
+  },
+  "200": {
+    "class_type": "GrowMaskWithBlur",
+    "inputs": {
+      "mask": [
+        "301",
+        0
+      ],
+      "expand": "{TOMORI_INPAINT_MASK_GROW}",
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": 0,
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": false
+    }
+  },
+  "201": {
+    "class_type": "MaskToImage",
+    "inputs": {
+      "mask": [
+        "268",
+        0
+      ]
+    }
+  },
+  "202": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "209",
+        0
+      ],
+      "filename_prefix": "{TOMORI_INPAINT_MASK_FILENAME_PREFIX}"
+    }
+  },
+  "204": {
+    "class_type": "SetLatentNoiseMask",
+    "inputs": {
+      "samples": [
+        "195",
+        2
+      ],
+      "mask": [
+        "268",
+        0
+      ]
+    }
+  },
+  "205": {
+    "class_type": "EmptyImage",
+    "inputs": {
+      "width": "{TOMORI_SOURCE_WIDTH}",
+      "height": "{TOMORI_SOURCE_HEIGHT}",
+      "batch_size": 1,
+      "color": 0
+    }
+  },
+  "206": {
+    "class_type": "EmptyImage",
+    "inputs": {
+      "width": "{TOMORI_SOURCE_WIDTH}",
+      "height": "{TOMORI_SOURCE_HEIGHT}",
+      "batch_size": 1,
+      "color": 16711680
+    }
+  },
+  "207": {
+    "class_type": "ImageBlend",
+    "inputs": {
+      "image1": [
+        "178",
+        0
+      ],
+      "image2": [
+        "206",
+        0
+      ],
+      "blend_factor": 0.35,
+      "blend_mode": "normal"
+    }
+  },
+  "208": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "178",
+        0
+      ],
+      "source": [
+        "207",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "resize_source": true,
+      "mask": [
+        "268",
+        0
+      ]
+    }
+  },
+  "209": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "201",
+        0
+      ],
+      "ff_value": [
+        "205",
+        0
+      ],
+      "cond": [
+        "198",
+        3
+      ]
+    }
+  },
+  "210": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "208",
+        0
+      ],
+      "ff_value": [
+        "205",
+        0
+      ],
+      "cond": [
+        "198",
+        3
+      ]
+    }
+  },
+  "211": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "210",
+        0
+      ],
+      "filename_prefix": "{TOMORI_INPAINT_MASK_FILENAME_PREFIX}_overlay"
+    }
+  },
+  "212": {
+    "class_type": "GrowMask",
+    "inputs": {
+      "mask": [
+        "194",
+        1
+      ],
+      "expand": "{TOMORI_INPAINT_EXTEND_PADDING}",
+      "tapered_corners": true
+    }
+  },
+  "213": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "194",
+        1
+      ],
+      "source": [
+        "212",
+        0
+      ],
+      "x": "{TOMORI_INPAINT_EXTEND_X}",
+      "y": "{TOMORI_INPAINT_EXTEND_Y}",
+      "operation": "or"
+    }
+  },
+  "214": {
+    "class_type": "ImpactCompare",
+    "inputs": {
+      "a": "{TOMORI_INPAINT_MODE}",
+      "b": "extend",
+      "cmp": "a = b"
+    }
+  },
+  "215": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "220",
+        0
+      ],
+      "ff_value": [
+        "295",
+        0
+      ],
+      "cond": [
+        "214",
+        0
+      ]
+    }
+  },
+  "216": {
+    "class_type": "MaskToImage",
+    "inputs": {
+      "mask": [
+        "295",
+        0
+      ]
+    }
+  },
+  "217": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "216",
+        0
+      ],
+      "ff_value": [
+        "205",
+        0
+      ],
+      "cond": [
+        "198",
+        3
+      ]
+    }
+  },
+  "218": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "217",
+        0
+      ],
+      "filename_prefix": "{TOMORI_INPAINT_MASK_FILENAME_PREFIX}_detected"
+    }
+  },
+  "220": {
+    "class_type": "GrowMaskWithBlur",
+    "inputs": {
+      "mask": [
+        "213",
+        0
+      ],
+      "expand": "{TOMORI_INPAINT_EXTEND_GROW}",
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_INPAINT_EXTEND_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": false
+    }
+  },
+  "221": {
+    "class_type": "InvertMask",
+    "inputs": {
+      "mask": [
+        "236",
+        0
+      ]
+    }
+  },
+  "222": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "221",
+        0
+      ],
+      "ff_value": [
+        "236",
+        0
+      ],
+      "cond": [
+        "223",
+        3
+      ]
+    }
+  },
+  "223": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_INPAINT_INVERT_MASK}"
+    }
+  },
+  "227": {
+    "class_type": "GrowMaskWithBlur",
+    "inputs": {
+      "mask": [
+        "222",
+        0
+      ],
+      "expand": 0,
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_INPAINT_MASK_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": false
+    }
+  },
+  "228": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "197",
+        0
+      ],
+      "source": [
+        "178",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "resize_source": true,
+      "mask": [
+        "231",
+        0
+      ]
+    }
+  },
+  "229": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "228",
+        0
+      ],
+      "ff_value": [
+        "298",
+        0
+      ],
+      "cond": [
+        "223",
+        3
+      ]
+    }
+  },
+  "231": {
+    "class_type": "GrowMaskWithBlur",
+    "inputs": {
+      "mask": [
+        "301",
+        0
+      ],
+      "expand": 0,
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": 0,
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true
+    }
+  },
+  "232": {
+    "class_type": "GroundingDinoSAMSegment (segment anything)",
+    "inputs": {
+      "sam_model": [
+        "192",
+        0
+      ],
+      "grounding_dino_model": [
+        "193",
+        0
+      ],
+      "image": [
+        "178",
+        0
+      ],
+      "prompt": "{TOMORI_INPAINT_FACE_MASK_PROMPT}",
+      "threshold": "{TOMORI_INPAINT_FACE_MASK_THRESHOLD}"
+    }
+  },
+  "233": {
+    "class_type": "GrowMaskWithBlur",
+    "inputs": {
+      "mask": [
+        "232",
+        1
+      ],
+      "expand": "{TOMORI_INPAINT_FACE_MASK_GROW}",
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_INPAINT_FACE_MASK_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true
+    }
+  },
+  "234": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "200",
+        0
+      ],
+      "source": [
+        "256",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "operation": "subtract"
+    }
+  },
+  "235": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_INPAINT_SUBTRACT_FACE_MASK}"
+    }
+  },
+  "236": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "234",
+        0
+      ],
+      "ff_value": [
+        "200",
+        0
+      ],
+      "cond": [
+        "235",
+        3
+      ]
+    }
+  },
+  "237": {
+    "class_type": "GroundingDinoSAMSegment (segment anything)",
+    "inputs": {
+      "sam_model": [
+        "192",
+        0
+      ],
+      "grounding_dino_model": [
+        "193",
+        0
+      ],
+      "image": [
+        "178",
+        0
+      ],
+      "prompt": "{TOMORI_INPAINT_CLOTHING_MASK_PROMPT}",
+      "threshold": "{TOMORI_INPAINT_CLOTHING_MASK_THRESHOLD}"
+    }
+  },
+  "238": {
+    "class_type": "GrowMaskWithBlur",
+    "inputs": {
+      "mask": [
+        "290",
+        0
+      ],
+      "expand": "{TOMORI_INPAINT_CLOTHING_MASK_GROW}",
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_INPAINT_CLOTHING_MASK_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true
+    }
+  },
+  "239": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "233",
+        0
+      ],
+      "source": [
+        "241",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "operation": "or"
+    }
+  },
+  "240": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_INPAINT_SUBTRACT_CLOTHING_MASK}"
+    }
+  },
+  "241": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "238",
+        0
+      ],
+      "ff_value": [
+        "233",
+        0
+      ],
+      "cond": [
+        "240",
+        3
+      ]
+    }
+  },
+  "242": {
+    "class_type": "GroundingDinoSAMSegment (segment anything)",
+    "inputs": {
+      "sam_model": [
+        "192",
+        0
+      ],
+      "grounding_dino_model": [
+        "193",
+        0
+      ],
+      "image": [
+        "178",
+        0
+      ],
+      "prompt": "{TOMORI_INPAINT_ARMS_MASK_PROMPT}",
+      "threshold": "{TOMORI_INPAINT_ARMS_MASK_THRESHOLD}"
+    }
+  },
+  "243": {
+    "class_type": "GrowMaskWithBlur",
+    "inputs": {
+      "mask": [
+        "242",
+        1
+      ],
+      "expand": "{TOMORI_INPAINT_ARMS_MASK_GROW}",
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_INPAINT_ARMS_MASK_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true
+    }
+  },
+  "244": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_INPAINT_SUBTRACT_ARMS_MASK}"
+    }
+  },
+  "245": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "243",
+        0
+      ],
+      "ff_value": [
+        "233",
+        0
+      ],
+      "cond": [
+        "244",
+        3
+      ]
+    }
+  },
+  "246": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "239",
+        0
+      ],
+      "source": [
+        "245",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "operation": "or"
+    }
+  },
+  "247": {
+    "class_type": "GroundingDinoSAMSegment (segment anything)",
+    "inputs": {
+      "sam_model": [
+        "192",
+        0
+      ],
+      "grounding_dino_model": [
+        "193",
+        0
+      ],
+      "image": [
+        "178",
+        0
+      ],
+      "prompt": "{TOMORI_INPAINT_NECK_MASK_PROMPT}",
+      "threshold": "{TOMORI_INPAINT_NECK_MASK_THRESHOLD}"
+    }
+  },
+  "248": {
+    "class_type": "GrowMaskWithBlur",
+    "inputs": {
+      "mask": [
+        "247",
+        1
+      ],
+      "expand": "{TOMORI_INPAINT_NECK_MASK_GROW}",
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_INPAINT_NECK_MASK_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true
+    }
+  },
+  "249": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_INPAINT_SUBTRACT_NECK_MASK}"
+    }
+  },
+  "250": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "248",
+        0
+      ],
+      "ff_value": [
+        "233",
+        0
+      ],
+      "cond": [
+        "249",
+        3
+      ]
+    }
+  },
+  "251": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "246",
+        0
+      ],
+      "source": [
+        "250",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "operation": "or"
+    }
+  },
+  "252": {
+    "class_type": "GroundingDinoSAMSegment (segment anything)",
+    "inputs": {
+      "sam_model": [
+        "192",
+        0
+      ],
+      "grounding_dino_model": [
+        "193",
+        0
+      ],
+      "image": [
+        "178",
+        0
+      ],
+      "prompt": "{TOMORI_INPAINT_SKIN_MASK_PROMPT}",
+      "threshold": "{TOMORI_INPAINT_SKIN_MASK_THRESHOLD}"
+    }
+  },
+  "253": {
+    "class_type": "GrowMaskWithBlur",
+    "inputs": {
+      "mask": [
+        "252",
+        1
+      ],
+      "expand": "{TOMORI_INPAINT_SKIN_MASK_GROW}",
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_INPAINT_SKIN_MASK_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true
+    }
+  },
+  "254": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_INPAINT_SUBTRACT_SKIN_MASK}"
+    }
+  },
+  "255": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "253",
+        0
+      ],
+      "ff_value": [
+        "233",
+        0
+      ],
+      "cond": [
+        "254",
+        3
+      ]
+    }
+  },
+  "256": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "251",
+        0
+      ],
+      "source": [
+        "255",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "operation": "or"
+    }
+  },
+  "266": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "178",
+        0
+      ],
+      "source": [
+        "197",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "resize_source": true,
+      "mask": [
+        "268",
+        0
+      ]
+    }
+  },
+  "267": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "227",
+        0
+      ],
+      "source": [
+        "256",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "operation": "subtract"
+    }
+  },
+  "268": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "227",
+        0
+      ],
+      "ff_value": [
+        "227",
+        0
+      ],
+      "cond": [
+        "235",
+        3
+      ]
+    }
+  },
+  "269": {
+    "class_type": "InpaintCropImproved",
+    "inputs": {
+      "image": [
+        "178",
+        0
+      ],
+      "downscale_algorithm": "bilinear",
+      "upscale_algorithm": "bicubic",
+      "preresize": false,
+      "preresize_mode": "ensure minimum resolution",
+      "preresize_min_width": 1024,
+      "preresize_min_height": 1024,
+      "preresize_max_width": 4096,
+      "preresize_max_height": 4096,
+      "mask_fill_holes": true,
+      "mask_expand_pixels": 0,
+      "mask_invert": false,
+      "mask_blend_pixels": 16,
+      "mask_hipass_filter": 0.1,
+      "extend_for_outpainting": "{TOMORI_OUTPAINT_USE_CROP_STITCH}",
+      "extend_up_factor": "{TOMORI_OUTPAINT_EXTEND_UP_FACTOR}",
+      "extend_down_factor": "{TOMORI_OUTPAINT_EXTEND_DOWN_FACTOR}",
+      "extend_left_factor": "{TOMORI_OUTPAINT_EXTEND_LEFT_FACTOR}",
+      "extend_right_factor": "{TOMORI_OUTPAINT_EXTEND_RIGHT_FACTOR}",
+      "context_from_mask_extend_factor": 2.25,
+      "output_resize_to_target_size": true,
+      "output_target_width": "{TOMORI_WIDTH}",
+      "output_target_height": "{TOMORI_HEIGHT}",
+      "output_padding": "128",
+      "device_mode": "gpu (much faster)",
+      "mask": [
+        "268",
+        0
+      ]
+    }
+  },
+  "270": {
+    "class_type": "InpaintModelConditioning",
+    "inputs": {
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "vae": [
+        "17",
+        0
+      ],
+      "pixels": [
+        "269",
+        1
+      ],
+      "mask": [
+        "269",
+        2
+      ],
+      "noise_mask": true
+    }
+  },
+  "271": {
+    "class_type": "SetLatentNoiseMask",
+    "inputs": {
+      "samples": [
+        "270",
+        2
+      ],
+      "mask": [
+        "269",
+        2
+      ]
+    }
+  },
+  "272": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "284",
+        0
+      ],
+      "positive": [
+        "270",
+        0
+      ],
+      "negative": [
+        "270",
+        1
+      ],
+      "latent_image": [
+        "271",
+        0
+      ],
+      "seed": "{TOMORI_SEED}",
+      "steps": 28,
+      "cfg": "{TOMORI_INPAINT_CFG}",
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": "{TOMORI_INPAINT_DENOISE}"
+    }
+  },
+  "273": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "272",
+        0
+      ],
+      "vae": [
+        "17",
+        0
+      ]
+    }
+  },
+  "274": {
+    "class_type": "InpaintStitchImproved",
+    "inputs": {
+      "stitcher": [
+        "269",
+        0
+      ],
+      "inpainted_image": [
+        "273",
+        0
+      ]
+    }
+  },
+  "275": {
+    "class_type": "ImpactCompare",
+    "inputs": {
+      "a": "{TOMORI_INPAINT_PRESET}",
+      "b": "broad_recolor",
+      "cmp": "a = b"
+    }
+  },
+  "276": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "274",
+        0
+      ],
+      "ff_value": [
+        "266",
+        0
+      ],
+      "cond": [
+        "275",
+        0
+      ]
+    }
+  },
+  "277": {
+    "class_type": "EmptyImage",
+    "inputs": {
+      "width": "{TOMORI_SOURCE_WIDTH}",
+      "height": "{TOMORI_SOURCE_HEIGHT}",
+      "batch_size": 1,
+      "color": "{TOMORI_RECOLOR_TARGET_COLOR}"
+    }
+  },
+  "278": {
+    "class_type": "ImageBlend",
+    "inputs": {
+      "image1": [
+        "178",
+        0
+      ],
+      "image2": [
+        "277",
+        0
+      ],
+      "blend_factor": "{TOMORI_INPAINT_MASKED_TINT_BLEND}",
+      "blend_mode": "normal"
+    }
+  },
+  "279": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "178",
+        0
+      ],
+      "source": [
+        "278",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "resize_source": true,
+      "mask": [
+        "268",
+        0
+      ]
+    }
+  },
+  "280": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_INPAINT_USE_MASKED_TINT_REFERENCE}"
+    }
+  },
+  "281": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "279",
+        0
+      ],
+      "ff_value": [
+        "178",
+        0
+      ],
+      "cond": [
+        "280",
+        3
+      ]
+    }
+  },
+  "282": {
+    "class_type": "DifferentialDiffusion",
+    "inputs": {
+      "model": [
+        "16",
+        0
+      ],
+      "strength": "{TOMORI_INPAINT_DIFFERENTIAL_DIFFUSION_STRENGTH}"
+    }
+  },
+  "283": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_INPAINT_USE_DIFFERENTIAL_DIFFUSION}"
+    }
+  },
+  "284": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "282",
+        0
+      ],
+      "ff_value": [
+        "16",
+        0
+      ],
+      "cond": [
+        "283",
+        3
+      ]
+    }
+  },
+  "285": {
+    "class_type": "ClothesSegment",
+    "inputs": {
+      "Hat": "{TOMORI_INPAINT_CLOTHING_SEGMENT_HAT}",
+      "Hair": "{TOMORI_INPAINT_CLOTHING_SEGMENT_HAIR}",
+      "Face": "{TOMORI_INPAINT_CLOTHING_SEGMENT_FACE}",
+      "Sunglasses": "{TOMORI_INPAINT_CLOTHING_SEGMENT_SUNGLASSES}",
+      "Upper-clothes": "{TOMORI_INPAINT_CLOTHING_SEGMENT_UPPER_CLOTHES}",
+      "Skirt": "{TOMORI_INPAINT_CLOTHING_SEGMENT_SKIRT}",
+      "Dress": "{TOMORI_INPAINT_CLOTHING_SEGMENT_DRESS}",
+      "Belt": "{TOMORI_INPAINT_CLOTHING_SEGMENT_BELT}",
+      "Pants": "{TOMORI_INPAINT_CLOTHING_SEGMENT_PANTS}",
+      "Left-arm": "{TOMORI_INPAINT_CLOTHING_SEGMENT_LEFT_ARM}",
+      "Right-arm": "{TOMORI_INPAINT_CLOTHING_SEGMENT_RIGHT_ARM}",
+      "Left-leg": "{TOMORI_INPAINT_CLOTHING_SEGMENT_LEFT_LEG}",
+      "Right-leg": "{TOMORI_INPAINT_CLOTHING_SEGMENT_RIGHT_LEG}",
+      "Bag": "{TOMORI_INPAINT_CLOTHING_SEGMENT_BAG}",
+      "Scarf": "{TOMORI_INPAINT_CLOTHING_SEGMENT_SCARF}",
+      "Left-shoe": "{TOMORI_INPAINT_CLOTHING_SEGMENT_LEFT_SHOE}",
+      "Right-shoe": "{TOMORI_INPAINT_CLOTHING_SEGMENT_RIGHT_SHOE}",
+      "Background": "{TOMORI_INPAINT_CLOTHING_SEGMENT_BACKGROUND}",
+      "process_res": 512,
+      "mask_blur": 0,
+      "mask_offset": 0,
+      "invert_output": false,
+      "background": "Alpha",
+      "background_color": "#222222",
+      "images": [
+        "178",
+        0
+      ]
+    }
+  },
+  "286": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "293",
+        0
+      ],
+      "ff_value": [
+        "194",
+        1
+      ],
+      "cond": [
+        "287",
+        3
+      ]
+    }
+  },
+  "287": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_INPAINT_USE_CLOTHING_PARSER_TARGET}"
+    }
+  },
+  "288": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "291",
+        1
+      ],
+      "ff_value": [
+        "286",
+        0
+      ],
+      "cond": [
+        "292",
+        3
+      ]
+    }
+  },
+  "289": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_INPAINT_USE_CLOTHING_PARSER_PROTECTION}"
+    }
+  },
+  "290": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "293",
+        0
+      ],
+      "ff_value": [
+        "237",
+        1
+      ],
+      "cond": [
+        "289",
+        3
+      ]
+    }
+  },
+  "291": {
+    "class_type": "ClothesSegment",
+    "inputs": {
+      "Hat": false,
+      "Hair": true,
+      "Face": false,
+      "Sunglasses": false,
+      "Upper-clothes": false,
+      "Skirt": false,
+      "Dress": false,
+      "Belt": false,
+      "Pants": false,
+      "Left-arm": false,
+      "Right-arm": false,
+      "Left-leg": false,
+      "Right-leg": false,
+      "Bag": false,
+      "Scarf": false,
+      "Left-shoe": false,
+      "Right-shoe": false,
+      "Background": false,
+      "process_res": 512,
+      "mask_blur": 0,
+      "mask_offset": 0,
+      "invert_output": false,
+      "background": "Alpha",
+      "background_color": "#222222",
+      "images": [
+        "178",
+        0
+      ]
+    }
+  },
+  "292": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_INPAINT_USE_CLOTHING_PARSER_HAIR_TARGET}"
+    }
+  },
+  "293": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "285",
+        1
+      ],
+      "source": [
+        "291",
+        1
+      ],
+      "x": 0,
+      "y": 0,
+      "operation": "subtract"
+    }
+  },
+  "294": {
+    "class_type": "RMBG",
+    "inputs": {
+      "image": [
+        "178",
+        0
+      ],
+      "model": "{TOMORI_RMBG_MODEL}",
+      "sensitivity": "{TOMORI_RMBG_SENSITIVITY}",
+      "process_res": "{TOMORI_RMBG_PROCESS_RES}",
+      "mask_blur": "{TOMORI_RMBG_MASK_BLUR}",
+      "mask_offset": "{TOMORI_RMBG_MASK_OFFSET}",
+      "invert_output": false,
+      "refine_foreground": "{TOMORI_RMBG_REFINE_FOREGROUND}",
+      "background": "Alpha",
+      "background_color": "#222222"
+    }
+  },
+  "295": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "294",
+        1
+      ],
+      "ff_value": [
+        "288",
+        0
+      ],
+      "cond": [
+        "296",
+        3
+      ]
+    }
+  },
+  "296": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_INPAINT_USE_RMBG_BACKGROUND_MASK}"
+    }
+  },
+  "297": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_OUTPAINT}"
+    }
+  },
+  "298": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "315",
+        0
+      ],
+      "ff_value": [
+        "276",
+        0
+      ],
+      "cond": [
+        "297",
+        3
+      ]
+    }
+  },
+  "299": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_OUTPAINT}"
+    }
+  },
+  "300": {
+    "class_type": "SolidMask",
+    "inputs": {
+      "value": 1,
+      "width": "{TOMORI_SOURCE_WIDTH}",
+      "height": "{TOMORI_SOURCE_HEIGHT}"
+    }
+  },
+  "301": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "300",
+        0
+      ],
+      "ff_value": [
+        "215",
+        0
+      ],
+      "cond": [
+        "299",
+        3
+      ]
+    }
+  },
+  "302": {
+    "class_type": "EmptyImage",
+    "inputs": {
+      "width": "{TOMORI_WIDTH}",
+      "height": "{TOMORI_HEIGHT}",
+      "batch_size": 1,
+      "color": "{TOMORI_OUTPAINT_UNDERPAINT_COLOR}"
+    }
+  },
+  "303": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "302",
+        0
+      ],
+      "source": [
+        "178",
+        0
+      ],
+      "x": "{TOMORI_OUTPAINT_SOURCE_X}",
+      "y": "{TOMORI_OUTPAINT_SOURCE_Y}",
+      "resize_source": false,
+      "mask": [
+        "300",
+        0
+      ]
+    }
+  },
+  "304": {
+    "class_type": "SolidMask",
+    "inputs": {
+      "value": 1,
+      "width": "{TOMORI_WIDTH}",
+      "height": "{TOMORI_HEIGHT}"
+    }
+  },
+  "305": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "304",
+        0
+      ],
+      "source": [
+        "317",
+        0
+      ],
+      "x": "{TOMORI_OUTPAINT_MASK_SOURCE_X}",
+      "y": "{TOMORI_OUTPAINT_MASK_SOURCE_Y}",
+      "operation": "subtract"
+    }
+  },
+  "306": {
+    "class_type": "InpaintModelConditioning",
+    "inputs": {
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "vae": [
+        "17",
+        0
+      ],
+      "pixels": [
+        "336",
+        0
+      ],
+      "mask": [
+        "337",
+        0
+      ],
+      "noise_mask": true
+    }
+  },
+  "307": {
+    "class_type": "SetLatentNoiseMask",
+    "inputs": {
+      "samples": [
+        "306",
+        2
+      ],
+      "mask": [
+        "337",
+        0
+      ]
+    }
+  },
+  "308": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "284",
+        0
+      ],
+      "positive": [
+        "306",
+        0
+      ],
+      "negative": [
+        "306",
+        1
+      ],
+      "latent_image": [
+        "307",
+        0
+      ],
+      "seed": "{TOMORI_SEED}",
+      "steps": 28,
+      "cfg": "{TOMORI_INPAINT_CFG}",
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": "{TOMORI_OUTPAINT_DENOISE}"
+    }
+  },
+  "310": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "308",
+        0
+      ],
+      "vae": [
+        "17",
+        0
+      ]
+    }
+  },
+  "311": {
+    "class_type": "MaskToImage",
+    "inputs": {
+      "mask": [
+        "332",
+        1
+      ]
+    }
+  },
+  "312": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "311",
+        0
+      ],
+      "filename_prefix": "{TOMORI_INPAINT_MASK_FILENAME_PREFIX}_outpaint"
+    }
+  },
+  "313": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "310",
+        0
+      ],
+      "source": [
+        "332",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "resize_source": false,
+      "mask": [
+        "333",
+        0
+      ]
+    }
+  },
+  "314": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_OUTPAINT_FULL_CANVAS}"
+    }
+  },
+  "315": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "338",
+        0
+      ],
+      "ff_value": [
+        "316",
+        0
+      ],
+      "cond": [
+        "314",
+        3
+      ]
+    }
+  },
+  "316": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "274",
+        0
+      ],
+      "source": [
+        "178",
+        0
+      ],
+      "x": "{TOMORI_OUTPAINT_SOURCE_X}",
+      "y": "{TOMORI_OUTPAINT_SOURCE_Y}",
+      "resize_source": false,
+      "mask": [
+        "300",
+        0
+      ]
+    }
+  },
+  "317": {
+    "class_type": "SolidMask",
+    "inputs": {
+      "value": 1,
+      "width": "{TOMORI_OUTPAINT_MASK_SOURCE_WIDTH}",
+      "height": "{TOMORI_OUTPAINT_MASK_SOURCE_HEIGHT}"
+    }
+  },
+  "318": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "178",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": "{TOMORI_WIDTH}",
+      "height": "{TOMORI_HEIGHT}",
+      "crop": "center"
+    }
+  },
+  "319": {
+    "class_type": "SolidMask",
+    "inputs": {
+      "value": 0,
+      "width": "{TOMORI_SOURCE_WIDTH}",
+      "height": "{TOMORI_SOURCE_HEIGHT}"
+    }
+  },
+  "320": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "319",
+        0
+      ],
+      "source": [
+        "317",
+        0
+      ],
+      "x": "{TOMORI_OUTPAINT_PROTECTED_SOURCE_X}",
+      "y": "{TOMORI_OUTPAINT_PROTECTED_SOURCE_Y}",
+      "operation": "or"
+    }
+  },
+  "321": {
+    "class_type": "GrowMaskWithBlur",
+    "inputs": {
+      "mask": [
+        "194",
+        1
+      ],
+      "expand": "{TOMORI_OUTPAINT_SUBJECT_MASK_GROW}",
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_OUTPAINT_SUBJECT_MASK_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true
+    }
+  },
+  "322": {
+    "class_type": "ImpactConvertDataType",
+    "inputs": {
+      "value": "{TOMORI_OUTPAINT_PRESERVE_SUBJECT_ONLY}"
+    }
+  },
+  "323": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "331",
+        0
+      ],
+      "ff_value": [
+        "320",
+        0
+      ],
+      "cond": [
+        "322",
+        3
+      ]
+    }
+  },
+  "324": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "304",
+        0
+      ],
+      "source": [
+        "331",
+        0
+      ],
+      "x": "{TOMORI_OUTPAINT_SOURCE_X}",
+      "y": "{TOMORI_OUTPAINT_SOURCE_Y}",
+      "operation": "subtract"
+    }
+  },
+  "325": {
+    "class_type": "ImpactConditionalBranch",
+    "inputs": {
+      "tt_value": [
+        "324",
+        0
+      ],
+      "ff_value": [
+        "305",
+        0
+      ],
+      "cond": [
+        "322",
+        3
+      ]
+    }
+  },
+  "330": {
+    "class_type": "InvertMask",
+    "inputs": {
+      "mask": [
+        "320",
+        0
+      ]
+    }
+  },
+  "331": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "321",
+        0
+      ],
+      "source": [
+        "330",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "operation": "subtract"
+    }
+  },
+  "332": {
+    "class_type": "ImagePadForOutpaint",
+    "inputs": {
+      "image": [
+        "178",
+        0
+      ],
+      "left": "{TOMORI_OUTPAINT_PAD_LEFT}",
+      "top": "{TOMORI_OUTPAINT_PAD_TOP}",
+      "right": "{TOMORI_OUTPAINT_PAD_RIGHT}",
+      "bottom": "{TOMORI_OUTPAINT_PAD_BOTTOM}",
+      "feathering": "{TOMORI_OUTPAINT_PAD_FEATHER}"
+    }
+  },
+  "333": {
+    "class_type": "InvertMask",
+    "inputs": {
+      "mask": [
+        "332",
+        1
+      ]
+    }
+  },
+  "334": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "178",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": "{TOMORI_WIDTH}",
+      "height": "{TOMORI_HEIGHT}",
+      "crop": "center"
+    }
+  },
+  "335": {
+    "class_type": "ImageBlur",
+    "inputs": {
+      "image": [
+        "334",
+        0
+      ],
+      "blur_radius": "{TOMORI_OUTPAINT_GUIDE_BLUR_RADIUS}",
+      "sigma": "{TOMORI_OUTPAINT_GUIDE_BLUR_SIGMA}"
+    }
+  },
+  "336": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "335",
+        0
+      ],
+      "source": [
+        "332",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "resize_source": false,
+      "mask": [
+        "333",
+        0
+      ]
+    }
+  },
+  "337": {
+    "class_type": "GrowMaskWithBlur",
+    "inputs": {
+      "mask": [
+        "325",
+        0
+      ],
+      "expand": 0,
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_OUTPAINT_BLEND_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true
+    }
+  },
+  "338": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "310",
+        0
+      ],
+      "source": [
+        "178",
+        0
+      ],
+      "x": "{TOMORI_OUTPAINT_SOURCE_X}",
+      "y": "{TOMORI_OUTPAINT_SOURCE_Y}",
+      "resize_source": false,
+      "mask": [
+        "339",
+        0
+      ]
+    }
+  },
+  "339": {
+    "class_type": "GrowMaskWithBlur",
+    "inputs": {
+      "mask": [
+        "320",
+        0
+      ],
+      "expand": 0,
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_OUTPAINT_CENTER_PRESERVE_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true
     }
   }
 }

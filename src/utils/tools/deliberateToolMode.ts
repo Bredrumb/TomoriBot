@@ -141,6 +141,7 @@ const MEMORY_TOOL_NAMES = ["create_long_term_memory", "update_long_term_memory"]
 const IMAGE_GENERATION_TOOL_NAMES = ["generate_image", "generate_image_nai"];
 const VIDEO_GENERATION_TOOL_NAMES = ["generate_video"];
 const VOICE_GENERATION_TOOL_NAMES = ["generate_voice_message"];
+const SHORT_TERM_MEMORY_TOOL_NAMES = ["update_short_term_memory"];
 const MEDIA_ANALYSIS_TOOL_NAMES = [
   "analyze_image",
   "increase_media_context",
@@ -160,7 +161,7 @@ export const DELIBERATE_TOOL_TRIGGER_TARGETS = [
   { value: "reminder", label: "Reminder/task", toolNames: ["create_task"] },
   { value: "cross-channel", label: "Cross-channel message", toolNames: ["cross_channel_message"] },
   { value: "search", label: "Web search/fetch", toolNames: WEB_TOOL_NAMES },
-  { value: "memory", label: "Long-term memory", toolNames: MEMORY_TOOL_NAMES },
+  { value: "memory", label: "Memory", toolNames: [...MEMORY_TOOL_NAMES, ...SHORT_TERM_MEMORY_TOOL_NAMES] },
   { value: "media-analysis", label: "Media analysis", toolNames: MEDIA_ANALYSIS_TOOL_NAMES },
   { value: "message-action", label: "Message actions", toolNames: MESSAGE_ACTION_TOOL_NAMES },
   { value: "sticker", label: "Sticker selection", toolNames: STICKER_TOOL_NAMES },
@@ -276,12 +277,13 @@ export function hasDeliberateToolIntent(
   content: string | null | undefined,
   customTriggers?: DeliberateToolTriggerMap | null,
 ): boolean {
-  const text = content?.trim();
-  if (!text) return false;
+  const text = content?.trim() ?? "";
 
   if (getCustomDeliberateToolIntentResult(text, customTriggers).allowedToolNames.length > 0) {
     return true;
   }
+
+  if (!text) return false;
 
   if (hasReminderCreationIntent(text)) {
     return true;
@@ -333,7 +335,9 @@ function getCustomDeliberateToolIntentResult(
     for (const trigger of triggers) {
       if (typeof trigger === "string" || trigger.type === "literal") {
         const normalizedTrigger = normalizeDeliberateToolTrigger(getCustomTriggerValue(trigger));
-        if (!normalizedTrigger || !literalTriggerMatches(text, normalizedTrigger)) continue;
+        if (!normalizedTrigger) continue;
+        // "^" is the deliberate-tool wildcard: expose this target on every turn.
+        if (normalizedTrigger !== "^" && !literalTriggerMatches(text, normalizedTrigger)) continue;
         addToolMatches(allowedToolNames, matches, toolNames, normalizedTrigger, "custom");
         continue;
       }
@@ -356,8 +360,7 @@ export function getDeliberateToolIntentResult(
   content: string | null | undefined,
   customTriggers?: DeliberateToolTriggerMap | null,
 ): DeliberateToolIntentResult {
-  const text = content?.trim();
-  if (!text) return { allowedToolNames: [], matches: [] };
+  const text = content?.trim() ?? "";
 
   const allowedToolNames: string[] = [];
   const matches: DeliberateToolIntentMatch[] = [];
@@ -365,6 +368,13 @@ export function getDeliberateToolIntentResult(
   const customResult = getCustomDeliberateToolIntentResult(text, customTriggers);
   allowedToolNames.push(...customResult.allowedToolNames);
   matches.push(...customResult.matches);
+
+  if (!text) {
+    return {
+      allowedToolNames: uniqueToolNames(allowedToolNames),
+      matches: uniqueMatches(matches),
+    };
+  }
 
   if (hasReminderCreationIntent(text)) {
     addToolMatches(allowedToolNames, matches, ["create_task"], "reminder/timer request", "built-in");

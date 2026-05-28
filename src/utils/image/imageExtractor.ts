@@ -11,6 +11,7 @@ import { log } from "../misc/logger";
 import type { ToolContext } from "../../types/tool/interfaces";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
+import { optimizeImageBuffer } from "@/utils/image/imageProcessor";
 
 /** Intermediate representation of a discovered image URL before base64 conversion */
 interface ImageUrlInfo {
@@ -35,6 +36,24 @@ export interface ExtractedImage {
  */
 function buildEmojiCdnUrl(emojiId: string): string {
   return `https://cdn.discordapp.com/emojis/${emojiId}.png`;
+}
+
+function inferImageMimeType(urlOrName: string, fallback = "image/jpeg"): string {
+  const lower = urlOrName.toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".gif")) return "image/gif";
+  if (lower.endsWith(".bmp")) return "image/bmp";
+  if (lower.endsWith(".avif")) return "image/avif";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  return fallback;
+}
+
+function isLikelyImageAttachment(attachment: { contentType?: string | null; name?: string | null; url?: string }): boolean {
+  if (attachment.contentType?.startsWith("image/")) {
+    return true;
+  }
+  return inferImageMimeType(attachment.name || attachment.url || "", "").startsWith("image/");
 }
 
 /**
@@ -100,12 +119,12 @@ export async function extractImagesFromMessage(messageId: string, context: ToolC
   const imageUrls: ImageUrlInfo[] = [];
 
   // 2. Direct attachments
-  const imageAttachments = message.attachments.filter((attachment) => attachment.contentType?.startsWith("image/"));
+  const imageAttachments = message.attachments.filter((attachment) => isLikelyImageAttachment(attachment));
 
   for (const attachment of imageAttachments.values()) {
     imageUrls.push({
       url: attachment.url,
-      mimeType: attachment.contentType || "image/jpeg",
+      mimeType: attachment.contentType || inferImageMimeType(attachment.name || attachment.url || ""),
       source: `attachment: ${attachment.name}`,
     });
   }
@@ -170,10 +189,8 @@ export async function extractImagesFromMessage(messageId: string, context: ToolC
         continue;
       }
 
-      results.push({
-        mimeType: imageInfo.mimeType,
-        data: imageResponse.buffer.toString("base64"),
-      });
+      const optimized = await optimizeImageBuffer(imageResponse.buffer, imageInfo.mimeType);
+      results.push({ mimeType: optimized.mimeType, data: optimized.data });
 
       log.info(`Successfully converted image from ${imageInfo.source} to base64`);
     } catch (imgErr) {
