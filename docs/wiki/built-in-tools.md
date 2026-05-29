@@ -63,23 +63,11 @@ Guild MCP replacements still work: if an enabled guild MCP server is registered 
 [Crawl4AI](https://docs.crawl4ai.com/) is an optional browser-rendered markdown sidecar used only behind `fetch_url`.
 
 - **When it activates:** `CRAWL4AI_BASE_URL` is set AND `${CRAWL4AI_BASE_URL}/health` responds OK. The probe result is cached for `FETCH_URL_HEALTHCHECK_CACHE_SEC` seconds (default 60).
-- **Where it sits in the chain:** before `mcp_fetch` by default. `FETCH_URL_ENGINE_ORDER` accepts comma-separated engine names, ignores unknown names, collapses duplicates, and always appends `mcp_fetch`.
+- **Where it sits in the chain:** before `mcp_fetch` by default. `FETCH_URL_ENGINE_ORDER` accepts `crawl4ai` and `mcp_fetch`; unknown names are ignored, duplicates are collapsed, and `mcp_fetch` is always appended.
 - **Graceful absence:** if `CRAWL4AI_BASE_URL` is unset OR the health probe fails, `fetch_url` uses `mcp_fetch` only.
 - **Private targets:** TomoriBot blocks private/internal target URLs before calling Crawl4AI unless `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`.
 - **Cookie injection:** set `CRAWL4AI_COOKIES_JSON` to a JSON array of `{name, value, domain?}` objects. When set, the engine switches from the `/md` endpoint to `/crawl` with `browser_config.cookies` — required because `/md` has no cookie field. Useful for login-gated sites; note that sites with headless browser fingerprinting (e.g. Twitter/X) will still block content even with valid cookies. See `docs/guides/setup-fetch-sidecars.md`.
 - **Deployment:** enable the compose sidecar with `docker compose --profile fetch-crawl4ai up` and set `CRAWL4AI_BASE_URL=http://crawl4ai:11235/` for the bot container. See `servers/crawl4ai/README.md`.
-
-#### Browserless sidecar (optional URL-fetch engine)
-
-[Browserless](https://docs.browserless.io/) is an optional browser-rendered HTML sidecar used only behind `fetch_url`. TomoriBot calls Browserless `/content`, then converts the rendered HTML to markdown with Readability and Turndown.
-
-- **When it activates:** `BROWSERLESS_BASE_URL` is set AND `${BROWSERLESS_BASE_URL}/pressure` responds OK and does not report the instance unavailable. The probe result is cached for `FETCH_URL_HEALTHCHECK_CACHE_SEC` seconds (default 60).
-- **Where it sits in the chain:** after Crawl4AI and before `mcp_fetch` by default. `FETCH_URL_ENGINE_ORDER` accepts `crawl4ai`, `browserless`, and `mcp_fetch`; unknown names are ignored, duplicates are collapsed, and `mcp_fetch` is always appended.
-- **Graceful absence:** if `BROWSERLESS_BASE_URL` is unset OR the health probe fails, `fetch_url` skips Browserless and tries the next configured engine.
-- **Private targets:** TomoriBot blocks private/internal target URLs before calling Browserless unless `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`.
-- **Cookie injection:** set `BROWSERLESS_COOKIES_JSON` to a JSON array of `{name, value, domain?}` objects. Cookies are passed directly in the `/content` request body — no endpoint switch needed. Same fingerprinting caveat as Crawl4AI applies. See `docs/guides/setup-fetch-sidecars.md`.
-- **Deployment:** enable the compose sidecar with `docker compose --profile fetch-browserless up` and set `BROWSERLESS_BASE_URL=http://browserless:3000/` for the bot container. See `servers/browserless/README.md`.
-- **License:** Browserless v2 is SSPL-1.0 or Browserless Commercial License. Review upstream terms before using it for commercial, proprietary, or closed-source CI deployments.
 
 #### SearXNG sidecar (optional self-hosted engine)
 

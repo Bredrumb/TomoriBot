@@ -52,6 +52,8 @@ export async function buildUsersInConversationContextItem(params: {
   impersonatedIdentityName: string | null;
   matrixUsers?: Map<string, string>;
   syntheticUsers?: Map<string, { displayName: string; type: "persona" | "webhook" }>;
+  publicPersonaAttributes?: Array<{ personaId: number; personaName: string; attributes: string[] }>;
+  toolPromptMacroResolver: { expand(text: string): Promise<string> };
   conversationCorpus: string | null;
   snapshot?: import("@/types/misc/context").RequestSnapshot;
   convertMentions: MentionConverter;
@@ -72,7 +74,8 @@ export async function buildUsersInConversationContextItem(params: {
   for (const userIdToProcess of params.userList) {
     if (
       (params.client.user && userIdToProcess === params.client.user.id) ||
-      (params.tomoriState?.is_alter && userIdToProcess === String(params.tomoriState.persona_id))
+      (params.tomoriState?.is_alter && userIdToProcess === String(params.tomoriState.persona_id)) ||
+      (params.tomoriState?.persona_id != null && userIdToProcess === `persona:${params.tomoriState.persona_id}`)
     ) {
       userEntries.push({
         userId: userIdToProcess,
@@ -211,6 +214,7 @@ export async function buildUsersInConversationContextItem(params: {
 
   appendMatrixAndSyntheticUsers(params, userEntries, aliasCounts);
   await applySyntheticPersonaAppearance(params, userEntries);
+  await applyPublicPersonaAttributes(params, userEntries, aliasCounts);
 
   usersInConversationText += renderUserEntries(userEntries, aliasCounts, conversationUsers, params.isUserImpersonation);
   usersInConversationText += renderChannelTimeContext(params);
@@ -402,6 +406,67 @@ async function applySyntheticPersonaAppearance(
     const targetEntry = userEntries.find((entry) => entry.userId === syntheticId);
     if (persona && targetEntry) {
       targetEntry.imageAppearanceTags = normalizeImageAppearanceTags(persona.nai_tags);
+    }
+  }
+}
+
+async function applyPublicPersonaAttributes(
+  params: Parameters<typeof buildUsersInConversationContextItem>[0],
+  userEntries: UserConversationEntry[],
+  aliasCounts: Map<string, number>,
+): Promise<void> {
+  if (!params.publicPersonaAttributes || params.publicPersonaAttributes.length === 0) return;
+
+  for (const publicPersona of params.publicPersonaAttributes) {
+    const convertedAttributes: string[] = [];
+    for (const attribute of publicPersona.attributes) {
+      const trimmedAttribute = attribute.trim();
+      if (!trimmedAttribute) continue;
+
+      convertedAttributes.push(
+        await params.convertMentions(
+          await params.toolPromptMacroResolver.expand(trimmedAttribute),
+          params.client,
+          params.guildId,
+          "User",
+          publicPersona.personaName,
+          params.tomoriConfig.personal_memories_enabled,
+          params.snapshot,
+        ),
+      );
+    }
+
+    if (convertedAttributes.length === 0) continue;
+
+    const syntheticId = String(publicPersona.personaId);
+    let targetEntry = userEntries.find(
+      (entry) => entry.userId === syntheticId || entry.userId === `persona:${syntheticId}`,
+    );
+
+    if (!targetEntry) {
+      targetEntry = userEntries.find((entry) => entry.displayName === publicPersona.personaName);
+    }
+
+    const attributeBlock = [
+      `- Known Information about ${publicPersona.personaName}:`,
+      ...convertedAttributes.map((attr) => `  - ${attr}`),
+    ];
+
+    if (targetEntry) {
+      targetEntry.detailLines.push(...attributeBlock);
+    } else {
+      const aliases = new Set<string>();
+      addAlias(aliasCounts, aliases, publicPersona.personaName);
+      userEntries.push({
+        userId: `persona:${syntheticId}`,
+        displayName: publicPersona.personaName,
+        detailLines: ["- Status: Online or status unknown", ...attributeBlock],
+        isBot: false,
+        mentionAliases: Array.from(aliases),
+        primaryAlias: publicPersona.personaName,
+        mentionable: false,
+        resolvableTargetId: `persona:${syntheticId}`,
+      });
     }
   }
 }

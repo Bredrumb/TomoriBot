@@ -27,7 +27,6 @@ export enum ContextItemTag {
   // System-level instructions and configurations
   SYSTEM_INSTRUCTION_BLOCK = "system_instruction_block", // For the main consolidated system prompt
   SYSTEM_PERSONALITY = "system_personality", // Specific to bot's core personality attributes
-  SYSTEM_PUBLIC_PERSONA_ATTRIBUTES = "system_public_persona_attributes", // Public attributes from other triggered personas
   SYSTEM_HUMANIZER_RULES = "system_humanizer_rules", // Specific to humanization instructions
   SYSTEM_PERSONA_PROMPT = "system_persona_prompt", // Specific to persona prompt
   SYSTEM_FUNCTION_GUIDE = "system_function_guide", // New: For instructions on using available functions

@@ -479,6 +479,7 @@ export async function execute(
 
     const simplifiedMessages: SimpleMsg[] = [];
     const userListSet = new Set<string>();
+    const syntheticUsers = new Map<string, { displayName: string; type: "persona" | "webhook" }>();
 
     for (const message of messagesArray) {
       // Skip fully-private users (same gate as real context building)
@@ -504,6 +505,7 @@ export async function execute(
           authorType = "persona";
           personaName = matchedPersona.persona_nickname;
           effectiveAuthorId = `persona:${matchedPersona.persona_id ?? matchedPersona.persona_nickname}`;
+          syntheticUsers.set(effectiveAuthorId, { displayName: authorName, type: "persona" });
         } else if (webhookName) {
           authorName = webhookName;
         }
@@ -672,6 +674,30 @@ export async function execute(
     const channelDesc = "topic" in textChannel ? (textChannel.topic as string | null) : null;
 
     // 13. Assemble context using the selected persona — buildContext handles preset routing internally
+    // Mirror personal memories: only include public attributes for personas present in the
+    // fetched conversation history (userListSet contains "persona:{id}" entries from line 506).
+    const personaIdsInHistory = new Set(
+      Array.from(userListSet)
+        .filter((id) => id.startsWith("persona:"))
+        .map((id) => Number.parseInt(id.slice("persona:".length), 10))
+        .filter((id) => !Number.isNaN(id)),
+    );
+    const publicPersonaAttributes = personas
+      .filter(
+        (persona) =>
+          typeof persona.persona_id === "number" &&
+          persona.persona_id !== selectedPersona.persona_id &&
+          personaIdsInHistory.has(persona.persona_id),
+      )
+      .map((persona) => ({
+        personaId: persona.persona_id as number,
+        personaName: persona.persona_nickname,
+        attributes: (persona.persona_attributes ?? [])
+          .filter((attribute) => attribute.is_public)
+          .map((attribute) => attribute.attribute_text),
+      }))
+      .filter((persona) => persona.attributes.length > 0);
+
     const contextBuild = await buildContext({
       guildId: interaction.guild.id,
       serverName: interaction.guild.name,
@@ -679,7 +705,7 @@ export async function execute(
       simplifiedMessageHistory: simplifiedMessages,
       userList: Array.from(userListSet),
       matrixUsers: new Map<string, string>(),
-      syntheticUsers: new Map<string, { displayName: string; type: "persona" | "webhook" }>(),
+      syntheticUsers,
       channelDesc,
       channelName,
       channelId: interaction.channelId,
@@ -691,12 +717,14 @@ export async function execute(
       snapshot: { triggererUserRow: userData, tomoriState: effectivePersona },
       tomoriNickname: selectedPersona.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
       tomoriAttributes: selectedPersona.attribute_list,
+      publicPersonaAttributes,
       tomoriConfig: effectivePersona.config,
       personaPrompt: selectedPersona.persona_prompt ?? null,
       personaLineageId: selectedPersona.persona_lineage_id,
       isDMChannel,
       seesImages: effectiveLlm.sees_images,
       seesVideos: effectiveLlm.sees_videos,
+      hasVisionTool: !!effectivePersona.vision_llm && !effectiveLlm.sees_images,
     });
 
     // Mutable copy — tail directives are spliced/pushed in below
@@ -892,10 +920,6 @@ type TagLabel = {
 const TAG_LABELS: Record<string, TagLabel> = {
   [ContextItemTag.SYSTEM_INSTRUCTION_BLOCK]: { title: "System Instruction Block", hint: "system-managed" },
   [ContextItemTag.SYSTEM_PERSONALITY]: { title: "Persona Attributes", hint: "/persona attribute" },
-  [ContextItemTag.SYSTEM_PUBLIC_PERSONA_ATTRIBUTES]: {
-    title: "Other Personas' Public Attributes",
-    hint: "/persona attribute",
-  },
   [ContextItemTag.SYSTEM_HUMANIZER_RULES]: { title: "System Prompt", hint: "/config system-prompt" },
   [ContextItemTag.SYSTEM_PERSONA_PROMPT]: { title: "Persona Prompt", hint: "/persona prompt" },
   [ContextItemTag.SYSTEM_FUNCTION_GUIDE]: { title: "Function Guide", hint: "system-managed" },
@@ -914,6 +938,7 @@ const TAG_LABELS: Record<string, TagLabel> = {
     subsections: [
       { title: "Personal/Server Memories", hint: "/memory" },
       { title: "Discord Presence/Role/Channel", hint: "system-managed" },
+      { title: "Other Personas' Public Attributes", hint: "/persona attribute" },
     ],
   },
   [ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY]: { title: "Short-Term Memory", hint: "/server stm manage" },

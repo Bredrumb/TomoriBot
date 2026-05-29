@@ -23,6 +23,7 @@ import { lazySyncGuildEmojis } from "@/utils/cache/emojiLazySync";
 import { lazySyncGuildStickers } from "@/utils/cache/stickerLazySync";
 import { callExpressionInitializationForProvider } from "@/providers/utils/providerFeatureExecutors";
 import { providerSupportsFeature } from "@/utils/provider/providerInfoRegistry";
+import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { resolveStructuredOutputCapability } from "@/utils/provider/providerCapabilityResolver";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
 
@@ -137,8 +138,8 @@ export async function execute(
   }
 
   // 2. Load Tomori state for this server
-  const tomoriState = await personaRepository.loadState(interaction.guild.id);
-  if (!tomoriState) {
+  const baseTomoriState = await personaRepository.loadState(interaction.guild.id);
+  if (!baseTomoriState) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.tomori_not_setup_title",
       descriptionKey: "general.errors.tomori_not_setup_description",
@@ -150,6 +151,11 @@ export async function execute(
 
   // 3. Defer reply early (this operation may take time)
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  // 3a. Overlay the invoking user's personal (BYOK) provider so the expression
+  //     generation runs on their personal model/key when configured. Done after
+  //     deferReply since it performs DB reads (keeps the 3s ack window safe).
+  const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
 
   const overwrite = interaction.options.getBoolean("overwrite") ?? false;
 

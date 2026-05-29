@@ -528,16 +528,15 @@ docker compose up
 
 エンジンごとのタイムアウトとヘルスプローブのキャッシュ時間は `WEB_SEARCH_TIMEOUT_MS` と `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` で調整可能（`.env.optional.example` 参照）。
 
-#### セルフホスト型URL取得レンダリング（Crawl4AI / Browserlessサイドカー）
+#### セルフホスト型URL取得レンダリング（Crawl4AIサイドカー）
 
 `fetch_url` ツールは、任意でブラウザレンダリング用サイドカーを先に試し、その後に組み込みMCP fetchエンジンへフォールバックできます。JavaScriptが多いページのレンダリング済み内容を取得したい場合に使います。
 
 1. **Crawl4AI Docker Composeプロファイル。** `docker compose --profile fetch-crawl4ai up` で起動し、botコンテナ用に `.env` へ `CRAWL4AI_BASE_URL=http://crawl4ai:11235/` を設定します。
-2. **Browserless Docker Composeプロファイル。** `docker compose --profile fetch-browserless up` で起動し、botコンテナ用に `.env` へ `BROWSERLESS_BASE_URL=http://browserless:3000/` と `BROWSERLESS_TOKEN` を設定します。
-3. **スタンドアロンDocker（`bun run dev` 利用時）。** `servers/crawl4ai/README.md` または `servers/browserless/README.md` の `docker run` スニペットを参照し、対応する `*_BASE_URL=http://localhost:<port>/` をシェルで設定します。
-4. **ブラウザサイドカーなし。** `CRAWL4AI_BASE_URL` と `BROWSERLESS_BASE_URL` を未設定のままにすると、`fetch_url` は組み込み `mcp_fetch` のみを使用します。
+2. **スタンドアロンDocker（`bun run dev` 利用時）。** `servers/crawl4ai/README.md` の `docker run` スニペットを参照し、`CRAWL4AI_BASE_URL=http://localhost:11235/` をシェルで設定します。
+3. **ブラウザサイドカーなし。** `CRAWL4AI_BASE_URL` を未設定のままにすると、`fetch_url` は組み込み `mcp_fetch` のみを使用します。
 
-デフォルトのエンジン順は `crawl4ai,browserless,mcp_fetch` です。任意設定: `FETCH_URL_ENGINE_ORDER`, `FETCH_URL_TIMEOUT_MS`, `FETCH_URL_HEALTHCHECK_CACHE_SEC`, `FETCH_URL_ALLOW_PRIVATE_NETWORK`, `CRAWL4AI_TOKEN`, `FETCH_URL_FILTER_MODE`, `BROWSERLESS_TOKEN`。`FETCH_URL_ALLOW_PRIVATE_NETWORK=false` のままにしてください。このbotが信頼済みのセルフホスト環境で動作し、ユーザーに `fetch_url` からlocalhost/プライベート/内部ネットワークへ到達させてもよい場合だけ有効にします。Browserless v2 にはSSPL/商用ライセンス条件があるため、商用またはプロプライエタリ環境で使う前に `servers/browserless/README.md` を確認してください。
+デフォルトのエンジン順は `crawl4ai,mcp_fetch` です。任意設定: `FETCH_URL_ENGINE_ORDER`, `FETCH_URL_TIMEOUT_MS`, `FETCH_URL_HEALTHCHECK_CACHE_SEC`, `FETCH_URL_ALLOW_PRIVATE_NETWORK`, `CRAWL4AI_TOKEN`, `FETCH_URL_FILTER_MODE`。`FETCH_URL_ALLOW_PRIVATE_NETWORK=false` のままにしてください。このbotが信頼済みのセルフホスト環境で動作し、ユーザーに `fetch_url` からlocalhost/プライベート/内部ネットワークへ到達させてもよい場合だけ有効にします。
 
 #### Grafanaでのモニタリング（オプション）
 

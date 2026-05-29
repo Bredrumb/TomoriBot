@@ -176,7 +176,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     ContextItemTag.SYSTEM_HUMANIZER_RULES,
     ContextItemTag.SYSTEM_PERSONA_PROMPT,
     ContextItemTag.SYSTEM_PERSONALITY,
-    ContextItemTag.SYSTEM_PUBLIC_PERSONA_ATTRIBUTES,
     ContextItemTag.KNOWLEDGE_SERVER_INFO,
     ContextItemTag.KNOWLEDGE_SERVER_EMOJIS, // Text-based with semantic metadata (deterministic ordering)
     ContextItemTag.KNOWLEDGE_SERVER_STICKERS, // Text-based with semantic metadata (deterministic ordering)

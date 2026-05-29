@@ -37,7 +37,6 @@ Subset of `BuildContextParams` plus carried state — see signature in
 | Not impersonation, `personaPrompt` present | Persona prompt | `SYSTEM_PERSONA_PROMPT` |
 | Impersonation, `impersonatedUserPrompt` present | Impersonated user prompt | `SYSTEM_HUMANIZER_RULES` |
 | Not impersonation | `tomoriAttributes.join("\n")` | `SYSTEM_PERSONALITY` |
-| Not impersonation and other triggered personas have public attributes | Owner-grouped public attributes | `SYSTEM_PUBLIC_PERSONA_ATTRIBUTES` |
 
 All emitted items are `role: "system"`.
 
@@ -50,9 +49,6 @@ All emitted items are `role: "system"`.
   `convertMentions(...)` for `<@id>` / `<#id>` / `{bot}` / `{user}`
   resolution. The `triggererName` argument is hardcoded to `"User"` here
   (the prompt items are persona-facing, not user-facing).
-- **Owner-aware public attributes** — public attributes are converted one
-  attribute at a time using the owning persona's name as `botName`, so `{bot}`
-  never resolves to the active responder by accident.
 
 ## Invariants
 

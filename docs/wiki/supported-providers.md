@@ -47,7 +47,7 @@ If you don't have the workstation to host your own models, TomoriBot supports a 
 
 The LLM sees a single unified `web_search(query, category)` tool. A dispatcher routes each call through an engine chain (Brave → SearXNG → DuckDuckGo → Felo) and returns the first successful result. Individual engines are no longer LLM-visible.
 
-For URL reading, the LLM sees `fetch_url(url, max_length?, start_index?, raw?)`. It can route through optional Crawl4AI and Browserless sidecars first, then always falls back to internal `mcp_fetch`. It is unavailable on NovelAI.
+For URL reading, the LLM sees `fetch_url(url, max_length?, start_index?, raw?)`. It can route through an optional Crawl4AI sidecar first, then always falls back to internal `mcp_fetch`. It is unavailable on NovelAI.
 
 | Engine | Categories | Integration | Notes |
 |----------|-------------|-----|-------|
@@ -56,5 +56,4 @@ For URL reading, the LLM sees `fetch_url(url, max_length?, start_index?, raw?)`.
 | **DuckDuckGo** | text only | MCP server | Fallback when Brave/SearXNG are unavailable; transparently cascades to Felo on rate limits. |
 | **Felo AI Search** | text only | MCP server | Final-resort text fallback. |
 | **Crawl4AI** | URL fetch | REST API (self-hosted sidecar) | Optional hidden `fetch_url` engine. Activates when `CRAWL4AI_BASE_URL` is set and `/health` is reachable. Browser-renders pages and returns markdown via `/md`; falls back to `mcp_fetch` when unavailable. See `servers/crawl4ai/README.md`. |
-| **Browserless** | URL fetch | REST API (self-hosted sidecar) | Optional hidden `fetch_url` engine. Activates when `BROWSERLESS_BASE_URL` is set and `/pressure` is reachable. Browser-renders pages through `/content`; TomoriBot converts HTML to markdown, then falls back to the next engine when unavailable. Review Browserless v2 license terms before commercial/proprietary use. See `servers/browserless/README.md`. |
-| **MCP Fetch** | URL fetch | Bundled MCP server | Mandatory final `fetch_url` fallback and default behavior when browser sidecars are unset or unhealthy. |
+| **MCP Fetch** | URL fetch | Bundled MCP server | Mandatory final `fetch_url` fallback and default behavior when no browser sidecar is configured or healthy. |

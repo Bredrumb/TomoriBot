@@ -219,6 +219,8 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       impersonatedIdentityName,
       matrixUsers,
       syntheticUsers,
+      publicPersonaAttributes,
+      toolPromptMacroResolver,
       conversationCorpus,
       snapshot,
       convertMentions,

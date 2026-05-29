@@ -252,12 +252,21 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
       ? { ...turn.persona, llm: { ...turn.persona.llm, has_tools: false } }
       : turn.persona;
   const triggeredPersonaIdSet = new Set(turn.triggeredPersonaIds);
+  // Mirror personal memories: only surface public attributes for personas that have
+  // actually spoken in the conversation window (are in syntheticUsers), plus any
+  // co-triggered peers responding to the same message right now.
+  const personaNamesInHistory = new Set(
+    Array.from(history.syntheticUsers.values())
+      .filter((u) => u.type === "persona")
+      .map((u) => u.displayName.toLowerCase()),
+  );
   const publicPersonaAttributes = turn.allPersonas
     .filter(
       (persona) =>
         typeof persona.persona_id === "number" &&
         persona.persona_id !== effectivePersona.persona_id &&
-        triggeredPersonaIdSet.has(persona.persona_id),
+        (personaNamesInHistory.has(persona.persona_nickname.toLowerCase()) ||
+          triggeredPersonaIdSet.has(persona.persona_id)),
     )
     .map((persona) => ({
       personaId: persona.persona_id as number,

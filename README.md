@@ -441,7 +441,7 @@ docker compose up
 TomoriBot supports optional Docker sidecars to enhance her tools and add local monitoring. See the guides below for simple setup instructions:
 
 - **[SearXNG Web Search Sidecar](docs/guides/setup-searxng.md)** - A self-hosted metasearch instance to bypass single-engine API limits for the `web_search` tool.
-- **[Crawl4AI & Browserless Sidecars](docs/guides/setup-fetch-sidecars.md)** - Browser-rendering sidecars to fetch and process JavaScript-heavy webpages for the `fetch_url` tool.
+- **[Crawl4AI Sidecar](docs/guides/setup-fetch-sidecars.md)** - A browser-rendering sidecar to fetch and process JavaScript-heavy webpages for the `fetch_url` tool.
 - **[Local Grafana Monitoring](docs/guides/local-monitoring.md)** - Instructions on how to spin up a local Grafana dashboard to monitor TomoriBot's performance and database metrics.
 
 <!-- ROADMAP -->

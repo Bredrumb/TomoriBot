@@ -367,6 +367,12 @@ Rules:
 
 `/generate video` is a modal-driven async generation command. It validates `videogen_enabled`, provider capability, API key, configured `video_model_id`, and server quota before polling the selected provider until the MP4 result is ready.
 
+### Personal-provider (BYOK) routing in commands
+
+Any command that performs AI work the invoking user triggers must overlay that user's personal (BYOK) provider onto the loaded server state via `applyPersonalProviderSelectionsToTomoriState(tomoriState, userData.user_id)` before reading `config.api_key`, deriving the provider/model name, or validating capabilities. The overlay returns the server state unchanged when the user has no enabled personal provider, so it is always safe to call. Commands that currently apply it: `/persona generate`, `/novelai image generate`, `/generate image`, `/generate video`, `/bot generate image`, `/memory document add`, `/memory history import`, `/server initialize expressions`, and `/tool estimate cost` (so its live estimate stays in parity with what would actually run for the user).
+
+The one deliberate exception is `/config model embedding`, which re-embeds **server-wide** documents under server credentials (`resolveCapabilityCredentials(serverId, "embedding")` with no `userId`). This is bulk maintenance of a pre-existing server resource rather than a fresh user action, so it intentionally stays on server credentials.
+
 Forward-looking command rewrite guidance (naming conventions, checklist-style settings pattern, migration map) is now part of `docs/guides/adding-slash-command.md`. The runtime loader and current implementation still use the existing `src/commands/` structure.
 
 ## Adding a New Command

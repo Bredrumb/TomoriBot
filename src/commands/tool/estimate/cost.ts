@@ -9,6 +9,7 @@ import { replyInfoEmbed, replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { getAvailableToolsForContext } from "@/tools/toolRegistry";
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
+import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { buildContext } from "@/utils/text/contextBuilder";
 import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
@@ -1578,8 +1579,20 @@ export async function execute(
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
-    const tomoriState = await getCachedTomoriState(serverDiscId);
-    if (!tomoriState?.config.api_key) {
+    const baseTomoriState = await getCachedTomoriState(serverDiscId);
+    if (!baseTomoriState) {
+      await sendLegacyEstimateEmbed(interaction, locale, true);
+      return;
+    }
+
+    // Overlay the invoking user's personal (BYOK) provider so the live estimate
+    // reflects the model/key that would actually run for them, keeping cost
+    // estimates in parity with runtime (see buildRuntimeParityContext).
+    const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(
+      baseTomoriState,
+      userData.user_id ?? null,
+    );
+    if (!tomoriState.config.api_key) {
       await sendLegacyEstimateEmbed(interaction, locale, true);
       return;
     }
