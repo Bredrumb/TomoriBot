@@ -638,17 +638,27 @@ export async function execute(
       const messageContent = combinedContent.length > 0 ? combinedContent : null;
       const mediaSourceMessageIds = hasLocalMedia ? [message.id] : undefined;
 
-      // Merge consecutive messages from the same author (same as real context building)
+      // Merge consecutive same-author messages, mirroring the real context path
+      // (buildSimplifiedHistory): collapse only when both sides are pure text — if
+      // either side carries media, keep separate turns so per-message media IDs stay
+      // unambiguous.
       const prevMsg = simplifiedMessages[simplifiedMessages.length - 1];
-      if (prevMsg && prevMsg.authorId === effectiveAuthorId && prevMsg.content && messageContent) {
+      const currentHasMedia =
+        imageAttachments.length > 0 || videoAttachments.length > 0 || (mediaSourceMessageIds?.length ?? 0) > 0;
+      const prevHasMedia =
+        !!prevMsg &&
+        (prevMsg.imageAttachments.length > 0 ||
+          prevMsg.videoAttachments.length > 0 ||
+          (prevMsg.mediaSourceMessageIds?.length ?? 0) > 0);
+      const shouldKeepSeparateMediaTurn = currentHasMedia || prevHasMedia;
+      if (
+        prevMsg &&
+        prevMsg.authorId === effectiveAuthorId &&
+        prevMsg.content &&
+        messageContent &&
+        !shouldKeepSeparateMediaTurn
+      ) {
         prevMsg.content += `\n${messageContent}`;
-        if (imageAttachments.length > 0) prevMsg.imageAttachments.push(...imageAttachments);
-        if (videoAttachments.length > 0) prevMsg.videoAttachments.push(...videoAttachments);
-        if (mediaSourceMessageIds?.length) {
-          prevMsg.mediaSourceMessageIds = [
-            ...new Set([...(prevMsg.mediaSourceMessageIds ?? []), ...mediaSourceMessageIds]),
-          ];
-        }
       } else if (messageContent || imageAttachments.length > 0 || videoAttachments.length > 0) {
         simplifiedMessages.push({
           id: message.id,

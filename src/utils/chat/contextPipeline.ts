@@ -477,12 +477,16 @@ async function buildSimplifiedHistory(
   const personaByName = new Map(turn.allPersonas.map((persona) => [persona.persona_nickname.toLowerCase(), persona]));
   const reactionBudgetState = createReactionContextBudgetState();
 
+  // Tracks whether the most recently pushed entry came from a "$:" debug message.
+  // A debug message and a normal message from the same user share an authorId, so
+  // this guard keeps them as separate turns (mirrors main's prevWasDebugMessage).
+  let previousEntryWasDebug = false;
   for (const msg of messages) {
     if ((await getCachedPrivacyLevel(msg.author.id)) === PrivacyLevel.FULL) {
       continue;
     }
 
-    const simplified = await simplifyMessage(
+    const result = await simplifyMessage(
       turn,
       msg,
       personaByName,
@@ -491,9 +495,61 @@ async function buildSimplifiedHistory(
       matrixUsers,
       reactionBudgetState,
     );
-    if (!simplified) continue;
-    simplifiedMessages.push(simplified);
+    if (!result) continue;
+    const { message: simplified, isDebug } = result;
     userIds.add(simplified.authorId);
+
+    // 1. Decide whether this message collapses into the previous turn.
+    //    Consecutive messages from the same effective author merge into one turn,
+    //    but only when BOTH sides are pure text — if either side carries media we
+    //    keep separate turns so per-message media IDs stay unambiguous for
+    //    media-targeted tools. A debug/normal boundary also forces a split even
+    //    when the authorId matches.
+    const previousEntry = simplifiedMessages[simplifiedMessages.length - 1];
+    const currentHasMedia =
+      simplified.imageAttachments.length > 0 ||
+      simplified.videoAttachments.length > 0 ||
+      (simplified.mediaSourceMessageIds?.length ?? 0) > 0;
+    const previousHasMedia =
+      !!previousEntry &&
+      (previousEntry.imageAttachments.length > 0 ||
+        previousEntry.videoAttachments.length > 0 ||
+        (previousEntry.mediaSourceMessageIds?.length ?? 0) > 0);
+    const previousHasContent =
+      !!previousEntry &&
+      (!!previousEntry.content ||
+        previousEntry.imageAttachments.length > 0 ||
+        previousEntry.videoAttachments.length > 0);
+    const isSameEffectiveAuthor =
+      !!previousEntry && previousEntry.authorId === simplified.authorId && previousEntryWasDebug === isDebug;
+    const shouldKeepSeparateMediaTurn = currentHasMedia || previousHasMedia;
+
+    if (
+      previousEntry &&
+      isSameEffectiveAuthor &&
+      simplified.content &&
+      previousHasContent &&
+      !shouldKeepSeparateMediaTurn
+    ) {
+      // 2. Merge: lazily promote the previous entry into a combined entry, then
+      //    append. The combined* tracking fields let reveal_message_metadata still
+      //    expose one ref_N + timestamp per original message (see contextAnnotations).
+      if (!previousEntry.combinedMessageIds) {
+        previousEntry.combinedMessageIds = [previousEntry.id];
+        previousEntry.individualContents = [previousEntry.content ?? ""];
+        previousEntry.combinedCreatedAts = [previousEntry.createdAt ?? 0];
+      }
+      previousEntry.combinedMessageIds.push(simplified.id);
+      previousEntry.individualContents?.push(simplified.content);
+      previousEntry.combinedCreatedAts?.push(simplified.createdAt ?? 0);
+      previousEntry.content = `${previousEntry.content}\n${simplified.content}`;
+      // The merged-into entry keeps its debug/normal kind, so previousEntryWasDebug is unchanged.
+      continue;
+    }
+
+    // 3. Otherwise start a new turn.
+    simplifiedMessages.push(simplified);
+    previousEntryWasDebug = isDebug;
   }
 
   if (turn.lockedTurn.admission.client.user?.id && !turn.isUserImpersonation) {
@@ -552,7 +608,7 @@ async function simplifyMessage(
   syntheticUsers: Map<string, { displayName: string; type: "persona" | "webhook" }>,
   matrixUsers: Map<string, string>,
   reactionBudgetState: ReactionContextBudgetState,
-): Promise<SimplifiedMessageForContext | null> {
+): Promise<{ message: SimplifiedMessageForContext; isDebug: boolean } | null> {
   const isJoin = msg.type === MessageType.UserJoin;
   const isDebug = !isJoin && msg.content.startsWith("$:");
   const isWebhook = Boolean(msg.webhookId);
@@ -689,24 +745,27 @@ async function simplifyMessage(
   }
 
   return {
-    id: msg.id,
-    authorId,
-    authorName,
-    authorType,
-    personaName,
-    content,
-    createdAt: msg.createdTimestamp,
-    mediaSourceMessageIds:
-      imageAttachments.length > 0 || videoAttachments.length > 0
-        ? hasLocalMedia
-          ? [msg.id, ...mediaSourceMessageIds]
-          : mediaSourceMessageIds.length > 0
-            ? mediaSourceMessageIds
-            : undefined
-        : undefined,
-    remoteMediaSourceKind: !hasLocalMedia && mediaSourceMessageIds.length > 0 ? remoteMediaSourceKind : undefined,
-    imageAttachments,
-    videoAttachments,
+    message: {
+      id: msg.id,
+      authorId,
+      authorName,
+      authorType,
+      personaName,
+      content,
+      createdAt: msg.createdTimestamp,
+      mediaSourceMessageIds:
+        imageAttachments.length > 0 || videoAttachments.length > 0
+          ? hasLocalMedia
+            ? [msg.id, ...mediaSourceMessageIds]
+            : mediaSourceMessageIds.length > 0
+              ? mediaSourceMessageIds
+              : undefined
+          : undefined,
+      remoteMediaSourceKind: !hasLocalMedia && mediaSourceMessageIds.length > 0 ? remoteMediaSourceKind : undefined,
+      imageAttachments,
+      videoAttachments,
+    },
+    isDebug,
   };
 }
 

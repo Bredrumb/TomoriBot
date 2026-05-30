@@ -49,6 +49,14 @@ Key fields populated here:
   chat mode, runs STT synchronously *before* the simplify loop so cache
   lookups inside `simplifyMessage` are non-async. Writes results to the
   voice-transcript cache.
+- **Consecutive same-author merge** — after simplifying each message, the loop
+  collapses it into the previous entry when (1) the effective `authorId`
+  matches, (2) the debug (`$:`)/normal kind matches (a debug message never
+  merges with a normal one even though they share an authorId), and (3)
+  **neither side carries media** (media forces a separate turn so per-message
+  media IDs stay unambiguous). Merged entries record `combinedMessageIds`,
+  `individualContents`, and `combinedCreatedAts` so `reveal_message_metadata`
+  can still surface one `ref_N` + timestamp per original message.
 - **Persona-asset cache load** — `loadEmojiStickerCache(...)` may hit Discord
   if the cache is cold.
 - **Reply-target fetch** — `channel.messages.fetch(referenceMessageId)` if
@@ -86,6 +94,9 @@ After this stage runs:
   tail), queued-reply directive, uncensor directive, and manual-prefill
   model message (last).
 - `simplifiedMessages` excludes messages from privacy-FULL users.
+- `simplifiedMessages` collapses runs of consecutive same-author pure-text
+  messages into a single entry (see the merge rule above); media-bearing or
+  debug-boundary messages remain their own entries.
 - The `messageIdMap` is populated with every message ID the LLM will see.
 - `streamingContext.explicitLongTermMemoryIntent` reflects whether the
   triggering message mentions long-term memory phrasing.

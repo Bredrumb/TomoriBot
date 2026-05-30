@@ -20,6 +20,10 @@ export type SimplifiedMessageForContext = {
   remoteMediaSourceKind?: "reply" | "forwarded";
   combinedMessageIds?: string[];
   individualContents?: string[];
+  /** Per-constituent send timestamps, parallel to `combinedMessageIds`. Lets
+   * reveal_message_metadata surface an accurate sent time for each original
+   * message folded into a merged turn. */
+  combinedCreatedAts?: number[];
   imageAttachments: Array<{
     url: string;
     proxyUrl: string;

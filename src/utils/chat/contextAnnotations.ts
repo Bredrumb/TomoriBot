@@ -268,14 +268,36 @@ export function annotateRecentMessageMetadataInContext(params: {
   messageIdMap: MessageIdMap;
 }): { annotatedCount: number; patchedReplyReferenceCount: number } {
   const metadataByMessageId = new Map<string, { inline: string; annotation: string }>();
+  // Maps a dialogue turn's representative message ID (the entry's own `id`, which is
+  // what context items carry) to the ordered list of original message IDs folded
+  // into that turn. Merged turns expand to all constituents; plain turns map to one.
+  const constituentIdsByEntryId = new Map<string, string[]>();
   for (const message of params.simplifiedMessages) {
-    if (!message.createdAt) continue;
-    const messageRef = params.messageIdMap.register(message.id, "ref");
-    const inline = buildRecentMessageMetadataInline(message.createdAt);
-    metadataByMessageId.set(message.id, {
-      inline,
-      annotation: buildRecentMessageMetadataAnnotation(messageRef, message.createdAt),
-    });
+    // 1. Resolve the original messages folded into this entry. Merged entries carry
+    //    combinedMessageIds + combinedCreatedAts (parallel arrays); plain entries
+    //    fall back to their own id + createdAt.
+    const isMerged = !!message.combinedMessageIds && message.combinedMessageIds.length > 0;
+    const ids = isMerged ? (message.combinedMessageIds as string[]) : [message.id];
+    const createdAts = isMerged
+      ? (message.combinedCreatedAts ?? [])
+      : message.createdAt !== undefined
+        ? [message.createdAt]
+        : [];
+
+    const registeredIds: string[] = [];
+    for (let i = 0; i < ids.length; i += 1) {
+      const createdAt = createdAts[i];
+      if (createdAt === undefined) continue;
+      const messageRef = params.messageIdMap.register(ids[i], "ref");
+      metadataByMessageId.set(ids[i], {
+        inline: buildRecentMessageMetadataInline(createdAt),
+        annotation: buildRecentMessageMetadataAnnotation(messageRef, createdAt),
+      });
+      registeredIds.push(ids[i]);
+    }
+    if (registeredIds.length > 0) {
+      constituentIdsByEntryId.set(message.id, registeredIds);
+    }
   }
 
   if (metadataByMessageId.size === 0) {
@@ -287,8 +309,8 @@ export function annotateRecentMessageMetadataInContext(params: {
     if (contextItem.metadataTag !== ContextItemTag.DIALOGUE_HISTORY || !contextItem.messageId) {
       continue;
     }
-    const metadata = metadataByMessageId.get(contextItem.messageId);
-    if (!metadata) {
+    const constituentIds = constituentIdsByEntryId.get(contextItem.messageId);
+    if (!constituentIds) {
       continue;
     }
     const textParts = contextItem.parts.filter(
@@ -297,11 +319,21 @@ export function annotateRecentMessageMetadataInContext(params: {
     if (textParts.some((part) => part.text.includes("[System: Message metadata: ref="))) {
       continue;
     }
+    // 2. Emit one metadata line per constituent message (in message order) so each
+    //    original message in a merged turn still exposes its own ref_N handle and
+    //    sent timestamp for manage_message / interact_with_recent_message.
+    const annotationBlock = constituentIds
+      .map((id) => metadataByMessageId.get(id)?.annotation)
+      .filter((annotation): annotation is string => annotation !== undefined)
+      .join("\n");
+    if (!annotationBlock) {
+      continue;
+    }
     const targetTextPart = textParts.at(-1);
     if (targetTextPart) {
-      targetTextPart.text = `${targetTextPart.text}\n${metadata.annotation}`;
+      targetTextPart.text = `${targetTextPart.text}\n${annotationBlock}`;
     } else {
-      contextItem.parts.push({ type: "text", text: metadata.annotation });
+      contextItem.parts.push({ type: "text", text: annotationBlock });
     }
     annotatedCount++;
   }

@@ -10,8 +10,9 @@ bottom of the prompt, immediately above the LLM's next response.
 ## Mission
 
 Iterate `simplifiedMessageHistory` (built by the chat pipeline's
-`buildSimplifiedHistory`) and append one or more context items per message
-with three orthogonal concerns interleaved:
+`buildSimplifiedHistory`, which has **already collapsed runs of consecutive
+same-author pure-text messages** into single entries) and append one or more
+context items per message with three orthogonal concerns interleaved:
 
 1. **Role mapping** — persona-authored → `model`; user impersonation flips
    the impersonated user → `model`; everyone else → `user`.

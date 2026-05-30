@@ -34,6 +34,8 @@ If you customize TomoriBot's system prompt, persona instructions, or external pr
 | `generate_image_nai` | `{anime_image_generation_tool}` | `imagegen_enabled`; NovelAI provider or NovelAI optional API key | Generate or edit anime-styled images with NovelAI. |
 | `generate_voice_message` | `{voice_message_tool}` | ElevenLabs optional API key; active persona needs an ElevenLabs voice; `voice_message_enabled` | Send a spoken Discord voice reply instead of plain text. |
 
+> **`interact_with_recent_message` reply text:** the `reply` action's text is normalized through `cleanToolReplyText` (`src/utils/discord/toolReplyText.ts`) before sending, applying the same `cleanLLMOutput` + `resolveGuildMentions` chain as the streaming pipeline. This means `:name:` emoji shortcodes resolve to real custom-emoji tags and `@handle` mentions resolve to `<@id>` — tool replies render identically to normal streamed replies. See `docs/pipelines/provider/06-segment-normalization.md`.
+
 ### Default Search / Web Extras
 
 These are the common built-in or bundled web tools Tomori can expose when web access is enabled. Exact availability depends on provider support, server config, API keys, and which MCP servers are active.

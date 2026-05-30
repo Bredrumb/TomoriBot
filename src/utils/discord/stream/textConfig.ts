@@ -78,7 +78,12 @@ function applyForcedMentions(
   }
 }
 
-function buildMentionLookup(contextItems: StructuredContextItem[]): {
+/**
+ * Builds the static handle→user-ID lookup from `KNOWLEDGE_USERS_IN_CONVERSATION` context items.
+ * Shared by the stream text pipeline and message-interaction tools so both resolve @mentions
+ * from the same conversation context.
+ */
+export function buildMentionLookup(contextItems: StructuredContextItem[]): {
   mentionMap: Map<string, string[]>;
   mentionIdSet: Set<string>;
 } {

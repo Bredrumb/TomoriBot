@@ -1,6 +1,25 @@
-import type { StreamContext } from "@/types/stream/interfaces";
-import type { TextProcessingConfig } from "@/types/stream/types";
+import type {
+  AnyThreadChannel,
+  BaseGuildTextChannel,
+  BaseGuildVoiceChannel,
+  DMChannel,
+  NewsChannel,
+  TextChannel,
+} from "discord.js";
 import { replaceMentionHandles } from "@/utils/text/processors/mentionProcessor";
+
+/**
+ * Channel shape accepted by {@link resolveGuildMentions}. Matches both `StreamContext.channel`
+ * and `ToolContext.channel` so the stream pipeline and message-interaction tools share one
+ * mention-resolution implementation.
+ */
+export type MentionResolvableChannel =
+  | BaseGuildTextChannel
+  | BaseGuildVoiceChannel
+  | DMChannel
+  | NewsChannel
+  | TextChannel
+  | AnyThreadChannel;
 
 function extractMentionCandidates(text: string): {
   handles: Set<string>;
@@ -58,17 +77,14 @@ function extractMentionCandidates(text: string): {
 
 export async function resolveGuildMentions(
   text: string,
-  context: StreamContext,
-  textConfig: TextProcessingConfig,
+  channel: MentionResolvableChannel,
+  mentionMap: Map<string, string[]>,
+  mentionIdSet: Set<string>,
 ): Promise<string> {
   if (!text.includes("@")) return text;
-  if (!("guild" in context.channel)) return text;
+  if (!("guild" in channel)) return text;
 
-  const guild = context.channel.guild;
-  const mentionMap = textConfig.mentionMap ?? new Map<string, string[]>();
-  const mentionIdSet = textConfig.mentionIdSet ?? new Set<string>();
-  textConfig.mentionMap = mentionMap;
-  textConfig.mentionIdSet = mentionIdSet;
+  const guild = channel.guild;
 
   const { handles, idCandidates } = extractMentionCandidates(text);
   if (handles.size === 0 && idCandidates.size === 0) return text;

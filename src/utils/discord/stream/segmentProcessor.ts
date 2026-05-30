@@ -69,7 +69,16 @@ export class StreamSegmentProcessor {
       },
     );
 
-    let resolvedSegment = await resolveGuildMentions(cleanedSegment, context, textConfig);
+    const segmentMentionMap = textConfig.mentionMap ?? new Map<string, string[]>();
+    const segmentMentionIdSet = textConfig.mentionIdSet ?? new Set<string>();
+    textConfig.mentionMap = segmentMentionMap;
+    textConfig.mentionIdSet = segmentMentionIdSet;
+    let resolvedSegment = await resolveGuildMentions(
+      cleanedSegment,
+      context.channel,
+      segmentMentionMap,
+      segmentMentionIdSet,
+    );
     if (
       normalizedLeadingWhitespace &&
       resolvedSegment.length > 0 &&
@@ -167,7 +176,16 @@ export class StreamSegmentProcessor {
       },
     );
 
-    const resolvedPrefill = await resolveGuildMentions(cleanedPrefill, context, textConfig);
+    const prefillMentionMap = textConfig.mentionMap ?? new Map<string, string[]>();
+    const prefillMentionIdSet = textConfig.mentionIdSet ?? new Set<string>();
+    textConfig.mentionMap = prefillMentionMap;
+    textConfig.mentionIdSet = prefillMentionIdSet;
+    const resolvedPrefill = await resolveGuildMentions(
+      cleanedPrefill,
+      context.channel,
+      prefillMentionMap,
+      prefillMentionIdSet,
+    );
     if (!resolvedPrefill.trim()) return;
 
     state.prefillTarget = resolvedPrefill;

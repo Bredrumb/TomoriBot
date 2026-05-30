@@ -845,24 +845,27 @@ async function buildRuntimeParityContext(
     const mediaSourceMessageIds =
       hasLocalMedia && (imageAttachments.length > 0 || videoAttachments.length > 0) ? [message.id] : undefined;
 
+    // Merge consecutive same-author messages, mirroring the real context path
+    // (buildSimplifiedHistory): collapse only when both sides are pure text — if
+    // either side carries media, keep separate turns so per-message media IDs stay
+    // unambiguous.
     const previousMessage = simplifiedMessages[simplifiedMessages.length - 1];
+    const currentHasMedia =
+      imageAttachments.length > 0 || videoAttachments.length > 0 || (mediaSourceMessageIds?.length ?? 0) > 0;
+    const previousHasMedia =
+      !!previousMessage &&
+      (previousMessage.imageAttachments.length > 0 ||
+        previousMessage.videoAttachments.length > 0 ||
+        (previousMessage.mediaSourceMessageIds?.length ?? 0) > 0);
+    const shouldKeepSeparateMediaTurn = currentHasMedia || previousHasMedia;
     if (
       previousMessage &&
       previousMessage.authorId === effectiveAuthorId &&
       previousMessage.content &&
-      messageContent
+      messageContent &&
+      !shouldKeepSeparateMediaTurn
     ) {
       previousMessage.content += `\n${messageContent}`;
-      if (imageAttachments.length > 0) {
-        previousMessage.imageAttachments = [...previousMessage.imageAttachments, ...imageAttachments];
-      }
-      if (videoAttachments.length > 0) {
-        previousMessage.videoAttachments = [...previousMessage.videoAttachments, ...videoAttachments];
-      }
-      if (mediaSourceMessageIds?.length) {
-        const mergedIds = [...(previousMessage.mediaSourceMessageIds ?? []), ...mediaSourceMessageIds];
-        previousMessage.mediaSourceMessageIds = [...new Set(mergedIds)];
-      }
     } else if (messageContent || imageAttachments.length > 0 || videoAttachments.length > 0) {
       simplifiedMessages.push({
         id: message.id,

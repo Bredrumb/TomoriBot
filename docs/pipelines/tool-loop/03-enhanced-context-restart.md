@@ -48,7 +48,10 @@ All mutations apply only when `data.type` starts with `"context_restart_"`.
 **Message-metadata restart** (`type.includes("message_metadata")`):
 - Calls `annotateRecentMessageMetadataInContext` — annotates recent messages
   in `contextItems` with author/timestamp metadata and patches reply references.
-  Logs annotated and patched counts.
+  Logs annotated and patched counts. When a turn merged several consecutive
+  same-author messages (`combinedMessageIds`), it emits one `ref_N` + timestamp
+  line per original constituent message so each remains individually targetable
+  by `manage_message` / `interact_with_recent_message`.
 - Appends a tail directive message block via `buildTailDirectiveMessage` +
   `buildRevealedMessageMetadataTailDirective` to `contextItems` when the
   directive is non-empty.

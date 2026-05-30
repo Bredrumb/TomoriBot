@@ -9,7 +9,7 @@ import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { log } from "@/utils/misc/logger";
-import { getKnownPersonaSpeakerNames, stripLeadingKnownSpeakerPrefixes } from "@/utils/discord/modelAuthoredText";
+import { cleanToolReplyText } from "@/utils/discord/toolReplyText";
 import { getReplyContextAuthorName, sendWebhookReplyWithContext } from "@/utils/discord/webhookReply";
 
 const DISCORD_ID_PATTERN = /^\d{17,20}$/;
@@ -265,14 +265,6 @@ export class InteractWithRecentMessageTool extends BaseTool {
     };
   }
 
-  private async sanitizeReplyContent(content: string, context: ToolContext): Promise<string> {
-    const speakerNames = await getKnownPersonaSpeakerNames(context.guildId, [
-      context.personaUsername,
-      context.tomoriState.persona_nickname,
-    ]);
-    return stripLeadingKnownSpeakerPrefixes(content, speakerNames);
-  }
-
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     if (context.streamContext?.disableAllTools) {
       log.info("InteractWithRecentMessageTool: Execution blocked because tools are suppressed for this turn");
@@ -471,12 +463,12 @@ export class InteractWithRecentMessageTool extends BaseTool {
     }
 
     try {
-      const sanitizedReplyContent = await this.sanitizeReplyContent(interactionContent, context);
+      const sanitizedReplyContent = await cleanToolReplyText(interactionContent, context);
       if (!sanitizedReplyContent) {
         return {
           success: false,
-          error: "Reply content collapsed after removing a speaker label",
-          message: "That reply started with a character name label, so I didn't send it as-is.",
+          error: "Reply content collapsed after cleaning",
+          message: "That reply collapsed to nothing after stripping character-name labels, so I didn't send it as-is.",
           data: {
             status: "reply_content_rejected_speaker_label",
             message_ref: targetRef,
