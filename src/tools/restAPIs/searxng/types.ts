@@ -3,8 +3,9 @@
  *
  * SearXNG normalizes results from upstream engines (Google, Bing, DDG, Brave,
  * Wikipedia, etc.) into a single flat `results[]` array. Different categories
- * (`general`, `images`, `videos`, `news`) populate different optional fields,
- * which is why every per-category field below is optional.
+ * (`general`, `images`, `videos`, `news`, `science`, `it`, `files`, `music`)
+ * populate different optional fields, which is why every per-category field
+ * below is optional.
  *
  * Reference: https://docs.searxng.org/dev/search_api.html
  */
@@ -14,7 +15,7 @@
  *
  * Mapped from the unified WebSearch `SearchCategory` ("text" → "general").
  */
-export type SearxngCategory = "general" | "images" | "videos" | "news";
+export type SearxngCategory = "general" | "images" | "videos" | "news" | "science" | "it" | "files" | "music";
 
 /**
  * Common request parameters accepted by the SearXNG `/search` endpoint.
@@ -41,6 +42,8 @@ export interface SearxngSearchParams {
  *  - general/news: `title`, `url`, `content`
  *  - images:       `title`, `url`, `img_src`, `thumbnail_src`, `resolution`
  *  - videos:       `title`, `url`, `content`, `thumbnail`, `length`
+ *  - science/it/files/music: usually `title`, `url`, `content`, plus
+ *    engine-specific metadata
  */
 export interface SearxngResult {
   /** Title of the result. */

@@ -8,6 +8,11 @@ SearXNG is a privacy-respecting metasearch aggregator. It calls upstream engines
 running our own instance we sidestep single-engine rate limits and scrape
 breakage.
 
+TomoriBot exposes the common categories (`text`, `image`, `video`, `news`) and
+SearXNG-only verticals (`science`, `it`, `files`, `music`) through the unified
+`web_search` tool. The specialty categories only work when this sidecar is
+configured and SearXNG has active engines for that category.
+
 ## Files
 
 - `settings.yml` — SearXNG configuration. Mounted read-only at
@@ -56,6 +61,9 @@ SEARXNG_BASE_URL=http://localhost:8080/ bun run dev
 
 Leave `SEARXNG_BASE_URL` unset. The chain falls back to `Brave → DDG → Felo`
 exactly as before Phase 2.
+
+SearXNG-only categories return the standard category-unavailable message in
+this mode.
 
 ## Upgrade procedure
 

@@ -117,9 +117,11 @@ Previous tool calls and their results are formatted using GLM's role tag structu
 ```
 <|assistant|>
 <think></think>
-<tool_call>brave_web_search
+<tool_call>web_search
 <arg_key>query</arg_key>
 <arg_value>...</arg_value>
+<arg_key>category</arg_key>
+<arg_value>text</arg_value>
 </tool_call>
 <|observation|>
 <tool_response>

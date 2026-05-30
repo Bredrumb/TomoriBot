@@ -47,6 +47,7 @@ export {
 } from "./searxng/searxngService";
 
 export {
+  searxng_category_search,
   searxng_web_search,
   searxng_image_search,
   searxng_video_search,

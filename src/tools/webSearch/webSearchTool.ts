@@ -4,8 +4,8 @@
  * Replaces the previously-LLM-visible 4-tool Brave surface (`brave_web_search`,
  * `brave_image_search`, `brave_video_search`, `brave_news_search`) with one
  * tool that takes a `category` enum. The dispatcher routes to whichever
- * engine in the chain (Brave → DuckDuckGo → Felo for Phase 1) can serve
- * the requested category.
+ * engine in the chain (Brave → SearXNG → DuckDuckGo → Felo) can serve the
+ * requested category.
  *
  * Saves ~400 tokens/turn from removed tool declarations and eliminates
  * wrong-tool-name fuzzy-matching errors observed in NovelAI streams.
@@ -14,14 +14,13 @@
 import { BaseTool, type ToolContext, type ToolResult } from "@/types/tool/interfaces";
 import { log } from "@/utils/misc/logger";
 import { executeWebSearchWithFallback } from "./dispatcher";
-import type { SearchCategory } from "./types";
-
-const SUPPORTED_CATEGORIES: SearchCategory[] = ["text", "image", "video", "news"];
+import { SEARCH_CATEGORIES, type SearchCategory } from "./types";
 
 export class WebSearchTool extends BaseTool {
   name = "web_search";
   description =
-    "Search the web for information. Supports text/image/video/news categories. " +
+    "Search the web for information. Supports text/image/video/news categories, " +
+    "plus SearXNG-only science/it/files/music types when available. " +
     "Routes through the best available search engine automatically.";
 
   category = "search" as const;
@@ -42,8 +41,10 @@ export class WebSearchTool extends BaseTool {
         type: "string" as const,
         description:
           "Search category. Use 'text' for general web results (default), 'image' for pictures, " +
-          "'video' for videos, 'news' for recent articles.",
-        enum: SUPPORTED_CATEGORIES,
+          "'video' for videos, and 'news' for recent articles. Use SearXNG-only 'science', 'it', " +
+          "'files', or 'music' only when the user clearly asks for that category ('it' for code snippets, and 'science' for research papers); these may be unavailable " +
+          "when no SearXNG backend is configured.",
+        enum: [...SEARCH_CATEGORIES],
       },
       count: {
         type: "number" as const,
@@ -86,7 +87,7 @@ export class WebSearchTool extends BaseTool {
 
       // 3. Normalize category (default to text).
       const rawCategory = typeof args.category === "string" ? args.category : "text";
-      const category: SearchCategory = SUPPORTED_CATEGORIES.includes(rawCategory as SearchCategory)
+      const category: SearchCategory = SEARCH_CATEGORIES.includes(rawCategory as SearchCategory)
         ? (rawCategory as SearchCategory)
         : "text";
 

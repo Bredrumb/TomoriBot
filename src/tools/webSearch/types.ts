@@ -10,13 +10,27 @@
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 
 /**
+ * Search categories supported by the unified `web_search` tool across the
+ * common Brave/SearXNG surface.
+ */
+export const BASE_SEARCH_CATEGORIES = ["text", "image", "video", "news"] as const;
+
+/**
+ * SearXNG-only vertical categories. The dispatcher will skip engines that
+ * don't support these and return the normal category-unavailable message when
+ * no SearXNG sidecar is configured.
+ */
+export const SEARXNG_ONLY_SEARCH_CATEGORIES = ["science", "it", "files", "music"] as const;
+
+export const SEARCH_CATEGORIES = [...BASE_SEARCH_CATEGORIES, ...SEARXNG_ONLY_SEARCH_CATEGORIES] as const;
+
+/**
  * Search categories supported by the unified `web_search` tool.
  *
- * Only `text` has fallback engines (DDG/Felo). The non-text categories
- * fail with a friendly "category unavailable" message when no engine
- * in the chain supports them.
+ * Only `text` has fallback engines (DDG/Felo). Brave supports the base four.
+ * SearXNG supports the base four plus the SearXNG-only verticals above.
  */
-export type SearchCategory = "text" | "image" | "video" | "news";
+export type SearchCategory = (typeof SEARCH_CATEGORIES)[number];
 
 /**
  * Canonical engine identifiers. Used for logging and embed labelling.
@@ -43,7 +57,8 @@ export interface WebSearchEngine {
 
   /**
    * Whether this engine can handle the given category.
-   * DDG/Felo return true only for `text`; Brave/SearXNG support all four.
+   * DDG/Felo return true only for `text`; Brave supports the base four;
+   * SearXNG supports the base four plus its specialty verticals.
    */
   supportsCategory(category: SearchCategory): boolean;
 

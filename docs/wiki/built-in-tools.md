@@ -42,11 +42,13 @@ Family macros below may resolve to the listed bundled tools or to compatible gui
 
 #### Unified `web_search`
 
-A single LLM-visible tool replaces the previous four `brave_*` tools. It takes a `category` enum (`text` / `image` / `video` / `news`) and routes through an internal **engine chain** — **Brave → SearXNG → DuckDuckGo → Felo** — picking the first engine that is both available and supports the requested category. Brave and SearXNG support all four categories; DDG and Felo only support `text`. Non-text categories fall back to a friendly "category unavailable" message when no engine in the chain handles them.
+A single LLM-visible tool replaces the previous four `brave_*` tools. It takes a `category` enum (`text` / `image` / `video` / `news` / `science` / `it` / `files` / `music`) and routes through an internal **engine chain** — **Brave → SearXNG → DuckDuckGo → Felo** — picking the first engine that is both available and supports the requested category. Brave supports the common four categories (`text`, `image`, `video`, `news`); SearXNG supports those plus the SearXNG-only verticals (`science`, `it`, `files`, `music`); DDG and Felo only support `text`. Non-text categories fall back to a friendly "category unavailable" message when no engine in the chain handles them.
+
+Search progress embeds show the selected category as a separate localized label (for example, "Searching videos for `beaver`...") rather than mutating the query string.
 
 | Tool name | Prompt macro | Requirements | Purpose |
 |---|---|---|---|
-| `web_search` | `{web_search_tool}` / `{image_search_tool}` / `{video_search_tool}` / `{news_search_tool}` | `web_search_enabled` | Search the web. The `category` arg selects text/image/video/news. Optional `count` arg sets result count (image: max 10 sent to Discord; text/video/news: max 20 in result list). The dispatcher hides engine selection from the model — saves ~400 tokens/turn vs. the previous 4-tool surface. |
+| `web_search` | `{web_search_tool}` / `{image_search_tool}` / `{video_search_tool}` / `{news_search_tool}` | `web_search_enabled` | Search the web. The `category` arg selects text/image/video/news plus SearXNG-only science/it/files/music verticals. Optional `count` arg sets result count (image: max 10 sent to Discord; text-like categories: max 20 in result list). The dispatcher hides engine selection from the model — saves ~400 tokens/turn vs. the previous 4-tool surface. |
 | `fetch_url` | `{url_fetch_tool}` | `web_search_enabled`; active bundled fetch path; unavailable on NovelAI | Read a specific web page or URL in more detail. Arguments mirror the bundled MCP fetch server: `url`, optional `max_length`, optional `start_index`, optional `raw`. |
 | `url-metadata` | `{url_metadata_tool}` | `web_search_enabled`; active DuckDuckGo/Felo MCP search server | Retrieve page metadata for a URL when a metadata-specific fetcher is available. |
 
@@ -75,7 +77,7 @@ Guild MCP replacements still work: if an enabled guild MCP server is registered 
 
 - **When it activates:** `SEARXNG_BASE_URL` is set AND `${SEARXNG_BASE_URL}/healthz` responds OK. The probe result is cached for `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` seconds (default 60).
 - **Where it sits in the chain:** after Brave (so a configured Brave API key still takes priority) and before DDG/Felo (so the self-hosted aggregator absorbs traffic before the public-instance fallbacks).
-- **Categories:** all four — `text`, `image`, `video`, `news`. Image results are HEAD-validated → optionally compressed → posted as Discord attachments, identical UX to Brave images.
+- **Categories:** common categories `text`, `image`, `video`, `news`, plus SearXNG-only verticals `science`, `it`, `files`, and `music`. The specialty verticals use SearXNG's native `categories=` parameter and are skipped by Brave/DDG/Felo. Image results are HEAD-validated → optionally compressed → posted as Discord attachments, identical UX to Brave images.
   - `SEARXNG_IMAGE_COUNT` (default 3, max 10) — how many valid images are sent to Discord. Overridden by the LLM's `count` arg.
   - `SEARXNG_IMAGE_POOL` (default 10) — candidate URL pool when the LLM does **not** specify `count`. When `count` is specified, the pool is `count × 3` (capped at 30) to absorb hotlink-protection failures without depleting candidates.
   - `IMAGE_MIN_SIZE_BYTES` (default 5120 = 5 KB) — images below this size are rejected. Filters placeholder/error images that Discord would render as raw file attachments rather than inline media. Shared with Brave image search.

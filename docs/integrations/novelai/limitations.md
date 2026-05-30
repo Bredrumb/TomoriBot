@@ -40,7 +40,7 @@ url-metadata
 fetch
 ```
 
-**Reason:** These are either redundant with the unified `web_search` tool (which already routes text/image/video/news through the Brave → DuckDuckGo → Felo engine chain), internal to the unified `fetch_url` path, or too token-expensive in their argument schemas and response payloads for GLM's strict prompt budget. The `brave_*` MCP function names are no longer LLM-visible at all post-unification, so they don't need to be in this disable list anymore.
+**Reason:** These are either redundant with the unified `web_search` tool (which routes search through the Brave → SearXNG → DuckDuckGo → Felo engine chain), internal to the unified `fetch_url` path, or too token-expensive in their argument schemas and response payloads for GLM's strict prompt budget. The `brave_*` MCP function names are no longer LLM-visible at all post-unification, so they don't need to be in this disable list anymore.
 
 ---
 

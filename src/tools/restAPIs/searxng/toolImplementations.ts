@@ -75,11 +75,11 @@ function createToolResult(
 }
 
 // =============================================
-// Text / News / Video — uniform text-result formatting
+// Text-like categories — uniform text-result formatting
 // =============================================
 
 /**
- * Execute a generic text/news/video search via SearXNG and return a formatted
+ * Execute a generic text-like search via SearXNG and return a formatted
  * ToolResult. Image category has its own implementation below because it also
  * downloads + posts attachments to Discord.
  */
@@ -87,6 +87,7 @@ async function searxngTextLikeSearch(
   query: string,
   category: Exclude<SearxngCategory, "images">,
   context?: ToolContext,
+  count?: number,
 ): Promise<ToolResult> {
   const startTime = Date.now();
   const result = await searxngSearch(query, category, { signal: context?.abortSignal });
@@ -95,7 +96,7 @@ async function searxngTextLikeSearch(
     return createToolResult(false, `SearXNG ${category} search failed`, result.error);
   }
 
-  const formatted = formatSearxngResults(result.data, category);
+  const formatted = formatSearxngResults(result.data, category, count);
 
   // 1. Encourage agentic follow-up fetches when URLs are present (same hook
   //    used by Brave web/news/video results).
@@ -122,40 +123,33 @@ async function searxngTextLikeSearch(
   });
 }
 
-export async function searxng_web_search(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
+export async function searxng_category_search(
+  args: Record<string, unknown>,
+  category: Exclude<SearxngCategory, "images">,
+  context?: ToolContext,
+): Promise<ToolResult> {
   try {
     if (typeof args.query !== "string" || args.query.trim().length === 0) {
       return createToolResult(false, "Invalid or missing query parameter", "Query is required");
     }
-    return await searxngTextLikeSearch(args.query, "general", context);
+    const count = typeof args.count === "number" && args.count > 0 ? Math.min(Math.floor(args.count), 20) : undefined;
+    return await searxngTextLikeSearch(args.query, category, context, count);
   } catch (error) {
-    log.error("Error in searxng_web_search:", error as Error);
-    return createToolResult(false, "Unexpected error during SearXNG web search", (error as Error).message);
+    log.error(`Error in searxng_${category}_search:`, error as Error);
+    return createToolResult(false, `Unexpected error during SearXNG ${category} search`, (error as Error).message);
   }
+}
+
+export async function searxng_web_search(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
+  return await searxng_category_search(args, "general", context);
 }
 
 export async function searxng_video_search(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
-  try {
-    if (typeof args.query !== "string" || args.query.trim().length === 0) {
-      return createToolResult(false, "Invalid or missing query parameter", "Query is required");
-    }
-    return await searxngTextLikeSearch(args.query, "videos", context);
-  } catch (error) {
-    log.error("Error in searxng_video_search:", error as Error);
-    return createToolResult(false, "Unexpected error during SearXNG video search", (error as Error).message);
-  }
+  return await searxng_category_search(args, "videos", context);
 }
 
 export async function searxng_news_search(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
-  try {
-    if (typeof args.query !== "string" || args.query.trim().length === 0) {
-      return createToolResult(false, "Invalid or missing query parameter", "Query is required");
-    }
-    return await searxngTextLikeSearch(args.query, "news", context);
-  } catch (error) {
-    log.error("Error in searxng_news_search:", error as Error);
-    return createToolResult(false, "Unexpected error during SearXNG news search", (error as Error).message);
-  }
+  return await searxng_category_search(args, "news", context);
 }
 
 // =============================================

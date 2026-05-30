@@ -8,6 +8,7 @@ import { log } from "../../../utils/misc/logger";
 import { sendStandardEmbed } from "../../../utils/discord/embedHelper";
 import { sendToolNotice } from "../../../utils/discord/toolProgressNotice";
 import { getMCPManager } from "../../../utils/mcp/mcpManager";
+import { getSearchNoticeTitleVars } from "@/tools/webSearch/categoryMetadata";
 import type {
   DuckDuckGoWebSearchResponse,
   MCPServerBehaviorHandler,
@@ -191,8 +192,8 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
           context,
           "web_search",
           {
-            titleKey: "tools.search.web_search_title",
-            titleVars: { query },
+            titleKey: "tools.search.category_search_title",
+            titleVars: getSearchNoticeTitleVars(context.locale, "text", query),
             descriptionKey: "tools.search.disclaimer_description",
           },
           "DuckDuckGoSearchHandler",

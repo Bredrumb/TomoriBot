@@ -18,6 +18,7 @@ import { BraveEngine } from "./braveEngine";
 import { SearxngEngine } from "./searxngEngine";
 import { DuckDuckGoEngine } from "./duckduckgoEngine";
 import { FeloEngine } from "./feloEngine";
+import { getSearchCategoryLabel } from "./categoryMetadata";
 import type { SearchCategory, WebSearchEngine } from "./types";
 
 // 1. Singleton chain — engines are stateless so a single instance is reusable
@@ -84,7 +85,9 @@ export async function executeWebSearchWithFallback(
   // 3. All engines exhausted — return a localized "category unavailable" message.
   //    For text, this means the entire chain is down; for image/video/news, this
   //    is the typical "no provider supports this category" path.
-  const description = localizer(context.locale, "tools.search.category_unavailable_description", { category });
+  const description = localizer(context.locale, "tools.search.category_unavailable_description", {
+    category: getSearchCategoryLabel(context.locale, category),
+  });
 
   return {
     success: false,

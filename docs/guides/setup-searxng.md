@@ -1,6 +1,6 @@
 # Setup: SearXNG Web Search Sidecar
 
-The `web_search` tool routes through an engine chain: **Brave → SearXNG → DuckDuckGo → Felo**. By running our own instance of SearXNG, we sidestep single-engine rate limits and scrape breakage.
+The `web_search` tool routes through an engine chain: **Brave → SearXNG → DuckDuckGo → Felo**. By running our own instance of SearXNG, we sidestep single-engine rate limits and scrape breakage, and unlock SearXNG-only vertical categories: `science`, `it`, `files`, and `music`.
 
 There are three ways to set up SearXNG locally:
 
@@ -48,5 +48,7 @@ Then run `bun run dev` once the container is healthy (`docker ps` shows `(health
 
 ### 3. No SearXNG
 Leave `SEARXNG_BASE_URL` unset — the chain falls back to `Brave → DDG → Felo` exactly as before. Nothing breaks.
+
+SearXNG-only categories return the normal "category unavailable" message when no SearXNG sidecar is configured. The common categories (`text`, `image`, `video`, `news`) still work through Brave when a Brave API key is configured.
 
 *Note: Per-engine timeout and the health-probe cache duration are tunable via `WEB_SEARCH_TIMEOUT_MS` and `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` (see `.env.optional.example`).*

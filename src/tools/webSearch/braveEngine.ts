@@ -2,7 +2,7 @@
  * BraveEngine — wraps the internal Brave service classes into a uniform
  * WebSearchEngine. Routes on category to the appropriate Internal*Tool.
  *
- * Supports all 4 categories (text/image/video/news).
+ * Supports the common 4 categories (text/image/video/news).
  * Availability gates on whether a Brave API key is configured (global or per-guild).
  */
 
@@ -14,7 +14,7 @@ import {
   InternalBraveVideoSearchTool,
   InternalBraveNewsSearchTool,
 } from "@/tools/restAPIs/brave/internal/braveServiceClasses";
-import type { SearchCategory, WebSearchEngine } from "./types";
+import { BASE_SEARCH_CATEGORIES, type SearchCategory, type WebSearchEngine } from "./types";
 
 export class BraveEngine implements WebSearchEngine {
   readonly name = "brave" as const;
@@ -30,8 +30,8 @@ export class BraveEngine implements WebSearchEngine {
     return await isBraveSearchAvailable(context.tomoriState?.server_id);
   }
 
-  supportsCategory(_category: SearchCategory): boolean {
-    return true;
+  supportsCategory(category: SearchCategory): boolean {
+    return BASE_SEARCH_CATEGORIES.includes(category as (typeof BASE_SEARCH_CATEGORIES)[number]);
   }
 
   async search(query: string, category: SearchCategory, context: ToolContext, count?: number): Promise<ToolResult> {
@@ -48,5 +48,10 @@ export class BraveEngine implements WebSearchEngine {
       case "news":
         return await this.newsTool.execute(args, context);
     }
+
+    return {
+      success: false,
+      error: `Brave search does not support category "${category}"`,
+    };
   }
 }

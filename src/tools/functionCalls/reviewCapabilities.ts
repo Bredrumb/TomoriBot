@@ -174,10 +174,12 @@ export class ReviewCapabilitiesTool extends BaseTool {
       if (hasTools) {
         capabilitiesContent += "## Search & Information\n\n";
         capabilitiesContent += "You CAN search and retrieve information:\n";
-        capabilitiesContent += "- **Web search** (brave_web_search for current information)\n";
-        capabilitiesContent += "- **Image search** (brave_image_search for finding images)\n";
-        capabilitiesContent += "- **Video search** (brave_video_search for finding videos)\n";
-        capabilitiesContent += "- **News search** (brave_news_search for latest news)\n";
+        capabilitiesContent += "- **Web search** (web_search for current information)\n";
+        capabilitiesContent += "- **Image search** (web_search with image category for finding images)\n";
+        capabilitiesContent += "- **Video search** (web_search with video category for finding videos)\n";
+        capabilitiesContent += "- **News search** (web_search with news category for latest news)\n";
+        capabilitiesContent +=
+          "- **Specialty search** (web_search with SearXNG-only science, IT, files, or music categories when available)\n";
         capabilitiesContent += "- **URL fetching** (fetch for retrieving webpage content)\n\n";
       }
 
@@ -330,7 +332,8 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent += "## Function Calling\n\n";
         capabilitiesContent += "You CAN call functions/tools to perform actions:\n";
         capabilitiesContent += "- **review_capabilities** (check your own capabilities - this function!)\n";
-        capabilitiesContent += "- **brave_web_search/image_search/video_search/news_search** (search the web)\n";
+        capabilitiesContent +=
+          "- **web_search** (search text, image, video, news, and available specialty categories)\n";
         capabilitiesContent += "- **fetch** (retrieve content from URLs)\n";
         const imageGenNote = config.imagegen_enabled
           ? hasStandardImageSlot

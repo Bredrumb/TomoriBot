@@ -4,7 +4,7 @@
  * Direct HTTP integration with a self-hosted SearXNG instance. SearXNG
  * normalizes results from upstream engines (Google, Bing, DDG, Brave,
  * Wikipedia, etc.) and exposes a single `/search` endpoint that takes
- * a `categories=` parameter — so unlike Brave (4 endpoints) all four
+ * a `categories=` parameter — so unlike Brave (4 endpoints) all supported
  * search modes ride one HTTP call here.
  *
  * Availability gates on whether `SEARXNG_BASE_URL` is set AND the
@@ -188,7 +188,7 @@ async function makeSearxngRequest(
 // =============================================
 
 /**
- * Generic search — pass any category string supported by your SearXNG config.
+ * Generic search — pass any category supported by your SearXNG config.
  */
 export async function searxngSearch(
   query: string,
@@ -211,7 +211,7 @@ export async function searxngSearch(
  * Output shape intentionally mirrors `formatBraveSearchResults` so consumers
  * downstream of the engine layer don't see provider-specific formatting drift.
  */
-export function formatSearxngResults(response: SearxngResponse, category: SearxngCategory): string {
+export function formatSearxngResults(response: SearxngResponse, category: SearxngCategory, count?: number): string {
   const results = response.results ?? [];
   const queryDisplay = response.query || "your search";
 
@@ -221,14 +221,15 @@ export function formatSearxngResults(response: SearxngResponse, category: Searxn
 
   let formatted = `**${capitalize(categoryLabel(category))} Search Results for "${queryDisplay}"** (via SearXNG)\n\n`;
 
-  const limit = Math.min(results.length, 10);
+  const resultLimit = count !== undefined ? Math.min(Math.max(Math.floor(count), 1), 20) : 10;
+  const limit = Math.min(results.length, resultLimit);
   for (let i = 0; i < limit; i++) {
     const r = results[i];
     formatted += `**${i + 1}. ${r.title ?? "(untitled)"}**\n`;
     if (r.url) formatted += `${r.url}\n`;
     if (r.content) formatted += `${r.content}\n`;
     if (category === "videos" && r.length) formatted += `Duration: ${r.length}\n`;
-    if (category === "news" && r.publishedDate) formatted += `Published: ${r.publishedDate}\n`;
+    if (r.publishedDate) formatted += `Published: ${r.publishedDate}\n`;
     formatted += "\n";
   }
 
@@ -266,6 +267,14 @@ function categoryLabel(category: SearxngCategory): string {
       return "video";
     case "news":
       return "news";
+    case "science":
+      return "science";
+    case "it":
+      return "IT";
+    case "files":
+      return "file";
+    case "music":
+      return "music";
   }
 }
 

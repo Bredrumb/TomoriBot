@@ -17,6 +17,7 @@ import { BaseTool, type ToolContext, type ToolResult } from "../../../../types/t
 import { log } from "../../../../utils/misc/logger";
 import { sendToolNotice } from "../../../../utils/discord/toolProgressNotice";
 import { brave_web_search, brave_image_search, brave_video_search, brave_news_search } from "../toolImplementations";
+import { getSearchNoticeTitleVars } from "@/tools/webSearch/categoryMetadata";
 
 // =============================================
 // Base Internal Brave Search Tool Class
@@ -100,8 +101,8 @@ export class InternalBraveWebSearchTool extends BaseInternalBraveSearchTool {
         context,
         "web_search",
         {
-          titleKey: "tools.search.web_search_title",
-          titleVars: { query: args.query as string },
+          titleKey: "tools.search.category_search_title",
+          titleVars: getSearchNoticeTitleVars(context.locale, "text", args.query as string),
           descriptionKey: "tools.search.disclaimer_description",
         },
         "InternalBraveWebSearchTool",
@@ -161,8 +162,8 @@ export class InternalBraveImageSearchTool extends BaseInternalBraveSearchTool {
         context,
         "image_search",
         {
-          titleKey: "tools.search.image_search_title",
-          titleVars: { query: args.query as string },
+          titleKey: "tools.search.category_search_title",
+          titleVars: getSearchNoticeTitleVars(context.locale, "image", args.query as string),
           descriptionKey: "tools.search.disclaimer_description",
         },
         "InternalBraveImageSearchTool",
@@ -223,8 +224,8 @@ export class InternalBraveVideoSearchTool extends BaseInternalBraveSearchTool {
         context,
         "video_search",
         {
-          titleKey: "tools.search.video_search_title",
-          titleVars: { query: args.query as string },
+          titleKey: "tools.search.category_search_title",
+          titleVars: getSearchNoticeTitleVars(context.locale, "video", args.query as string),
           descriptionKey: "tools.search.disclaimer_description",
         },
         "InternalBraveVideoSearchTool",
@@ -285,8 +286,8 @@ export class InternalBraveNewsSearchTool extends BaseInternalBraveSearchTool {
         context,
         "news_search",
         {
-          titleKey: "tools.search.news_search_title",
-          titleVars: { query: args.query as string },
+          titleKey: "tools.search.category_search_title",
+          titleVars: getSearchNoticeTitleVars(context.locale, "news", args.query as string),
           descriptionKey: "tools.search.disclaimer_description",
         },
         "InternalBraveNewsSearchTool",
