@@ -28,4 +28,6 @@ Local wrappers must expose:
 
 Clone wrappers should treat `ref_audio` as the speaker reference and `ref_text` as its transcript. Voice-design wrappers may ignore `ref_audio` and use `instruct` as the natural-language voice description; configure those prompts per persona with `/speech voice-design set`.
 
+TomoriBot waits up to `TTS_SYNTHESIZE_TIMEOUT_MS` milliseconds for local clone and VoiceDesign `/synthesize` responses, defaulting to 240000. The legacy `TTS_CLONE_TIMEOUT_MS` name is still accepted when the new setting is unset.
+
 Reference scripts are best-effort examples, not production services. Upstream model packages may break over time; fixes should be made in the wrapper scripts and documented here.

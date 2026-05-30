@@ -4,16 +4,14 @@ import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { stripTtsUnsupportedEmojiAttempts } from "@/utils/text/emojiHelper";
 import { log } from "@/utils/misc/logger";
 import type { TtsCloneErrorKind, TtsCloneResult } from "@/providers/custom/styles/ttsCloningAdapter";
+import { resolveTtsSynthesizeTimeoutMs } from "@/providers/custom/styles/ttsSynthesizeTimeout";
 
 function isEnabledEnv(value: string | undefined): boolean {
   return value === "true" || value === "1";
 }
 
-/** Timeout for /synthesize requests, shared with clone-style local TTS. */
-const TTS_VOICE_DESIGN_TIMEOUT_MS =
-  Number.parseInt(process.env.TTS_CLONE_TIMEOUT_MS ?? "", 10) > 0
-    ? Number.parseInt(process.env.TTS_CLONE_TIMEOUT_MS ?? "", 10)
-    : 120_000;
+/** Timeout for local /synthesize requests, configurable via env. */
+const TTS_SYNTHESIZE_TIMEOUT_MS = resolveTtsSynthesizeTimeoutMs();
 const TTS_VOICE_DESIGN_LOG_PAYLOADS = isEnabledEnv(process.env.TTS_VOICE_DESIGN_LOG_PAYLOADS);
 const TTS_VOICE_DESIGN_LOG_PREVIEW_CHARS = 240;
 
@@ -171,7 +169,7 @@ export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignR
   let response: Response;
   const requestStartedAt = Date.now();
   log.info(
-    `[TtsVoiceDesign] Sending /synthesize | endpoint="${endpoint.display_name}" label="${endpoint.label}" url="${endpointUrl}" mode=${getTtsVoiceMode(endpoint)} scriptChars=${processedScript.length} instructChars=${instruct.length} oneOffInstructionChars=${cleanedVoiceInstructions.length} timeoutMs=${TTS_VOICE_DESIGN_TIMEOUT_MS} payloadLog=${TTS_VOICE_DESIGN_LOG_PAYLOADS ? "full" : "preview"}`,
+    `[TtsVoiceDesign] Sending /synthesize | endpoint="${endpoint.display_name}" label="${endpoint.label}" url="${endpointUrl}" mode=${getTtsVoiceMode(endpoint)} scriptChars=${processedScript.length} instructChars=${instruct.length} oneOffInstructionChars=${cleanedVoiceInstructions.length} timeoutMs=${TTS_SYNTHESIZE_TIMEOUT_MS} payloadLog=${TTS_VOICE_DESIGN_LOG_PAYLOADS ? "full" : "preview"}`,
   );
   log.info(
     `[TtsVoiceDesign] Script ${TTS_VOICE_DESIGN_LOG_PAYLOADS ? "full" : "preview"}: ${previewForLog(processedScript)}`,
@@ -182,7 +180,7 @@ export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignR
 
   try {
     const abortController = new AbortController();
-    const timer = setTimeout(() => abortController.abort(), TTS_VOICE_DESIGN_TIMEOUT_MS);
+    const timer = setTimeout(() => abortController.abort(), TTS_SYNTHESIZE_TIMEOUT_MS);
     try {
       response = await fetchUserRemoteUrl(`${endpointUrl}/synthesize`, {
         method: "POST",

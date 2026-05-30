@@ -5,12 +5,10 @@ import { loadStoredVoiceSampleBuffer } from "@/utils/storage/voiceSampleStorage"
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { stripTtsUnsupportedEmojiAttempts } from "@/utils/text/emojiHelper";
 import { loadVoiceSampleById } from "@/utils/db/repositories/SpeechRepository";
+import { resolveTtsSynthesizeTimeoutMs } from "@/providers/custom/styles/ttsSynthesizeTimeout";
 
-/** Timeout for /synthesize requests, configurable via env. */
-const TTS_CLONE_TIMEOUT_MS =
-  Number.parseInt(process.env.TTS_CLONE_TIMEOUT_MS ?? "", 10) > 0
-    ? Number.parseInt(process.env.TTS_CLONE_TIMEOUT_MS ?? "", 10)
-    : 120_000;
+/** Timeout for local /synthesize requests, configurable via env. */
+const TTS_SYNTHESIZE_TIMEOUT_MS = resolveTtsSynthesizeTimeoutMs();
 
 /** Regex matching any bracket-tag in the form [content]. */
 const ANY_BRACKET_TAG_REGEX = /\[([^\]\r\n]{1,40})\]/g;
@@ -211,7 +209,7 @@ export async function synthesizeSpeechViaTtsClone(request: TtsCloneRequest): Pro
   let response: Response;
   try {
     const abortController = new AbortController();
-    const timer = setTimeout(() => abortController.abort(), TTS_CLONE_TIMEOUT_MS);
+    const timer = setTimeout(() => abortController.abort(), TTS_SYNTHESIZE_TIMEOUT_MS);
     try {
       response = await fetchUserRemoteUrl(`${endpointUrl}/synthesize`, {
         method: "POST",

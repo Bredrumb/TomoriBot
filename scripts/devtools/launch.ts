@@ -72,6 +72,12 @@ interface DockerSidecar {
   runArgs: string[];
   /** milliseconds to wait for healthcheck before aborting (default 120s) */
   healthTimeoutMs?: number;
+  /**
+   * HTTP URL to probe as a fallback when the container has no Docker healthcheck
+   * (e.g. an existing container created before --health-cmd was added to runArgs).
+   * Polled every 2s; a 2xx response is treated as healthy.
+   */
+  httpHealthUrl?: string;
 }
 
 interface PythonSidecar {
@@ -95,12 +101,18 @@ const SIDECARS: Record<string, SidecarDef> = {
     kind: "docker",
     containerName: "searxng",
     image: "searxng/searxng:latest",
+    httpHealthUrl: "http://localhost:8080/healthz",
     runArgs: [
       "-d",
       "--name", "searxng",
       "-p", "8080:8080",
       "-v", `${ROOT}/servers/searxng:/etc/searxng:rw`,
       "-e", "SEARXNG_SECRET=dev-only-not-for-production",
+      "--health-cmd", "wget -q --spider http://localhost:8080/healthz || exit 1",
+      "--health-interval", "10s",
+      "--health-timeout", "3s",
+      "--health-retries", "5",
+      "--health-start-period", "15s",
       "searxng/searxng:latest",
     ],
   },
@@ -111,12 +123,18 @@ const SIDECARS: Record<string, SidecarDef> = {
     image: "unclecode/crawl4ai:latest",
     // Crawl4AI has a longer first-run startup (model download), give it 3 min.
     healthTimeoutMs: 180_000,
+    httpHealthUrl: "http://localhost:11235/health",
     runArgs: [
       "-d",
       "--name", "crawl4ai",
       "-p", "11235:11235",
       "--shm-size=3g",
       ...(process.env.CRAWL4AI_TOKEN ? ["-e", `CRAWL4AI_API_TOKEN=${process.env.CRAWL4AI_TOKEN}`] : []),
+      "--health-cmd", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:11235/health', timeout=3).read()\"",
+      "--health-interval", "10s",
+      "--health-timeout", "5s",
+      "--health-retries", "12",
+      "--health-start-period", "45s",
       "unclecode/crawl4ai:latest",
     ],
   },
@@ -187,18 +205,34 @@ async function getContainerHealth(name: string): Promise<string> {
 }
 
 /**
- * Polls a container's healthcheck every 2 seconds until it reports "healthy"
- * or the timeout elapses. Throws on timeout or "unhealthy".
+ * Polls until the container is ready, using Docker's healthcheck when available
+ * and falling back to an HTTP probe when the container has no healthcheck defined
+ * (e.g. an existing container created before --health-cmd was added to runArgs).
+ * Throws on timeout or a Docker "unhealthy" status.
  */
-async function waitForHealthy(name: string, timeoutMs: number): Promise<void> {
+async function waitForHealthy(def: DockerSidecar, timeoutMs: number): Promise<void> {
+  const { containerName, httpHealthUrl } = def;
   const deadline = Date.now() + timeoutMs;
+
   while (Date.now() < deadline) {
-    const health = await getContainerHealth(name);
+    const health = await getContainerHealth(containerName);
+
     if (health === "healthy") return;
-    if (health === "unhealthy") throw new Error(`Container "${name}" reported unhealthy.`);
+    if (health === "unhealthy") throw new Error(`Container "${containerName}" reported unhealthy.`);
+
+    // No Docker healthcheck on this container — fall back to HTTP probe.
+    if (health === "" && httpHealthUrl) {
+      try {
+        const res = await fetch(httpHealthUrl, { signal: AbortSignal.timeout(3_000) });
+        if (res.ok) return;
+      } catch {
+        // Not ready yet — keep polling.
+      }
+    }
+
     await Bun.sleep(2_000);
   }
-  throw new Error(`Container "${name}" did not become healthy within ${timeoutMs / 1000}s.`);
+  throw new Error(`Container "${containerName}" did not become healthy within ${timeoutMs / 1000}s.`);
 }
 
 /**
@@ -236,7 +270,7 @@ async function ensureDockerSidecar(def: DockerSidecar): Promise<void> {
   }
 
   console.log(`${label} Waiting for healthcheck...`);
-  await waitForHealthy(containerName, healthTimeoutMs);
+  await waitForHealthy(def, healthTimeoutMs);
   console.log(`${label} ${pc.green("Healthy ✓")}`);
 }
 
