@@ -4405,6 +4405,13 @@ Use {help_matrix} for setup steps, Matrix-only command notes, and the current li
         disabled_title: `Deliberate Tool Mode Disabled`,
         disabled_description: `Tool declarations will be available normally again whenever the active model supports them.`,
       },
+      "fast-regeneration": {
+        description: `Toggle short-lived 🔄 regeneration reactions for user-triggered replies.`,
+        enabled_title: `Fast Regeneration Enabled`,
+        enabled_description: `User-triggered replies will now get a short-lived 🔄 reaction. Only the triggering user can press it to regenerate the turn.`,
+        disabled_title: `Fast Regeneration Disabled`,
+        disabled_description: `User-triggered replies will no longer get 🔄 regeneration reactions. Existing regeneration reactions have been cleared where possible.`,
+      },
       "deliberate-tool-mode": {
         description: `Toggle deliberate tool mode for this server.`,
       },

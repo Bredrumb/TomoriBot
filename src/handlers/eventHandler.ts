@@ -28,6 +28,7 @@ const setupEventListeners = (client: Client): void => {
     guildMemberAdd: "guildMemberAdd",
     interactionCreate: "interactionCreate",
     messageCreate: "messageCreate",
+    messageReactionAdd: "messageReactionAdd",
     clientReady: "clientReady",
     // New mappings for consolidated handlers
     emojiCreate: "guildEmojisUpdate", // Map emoji events to one folder

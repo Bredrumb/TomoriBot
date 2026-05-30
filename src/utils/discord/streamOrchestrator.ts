@@ -2155,6 +2155,9 @@ export class StreamOrchestrator implements IStreamOrchestrator {
       if (!state.firstReplyUrl && sentMessage?.url) {
         state.firstReplyUrl = sentMessage.url;
       }
+      if (sentMessage) {
+        context.recordTurnOutputMessage?.(sentMessage, context.tomoriState.tomori_id);
+      }
       state.messageSentCount++;
       if (textForState) {
         state.accumulatedText += textForState; // Track all sent text for short-term memory

@@ -536,6 +536,7 @@ export const tomoriConfigSchema = z.object({
     (value) => normalizeDeliberateToolTriggers(value),
     z.record(z.string(), z.array(deliberateToolTriggerEntrySchema)).default({}),
   ), // Added May 2026 - Server-defined deliberate tool trigger phrases by tool target
+  fast_regeneration_enabled: z.boolean().default(true), // Added May 2026 - Show short-lived regenerate reaction on user-triggered Tomori turns
   cascade_limit: z.number().int().min(0).max(10).default(3), // Added January 2026, renamed April 2026 - Total additional triggers allowed after the first
   send_message_limit: z.number().int().min(0).max(40).default(0), // Added March 2026 - Max Discord messages per response (0 = unlimited, capped by MAX_FLUSH_COUNT)
   match_limit: z.number().int().min(1).max(10).default(3), // Added February 2026, renamed April 2026 - Max personas matched per message

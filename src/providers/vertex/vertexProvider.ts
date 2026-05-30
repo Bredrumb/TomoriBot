@@ -435,13 +435,12 @@ export class VertexProvider
         );
       }
 
-      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } =
-        applyDeliberateToolAllowlist({
-          providerLabel: "Vertex provider",
-          builtInTools: finalBuiltInTools,
-          mcpFunctionNames: finalMcpFunctionNames,
-          allowedToolNames: streamingContext?.deliberateToolAllowedNames,
-        }));
+      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } = applyDeliberateToolAllowlist({
+        providerLabel: "Vertex provider",
+        builtInTools: finalBuiltInTools,
+        mcpFunctionNames: finalMcpFunctionNames,
+        allowedToolNames: streamingContext?.deliberateToolAllowedNames,
+      }));
 
       // Use the Vertex tool adapter to get all tools in Gemini format
       const vertexAdapter = getVertexToolAdapter();
@@ -641,6 +640,7 @@ export class VertexProvider
 
         // Opaque message ID map for snowflake ID abstraction in LLM-visible text
         messageIdMap: streamingContext?.messageIdMap,
+        recordTurnOutputMessage: streamingContext?.recordTurnOutputMessage,
       };
 
       // Create streaming components

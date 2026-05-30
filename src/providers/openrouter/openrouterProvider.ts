@@ -521,13 +521,12 @@ export class OpenrouterProvider
         );
       }
 
-      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } =
-        applyDeliberateToolAllowlist({
-          providerLabel: "OpenRouter provider",
-          builtInTools: finalBuiltInTools,
-          mcpFunctionNames: finalMcpFunctionNames,
-          allowedToolNames: streamingContext?.deliberateToolAllowedNames,
-        }));
+      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } = applyDeliberateToolAllowlist({
+        providerLabel: "OpenRouter provider",
+        builtInTools: finalBuiltInTools,
+        mcpFunctionNames: finalMcpFunctionNames,
+        allowedToolNames: streamingContext?.deliberateToolAllowedNames,
+      }));
 
       // Use the enhanced tool adapter to get all tools (built-in + MCP)
       const openrouterAdapter = getOpenrouterToolAdapter();
@@ -828,6 +827,7 @@ export class OpenrouterProvider
 
         // Opaque message ID map for snowflake ID abstraction in LLM-visible text
         messageIdMap: streamingContext?.messageIdMap,
+        recordTurnOutputMessage: streamingContext?.recordTurnOutputMessage,
       };
 
       // Create the modular streaming components

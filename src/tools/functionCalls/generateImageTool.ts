@@ -41,8 +41,7 @@ const IMAGE_REFERENCE_MAX_SINGLE_BYTES = Number.parseInt(process.env.IMAGE_REFER
  */
 export class GenerateImageTool extends BaseTool {
   name = "generate_image";
-  description =
-    "Generate, edit, or outpaint an image. Sends the result directly to Discord.";
+  description = "Generate, edit, or outpaint an image. Sends the result directly to Discord.";
   category = "utility" as const;
   requiresFeatureFlag = "image_gen";
 
@@ -58,8 +57,7 @@ export class GenerateImageTool extends BaseTool {
       },
       media_id: {
         type: "string",
-        description:
-          "Reference media ID such as media_1. Use for img2img, inpaint, or outpaint.",
+        description: "Reference media ID such as media_1. Use for img2img, inpaint, or outpaint.",
       },
       inpaint: {
         type: "boolean",
@@ -93,8 +91,7 @@ export class GenerateImageTool extends BaseTool {
       },
       clothing_mode: {
         type: "boolean",
-        description:
-          "Set true for clothing, worn accessories, jewelry, or paired wearable items.",
+        description: "Set true for clothing, worn accessories, jewelry, or paired wearable items.",
       },
       mask_threshold: {
         type: "number",
@@ -118,8 +115,7 @@ export class GenerateImageTool extends BaseTool {
       },
       mask_mode: {
         type: "string",
-        description:
-          "Use target to edit the mask_prompt region; background edits surroundings while protecting it.",
+        description: "Use target to edit the mask_prompt region; background edits surroundings while protecting it.",
         enum: ["target", "background"],
       },
       inpaint_preset: {
@@ -144,8 +140,7 @@ export class GenerateImageTool extends BaseTool {
       },
       outpaint_amount: {
         type: "string",
-        description:
-          "Canvas expansion preset: slight, moderate, large, or dramatic.",
+        description: "Canvas expansion preset: slight, moderate, large, or dramatic.",
         enum: ["slight", "moderate", "large", "dramatic"],
       },
       outpaint_left_prompt: {
@@ -184,8 +179,7 @@ export class GenerateImageTool extends BaseTool {
       },
       target_identity: {
         type: "string",
-        description:
-          "User/persona identity whose avatar should be used as a reference.",
+        description: "User/persona identity whose avatar should be used as a reference.",
       },
       aspect_ratio: {
         type: "string",
@@ -223,7 +217,11 @@ export class GenerateImageTool extends BaseTool {
   }
 
   private shouldUseInpaint(args: Record<string, unknown>): boolean {
-    if (typeof args.mask_mode === "string" || typeof args.mask_prompt === "string" || typeof args.inpaint_preset === "string") {
+    if (
+      typeof args.mask_mode === "string" ||
+      typeof args.mask_prompt === "string" ||
+      typeof args.inpaint_preset === "string"
+    ) {
       return true;
     }
     if (typeof args.inpaint_mode === "string" && ["extend", "outpaint"].includes(args.inpaint_mode.toLowerCase())) {
@@ -297,8 +295,16 @@ export class GenerateImageTool extends BaseTool {
   }
 
   private resolveOutpaintStrategy(prompt: string, strategy: string | null): string | null {
-    const normalizedStrategy = strategy?.trim().toLowerCase().replace(/[-\s]+/g, "_") ?? "";
-    if (normalizedStrategy === "full_canvas" || normalizedStrategy === "edge_extend" || normalizedStrategy === "zoom_out") {
+    const normalizedStrategy =
+      strategy
+        ?.trim()
+        .toLowerCase()
+        .replace(/[-\s]+/g, "_") ?? "";
+    if (
+      normalizedStrategy === "full_canvas" ||
+      normalizedStrategy === "edge_extend" ||
+      normalizedStrategy === "zoom_out"
+    ) {
       return normalizedStrategy;
     }
     if (/\b(?:full[-\s]?canvas|novelai[-\s]?style|expanded[-\s]?canvas)\b/i.test(prompt)) {
@@ -455,6 +461,13 @@ export class GenerateImageTool extends BaseTool {
     context: ToolContext,
     attachment: AttachmentBuilder,
   ): Promise<import("discord.js").Message> {
+    const recordOutputMessage = (message: import("discord.js").Message): import("discord.js").Message => {
+      context.streamContext?.recordTurnOutputMessage?.(
+        message,
+        context.activePersonaId ?? context.tomoriState.tomori_id,
+      );
+      return message;
+    };
     const threadId =
       "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
         ? context.channel.id
@@ -462,24 +475,26 @@ export class GenerateImageTool extends BaseTool {
 
     if (context.webhook && context.personaUsername) {
       try {
-        return await sendWebhookMessageWithIdentity(
-          context.webhook,
-          {
-            files: [attachment],
-            ...(threadId ? { threadId } : {}),
-          },
-          {
-            username: context.personaUsername,
-            avatarUrl: context.personaAvatarUrl,
-            avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
-          },
+        return recordOutputMessage(
+          await sendWebhookMessageWithIdentity(
+            context.webhook,
+            {
+              files: [attachment],
+              ...(threadId ? { threadId } : {}),
+            },
+            {
+              username: context.personaUsername,
+              avatarUrl: context.personaAvatarUrl,
+              avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
+            },
+          ),
         );
       } catch (error) {
         log.warn("Failed to send generated image via webhook, falling back to bot message", error as Error);
       }
     }
 
-    return await context.channel.send({ files: [attachment] });
+    return recordOutputMessage(await context.channel.send({ files: [attachment] }));
   }
 
   /**
@@ -947,10 +962,12 @@ export class GenerateImageTool extends BaseTool {
     const extendPixels = this.parseClampedNumber(args.extend_pixels, 0, 512);
     const outpaintOverlap = this.parseClampedNumber(args.outpaint_overlap, 0, 256);
     const outpaintZoomScale = this.parseClampedNumber(args.outpaint_zoom_scale, 0.5, 0.95);
-    const outpaintLeftPrompt = typeof args.outpaint_left_prompt === "string" ? args.outpaint_left_prompt.trim() || null : null;
+    const outpaintLeftPrompt =
+      typeof args.outpaint_left_prompt === "string" ? args.outpaint_left_prompt.trim() || null : null;
     const outpaintRightPrompt =
       typeof args.outpaint_right_prompt === "string" ? args.outpaint_right_prompt.trim() || null : null;
-    const outpaintTopPrompt = typeof args.outpaint_top_prompt === "string" ? args.outpaint_top_prompt.trim() || null : null;
+    const outpaintTopPrompt =
+      typeof args.outpaint_top_prompt === "string" ? args.outpaint_top_prompt.trim() || null : null;
     const outpaintBottomPrompt =
       typeof args.outpaint_bottom_prompt === "string" ? args.outpaint_bottom_prompt.trim() || null : null;
 
@@ -1476,7 +1493,11 @@ export class GenerateImageTool extends BaseTool {
     return fallback;
   }
 
-  private isLikelyImageAttachment(attachment: { contentType?: string | null; name?: string | null; url?: string }): boolean {
+  private isLikelyImageAttachment(attachment: {
+    contentType?: string | null;
+    name?: string | null;
+    url?: string;
+  }): boolean {
     if (attachment.contentType?.startsWith("image/")) {
       return true;
     }
@@ -1607,7 +1628,9 @@ export class GenerateImageTool extends BaseTool {
       })
       .jpeg({ quality: 42, mozjpeg: true })
       .toBuffer();
-    log.warn(`Reference image still exceeds desired payload cap after downscale (${finalBuffer.byteLength} > ${maxBytes})`);
+    log.warn(
+      `Reference image still exceeds desired payload cap after downscale (${finalBuffer.byteLength} > ${maxBytes})`,
+    );
     return {
       mimeType: "image/jpeg",
       data: finalBuffer.toString("base64"),
@@ -1654,7 +1677,10 @@ export class GenerateImageTool extends BaseTool {
     };
   }
 
-  private async inferReferenceImageAspectRatio(referenceImage: { mimeType: string; data: string }): Promise<string | null> {
+  private async inferReferenceImageAspectRatio(referenceImage: {
+    mimeType: string;
+    data: string;
+  }): Promise<string | null> {
     try {
       const metadata = await sharp(Buffer.from(referenceImage.data, "base64")).metadata();
       if (!metadata.width || !metadata.height) {

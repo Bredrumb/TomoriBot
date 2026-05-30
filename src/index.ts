@@ -196,7 +196,7 @@ if ((process.env.RUN_ENV || "development") !== "production") {
 
 const client = new Client({
   intents,
-  partials: [Partials.Channel, Partials.Message],
+  partials: [Partials.Channel, Partials.Message, Partials.Reaction, Partials.User],
   /**
    * Cache sweepers prevent unbounded memory growth by automatically removing old cached data.
    * These settings optimize memory usage while maintaining recent data for performance.

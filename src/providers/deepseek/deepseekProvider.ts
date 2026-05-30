@@ -196,13 +196,12 @@ export class DeepseekProvider
         );
       }
 
-      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } =
-        applyDeliberateToolAllowlist({
-          providerLabel: "DeepSeek provider",
-          builtInTools: finalBuiltInTools,
-          mcpFunctionNames: finalMcpFunctionNames,
-          allowedToolNames: streamingContext?.deliberateToolAllowedNames,
-        }));
+      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } = applyDeliberateToolAllowlist({
+        providerLabel: "DeepSeek provider",
+        builtInTools: finalBuiltInTools,
+        mcpFunctionNames: finalMcpFunctionNames,
+        allowedToolNames: streamingContext?.deliberateToolAllowedNames,
+      }));
 
       const adapter = getDeepseekToolAdapter();
       const allToolsConfig = await adapter.getAllToolsInOpenAICompatibleFormat(
@@ -333,6 +332,7 @@ export class DeepseekProvider
 
         // Opaque message ID map for snowflake ID abstraction in LLM-visible text
         messageIdMap: streamingContext?.messageIdMap,
+        recordTurnOutputMessage: streamingContext?.recordTurnOutputMessage,
       };
 
       const orchestrator = new StreamOrchestrator();

@@ -157,6 +157,13 @@ export class GenerateVideoTool extends BaseTool {
     context: ToolContext,
     attachment: AttachmentBuilder,
   ): Promise<import("discord.js").Message> {
+    const recordOutputMessage = (message: import("discord.js").Message): import("discord.js").Message => {
+      context.streamContext?.recordTurnOutputMessage?.(
+        message,
+        context.activePersonaId ?? context.tomoriState.tomori_id,
+      );
+      return message;
+    };
     const threadId =
       "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
         ? context.channel.id
@@ -165,24 +172,26 @@ export class GenerateVideoTool extends BaseTool {
     // Try persona webhook first
     if (context.webhook && context.personaUsername) {
       try {
-        return await sendWebhookMessageWithIdentity(
-          context.webhook,
-          {
-            files: [attachment],
-            ...(threadId ? { threadId } : {}),
-          },
-          {
-            username: context.personaUsername,
-            avatarUrl: context.personaAvatarUrl,
-            avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
-          },
+        return recordOutputMessage(
+          await sendWebhookMessageWithIdentity(
+            context.webhook,
+            {
+              files: [attachment],
+              ...(threadId ? { threadId } : {}),
+            },
+            {
+              username: context.personaUsername,
+              avatarUrl: context.personaAvatarUrl,
+              avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
+            },
+          ),
         );
       } catch (error) {
         log.warn("Failed to send generated video via webhook, falling back to bot message", error as Error);
       }
     }
 
-    return await context.channel.send({ files: [attachment] });
+    return recordOutputMessage(await context.channel.send({ files: [attachment] }));
   }
 
   /**

@@ -72,6 +72,10 @@ import {
   type DeliberateToolIntentMatch,
 } from "@/utils/tools/deliberateToolMode";
 import { routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
+import {
+  clearFastRegenerationEntriesForChannel,
+  createFastRegenerationRecorder,
+} from "@/utils/discord/fastRegeneration";
 import { sql } from "@/utils/db/client";
 import { loadEmojiStickerCache } from "../../utils/cache/emojiStickerCache";
 import { getLinkedMatrixRoom, pendingMatrixReplyChannels, sendMatrixTypingIndicator } from "@/utils/matrix";
@@ -2776,6 +2780,31 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
       );
     }
   }
+
+  const shouldOfferFastRegeneration =
+    Boolean(message.guildId) &&
+    Boolean(earlyTomoriState) &&
+    earlyTomoriState?.config.fast_regeneration_enabled !== false &&
+    !isPersonaJob &&
+    !isUserImpersonation &&
+    !isStopResponse &&
+    !reminderRecipientID &&
+    !reminderData &&
+    !streamingContext.disableCrossChannelMessage;
+  if (shouldOfferFastRegeneration) {
+    await clearFastRegenerationEntriesForChannel(channel.id);
+  }
+  const fastRegenerationRecorder = shouldOfferFastRegeneration
+    ? createFastRegenerationRecorder({
+        triggerUserId: userDiscId,
+        triggerUsername: triggererUsername,
+        locale,
+        member: manualTriggerInvoker?.member ?? message.member,
+      })
+    : null;
+  streamingContext.recordTurnOutputMessage = (outputMessage, personaId) => {
+    fastRegenerationRecorder?.record(outputMessage, personaId);
+  };
 
   // Guard: block replies to other bots' messages unless Tomori is directly addressed.
   // Placed here (after earlyAllPersonas load) so all persona/alter trigger words are
@@ -8469,7 +8498,7 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
                   ? channel.id
                   : undefined;
               try {
-                await sendWebhookMessageWithIdentity(
+                const sentStickerMessage = await sendWebhookMessageWithIdentity(
                   personaWebhook,
                   {
                     content: stickerUrl,
@@ -8481,6 +8510,7 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
                     avatarDataUri: personaAvatarUrl?.startsWith("data:image/") ? personaAvatarUrl : undefined,
                   },
                 );
+                streamingContext.recordTurnOutputMessage?.(sentStickerMessage, currentPersona.tomori_id);
                 stickerSent = true;
                 log.info(`Sent sticker URL for '${selectedStickerToSend.name}' via webhook.`);
               } catch (stickerError) {
@@ -8492,11 +8522,10 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
               try {
                 // If the last interaction was a reply (isFromQueue), try to reply with sticker too.
                 // Otherwise, just send to channel.
-                if (isFromQueue) {
-                  await message.reply({ stickers: [selectedStickerToSend.id] });
-                } else {
-                  await channel.send({ stickers: [selectedStickerToSend.id] });
-                }
+                const sentStickerMessage = isFromQueue
+                  ? await message.reply({ stickers: [selectedStickerToSend.id] })
+                  : await channel.send({ stickers: [selectedStickerToSend.id] });
+                streamingContext.recordTurnOutputMessage?.(sentStickerMessage, currentPersona.tomori_id);
                 stickerSent = true;
                 log.info(`Sent selected sticker '${selectedStickerToSend.name}' after stream.`);
               } catch (stickerError) {
@@ -8838,6 +8867,8 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
         // Don't fail the conversation if boomerang check fails
         log.warn("Failed to check/execute boomerang, but conversation completed successfully", boomerangCheckError);
       }
+
+      await fastRegenerationRecorder?.arm();
     } catch (error) {
       // 14. Global error handler for entire function
       log.error("Unhandled error in tomoriChat handler:", error);

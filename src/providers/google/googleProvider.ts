@@ -431,13 +431,12 @@ export class GoogleProvider
         );
       }
 
-      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } =
-        applyDeliberateToolAllowlist({
-          providerLabel: "Google provider",
-          builtInTools: finalBuiltInTools,
-          mcpFunctionNames: finalMcpFunctionNames,
-          allowedToolNames: streamingContext?.deliberateToolAllowedNames,
-        }));
+      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } = applyDeliberateToolAllowlist({
+        providerLabel: "Google provider",
+        builtInTools: finalBuiltInTools,
+        mcpFunctionNames: finalMcpFunctionNames,
+        allowedToolNames: streamingContext?.deliberateToolAllowedNames,
+      }));
 
       // Use the enhanced tool adapter to get all tools (built-in + MCP)
       // Pass the pre-filtered MCP function names to ensure centralized filtering
@@ -702,6 +701,7 @@ export class GoogleProvider
 
         // Opaque message ID map for snowflake ID abstraction in LLM-visible text
         messageIdMap: streamingContext?.messageIdMap,
+        recordTurnOutputMessage: streamingContext?.recordTurnOutputMessage,
       };
 
       // Create the modular streaming components

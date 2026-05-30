@@ -1,5 +1,5 @@
 import { AttachmentBuilder, Routes } from "discord.js";
-import type { Webhook } from "discord.js";
+import type { Message, Webhook } from "discord.js";
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
 import { synthesizeSpeechViaElevenLabsAdapter } from "@/providers/custom/styles/elevenLabsAdapter";
 import { synthesizeSpeechViaTtsClone } from "@/providers/custom/styles/ttsCloningAdapter";
@@ -259,6 +259,12 @@ export class GenerateVoiceMessageTool extends BaseTool {
   }): Promise<string | undefined> {
     const { context, audioBuffer, mimeType, filename, voiceMeta, threadId } = options;
     let sentMessageId: string | undefined;
+    const recordOutputMessage = (message: Message): void => {
+      context.streamContext?.recordTurnOutputMessage?.(
+        message,
+        context.activePersonaId ?? context.tomoriState.tomori_id,
+      );
+    };
 
     if (voiceMeta) {
       if (context.webhook?.token) {
@@ -310,9 +316,18 @@ export class GenerateVoiceMessageTool extends BaseTool {
           },
         );
         sentMessageId = sent.id;
+        recordOutputMessage(sent);
       } else {
         const sent = await context.channel.send({ files: [attachment] });
         sentMessageId = sent.id;
+        recordOutputMessage(sent);
+      }
+    }
+
+    if (sentMessageId) {
+      const sentMessage = await context.channel.messages.fetch(sentMessageId).catch(() => null);
+      if (sentMessage) {
+        recordOutputMessage(sentMessage);
       }
     }
 
@@ -325,9 +340,15 @@ export class GenerateVoiceMessageTool extends BaseTool {
    */
   private async postTranscriptCaption(context: ToolContext, captionText: string, threadId?: string): Promise<void> {
     const quotedCaption = `> ${captionText.replace(/\n/g, "\n> ")}`;
+    const recordOutputMessage = (message: Message): void => {
+      context.streamContext?.recordTurnOutputMessage?.(
+        message,
+        context.activePersonaId ?? context.tomoriState.tomori_id,
+      );
+    };
     try {
       if (context.webhook && context.personaUsername) {
-        await sendWebhookMessageWithIdentity(
+        const sentMessage = await sendWebhookMessageWithIdentity(
           context.webhook,
           {
             content: quotedCaption,
@@ -340,8 +361,10 @@ export class GenerateVoiceMessageTool extends BaseTool {
             avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
           },
         );
+        recordOutputMessage(sentMessage);
       } else {
-        await context.channel.send({ content: quotedCaption, allowedMentions: { parse: [] } });
+        const sentMessage = await context.channel.send({ content: quotedCaption, allowedMentions: { parse: [] } });
+        recordOutputMessage(sentMessage);
       }
       log.info(`[VoiceChat] Posted TTS transcript | persona="${context.personaUsername ?? "bot"}"`);
     } catch (error) {

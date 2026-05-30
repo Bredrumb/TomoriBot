@@ -4468,6 +4468,13 @@ RP設定を無効化したチャンネル **{disabled_count}** 件: {disabled_ch
         disabled_title: `明示的ツールモードが無効になりました`,
         disabled_description: `対応モデルでは、ツール宣言が通常どおり利用可能になります。`,
       },
+      "fast-regeneration": {
+        description: `ユーザー起点の返信に短時間だけ表示される 🔄 再生成リアクションを切り替えます。`,
+        enabled_title: `高速再生成が有効になりました`,
+        enabled_description: `ユーザー起点の返信に短時間だけ 🔄 リアクションが付きます。押せるのはその返信を起動したユーザーだけです。`,
+        disabled_title: `高速再生成が無効になりました`,
+        disabled_description: `ユーザー起点の返信に 🔄 再生成リアクションは付きません。既存の再生成リアクションも可能な範囲で削除しました。`,
+      },
       "deliberate-tool-mode": {
         description: `このサーバーの明示的ツールモードを切り替えます。`,
       },

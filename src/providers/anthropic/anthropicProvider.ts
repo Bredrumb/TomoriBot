@@ -248,13 +248,12 @@ export class AnthropicProvider
         );
       }
 
-      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } =
-        applyDeliberateToolAllowlist({
-          providerLabel: "Anthropic provider",
-          builtInTools: finalBuiltInTools,
-          mcpFunctionNames: finalMcpFunctionNames,
-          allowedToolNames: streamingContext?.deliberateToolAllowedNames,
-        }));
+      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } = applyDeliberateToolAllowlist({
+        providerLabel: "Anthropic provider",
+        builtInTools: finalBuiltInTools,
+        mcpFunctionNames: finalMcpFunctionNames,
+        allowedToolNames: streamingContext?.deliberateToolAllowedNames,
+      }));
 
       const adapter = getAnthropicToolAdapter();
       const allToolsConfig = await adapter.getAllToolsInProviderFormat(
@@ -381,6 +380,7 @@ export class AnthropicProvider
 
         // Opaque message ID map for snowflake ID abstraction in LLM-visible text
         messageIdMap: streamingContext?.messageIdMap,
+        recordTurnOutputMessage: streamingContext?.recordTurnOutputMessage,
       };
 
       const orchestrator = new StreamOrchestrator();

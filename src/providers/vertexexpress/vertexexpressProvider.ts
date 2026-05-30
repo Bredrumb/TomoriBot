@@ -333,13 +333,12 @@ export class VertexexpressProvider
         );
       }
 
-      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } =
-        applyDeliberateToolAllowlist({
-          providerLabel: "Vertex AI Express provider",
-          builtInTools: finalBuiltInTools,
-          mcpFunctionNames: finalMcpFunctionNames,
-          allowedToolNames: streamingContext?.deliberateToolAllowedNames,
-        }));
+      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } = applyDeliberateToolAllowlist({
+        providerLabel: "Vertex AI Express provider",
+        builtInTools: finalBuiltInTools,
+        mcpFunctionNames: finalMcpFunctionNames,
+        allowedToolNames: streamingContext?.deliberateToolAllowedNames,
+      }));
 
       const adapter = getVertexexpressToolAdapter();
       const allToolsConfig = await adapter.getAllToolsInProviderFormat(
@@ -528,6 +527,7 @@ export class VertexexpressProvider
         forcedMentions: streamingContext?.forcedMentions,
         abortSignal: streamingContext?.abortSignal,
         messageIdMap: streamingContext?.messageIdMap,
+        recordTurnOutputMessage: streamingContext?.recordTurnOutputMessage,
       };
 
       const orchestrator = new StreamOrchestrator();
