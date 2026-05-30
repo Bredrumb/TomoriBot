@@ -681,22 +681,33 @@ async function buildShortTermMemoryContext(
       otherChannelMemories = [...otherChannelMemories, ...crossServerUserMemories];
     }
 
-    // Filter out private-channel STMs when the current channel is not private.
-    // Private channels isolate their STMs — they cannot leak into non-private channels.
-    // The reverse is allowed: non-private STMs can still appear in private channels.
-    // Also treat a thread as private when its parent channel is private.
+    // Private channels isolate their STMs from all other private channels.
+    // Rule: a private-channel STM is only visible when the current channel belongs to the
+    // SAME private channel (or one of its threads). Non-private STMs pass through everywhere.
+    // Threads inherit their parent channel's privacy group for matching purposes.
     // This guard is skipped entirely when stm_privacy_bypass is enabled by the server admin.
     const privateChannelIds = tomoriState?.config.private_channel_ids ?? [];
     const stmPrivacyBypass = tomoriState?.config.stm_privacy_bypass ?? false;
-    const isCurrentChannelPrivate =
-      privateChannelIds.includes(currentChannelId) ||
-      (currentParentChannelId != null && privateChannelIds.includes(currentParentChannelId));
-    if (!stmPrivacyBypass && !isCurrentChannelPrivate && privateChannelIds.length > 0) {
-      otherChannelMemories = otherChannelMemories.filter(
-        (memory) =>
-          !privateChannelIds.includes(memory.channelId) &&
-          !(memory.parentChannelId != null && privateChannelIds.includes(memory.parentChannelId)),
-      );
+    if (!stmPrivacyBypass && privateChannelIds.length > 0) {
+      const currentPrivateChannelId = privateChannelIds.includes(currentChannelId)
+        ? currentChannelId
+        : currentParentChannelId != null && privateChannelIds.includes(currentParentChannelId)
+          ? currentParentChannelId
+          : null;
+
+      otherChannelMemories = otherChannelMemories.filter((memory) => {
+        const memoryPrivateChannelId = privateChannelIds.includes(memory.channelId)
+          ? memory.channelId
+          : memory.parentChannelId != null && privateChannelIds.includes(memory.parentChannelId)
+            ? memory.parentChannelId
+            : null;
+
+        // Non-private memories always pass through
+        if (memoryPrivateChannelId === null) return true;
+
+        // Private memories only visible when in the same private channel (or its threads)
+        return memoryPrivateChannelId === currentPrivateChannelId;
+      });
     }
 
     otherChannelMemories.sort((a, b) => b.lastUpdated - a.lastUpdated);
