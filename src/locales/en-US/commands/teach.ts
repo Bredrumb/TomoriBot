@@ -66,7 +66,7 @@ export default {
       batch_file_label: `Batch .txt File`,
       batch_file_description: `Optional: one attribute per non-empty line.`,
       public_checkbox_label: `Public attribute`,
-      public_checkbox_description: `Visible to other personas triggered by the same message.`,
+      public_checkbox_description: `Visible to other personas as well.`,
       visibility_public: `Public`,
       visibility_private: `Private`,
       no_input_title: `No Input Provided`,

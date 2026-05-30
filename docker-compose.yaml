@@ -39,10 +39,14 @@ services:
 
   # SearXNG metasearch sidecar - Tomori's library research assistant
   # Self-hosted JSON aggregator that fronts Google/Bing/DDG/Brave/Wikipedia.
+  # Enable with: docker compose --profile searxng up
+  # Set SEARXNG_BASE_URL=http://searxng:8080/ in .env (already set in tomoribot service below).
   # See servers/searxng/README.md for configuration + upgrade procedure.
   searxng:
     image: searxng/searxng:latest
     container_name: tomoribot-searxng
+    profiles:
+      - searxng
     volumes:
       - ./servers/searxng:/etc/searxng:ro
     environment:
@@ -90,8 +94,6 @@ services:
     container_name: tomoribot-app
     depends_on:
       postgres:
-        condition: service_healthy
-      searxng:
         condition: service_healthy
     env_file: .env
     environment:

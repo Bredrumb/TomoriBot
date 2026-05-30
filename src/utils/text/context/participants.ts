@@ -70,6 +70,7 @@ export async function buildUsersInConversationContextItem(params: {
   const userEntries: UserConversationEntry[] = [];
   const conversationUsers: ConversationUserReference[] = [];
   const aliasCounts = new Map<string, number>();
+  let botEntryAdded = false;
 
   for (const userIdToProcess of params.userList) {
     if (
@@ -77,19 +78,22 @@ export async function buildUsersInConversationContextItem(params: {
       (params.tomoriState?.is_alter && userIdToProcess === String(params.tomoriState.persona_id)) ||
       (params.tomoriState?.persona_id != null && userIdToProcess === `persona:${params.tomoriState.persona_id}`)
     ) {
-      userEntries.push({
-        userId: userIdToProcess,
-        displayName: params.botName,
-        detailLines: ["- Status: Online - Currently active and responding to messages"],
-        imageAppearanceTags:
-          !params.isUserImpersonation && params.tomoriConfig.imagegen_enabled
-            ? normalizeImageAppearanceTags(params.tomoriState?.nai_tags)
-            : undefined,
-        isBot: true,
-        mentionAliases: [],
-        primaryAlias: null,
-        mentionable: false,
-      });
+      if (!botEntryAdded) {
+        userEntries.push({
+          userId: userIdToProcess,
+          displayName: params.botName,
+          detailLines: ["- Status: Online - Currently active and responding to messages"],
+          imageAppearanceTags:
+            !params.isUserImpersonation && params.tomoriConfig.imagegen_enabled
+              ? normalizeImageAppearanceTags(params.tomoriState?.nai_tags)
+              : undefined,
+          isBot: true,
+          mentionAliases: [],
+          primaryAlias: null,
+          mentionable: false,
+        });
+        botEntryAdded = true;
+      }
       continue;
     }
 

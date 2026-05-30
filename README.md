@@ -356,6 +356,32 @@ The bot will automatically:
 
 Once you see `TomoriBot up and running!`, without errors in your logs, the bot is online and ready to use.
 
+#### Optional Sidecars (`bun launch`)
+
+If you want to run optional sidecar services alongside the bot — such as SearXNG for web search, Crawl4AI for browser-rendered page fetches, or a local TTS server — use `bun launch` instead of `bun run dev`. It starts the requested sidecars, waits for them to be ready, then launches the bot in watch mode automatically:
+
+```sh
+# Bot only — identical to bun run dev
+bun launch
+
+# With SearXNG and Crawl4AI Docker sidecars
+bun launch --searxng --crawl4ai
+
+# With a local TTS server (venv must be set up first — see docs/integrations/voice/tts/)
+bun launch --qwen3tts
+
+# See all available flags
+bun launch --help
+```
+
+Available flags: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--whisperx`
+
+Docker sidecars (`--searxng`, `--crawl4ai`) are created on first run and reused on subsequent runs — no manual `docker run` needed. Python TTS/STT sidecars require their venv to be set up once beforehand; see the individual setup guides in `docs/integrations/voice/`.
+
+**Hot reload** applies only to the bot (`src/`). Sidecar servers are unaffected by file changes and stay running until you stop them manually.
+
+**Ctrl+C** stops the bot and any Python sidecar processes. Docker containers (`--searxng`, `--crawl4ai`) are intentionally left running — stop them manually with `docker stop searxng` / `docker stop crawl4ai` when you're done.
+
 #### Basic Commands
 
 - `/config setup` - Initial bot setup for your server
@@ -430,7 +456,7 @@ For Docker Compose, start from `.env.example`, then add `POSTGRES_PASSWORD` if y
 # Build TomoriBot's container (first time or after code changes)
 docker compose build
 
-# Start TomoriBot and her database (uses docker-compose.yaml)
+# Start TomoriBot and her database only
 docker compose up
 ```
 
@@ -438,11 +464,26 @@ docker compose up
 
 #### Optional Docker Sidecars
 
-TomoriBot supports optional Docker sidecars to enhance her tools and add local monitoring. See the guides below for simple setup instructions:
+TomoriBot supports optional Docker sidecars to enhance her tools and add local monitoring. All sidecars are opt-in via Docker Compose profiles:
+
+```sh
+# + SearXNG web search (self-hosted metasearch)
+docker compose --profile searxng up
+
+# + Crawl4AI browser-rendered page fetching
+docker compose --profile fetch-crawl4ai up
+
+# + Both at once
+docker compose --profile searxng --profile fetch-crawl4ai up
+```
+
+See the guides below for full setup details:
 
 - **[SearXNG Web Search Sidecar](docs/guides/setup-searxng.md)** - A self-hosted metasearch instance to bypass single-engine API limits for the `web_search` tool.
 - **[Crawl4AI Sidecar](docs/guides/setup-fetch-sidecars.md)** - A browser-rendering sidecar to fetch and process JavaScript-heavy webpages for the `fetch_url` tool.
 - **[Local Grafana Monitoring](docs/guides/local-monitoring.md)** - Instructions on how to spin up a local Grafana dashboard to monitor TomoriBot's performance and database metrics.
+
+> **Using `bun run dev` instead of Docker Compose?** Use `bun launch --searxng --crawl4ai` — it handles the Docker container lifecycle for you automatically. See the [Optional Sidecars](#optional-sidecars-bun-launch) section above.
 
 <!-- ROADMAP -->
 ## Roadmap

@@ -112,6 +112,159 @@ export function truncateBeforeGenericSpeakerLine(
 }
 
 /**
+ * Removes leaked uses of the bot's *own* name as a turn label (e.g. "Tomori:"). Conversation
+ * history is fed to the model in "Name: text" form, so the model both opens its turn with its own
+ * label and sometimes re-emits it. The handling branches on whether the output *opened* with the
+ * persona label — the signal for "this is a real turn" vs "a thought leaked before the turn":
+ *
+ *   A. Opened with the label ("Tomori: ...") — a real turn. The starter label is removed and any
+ *      *further* self-labels are cleaned by stripBoundaryOwnNameLabels, which preserves the
+ *      preceding text (collapsing to a newline). So "Tomori: a.Tomori: b" → "a.\nb".
+ *   B. Did NOT open with the label — content before the first own-label is treated as a leaked
+ *      "thought"/scratchpad and dropped by stripLeakedPreamble. So "the answer is 30Tomori: 30!"
+ *      → "30!". A trailing-only label ("...chew toy!Tomori:") is the exception: the preceding text
+ *      is the response, so only the bare label is dropped (by stripBoundaryOwnNameLabels).
+ *
+ * Legitimate "Name: value" list items and inline prose are preserved throughout — see
+ * stripBoundaryOwnNameLabels for the turn-boundary rules and list-marker guards.
+ *
+ * NOTE: this function owns the leading-label strip, so it must run on text where that label is
+ * still present (callers must not pre-strip it) — otherwise the branch-A/B decision is wrong.
+ *
+ * @param text - LLM text (post emoji-resolution)
+ * @param botName - Active persona / bot display name
+ * @returns Text with leaked self-labels removed
+ */
+export function stripLeakedOwnNameLabels(text: string, botName: string): string {
+  if (!text || !botName.trim()) return text;
+
+  const escapedName = escapeRegExp(botName);
+  // Own-name label in plain, "**Name:**", or "**Name**:" bold forms (reused across the helpers).
+  const labelAlternation = `(?:\\*\\*${escapedName}:\\*\\*|\\*\\*${escapedName}\\*\\*:|${escapedName}:)`;
+
+  // 1. Did the model open its turn with its own label? That distinguishes a real (if messy) turn
+  //    from output that leaked a "thought" before re-introducing the persona.
+  const starterPattern = new RegExp(`^\\s*${labelAlternation}[ \\t]*`, "i");
+  const deleaked = starterPattern.test(text)
+    ? text.replace(starterPattern, "") // 2a. Real turn — drop only the starter label.
+    : stripLeakedPreamble(text, labelAlternation); // 2b. Leaked preamble — drop everything before the turn.
+
+  // 3. Clean any self-labels that re-introduce the persona at a later turn boundary.
+  return stripBoundaryOwnNameLabels(deleaked, labelAlternation);
+}
+
+/**
+ * Matches a fully-resolved Discord custom emoji tag (`<:name:id>` / `<a:name:id>`). The shortcode→tag
+ * conversion in `cleanLLMOutput` wraps emojis in surrounding spaces, so a leaked self-label that the
+ * model glued onto an emoji ("…<:Emoji:id>Tomori:") arrives here as "<:Emoji:id> Tomori:". The space
+ * would otherwise disguise it as legitimate prose, so an emoji tag is treated as a leak-preceding
+ * context (the tag itself is kept; the trailing label is dropped).
+ */
+const CUSTOM_EMOJI_TAG_SOURCE = "<a?:[^\\s:>]+:\\d+>";
+
+/**
+ * Drops a leaked "thought"/scratchpad preamble emitted before the real response, used when the
+ * output did NOT open with the persona label. Everything up to and including the first own-name
+ * label is removed, keeping only the real response that follows
+ * ("the answer is 30Tomori: 30!" → "30!"; "reasoning...\nTomori: hi" → "hi").
+ *
+ * Exception: a trailing label with no real content after it ("...chew toy!Tomori:") is left
+ * untouched here — the preceding text is the response, and the bare label is dropped later by
+ * stripBoundaryOwnNameLabels. Labels inside markdown code spans/blocks are ignored.
+ *
+ * @param text - LLM text that does not open with the persona label
+ * @param labelAlternation - Regex source matching the own-name label (plain/bold forms)
+ * @returns Text with any leaked preamble removed
+ */
+function stripLeakedPreamble(text: string, labelAlternation: string): string {
+  const codeRanges = findMarkdownCodeRanges(text);
+  // 1. A "leak-shaped" re-introduction label is glued directly onto the preamble (preceded by a
+  //    non-whitespace char with no space — "30Tomori:"), follows a custom emoji tag (with the
+  //    conversion-inserted space — "<:Emoji:id> Tomori:"), or sits at a turn boundary (newline, or
+  //    sentence punctuation that is not a numbered-list marker). List items ("- Tomori:",
+  //    "1. Tomori:") and inline prose (", Tomori:") are space-preceded and so NOT leak-shaped, so a
+  //    legitimate label is skipped and its surrounding text is preserved. Colon is excluded from the
+  //    glued char so an emoji named exactly like the persona ("<:Tomori:id>") is not a false match.
+  const leakLabelPattern = new RegExp(
+    `(?:[^\\s.!?。！？:]${labelAlternation}` +
+      `|${CUSTOM_EMOJI_TAG_SOURCE}[ \\t]*${labelAlternation}` +
+      `|(?:\\n|(?<!(?:^|\\n)[ \\t]*\\d{1,9})[.!?。！？])[ \\t]*${labelAlternation})[ \\t]*`,
+    "gi",
+  );
+  let match: RegExpExecArray | null = null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: standard exec loop
+  while ((match = leakLabelPattern.exec(text)) !== null) {
+    // 2. Ignore a label that lives inside a code span/block.
+    if (isIndexInsideRanges(match.index, codeRanges)) continue;
+    // 3. Cut the preamble + this label only when a real response follows; a trailing-only label
+    //    keeps its preceding text (it is the response) and is dropped downstream instead.
+    const rest = text.slice(match.index + match[0].length);
+    return rest.trim() ? rest : text;
+  }
+  return text;
+}
+
+/**
+ * Collapses or removes the bot's own name used as a turn label at a leaked position — the start of
+ * text, a newline, sentence-ending punctuation (`. ! ? 。 ！ ？`), immediately after a custom emoji
+ * tag, or glued onto a non-whitespace char. This distinguishes a leaked turn from legitimate uses,
+ * which are preserved:
+ *   - List items: "- Tomori: 100" / "1. Tomori: 100" (name follows a marker, not a boundary)
+ *   - Inline prose: ", Tomori: never quit" (comma is not a turn boundary)
+ * The numbered-list guard rejects a punctuation boundary only when the preceding digits run back
+ * to line start. Matches inside markdown code spans/blocks are skipped.
+ *
+ * Mid-text labels collapse to a newline (so the following clause splits onto its own line);
+ * a leading/trailing label is removed (any inserted newline is trimmed by the caller).
+ *
+ * @param text - LLM text
+ * @param labelAlternation - Regex source matching the own-name label (plain/bold forms)
+ * @returns Text with boundary self-labels stripped
+ */
+function stripBoundaryOwnNameLabels(text: string, labelAlternation: string): string {
+  const codeRanges = findMarkdownCodeRanges(text);
+  // 1. A leaked self-label is detected in three shapes (each keeps its preceding char/tag and drops
+  //    only the label, inserting a newline so the next clause splits onto its own line):
+  //      - Boundary (group 1) + optional spaces (group 2): start, newline, or sentence punctuation
+  //        that is not a numbered-list marker ("...girl. Tomori:", "scored 100.Tomori:"). The
+  //        lookbehind rejects "1. Tomori:" (line-start digits) so numbered lists survive.
+  //      - Emoji tag (group 3) + optional spaces: a label after a custom emoji ("<:Emoji:id> Tomori:"),
+  //        where the shortcode→tag conversion inserted a space that would otherwise disguise the leak.
+  //      - Glued (group 4): a non-whitespace char fused directly onto the label with NO space
+  //        ("30Tomori:"). Colon is excluded so an emoji named exactly like the persona is not matched.
+  //    A space before the label means a list item ("- Tomori:") or prose (", Tomori:") — preserved.
+  const labelPattern = new RegExp(
+    `(?:(^|\\n|(?<!(?:^|\\n)[ \\t]*\\d{1,9})[.!?。！？])([ \\t]*)` +
+      `|(${CUSTOM_EMOJI_TAG_SOURCE})[ \\t]*` +
+      `|([^\\s.!?。！？:]))${labelAlternation}[ \\t]*`,
+    "gi",
+  );
+
+  let result = "";
+  let lastIndex = 0;
+  let match: RegExpExecArray | null = null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: standard exec loop
+  while ((match = labelPattern.exec(text)) !== null) {
+    // 2. The char/tag kept before the inserted newline is whichever shape matched (start → "").
+    const kept = match[1] ?? match[3] ?? match[4] ?? "";
+    // 3. Leave labels inside code spans/blocks untouched (do NOT advance lastIndex). match.index
+    //    is the start of the kept prefix, within a couple chars of the label — close enough.
+    if (isIndexInsideRanges(match.index, codeRanges)) continue;
+
+    // 4. Emit text up to the match, keep the boundary/emoji/glued prefix, drop the label. A newline
+    //    (or start) needs no extra separator; any other kept prefix gains a trailing newline.
+    result += text.slice(lastIndex, match.index);
+    result += kept === "" || kept === "\n" ? "\n" : `${kept}\n`;
+    lastIndex = labelPattern.lastIndex;
+  }
+
+  // 5. No (strippable) matches — return the input untouched.
+  if (lastIndex === 0) return text;
+  result += text.slice(lastIndex);
+  return result;
+}
+
+/**
  * Cleans raw LLM output for Discord display: removes leaked system blocks, normalises
  * whitespace, resolves known Discord emoji shortcodes, strips bot-name prefixes, and resolves
  * @mention handles.
@@ -152,13 +305,6 @@ export function cleanLLMOutput(
     .replace(/\*\*<(.*?)>\*\*/g, "<$1>")
     .replace(/\*<(.*?)>\*/g, "<$1>")
     .replace(/<([a-zA-Z0-9_]+)>[\s\S]*?<\/\1>/g, "")
-    .replace(
-      new RegExp(
-        `^(\\*\\*${escapeRegExp(botName || "Tomori")}:\\*\\*|\\*\\*${escapeRegExp(botName || "Tomori")}\\*\\*:|${escapeRegExp(botName || "Tomori")}:)\\s*`,
-        "i",
-      ),
-      "",
-    )
     .trim();
 
   if (emojiUsageEnabled === false) {
@@ -226,12 +372,10 @@ export function cleanLLMOutput(
   }
 
   if (botName) {
-    const escapedName = escapeRegExp(botName);
-    const prefixPattern = new RegExp(
-      `^(\\*\\*${escapedName}:\\*\\*|\\*\\*${escapedName}\\*\\*:|${escapedName}:)\\s*`,
-      "i",
-    );
-    cleanedText = cleanedText.replace(prefixPattern, "");
+    // Owns the full own-name leak handling: drop the starter "Name:" label on a real turn, drop a
+    // leaked "thought" preamble when the turn did not open with the label, and collapse any later
+    // self-labels. Must run with the leading label intact, so no prefix strip precedes it.
+    cleanedText = stripLeakedOwnNameLabels(cleanedText, botName);
   }
 
   if (!preserveUnresolvedEmojiShortcodes) {

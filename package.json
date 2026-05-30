@@ -9,6 +9,7 @@
     "build": "rm -rf dist && bun build ./src/index.ts --outdir dist --target bun",
     "start": "bun run dist/index.js",
     "dev": "bun --watch src/index.ts",
+    "launch": "bun run scripts/devtools/launch.ts",
     "watch": "bun build ./src/index.ts --outdir dist --target node --watch",
     "purge-commands": "bun run scripts/devtools/purgeCommands.ts",
     "check-migrations": "bun run scripts/db/check-migrations.ts",

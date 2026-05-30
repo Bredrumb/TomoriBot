@@ -83,7 +83,6 @@ const MARKER_TO_TAGS: Record<string, ContextItemTag[]> = {
  * These are always included and flushed at anchor points.
  */
 const TOMORI_ONLY_KNOWLEDGE_TAGS = new Set([
-
   ContextItemTag.KNOWLEDGE_SERVER_INFO,
   ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
   ContextItemTag.KNOWLEDGE_SERVER_EMOJIS,

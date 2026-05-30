@@ -171,7 +171,7 @@ async function evaluateLockedChannelAdmission(args: {
 
   if (!wouldReply) {
     log.info(
-      `Channel ${channelId} is busy (msg ${lockEntry.currentMessageId}), but message ${message.id} would not have triggered a reply from Tomori (autoch_counter simulated as 0 for this check). Ignoring for queue.`,
+      `Channel ${channelId} is busy (msg ${lockEntry.currentMessageId}), but message ${message.id} would not have triggered a reply (autoch_counter simulated as 0 for this check). Ignoring for queue.`,
     );
     return ignored("locked_non_trigger");
   }

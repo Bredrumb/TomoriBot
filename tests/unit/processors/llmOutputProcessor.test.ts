@@ -3,6 +3,7 @@ import {
   cleanLLMOutput,
   findMarkdownCodeRanges,
   isGenericSpeakerStopLabel,
+  stripLeakedOwnNameLabels,
   truncateBeforeGenericSpeakerLine,
 } from "@/utils/text/processors/llmOutputProcessor";
 
@@ -77,6 +78,163 @@ describe("cleanLLMOutput", () => {
   it("strips emoji shortcodes when emoji usage is disabled", () => {
     withPreserveUnresolvedShortcodes("true", () => {
       expect(cleanLLMOutput("hello :LILYESHYPER:", "Tomori", emojiStrings, false)).toBe("hello");
+    });
+  });
+
+  it("strips a self-label that the emoji shortcode→tag conversion space-separated from its emoji", () => {
+    // End-to-end: shortcode ":NagatoroSmug:" is converted (with inserted spaces) BEFORE the leak
+    // handler runs, so the second "Tsukushi:" arrives as "<:NagatoroSmug:id> Tsukushi:".
+    const emojiList = ["<:NagatoroSmug:1382568815900098660>"];
+    const cleaned = cleanLLMOutput(
+      "Tsukushi: :NagatoroSmug:Tsukushi: Staying up late. How devoted.",
+      "Tsukushi",
+      emojiList,
+    );
+    expect(cleaned).not.toContain("Tsukushi:");
+    expect(cleaned).toContain("<:NagatoroSmug:1382568815900098660>");
+    expect(cleaned).toContain("Staying up late.");
+  });
+});
+
+// ─── stripLeakedOwnNameLabels ────────────────────────────────────────────────
+
+describe("stripLeakedOwnNameLabels", () => {
+  // Branch A: the model opened its turn with its own label — real speech. The starter is dropped
+  // and any *later* self-labels are collapsed at their turn boundary, PRESERVING preceding text.
+  describe("opened with own label (real turn — keep preceding, collapse later labels)", () => {
+    it("removes the starter label", () => {
+      expect(stripLeakedOwnNameLabels("Tomori: hello there", "Tomori").trim()).toBe("hello there");
+    });
+
+    it("keeps preceding speech and collapses a later self-label to a newline", () => {
+      expect(stripLeakedOwnNameLabels("Tsukushi: exact numbers, Misuzu.Tsukushi: But if you wanted", "Tsukushi")).toBe(
+        "exact numbers, Misuzu.\nBut if you wanted",
+      );
+    });
+
+    it("collapses repeated later self-labels", () => {
+      expect(stripLeakedOwnNameLabels("Tsukushi: done.Tsukushi: more.Tsukushi: again", "Tsukushi")).toBe(
+        "done.\nmore.\nagain",
+      );
+    });
+
+    it("handles bold starter and later bold labels", () => {
+      expect(stripLeakedOwnNameLabels("**Tomori:** hi.**Tomori:** there", "Tomori")).toBe("hi.\nthere");
+    });
+
+    it("drops a trailing self-label after keeping the real speech", () => {
+      expect(stripLeakedOwnNameLabels("Bella: my favorite chew toy!Bella:", "Bella").trim()).toBe(
+        "my favorite chew toy!",
+      );
+    });
+
+    it("collapses a self-label glued to an emoji's closing bracket", () => {
+      expect(
+        stripLeakedOwnNameLabels(
+          "Tsukushi: Such an honest girl. <:TomoriSmug:1476754434078801980>Tsukushi: It's adorable",
+          "Tsukushi",
+        ),
+      ).toBe("Such an honest girl. <:TomoriSmug:1476754434078801980>\nIt's adorable");
+    });
+
+    it("collapses a self-label glued to a non-alphanumeric char", () => {
+      expect(stripLeakedOwnNameLabels("Tomori: (an aside)Tomori: back to it", "Tomori")).toBe("(an aside)\nback to it");
+    });
+
+    it("collapses a self-label space-separated from a preceding emoji tag", () => {
+      // Mirrors the post-conversion form: the emoji shortcode→tag step inserts a space, so the leak
+      // arrives as "<:Emoji:id> Tsukushi:" rather than glued.
+      expect(
+        stripLeakedOwnNameLabels(
+          "Tsukushi: <:NagatoroSmug:1382568815900098660> Tsukushi: Staying up late. How devoted.",
+          "Tsukushi",
+        ),
+      ).toBe("<:NagatoroSmug:1382568815900098660>\nStaying up late. How devoted.");
+    });
+  });
+
+  // Branch B: the model did NOT open with its own label — content before the first leak-shaped
+  // label is a leaked "thought" and is dropped, keeping only the real response.
+  describe("did not open with own label (leaked thought — cut the preamble)", () => {
+    it("cuts a thought glued to the re-introduction label", () => {
+      expect(stripLeakedOwnNameLabels("the answer is 30Bella: I think the answer is 30!", "Bella")).toBe(
+        "I think the answer is 30!",
+      );
+    });
+
+    it("cuts a thought ended by a newline before the label", () => {
+      expect(stripLeakedOwnNameLabels("reasoning here\nTomori: hi", "Tomori")).toBe("hi");
+    });
+
+    it("cuts a thought ended by sentence punctuation before the label", () => {
+      expect(stripLeakedOwnNameLabels("she scored 100.Tomori: nice", "Tomori")).toBe("nice");
+    });
+
+    it("keeps the text and drops the bare label when nothing follows (trailing-only)", () => {
+      expect(stripLeakedOwnNameLabels("my favorite chew toy!Bella:", "Bella").trim()).toBe("my favorite chew toy!");
+    });
+
+    it("cuts a thought glued to the label via an emoji bracket", () => {
+      expect(stripLeakedOwnNameLabels("hmm let me think<:smile:123456789012345678>Bella: the answer", "Bella")).toBe(
+        "the answer",
+      );
+    });
+  });
+
+  describe("preserves legitimate Name: usages", () => {
+    it("does not strip a hyphen list item", () => {
+      const text = "Power levels:\n- Tsukushi: 100\n- Bella: 80";
+      expect(stripLeakedOwnNameLabels(text, "Tsukushi")).toBe(text);
+    });
+
+    it("does not strip a numbered list item", () => {
+      const text = "1. Tsukushi: 100\n2. Bella: 80";
+      expect(stripLeakedOwnNameLabels(text, "Tsukushi")).toBe(text);
+    });
+
+    it("does not strip a numbered list item at the very start of text", () => {
+      expect(stripLeakedOwnNameLabels("1. Tomori: 100", "Tomori")).toBe("1. Tomori: 100");
+    });
+
+    it("does not strip an indented numbered list item", () => {
+      const text = "Scores:\n   12. Tsukushi: 100";
+      expect(stripLeakedOwnNameLabels(text, "Tsukushi")).toBe(text);
+    });
+
+    it("does not strip the name after a comma in prose", () => {
+      const text = "Remember this, Tsukushi: never give up";
+      expect(stripLeakedOwnNameLabels(text, "Tsukushi")).toBe(text);
+    });
+
+    it("does not strip another speaker's label (own-name only)", () => {
+      const text = "done.Bella: hi";
+      expect(stripLeakedOwnNameLabels(text, "Tsukushi")).toBe(text);
+    });
+
+    it("does not strip labels inside a code block", () => {
+      const text = "```\nTomori: in code\n```";
+      expect(stripLeakedOwnNameLabels(text, "Tomori")).toBe(text);
+    });
+
+    it("does not strip labels inside an inline code span", () => {
+      const text = "see `Tomori: example` here";
+      expect(stripLeakedOwnNameLabels(text, "Tomori")).toBe(text);
+    });
+
+    it("does not mangle an emoji named exactly like the persona", () => {
+      // "<:Tomori:id>" contains "Tomori:" preceded by a colon — excluded from the glued char so the
+      // emoji is preserved, while the genuinely leaked label after ">" is still collapsed.
+      expect(stripLeakedOwnNameLabels("Tomori: hi <:Tomori:123456789012345678> there", "Tomori").trim()).toBe(
+        "hi <:Tomori:123456789012345678> there",
+      );
+    });
+
+    it("returns text unchanged when no label is present", () => {
+      expect(stripLeakedOwnNameLabels("just normal text", "Tomori")).toBe("just normal text");
+    });
+
+    it("returns text unchanged for an empty bot name", () => {
+      expect(stripLeakedOwnNameLabels("done.Tomori: hi", "  ")).toBe("done.Tomori: hi");
     });
   });
 });

@@ -5,25 +5,26 @@ The `web_search` tool routes through an engine chain: **Brave → SearXNG → Du
 There are three ways to set up SearXNG locally:
 
 ### 1. Docker Compose (Recommended)
-First, set `SEARXNG_SECRET` in `.env` to any 32+ char string for production (it's auto-defaulted in dev). 
+First, set `SEARXNG_SECRET` in `.env` to any 32+ char string for production (it's auto-defaulted in dev).
 
-Then run:
+Then run with the `searxng` profile:
 ```sh
-docker compose up -d
+docker compose --profile searxng up -d
 ```
-This starts the `searxng` service alongside TomoriBot automatically — the bot reaches it at `http://searxng:8080/`.
+This starts the `searxng` service alongside TomoriBot — the bot reaches it at `http://searxng:8080/` automatically.
 
 ---
 
 ### 2. Standalone Docker (when running `bun run dev`)
-If you are running TomoriBot directly with `bun run dev` (not using Docker Compose for the bot), you can still spin up SearXNG in a container.
+If you are running TomoriBot directly with `bun run dev`, use `bun launch --searxng` instead — it handles the container lifecycle automatically and waits for the container to be healthy before starting the bot:
 
-First, set the following variable in your `.env` file:
-```env
-SEARXNG_BASE_URL=http://localhost:8080/
+```sh
+bun launch --searxng
 ```
 
-Then, run this exact command to start the SearXNG container:
+Set `SEARXNG_BASE_URL=http://localhost:8080/` in `.env` so the bot connects to it.
+
+If you prefer to manage the container yourself, set `SEARXNG_BASE_URL=http://localhost:8080/` in `.env` and run:
 
 **PowerShell:**
 ```powershell
@@ -41,7 +42,7 @@ docker run -d --name searxng -p 8080:8080 \
   searxng/searxng:latest
 ```
 
-After the container starts, simply run `bun run dev` to start TomoriBot. She will automatically detect `SEARXNG_BASE_URL` and use it.
+Then run `bun run dev` once the container is healthy (`docker ps` shows `(healthy)`).
 
 ---
 
