@@ -93,6 +93,13 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
           },
         )
         .setRequired(true),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("channels")
+        .setDescription(localizer("en-US", "commands.memory.history.import.channels_description"))
+        .setRequired(false)
+        .setMaxLength(200),
     );
 
 /**
@@ -270,6 +277,7 @@ async function storeExtractedFacts(params: {
   embeddingCodename: string;
   apiKey: string;
   scopeLabel: string;
+  channelTags: string[];
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction;
   locale: string;
   guildId: string;
@@ -286,6 +294,7 @@ async function storeExtractedFacts(params: {
     embeddingCodename,
     apiKey,
     scopeLabel,
+    channelTags,
     replyInteraction,
     locale,
     guildId,
@@ -404,6 +413,7 @@ async function storeExtractedFacts(params: {
     embeddingModelId,
     embeddingFamily,
     sourceType: "history",
+    channelTags,
   });
 
   // 7. Invalidate cache
@@ -589,6 +599,22 @@ export async function execute(
     const scopeInput = interaction.options.getString("scope");
     const scope: HistoryScope =
       scopeInput === "automatic" ? "automatic" : scopeInput === "global" ? "global" : "persona";
+    const channelsInput = interaction.options.getString("channels");
+    const channelTags: string[] = channelsInput
+      ? channelsInput
+          .split(",")
+          .map((raw) => {
+            const s = raw.trim();
+            const mention = s.match(/^<#(\d+)>$/);
+            if (mention) {
+              const resolved = _client.channels.cache.get(mention[1]);
+              return "name" in (resolved ?? {}) ? (resolved as { name: string }).name.toLowerCase() : "";
+            }
+            return s.toLowerCase().replace(/^#+/, "");
+          })
+          .filter((c) => c.length > 0 && /^[\w-]+$/.test(c))
+          .map((c) => `#${c}`)
+      : [];
 
     // 10. Decrypt API key
     const provider = tomoriState.llm.llm_provider.toLowerCase();
@@ -696,6 +722,7 @@ export async function execute(
         embeddingCodename: embeddingModel.codename,
         apiKey: embeddingCreds.apiKey,
         scopeLabel,
+        channelTags,
         replyInteraction: personaSelectionInteraction,
         locale,
         guildId,
@@ -780,6 +807,7 @@ export async function execute(
         embeddingCodename: embeddingModel.codename,
         apiKey: embeddingCreds.apiKey,
         scopeLabel,
+        channelTags,
         replyInteraction: interaction,
         locale,
         guildId,
@@ -868,6 +896,7 @@ export async function execute(
         embeddingCodename: embeddingModel.codename,
         apiKey: embeddingCreds.apiKey,
         scopeLabel,
+        channelTags,
         replyInteraction: interaction,
         locale,
         guildId,
@@ -926,6 +955,7 @@ export async function execute(
         embeddingCodename: embeddingModel.codename,
         apiKey: embeddingCreds.apiKey,
         scopeLabel,
+        channelTags,
         replyInteraction: interaction,
         locale,
         guildId,

@@ -375,7 +375,7 @@ export async function execute(
               customId: MEMORY_TAGS_INPUT_ID,
               labelKey: "Memory Tags",
               descriptionKey:
-                "Up to 5 comma-separated case-sensitive tags, use '/memory tagging set' to enable tagged memory",
+                "Up to 5 comma-separated case-sensitive keyword or #channel tags, see '/help memory tagging set'",
               placeholder: "mango,drinks,snacks",
               style: TextInputStyle.Short,
               required: false,
@@ -594,7 +594,7 @@ export async function execute(
           customId: MEMORY_TAGS_INPUT_ID,
           labelKey: "Memory Tags",
           descriptionKey:
-            "Up to 5 comma-separated case-sensitive tags, use '/memory tagging set' to enable tagged memory",
+            "Up to 5 comma-separated case-sensitive keyword or #channel tags, see '/help memory tagging set'",
           placeholder: "mango,drinks,snacks",
           style: TextInputStyle.Short,
           required: false,
