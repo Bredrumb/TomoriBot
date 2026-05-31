@@ -2072,6 +2072,19 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
 - Clear your user-specific STM with {personalStmClear}
 - STM expires automatically over time`,
       },
+      "memory-tagging": {
+        description: `Learn how memory keyword and channel tagging works`,
+        title: `Memory Tagging`,
+        embed_description: `By default, all memories are sent with every prompt. Tagging lets you control which memories activate and where. Turn on memory and channel tagging with {memoryTaggingSet}.`,
+        keywords_title: `Keyword Tags`,
+        keywords_description: `- Memories **without** keyword tags will always be active (default behavior)
+- Memories **with** keyword tags will only activate when the keyword is visible in the context
+- Use {toolPromptSnapshot} to see which memories are currently activating`,
+        channels_title: `Channel Tags`,
+        channels_description: `- Memories with \`#channel\` tags will activate only in that channel
+- Channel tags can be combined with keyword tags
+- If using RAG, channel tags can also be applied to documents (\`/memory document add\`) and extracted histories (\`/memory history import\`)`,
+      },
       spotlight: {
         description: `Learn what personal spotlight does and how to use it`,
         title: `Personal Spotlight Guide`,

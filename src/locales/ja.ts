@@ -2119,6 +2119,19 @@ IDの形式は \`!abc:matrix.org\` のようになります。
 - {personalStmClear}でユーザー固有のSTMをすべて削除できます
 - STMは時間とともに自動的に期限切れになります`,
       },
+      "memory-tagging": {
+        description: `記憶のキーワードタグとチャンネルタグの仕組みを学ぶ`,
+        title: `記憶タグ付け`,
+        embed_description: `デフォルトでは、すべての記憶が毎回のプロンプトに含まれます。タグを使うと、どの記憶をどこで有効にするかを制御できます。{memoryTaggingSet}で記憶タグとチャンネルタグを有効にできます。`,
+        keywords_title: `キーワードタグ`,
+        keywords_description: `- キーワードタグが**ない**記憶は常に有効です（デフォルト動作）
+- キーワードタグが**ある**記憶は、そのキーワードがコンテキストに含まれている場合のみ有効になります
+- どの記憶が現在有効かは{toolPromptSnapshot}で確認できます`,
+        channels_title: `チャンネルタグ`,
+        channels_description: `- \`#チャンネル\`タグが付いた記憶は、そのチャンネルでのみ有効になります
+- チャンネルタグはキーワードタグと組み合わせて使用できます
+- RAGを使用している場合、チャンネルタグはドキュメント（\`/memory document add\`）や履歴インポート（\`/memory history import\`）にも適用できます`,
+      },
       spotlight: {
         description: `パーソナルスポットライトの仕組みと使い方を学ぶ`,
         title: `パーソナルスポットライトガイド`,
