@@ -6,9 +6,10 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
-import { updateTomori } from "@/utils/db/dbWrite";
-import { replyInfoEmbed, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/interactionHelper";
+import { personaRepository } from "@/utils/db/repositories";
+
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { resolveActiveSpeechEndpoint } from "@/utils/provider/speechEndpointResolver";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
@@ -63,7 +64,7 @@ export async function execute(
       return;
     }
 
-    const allPersonas = await loadAllPersonasForServer(serverDiscId);
+    const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -88,7 +89,7 @@ export async function execute(
 
     const personaButtonInteraction = personaSelection.interaction as ButtonInteraction;
     selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-    if (!selectedPersona?.tomori_id) {
+    if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(personaButtonInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -105,7 +106,7 @@ export async function execute(
         ? selectedPersona.speech_voice_name
         : null;
 
-    const updatedTomori = await updateTomori(selectedPersona.tomori_id, {
+    const updatedTomori = await personaRepository.update(selectedPersona.persona_id, {
       speech_voice_design_prompt: null,
       speech_voice_name: voiceNameIfOtherVoiceRemains,
     });
@@ -123,14 +124,14 @@ export async function execute(
     await replyInfoEmbed(personaButtonInteraction, locale, {
       titleKey: "commands.speech.voice_design.cleared_title",
       descriptionKey: "commands.speech.voice_design.cleared_description",
-      descriptionVars: { persona: selectedPersona.tomori_nickname },
+      descriptionVars: { persona: selectedPersona.persona_nickname },
       color: ColorCode.SUCCESS,
     });
   } catch (error) {
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: selectedPersona?.server_id ?? null,
-      tomoriId: selectedPersona?.tomori_id ?? null,
+      personaId: selectedPersona?.persona_id ?? null,
       errorType: "CommandExecutionError",
       metadata: {
         command: "speech voice-design remove",

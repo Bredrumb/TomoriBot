@@ -1,9 +1,9 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { type ErrorContext, type UserRow, tomoriConfigSchema } from "@/types/db/schema";
+import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { sql } from "@/utils/db/client";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { configRepository } from "@/utils/db/repositories";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -72,23 +72,20 @@ export async function execute(
       return;
     }
 
-    const [updatedRow] = await sql`
-      UPDATE tomori_configs
-      SET voice_transcript_chat_mode = ${isEnabled}
-      WHERE server_id = ${tomoriState.server_id}
-      RETURNING *
-    `;
+    const updated = await configRepository.updateSpeechConfig(tomoriState.server_id, {
+      voice_transcript_chat_mode: isEnabled,
+    });
 
-    if (!updatedRow) {
+    if (!updated) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
         metadata: {
           command: "speech transcripts",
           voiceTranscriptChatMode: isEnabled,
-          targetTable: "tomori_configs",
+          targetTable: "server_speech_configs",
         },
       };
       await log.error(
@@ -96,26 +93,6 @@ export async function execute(
         new Error("Database update returned no rows"),
         context,
       );
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-    if (!validatedConfig.success) {
-      const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
-        serverId: tomoriState.server_id,
-        errorType: "SchemaValidationError",
-        metadata: {
-          command: "speech transcripts",
-          validationErrors: validatedConfig.error.flatten(),
-        },
-      };
-      await log.error("Failed to validate updated config", validatedConfig.error, context);
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",

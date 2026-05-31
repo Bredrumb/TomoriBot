@@ -4,12 +4,12 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
+import { configRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
-import { type UserRow, type ErrorContext, tomoriConfigSchema } from "../../types/db/schema";
-import { sql } from "@/utils/db/client";
+import type { UserRow, ErrorContext } from "../../types/db/schema";
 import { formatUTCOffset } from "../../utils/text/timezoneHelper";
 
 // Define constants at the top
@@ -105,20 +105,12 @@ export async function execute(
       return;
     }
 
-    // 6. Update the config in the database using direct SQL
-    const [updatedRow] = await sql`
-            UPDATE tomori_configs
-            SET timezone_offset = ${timezoneValue}
-            WHERE server_id = ${tomoriState.server_id}
-            RETURNING *
-        `;
+    // 6. Update the config in the database
+    const updated = await configRepository.updateChatConfig(tomoriState.server_id, { timezone_offset: timezoneValue });
 
-    // 7. Validate the returned data
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-
-    if (!validatedConfig.success || !updatedRow) {
+    if (!updated) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
@@ -126,16 +118,9 @@ export async function execute(
           command: "config timezone",
           guildId: interaction.guild?.id,
           timezoneValue,
-          validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
         },
       };
-      await log.error(
-        "Failed to update or validate timezone_offset config",
-        validatedConfig.success
-          ? new Error("Database update returned no rows or unexpected data")
-          : new Error("Updated config data failed validation"),
-        context,
-      );
+      await log.error("Failed to update timezone_offset config", new Error("Database update failed"), context);
 
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.update_failed_title",
@@ -145,7 +130,7 @@ export async function execute(
       return;
     }
 
-    // 8. Invalidate cache so next message gets fresh config
+    // 7. Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild.id);
 
     // 9. Success message with formatted timezone display
@@ -161,17 +146,17 @@ export async function execute(
   } catch (error) {
     // 9. Log error with context
     let serverIdForError: number | null = null;
-    let tomoriIdForError: number | null = null;
+    let personaIdForError: number | null = null;
     if (interaction.guild?.id) {
       const state = await getCachedTomoriState(interaction.guild.id);
       serverIdForError = state?.server_id ?? null;
-      tomoriIdForError = state?.tomori_id ?? null;
+      personaIdForError = state?.persona_id ?? null;
     }
 
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: serverIdForError,
-      tomoriId: tomoriIdForError,
+      personaId: personaIdForError,
       errorType: "CommandExecutionError",
       metadata: {
         command: "config timezone",

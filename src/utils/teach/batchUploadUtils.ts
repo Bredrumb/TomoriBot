@@ -36,10 +36,6 @@ export interface SampleDialogueParseResult {
   error?: SampleDialogueParseError;
 }
 
-export function formatTextArrayLiteral(items: string[]): string {
-  return `{${items.map((item) => `"${item.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
-}
-
 export function getNonEmptyNumberedLines(text: string): NumberedLine[] {
   return text
     .split(/\r?\n/)

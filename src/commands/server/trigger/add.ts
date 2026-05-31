@@ -8,13 +8,13 @@ import {
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { promptWithRawModal, replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
-import { personaConfigSchema } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
-import { validateMemoryContent, getMemoryLimits } from "@/utils/db/memoryLimits";
+import { validateMemoryContent, getMemoryLimits } from "@/utils/misc/memoryLimits";
 import type { SelectOption } from "@/types/discord/modal";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { personaRepository } from "@/utils/db/repositories";
+import { normalizeTriggerWord, parseTriggerWordListInput } from "@/utils/text/triggerWords";
 
 // Get memory limits from environment variables
 const memoryLimits = getMemoryLimits();
@@ -29,10 +29,8 @@ const MAX_TEXT_INPUT_LENGTH = Math.min(
   Math.max(1, memoryLimits.maxTriggerWords * (memoryLimits.maxMemoryLength + 1)),
 );
 
-const formatTextArrayLiteral = (items: string[]): string =>
-  `{${items.map((item) => `"${item.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
-
-const formatTriggerList = (triggers: string[]): string => triggers.map((trigger) => `\`${trigger}\``).join(", ");
+const formatTriggerList = (triggers: string[]): string =>
+  triggers.map((trigger) => `\`${normalizeTriggerWord(trigger, { lowercase: false })}\``).join(", ");
 
 // Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
@@ -65,7 +63,7 @@ export async function execute(
   let selectedPersona: TomoriState | null = null;
 
   try {
-    const allPersonas = await loadAllPersonasForServer(interaction.guild.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -76,10 +74,10 @@ export async function execute(
     }
 
     const personaSelectOptions: SelectOption[] = allPersonas
-      .filter((persona) => persona.tomori_id !== undefined)
+      .filter((persona) => persona.persona_id !== undefined)
       .map((persona) => ({
-        label: safeSelectOptionText(persona.tomori_nickname),
-        value: persona.tomori_id?.toString() ?? "",
+        label: safeSelectOptionText(persona.persona_nickname),
+        value: persona.persona_id?.toString() ?? "",
         description: persona.is_alter
           ? localizer(locale, "commands.server.trigger.add.alter_persona_description")
           : localizer(locale, "commands.server.trigger.add.main_persona_description"),
@@ -138,7 +136,7 @@ export async function execute(
       return;
     }
 
-    selectedPersona = allPersonas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
+    selectedPersona = allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
 
     if (!selectedPersona) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -151,19 +149,7 @@ export async function execute(
 
     const currentTriggerWords = selectedPersona.trigger_words ?? [];
 
-    const parsedTriggers = triggerInput
-      .split(/[,\u3001]/)
-      .map((trigger) => trigger.trim().toLowerCase())
-      .filter((trigger) => trigger.length > 0);
-
-    const uniqueTriggers: string[] = [];
-    const seenTriggers = new Set<string>();
-    for (const trigger of parsedTriggers) {
-      if (!seenTriggers.has(trigger)) {
-        seenTriggers.add(trigger);
-        uniqueTriggers.push(trigger);
-      }
-    }
+    const uniqueTriggers = parseTriggerWordListInput(triggerInput);
 
     if (uniqueTriggers.length === 0) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -196,7 +182,7 @@ export async function execute(
       }
     }
 
-    const existingTriggers = new Set(currentTriggerWords.map((trigger) => trigger.toLowerCase()));
+    const existingTriggers = new Set(currentTriggerWords.map((trigger) => normalizeTriggerWord(trigger)));
     const newTriggers = uniqueTriggers.filter((trigger) => !existingTriggers.has(trigger));
 
     if (newTriggers.length === 0) {
@@ -228,25 +214,17 @@ export async function execute(
       return;
     }
 
-    const triggerArrayLiteral = formatTextArrayLiteral(newTriggers);
-    const personaId = selectedPersona.tomori_id ?? null;
+    const personaId = selectedPersona.persona_id ?? null;
     if (!personaId) {
-      log.error("Selected persona missing tomori_id - this should never happen");
+      log.error("Selected persona missing persona_id - this should never happen");
       return;
     }
 
-    const [updatedConfig] = await sql`
-			INSERT INTO persona_configs (tomori_id, trigger_words)
-			VALUES (${personaId}, ${triggerArrayLiteral}::text[])
-			ON CONFLICT (tomori_id) DO UPDATE
-			SET trigger_words = array_cat(persona_configs.trigger_words, EXCLUDED.trigger_words)
-			RETURNING *
-		`;
+    const success = await personaRepository.addTrigger(personaId, newTriggers);
 
-    const validatedConfig = personaConfigSchema.safeParse(updatedConfig);
-    if (!validatedConfig.success || !updatedConfig) {
+    if (!success) {
       const context: ErrorContext = {
-        tomoriId: personaId,
+        personaId: personaId,
         userId: userData.user_id,
         serverId: selectedPersona.server_id,
         errorType: "DatabaseUpdateError",
@@ -256,14 +234,11 @@ export async function execute(
           wordAdded: newTriggers,
           updatedField: "trigger_words",
           targetTable: "persona_configs",
-          validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
         },
       };
       await log.error(
-        "Failed to update or validate trigger_words in persona_configs table",
-        validatedConfig.success
-          ? new Error("Database UPDATE failed to return updated row")
-          : new Error("Updated config data failed validation"),
+        "Failed to update trigger_words in persona_configs table via repository",
+        new Error("Database UPDATE failed"),
         context,
       );
 
@@ -282,7 +257,7 @@ export async function execute(
       titleKey: "commands.server.trigger.add.success_title",
       descriptionKey: "commands.server.trigger.add.success_description",
       descriptionVars: {
-        persona_name: selectedPersona.tomori_nickname,
+        persona_name: selectedPersona.persona_nickname,
         added_words: formatTriggerList(newTriggers),
         added_count: newTriggers.length.toString(),
         word_count: updatedTriggerCount.toString(),
@@ -295,7 +270,7 @@ export async function execute(
       metadata: {
         command: "config triggeradd",
         guildId: interaction.guild.id,
-        personaId: selectedPersona?.tomori_id ?? null,
+        personaId: selectedPersona?.persona_id ?? null,
       },
     };
     await log.error("Error in /config triggeradd command", error, context);

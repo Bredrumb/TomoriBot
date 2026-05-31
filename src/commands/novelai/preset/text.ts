@@ -1,11 +1,12 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadNaiPresetsForModel } from "@/utils/db/dbRead";
-import { applyNaiPreset } from "@/utils/db/dbWrite";
+import { configRepository } from "@/utils/db/repositories";
+
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import type { UserRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 
@@ -91,7 +92,7 @@ export async function execute(
 
   // 5. Determine model target category and load available presets
   const modelTarget = MODEL_TARGET_MAP[modelCodename] ?? "kayra";
-  const presets = await loadNaiPresetsForModel(modelTarget);
+  const presets = await configRepository.loadNaiPresets(modelTarget);
   if (presets.length === 0) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
@@ -149,8 +150,8 @@ export async function execute(
     return;
   }
 
-  // 10. Apply the preset — writes schema fields to tomori_configs + nai_preset_name
-  const updated = await applyNaiPreset(tomoriState.server_id, chosenPreset, modelCodename);
+  // 10. Apply the preset — writes schema fields to split server config tables + nai_preset_name
+  const updated = await configRepository.applyNaiPreset(tomoriState.server_id, chosenPreset, modelCodename);
   if (!updated) {
     await replyInfoEmbed(modalInteraction, locale, {
       titleKey: "general.errors.update_failed_title",

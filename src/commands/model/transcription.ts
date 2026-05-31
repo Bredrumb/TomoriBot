@@ -3,8 +3,9 @@ import { MessageFlags } from "discord.js";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadCustomEndpointsForServer } from "@/utils/db/dbRead";
-import { promptWithPaginatedModal, replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { llmProviderRepo } from "@/utils/db/repositories";
+import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { setActiveCustomEndpoint } from "@/utils/provider/customEndpointService";
 import { localizer } from "@/utils/text/localizer";
@@ -44,7 +45,7 @@ export async function execute(
   }
 
   try {
-    const endpoints = (await loadCustomEndpointsForServer(tomoriState.server_id)).filter(
+    const endpoints = (await llmProviderRepo.loadCustomEndpointsForServer(tomoriState.server_id)).filter(
       (endpoint) => endpoint.capability === "transcription" && endpoint.custom_endpoint_id !== undefined,
     );
 
@@ -136,7 +137,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState.server_id,
-      tomoriId: tomoriState.tomori_id,
+      personaId: tomoriState.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "config model transcription",

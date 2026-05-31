@@ -1,11 +1,11 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { localizer } from "@/utils/text/localizer";
 import { ColorCode, log } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow } from "@/types/db/schema";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { configRepository, serverRepository } from "@/utils/db/repositories";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
@@ -54,13 +54,7 @@ export async function execute(
     }
 
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
-    const serverRows = await sql<Array<{ server_id: number }>>`
-      SELECT server_id
-      FROM servers
-      WHERE server_disc_id = ${serverDiscId}
-      LIMIT 1
-    `;
-    const serverId = serverRows[0]?.server_id;
+    const serverId = await serverRepository.loadServerIdByDiscId(serverDiscId);
     if (!serverId) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.data.delete.no_server_data_title",
@@ -71,76 +65,45 @@ export async function execute(
       return;
     }
 
-    let updatedRows = await sql<Array<{ tomori_config_id: number }>>`
-      UPDATE tomori_configs
-      SET
-        llm_temperature = 1.2,
-        llm_top_p = 0.95,
-        llm_min_p = 0.05,
-        llm_disabled_params = ARRAY[]::text[],
-        llm_stop_strings = ARRAY[]::text[],
-        llm_stop_speaker_pattern_enabled = false,
-        humanizer_degree = 1,
-        thinking_level = 'auto',
-        timezone_offset = 0,
-        message_fetch_limit = 80,
-        server_memteaching_enabled = true,
-        attribute_memteaching_enabled = false,
-        sampledialogue_memteaching_enabled = false,
-        self_teaching_enabled = true,
-        web_search_enabled = true,
-        personal_memories_enabled = true,
-        emoji_usage_enabled = true,
-        sticker_usage_enabled = true,
-        imagegen_enabled = true,
-        tool_notice_hidden_keys = ARRAY[]::text[],
-        self_debug_enabled = false
-      WHERE server_id = ${serverId}
-      RETURNING tomori_config_id
-    `;
+    // 1. Reset defaults across all split config tables in parallel via typed repository methods.
+    //    Each method returns a boolean indicating whether any row was updated.
+    const results = await Promise.all([
+      configRepository.updateModelConfig(serverId, {
+        llm_temperature: 1.2,
+        thinking_level: "auto",
+        llm_disabled_params: [],
+      }),
+      configRepository.updateChatConfig(serverId, {
+        llm_top_p: 0.95,
+        llm_min_p: 0.05,
+        llm_stop_strings: [],
+        llm_stop_speaker_pattern_enabled: false,
+        humanizer_degree: 1,
+        timezone_offset: 0,
+        message_fetch_limit: 80,
+        self_debug_enabled: false,
+      }),
+      configRepository.updateMemberPermissionsConfig(serverId, {
+        server_memteaching_enabled: true,
+        attribute_memteaching_enabled: false,
+        sampledialogue_memteaching_enabled: false,
+        self_teaching_enabled: true,
+        personal_memories_enabled: true,
+      }),
+      configRepository.updateCapabilitiesConfig(serverId, {
+        emoji_usage_enabled: true,
+        sticker_usage_enabled: true,
+        web_search_enabled: true,
+        imagegen_enabled: true,
+      }),
+      configRepository.updateNoticeEmbedsConfig(serverId, {
+        tool_notice_hidden_keys: [],
+      }),
+    ]);
 
-    if (!updatedRows.length) {
-      const mainTomoriRows = await sql<Array<{ tomori_id: number }>>`
-        SELECT tomori_id
-        FROM tomoris
-        WHERE server_id = ${serverId}
-          AND is_alter = false
-        ORDER BY updated_at DESC NULLS LAST, tomori_id DESC
-        LIMIT 1
-      `;
-      const mainTomoriId = mainTomoriRows[0]?.tomori_id;
-      if (mainTomoriId) {
-        updatedRows = await sql<Array<{ tomori_config_id: number }>>`
-          UPDATE tomori_configs
-          SET
-            llm_temperature = 1.2,
-            llm_top_p = 0.95,
-            llm_min_p = 0.05,
-            llm_disabled_params = ARRAY[]::text[],
-            llm_stop_strings = ARRAY[]::text[],
-            llm_stop_speaker_pattern_enabled = false,
-            humanizer_degree = 1,
-            thinking_level = 'auto',
-            timezone_offset = 0,
-            message_fetch_limit = 80,
-            server_memteaching_enabled = true,
-            attribute_memteaching_enabled = false,
-            sampledialogue_memteaching_enabled = false,
-            self_teaching_enabled = true,
-            web_search_enabled = true,
-            personal_memories_enabled = true,
-            emoji_usage_enabled = true,
-            sticker_usage_enabled = true,
-            imagegen_enabled = true,
-            tool_notice_hidden_keys = ARRAY[]::text[],
-            self_debug_enabled = false
-          WHERE tomori_id = ${mainTomoriId}
-          RETURNING tomori_config_id
-        `;
-      }
-    }
+    const anyUpdated = results.some(Boolean);
 
-    if (!updatedRows.length) {
+    if (!anyUpdated) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.data.delete.no_server_data_title",
         descriptionKey: "commands.data.delete.no_server_data_description",

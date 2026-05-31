@@ -1,0 +1,98 @@
+/*
+  TomoriBot docs theme overrides.
+
+  Character-inspired palette:
+  - Yellow + charcoal carry the docs identity.
+  - Cyan and magenta stay available as secondary accents.
+*/
+
+:root,
+::backdrop {
+  /* Dark theme */
+  --tb-color-yellow: #f5a524;
+  --tb-color-charcoal: #2a282d;
+  --tb-color-magenta: #db1458;
+  --tb-color-cyan: #00e5ff;
+  --tb-color-teal: #6ec4cf;
+  --tb-color-off-white: #f6f4f5;
+
+  --sl-color-white: var(--tb-color-off-white);
+  --sl-color-gray-1: #ede8ec;
+  --sl-color-gray-2: #c8c1c6;
+  --sl-color-gray-3: #918891;
+  --sl-color-gray-4: #615b66;
+  --sl-color-gray-5: #393640;
+  --sl-color-gray-6: #211f24;
+  --sl-color-black: #17161a;
+
+  --sl-color-blue-low: #00363c;
+  --sl-color-blue: var(--tb-color-cyan);
+  --sl-color-blue-high: #a9f7ff;
+  --sl-color-purple-low: #431329;
+  --sl-color-purple: var(--tb-color-magenta);
+  --sl-color-purple-high: #ffabc9;
+
+  --sl-color-accent-low: #4a2f08;
+  --sl-color-accent: var(--tb-color-yellow);
+  --sl-color-accent-high: #ffd88a;
+
+  --sl-color-text: var(--sl-color-gray-2);
+  --sl-color-text-accent: var(--sl-color-accent-high);
+  --sl-color-text-invert: var(--sl-color-black);
+
+  --sl-color-bg: var(--sl-color-black);
+  --sl-color-bg-nav: var(--sl-color-gray-6);
+  --sl-color-bg-sidebar: var(--sl-color-gray-6);
+  --sl-color-bg-inline-code: var(--tb-color-charcoal);
+  --sl-color-bg-accent: var(--sl-color-accent);
+
+  --sl-color-hairline-light: var(--sl-color-gray-5);
+  --sl-color-hairline: var(--sl-color-gray-6);
+  --sl-color-hairline-shade: var(--sl-color-black);
+  --sl-color-backdrop-overlay: rgba(23, 22, 26, 0.66);
+}
+
+:root[data-theme="light"],
+[data-theme="light"] ::backdrop {
+  /* Light theme */
+  --sl-color-white: var(--tb-color-charcoal);
+  --sl-color-gray-1: #39343b;
+  --sl-color-gray-2: #565057;
+  --sl-color-gray-3: #7d757d;
+  --sl-color-gray-4: #aca4ac;
+  --sl-color-gray-5: #e0d9de;
+  --sl-color-gray-6: #f2edf1;
+  --sl-color-gray-7: #fffaf3;
+  --sl-color-black: #fffbf6;
+
+  --sl-color-blue-low: #d7fbff;
+  --sl-color-blue: #009cb0;
+  --sl-color-blue-high: #006c78;
+  --sl-color-purple-low: #fde1ea;
+  --sl-color-purple: var(--tb-color-magenta);
+  --sl-color-purple-high: #86103a;
+
+  --sl-color-accent-high: #6f5300;
+  --sl-color-accent: #c28f00;
+  --sl-color-accent-low: #fff3bf;
+
+  --sl-color-text-accent: var(--sl-color-accent);
+  --sl-color-text-invert: var(--tb-color-charcoal);
+
+  --sl-color-bg: #fffbf6;
+  --sl-color-bg-nav: #fffdf8;
+  --sl-color-bg-sidebar: var(--sl-color-bg);
+  --sl-color-bg-inline-code: var(--sl-color-gray-6);
+  --sl-color-bg-accent: var(--tb-color-yellow);
+
+  --sl-color-hairline-light: var(--sl-color-gray-6);
+  --sl-color-hairline-shade: var(--sl-color-gray-6);
+  --sl-color-backdrop-overlay: rgba(246, 244, 245, 0.66);
+}
+
+:root[data-theme="light"] a[aria-current="page"],
+:root[data-theme="light"] a[aria-current="page"]:hover,
+:root[data-theme="light"] a[aria-current="page"]:focus {
+  color: var(--tb-color-charcoal);
+  background-color: var(--tb-color-yellow);
+}

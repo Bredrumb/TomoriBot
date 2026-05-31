@@ -1,7 +1,8 @@
 import { EmbedBuilder, type Message, type Webhook } from "discord.js";
-import { stripBridgePrefix } from "@/utils/bridge";
+import { stripBridgePrefix } from "@/utils/bridges";
 import { localizer } from "@/utils/text/localizer";
-import { sendWebhookMessageWithIdentity, type ResolvedWebhookIdentity } from "@/utils/discord/webhookManager";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
+import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
 
 /**
  * Resolves the author label for a historic message in the reply-context embed.

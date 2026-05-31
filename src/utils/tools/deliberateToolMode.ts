@@ -1,3 +1,9 @@
+import type { Message } from "discord.js";
+import { isAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
+import {
+  isSupportedImageAttachmentContentType,
+  isSupportedVideoAttachmentContentType,
+} from "@/utils/chat/contextMedia";
 import { log } from "@/utils/misc/logger";
 
 export const PERSONAL_DELIBERATE_TOOL_MODES = ["off", "follow", "on"] as const;
@@ -124,6 +130,7 @@ const TOOL_FOLLOW_UP_PATTERNS: RegExp[] = [
 ];
 
 const WEB_TOOL_NAMES = [
+  "web_search",
   "web-search",
   "felo-search",
   "iask-search",
@@ -134,6 +141,7 @@ const WEB_TOOL_NAMES = [
   "brave_news_search",
   "brave_local_search",
   "brave_summarizer",
+  "fetch_url",
   "fetch",
   "url-metadata",
 ];
@@ -550,7 +558,9 @@ export function applyDeliberateToolAllowlist<T extends { name: string }>(params:
     return { builtInTools, mcpFunctionNames };
   }
 
-  const filteredBuiltInTools = builtInTools.filter((tool) => isToolAllowedByDeliberateMode(tool.name, allowedToolNames));
+  const filteredBuiltInTools = builtInTools.filter((tool) =>
+    isToolAllowedByDeliberateMode(tool.name, allowedToolNames),
+  );
   const filteredMcpFunctionNames = filterDeliberateToolNames(mcpFunctionNames, allowedToolNames);
 
   log.info(
@@ -570,4 +580,92 @@ export function resolveDeliberateToolMode(
   if (personalMode === "on") return true;
   if (personalMode === "off") return false;
   return Boolean(serverDeliberateToolMode);
+}
+
+/**
+ * Inspects the most recent messages in a channel to detect tools the model
+ * recently invoked or was asked to invoke, so the deliberate-tool allowlist
+ * can keep those tools exposed for short follow-up turns ("do it again", etc.).
+ * Stops as soon as one message yields any tool names.
+ */
+export function getRecentToolAffordanceNames(
+  recentMessages: Message[],
+  currentMessageId: string,
+  clientUserId?: string | null,
+): string[] {
+  const toolNames: string[] = [];
+
+  const lookbackMessages = recentMessages
+    .filter((recentMessage) => recentMessage.id !== currentMessageId)
+    .slice(-8)
+    .reverse();
+
+  for (const msg of lookbackMessages) {
+    const isPersonaOutput = Boolean(msg.webhookId) || (Boolean(clientUserId) && msg.author.id === clientUserId);
+
+    if (!isPersonaOutput) {
+      const recentIntentResult = getDeliberateToolIntentResult(msg.content);
+      toolNames.push(...recentIntentResult.allowedToolNames);
+      if (toolNames.length > 0) break;
+      continue;
+    }
+
+    const attachments = [...msg.attachments.values()];
+
+    if (attachments.some(isAudioAttachment)) {
+      toolNames.push("generate_voice_message");
+    }
+
+    if (attachments.some((attachment) => isSupportedImageAttachmentContentType(attachment.contentType))) {
+      toolNames.push("generate_image", "generate_image_nai");
+    }
+
+    if (attachments.some((attachment) => isSupportedVideoAttachmentContentType(attachment.contentType))) {
+      toolNames.push("generate_video");
+    }
+
+    if (toolNames.length > 0) break;
+  }
+
+  return Array.from(new Set(toolNames));
+}
+
+type RetainedToolAffordance = {
+  remainingTurns: number;
+};
+
+// Channel-keyed in-memory store of tool names that should remain exposed for
+// the next N turns after a successful invocation. Counter decrements each
+// consume; entries self-evict at zero.
+const retainedToolAffordancesByChannel = new Map<string, Map<string, RetainedToolAffordance>>();
+
+export function retainSuccessfulToolAffordance(channelId: string, toolName: string, turns: number): void {
+  if (turns <= 0) return;
+
+  let channelAffordances = retainedToolAffordancesByChannel.get(channelId);
+  if (!channelAffordances) {
+    channelAffordances = new Map<string, RetainedToolAffordance>();
+    retainedToolAffordancesByChannel.set(channelId, channelAffordances);
+  }
+
+  channelAffordances.set(toolName, { remainingTurns: turns });
+}
+
+export function consumeRetainedToolAffordanceNames(channelId: string): string[] {
+  const channelAffordances = retainedToolAffordancesByChannel.get(channelId);
+  if (!channelAffordances) return [];
+
+  const toolNames = [...channelAffordances.keys()];
+  for (const [toolName, affordance] of channelAffordances.entries()) {
+    affordance.remainingTurns -= 1;
+    if (affordance.remainingTurns <= 0) {
+      channelAffordances.delete(toolName);
+    }
+  }
+
+  if (channelAffordances.size === 0) {
+    retainedToolAffordancesByChannel.delete(channelId);
+  }
+
+  return toolNames;
 }

@@ -4,26 +4,14 @@ import type {
   CustomEndpointRow,
   SavedProviderConfigUpsert,
   SavedProviderConfigRow,
-  TomoriConfigRow,
+  ServerModelConfigRow,
+  ServerNovelaiImagegenConfigRow,
+  AssembledServerConfig,
   UserSavedProviderConfigUpsert,
   UserSavedProviderConfigRow,
 } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
-import {
-  deleteCustomEndpoint,
-  deleteSavedProviderConfig,
-  deleteUserSavedProviderConfig,
-  upsertCustomEndpoint,
-  upsertSavedProviderConfig,
-  upsertUserSavedProviderConfig,
-} from "@/utils/db/dbWrite";
-import {
-  loadCustomEndpoint,
-  loadCustomEndpointsForServer,
-  loadCustomEndpointsForUser,
-  loadSavedProviderConfig,
-  loadUserSavedProviderConfig,
-} from "@/utils/db/dbRead";
+import { configRepository, llmModelRepo, llmOverrideRepo, llmProviderRepo } from "@/utils/db/repositories";
+
 import { CUSTOM_ENDPOINT_PLACEHOLDER_KEY } from "@/utils/discord/customProviderModal";
 import {
   buildSavedProviderConfigFromExistingOrDefaults,
@@ -42,12 +30,13 @@ type RegistrationScope =
   | {
       kind: "server";
       ownerId: number;
-      baseConfig: TomoriConfigRow;
+      baseConfig: AssembledServerConfig;
+      serverDiscId?: string;
     }
   | {
       kind: "personal";
       ownerId: number;
-      baseConfig: TomoriConfigRow;
+      baseConfig: AssembledServerConfig;
     };
 
 export interface CustomEndpointRegistrationInput {
@@ -84,166 +73,68 @@ async function getExistingSavedConfig(
   provider: string,
 ): Promise<SavedProviderConfigRow | UserSavedProviderConfigRow | null> {
   return scope.kind === "server"
-    ? await loadSavedProviderConfig(scope.ownerId, provider)
-    : await loadUserSavedProviderConfig(scope.ownerId, provider);
+    ? await llmProviderRepo.loadSavedProviderConfig(scope.ownerId, provider)
+    : await llmProviderRepo.loadUserSavedProviderConfig(scope.ownerId, provider);
 }
 
-async function upsertSyntheticTextModel(provider: string, endpoint: CustomEndpointRegistrationInput): Promise<number> {
+async function upsertSyntheticTextModel(
+  provider: string,
+  endpoint: CustomEndpointRegistrationInput,
+): Promise<number | null> {
   const codename = buildSyntheticCustomModelCodename(provider, "text");
-  const rows = await sql`
-		INSERT INTO llms (
-			llm_provider,
-			llm_codename,
-			has_tools,
-			sees_images,
-			sees_videos,
-			sees_youtube,
-			supports_structoutput,
-			is_smartest,
-			is_default,
-			is_reasoning,
-			is_deprecated,
-			is_free,
-			is_uncensored,
-			llm_description,
-			ja_description
-		) VALUES (
-			${provider},
-			${codename},
-			${endpoint.hasTools ?? false},
-			${endpoint.seesImages ?? false},
-			${endpoint.seesVideos ?? false},
-			false,
-			${endpoint.supportsStructOutput ?? false},
-			false,
-			true,
-			false,
-			false,
-			true,
-			true,
-			${endpoint.displayName},
-			${endpoint.displayName}
-		)
-		ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET
-			has_tools = EXCLUDED.has_tools,
-			sees_images = EXCLUDED.sees_images,
-			sees_videos = EXCLUDED.sees_videos,
-			supports_structoutput = EXCLUDED.supports_structoutput,
-			llm_description = EXCLUDED.llm_description,
-			ja_description = EXCLUDED.ja_description,
-			updated_at = CURRENT_TIMESTAMP
-		RETURNING llm_id
-	`;
+  const modelId = await llmModelRepo.upsertSyntheticCustomLlm({
+    provider,
+    codename,
+    displayName: endpoint.displayName,
+    hasTools: endpoint.hasTools ?? false,
+    seesImages: endpoint.seesImages ?? false,
+    seesVideos: endpoint.seesVideos ?? false,
+    supportsStructOutput: endpoint.supportsStructOutput ?? false,
+  });
 
-  return Number(rows[0].llm_id);
+  return modelId;
 }
 
 async function upsertSyntheticEmbeddingModel(
   provider: string,
   endpoint: CustomEndpointRegistrationInput,
-): Promise<number> {
+): Promise<number | null> {
   const codename = buildSyntheticCustomModelCodename(provider, "embedding");
-  const rows = await sql`
-		INSERT INTO embedding_models (
-			provider,
-			codename,
-			model_family,
-			model_description,
-			ja_description,
-			is_default,
-			is_deprecated
-		) VALUES (
-			${provider},
-			${codename},
-			${`custom:${provider}`},
-			${endpoint.displayName},
-			${endpoint.displayName},
-			true,
-			false
-		)
-		ON CONFLICT (provider, codename) DO UPDATE SET
-			provider = EXCLUDED.provider,
-			model_family = EXCLUDED.model_family,
-			model_description = EXCLUDED.model_description,
-			ja_description = EXCLUDED.ja_description,
-			is_default = EXCLUDED.is_default,
-			is_deprecated = EXCLUDED.is_deprecated,
-			updated_at = CURRENT_TIMESTAMP
-		RETURNING embedding_model_id
-	`;
+  const modelId = await llmModelRepo.upsertSyntheticCustomEmbeddingModel({
+    provider,
+    codename,
+    displayName: endpoint.displayName,
+  });
 
-  return Number(rows[0].embedding_model_id);
+  return modelId;
 }
 
-async function upsertSyntheticImageModel(provider: string, endpoint: CustomEndpointRegistrationInput): Promise<number> {
+async function upsertSyntheticImageModel(
+  provider: string,
+  endpoint: CustomEndpointRegistrationInput,
+): Promise<number | null> {
   const codename = buildSyntheticCustomModelCodename(provider, "image");
-  const rows = await sql`
-		INSERT INTO image_diffusion_models (
-			provider,
-			codename,
-			model_description,
-			ja_description,
-			is_default,
-			is_deprecated,
-			is_free,
-			is_uncensored
-		) VALUES (
-			${provider},
-			${codename},
-			${endpoint.displayName},
-			${endpoint.displayName},
-			true,
-			false,
-			true,
-			true
-		)
-		ON CONFLICT (provider, codename) DO UPDATE SET
-			provider = EXCLUDED.provider,
-			model_description = EXCLUDED.model_description,
-			ja_description = EXCLUDED.ja_description,
-			is_default = EXCLUDED.is_default,
-			is_deprecated = EXCLUDED.is_deprecated,
-			is_free = EXCLUDED.is_free,
-			is_uncensored = EXCLUDED.is_uncensored,
-			updated_at = CURRENT_TIMESTAMP
-		RETURNING diffusion_model_id
-	`;
+  const modelId = await llmModelRepo.upsertSyntheticCustomDiffusionModel({
+    provider,
+    codename,
+    displayName: endpoint.displayName,
+  });
 
-  return Number(rows[0].diffusion_model_id);
+  return modelId;
 }
 
-async function upsertSyntheticVideoModel(provider: string, endpoint: CustomEndpointRegistrationInput): Promise<number> {
+async function upsertSyntheticVideoModel(
+  provider: string,
+  endpoint: CustomEndpointRegistrationInput,
+): Promise<number | null> {
   const codename = buildSyntheticCustomModelCodename(provider, "video");
-  const rows = await sql`
-		INSERT INTO video_generation_models (
-			provider,
-			codename,
-			model_description,
-			ja_description,
-			is_default,
-			is_deprecated,
-			is_free
-		) VALUES (
-			${provider},
-			${codename},
-			${endpoint.displayName},
-			${endpoint.displayName},
-			true,
-			false,
-			true
-		)
-		ON CONFLICT (provider, codename) DO UPDATE SET
-			provider = EXCLUDED.provider,
-			model_description = EXCLUDED.model_description,
-			ja_description = EXCLUDED.ja_description,
-			is_default = EXCLUDED.is_default,
-			is_deprecated = EXCLUDED.is_deprecated,
-			is_free = EXCLUDED.is_free,
-			updated_at = CURRENT_TIMESTAMP
-		RETURNING video_model_id
-	`;
+  const modelId = await llmModelRepo.upsertSyntheticCustomVideoModel({
+    provider,
+    codename,
+    displayName: endpoint.displayName,
+  });
 
-  return Number(rows[0].video_model_id);
+  return modelId;
 }
 
 async function upsertSyntheticCapabilityModel(
@@ -267,40 +158,7 @@ async function upsertSyntheticCapabilityModel(
 async function deleteSyntheticCapabilityModel(provider: string, capability: CustomEndpointCapability): Promise<void> {
   const codename = buildSyntheticCustomModelCodename(provider, capability);
 
-  switch (capability) {
-    case "text":
-      await sql`
-				DELETE FROM llms
-				WHERE llm_provider = ${provider}
-				  AND llm_codename = ${codename}
-			`;
-      return;
-    case "embedding":
-      await sql`
-				DELETE FROM embedding_models
-				WHERE provider = ${provider}
-				  AND codename = ${codename}
-			`;
-      return;
-    case "image":
-      await sql`
-				DELETE FROM image_diffusion_models
-				WHERE provider = ${provider}
-				  AND codename = ${codename}
-			`;
-      return;
-    case "video":
-      await sql`
-				DELETE FROM video_generation_models
-				WHERE provider = ${provider}
-				  AND codename = ${codename}
-			`;
-      return;
-    case "speech":
-    case "transcription":
-      // Speech and transcription endpoints have no synthetic model table entries.
-      return;
-  }
+  await llmModelRepo.deleteSyntheticCustomCapabilityModel(provider, codename, capability);
 }
 
 function getCapabilityModelId(
@@ -323,7 +181,7 @@ function getCapabilityModelId(
 }
 
 async function clearServerScopedLiveReferences(
-  serverId: number,
+  scope: Extract<RegistrationScope, { kind: "server" }>,
   capability: CustomEndpointCapability,
   modelId: number | null,
 ): Promise<void> {
@@ -331,65 +189,63 @@ async function clearServerScopedLiveReferences(
     return;
   }
 
+  const serverId = scope.ownerId;
+  const modelPatch: Partial<ServerModelConfigRow> = {};
+  const novelaiPatch: Partial<ServerNovelaiImagegenConfigRow> = {};
+
   switch (capability) {
     case "text":
-      await sql`
-				UPDATE tomori_configs
-				SET llm_id = CASE WHEN llm_id = ${modelId} THEN NULL ELSE llm_id END,
-				    custom_endpoint_url = CASE WHEN llm_id = ${modelId} THEN NULL ELSE custom_endpoint_url END,
-				    custom_model_name = CASE WHEN llm_id = ${modelId} THEN NULL ELSE custom_model_name END,
-				    custom_num_ctx = CASE WHEN llm_id = ${modelId} THEN NULL ELSE custom_num_ctx END,
-				    vision_llm_id = CASE WHEN vision_llm_id = ${modelId} THEN NULL ELSE vision_llm_id END,
-				    updated_at = CURRENT_TIMESTAMP
-				WHERE server_id = ${serverId}
-				  AND (llm_id = ${modelId} OR vision_llm_id = ${modelId})
-			`;
-      await sql`
-				DELETE FROM channel_llm_overrides
-				WHERE server_id = ${serverId}
-				  AND llm_id = ${modelId}
-			`;
-      await sql`
-				UPDATE persona_configs
-				SET llm_id = NULL,
-				    updated_at = CURRENT_TIMESTAMP
-				WHERE llm_id = ${modelId}
-				  AND tomori_id IN (
-				    SELECT tomori_id
-				    FROM tomoris
-				    WHERE server_id = ${serverId}
-				  )
-			`;
+      if (scope.baseConfig.llm_id === modelId) {
+        modelPatch.llm_id = null;
+        modelPatch.custom_endpoint_url = null;
+        modelPatch.custom_model_name = null;
+        modelPatch.custom_num_ctx = null;
+      }
+      if (scope.baseConfig.vision_llm_id === modelId) {
+        modelPatch.vision_llm_id = null;
+      }
+      await Promise.all([
+        updateModelConfigIfNeeded(serverId, modelPatch),
+        llmOverrideRepo.deleteChannelLlmOverridesForModel(serverId, modelId, { serverDiscId: scope.serverDiscId }),
+        llmOverrideRepo.clearPersonaLlmOverridesForModel(serverId, modelId, { serverDiscId: scope.serverDiscId }),
+      ]);
       return;
     case "embedding":
-      await sql`
-				UPDATE tomori_configs
-				SET embedding_model_id = NULL,
-				    updated_at = CURRENT_TIMESTAMP
-				WHERE server_id = ${serverId}
-				  AND embedding_model_id = ${modelId}
-			`;
+      if (scope.baseConfig.embedding_model_id === modelId) {
+        modelPatch.embedding_model_id = null;
+      }
+      await updateModelConfigIfNeeded(serverId, modelPatch);
       return;
     case "image":
-      await sql`
-				UPDATE tomori_configs
-				SET diffusion_model_id = CASE WHEN diffusion_model_id = ${modelId} THEN NULL ELSE diffusion_model_id END,
-				    nai_diffusion_model_id = CASE WHEN nai_diffusion_model_id = ${modelId} THEN NULL ELSE nai_diffusion_model_id END,
-				    updated_at = CURRENT_TIMESTAMP
-				WHERE server_id = ${serverId}
-				  AND (diffusion_model_id = ${modelId} OR nai_diffusion_model_id = ${modelId})
-			`;
+      if (scope.baseConfig.diffusion_model_id === modelId) {
+        modelPatch.diffusion_model_id = null;
+      }
+      if (scope.baseConfig.nai_diffusion_model_id === modelId) {
+        novelaiPatch.nai_diffusion_model_id = null;
+      }
+      await Promise.all([
+        updateModelConfigIfNeeded(serverId, modelPatch),
+        updateNovelaiImagegenConfigIfNeeded(serverId, novelaiPatch),
+      ]);
       return;
     case "video":
-      await sql`
-				UPDATE tomori_configs
-				SET video_model_id = NULL,
-				    updated_at = CURRENT_TIMESTAMP
-				WHERE server_id = ${serverId}
-				  AND video_model_id = ${modelId}
-			`;
+      if (scope.baseConfig.video_model_id === modelId) {
+        modelPatch.video_model_id = null;
+      }
+      await updateModelConfigIfNeeded(serverId, modelPatch);
       return;
   }
+}
+
+async function updateModelConfigIfNeeded(serverId: number, patch: Partial<ServerModelConfigRow>): Promise<boolean> {
+  return Object.keys(patch).length > 0 ? await configRepository.updateModelConfig(serverId, patch) : true;
+}
+
+async function updateNovelaiImagegenConfigIfNeeded(
+  serverId: number,
+  patch: Partial<ServerNovelaiImagegenConfigRow>,
+): Promise<boolean> {
+  return Object.keys(patch).length > 0 ? await configRepository.updateNovelaiImagegenConfig(serverId, patch) : true;
 }
 
 async function buildSavedConfigForCustomEndpoint(
@@ -421,14 +277,6 @@ async function buildSavedConfigForCustomEndpoint(
         baseConfig: scope.baseConfig,
         existingConfig: existingConfig as SavedProviderConfigRow | null,
         llmId: textModelId,
-        customEndpointUrl:
-          endpoint.capability === "text" ? endpoint.endpointUrl : (existingConfig?.custom_endpoint_url ?? null),
-        customModelName:
-          endpoint.capability === "text"
-            ? (endpoint.modelName ?? endpoint.displayName)
-            : (existingConfig?.custom_model_name ?? null),
-        customNumCtx:
-          endpoint.capability === "text" ? (endpoint.numCtx ?? null) : (existingConfig?.custom_num_ctx ?? null),
       })
     : await buildUserSavedProviderConfigFromExistingOrDefaults({
         userId: scope.ownerId,
@@ -438,14 +286,6 @@ async function buildSavedConfigForCustomEndpoint(
         baseConfig: scope.baseConfig,
         existingConfig: existingConfig as UserSavedProviderConfigRow | null,
         llmId: textModelId,
-        customEndpointUrl:
-          endpoint.capability === "text" ? endpoint.endpointUrl : (existingConfig?.custom_endpoint_url ?? null),
-        customModelName:
-          endpoint.capability === "text"
-            ? (endpoint.modelName ?? endpoint.displayName)
-            : (existingConfig?.custom_model_name ?? null),
-        customNumCtx:
-          endpoint.capability === "text" ? (endpoint.numCtx ?? null) : (existingConfig?.custom_num_ctx ?? null),
         enabledCapabilities: (existingConfig as UserSavedProviderConfigRow | null)?.enabled_capabilities ?? [],
       }).then((config) => ({
         ...config,
@@ -469,22 +309,22 @@ export async function registerCustomEndpoint(
   const existingConfig = await getExistingSavedConfig(input.scope, provider);
   const existingEndpoint =
     input.scope.kind === "server"
-      ? await loadCustomEndpoint({
+      ? await llmProviderRepo.loadCustomEndpoint({
           serverId: input.scope.ownerId,
           label: input.label,
           capability: input.capability,
         })
-      : await loadCustomEndpoint({
+      : await llmProviderRepo.loadCustomEndpoint({
           userId: input.scope.ownerId,
           label: input.label,
           capability: input.capability,
         });
   const siblingEndpoints =
     input.scope.kind === "server"
-      ? (await loadCustomEndpointsForServer(input.scope.ownerId)).filter(
+      ? (await llmProviderRepo.loadCustomEndpointsForServer(input.scope.ownerId)).filter(
           (endpoint) => endpoint.capability === input.capability,
         )
-      : (await loadCustomEndpointsForUser(input.scope.ownerId)).filter(
+      : (await llmProviderRepo.loadCustomEndpointsForUser(input.scope.ownerId)).filter(
           (endpoint) => endpoint.capability === input.capability,
         );
   const shouldBeDefault = existingEndpoint?.is_default ?? !siblingEndpoints.some((endpoint) => endpoint.is_default);
@@ -492,68 +332,75 @@ export async function registerCustomEndpoint(
   const trimmedAuthToken = input.authToken?.trim();
   const requiresAuth =
     trimmedAuthToken && trimmedAuthToken.length > 0 ? true : (existingEndpoint?.requires_auth ?? false);
+  const serverScope = input.scope.kind === "server" ? input.scope : null;
 
-  const customEndpoint = await upsertCustomEndpoint({
-    serverId: input.scope.kind === "server" ? input.scope.ownerId : null,
-    userId: input.scope.kind === "personal" ? input.scope.ownerId : null,
-    label: input.label,
-    capability: input.capability,
-    apiStyle: input.apiStyle,
-    endpointUrl: input.endpointUrl,
-    modelName: input.modelName ?? null,
-    displayName: input.displayName,
-    numCtx: input.numCtx ?? null,
-    requiresAuth,
-    extraConfig: input.extraConfig ?? {},
-    hasTools: input.hasTools ?? false,
-    seesImages: input.seesImages ?? false,
-    seesVideos: input.seesVideos ?? false,
-    supportsStructOutput: input.supportsStructOutput ?? false,
-    isDefault: shouldBeDefault,
-  });
+  const customEndpoint = await llmProviderRepo.upsertCustomEndpoint(
+    {
+      serverId: input.scope.kind === "server" ? input.scope.ownerId : null,
+      userId: input.scope.kind === "personal" ? input.scope.ownerId : null,
+      label: input.label,
+      capability: input.capability,
+      apiStyle: input.apiStyle,
+      endpointUrl: input.endpointUrl,
+      modelName: input.modelName ?? null,
+      displayName: input.displayName,
+      numCtx: input.numCtx ?? null,
+      requiresAuth,
+      extraConfig: input.extraConfig ?? {},
+      hasTools: input.hasTools ?? false,
+      seesImages: input.seesImages ?? false,
+      seesVideos: input.seesVideos ?? false,
+      supportsStructOutput: input.supportsStructOutput ?? false,
+      isDefault: shouldBeDefault,
+    },
+    serverScope ? { serverDiscId: serverScope.serverDiscId } : {},
+  );
 
   if (!customEndpoint) {
     return null;
   }
 
-  const writeOk =
-    input.scope.kind === "server"
-      ? await (async () => {
-          const savedConfig = (await buildSavedConfigForCustomEndpoint(
-            input.scope,
-            provider,
-            existingConfig,
-            input,
-            modelId,
-          )) as SavedProviderConfigUpsert;
+  const writeOk = serverScope
+    ? await (async () => {
+        const savedConfig = (await buildSavedConfigForCustomEndpoint(
+          input.scope,
+          provider,
+          existingConfig,
+          input,
+          modelId,
+        )) as SavedProviderConfigUpsert;
 
-          return await upsertSavedProviderConfig(input.scope.ownerId, {
+        return await llmProviderRepo.upsertSavedProviderConfig(
+          serverScope.ownerId,
+          {
             ...savedConfig,
             llm_id: input.capability === "text" ? modelId : savedConfig.llm_id,
             vision_llm_id: input.capability === "text" && input.seesImages ? modelId : savedConfig.vision_llm_id,
             embedding_model_id: input.capability === "embedding" ? modelId : savedConfig.embedding_model_id,
             diffusion_model_id: input.capability === "image" ? modelId : savedConfig.diffusion_model_id,
             video_model_id: input.capability === "video" ? modelId : savedConfig.video_model_id,
-          });
-        })()
-      : await (async () => {
-          const savedConfig = (await buildSavedConfigForCustomEndpoint(
-            input.scope,
-            provider,
-            existingConfig,
-            input,
-            modelId,
-          )) as UserSavedProviderConfigUpsert;
+          },
+          { serverDiscId: serverScope.serverDiscId },
+        );
+      })()
+    : await (async () => {
+        const savedConfig = (await buildSavedConfigForCustomEndpoint(
+          input.scope,
+          provider,
+          existingConfig,
+          input,
+          modelId,
+        )) as UserSavedProviderConfigUpsert;
 
-          return await upsertUserSavedProviderConfig(input.scope.ownerId, {
-            ...savedConfig,
-            llm_id: input.capability === "text" ? modelId : savedConfig.llm_id,
-            vision_llm_id: input.capability === "text" && input.seesImages ? modelId : savedConfig.vision_llm_id,
-            embedding_model_id: input.capability === "embedding" ? modelId : savedConfig.embedding_model_id,
-            diffusion_model_id: input.capability === "image" ? modelId : savedConfig.diffusion_model_id,
-            video_model_id: input.capability === "video" ? modelId : savedConfig.video_model_id,
-          });
-        })();
+        return await llmProviderRepo.upsertUserSavedProviderConfig(input.scope.ownerId, {
+          ...savedConfig,
+          llm_id: input.capability === "text" ? modelId : savedConfig.llm_id,
+          vision_llm_id: input.capability === "text" && input.seesImages ? modelId : savedConfig.vision_llm_id,
+          embedding_model_id: input.capability === "embedding" ? modelId : savedConfig.embedding_model_id,
+          diffusion_model_id: input.capability === "image" ? modelId : savedConfig.diffusion_model_id,
+          video_model_id: input.capability === "video" ? modelId : savedConfig.video_model_id,
+        });
+      })();
 
   if (!writeOk) {
     return null;
@@ -571,44 +418,7 @@ export async function setActiveCustomEndpoint(params: {
   capability: "speech" | "transcription";
   customEndpointId: number;
 }): Promise<boolean> {
-  try {
-    const [selectedEndpoint] = await sql<[{ custom_endpoint_id: number }]>`
-      SELECT custom_endpoint_id
-      FROM custom_endpoints
-      WHERE custom_endpoint_id = ${params.customEndpointId}
-        AND server_id = ${params.serverId}
-        AND user_id IS NULL
-        AND capability = ${params.capability}
-      LIMIT 1
-    `;
-
-    if (!selectedEndpoint) {
-      return false;
-    }
-
-    await sql`
-      UPDATE custom_endpoints
-      SET is_default = false,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE server_id = ${params.serverId}
-        AND user_id IS NULL
-        AND capability = ${params.capability}
-    `;
-
-    const result = await sql`
-      UPDATE custom_endpoints
-      SET is_default = true,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE custom_endpoint_id = ${params.customEndpointId}
-        AND server_id = ${params.serverId}
-        AND user_id IS NULL
-        AND capability = ${params.capability}
-    `;
-
-    return result.count > 0;
-  } catch {
-    return false;
-  }
+  return await llmProviderRepo.setActiveCustomEndpoint(params);
 }
 
 export async function resolveCustomEndpointForProvider(
@@ -621,12 +431,12 @@ export async function resolveCustomEndpointForProvider(
   }
 
   return parsed.scope === "server"
-    ? await loadCustomEndpoint({
+    ? await llmProviderRepo.loadCustomEndpoint({
         serverId: parsed.ownerId,
         label: parsed.label,
         capability,
       })
-    : await loadCustomEndpoint({
+    : await llmProviderRepo.loadCustomEndpoint({
         userId: parsed.ownerId,
         label: parsed.label,
         capability,
@@ -648,12 +458,15 @@ export async function removeCustomEndpointRegistration(params: {
 
   const deleted =
     params.scope.kind === "server"
-      ? await deleteCustomEndpoint({
-          serverId: params.scope.ownerId,
-          label: params.label,
-          capability: params.capability,
-        })
-      : await deleteCustomEndpoint({
+      ? await llmProviderRepo.deleteCustomEndpoint(
+          {
+            serverId: params.scope.ownerId,
+            label: params.label,
+            capability: params.capability,
+          },
+          { serverDiscId: params.scope.serverDiscId },
+        )
+      : await llmProviderRepo.deleteCustomEndpoint({
           userId: params.scope.ownerId,
           label: params.label,
           capability: params.capability,
@@ -664,22 +477,24 @@ export async function removeCustomEndpointRegistration(params: {
   }
 
   if (params.scope.kind === "server") {
-    await clearServerScopedLiveReferences(params.scope.ownerId, params.capability, modelId);
+    await clearServerScopedLiveReferences(params.scope, params.capability, modelId);
   }
 
   await deleteSyntheticCapabilityModel(provider, params.capability);
 
   const remaining =
     params.scope.kind === "server"
-      ? await loadCustomEndpointsForServer(params.scope.ownerId)
-      : await loadCustomEndpointsForUser(params.scope.ownerId);
+      ? await llmProviderRepo.loadCustomEndpointsForServer(params.scope.ownerId)
+      : await llmProviderRepo.loadCustomEndpointsForUser(params.scope.ownerId);
   const sameProviderRemaining = remaining.filter((endpoint) => endpoint.label === params.label);
 
   if (sameProviderRemaining.length === 0) {
     if (params.scope.kind === "server") {
-      await deleteSavedProviderConfig(params.scope.ownerId, provider);
+      await llmProviderRepo.deleteSavedProviderConfig(params.scope.ownerId, provider, {
+        serverDiscId: params.scope.serverDiscId,
+      });
     } else {
-      await deleteUserSavedProviderConfig(params.scope.ownerId, provider);
+      await llmProviderRepo.deleteUserSavedProviderConfig(params.scope.ownerId, provider);
     }
     return true;
   }
@@ -693,9 +508,6 @@ export async function removeCustomEndpointRegistration(params: {
           embedding_model_id: params.capability === "embedding" ? null : existingConfig.embedding_model_id,
           diffusion_model_id: params.capability === "image" ? null : existingConfig.diffusion_model_id,
           video_model_id: params.capability === "video" ? null : existingConfig.video_model_id,
-          custom_endpoint_url: params.capability === "text" ? null : existingConfig.custom_endpoint_url,
-          custom_model_name: params.capability === "text" ? null : existingConfig.custom_model_name,
-          custom_num_ctx: params.capability === "text" ? null : existingConfig.custom_num_ctx,
         }
       : {
           ...(existingConfig as UserSavedProviderConfigRow),
@@ -704,15 +516,14 @@ export async function removeCustomEndpointRegistration(params: {
           embedding_model_id: params.capability === "embedding" ? null : existingConfig.embedding_model_id,
           diffusion_model_id: params.capability === "image" ? null : existingConfig.diffusion_model_id,
           video_model_id: params.capability === "video" ? null : existingConfig.video_model_id,
-          custom_endpoint_url: params.capability === "text" ? null : existingConfig.custom_endpoint_url,
-          custom_model_name: params.capability === "text" ? null : existingConfig.custom_model_name,
-          custom_num_ctx: params.capability === "text" ? null : existingConfig.custom_num_ctx,
         };
 
   if (params.scope.kind === "server") {
-    await upsertSavedProviderConfig(params.scope.ownerId, nextConfig as SavedProviderConfigRow);
+    await llmProviderRepo.upsertSavedProviderConfig(params.scope.ownerId, nextConfig as SavedProviderConfigRow, {
+      serverDiscId: params.scope.serverDiscId,
+    });
   } else {
-    await upsertUserSavedProviderConfig(params.scope.ownerId, nextConfig as UserSavedProviderConfigRow);
+    await llmProviderRepo.upsertUserSavedProviderConfig(params.scope.ownerId, nextConfig as UserSavedProviderConfigRow);
   }
 
   return true;
@@ -726,13 +537,13 @@ export async function cleanupCustomProviderArtifacts(provider: string): Promise<
 
   const registeredEndpoints =
     parsed.scope === "server"
-      ? await loadCustomEndpointsForServer(parsed.ownerId)
-      : await loadCustomEndpointsForUser(parsed.ownerId);
+      ? await llmProviderRepo.loadCustomEndpointsForServer(parsed.ownerId)
+      : await llmProviderRepo.loadCustomEndpointsForUser(parsed.ownerId);
 
   const matchingEndpoints = registeredEndpoints.filter((endpoint) => endpoint.label === parsed.label);
 
   for (const endpoint of matchingEndpoints) {
-    await deleteCustomEndpoint(
+    await llmProviderRepo.deleteCustomEndpoint(
       parsed.scope === "server"
         ? {
             serverId: parsed.ownerId,

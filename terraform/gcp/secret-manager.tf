@@ -36,3 +36,31 @@ resource "google_secret_manager_secret_iam_member" "cloudrun_agent_access" {
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:service-${data.google_project.project.number}@serverless-robot-prod.iam.gserviceaccount.com"
 }
+
+# -------------------------------------------------------------------
+# SearXNG sidecar secret (Phase 2).
+# Holds the SEARXNG_SECRET value required by the searxng container's
+# `settings.yml`. Not consumed by TomoriBot directly.
+# -------------------------------------------------------------------
+
+resource "google_secret_manager_secret" "searxng_secret" {
+  secret_id = "${var.name_prefix}-searxng-secret"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_secret_manager_secret_iam_member" "searxng_app_access" {
+  secret_id = google_secret_manager_secret.searxng_secret.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.app.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "searxng_cloudrun_agent_access" {
+  secret_id = google_secret_manager_secret.searxng_secret.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:service-${data.google_project.project.number}@serverless-robot-prod.iam.gserviceaccount.com"
+}

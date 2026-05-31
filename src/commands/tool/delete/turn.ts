@@ -1,12 +1,13 @@
 import type { AnyThreadChannel, ButtonInteraction, ChatInputCommandInteraction, Client, Message } from "discord.js";
 import { BaseGuildTextChannel, EmbedBuilder, MessageFlags, type SlashCommandSubcommandBuilder } from "discord.js";
-import tomoriChat, { suppressNextSelfReply } from "@/events/messageCreate/tomoriChat";
+import { tomoriChat, suppressNextSelfReply } from "@/events/messageCreate/tomoriChat";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { getCachedAllPersonas, getCachedMainPersona } from "@/utils/cache/tomoriStateCache";
-import { replyInfoEmbed, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { findLastPersonaTurnBlock } from "@/utils/discord/personaTurnDetection";
-import { resolveManagedWebhookForChannel } from "@/utils/discord/webhookManager";
+import { resolveManagedWebhookForChannel } from "@/utils/discord/webhook/fallback";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -224,7 +225,7 @@ export async function execute(
       messages,
       allPersonas,
       clientUserId: client.user?.id,
-      targetPersonaId: resolvedPersona?.tomori_id,
+      targetPersonaId: resolvedPersona?.persona_id,
     });
     const blockMessages = detectedTurn.blockMessages;
     resolvedPersona = detectedTurn.resolvedPersona;
@@ -242,7 +243,7 @@ export async function execute(
       return;
     }
 
-    const displayName = resolvedPersona?.tomori_nickname ?? detectedTurn.targetPersonaKey ?? "Unknown";
+    const displayName = resolvedPersona?.persona_nickname ?? detectedTurn.targetPersonaKey ?? "Unknown";
     const totalCount = blockMessages.length;
 
     // 11. Inform user that deletion is in progress
@@ -471,39 +472,26 @@ export async function execute(
           suppressNextSelfReply(channel.id);
 
           // Fire-and-forget — do not await so the command interaction resolves
-          void tomoriChat(
+          void tomoriChat({
             client,
-            lastMessage,
-            false, // isFromQueue
-            true, // isManuallyTriggered
-            false, // forceReason
-            undefined, // reasoningQuery
-            undefined, // llmOverrideCodename
-            false, // isStopResponse
-            0, // retryCount
-            false, // skipLock
-            undefined, // reminderRecipientID
-            undefined, // reminderData
-            resolvedPersona.tomori_id, // selectedPersonaId
-            false, // isPersonaJob
-            false, // isUserImpersonation
-            undefined, // impersonatedUserId
-            "user", // textQuotaSource
-            interaction.id, // textQuotaTriggerKey
-            interaction.user.id, // textQuotaUserDiscId
-            undefined, // manualSystemPrompt
-            undefined, // manualPrefill
-            undefined, // naiContinuationPrefill
-            undefined, // emptyResponseFinishReason
-            undefined, // injectedContextItems
-            undefined, // forcedMentions
-            {
+            message: lastMessage,
+            isFromQueue: false,
+            isManuallyTriggered: true,
+            forceReason: false,
+            isStopResponse: false,
+            selectedPersonaId: resolvedPersona.persona_id,
+            isPersonaJob: false,
+            isUserImpersonation: false,
+            textQuotaSource: "user",
+            textQuotaTriggerKey: interaction.id,
+            textQuotaUserDiscId: interaction.user.id,
+            manualTriggerInvoker: {
               userDiscId: interaction.user.id,
               username: interaction.user.username,
               locale,
               member: interaction.member as import("discord.js").GuildMember | null,
             },
-          );
+          });
         }
       } catch (regenError) {
         log.warn(`[deleteTurn] Failed to set up regenerate for persona="${displayName}"`, regenError);

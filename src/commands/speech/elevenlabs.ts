@@ -5,7 +5,7 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { ELEVENLABS_SERVICE_NAME, validateElevenLabsApiKey } from "@/utils/audio/elevenLabsAccount";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
@@ -80,6 +80,7 @@ export async function execute(
         kind: "server",
         ownerId: tomoriState.server_id,
         baseConfig: tomoriState.config,
+        serverDiscId,
       },
       label: ELEVENLABS_SERVICE_NAME,
       capability: "speech",
@@ -95,6 +96,7 @@ export async function execute(
         kind: "server",
         ownerId: tomoriState.server_id,
         baseConfig: tomoriState.config,
+        serverDiscId,
       },
       label: ELEVENLABS_SERVICE_NAME,
       capability: "transcription",
@@ -139,7 +141,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id ?? null,
-      tomoriId: tomoriState?.tomori_id ?? null,
+      personaId: tomoriState?.persona_id ?? null,
       errorType: "CommandExecutionError",
       metadata: {
         command: "speech elevenlabs",

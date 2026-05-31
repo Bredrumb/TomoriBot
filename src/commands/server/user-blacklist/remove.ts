@@ -12,11 +12,10 @@ import {
 } from "discord.js";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
-import { formatTextArrayLiteral } from "@/utils/discord/channelChecklistManager";
-import { getBlacklistedMemberIds, loadTomoriState } from "@/utils/db/dbRead";
-import { sql } from "@/utils/db/client";
+import { personaRepository, serverRepository, userRepository } from "@/utils/db/repositories";
 import { invalidateUserBlacklistCache } from "@/utils/cache/userCache";
-import { promptWithRawModal, replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
@@ -55,7 +54,7 @@ export async function execute(
   }
 
   try {
-    const tomoriState = await loadTomoriState(interaction.guildId);
+    const tomoriState = await personaRepository.loadState(interaction.guildId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -65,7 +64,7 @@ export async function execute(
       return;
     }
 
-    const blacklistedIds = await getBlacklistedMemberIds(tomoriState.server_id);
+    const blacklistedIds = await userRepository.getBlacklistedMemberIds(tomoriState.server_id);
     if (blacklistedIds.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.server.user-blacklist.remove.none_title",
@@ -377,11 +376,7 @@ async function persistUpdate(
     return previousSelectedIds;
   }
 
-  await sql`
-    DELETE FROM personalization_blacklist
-    WHERE server_id = ${serverId}
-      AND user_disc_id = ANY(${formatTextArrayLiteral(removedIds)}::text[])
-  `;
+  await serverRepository.removeUserBlacklistMany(serverId, removedIds);
 
   for (const userId of removedIds) {
     invalidateUserBlacklistCache(responseInteraction.guildId ?? "", userId);

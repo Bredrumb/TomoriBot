@@ -1,0 +1,7 @@
+-- 001_baseline (down)
+--
+-- Rolling back the baseline schema requires dropping the entire database.
+-- This rollback is intentionally not automated.
+--
+-- To recover: restore from a database backup (bun run backup / bun run restore-backup)
+-- rather than executing a down migration against the baseline.

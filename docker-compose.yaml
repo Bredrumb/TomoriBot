@@ -37,6 +37,55 @@ services:
     # - Using a managed database service with pg_cron support
     # - TomoriBot includes app-level cooldown cleanup as fallback
 
+  # SearXNG metasearch sidecar - Tomori's library research assistant
+  # Self-hosted JSON aggregator that fronts Google/Bing/DDG/Brave/Wikipedia.
+  # Enable with: docker compose --profile searxng up
+  # Set SEARXNG_BASE_URL=http://searxng:8080/ in .env (already set in tomoribot service below).
+  # See servers/searxng/README.md for configuration + upgrade procedure.
+  searxng:
+    image: searxng/searxng:latest
+    container_name: tomoribot-searxng
+    profiles:
+      - searxng
+    volumes:
+      - ./servers/searxng:/etc/searxng:ro
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:-dev-only-not-for-production}
+      # SearXNG's startup script substitutes this into settings.yml.
+      SEARXNG_BASE_URL: http://localhost:8080/
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    networks:
+      - tomori-network
+
+  # Crawl4AI URL-fetch sidecar - optional browser-rendered markdown fetcher.
+  # Enable with: docker compose --profile fetch-crawl4ai up
+  # Set CRAWL4AI_BASE_URL=http://crawl4ai:11235/ in .env to let TomoriBot use it.
+  crawl4ai:
+    image: unclecode/crawl4ai:latest
+    container_name: tomoribot-crawl4ai
+    profiles:
+      - fetch-crawl4ai
+    environment:
+      CRAWL4AI_API_TOKEN: ${CRAWL4AI_TOKEN:-}
+    shm_size: "3gb"
+    ports:
+      - "11235:11235"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:11235/health', timeout=3).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 45s
+    networks:
+      - tomori-network
+
   # TomoriBot application - the main apartment
   tomoribot:
     build:
@@ -60,6 +109,8 @@ services:
       # Override RUN_ENV to 'development' for local compose to disable SSL verification
       # Production deployments to AWS ECS will use RUN_ENV=production automatically
       RUN_ENV: development
+      # Web-search SearXNG sidecar (resolved via compose DNS)
+      SEARXNG_BASE_URL: http://searxng:8080/
     restart: unless-stopped
     networks:
       - tomori-network

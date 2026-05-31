@@ -6,14 +6,14 @@
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { sql } from "@/utils/db/client";
-import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { configRepository } from "@/utils/db/repositories";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { UserRow } from "@/types/db/schema";
 import { DEFAULT_NAI_STYLE_TAGS } from "@/utils/image/naiTagDefaults";
 import {
-  formatTextArrayLiteral,
   formatNaiTagsForModalValue,
   MAX_TAG_LENGTH,
   MAX_TAGS,
@@ -91,15 +91,11 @@ export async function execute(
     const tagsInput = modalResult.values?.[TAGS_INPUT_ID] ?? "";
 
     if (tagsInput.trim().length === 0) {
-      const defaultTagArrayLiteral = formatTextArrayLiteral(DEFAULT_NAI_STYLE_TAGS);
-      const cleared = await sql<Array<{ tomori_config_id: number }>>`
-				UPDATE tomori_configs
-				SET nai_style_tags = ${defaultTagArrayLiteral}::TEXT[]
-				WHERE server_id = ${tomoriState.server_id}
-				RETURNING tomori_config_id
-			`;
+      const cleared = await configRepository.updateNovelaiImagegenConfig(tomoriState.server_id, {
+        nai_style_tags: [...DEFAULT_NAI_STYLE_TAGS],
+      });
 
-      if (!cleared.length) {
+      if (!cleared) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
@@ -161,15 +157,11 @@ export async function execute(
       return;
     }
 
-    const tagArrayLiteral = formatTextArrayLiteral(validationResult.tags);
-    const updated = await sql<Array<{ tomori_config_id: number }>>`
-			UPDATE tomori_configs
-			SET nai_style_tags = ${tagArrayLiteral}::TEXT[]
-			WHERE server_id = ${tomoriState.server_id}
-			RETURNING tomori_config_id
-		`;
+    const updated = await configRepository.updateNovelaiImagegenConfig(tomoriState.server_id, {
+      nai_style_tags: validationResult.tags,
+    });
 
-    if (!updated.length) {
+    if (!updated) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",

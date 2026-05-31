@@ -1,11 +1,11 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { type ErrorContext, type UserRow, tomoriConfigSchema } from "@/types/db/schema";
+import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { configRepository } from "@/utils/db/repositories";
 
 // Configure the subcommand — no options, running the command flips the toggle
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
@@ -52,23 +52,20 @@ export async function execute(
     // Flip the current value
     const isEnabled = !(tomoriState.config.tool_use_enabled ?? true);
 
-    const [updatedRow] = await sql`
-      UPDATE tomori_configs
-      SET tool_use_enabled = ${isEnabled}
-      WHERE server_id = ${tomoriState.server_id}
-      RETURNING *
-    `;
+    const updated = await configRepository.updateCapabilitiesConfig(tomoriState.server_id, {
+      tool_use_enabled: isEnabled,
+    });
 
-    if (!updatedRow) {
+    if (!updated) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
         metadata: {
-          command: "config tools toggle",
+          command: "capabilities toggle",
           toolUseEnabled: isEnabled,
-          targetTable: "tomori_configs",
+          targetTable: "server_capabilities_configs",
         },
       };
       await log.error(
@@ -76,26 +73,6 @@ export async function execute(
         new Error("Database update returned no rows"),
         context,
       );
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-    if (!validatedConfig.success) {
-      const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
-        serverId: tomoriState.server_id,
-        errorType: "SchemaValidationError",
-        metadata: {
-          command: "config tools toggle",
-          validationErrors: validatedConfig.error.flatten(),
-        },
-      };
-      await log.error("Failed to validate updated config", validatedConfig.error, context);
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",
@@ -119,11 +96,11 @@ export async function execute(
       serverId: (await getCachedTomoriState(serverDiscId))?.server_id,
       errorType: "CommandExecutionError",
       metadata: {
-        command: "config tools toggle",
+        command: "capabilities toggle",
         options: interaction.options?.data,
       },
     };
-    await log.error("Error in /config tools toggle command", error as Error, context);
+    await log.error("Error in /capabilities toggle command", error as Error, context);
 
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",

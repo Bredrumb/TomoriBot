@@ -600,6 +600,29 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
 
+      - name: Destructive migration gate
+        # Blocks deploys that introduce destructive migrations (DROP TABLE / COLUMN /
+        # CONSTRAINT, ALTER COLUMN ... TYPE, TRUNCATE, unfiltered DELETE) unless the
+        # deployer opted into a pre-deploy snapshot via (Checkpoint) in the commit
+        # message or create_db_snapshot=true on manual dispatch. See OD-R-6 and
+        # docs/guides/safe-migration.md.
+        if: |
+          !(
+            (github.event_name == 'workflow_dispatch' && inputs.create_db_snapshot == true) ||
+            (github.event_name == 'push' && contains(github.event.head_commit.message, '(Checkpoint)'))
+          )
+        run: |
+          # Compare against the deploy target's previous commit. github.event.before
+          # is the SHA HEAD pointed to before this push; on first push to a branch
+          # it may be all-zeros, in which case fall back to scanning every migration.
+          PREV_REF="${{ github.event.before }}"
+          if [ -z "$PREV_REF" ] || [ "$PREV_REF" = "0000000000000000000000000000000000000000" ]; then
+            echo "No previous-ref available; scanning all up-migrations as a conservative fallback."
+            bun run scripts/checks/checkPendingMigrations.ts --all
+          else
+            bun run scripts/checks/checkPendingMigrations.ts --changed-since "$PREV_REF"
+          fi
+
       - name: Optional RDS snapshot (manual or (Checkpoint) commit)
         if: |
           (github.event_name == 'workflow_dispatch' && inputs.create_db_snapshot == true) ||

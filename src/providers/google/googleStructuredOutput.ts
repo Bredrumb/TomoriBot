@@ -153,7 +153,7 @@ export async function callGoogleStructuredOutput(
       }
     }
 
-    const responseSchema = buildExpressionResponseSchema(images.length);
+    const responseSchema = buildExpressionResponseSchema();
     const generationConfig: GenerateContentConfig = {
       temperature: request.temperature ?? 1.0,
       maxOutputTokens: 8192,

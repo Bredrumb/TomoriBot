@@ -1,6 +1,6 @@
 import type { Message } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
-import { isMatrixBridgeWebhookUsername } from "@/utils/bridge";
+import { isMatrixBridgeWebhookUsername } from "@/utils/bridges";
 
 export interface PersonaTurnBlockResult {
   blockMessages: Message[];
@@ -20,14 +20,14 @@ export function findLastPersonaTurnBlock(options: {
 }): PersonaTurnBlockResult {
   const { messages, allPersonas, clientUserId, targetPersonaId } = options;
   const personaByNickname = new Map<string, TomoriState>(
-    allPersonas.map((persona) => [persona.tomori_nickname.toLowerCase(), persona]),
+    allPersonas.map((persona) => [persona.persona_nickname.toLowerCase(), persona]),
   );
   const mainPersona = allPersonas.find((persona) => !persona.is_alter) ?? null;
   const requestedPersona = targetPersonaId
-    ? (allPersonas.find((persona) => persona.tomori_id === targetPersonaId) ?? null)
+    ? (allPersonas.find((persona) => persona.persona_id === targetPersonaId) ?? null)
     : null;
 
-  let targetPersonaKey = requestedPersona?.tomori_nickname.toLowerCase() ?? null;
+  let targetPersonaKey = requestedPersona?.persona_nickname.toLowerCase() ?? null;
   let resolvedPersona = requestedPersona;
   const blockMessages: Message[] = [];
 
@@ -41,7 +41,7 @@ export function findLastPersonaTurnBlock(options: {
       }
 
       if (clientUserId && msg.author.id === clientUserId && mainPersona) {
-        const mainKey = mainPersona.tomori_nickname.toLowerCase();
+        const mainKey = mainPersona.persona_nickname.toLowerCase();
         if (targetPersonaKey === null) {
           targetPersonaKey = mainKey;
           resolvedPersona = mainPersona;

@@ -10,15 +10,11 @@
 
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, EmbedBuilder, MessageFlags } from "discord.js";
 import type { ButtonInteraction, ChatInputCommandInteraction, ModalSubmitInteraction } from "discord.js";
-import type { CustomEndpointCapability, CustomEndpointRow, TomoriConfigRow } from "@/types/db/schema";
+import type { CustomEndpointCapability, CustomEndpointRow, AssembledServerConfig } from "@/types/db/schema";
 import type { ModalComponent } from "@/types/discord/modal";
 import type { SelectOption } from "@/types/discord/modal";
-import {
-  promptWithPaginatedModal,
-  promptWithRawModal,
-  replyInfoEmbed,
-  safeSelectOptionText,
-} from "@/utils/discord/interactionHelper";
+import { promptWithPaginatedModal, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
 import {
@@ -37,8 +33,8 @@ const CANCEL_BUTTON_ID = "cancel_edit";
 const WORKFLOW_UPLOAD_ID = "workflow_json";
 
 type RegistrationScope =
-  | { kind: "server"; ownerId: number; baseConfig: TomoriConfigRow }
-  | { kind: "personal"; ownerId: number; baseConfig: TomoriConfigRow };
+  | { kind: "server"; ownerId: number; baseConfig: AssembledServerConfig }
+  | { kind: "personal"; ownerId: number; baseConfig: AssembledServerConfig };
 
 export interface ExecuteCustomEndpointEditOptions {
   interaction: ChatInputCommandInteraction;

@@ -6,20 +6,18 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import path from "node:path";
-import { readFile } from "node:fs/promises";
-import { loadAllPersonasForServer, loadPresetRowsByLocale } from "../../utils/db/dbRead";
+import { configRepository, personaRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { localizer, getBaseTriggerWords, getDefaultBotName } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "../../utils/discord/interactionHelper";
 import { type UserRow, type ErrorContext, tomoriSchema, type TomoriPresetRow } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
-import { sql } from "@/utils/db/client";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
-import { getCachedPresetAvatar } from "../../utils/image/avatarHelper";
-import { getMemoryLimits } from "../../utils/db/memoryLimits";
+import { getCachedPresetAvatar, getPresetAvatarBuffer } from "../../utils/image/avatarHelper";
+import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage";
+import { dedupeTriggerWords, normalizeTriggerWord } from "@/utils/text/triggerWords";
 
 function isUniqueViolation(error: unknown): boolean {
   return (
@@ -42,30 +40,11 @@ type PersonaDefaultTargetType = "default" | "alter";
 const DEFAULT_TARGET_TYPE: PersonaDefaultTargetType = "default";
 
 function normalizeForComparison(value: string): string {
-  return value.trim().toLowerCase();
+  return normalizeTriggerWord(value);
 }
 
 function dedupeCaseInsensitive(values: string[]): string[] {
-  const deduped: string[] = [];
-  const seen = new Set<string>();
-  for (const value of values) {
-    const trimmed = value.trim();
-    if (trimmed.length === 0) {
-      continue;
-    }
-
-    const normalized = normalizeForComparison(trimmed);
-    if (seen.has(normalized)) {
-      continue;
-    }
-    seen.add(normalized);
-    deduped.push(trimmed);
-  }
-  return deduped;
-}
-
-function toPgTextArrayLiteral(values: string[]): string {
-  return `{${values.map((value) => `"${value.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
+  return dedupeTriggerWords(values, { lowercase: false });
 }
 
 function resolvePresetTriggerWords(preset: TomoriPresetRow, locale: string): string[] {
@@ -104,7 +83,29 @@ function resolveAvailablePersonaName(defaultName: string, triggerWords: string[]
   return null;
 }
 
+function normalizePresetLineageId(value: unknown): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === "bigint") {
+    return Number(value);
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  return null;
+}
+
 function resolvePresetLineageId(preset: TomoriPresetRow): number | null {
+  const explicitLineageId = normalizePresetLineageId(preset.preset_lineage_id);
+  if (explicitLineageId !== null) {
+    return explicitLineageId;
+  }
+
   const avatarPath = (preset.preset_avatar_path ?? "").trim().toLowerCase();
   if (avatarPath.length > 0) {
     const fileName = avatarPath.split(/[\\/]/).pop() ?? "";
@@ -114,55 +115,13 @@ function resolvePresetLineageId(preset: TomoriPresetRow): number | null {
   }
 
   // Locale-safe fallback for environments where avatar paths were customized.
-  const normalizedName = preset.tomori_preset_name.toLowerCase();
+  const normalizedName = preset.persona_preset_name.toLowerCase();
   if (normalizedName.includes("bratty")) return 716;
   if (normalizedName.includes("gloomy")) return 1770;
   if (normalizedName.includes("shy")) return 3585;
   if (normalizedName.includes("professional")) return 50;
   if (normalizedName.includes("default") || normalizedName.includes("boyish")) return 4;
   return null;
-}
-
-function decodeBase64DataUri(dataUri: string): Buffer | null {
-  const base64Marker = "base64,";
-  const markerIndex = dataUri.indexOf(base64Marker);
-  if (markerIndex === -1) {
-    return null;
-  }
-
-  const base64Payload = dataUri.slice(markerIndex + base64Marker.length).trim();
-  if (base64Payload.length === 0) {
-    return null;
-  }
-
-  try {
-    return Buffer.from(base64Payload, "base64");
-  } catch {
-    return null;
-  }
-}
-
-async function getPresetAvatarBuffer(preset: TomoriPresetRow): Promise<Buffer | null> {
-  const cachedAvatarDataUri = getCachedPresetAvatar(preset.tomori_preset_id);
-  if (cachedAvatarDataUri) {
-    const decoded = decodeBase64DataUri(cachedAvatarDataUri);
-    if (decoded) {
-      return decoded;
-    }
-  }
-
-  const presetAvatarPath = preset.preset_avatar_path?.trim();
-  if (!presetAvatarPath) {
-    return null;
-  }
-
-  try {
-    const absolutePath = path.join(process.cwd(), presetAvatarPath);
-    return await readFile(absolutePath);
-  } catch (error) {
-    log.warn(`Failed to load preset avatar file "${presetAvatarPath}" for preset ${preset.tomori_preset_id}`, error);
-    return null;
-  }
 }
 
 // Configure the subcommand
@@ -192,7 +151,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * - type=default (default): updates the main persona.
  * - type=alter: creates an alter persona from the selected preset.
  *
- * Preset trigger words come from tomori_presets.preset_trigger_words,
+ * Preset trigger words come from persona_presets.preset_trigger_words,
  * with locale base-trigger fallback for backward compatibility.
  * Persona naming prefers the locale default bot name, then falls back to
  * preset trigger words in order if the preferred name is already taken.
@@ -256,7 +215,7 @@ export async function execute(
     }
 
     // 4. Fetch available presets for the user's locale using shared helper
-    const presets = await loadPresetRowsByLocale(locale);
+    const presets = await configRepository.loadPresetRowsByLocale(locale);
 
     // 5. Check if there are any presets available
     if (!presets || presets.length === 0) {
@@ -270,9 +229,9 @@ export async function execute(
 
     // 6. Create preset options for the select menu using full descriptions
     const presetSelectOptions: SelectOption[] = presets.map((preset: TomoriPresetRow) => ({
-      label: safeSelectOptionText(preset.tomori_preset_name),
-      value: safeSelectOptionText(preset.tomori_preset_name),
-      description: safeSelectOptionText(preset.tomori_preset_desc),
+      label: safeSelectOptionText(preset.persona_preset_name),
+      value: safeSelectOptionText(preset.persona_preset_name),
+      description: safeSelectOptionText(preset.persona_preset_desc),
     }));
 
     // 7. Show the modal with preset selection
@@ -309,7 +268,7 @@ export async function execute(
     const selectedPresetName = modalResult.values![PRESET_SELECT_ID];
 
     // 9. Find the selected preset - let helper functions manage interaction state
-    const selectedPreset = presets.find((preset: TomoriPresetRow) => preset.tomori_preset_name === selectedPresetName);
+    const selectedPreset = presets.find((preset: TomoriPresetRow) => preset.persona_preset_name === selectedPresetName);
 
     if (!selectedPreset) {
       await modalSubmitInteraction.editReply({
@@ -319,23 +278,19 @@ export async function execute(
     }
 
     // 10. Build preset payloads for database update/insert
-    const attributeArrayLiteral = toPgTextArrayLiteral(selectedPreset.preset_attribute_list);
-    const presetPersonaPrompt = selectedPreset.tomori_preset_desc || null;
-    const inArrayLiteral = toPgTextArrayLiteral(selectedPreset.preset_sample_dialogues_in);
-    const outArrayLiteral = toPgTextArrayLiteral(selectedPreset.preset_sample_dialogues_out);
+    const presetPersonaPrompt = selectedPreset.persona_preset_desc || null;
 
     const presetTriggerWords = resolvePresetTriggerWords(selectedPreset, locale);
-    const triggerWordsArrayLiteral = toPgTextArrayLiteral(presetTriggerWords);
     const defaultBotName = getDefaultBotName(locale);
     const resolvedLineageId = resolvePresetLineageId(selectedPreset);
     const shouldUseResolvedLineageId = resolvedLineageId !== null;
 
-    const allPersonas = await loadAllPersonasForServer(serverDiscId);
-    const allPersonaNames = allPersonas.map((persona) => persona.tomori_nickname);
+    const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
+    const allPersonaNames = allPersonas.map((persona) => persona.persona_nickname);
     const mainPersona = allPersonas.find((persona) => !persona.is_alter) ?? tomoriState;
 
     if (targetType === "default") {
-      const targetPersonaId = mainPersona.tomori_id ?? tomoriState.tomori_id;
+      const targetPersonaId = mainPersona.persona_id ?? tomoriState.persona_id;
       if (!targetPersonaId) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "general.errors.update_failed_title",
@@ -346,8 +301,8 @@ export async function execute(
       }
 
       const takenNamesExcludingTarget = allPersonas
-        .filter((persona) => persona.tomori_id !== targetPersonaId)
-        .map((persona) => persona.tomori_nickname);
+        .filter((persona) => persona.persona_id !== targetPersonaId)
+        .map((persona) => persona.persona_nickname);
       const resolvedPersonaName = resolveAvailablePersonaName(
         defaultBotName,
         presetTriggerWords,
@@ -364,58 +319,33 @@ export async function execute(
         return;
       }
 
-      // 11a. Update main persona and trigger words
-      const [updatedTomoriResult] = await sql`
-				UPDATE tomoris
-				SET
-					tomori_nickname = ${resolvedPersonaName},
-					attribute_list = ${attributeArrayLiteral}::text[],
-					sample_dialogues_in = ${inArrayLiteral}::text[],
-					sample_dialogues_out = ${outArrayLiteral}::text[],
-					persona_lineage_id = CASE
-						WHEN ${shouldUseResolvedLineageId} THEN ${resolvedLineageId}::bigint
-						ELSE persona_lineage_id
-					END
-				WHERE tomori_id = ${targetPersonaId}
-				RETURNING *
-			`;
-
-      await sql`
-				INSERT INTO persona_configs (tomori_id, trigger_words, persona_prompt)
-				VALUES (${targetPersonaId}, ${triggerWordsArrayLiteral}::text[], ${presetPersonaPrompt})
-				ON CONFLICT (tomori_id) DO UPDATE
-				SET trigger_words = EXCLUDED.trigger_words,
-						persona_prompt = EXCLUDED.persona_prompt
-			`;
-
-      await sql`
-				UPDATE tomori_configs
-				SET trigger_words = ${triggerWordsArrayLiteral}::text[]
-				WHERE server_id = ${tomoriState.server_id}
-			`;
+      // 11a. Turn the main persona into a live preset pointer.
+      const updatedTomoriResult = await personaRepository.applyPresetPointerToPersona({
+        personaId: targetPersonaId,
+        nickname: resolvedPersonaName,
+        preset: selectedPreset,
+        personaLineageId: shouldUseResolvedLineageId ? resolvedLineageId : undefined,
+        triggerWords: presetTriggerWords,
+        personaPrompt: presetPersonaPrompt,
+      });
 
       // 11b. Validate the result
-      const validationResult = tomoriSchema.safeParse(updatedTomoriResult);
-
-      if (!validationResult.success || !updatedTomoriResult) {
+      if (!updatedTomoriResult) {
         const context: ErrorContext = {
           userId: userData.user_id,
           serverId: tomoriState.server_id,
-          tomoriId: targetPersonaId,
+          personaId: targetPersonaId,
           errorType: "DatabaseValidationError",
           metadata: {
             command: "persona default",
             targetType,
-            preset: selectedPreset.tomori_preset_name,
-            presetId: selectedPreset.tomori_preset_id,
-            validationErrors: validationResult.success ? null : validationResult.error.flatten(),
+            preset: selectedPreset.persona_preset_name,
+            presetId: selectedPreset.persona_preset_id,
           },
         };
         await log.error(
-          "Failed to validate updated tomori data after applying preset",
-          validationResult.success
-            ? new Error("Database update returned no rows or unexpected data")
-            : new Error("Updated tomori data failed validation"),
+          "Failed to update tomori after applying preset",
+          new Error("PersonaRepository.applyPresetPointerToPersona returned null"),
           context,
         );
 
@@ -433,6 +363,7 @@ export async function execute(
       const isDM = !interaction.guild;
       let avatarUpdateFailed = false;
       let nicknameUpdateFailed = false;
+      let presetAvatarBuffer: Buffer | null = null;
 
       if (!isDM) {
         try {
@@ -451,9 +382,14 @@ export async function execute(
           }
 
           if (interaction.guild) {
-            const cachedAvatar = getCachedPresetAvatar(selectedPreset.tomori_preset_id);
+            const cachedAvatar = getCachedPresetAvatar(selectedPreset.persona_preset_id);
+            if (!cachedAvatar) {
+              presetAvatarBuffer = await getPresetAvatarBuffer(selectedPreset);
+            }
 
-            const avatarValue = cachedAvatar || null;
+            const avatarValue =
+              cachedAvatar ??
+              (presetAvatarBuffer ? `data:image/png;base64,${presetAvatarBuffer.toString("base64")}` : null);
             const endpoint = `https://discord.com/api/v10/guilds/${interaction.guild.id}/members/@me`;
             const response = await fetch(endpoint, {
               method: "PATCH",
@@ -465,8 +401,8 @@ export async function execute(
             });
 
             if (response.ok) {
-              const actionDescription = cachedAvatar
-                ? `Set preset avatar for "${selectedPreset.tomori_preset_name}"`
+              const actionDescription = avatarValue
+                ? `Set preset avatar for "${selectedPreset.persona_preset_name}"`
                 : "Reset guild avatar to bot default";
               log.info(`${actionDescription} for guild ${interaction.guild.id} after applying preset`);
             } else {
@@ -482,7 +418,7 @@ export async function execute(
 
       const triggerSummary = presetTriggerWords.length > 0 ? presetTriggerWords.join(", ") : "N/A";
       const detailedSuccessDescription = localizer(locale, "commands.persona.default.success_details_description", {
-        preset_name: selectedPreset.tomori_preset_name,
+        preset_name: selectedPreset.persona_preset_name,
         nickname: resolvedPersonaName,
         attribute_count: selectedPreset.preset_attribute_list.length,
         dialogue_count: selectedPreset.preset_sample_dialogues_in.length,
@@ -512,7 +448,7 @@ export async function execute(
       footerParts.push(localizer(locale, "commands.persona.import.refresh_reminder"));
       successEmbed.setFooter({ text: footerParts.join(" • ") });
 
-      const presetAvatarBuffer = await getPresetAvatarBuffer(selectedPreset);
+      presetAvatarBuffer = presetAvatarBuffer ?? (await getPresetAvatarBuffer(selectedPreset));
       let avatarAttachment: AttachmentBuilder | null = null;
       if (presetAvatarBuffer) {
         const sanitizedNickname = sanitizeAttachmentFilenamePart(resolvedPersonaName, {
@@ -546,7 +482,7 @@ export async function execute(
       });
 
       log.success(
-        `Applied preset "${selectedPreset.tomori_preset_name}" to main persona for server ${tomoriState.server_id} by user ${userData.user_disc_id}`,
+        `Applied preset "${selectedPreset.persona_preset_name}" to main persona for server ${tomoriState.server_id} by user ${userData.user_disc_id}`,
       );
 
       await modalSubmitInteraction.editReply({
@@ -590,65 +526,17 @@ export async function execute(
       return;
     }
 
-    // Mirror /persona import alter behavior:
-    // keep only trigger words that do not overlap with existing personas.
-    const allTriggerWords = new Set<string>();
-    for (const persona of allPersonas) {
-      for (const trigger of persona.trigger_words ?? []) {
-        allTriggerWords.add(normalizeForComparison(trigger));
-      }
-    }
-
-    const uniqueAlterTriggers = presetTriggerWords.filter(
-      (trigger) => !allTriggerWords.has(normalizeForComparison(trigger)),
-    );
+    const uniqueAlterTriggers = presetTriggerWords;
     const hasNoTriggers = uniqueAlterTriggers.length === 0;
-    const alterTriggerWordsArrayLiteral = toPgTextArrayLiteral(uniqueAlterTriggers);
 
-    let insertedAlterRow: unknown;
-    if (shouldUseResolvedLineageId) {
-      [insertedAlterRow] = await sql`
-				INSERT INTO tomoris (
-					server_id,
-					tomori_nickname,
-					attribute_list,
-					sample_dialogues_in,
-					sample_dialogues_out,
-					is_alter,
-					persona_lineage_id
-				)
-				VALUES (
-					${tomoriState.server_id},
-					${resolvedAlterName},
-					${attributeArrayLiteral}::text[],
-					${inArrayLiteral}::text[],
-					${outArrayLiteral}::text[],
-					true,
-					${resolvedLineageId}::bigint
-				)
-				RETURNING *
-			`;
-    } else {
-      [insertedAlterRow] = await sql`
-				INSERT INTO tomoris (
-					server_id,
-					tomori_nickname,
-					attribute_list,
-					sample_dialogues_in,
-					sample_dialogues_out,
-					is_alter
-				)
-				VALUES (
-					${tomoriState.server_id},
-					${resolvedAlterName},
-					${attributeArrayLiteral}::text[],
-					${inArrayLiteral}::text[],
-					${outArrayLiteral}::text[],
-					true
-				)
-				RETURNING *
-			`;
-    }
+    const insertedAlterRow = await personaRepository.createPresetPointerAlterPersona({
+      serverId: tomoriState.server_id,
+      nickname: resolvedAlterName,
+      preset: selectedPreset,
+      personaLineageId: shouldUseResolvedLineageId ? resolvedLineageId : null,
+      triggerWords: uniqueAlterTriggers,
+      personaPrompt: presetPersonaPrompt,
+    });
 
     const insertedValidation = tomoriSchema.safeParse(insertedAlterRow);
     if (!insertedValidation.success) {
@@ -659,8 +547,8 @@ export async function execute(
         metadata: {
           command: "persona default",
           targetType,
-          preset: selectedPreset.tomori_preset_name,
-          presetId: selectedPreset.tomori_preset_id,
+          preset: selectedPreset.persona_preset_name,
+          presetId: selectedPreset.persona_preset_id,
           validationErrors: insertedValidation.error.flatten(),
         },
       };
@@ -678,7 +566,7 @@ export async function execute(
       return;
     }
 
-    const newAlterId = insertedValidation.data.tomori_id;
+    const newAlterId = insertedValidation.data.persona_id;
     if (!newAlterId) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
@@ -687,14 +575,6 @@ export async function execute(
       });
       return;
     }
-
-    await sql`
-			INSERT INTO persona_configs (tomori_id, trigger_words, persona_prompt)
-			VALUES (${newAlterId}, ${alterTriggerWordsArrayLiteral}::text[], ${presetPersonaPrompt})
-			ON CONFLICT (tomori_id) DO UPDATE
-			SET trigger_words = EXCLUDED.trigger_words,
-					persona_prompt = EXCLUDED.persona_prompt
-		`;
 
     const descriptionParts = [
       localizer(locale, "commands.persona.import.alter_success_description", {
@@ -761,11 +641,10 @@ export async function execute(
       storedAvatarUrl = s3AvatarUrl;
 
       if (storedAvatarUrl) {
-        await sql`
-					UPDATE tomoris
-					SET webhook_avatar_url = ${storedAvatarUrl}
-					WHERE tomori_id = ${newAlterId}
-				`;
+        const avatarUpdated = await personaRepository.setAvatar(newAlterId, storedAvatarUrl);
+        if (!avatarUpdated) {
+          log.warn(`Failed to persist preset avatar for alter persona ${newAlterId}`);
+        }
       } else {
         log.warn(`Failed to persist preset avatar for alter persona ${newAlterId}`);
       }
@@ -775,7 +654,7 @@ export async function execute(
     invalidateTomoriStateCache(serverDiscId);
 
     log.success(
-      `Applied preset "${selectedPreset.tomori_preset_name}" to alter persona "${resolvedAlterName}" with ${uniqueAlterTriggers.length} unique triggers for server ${tomoriState.server_id} by user ${userData.user_disc_id}`,
+      `Applied preset "${selectedPreset.persona_preset_name}" to alter persona "${resolvedAlterName}" with ${uniqueAlterTriggers.length} unique triggers for server ${tomoriState.server_id} by user ${userData.user_disc_id}`,
     );
 
     await modalSubmitInteraction.editReply({
@@ -805,17 +684,17 @@ export async function execute(
 
     // 13. Log error with context
     let serverIdForError: number | null = null;
-    let tomoriIdForError: number | null = null;
+    let personaIdForError: number | null = null;
     if (interaction.guild?.id) {
       const state = await getCachedTomoriState(interaction.guild.id);
       serverIdForError = state?.server_id ?? null;
-      tomoriIdForError = state?.tomori_id ?? null;
+      personaIdForError = state?.persona_id ?? null;
     }
 
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: serverIdForError,
-      tomoriId: tomoriIdForError,
+      personaId: personaIdForError,
       errorType: "CommandExecutionError",
       metadata: {
         command: "persona default",

@@ -6,7 +6,7 @@
  */
 
 import { HumanizerDegree } from "../db/schema";
-import { createSentenceSplitRegex } from "../../utils/text/stringHelper";
+import { createSentenceSplitRegex } from "@/utils/text/processors/chunkProcessor";
 
 /**
  * Discord streaming constants extracted from the original implementation

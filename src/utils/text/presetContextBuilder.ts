@@ -66,7 +66,7 @@ interface MentionParams {
 const MARKER_TO_TAGS: Record<string, ContextItemTag[]> = {
   // Primary character blocks
   main: [ContextItemTag.SYSTEM_HUMANIZER_RULES],
-  charDescription: [ContextItemTag.SYSTEM_HUMANIZER_RULES], // Same tag as main — persona prompt also uses this
+  charDescription: [ContextItemTag.SYSTEM_PERSONA_PROMPT], // Persona prompt tag
   charPersonality: [ContextItemTag.SYSTEM_PERSONALITY],
 
   // Dialogue

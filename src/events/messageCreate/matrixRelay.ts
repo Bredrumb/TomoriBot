@@ -18,7 +18,7 @@
 
 import type { Client, Embed, Message } from "discord.js";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { isSelfTriggerMessage } from "./tomoriChat";
+import { isSelfTriggerMessage } from "@/utils/chat/triggerProcessor";
 import {
   isMatrixConfigured,
   getLinkedMatrixRoom,
@@ -26,7 +26,7 @@ import {
   sendAttachmentToMatrixRoom,
   MATRIX_MAX_ATTACHMENT_BYTES,
   getMatrixIdForDisplayName,
-} from "@/utils/matrix";
+} from "@/utils/bridges/matrix";
 import { log } from "@/utils/misc/logger";
 import type { TomoriState } from "@/types/db/schema";
 import { resolvePersonaAvatarPublicUrl } from "@/utils/storage/avatarStorage";
@@ -335,7 +335,7 @@ const handler = async (client: Client, message: Message): Promise<void> => {
   } else {
     // Alter persona webhook — match by username (case-insensitive)
     const authornameLower = message.author.username.toLowerCase();
-    persona = allPersonas.find((p) => p.tomori_nickname?.toLowerCase() === authornameLower);
+    persona = allPersonas.find((p) => p.persona_nickname?.toLowerCase() === authornameLower);
 
     // Warn if no persona matched — the fallback uses the webhook username as the
     // virtual user localpart, which may create an orphaned Matrix user
@@ -350,7 +350,7 @@ const handler = async (client: Client, message: Message): Promise<void> => {
   }
 
   // Fall back to username if no matching persona is found
-  const personaName = persona?.tomori_nickname ?? message.author.username;
+  const personaName = persona?.persona_nickname ?? message.author.username;
 
   // 6. Relay the text content (skip if empty after trim)
   //    Identity is conveyed by the virtual Matrix user — no bold prefix needed.

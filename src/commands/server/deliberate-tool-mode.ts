@@ -4,30 +4,43 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
+import { configRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
-import { tomoriConfigSchema } from "../../types/db/schema";
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
 import type { UserRow, ErrorContext } from "../../types/db/schema";
 
+/**
+ * Configures the `/server deliberate-tool-mode` subcommand.
+ * Toggles whether tools require explicit invocation context vs. firing on plain prompts.
+ */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("deliberate-tool-mode")
     .setDescription(localizer("en-US", "commands.server.deliberatetoolmode.description"));
 
+/**
+ * Toggles deliberate tool mode for the server.
+ * @param _client - Discord client instance
+ * @param interaction - Command interaction
+ * @param userData - User data from database
+ * @param locale - Locale of the interaction
+ */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,
   userData: UserRow,
   locale: string,
 ): Promise<void> {
+  // Guild guaranteed by command loader's server-category gate
   const guildId = interaction.guild?.id ?? "";
 
+  // 1. Defer reply before any async work
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
+    // 2. Load tomori state
     const tomoriState = await getCachedTomoriState(guildId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -38,25 +51,24 @@ export async function execute(
       return;
     }
 
+    // 3. Toggle current value
     const newValue = !tomoriState.config.deliberate_tool_mode;
 
-    const [updatedRow] = await sql`
-      UPDATE tomori_configs
-      SET deliberate_tool_mode = ${newValue}
-      WHERE server_id = ${tomoriState.server_id}
-      RETURNING *
-    `;
+    // 4. Update via per-domain repository (writes to server_trigger_behavior_configs)
+    const updated = await configRepository.updateTriggerBehaviorConfig(tomoriState.server_id, {
+      deliberate_tool_mode: newValue,
+    });
 
-    if (!updatedRow) {
+    if (!updated) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
         metadata: {
           command: "server deliberatetoolmode",
           newValue,
-          targetTable: "tomori_configs",
+          targetTable: "server_trigger_behavior_configs",
         },
       };
       await log.error(
@@ -73,33 +85,10 @@ export async function execute(
       return;
     }
 
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-    if (!validatedConfig.success) {
-      const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
-        serverId: tomoriState.server_id,
-        errorType: "SchemaValidationError",
-        metadata: {
-          command: "server deliberatetoolmode",
-          validationErrors: validatedConfig.error.flatten(),
-        },
-      };
-      await log.error(
-        "Failed to validate updated config after deliberate_tool_mode change",
-        validatedConfig.error,
-        context,
-      );
-
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
+    // 5. Invalidate cache only after successful write
     invalidateTomoriStateCache(guildId);
 
+    // 6. Send confirmation
     await replyInfoEmbed(interaction, locale, {
       titleKey: newValue
         ? "commands.server.deliberatetoolmode.enabled_title"
@@ -108,7 +97,7 @@ export async function execute(
         ? "commands.server.deliberatetoolmode.enabled_description"
         : "commands.server.deliberatetoolmode.disabled_description",
       descriptionVars: {
-        persona_name: tomoriState.tomori_nickname,
+        persona_name: tomoriState.persona_nickname,
       },
       color: newValue ? ColorCode.SUCCESS : ColorCode.WARN,
     });

@@ -5,16 +5,16 @@ import type {
   ModalSubmitInteraction,
 } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
-import { sql } from "@/utils/db/client";
 import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
-import { isBlacklisted, loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { personaRepository, serverMemoryRepository, userRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import type { ModalResult, SelectOption } from "@/types/discord/modal";
-import { validateMemoryContent, checkServerMemoryLimit, getMemoryLimits } from "@/utils/db/memoryLimits";
-import { addServerMemoryByTomori } from "@/utils/db/dbWrite";
+import { validateMemoryContent, getMemoryLimits } from "@/utils/misc/memoryLimits";
+
 import { dedupeCaseInsensitive, getNonEmptyNumberedLines, readTxtUpload } from "@/utils/teach/batchUploadUtils";
 
 // Rule 20: Constants for modal and input IDs
@@ -72,7 +72,7 @@ export async function execute(
     // 3. Check blacklisting only for guild contexts
     // Users with Manage Server permission can bypass blacklist (they can unblacklist themselves anyway)
     if (interaction.guild) {
-      const blacklisted = (await isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
+      const blacklisted = (await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
       if (blacklisted && !hasManagePermission) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.user_blacklisted_title",
@@ -99,7 +99,7 @@ export async function execute(
     }
 
     // 6. Resolve target persona (default: current main persona)
-    const allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -111,10 +111,10 @@ export async function execute(
     }
 
     const personaSelectOptions: SelectOption[] = allPersonas
-      .filter((persona) => persona.tomori_id !== undefined)
+      .filter((persona) => persona.persona_id !== undefined)
       .map((persona) => ({
-        label: safeSelectOptionText(persona.tomori_nickname),
-        value: persona.tomori_id?.toString() ?? "",
+        label: safeSelectOptionText(persona.persona_nickname),
+        value: persona.persona_id?.toString() ?? "",
         description: persona.is_alter
           ? localizer(locale, "commands.teach.memory.server.alter_persona_description")
           : localizer(locale, "commands.teach.memory.server.main_persona_description"),
@@ -122,11 +122,7 @@ export async function execute(
       .filter((option) => option.value !== "");
 
     // 7. Check if server memory teaching is enabled
-    // NOTE: Check the correct config key name from tomori_configs table
-    if (
-      !tomoriState.config.server_memteaching_enabled && // Assuming this is the correct key
-      !hasManagePermission
-    ) {
+    if (!tomoriState.config.server_memteaching_enabled && !hasManagePermission) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.teach.memory.server.teaching_disabled_title",
         descriptionKey: "commands.teach.memory.server.teaching_disabled_description",
@@ -204,8 +200,8 @@ export async function execute(
         ].slice(0, MAX_TAGS)
       : [];
     const selectedPersonaId = modalResult.values?.persona_select;
-    selectedPersona = allPersonas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
-    if (!selectedPersona?.tomori_id) {
+    selectedPersona = allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
+    if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -222,7 +218,7 @@ export async function execute(
       });
       return;
     }
-    const targetTomoriId = selectedPersona.tomori_id;
+    const targetPersonaId = selectedPersona.persona_id;
     const targetPersonaLineageId = selectedPersona.persona_lineage_id ?? 0;
     const targetServerId = tomoriState.server_id;
 
@@ -283,17 +279,11 @@ export async function execute(
       }
     }
 
-    const existingRows = await sql`
-			SELECT content
-			FROM server_memories
-			WHERE server_id = ${targetServerId}
-			  AND persona_lineage_id = ${targetPersonaLineageId}
-		`;
-    const existingMemories = new Set(
-      existingRows
-        .map((row: { content?: unknown }) => (typeof row.content === "string" ? row.content.trim().toLowerCase() : ""))
-        .filter((content: string) => content.length > 0),
+    const existingContents = await serverMemoryRepository.loadServerMemoryContents(
+      targetServerId,
+      targetPersonaLineageId,
     );
+    const existingMemories = new Set(existingContents.map((c) => c.trim().toLowerCase()).filter((c) => c.length > 0));
     const memoriesToAdd = dedupedMemories.filter((memory) => !existingMemories.has(memory.toLowerCase()));
 
     if (memoriesToAdd.length === 0) {
@@ -309,8 +299,11 @@ export async function execute(
     }
 
     // 13.5 Check server memory limit after final persona resolution
-    const serverLimitCheck = await checkServerMemoryLimit(targetServerId, targetPersonaLineageId);
-    const currentCount = serverLimitCheck.currentCount ?? existingRows.length;
+    const serverLimitCheck = await serverMemoryRepository.checkServerMemoryLimit(
+      targetServerId,
+      targetPersonaLineageId,
+    );
+    const currentCount = serverLimitCheck.currentCount ?? existingContents.length;
     const maxAllowed = serverLimitCheck.maxAllowed ?? memoryLimits.maxServerMemories;
     const availableSlots = Math.max(0, maxAllowed - currentCount);
     if (memoriesToAdd.length > availableSlots) {
@@ -341,9 +334,9 @@ export async function execute(
     // 14. Insert into persona-scoped server memories table
     let insertSuccess = true;
     if (memoriesToAdd.length === 1) {
-      const insertedMemory = await addServerMemoryByTomori(
+      const insertedMemory = await serverMemoryRepository.add(
         targetServerId,
-        targetTomoriId,
+        targetPersonaId,
         targetPersonaLineageId,
         targetUserId,
         memoriesToAdd[0] ?? "",
@@ -351,26 +344,25 @@ export async function execute(
       );
       insertSuccess = insertedMemory !== null;
     } else {
-      try {
-        await sql.transaction(async (tx) => {
-          for (const memory of memoriesToAdd) {
-            await tx`
-							INSERT INTO server_memories (server_id, tomori_id, persona_lineage_id, user_id, content, tags)
-							VALUES (${targetServerId}, ${targetTomoriId}, ${targetPersonaLineageId}, ${targetUserId}, ${memory}, ${sql.array(parsedTags)})
-						`;
-          }
-        });
-      } catch (insertError) {
-        insertSuccess = false;
-        await log.error("Batch insert failed for server memories", insertError, {
+      // Batch path: delegate to repository which wraps the transaction internally
+      insertSuccess = await serverMemoryRepository.addBatch(
+        targetServerId,
+        targetPersonaId,
+        targetPersonaLineageId,
+        targetUserId,
+        memoriesToAdd,
+        parsedTags,
+      );
+      if (!insertSuccess) {
+        await log.error("Batch insert failed for server memories", new Error("addBatch returned false"), {
           userId: userData.user_id,
           serverId: targetServerId,
-          tomoriId: targetTomoriId,
+          personaId: targetPersonaId,
           errorType: "DatabaseValidationError",
           metadata: {
             command: "teach servermemory",
             insertCount: memoriesToAdd.length,
-            targetTomoriId: targetTomoriId,
+            targetPersonaId: targetPersonaId,
           },
         });
       }
@@ -381,7 +373,7 @@ export async function execute(
       const context: ErrorContext = {
         userId: userData.user_id,
         serverId: targetServerId,
-        tomoriId: targetTomoriId,
+        personaId: targetPersonaId,
         errorType: "DatabaseValidationError",
         metadata: {
           command: "teach servermemory",
@@ -389,7 +381,7 @@ export async function execute(
           operation: "INSERT",
           userDiscordId: interaction.user.id,
           newMemoryContent: memoriesToAdd.join("\n"),
-          targetTomoriId: targetTomoriId,
+          targetPersonaId: targetPersonaId,
         },
       };
       await log.error("Failed to insert server memory data", new Error("Insert returned null"), context);
@@ -433,7 +425,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: tomoriState?.tomori_id,
+      personaId: tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "teach servermemory",

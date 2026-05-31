@@ -1,0 +1,1741 @@
+import {
+  customEndpointSchema,
+  diffusionModelSchema,
+  embeddingModelSchema,
+  llmSchema,
+  openRouterEmbeddingModelRegistrationSchema,
+  openRouterImageModelRegistrationSchema,
+  openRouterModelRegistrationSchema,
+  openRouterVideoModelRegistrationSchema,
+  savedProviderConfigSchema,
+  userSavedProviderConfigSchema,
+  videoGenerationModelSchema,
+  type CustomEndpointApiStyle,
+  type CustomEndpointCapability,
+  type CustomEndpointRow,
+  type DiffusionModelRow,
+  type EmbeddingModelRow,
+  type LlmRow,
+  type OpenRouterEmbeddingModelRegistrationRow,
+  type OpenRouterImageModelRegistrationRow,
+  type OpenRouterModelRegistrationRow,
+  type OpenRouterVideoModelRegistrationRow,
+  type SavedProviderConfigRow,
+  type SavedProviderConfigUpsert,
+  type UserSavedProviderConfigRow,
+  type UserSavedProviderConfigUpsert,
+  type VideoGenerationModelRow,
+} from "@/types/db/schema";
+import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
+import { sql } from "@/utils/db/client";
+import { log } from "@/utils/misc/logger";
+import type { OpenRouterModelScope } from "./LlmModelRepository";
+import type { IRepository } from "./IRepository";
+
+/** Export shape for server-scoped provider configuration. */
+export type LlmProviderExportShape = {
+  savedProviderConfigs: SavedProviderConfigRow[];
+};
+
+export type LlmProviderCacheOptions = {
+  serverDiscId?: string;
+};
+
+export type ChannelLlmCacheOptions = LlmProviderCacheOptions & {
+  channelDiscId?: string;
+};
+
+/**
+ * LlmProviderRepository — saved provider configs, custom endpoints, and OpenRouter registrations.
+ *
+ * Owns tables: saved_provider_configs, user_saved_provider_configs, custom_endpoints,
+ * openrouter_model_registrations, openrouter_embedding_model_registrations,
+ * openrouter_image_model_registrations, openrouter_video_model_registrations.
+ */
+export class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
+  // ── private scoped OpenRouter row loaders ──────────────────────────────────
+
+  private async scopedLlmRows(scope: OpenRouterModelScope, includeDeprecated: boolean): Promise<unknown[]> {
+    if (scope.kind === "server") {
+      return includeDeprecated
+        ? await sql`
+            SELECT l.*
+            FROM llms l
+            WHERE l.llm_provider = 'openrouter'
+              AND (
+                COALESCE(l.is_scoped_registration, false) = false
+                OR (
+                  COALESCE(l.is_scoped_registration, false) = true
+                  AND EXISTS (
+                    SELECT 1
+                    FROM openrouter_model_registrations omr
+                    WHERE omr.llm_id = l.llm_id
+                      AND omr.server_id = ${scope.ownerId}
+                      AND omr.user_id IS NULL
+                  )
+                )
+              )
+            ORDER BY l.is_scoped_registration ASC NULLS FIRST, l.llm_id ASC
+          `
+        : await sql`
+            SELECT l.*
+            FROM llms l
+            WHERE l.llm_provider = 'openrouter'
+              AND l.is_deprecated = false
+              AND (
+                COALESCE(l.is_scoped_registration, false) = false
+                OR (
+                  COALESCE(l.is_scoped_registration, false) = true
+                  AND EXISTS (
+                    SELECT 1
+                    FROM openrouter_model_registrations omr
+                    WHERE omr.llm_id = l.llm_id
+                      AND omr.server_id = ${scope.ownerId}
+                      AND omr.user_id IS NULL
+                  )
+                )
+              )
+            ORDER BY l.is_scoped_registration ASC NULLS FIRST, l.llm_id ASC
+          `;
+    }
+
+    return includeDeprecated
+      ? await sql`
+          SELECT l.*
+          FROM llms l
+          WHERE l.llm_provider = 'openrouter'
+            AND (
+              COALESCE(l.is_scoped_registration, false) = false
+              OR (
+                COALESCE(l.is_scoped_registration, false) = true
+                AND EXISTS (
+                  SELECT 1
+                  FROM openrouter_model_registrations omr
+                  WHERE omr.llm_id = l.llm_id
+                    AND omr.user_id = ${scope.ownerId}
+                    AND omr.server_id IS NULL
+                )
+              )
+            )
+          ORDER BY l.is_scoped_registration ASC NULLS FIRST, l.llm_id ASC
+        `
+      : await sql`
+          SELECT l.*
+          FROM llms l
+          WHERE l.llm_provider = 'openrouter'
+            AND l.is_deprecated = false
+            AND (
+              COALESCE(l.is_scoped_registration, false) = false
+              OR (
+                COALESCE(l.is_scoped_registration, false) = true
+                AND EXISTS (
+                  SELECT 1
+                  FROM openrouter_model_registrations omr
+                  WHERE omr.llm_id = l.llm_id
+                    AND omr.user_id = ${scope.ownerId}
+                    AND omr.server_id IS NULL
+                )
+              )
+            )
+          ORDER BY l.is_scoped_registration ASC NULLS FIRST, l.llm_id ASC
+        `;
+  }
+
+  private async scopedEmbeddingModelRows(scope: OpenRouterModelScope, includeDeprecated: boolean): Promise<unknown[]> {
+    if (scope.kind === "server") {
+      return includeDeprecated
+        ? await sql`
+            SELECT em.*
+            FROM embedding_models em
+            WHERE em.provider = 'openrouter'
+              AND (
+                COALESCE(em.is_scoped_registration, false) = false
+                OR (
+                  COALESCE(em.is_scoped_registration, false) = true
+                  AND EXISTS (
+                    SELECT 1
+                    FROM openrouter_embedding_model_registrations oemr
+                    WHERE oemr.embedding_model_id = em.embedding_model_id
+                      AND oemr.server_id = ${scope.ownerId}
+                      AND oemr.user_id IS NULL
+                  )
+                )
+              )
+            ORDER BY em.is_scoped_registration ASC NULLS FIRST, em.embedding_model_id ASC
+          `
+        : await sql`
+            SELECT em.*
+            FROM embedding_models em
+            WHERE em.provider = 'openrouter'
+              AND em.is_deprecated = false
+              AND (
+                COALESCE(em.is_scoped_registration, false) = false
+                OR (
+                  COALESCE(em.is_scoped_registration, false) = true
+                  AND EXISTS (
+                    SELECT 1
+                    FROM openrouter_embedding_model_registrations oemr
+                    WHERE oemr.embedding_model_id = em.embedding_model_id
+                      AND oemr.server_id = ${scope.ownerId}
+                      AND oemr.user_id IS NULL
+                  )
+                )
+              )
+            ORDER BY em.is_scoped_registration ASC NULLS FIRST, em.embedding_model_id ASC
+          `;
+    }
+
+    return includeDeprecated
+      ? await sql`
+          SELECT em.*
+          FROM embedding_models em
+          WHERE em.provider = 'openrouter'
+            AND (
+              COALESCE(em.is_scoped_registration, false) = false
+              OR (
+                COALESCE(em.is_scoped_registration, false) = true
+                AND EXISTS (
+                  SELECT 1
+                  FROM openrouter_embedding_model_registrations oemr
+                  WHERE oemr.embedding_model_id = em.embedding_model_id
+                    AND oemr.user_id = ${scope.ownerId}
+                    AND oemr.server_id IS NULL
+                )
+              )
+            )
+          ORDER BY em.is_scoped_registration ASC NULLS FIRST, em.embedding_model_id ASC
+        `
+      : await sql`
+          SELECT em.*
+          FROM embedding_models em
+          WHERE em.provider = 'openrouter'
+            AND em.is_deprecated = false
+            AND (
+              COALESCE(em.is_scoped_registration, false) = false
+              OR (
+                COALESCE(em.is_scoped_registration, false) = true
+                AND EXISTS (
+                  SELECT 1
+                  FROM openrouter_embedding_model_registrations oemr
+                  WHERE oemr.embedding_model_id = em.embedding_model_id
+                    AND oemr.user_id = ${scope.ownerId}
+                    AND oemr.server_id IS NULL
+                )
+              )
+            )
+          ORDER BY em.is_scoped_registration ASC NULLS FIRST, em.embedding_model_id ASC
+        `;
+  }
+
+  private async scopedDiffusionModelRows(scope: OpenRouterModelScope, includeDeprecated: boolean): Promise<unknown[]> {
+    if (scope.kind === "server") {
+      return includeDeprecated
+        ? await sql`
+            SELECT dm.*
+            FROM image_diffusion_models dm
+            WHERE dm.provider = 'openrouter'
+              AND (
+                COALESCE(dm.is_scoped_registration, false) = false
+                OR (
+                  COALESCE(dm.is_scoped_registration, false) = true
+                  AND EXISTS (
+                    SELECT 1
+                    FROM openrouter_image_model_registrations oimr
+                    WHERE oimr.diffusion_model_id = dm.diffusion_model_id
+                      AND oimr.server_id = ${scope.ownerId}
+                      AND oimr.user_id IS NULL
+                  )
+                )
+              )
+            ORDER BY dm.is_scoped_registration ASC NULLS FIRST, dm.diffusion_model_id ASC
+          `
+        : await sql`
+            SELECT dm.*
+            FROM image_diffusion_models dm
+            WHERE dm.provider = 'openrouter'
+              AND dm.is_deprecated = false
+              AND (
+                COALESCE(dm.is_scoped_registration, false) = false
+                OR (
+                  COALESCE(dm.is_scoped_registration, false) = true
+                  AND EXISTS (
+                    SELECT 1
+                    FROM openrouter_image_model_registrations oimr
+                    WHERE oimr.diffusion_model_id = dm.diffusion_model_id
+                      AND oimr.server_id = ${scope.ownerId}
+                      AND oimr.user_id IS NULL
+                  )
+                )
+              )
+            ORDER BY dm.is_scoped_registration ASC NULLS FIRST, dm.diffusion_model_id ASC
+          `;
+    }
+
+    return includeDeprecated
+      ? await sql`
+          SELECT dm.*
+          FROM image_diffusion_models dm
+          WHERE dm.provider = 'openrouter'
+            AND (
+              COALESCE(dm.is_scoped_registration, false) = false
+              OR (
+                COALESCE(dm.is_scoped_registration, false) = true
+                AND EXISTS (
+                  SELECT 1
+                  FROM openrouter_image_model_registrations oimr
+                  WHERE oimr.diffusion_model_id = dm.diffusion_model_id
+                    AND oimr.user_id = ${scope.ownerId}
+                    AND oimr.server_id IS NULL
+                )
+              )
+            )
+          ORDER BY dm.is_scoped_registration ASC NULLS FIRST, dm.diffusion_model_id ASC
+        `
+      : await sql`
+          SELECT dm.*
+          FROM image_diffusion_models dm
+          WHERE dm.provider = 'openrouter'
+            AND dm.is_deprecated = false
+            AND (
+              COALESCE(dm.is_scoped_registration, false) = false
+              OR (
+                COALESCE(dm.is_scoped_registration, false) = true
+                AND EXISTS (
+                  SELECT 1
+                  FROM openrouter_image_model_registrations oimr
+                  WHERE oimr.diffusion_model_id = dm.diffusion_model_id
+                    AND oimr.user_id = ${scope.ownerId}
+                    AND oimr.server_id IS NULL
+                )
+              )
+            )
+          ORDER BY dm.is_scoped_registration ASC NULLS FIRST, dm.diffusion_model_id ASC
+        `;
+  }
+
+  private async scopedVideoModelRows(scope: OpenRouterModelScope, includeDeprecated: boolean): Promise<unknown[]> {
+    if (scope.kind === "server") {
+      return includeDeprecated
+        ? await sql`
+            SELECT vm.*
+            FROM video_generation_models vm
+            WHERE vm.provider = 'openrouter'
+              AND (
+                COALESCE(vm.is_scoped_registration, false) = false
+                OR (
+                  COALESCE(vm.is_scoped_registration, false) = true
+                  AND EXISTS (
+                    SELECT 1
+                    FROM openrouter_video_model_registrations ovmr
+                    WHERE ovmr.video_model_id = vm.video_model_id
+                      AND ovmr.server_id = ${scope.ownerId}
+                      AND ovmr.user_id IS NULL
+                  )
+                )
+              )
+            ORDER BY vm.is_scoped_registration ASC NULLS FIRST, vm.video_model_id ASC
+          `
+        : await sql`
+            SELECT vm.*
+            FROM video_generation_models vm
+            WHERE vm.provider = 'openrouter'
+              AND vm.is_deprecated = false
+              AND (
+                COALESCE(vm.is_scoped_registration, false) = false
+                OR (
+                  COALESCE(vm.is_scoped_registration, false) = true
+                  AND EXISTS (
+                    SELECT 1
+                    FROM openrouter_video_model_registrations ovmr
+                    WHERE ovmr.video_model_id = vm.video_model_id
+                      AND ovmr.server_id = ${scope.ownerId}
+                      AND ovmr.user_id IS NULL
+                  )
+                )
+              )
+            ORDER BY vm.is_scoped_registration ASC NULLS FIRST, vm.video_model_id ASC
+          `;
+    }
+
+    return includeDeprecated
+      ? await sql`
+          SELECT vm.*
+          FROM video_generation_models vm
+          WHERE vm.provider = 'openrouter'
+            AND (
+              COALESCE(vm.is_scoped_registration, false) = false
+              OR (
+                COALESCE(vm.is_scoped_registration, false) = true
+                AND EXISTS (
+                  SELECT 1
+                  FROM openrouter_video_model_registrations ovmr
+                  WHERE ovmr.video_model_id = vm.video_model_id
+                    AND ovmr.user_id = ${scope.ownerId}
+                    AND ovmr.server_id IS NULL
+                )
+              )
+            )
+          ORDER BY vm.is_scoped_registration ASC NULLS FIRST, vm.video_model_id ASC
+        `
+      : await sql`
+          SELECT vm.*
+          FROM video_generation_models vm
+          WHERE vm.provider = 'openrouter'
+            AND vm.is_deprecated = false
+            AND (
+              COALESCE(vm.is_scoped_registration, false) = false
+              OR (
+                COALESCE(vm.is_scoped_registration, false) = true
+                AND EXISTS (
+                  SELECT 1
+                  FROM openrouter_video_model_registrations ovmr
+                  WHERE ovmr.video_model_id = vm.video_model_id
+                    AND ovmr.user_id = ${scope.ownerId}
+                    AND ovmr.server_id IS NULL
+                )
+              )
+            )
+          ORDER BY vm.is_scoped_registration ASC NULLS FIRST, vm.video_model_id ASC
+        `;
+  }
+
+  // ── private write helper ───────────────────────────────────────────────────
+
+  private toPostgresTextArrayLiteral(values: readonly string[] | null | undefined): string {
+    return `{${(values ?? []).map((v) => `"${v.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
+  }
+
+  // ── saved provider config reads ────────────────────────────────────────────
+
+  /**
+   * Returns all saved provider configs for a server.
+   *
+   * @param serverId - Internal server DB ID
+   */
+  async loadSavedProviderConfigs(serverId: number): Promise<SavedProviderConfigRow[]> {
+    try {
+      const rows = await sql`
+        SELECT * FROM saved_provider_configs
+        WHERE server_id = ${serverId}
+        ORDER BY provider ASC
+      `;
+
+      if (!rows || rows.length === 0) return [];
+
+      const validated: SavedProviderConfigRow[] = [];
+      for (const row of rows) {
+        const parsed = savedProviderConfigSchema.safeParse(row);
+        if (parsed.success) {
+          validated.push(parsed.data);
+        } else {
+          log.warn(
+            `Invalid saved provider config row for server ${serverId}, provider ${row.provider}: ${parsed.error.message}`,
+          );
+        }
+      }
+      return validated;
+    } catch (error) {
+      log.error(`Error loading saved provider configs for server ${serverId}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Returns the saved provider config for a server + provider pair, or null.
+   *
+   * @param serverId - Internal server DB ID
+   * @param provider - Provider name
+   */
+  async loadSavedProviderConfig(serverId: number, provider: string): Promise<SavedProviderConfigRow | null> {
+    try {
+      const rows = await sql`
+        SELECT * FROM saved_provider_configs
+        WHERE server_id = ${serverId}
+          AND provider = ${provider.toLowerCase()}
+        LIMIT 1
+      `;
+
+      if (!rows || rows.length === 0) return null;
+
+      const parsed = savedProviderConfigSchema.safeParse(rows[0]);
+      if (!parsed.success) {
+        log.warn(`Invalid saved provider config for server ${serverId}, provider ${provider}: ${parsed.error.message}`);
+        return null;
+      }
+      return parsed.data;
+    } catch (error) {
+      log.error(`Error loading saved provider config for server ${serverId}, provider ${provider}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Returns all saved personal provider configs for a user.
+   *
+   * @param userId - Internal user DB ID
+   */
+  async loadUserSavedProviderConfigs(userId: number): Promise<UserSavedProviderConfigRow[]> {
+    try {
+      const rows = await sql`
+        SELECT * FROM user_saved_provider_configs
+        WHERE user_id = ${userId}
+        ORDER BY provider ASC
+      `;
+
+      if (!rows || rows.length === 0) return [];
+
+      const validated: UserSavedProviderConfigRow[] = [];
+      for (const row of rows) {
+        const parsed = userSavedProviderConfigSchema.safeParse(row);
+        if (parsed.success) {
+          validated.push(parsed.data);
+        } else {
+          log.warn(
+            `Invalid user saved provider config row for user ${userId}, provider ${row.provider}: ${parsed.error.message}`,
+          );
+        }
+      }
+      return validated;
+    } catch (error) {
+      log.error(`Error loading user saved provider configs for user ${userId}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Returns the saved personal provider config for a user + provider pair, or null.
+   *
+   * @param userId   - Internal user DB ID
+   * @param provider - Provider name
+   */
+  async loadUserSavedProviderConfig(userId: number, provider: string): Promise<UserSavedProviderConfigRow | null> {
+    try {
+      const rows = await sql`
+        SELECT * FROM user_saved_provider_configs
+        WHERE user_id = ${userId}
+          AND provider = ${provider.toLowerCase()}
+        LIMIT 1
+      `;
+
+      if (!rows || rows.length === 0) return null;
+
+      const parsed = userSavedProviderConfigSchema.safeParse(rows[0]);
+      if (!parsed.success) {
+        log.warn(
+          `Invalid user saved provider config for user ${userId}, provider ${provider}: ${parsed.error.message}`,
+        );
+        return null;
+      }
+      return parsed.data;
+    } catch (error) {
+      log.error(`Error loading user saved provider config for user ${userId}, provider ${provider}:`, error);
+      return null;
+    }
+  }
+
+  // ── custom endpoint reads ──────────────────────────────────────────────────
+
+  /**
+   * Returns custom endpoints configured for a server.
+   *
+   * @param serverId - Internal server DB ID
+   */
+  async loadCustomEndpointsForServer(serverId: number): Promise<CustomEndpointRow[]> {
+    try {
+      const rows = await sql<unknown[]>`
+        SELECT DISTINCT ON (label, capability) *
+        FROM custom_endpoints
+        WHERE server_id = ${serverId}
+          AND user_id IS NULL
+        ORDER BY label ASC, capability ASC, updated_at DESC, custom_endpoint_id DESC
+      `;
+
+      return rows
+        .map((row) => customEndpointSchema.safeParse(row))
+        .flatMap((parsed) => (parsed.success ? [parsed.data] : []));
+    } catch (error) {
+      log.error(`Error loading custom endpoints for server ${serverId}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Returns custom endpoints configured for a user.
+   *
+   * @param userId - Internal user DB ID
+   */
+  async loadCustomEndpointsForUser(userId: number): Promise<CustomEndpointRow[]> {
+    try {
+      const rows = await sql<unknown[]>`
+        SELECT DISTINCT ON (label, capability) *
+        FROM custom_endpoints
+        WHERE user_id = ${userId}
+          AND server_id IS NULL
+        ORDER BY label ASC, capability ASC, updated_at DESC, custom_endpoint_id DESC
+      `;
+
+      return rows
+        .map((row) => customEndpointSchema.safeParse(row))
+        .flatMap((parsed) => (parsed.success ? [parsed.data] : []));
+    } catch (error) {
+      log.error(`Error loading custom endpoints for user ${userId}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Returns custom endpoints by their internal IDs, preserving input order.
+   *
+   * @param ids - Array of internal custom endpoint IDs
+   */
+  async loadCustomEndpointsByIds(ids: number[]): Promise<CustomEndpointRow[]> {
+    if (ids.length === 0) return [];
+
+    try {
+      // Avoid ANY($1) array binding — Bun SQL can intermittently fail on
+      // integer-array parameters with protocol error 08P01.
+      const distinctIds = Array.from(new Set(ids));
+      const placeholders = distinctIds.map((_, i) => `$${i + 1}`).join(", ");
+      const rows = await sql.unsafe(
+        `SELECT * FROM custom_endpoints WHERE custom_endpoint_id IN (${placeholders})`,
+        distinctIds,
+      );
+
+      const rowMap = new Map<number, CustomEndpointRow>();
+      for (const row of rows) {
+        const parsed = customEndpointSchema.safeParse(row);
+        if (parsed.success && parsed.data.custom_endpoint_id !== undefined) {
+          rowMap.set(parsed.data.custom_endpoint_id, parsed.data);
+        } else if (!parsed.success) {
+          log.warn(
+            `Invalid custom endpoint row for id ${(row as Record<string, unknown>).custom_endpoint_id}:`,
+            parsed.error.flatten(),
+          );
+        }
+      }
+
+      return ids.flatMap((id) => {
+        const ep = rowMap.get(id);
+        return ep ? [ep] : [];
+      });
+    } catch (error) {
+      log.error(`Error loading custom endpoints by ids [${ids.join(", ")}]:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Returns a specific custom endpoint by lookup parameters.
+   *
+   * @param params - Lookup parameters including scope (serverId or userId), label, and capability
+   */
+  async loadCustomEndpoint(params: {
+    serverId?: number | null;
+    userId?: number | null;
+    label: string;
+    capability: CustomEndpointCapability;
+  }): Promise<CustomEndpointRow | null> {
+    const { serverId = null, userId = null, label, capability } = params;
+
+    try {
+      const rows =
+        serverId !== null
+          ? await sql`
+              SELECT *
+              FROM custom_endpoints
+              WHERE server_id = ${serverId}
+                AND user_id IS NULL
+                AND label = ${label}
+                AND capability = ${capability}
+              ORDER BY updated_at DESC, custom_endpoint_id DESC
+              LIMIT 1
+            `
+          : await sql`
+              SELECT *
+              FROM custom_endpoints
+              WHERE user_id = ${userId}
+                AND server_id IS NULL
+                AND label = ${label}
+                AND capability = ${capability}
+              ORDER BY updated_at DESC, custom_endpoint_id DESC
+              LIMIT 1
+            `;
+
+      if (!rows.length) return null;
+
+      const parsed = customEndpointSchema.safeParse(rows[0]);
+      if (!parsed.success) {
+        const owner = serverId !== null ? `server ${serverId}` : `user ${userId}`;
+        log.warn(
+          `Invalid custom endpoint row for ${owner}, label ${label}, capability ${capability}: ${parsed.error.message}`,
+        );
+        return null;
+      }
+
+      return parsed.data;
+    } catch (error) {
+      const owner = serverId !== null ? `server ${serverId}` : `user ${userId}`;
+      log.error(`Error loading custom endpoint for ${owner}, label ${label}, capability ${capability}:`, error);
+      return null;
+    }
+  }
+
+  // ── OpenRouter model registration reads ───────────────────────────────────
+
+  /** Returns LLM registrations for a server. @param serverId - Internal server DB ID */
+  async loadOpenRouterModelRegistrationsForServer(serverId: number): Promise<OpenRouterModelRegistrationRow[]> {
+    try {
+      const rows = await sql<unknown[]>`
+        SELECT * FROM openrouter_model_registrations
+        WHERE server_id = ${serverId} AND user_id IS NULL
+        ORDER BY llm_id ASC
+      `;
+      return rows
+        .map((row) => openRouterModelRegistrationSchema.safeParse(row))
+        .flatMap((parsed) => (parsed.success ? [parsed.data] : []));
+    } catch (error) {
+      log.error(`Error loading OpenRouter model registrations for server ${serverId}:`, error);
+      return [];
+    }
+  }
+
+  /** Returns LLM registrations for a user. @param userId - Internal user DB ID */
+  async loadOpenRouterModelRegistrationsForUser(userId: number): Promise<OpenRouterModelRegistrationRow[]> {
+    try {
+      const rows = await sql<unknown[]>`
+        SELECT * FROM openrouter_model_registrations
+        WHERE user_id = ${userId} AND server_id IS NULL
+        ORDER BY llm_id ASC
+      `;
+      return rows
+        .map((row) => openRouterModelRegistrationSchema.safeParse(row))
+        .flatMap((parsed) => (parsed.success ? [parsed.data] : []));
+    } catch (error) {
+      log.error(`Error loading OpenRouter model registrations for user ${userId}:`, error);
+      return [];
+    }
+  }
+
+  /** Returns embedding registrations for a server. @param serverId - Internal server DB ID */
+  async loadOpenRouterEmbeddingModelRegistrationsForServer(
+    serverId: number,
+  ): Promise<OpenRouterEmbeddingModelRegistrationRow[]> {
+    try {
+      const rows = await sql<unknown[]>`
+        SELECT * FROM openrouter_embedding_model_registrations
+        WHERE server_id = ${serverId} AND user_id IS NULL
+        ORDER BY embedding_model_id ASC
+      `;
+      return rows
+        .map((row) => openRouterEmbeddingModelRegistrationSchema.safeParse(row))
+        .flatMap((parsed) => (parsed.success ? [parsed.data] : []));
+    } catch (error) {
+      log.error(`Error loading OpenRouter embedding model registrations for server ${serverId}:`, error);
+      return [];
+    }
+  }
+
+  /** Returns embedding registrations for a user. @param userId - Internal user DB ID */
+  async loadOpenRouterEmbeddingModelRegistrationsForUser(
+    userId: number,
+  ): Promise<OpenRouterEmbeddingModelRegistrationRow[]> {
+    try {
+      const rows = await sql<unknown[]>`
+        SELECT * FROM openrouter_embedding_model_registrations
+        WHERE user_id = ${userId} AND server_id IS NULL
+        ORDER BY embedding_model_id ASC
+      `;
+      return rows
+        .map((row) => openRouterEmbeddingModelRegistrationSchema.safeParse(row))
+        .flatMap((parsed) => (parsed.success ? [parsed.data] : []));
+    } catch (error) {
+      log.error(`Error loading OpenRouter embedding model registrations for user ${userId}:`, error);
+      return [];
+    }
+  }
+
+  /** Returns image model registrations for a server. @param serverId - Internal server DB ID */
+  async loadOpenRouterImageModelRegistrationsForServer(
+    serverId: number,
+  ): Promise<OpenRouterImageModelRegistrationRow[]> {
+    try {
+      const rows = await sql<unknown[]>`
+        SELECT * FROM openrouter_image_model_registrations
+        WHERE server_id = ${serverId} AND user_id IS NULL
+        ORDER BY diffusion_model_id ASC
+      `;
+      return rows
+        .map((row) => openRouterImageModelRegistrationSchema.safeParse(row))
+        .flatMap((parsed) => (parsed.success ? [parsed.data] : []));
+    } catch (error) {
+      log.error(`Error loading OpenRouter image model registrations for server ${serverId}:`, error);
+      return [];
+    }
+  }
+
+  /** Returns image model registrations for a user. @param userId - Internal user DB ID */
+  async loadOpenRouterImageModelRegistrationsForUser(userId: number): Promise<OpenRouterImageModelRegistrationRow[]> {
+    try {
+      const rows = await sql<unknown[]>`
+        SELECT * FROM openrouter_image_model_registrations
+        WHERE user_id = ${userId} AND server_id IS NULL
+        ORDER BY diffusion_model_id ASC
+      `;
+      return rows
+        .map((row) => openRouterImageModelRegistrationSchema.safeParse(row))
+        .flatMap((parsed) => (parsed.success ? [parsed.data] : []));
+    } catch (error) {
+      log.error(`Error loading OpenRouter image model registrations for user ${userId}:`, error);
+      return [];
+    }
+  }
+
+  /** Returns video model registrations for a server. @param serverId - Internal server DB ID */
+  async loadOpenRouterVideoModelRegistrationsForServer(
+    serverId: number,
+  ): Promise<OpenRouterVideoModelRegistrationRow[]> {
+    try {
+      const rows = await sql<unknown[]>`
+        SELECT * FROM openrouter_video_model_registrations
+        WHERE server_id = ${serverId} AND user_id IS NULL
+        ORDER BY video_model_id ASC
+      `;
+      return rows
+        .map((row) => openRouterVideoModelRegistrationSchema.safeParse(row))
+        .flatMap((parsed) => (parsed.success ? [parsed.data] : []));
+    } catch (error) {
+      log.error(`Error loading OpenRouter video model registrations for server ${serverId}:`, error);
+      return [];
+    }
+  }
+
+  /** Returns video model registrations for a user. @param userId - Internal user DB ID */
+  async loadOpenRouterVideoModelRegistrationsForUser(userId: number): Promise<OpenRouterVideoModelRegistrationRow[]> {
+    try {
+      const rows = await sql<unknown[]>`
+        SELECT * FROM openrouter_video_model_registrations
+        WHERE user_id = ${userId} AND server_id IS NULL
+        ORDER BY video_model_id ASC
+      `;
+      return rows
+        .map((row) => openRouterVideoModelRegistrationSchema.safeParse(row))
+        .flatMap((parsed) => (parsed.success ? [parsed.data] : []));
+    } catch (error) {
+      log.error(`Error loading OpenRouter video model registrations for user ${userId}:`, error);
+      return [];
+    }
+  }
+
+  // ── scoped OpenRouter model reads ──────────────────────────────────────────
+
+  /**
+   * Returns LLMs visible for a given scope (server or personal), filtered by registration.
+   *
+   * @param scope             - {kind: "server"|"personal", ownerId: number}
+   * @param includeDeprecated - Include deprecated models
+   */
+  async loadScopedOpenRouterModels(scope: OpenRouterModelScope, includeDeprecated = false): Promise<LlmRow[]> {
+    try {
+      const rows = await this.scopedLlmRows(scope, includeDeprecated);
+      const parsed = llmSchema.array().safeParse(rows);
+      if (!parsed.success) {
+        log.error(
+          `Failed to validate scoped OpenRouter model data for ${scope.kind} ${scope.ownerId}:`,
+          parsed.error.flatten(),
+        );
+        return [];
+      }
+      return parsed.data;
+    } catch (error) {
+      log.error(`Error loading scoped OpenRouter models for ${scope.kind} ${scope.ownerId}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Returns embedding models visible for a given scope.
+   *
+   * @param scope             - {kind: "server"|"personal", ownerId: number}
+   * @param includeDeprecated - Include deprecated models
+   */
+  async loadScopedOpenRouterEmbeddingModels(
+    scope: OpenRouterModelScope,
+    includeDeprecated = false,
+  ): Promise<EmbeddingModelRow[]> {
+    try {
+      const rows = await this.scopedEmbeddingModelRows(scope, includeDeprecated);
+      const parsed = embeddingModelSchema.array().safeParse(rows);
+      if (!parsed.success) {
+        log.error(
+          `Failed to validate scoped OpenRouter embedding model data for ${scope.kind} ${scope.ownerId}:`,
+          parsed.error.flatten(),
+        );
+        return [];
+      }
+      return parsed.data;
+    } catch (error) {
+      log.error(`Error loading scoped OpenRouter embedding models for ${scope.kind} ${scope.ownerId}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Returns diffusion models visible for a given scope.
+   *
+   * @param scope             - {kind: "server"|"personal", ownerId: number}
+   * @param includeDeprecated - Include deprecated models
+   */
+  async loadScopedOpenRouterDiffusionModels(
+    scope: OpenRouterModelScope,
+    includeDeprecated = false,
+  ): Promise<DiffusionModelRow[]> {
+    try {
+      const rows = await this.scopedDiffusionModelRows(scope, includeDeprecated);
+      const parsed = diffusionModelSchema.array().safeParse(rows);
+      if (!parsed.success) {
+        log.error(
+          `Failed to validate scoped OpenRouter diffusion model data for ${scope.kind} ${scope.ownerId}:`,
+          parsed.error.flatten(),
+        );
+        return [];
+      }
+      return parsed.data;
+    } catch (error) {
+      log.error(`Error loading scoped OpenRouter diffusion models for ${scope.kind} ${scope.ownerId}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Returns video generation models visible for a given scope.
+   *
+   * @param scope             - {kind: "server"|"personal", ownerId: number}
+   * @param includeDeprecated - Include deprecated models
+   */
+  async loadScopedOpenRouterVideoGenerationModels(
+    scope: OpenRouterModelScope,
+    includeDeprecated = false,
+  ): Promise<VideoGenerationModelRow[]> {
+    try {
+      const rows = await this.scopedVideoModelRows(scope, includeDeprecated);
+      const parsed = videoGenerationModelSchema.array().safeParse(rows);
+      if (!parsed.success) {
+        log.error(
+          `Failed to validate scoped OpenRouter video model data for ${scope.kind} ${scope.ownerId}:`,
+          parsed.error.flatten(),
+        );
+        return [];
+      }
+      return parsed.data;
+    } catch (error) {
+      log.error(`Error loading scoped OpenRouter video models for ${scope.kind} ${scope.ownerId}:`, error);
+      return [];
+    }
+  }
+
+  // ── saved provider config writes ───────────────────────────────────────────
+
+  /**
+   * Upserts a saved provider config snapshot for a server.
+   *
+   * @param serverId - Internal server DB ID
+   * @param config   - Provider config fields to save
+   * @param options  - Optional cache invalidation options
+   */
+  async upsertSavedProviderConfig(
+    serverId: number,
+    config: SavedProviderConfigUpsert,
+    options: LlmProviderCacheOptions = {},
+  ): Promise<boolean> {
+    try {
+      const provider = config.provider.toLowerCase();
+      const fallbackModelRefsJson = JSON.stringify(config.fallback_model_refs ?? []);
+      const logitBiasesJson = JSON.stringify(config.llm_logit_biases ?? []);
+      const disabledParamsLiteral = this.toPostgresTextArrayLiteral(config.llm_disabled_params);
+
+      const rows = await sql`
+        INSERT INTO saved_provider_configs (
+          server_id, provider, api_key, key_version,
+          llm_id, diffusion_model_id, embedding_model_id,
+          video_model_id,
+          nai_diffusion_model_id, vision_llm_id, nai_preset_name,
+          thinking_level, fallback_model_refs,
+          llm_temperature, llm_top_p, llm_top_k,
+          llm_frequency_penalty, llm_presence_penalty, llm_min_p,
+          llm_max_output_tokens,
+          llm_logit_biases, llm_disabled_params
+        ) VALUES (
+          ${serverId}, ${provider}, ${config.api_key}, ${config.key_version},
+          ${config.llm_id}, ${config.diffusion_model_id}, ${config.embedding_model_id},
+          ${config.video_model_id ?? null},
+          ${config.nai_diffusion_model_id}, ${config.vision_llm_id ?? null}, ${config.nai_preset_name},
+          ${config.thinking_level}, ${fallbackModelRefsJson}::jsonb,
+          ${config.llm_temperature ?? null}, ${config.llm_top_p ?? null}, ${config.llm_top_k ?? null},
+          ${config.llm_frequency_penalty ?? null}, ${config.llm_presence_penalty ?? null}, ${config.llm_min_p ?? null},
+          ${config.llm_max_output_tokens ?? null},
+          ${logitBiasesJson}::jsonb, ${disabledParamsLiteral}::text[]
+        )
+        ON CONFLICT (server_id, provider) DO UPDATE SET
+          api_key = EXCLUDED.api_key,
+          key_version = EXCLUDED.key_version,
+          llm_id = EXCLUDED.llm_id,
+          diffusion_model_id = EXCLUDED.diffusion_model_id,
+          embedding_model_id = EXCLUDED.embedding_model_id,
+          video_model_id = EXCLUDED.video_model_id,
+          nai_diffusion_model_id = EXCLUDED.nai_diffusion_model_id,
+          vision_llm_id = EXCLUDED.vision_llm_id,
+          nai_preset_name = EXCLUDED.nai_preset_name,
+          thinking_level = EXCLUDED.thinking_level,
+          fallback_model_refs = EXCLUDED.fallback_model_refs,
+          llm_temperature = EXCLUDED.llm_temperature,
+          llm_top_p = EXCLUDED.llm_top_p,
+          llm_top_k = EXCLUDED.llm_top_k,
+          llm_frequency_penalty = EXCLUDED.llm_frequency_penalty,
+          llm_presence_penalty = EXCLUDED.llm_presence_penalty,
+          llm_min_p = EXCLUDED.llm_min_p,
+          llm_max_output_tokens = EXCLUDED.llm_max_output_tokens,
+          llm_logit_biases = EXCLUDED.llm_logit_biases,
+          llm_disabled_params = EXCLUDED.llm_disabled_params
+        RETURNING *
+      `;
+
+      if (rows.length > 0) {
+        const parsed = savedProviderConfigSchema.safeParse(rows[0]);
+        if (!parsed.success) {
+          log.warn(
+            `Upserted saved provider config failed validation for server ${serverId}, provider ${provider}: ${parsed.error.message}`,
+          );
+          return false;
+        }
+      }
+
+      log.info(`Upserted saved provider config for server ${serverId}, provider ${provider}`);
+      if (options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
+      return true;
+    } catch (error) {
+      log.error(`Error upserting saved provider config for server ${serverId}, provider ${config.provider}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Deletes a saved provider config for a server + provider pair.
+   *
+   * @param serverId - Internal server DB ID
+   * @param provider - Provider name
+   * @param options  - Optional cache invalidation options
+   */
+  async deleteSavedProviderConfig(
+    serverId: number,
+    provider: string,
+    options: LlmProviderCacheOptions = {},
+  ): Promise<boolean> {
+    try {
+      const result = await sql`
+        DELETE FROM saved_provider_configs
+        WHERE server_id = ${serverId}
+          AND provider = ${provider.toLowerCase()}
+      `;
+
+      const deleted = result.count > 0;
+      if (deleted) {
+        log.info(`Deleted saved provider config for server ${serverId}, provider ${provider}`);
+        if (options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
+      }
+      return deleted;
+    } catch (error) {
+      log.error(`Error deleting saved provider config for server ${serverId}, provider ${provider}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Upserts a personal saved provider config for a user.
+   *
+   * @param userId - Internal user DB ID
+   * @param config - Personal provider config fields to save
+   */
+  async upsertUserSavedProviderConfig(userId: number, config: UserSavedProviderConfigUpsert): Promise<boolean> {
+    try {
+      const provider = config.provider.toLowerCase();
+      const enabledCapabilitiesLiteral = this.toPostgresTextArrayLiteral(config.enabled_capabilities);
+      const fallbackModelRefsJson = JSON.stringify(config.fallback_model_refs ?? []);
+      const logitBiasesJson = JSON.stringify(config.llm_logit_biases ?? []);
+      const disabledParamsLiteral = this.toPostgresTextArrayLiteral(config.llm_disabled_params);
+
+      const rows = await sql`
+        INSERT INTO user_saved_provider_configs (
+          user_id, provider, api_key, key_version,
+          llm_id, diffusion_model_id, embedding_model_id,
+          video_model_id,
+          nai_diffusion_model_id, vision_llm_id, nai_preset_name,
+          thinking_level, enabled_capabilities, fallback_model_refs,
+          llm_temperature, llm_top_p, llm_top_k,
+          llm_frequency_penalty, llm_presence_penalty, llm_min_p,
+          llm_max_output_tokens,
+          llm_logit_biases, llm_disabled_params
+        ) VALUES (
+          ${userId}, ${provider}, ${config.api_key}, ${config.key_version},
+          ${config.llm_id}, ${config.diffusion_model_id}, ${config.embedding_model_id},
+          ${config.video_model_id ?? null},
+          ${config.nai_diffusion_model_id}, ${config.vision_llm_id ?? null}, ${config.nai_preset_name},
+          ${config.thinking_level}, ${enabledCapabilitiesLiteral}::text[], ${fallbackModelRefsJson}::jsonb,
+          ${config.llm_temperature ?? null}, ${config.llm_top_p ?? null}, ${config.llm_top_k ?? null},
+          ${config.llm_frequency_penalty ?? null}, ${config.llm_presence_penalty ?? null}, ${config.llm_min_p ?? null},
+          ${config.llm_max_output_tokens ?? null},
+          ${logitBiasesJson}::jsonb, ${disabledParamsLiteral}::text[]
+        )
+        ON CONFLICT (user_id, provider) DO UPDATE SET
+          api_key = EXCLUDED.api_key,
+          key_version = EXCLUDED.key_version,
+          llm_id = EXCLUDED.llm_id,
+          diffusion_model_id = EXCLUDED.diffusion_model_id,
+          embedding_model_id = EXCLUDED.embedding_model_id,
+          video_model_id = EXCLUDED.video_model_id,
+          nai_diffusion_model_id = EXCLUDED.nai_diffusion_model_id,
+          vision_llm_id = EXCLUDED.vision_llm_id,
+          nai_preset_name = EXCLUDED.nai_preset_name,
+          thinking_level = EXCLUDED.thinking_level,
+          enabled_capabilities = EXCLUDED.enabled_capabilities,
+          fallback_model_refs = EXCLUDED.fallback_model_refs,
+          llm_temperature = EXCLUDED.llm_temperature,
+          llm_top_p = EXCLUDED.llm_top_p,
+          llm_top_k = EXCLUDED.llm_top_k,
+          llm_frequency_penalty = EXCLUDED.llm_frequency_penalty,
+          llm_presence_penalty = EXCLUDED.llm_presence_penalty,
+          llm_min_p = EXCLUDED.llm_min_p,
+          llm_max_output_tokens = EXCLUDED.llm_max_output_tokens,
+          llm_logit_biases = EXCLUDED.llm_logit_biases,
+          llm_disabled_params = EXCLUDED.llm_disabled_params
+        RETURNING *
+      `;
+
+      if (rows.length > 0) {
+        const parsed = userSavedProviderConfigSchema.safeParse(rows[0]);
+        if (!parsed.success) {
+          log.warn(
+            `Upserted user saved provider config failed validation for user ${userId}, provider ${provider}: ${parsed.error.message}`,
+          );
+          return false;
+        }
+      }
+
+      log.info(`Upserted user saved provider config for user ${userId}, provider ${provider}`);
+      return true;
+    } catch (error) {
+      log.error(`Error upserting user saved provider config for user ${userId}, provider ${config.provider}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Deletes a personal saved provider config for a user + provider pair.
+   *
+   * @param userId   - Internal user DB ID
+   * @param provider - Provider name
+   */
+  async deleteUserSavedProviderConfig(userId: number, provider: string): Promise<boolean> {
+    try {
+      const result = await sql`
+        DELETE FROM user_saved_provider_configs
+        WHERE user_id = ${userId}
+          AND provider = ${provider.toLowerCase()}
+      `;
+
+      const deleted = result.count > 0;
+      if (deleted) {
+        log.info(`Deleted user saved provider config for user ${userId}, provider ${provider}`);
+      }
+      return deleted;
+    } catch (error) {
+      log.error(`Error deleting user saved provider config for user ${userId}, provider ${provider}:`, error);
+      return false;
+    }
+  }
+
+  // ── custom endpoint writes ─────────────────────────────────────────────────
+
+  /**
+   * Upserts a custom endpoint for a server or user.
+   *
+   * @param params  - Endpoint configuration
+   * @param options - Optional cache invalidation options
+   */
+  async upsertCustomEndpoint(
+    params: {
+      serverId?: number | null;
+      userId?: number | null;
+      label: string;
+      capability: CustomEndpointCapability;
+      apiStyle: CustomEndpointApiStyle;
+      endpointUrl: string;
+      modelName?: string | null;
+      displayName: string;
+      numCtx?: number | null;
+      requiresAuth: boolean;
+      extraConfig?: Record<string, unknown>;
+      hasTools?: boolean;
+      seesImages?: boolean;
+      seesVideos?: boolean;
+      supportsStructOutput?: boolean;
+      isDefault?: boolean;
+    },
+    options: LlmProviderCacheOptions = {},
+  ): Promise<CustomEndpointRow | null> {
+    const {
+      serverId = null,
+      userId = null,
+      label,
+      capability,
+      apiStyle,
+      endpointUrl,
+      modelName = null,
+      displayName,
+      numCtx = null,
+      requiresAuth,
+      extraConfig = {},
+      hasTools = false,
+      seesImages = false,
+      seesVideos = false,
+      supportsStructOutput = false,
+      isDefault = true,
+    } = params;
+
+    try {
+      const rows =
+        serverId !== null
+          ? await sql`
+              INSERT INTO custom_endpoints (
+                server_id, user_id, label, capability, api_style,
+                endpoint_url, model_name, display_name, num_ctx, requires_auth,
+                extra_config, has_tools, sees_images, sees_videos,
+                supports_structoutput, is_default
+              ) VALUES (
+                ${serverId}, NULL, ${label}, ${capability}, ${apiStyle},
+                ${endpointUrl}, ${modelName}, ${displayName}, ${numCtx}, ${requiresAuth},
+                ${JSON.stringify(extraConfig)}::jsonb, ${hasTools}, ${seesImages}, ${seesVideos},
+                ${supportsStructOutput}, ${isDefault}
+              )
+              ON CONFLICT (server_id, label, capability) WHERE user_id IS NULL
+              DO UPDATE SET
+                api_style = EXCLUDED.api_style,
+                endpoint_url = EXCLUDED.endpoint_url,
+                model_name = EXCLUDED.model_name,
+                display_name = EXCLUDED.display_name,
+                num_ctx = EXCLUDED.num_ctx,
+                requires_auth = EXCLUDED.requires_auth,
+                extra_config = EXCLUDED.extra_config,
+                has_tools = EXCLUDED.has_tools,
+                sees_images = EXCLUDED.sees_images,
+                sees_videos = EXCLUDED.sees_videos,
+                supports_structoutput = EXCLUDED.supports_structoutput,
+                is_default = EXCLUDED.is_default,
+                updated_at = CURRENT_TIMESTAMP
+              RETURNING *
+            `
+          : userId !== null
+            ? await sql`
+                INSERT INTO custom_endpoints (
+                  server_id, user_id, label, capability, api_style,
+                  endpoint_url, model_name, display_name, num_ctx, requires_auth,
+                  extra_config, has_tools, sees_images, sees_videos,
+                  supports_structoutput, is_default
+                ) VALUES (
+                  NULL, ${userId}, ${label}, ${capability}, ${apiStyle},
+                  ${endpointUrl}, ${modelName}, ${displayName}, ${numCtx}, ${requiresAuth},
+                  ${JSON.stringify(extraConfig)}::jsonb, ${hasTools}, ${seesImages}, ${seesVideos},
+                  ${supportsStructOutput}, ${isDefault}
+                )
+                ON CONFLICT (user_id, label, capability) WHERE server_id IS NULL
+                DO UPDATE SET
+                  api_style = EXCLUDED.api_style,
+                  endpoint_url = EXCLUDED.endpoint_url,
+                  model_name = EXCLUDED.model_name,
+                  display_name = EXCLUDED.display_name,
+                  num_ctx = EXCLUDED.num_ctx,
+                  requires_auth = EXCLUDED.requires_auth,
+                  extra_config = EXCLUDED.extra_config,
+                  has_tools = EXCLUDED.has_tools,
+                  sees_images = EXCLUDED.sees_images,
+                  sees_videos = EXCLUDED.sees_videos,
+                  supports_structoutput = EXCLUDED.supports_structoutput,
+                  is_default = EXCLUDED.is_default,
+                  updated_at = CURRENT_TIMESTAMP
+                RETURNING *
+              `
+            : [];
+
+      if (!rows.length) return null;
+
+      const parsed = customEndpointSchema.safeParse(rows[0]);
+      if (!parsed.success) {
+        log.warn(`Failed to validate custom endpoint ${label}/${capability}: ${parsed.error.message}`);
+        return null;
+      }
+
+      if (serverId !== null && options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
+      return parsed.data;
+    } catch (error) {
+      const owner = serverId !== null ? `server ${serverId}` : `user ${userId}`;
+      log.error(`Error upserting custom endpoint ${label}/${capability} for ${owner}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Deletes a custom endpoint for a server or user.
+   *
+   * @param params  - Endpoint lookup parameters
+   * @param options - Optional cache invalidation options
+   */
+  async deleteCustomEndpoint(
+    params: {
+      serverId?: number | null;
+      userId?: number | null;
+      label: string;
+      capability: CustomEndpointCapability;
+    },
+    options: ChannelLlmCacheOptions = {},
+  ): Promise<boolean> {
+    const { serverId = null, userId = null, label, capability } = params;
+
+    try {
+      const result =
+        serverId !== null
+          ? await sql`
+              DELETE FROM custom_endpoints
+              WHERE server_id = ${serverId}
+                AND user_id IS NULL
+                AND label = ${label}
+                AND capability = ${capability}
+            `
+          : await sql`
+              DELETE FROM custom_endpoints
+              WHERE user_id = ${userId}
+                AND server_id IS NULL
+                AND label = ${label}
+                AND capability = ${capability}
+            `;
+
+      const ok = result.count > 0;
+      if (ok && serverId !== null) {
+        const { invalidateAllChannelLlmCacheForServer, invalidateChannelLlmCache } = await import(
+          "@/utils/cache/channelLlmCacheStore"
+        );
+        if (options.channelDiscId) {
+          invalidateChannelLlmCache(serverId, options.channelDiscId);
+        } else {
+          invalidateAllChannelLlmCacheForServer(serverId);
+        }
+        if (options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
+      }
+      return ok;
+    } catch (error) {
+      const owner = serverId !== null ? `server ${serverId}` : `user ${userId}`;
+      log.error(`Error deleting custom endpoint ${label}/${capability} for ${owner}:`, error);
+      return false;
+    }
+  }
+
+  async setActiveCustomEndpoint(params: {
+    serverId: number;
+    capability: "speech" | "transcription";
+    customEndpointId: number;
+  }): Promise<boolean> {
+    try {
+      const [selectedEndpoint] = await sql<[{ custom_endpoint_id: number }]>`
+        SELECT custom_endpoint_id
+        FROM custom_endpoints
+        WHERE custom_endpoint_id = ${params.customEndpointId}
+          AND server_id = ${params.serverId}
+          AND user_id IS NULL
+          AND capability = ${params.capability}
+        LIMIT 1
+      `;
+
+      if (!selectedEndpoint) {
+        return false;
+      }
+
+      await sql`
+        UPDATE custom_endpoints
+        SET is_default = false,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE server_id = ${params.serverId}
+          AND user_id IS NULL
+          AND capability = ${params.capability}
+      `;
+
+      const result = await sql`
+        UPDATE custom_endpoints
+        SET is_default = true,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE custom_endpoint_id = ${params.customEndpointId}
+          AND server_id = ${params.serverId}
+          AND user_id IS NULL
+          AND capability = ${params.capability}
+      `;
+
+      return result.count > 0;
+    } catch (error) {
+      log.error(`Error setting active custom endpoint ${params.customEndpointId}:`, error);
+      return false;
+    }
+  }
+
+  // ── OpenRouter model registration writes ───────────────────────────────────
+
+  /**
+   * Upserts an OpenRouter LLM model registration.
+   *
+   * @param params - {serverId?, userId?, llmId}
+   */
+  async upsertOpenRouterModelRegistration(params: {
+    serverId?: number | null;
+    userId?: number | null;
+    llmId: number;
+  }): Promise<OpenRouterModelRegistrationRow | null> {
+    const { serverId = null, userId = null, llmId } = params;
+
+    try {
+      const rows =
+        serverId !== null
+          ? await sql`
+              INSERT INTO openrouter_model_registrations (server_id, user_id, llm_id)
+              VALUES (${serverId}, NULL, ${llmId})
+              ON CONFLICT (server_id, llm_id) WHERE user_id IS NULL
+              DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+              RETURNING *
+            `
+          : await sql`
+              INSERT INTO openrouter_model_registrations (server_id, user_id, llm_id)
+              VALUES (NULL, ${userId}, ${llmId})
+              ON CONFLICT (user_id, llm_id) WHERE server_id IS NULL
+              DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+              RETURNING *
+            `;
+
+      if (!rows.length) return null;
+
+      const parsed = openRouterModelRegistrationSchema.safeParse(rows[0]);
+      if (!parsed.success) {
+        log.warn(`Failed to validate OpenRouter model registration for llm_id ${llmId}: ${parsed.error.message}`);
+        return null;
+      }
+      return parsed.data;
+    } catch (error) {
+      const owner = serverId !== null ? `server ${serverId}` : `user ${userId}`;
+      log.error(`Error upserting OpenRouter model registration for llm_id ${llmId} on ${owner}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Deletes an OpenRouter LLM model registration.
+   *
+   * @param params - {serverId?, userId?, llmId}
+   */
+  async deleteOpenRouterModelRegistration(params: {
+    serverId?: number | null;
+    userId?: number | null;
+    llmId: number;
+  }): Promise<boolean> {
+    const { serverId = null, userId = null, llmId } = params;
+
+    try {
+      const result =
+        serverId !== null
+          ? await sql`
+              DELETE FROM openrouter_model_registrations
+              WHERE server_id = ${serverId} AND user_id IS NULL AND llm_id = ${llmId}
+            `
+          : await sql`
+              DELETE FROM openrouter_model_registrations
+              WHERE user_id = ${userId} AND server_id IS NULL AND llm_id = ${llmId}
+            `;
+      return result.count > 0;
+    } catch (error) {
+      const owner = serverId !== null ? `server ${serverId}` : `user ${userId}`;
+      log.error(`Error deleting OpenRouter model registration for llm_id ${llmId} on ${owner}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Upserts an OpenRouter embedding model registration.
+   *
+   * @param params - {serverId?, userId?, embeddingModelId}
+   */
+  async upsertOpenRouterEmbeddingModelRegistration(params: {
+    serverId?: number | null;
+    userId?: number | null;
+    embeddingModelId: number;
+  }): Promise<OpenRouterEmbeddingModelRegistrationRow | null> {
+    const { serverId = null, userId = null, embeddingModelId } = params;
+
+    try {
+      const rows =
+        serverId !== null
+          ? await sql`
+              INSERT INTO openrouter_embedding_model_registrations (server_id, user_id, embedding_model_id)
+              VALUES (${serverId}, NULL, ${embeddingModelId})
+              ON CONFLICT (server_id, embedding_model_id) WHERE user_id IS NULL
+              DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+              RETURNING *
+            `
+          : await sql`
+              INSERT INTO openrouter_embedding_model_registrations (server_id, user_id, embedding_model_id)
+              VALUES (NULL, ${userId}, ${embeddingModelId})
+              ON CONFLICT (user_id, embedding_model_id) WHERE server_id IS NULL
+              DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+              RETURNING *
+            `;
+
+      if (!rows.length) return null;
+
+      const parsed = openRouterEmbeddingModelRegistrationSchema.safeParse(rows[0]);
+      if (!parsed.success) {
+        log.warn(
+          `Failed to validate OpenRouter embedding model registration for embedding_model_id ${embeddingModelId}: ${parsed.error.message}`,
+        );
+        return null;
+      }
+      return parsed.data;
+    } catch (error) {
+      const owner = serverId !== null ? `server ${serverId}` : `user ${userId}`;
+      log.error(
+        `Error upserting OpenRouter embedding model registration for embedding_model_id ${embeddingModelId} on ${owner}:`,
+        error,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Deletes an OpenRouter embedding model registration.
+   *
+   * @param params - {serverId?, userId?, embeddingModelId}
+   */
+  async deleteOpenRouterEmbeddingModelRegistration(params: {
+    serverId?: number | null;
+    userId?: number | null;
+    embeddingModelId: number;
+  }): Promise<boolean> {
+    const { serverId = null, userId = null, embeddingModelId } = params;
+
+    try {
+      const result =
+        serverId !== null
+          ? await sql`
+              DELETE FROM openrouter_embedding_model_registrations
+              WHERE server_id = ${serverId} AND user_id IS NULL AND embedding_model_id = ${embeddingModelId}
+            `
+          : await sql`
+              DELETE FROM openrouter_embedding_model_registrations
+              WHERE user_id = ${userId} AND server_id IS NULL AND embedding_model_id = ${embeddingModelId}
+            `;
+      return result.count > 0;
+    } catch (error) {
+      const owner = serverId !== null ? `server ${serverId}` : `user ${userId}`;
+      log.error(
+        `Error deleting OpenRouter embedding model registration for embedding_model_id ${embeddingModelId} on ${owner}:`,
+        error,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Upserts an OpenRouter image model registration.
+   *
+   * @param params - {serverId?, userId?, diffusionModelId}
+   */
+  async upsertOpenRouterImageModelRegistration(params: {
+    serverId?: number | null;
+    userId?: number | null;
+    diffusionModelId: number;
+  }): Promise<OpenRouterImageModelRegistrationRow | null> {
+    const { serverId = null, userId = null, diffusionModelId } = params;
+
+    try {
+      const rows =
+        serverId !== null
+          ? await sql`
+              INSERT INTO openrouter_image_model_registrations (server_id, user_id, diffusion_model_id)
+              VALUES (${serverId}, NULL, ${diffusionModelId})
+              ON CONFLICT (server_id, diffusion_model_id) WHERE user_id IS NULL
+              DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+              RETURNING *
+            `
+          : await sql`
+              INSERT INTO openrouter_image_model_registrations (server_id, user_id, diffusion_model_id)
+              VALUES (NULL, ${userId}, ${diffusionModelId})
+              ON CONFLICT (user_id, diffusion_model_id) WHERE server_id IS NULL
+              DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+              RETURNING *
+            `;
+
+      if (!rows.length) return null;
+
+      const parsed = openRouterImageModelRegistrationSchema.safeParse(rows[0]);
+      if (!parsed.success) {
+        log.warn(
+          `Failed to validate OpenRouter image model registration for diffusion_model_id ${diffusionModelId}: ${parsed.error.message}`,
+        );
+        return null;
+      }
+      return parsed.data;
+    } catch (error) {
+      const owner = serverId !== null ? `server ${serverId}` : `user ${userId}`;
+      log.error(
+        `Error upserting OpenRouter image model registration for diffusion_model_id ${diffusionModelId} on ${owner}:`,
+        error,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Deletes an OpenRouter image model registration.
+   *
+   * @param params - {serverId?, userId?, diffusionModelId}
+   */
+  async deleteOpenRouterImageModelRegistration(params: {
+    serverId?: number | null;
+    userId?: number | null;
+    diffusionModelId: number;
+  }): Promise<boolean> {
+    const { serverId = null, userId = null, diffusionModelId } = params;
+
+    try {
+      const result =
+        serverId !== null
+          ? await sql`
+              DELETE FROM openrouter_image_model_registrations
+              WHERE server_id = ${serverId} AND user_id IS NULL AND diffusion_model_id = ${diffusionModelId}
+            `
+          : await sql`
+              DELETE FROM openrouter_image_model_registrations
+              WHERE user_id = ${userId} AND server_id IS NULL AND diffusion_model_id = ${diffusionModelId}
+            `;
+      return result.count > 0;
+    } catch (error) {
+      const owner = serverId !== null ? `server ${serverId}` : `user ${userId}`;
+      log.error(
+        `Error deleting OpenRouter image model registration for diffusion_model_id ${diffusionModelId} on ${owner}:`,
+        error,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Upserts an OpenRouter video model registration.
+   *
+   * @param params - {serverId?, userId?, videoModelId}
+   */
+  async upsertOpenRouterVideoModelRegistration(params: {
+    serverId?: number | null;
+    userId?: number | null;
+    videoModelId: number;
+  }): Promise<OpenRouterVideoModelRegistrationRow | null> {
+    const { serverId = null, userId = null, videoModelId } = params;
+
+    try {
+      const rows =
+        serverId !== null
+          ? await sql`
+              INSERT INTO openrouter_video_model_registrations (server_id, user_id, video_model_id)
+              VALUES (${serverId}, NULL, ${videoModelId})
+              ON CONFLICT (server_id, video_model_id) WHERE user_id IS NULL
+              DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+              RETURNING *
+            `
+          : await sql`
+              INSERT INTO openrouter_video_model_registrations (server_id, user_id, video_model_id)
+              VALUES (NULL, ${userId}, ${videoModelId})
+              ON CONFLICT (user_id, video_model_id) WHERE server_id IS NULL
+              DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+              RETURNING *
+            `;
+
+      if (!rows.length) return null;
+
+      const parsed = openRouterVideoModelRegistrationSchema.safeParse(rows[0]);
+      if (!parsed.success) {
+        log.warn(
+          `Failed to validate OpenRouter video model registration for video_model_id ${videoModelId}: ${parsed.error.message}`,
+        );
+        return null;
+      }
+      return parsed.data;
+    } catch (error) {
+      const owner = serverId !== null ? `server ${serverId}` : `user ${userId}`;
+      log.error(
+        `Error upserting OpenRouter video model registration for video_model_id ${videoModelId} on ${owner}:`,
+        error,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Deletes an OpenRouter video model registration.
+   *
+   * @param params - {serverId?, userId?, videoModelId}
+   */
+  async deleteOpenRouterVideoModelRegistration(params: {
+    serverId?: number | null;
+    userId?: number | null;
+    videoModelId: number;
+  }): Promise<boolean> {
+    const { serverId = null, userId = null, videoModelId } = params;
+
+    try {
+      const result =
+        serverId !== null
+          ? await sql`
+              DELETE FROM openrouter_video_model_registrations
+              WHERE server_id = ${serverId} AND user_id IS NULL AND video_model_id = ${videoModelId}
+            `
+          : await sql`
+              DELETE FROM openrouter_video_model_registrations
+              WHERE user_id = ${userId} AND server_id IS NULL AND video_model_id = ${videoModelId}
+            `;
+      return result.count > 0;
+    } catch (error) {
+      const owner = serverId !== null ? `server ${serverId}` : `user ${userId}`;
+      log.error(
+        `Error deleting OpenRouter video model registration for video_model_id ${videoModelId} on ${owner}:`,
+        error,
+      );
+      return false;
+    }
+  }
+
+  // ── IRepository contract ───────────────────────────────────────────────────
+
+  /**
+   * Exports server-scoped provider configuration.
+   * Stub — full composition with the unified export pipeline lands in Phase 6 (#16.7).
+   *
+   * @param ownerId - Internal server DB ID
+   */
+  async toExportShape(ownerId: string | number): Promise<LlmProviderExportShape | null> {
+    const serverId = Number(ownerId);
+    if (Number.isNaN(serverId)) return null;
+    const savedProviderConfigs = await this.loadSavedProviderConfigs(serverId);
+    return { savedProviderConfigs };
+  }
+
+  /**
+   * Restores server-scoped provider configuration from an export.
+   * Stub — full implementation lands in Phase 6 (#16.7).
+   */
+  async fromExportShape(_ownerId: string | number, _data: LlmProviderExportShape): Promise<boolean> {
+    return false;
+  }
+}
+
+/** Singleton instance — import this in callers. */
+export const llmProviderRepo = new LlmProviderRepository();

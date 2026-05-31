@@ -42,7 +42,7 @@ import type {
   SupportsStructuredOutput,
 } from "@/types/provider/featureInterfaces";
 import { getCachedDefaultLLM, isLLMCacheReady } from "@/utils/cache/llmCache";
-import { loadAvailableModelsForProvider, loadDefaultModelForProvider } from "@/utils/db/dbRead";
+import { llmModelRepo } from "@/utils/db/repositories";
 import { callGoogleStructuredJSON } from "@/providers/google/googleStructuredOutput";
 import { generateConversationSummaryGoogle, generateRoleplaySummaryGoogle } from "@/providers/google/compactGenerator";
 import { generatePresetFromPrompt } from "@/providers/google/presetGenerator";
@@ -66,7 +66,7 @@ async function getDefaultVertexexpressModel(): Promise<string> {
   }
 
   try {
-    const dbDefault = await loadDefaultModelForProvider(providerName);
+    const dbDefault = await llmModelRepo.loadDefaultModel(providerName);
     if (dbDefault) {
       log.info(`Using database default ${providerName} model: ${dbDefault.llm_codename}`);
       return dbDefault.llm_codename;
@@ -78,7 +78,7 @@ async function getDefaultVertexexpressModel(): Promise<string> {
   }
 
   try {
-    const availableModels = await loadAvailableModelsForProvider(providerName);
+    const availableModels = await llmModelRepo.loadAvailableModelsForProvider(providerName);
     if (availableModels && availableModels.length > 0) {
       const firstModel = availableModels[0].llm_codename;
       log.warn(`No default model found, using first available ${providerName} model: ${firstModel}`);
@@ -221,30 +221,23 @@ export class VertexexpressProvider
       model: request.model,
     });
 
-    const messagePayload: {
-      message: string;
-      media?: Array<{ mimeType: string; data: string }>;
-      config: {
-        responseModalities: string[];
-        imageConfig: {
-          aspectRatio: string;
-        };
-      };
-    } = {
-      message: request.prompt,
+    // Build parts: reference images (as inlineData) followed by the text prompt.
+    // SendMessageParameters.message is PartListUnion — inline images must be
+    // passed as inlineData parts, not via a non-existent "media" field.
+    const messageParts: Array<{ inlineData: { mimeType: string; data: string } } | string> = [
+      ...(request.referenceImages ?? []).map((img) => ({ inlineData: { mimeType: img.mimeType, data: img.data } })),
+      request.prompt,
+    ];
+
+    const response = await chat.sendMessage({
+      message: messageParts,
       config: {
         responseModalities: ["IMAGE"],
         imageConfig: {
           aspectRatio: request.aspectRatio,
         },
       },
-    };
-
-    if (request.referenceImages && request.referenceImages.length > 0) {
-      messagePayload.media = request.referenceImages;
-    }
-
-    const response = await chat.sendMessage(messagePayload);
+    });
     if (response?.candidates && response.candidates.length > 0 && response.candidates[0]?.content?.parts) {
       for (const part of response.candidates[0].content.parts) {
         if (part.inlineData?.data) {
@@ -272,8 +265,7 @@ export class VertexexpressProvider
         activePersonaHasElevenlabsVoice: Boolean(
           tomoriState.speech_voice_sample_id ||
             tomoriState.speech_voice_design_prompt?.trim() ||
-            tomoriState.speech_voice_id?.trim() ||
-            tomoriState.elevenlabs_voice_id?.trim(),
+            tomoriState.speech_voice_id?.trim(),
         ),
         activePersonaVoiceDesignPrompt: tomoriState.speech_voice_design_prompt?.trim() || null,
         activePersonaVoiceName: tomoriState.speech_voice_name,
@@ -295,7 +287,6 @@ export class VertexexpressProvider
           manage_message_enabled: tomoriState.config.manage_message_enabled,
           imagegen_enabled: tomoriState.config.imagegen_enabled,
           videogen_enabled: tomoriState.config.videogen_enabled,
-          nai_exclusive_imggen: tomoriState.config.nai_exclusive_imggen,
           voice_message_enabled: tomoriState.config.voice_message_enabled,
           thread_creation_enabled: tomoriState.config.thread_creation_enabled,
         },
@@ -333,13 +324,12 @@ export class VertexexpressProvider
         );
       }
 
-      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } =
-        applyDeliberateToolAllowlist({
-          providerLabel: "Vertex AI Express provider",
-          builtInTools: finalBuiltInTools,
-          mcpFunctionNames: finalMcpFunctionNames,
-          allowedToolNames: streamingContext?.deliberateToolAllowedNames,
-        }));
+      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } = applyDeliberateToolAllowlist({
+        providerLabel: "Vertex AI Express provider",
+        builtInTools: finalBuiltInTools,
+        mcpFunctionNames: finalMcpFunctionNames,
+        allowedToolNames: streamingContext?.deliberateToolAllowedNames,
+      }));
 
       const adapter = getVertexexpressToolAdapter();
       const allToolsConfig = await adapter.getAllToolsInProviderFormat(

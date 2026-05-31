@@ -3,9 +3,9 @@
  * Provides in-memory caching for LLM model configurations to eliminate database queries on every chat message
  */
 
-import { sql } from "@/utils/db/client";
 import type { LlmRow } from "../../types/db/schema";
 import { log } from "../misc/logger";
+import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
 
 /**
  * In-memory cache for LLM configurations
@@ -24,30 +24,8 @@ export async function initializeLLMCache(): Promise<void> {
     // 1. Clear existing cache
     llmCache.clear();
 
-    // 2. Load all LLM configurations from database
-    const llms = await sql`
-			SELECT
-				llm_id,
-				llm_provider,
-				llm_codename,
-				is_smartest,
-				is_default,
-				is_reasoning,
-				is_deprecated,
-				is_free,
-				has_tools,
-				sees_images,
-				sees_videos,
-				sees_youtube,
-				is_uncensored,
-				supports_structoutput,
-				llm_description,
-				ja_description,
-				created_at,
-				updated_at
-			FROM llms
-			ORDER BY llm_provider, llm_codename
-		`;
+    // 2. Load all LLM configurations from database via repository
+    const llms = await llmModelRepo.loadAvailableLlms(true);
 
     if (!llms || llms.length === 0) {
       log.warn("No LLM configurations found in database");
@@ -56,7 +34,9 @@ export async function initializeLLMCache(): Promise<void> {
 
     // 3. Cache each LLM configuration
     for (const llm of llms) {
-      llmCache.set(llm.llm_id, llm as LlmRow);
+      if (llm.llm_id !== undefined) {
+        llmCache.set(llm.llm_id, llm as LlmRow);
+      }
     }
 
     // 4. Log statistics

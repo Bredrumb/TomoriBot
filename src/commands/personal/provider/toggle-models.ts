@@ -1,10 +1,11 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { ErrorContext, PersonalProviderCapability, UserRow } from "@/types/db/schema";
-import { loadUserSavedProviderConfigs } from "@/utils/db/dbRead";
+import { llmProviderRepo } from "@/utils/db/repositories";
 import {
   getActivePersonalProviderForCapability,
   getStoredPersonalProviderForCapability,
@@ -44,7 +45,7 @@ export async function execute(
   }
 
   try {
-    const rows = await loadUserSavedProviderConfigs(userData.user_id);
+    const rows = await llmProviderRepo.loadUserSavedProviderConfigs(userData.user_id);
     if (rows.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.personal.provider.no_saved_title",
@@ -119,7 +120,7 @@ export async function execute(
       await setPersonalCapabilityEnabled(userData.user_id, capability, enabled);
     }
 
-    const refreshedRows = await loadUserSavedProviderConfigs(userData.user_id);
+    const refreshedRows = await llmProviderRepo.loadUserSavedProviderConfigs(userData.user_id);
     const activeSummary = CAPABILITIES.map((capability) => {
       const row = getActivePersonalProviderForCapability(refreshedRows, capability);
       return row

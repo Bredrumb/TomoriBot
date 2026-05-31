@@ -11,7 +11,7 @@ import getAllFiles from "../../utils/misc/ioHelper";
 import { localizer } from "../../utils/text/localizer";
 import type { SlashCommandSubcommandBuilder } from "discord.js";
 import { ToolRegistry } from "../toolRegistry";
-import { getBraveApiKeyStatus } from "../../utils/db/dbRead";
+import { toolRepository } from "@/utils/db/repositories";
 import { getLlmDisplayName } from "@/utils/provider/modelDisplay";
 import { getCachedActivePreset } from "@/utils/cache/stPresetCache";
 
@@ -174,10 +174,12 @@ export class ReviewCapabilitiesTool extends BaseTool {
       if (hasTools) {
         capabilitiesContent += "## Search & Information\n\n";
         capabilitiesContent += "You CAN search and retrieve information:\n";
-        capabilitiesContent += "- **Web search** (brave_web_search for current information)\n";
-        capabilitiesContent += "- **Image search** (brave_image_search for finding images)\n";
-        capabilitiesContent += "- **Video search** (brave_video_search for finding videos)\n";
-        capabilitiesContent += "- **News search** (brave_news_search for latest news)\n";
+        capabilitiesContent += "- **Web search** (web_search for current information)\n";
+        capabilitiesContent += "- **Image search** (web_search with image category for finding images)\n";
+        capabilitiesContent += "- **Video search** (web_search with video category for finding videos)\n";
+        capabilitiesContent += "- **News search** (web_search with news category for latest news)\n";
+        capabilitiesContent +=
+          "- **Specialty search** (web_search with SearXNG-only science, IT, files, or music categories when available)\n";
         capabilitiesContent += "- **URL fetching** (fetch for retrieving webpage content)\n\n";
       }
 
@@ -238,12 +240,10 @@ export class ReviewCapabilitiesTool extends BaseTool {
       const hasVoiceAssignment = Boolean(
         context.tomoriState.speech_voice_sample_id ||
           context.tomoriState.speech_voice_design_prompt?.trim() ||
-          context.tomoriState.speech_voice_id?.trim() ||
-          context.tomoriState.elevenlabs_voice_id?.trim(),
+          context.tomoriState.speech_voice_id?.trim(),
       );
       const voiceName =
         context.tomoriState.speech_voice_name ||
-        context.tomoriState.elevenlabs_voice_name ||
         (context.tomoriState.speech_voice_design_prompt?.trim() ? "VoiceDesign prompt" : null) ||
         (context.tomoriState.speech_voice_sample_id ? "Local voice sample" : "Unknown");
       const voiceSource =
@@ -266,7 +266,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
           "- Users can also ask you to speak or say something out loud (triggers the voice message tool)\n\n";
       } else if (!voiceEnabled) {
         capabilitiesContent +=
-          "Voice messages are **disabled** by server configuration. An admin can re-enable with `/config tools manage`.\n\n";
+          "Voice messages are **disabled** by server configuration. An admin can re-enable with `/capabilities manage`.\n\n";
       } else {
         capabilitiesContent +=
           "Voice messages are not configured for this persona. An admin can assign a voice with `/config speech voice-assign`.\n\n";
@@ -332,7 +332,8 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent += "## Function Calling\n\n";
         capabilitiesContent += "You CAN call functions/tools to perform actions:\n";
         capabilitiesContent += "- **review_capabilities** (check your own capabilities - this function!)\n";
-        capabilitiesContent += "- **brave_web_search/image_search/video_search/news_search** (search the web)\n";
+        capabilitiesContent +=
+          "- **web_search** (search text, image, video, news, and available specialty categories)\n";
         capabilitiesContent += "- **fetch** (retrieve content from URLs)\n";
         const imageGenNote = config.imagegen_enabled
           ? hasStandardImageSlot
@@ -364,8 +365,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         const toolHasVoiceAssignment = Boolean(
           context.tomoriState.speech_voice_sample_id ||
             context.tomoriState.speech_voice_design_prompt?.trim() ||
-            context.tomoriState.speech_voice_id?.trim() ||
-            context.tomoriState.elevenlabs_voice_id?.trim(),
+            context.tomoriState.speech_voice_id?.trim(),
         );
         const voiceNote =
           toolHasVoiceAssignment && voiceEnabled
@@ -417,7 +417,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       capabilitiesContent += "## Why Some Features May Be Unavailable\n\n";
 
       // Check API key status for detailed explanations
-      const braveApiKeySet = await getBraveApiKeyStatus(context.tomoriState.server_id);
+      const braveApiKeySet = await toolRepository.getBraveApiKeyStatus(context.tomoriState.server_id);
 
       const unavailableReasons: string[] = [];
 
@@ -450,17 +450,17 @@ export class ReviewCapabilitiesTool extends BaseTool {
       if (!config.imagegen_enabled)
         disabledFeatures.push({
           feature: "image generation",
-          command: "/config tools manage (permission: imagegen)",
+          command: "/capabilities manage (permission: imagegen)",
         });
       if (!config.videogen_enabled)
         disabledFeatures.push({
           feature: "video generation",
-          command: "/config tools manage (permission: videogen)",
+          command: "/capabilities manage (permission: videogen)",
         });
       if (!config.thread_creation_enabled)
         disabledFeatures.push({
           feature: "thread creation",
-          command: "/config tools manage (permission: threadcreation)",
+          command: "/capabilities manage (permission: threadcreation)",
         });
       if (!config.sticker_usage_enabled)
         disabledFeatures.push({
@@ -560,7 +560,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       const displayModelName = getLlmDisplayName(llm, config.custom_model_name);
 
       // 2. Check API key status
-      const braveApiKeySet = await getBraveApiKeyStatus(serverId);
+      const braveApiKeySet = await toolRepository.getBraveApiKeyStatus(serverId);
       const mainApiKeySet = !!config.api_key;
 
       // 3. Build settings report
@@ -669,7 +669,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         settingsContent += "Image generation is enabled but no diffusion model is set.\n";
         settingsContent += "- Configure with `/config model image` to activate\n\n";
       } else {
-        settingsContent += "Image generation is **disabled**. Enable with `/config tools manage`.\n\n";
+        settingsContent += "Image generation is **disabled**. Enable with `/capabilities manage`.\n\n";
       }
 
       // 6b-1b. Video Generation Configuration
@@ -682,7 +682,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         settingsContent += "Video generation is enabled but no video model is set.\n";
         settingsContent += "- Configure with `/config model video` to activate\n\n";
       } else {
-        settingsContent += "Video generation is **disabled**. Enable with `/config tools manage`.\n\n";
+        settingsContent += "Video generation is **disabled**. Enable with `/capabilities manage`.\n\n";
       }
 
       // 6b-2. Voice System Configuration
@@ -691,12 +691,10 @@ export class ReviewCapabilitiesTool extends BaseTool {
       const hasPersonaVoice = Boolean(
         context.tomoriState.speech_voice_sample_id ||
           context.tomoriState.speech_voice_design_prompt?.trim() ||
-          context.tomoriState.speech_voice_id?.trim() ||
-          context.tomoriState.elevenlabs_voice_id?.trim(),
+          context.tomoriState.speech_voice_id?.trim(),
       );
       const personaVoiceName =
         context.tomoriState.speech_voice_name ||
-        context.tomoriState.elevenlabs_voice_name ||
         (context.tomoriState.speech_voice_design_prompt?.trim() ? "VoiceDesign prompt" : null) ||
         (context.tomoriState.speech_voice_sample_id ? "Local voice sample" : "Unknown");
       if (voiceEnabledSettings && hasPersonaVoice) {
@@ -709,7 +707,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         settingsContent += `- Assign a voice with \`/config speech voice-assign\`\n\n`;
       } else {
         settingsContent += `Voice messages are **disabled** by server configuration.\n`;
-        settingsContent += `- Re-enable with \`/config tools manage\`\n\n`;
+        settingsContent += `- Re-enable with \`/capabilities manage\`\n\n`;
       }
 
       // 6b-3. SillyTavern Preset Configuration
@@ -774,8 +772,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
           activePersonaHasElevenlabsVoice: Boolean(
             context.tomoriState.speech_voice_sample_id ||
               context.tomoriState.speech_voice_design_prompt?.trim() ||
-              context.tomoriState.speech_voice_id?.trim() ||
-              context.tomoriState.elevenlabs_voice_id?.trim(),
+              context.tomoriState.speech_voice_id?.trim(),
           ),
           activePersonaVoiceDesignPrompt: context.tomoriState.speech_voice_design_prompt?.trim() || null,
           activePersonaVoiceName: context.tomoriState.speech_voice_name,
@@ -794,7 +791,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
             manage_message_enabled: config.manage_message_enabled,
             imagegen_enabled: config.imagegen_enabled,
             videogen_enabled: config.videogen_enabled,
-            nai_exclusive_imggen: config.nai_exclusive_imggen ?? false,
             voice_message_enabled: config.voice_message_enabled ?? true,
             thread_creation_enabled: config.thread_creation_enabled,
           },
@@ -1039,7 +1035,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       const commandsPath = path.join(process.cwd(), "src", "commands");
 
       // 2. Get all category directories
-      const categoryDirs = getAllFiles(commandsPath, true);
+      const categoryDirs = await getAllFiles(commandsPath, true);
 
       // 3. Build markdown documentation
       let commandsMarkdown = "# Your Slash Commands\n\n";
@@ -1060,7 +1056,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         commandsMarkdown += `${categoryDescription}\n\n`;
 
         // 6. Get direct command files (immediate children - direct subcommands)
-        const directCommandFiles = getAllFiles(categoryDir).filter((file) => file.endsWith(".ts"));
+        const directCommandFiles = (await getAllFiles(categoryDir)).filter((file) => file.endsWith(".ts"));
 
         // 7. Process direct subcommands (no subcommand group)
         for (const commandFile of directCommandFiles) {
@@ -1094,14 +1090,14 @@ export class ReviewCapabilitiesTool extends BaseTool {
         }
 
         // 13. Get subdirectories (potential subcommand groups)
-        const subcommandGroups = getAllFiles(categoryDir, true);
+        const subcommandGroups = await getAllFiles(categoryDir, true);
 
         // 14. Process subcommand groups
         for (const groupDir of subcommandGroups) {
           const groupName = path.basename(groupDir);
 
           // 15. Get command files in this subcommand group
-          const groupCommandFiles = getAllFiles(groupDir).filter((file) => file.endsWith(".ts"));
+          const groupCommandFiles = (await getAllFiles(groupDir)).filter((file) => file.endsWith(".ts"));
 
           // 16. Process each command file in the group
           for (const commandFile of groupCommandFiles) {

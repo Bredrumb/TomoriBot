@@ -9,9 +9,9 @@ import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult }
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { getKnownPersonaSpeakerNames, stripLeadingKnownSpeakerPrefixes } from "@/utils/discord/modelAuthoredText";
-import { resolveManagedWebhookForChannel } from "@/utils/discord/webhookManager";
+import { resolveManagedWebhookForChannel } from "@/utils/discord/webhook/fallback";
 import { log } from "@/utils/misc/logger";
-import { isMatrixBridgeWebhookUsername, stripBridgePrefix } from "@/utils/bridge";
+import { isMatrixBridgeWebhookUsername, stripBridgePrefix } from "@/utils/bridges";
 
 const DISCORD_ID_PATTERN = /^\d{17,20}$/;
 const MAX_FUZZY_DISTANCE = 1000n;
@@ -153,7 +153,7 @@ export class ManageMessageTool extends BaseTool {
 
     if (!DISCORD_ID_PATTERN.test(resolvedId)) {
       const errorMessage = MessageIdMap.isOpaqueKey(normalizedValue)
-        ? "That message reference could not be resolved from the current recent-message context."
+        ? "That message reference is not present in the current recent-message context. Call `reveal_message_metadata` first to expose `ref_N` handles for recent messages, then retry with a ref from that listing."
         : `The ${fieldName} value does not look like a valid message reference or Discord message ID.`;
 
       return {
@@ -270,7 +270,7 @@ export class ManageMessageTool extends BaseTool {
 
     const speakerNameSet = await getKnownPersonaSpeakerNames(context.guildId, [
       context.personaUsername,
-      context.tomoriState.tomori_nickname,
+      context.tomoriState.persona_nickname,
     ]);
     const personaNameSet = new Set([...speakerNameSet].map((speakerName) => speakerName.toLowerCase()));
     const fetchLimit = normalizeMessageFetchLimit(context.tomoriState.config.message_fetch_limit);

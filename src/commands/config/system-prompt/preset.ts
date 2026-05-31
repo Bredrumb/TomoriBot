@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Command: /config system-prompt preset
  * Allows users to apply a preset system prompt from pre-made options
  */
@@ -7,10 +7,10 @@ import type { ChatInputCommandInteraction, Client } from "discord.js";
 import { MessageFlags, SlashCommandSubcommandBuilder } from "discord.js";
 import type { UserRow, SystemPromptPresetRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
-import { sql } from "@/utils/db/client";
-import { loadSystemPromptPresets } from "@/utils/db/dbRead";
+import { configRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";
 
 // Modal configuration constants
@@ -71,7 +71,7 @@ export async function execute(
 
   try {
     // 4. Load available system prompt presets
-    const presets = await loadSystemPromptPresets();
+    const presets = await configRepository.loadSystemPromptPresets();
 
     // 5. Check if presets are available
     if (!presets || presets.length === 0) {
@@ -145,12 +145,10 @@ export async function execute(
       return;
     }
 
-    // 12. Update tomori_configs with the preset prompt text
-    await sql`
-			UPDATE tomori_configs
-			SET system_prompt = ${selectedPreset.preset_prompt_text}
-			WHERE server_id = ${tomoriState.server_id}
-		`;
+    // 12. Update database with the preset prompt text
+    await configRepository.updateChatConfig(tomoriState.server_id, {
+      system_prompt: selectedPreset.preset_prompt_text,
+    });
 
     // 13. Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(serverId);

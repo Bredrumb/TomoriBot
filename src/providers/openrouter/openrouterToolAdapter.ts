@@ -17,7 +17,6 @@ import type { TypedMCPToolResult } from "../../types/tool/mcpTypes";
 import { getMCPManager } from "../../utils/mcp/mcpManager";
 import { getMCPExecutor } from "../../utils/mcp/mcpExecutor";
 import { getGuildMcpManager } from "../../utils/mcp/guildMcpManager";
-import { isBraveSearchAvailable } from "../../tools/restAPIs/brave/braveSearchService";
 
 /**
  * OpenAI-compatible function declaration format (used by OpenRouter)
@@ -202,36 +201,11 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
     try {
       const allTools: Record<string, unknown>[] = [];
 
-      // Check if Brave Search is available for conditional tool selection
-      const hasBraveApiKey = await isBraveSearchAvailable(serverId);
-      log.info(
-        `Brave Search ${hasBraveApiKey ? "available" : "not available"} for server ${serverId || "global"} - implementing conditional search tool selection`,
-      );
-
-      // Brave search tool names for filtering
-      const braveSearchToolNames = [
-        "brave_web_search",
-        "brave_image_search",
-        "brave_video_search",
-        "brave_news_search",
-      ];
-
-      // Filter built-in tools based on Brave API key availability
-      let filteredBuiltInTools = builtInTools;
-      if (!hasBraveApiKey) {
-        // No Brave API key - exclude Brave search tools
-        filteredBuiltInTools = builtInTools.filter((tool) => !braveSearchToolNames.includes(tool.name));
-        const excludedCount = builtInTools.length - filteredBuiltInTools.length;
-        if (excludedCount > 0) {
-          log.info(`Excluded ${excludedCount} Brave search tools (no API key available)`);
-        }
-      }
-
-      // Convert filtered built-in tools
-      if (filteredBuiltInTools.length > 0) {
-        const builtInToolsFormatted = this.convertToolsArray(filteredBuiltInTools);
+      // Brave-key dance removed — unified web_search is gated centrally.
+      if (builtInTools.length > 0) {
+        const builtInToolsFormatted = this.convertToolsArray(builtInTools);
         allTools.push(...builtInToolsFormatted);
-        log.info(`Converted ${filteredBuiltInTools.length} built-in tools to OpenAI format`);
+        log.info(`Converted ${builtInTools.length} built-in tools to OpenAI format`);
       }
 
       // Add MCP tools if available (using pre-filtered list or legacy filtering)

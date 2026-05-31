@@ -5,10 +5,11 @@ import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import { PrivacyLevel } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, replySummaryEmbed } from "@/utils/discord/interactionHelper";
-import { getMemoryLimits } from "@/utils/db/memoryLimits";
+import { replyInfoEmbed, replySummaryEmbed } from "@/utils/discord/ui/embeds";
+import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { getAvailableToolsForContext } from "@/tools/toolRegistry";
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
+import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { buildContext } from "@/utils/text/contextBuilder";
 import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
@@ -32,6 +33,7 @@ import { AnthropicStreamAdapter } from "@/providers/anthropic/anthropicStreamAda
 import { buildOpenAICompatibleMessages } from "@/providers/openaiCompatible/openaiCompatibleMessageBuilder";
 import {
   getProviderDisplayName,
+  getStaticProviderInfo,
   normalizeProviderName,
   resolveProviderFeatureImplementation,
 } from "@/utils/provider/providerInfoRegistry";
@@ -92,6 +94,16 @@ const ZAICODING_OUTPUT_PRICE_PER_MILLION = parseFloatEnv(
   3.0,
   0,
 );
+const zaiPricingByProvider: Record<"zai" | "zaicoding", { input: number; output: number }> = {
+  zai: {
+    input: ZAI_GENERAL_INPUT_PRICE_PER_MILLION,
+    output: ZAI_GENERAL_OUTPUT_PRICE_PER_MILLION,
+  },
+  zaicoding: {
+    input: ZAICODING_INPUT_PRICE_PER_MILLION,
+    output: ZAICODING_OUTPUT_PRICE_PER_MILLION,
+  },
+};
 // Anthropic Claude model-tier pricing (USD per million tokens).
 // Tier is detected from the model codename: opus > sonnet > haiku.
 const ANTHROPIC_OPUS_INPUT_PRICE_PER_MILLION = parseFloatEnv(
@@ -144,6 +156,19 @@ const YOUTUBE_URL_PATTERNS = [
 ];
 
 type LiveProvider = "google" | "openrouter" | "deepseek" | "zai" | "zaicoding" | "anthropic";
+
+const LIVE_PROVIDER_IMPLEMENTATIONS = new Set<LiveProvider>([
+  "google",
+  "openrouter",
+  "deepseek",
+  "zai",
+  "zaicoding",
+  "anthropic",
+]);
+
+function isLiveProvider(value: string | null): value is LiveProvider {
+  return value !== null && LIVE_PROVIDER_IMPLEMENTATIONS.has(value as LiveProvider);
+}
 
 interface ZaiFamilyProviderConfig {
   model: string;
@@ -218,6 +243,43 @@ interface OpenRouterProbeUsage {
   totalTokens?: number;
   total_tokens?: number;
 }
+
+type ContextTruncator = (contextSegments: StructuredContextItem[], tomoriState: TomoriState) => StructuredContextItem[];
+
+const contextTruncators: Partial<Record<LiveProvider, ContextTruncator>> = {
+  openrouter: (contextSegments, tomoriState) => {
+    if (tomoriState.llm.llm_codename === "other-model" || !isOpenRouterCapabilityCacheReady()) {
+      return contextSegments;
+    }
+
+    const tokenLimits = getOpenRouterTokenLimits(tomoriState.llm.llm_codename);
+    const openrouterTruncationOutputCap = parseIntegerEnv(process.env.OPENROUTER_MAX_OUTPUT_TOKENS, 8192, 1);
+    if (!tokenLimits || tokenLimits.contextLength <= 0 || !tokenLimits.maxCompletionTokens) {
+      return contextSegments;
+    }
+
+    const truncationMaxCompletionTokens = Math.min(tokenLimits.maxCompletionTokens, openrouterTruncationOutputCap);
+    const { truncated, totalDropped } = truncateDialogueHistory(
+      contextSegments,
+      tokenLimits.contextLength,
+      truncationMaxCompletionTokens,
+    );
+    return totalDropped > 0 ? truncated : contextSegments;
+  },
+  google: (contextSegments, tomoriState) => {
+    const tokenLimits = getGeminiTokenLimits(tomoriState.llm.llm_codename);
+    if (!tokenLimits || tokenLimits.contextLength <= 0 || !tokenLimits.maxCompletionTokens) {
+      return contextSegments;
+    }
+
+    const { truncated, totalDropped } = truncateDialogueHistory(
+      contextSegments,
+      tokenLimits.contextLength,
+      tokenLimits.maxCompletionTokens,
+    );
+    return totalDropped > 0 ? truncated : contextSegments;
+  },
+};
 
 interface OpenRouterProbeResponse {
   id?: string;
@@ -308,7 +370,6 @@ function estimateToolSchemaTokens(): number {
         manage_message_enabled: true,
         imagegen_enabled: true,
         videogen_enabled: true,
-        nai_exclusive_imggen: false,
         voice_message_enabled: true,
         thread_creation_enabled: true,
       },
@@ -627,27 +688,11 @@ function formatPricePerMillion(value: number): string {
 function resolveProvider(providerName: string): LiveProvider | null {
   const normalizedProvider = normalizeProviderName(providerName);
   const implementation = resolveProviderFeatureImplementation(normalizedProvider, "liveTokenCounting");
-  if (normalizedProvider === "google" && implementation === "google") {
-    return "google";
-  }
-  if (normalizedProvider === "openrouter" && implementation === "openrouter") {
-    return "openrouter";
-  }
-  if (normalizedProvider === "deepseek" && implementation === "deepseek") {
-    return "deepseek";
-  }
-  if ((normalizedProvider === "zai" || normalizedProvider === "zaicoding") && implementation === "zai") {
-    return normalizedProvider;
-  }
-  if (normalizedProvider === "anthropic" && implementation === "anthropic") {
-    return "anthropic";
-  }
-  return null;
+  return isLiveProvider(implementation) ? implementation : null;
 }
 
 function providerHasNoUsageCosts(providerName: string): boolean {
-  const normalized = normalizeProviderName(providerName);
-  return normalized === "novelai" || normalized === "custom";
+  return getStaticProviderInfo(providerName)?.usageCostMode === "none";
 }
 
 function getTriggererName(interaction: ChatInputCommandInteraction): string {
@@ -682,8 +727,8 @@ async function buildRuntimeParityContext(
   const mainPersona = personas.find((persona) => !persona.is_alter) ?? tomoriState;
   const personaByNickname = new Map<string, TomoriState>();
   for (const persona of personas) {
-    if (!persona.tomori_nickname) continue;
-    const key = persona.tomori_nickname.toLowerCase();
+    if (!persona.persona_nickname) continue;
+    const key = persona.persona_nickname.toLowerCase();
     if (!personaByNickname.has(key)) {
       personaByNickname.set(key, persona);
     }
@@ -713,7 +758,7 @@ async function buildRuntimeParityContext(
     let personaName: string | null = null;
 
     if (message.author.id === client.user?.id) {
-      authorName = mainPersona.tomori_nickname ?? tomoriState.tomori_nickname ?? message.author.username;
+      authorName = mainPersona.persona_nickname ?? tomoriState.persona_nickname ?? message.author.username;
       authorType = "persona";
       personaName = authorName;
     } else if (message.webhookId) {
@@ -721,10 +766,10 @@ async function buildRuntimeParityContext(
       const matchedPersona = webhookName ? personaByNickname.get(webhookName.toLowerCase()) : undefined;
 
       if (matchedPersona) {
-        authorName = matchedPersona.tomori_nickname;
+        authorName = matchedPersona.persona_nickname;
         authorType = "persona";
-        personaName = matchedPersona.tomori_nickname;
-        effectiveAuthorId = `persona:${matchedPersona.tomori_id ?? matchedPersona.tomori_nickname}`;
+        personaName = matchedPersona.persona_nickname;
+        effectiveAuthorId = `persona:${matchedPersona.persona_id ?? matchedPersona.persona_nickname}`;
       } else if (webhookName) {
         authorName = webhookName;
       }
@@ -800,24 +845,27 @@ async function buildRuntimeParityContext(
     const mediaSourceMessageIds =
       hasLocalMedia && (imageAttachments.length > 0 || videoAttachments.length > 0) ? [message.id] : undefined;
 
+    // Merge consecutive same-author messages, mirroring the real context path
+    // (buildSimplifiedHistory): collapse only when both sides are pure text — if
+    // either side carries media, keep separate turns so per-message media IDs stay
+    // unambiguous.
     const previousMessage = simplifiedMessages[simplifiedMessages.length - 1];
+    const currentHasMedia =
+      imageAttachments.length > 0 || videoAttachments.length > 0 || (mediaSourceMessageIds?.length ?? 0) > 0;
+    const previousHasMedia =
+      !!previousMessage &&
+      (previousMessage.imageAttachments.length > 0 ||
+        previousMessage.videoAttachments.length > 0 ||
+        (previousMessage.mediaSourceMessageIds?.length ?? 0) > 0);
+    const shouldKeepSeparateMediaTurn = currentHasMedia || previousHasMedia;
     if (
       previousMessage &&
       previousMessage.authorId === effectiveAuthorId &&
       previousMessage.content &&
-      messageContent
+      messageContent &&
+      !shouldKeepSeparateMediaTurn
     ) {
       previousMessage.content += `\n${messageContent}`;
-      if (imageAttachments.length > 0) {
-        previousMessage.imageAttachments = [...previousMessage.imageAttachments, ...imageAttachments];
-      }
-      if (videoAttachments.length > 0) {
-        previousMessage.videoAttachments = [...previousMessage.videoAttachments, ...videoAttachments];
-      }
-      if (mediaSourceMessageIds?.length) {
-        const mergedIds = [...(previousMessage.mediaSourceMessageIds ?? []), ...mediaSourceMessageIds];
-        previousMessage.mediaSourceMessageIds = [...new Set(mergedIds)];
-      }
     } else if (messageContent || imageAttachments.length > 0 || videoAttachments.length > 0) {
       simplifiedMessages.push({
         id: message.id,
@@ -862,7 +910,7 @@ async function buildRuntimeParityContext(
     channelId: interaction.channelId,
     client,
     triggererName: getTriggererName(interaction),
-    tomoriNickname: tomoriState.tomori_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
+    tomoriNickname: tomoriState.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
     tomoriAttributes: tomoriState.attribute_list,
     tomoriConfig: tomoriState.config,
     personaPrompt: tomoriState.persona_prompt ?? null,
@@ -872,43 +920,13 @@ async function buildRuntimeParityContext(
 
   let contextSegments = contextBuild.contextItems;
 
-  if (
-    provider === "openrouter" &&
-    tomoriState.llm.llm_codename !== "other-model" &&
-    isOpenRouterCapabilityCacheReady()
-  ) {
-    const tokenLimits = getOpenRouterTokenLimits(tomoriState.llm.llm_codename);
-    const openrouterTruncationOutputCap = parseIntegerEnv(process.env.OPENROUTER_MAX_OUTPUT_TOKENS, 8192, 1);
-    if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
-      const truncationMaxCompletionTokens = Math.min(tokenLimits.maxCompletionTokens, openrouterTruncationOutputCap);
-      const { truncated, totalDropped } = truncateDialogueHistory(
-        contextSegments,
-        tokenLimits.contextLength,
-        truncationMaxCompletionTokens,
-      );
-      if (totalDropped > 0) {
-        contextSegments = truncated;
-      }
-    }
-  } else if (provider === "google") {
-    const tokenLimits = getGeminiTokenLimits(tomoriState.llm.llm_codename);
-    if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
-      const { truncated, totalDropped } = truncateDialogueHistory(
-        contextSegments,
-        tokenLimits.contextLength,
-        tokenLimits.maxCompletionTokens,
-      );
-      if (totalDropped > 0) {
-        contextSegments = truncated;
-      }
-    }
-  }
+  contextSegments = contextTruncators[provider]?.(contextSegments, tomoriState) ?? contextSegments;
 
   const lowerPriorityTailDirectives = [...contextBuild.lowerPriorityTailDirectives];
   const tailDirectives = [...contextBuild.tailDirectives];
   const emojiPenaltyDirective = getEmojiPenaltyDirective(
     contextSegments,
-    tomoriState.tomori_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
+    tomoriState.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
   );
   if (emojiPenaltyDirective) {
     lowerPriorityTailDirectives.push(emojiPenaltyDirective);
@@ -1234,10 +1252,8 @@ async function measureZaiInputTokens(
     providerLabel: getProviderDisplayName(providerName),
     model: providerConfig.model,
     inputTokens: measuredPromptTokens,
-    inputPricePerMillion:
-      providerName === "zaicoding" ? ZAICODING_INPUT_PRICE_PER_MILLION : ZAI_GENERAL_INPUT_PRICE_PER_MILLION,
-    outputPricePerMillion:
-      providerName === "zaicoding" ? ZAICODING_OUTPUT_PRICE_PER_MILLION : ZAI_GENERAL_OUTPUT_PRICE_PER_MILLION,
+    inputPricePerMillion: zaiPricingByProvider[providerName].input,
+    outputPricePerMillion: zaiPricingByProvider[providerName].output,
   };
 }
 
@@ -1322,6 +1338,19 @@ async function measureAnthropicInputTokens(
     outputPricePerMillion: pricing.output,
   };
 }
+
+const liveTokenCounters: Record<
+  LiveProvider,
+  (tomoriState: TomoriState, apiKey: string, contextItems: StructuredContextItem[]) => Promise<LiveCostMeasurement>
+> = {
+  google: measureGoogleInputTokens,
+  openrouter: measureOpenRouterInputTokens,
+  deepseek: measureDeepseekInputTokens,
+  anthropic: measureAnthropicInputTokens,
+  zai: (tomoriState, apiKey, contextItems) => measureZaiInputTokens("zai", tomoriState, apiKey, contextItems),
+  zaicoding: (tomoriState, apiKey, contextItems) =>
+    measureZaiInputTokens("zaicoding", tomoriState, apiKey, contextItems),
+};
 
 async function sendLiveEstimateEmbed(
   interaction: ChatInputCommandInteraction,
@@ -1553,8 +1582,20 @@ export async function execute(
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
-    const tomoriState = await getCachedTomoriState(serverDiscId);
-    if (!tomoriState?.config.api_key) {
+    const baseTomoriState = await getCachedTomoriState(serverDiscId);
+    if (!baseTomoriState) {
+      await sendLegacyEstimateEmbed(interaction, locale, true);
+      return;
+    }
+
+    // Overlay the invoking user's personal (BYOK) provider so the live estimate
+    // reflects the model/key that would actually run for them, keeping cost
+    // estimates in parity with runtime (see buildRuntimeParityContext).
+    const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(
+      baseTomoriState,
+      userData.user_id ?? null,
+    );
+    if (!tomoriState.config.api_key) {
       await sendLegacyEstimateEmbed(interaction, locale, true);
       return;
     }
@@ -1603,16 +1644,7 @@ export async function execute(
     }
 
     try {
-      const measurement =
-        provider === "google"
-          ? await measureGoogleInputTokens(tomoriState, decryptedApiKey, contextItems)
-          : provider === "openrouter"
-            ? await measureOpenRouterInputTokens(tomoriState, decryptedApiKey, contextItems)
-            : provider === "deepseek"
-              ? await measureDeepseekInputTokens(tomoriState, decryptedApiKey, contextItems)
-              : provider === "anthropic"
-                ? await measureAnthropicInputTokens(tomoriState, decryptedApiKey, contextItems)
-                : await measureZaiInputTokens(provider, tomoriState, decryptedApiKey, contextItems);
+      const measurement = await liveTokenCounters[provider](tomoriState, decryptedApiKey, contextItems);
       await sendLiveEstimateEmbed(interaction, locale, measurement);
     } catch (countError) {
       await log.error(

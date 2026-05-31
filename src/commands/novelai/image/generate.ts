@@ -10,10 +10,12 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
+import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { decryptApiKey, getOptApiKey } from "@/utils/security/crypto";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
-import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { checkImageQuota, incrementImageQuota } from "@/utils/quota/imageQuotaManager";
 import { resolveNaiImageParams } from "@/utils/image/naiImageParams";
@@ -91,7 +93,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,
-  _userData: UserRow,
+  userData: UserRow,
   locale: string,
 ): Promise<void> {
   if (!interaction.channel) {
@@ -120,6 +122,10 @@ export async function execute(
       });
       return;
     }
+
+    // Overlay the invoking user's personal (BYOK) provider selections so their
+    // personal NovelAI model/key is used when configured, mirroring /generate image.
+    ({ tomoriState } = await applyPersonalProviderSelectionsToTomoriState(tomoriState, userData.user_id ?? null));
 
     if (!tomoriState.config.imagegen_enabled) {
       await replyInfoEmbed(interaction, locale, {

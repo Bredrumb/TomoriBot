@@ -10,7 +10,7 @@ import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
 import type { UserRow } from "../../types/db/schema";
-import { loadTomoriState } from "../../utils/db/dbRead";
+import { personaRepository } from "@/utils/db/repositories";
 import { decryptApiKey } from "../../utils/security/crypto";
 import { memoryGuard, PERSONA_LIMITS, reservePersonaQuota } from "../../utils/security/rateLimiter";
 import { safeDownload } from "../../utils/security/safeDownload";
@@ -22,15 +22,21 @@ import {
   extractSillyTavernMetadataFromPNG,
   embedMetadataInPNG,
 } from "../../utils/image/pngMetadata";
-import { convertSillyTavernMetadataToPresetData } from "../../utils/db/sillyTavernImport";
-import { presetExportDataSchema, PRESET_EXPORT_VERSION } from "../../types/preset/presetExport";
+import { presetRepository } from "@/utils/db/repositories/PresetRepository";
+import {
+  buildGeneratedPresetAttributePublicFlags,
+  presetExportDataSchema,
+  PRESET_EXPORT_VERSION,
+} from "../../types/preset/presetExport";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
+import { dedupeTriggerWords } from "@/utils/text/triggerWords";
 import type { PresetExport } from "../../types/preset/presetExport";
 import type { ModalComponent } from "../../types/discord/modal";
 import type { ToolContext } from "../../types/tool/interfaces";
 import { generatePresetForProvider } from "@/providers/utils/providerFeatureExecutors";
 import { providerSupportsFeature } from "@/utils/provider/providerInfoRegistry";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
+import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 
 // Modal constants
 const MODAL_CUSTOM_ID = "preset_generate_modal";
@@ -41,22 +47,7 @@ const ADDITIONAL_INST_ID = "additional_inst";
 const FILE_UPLOAD_ID = "avatar_image";
 
 function parsePersonaNameInput(input: string): string[] {
-  const parsedNames = input
-    .split(/[,\u3001]/)
-    .map((name) => name.trim())
-    .filter((name) => name.length > 0);
-
-  const uniqueNames: string[] = [];
-  const seenNames = new Set<string>();
-  for (const name of parsedNames) {
-    const normalizedName = name.toLowerCase();
-    if (!seenNames.has(normalizedName)) {
-      seenNames.add(normalizedName);
-      uniqueNames.push(name);
-    }
-  }
-
-  return uniqueNames;
+  return dedupeTriggerWords(input.split(/[,\u3001]/), { lowercase: false });
 }
 
 /**
@@ -148,20 +139,20 @@ function isToolContextChannel(channel: unknown): channel is ToolContextChannel {
  *
  * @param client - The Discord client instance
  * @param interaction - The chat input command interaction
- * @param _userData - The user data for the invoking user
+ * @param userData - The user data for the invoking user
  * @param locale - The user's preferred locale
  */
 export async function execute(
   client: Client,
   interaction: ChatInputCommandInteraction,
-  _userData: UserRow,
+  userData: UserRow,
   locale: string,
 ): Promise<void> {
   try {
     // 1. Load Tomori state to check provider (works for both guilds and DMs)
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
-    const tomoriState = await loadTomoriState(serverDiscId);
-    if (!tomoriState) {
+    const baseTomoriState = await personaRepository.loadState(serverDiscId);
+    if (!baseTomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
         descriptionKey: "general.errors.tomori_not_setup_description",
@@ -170,6 +161,16 @@ export async function execute(
       });
       return;
     }
+
+    // 2. Overlay the invoking user's personal (BYOK) provider selections onto the
+    //    server state. This mirrors every other AI-generation command (e.g.
+    //    /generate image, /memory document add) and ensures generation uses the
+    //    user's personal text provider when configured, instead of always falling
+    //    back to the server's configured model.
+    const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(
+      baseTomoriState,
+      userData.user_id ?? null,
+    );
 
     // 3. Validate provider and model capabilities
     const providerName = tomoriState.llm.llm_provider.toLowerCase();
@@ -484,7 +485,7 @@ export async function execute(
       if (!extractedPresetContext) {
         const stMetadata = extractSillyTavernMetadataFromPNG(imageBuffer);
         if (stMetadata) {
-          const conversionResult = convertSillyTavernMetadataToPresetData(stMetadata);
+          const conversionResult = presetRepository.convertSillyTavernMetadataToPresetData(stMetadata);
           if (conversionResult.success) {
             extractedPresetContext = JSON.stringify(conversionResult.data);
             log.info("Extracted SillyTavern card data from uploaded image");
@@ -658,6 +659,11 @@ export async function execute(
 
     genResult.preset.tomori_nickname = characterName;
     genResult.preset.trigger_words = parsedNames;
+    if (Array.isArray(genResult.preset.attribute_list)) {
+      genResult.preset.attribute_public_flags = buildGeneratedPresetAttributePublicFlags(
+        genResult.preset.attribute_list,
+      );
+    }
 
     // 14. Validate generated data against schema
     const validationResult = presetExportDataSchema.safeParse(genResult.preset);

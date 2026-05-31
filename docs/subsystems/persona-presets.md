@@ -1,0 +1,101 @@
+---
+title: "Persona Presets"
+---
+
+Official persona presets are seeded from `src/db/seed.sql` into `persona_presets`. They are the canonical definitions for bundled characters such as Tomori/Rose, Temari, Aphel, Lilya, and Nerine.
+
+This page covers how official preset text/config content is applied and kept current through the copy-on-write pointer model. Avatar media is applied as a one-time Discord/storage operation and is called out separately below.
+
+## Data Model
+
+### `persona_presets`
+
+Official preset rows carry a stable `preset_lineage_id`.
+
+- Reuse the same `preset_lineage_id` across locale variants of the same character.
+- Do not change a character's `preset_lineage_id` just because text, triggers, sample dialogue, or avatar art changed.
+- New official characters need a new stable `preset_lineage_id`.
+
+`preset_lineage_id` is related to, but not the same operational concern as `personas.persona_lineage_id`:
+
+- `preset_lineage_id` identifies the official preset family (which character a preset is).
+- `persona_lineage_id` scopes memory/conditioning identity.
+- Applying a preset usually stamps the preset lineage onto the persona's `persona_lineage_id`, so personas derived from the same official character share memory scope.
+- Legacy bootstrapping does not rewrite an existing `persona_lineage_id`, because that would move memory scope.
+- Import with fork identity can intentionally allocate a fresh `persona_lineage_id` while still pointing at the same official preset.
+
+### `personas` preset pointer columns
+
+Personas can point at live official preset rows instead of storing an independent copy:
+
+- `is_pointer` marks a persona as a live preset pointer.
+- `preset_lineage_id` and `preset_language` identify the `persona_presets` row to resolve.
+- `persona_lineage_id` remains the memory/conditioning identity and is preserved when the pointer materializes.
+
+When `is_pointer = true`, runtime reads resolve the persona's preset-backed content from `persona_presets`:
+
+- attributes and public flags
+- sample dialogues
+- trigger words
+- persona prompt
+
+The persona row and normalized child rows still carry copied values for compatibility with older surfaces, but live preset data is authoritative while the persona is a pointer.
+
+Avatars are the exception to live pointer resolution. `persona_presets.preset_avatar_path` is an application source asset, not a runtime-resolved pointer field. Main persona avatars live as the bot's Discord guild member avatar, while alter avatars live in `personas.webhook_avatar_url` as an avatar-storage URL/path. Because those are external Discord/storage media references, later seed changes to `preset_avatar_path` do not fan out to existing pointer personas.
+
+### `persona_presets.preset_attribute_public_flags`
+
+A `BOOLEAN[]` aligned 1:1 with `preset_attribute_list`. Pointer personas resolve these flags from the live preset row; materialized copies store them in `persona_attributes.is_public`. Official Tomori presets mark their first appearance-style attribute public; public attributes can be shown to other personas triggered by the same message. All other seeded attributes are private.
+
+## Applying Presets
+
+Applying an official preset creates a **copy-on-write pointer** when the preset has a `preset_lineage_id`. The persona follows the live `persona_presets` row until the first local content edit materializes it into an independent copy.
+
+### `/config setup`
+
+Setup creates the main persona as a pointer to the selected official preset, stamps `persona_lineage_id` from the preset lineage, and applies the preset avatar to the bot's Discord guild avatar when running in a guild.
+
+### `/persona default`
+
+For the main/default target, `/persona default` re-points the main persona to the selected official preset and patches the bot's Discord guild avatar. Re-running it after customization discards local preset-backed content by establishing a fresh pointer.
+
+For `type=alter`, `/persona default` creates an alter pointer from the preset, uploads a copy of the preset avatar through avatar storage, and stores the resulting reference in `personas.webhook_avatar_url`.
+
+Preset-application avatar writes are one-time operational Discord/storage updates and do not materialize a pointer: `/config setup`, `/persona default`, and `/persona import` can establish or preserve the pointer while applying the preset avatar. Direct `/server avatar` edits are different; setting or resetting a persona avatar is deliberate customization and materializes a pointer before the avatar write.
+
+## Materialization
+
+The first local content edit forks a pointer into an independent copy. Materialization preserves `persona_id` and `persona_lineage_id`, copies the current live preset content into `personas`, `persona_attributes`, and `persona_configs`, then sets `is_pointer = false`.
+
+This fork is binary per persona, not field-level: after any content edit, future seed updates no longer change that persona's preset-backed content. Re-running `/persona default` is the supported way to opt back into the live official preset.
+
+Memory and runtime-state writes do not materialize pointers. Server memories, personal memories, conditioning history, autochat runtime counters, cooldowns, and similar runtime rows continue to use `persona_lineage_id`/`persona_id` normally.
+
+## Import/export cards
+
+Native Tomori preset exports include `attribute_public_flags`, aligned 1:1 with `attribute_list`. Older Tomori preset files that do not have this field remain valid; import normalizes them to all-private flags before writing `persona_attributes`.
+
+Exports materialize pointer personas into self-contained preset files by reading the current live preset content. When the source persona is or was derived from an official preset, export stamps `preset_lineage_id` in the native Tomori preset payload.
+
+Import re-links to an official preset pointer only when all of these are true:
+
+- The file has `preset_lineage_id`.
+- A seeded `persona_presets` row with that lineage exists.
+- Attributes, public flags, sample dialogues, trigger words, and persona prompt exactly match that official preset.
+- The file does not carry persona-specific NovelAI/custom fields that are not part of official presets.
+
+If any exact-match check fails, import creates an independent copy with `is_pointer = false`. The imported `preset_lineage_id` is kept as provenance when present, but `preset_language` remains null.
+
+`/persona generate` emits the canonical six generated attributes and marks only the generated Appearance attribute public. `/persona create` emits an explicit all-private flag array because its single freeform description is not guaranteed to be an appearance-only field. SillyTavern card conversion also defaults converted attributes to private because ST cards do not carry Tomori public visibility metadata.
+
+## Editing Official Presets
+
+Editing seeded text/config fields in `persona_presets` changes live pointer personas and future applications. Editing `preset_avatar_path` only affects future preset applications; existing pointer personas keep their current Discord guild avatar or stored `webhook_avatar_url`. Independent copies do not change. Startup invalidates cached Tomori state for servers that have pointer personas after schema/seed/migration work, so long-lived cache entries do not keep stale preset content after seed updates.
+
+## Migration behavior
+
+The previous seed-time 3-way rebase sync design has been removed. It used a per-persona baseline and attempted to merge official updates into local copies, but it was fragile and never shipped to production.
+
+Migration `020_persona_preset_pointers.sql` adds the pointer columns and converts only exact matches into pointers. The backfill requires matching lineage, attributes/public flags, sample dialogues, trigger words, and persona prompt. It intentionally does not compare or rewrite avatars, so existing Discord/CDN/storage avatar state stays as-is. Customized personas stay independent copies.
+
+If a pointer references a missing official preset row, materialization fails closed by logging an error and refusing the fork. Runtime reads are more resilient: they log a warning and fall back to the persona's last copied snapshot instead of failing the whole state load.

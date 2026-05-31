@@ -1,11 +1,10 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
 import type { UserRow, ErrorContext } from "../../../types/db/schema";
 import { localizer } from "../../../utils/text/localizer";
 import { log, ColorCode } from "../../../utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal } from "../../../utils/discord/interactionHelper";
-import { isBlacklisted } from "../../../utils/db/dbRead";
+import { userRepository, configRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "../../../utils/cache/tomoriStateCache";
 import type { ModalResult } from "../../../types/discord/modal";
 
@@ -38,7 +37,7 @@ export async function execute(
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
 
     if (interaction.guild) {
-      const blacklisted = (await isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
+      const blacklisted = (await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
       if (blacklisted && !hasManagePermission) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.user_blacklisted_title",
@@ -123,15 +122,12 @@ export async function execute(
     const enabled = selectedValue === "true";
     const channelEnabled = channelValue === "true";
 
-    const [updatedRow] = await sql`
-      UPDATE tomori_configs
-      SET memory_tagging_enabled = ${enabled},
-          channel_memory_enabled = ${channelEnabled}
-      WHERE server_id = ${tomoriState.server_id}
-      RETURNING memory_tagging_enabled, channel_memory_enabled
-    `;
+    const updated = await configRepository.updateMemoryConfig(tomoriState.server_id, {
+      memory_tagging_enabled: enabled,
+      channel_memory_enabled: channelEnabled,
+    });
 
-    if (!updatedRow) {
+    if (!updated) {
       await replyInfoEmbed(modalInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",

@@ -2,10 +2,10 @@ import type { ChatInputCommandInteraction, ButtonInteraction, Client, SlashComma
 import { MessageFlags } from "discord.js";
 import type { UserRow, TomoriState } from "@/types/db/schema";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
-import { sql } from "@/utils/db/client";
+import { personaRepository } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
@@ -55,7 +55,7 @@ export async function execute(
       return;
     }
 
-    const allPersonas = await loadAllPersonasForServer(serverDiscId);
+    const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -80,7 +80,7 @@ export async function execute(
     personaSelectionInteraction = personaSelection.interaction;
     const selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
 
-    if (!selectedPersona?.tomori_id) {
+    if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(personaSelectionInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -89,25 +89,28 @@ export async function execute(
       return;
     }
 
-    await sql`
-			INSERT INTO persona_configs (tomori_id, trigger_words, persona_prompt)
-			VALUES (${selectedPersona.tomori_id}, ARRAY[]::text[], NULL)
-			ON CONFLICT (tomori_id) DO UPDATE
-			SET persona_prompt = NULL
-		`;
+    const ok = await personaRepository.removePrompt(selectedPersona.persona_id);
+    if (!ok) {
+      await replyInfoEmbed(personaSelectionInteraction, locale, {
+        titleKey: "general.errors.update_failed_title",
+        descriptionKey: "general.errors.update_failed_description",
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
 
     invalidateTomoriStateCache(serverDiscId);
 
     await replyInfoEmbed(personaSelectionInteraction, locale, {
       titleKey: "commands.forget.personaprompt.success_title",
       descriptionKey: "commands.forget.personaprompt.success_description",
-      descriptionVars: { persona_name: selectedPersona.tomori_nickname },
+      descriptionVars: { persona_name: selectedPersona.persona_nickname },
       color: ColorCode.SUCCESS,
     });
   } catch (error) {
     await log.error("Error in /forget personaprompt command", error, {
       serverId: tomoriState?.server_id,
-      tomoriId: tomoriState?.tomori_id,
+      personaId: tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "forget personaprompt",

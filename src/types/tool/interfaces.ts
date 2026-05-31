@@ -82,7 +82,7 @@ export interface StreamingContext {
   disableRecentMessageReplyTool?: boolean; // Allow reactions but block tool-sent replies when the stream is already replying
   forceReason?: boolean; // Flag to indicate reasoning mode for enhanced AI responses
   isManuallyTriggered?: boolean; // Flag to indicate this stream was triggered by a manual command
-  suppressUserErrors?: boolean; // Suppress user-facing error embeds during key-rotation retries
+  suppressUserErrors?: boolean; // Suppress user-facing error embeds during retries or non-deliberate chat turns
   forceModelFallback?: boolean; // Force suppress errors regardless of key availability (model fallback retries)
   rotationKeyRetriesUsed?: boolean; // True if one or more rotation-key retries were attempted
   disableAllTools?: boolean; // Flag to disable all tool calling (e.g., during user impersonation)
@@ -151,6 +151,9 @@ export interface ToolContext {
 
   // Opaque message ID map for resolving media_N/ref_N keys back to Discord snowflake IDs
   messageIdMap?: MessageIdMap;
+
+  /** Turn-level AbortSignal. Tools should forward this to their fetch/HTTP calls for true cancellation on /bot kill. */
+  abortSignal?: AbortSignal;
 }
 
 /**

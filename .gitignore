@@ -1,4 +1,5 @@
 nul
+temp_*
 .venv*
 .env.test
 *.backup
@@ -8,6 +9,7 @@ __pycache__/
 # Script outputs
 backups/*
 .env.bak
+.env.test
 
 # Tokenizers (assets ignored; manifest tracked)
 tokenizers/*
@@ -51,8 +53,10 @@ tmpclaude*
 *PLAN*.md
 *HANDOVER*.md
 *REFERENCES*.md
+!docs/**
 crash*/
 .prompts/
+.antigravitycli/
 ACTIVECONTEXT.md
 GEMINI.md
 AGENTS.md

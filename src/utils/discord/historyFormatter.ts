@@ -8,7 +8,7 @@ import type { Message } from "discord.js";
 import { MessageType } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { isRefreshMarkerEmbed } from "@/utils/discord/embedDetection";
-import { stripBridgePrefix } from "@/utils/bridge";
+import { stripBridgePrefix } from "@/utils/bridges";
 import { isAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
 import { getCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { getCachedRenderedMarkdownTable } from "@/utils/text/markdownTableCache";
@@ -108,11 +108,11 @@ export function formatMessagesForExtraction(
   const lines: string[] = [];
   const detectedTomoriIds = new Set<number>();
 
-  // Build a lowercase nickname → tomoriId map for persona detection
+  // Build a lowercase nickname → personaId map for persona detection
   const nicknameToTomoriId = new Map<string, number>();
   for (const persona of serverPersonas) {
-    if (persona.tomori_id !== undefined) {
-      nicknameToTomoriId.set(persona.tomori_nickname.toLowerCase(), persona.tomori_id);
+    if (persona.persona_id !== undefined) {
+      nicknameToTomoriId.set(persona.persona_nickname.toLowerCase(), persona.persona_id);
     }
   }
 

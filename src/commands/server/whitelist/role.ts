@@ -6,10 +6,10 @@ import {
 } from "discord.js";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { invalidateWhitelistCache } from "@/utils/cache/channelWhitelistCache";
-import { isRoleWhitelisted, removeRoleWhitelist, upsertRoleWhitelist } from "@/utils/db/roleWhitelist";
+import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 
 /**
@@ -55,7 +55,7 @@ export async function execute(
   const errorContext: ErrorContext = {
     userId: user.user_id,
     serverId: null,
-    tomoriId: null,
+    personaId: null,
   };
 
   try {
@@ -84,7 +84,7 @@ export async function execute(
     }
 
     errorContext.serverId = tomoriState.server_id;
-    errorContext.tomoriId = tomoriState.tomori_id;
+    errorContext.personaId = tomoriState.persona_id;
 
     // 3. Get command parameters
     const role = interaction.options.getRole("role", true);
@@ -104,7 +104,7 @@ export async function execute(
 
     if (action === "add") {
       // 5a. Add role to whitelist
-      const alreadySet = await isRoleWhitelisted(tomoriState.server_id, role.id);
+      const alreadySet = await whitelistRepository.isRoleWhitelisted(tomoriState.server_id, role.id);
       if (alreadySet) {
         await replyInfoEmbed(interaction, locale, {
           color: ColorCode.WARN,
@@ -117,7 +117,7 @@ export async function execute(
         return;
       }
 
-      await upsertRoleWhitelist(tomoriState.server_id, role.id);
+      await whitelistRepository.upsertRoleWhitelist(tomoriState.server_id, role.id);
       invalidateWhitelistCache(interaction.guildId);
 
       await replyInfoEmbed(interaction, locale, {
@@ -134,7 +134,7 @@ export async function execute(
     }
 
     // 5b. Remove role from whitelist
-    const removed = await removeRoleWhitelist(tomoriState.server_id, role.id);
+    const removed = await whitelistRepository.removeRoleWhitelist(tomoriState.server_id, role.id);
     if (!removed) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.WARN,

@@ -11,11 +11,12 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
-import { tomoriConfigSchema, type ErrorContext, type TomoriState, type UserRow } from "@/types/db/schema";
+import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { sql } from "@/utils/db/client";
+import { configRepository } from "@/utils/db/repositories";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
-import { promptWithRawModal, replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -81,7 +82,10 @@ export async function execute(
       return;
     }
 
-    const initialBlockedIds = new Set(tomoriState.config.crosschannel_blocklist_ids ?? []);
+    const availableChannelIds = new Set(availableChannels.map((c) => c.id));
+    const initialBlockedIds = new Set(
+      (tomoriState.config.crosschannel_blocklist_ids ?? []).filter((id) => availableChannelIds.has(id)),
+    );
 
     if (availableChannels.length <= CHANNELS_PER_PAGE) {
       await executeSinglePageBlocklist(
@@ -121,7 +125,6 @@ export async function execute(
     });
   }
 }
-
 async function executeSinglePageBlocklist(
   interaction: ChatInputCommandInteraction,
   locale: string,
@@ -463,16 +466,13 @@ async function persistBlocklistUpdate(
     return previousBlockedIds;
   }
 
-  const [updatedRow] = await sql`
-    UPDATE tomori_configs
-    SET crosschannel_blocklist_ids = ${formatTextArrayLiteral([...nextBlockedIds])}::text[]
-    WHERE server_id = ${tomoriState.server_id}
-    RETURNING *
-  `;
+  const updated = await configRepository.updateChannelScopeConfig(tomoriState.server_id, {
+    crosschannel_blocklist_ids: [...nextBlockedIds],
+  });
 
-  if (!updatedRow) {
+  if (!updated) {
     const context: ErrorContext = {
-      tomoriId: tomoriState.tomori_id,
+      personaId: tomoriState.persona_id,
       serverId: tomoriState.server_id,
       errorType: "CommandExecutionError",
       metadata: {
@@ -481,31 +481,6 @@ async function persistBlocklistUpdate(
       },
     };
     await log.error("Failed to update crosschannel_blocklist_ids config", new Error("Database update failed"), context);
-
-    await replyInfoEmbed(responseInteraction, locale, {
-      titleKey: "general.errors.update_failed_title",
-      descriptionKey: "general.errors.update_failed_description",
-      color: ColorCode.ERROR,
-    });
-    return previousBlockedIds;
-  }
-
-  const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-  if (!validatedConfig.success) {
-    const context: ErrorContext = {
-      tomoriId: tomoriState.tomori_id,
-      serverId: tomoriState.server_id,
-      errorType: "SchemaValidationError",
-      metadata: {
-        command: "server crosschannel-blocklist",
-        validationErrors: validatedConfig.error.flatten(),
-      },
-    };
-    await log.error(
-      "Failed to validate updated config after crosschannel blocklist update",
-      validatedConfig.error,
-      context,
-    );
 
     await replyInfoEmbed(responseInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
@@ -526,16 +501,16 @@ async function persistBlocklistUpdate(
       enabled_channels: formatChannelMentionList(enabledIds, channelLookup, locale),
       disabled_count: disabledIds.length.toString(),
       disabled_channels: formatChannelMentionList(disabledIds, channelLookup, locale),
-      blocked_count: validatedConfig.data.crosschannel_blocklist_ids.length.toString(),
+      blocked_count: nextBlockedIds.size.toString(),
     },
     color: ColorCode.SUCCESS,
   });
 
   log.info(
-    `[CrossChannelBlocklist] Updated in guild ${guildId}: +${enabledIds.length} / -${disabledIds.length} / total ${validatedConfig.data.crosschannel_blocklist_ids.length}`,
+    `[CrossChannelBlocklist] Updated in guild ${guildId}: +${enabledIds.length} / -${disabledIds.length} / total ${nextBlockedIds.size}`,
   );
 
-  return new Set(validatedConfig.data.crosschannel_blocklist_ids);
+  return nextBlockedIds;
 }
 
 function formatChannelMentionList(
@@ -552,8 +527,4 @@ function formatChannelMentionList(
       channelLookup.has(channelId) ? `<#${channelId}>` : `${localizer(locale, "general.unknown")} (${channelId})`,
     )
     .join(", ");
-}
-
-function formatTextArrayLiteral(items: string[]): string {
-  return `{${items.map((item) => `"${item.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
 }

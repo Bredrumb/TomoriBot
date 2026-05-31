@@ -67,12 +67,12 @@ export async function sendFetchProgressNotice(
   trimFetchPageTracker();
 
   // Build the description: base URL line + optional offset line when reading a continuation
-  const baseDescription = localizer(context.locale, "genai.fetch.reading_description", {
+  const baseDescription = localizer(context.locale, "tools.fetch.reading_description", {
     url: url || "the requested page",
   });
   const offsetLine =
     startIndex && startIndex > 0
-      ? localizer(context.locale, "genai.fetch.reading_offset_line", {
+      ? localizer(context.locale, "tools.fetch.reading_offset_line", {
           start_index: startIndex.toLocaleString(),
         })
       : "";
@@ -82,10 +82,10 @@ export async function sendFetchProgressNotice(
     context,
     "web_fetch",
     {
-      titleKey: page > 1 ? "genai.fetch.reading_title_page" : "genai.fetch.reading_title",
+      titleKey: page > 1 ? "tools.fetch.reading_title_page" : "tools.fetch.fetch_url_title",
       titleVars: page > 1 ? { page: String(page) } : undefined,
       description,
-      footerKey: "genai.fetch.reading_footer",
+      footerKey: "tools.fetch.reading_footer",
       color: ColorCode.INFO,
     },
     label,
@@ -98,7 +98,7 @@ export async function sendFetchProgressNotice(
  * @param url - URL to validate
  * @returns Validation result with size information
  */
-async function validateFetchSize(url: string): Promise<{ allowed: boolean; reason?: string; sizeMB?: number }> {
+export async function validateFetchSize(url: string): Promise<{ allowed: boolean; reason?: string; sizeMB?: number }> {
   try {
     const maxSizeMB = FETCH_LIMITS.MAX_FETCH_SIZE_MB;
 
@@ -418,7 +418,7 @@ export class MCPExecutor {
             log.info(`Executing MCP function: ${functionName}`);
 
             // Validate fetch URL size before executing (HEAD request check)
-            if (functionName === "fetch-url" && mcpContext.modifiedArgs.url) {
+            if ((functionName === "fetch-url" || functionName === "fetch") && mcpContext.modifiedArgs.url) {
               const fetchValidation = await validateFetchSize(mcpContext.modifiedArgs.url as string);
 
               if (!fetchValidation.allowed) {

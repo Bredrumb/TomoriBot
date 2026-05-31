@@ -1,4 +1,6 @@
-# 25. Matrix Bridge & Bridge Utilities
+---
+title: "Matrix Bridge & Bridge Utilities"
+---
 
 This document describes TomoriBot's Matrix bridge implementation — what it does, why it was built the way it was, and how the codebase is organized to keep bridge concerns cleanly separated from core Discord logic.
 
@@ -14,8 +16,8 @@ This document describes TomoriBot's Matrix bridge implementation — what it doe
   - [Data Flow](#data-flow)
   - [Loop Prevention](#loop-prevention)
 - [Key Components](#key-components)
-  - [src/utils/bridge/ — Generic Bridge Utilities](#srcutilsbridge--generic-bridge-utilities)
-  - [src/utils/matrix/ — Matrix Appservice](#srcutilsmatrix--matrix-appservice)
+  - [src/utils/bridges/ — Generic Bridge Utilities](#srcutilsbridges--generic-bridge-utilities)
+  - [src/utils/bridges/matrix/ — Matrix Appservice](#srcutilsbridgesmatrix--matrix-appservice)
   - [src/events/messageCreate/matrixRelay.ts — Discord→Matrix Relay](#srceventsmessagecreatemayrixrelayts--discordmatrix-relay)
 - [Webhook Username Format](#webhook-username-format)
 - [Virtual Persona Users](#virtual-persona-users)
@@ -124,11 +126,21 @@ A power user who already has mautrix-discord running could technically bridge th
 ### Directory Layout
 
 ```
-src/utils/bridge/
-  index.ts              ← Pure, stateless bridge utilities (ID detection, webhook parsing)
+src/utils/bridges/
+  bridgeUserId.ts       ← Pure, stateless bridge utilities (ID detection, webhook parsing)
+  index.ts              ← Generic bridge utilities barrel
 
-src/utils/matrix/
-  matrixManager.ts      ← Matrix appservice lifecycle, send functions, link cache
+src/utils/bridges/matrix/
+  runtime.ts            ← Compatibility barrel for Matrix runtime exports
+  appserviceImplementation.ts ← Compatibility barrel for split Matrix modules
+  client.ts             ← Appservice boot and setup notices
+  media.ts              ← Matrix media upload/download and outbound sends
+  state.ts              ← Session-scoped Matrix bridge state and caches
+  matrixManager.ts      ← Thin public coordinator barrel
+  events.ts             ← Matrix inbound event handling and Matrix command handling
+  stateSync.ts          ← Reply tracking, pending reply channels, reminder mention surface
+  userMapping.ts        ← Display-name/Matrix-ID maps and persona intent surface
+  rooms.ts              ← Link cache, room joins, and encryption helpers
   index.ts              ← Matrix-specific barrel export
 
 src/events/messageCreate/
@@ -139,12 +151,12 @@ src/commands/server/matrix/
   unlink.ts             ← /server matrix unlink command
 ```
 
-The split between `utils/bridge/` and `utils/matrix/` is intentional:
+The split under `utils/bridges/` is intentional:
 
-- `utils/bridge/` contains **pure string utilities** with no runtime dependencies — ID format detection, webhook username parsing. These work for any bridge protocol.
-- `utils/matrix/` contains **stateful Matrix operations** — the appservice HTTP server, session-scoped display name maps, Matrix API calls.
+- `utils/bridges/` contains **pure string utilities** with no runtime dependencies — ID format detection, webhook username parsing. These work for any bridge protocol.
+- `utils/bridges/matrix/` contains **stateful Matrix operations** — the appservice HTTP server, session-scoped display name maps, Matrix API calls.
 
-This means a file like `reminderTimer.ts` imports from `utils/bridge` for the ID check, not `utils/matrix`, making it clear the bridge support is a general concern rather than Matrix-specific logic scattered everywhere.
+This means a file like `reminderProcessor.ts` imports from `utils/bridges` for the ID check, not `utils/bridges/matrix`, making it clear the bridge support is a general concern rather than Matrix-specific logic scattered everywhere.
 
 ### Data Flow
 
@@ -152,7 +164,7 @@ This means a file like `reminderTimer.ts` imports from `utils/bridge` for the ID
 ```
 Matrix user sends message
   → Homeserver pushes event to appservice HTTP server (port 9993)
-  → matrixManager.ts onEvent handler fires
+  → client.ts appservice controller dispatches to events.ts
   → Looks up linked Discord channel via matrix_channel_links table
   → Sends webhook message to Discord channel as "[Matrix|@user:host] DisplayName"
   → TomoriBot's messageCreate handler sees the webhook message
@@ -183,7 +195,7 @@ Two separate guards prevent message echo loops:
 
 ## Key Components
 
-### `src/utils/bridge/` — Generic Bridge Utilities
+### `src/utils/bridges/` — Generic Bridge Utilities
 
 Three pure, stateless utility functions covering all bridge-related string operations:
 
@@ -195,17 +207,19 @@ Three pure, stateless utility functions covering all bridge-related string opera
 
 These functions are format-agnostic by design. The `[BridgeName|userId] DisplayName` webhook username convention is TomoriBot's own format — a future IRC bridge would use `[IRC|user@host] DisplayName` and these functions would handle it without any changes.
 
-### `src/utils/matrix/` — Matrix Appservice
+### `src/utils/bridges/matrix/` — Matrix Appservice
 
-**`matrixManager.ts`** is the core of the Matrix implementation. Key responsibilities:
+The public Matrix surface is grouped by responsibility. `matrixManager.ts`, `runtime.ts`, and `appserviceImplementation.ts` are compatibility barrels; implementation lives in the responsibility modules:
 
-- **Initialization** (`initializeMatrixClient`): Builds an `AppServiceRegistration`, creates the `Bridge` instance, and starts the HTTP server. Uses PostgreSQL for storage (`disableStores: true`) instead of the built-in NeDB file stores.
-- **Virtual user provisioning** (`getPersonaIntent`): On first use per session, registers the virtual user, sets their display name and avatar (downloaded from Discord CDN and uploaded to the homeserver's media repository). Uses an optimistic in-memory cache to prevent race conditions on simultaneous messages.
-- **Message sending** (`sendToMatrixRoom`): Sends text under the persona's virtual user. Supports rich HTML bodies for Matrix mention anchor tags and the `m.mentions` MSC3952 field for homeserver-level notifications.
-- **Media sending** (`sendAttachmentToMatrixRoom`): Uploads files to the homeserver's media repository and sends `m.image`, `m.video`, or `m.file` events.
-- **Link cache** (`getLinkedMatrixRoom`, `getDiscordChannelForRoom`): Caches the `matrix_channel_links` DB lookups with a 5-minute TTL to avoid hitting the database on every message.
-- **Bridge user ID resolution** (`resolveBridgeUserId`): Consolidates LLM defensive recovery logic — handles dropped `@` prefix and plain display name → Matrix ID resolution. Used by reminder and memory tools.
-- **Reminder mention** (`sendMatrixReminderMention`): After TomoriBot delivers a reminder to a Matrix user, checks whether the AI response already contained the `@{localpart}` mention placeholder. If not, sends a direct Matrix mention ping to ensure the user is notified.
+- **`client.ts`**: Appservice initialization (`initializeMatrixClient`) plus Matrix setup notices.
+- **`events.ts`**: Matrix inbound event handling, Matrix `/kill`, Matrix `/refresh`, and Matrix-to-Discord relay.
+- **`rooms.ts`**: Link cache (`getLinkedMatrixRoom`, `getDiscordChannelForRoom`), cache invalidation, room joins, and encryption checks.
+- **`stateSync.ts`**: Sent-event reply tracking, pending reply channels, Matrix reply fallback stripping, and reminder mention pings.
+- **`userMapping.ts`**: Display-name/Matrix-ID maps, persona intent provisioning, typing indicators, and bridge user ID recovery.
+- **`media.ts`**: Matrix media upload/download, attachment limits, and outbound text/media sends (`sendToMatrixRoom`, `sendAttachmentToMatrixRoom`).
+- **`state.ts`**: Session-scoped bridge instance, link caches, persona provisioning caches, and shared constants.
+
+New code should import from the responsibility module or from `@/utils/bridges/matrix`.
 
 ### `src/events/messageCreate/matrixRelay.ts` — Discord→Matrix Relay
 
@@ -413,11 +427,11 @@ Bridged rooms must remain non-encrypted. `/server matrix link` intentionally blo
 
 ## Design Decisions
 
-### Why `utils/bridge/` is separate from `utils/matrix/`
+### Why generic bridge utilities live outside `bridges/matrix/`
 
-The pure string utilities (`isBridgeUserId`, `stripBridgePrefix`, `extractBridgeUserId`) have no dependency on the Matrix appservice runtime. Keeping them in `utils/bridge/` means:
-- Files like `reminderTimer.ts` import from `utils/bridge`, not `utils/matrix` — making it clear the dependency is on the concept of bridged users, not the Matrix implementation.
-- Adding a second bridge (IRC, XMPP) only requires extending `utils/bridge/` functions — no changes to `utils/matrix/`.
+The pure string utilities (`isBridgeUserId`, `stripBridgePrefix`, `extractBridgeUserId`) have no dependency on the Matrix appservice runtime. Keeping them in `utils/bridges/` means:
+- Files like `reminderProcessor.ts` import from `utils/bridges`, not `utils/bridges/matrix` — making it clear the dependency is on the concept of bridged users, not the Matrix implementation.
+- Adding a second bridge (IRC, XMPP) only requires extending `utils/bridges/` functions — no changes to `utils/bridges/matrix/`.
 
 ### Why not store Matrix user IDs in the `users` table
 
@@ -427,9 +441,9 @@ The `users` table uses `BIGINT` for `user_id` (Discord snowflakes are purely num
 
 Using Intent objects (one per persona) rather than a single bot account gives Matrix users a richer experience — each persona appears with its own display name and avatar, matching what Discord users see. It also avoids the need to prefix messages with the persona name, keeping the Matrix conversation clean.
 
-### Why `resolveBridgeUserId` lives in `utils/matrix/` rather than `utils/bridge/`
+### Why `resolveBridgeUserId` lives in `utils/bridges/matrix/` rather than `utils/bridges/`
 
-The resolution function needs access to `matrixDisplayNameToId` — a session-scoped Map populated by the Matrix appservice event handler. This is inherently runtime state tied to the Matrix connection. Moving it to `utils/bridge/` would either require passing the map as a parameter (awkward for a utility function) or creating a circular dependency. The function is named `resolveBridgeUserId` (not `resolveMatrixUserId`) to signal that it's a general concept even though its current implementation details are Matrix-specific.
+The resolution function needs access to `matrixDisplayNameToId` — a session-scoped Map populated by the Matrix appservice event handler. This is inherently runtime state tied to the Matrix connection. Moving it to `utils/bridges/` would either require passing the map as a parameter (awkward for a utility function) or creating a circular dependency. The function is named `resolveBridgeUserId` (not `resolveMatrixUserId`) to signal that it's a general concept even though its current implementation details are Matrix-specific.
 
 ### Why the `[BridgeName|userId] DisplayName` webhook username format
 

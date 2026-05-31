@@ -63,6 +63,7 @@ interface ApiRequestConfig {
   serverId?: number;
   apiKey?: string;
   timeout?: number;
+  signal?: AbortSignal;
 }
 
 interface ApiResult<T> {
@@ -245,8 +246,8 @@ export function addFetchCapabilityReminder(originalResult: string): {
     // Create an enhanced response that includes fetch capability reminder
     const fetchReminder =
       urlCount > 0
-        ? `\n\n[AGENT REMINDER] You have access to the "fetch" function call to retrieve and analyze the full content of any of these ${urlCount} web URLs. If any given information snippet is not enough, use the function to retrieve more details about a specific webpage, use fetch(url="[URL]") to get the complete page content for deeper analysis.`
-        : `\n\n[AGENT REMINDER] You have access to the "fetch" function call to retrieve and analyze the full content of any web URL the user needs. Use fetch(url="[URL]") when more detailed webpage content is needed.`;
+        ? `\n\n[AGENT REMINDER] You have access to the "fetch_url" function call to retrieve and analyze the full content of any of these ${urlCount} web URLs. If any given information snippet is not enough, use the function to retrieve more details about a specific webpage, use fetch_url(url="[URL]") to get the complete page content for deeper analysis.`
+        : `\n\n[AGENT REMINDER] You have access to the "fetch_url" function call to retrieve and analyze the full content of any web URL the user needs. Use fetch_url(url="[URL]") when more detailed webpage content is needed.`;
 
     const enhancedMessage = originalResult;
 
@@ -313,7 +314,7 @@ async function makeBraveApiRequest<T>(
   params: Record<string, string | number | boolean | undefined>,
   config: ApiRequestConfig = {},
 ): Promise<ApiResult<T>> {
-  const { serverId, timeout = REQUEST_TIMEOUT } = config;
+  const { serverId, timeout = REQUEST_TIMEOUT, signal: externalSignal } = config;
 
   try {
     // Get API key
@@ -336,9 +337,16 @@ async function makeBraveApiRequest<T>(
 
     log.info(`Making Brave API request to: ${endpoint} with ${Object.keys(params).length} parameters`);
 
-    // Create fetch request with timeout
+    // Create fetch request with timeout; chain optional external signal
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        clearTimeout(timeoutId);
+        return { success: false, error: "Request aborted", statusCode: 408 };
+      }
+      externalSignal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
 
     const response = await fetch(url.toString(), {
       method: "GET",
