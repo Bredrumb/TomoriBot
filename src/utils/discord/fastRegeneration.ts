@@ -2,7 +2,17 @@ import type { GuildMember, Message } from "discord.js";
 import { log } from "@/utils/misc/logger";
 
 export const FAST_REGENERATION_EMOJI = "🔄";
+export const FAST_CONTINUE_EMOJI = "➡️";
+export const FAST_ACTION_EMOJIS = new Set([FAST_REGENERATION_EMOJI, FAST_CONTINUE_EMOJI, "➡"]);
 const DEFAULT_FAST_REGENERATION_TIMEOUT_MS = 30_000;
+
+export type FastActionEmoji = typeof FAST_REGENERATION_EMOJI | typeof FAST_CONTINUE_EMOJI;
+
+export interface FastRegenerationActionConfig {
+  fast_regeneration_enabled?: boolean;
+  fast_regeneration_retry_enabled?: boolean;
+  fast_regeneration_continue_enabled?: boolean;
+}
 
 export interface FastRegenerationEntry {
   messageId: string;
@@ -17,6 +27,7 @@ export interface FastRegenerationEntry {
   armedAt: number;
   consumed: boolean;
   message: Message;
+  enabledActions: FastActionEmoji[];
 }
 
 export function getFastRegenerationReactionTimeoutMs(): number {
@@ -27,6 +38,31 @@ export function getFastRegenerationReactionTimeoutMs(): number {
 
 const fastRegenerationEntries = new Map<string, FastRegenerationEntry>();
 
+export function normalizeFastActionEmoji(emoji: string | null | undefined): FastActionEmoji | null {
+  if (emoji === FAST_REGENERATION_EMOJI) {
+    return FAST_REGENERATION_EMOJI;
+  }
+  if (emoji === FAST_CONTINUE_EMOJI || emoji === "➡") {
+    return FAST_CONTINUE_EMOJI;
+  }
+  return null;
+}
+
+export function getEnabledFastRegenerationActions(config: FastRegenerationActionConfig): FastActionEmoji[] {
+  if (config.fast_regeneration_enabled !== true) {
+    return [];
+  }
+
+  const actions: FastActionEmoji[] = [];
+  if (config.fast_regeneration_retry_enabled === true) {
+    actions.push(FAST_REGENERATION_EMOJI);
+  }
+  if (config.fast_regeneration_continue_enabled === true) {
+    actions.push(FAST_CONTINUE_EMOJI);
+  }
+  return actions;
+}
+
 function forgetFastRegenerationEntry(messageId: string): void {
   const entry = fastRegenerationEntries.get(messageId);
   if (entry) {
@@ -35,18 +71,19 @@ function forgetFastRegenerationEntry(messageId: string): void {
   }
 }
 
-async function removeBotRegenerationReaction(message: Message): Promise<void> {
+async function removeBotFastActionReactions(message: Message): Promise<void> {
   const botUserId = message.client.user?.id;
   if (!botUserId) {
     return;
   }
 
-  try {
-    const reaction =
-      message.reactions.cache.get(FAST_REGENERATION_EMOJI) ?? message.reactions.resolve(FAST_REGENERATION_EMOJI);
-    await reaction?.users.remove(botUserId);
-  } catch (error) {
-    log.warn("[fastRegeneration] Failed to remove regeneration reaction", error);
+  for (const emoji of FAST_ACTION_EMOJIS) {
+    try {
+      const reaction = message.reactions.cache.get(emoji) ?? message.reactions.resolve(emoji);
+      await reaction?.users.remove(botUserId);
+    } catch (error) {
+      log.warn(`[fastRegeneration] Failed to remove fast action reaction "${emoji}"`, error);
+    }
   }
 }
 
@@ -69,7 +106,7 @@ export async function clearFastRegenerationEntriesForChannel(channelId: string):
   const entries = [...fastRegenerationEntries.values()].filter((entry) => entry.channelId === channelId);
   for (const entry of entries) {
     forgetFastRegenerationEntry(entry.messageId);
-    await removeBotRegenerationReaction(entry.message);
+    await removeBotFastActionReactions(entry.message);
   }
 }
 
@@ -77,7 +114,7 @@ export async function clearFastRegenerationEntriesForGuild(guildId: string): Pro
   const entries = [...fastRegenerationEntries.values()].filter((entry) => entry.guildId === guildId);
   for (const entry of entries) {
     forgetFastRegenerationEntry(entry.messageId);
-    await removeBotRegenerationReaction(entry.message);
+    await removeBotFastActionReactions(entry.message);
   }
 }
 
@@ -86,6 +123,7 @@ export interface FastRegenerationRecorderOptions {
   triggerUsername: string;
   locale: string;
   member: GuildMember | null;
+  enabledActions: FastActionEmoji[];
 }
 
 export interface FastRegenerationRecorder {
@@ -96,6 +134,7 @@ export interface FastRegenerationRecorder {
 export function createFastRegenerationRecorder(options: FastRegenerationRecorderOptions): FastRegenerationRecorder {
   let latestMessage: Message | null = null;
   let latestPersonaId: number | undefined;
+  const enabledActions = [...new Set(options.enabledActions)];
 
   return {
     record(message, personaId) {
@@ -108,7 +147,7 @@ export function createFastRegenerationRecorder(options: FastRegenerationRecorder
     },
 
     async arm() {
-      if (!latestMessage?.guildId) {
+      if (!latestMessage?.guildId || enabledActions.length === 0) {
         return;
       }
 
@@ -120,16 +159,19 @@ export function createFastRegenerationRecorder(options: FastRegenerationRecorder
       forgetFastRegenerationEntry(message.id);
 
       try {
-        await message.react(FAST_REGENERATION_EMOJI);
+        for (const emoji of enabledActions) {
+          await message.react(emoji);
+        }
       } catch (error) {
-        log.warn(`[fastRegeneration] Failed to add regeneration reaction to messageId=${message.id}`, error);
+        await removeBotFastActionReactions(message);
+        log.warn(`[fastRegeneration] Failed to add fast action reactions to messageId=${message.id}`, error);
         return;
       }
 
       const timeoutMs = getFastRegenerationReactionTimeoutMs();
       const timeout = setTimeout(() => {
         fastRegenerationEntries.delete(message.id);
-        void removeBotRegenerationReaction(message);
+        void removeBotFastActionReactions(message);
       }, timeoutMs);
 
       fastRegenerationEntries.set(message.id, {
@@ -145,6 +187,7 @@ export function createFastRegenerationRecorder(options: FastRegenerationRecorder
         armedAt: Date.now(),
         consumed: false,
         message,
+        enabledActions,
       });
     },
   };

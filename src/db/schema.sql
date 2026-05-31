@@ -402,7 +402,9 @@ CREATE TABLE IF NOT EXISTS tomori_configs (
   channel_memory_enabled BOOLEAN DEFAULT false,
   imagegen_enabled BOOLEAN DEFAULT true,
   videogen_enabled BOOLEAN DEFAULT false,
-  fast_regeneration_enabled BOOLEAN DEFAULT true,
+  fast_regeneration_enabled BOOLEAN DEFAULT false,
+  fast_regeneration_retry_enabled BOOLEAN DEFAULT false,
+  fast_regeneration_continue_enabled BOOLEAN DEFAULT false,
   thread_creation_enabled BOOLEAN DEFAULT true,
   tool_notice_hidden_keys TEXT[] DEFAULT '{}',
   llm_disabled_params TEXT[] DEFAULT '{}', -- DEPRECATED Phase 1.5 Pass B: mirror of saved_provider_configs
@@ -711,9 +713,11 @@ SELECT add_column_if_not_exists('tomori_configs', 'deliberate_tool_triggers', 'J
 -- NULL uses DELIBERATE_TOOL_CONTEXT_TURNS (default 4); 0 disables retained tool context.
 SELECT add_column_if_not_exists('tomori_configs', 'deliberate_tool_context_turns', 'INTEGER', 'NULL');
 
--- Fast regeneration reaction (May 2026)
--- When TRUE, user-triggered Tomori turns get a short-lived regenerate reaction.
-SELECT add_column_if_not_exists('tomori_configs', 'fast_regeneration_enabled', 'BOOLEAN', 'true');
+-- Fast regeneration reactions (May 2026)
+-- Master switch plus per-action toggles for short-lived user-triggered follow-up reactions.
+SELECT add_column_if_not_exists('tomori_configs', 'fast_regeneration_enabled', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('tomori_configs', 'fast_regeneration_retry_enabled', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('tomori_configs', 'fast_regeneration_continue_enabled', 'BOOLEAN', 'false');
 
 -- Add LLM sampling parameter columns (February 2026)
 -- DEPRECATED Phase 1.5 Pass B: all sampler columns are now canonical in saved_provider_configs

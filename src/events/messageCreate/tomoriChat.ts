@@ -75,6 +75,7 @@ import { routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
 import {
   clearFastRegenerationEntriesForChannel,
   createFastRegenerationRecorder,
+  getEnabledFastRegenerationActions,
 } from "@/utils/discord/fastRegeneration";
 import { sql } from "@/utils/db/client";
 import { loadEmojiStickerCache } from "../../utils/cache/emojiStickerCache";
@@ -2781,10 +2782,13 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
     }
   }
 
+  const enabledFastRegenerationActions = earlyTomoriState
+    ? getEnabledFastRegenerationActions(earlyTomoriState.config)
+    : [];
   const shouldOfferFastRegeneration =
     Boolean(message.guildId) &&
     Boolean(earlyTomoriState) &&
-    earlyTomoriState?.config.fast_regeneration_enabled !== false &&
+    enabledFastRegenerationActions.length > 0 &&
     !isPersonaJob &&
     !isUserImpersonation &&
     !isStopResponse &&
@@ -2800,6 +2804,7 @@ It's just 300 yen. Please. Just buy the damn audio so Bredrumb can pay the bills
         triggerUsername: triggererUsername,
         locale,
         member: manualTriggerInvoker?.member ?? message.member,
+        enabledActions: enabledFastRegenerationActions,
       })
     : null;
   streamingContext.recordTurnOutputMessage = (outputMessage, personaId) => {

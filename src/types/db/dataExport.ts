@@ -160,6 +160,8 @@ export const serverConfigExportSchema = z.object({
   deliberate_tool_context_turns: z.number().int().min(0).max(10).nullable().optional(),
   deliberate_tool_triggers: z.record(z.string(), z.array(z.string())).optional(),
   fast_regeneration_enabled: z.boolean().optional(),
+  fast_regeneration_retry_enabled: z.boolean().optional(),
+  fast_regeneration_continue_enabled: z.boolean().optional(),
   cooldown_type: z.number().int().min(0).max(4).optional(),
   cooldown_length: z.number().int().min(1).max(86400).optional(),
   stm_privacy_bypass: z.boolean().optional(),
