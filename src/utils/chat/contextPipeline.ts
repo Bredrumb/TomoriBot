@@ -242,15 +242,21 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     );
   }
 
-  // 4. Derive an effective persona with has_tools=false when tools are
-  // suppressed for the turn. Every provider's tool-list builder gates on
-  // persona.llm.has_tools, so this is the universal kill switch; the
-  // streamingContext.disableAllTools flag alone is only honored by a couple
-  // of specific tools (NovelAI provider, interactWithRecentMessageTool).
+  // 4. Derive an effective persona for this turn, applying overrides in order:
+  //    a) RP-channel: zero out emoji/sticker flags so context builders skip their
+  //       DB fallback and the sticker tool is not registered (gates on these flags).
+  //    b) disableAllTools: set has_tools=false as the universal kill switch for
+  //       every provider's tool-list builder.
+  const rpBasePersona = assets.isRpChannel
+    ? {
+        ...turn.persona,
+        config: { ...turn.persona.config, emoji_usage_enabled: false, sticker_usage_enabled: false },
+      }
+    : turn.persona;
   const effectivePersona =
-    streamingContext.disableAllTools && turn.persona.llm.has_tools
-      ? { ...turn.persona, llm: { ...turn.persona.llm, has_tools: false } }
-      : turn.persona;
+    streamingContext.disableAllTools && rpBasePersona.llm.has_tools
+      ? { ...rpBasePersona, llm: { ...rpBasePersona.llm, has_tools: false } }
+      : rpBasePersona;
   const triggeredPersonaIdSet = new Set(turn.triggeredPersonaIds);
   // Mirror personal memories: only surface public attributes for personas that have
   // actually spoken in the conversation window (are in syntheticUsers), plus any
@@ -389,9 +395,10 @@ async function loadPersonaAssets(turn: ChatTurn): Promise<{
   emojiStrings: string[];
   loadedEmojis: ServerEmojiRow[] | null;
   loadedStickers: ServerStickerRow[] | null;
+  isRpChannel: boolean;
 }> {
   if (turn.isDMChannel || !turn.guild || !turn.persona.server_id) {
-    return { emojiStrings: [], loadedEmojis: null, loadedStickers: null };
+    return { emojiStrings: [], loadedEmojis: null, loadedStickers: null, isRpChannel: false };
   }
 
   const rpParentId = turn.lockedTurn.admission.channel.isThread() ? turn.lockedTurn.admission.channel.parentId : null;
@@ -406,7 +413,7 @@ async function loadPersonaAssets(turn: ChatTurn): Promise<{
   );
   const emojiStrings =
     emojis?.map((emoji) => `<${emoji.is_animated ? "a" : ""}:${emoji.emoji_name}:${emoji.emoji_disc_id}>`) ?? [];
-  return { emojiStrings, loadedEmojis: emojis, loadedStickers: stickers };
+  return { emojiStrings, loadedEmojis: emojis, loadedStickers: stickers, isRpChannel };
 }
 
 async function buildSimplifiedHistory(

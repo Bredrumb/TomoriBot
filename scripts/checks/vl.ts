@@ -93,7 +93,35 @@ const TEST_FILE_META: Record<string, { displayName: string; hint: string }> = {
   },
   "preset-import.regression.test.ts": {
     displayName: "Preset Import",
-    hint: "Run `bun test tests/regression/preset-import.regression.test.ts`",
+    hint: "Run `bun test tests/regression/db/preset-import.regression.test.ts`",
+  },
+  "personaQueue.test.ts": {
+    displayName: "Persona Queue",
+    hint: "Run `bun test tests/unit/chat/personaQueue.test.ts`",
+  },
+  "presetAttributePublicFlags.test.ts": {
+    displayName: "Preset Attribute Public Flags",
+    hint: "Run `bun test tests/unit/preset/presetAttributePublicFlags.test.ts`",
+  },
+  "reasoningContentSpillGuard.test.ts": {
+    displayName: "Reasoning Content Spill Guard",
+    hint: "Run `bun test tests/unit/providers/reasoningContentSpillGuard.test.ts`",
+  },
+  "thinkBlockContentStripper.test.ts": {
+    displayName: "Think Block Content Stripper",
+    hint: "Run `bun test tests/unit/providers/thinkBlockContentStripper.test.ts`",
+  },
+  "bufferManager.test.ts": {
+    displayName: "Stream Buffer Manager",
+    hint: "Run `bun test tests/unit/stream/bufferManager.test.ts`",
+  },
+  "deliberateToolMode.test.ts": {
+    displayName: "Deliberate Tool Mode",
+    hint: "Run `bun test tests/unit/tools/deliberateToolMode.test.ts`",
+  },
+  "fetchUrlUrlSafety.test.ts": {
+    displayName: "Fetch URL Safety",
+    hint: "Run `bun test tests/unit/tools/fetchUrlUrlSafety.test.ts`",
   },
 };
 
@@ -222,8 +250,9 @@ async function runAudit(): Promise<ResultItem> {
   return {
     name: "Dependency Audit (bun audit)",
     exitCode: hasHighOrCritical ? 1 : exitCode !== 0 ? 1 : 0,
-    fatal: hasHighOrCritical,
-    isWarning: exitCode !== 0 && !hasHighOrCritical,
+    // Audit issues are never contributor-caused — warn locally, block only in the deploy pipeline
+    fatal: false,
+    isWarning: hasHighOrCritical || exitCode !== 0,
   };
 }
 
