@@ -20,7 +20,7 @@
         "@types/dotenv": "^8.2.3",
         "@types/node": "^25.3.5",
         "@types/pg": "^8.18.0",
-        "axios": "^1.15.0",
+        "axios": "^1.16.1",
         "bing-translate-api": "^4.2.0",
         "bun-types": "^1.3.10",
         "discord.js": "14.25.1",
@@ -78,6 +78,7 @@
     "@aws-sdk/xml-builder>fast-xml-parser": "5.7.0",
     "@hono/node-server": "1.19.13",
     "ajv": "^8.18.0",
+    "axios": "^1.16.1",
     "body-parser": ">=2.2.1",
     "body-parser>qs": "6.14.2",
     "brace-expansion": ">=5.0.5",
@@ -762,7 +763,7 @@
 
     "aws4": ["aws4@1.13.2", "", {}, "sha512-lHe62zvbTB5eEABUVi/AwVh0ZKY9rMMDhmm+eeyuuUQbQ3+J+fONVQOZyj+DdrvD4BY33uYniyRJ4UJIaSKAfw=="],
 
-    "axios": ["axios@1.15.2", "", { "dependencies": { "follow-redirects": "^1.15.11", "form-data": "^4.0.5", "proxy-from-env": "^2.1.0" } }, "sha512-wLrXxPtcrPTsNlJmKjkPnNPK2Ihe0hn0wGSaTEiHRPxwjvJwT3hKmXF4dpqxmPO9SoNb2FsYXj/xEo0gHN+D5A=="],
+    "axios": ["axios@1.16.1", "", { "dependencies": { "follow-redirects": "^1.16.0", "form-data": "^4.0.5", "https-proxy-agent": "^5.0.1", "proxy-from-env": "^2.1.0" } }, "sha512-caYkukvroVPO8KrzuJEb50Hm07KwfBZPEC3VeFHTsqWHvKTsy54hjJz9BS/cdaypROE2rH6xvm9mHX4fgWkr3A=="],
 
     "axios-cookiejar-support": ["axios-cookiejar-support@6.0.5", "", { "dependencies": { "http-cookie-agent": "^7.0.3" }, "peerDependencies": { "axios": ">=0.20.0", "tough-cookie": ">=4.0.0" } }, "sha512-ldPOQCJWB0ipugkTNVB8QRl/5L2UgfmVNVQtS9en1JQJ1wW588PqAmymnwmmgc12HLDzDtsJ28xE2ppj4rD4ng=="],
 
