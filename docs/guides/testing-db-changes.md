@@ -118,6 +118,21 @@ Each test file has at least one `it.skip("[REGRESSION PROBE] ...")` block. To co
 4. Revert the regression and re-run — the probe test must pass again.
 5. Re-skip the probe test before committing.
 
+## Rehearsing migrations against a production snapshot
+
+The regression harness above runs against a *fresh* schema. Before shipping a release branch with many migrations, also rehearse them against a copy of **real production data** to catch issues that only surface against existing rows (orphaned references, backfill edge cases, data-pattern assumptions).
+
+1. Restore a production snapshot into a scratch database. The target Postgres **must have `pgvector` available** — see the [pgvector prerequisite in the Safe Migration guide](safe-migration.md#prerequisite-the-pgvector-extension). Restore with `ON_ERROR_STOP=1` so any failure surfaces instead of silently dropping tables.
+2. Point `POSTGRES_DB` at that scratch database and run the rehearsal:
+
+   ```bash
+   POSTGRES_DB=tomodb_prodrehearse POSTGRES_PASSWORD=<pw> \
+     bun run scripts/db/rehearse-migration.ts
+   ```
+
+   This invokes the same `initializeDatabase` path the bot runs at boot (schema + seed + pending migrations), so a clean run means the same migrations will apply cleanly in production. The script refuses to run when `RUN_ENV=production`.
+3. Run your own integrity queries against the result (orphan checks, row-count parity vs. the snapshot, and any backfill-specific assertions for the migrations under test).
+
 ## CI integration
 
 CI sets `POSTGRES_PASSWORD` and `POSTGRES_HOST` in the job environment. `bun run test` detects the credentials, provisions a fresh disposable database per run, and drops it after tests complete — no static `tomodb_test` database or manual CI setup is required.

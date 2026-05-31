@@ -17,6 +17,27 @@ Follow these steps BEFORE running `git pull`:
 3. **Note the current commit** — run `git rev-parse HEAD` and save the output in case rollback is needed.
 4. **Pull and restart** — once the backup is safely on disk, you're safe to pull and restart.
 
+### Prerequisite: the `pgvector` extension
+
+A full backup is a plain-SQL `pg_dump` (`backupData.ts` runs `pg_dump --clean --if-exists -f`), so it contains the `vector`-typed `document_chunks` table used for RAG. **The target Postgres must have the `pgvector` extension available before you restore**, or the dump's `CREATE EXTENSION IF NOT EXISTS vector` cannot run and the `document_chunks` table fails to create.
+
+Install it once on the host (matching your Postgres major version), e.g. for Postgres 16:
+
+```bash
+sudo apt-get install -y postgresql-16-pgvector
+```
+
+Confirm it is available:
+
+```bash
+psql -c "SELECT name, default_version FROM pg_available_extensions WHERE name = 'vector';"
+```
+
+If you restore without it:
+
+- The project's `restore-backup` (and any `psql -f` run with `ON_ERROR_STOP=1`) **aborts early** with `extension "vector" is not available` — no data is loaded. Install pgvector and retry.
+- A manual `psql -f` run that **ignores errors** (`ON_ERROR_STOP=0`) is worse: the failed `COPY public.document_chunks` desynchronizes psql's input parser, which then mis-parses the following `COPY` data rows as SQL (a `syntax error at or near …` cascade). This silently drops whole tables (observed: `documents` and `llms`), leaving a partially-restored database that looks intact but has lost rows. Always restore with `ON_ERROR_STOP=1` so failures surface immediately.
+
 ### Option A: Use the project's backup script
 
 TomoriBot includes three backup scripts, each targeting different data:
