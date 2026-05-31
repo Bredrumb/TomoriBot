@@ -48,3 +48,15 @@ export function invalidateTomoriStateCache(serverDiscId: string): void {
   // 2. Drop any recorded DB error so next read can re-evaluate freshly
   lastDbError.delete(serverDiscId);
 }
+
+/**
+ * Invalidates multiple server snapshots. Used when one shared source row
+ * affects many pointer personas.
+ *
+ * @param serverDiscIds - Discord server IDs to invalidate
+ */
+export function invalidateTomoriStateCaches(serverDiscIds: Iterable<string>): void {
+  for (const serverDiscId of serverDiscIds) {
+    invalidateTomoriStateCache(serverDiscId);
+  }
+}

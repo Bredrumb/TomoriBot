@@ -13,7 +13,7 @@ import { encryptApiKey } from "../../utils/security/crypto";
 import { configRepository, llmModelRepo, personaRepository, serverRepository } from "@/utils/db/repositories";
 
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { getCachedPresetAvatar, getPresetAvatarBuffer, hashAvatarBuffer } from "@/utils/image/avatarHelper";
+import { getCachedPresetAvatar, getPresetAvatarBuffer } from "@/utils/image/avatarHelper";
 import { lazySyncGuildEmojis } from "@/utils/cache/emojiLazySync";
 import { lazySyncGuildStickers } from "@/utils/cache/stickerLazySync";
 import { formatLlmDisplayLabel } from "@/utils/provider/modelDisplay";
@@ -652,32 +652,6 @@ export async function execute(
               ? `Set preset avatar for "${selectedPresetOption.name}"`
               : "Reset guild avatar to bot default";
             log.info(`${actionDescription} for guild ${interaction.guild.id} during setup`);
-
-            if (newTomoriState?.persona_id && avatarValue) {
-              const hashBuffer = presetAvatarBuffer ?? (await getPresetAvatarBuffer(presetRow));
-              const avatarHash = hashBuffer ? hashAvatarBuffer(hashBuffer) : null;
-              if (avatarHash) {
-                const avatarSyncMarked = await personaRepository.markOfficialPresetAvatarSynced(
-                  newTomoriState.persona_id,
-                  presetRow,
-                  avatarHash,
-                );
-                if (!avatarSyncMarked) {
-                  log.warn(`Failed to record preset avatar sync state during setup for ${newTomoriState.persona_id}`);
-                }
-              }
-            } else if (newTomoriState?.persona_id && !presetRow.preset_avatar_path?.trim()) {
-              const avatarSyncMarked = await personaRepository.markOfficialPresetAvatarSynced(
-                newTomoriState.persona_id,
-                presetRow,
-                null,
-              );
-              if (!avatarSyncMarked) {
-                log.warn(
-                  `Failed to record preset avatar reset sync state during setup for ${newTomoriState.persona_id}`,
-                );
-              }
-            }
           } else {
             avatarUpdateFailed = true;
             log.warn(`Failed to update guild avatar during setup: ${response.status} ${response.statusText}`);

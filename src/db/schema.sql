@@ -146,6 +146,13 @@ SELECT add_column_if_not_exists('personas', 'is_alter', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('personas', 'webhook_avatar_url', 'TEXT');
 -- persona_lineage_id: Shared identity namespace for cross-server personal memory pooling
 SELECT add_column_if_not_exists('personas', 'persona_lineage_id', 'BIGINT');
+-- is_pointer/preset_*: copy-on-write pointer to a live official persona preset.
+SELECT add_column_if_not_exists('personas', 'is_pointer', 'BOOLEAN', 'false', 'NOT NULL');
+SELECT add_column_if_not_exists('personas', 'preset_lineage_id', 'BIGINT');
+SELECT add_column_if_not_exists('personas', 'preset_language', 'TEXT');
+UPDATE personas SET is_pointer = false WHERE is_pointer IS NULL;
+ALTER TABLE personas ALTER COLUMN is_pointer SET DEFAULT false;
+ALTER TABLE personas ALTER COLUMN is_pointer SET NOT NULL;
 -- nai_tags: Imageboard-style persona appearance tags for NovelAI character profile resolution
 SELECT add_column_if_not_exists('personas', 'nai_tags', 'TEXT[]', 'ARRAY[]::TEXT[]');
 -- nai_char_ref_url: Stored reference image URL/path for NovelAI character consistency
@@ -239,6 +246,9 @@ END $$;
 -- Create index for efficient multi-persona queries (main persona is queried frequently)
 CREATE INDEX IF NOT EXISTS idx_personas_server_is_alter ON personas(server_id, is_alter);
 CREATE INDEX IF NOT EXISTS idx_personas_persona_lineage_id ON personas(persona_lineage_id);
+CREATE INDEX IF NOT EXISTS idx_personas_pointer_preset
+  ON personas(preset_lineage_id, preset_language)
+  WHERE is_pointer = true;
 
 -- Phase 6 Step #14.6: enforce exactly one main persona (is_alter=false) per server.
 CREATE UNIQUE INDEX IF NOT EXISTS personas_one_main_per_server
@@ -606,169 +616,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_persona_presets_lineage_language_unique
   ON persona_presets(preset_lineage_id, preset_language)
   WHERE preset_lineage_id IS NOT NULL;
 
-CREATE OR REPLACE FUNCTION persona_preset_array_starts_with(
-  candidate TEXT[],
-  prefix TEXT[]
-) RETURNS BOOLEAN AS $$
-DECLARE
-  candidate_array TEXT[] := COALESCE(candidate, ARRAY[]::TEXT[]);
-  prefix_array TEXT[] := COALESCE(prefix, ARRAY[]::TEXT[]);
-  candidate_len INT := COALESCE(array_length(candidate_array, 1), 0);
-  prefix_len INT := COALESCE(array_length(prefix_array, 1), 0);
-BEGIN
-  IF prefix_len = 0 THEN
-    RETURN true;
-  END IF;
-
-  IF candidate_len < prefix_len THEN
-    RETURN false;
-  END IF;
-
-  RETURN candidate_array[1:prefix_len] = prefix_array;
-END;
-$$ LANGUAGE plpgsql IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION persona_preset_rebase_text_array(
-  current_array TEXT[],
-  old_base_array TEXT[],
-  new_base_array TEXT[]
-) RETURNS TEXT[] AS $$
-DECLARE
-  current_values TEXT[] := COALESCE(current_array, ARRAY[]::TEXT[]);
-  old_base_values TEXT[] := COALESCE(old_base_array, ARRAY[]::TEXT[]);
-  new_base_values TEXT[] := COALESCE(new_base_array, ARRAY[]::TEXT[]);
-  current_len INT := COALESCE(array_length(current_values, 1), 0);
-  old_base_len INT := COALESCE(array_length(old_base_values, 1), 0);
-  local_tail TEXT[] := ARRAY[]::TEXT[];
-BEGIN
-  IF NOT persona_preset_array_starts_with(current_values, old_base_values) THEN
-    RETURN current_values;
-  END IF;
-
-  IF current_len > old_base_len THEN
-    local_tail := current_values[(old_base_len + 1):current_len];
-  END IF;
-
-  RETURN new_base_values || local_tail;
-END;
-$$ LANGUAGE plpgsql IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION persona_preset_rebase_bool_array(
-  current_bool_array BOOLEAN[],
-  current_text_array TEXT[],
-  old_base_text_array TEXT[],
-  new_base_bool_array BOOLEAN[]
-) RETURNS BOOLEAN[] AS $$
-DECLARE
-  current_flags BOOLEAN[] := COALESCE(current_bool_array, ARRAY[]::BOOLEAN[]);
-  current_values TEXT[] := COALESCE(current_text_array, ARRAY[]::TEXT[]);
-  old_base_values TEXT[] := COALESCE(old_base_text_array, ARRAY[]::TEXT[]);
-  new_base_flags BOOLEAN[] := COALESCE(new_base_bool_array, ARRAY[]::BOOLEAN[]);
-  current_len INT := COALESCE(array_length(current_values, 1), 0);
-  old_base_len INT := COALESCE(array_length(old_base_values, 1), 0);
-  local_tail BOOLEAN[] := ARRAY[]::BOOLEAN[];
-  idx INT;
-BEGIN
-  IF current_len > old_base_len THEN
-    FOR idx IN (old_base_len + 1)..current_len LOOP
-      local_tail := array_append(local_tail, COALESCE(current_flags[idx], false));
-    END LOOP;
-  END IF;
-
-  RETURN new_base_flags || local_tail;
-END;
-$$ LANGUAGE plpgsql IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION persona_preset_snapshot_text_array(
-  snapshot JSONB,
-  snapshot_key TEXT
-) RETURNS TEXT[] AS $$
-BEGIN
-  IF snapshot IS NULL OR jsonb_typeof(snapshot -> snapshot_key) <> 'array' THEN
-    RETURN ARRAY[]::TEXT[];
-  END IF;
-
-  RETURN ARRAY(SELECT jsonb_array_elements_text(snapshot -> snapshot_key));
-END;
-$$ LANGUAGE plpgsql IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION persona_preset_snapshot_bool_array(
-  snapshot JSONB,
-  snapshot_key TEXT
-) RETURNS BOOLEAN[] AS $$
-BEGIN
-  IF snapshot IS NULL OR jsonb_typeof(snapshot -> snapshot_key) <> 'array' THEN
-    RETURN ARRAY[]::BOOLEAN[];
-  END IF;
-
-  RETURN ARRAY(
-    SELECT item.value::BOOLEAN
-    FROM jsonb_array_elements_text(snapshot -> snapshot_key) AS item(value)
-  );
-END;
-$$ LANGUAGE plpgsql IMMUTABLE;
-
-CREATE TABLE IF NOT EXISTS persona_preset_sync_state (
-  persona_id INT PRIMARY KEY,
-  preset_lineage_id BIGINT NOT NULL,
-  preset_language TEXT NOT NULL DEFAULT 'en-US',
-  sync_mode TEXT NOT NULL DEFAULT 'auto',
-  avatar_sync_mode TEXT NOT NULL DEFAULT 'auto',
-  avatar_source_path TEXT,
-  avatar_source_hash TEXT,
-  avatar_synced_at TIMESTAMP,
-  base_snapshot JSONB NOT NULL DEFAULT '{}'::JSONB,
-  last_synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (persona_id) REFERENCES personas(persona_id) ON DELETE CASCADE,
-  CHECK (sync_mode IN ('auto', 'manual', 'forked')),
-  CHECK (avatar_sync_mode IN ('auto', 'manual'))
-);
-
-ALTER TABLE persona_preset_sync_state
-  ADD COLUMN IF NOT EXISTS avatar_sync_mode TEXT NOT NULL DEFAULT 'auto';
-
-ALTER TABLE persona_preset_sync_state
-  ADD COLUMN IF NOT EXISTS avatar_source_path TEXT;
-
-ALTER TABLE persona_preset_sync_state
-  ADD COLUMN IF NOT EXISTS avatar_source_hash TEXT;
-
-ALTER TABLE persona_preset_sync_state
-  ADD COLUMN IF NOT EXISTS avatar_synced_at TIMESTAMP;
-
-DO $$
-BEGIN
-  ALTER TABLE persona_preset_sync_state
-    ADD CONSTRAINT chk_persona_preset_sync_state_avatar_sync_mode
-    CHECK (avatar_sync_mode IN ('auto', 'manual'));
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
-END $$;
-
-UPDATE persona_preset_sync_state
-SET avatar_source_path = COALESCE(
-  base_snapshot ->> 'preset_avatar_path',
-  CASE preset_lineage_id
-    WHEN 4 THEN 'src/db/img/default.png'
-    WHEN 716 THEN 'src/db/img/bratty.png'
-    WHEN 1770 THEN 'src/db/img/gloomy.png'
-    WHEN 3585 THEN 'src/db/img/shy.png'
-    WHEN 50 THEN 'src/db/img/blind.png'
-    ELSE NULL
-  END
-)
-WHERE avatar_source_path IS NULL;
-
-CREATE INDEX IF NOT EXISTS idx_persona_preset_sync_state_lineage
-  ON persona_preset_sync_state(preset_lineage_id, preset_language);
-
-DROP TRIGGER IF EXISTS update_persona_preset_sync_state_timestamp ON persona_preset_sync_state;
-CREATE TRIGGER update_persona_preset_sync_state_timestamp
-BEFORE UPDATE ON persona_preset_sync_state
-FOR EACH ROW
-EXECUTE FUNCTION update_timestamp();
 
 -- Table: system_prompt_presets
 -- Purpose: Store pre-made system prompt presets that users can apply

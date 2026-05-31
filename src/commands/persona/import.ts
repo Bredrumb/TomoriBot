@@ -211,18 +211,7 @@ async function persistImportedMainAvatar(serverDiscId: string, avatarImageBuffer
     return;
   }
 
-  await personaRepository.markOfficialPresetAvatarManual(mainPersona.persona_id);
   invalidateTomoriStateCache(serverDiscId);
-}
-
-async function markMainPersonaAvatarManual(serverDiscId: string): Promise<void> {
-  const mainPersona = (await personaRepository.loadAllForServer(serverDiscId)).find((persona) => !persona.is_alter);
-
-  if (!mainPersona?.persona_id) {
-    return;
-  }
-
-  await personaRepository.markOfficialPresetAvatarManual(mainPersona.persona_id);
 }
 
 /**
@@ -698,9 +687,6 @@ export async function execute(
 
       // Invalidate cache so next message gets fresh persona/config
       invalidateTomoriStateCache(serverDiscId);
-      if (!isDM) {
-        await markMainPersonaAvatarManual(serverDiscId);
-      }
 
       // 12. Try to set TomoriBot's server-specific avatar and nickname (guild-only, non-fatal if fails)
       let avatarUpdateSucceeded = false;
@@ -970,9 +956,12 @@ export async function execute(
       // 11d. Remove overlapping triggers from the import
       const importTriggers = presetData.trigger_words ?? [];
       const uniqueTriggers = importTriggers.filter((trigger) => !allTriggerWords.has(normalizeTriggerWord(trigger)));
+      const matchingOfficialPreset = await presetRepository.findMatchingOfficialPresetForImport(presetData);
+      const createdAsPointer = matchingOfficialPreset !== null;
+      const displayedTriggers = createdAsPointer ? importTriggers : uniqueTriggers;
 
       // Track if there are no triggers (we'll warn but still allow import)
-      const hasNoTriggers = uniqueTriggers.length === 0;
+      const hasNoTriggers = displayedTriggers.length === 0;
 
       // 11f. Get the main persona to copy config from
       const mainPersona = allPersonas.find((p) => !p.is_alter);
@@ -1011,23 +1000,32 @@ export async function execute(
       const importedLineageId = presetData.persona_lineage_id ?? null;
       let newAlterRow: { persona_id?: number } | undefined;
       try {
-        newAlterRow =
-          (await personaRepository.createAlterPersona({
-            serverId: mainPersona.server_id,
-            nickname: presetData.tomori_nickname,
-            attributes: presetData.attribute_list,
-            attributePublicFlags: presetData.attribute_public_flags,
-            sampleDialoguesIn: presetData.sample_dialogues_in,
-            sampleDialoguesOut: presetData.sample_dialogues_out,
-            personaLineageId: identityMode === "preserve" ? importedLineageId : null,
-            naiTags: presetData.nai_tags ?? [],
-            naiCharRefUrl: presetData.nai_char_ref_url ?? null,
-            naiAttgAuthor: presetData.nai_attg_author ?? null,
-            naiAttgTitle: presetData.nai_attg_title ?? null,
-            naiAttgTags: presetData.nai_attg_tags ?? null,
-            naiAttgGenre: presetData.nai_attg_genre ?? null,
-            naiAttgStars: presetData.nai_attg_stars ?? null,
-          })) ?? undefined;
+        newAlterRow = matchingOfficialPreset
+          ? ((await personaRepository.createPresetPointerAlterPersona({
+              serverId: mainPersona.server_id,
+              nickname: presetData.tomori_nickname,
+              preset: matchingOfficialPreset,
+              personaLineageId: identityMode === "preserve" ? importedLineageId : null,
+              useFreshLineage: identityMode === "fork",
+              triggerWords: importTriggers,
+              personaPrompt: typeof presetData.persona_prompt === "string" ? presetData.persona_prompt : null,
+            })) ?? undefined)
+          : ((await personaRepository.createAlterPersona({
+              serverId: mainPersona.server_id,
+              nickname: presetData.tomori_nickname,
+              attributes: presetData.attribute_list,
+              attributePublicFlags: presetData.attribute_public_flags,
+              sampleDialoguesIn: presetData.sample_dialogues_in,
+              sampleDialoguesOut: presetData.sample_dialogues_out,
+              personaLineageId: identityMode === "preserve" ? importedLineageId : null,
+              naiTags: presetData.nai_tags ?? [],
+              naiCharRefUrl: presetData.nai_char_ref_url ?? null,
+              naiAttgAuthor: presetData.nai_attg_author ?? null,
+              naiAttgTitle: presetData.nai_attg_title ?? null,
+              naiAttgTags: presetData.nai_attg_tags ?? null,
+              naiAttgGenre: presetData.nai_attg_genre ?? null,
+              naiAttgStars: presetData.nai_attg_stars ?? null,
+            })) ?? undefined);
       } catch (error) {
         if (isUniqueViolation(error)) {
           await interaction.editReply({
@@ -1065,21 +1063,23 @@ export async function execute(
       // 11h.1 Store alter trigger words + optional persona prompt in persona_configs
       const importedPersonaPrompt = typeof presetData.persona_prompt === "string" ? presetData.persona_prompt : null;
 
-      const personaConfigUpdated = await personaRepository.setPersonaConfig(
-        newTomoriId,
-        uniqueTriggers,
-        importedPersonaPrompt,
-      );
-      if (!personaConfigUpdated) {
-        await interaction.editReply({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(localizer(locale, "general.errors.update_failed_title"))
-              .setDescription(localizer(locale, "general.errors.update_failed_description"))
-              .setColor(ColorCode.ERROR),
-          ],
-        });
-        return;
+      if (!createdAsPointer) {
+        const personaConfigUpdated = await personaRepository.setPersonaConfig(
+          newTomoriId,
+          uniqueTriggers,
+          importedPersonaPrompt,
+        );
+        if (!personaConfigUpdated) {
+          await interaction.editReply({
+            embeds: [
+              new EmbedBuilder()
+                .setTitle(localizer(locale, "general.errors.update_failed_title"))
+                .setDescription(localizer(locale, "general.errors.update_failed_description"))
+                .setColor(ColorCode.ERROR),
+            ],
+          });
+          return;
+        }
       }
 
       const usedMainAvatarFallback = !avatarImageBuffer && Boolean(fallbackAvatarReference);
@@ -1088,8 +1088,8 @@ export async function execute(
       const descriptionParts = [
         localizer(locale, "commands.persona.import.alter_success_description", {
           nickname: presetData.tomori_nickname,
-          trigger_count: uniqueTriggers.length,
-          triggers: uniqueTriggers.length > 0 ? uniqueTriggers.join(", ") : "N/A",
+          trigger_count: displayedTriggers.length,
+          triggers: displayedTriggers.length > 0 ? displayedTriggers.join(", ") : "N/A",
         }),
       ];
 

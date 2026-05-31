@@ -61,6 +61,8 @@ export interface PresetExportData {
   trigger_words: string[];
   persona_prompt?: string | null;
   persona_lineage_id?: number;
+  /** Official preset lineage, when this export was materialized from a preset pointer */
+  preset_lineage_id?: number;
   /** Imageboard-style persona appearance tags for NovelAI character rendering */
   nai_tags?: string[];
   /** Persona-specific NovelAI character reference image URL */
@@ -140,6 +142,17 @@ export const presetExportDataSchema = z.object({
   trigger_words: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_TRIGGER_WORDS),
   persona_prompt: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),
   persona_lineage_id: z
+    .preprocess((value) => {
+      if (typeof value === "bigint") {
+        return Number(value);
+      }
+      if (typeof value === "string" && value.trim() !== "") {
+        return Number(value);
+      }
+      return value;
+    }, z.number().int().nonnegative())
+    .optional(),
+  preset_lineage_id: z
     .preprocess((value) => {
       if (typeof value === "bigint") {
         return Number(value);

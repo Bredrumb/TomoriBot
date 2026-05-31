@@ -10,7 +10,7 @@
  * add an import dependency layer without meaningful cohesion gain. Single class accepted.
  */
 import { sql } from "@/utils/db/client";
-import type { StPresetRow, StPresetNodeRow } from "@/types/db/schema";
+import type { StPresetRow, StPresetNodeRow, TomoriPresetRow } from "@/types/db/schema";
 import {
   PRESET_EXPORT_VERSION,
   PRESET_MAX_ATTRIBUTES,
@@ -31,6 +31,7 @@ import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import type { SillyTavernCardMetadata } from "@/utils/image/pngMetadata";
 import { dedupeTriggerWords, normalizeTriggerWord, stripSurroundingTriggerQuotes } from "@/utils/text/triggerWords";
 import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
+import { getBaseTriggerWords } from "@/utils/text/localizer";
 
 // ── SillyTavern conversion private types ──────────────────────────────────────
 
@@ -62,6 +63,54 @@ export type SillyTavernConversionResult =
     };
 
 const CONTINUATION_MARKER = " [truncated]";
+
+function normalizeLineageId(value: unknown): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === "bigint") {
+    return Number(value);
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  return null;
+}
+
+function arraysEqual<T>(left: readonly T[], right: readonly T[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function normalizePresetPublicFlags(preset: TomoriPresetRow): boolean[] {
+  return preset.preset_attribute_list.map(
+    (_attribute, index) => preset.preset_attribute_public_flags?.[index] ?? false,
+  );
+}
+
+function resolveOfficialPresetTriggerWords(preset: TomoriPresetRow): string[] {
+  const presetTriggerWords = dedupeTriggerWords(preset.preset_trigger_words ?? [], { lowercase: false });
+  if (presetTriggerWords.length > 0) {
+    return presetTriggerWords;
+  }
+  return dedupeTriggerWords(getBaseTriggerWords(preset.preset_language), { lowercase: false });
+}
+
+function resolveOfficialPresetPrompt(preset: TomoriPresetRow): string | null {
+  const trimmed = preset.persona_preset_desc.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeNullableText(value: string | null | undefined): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
 
 export class PresetRepository {
   // ── SillyTavern conversion private helpers (from sillyTavernImport.ts) ───────
@@ -377,6 +426,79 @@ export class PresetRepository {
     );
   }
 
+  async findMatchingOfficialPresetForImport(data: PresetExportData): Promise<TomoriPresetRow | null> {
+    const presetLineageId = normalizeLineageId(data.preset_lineage_id);
+    if (presetLineageId === null) {
+      return null;
+    }
+
+    if (
+      (data.nai_tags?.length ?? 0) > 0 ||
+      data.nai_char_ref_url ||
+      data.nai_attg_author ||
+      data.nai_attg_title ||
+      data.nai_attg_tags ||
+      data.nai_attg_genre ||
+      data.nai_attg_stars
+    ) {
+      return null;
+    }
+
+    const presets = await sql<TomoriPresetRow[]>`
+      SELECT *
+      FROM persona_presets
+      WHERE preset_lineage_id = ${presetLineageId}
+      ORDER BY preset_language ASC, persona_preset_id ASC
+    `;
+
+    const expectedPublicFlags = data.attribute_public_flags ?? buildPrivateAttributePublicFlags(data.attribute_list);
+    const expectedPrompt = normalizeNullableText(data.persona_prompt);
+    const expectedTriggers = dedupeTriggerWords(data.trigger_words, { lowercase: false });
+
+    return (
+      presets.find((preset) => {
+        return (
+          arraysEqual(preset.preset_attribute_list, data.attribute_list) &&
+          arraysEqual(normalizePresetPublicFlags(preset), expectedPublicFlags) &&
+          arraysEqual(preset.preset_sample_dialogues_in, data.sample_dialogues_in) &&
+          arraysEqual(preset.preset_sample_dialogues_out, data.sample_dialogues_out) &&
+          arraysEqual(resolveOfficialPresetTriggerWords(preset), expectedTriggers) &&
+          resolveOfficialPresetPrompt(preset) === expectedPrompt
+        );
+      }) ?? null
+    );
+  }
+
+  private async allocatePersonaLineageId(): Promise<number> {
+    const [row] = await sql<Array<{ lineage_id: number | string | bigint }>>`
+      SELECT nextval('persona_lineage_id_seq') AS lineage_id
+    `;
+
+    return Number(row.lineage_id);
+  }
+
+  private async loadPointerPresetForPersonaRow(personaRow: Record<string, unknown>): Promise<TomoriPresetRow | null> {
+    if (personaRow.is_pointer !== true) {
+      return null;
+    }
+
+    const presetLineageId = normalizeLineageId(personaRow.preset_lineage_id);
+    const presetLanguage = typeof personaRow.preset_language === "string" ? personaRow.preset_language : null;
+    if (presetLineageId === null || !presetLanguage) {
+      return null;
+    }
+
+    const [preset] = await sql<TomoriPresetRow[]>`
+      SELECT *
+      FROM persona_presets
+      WHERE preset_lineage_id = ${presetLineageId}
+        AND preset_language = ${presetLanguage}
+      LIMIT 1
+    `;
+
+    return preset ?? null;
+  }
+
   // ── ST preset DB operations (from stPresetDb.ts) ──────────────────────────
 
   /**
@@ -677,7 +799,8 @@ export class PresetRepository {
               SELECT
                 persona_id, persona_nickname, persona_lineage_id,
                 attribute_list, sample_dialogues_in, sample_dialogues_out,
-                is_alter, nai_tags, nai_char_ref_url,
+                is_alter, is_pointer, preset_lineage_id, preset_language,
+                nai_tags, nai_char_ref_url,
                 nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
               FROM personas
               WHERE server_id = ${serverId}
@@ -688,7 +811,8 @@ export class PresetRepository {
               SELECT
                 persona_id, persona_nickname, persona_lineage_id,
                 attribute_list, sample_dialogues_in, sample_dialogues_out,
-                is_alter, nai_tags, nai_char_ref_url,
+                is_alter, is_pointer, preset_lineage_id, preset_language,
+                nai_tags, nai_char_ref_url,
                 nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
               FROM personas
               WHERE server_id = ${serverId}
@@ -702,6 +826,7 @@ export class PresetRepository {
       }
 
       const presetData = personaRows[0];
+      const pointerPreset = await this.loadPointerPresetForPersonaRow(presetData as Record<string, unknown>);
       if (typeof targetPersonaId !== "number") {
         const mainCountRows = await sql`
           SELECT COUNT(*)::int AS count
@@ -739,18 +864,36 @@ export class PresetRepository {
         personaPrompt = personaConfigRows[0].persona_prompt ?? null;
       }
 
+      if (pointerPreset) {
+        triggerWords = resolveOfficialPresetTriggerWords(pointerPreset);
+        personaPrompt = resolveOfficialPresetPrompt(pointerPreset);
+      }
+
       const attributeRows = await sql<Array<{ attribute_text: string; is_public: boolean }>>`
         SELECT attribute_text, is_public
         FROM persona_attributes
         WHERE persona_id = ${presetData.persona_id}
         ORDER BY attribute_order
       `;
-      const exportedAttributes =
-        attributeRows.length > 0
+      const exportedAttributes = pointerPreset
+        ? pointerPreset.preset_attribute_list
+        : attributeRows.length > 0
           ? attributeRows.map((row) => row.attribute_text)
           : ((presetData.attribute_list as string[] | undefined) ?? []);
-      const exportedPublicFlags =
-        attributeRows.length > 0 ? attributeRows.map((row) => row.is_public) : exportedAttributes.map(() => false);
+      const exportedPublicFlags = pointerPreset
+        ? normalizePresetPublicFlags(pointerPreset)
+        : attributeRows.length > 0
+          ? attributeRows.map((row) => row.is_public)
+          : exportedAttributes.map(() => false);
+      const exportedSampleDialoguesIn = pointerPreset
+        ? pointerPreset.preset_sample_dialogues_in
+        : ((presetData.sample_dialogues_in as string[] | undefined) ?? []);
+      const exportedSampleDialoguesOut = pointerPreset
+        ? pointerPreset.preset_sample_dialogues_out
+        : ((presetData.sample_dialogues_out as string[] | undefined) ?? []);
+      const exportedPresetLineageId = pointerPreset
+        ? normalizeLineageId(pointerPreset.preset_lineage_id)
+        : normalizeLineageId(presetData.preset_lineage_id);
 
       // 4. Build export object with metadata (includes NovelAI persona fields)
       const exportData: PresetExport = {
@@ -761,11 +904,12 @@ export class PresetRepository {
           tomori_nickname: presetData.persona_nickname,
           attribute_list: exportedAttributes,
           attribute_public_flags: exportedPublicFlags,
-          sample_dialogues_in: presetData.sample_dialogues_in || [],
-          sample_dialogues_out: presetData.sample_dialogues_out || [],
+          sample_dialogues_in: exportedSampleDialoguesIn,
+          sample_dialogues_out: exportedSampleDialoguesOut,
           trigger_words: triggerWords || [],
           persona_prompt: personaPrompt,
           persona_lineage_id: lineageId,
+          ...(exportedPresetLineageId !== null ? { preset_lineage_id: exportedPresetLineageId } : {}),
           nai_tags: presetData.nai_tags || [],
           nai_char_ref_url: presetData.nai_char_ref_url ?? null,
           nai_attg_author: presetData.nai_attg_author ?? null,
@@ -818,6 +962,7 @@ export class PresetRepository {
         };
       }
       const validatedImportData = importValidation.data;
+      const matchingOfficialPreset = await this.findMatchingOfficialPresetForImport(validatedImportData);
 
       // 1. Validate persona-scoped config fields for SQL security.
       try {
@@ -844,6 +989,7 @@ export class PresetRepository {
       const serverId = serverRows[0].server_id;
       const mainTomoriId = serverRows[0].persona_id;
       const importedLineageId = validatedImportData.persona_lineage_id ?? null;
+      const importedPresetLineageId = normalizeLineageId(validatedImportData.preset_lineage_id);
 
       // 3. Enforce persona nickname uniqueness within this server (excluding current main persona)
       const conflictingNameRows = await sql<Array<{ persona_id: number }>>`
@@ -858,6 +1004,44 @@ export class PresetRepository {
         return {
           success: false,
           error: `commands.persona.import.error_name_conflict|${validatedImportData.tomori_nickname}`,
+        };
+      }
+
+      if (matchingOfficialPreset) {
+        const pointerLineageId = normalizeLineageId(matchingOfficialPreset.preset_lineage_id);
+        if (pointerLineageId === null) {
+          return { success: false, error: "commands.persona.import.error_import_failed" };
+        }
+
+        const targetPersonaLineageId =
+          identityMode === "fork"
+            ? await this.allocatePersonaLineageId()
+            : (normalizeLineageId(importedLineageId) ?? pointerLineageId);
+        const pointerRow = await personaRepository.applyPresetPointerToPersona({
+          personaId: mainTomoriId,
+          nickname: validatedImportData.tomori_nickname,
+          preset: matchingOfficialPreset,
+          personaLineageId: targetPersonaLineageId,
+          triggerWords: resolveOfficialPresetTriggerWords(matchingOfficialPreset),
+          personaPrompt: resolveOfficialPresetPrompt(matchingOfficialPreset),
+        });
+
+        if (!pointerRow) {
+          return { success: false, error: "commands.persona.import.error_import_failed" };
+        }
+
+        log.success(
+          `Successfully imported preset pointer for server ${serverDiscId}: ${validatedImportData.tomori_nickname}`,
+        );
+
+        return {
+          success: true,
+          itemsImported: {
+            nickname: validatedImportData.tomori_nickname,
+            attributeCount: validatedImportData.attribute_list.length,
+            dialogueCount: validatedImportData.sample_dialogues_in.length,
+            triggerWordCount: validatedImportData.trigger_words.length,
+          },
         };
       }
 
@@ -898,6 +1082,9 @@ export class PresetRepository {
               WHEN ${shouldUseImportedLineage} THEN ${importedLineageId}::bigint
               ELSE persona_lineage_id
             END,
+            is_pointer = false,
+            preset_lineage_id = ${importedPresetLineageId},
+            preset_language = NULL,
             nai_tags = ${naiTagsArrayLiteral}::text[],
             nai_char_ref_url = ${validatedImportData.nai_char_ref_url ?? null},
             nai_attg_author = ${validatedImportData.nai_attg_author ?? null},

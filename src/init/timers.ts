@@ -67,21 +67,6 @@ export function initTimers(client: Client): void {
     log.error("Failed to initialize cache metrics logger", error as Error);
   }
 
-  log.section("Initializing Preset Avatar Sync...");
-  try {
-    import("@/utils/persona/presetAvatarSync")
-      .then(({ runOfficialPresetAvatarSync }) => {
-        client.once("clientReady", () => {
-          void runOfficialPresetAvatarSync(client);
-        });
-      })
-      .catch((error: Error) => {
-        log.error("Failed to initialize preset avatar sync", error);
-      });
-  } catch (error) {
-    log.error("Failed to initialize preset avatar sync", error as Error);
-  }
-
   log.section("Initializing Upload Quota System...");
   try {
     import("@/utils/security/rateLimiter")

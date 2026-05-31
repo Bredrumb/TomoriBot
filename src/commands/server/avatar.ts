@@ -24,6 +24,21 @@ const PERSONA_SELECT_ID = "persona_select";
 const FILE_UPLOAD_ID = "avatar_image";
 
 type AvatarAttachment = Attachment | APIAttachment;
+
+export async function forkPointerForServerAvatarChange(
+  selectedPersona: Pick<TomoriState, "persona_id" | "is_pointer">,
+): Promise<boolean> {
+  if (!selectedPersona.persona_id) {
+    return false;
+  }
+
+  if (selectedPersona.is_pointer !== true) {
+    return true;
+  }
+
+  return await personaRepository.materializeIfPointer(selectedPersona.persona_id);
+}
+
 /**
  * Configure the avatar subcommand
  * @param subcommand - SlashCommandSubcommandBuilder instance
@@ -293,6 +308,7 @@ export async function execute(
       });
       return;
     }
+    const selectedPersonaDbId = selectedPersona.persona_id;
 
     // 3. Defer the reply to prevent timeout during image processing
     await responseInteraction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -309,6 +325,19 @@ export async function execute(
         ],
       });
       return;
+    }
+
+    const pointerForked = await forkPointerForServerAvatarChange(selectedPersona);
+    if (!pointerForked) {
+      await replyInfoEmbed(responseInteraction, locale, {
+        titleKey: "general.errors.update_failed_title",
+        descriptionKey: "general.errors.update_failed_description",
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
+    if (selectedPersona.is_pointer === true) {
+      selectedPersona = { ...selectedPersona, is_pointer: false };
     }
 
     // 5. Reserve avatar quota (atomic check+increment for per-server DDoS protection)
@@ -341,8 +370,6 @@ export async function execute(
         const result = await updateGuildAvatar(interaction.guild.id, null);
 
         if (result.success) {
-          await personaRepository.markOfficialPresetAvatarManual(selectedPersona.persona_id);
-
           // Quota already reserved at step 5 - no increment needed
           await replyInfoEmbed(responseInteraction, locale, {
             titleKey: "commands.server.avatar.removed_title",
@@ -369,10 +396,7 @@ export async function execute(
           await deletePersonaAvatarFromStorage(selectedPersona.webhook_avatar_url);
         }
 
-        const avatarUpdated = await personaRepository.setAvatar(selectedPersona.persona_id, null);
-        if (avatarUpdated) {
-          await personaRepository.markOfficialPresetAvatarManual(selectedPersona.persona_id);
-        }
+        await personaRepository.setAvatar(selectedPersonaDbId, null);
 
         invalidateTomoriStateCache(interaction.guild.id);
 
@@ -436,8 +460,6 @@ export async function execute(
       const updateResult = await updateGuildAvatar(interaction.guild.id, avatarDataUri);
 
       if (updateResult.success) {
-        await personaRepository.markOfficialPresetAvatarManual(selectedPersona.persona_id);
-
         // Quota already reserved at step 5 - no increment needed
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "commands.server.avatar.success_title",
@@ -480,7 +502,7 @@ export async function execute(
       }
 
       persistedAvatarUrl = await uploadPersonaAvatarToStorage({
-        personaId: selectedPersona.persona_id,
+        personaId: selectedPersonaDbId,
         serverDiscId: interaction.guild.id,
         label: "server avatar",
         buffer: pngBuffer,
@@ -500,10 +522,7 @@ export async function execute(
           await deletePersonaAvatarFromStorage(selectedPersona.webhook_avatar_url);
         }
 
-        const avatarUpdated = await personaRepository.setAvatar(selectedPersona.persona_id, persistedAvatarUrl);
-        if (avatarUpdated) {
-          await personaRepository.markOfficialPresetAvatarManual(selectedPersona.persona_id);
-        }
+        await personaRepository.setAvatar(selectedPersonaDbId, persistedAvatarUrl);
       }
 
       invalidateTomoriStateCache(interaction.guild.id);

@@ -203,6 +203,7 @@ function makeContext(primaryModel: LlmRow, fallbackModel: LlmRow): ChatTurnConte
     requestSnapshot: {},
     serverDiscId: "server_1",
     shouldApplyTextQuota: false,
+    shouldSurfaceUserErrors: true,
     simplifiedMessages: [],
     streamingContext: {
       disableYouTubeProcessing: false,

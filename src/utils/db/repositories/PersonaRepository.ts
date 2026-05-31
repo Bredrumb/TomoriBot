@@ -8,6 +8,7 @@
  * Export contract: toExportShape / fromExportShape are required by IRepository
  * and consumed by the Phase 6 (#16.7) export pipeline composition.
  */
+import type { SQL } from "bun";
 import {
   apiKeyRotationSchema,
   naiPresetSchema,
@@ -40,6 +41,7 @@ import { llmProviderRepo } from "@/utils/db/repositories/LlmProviderRepository";
 import { type MemoryValidationResult, getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { getUnconfiguredLlm } from "@/utils/provider/unconfiguredLlm";
 import { log } from "@/utils/misc/logger";
+import { getBaseTriggerWords } from "@/utils/text/localizer";
 import { dedupeTriggerWords } from "@/utils/text/triggerWords";
 import type { IRepository } from "./IRepository";
 
@@ -97,21 +99,63 @@ export type PersonaExportShape = {
   personas: PersonaConfigBundle[];
 };
 
-type PresetSyncSnapshot = {
-  persona_preset_name: string;
-  preset_language: string;
-  preset_avatar_path: string | null;
-  attribute_list: string[];
-  attribute_public_flags: boolean[];
-  sample_dialogues_in: string[];
-  sample_dialogues_out: string[];
-  trigger_words: string[];
-  persona_prompt: string;
-};
-
 function normalizeAttributePublicFlags(attributes: string[], flags?: boolean[]): boolean[] {
   return attributes.map((_attribute, index) => flags?.[index] ?? false);
 }
+
+function normalizeLineageId(value: unknown): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === "bigint") {
+    return Number(value);
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  return null;
+}
+
+function presetPointerKey(lineageId: number, language: string): string {
+  return `${lineageId}:${language}`;
+}
+
+function resolvePresetTriggerWords(preset: TomoriPresetRow): string[] {
+  const presetTriggerWords = dedupeTriggerWords(preset.preset_trigger_words ?? [], { lowercase: false });
+  if (presetTriggerWords.length > 0) {
+    return presetTriggerWords;
+  }
+  return dedupeTriggerWords(getBaseTriggerWords(preset.preset_language), { lowercase: false });
+}
+
+function resolvePresetPersonaPrompt(preset: TomoriPresetRow): string | null {
+  const trimmed = preset.persona_preset_desc.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+const TOMORI_POINTER_CONTENT_FIELDS = new Set<string>([
+  "persona_nickname",
+  "attribute_list",
+  "sample_dialogues_in",
+  "sample_dialogues_out",
+  "context_note",
+  "context_note_depth",
+  "nai_tags",
+  "nai_char_ref_url",
+  "nai_attg_author",
+  "nai_attg_title",
+  "nai_attg_tags",
+  "nai_attg_genre",
+  "nai_attg_stars",
+  "speech_voice_sample_id",
+  "speech_voice_id",
+  "speech_voice_name",
+  "speech_voice_design_prompt",
+]);
 
 /** Fields where SQL NULL carries semantic meaning ("not configured") and must not be coerced to undefined. */
 const MEANINGFULLY_NULLABLE_CONFIG_FIELDS = new Set([
@@ -204,18 +248,28 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
           t.persona_nickname,
           t.webhook_avatar_url,
           t.is_alter,
-          COALESCE(
-            (
-              SELECT array_agg(pa.attribute_text ORDER BY pa.attribute_order)
-              FROM persona_attributes pa
-              WHERE pa.persona_id = t.persona_id
-            ),
-            t.attribute_list
-          ) AS attribute_list,
+          CASE
+            WHEN pp.persona_preset_id IS NOT NULL THEN pp.preset_attribute_list
+            ELSE COALESCE(
+              (
+                SELECT array_agg(pa.attribute_text ORDER BY pa.attribute_order)
+                FROM persona_attributes pa
+                WHERE pa.persona_id = t.persona_id
+              ),
+              t.attribute_list
+            )
+          END AS attribute_list,
           t.persona_lineage_id,
-          pc.persona_prompt
+          CASE
+            WHEN pp.persona_preset_id IS NOT NULL THEN NULLIF(BTRIM(pp.persona_preset_desc), '')
+            ELSE pc.persona_prompt
+          END AS persona_prompt
         FROM personas t
         LEFT JOIN persona_configs pc ON pc.persona_id = t.persona_id
+        LEFT JOIN persona_presets pp
+          ON t.is_pointer = true
+          AND pp.preset_lineage_id = t.preset_lineage_id
+          AND pp.preset_language = t.preset_language
         WHERE t.server_id = ${serverId}
         ORDER BY t.is_alter ASC, t.updated_at DESC NULLS LAST, t.persona_id DESC
       `;
@@ -260,6 +314,13 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    * @returns Updated TomoriRow or null on failure
    */
   async update(personaId: number, tomoriData: Partial<TomoriRow>, serverDiscId?: string): Promise<TomoriRow | null> {
+    if (Object.keys(tomoriData).some((field) => TOMORI_POINTER_CONTENT_FIELDS.has(field))) {
+      const materialized = await this.materializeIfPointer(personaId);
+      if (!materialized) {
+        return null;
+      }
+    }
+
     const row = await this.updateTomori(personaId, tomoriData);
     if (row && serverDiscId) invalidateTomoriStateCache(serverDiscId);
     return row;
@@ -271,6 +332,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     try {
       const flags = normalizeAttributePublicFlags(attributes, publicFlags);
       return await sql.transaction(async (tx) => {
+        const materialized = await this.materializeIfPointerWithClient(personaId, tx);
+        if (!materialized) {
+          return false;
+        }
+
         await tx`DELETE FROM persona_attributes WHERE persona_id = ${personaId}`;
 
         for (let index = 0; index < attributes.length; index++) {
@@ -303,6 +369,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
     try {
       return await sql.transaction(async (tx) => {
+        const materialized = await this.materializeIfPointerWithClient(personaId, tx);
+        if (!materialized) {
+          return false;
+        }
+
         await tx`
           INSERT INTO persona_attributes (persona_id, attribute_order, attribute_text, is_public)
           SELECT
@@ -367,6 +438,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   ): Promise<boolean> {
     try {
       return await sql.transaction(async (tx) => {
+        const materialized = await this.materializeIfPointerWithClient(personaId, tx);
+        if (!materialized) {
+          return false;
+        }
+
         await tx`
           INSERT INTO persona_attributes (persona_id, attribute_order, attribute_text, is_public)
           SELECT
@@ -425,6 +501,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   async removeAttributeAt(personaId: number, index1Based: number): Promise<boolean> {
     try {
       return await sql.transaction(async (tx) => {
+        const materialized = await this.materializeIfPointerWithClient(personaId, tx);
+        if (!materialized) {
+          return false;
+        }
+
         await tx`
           INSERT INTO persona_attributes (persona_id, attribute_order, attribute_text, is_public)
           SELECT
@@ -485,6 +566,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   async removeAttribute(personaId: number, attributeToRemove: string): Promise<boolean> {
     try {
+      const materialized = await this.materializeIfPointer(personaId);
+      if (!materialized) {
+        return false;
+      }
+
       const [row] = await sql<Array<{ attribute_order: number }>>`
         SELECT attribute_order
         FROM persona_attributes
@@ -515,6 +601,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   async setPrompt(personaId: number, prompt: string): Promise<boolean> {
     try {
+      const materialized = await this.materializeIfPointer(personaId);
+      if (!materialized) {
+        return false;
+      }
+
       const result = await sql`
         INSERT INTO persona_configs (persona_id, persona_prompt)
         VALUES (${personaId}, ${prompt})
@@ -531,6 +622,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   async removePrompt(personaId: number): Promise<boolean> {
     try {
+      const materialized = await this.materializeIfPointer(personaId);
+      if (!materialized) {
+        return false;
+      }
+
       const result = await sql`
         UPDATE persona_configs
         SET persona_prompt = NULL
@@ -555,6 +651,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    */
   async setContextNote(personaId: number, contextNote: string | null, contextNoteDepth: number): Promise<boolean> {
     try {
+      const materialized = await this.materializeIfPointer(personaId);
+      if (!materialized) {
+        return false;
+      }
+
       const row: PersonaContextNoteConfigsRow = {
         persona_id: personaId,
         context_note: contextNote,
@@ -587,6 +688,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     },
   ): Promise<boolean> {
     try {
+      const materialized = await this.materializeIfPointer(personaId);
+      if (!materialized) {
+        return false;
+      }
+
       const row: PersonaTextgenConfigsRow = { persona_id: personaId, ...attg };
       await Promise.all([this.sqlUpsertPersonaTextgenConfigs(row), this.sqlDualWriteTextgenToTomoris(row)]);
       return true;
@@ -606,6 +712,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    */
   async setNaiTags(personaId: number, tags: string[]): Promise<boolean> {
     try {
+      const materialized = await this.materializeIfPointer(personaId);
+      if (!materialized) {
+        return false;
+      }
+
       await Promise.all([
         sql`
           INSERT INTO persona_imagegen_configs (persona_id, nai_tags)
@@ -636,6 +747,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    */
   async setNaiCharRef(personaId: number, refUrl: string | null): Promise<boolean> {
     try {
+      const materialized = await this.materializeIfPointer(personaId);
+      if (!materialized) {
+        return false;
+      }
+
       await Promise.all([
         sql`
           INSERT INTO persona_imagegen_configs (persona_id, nai_char_ref_url)
@@ -665,6 +781,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     if (inputs.length === 0) return true;
 
     try {
+      const materialized = await this.materializeIfPointer(personaId);
+      if (!materialized) {
+        return false;
+      }
+
       const result = await sql`
         UPDATE personas
         SET sample_dialogues_in = array_cat(sample_dialogues_in, ${sql.array(inputs, "TEXT")}),
@@ -686,6 +807,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     newOutput: string,
   ): Promise<boolean> {
     try {
+      const materialized = await this.materializeIfPointer(personaId);
+      if (!materialized) {
+        return false;
+      }
+
       const result = await sql`
         UPDATE personas
         SET sample_dialogues_in[${index1Based}] = ${newInput},
@@ -702,6 +828,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   async removeSampleDialoguePairAt(personaId: number, index1Based: number): Promise<boolean> {
     try {
+      const materialized = await this.materializeIfPointer(personaId);
+      if (!materialized) {
+        return false;
+      }
+
       const result = await sql`
         UPDATE personas
         SET
@@ -736,6 +867,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     personaId: number,
     safeLength: number,
   ): Promise<{ repairedIn: string[]; repairedOut: string[] } | null> {
+    const materialized = await this.materializeIfPointer(personaId);
+    if (!materialized) {
+      return null;
+    }
+
     const [updatedRow] = await sql`
       UPDATE personas
       SET
@@ -784,6 +920,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   async renamePersona(personaId: number, newName: string): Promise<boolean> {
     try {
+      const materialized = await this.materializeIfPointer(personaId);
+      if (!materialized) {
+        return false;
+      }
+
       const result = await sql`
         UPDATE personas
         SET persona_nickname = ${newName}
@@ -869,121 +1010,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   }
 
   /**
-   * Records the official preset baseline used by seed-time sync.
-   * Future seed updates can then rebase untouched content while preserving
-   * server-local additions, edits, and removals.
-   *
-   * @param personaId - Internal persona DB ID
-   * @param preset - Official preset row that was just applied
-   */
-  async setOfficialPresetSyncState(personaId: number, preset: TomoriPresetRow): Promise<boolean> {
-    const presetLineageId = this.normalizePresetLineageId(preset.preset_lineage_id);
-    if (presetLineageId === null) {
-      return true;
-    }
-
-    const presetAvatarPath = this.normalizePresetAvatarPath(preset.preset_avatar_path);
-    const baseSnapshot: PresetSyncSnapshot = {
-      persona_preset_name: preset.persona_preset_name,
-      preset_language: preset.preset_language,
-      preset_avatar_path: presetAvatarPath,
-      attribute_list: preset.preset_attribute_list,
-      attribute_public_flags: normalizeAttributePublicFlags(
-        preset.preset_attribute_list,
-        preset.preset_attribute_public_flags,
-      ),
-      sample_dialogues_in: preset.preset_sample_dialogues_in,
-      sample_dialogues_out: preset.preset_sample_dialogues_out,
-      trigger_words: preset.preset_trigger_words,
-      persona_prompt: preset.persona_preset_desc,
-    };
-
-    try {
-      await sql`
-        INSERT INTO persona_preset_sync_state (
-          persona_id,
-          preset_lineage_id,
-          preset_language,
-          sync_mode,
-          avatar_sync_mode,
-          avatar_source_path,
-          avatar_source_hash,
-          avatar_synced_at,
-          base_snapshot,
-          last_synced_at
-        )
-        VALUES (
-          ${personaId},
-          ${presetLineageId},
-          ${preset.preset_language},
-          'auto',
-          'auto',
-          ${presetAvatarPath},
-          NULL,
-          NULL,
-          ${JSON.stringify(baseSnapshot)}::jsonb,
-          CURRENT_TIMESTAMP
-        )
-        ON CONFLICT (persona_id) DO UPDATE
-        SET
-          preset_lineage_id = EXCLUDED.preset_lineage_id,
-          preset_language = EXCLUDED.preset_language,
-          sync_mode = 'auto',
-          avatar_sync_mode = 'auto',
-          avatar_source_path = EXCLUDED.avatar_source_path,
-          avatar_source_hash = NULL,
-          avatar_synced_at = NULL,
-          base_snapshot = EXCLUDED.base_snapshot,
-          last_synced_at = CURRENT_TIMESTAMP
-      `;
-      return true;
-    } catch (error) {
-      log.error(`Error setting official preset sync state for persona ${personaId}:`, error);
-      return false;
-    }
-  }
-
-  async markOfficialPresetAvatarSynced(
-    personaId: number,
-    preset: TomoriPresetRow,
-    avatarSourceHash: string | null,
-  ): Promise<boolean> {
-    const presetAvatarPath = this.normalizePresetAvatarPath(preset.preset_avatar_path);
-
-    try {
-      const result = await sql`
-        UPDATE persona_preset_sync_state
-        SET
-          avatar_sync_mode = 'auto',
-          avatar_source_path = ${presetAvatarPath},
-          avatar_source_hash = ${avatarSourceHash},
-          avatar_synced_at = CURRENT_TIMESTAMP
-        WHERE persona_id = ${personaId}
-        RETURNING persona_id
-      `;
-      return result.length > 0;
-    } catch (error) {
-      log.error(`Error marking official preset avatar synced for persona ${personaId}:`, error);
-      return false;
-    }
-  }
-
-  async markOfficialPresetAvatarManual(personaId: number): Promise<boolean> {
-    try {
-      const result = await sql`
-        UPDATE persona_preset_sync_state
-        SET avatar_sync_mode = 'manual'
-        WHERE persona_id = ${personaId}
-        RETURNING persona_id
-      `;
-      return result.length > 0;
-    } catch (error) {
-      log.error(`Error marking official preset avatar manual for persona ${personaId}:`, error);
-      return false;
-    }
-  }
-
-  /**
    * Creates an alter persona row and returns the inserted row.
    * Intentionally does not catch DB errors so callers can preserve
    * unique-violation handling for user-facing name-conflict replies.
@@ -1059,8 +1085,135 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     return row ? (row as unknown as TomoriRow) : null;
   }
 
+  async applyPresetPointerToPersona(params: {
+    personaId: number;
+    nickname: string;
+    preset: TomoriPresetRow;
+    personaLineageId?: number | null;
+    triggerWords?: string[];
+    personaPrompt?: string | null;
+  }): Promise<TomoriRow | null> {
+    const pointerLineageId = normalizeLineageId(params.preset.preset_lineage_id);
+    if (pointerLineageId === null) {
+      log.error(`Cannot create preset pointer for persona ${params.personaId}: preset has no lineage id.`);
+      return null;
+    }
+
+    try {
+      const row = await sql.transaction(async (tx) => {
+        const [updatedRow] = await tx`
+          UPDATE personas
+          SET
+            persona_nickname = ${params.nickname},
+            attribute_list = ${sql.array(params.preset.preset_attribute_list, "TEXT")},
+            sample_dialogues_in = ${sql.array(params.preset.preset_sample_dialogues_in, "TEXT")},
+            sample_dialogues_out = ${sql.array(params.preset.preset_sample_dialogues_out, "TEXT")},
+            persona_lineage_id = ${params.personaLineageId ?? pointerLineageId},
+            is_pointer = true,
+            preset_lineage_id = ${pointerLineageId},
+            preset_language = ${params.preset.preset_language},
+            updated_at = NOW()
+          WHERE persona_id = ${params.personaId}
+          RETURNING *
+        `;
+        if (!updatedRow?.persona_id) {
+          return null;
+        }
+
+        await this.replacePresetAttributesWithClient(tx, params.personaId, params.preset);
+        await this.writePresetPersonaConfigWithClient(
+          tx,
+          params.personaId,
+          params.triggerWords ?? resolvePresetTriggerWords(params.preset),
+          params.personaPrompt ?? resolvePresetPersonaPrompt(params.preset),
+        );
+
+        return updatedRow;
+      });
+
+      return row ? (row as unknown as TomoriRow) : null;
+    } catch (error) {
+      log.error(`Error applying preset pointer to persona ${params.personaId}:`, error);
+      return null;
+    }
+  }
+
+  async createPresetPointerAlterPersona(params: {
+    serverId: number;
+    nickname: string;
+    preset: TomoriPresetRow;
+    personaLineageId?: number | null;
+    useFreshLineage?: boolean;
+    triggerWords?: string[];
+    personaPrompt?: string | null;
+  }): Promise<TomoriRow | null> {
+    const pointerLineageId = normalizeLineageId(params.preset.preset_lineage_id);
+    if (pointerLineageId === null) {
+      log.error(`Cannot create alter preset pointer "${params.nickname}": preset has no lineage id.`);
+      return null;
+    }
+
+    const row = await sql.transaction(async (tx) => {
+      let memoryLineageId = params.personaLineageId ?? pointerLineageId;
+      if (params.useFreshLineage === true) {
+        const [lineageRow] = await tx<Array<{ lineage_id: number | string | bigint }>>`
+          SELECT nextval('persona_lineage_id_seq') AS lineage_id
+        `;
+        memoryLineageId = Number(lineageRow.lineage_id);
+      }
+
+      const [insertedRow] = await tx`
+        INSERT INTO personas (
+          server_id,
+          persona_nickname,
+          attribute_list,
+          sample_dialogues_in,
+          sample_dialogues_out,
+          is_alter,
+          persona_lineage_id,
+          is_pointer,
+          preset_lineage_id,
+          preset_language
+        )
+        VALUES (
+          ${params.serverId},
+          ${params.nickname},
+          ${sql.array(params.preset.preset_attribute_list, "TEXT")},
+          ${sql.array(params.preset.preset_sample_dialogues_in, "TEXT")},
+          ${sql.array(params.preset.preset_sample_dialogues_out, "TEXT")},
+          true,
+          ${memoryLineageId},
+          true,
+          ${pointerLineageId},
+          ${params.preset.preset_language}
+        )
+        RETURNING *
+      `;
+      if (!insertedRow?.persona_id) {
+        return null;
+      }
+
+      await this.replacePresetAttributesWithClient(tx, insertedRow.persona_id as number, params.preset);
+      await this.writePresetPersonaConfigWithClient(
+        tx,
+        insertedRow.persona_id as number,
+        params.triggerWords ?? resolvePresetTriggerWords(params.preset),
+        params.personaPrompt ?? resolvePresetPersonaPrompt(params.preset),
+      );
+
+      return insertedRow;
+    });
+
+    return row ? (row as unknown as TomoriRow) : null;
+  }
+
   async addTrigger(personaId: number, triggers: string[]): Promise<boolean> {
     try {
+      const materialized = await this.materializeIfPointer(personaId);
+      if (!materialized) {
+        return false;
+      }
+
       const normalizedTriggers = dedupeTriggerWords(triggers, { lowercase: false });
       if (normalizedTriggers.length === 0) {
         return true;
@@ -1090,6 +1243,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    */
   async removeTrigger(personaId: number, triggersRemaining: string[]): Promise<boolean> {
     try {
+      const materialized = await this.materializeIfPointer(personaId);
+      if (!materialized) {
+        return false;
+      }
+
       const normalizedTriggersRemaining = dedupeTriggerWords(triggersRemaining, { lowercase: false });
       const result = await sql`
         INSERT INTO persona_configs (persona_id, trigger_words)
@@ -1113,8 +1271,20 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    * @param triggers - Full replacement trigger word list (use [] to clear)
    * @param prompt   - Persona prompt text, or null to clear
    */
-  async setPersonaConfig(personaId: number, triggers: string[], prompt: string | null): Promise<boolean> {
+  async setPersonaConfig(
+    personaId: number,
+    triggers: string[],
+    prompt: string | null,
+    options: { materialize?: boolean } = {},
+  ): Promise<boolean> {
     try {
+      if (options.materialize !== false) {
+        const materialized = await this.materializeIfPointer(personaId);
+        if (!materialized) {
+          return false;
+        }
+      }
+
       const normalizedTriggers = dedupeTriggerWords(triggers, { lowercase: false });
       await sql`
         INSERT INTO persona_configs (persona_id, trigger_words, persona_prompt)
@@ -1145,14 +1315,31 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     try {
       const [configResult] = personaId
         ? await sql`
-            SELECT array_length(trigger_words, 1) as trigger_count
-            FROM persona_configs
-            WHERE persona_id = ${personaId}
+            SELECT
+              CASE
+                WHEN pp.persona_preset_id IS NOT NULL THEN array_length(pp.preset_trigger_words, 1)
+                ELSE array_length(pc.trigger_words, 1)
+              END as trigger_count
+            FROM personas p
+            LEFT JOIN persona_configs pc ON pc.persona_id = p.persona_id
+            LEFT JOIN persona_presets pp
+              ON p.is_pointer = true
+              AND pp.preset_lineage_id = p.preset_lineage_id
+              AND pp.preset_language = p.preset_language
+            WHERE p.persona_id = ${personaId}
           `
         : await sql`
-            SELECT array_length(pc.trigger_words, 1) as trigger_count
+            SELECT
+              CASE
+                WHEN pp.persona_preset_id IS NOT NULL THEN array_length(pp.preset_trigger_words, 1)
+                ELSE array_length(pc.trigger_words, 1)
+              END as trigger_count
             FROM persona_configs pc
             JOIN personas t ON t.persona_id = pc.persona_id
+            LEFT JOIN persona_presets pp
+              ON t.is_pointer = true
+              AND pp.preset_lineage_id = t.preset_lineage_id
+              AND pp.preset_language = t.preset_language
             WHERE t.server_id = ${serverId}
               AND t.is_alter = false
             LIMIT 1
@@ -1187,9 +1374,17 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
     try {
       const [tomoriResult] = await sql`
-        SELECT array_length(sample_dialogues_in, 1) as dialogue_count
-        FROM personas
-        WHERE persona_id = ${personaId}
+        SELECT
+          CASE
+            WHEN pp.persona_preset_id IS NOT NULL THEN array_length(pp.preset_sample_dialogues_in, 1)
+            ELSE array_length(p.sample_dialogues_in, 1)
+          END as dialogue_count
+        FROM personas p
+        LEFT JOIN persona_presets pp
+          ON p.is_pointer = true
+          AND pp.preset_lineage_id = p.preset_lineage_id
+          AND pp.preset_language = p.preset_language
+        WHERE p.persona_id = ${personaId}
       `;
 
       const currentCount = tomoriResult?.dialogue_count || 0;
@@ -1221,15 +1416,23 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
     try {
       const [tomoriResult] = await sql`
-        SELECT GREATEST(
-          COALESCE((
-            SELECT COUNT(*)::INT
-            FROM persona_attributes pa
-            WHERE pa.persona_id = p.persona_id
-          ), 0),
-          COALESCE(array_length(p.attribute_list, 1), 0)
-        ) AS attribute_count
+        SELECT
+          CASE
+            WHEN pp.persona_preset_id IS NOT NULL THEN COALESCE(array_length(pp.preset_attribute_list, 1), 0)
+            ELSE GREATEST(
+              COALESCE((
+                SELECT COUNT(*)::INT
+                FROM persona_attributes pa
+                WHERE pa.persona_id = p.persona_id
+              ), 0),
+              COALESCE(array_length(p.attribute_list, 1), 0)
+            )
+          END AS attribute_count
         FROM personas p
+        LEFT JOIN persona_presets pp
+          ON p.is_pointer = true
+          AND pp.preset_lineage_id = p.preset_lineage_id
+          AND pp.preset_language = p.preset_language
         WHERE p.persona_id = ${personaId}
       `;
 
@@ -1552,31 +1755,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     return result;
   }
 
-  private normalizePresetLineageId(value: unknown): number | null {
-    if (value === null || value === undefined) {
-      return null;
-    }
-    if (typeof value === "bigint") {
-      return Number(value);
-    }
-    if (typeof value === "string" && value.trim() !== "") {
-      const parsed = Number(value);
-      return Number.isFinite(parsed) ? parsed : null;
-    }
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return value;
-    }
-    return null;
-  }
-
-  private normalizePresetAvatarPath(value: unknown): string | null {
-    if (typeof value !== "string") {
-      return null;
-    }
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : null;
-  }
-
   /**
    * Normalizes a flat split-table join row into runtime-compatible types.
    * - Hydrates api_key: Uint8Array (direct DB read) → Buffer; hex string (legacy) → Buffer.
@@ -1842,6 +2020,222 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     return parsedConfig.data;
   }
 
+  // ── private SQL: preset pointer helpers ───────────────────────────────────
+
+  async materializeIfPointer(personaId: number): Promise<boolean> {
+    try {
+      return await sql.transaction((tx) => this.materializeIfPointerWithClient(personaId, tx));
+    } catch (error) {
+      log.error(`Error materializing preset pointer persona ${personaId}:`, error);
+      return false;
+    }
+  }
+
+  private async materializeIfPointerWithClient(personaId: number, client: SQL): Promise<boolean> {
+    const [personaRow] = await client<
+      Array<{
+        persona_id: number;
+        is_pointer: boolean | null;
+        preset_lineage_id: number | string | bigint | null;
+        preset_language: string | null;
+      }>
+    >`
+      SELECT persona_id, is_pointer, preset_lineage_id, preset_language
+      FROM personas
+      WHERE persona_id = ${personaId}
+      FOR UPDATE
+    `;
+
+    if (!personaRow) {
+      return false;
+    }
+
+    if (personaRow.is_pointer !== true) {
+      return true;
+    }
+
+    const pointerLineageId = normalizeLineageId(personaRow.preset_lineage_id);
+    const pointerLanguage = personaRow.preset_language;
+    if (pointerLineageId === null || !pointerLanguage) {
+      log.error(`Pointer persona ${personaId} is missing preset lineage/language.`);
+      return false;
+    }
+
+    const preset = await this.loadPresetForPointer(client, pointerLineageId, pointerLanguage);
+    if (!preset) {
+      log.error(
+        `Pointer persona ${personaId} references missing preset lineage=${pointerLineageId} language=${pointerLanguage}.`,
+      );
+      return false;
+    }
+
+    await client`
+      UPDATE personas
+      SET
+        attribute_list = ${sql.array(preset.preset_attribute_list, "TEXT")},
+        sample_dialogues_in = ${sql.array(preset.preset_sample_dialogues_in, "TEXT")},
+        sample_dialogues_out = ${sql.array(preset.preset_sample_dialogues_out, "TEXT")},
+        is_pointer = false,
+        updated_at = NOW()
+      WHERE persona_id = ${personaId}
+    `;
+    await this.replacePresetAttributesWithClient(client, personaId, preset);
+    await this.writePresetPersonaConfigWithClient(
+      client,
+      personaId,
+      resolvePresetTriggerWords(preset),
+      resolvePresetPersonaPrompt(preset),
+    );
+
+    return true;
+  }
+
+  private async loadPresetForPointer(
+    client: SQL,
+    presetLineageId: number,
+    presetLanguage: string,
+  ): Promise<TomoriPresetRow | null> {
+    const [preset] = await client<TomoriPresetRow[]>`
+      SELECT *
+      FROM persona_presets
+      WHERE preset_lineage_id = ${presetLineageId}
+        AND preset_language = ${presetLanguage}
+      LIMIT 1
+    `;
+
+    return preset ?? null;
+  }
+
+  private async loadPointerPresetsForRows(rows: TomoriRow[]): Promise<Map<number, TomoriPresetRow>> {
+    const pointerRefs = rows
+      .map((row) => {
+        const personaId = row.persona_id;
+        const lineageId = normalizeLineageId(row.preset_lineage_id);
+        const language = row.preset_language;
+        if (row.is_pointer !== true || typeof personaId !== "number" || lineageId === null || !language) {
+          return null;
+        }
+        return { personaId, lineageId, language };
+      })
+      .filter((row): row is { personaId: number; lineageId: number; language: string } => row !== null);
+
+    if (pointerRefs.length === 0) {
+      return new Map();
+    }
+
+    const lineageIds = [...new Set(pointerRefs.map((row) => row.lineageId))];
+    const languages = [...new Set(pointerRefs.map((row) => row.language))];
+    const presetRows = await sql<TomoriPresetRow[]>`
+      SELECT *
+      FROM persona_presets
+      WHERE preset_lineage_id = ANY(${sql.array(lineageIds, "int8")})
+        AND preset_language = ANY(${sql.array(languages, "TEXT")})
+    `;
+
+    const presetsByPointerKey = new Map<string, TomoriPresetRow>();
+    for (const preset of presetRows) {
+      const lineageId = normalizeLineageId(preset.preset_lineage_id);
+      if (lineageId === null) {
+        continue;
+      }
+      presetsByPointerKey.set(presetPointerKey(lineageId, preset.preset_language), preset);
+    }
+
+    const presetsByPersonaId = new Map<number, TomoriPresetRow>();
+    for (const ref of pointerRefs) {
+      const preset = presetsByPointerKey.get(presetPointerKey(ref.lineageId, ref.language));
+      if (preset) {
+        presetsByPersonaId.set(ref.personaId, preset);
+      } else {
+        log.warn(
+          `Pointer persona ${ref.personaId} references missing preset lineage=${ref.lineageId} language=${ref.language}.`,
+        );
+      }
+    }
+
+    return presetsByPersonaId;
+  }
+
+  private buildPresetAttributeRows(personaId: number, preset: TomoriPresetRow): PersonaAttributeRow[] {
+    const publicFlags = normalizeAttributePublicFlags(
+      preset.preset_attribute_list,
+      preset.preset_attribute_public_flags,
+    );
+
+    return preset.preset_attribute_list.map((attribute, index) => ({
+      persona_id: personaId,
+      attribute_order: index + 1,
+      attribute_text: attribute,
+      is_public: publicFlags[index] ?? false,
+    }));
+  }
+
+  private async loadPersonaAttributeRows(personaId: number): Promise<PersonaAttributeRow[]> {
+    const rows = await sql<
+      Array<{
+        attribute_id: number;
+        persona_id: number;
+        attribute_order: number;
+        attribute_text: string;
+        is_public: boolean | null;
+        created_at: Date | undefined;
+        updated_at: Date | undefined;
+      }>
+    >`
+      SELECT attribute_id, persona_id, attribute_order, attribute_text, is_public, created_at, updated_at
+      FROM persona_attributes
+      WHERE persona_id = ${personaId}
+      ORDER BY attribute_order
+    `;
+
+    return rows.map((row) => ({
+      attribute_id: row.attribute_id as number,
+      persona_id: row.persona_id as number,
+      attribute_order: row.attribute_order as number,
+      attribute_text: row.attribute_text as string,
+      is_public: (row.is_public as boolean) ?? false,
+      created_at: row.created_at as Date | undefined,
+      updated_at: row.updated_at as Date | undefined,
+    }));
+  }
+
+  private async replacePresetAttributesWithClient(
+    client: SQL,
+    personaId: number,
+    preset: TomoriPresetRow,
+  ): Promise<void> {
+    const publicFlags = normalizeAttributePublicFlags(
+      preset.preset_attribute_list,
+      preset.preset_attribute_public_flags,
+    );
+
+    await client`DELETE FROM persona_attributes WHERE persona_id = ${personaId}`;
+    for (let index = 0; index < preset.preset_attribute_list.length; index++) {
+      await client`
+        INSERT INTO persona_attributes (persona_id, attribute_order, attribute_text, is_public)
+        VALUES (${personaId}, ${index + 1}, ${preset.preset_attribute_list[index]}, ${publicFlags[index]})
+      `;
+    }
+  }
+
+  private async writePresetPersonaConfigWithClient(
+    client: SQL,
+    personaId: number,
+    triggerWords: string[],
+    personaPrompt: string | null,
+  ): Promise<void> {
+    const normalizedTriggers = dedupeTriggerWords(triggerWords, { lowercase: false });
+    await client`
+      INSERT INTO persona_configs (persona_id, trigger_words, persona_prompt)
+      VALUES (${personaId}, ${sql.array(normalizedTriggers, "TEXT")}, ${personaPrompt})
+      ON CONFLICT (persona_id) DO UPDATE
+      SET
+        trigger_words = EXCLUDED.trigger_words,
+        persona_prompt = EXCLUDED.persona_prompt,
+        updated_at = NOW()
+    `;
+  }
+
   // ── private SQL: persona reads ────────────────────────────────────────────
 
   private async loadTomoriState(serverDiscId: string): Promise<TomoriState | null> {
@@ -1860,12 +2254,14 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         log.warn(`No Tomori instance found for server ${serverDiscId}`);
         return null;
       }
-      const tomoriData = tomoriRows[0];
+      const tomoriData = tomoriRows[0] as TomoriRow;
 
       // 2. Load associated config using server_id (server-scoped config)
       // biome-ignore lint/style/noNonNullAssertion: Row existence checked above, ID is guaranteed by DB schema.
       const personaId = tomoriData.persona_id!;
       const serverId = tomoriData.server_id;
+      const pointerPresetsByPersonaId = await this.loadPointerPresetsForRows([tomoriData]);
+      const pointerPreset = pointerPresetsByPersonaId.get(personaId);
       let configData = await this.sqlLoadTomoriConfigByServerId(serverId);
 
       // Backward compatibility: fall back to persona_id if server_id config missing
@@ -2056,13 +2452,38 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         }
       }
 
+      const personaAttributes = pointerPreset
+        ? this.buildPresetAttributeRows(personaId, pointerPreset)
+        : await this.loadPersonaAttributeRows(personaId);
+      const attributeList = pointerPreset
+        ? pointerPreset.preset_attribute_list
+        : personaAttributes.length > 0
+          ? personaAttributes.map((attribute) => attribute.attribute_text)
+          : ((tomoriData.attribute_list as string[] | undefined) ?? []);
+      const sampleDialoguesIn = pointerPreset
+        ? pointerPreset.preset_sample_dialogues_in
+        : ((tomoriData.sample_dialogues_in as string[] | undefined) ?? []);
+      const sampleDialoguesOut = pointerPreset
+        ? pointerPreset.preset_sample_dialogues_out
+        : ((tomoriData.sample_dialogues_out as string[] | undefined) ?? []);
+      const triggerWords = pointerPreset
+        ? resolvePresetTriggerWords(pointerPreset)
+        : (personaConfig?.trigger_words ?? []);
+      const personaPrompt = pointerPreset
+        ? resolvePresetPersonaPrompt(pointerPreset)
+        : (personaConfig?.persona_prompt ?? null);
+
       // 11. Combine and validate the full state
       const combinedState = {
         ...tomoriData,
+        attribute_list: attributeList,
+        sample_dialogues_in: sampleDialoguesIn,
+        sample_dialogues_out: sampleDialoguesOut,
+        persona_attributes: personaAttributes,
         config: configData,
         llm: llmData,
-        trigger_words: personaConfig?.trigger_words ?? [],
-        persona_prompt: personaConfig?.persona_prompt ?? null,
+        trigger_words: triggerWords,
+        persona_prompt: personaPrompt,
         reward_conditioning_enabled: personaConfig?.reward_conditioning_enabled ?? true,
         punish_conditioning_enabled: personaConfig?.punish_conditioning_enabled ?? true,
         ...autochRuntime,
@@ -2106,13 +2527,15 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             return [];
           }
 
-          const serverId = tomoriRows[0].server_id;
+          const typedTomoriRows = tomoriRows as TomoriRow[];
+          const serverId = typedTomoriRows[0].server_id;
+          const pointerPresetsByPersonaId = await this.loadPointerPresetsForRows(typedTomoriRows);
 
           // 2. Load server-scoped config once (fallback to main persona config)
           let configData = await this.sqlLoadTomoriConfigByServerId(serverId);
 
           if (!configData) {
-            const mainTomoriRow = tomoriRows.find((row: TomoriRow) => row.is_alter === false) ?? tomoriRows[0];
+            const mainTomoriRow = typedTomoriRows.find((row) => row.is_alter === false) ?? typedTomoriRows[0];
             const fallbackTomoriId = mainTomoriRow?.persona_id;
             if (fallbackTomoriId) {
               log.warn(
@@ -2265,7 +2688,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
           }
 
           // 8. Batch-load autochat runtime counters for all personas in this server.
-          const personaIds: number[] = (tomoriRows as TomoriRow[])
+          const personaIds: number[] = typedTomoriRows
             .map((r) => r.persona_id)
             .filter((id): id is number => typeof id === "number");
           const personaAttributeRows =
@@ -2329,7 +2752,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
           // 10. Build persona states
           const personas: TomoriState[] = [];
-          for (const tomoriRow of tomoriRows) {
+          for (const tomoriRow of typedTomoriRows) {
             const personaId = tomoriRow.persona_id;
             if (!personaId) {
               log.warn(`Skipping persona with missing persona_id for server ${serverDiscId}`);
@@ -2367,20 +2790,38 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
               autoch_counter: 0,
               autoch_next_target: 0,
             };
-            const personaAttributes = attributesByPersonaId.get(personaId) ?? [];
-            const attributeList =
-              personaAttributes.length > 0
+            const pointerPreset = pointerPresetsByPersonaId.get(personaId);
+            const personaAttributes = pointerPreset
+              ? this.buildPresetAttributeRows(personaId, pointerPreset)
+              : (attributesByPersonaId.get(personaId) ?? []);
+            const attributeList = pointerPreset
+              ? pointerPreset.preset_attribute_list
+              : personaAttributes.length > 0
                 ? personaAttributes.map((attribute) => attribute.attribute_text)
                 : ((tomoriRow.attribute_list as string[] | undefined) ?? []);
+            const sampleDialoguesIn = pointerPreset
+              ? pointerPreset.preset_sample_dialogues_in
+              : ((tomoriRow.sample_dialogues_in as string[] | undefined) ?? []);
+            const sampleDialoguesOut = pointerPreset
+              ? pointerPreset.preset_sample_dialogues_out
+              : ((tomoriRow.sample_dialogues_out as string[] | undefined) ?? []);
+            const triggerWords = pointerPreset
+              ? resolvePresetTriggerWords(pointerPreset)
+              : (personaConfig?.trigger_words ?? []);
+            const personaPrompt = pointerPreset
+              ? resolvePresetPersonaPrompt(pointerPreset)
+              : (personaConfig?.persona_prompt ?? null);
 
             const combinedState = {
               ...tomoriRow,
               attribute_list: attributeList,
+              sample_dialogues_in: sampleDialoguesIn,
+              sample_dialogues_out: sampleDialoguesOut,
               persona_attributes: personaAttributes,
               config: configData,
               llm: llmData,
-              trigger_words: personaConfig?.trigger_words ?? [],
-              persona_prompt: personaConfig?.persona_prompt ?? null,
+              trigger_words: triggerWords,
+              persona_prompt: personaPrompt,
               reward_conditioning_enabled: personaConfig?.reward_conditioning_enabled ?? true,
               punish_conditioning_enabled: personaConfig?.punish_conditioning_enabled ?? true,
               server_memories: serverMemories,

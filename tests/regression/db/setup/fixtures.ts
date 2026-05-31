@@ -91,7 +91,12 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
     UPDATE personas
     SET
       persona_nickname = '_rt_persona',
-      attribute_list = ARRAY[]::TEXT[]
+      attribute_list = ARRAY[]::TEXT[],
+      sample_dialogues_in = ARRAY[]::TEXT[],
+      sample_dialogues_out = ARRAY[]::TEXT[],
+      is_pointer = false,
+      preset_lineage_id = NULL,
+      preset_language = NULL
     WHERE persona_id = ${personaId}
   `;
   await db`DELETE FROM persona_attributes WHERE persona_id = ${personaId}`;

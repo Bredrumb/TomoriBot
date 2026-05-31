@@ -567,10 +567,9 @@ export class ServerRepository implements IRepository<ServerExportShape> {
           Array<{
             preset_trigger_words: string[] | null;
             persona_preset_desc: string | null;
-            preset_lineage_id: number | string | bigint | null;
           }>
         >`
-          SELECT preset_trigger_words, persona_preset_desc, preset_lineage_id
+          SELECT preset_trigger_words, persona_preset_desc
           FROM persona_presets
           WHERE persona_preset_id = ${validConfig.presetId}
           LIMIT 1
@@ -602,7 +601,10 @@ export class ServerRepository implements IRepository<ServerExportShape> {
             attribute_list,
             sample_dialogues_in,
             sample_dialogues_out,
-            persona_lineage_id
+            persona_lineage_id,
+            is_pointer,
+            preset_lineage_id,
+            preset_language
           )
           VALUES (
             ${server.server_id},
@@ -613,7 +615,10 @@ export class ServerRepository implements IRepository<ServerExportShape> {
             COALESCE(
               (SELECT preset_lineage_id FROM persona_presets WHERE persona_preset_id = ${validConfig.presetId}),
               nextval('persona_lineage_id_seq')
-            )
+            ),
+            (SELECT preset_lineage_id IS NOT NULL FROM persona_presets WHERE persona_preset_id = ${validConfig.presetId}),
+            (SELECT preset_lineage_id FROM persona_presets WHERE persona_preset_id = ${validConfig.presetId}),
+            (SELECT preset_language FROM persona_presets WHERE persona_preset_id = ${validConfig.presetId})
           )
           RETURNING *
         `;
@@ -682,52 +687,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
           INSERT INTO persona_configs (persona_id, trigger_words, persona_prompt)
           VALUES (${tomori.persona_id}, ${triggerWordsArrayLiteral}::text[], ${presetPersonaPrompt})
           ON CONFLICT (persona_id) DO NOTHING
-        `;
-
-        await tx`
-          INSERT INTO persona_preset_sync_state (
-            persona_id,
-            preset_lineage_id,
-            preset_language,
-            sync_mode,
-            avatar_sync_mode,
-            avatar_source_path,
-            base_snapshot,
-            last_synced_at
-          )
-          SELECT
-            ${tomori.persona_id},
-            preset_lineage_id,
-            preset_language,
-            'auto',
-            'auto',
-            preset_avatar_path,
-            jsonb_build_object(
-              'persona_preset_name', persona_preset_name,
-              'preset_language', preset_language,
-              'preset_avatar_path', preset_avatar_path,
-              'attribute_list', to_jsonb(COALESCE(preset_attribute_list, ARRAY[]::TEXT[])),
-              'attribute_public_flags', to_jsonb(COALESCE(preset_attribute_public_flags, ARRAY[]::BOOLEAN[])),
-              'sample_dialogues_in', to_jsonb(COALESCE(preset_sample_dialogues_in, ARRAY[]::TEXT[])),
-              'sample_dialogues_out', to_jsonb(COALESCE(preset_sample_dialogues_out, ARRAY[]::TEXT[])),
-              'trigger_words', to_jsonb(COALESCE(preset_trigger_words, ARRAY[]::TEXT[])),
-              'persona_prompt', persona_preset_desc
-            ),
-            CURRENT_TIMESTAMP
-          FROM persona_presets
-          WHERE persona_preset_id = ${validConfig.presetId}
-            AND preset_lineage_id IS NOT NULL
-          ON CONFLICT (persona_id) DO UPDATE
-          SET
-            preset_lineage_id = EXCLUDED.preset_lineage_id,
-            preset_language = EXCLUDED.preset_language,
-            sync_mode = 'auto',
-            avatar_sync_mode = 'auto',
-            avatar_source_path = EXCLUDED.avatar_source_path,
-            avatar_source_hash = NULL,
-            avatar_synced_at = NULL,
-            base_snapshot = EXCLUDED.base_snapshot,
-            last_synced_at = CURRENT_TIMESTAMP
         `;
 
         // Seed the saved_provider_configs row for the provider registered at setup.

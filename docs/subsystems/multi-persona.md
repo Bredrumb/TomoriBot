@@ -14,7 +14,7 @@ TomoriBot supports **one main persona** plus **multiple alter personas** per ser
 - **Shared config**: all personas in a server share the same server-scoped config tables (`server_*_configs`).
 - **Sequential responses**: if multiple personas match a trigger, they respond one-by-one via the channel queue.
 
-Official bundled character presets have their own sync behavior for seeded text and avatars. See [Persona Presets](./persona-presets).
+Official bundled character presets have their own pointer behavior for seeded text and one-time avatar application. See [Persona Presets](./persona-presets).
 
 ## Data Model
 

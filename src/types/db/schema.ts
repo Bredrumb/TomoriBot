@@ -74,6 +74,19 @@ export const tomoriSchema = z.object({
       return value;
     }, z.number().int().nonnegative())
     .default(0),
+  is_pointer: z.boolean().default(false),
+  preset_lineage_id: z
+    .preprocess((value) => {
+      if (typeof value === "bigint") {
+        return Number(value);
+      }
+      if (typeof value === "string" && value.trim() !== "") {
+        return Number(value);
+      }
+      return value;
+    }, z.number().int().nonnegative().nullable())
+    .optional(),
+  preset_language: z.string().nullable().optional(),
   persona_nickname: z.string(),
   attribute_list: z.array(z.string()).default([]),
   sample_dialogues_in: z.array(z.string()).default([]),

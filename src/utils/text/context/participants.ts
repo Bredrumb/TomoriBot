@@ -451,20 +451,27 @@ async function applyPublicPersonaAttributes(
       targetEntry = userEntries.find((entry) => entry.displayName === publicPersona.personaName);
     }
 
-    const attributeBlock = [
-      `- Known Information about ${publicPersona.personaName}:`,
-      ...convertedAttributes.map((attr) => `  - ${attr}`),
-    ];
+    // 1. Build the header and the attribute lines separately so we can avoid
+    //    re-pushing the header when appending to an entry that already has one.
+    const attributeHeader = `- Known Information about ${publicPersona.personaName}:`;
+    const attributeLines = convertedAttributes.map((attr) => `  - ${attr}`);
 
     if (targetEntry) {
-      targetEntry.detailLines.push(...attributeBlock);
+      // 2. A second persona that shares a display name resolves to the same
+      //    targetEntry via the name fallback. Only push the header if this entry
+      //    doesn't already carry it; otherwise append the attribute lines alone
+      //    to prevent a duplicate "- Known Information about ..." line.
+      if (!targetEntry.detailLines.includes(attributeHeader)) {
+        targetEntry.detailLines.push(attributeHeader);
+      }
+      targetEntry.detailLines.push(...attributeLines);
     } else {
       const aliases = new Set<string>();
       addAlias(aliasCounts, aliases, publicPersona.personaName);
       userEntries.push({
         userId: `persona:${syntheticId}`,
         displayName: publicPersona.personaName,
-        detailLines: ["- Status: Online or status unknown", ...attributeBlock],
+        detailLines: ["- Status: Online or status unknown", attributeHeader, ...attributeLines],
         isBot: false,
         mentionAliases: Array.from(aliases),
         primaryAlias: publicPersona.personaName,

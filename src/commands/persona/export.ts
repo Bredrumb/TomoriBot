@@ -162,6 +162,7 @@ export async function execute(
           persona_nickname: nickname,
           is_alter: selectedPersona.is_alter === true,
           persona_lineage_id: presetData.data.persona_lineage_id,
+          preset_lineage_id: presetData.data.preset_lineage_id ?? null,
           trigger_words: presetData.data.trigger_words,
           persona_prompt: presetData.data.persona_prompt,
           attribute_list: presetData.data.attribute_list,

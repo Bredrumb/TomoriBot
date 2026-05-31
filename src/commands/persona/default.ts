@@ -11,16 +11,10 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/ca
 import { localizer, getBaseTriggerWords, getDefaultBotName } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "../../utils/discord/interactionHelper";
-import {
-  type UserRow,
-  type ErrorContext,
-  type TomoriRow,
-  tomoriSchema,
-  type TomoriPresetRow,
-} from "../../types/db/schema";
+import { type UserRow, type ErrorContext, tomoriSchema, type TomoriPresetRow } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
-import { getCachedPresetAvatar, getPresetAvatarBuffer, hashAvatarBuffer } from "../../utils/image/avatarHelper";
+import { getCachedPresetAvatar, getPresetAvatarBuffer } from "../../utils/image/avatarHelper";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage";
 import { dedupeTriggerWords, normalizeTriggerWord } from "@/utils/text/triggerWords";
@@ -325,27 +319,18 @@ export async function execute(
         return;
       }
 
-      // 11a. Update main persona and trigger words
-      const personaUpdatePayload: Partial<TomoriRow> = {
-        persona_nickname: resolvedPersonaName,
-        sample_dialogues_in: selectedPreset.preset_sample_dialogues_in,
-        sample_dialogues_out: selectedPreset.preset_sample_dialogues_out,
-      };
-      if (shouldUseResolvedLineageId && resolvedLineageId !== null) {
-        personaUpdatePayload.persona_lineage_id = resolvedLineageId;
-      }
-      const [updatedTomoriResult, attributesUpdated, personaConfigUpdated] = await Promise.all([
-        personaRepository.update(targetPersonaId, personaUpdatePayload),
-        personaRepository.replaceAttributes(
-          targetPersonaId,
-          selectedPreset.preset_attribute_list,
-          selectedPreset.preset_attribute_public_flags,
-        ),
-        personaRepository.setPersonaConfig(targetPersonaId, presetTriggerWords, presetPersonaPrompt),
-      ]);
+      // 11a. Turn the main persona into a live preset pointer.
+      const updatedTomoriResult = await personaRepository.applyPresetPointerToPersona({
+        personaId: targetPersonaId,
+        nickname: resolvedPersonaName,
+        preset: selectedPreset,
+        personaLineageId: shouldUseResolvedLineageId ? resolvedLineageId : undefined,
+        triggerWords: presetTriggerWords,
+        personaPrompt: presetPersonaPrompt,
+      });
 
       // 11b. Validate the result
-      if (!updatedTomoriResult || !attributesUpdated || !personaConfigUpdated) {
+      if (!updatedTomoriResult) {
         const context: ErrorContext = {
           userId: userData.user_id,
           serverId: tomoriState.server_id,
@@ -360,13 +345,7 @@ export async function execute(
         };
         await log.error(
           "Failed to update tomori after applying preset",
-          new Error(
-            !updatedTomoriResult
-              ? "PersonaRepository.update returned null"
-              : !attributesUpdated
-                ? "PersonaRepository.replaceAttributes returned false"
-                : "PersonaRepository.setPersonaConfig returned false",
-          ),
+          new Error("PersonaRepository.applyPresetPointerToPersona returned null"),
           context,
         );
 
@@ -376,11 +355,6 @@ export async function execute(
           color: ColorCode.ERROR,
         });
         return;
-      }
-
-      const presetSyncUpdated = await personaRepository.setOfficialPresetSyncState(targetPersonaId, selectedPreset);
-      if (!presetSyncUpdated) {
-        log.warn(`Failed to record official preset sync state for persona ${targetPersonaId}`);
       }
 
       invalidateTomoriStateCache(serverDiscId);
@@ -431,30 +405,6 @@ export async function execute(
                 ? `Set preset avatar for "${selectedPreset.persona_preset_name}"`
                 : "Reset guild avatar to bot default";
               log.info(`${actionDescription} for guild ${interaction.guild.id} after applying preset`);
-
-              if (avatarValue) {
-                presetAvatarBuffer = presetAvatarBuffer ?? (await getPresetAvatarBuffer(selectedPreset));
-                const avatarHash = presetAvatarBuffer ? hashAvatarBuffer(presetAvatarBuffer) : null;
-                if (avatarHash) {
-                  const avatarSyncMarked = await personaRepository.markOfficialPresetAvatarSynced(
-                    targetPersonaId,
-                    selectedPreset,
-                    avatarHash,
-                  );
-                  if (!avatarSyncMarked) {
-                    log.warn(`Failed to record official preset avatar sync state for persona ${targetPersonaId}`);
-                  }
-                }
-              } else if (!selectedPreset.preset_avatar_path?.trim()) {
-                const avatarSyncMarked = await personaRepository.markOfficialPresetAvatarSynced(
-                  targetPersonaId,
-                  selectedPreset,
-                  null,
-                );
-                if (!avatarSyncMarked) {
-                  log.warn(`Failed to record official preset avatar reset sync state for persona ${targetPersonaId}`);
-                }
-              }
             } else {
               avatarUpdateFailed = true;
               log.warn(`Failed to update guild avatar: ${response.status} ${response.statusText}`);
@@ -576,28 +526,16 @@ export async function execute(
       return;
     }
 
-    // Mirror /persona import alter behavior:
-    // keep only trigger words that do not overlap with existing personas.
-    const allTriggerWords = new Set<string>();
-    for (const persona of allPersonas) {
-      for (const trigger of persona.trigger_words ?? []) {
-        allTriggerWords.add(normalizeForComparison(trigger));
-      }
-    }
-
-    const uniqueAlterTriggers = presetTriggerWords.filter(
-      (trigger) => !allTriggerWords.has(normalizeForComparison(trigger)),
-    );
+    const uniqueAlterTriggers = presetTriggerWords;
     const hasNoTriggers = uniqueAlterTriggers.length === 0;
 
-    const insertedAlterRow = await personaRepository.createAlterPersona({
+    const insertedAlterRow = await personaRepository.createPresetPointerAlterPersona({
       serverId: tomoriState.server_id,
       nickname: resolvedAlterName,
-      attributes: selectedPreset.preset_attribute_list,
-      attributePublicFlags: selectedPreset.preset_attribute_public_flags,
-      sampleDialoguesIn: selectedPreset.preset_sample_dialogues_in,
-      sampleDialoguesOut: selectedPreset.preset_sample_dialogues_out,
+      preset: selectedPreset,
       personaLineageId: shouldUseResolvedLineageId ? resolvedLineageId : null,
+      triggerWords: uniqueAlterTriggers,
+      personaPrompt: presetPersonaPrompt,
     });
 
     const insertedValidation = tomoriSchema.safeParse(insertedAlterRow);
@@ -636,25 +574,6 @@ export async function execute(
         color: ColorCode.ERROR,
       });
       return;
-    }
-
-    const personaConfigUpdated = await personaRepository.setPersonaConfig(
-      newAlterId,
-      uniqueAlterTriggers,
-      presetPersonaPrompt,
-    );
-    if (!personaConfigUpdated) {
-      await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    const presetSyncUpdated = await personaRepository.setOfficialPresetSyncState(newAlterId, selectedPreset);
-    if (!presetSyncUpdated) {
-      log.warn(`Failed to record official preset sync state for alter persona ${newAlterId}`);
     }
 
     const descriptionParts = [
@@ -725,15 +644,6 @@ export async function execute(
         const avatarUpdated = await personaRepository.setAvatar(newAlterId, storedAvatarUrl);
         if (!avatarUpdated) {
           log.warn(`Failed to persist preset avatar for alter persona ${newAlterId}`);
-        } else {
-          const avatarSyncMarked = await personaRepository.markOfficialPresetAvatarSynced(
-            newAlterId,
-            selectedPreset,
-            hashAvatarBuffer(presetAvatarBuffer),
-          );
-          if (!avatarSyncMarked) {
-            log.warn(`Failed to record official preset avatar sync state for alter persona ${newAlterId}`);
-          }
         }
       } else {
         log.warn(`Failed to persist preset avatar for alter persona ${newAlterId}`);

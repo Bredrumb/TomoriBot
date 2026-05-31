@@ -98,7 +98,6 @@ All SQL is inlined as `private` methods directly on the owning Repository class.
 ### Presets and prompts
 
 - `persona_presets`
-- `persona_preset_sync_state`
 - `system_prompt_presets`
 
 ### Memory and expression data
@@ -167,9 +166,8 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 - `personas` now supports multiple personas per server (`is_alter` flag).
 - `persona_lineage_id` supports cross-server memory identity matching.
 - `persona_attributes` is the source of truth for ordered persona attributes and their `is_public` visibility flag. `personas.attribute_list` remains as a denormalized text-array mirror for older import/export and status surfaces. Native preset/card data stores aligned `attribute_public_flags`; missing flags from legacy files are normalized to all-private rows on import.
-- Official rows in `persona_presets` carry `preset_lineage_id`; applying one records a `persona_preset_sync_state` baseline so later `seed.sql` edits can rebase untouched preset fields while preserving local additions, edits, and removals. Seed also bootstraps clear legacy matches by lineage or content without changing the persona's memory lineage.
-- `persona_presets.preset_attribute_public_flags` stores boolean visibility flags aligned to `preset_attribute_list`; official appearance attributes are public by default.
-- `persona_preset_sync_state` also tracks preset avatar source path/hash metadata. Avatar sync has its own `avatar_sync_mode`, so explicit avatar changes can be preserved while text fields remain on automatic preset sync.
+- Official rows in `persona_presets` carry `preset_lineage_id` as a stable identity anchor for each bundled character. Applying an official preset (`/config setup`, `/persona default`) creates a copy-on-write pointer when possible: `personas.is_pointer = true`, with `personas.preset_lineage_id` and `personas.preset_language` resolving the live `persona_presets` row. The first local content edit materializes the persona into an independent copy while preserving `persona_id` and `persona_lineage_id`.
+- `persona_presets.preset_attribute_public_flags` stores boolean visibility flags aligned to `preset_attribute_list`; official appearance attributes are public by default. Pointer personas resolve these flags from the live preset row, while materialized/imported copies store them in `persona_attributes.is_public`.
 - Persona names are constrained unique per server (case-insensitive, trimmed).
 - Exactly one non-alter persona (`is_alter = false`) per server is enforced by partial unique index `personas_one_main_per_server ON personas(server_id) WHERE is_alter = false` (added in Phase 6 Step #14.6, migration `012`). This hardens the invariant that was previously enforced only at the command layer.
 - `persona_configs.reward_conditioning_enabled` and `persona_configs.punish_conditioning_enabled` are persona-scoped prompt-injection toggles for conditioning memory.

@@ -2,6 +2,7 @@ import type { SQL } from "bun";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { markAllMigrationsApplied, runMigrations } from "@/db/migrationRunner";
+import { invalidateTomoriStateCaches } from "@/utils/cache/tomoriStateCacheStore";
 import { sql as defaultSql } from "@/utils/db/client";
 import { detectRagAvailability } from "@/utils/db/ragAvailability";
 import { splitSqlStatements } from "@/utils/db/sqlSplitter";
@@ -53,6 +54,19 @@ async function executeSqlFile(client: SQL, filePath: string): Promise<void> {
   for (const stmt of statements) {
     await client.unsafe(stmt);
   }
+}
+
+async function invalidatePresetPointerStateCaches(client: SQL): Promise<void> {
+  const rows = await client<Array<{ server_disc_id: string }>>`
+    SELECT DISTINCT s.server_disc_id
+    FROM personas p
+    JOIN servers s ON s.server_id = p.server_id
+    WHERE p.is_pointer = true
+      AND p.preset_lineage_id IS NOT NULL
+      AND p.preset_language IS NOT NULL
+  `;
+
+  invalidateTomoriStateCaches(rows.map((row) => row.server_disc_id));
 }
 
 async function isFreshDatabaseBeforeSchema(client: SQL): Promise<boolean> {
@@ -243,6 +257,8 @@ export async function initializeDatabase(options: InitializeDatabaseOptions = {}
         // static schema files so Phase 6+ schema changes apply in a controlled order.
         await runMigrations(client);
       }
+
+      await invalidatePresetPointerStateCaches(client);
 
       return {
         ragInitialized: ragAvailable,
