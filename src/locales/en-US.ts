@@ -2071,18 +2071,6 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
 - **Cross-server sharing** is opt-in: use {personalStm} with the \`crossserver\` option to let me reference your own conversations from other servers
 - Clear your user-specific STM with {personalStmClear}
 - STM expires automatically over time`,
-        tagging_title: `Memory Tagging`,
-        tagging_description: `Turn on memory and channel tagging with {memoryTaggingSet}.
-
-**Keywords:**
-You can have me activate memories with keywords! This might save a few tokens (my default behavior is to send all my memories with every prompt) but it's also great for more in-depth roleplay where you might want to control what comes up when. Surprise other users in the server when I respond to something I shouldn't know, or save lore until it matters. When you assign a keyword to a memory, I'll only 'remember' if the keyword is in my prompt somewhere. Try not to use usernames or channel names — they'll hit too often. Memories without keywords will always be active.
-
-**Channel Tagging:**
-You can control *where* I remember things, too! By tagging a memory with a #channel_name, I'll only remember it in that channel! This is made for serious roleplay — different channels can be different AUs, time travel scenarios, flashbacks. Different users can even go on different adventures with me at the same time and I'll have different lore for each one. Memories that don't have channel tags will fire in any channel.
-
-Keywords and channel tags can even be used together! And remember, the default behavior never breaks — if you want me to always remember something, every prompt, any channel, just don't add any tags to it.
-
-*If you're self-hosting and have RAG and embedding enabled, channel tags can also be applied to documents (\`/memory document add\`) and history imports (\`/memory history import\`) to lock in your lore even tighter.*`,
       },
       spotlight: {
         description: `Learn what personal spotlight does and how to use it`,

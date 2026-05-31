@@ -39,7 +39,6 @@ export async function execute(
     const statusMention = commandRegistry.getCommandMention("tool", "status");
     const helpCustomizationMention = commandRegistry.getCommandMention("help", "customization");
     const personalStmMention = commandRegistry.getCommandMention("personal", "stm");
-    const memoryTaggingSetMention = commandRegistry.getCommandMention("memory", "tagging", "set");
 
     // Use replySummaryEmbed to show structured memory guide
     await replySummaryEmbed(
@@ -93,13 +92,6 @@ export async function execute(
             value: localizer(locale, "commands.help.memory.shortterm_description", {
               personalStm: personalStmMention,
               personalStmClear: personalStmMention,
-            }),
-            inline: false,
-          },
-          {
-            nameKey: "commands.help.memory.tagging_title",
-            value: localizer(locale, "commands.help.memory.tagging_description", {
-              memoryTaggingSet: memoryTaggingSetMention,
             }),
             inline: false,
           },
