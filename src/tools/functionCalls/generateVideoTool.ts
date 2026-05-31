@@ -77,6 +77,11 @@ export class GenerateVideoTool extends BaseTool {
         description:
           "Optional: Whether to generate audio alongside the video. Defaults to false. Only supported by some providers and models (e.g. Seedance). Enable when the scene involves speech, music, or sound effects.",
       },
+      loop: {
+        type: "boolean",
+        description:
+          "Optional: For image-to-video, whether to make the video loop by using the reference image as both the first and last frame. Defaults to false. Set true only when the user explicitly wants a looping video.",
+      },
     },
     required: ["prompt"],
   };
@@ -329,6 +334,7 @@ export class GenerateVideoTool extends BaseTool {
     const durationSeconds = this.normalizeDuration(args.duration);
     const resolution = this.normalizeResolution(args.resolution);
     const generateAudio = args.generate_audio === true;
+    const loop = args.loop === true;
     const usesReference = !!messageId;
 
     if (
@@ -434,6 +440,7 @@ export class GenerateVideoTool extends BaseTool {
           resolution,
           referenceImages,
           generateAudio,
+          loop,
         });
         videoData = result.videoData;
       } else if (videoImplementation === "google") {
@@ -447,6 +454,7 @@ export class GenerateVideoTool extends BaseTool {
           resolution,
           referenceImages,
           generateAudio,
+          loop,
         });
         videoData = result.videoData;
       } else if (videoImplementation === "openrouter") {
@@ -460,6 +468,7 @@ export class GenerateVideoTool extends BaseTool {
           resolution,
           referenceImages,
           generateAudio,
+          loop,
         });
         videoData = result.videoData;
       } else if (videoImplementation === "zai") {
@@ -473,6 +482,7 @@ export class GenerateVideoTool extends BaseTool {
           resolution,
           referenceImages,
           generateAudio,
+          loop,
         });
         videoData = result.videoData;
       } else {

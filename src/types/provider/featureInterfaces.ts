@@ -206,6 +206,8 @@ export interface ProviderNativeVideoGenerationRequest {
   referenceImages?: ProviderNativeVideoReference[];
   /** Whether the provider should generate audio alongside the video. Defaults to false. */
   generateAudio?: boolean;
+  /** Whether image-to-video generation should reuse the start image as the end frame for a loop. Defaults to false. */
+  loop?: boolean;
 }
 
 /** Result of a native video generation operation */

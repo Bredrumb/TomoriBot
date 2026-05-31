@@ -49,7 +49,8 @@ export async function generateCustomImageViaEndpoint(
 export async function generateCustomVideoViaEndpoint(
   params: GenerateCustomVideoEndpointParams,
 ): Promise<ProviderNativeVideoGenerationResult> {
-  const { endpoint, apiKey, prompt, aspectRatio, durationSeconds, resolution, referenceImages } = params;
+  const { endpoint, apiKey, prompt, aspectRatio, durationSeconds, resolution, referenceImages, generateAudio, loop } =
+    params;
 
   if (endpoint.api_style === "comfyui") {
     return generateComfyUiVideoViaEndpoint(params);
@@ -64,6 +65,8 @@ export async function generateCustomVideoViaEndpoint(
       aspect_ratio: aspectRatio,
       duration: durationSeconds,
       resolution,
+      generate_audio: generateAudio,
+      loop: loop === true,
       ...(referenceImages?.length ? { reference_images: referenceImages } : {}),
     }),
   });

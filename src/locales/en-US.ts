@@ -5489,6 +5489,8 @@ Click **Confirm** to edit it.`,
           image_upload_description: `Upload a reference image for image-to-video generation`,
           aspect_ratio_label: `Aspect Ratio`,
           aspect_ratio_description: `Select the desired aspect ratio`,
+          loop_label: `Loop video`,
+          loop_description: `Use the reference image as both the first and last frame for image-to-video generation. Off by default.`,
         },
         success_title: `🟢 Video Generated Successfully!`,
         success_description: `Generated with \`{model}\` in {elapsed}s.

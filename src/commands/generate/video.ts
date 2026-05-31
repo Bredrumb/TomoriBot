@@ -40,6 +40,7 @@ const MODAL_CUSTOM_ID = "generate_video_modal";
 const PROMPT_INPUT_ID = "prompt_input";
 const ASPECT_RATIO_SELECT_ID = "aspect_ratio_select";
 const REFERENCE_IMAGE_INPUT_ID = "image_upload_1";
+const LOOP_INPUT_ID = "loop_input";
 
 /** Discord file size limit for non-boosted servers (25 MB) */
 const DISCORD_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
@@ -285,6 +286,13 @@ export async function execute(
           { label: "1:1 (Square)", value: "1:1" },
         ],
       },
+      {
+        kind: "checkbox" as const,
+        customId: LOOP_INPUT_ID,
+        labelKey: "commands.generate.video.modal.loop_label",
+        descriptionKey: "commands.generate.video.modal.loop_description",
+        default: false,
+      },
     ];
 
     // 9. Show modal and wait for submission (auto-defer with public reply)
@@ -307,6 +315,7 @@ export async function execute(
     modalSubmitInteraction = modalResult.interaction;
     const prompt = modalResult.values?.[PROMPT_INPUT_ID];
     const aspectRatio = modalResult.values?.[ASPECT_RATIO_SELECT_ID] ?? "16:9";
+    const loop = modalResult.values?.[LOOP_INPUT_ID] === "true";
     const imageAttachment = modalResult.attachments?.[REFERENCE_IMAGE_INPUT_ID];
 
     if (!modalSubmitInteraction || !prompt) {
@@ -369,6 +378,7 @@ export async function execute(
         prompt,
         aspectRatio,
         referenceImages,
+        loop,
       });
       videoData = result.videoData;
     } else if (videoImplementation === "google") {
@@ -379,6 +389,7 @@ export async function execute(
         prompt,
         aspectRatio,
         referenceImages,
+        loop,
       });
       videoData = result.videoData;
     } else if (videoImplementation === "openrouter") {
@@ -389,6 +400,7 @@ export async function execute(
         prompt,
         aspectRatio,
         referenceImages,
+        loop,
       });
       videoData = result.videoData;
     } else if (videoImplementation === "zai") {
@@ -399,6 +411,7 @@ export async function execute(
         prompt,
         aspectRatio,
         referenceImages,
+        loop,
       });
       videoData = result.videoData;
     } else {

@@ -5552,6 +5552,8 @@ RP設定を無効化したチャンネル **{disabled_count}** 件: {disabled_ch
           image_upload_description: `画像から動画を生成するための参照画像をアップロード`,
           aspect_ratio_label: `アスペクト比`,
           aspect_ratio_description: `希望のアスペクト比を選択してください`,
+          loop_label: `ループ動画`,
+          loop_description: `画像から動画を生成するとき、参照画像を最初と最後のフレームの両方に使います。デフォルトはオフです。`,
         },
         success_title: `🟢 動画が正常に生成されました！`,
         success_description: `\`{model}\` で {elapsed}秒で生成しました。
