@@ -5,12 +5,12 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
+import { configRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { promptWithRawModal, replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/interactionHelper";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
-import { tomoriConfigSchema, type ErrorContext, type UserRow } from "@/types/db/schema";
+import type { ErrorContext, UserRow } from "@/types/db/schema";
 import {
   DELIBERATE_TOOL_TRIGGER_TARGETS,
   getDeliberateToolTriggerTargetLabel,
@@ -373,15 +373,10 @@ async function handleRemove(
 }
 
 async function saveTriggerMap(serverId: number, triggerMap: DeliberateToolTriggerMap): Promise<boolean> {
-  const [updatedRow] = await sql`
-    UPDATE tomori_configs
-    SET deliberate_tool_triggers = ${JSON.stringify(triggerMap)}::jsonb
-    WHERE server_id = ${serverId}
-    RETURNING *
-  `;
-
-  const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-  return Boolean(updatedRow && validatedConfig.success);
+  // Repository handles per-domain table (server_trigger_behavior_configs) + zod-derived field whitelist
+  return configRepository.updateTriggerBehaviorConfig(serverId, {
+    deliberate_tool_triggers: triggerMap,
+  });
 }
 
 function getTriggerEntries(triggerMap: DeliberateToolTriggerMap): TriggerEntry[] {

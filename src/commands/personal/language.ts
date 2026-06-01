@@ -7,9 +7,9 @@ import {
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
-import { type UserRow, type ErrorContext, userSchema } from "../../types/db/schema";
-import { sql } from "@/utils/db/client";
+import type { UserRow, ErrorContext } from "../../types/db/schema";
 import { invalidateUserCache } from "../../utils/cache/userCache";
+import { userRepository } from "@/utils/db/repositories";
 
 // Define constants at the top (Rule #20)
 const SUPPORTED_LANGUAGES = ["en-US", "ja"] as const;
@@ -96,37 +96,11 @@ export async function execute(
       return;
     }
 
-    // 6. Update the user's language preference in the database using direct SQL (Rule #4, #15)
-    const [updatedRow] = await sql`
-            UPDATE users
-            SET language_pref = ${languageValue}
-            WHERE user_disc_id = ${userData.user_disc_id}
-            RETURNING *
-        `;
+    // 6. Update the user's language preference in the database
+    // biome-ignore lint/style/noNonNullAssertion: userData.user_id is always provided by command framework
+    const ok = await userRepository.setLanguage(userData.user_id!, languageValue);
 
-    // 7. Validate the returned data (Rules #3, #5 - critical user data change)
-    const validatedUser = userSchema.safeParse(updatedRow);
-
-    if (!validatedUser.success || !updatedRow) {
-      const context: ErrorContext = {
-        userId: userData.user_id,
-        errorType: "DatabaseUpdateError",
-        metadata: {
-          command: "config language",
-          guildId: interaction.guild?.id ?? interaction.user.id,
-          languageValue,
-          validationErrors: validatedUser.success ? null : validatedUser.error.flatten(), // Include Zod errors if validation failed
-        },
-      };
-      await log.error(
-        "Failed to update or validate user language preference",
-        // Provide a specific error message based on the failure reason
-        validatedUser.success
-          ? new Error("Database update returned no rows or unexpected data")
-          : new Error("Updated user data failed validation"),
-        context,
-      );
-
+    if (!ok) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",
@@ -135,10 +109,10 @@ export async function execute(
       return;
     }
 
-    // 8. Invalidate user cache so next message gets fresh data
+    // 7. Invalidate user cache so next message gets fresh data
     invalidateUserCache(userData.user_disc_id);
 
-    // 9. Success message with explanation of the language change
+    // 8. Success message with explanation of the language change
     await replyInfoEmbed(interaction, languageValue, {
       titleKey: "commands.personal.language.success_title",
       descriptionKey: "commands.personal.language.success_description",
@@ -149,7 +123,7 @@ export async function execute(
       color: ColorCode.SUCCESS,
     });
   } catch (error) {
-    // 9. Log error with context (Rule #22)
+    // 9. Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       errorType: "CommandExecutionError",

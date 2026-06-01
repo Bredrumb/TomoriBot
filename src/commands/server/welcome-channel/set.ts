@@ -10,8 +10,9 @@ import {
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { getCachedAllPersonas, getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { updateTomoriConfig } from "@/utils/db/dbWrite";
-import { promptWithRawModal, replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { configRepository } from "@/utils/db/repositories";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -81,10 +82,10 @@ export async function execute(
         value: RANDOM_PERSONA_VALUE,
       },
       ...allPersonas
-        .filter((persona) => persona.tomori_id !== undefined)
+        .filter((persona) => persona.persona_id !== undefined)
         .map((persona) => ({
-          label: safeSelectOptionText(persona.tomori_nickname),
-          value: persona.tomori_id?.toString() ?? "",
+          label: safeSelectOptionText(persona.persona_nickname),
+          value: persona.persona_id?.toString() ?? "",
           description: persona.is_alter
             ? localizer(locale, "commands.server.welcome-channel.shared.alter_persona_description")
             : localizer(locale, "commands.server.welcome-channel.shared.main_persona_description"),
@@ -151,7 +152,7 @@ export async function execute(
 
     if (selectedPersonaValue !== RANDOM_PERSONA_VALUE) {
       welcomePersonaId = Number.parseInt(selectedPersonaValue, 10);
-      const selectedPersona = allPersonas.find((persona) => persona.tomori_id === welcomePersonaId);
+      const selectedPersona = allPersonas.find((persona) => persona.persona_id === welcomePersonaId);
       if (!selectedPersona || Number.isNaN(welcomePersonaId)) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "general.errors.invalid_option_title",
@@ -161,12 +162,12 @@ export async function execute(
         });
         return;
       }
-      personaDisplayName = selectedPersona.tomori_nickname;
+      personaDisplayName = selectedPersona.persona_nickname;
     }
 
     await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const updatedConfig = await updateTomoriConfig(tomoriState.server_id, {
+    const updatedConfig = await configRepository.updateWelcomeConfig(tomoriState.server_id, {
       welcome_channel_disc_id: selectedChannel.id,
       welcome_prompt: additionalPrompt,
       welcome_persona_id: welcomePersonaId,

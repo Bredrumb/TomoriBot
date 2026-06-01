@@ -1,0 +1,93 @@
+// locales/ja/commands/mcp.ts
+
+export default {
+  mcp: {
+    description: `リモートMCP（Model Context Protocol）ツールサーバーを管理`,
+    add: {
+      description: `このギルドに新しいリモートMCPサーバーを登録します。/help mcp でセットアップガイドを確認できます。`,
+      modal_title: `MCPサーバーを追加`,
+      name_label: `サーバー名`,
+      name_placeholder: `my-mcp-server`,
+      url_label: `サーバーURL`,
+      url_placeholder: `https://mcp.example.com/sse`,
+      auth_token_label: `認証トークン（任意）`,
+      auth_token_placeholder: `BearerトークンまたはSmithery APIキー（不要な場合は空白）`,
+      server_type_label: `サーバータイプ（任意）`,
+      server_type_description: `このサーバーが置き換える機能（対応する内蔵ツールを無効化）`,
+      none_option: `汎用`,
+      none_option_description: `内蔵ツールは無効化されません`,
+      web_search_option: `ウェブ検索`,
+      web_search_option_description: `内蔵のBraveおよびDuckDuckGo検索ツールを無効化`,
+      url_fetcher_option: `URL取得`,
+      url_fetcher_option_description: `内蔵のURL取得ツールを無効化`,
+      invalid_input_title: `入力不足`,
+      invalid_input_description: `サーバー名とURLの両方が必要です。`,
+      invalid_name_title: `無効なサーバー名`,
+      invalid_name_description: `サーバー名は英数字とハイフンのみ使用可能（1〜32文字）で、英数字で始まる必要があります。`,
+      invalid_url_title: `無効なURL`,
+      invalid_url_invalid_format_description: `MCPサーバーURLの形式が正しくありません。`,
+      invalid_url_protocol_description: `MCPサーバーURLはHTTPまたはHTTPSを使用する必要があります。`,
+      invalid_url_http_localhost_only_description: `開発環境では、HTTPはlocalhostのMCPサーバーにのみ使用できます。リモートサーバーにはHTTPSを使ってください。`,
+      invalid_url_https_required_description: `本番環境ではTLS付きのHTTPS MCPサーバーのみ許可されています。`,
+      invalid_url_localhost_blocked_description: `本番環境ではlocalhostのMCPサーバーは使用できません。`,
+      invalid_url_dns_failed_description: `ホスト名 \`{hostname}\` をこのサーバーから解決できませんでした。`,
+      invalid_url_private_address_description: `本番環境では公開ルーティング可能なMCPホストのみ許可されています。このホスト名はブロック対象アドレス \`{address}\` に解決されました。`,
+      limit_reached_title: `サーバー上限に達しました`,
+      limit_reached_description: `このギルドはMCPサーバーの上限（{max}台）に達しています。新しいサーバーを追加する前に既存のサーバーを削除してください。`,
+      connection_failed_title: `接続失敗`,
+      connection_failed_description: `MCPサーバーに接続できませんでした。
+**エラー:** {error}`,
+      duplicate_name_title: `名前が重複`,
+      duplicate_name_description: `"{name}"という名前のMCPサーバーはこのギルドに既に存在します。`,
+      success_title: `MCPサーバーを追加しました`,
+      success_description: `**{name}**の登録に成功しました。
+**URL:** \`{url}\`
+**発見されたツール:** {tool_count}件 ({tool_names})
+
+信頼できるMCPサーバーだけを追加してください。
+悪意のあるサーバーは、まぎらわしい指示を返したり、ツールに送られた情報を集めたり、危険または誤った結果を返すおそれがあります。`,
+    },
+    remove: {
+      description: `このギルドから登録済みのMCPサーバーを削除します。`,
+      modal_title: `MCPサーバーを削除`,
+      checkbox_label: `登録済みMCPサーバー`,
+      checkbox_label_continued: `登録済みMCPサーバー（続き）`,
+      checkbox_description: `削除したいMCPサーバーのチェックを外してください。`,
+      too_many_title: `MCPサーバーが多すぎます`,
+      too_many_description: `このギルドには登録済みMCPサーバーが **{count}** 台あります。Discord のモーダルではチェックボックスグループを **{max_groups}** 個（合計 **{max_entries}** 項目）までしか表示できません。`,
+      no_removals_title: `削除されたMCPサーバーはありません`,
+      no_removals_description: `どのMCPサーバーも未チェックになっていません。登録済みサーバーは変更されていません。`,
+      success_title: `MCPサーバーを更新しました`,
+      success_description: `次のMCPサーバーを削除して切断しました。
+{servers_removed}`,
+    },
+    list: {
+      description: `このギルドの登録済みMCPサーバーを一覧表示します。`,
+      empty_title: `MCPサーバーなし`,
+      empty_description: `このギルドにはMCPサーバーが登録されていません。\`/config mcp add\`で登録してください。`,
+      title: `登録済みMCPサーバー`,
+      header_description: `**{count}**台のサーバーが登録済み:
+
+{servers}`,
+    },
+    toggle: {
+      description: `登録済みMCPサーバーの有効/無効を切り替えます。`,
+      modal_title: `MCPサーバーの切り替え`,
+      select_label: `サーバーを選択`,
+      select_description: `切り替えるMCPサーバーを選択してください`,
+      select_placeholder: `切り替えるサーバーを選択...`,
+      state_label: `有効/無効`,
+      state_description: `サーバーを有効にするか無効にするかを選択`,
+      currently_enabled: `有効`,
+      currently_disabled: `無効`,
+      enable_option: `有効にする`,
+      enable_option_description: `このMCPサーバーをツール呼び出しに有効化`,
+      not_found_title: `サーバーが見つかりません`,
+      not_found_description: `"{name}"という名前のMCPサーバーはこのギルドに見つかりませんでした。`,
+      enabled_success_title: `MCPサーバーを有効化しました`,
+      enabled_success_description: `MCPサーバー"{name}"が有効化され、ツール呼び出しに使用可能になりました。`,
+      disabled_success_title: `MCPサーバーを無効化しました`,
+      disabled_success_description: `MCPサーバー"{name}"が無効化され、切断されました。`,
+    },
+  },
+};

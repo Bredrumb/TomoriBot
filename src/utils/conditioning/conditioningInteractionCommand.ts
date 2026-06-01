@@ -6,22 +6,23 @@ import type {
   SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { EmbedBuilder, MessageFlags, PermissionFlagsBits } from "discord.js";
-import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { ConditioningType, UserRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
-import { loadAllPersonasForServer, loadTomoriState } from "@/utils/db/dbRead";
+import { personaRepository } from "@/utils/db/repositories";
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
-import tomoriChat from "@/events/messageCreate/tomoriChat";
+import { tomoriChat } from "@/events/messageCreate/tomoriChat";
 import {
   CONDITIONING_REASON_MAX_LENGTH,
   normalizeConditioningReason,
   type ConditioningActionKey,
 } from "@/utils/conditioning/conditioning";
-import { recordConditioningEvent } from "@/utils/db/conditioningDb";
-import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/db/personaAccess";
+import { conditioningMemoryRepository } from "@/utils/db/repositories/ConditioningMemoryRepository";
+import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 
 const EMBED_COLOR_BY_TYPE: Record<ConditioningType, ColorCode> = {
   reward: ColorCode.AFFECTION,
@@ -103,7 +104,7 @@ export function createConditioningInteractionCommand(
       return;
     }
 
-    const tomoriState = await loadTomoriState(interaction.guild.id);
+    const tomoriState = await personaRepository.loadState(interaction.guild.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.unknown_error_title",
@@ -113,7 +114,7 @@ export function createConditioningInteractionCommand(
       return;
     }
 
-    const allPersonas = await loadAllPersonasForServer(interaction.guild.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -160,12 +161,12 @@ export function createConditioningInteractionCommand(
     if (alterPersonas.length > 0) {
       const personaOptions: SelectOption[] = [
         {
-          label: safeSelectOptionText(mainPersona.tomori_nickname),
+          label: safeSelectOptionText(mainPersona.persona_nickname),
           value: "0",
           description: localizer(locale, "commands.bot.respond.main_persona_description"),
         },
         ...alterPersonas.map((persona, index) => ({
-          label: safeSelectOptionText(persona.tomori_nickname),
+          label: safeSelectOptionText(persona.persona_nickname),
           value: (index + 1).toString(),
           description: localizer(locale, "commands.bot.respond.alter_persona_description"),
         })),
@@ -198,7 +199,7 @@ export function createConditioningInteractionCommand(
       selectedPersona = selectedIndex === 0 ? mainPersona : (alterPersonas[selectedIndex - 1] ?? mainPersona);
     }
 
-    if (!selectedPersona.tomori_id) {
+    if (!selectedPersona.persona_id) {
       await replyInfoEmbed(replyInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -218,11 +219,11 @@ export function createConditioningInteractionCommand(
 
     try {
       const botName =
-        selectedPersona.tomori_nickname ?? tomoriState.tomori_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori";
+        selectedPersona.persona_nickname ?? tomoriState.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori";
       const reasonText = normalizeConditioningReason(interaction.options.getString("reason"));
       const extraContext = cmdOptions?.getExtraContext?.(interaction) ?? {};
       const actionTextValue = extraContext.action_text?.trim() ?? null;
-      const conditioningEvent = await recordConditioningEvent({
+      const conditioningEvent = await conditioningMemoryRepository.recordEvent({
         serverId: tomoriState.server_id,
         personaLineageId: selectedPersona.persona_lineage_id ?? 0,
         conditioningType: type,
@@ -269,9 +270,9 @@ export function createConditioningInteractionCommand(
         return;
       }
 
-      if (!isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, selectedPersona.tomori_id)) {
+      if (!isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, selectedPersona.persona_id)) {
         log.info(
-          `${type} ${actionKey} interaction completed without chat response because persona ${selectedPersona.tomori_id} is blocked by persona access rules in ${interaction.channel.id}`,
+          `${type} ${actionKey} interaction completed without chat response because persona ${selectedPersona.persona_id} is blocked by persona access rules in ${interaction.channel.id}`,
         );
         return;
       }
@@ -288,39 +289,22 @@ export function createConditioningInteractionCommand(
         `${type} ${actionKey} triggered by ${interaction.user.id} in channel ${interaction.channel.id} for message ${latestMessage.id}`,
       );
 
-      await tomoriChat(
+      await tomoriChat({
         client,
-        latestMessage as Message,
-        false,
-        true,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        0,
-        false,
-        undefined,
-        undefined,
-        selectedPersona.tomori_id,
-        undefined,
-        undefined,
-        undefined,
-        "user",
-        interaction.id,
-        interaction.user.id,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        {
+        message: latestMessage as Message,
+        isFromQueue: false,
+        isManuallyTriggered: true,
+        selectedPersonaId: selectedPersona.persona_id,
+        textQuotaSource: "user",
+        textQuotaTriggerKey: interaction.id,
+        textQuotaUserDiscId: interaction.user.id,
+        manualTriggerInvoker: {
           userDiscId: interaction.user.id,
           username: interaction.user.username,
           locale,
           member: interaction.member as import("discord.js").GuildMember | null,
         },
-      );
+      });
     } catch (error) {
       await log.error(`Error in ${type} ${actionKey} command`, error, {
         errorType: `${type}_${actionKey}_command_error`,

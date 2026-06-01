@@ -28,16 +28,16 @@ import type { FunctionCall, ThoughtLogEntry } from "../../types/provider/interfa
 import { ContextItemTag, type StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
-import { truncateBeforeGenericSpeakerLine } from "../../utils/text/stringHelper";
+import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { buildProviderStopStrings } from "../utils/stopStrings";
+import { BaseStreamAdapter } from "../../types/stream/interfaces";
 import type {
   ProcessedChunk,
   ProviderError,
   RawStreamChunk,
   StreamConfig,
   StreamContext,
-  StreamProvider,
 } from "../../types/stream/interfaces";
 import { fetchAndOptimizeImage } from "../../utils/image/imageProcessor";
 import { parseVertexCompositeKey, createVertexClient } from "./vertexClient";
@@ -86,12 +86,13 @@ interface VertexStreamChunk {
  * Shares the same speaker-guard, deduplication, and thought-signature
  * logic as GoogleStreamAdapter because the response format is identical.
  */
-export class VertexStreamAdapter implements StreamProvider {
+export class VertexStreamAdapter extends BaseStreamAdapter {
   private static readonly SPEAKER_GUARD_HOLDBACK_CHARS = 32;
   private static readonly STREAM_TEXT_TAIL_CHARS = 4096;
   private static readonly STREAM_TEXT_MIN_DEDUP_CHARS = 8;
-  private static readonly SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
+  public static readonly SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
     ContextItemTag.SYSTEM_HUMANIZER_RULES,
+    ContextItemTag.SYSTEM_PERSONA_PROMPT,
     ContextItemTag.SYSTEM_PERSONALITY,
     ContextItemTag.KNOWLEDGE_SERVER_INFO,
     ContextItemTag.KNOWLEDGE_SERVER_EMOJIS,
@@ -105,7 +106,13 @@ export class VertexStreamAdapter implements StreamProvider {
   private readonly clientFactory: (apiKey: string) => GoogleGenAI;
 
   constructor(options: VertexStreamAdapterOptions = {}) {
-    this.providerName = options.providerName ?? "vertex";
+    const providerName = options.providerName ?? "vertex";
+    super({
+      name: providerName,
+      version: "1.0",
+      supportsFunctionCalling: true,
+    });
+    this.providerName = providerName;
     this.clientFactory =
       options.clientFactory ??
       ((apiKey: string) => {
@@ -189,7 +196,7 @@ export class VertexStreamAdapter implements StreamProvider {
       existingStops: requestConfig.stopSequences,
       providerName: this.providerName,
       model: config.model,
-      personaName: context.tomoriState.tomori_nickname,
+      personaName: context.tomoriState.persona_nickname,
       configuredStops: context.tomoriState.config.llm_stop_strings,
       includePersonaSpeakerStop: speakerStopPatternEnabled,
     });
@@ -385,16 +392,7 @@ export class VertexStreamAdapter implements StreamProvider {
         }
       }
 
-      // Convert Vertex/API errors to our format
-      const providerError = this.handleProviderError(error);
-      yield {
-        data: { error: providerError },
-        provider: this.providerName,
-        metadata: {
-          timestamp: Date.now(),
-          error: true,
-        },
-      };
+      yield this.createProviderErrorChunk(error, undefined, this.providerName);
     }
   }
 
@@ -1004,18 +1002,6 @@ export class VertexStreamAdapter implements StreamProvider {
     return `Error Code ${errorCode}: ${apiMessage}`;
   }
 
-  /**
-   * Get provider information
-   */
-  getProviderInfo() {
-    return {
-      name: this.providerName,
-      version: "1.0",
-      supportsStreaming: true,
-      supportsFunctionCalling: true,
-    };
-  }
-
   // ─── Context assembly (shared with Google) ───────────────────────────
 
   private async assembleVertexContext(
@@ -1087,9 +1073,22 @@ export class VertexStreamAdapter implements StreamProvider {
                 });
               }
             } catch (imgErr) {
-              log.warn(`VertexStreamAdapter: Image processing error ${part.uri}`, {
-                error: imgErr instanceof Error ? imgErr.message : String(imgErr),
-              });
+              const fallback = (part as { fallbackUri?: string }).fallbackUri;
+              if (fallback && fallback !== part.uri) {
+                try {
+                  const optimized = await fetchAndOptimizeImage(fallback, part.mimeType);
+                  geminiParts.push({ inlineData: { mimeType: optimized.mimeType, data: optimized.data } });
+                  log.info(`VertexStreamAdapter: Image loaded via fallback CDN URL ${fallback}`);
+                } catch (fallbackErr) {
+                  log.warn(`VertexStreamAdapter: Image processing error (proxy + CDN both failed) ${part.uri}`, {
+                    error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+                  });
+                }
+              } else {
+                log.warn(`VertexStreamAdapter: Image processing error ${part.uri}`, {
+                  error: imgErr instanceof Error ? imgErr.message : String(imgErr),
+                });
+              }
             }
           } else if (part.type === "image" && "inlineData" in part && part.inlineData) {
             const inlineData = part.inlineData as {

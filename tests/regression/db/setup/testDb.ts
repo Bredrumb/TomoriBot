@@ -1,0 +1,62 @@
+/**
+ * Test database configuration for the DB regression harness.
+ *
+ * DB tests are enabled automatically when `bun run test` detects a reachable
+ * local Postgres instance and provisions a disposable database. The wrapper
+ * (scripts/checks/runTests.ts) sets TEST_DB_READY=1 and POSTGRES_DB to
+ * the disposable database name before spawning bun test.
+ *
+ * To run only DB regression tests (assumes wrapper has provisioned the DB):
+ *   bun run test
+ *
+ * To target a specific pre-existing database manually:
+ *   TEST_DB_READY=1 POSTGRES_DB=<name> POSTGRES_PASSWORD=<pw> bun test tests/regression/db/
+ */
+import { SQL } from "bun";
+import { initializeDatabase } from "@/utils/db/initializeDatabase";
+
+const effectiveHost = process.env.TEST_POSTGRES_HOST ?? process.env.POSTGRES_HOST ?? "localhost";
+const effectivePort = process.env.TEST_POSTGRES_PORT ?? process.env.POSTGRES_PORT ?? "5432";
+const effectiveUser = process.env.TEST_POSTGRES_USER ?? process.env.POSTGRES_USER ?? "postgres";
+const effectivePassword = process.env.TEST_POSTGRES_PASSWORD ?? process.env.POSTGRES_PASSWORD;
+const effectiveDatabase = process.env.POSTGRES_DB ?? "tomodb";
+
+// Keep the application singleton DB client pointed at the same test database as
+// the direct fixture client below. dbRead/dbWrite import the singleton lazily, so
+// setting these at module load is early enough for the harness.
+process.env.POSTGRES_HOST = effectiveHost;
+process.env.POSTGRES_PORT = effectivePort;
+process.env.POSTGRES_USER = effectiveUser;
+process.env.POSTGRES_DB = effectiveDatabase;
+if (effectivePassword) process.env.POSTGRES_PASSWORD = effectivePassword;
+
+/**
+ * True when the runTests.ts wrapper has provisioned a disposable database for
+ * this run (TEST_DB_READY=1) and credentials are present. Prevents the harness
+ * from writing fixture data into a development or production database when
+ * tests are invoked directly without the wrapper.
+ */
+export const DB_TESTS_AVAILABLE = Boolean(effectivePassword) && process.env.TEST_DB_READY === "1";
+
+/**
+ * A direct SQL client for the test database, used exclusively for fixture
+ * insertion and cleanup. Test assertions call the real dbRead/dbWrite functions
+ * which use the global sql singleton from client.ts — those must also be pointed
+ * at the test DB via POSTGRES_DB env var (set by the wrapper).
+ */
+export const testSql = new SQL({
+  hostname: effectiveHost,
+  port: Number(effectivePort),
+  username: effectiveUser,
+  password: effectivePassword ?? "dummy",
+  database: effectiveDatabase,
+});
+
+/**
+ * Bootstraps the test database schema (idempotent).
+ * Uses the same initializeDatabase() path as the bot, so schema drift
+ * between tests and production is structurally impossible.
+ */
+export async function setupTestDb(): Promise<void> {
+  await initializeDatabase({ client: testSql, includeRag: false });
+}

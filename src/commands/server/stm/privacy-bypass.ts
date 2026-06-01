@@ -4,12 +4,11 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
+import { configRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { tomoriConfigSchema } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 
 /**
@@ -60,23 +59,20 @@ export async function execute(
     const newValue = !(tomoriState.config.stm_privacy_bypass ?? false);
 
     // 4. Persist to the database
-    const [updatedRow] = await sql`
-      UPDATE tomori_configs
-      SET stm_privacy_bypass = ${newValue}
-      WHERE server_id = ${tomoriState.server_id}
-      RETURNING *
-    `;
+    const updated = await configRepository.updateChannelScopeConfig(tomoriState.server_id, {
+      stm_privacy_bypass: newValue,
+    });
 
-    if (!updatedRow) {
+    if (!updated) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
         metadata: {
           command: "server stm privacy-bypass",
           newValue,
-          targetTable: "tomori_configs",
+          targetTable: "server_channel_scope_configs",
         },
       };
       await log.error(
@@ -92,35 +88,10 @@ export async function execute(
       return;
     }
 
-    // 5. Validate the returned row against the config schema
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-    if (!validatedConfig.success) {
-      const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
-        serverId: tomoriState.server_id,
-        errorType: "SchemaValidationError",
-        metadata: {
-          command: "server stm privacy-bypass",
-          validationErrors: validatedConfig.error.flatten(),
-        },
-      };
-      await log.error(
-        "Failed to validate updated config after stm_privacy_bypass toggle",
-        validatedConfig.error,
-        context,
-      );
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    // 6. Invalidate cache after successful write
+    // 5. Invalidate cache after successful write
     invalidateTomoriStateCache(guildId);
 
-    // 7. Confirm the change to the user
+    // 6. Confirm the change to the user
     await replyInfoEmbed(interaction, locale, {
       titleKey: newValue
         ? "commands.server.stm.privacy-bypass.enabled_title"

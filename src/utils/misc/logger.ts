@@ -1,5 +1,5 @@
 import type { ErrorContext } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
+import { buildErrorLogPayload, errorLogRepository } from "@/utils/db/repositories/ErrorLogRepository";
 import pino from "pino";
 
 /**
@@ -29,8 +29,6 @@ export enum ColorCode {
 const isProduction = process.env.RUN_ENV === "production";
 const isTestProduction = process.env.TEST_PRODUCTION === "true";
 const shouldHideLogs = isProduction && !isTestProduction;
-// const entrypointPath = process.argv[1]?.replace(/\\/g, "/") ?? "";
-// const isMaintenanceScript = entrypointPath.includes("/scripts/maintenance/");
 
 /**
  * Check if pino-pretty is available (it's a devDependency, absent in production Docker builds).
@@ -84,8 +82,6 @@ const colors = {
   brightYellow: "\x1b[93m",
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
-
 const isCloneSafeLogValue = (value: unknown): boolean =>
   value === null || ["string", "number", "boolean", "undefined"].includes(typeof value);
 
@@ -100,27 +96,8 @@ const toLoggableError = (err: unknown): Record<string, unknown> => {
       stack: err.stack,
     };
   }
-  if (isRecord(err)) return err;
+  if (typeof err === "object" && err !== null) return err as Record<string, unknown>;
   return { message: String(err) };
-};
-
-const toErrorMessage = (err: unknown): string => {
-  if (err instanceof Error) return err.message;
-  if (isRecord(err)) {
-    if (typeof err.message === "string") return err.message;
-    try {
-      return JSON.stringify(err);
-    } catch {
-      return "[unserializable object]";
-    }
-  }
-  return String(err);
-};
-
-const toErrorStack = (err: unknown): string | null => {
-  if (err instanceof Error) return err.stack ?? null;
-  if (isRecord(err) && typeof err.stack === "string") return err.stack;
-  return null;
 };
 
 /**
@@ -205,52 +182,23 @@ export const log = {
   error: async (msg: string, err?: unknown, context?: ErrorContext): Promise<void> => {
     const coloredMsg = shouldHideLogs ? msg : `${colors.red}${msg}${colors.reset}`;
 
-    // 1. Log to console using Pino
     if (err) {
-      pinoLogger.error(
-        {
-          err: toLoggableError(err),
-          context,
-        },
-        coloredMsg,
-      );
+      pinoLogger.error({ err: toLoggableError(err), context }, coloredMsg);
     } else {
       pinoLogger.error({ context }, coloredMsg);
     }
 
-    // 2. Skip database logging if disabled (relying on CloudWatch instead)
+    // Skip database logging when disabled (relying on CloudWatch instead)
     if (!ENABLE_ERROR_DB_LOGGING) {
       return;
     }
 
-    // 3. Prepare data for database insertion
-    const errorMessage = toErrorMessage(err);
-    const stackTrace = toErrorStack(err);
+    const dbPayload = buildErrorLogPayload(msg, err, context);
 
-    const dbPayload = {
-      tomori_id: context?.tomoriId ?? null,
-      user_id: context?.userId ?? null,
-      server_id: context?.serverId ?? null,
-      error_type: context?.errorType ?? "GenericError",
-      error_message: `${msg} - ${errorMessage}`,
-      stack_trace: stackTrace,
-      error_metadata: context?.metadata ? JSON.stringify(context.metadata) : null,
-    };
-
-    // 4. Attempt to insert into the database
     try {
-      await sql`
-                INSERT INTO error_logs (
-                    tomori_id, user_id, server_id,
-                    error_type, error_message, stack_trace, error_metadata
-                ) VALUES (
-                    ${dbPayload.tomori_id}, ${dbPayload.user_id}, ${dbPayload.server_id},
-                    ${dbPayload.error_type}, ${dbPayload.error_message}, ${dbPayload.stack_trace},
-                    ${dbPayload.error_metadata}::jsonb
-                )
-            `;
+      await errorLogRepository.insertErrorLog(dbPayload);
     } catch (dbError) {
-      // Log DB insertion failure - avoid infinite recursion by using console directly
+      // Avoid infinite recursion — fall back to console directly
       console.error("\x1b[31m[DB LOG ERROR]\x1b[0m Failed to log error to database:");
       console.error(dbError instanceof Error ? (dbError.stack ?? dbError.message) : String(dbError));
       console.error("Original error payload:", dbPayload);

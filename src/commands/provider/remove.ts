@@ -4,62 +4,41 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { loadSavedProviderConfigs } from "@/utils/db/dbRead";
-import { deleteSavedProviderConfig } from "@/utils/db/dbWrite";
-import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { configRepository, llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+
+import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { isCustomProvider, deleteCustomLLMEntry } from "@/utils/discord/customProviderModal";
-import { sql } from "@/utils/db/client";
 import { hasRegisteredCustomProvider, loadProviderDefaultSelectionIds } from "@/utils/provider/savedProviderConfig";
 import { cleanupCustomProviderArtifacts } from "@/utils/provider/customEndpointService";
 import { promptForSavedProvider } from "../model/providerPicker";
 
 async function resolveLlmProvider(llmId: number | null | undefined): Promise<string | null> {
   if (!llmId) return null;
-  const [row] = await sql`
-    SELECT llm_provider
-    FROM llms
-    WHERE llm_id = ${llmId}
-    LIMIT 1
-  `;
-  return row?.llm_provider ? String(row.llm_provider).toLowerCase() : null;
+  const llm = await llmModelRepo.loadById(llmId);
+  return llm?.llm_provider ? llm.llm_provider.toLowerCase() : null;
 }
 
 async function resolveDiffusionProvider(diffusionModelId: number | null | undefined): Promise<string | null> {
   if (!diffusionModelId) return null;
-  const [row] = await sql`
-    SELECT provider
-    FROM image_diffusion_models
-    WHERE diffusion_model_id = ${diffusionModelId}
-    LIMIT 1
-  `;
-  return row?.provider ? String(row.provider).toLowerCase() : null;
+  const model = await llmModelRepo.loadDiffusionModelById(diffusionModelId);
+  return model?.provider ? String(model.provider).toLowerCase() : null;
 }
 
 async function resolveEmbeddingProvider(embeddingModelId: number | null | undefined): Promise<string | null> {
   if (!embeddingModelId) return null;
-  const [row] = await sql`
-    SELECT provider
-    FROM embedding_models
-    WHERE embedding_model_id = ${embeddingModelId}
-    LIMIT 1
-  `;
-  return row?.provider ? String(row.provider).toLowerCase() : null;
+  const model = await llmModelRepo.loadEmbeddingModelById(embeddingModelId);
+  return model?.provider ? String(model.provider).toLowerCase() : null;
 }
 
 async function resolveVideoProvider(videoModelId: number | null | undefined): Promise<string | null> {
   if (!videoModelId) return null;
-  const [row] = await sql`
-    SELECT provider
-    FROM video_generation_models
-    WHERE video_model_id = ${videoModelId}
-    LIMIT 1
-  `;
-  return row?.provider ? String(row.provider).toLowerCase() : null;
+  const model = await llmModelRepo.loadVideoGenerationModelById(videoModelId);
+  return model?.provider ? String(model.provider).toLowerCase() : null;
 }
 
 // Configure the subcommand
@@ -109,7 +88,7 @@ export async function execute(
 
   try {
     // 3. Load all saved provider configs
-    const rawSavedConfigs = await loadSavedProviderConfigs(tomoriState.server_id);
+    const rawSavedConfigs = await llmProviderRepo.loadSavedProviderConfigs(tomoriState.server_id);
     // Custom providers with live endpoints are managed via /config custom-endpoint remove.
     // Orphaned custom provider rows (no matching custom_endpoints) are kept here as a
     // cleanup path — they have no other way to be removed.
@@ -207,15 +186,11 @@ export async function execute(
 
     const fallbackRows =
       tomoriState.config.fallback_llm_ids && tomoriState.config.fallback_llm_ids.length > 0
-        ? await sql<Array<{ llm_id: number; llm_provider: string }>>`
-            SELECT llm_id, llm_provider
-            FROM llms
-            WHERE llm_id = ANY(${tomoriState.config.fallback_llm_ids})
-          `
+        ? await llmModelRepo.getLlmsByIds(tomoriState.config.fallback_llm_ids)
         : [];
     const nextFallbackIds = fallbackRows
       .filter((row) => row.llm_provider.toLowerCase() !== selectedProvider.toLowerCase())
-      .map((row) => row.llm_id);
+      .flatMap((row) => (row.llm_id === undefined ? [] : [row.llm_id]));
     const nextConfigApiKey =
       deletingActiveProvider && tomoriState.config.user_byok_mode ? null : tomoriState.config.api_key;
     const nextConfigKeyVersion =
@@ -255,33 +230,28 @@ export async function execute(
       reassignmentLines.push("- Fallback models -> removed entries from the deleted provider");
     }
 
-    await sql`
-      UPDATE tomori_configs
-      SET llm_id = ${nextLlmId},
-          api_key = ${nextConfigApiKey},
-          key_version = ${nextConfigKeyVersion},
-          custom_endpoint_url = ${nextCustomEndpointUrl},
-          custom_model_name = ${nextCustomModelName},
-          custom_num_ctx = ${nextCustomNumCtx},
-          embedding_model_id = ${nextEmbeddingModelId},
-          diffusion_model_id = ${nextDiffusionModelId},
-          nai_diffusion_model_id = ${nextNaiDiffusionModelId},
-          video_model_id = ${nextVideoModelId},
-          vision_llm_id = ${nextVisionLlmId},
-          fallback_llm_ids = ${JSON.stringify(nextFallbackIds)}::jsonb
-      WHERE server_id = ${tomoriState.server_id}
-    `;
+    await Promise.all([
+      configRepository.updateModelConfig(tomoriState.server_id, {
+        llm_id: nextLlmId,
+        api_key: nextConfigApiKey,
+        key_version: nextConfigKeyVersion,
+        custom_endpoint_url: nextCustomEndpointUrl,
+        custom_model_name: nextCustomModelName,
+        custom_num_ctx: nextCustomNumCtx,
+        embedding_model_id: nextEmbeddingModelId,
+        diffusion_model_id: nextDiffusionModelId,
+        video_model_id: nextVideoModelId,
+        vision_llm_id: nextVisionLlmId,
+        fallback_llm_ids: nextFallbackIds,
+      }),
+      configRepository.updateNovelaiImagegenConfig(tomoriState.server_id, {
+        nai_diffusion_model_id: nextNaiDiffusionModelId,
+      }),
+    ]);
 
-    if (activeProvider === tomoriState.llm.llm_provider.toLowerCase()) {
-      await sql`
-        UPDATE saved_provider_configs
-        SET fallback_llm_ids = ${JSON.stringify(nextFallbackIds)}::jsonb
-        WHERE server_id = ${tomoriState.server_id}
-          AND provider = ${activeProvider}
-      `;
-    }
-
-    const deleted = await deleteSavedProviderConfig(tomoriState.server_id, selectedProvider);
+    const deleted = await llmProviderRepo.deleteSavedProviderConfig(tomoriState.server_id, selectedProvider, {
+      serverDiscId: serverId,
+    });
 
     if (!deleted) {
       await replyInfoEmbed(resultTarget, locale, {
@@ -310,8 +280,6 @@ export async function execute(
       await cleanupCustomProviderArtifacts(selectedProvider);
     }
 
-    invalidateTomoriStateCache(serverId);
-
     // 10. Success message — update the picker embed or reply to the interaction
     await replyInfoEmbed(resultTarget, locale, {
       titleKey: "commands.provider.remove.success_title",
@@ -327,16 +295,16 @@ export async function execute(
     });
   } catch (error) {
     let serverIdForError: number | null = null;
-    let tomoriIdForError: number | null = null;
+    let personaIdForError: number | null = null;
     const errorServerId = interaction.guild?.id ?? interaction.user.id;
     const state = await getCachedTomoriState(errorServerId);
     serverIdForError = state?.server_id ?? null;
-    tomoriIdForError = state?.tomori_id ?? null;
+    personaIdForError = state?.persona_id ?? null;
 
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: serverIdForError,
-      tomoriId: tomoriIdForError,
+      personaId: personaIdForError,
       errorType: "CommandExecutionError",
       metadata: {
         command: "config provider remove",

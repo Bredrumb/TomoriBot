@@ -16,9 +16,7 @@ import { localizer } from "@/utils/text/localizer";
  * Explains keyword and channel tag behavior for memories.
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
-  subcommand
-    .setName("memory-tagging")
-    .setDescription(localizer("en-US", "commands.help.memory-tagging.description"));
+  subcommand.setName("memory-tagging").setDescription(localizer("en-US", "commands.help.memory-tagging.description"));
 
 /**
  * Execute the /help memory-tagging command.

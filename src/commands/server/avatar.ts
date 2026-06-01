@@ -14,8 +14,7 @@ import type { UserRow, ErrorContext, TomoriState } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
 import { safeDownload } from "../../utils/security/safeDownload";
 import { memoryGuard, reserveAvatarQuota } from "../../utils/security/rateLimiter";
-import { loadAllPersonasForServer } from "../../utils/db/dbRead";
-import { sql } from "../../utils/db/client";
+import { personaRepository } from "@/utils/db/repositories";
 import { convertToPNG } from "../../utils/image/imageProcessor";
 import { deletePersonaAvatarFromStorage, uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage";
 import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
@@ -25,6 +24,21 @@ const PERSONA_SELECT_ID = "persona_select";
 const FILE_UPLOAD_ID = "avatar_image";
 
 type AvatarAttachment = Attachment | APIAttachment;
+
+export async function forkPointerForServerAvatarChange(
+  selectedPersona: Pick<TomoriState, "persona_id" | "is_pointer">,
+): Promise<boolean> {
+  if (!selectedPersona.persona_id) {
+    return false;
+  }
+
+  if (selectedPersona.is_pointer !== true) {
+    return true;
+  }
+
+  return await personaRepository.materializeIfPointer(selectedPersona.persona_id);
+}
+
 /**
  * Configure the avatar subcommand
  * @param subcommand - SlashCommandSubcommandBuilder instance
@@ -229,12 +243,12 @@ export async function execute(
 
   try {
     // 2. Load personas and prompt user to choose target persona
-    const allPersonas = await loadAllPersonasForServer(interaction.guild.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
     const personaSelectOptions: SelectOption[] = allPersonas
-      .filter((persona) => persona.tomori_id !== undefined)
+      .filter((persona) => persona.persona_id !== undefined)
       .map((persona) => ({
-        label: safeSelectOptionText(persona.tomori_nickname),
-        value: persona.tomori_id?.toString() ?? "",
+        label: safeSelectOptionText(persona.persona_nickname),
+        value: persona.persona_id?.toString() ?? "",
         description: persona.is_alter
           ? localizer(locale, "commands.server.avatar.alter_persona_description")
           : localizer(locale, "commands.server.avatar.main_persona_description"),
@@ -285,8 +299,8 @@ export async function execute(
     responseInteraction = modalSubmitInteraction;
 
     const selectedPersonaId = modalResult.values?.[PERSONA_SELECT_ID];
-    selectedPersona = allPersonas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
-    if (!selectedPersona?.tomori_id) {
+    selectedPersona = allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
+    if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -294,6 +308,7 @@ export async function execute(
       });
       return;
     }
+    const selectedPersonaDbId = selectedPersona.persona_id;
 
     // 3. Defer the reply to prevent timeout during image processing
     await responseInteraction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -310,6 +325,19 @@ export async function execute(
         ],
       });
       return;
+    }
+
+    const pointerForked = await forkPointerForServerAvatarChange(selectedPersona);
+    if (!pointerForked) {
+      await replyInfoEmbed(responseInteraction, locale, {
+        titleKey: "general.errors.update_failed_title",
+        descriptionKey: "general.errors.update_failed_description",
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
+    if (selectedPersona.is_pointer === true) {
+      selectedPersona = { ...selectedPersona, is_pointer: false };
     }
 
     // 5. Reserve avatar quota (atomic check+increment for per-server DDoS protection)
@@ -368,18 +396,14 @@ export async function execute(
           await deletePersonaAvatarFromStorage(selectedPersona.webhook_avatar_url);
         }
 
-        await sql`
-					UPDATE tomoris
-					SET webhook_avatar_url = NULL
-					WHERE tomori_id = ${selectedPersona.tomori_id}
-				`;
+        await personaRepository.setAvatar(selectedPersonaDbId, null);
 
         invalidateTomoriStateCache(interaction.guild.id);
 
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "commands.server.avatar.removed_title",
           descriptionKey: "commands.server.avatar.removed_alter_description",
-          descriptionVars: { persona_name: selectedPersona.tomori_nickname },
+          descriptionVars: { persona_name: selectedPersona.persona_nickname },
           color: ColorCode.SUCCESS,
         });
       }
@@ -478,7 +502,7 @@ export async function execute(
       }
 
       persistedAvatarUrl = await uploadPersonaAvatarToStorage({
-        personaId: selectedPersona.tomori_id,
+        personaId: selectedPersonaDbId,
         serverDiscId: interaction.guild.id,
         label: "server avatar",
         buffer: pngBuffer,
@@ -498,11 +522,7 @@ export async function execute(
           await deletePersonaAvatarFromStorage(selectedPersona.webhook_avatar_url);
         }
 
-        await sql`
-					UPDATE tomoris
-					SET webhook_avatar_url = ${persistedAvatarUrl}
-					WHERE tomori_id = ${selectedPersona.tomori_id}
-				`;
+        await personaRepository.setAvatar(selectedPersonaDbId, persistedAvatarUrl);
       }
 
       invalidateTomoriStateCache(interaction.guild.id);
@@ -510,7 +530,7 @@ export async function execute(
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "commands.server.avatar.success_title",
         descriptionKey: "commands.server.avatar.success_alter_description",
-        descriptionVars: { persona_name: selectedPersona.tomori_nickname },
+        descriptionVars: { persona_name: selectedPersona.persona_nickname },
         color: ColorCode.SUCCESS,
       });
     }
@@ -520,7 +540,7 @@ export async function execute(
       metadata: {
         command: "config avatar",
         guildId: interaction.guild.id,
-        personaId: selectedPersona?.tomori_id ?? null,
+        personaId: selectedPersona?.persona_id ?? null,
       },
     };
     await log.error("Error in /config avatar command", error, context);

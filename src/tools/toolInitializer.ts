@@ -16,9 +16,14 @@ import type { ErrorContext } from "../types/db/schema";
  *
  * Auto-discovers tools from:
  * - src/tools/functionCalls/ - Built-in function call tools
- * - src/tools/restAPIs/brave/ - HTTP-based Brave Search tools
+ * - src/tools/webSearch/      - Unified web_search tool (BraveEngine + DDG/Felo chain)
+ * - src/tools/fetchUrl/       - Unified fetch_url tool (hidden engine chain)
  *
- * MCP tools are now handled by Google's official mcpToTool() - no manual registration needed
+ * Note: the previously LLM-visible `BraveXxxSearchTool` classes are now demoted
+ * to `restAPIs/brave/internal/` and consumed only by `webSearch/braveEngine.ts`.
+ * They are intentionally excluded from auto-discovery.
+ *
+ * MCP tools are still handled by Google's official mcpToTool() - no manual registration needed
  */
 export async function initializeTools(): Promise<void> {
   try {
@@ -31,9 +36,7 @@ export async function initializeTools(): Promise<void> {
 
     // 2. Auto-discover built-in function call tools
     const functionCallsPath = path.join(process.cwd(), "src", "tools", "functionCalls");
-    const functionCallFiles = getAllFiles(functionCallsPath).filter(
-      (file) => !file.endsWith("index.ts"), // Skip index.ts
-    );
+    const functionCallFiles = (await getAllFiles(functionCallsPath)).filter((file) => !file.endsWith("index.ts"));
 
     log.info(`Scanning ${functionCallFiles.length} files in functionCalls directory...`);
 
@@ -42,18 +45,34 @@ export async function initializeTools(): Promise<void> {
       totalDiscovered += discovered;
     }
 
-    // 3. Auto-discover Brave Search tools
-    const braveToolsPath = path.join(process.cwd(), "src", "tools", "restAPIs", "brave");
-    const braveToolFiles = getAllFiles(braveToolsPath).filter((file) => file.endsWith("braveTools.ts"));
+    // 3. Auto-discover unified webSearch tool(s).
+    //    The webSearch/ folder contains a single LLM-visible class (WebSearchTool)
+    //    plus engine-internal modules. We scan only `webSearchTool.ts` to keep
+    //    the engine modules (which export instances, not BaseTool subclasses)
+    //    out of registration.
+    const webSearchPath = path.join(process.cwd(), "src", "tools", "webSearch");
+    const webSearchFiles = (await getAllFiles(webSearchPath)).filter((file) => file.endsWith("webSearchTool.ts"));
 
-    log.info(`Scanning ${braveToolFiles.length} files in Brave tools directory...`);
+    log.info(`Scanning ${webSearchFiles.length} files in webSearch directory...`);
 
-    for (const braveFile of braveToolFiles) {
-      const discovered = await discoverAndRegisterTools(braveFile, "brave");
+    for (const wsFile of webSearchFiles) {
+      const discovered = await discoverAndRegisterTools(wsFile, "webSearch");
       totalDiscovered += discovered;
     }
 
-    // 4. Log final statistics
+    // 4. Auto-discover unified fetchUrl tool(s). As with webSearch, scan only
+    //    the public BaseTool file and keep engine modules internal.
+    const fetchUrlPath = path.join(process.cwd(), "src", "tools", "fetchUrl");
+    const fetchUrlFiles = (await getAllFiles(fetchUrlPath)).filter((file) => file.endsWith("fetchUrlTool.ts"));
+
+    log.info(`Scanning ${fetchUrlFiles.length} files in fetchUrl directory...`);
+
+    for (const fetchUrlFile of fetchUrlFiles) {
+      const discovered = await discoverAndRegisterTools(fetchUrlFile, "fetchUrl");
+      totalDiscovered += discovered;
+    }
+
+    // 5. Log final statistics
     const stats = ToolRegistry.getStats();
     log.success(
       `Auto-discovery complete: Found and registered ${totalDiscovered} tools (${stats.totalTools} total in registry)`,

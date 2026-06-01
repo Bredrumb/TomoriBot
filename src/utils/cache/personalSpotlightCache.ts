@@ -1,5 +1,5 @@
-import type { PersonalSpotlightStatus } from "@/utils/db/personalSpotlight";
-import { getPersonalSpotlightStatus } from "@/utils/db/personalSpotlight";
+import type { PersonalSpotlightStatus } from "@/utils/db/repositories/UserRepository";
+import { userRepository } from "@/utils/db/repositories/UserRepository";
 
 const spotlightCache = new Map<string, { result: PersonalSpotlightStatus | null; expiresAt: number }>();
 
@@ -29,7 +29,7 @@ export async function getCachedPersonalSpotlightStatus(
 
   cacheMisses++;
 
-  const result = await getPersonalSpotlightStatus(serverId, userId, channelDiscId);
+  const result = await userRepository.getPersonalSpotlightStatus(serverId, userId, channelDiscId);
   spotlightCache.set(cacheKey, {
     result,
     expiresAt: now + CACHE_TTL_MS,

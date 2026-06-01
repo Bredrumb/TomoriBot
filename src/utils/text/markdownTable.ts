@@ -134,7 +134,7 @@ function isPotentialHeaderLine(line: string): boolean {
 }
 
 function isSeparatorCell(cell: string): boolean {
-  return /^:?-{3,}:?$/.test(cell.trim());
+  return /^:?-+:?$/.test(cell.trim());
 }
 
 function parseAlignment(cell: string): MarkdownTableAlignment {

@@ -1,6 +1,10 @@
 import { MessageFlags, type SlashCommandSubcommandBuilder } from "discord.js";
 import type { ChatInputCommandInteraction, Client } from "discord.js";
-import { clearChannelProcessingQueue, isChannelProcessingLocked } from "../../events/messageCreate/tomoriChat";
+import {
+  clearChannelProcessingQueue,
+  forceKillChannelStream,
+  isChannelProcessingLocked,
+} from "@/utils/chat/channelQueue";
 import type { UserRow } from "../../types/db/schema";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
 import { StreamOrchestrator } from "../../utils/discord/streamOrchestrator";
@@ -62,7 +66,10 @@ export async function execute(
   }
 
   if (hasActiveStream) {
+    // 1. Signal the stream processing loop to stop gracefully.
     StreamOrchestrator.requestStop(channelId, interaction.user.id);
+    // 2. Abort the underlying HTTP request and unblock Promise.race so the lock releases immediately.
+    forceKillChannelStream(channelId);
   }
 
   log.info(

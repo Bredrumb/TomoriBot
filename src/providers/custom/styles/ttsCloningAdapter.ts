@@ -1,17 +1,14 @@
-import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
-import { voiceSampleSchema } from "@/types/db/schema";
 import type { CustomEndpointRow } from "@/types/db/schema";
 import { stripElevenLabsExpressionTags } from "@/utils/audio/elevenLabsShared";
 import { loadStoredVoiceSampleBuffer } from "@/utils/storage/voiceSampleStorage";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { stripTtsUnsupportedEmojiAttempts } from "@/utils/text/emojiHelper";
+import { loadVoiceSampleById } from "@/utils/db/repositories/SpeechRepository";
+import { resolveTtsSynthesizeTimeoutMs } from "@/providers/custom/styles/ttsSynthesizeTimeout";
 
-/** Timeout for /synthesize requests, configurable via env. */
-const TTS_CLONE_TIMEOUT_MS =
-  Number.parseInt(process.env.TTS_CLONE_TIMEOUT_MS ?? "", 10) > 0
-    ? Number.parseInt(process.env.TTS_CLONE_TIMEOUT_MS ?? "", 10)
-    : 120_000;
+/** Timeout for local /synthesize requests, configurable via env. */
+const TTS_SYNTHESIZE_TIMEOUT_MS = resolveTtsSynthesizeTimeoutMs();
 
 /** Regex matching any bracket-tag in the form [content]. */
 const ANY_BRACKET_TAG_REGEX = /\[([^\]\r\n]{1,40})\]/g;
@@ -126,14 +123,10 @@ function isIrodoriTtsEndpoint(endpoint: CustomEndpointRow): boolean {
 export async function synthesizeSpeechViaTtsClone(request: TtsCloneRequest): Promise<TtsCloneResult> {
   const { endpoint, voiceSampleId, script, apiKey, chatterbox } = request;
 
-  // 1. Load voice sample metadata from DB.
-  const rows = await sql`
-    SELECT * FROM voice_samples
-    WHERE sample_id = ${voiceSampleId}
-    LIMIT 1
-  `;
+  // 1. Load voice sample metadata from DB via repository.
+  const voiceSample = await loadVoiceSampleById(voiceSampleId);
 
-  if (!rows || rows.length === 0) {
+  if (!voiceSample) {
     log.warn(`[TtsClone] Voice sample ${voiceSampleId} not found in DB`);
     return {
       success: false,
@@ -142,17 +135,7 @@ export async function synthesizeSpeechViaTtsClone(request: TtsCloneRequest): Pro
     };
   }
 
-  const parsed = voiceSampleSchema.safeParse(rows[0]);
-  if (!parsed.success) {
-    log.warn(`[TtsClone] Failed to parse voice sample row for id ${voiceSampleId}`, parsed.error.message);
-    return {
-      success: false,
-      errorKind: "missing_sample",
-      details: "Failed to parse voice sample row from database.",
-    };
-  }
-
-  const sample = parsed.data;
+  const sample = voiceSample;
 
   // 2. Read the audio from stable storage and base64-encode it.
   const refAudioBuffer = await loadStoredVoiceSampleBuffer(sample.file_path);
@@ -226,7 +209,7 @@ export async function synthesizeSpeechViaTtsClone(request: TtsCloneRequest): Pro
   let response: Response;
   try {
     const abortController = new AbortController();
-    const timer = setTimeout(() => abortController.abort(), TTS_CLONE_TIMEOUT_MS);
+    const timer = setTimeout(() => abortController.abort(), TTS_SYNTHESIZE_TIMEOUT_MS);
     try {
       response = await fetchUserRemoteUrl(`${endpointUrl}/synthesize`, {
         method: "POST",

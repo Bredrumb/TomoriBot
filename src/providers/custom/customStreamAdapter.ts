@@ -1,7 +1,9 @@
 import { OpenAICompatibleStreamAdapter } from "@/providers/openaiCompatible/openaiCompatibleStreamAdapter";
 import type { OpenAICompatibleStreamConfig } from "@/providers/openaiCompatible/openaiCompatibleTypes";
 import { GemmaToolCallParser } from "@/providers/custom/customGemmaToolParser";
+import { GemmaThinkingParser, GEMMA_THINKING_PARSER_ENABLED } from "@/providers/custom/customGemmaThinkingParser";
 import type { ProcessedChunk, RawStreamChunk } from "@/types/stream/interfaces";
+import type { ThoughtLogEntry } from "@/types/provider/interfaces";
 import { log } from "@/utils/misc/logger";
 import { buildCustomThinkingRequest } from "@/utils/provider/thinkingControl";
 
@@ -22,6 +24,7 @@ export interface CustomStreamConfig extends OpenAICompatibleStreamConfig {
 export const CUSTOM_PROVIDER_PLACEHOLDER_API_KEY = "custom-endpoint-configured";
 
 export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
+  private readonly gemmaThinkingParser = new GemmaThinkingParser();
   private readonly gemmaParser = new GemmaToolCallParser();
 
   constructor() {
@@ -92,13 +95,19 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
   }
 
   /**
-   * Intercept text chunks to detect Gemma 4's hallucinated tool call tokens.
+   * Intercept text chunks to handle two Gemma 4 token formats that KoboldCPP
+   * does not always convert to standard OpenAI fields:
    *
-   * Gemma 4 at low quantisation leaks `<|tool_call>call:name{...}<tool_call|>`
-   * into `delta.content` instead of using the proper `delta.tool_calls` field.
-   * The GemmaToolCallParser buffers these tokens across chunk boundaries and
-   * converts completed blocks into function_call chunks for the normal tool
-   * execution pipeline.
+   * 1. `<|channel>thought\n[reasoning]\n<channel|>` — thinking block. KoboldCPP
+   *    converts this to `reasoning_content` for pure-text responses, but when a
+   *    tool call follows in the same chunk the entire blob arrives as raw content.
+   *    GemmaThinkingParser runs first to extract thoughts before the tool parser sees it.
+   *
+   * 2. `<|tool_call>call:name{...}<tool_call|>` — hallucinated tool call token.
+   *    GemmaToolCallParser converts completed blocks into function_call chunks.
+   *
+   * Parsers are intentionally serial and each maintains its own scanHoldback,
+   * so a chunk boundary mid-token is handled safely by whichever parser is active.
    */
   override processChunk(chunk: RawStreamChunk): ProcessedChunk {
     const base = super.processChunk(chunk);
@@ -107,22 +116,26 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
       return base;
     }
 
-    // End-of-stream: flush held-back text and/or incomplete tool buffer.
+    // End-of-stream: flush both parsers and merge any recovered thoughts.
     if (base.type === "done") {
+      const thinkFlush = GEMMA_THINKING_PARSER_ENABLED
+        ? this.gemmaThinkingParser.flush()
+        : { visibleText: "", thoughts: [] };
       const { pendingText, functionCall } = this.gemmaParser.flush();
+      const allThoughts = mergeThoughts(base.thoughts, thinkFlush.thoughts);
 
       if (functionCall) {
         log.info("CustomStreamAdapter: Flushed truncated Gemma tool call at stream end");
-        return { ...base, type: "function_call", functionCall };
+        return { ...base, type: "function_call", functionCall, thoughts: allThoughts };
       }
-      if (pendingText) {
-        // Held-back scan chars that were never followed by a START_TOKEN.
-        // Return as a text chunk; the stream iterator will exhaust naturally
-        // on the next raw chunk (there isn't one), terminating the loop.
-        log.info(`CustomStreamAdapter: Flushing ${pendingText.length} held-back chars at stream end`);
-        return { ...base, type: "text", content: pendingText };
+
+      const flushedText = thinkFlush.visibleText + (pendingText ?? "");
+      if (flushedText) {
+        log.info(`CustomStreamAdapter: Flushing ${flushedText.length} held-back chars at stream end`);
+        return { ...base, type: "text", content: flushedText, thoughts: allThoughts };
       }
-      return base;
+
+      return { ...base, thoughts: allThoughts };
     }
 
     // Non-text chunks (errors, native delta.tool_calls) pass through untouched.
@@ -130,14 +143,27 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
       return base;
     }
 
-    const result = this.gemmaParser.feed(base.content);
+    // 1. Strip any <|channel>thought...<channel|> block, routing its content to thoughts.
+    const thinkResult = GEMMA_THINKING_PARSER_ENABLED
+      ? this.gemmaThinkingParser.feed(base.content)
+      : { visibleText: base.content, thoughts: [] };
+    const allThoughts = mergeThoughts(base.thoughts, thinkResult.thoughts);
 
-    if (result.functionCall) {
-      return { ...base, type: "function_call", functionCall: result.functionCall };
+    // 2. Scan remaining visible text for <|tool_call>...<tool_call|> tokens.
+    const toolResult = this.gemmaParser.feed(thinkResult.visibleText);
+
+    if (toolResult.functionCall) {
+      return { ...base, type: "function_call", functionCall: toolResult.functionCall, thoughts: allThoughts };
     }
 
-    return { ...base, content: result.visibleText };
+    return { ...base, content: toolResult.visibleText, thoughts: allThoughts };
   }
+}
+
+/** Merges two thought arrays, omitting undefined/empty sources. */
+function mergeThoughts(a: ThoughtLogEntry[] | undefined, b: ThoughtLogEntry[]): ThoughtLogEntry[] | undefined {
+  if ((!a || a.length === 0) && b.length === 0) return undefined;
+  return [...(a ?? []), ...b];
 }
 
 /**

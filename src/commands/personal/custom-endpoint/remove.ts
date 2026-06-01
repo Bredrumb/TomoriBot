@@ -2,13 +2,14 @@ import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder
 import { MessageFlags } from "discord.js";
 import type { CustomEndpointCapability, CustomEndpointRow, ErrorContext, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { loadCustomEndpointsForUser } from "@/utils/db/dbRead";
+import { llmProviderRepo } from "@/utils/db/repositories";
 import {
   buildCustomEndpointCheckboxGroups,
   collectCheckedCustomEndpointValues,
   MAX_CUSTOM_MODEL_GROUPS,
 } from "@/utils/discord/customModelRemovalModal";
-import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { removeCustomEndpointRegistration } from "@/utils/provider/customEndpointService";
 import { localizer } from "@/utils/text/localizer";
@@ -69,7 +70,7 @@ export async function execute(
   }
 
   try {
-    const registeredEndpoints = await loadCustomEndpointsForUser(userData.user_id);
+    const registeredEndpoints = await llmProviderRepo.loadCustomEndpointsForUser(userData.user_id);
     if (registeredEndpoints.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.personal.custom_models.remove.none_title",
@@ -163,7 +164,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState.server_id,
-      tomoriId: tomoriState.tomori_id,
+      personaId: tomoriState.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "personal custom-endpoint remove",

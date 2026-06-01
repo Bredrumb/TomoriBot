@@ -32,6 +32,12 @@ export interface SafeDownloadOptions {
    * The timeout AbortSignal is always applied by safeDownload.
    */
   requestInit?: Omit<RequestInit, "signal">;
+
+  /**
+   * Optional external AbortSignal (e.g. from ToolContext.abortSignal).
+   * When fired, it also aborts the internal timeout controller early.
+   */
+  externalSignal?: AbortSignal;
 }
 
 /**
@@ -87,7 +93,7 @@ export interface SafeDownloadResult {
  * ```
  */
 export async function safeDownload(url: string, options: SafeDownloadOptions): Promise<SafeDownloadResult> {
-  const { maxSizeMB, timeoutMs = 10000, knownSize, requestInit } = options;
+  const { maxSizeMB, timeoutMs = 10000, knownSize, requestInit, externalSignal } = options;
   const maxSizeBytes = maxSizeMB * 1024 * 1024;
 
   // 1. Pre-check known size if provided (early rejection, no network call)
@@ -164,9 +170,16 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
     }
   }
 
-  // 2. Setup timeout controller
+  // 2. Setup timeout controller; chain optional external signal into it
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      clearTimeout(timeoutId);
+      return { success: false, error: "timeout", details: "Aborted before download started" };
+    }
+    externalSignal.addEventListener("abort", () => controller.abort(), { once: true });
+  }
 
   try {
     // 3. Fetch with timeout and abort signal

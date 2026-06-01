@@ -4,12 +4,12 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
+import { configRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { tomoriConfigSchema, type ErrorContext, type UserRow } from "@/types/db/schema";
+import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { resolveDeliberateToolContextTurns } from "@/utils/tools/deliberateToolMode";
 
 const MIN_TURNS = 0;
@@ -49,6 +49,7 @@ export async function execute(
       return;
     }
 
+    // 1. No-op short circuit if the value is already set explicitly
     const currentTurns = resolveDeliberateToolContextTurns(tomoriState.config.deliberate_tool_context_turns);
     if (turns === currentTurns && tomoriState.config.deliberate_tool_context_turns !== null) {
       await replyInfoEmbed(interaction, locale, {
@@ -60,27 +61,27 @@ export async function execute(
       return;
     }
 
-    const [updatedRow] = await sql`
-      UPDATE tomori_configs
-      SET deliberate_tool_context_turns = ${turns}
-      WHERE server_id = ${tomoriState.server_id}
-      RETURNING *
-    `;
+    // 2. Update via per-domain repository (server_trigger_behavior_configs)
+    const updated = await configRepository.updateTriggerBehaviorConfig(tomoriState.server_id, {
+      deliberate_tool_context_turns: turns,
+    });
 
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-    if (!updatedRow || !validatedConfig.success) {
+    if (!updated) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
-        errorType: updatedRow ? "SchemaValidationError" : "DatabaseUpdateError",
+        errorType: "DatabaseUpdateError",
         metadata: {
           command: "server deliberate-tool-context",
           turns,
-          validationErrors: validatedConfig.success ? undefined : validatedConfig.error.flatten(),
         },
       };
-      await log.error("Failed to update deliberate_tool_context_turns config", new Error("Update failed"), context);
+      await log.error(
+        "Failed to update deliberate_tool_context_turns config",
+        new Error("Database update returned no rows"),
+        context,
+      );
 
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.update_failed_title",

@@ -15,7 +15,7 @@ import { AttachmentBuilder } from "discord.js";
 import JSZip from "jszip";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
-import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhookManager";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import {
   buildImageToolNoticeDescription,
   buildReferencedMessageUrl,
@@ -24,7 +24,7 @@ import {
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { sql } from "../../utils/db/client";
 import { decryptApiKey } from "../../utils/security/crypto";
-import { checkImageQuota, incrementImageQuota } from "../../utils/quota/imageQuotaManager";
+import { checkImageQuota, incrementImageQuota, type QuotaCheckResult } from "../../utils/quota/imageQuotaManager";
 import { extractImagesFromMessage } from "../../utils/image/imageExtractor";
 import { segmentImage } from "../../utils/image/segmentationService";
 import { resolveNaiImageParams, type EffectiveNaiImageParams } from "@/utils/image/naiImageParams";
@@ -40,7 +40,7 @@ import {
   type NaiGenerationCharacterPayload,
 } from "@/utils/image/naiImageGeneration";
 import { loadCharRefAsBase64 } from "@/utils/storage/charrefStorage";
-import { loadSavedProviderConfig } from "@/utils/db/dbRead";
+import { llmProviderRepo } from "@/utils/db/repositories";
 import {
   CredentialUnavailableError,
   getResolvedCapabilityModelId,
@@ -106,7 +106,7 @@ function buildCharacterNoticeLines(locale: string, characters: GenerateImageNaiC
         return "";
       }
 
-      return localizer(locale, "genai.image.notice_character_prompt_line", {
+      return localizer(locale, "tools.image.notice_character_prompt_line", {
         index: (index + 1).toString(),
         prompt: `\`${tags}\``,
       });
@@ -356,7 +356,7 @@ export class GenerateImageNaiTool extends BaseTool {
    * @returns Decrypted Google API key, or null if unavailable
    */
   private async resolveGoogleApiKey(context: ToolContext): Promise<string | null> {
-    const savedGoogleConfig = await loadSavedProviderConfig(context.tomoriState.server_id, "google");
+    const savedGoogleConfig = await llmProviderRepo.loadSavedProviderConfig(context.tomoriState.server_id, "google");
     if (savedGoogleConfig?.api_key) {
       return await decryptApiKey(savedGoogleConfig.api_key, savedGoogleConfig.key_version || 1);
     }
@@ -385,9 +385,9 @@ export class GenerateImageNaiTool extends BaseTool {
       }>
     >`
 			SELECT nai_tags, nai_char_ref_url
-			FROM tomoris
+			FROM personas
 			WHERE server_id = ${serverId}
-			  AND tomori_id = ${personaId}
+			  AND persona_id = ${personaId}
 			LIMIT 1
 		`;
 
@@ -462,9 +462,9 @@ export class GenerateImageNaiTool extends BaseTool {
       const rawId = typeof character.id === "string" ? character.id.trim() : undefined;
       const clientUserId = context.client.user?.id;
       const normalizedId = NAI_ENABLE_PROFILE_CHARACTER_AUTOFILL
-        ? (rawId === "self" || (clientUserId && rawId === clientUserId && context.tomoriState.tomori_id != null)) &&
-          context.tomoriState.tomori_id
-          ? `persona:${context.tomoriState.tomori_id}`
+        ? (rawId === "self" || (clientUserId && rawId === clientUserId && context.tomoriState.persona_id != null)) &&
+          context.tomoriState.persona_id
+          ? `persona:${context.tomoriState.persona_id}`
           : rawId
         : undefined;
 
@@ -473,10 +473,10 @@ export class GenerateImageNaiTool extends BaseTool {
         rawId &&
         clientUserId &&
         rawId === clientUserId &&
-        context.tomoriState.tomori_id != null
+        context.tomoriState.persona_id != null
       ) {
         log.info(
-          `[NAI] Remapped bot user ID ${rawId} to active persona persona:${context.tomoriState.tomori_id} for character profile resolution`,
+          `[NAI] Remapped bot user ID ${rawId} to active persona persona:${context.tomoriState.persona_id} for character profile resolution`,
         );
       }
 
@@ -879,53 +879,11 @@ export class GenerateImageNaiTool extends BaseTool {
       };
     }
 
-    // 2. Check image generation quota
     const userDiscId = context.userId || context.message?.author.id || "";
     if (!userDiscId) {
       return {
         success: false,
         error: "Unable to identify user for quota checking",
-      };
-    }
-
-    const quotaCheck = await checkImageQuota(context.tomoriState.server_id, userDiscId);
-
-    if (!quotaCheck.allowed) {
-      // Build user-friendly error message based on quota type
-      let errorMessage = "";
-      let resetInfo = "";
-
-      if (quotaCheck.resetTime) {
-        const now = new Date();
-        const resetTime = quotaCheck.resetTime;
-        const hoursUntilReset = Math.ceil((resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
-
-        if (hoursUntilReset < 24) {
-          resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_hours", {
-            hours: hoursUntilReset.toString(),
-          });
-        } else {
-          const daysUntilReset = Math.ceil(hoursUntilReset / 24);
-          resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_days", {
-            days: daysUntilReset.toString(),
-          });
-        }
-      }
-
-      if (quotaCheck.reason === "user_quota_exceeded") {
-        errorMessage = localizer(context.locale, "tools.generate_image.user_quota_exceeded", { reset_info: resetInfo });
-      } else if (quotaCheck.reason === "serverwide_quota_exceeded") {
-        errorMessage = localizer(context.locale, "tools.generate_image.serverwide_quota_exceeded", {
-          reset_info: resetInfo,
-        });
-      } else {
-        errorMessage = localizer(context.locale, "tools.generate_image.quota_exceeded_generic");
-      }
-
-      return {
-        success: false,
-        error: "Image generation quota exceeded",
-        message: errorMessage,
       };
     }
 
@@ -949,10 +907,61 @@ export class GenerateImageNaiTool extends BaseTool {
       };
     }
 
+    // Default to allowed; overwritten below for server-credential users
+    let quotaCheck: QuotaCheckResult = { allowed: true };
+
     try {
+      // Resolve credentials first so we can skip server quota for personal BYOK users
       const creds = await resolveCapabilityCredentials(context.tomoriState.server_id, "image-nai", {
         userId: context.internalUserId ?? null,
       });
+
+      // Personal BYOK users bring their own API quota — bypass server quota entirely
+      if (creds.source === "server") {
+        quotaCheck = await checkImageQuota(context.tomoriState.server_id, userDiscId);
+      }
+
+      if (!quotaCheck.allowed) {
+        // Build user-friendly error message based on quota type
+        let errorMessage = "";
+        let resetInfo = "";
+
+        if (quotaCheck.resetTime) {
+          const now = new Date();
+          const resetTime = quotaCheck.resetTime;
+          const hoursUntilReset = Math.ceil((resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
+
+          if (hoursUntilReset < 24) {
+            resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_hours", {
+              hours: hoursUntilReset.toString(),
+            });
+          } else {
+            const daysUntilReset = Math.ceil(hoursUntilReset / 24);
+            resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_days", {
+              days: daysUntilReset.toString(),
+            });
+          }
+        }
+
+        if (quotaCheck.reason === "user_quota_exceeded") {
+          errorMessage = localizer(context.locale, "tools.generate_image.user_quota_exceeded", {
+            reset_info: resetInfo,
+          });
+        } else if (quotaCheck.reason === "serverwide_quota_exceeded") {
+          errorMessage = localizer(context.locale, "tools.generate_image.serverwide_quota_exceeded", {
+            reset_info: resetInfo,
+          });
+        } else {
+          errorMessage = localizer(context.locale, "tools.generate_image.quota_exceeded_generic");
+        }
+
+        return {
+          success: false,
+          error: "Image generation quota exceeded",
+          message: errorMessage,
+        };
+      }
+
       const resolvedConfig = {
         ...context.tomoriState.config,
         nai_diffusion_model_id:
@@ -985,21 +994,21 @@ export class GenerateImageNaiTool extends BaseTool {
       if (!context.suppressProgressNotices) {
         const baseNoticeDescription = localizer(
           context.locale,
-          isInpaintMode ? "genai.image.editing_description" : "genai.image.generating_description",
+          isInpaintMode ? "tools.image.editing_description" : "tools.image.generating_description",
           isInpaintMode ? { edit_target: editTarget as string } : undefined,
         );
         const extraNoticeLines: string[] = [];
         if ((context.tomoriState.config.nai_style_tags ?? []).length > 0) {
-          extraNoticeLines.push(localizer(context.locale, "genai.image.notice_nai_tags_help_line"));
+          extraNoticeLines.push(localizer(context.locale, "tools.image.notice_nai_tags_help_line"));
         }
         if (messageId) {
           const referencedMessageUrl = buildReferencedMessageUrl(context, messageId);
           extraNoticeLines.push(
             referencedMessageUrl
-              ? localizer(context.locale, "genai.image.notice_reference_line", {
+              ? localizer(context.locale, "tools.image.notice_reference_line", {
                   message_url: referencedMessageUrl,
                 })
-              : localizer(context.locale, "genai.image.notice_reference_count_line", {
+              : localizer(context.locale, "tools.image.notice_reference_count_line", {
                   count: "1",
                 }),
           );
@@ -1009,13 +1018,13 @@ export class GenerateImageNaiTool extends BaseTool {
           context,
           isInpaintMode ? "image_editing" : "image_generation",
           {
-            titleKey: isInpaintMode ? "genai.image.editing_title" : "genai.image.generating_title",
+            titleKey: isInpaintMode ? "tools.image.editing_title" : "tools.image.generating_title",
             description: buildImageToolNoticeDescription(
               context.locale,
               baseNoticeDescription,
               baseModelCodename,
               prompt,
-              localizer(context.locale, "genai.image.generating_footer"),
+              localizer(context.locale, "tools.image.generating_footer"),
               extraNoticeLines,
             ),
             color: ColorCode.INFO,
@@ -1234,6 +1243,7 @@ export class GenerateImageNaiTool extends BaseTool {
           orientation,
           imageParams: effectiveImageParams,
           characterPayload,
+          abortSignal: context.abortSignal,
         });
       }
 
@@ -1247,8 +1257,10 @@ export class GenerateImageNaiTool extends BaseTool {
 
       log.success(`Successfully ${isInpaintMode ? "inpainted" : "generated"} and sent NAI image to Discord`);
 
-      // 8. Increment quota after successful generation
-      await incrementImageQuota(context.tomoriState.server_id, userDiscId);
+      // 8. Increment quota after successful generation (server providers only)
+      if (creds.source === "server") {
+        await incrementImageQuota(context.tomoriState.server_id, userDiscId);
+      }
 
       // Build success message with remaining quota info
       let successMessage: string;

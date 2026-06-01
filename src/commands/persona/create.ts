@@ -11,13 +11,18 @@ import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
 import type { UserRow } from "../../types/db/schema";
 import { memoryGuard, PERSONA_LIMITS, reservePersonaQuota } from "../../utils/security/rateLimiter";
-import { getMemoryLimits, validateAttribute, validateSampleDialogue } from "../../utils/db/memoryLimits";
+import { getMemoryLimits, validateAttribute, validateSampleDialogue } from "@/utils/misc/memoryLimits";
 import { safeDownload } from "../../utils/security/safeDownload";
 import { getServerAvatar } from "../../utils/image/avatarHelper";
 import { centerCropToSquare } from "../../utils/image/imageProcessor";
 import { embedMetadataInPNG } from "../../utils/image/pngMetadata";
-import { presetExportDataSchema, PRESET_EXPORT_VERSION } from "../../types/preset/presetExport";
+import {
+  buildPrivateAttributePublicFlags,
+  presetExportDataSchema,
+  PRESET_EXPORT_VERSION,
+} from "../../types/preset/presetExport";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
+import { dedupeTriggerWords } from "@/utils/text/triggerWords";
 import type { PresetExport, PresetExportData } from "../../types/preset/presetExport";
 import type { ModalComponent } from "../../types/discord/modal";
 
@@ -33,22 +38,7 @@ const EXAMPLE_BOT_ID = "example_bot";
 const FILE_UPLOAD_ID = "avatar_image";
 
 function parsePersonaNameInput(input: string): string[] {
-  const parsedNames = input
-    .split(/[,\u3001]/)
-    .map((name) => name.trim())
-    .filter((name) => name.length > 0);
-
-  const uniqueNames: string[] = [];
-  const seenNames = new Set<string>();
-  for (const name of parsedNames) {
-    const normalizedName = name.toLowerCase();
-    if (!seenNames.has(normalizedName)) {
-      seenNames.add(normalizedName);
-      uniqueNames.push(name);
-    }
-  }
-
-  return uniqueNames;
+  return dedupeTriggerWords(input.split(/[,\u3001]/), { lowercase: false });
 }
 
 /**
@@ -352,6 +342,7 @@ export async function execute(
     const presetData: PresetExportData = {
       tomori_nickname: characterName,
       attribute_list: [characterDesc],
+      attribute_public_flags: buildPrivateAttributePublicFlags([characterDesc]),
       // biome-ignore lint/style/noNonNullAssertion: Both or neither has to exist
       sample_dialogues_in: hasSampleDialogue ? [exampleUser!] : [],
       // biome-ignore lint/style/noNonNullAssertion: Both or neither has to exist

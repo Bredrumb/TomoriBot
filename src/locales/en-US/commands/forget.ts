@@ -1,0 +1,78 @@
+// locales/en-US/commands/forget.ts
+
+export default {
+  forget: {
+    sampledialogue: {
+      description: `Remove a sample user/bot dialogue pair from my memory.`,
+      modal_title: `Remove Sample Dialogue`,
+      select_label: `Dialogue to Remove`,
+      select_description: `Choose which dialogue pair to remove`,
+      select_placeholder: `Select a dialogue...`,
+      no_dialogues_title: `No Sample Dialogues`,
+      no_dialogues: `There are no sample dialogues stored to remove. Add some with \`/persona sample-dialogue add\`.`,
+      success_title: `Sample Dialogue Removed`,
+      success_description: `Successfully removed the dialogue pair: User: "{input}" → Bot: "{output}"`,
+    },
+    attribute: {
+      description: `Remove a personality attribute from my memory.`,
+      modal_title: `Remove Attribute`,
+      select_label: `Attribute to Remove`,
+      select_description: `Choose which attribute to remove from my personality`,
+      select_placeholder: `Select an attribute...`,
+      no_attributes_title: `No Attributes`,
+      no_attributes: `There are no personality attributes to remove. Add some with \`/persona attribute add\`.`,
+      success_title: `Attribute Removed`,
+      success_description: `Successfully removed the attribute: "{attribute}"`,
+    },
+    document: {
+      description: `Remove a document from the server knowledge base.`,
+      modal_title: `Remove Document`,
+      select_label: `Document to Remove`,
+      select_description: `Choose which document to remove`,
+      select_placeholder: `Select a document...`,
+      rag_disabled_title: `Document RAG Disabled`,
+      rag_disabled_description: `Document retrieval requires the [pgvector](https://github.com/pgvector/pgvector) PostgreSQL extension. Install pgvector in your database and restart me to enable it (see README.md).`,
+      none_title: `No Documents`,
+      none_description: `There are no documents to remove in this scope. Add one with \`/memory document add\`.`,
+      success_title: `Document Removed`,
+      success_description: `Successfully removed the document: "{name}"`,
+    },
+    personaprompt: {
+      description: `Clear a persona-specific prompt`,
+      no_permission_title: `🔴 Permission Denied`,
+      no_permission_description: `You need the **Manage Server** permission to clear persona prompts.`,
+      success_title: `Persona Prompt Cleared`,
+      success_description: `Cleared persona prompt for "{persona_name}".`,
+    },
+    memory: {
+      personal: {
+        description: `Remove a personal memory.`,
+        modal_title: `Remove Personal Memory`,
+        select_label: `Memory to Remove`,
+        select_description: `Choose which personal memory to remove`,
+        select_placeholder: `Select a memory...`,
+        no_memories_title: `No Personal Memories`,
+        no_memories: `You don't have any personal memories stored. Add some with \`/memory personal add\`.`,
+        success_title: `Personal Memory Removed`,
+        success_description: `Successfully removed the personal memory: "{memory}"`,
+        warning_disabled_title: `Personalization Disabled`,
+        warning_disabled_description: `The memory was successfully removed.
+
+**Warning:** Personalization is currently disabled on this server, so this change won't affect my behavior here. It will still be reflected on other servers where personalization is enabled.`,
+      },
+      server: {
+        description: `Remove a server memory from my knowledge.`,
+        modal_title: `Remove Server Memory`,
+        select_label: `Memory to Remove`,
+        select_description: `Choose which server memory to remove`,
+        select_placeholder: `Select a memory...`,
+        no_memories_title: `No Server Memories`,
+        no_memories: `There are no server memories stored for this server. Add some with \`/memory server add\`.`,
+        no_owned_memories: `You don't own any server memories that can be removed.`,
+        memory_not_found: `The selected memory could not be found.`,
+        success_title: `Server Memory Removed`,
+        success_description: `Successfully removed the server memory: "{memory}"`,
+      },
+    },
+  },
+};

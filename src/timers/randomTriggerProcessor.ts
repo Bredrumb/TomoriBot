@@ -1,10 +1,10 @@
 import type { Client, Message } from "discord.js";
 import { ChannelType } from "discord.js";
 import { log } from "../utils/misc/logger";
-import { getDueRandomTriggers } from "../utils/db/dbRead";
-import { rescheduleRandomTrigger } from "../utils/db/dbWrite";
+import { serverScheduleRepository } from "@/utils/db/repositories";
+
 import type { RandomTriggerRow, TomoriState } from "../types/db/schema";
-import tomoriChat, { suppressNextSelfReply } from "../events/messageCreate/tomoriChat";
+import { tomoriChat, suppressNextSelfReply } from "../events/messageCreate/tomoriChat";
 import { getCachedAllPersonas } from "../utils/cache/tomoriStateCache";
 
 export class RandomTriggerProcessor {
@@ -16,7 +16,7 @@ export class RandomTriggerProcessor {
 
   public async processDueRandomTriggers(): Promise<void> {
     try {
-      const dueTriggers = await getDueRandomTriggers();
+      const dueTriggers = await serverScheduleRepository.getDueTriggers();
 
       if (!dueTriggers || dueTriggers.length === 0) {
         return;
@@ -111,27 +111,27 @@ export class RandomTriggerProcessor {
         return;
       }
 
-      if (trigger.tomori_id === null || trigger.tomori_id === undefined) {
+      if (trigger.persona_id === null || trigger.persona_id === undefined) {
         const randomIndex = Math.floor(Math.random() * allPersonas.length);
         chosenPersona = allPersonas[randomIndex] ?? null;
       } else {
-        chosenPersona = allPersonas.find((persona) => persona.tomori_id === trigger.tomori_id) ?? null;
+        chosenPersona = allPersonas.find((persona) => persona.persona_id === trigger.persona_id) ?? null;
       }
 
       if (!chosenPersona) {
         log.warn(
-          `Random trigger ${triggerId}: could not resolve persona (tomori_id=${trigger.tomori_id}) — rescheduling`,
+          `Random trigger ${triggerId}: could not resolve persona (persona_id=${trigger.persona_id}) — rescheduling`,
         );
         return;
       }
 
       if (!trigger.respond_to_self && lastMessage) {
         const isPersonaLastSpeaker =
-          lastMessage.webhookId !== null && lastMessage.author.username === chosenPersona.tomori_nickname;
+          lastMessage.webhookId !== null && lastMessage.author.username === chosenPersona.persona_nickname;
 
         if (isPersonaLastSpeaker) {
           log.info(
-            `Random trigger ${triggerId}: persona "${chosenPersona.tomori_nickname}" spoke last, respond_to_self=false — skipping & rescheduling`,
+            `Random trigger ${triggerId}: persona "${chosenPersona.persona_nickname}" spoke last, respond_to_self=false — skipping & rescheduling`,
           );
           return;
         }
@@ -160,33 +160,26 @@ export class RandomTriggerProcessor {
       consecutiveFailures = 0;
 
       log.info(
-        `Random trigger ${triggerId}: firing for persona "${chosenPersona.tomori_nickname}" in channel ${trigger.channel_disc_id}`,
+        `Random trigger ${triggerId}: firing for persona "${chosenPersona.persona_nickname}" in channel ${trigger.channel_disc_id}`,
       );
 
-      await tomoriChat(
-        this.client,
-        lastMessage,
-        false,
-        true,
-        false,
-        undefined,
-        undefined,
-        false,
-        0,
-        false,
-        undefined,
-        undefined,
-        chosenPersona.tomori_id,
-        false,
-        false,
-        undefined,
-        "system",
-        `random:${triggerId}:${lastMessage.id}`,
-        undefined,
-        trigger.custom_prompt ?? undefined,
-      );
+      await tomoriChat({
+        client: this.client,
+        message: lastMessage,
+        isFromQueue: false,
+        isManuallyTriggered: true,
+        forceReason: false,
+        isStopResponse: false,
+        selectedPersonaId: chosenPersona.persona_id,
+        isPersonaJob: false,
+        isUserImpersonation: false,
+        textQuotaSource: "system",
+        textQuotaTriggerKey: `random:${triggerId}:${lastMessage.id}`,
+        shouldSurfaceUserErrors: false,
+        manualSystemPrompt: trigger.custom_prompt ?? undefined,
+      });
 
-      log.success(`Random trigger ${triggerId} fired successfully for persona "${chosenPersona.tomori_nickname}"`);
+      log.success(`Random trigger ${triggerId} fired successfully for persona "${chosenPersona.persona_nickname}"`);
     } catch (error) {
       log.error(`Error executing random trigger ${triggerId}:`, error);
     } finally {
@@ -205,7 +198,12 @@ export class RandomTriggerProcessor {
     randomOffsetRange: number | null,
     consecutiveFailures: number,
   ): Promise<void> {
-    const rescheduled = await rescheduleRandomTrigger(triggerId, timerHours, randomOffsetRange, consecutiveFailures);
+    const rescheduled = await serverScheduleRepository.rescheduleTrigger(
+      triggerId,
+      timerHours,
+      randomOffsetRange,
+      consecutiveFailures,
+    );
     if (!rescheduled) {
       log.error(`Failed to reschedule random trigger ${triggerId} — it may fire repeatedly until rescheduled`);
     }

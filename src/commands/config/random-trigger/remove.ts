@@ -14,15 +14,11 @@ import {
 } from "discord.js";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import {
-  replyInfoEmbed,
-  promptWithPaginatedModal,
-  promptWithRawModal,
-  safeSelectOptionText,
-} from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithPaginatedModal, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { getServerRandomTriggers } from "@/utils/db/dbRead";
-import { deleteRandomTrigger } from "@/utils/db/dbWrite";
+import { serverScheduleRepository } from "@/utils/db/repositories";
+
 import type { UserRow, ErrorContext, RandomTriggerRow } from "@/types/db/schema";
 import type { CheckboxGroupOption, ModalCheckboxGroupField, SelectOption } from "@/types/discord/modal";
 
@@ -71,7 +67,7 @@ export async function execute(
       return;
     }
 
-    const triggers = await getServerRandomTriggers(tomoriState.server_id);
+    const triggers = await serverScheduleRepository.getServerTriggers(tomoriState.server_id);
     if (triggers.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.config.random-trigger.remove.none_title",
@@ -86,8 +82,8 @@ export async function execute(
     const allPersonas = await getCachedAllPersonas(interaction.guild.id);
     const personaNameById = new Map<number, string>();
     for (const persona of allPersonas) {
-      if (persona.tomori_id != null) {
-        personaNameById.set(persona.tomori_id, persona.tomori_nickname);
+      if (persona.persona_id != null) {
+        personaNameById.set(persona.persona_id, persona.persona_nickname);
       }
     }
 
@@ -230,7 +226,7 @@ async function removeRandomTriggers(
   const deletionResults = await Promise.all(
     triggerSummaries.map(async (summary) => ({
       summary,
-      deleted: await deleteRandomTrigger(summary.trigger.trigger_id),
+      deleted: await serverScheduleRepository.deleteTrigger(summary.trigger.trigger_id),
     })),
   );
   const removedSummaries = deletionResults.filter((result) => result.deleted).map((result) => result.summary);
@@ -241,13 +237,13 @@ async function removeRandomTriggers(
       serverId,
       errorType: "DatabaseDeleteError",
       metadata: {
-        operation: "deleteRandomTrigger",
+        operation: "serverScheduleRepository.deleteTrigger",
         failedTriggerIds: failedSummaries.map((summary) => summary.trigger.trigger_id),
       },
     };
     await log.error(
       "Failed to delete one or more random triggers",
-      new Error("deleteRandomTrigger returned false for one or more entries"),
+      new Error("serverScheduleRepository.deleteTrigger returned false for one or more entries"),
       context,
     );
     await replyInfoEmbed(replyInteraction, locale, {
@@ -286,7 +282,9 @@ function buildTriggerSummaries(
         ? `#${guildChannel.name}`
         : `Unknown (${trigger.channel_disc_id.slice(0, 10)}...)`;
       const personaName =
-        trigger.tomori_id == null ? randomLabel : (personaNameById.get(trigger.tomori_id) ?? `ID:${trigger.tomori_id}`);
+        trigger.persona_id == null
+          ? randomLabel
+          : (personaNameById.get(trigger.persona_id) ?? `ID:${trigger.persona_id}`);
       const timingLabel = formatTimingLabel(trigger);
       return {
         trigger,

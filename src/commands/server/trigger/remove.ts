@@ -10,20 +10,18 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
   acknowledgeModalSubmitForRefresh,
-  replyInfoEmbed,
-  replyComponentsV2Status,
-  updateButtonComponentsV2Status,
-  type AvatarSessionCache,
-  replyPaginatedPersonaChoicesV2,
   promptWithPaginatedModal,
   promptWithRawModal,
   safeSelectOptionText,
-} from "@/utils/discord/interactionHelper";
+} from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { type UserRow, type ErrorContext, personaConfigSchema, type TomoriState } from "@/types/db/schema";
+import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import type { CheckboxGroupOption, ModalCheckboxGroupField, SelectOption } from "@/types/discord/modal";
-import { sql } from "@/utils/db/client";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { personaRepository } from "@/utils/db/repositories";
+import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 
 const TRIGGER_MODAL_CUSTOM_ID = "server_triggerremove_trigger_modal";
 const TRIGGER_SELECT_ID = "trigger_select";
@@ -31,9 +29,6 @@ const TRIGGER_CHECKBOX_ID_PREFIX = "server_trigger_checkbox_group";
 const MAX_OPTIONS_PER_GROUP = 10;
 const MAX_GROUPS_PER_MODAL = 5;
 const MAX_ENTRIES_PER_MODAL = MAX_OPTIONS_PER_GROUP * MAX_GROUPS_PER_MODAL;
-
-const formatTextArrayLiteral = (items: string[]): string =>
-  `{${items.map((item) => `"${item.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("remove").setDescription(localizer("en-US", "commands.server.trigger.remove.description"));
@@ -58,7 +53,7 @@ export async function execute(
   let selectedPersona: TomoriState | null = null;
 
   try {
-    const allPersonas = await loadAllPersonasForServer(interaction.guild.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(
         interaction,
@@ -84,8 +79,7 @@ export async function execute(
       });
 
       if (!personaSelection.success) {
-        if (personaSelection.reason === "cancelled" || personaSelection.reason === "fatal") return;
-        continue;
+        return;
       }
       if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
         return;
@@ -94,7 +88,7 @@ export async function execute(
       responseInteraction = personaSelection.interaction;
       selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
       tomoriState = selectedPersona;
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await updateButtonComponentsV2Status(
           personaSelection.interaction,
           locale,
@@ -107,7 +101,7 @@ export async function execute(
         continue;
       }
       const selectedPersonaWithId = selectedPersona as TomoriState & {
-        tomori_id: number;
+        persona_id: number;
       };
 
       const currentTriggerWords = selectedPersonaWithId.trigger_words ?? [];
@@ -219,7 +213,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: selectedPersona?.server_id ?? tomoriState?.server_id,
-      tomoriId: selectedPersona?.tomori_id ?? tomoriState?.tomori_id,
+      personaId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "server trigger remove",
@@ -252,14 +246,14 @@ export async function execute(
 
 async function handlePaginatedTriggerRemovalFallback(
   responseInteraction: ChatInputCommandInteraction | ButtonInteraction,
-  selectedPersona: TomoriState & { tomori_id: number },
+  selectedPersona: TomoriState & { persona_id: number },
   currentTriggerWords: string[],
   userData: UserRow,
   locale: string,
   guildId: string,
 ): Promise<boolean> {
   const triggerOptions: SelectOption[] = currentTriggerWords.map((trigger, index) => ({
-    label: safeSelectOptionText(trigger, 50),
+    label: safeSelectOptionText(formatTriggerWordForDisplay(trigger), 50),
     value: index.toString(),
   }));
 
@@ -338,7 +332,7 @@ async function handlePaginatedTriggerRemovalFallback(
 }
 
 async function performTriggerWordRemoval(
-  selectedPersona: TomoriState & { tomori_id: number },
+  selectedPersona: TomoriState & { persona_id: number },
   currentTriggerWords: string[],
   removedIndices: number[],
   userData: UserRow,
@@ -360,24 +354,11 @@ async function performTriggerWordRemoval(
     return false;
   }
 
-  await sql`
-		INSERT INTO persona_configs (tomori_id, trigger_words)
-		VALUES (${selectedPersona.tomori_id}, ARRAY[]::text[])
-		ON CONFLICT (tomori_id) DO NOTHING
-	`;
+  const success = await personaRepository.removeTrigger(selectedPersona.persona_id, remainingTriggerWords);
 
-  const triggerWordsArrayLiteral = formatTextArrayLiteral(remainingTriggerWords);
-  const [updatedRow] = await sql`
-		UPDATE persona_configs
-		SET trigger_words = ${triggerWordsArrayLiteral}::text[]
-		WHERE tomori_id = ${selectedPersona.tomori_id}
-		RETURNING *
-	`;
-
-  const validatedConfig = personaConfigSchema.safeParse(updatedRow);
-  if (!validatedConfig.success || !updatedRow) {
+  if (!success) {
     const context: ErrorContext = {
-      tomoriId: selectedPersona.tomori_id,
+      personaId: selectedPersona.persona_id,
       serverId: selectedPersona.server_id,
       userId: userData.user_id,
       errorType: "DatabaseUpdateError",
@@ -386,14 +367,11 @@ async function performTriggerWordRemoval(
         guildId,
         removedIndices,
         removedTriggerWords,
-        validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
       },
     };
     await log.error(
-      "Failed to update or validate trigger_words in persona_configs table",
-      validatedConfig.success
-        ? new Error("Database update returned no rows")
-        : new Error("Updated config data failed validation"),
+      "Failed to update trigger_words in persona_configs table via repository",
+      new Error("Database update returned false"),
       context,
     );
 
@@ -408,7 +386,7 @@ async function performTriggerWordRemoval(
   invalidateTomoriStateCache(guildId);
 
   log.success(
-    `Removed ${removedTriggerWords.length} trigger word(s) for tomori ${selectedPersona.tomori_id} by user ${userData.user_disc_id}: ${removedTriggerWords.join(", ")}`,
+    `Removed ${removedTriggerWords.length} trigger word(s) for tomori ${selectedPersona.persona_id} by user ${userData.user_disc_id}: ${removedTriggerWords.join(", ")}`,
   );
 
   if (!suppressSuccessReply) {
@@ -432,7 +410,7 @@ function buildTriggerCheckboxGroups(currentTriggerWords: string[]): ModalCheckbo
     const chunk = currentTriggerWords.slice(i, i + MAX_OPTIONS_PER_GROUP);
     const groupIndex = Math.floor(i / MAX_OPTIONS_PER_GROUP);
     const options: CheckboxGroupOption[] = chunk.map((triggerWord, offset) => ({
-      label: safeSelectOptionText(triggerWord, 50),
+      label: safeSelectOptionText(formatTriggerWordForDisplay(triggerWord), 50),
       value: (i + offset).toString(),
       default: true,
     }));
@@ -458,5 +436,9 @@ function formatTriggerList(triggerWords: string[]): string {
   const maxVisible = 10;
   const visibleWords = triggerWords.slice(0, maxVisible);
   const suffix = triggerWords.length > maxVisible ? ", ..." : "";
-  return `${visibleWords.map((triggerWord) => `\`${triggerWord}\``).join(", ")}${suffix}`;
+  return `${visibleWords.map((triggerWord) => `\`${formatTriggerWordForDisplay(triggerWord)}\``).join(", ")}${suffix}`;
+}
+
+function formatTriggerWordForDisplay(triggerWord: string): string {
+  return normalizeTriggerWord(triggerWord, { lowercase: false });
 }

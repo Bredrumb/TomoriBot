@@ -1,4 +1,4 @@
-﻿import {
+import {
   TextInputStyle,
   type ChatInputCommandInteraction,
   type Client,
@@ -8,18 +8,12 @@
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { promptWithRawModal, replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { TomoriState, UserRow } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
-import {
-  formatTextArrayLiteral,
-  MAX_TAG_LENGTH,
-  MAX_TAGS,
-  parseAndValidateNaiTags,
-  TAGS_MODAL_MAX_LENGTH,
-} from "@/utils/novelai/tagHelpers";
+import { MAX_TAG_LENGTH, MAX_TAGS, parseAndValidateNaiTags, TAGS_MODAL_MAX_LENGTH } from "@/utils/novelai/tagHelpers";
 import type { SelectOption } from "@/types/discord/modal";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { personaRepository } from "@/utils/db/repositories";
 
 // Modal field IDs
 const MODAL_CUSTOM_ID = "novelai_tags_character_modal";
@@ -70,7 +64,7 @@ export async function execute(
 
   try {
     // 2. Load all personas for the server
-    const allPersonas = await loadAllPersonasForServer(interaction.guild.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -82,10 +76,10 @@ export async function execute(
 
     // 3. Build persona select options
     const personaSelectOptions: SelectOption[] = allPersonas
-      .filter((persona) => persona.tomori_id !== undefined)
+      .filter((persona) => persona.persona_id !== undefined)
       .map((persona) => ({
-        label: safeSelectOptionText(persona.tomori_nickname),
-        value: persona.tomori_id?.toString() ?? "",
+        label: safeSelectOptionText(persona.persona_nickname),
+        value: persona.persona_id?.toString() ?? "",
         description: persona.is_alter
           ? localizer(locale, "commands.server.trigger.add.alter_persona_description")
           : localizer(locale, "commands.server.trigger.add.main_persona_description"),
@@ -147,9 +141,9 @@ export async function execute(
     }
 
     // 5. Find the selected persona
-    selectedPersona = allPersonas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
+    selectedPersona = allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
 
-    if (!selectedPersona) {
+    if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.unknown_error_title",
         descriptionKey: "general.errors.unknown_error_description",
@@ -160,19 +154,14 @@ export async function execute(
 
     // 6. Handle empty input — clear all tags
     if (!tagsInput || tagsInput.trim().length === 0) {
-      const personaId = selectedPersona.tomori_id;
-      await sql`
-				UPDATE tomoris
-				SET nai_tags = ARRAY[]::TEXT[]
-				WHERE tomori_id = ${personaId}
-			`;
+      await personaRepository.setNaiTags(selectedPersona.persona_id, []);
       invalidateTomoriStateCache(interaction.guild.id);
 
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.novelai.tags.character.cleared_title",
         descriptionKey: "commands.novelai.tags.character.cleared_description",
         descriptionVars: {
-          persona_name: selectedPersona.tomori_nickname,
+          persona_name: selectedPersona.persona_nickname,
         },
         color: ColorCode.SUCCESS,
       });
@@ -223,14 +212,7 @@ export async function execute(
     const uniqueTags = validationResult.tags;
 
     // 8. Replace all existing tags in the database
-    const personaId = selectedPersona.tomori_id;
-    const tagArrayLiteral = formatTextArrayLiteral(uniqueTags);
-
-    await sql`
-			UPDATE tomoris
-			SET nai_tags = ${tagArrayLiteral}::TEXT[]
-			WHERE tomori_id = ${personaId}
-		`;
+    await personaRepository.setNaiTags(selectedPersona.persona_id, uniqueTags);
 
     // 9. Invalidate cache so next access gets fresh data
     invalidateTomoriStateCache(interaction.guild.id);
@@ -240,7 +222,7 @@ export async function execute(
       titleKey: "commands.novelai.tags.character.success_title",
       descriptionKey: "commands.novelai.tags.character.success_description",
       descriptionVars: {
-        persona_name: selectedPersona.tomori_nickname,
+        persona_name: selectedPersona.persona_nickname,
         tag_list: uniqueTags.join(", "),
       },
       color: ColorCode.SUCCESS,
@@ -251,7 +233,7 @@ export async function execute(
       metadata: {
         command: "novelai tags character",
         guildId: interaction.guild.id,
-        personaId: selectedPersona?.tomori_id ?? null,
+        personaId: selectedPersona?.persona_id ?? null,
       },
     };
     await log.error("Error in /novelai image-tags character command", error, context);

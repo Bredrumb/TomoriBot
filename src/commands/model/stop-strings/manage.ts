@@ -7,9 +7,10 @@ import {
 } from "discord.js";
 import type { CheckboxGroupOption, ModalCheckboxGroupField, ModalComponent } from "@/types/discord/modal";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
+import { configRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { sql } from "@/utils/db/client";
-import { promptWithRawModal, replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { formatStopStringForDisplay, MAX_STOP_STRINGS_PER_SERVER } from "@/utils/provider/stopStringConfig";
 import { localizer } from "@/utils/text/localizer";
@@ -107,12 +108,29 @@ export async function execute(
       return;
     }
 
-    await sql`
-      UPDATE tomori_configs
-      SET llm_stop_strings = ${toPostgresTextArrayLiteral(nextStopStrings)}::text[],
-          llm_stop_speaker_pattern_enabled = ${speakerPatternEnabled}
-      WHERE server_id = ${tomoriState.server_id}
-    `;
+    const updated = await configRepository.updateChatConfig(tomoriState.server_id, {
+      llm_stop_strings: nextStopStrings,
+      llm_stop_speaker_pattern_enabled: speakerPatternEnabled,
+    });
+
+    if (!updated) {
+      const context: ErrorContext = {
+        userId: userData.user_id,
+        serverId: tomoriState.server_id,
+        personaId: tomoriState.persona_id,
+        errorType: "DatabaseUpdateError",
+        metadata: {
+          command: "config stop-strings manage",
+        },
+      };
+      await log.error("Failed to update stop strings config", new Error("Database update failed"), context);
+      await replyInfoEmbed(modalInteraction, locale, {
+        titleKey: "general.errors.update_failed_title",
+        descriptionKey: "general.errors.update_failed_description",
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
 
     invalidateTomoriStateCache(guildKey);
 
@@ -134,7 +152,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState.server_id,
-      tomoriId: tomoriState.tomori_id,
+      personaId: tomoriState.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "config stop-strings manage",
@@ -231,10 +249,6 @@ function collectCheckedStopIndexes(
 
 function getStopIndexValue(index: number): string {
   return `stop_${index}`;
-}
-
-function toPostgresTextArrayLiteral(values: readonly string[]): string {
-  return `{${values.map((value) => `"${value.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
 }
 
 function formatStopStringList(stops: readonly string[], locale: string): string {

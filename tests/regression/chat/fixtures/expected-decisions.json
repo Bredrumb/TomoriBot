@@ -1,0 +1,32 @@
+{
+  "google-direct-mention-main": {
+    "provider": "google",
+    "shouldReply": true,
+    "matchingPersonaNicknames": ["Tomori"]
+  },
+  "openrouter-deliberate-alter-trigger": {
+    "provider": "openrouter",
+    "shouldReply": true,
+    "matchingPersonaNicknames": ["Lilya"]
+  },
+  "novelai-autochat-channel-alter": {
+    "provider": "novelai",
+    "shouldReply": true,
+    "matchingPersonaNicknames": ["Lilya"]
+  },
+  "google-multi-persona-trigger-order": {
+    "provider": "google",
+    "shouldReply": true,
+    "matchingPersonaNicknames": ["Lilya", "Tomori"]
+  },
+  "openrouter-deliberate-mode-ignores-plain-trigger": {
+    "provider": "openrouter",
+    "shouldReply": false,
+    "matchingPersonaNicknames": []
+  },
+  "google-persona-webhook-self-trigger": {
+    "provider": "google",
+    "shouldReply": false,
+    "matchingPersonaNicknames": ["Tomori"]
+  }
+}

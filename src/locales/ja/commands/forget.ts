@@ -1,0 +1,78 @@
+// locales/ja/commands/forget.ts
+
+export default {
+  forget: {
+    sampledialogue: {
+      description: `私の記憶からサンプルユーザー/ボットの対話ペアを削除します。`,
+      modal_title: `サンプル対話の削除`,
+      select_label: `削除する対話`,
+      select_description: `削除する対話ペアを選択してください`,
+      select_placeholder: `対話を選択...`,
+      no_dialogues_title: `サンプル対話がありません`,
+      no_dialogues: `削除するサンプル対話が保存されていません。\`/persona sample-dialogue add\`で追加してください。`,
+      success_title: `サンプル対話が削除されました`,
+      success_description: `対話ペアを正常に削除しました: ユーザー: "{input}" → ボット: "{output}"`,
+    },
+    attribute: {
+      description: `私の記憶から人格属性を削除します。`,
+      modal_title: `属性の削除`,
+      select_label: `削除する属性`,
+      select_description: `私の人格から削除する属性を選択してください`,
+      select_placeholder: `属性を選択...`,
+      no_attributes_title: `属性がありません`,
+      no_attributes: `削除する人格属性がありません。\`/persona attribute add\`で追加してください。`,
+      success_title: `属性が削除されました`,
+      success_description: `属性を正常に削除しました: "{attribute}"`,
+    },
+    document: {
+      description: `サーバーの文書を削除します。`,
+      modal_title: `文書の削除`,
+      select_label: `削除する文書`,
+      select_description: `削除する文書を選択してください`,
+      select_placeholder: `文書を選択...`,
+      rag_disabled_title: `ドキュメントRAGが無効です`,
+      rag_disabled_description: `文書の参照にはデータベースに [pgvector](https://github.com/pgvector/pgvector) PostgreSQL拡張が必要です。pgvector をインストールして TomoriBot を再起動してください（[セットアップガイド](https://github.com/Bredrumb/TomoriBot#readme)を参照）。`,
+      none_title: `文書がありません`,
+      none_description: `このスコープには削除できる文書がありません。\`/memory document add\`で追加してください。`,
+      success_title: `文書が削除されました`,
+      success_description: `文書を正常に削除しました: "{name}"`,
+    },
+    personaprompt: {
+      description: `ペルソナ専用プロンプトをクリアします`,
+      no_permission_title: `🔴 権限がありません`,
+      no_permission_description: `ペルソナプロンプトをクリアするには**サーバー管理**権限が必要です。`,
+      success_title: `ペルソナプロンプトをクリアしました`,
+      success_description: `「{persona_name}」のペルソナプロンプトをクリアしました。`,
+    },
+    memory: {
+      personal: {
+        description: `個人的な記憶を削除します。`,
+        modal_title: `個人的な記憶の削除`,
+        select_label: `削除する記憶`,
+        select_description: `削除する個人的な記憶を選択してください`,
+        select_placeholder: `記憶を選択...`,
+        no_memories_title: `個人的な記憶がありません`,
+        no_memories: `あなたには個人的な記憶が保存されていません。\`/memory personal add\`で追加してください。`,
+        success_title: `個人的な記憶が削除されました`,
+        success_description: `個人的な記憶を正常に削除しました: "{memory}"`,
+        warning_disabled_title: `パーソナライズが無効です`,
+        warning_disabled_description: `記憶は正常に削除されました。
+
+**警告:** 現在、このサーバーではパーソナライズが無効になっているため、この変更はここでの私の行動に影響しません。パーソナライズが有効になっている他のサーバーでは反映されます。`,
+      },
+      server: {
+        description: `私の知識からサーバーの記憶を削除します。`,
+        modal_title: `サーバーの記憶の削除`,
+        select_label: `削除する記憶`,
+        select_description: `削除するサーバーの記憶を選択してください`,
+        select_placeholder: `記憶を選択...`,
+        no_memories_title: `サーバーの記憶がありません`,
+        no_memories: `このサーバーにはサーバーの記憶が保存されていません。\`/memory server add\`で追加してください。`,
+        no_owned_memories: `あなたが所有していて削除できるサーバーの記憶はありません。`,
+        memory_not_found: `選択された記憶が見つかりませんでした。`,
+        success_title: `サーバーの記憶が削除されました`,
+        success_description: `サーバーの記憶を正常に削除しました: "{memory}"`,
+      },
+    },
+  },
+};

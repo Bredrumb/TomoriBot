@@ -1,0 +1,1809 @@
+{
+  "10000:198": {
+    "inputs": {
+      "value": "{TOMORI_INPAINT}"
+    },
+    "class_type": "ImpactConvertDataType",
+    "_meta": {
+      "title": "Branch value: inpaint enabled"
+    }
+  },
+  "10000:223": {
+    "inputs": {
+      "value": "{TOMORI_INPAINT_INVERT_MASK}"
+    },
+    "class_type": "ImpactConvertDataType",
+    "_meta": {
+      "title": "Branch value: invert mask"
+    }
+  },
+  "10000:297": {
+    "inputs": {
+      "value": "{TOMORI_OUTPAINT}"
+    },
+    "class_type": "ImpactConvertDataType",
+    "_meta": {
+      "title": "Branch value: outpaint enabled"
+    }
+  },
+  "10001:16": {
+    "inputs": {
+      "unet_name": "anima-preview3-base.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Model: Anima UNet"
+    }
+  },
+  "10001:17": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Model: Qwen image VAE"
+    }
+  },
+  "10001:18": {
+    "inputs": {
+      "clip_name": "qwen_3_06b_base.safetensors",
+      "type": "stable_diffusion",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Model: Qwen text encoder"
+    }
+  },
+  "10001:6": {
+    "inputs": {
+      "text": "{TOMORI_PROMPT_WITH_DEFAULTS}",
+      "clip": ["10001:18", 0]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Prompt: Positive text with Tomori defaults"
+    }
+  },
+  "10001:7": {
+    "inputs": {
+      "text": "{TOMORI_NEGATIVE_PROMPT}",
+      "clip": ["10001:18", 0]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Prompt: Negative text"
+    }
+  },
+  "10001:282": {
+    "inputs": {
+      "strength": "{TOMORI_INPAINT_DIFFERENTIAL_DIFFUSION_STRENGTH}",
+      "model": ["10001:16", 0]
+    },
+    "class_type": "DifferentialDiffusion",
+    "_meta": {
+      "title": "Optional Differential Diffusion model"
+    }
+  },
+  "10001:283": {
+    "inputs": {
+      "value": "{TOMORI_INPAINT_USE_DIFFERENTIAL_DIFFUSION}"
+    },
+    "class_type": "ImpactConvertDataType",
+    "_meta": {
+      "title": "Branch value: use Differential Diffusion"
+    }
+  },
+  "10001:284": {
+    "inputs": {
+      "cond": ["10001:283", 3],
+      "tt_value": ["10001:282", 0],
+      "ff_value": ["10001:16", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Branch: base or Differential Diffusion model"
+    }
+  },
+  "10002:177": {
+    "inputs": {
+      "image": "163845_329810352562401_00118.png",
+      "link_id": 0,
+      "save_to_workflow": true,
+      "image_data": "{TOMORI_REFERENCE_IMAGE_1_DATA_URL}",
+      "trigger_always": false
+    },
+    "class_type": "ImageReceiver",
+    "_meta": {
+      "title": "Input: Source/reference image"
+    }
+  },
+  "10002:178": {
+    "inputs": {
+      "upscale_method": "lanczos",
+      "width": "{TOMORI_SOURCE_WIDTH}",
+      "height": "{TOMORI_SOURCE_HEIGHT}",
+      "crop": "center",
+      "image": ["10002:177", 0]
+    },
+    "class_type": "ImageScale",
+    "_meta": {
+      "title": "Source image scaled to request size"
+    }
+  },
+  "10002:188": {
+    "inputs": {
+      "value": "{TOMORI_REFERENCE_IMAGE_COUNT}"
+    },
+    "class_type": "ImpactConvertDataType",
+    "_meta": {
+      "title": "Branch value: reference image count"
+    }
+  },
+  "10002:189": {
+    "inputs": {
+      "value": 0
+    },
+    "class_type": "ImpactInt",
+    "_meta": {
+      "title": "Branch value: zero references"
+    }
+  },
+  "10002:190": {
+    "inputs": {
+      "cmp": "a > b",
+      "a": ["10002:188", 2],
+      "b": ["10002:189", 0]
+    },
+    "class_type": "ImpactCompare",
+    "_meta": {
+      "title": "Branch: has reference image?"
+    }
+  },
+  "10002:205": {
+    "inputs": {
+      "width": "{TOMORI_SOURCE_WIDTH}",
+      "height": "{TOMORI_SOURCE_HEIGHT}",
+      "batch_size": 1,
+      "color": 0
+    },
+    "class_type": "EmptyImage",
+    "_meta": {
+      "title": "Diagnostic blank image"
+    }
+  },
+  "10003:144": {
+    "inputs": {
+      "width": "{TOMORI_WIDTH}",
+      "height": "{TOMORI_HEIGHT}",
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Txt2Img latent canvas"
+    }
+  },
+  "10003:186": {
+    "inputs": {
+      "seed": "{TOMORI_SEED}",
+      "steps": 28,
+      "cfg": 5,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": ["10001:16", 0],
+      "positive": ["10001:6", 0],
+      "negative": ["10001:7", 0],
+      "latent_image": ["10003:144", 0]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "Txt2Img sampler"
+    }
+  },
+  "10003:187": {
+    "inputs": {
+      "samples": ["10003:186", 0],
+      "vae": ["10001:17", 0]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "Txt2Img decode"
+    }
+  },
+  "10004:179": {
+    "inputs": {
+      "pixels": ["10002:178", 0],
+      "vae": ["10001:17", 0]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "Img2Img source VAE encode"
+    }
+  },
+  "10004:176": {
+    "inputs": {
+      "seed": "{TOMORI_SEED}",
+      "steps": 28,
+      "cfg": 5,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": "{TOMORI_IMG2IMG_DENOISE}",
+      "model": ["10001:16", 0],
+      "positive": ["10001:6", 0],
+      "negative": ["10001:7", 0],
+      "latent_image": ["10004:179", 0]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "Img2Img sampler"
+    }
+  },
+  "10004:8": {
+    "inputs": {
+      "samples": ["10004:176", 0],
+      "vae": ["10001:17", 0]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "Img2Img decode"
+    }
+  },
+  "10005:212": {
+    "inputs": {
+      "expand": "{TOMORI_INPAINT_EXTEND_PADDING}",
+      "tapered_corners": true,
+      "mask": ["10010:10005:194:florence", 1]
+    },
+    "class_type": "GrowMask",
+    "_meta": {
+      "title": "Extend-mode mask padding source"
+    }
+  },
+  "10005:213": {
+    "inputs": {
+      "x": "{TOMORI_INPAINT_EXTEND_X}",
+      "y": "{TOMORI_INPAINT_EXTEND_Y}",
+      "operation": "or",
+      "destination": ["10010:10005:194:florence", 1],
+      "source": ["10005:212", 0]
+    },
+    "class_type": "MaskComposite",
+    "_meta": {
+      "title": "Extend-mode combined mask"
+    }
+  },
+  "10005:214": {
+    "inputs": {
+      "cmp": "a = b",
+      "a": "{TOMORI_INPAINT_MODE}",
+      "b": "extend"
+    },
+    "class_type": "ImpactCompare",
+    "_meta": {
+      "title": "Branch: inpaint mode is extend?"
+    }
+  },
+  "10005:215": {
+    "inputs": {
+      "cond": ["10005:214", 0],
+      "tt_value": ["10005:220", 0],
+      "ff_value": ["10005:295", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Branch: extend-mode or normal mask"
+    }
+  },
+  "10005:216": {
+    "inputs": {
+      "mask": ["10005:295", 0]
+    },
+    "class_type": "MaskToImage",
+    "_meta": {
+      "title": "Diagnostic: detected mask image"
+    }
+  },
+  "10005:217": {
+    "inputs": {
+      "cond": ["10000:198", 3],
+      "tt_value": ["10005:216", 0],
+      "ff_value": ["10002:205", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Diagnostic branch: detected mask or blank"
+    }
+  },
+  "10005:218": {
+    "inputs": {
+      "filename_prefix": "{TOMORI_INPAINT_MASK_FILENAME_PREFIX}_detected",
+      "images": ["10005:217", 0]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Diagnostic output: detected mask"
+    }
+  },
+  "10005:220": {
+    "inputs": {
+      "expand": "{TOMORI_INPAINT_EXTEND_GROW}",
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_INPAINT_EXTEND_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": false,
+      "mask": ["10005:213", 0]
+    },
+    "class_type": "GrowMaskWithBlur",
+    "_meta": {
+      "title": "Extend-mode mask grow/feather"
+    }
+  },
+  "10005:285": {
+    "inputs": {
+      "Hat": "{TOMORI_INPAINT_CLOTHING_SEGMENT_HAT}",
+      "Hair": "{TOMORI_INPAINT_CLOTHING_SEGMENT_HAIR}",
+      "Face": "{TOMORI_INPAINT_CLOTHING_SEGMENT_FACE}",
+      "Sunglasses": "{TOMORI_INPAINT_CLOTHING_SEGMENT_SUNGLASSES}",
+      "Upper-clothes": "{TOMORI_INPAINT_CLOTHING_SEGMENT_UPPER_CLOTHES}",
+      "Skirt": "{TOMORI_INPAINT_CLOTHING_SEGMENT_SKIRT}",
+      "Dress": "{TOMORI_INPAINT_CLOTHING_SEGMENT_DRESS}",
+      "Belt": "{TOMORI_INPAINT_CLOTHING_SEGMENT_BELT}",
+      "Pants": "{TOMORI_INPAINT_CLOTHING_SEGMENT_PANTS}",
+      "Left-arm": "{TOMORI_INPAINT_CLOTHING_SEGMENT_LEFT_ARM}",
+      "Right-arm": "{TOMORI_INPAINT_CLOTHING_SEGMENT_RIGHT_ARM}",
+      "Left-leg": "{TOMORI_INPAINT_CLOTHING_SEGMENT_LEFT_LEG}",
+      "Right-leg": "{TOMORI_INPAINT_CLOTHING_SEGMENT_RIGHT_LEG}",
+      "Bag": "{TOMORI_INPAINT_CLOTHING_SEGMENT_BAG}",
+      "Scarf": "{TOMORI_INPAINT_CLOTHING_SEGMENT_SCARF}",
+      "Left-shoe": "{TOMORI_INPAINT_CLOTHING_SEGMENT_LEFT_SHOE}",
+      "Right-shoe": "{TOMORI_INPAINT_CLOTHING_SEGMENT_RIGHT_SHOE}",
+      "Background": "{TOMORI_INPAINT_CLOTHING_SEGMENT_BACKGROUND}",
+      "process_res": 512,
+      "mask_blur": 0,
+      "mask_offset": 0,
+      "invert_output": false,
+      "background": "Alpha",
+      "background_color": "#222222",
+      "images": ["10002:178", 0]
+    },
+    "class_type": "ClothesSegment",
+    "_meta": {
+      "title": "Clothing parser: selected categories"
+    }
+  },
+  "10005:291": {
+    "inputs": {
+      "Hat": false,
+      "Hair": true,
+      "Face": false,
+      "Sunglasses": false,
+      "Upper-clothes": false,
+      "Skirt": false,
+      "Dress": false,
+      "Belt": false,
+      "Pants": false,
+      "Left-arm": false,
+      "Right-arm": false,
+      "Left-leg": false,
+      "Right-leg": false,
+      "Bag": false,
+      "Scarf": false,
+      "Left-shoe": false,
+      "Right-shoe": false,
+      "Background": false,
+      "process_res": 512,
+      "mask_blur": 0,
+      "mask_offset": 0,
+      "invert_output": false,
+      "background": "Alpha",
+      "background_color": "#222222",
+      "images": ["10002:178", 0]
+    },
+    "class_type": "ClothesSegment",
+    "_meta": {
+      "title": "Clothing parser: hair-only mask"
+    }
+  },
+  "10005:293": {
+    "inputs": {
+      "x": 0,
+      "y": 0,
+      "operation": "subtract",
+      "destination": ["10005:285", 1],
+      "source": ["10005:291", 1]
+    },
+    "class_type": "MaskComposite",
+    "_meta": {
+      "title": "Clothing parser target minus hair"
+    }
+  },
+  "10005:286": {
+    "inputs": {
+      "cond": ["10005:287", 3],
+      "tt_value": ["10005:293", 0],
+      "ff_value": ["10010:10005:194:florence", 1]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Branch: Florence2 prompt mask or clothing parser target mask"
+    }
+  },
+  "10005:288": {
+    "inputs": {
+      "cond": ["10005:292", 3],
+      "tt_value": ["10005:291", 1],
+      "ff_value": ["10005:286", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Branch: optional hair target mask"
+    }
+  },
+  "10005:294": {
+    "inputs": {
+      "model": "{TOMORI_RMBG_MODEL}",
+      "sensitivity": "{TOMORI_RMBG_SENSITIVITY}",
+      "process_res": "{TOMORI_RMBG_PROCESS_RES}",
+      "mask_blur": "{TOMORI_RMBG_MASK_BLUR}",
+      "mask_offset": "{TOMORI_RMBG_MASK_OFFSET}",
+      "invert_output": false,
+      "refine_foreground": "{TOMORI_RMBG_REFINE_FOREGROUND}",
+      "background": "Alpha",
+      "background_color": "#222222",
+      "image": ["10002:178", 0]
+    },
+    "class_type": "RMBG",
+    "_meta": {
+      "title": "RMBG background mask"
+    }
+  },
+  "10005:295": {
+    "inputs": {
+      "cond": ["10005:296", 3],
+      "tt_value": ["10005:294", 1],
+      "ff_value": ["10005:288", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Branch: RMBG background or target mask"
+    }
+  },
+  "10005:287": {
+    "inputs": {
+      "value": "{TOMORI_INPAINT_USE_CLOTHING_PARSER_TARGET}"
+    },
+    "class_type": "ImpactConvertDataType",
+    "_meta": {
+      "title": "Branch value: use clothing parser target"
+    }
+  },
+  "10005:292": {
+    "inputs": {
+      "value": "{TOMORI_INPAINT_USE_CLOTHING_PARSER_HAIR_TARGET}"
+    },
+    "class_type": "ImpactConvertDataType",
+    "_meta": {
+      "title": "Branch value: use clothing parser hair target"
+    }
+  },
+  "10005:296": {
+    "inputs": {
+      "value": "{TOMORI_INPAINT_USE_RMBG_BACKGROUND_MASK}"
+    },
+    "class_type": "ImpactConvertDataType",
+    "_meta": {
+      "title": "Branch value: use RMBG background mask"
+    }
+  },
+  "10006:233": {
+    "inputs": {
+      "expand": "{TOMORI_INPAINT_FACE_MASK_GROW}",
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_INPAINT_FACE_MASK_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true,
+      "mask": ["10010:10006:232:florence", 1]
+    },
+    "class_type": "GrowMaskWithBlur",
+    "_meta": {
+      "title": "Protection mask: face grow/feather"
+    }
+  },
+  "10006:238": {
+    "inputs": {
+      "expand": "{TOMORI_INPAINT_CLOTHING_MASK_GROW}",
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_INPAINT_CLOTHING_MASK_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true,
+      "mask": ["10006:290", 0]
+    },
+    "class_type": "GrowMaskWithBlur",
+    "_meta": {
+      "title": "Protection mask: clothing grow/feather"
+    }
+  },
+  "10006:239": {
+    "inputs": {
+      "x": 0,
+      "y": 0,
+      "operation": "or",
+      "destination": ["10006:233", 0],
+      "source": ["10006:241", 0]
+    },
+    "class_type": "MaskComposite",
+    "_meta": {
+      "title": "Protection mask: face + clothing"
+    }
+  },
+  "10006:241": {
+    "inputs": {
+      "cond": ["10006:240", 3],
+      "tt_value": ["10006:238", 0],
+      "ff_value": ["10006:233", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Branch: clothing protection source"
+    }
+  },
+  "10006:243": {
+    "inputs": {
+      "expand": "{TOMORI_INPAINT_ARMS_MASK_GROW}",
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_INPAINT_ARMS_MASK_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true,
+      "mask": ["10010:10006:242:florence", 1]
+    },
+    "class_type": "GrowMaskWithBlur",
+    "_meta": {
+      "title": "Protection mask: arms grow/feather"
+    }
+  },
+  "10006:245": {
+    "inputs": {
+      "cond": ["10006:244", 3],
+      "tt_value": ["10006:243", 0],
+      "ff_value": ["10006:233", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Branch: arms protection source"
+    }
+  },
+  "10006:246": {
+    "inputs": {
+      "x": 0,
+      "y": 0,
+      "operation": "or",
+      "destination": ["10006:239", 0],
+      "source": ["10006:245", 0]
+    },
+    "class_type": "MaskComposite",
+    "_meta": {
+      "title": "Protection mask: face/clothing/arms"
+    }
+  },
+  "10006:248": {
+    "inputs": {
+      "expand": "{TOMORI_INPAINT_NECK_MASK_GROW}",
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_INPAINT_NECK_MASK_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true,
+      "mask": ["10010:10006:247:florence", 1]
+    },
+    "class_type": "GrowMaskWithBlur",
+    "_meta": {
+      "title": "Protection mask: neck grow/feather"
+    }
+  },
+  "10006:250": {
+    "inputs": {
+      "cond": ["10006:249", 3],
+      "tt_value": ["10006:248", 0],
+      "ff_value": ["10006:233", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Branch: neck protection source"
+    }
+  },
+  "10006:251": {
+    "inputs": {
+      "x": 0,
+      "y": 0,
+      "operation": "or",
+      "destination": ["10006:246", 0],
+      "source": ["10006:250", 0]
+    },
+    "class_type": "MaskComposite",
+    "_meta": {
+      "title": "Protection mask: face/clothing/arms/neck"
+    }
+  },
+  "10006:253": {
+    "inputs": {
+      "expand": "{TOMORI_INPAINT_SKIN_MASK_GROW}",
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_INPAINT_SKIN_MASK_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true,
+      "mask": ["10010:10006:252:florence", 1]
+    },
+    "class_type": "GrowMaskWithBlur",
+    "_meta": {
+      "title": "Protection mask: skin grow/feather"
+    }
+  },
+  "10006:255": {
+    "inputs": {
+      "cond": ["10006:254", 3],
+      "tt_value": ["10006:253", 0],
+      "ff_value": ["10006:233", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Branch: skin protection source"
+    }
+  },
+  "10006:256": {
+    "inputs": {
+      "x": 0,
+      "y": 0,
+      "operation": "or",
+      "destination": ["10006:251", 0],
+      "source": ["10006:255", 0]
+    },
+    "class_type": "MaskComposite",
+    "_meta": {
+      "title": "Combined protection mask"
+    }
+  },
+  "10006:234": {
+    "inputs": {
+      "x": 0,
+      "y": 0,
+      "operation": "subtract",
+      "destination": ["10006:200", 0],
+      "source": ["10006:256", 0]
+    },
+    "class_type": "MaskComposite",
+    "_meta": {
+      "title": "Subtract protected face/clothing/skin from edit mask"
+    }
+  },
+  "10006:235": {
+    "inputs": {
+      "value": "{TOMORI_INPAINT_SUBTRACT_FACE_MASK}"
+    },
+    "class_type": "ImpactConvertDataType",
+    "_meta": {
+      "title": "Branch value: subtract face/protection mask"
+    }
+  },
+  "10006:240": {
+    "inputs": {
+      "value": "{TOMORI_INPAINT_SUBTRACT_CLOTHING_MASK}"
+    },
+    "class_type": "ImpactConvertDataType",
+    "_meta": {
+      "title": "Branch value: subtract clothing protection"
+    }
+  },
+  "10006:244": {
+    "inputs": {
+      "value": "{TOMORI_INPAINT_SUBTRACT_ARMS_MASK}"
+    },
+    "class_type": "ImpactConvertDataType",
+    "_meta": {
+      "title": "Branch value: subtract arms protection"
+    }
+  },
+  "10006:249": {
+    "inputs": {
+      "value": "{TOMORI_INPAINT_SUBTRACT_NECK_MASK}"
+    },
+    "class_type": "ImpactConvertDataType",
+    "_meta": {
+      "title": "Branch value: subtract neck protection"
+    }
+  },
+  "10006:254": {
+    "inputs": {
+      "value": "{TOMORI_INPAINT_SUBTRACT_SKIN_MASK}"
+    },
+    "class_type": "ImpactConvertDataType",
+    "_meta": {
+      "title": "Branch value: subtract skin protection"
+    }
+  },
+  "10006:290": {
+    "inputs": {
+      "cond": ["10006:289", 3],
+      "tt_value": ["10005:293", 0],
+      "ff_value": ["10010:10006:237:florence", 1]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Branch: clothing prompt or parser protection"
+    }
+  },
+  "10006:236": {
+    "inputs": {
+      "cond": ["10006:235", 3],
+      "tt_value": ["10006:234", 0],
+      "ff_value": ["10006:200", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Branch: protection subtraction enabled?"
+    }
+  },
+  "10006:221": {
+    "inputs": {
+      "mask": ["10006:236", 0]
+    },
+    "class_type": "InvertMask",
+    "_meta": {
+      "title": "Mask invert helper"
+    }
+  },
+  "10006:222": {
+    "inputs": {
+      "cond": ["10000:223", 3],
+      "tt_value": ["10006:221", 0],
+      "ff_value": ["10006:236", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Branch: invert final edit mask?"
+    }
+  },
+  "10006:227": {
+    "inputs": {
+      "expand": 0,
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": "{TOMORI_INPAINT_MASK_FEATHER}",
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": false,
+      "mask": ["10006:222", 0]
+    },
+    "class_type": "GrowMaskWithBlur",
+    "_meta": {
+      "title": "Final regular edit mask feather"
+    }
+  },
+  "10006:200": {
+    "inputs": {
+      "expand": "{TOMORI_INPAINT_MASK_GROW}",
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": 0,
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": false,
+      "mask": ["10005:215", 0]
+    },
+    "class_type": "GrowMaskWithBlur",
+    "_meta": {
+      "title": "Mask grow: regular target mask"
+    }
+  },
+  "10006:201": {
+    "inputs": {
+      "mask": ["10006:227", 0]
+    },
+    "class_type": "MaskToImage",
+    "_meta": {
+      "title": "Diagnostic: final mask image"
+    }
+  },
+  "10006:202": {
+    "inputs": {
+      "filename_prefix": "{TOMORI_INPAINT_MASK_FILENAME_PREFIX}",
+      "images": ["10006:209", 0]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Diagnostic output: final mask"
+    }
+  },
+  "10006:206": {
+    "inputs": {
+      "width": "{TOMORI_SOURCE_WIDTH}",
+      "height": "{TOMORI_SOURCE_HEIGHT}",
+      "batch_size": 1,
+      "color": 16711680
+    },
+    "class_type": "EmptyImage",
+    "_meta": {
+      "title": "Diagnostic red overlay fill"
+    }
+  },
+  "10006:207": {
+    "inputs": {
+      "blend_factor": 0.35,
+      "blend_mode": "normal",
+      "image1": ["10002:178", 0],
+      "image2": ["10006:206", 0]
+    },
+    "class_type": "ImageBlend",
+    "_meta": {
+      "title": "Diagnostic red overlay source"
+    }
+  },
+  "10006:208": {
+    "inputs": {
+      "x": 0,
+      "y": 0,
+      "resize_source": true,
+      "destination": ["10002:178", 0],
+      "source": ["10006:207", 0],
+      "mask": ["10006:227", 0]
+    },
+    "class_type": "ImageCompositeMasked",
+    "_meta": {
+      "title": "Diagnostic mask overlay composite"
+    }
+  },
+  "10006:209": {
+    "inputs": {
+      "cond": ["10000:198", 3],
+      "tt_value": ["10006:201", 0],
+      "ff_value": ["10002:205", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Diagnostic branch: final mask image or blank"
+    }
+  },
+  "10006:210": {
+    "inputs": {
+      "cond": ["10000:198", 3],
+      "tt_value": ["10006:208", 0],
+      "ff_value": ["10002:205", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Diagnostic branch: overlay image or blank"
+    }
+  },
+  "10006:211": {
+    "inputs": {
+      "filename_prefix": "{TOMORI_INPAINT_MASK_FILENAME_PREFIX}_overlay",
+      "images": ["10006:210", 0]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Diagnostic output: mask overlay"
+    }
+  },
+  "10006:231": {
+    "inputs": {
+      "expand": 0,
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": 0,
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": true,
+      "mask": ["10006:236", 0]
+    },
+    "class_type": "GrowMaskWithBlur",
+    "_meta": {
+      "title": "Regular preserve mask"
+    }
+  },
+  "10006:289": {
+    "inputs": {
+      "value": "{TOMORI_INPAINT_USE_CLOTHING_PARSER_PROTECTION}"
+    },
+    "class_type": "ImpactConvertDataType",
+    "_meta": {
+      "title": "Branch value: use clothing parser protection"
+    }
+  },
+  "10007:340": {
+    "inputs": {
+      "pixels": ["10002:178", 0],
+      "vae": ["10001:17", 0]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "Regular inpaint source VAE encode"
+    }
+  },
+  "10007:204": {
+    "inputs": {
+      "samples": ["10007:340", 0],
+      "mask": ["10006:227", 0]
+    },
+    "class_type": "SetLatentNoiseMask",
+    "_meta": {
+      "title": "Regular inpaint latent noise mask"
+    }
+  },
+  "10007:196": {
+    "inputs": {
+      "seed": "{TOMORI_SEED}",
+      "steps": "{TOMORI_LANPAINT_STEPS}",
+      "cfg": "{TOMORI_INPAINT_CFG}",
+      "sampler_name": "{TOMORI_LANPAINT_SAMPLER}",
+      "scheduler": "simple",
+      "denoise": "{TOMORI_INPAINT_DENOISE}",
+      "LanPaint_NumSteps": "{TOMORI_LANPAINT_NUM_STEPS}",
+      "LanPaint_PromptMode": "{TOMORI_LANPAINT_PROMPT_MODE}",
+      "LanPaint_Info": "LanPaint KSampler.",
+      "Inpainting_mode": "{TOMORI_LANPAINT_INPAINTING_MODE}",
+      "More Info, Bug Report, Star on GitHub ⭐": "lanpaint_star_button",
+      "model": ["10001:284", 0],
+      "positive": ["10001:6", 0],
+      "negative": ["10001:7", 0],
+      "latent_image": ["10007:204", 0]
+    },
+    "class_type": "LanPaint_KSampler",
+    "_meta": {
+      "title": "LanPaint sampler: regular inpaint"
+    }
+  },
+  "10007:197": {
+    "inputs": {
+      "samples": ["10007:196", 0],
+      "vae": ["10001:17", 0]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "Regular inpaint decode"
+    }
+  },
+  "10007:266": {
+    "inputs": {
+      "blend_overlap": "{TOMORI_LANPAINT_MASK_BLEND_OVERLAP}",
+      "image1": ["10002:178", 0],
+      "image2": ["10007:197", 0],
+      "mask": ["10006:227", 0]
+    },
+    "class_type": "LanPaint_MaskBlend",
+    "_meta": {
+      "title": "LanPaint blend: regular inpaint restore source"
+    }
+  },
+  "10009:191": {
+    "inputs": {
+      "cond": ["10000:198", 3],
+      "tt_value": ["10009:229", 0],
+      "ff_value": ["10004:8", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Branch: inpaint/img2img when referenced"
+    }
+  },
+  "10009:199": {
+    "inputs": {
+      "cond": ["10002:190", 0],
+      "tt_value": ["10009:191", 0],
+      "ff_value": ["10003:187", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Branch: final txt2img/reference path"
+    }
+  },
+  "10009:228": {
+    "inputs": {
+      "x": 0,
+      "y": 0,
+      "resize_source": true,
+      "destination": ["10007:197", 0],
+      "source": ["10002:178", 0],
+      "mask": ["10006:231", 0]
+    },
+    "class_type": "ImageCompositeMasked",
+    "_meta": {
+      "title": "Invert-mask regular inpaint preserve composite"
+    }
+  },
+  "10009:229": {
+    "inputs": {
+      "cond": ["10000:223", 3],
+      "tt_value": ["10009:228", 0],
+      "ff_value": ["10009:298", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Branch: inverted regular mask or normal/outpaint path"
+    }
+  },
+  "10009:298": {
+    "inputs": {
+      "cond": ["10000:297", 3],
+      "tt_value": ["10008:469", 0],
+      "ff_value": ["10007:266", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "Branch: LanPaint outpaint or regular inpaint"
+    }
+  },
+  "10009:40": {
+    "inputs": {
+      "filename_prefix": "TomoriBot_Anima3",
+      "images": ["10009:199", 0]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Output: Final Tomori image"
+    }
+  },
+  "10008:299": {
+    "inputs": {
+      "value": "{TOMORI_OUTPAINT_FULL_CANVAS}"
+    },
+    "class_type": "ImpactConvertDataType",
+    "_meta": {
+      "title": "Branch value: full-canvas staged outpaint"
+    }
+  },
+  "10008:350": {
+    "inputs": {
+      "text": "{TOMORI_OUTPAINT_HORIZONTAL_POSITIVE_PROMPT}",
+      "clip": ["10001:18", 0]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Outpaint prompt: positive LEFT/RIGHT"
+    }
+  },
+  "10008:351": {
+    "inputs": {
+      "text": "{TOMORI_OUTPAINT_HORIZONTAL_NEGATIVE_PROMPT}",
+      "clip": ["10001:18", 0]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Outpaint prompt: negative LEFT/RIGHT"
+    }
+  },
+  "10008:352": {
+    "inputs": {
+      "text": "{TOMORI_OUTPAINT_TOP_POSITIVE_PROMPT}",
+      "clip": ["10001:18", 0]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Outpaint prompt: positive TOP"
+    }
+  },
+  "10008:353": {
+    "inputs": {
+      "text": "{TOMORI_OUTPAINT_TOP_NEGATIVE_PROMPT}",
+      "clip": ["10001:18", 0]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Outpaint prompt: negative TOP"
+    }
+  },
+  "10008:354": {
+    "inputs": {
+      "text": "{TOMORI_OUTPAINT_BOTTOM_POSITIVE_PROMPT}",
+      "clip": ["10001:18", 0]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Outpaint prompt: positive BOTTOM"
+    }
+  },
+  "10008:355": {
+    "inputs": {
+      "text": "{TOMORI_OUTPAINT_BOTTOM_NEGATIVE_PROMPT}",
+      "clip": ["10001:18", 0]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Outpaint prompt: negative BOTTOM"
+    }
+  },
+  "10008:360": {
+    "inputs": {
+      "a": "{TOMORI_OUTPAINT_PAD_LEFT}",
+      "b": 0,
+      "cmp": "a > b"
+    },
+    "class_type": "ImpactCompare",
+    "_meta": {
+      "title": "Outpaint enabled: left pad > 0"
+    }
+  },
+  "10008:361": {
+    "inputs": {
+      "a": "{TOMORI_OUTPAINT_PAD_RIGHT}",
+      "b": 0,
+      "cmp": "a > b"
+    },
+    "class_type": "ImpactCompare",
+    "_meta": {
+      "title": "Outpaint enabled: right pad > 0"
+    }
+  },
+  "10008:362": {
+    "inputs": {
+      "a": "{TOMORI_OUTPAINT_PAD_TOP}",
+      "b": 0,
+      "cmp": "a > b"
+    },
+    "class_type": "ImpactCompare",
+    "_meta": {
+      "title": "Outpaint enabled: top pad > 0"
+    }
+  },
+  "10008:363": {
+    "inputs": {
+      "a": "{TOMORI_OUTPAINT_PAD_BOTTOM}",
+      "b": 0,
+      "cmp": "a > b"
+    },
+    "class_type": "ImpactCompare",
+    "_meta": {
+      "title": "Outpaint enabled: bottom pad > 0"
+    }
+  },
+  "10008:400:crop": {
+    "inputs": {
+      "image": ["10002:178", 0],
+      "width": "{TOMORI_OUTPAINT_LEFT_CROP_WIDTH}",
+      "height": "{TOMORI_OUTPAINT_LEFT_CROP_HEIGHT}",
+      "x": 0,
+      "y": 0
+    },
+    "class_type": "ImageCrop",
+    "_meta": {
+      "title": "LEFT outpaint: crop edge context"
+    }
+  },
+  "10008:400:pad_crop": {
+    "inputs": {
+      "image": ["10008:400:crop", 0],
+      "left": "{TOMORI_OUTPAINT_PAD_LEFT}",
+      "top": 0,
+      "right": 0,
+      "bottom": 0,
+      "feathering": "{TOMORI_OUTPAINT_STAGE_FEATHER}"
+    },
+    "class_type": "ImagePadForOutpaint",
+    "_meta": {
+      "title": "LEFT outpaint: pad cropped edge and create mask"
+    }
+  },
+  "10008:400:encode": {
+    "inputs": {
+      "pixels": ["10008:400:pad_crop", 0],
+      "vae": ["10001:17", 0]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "LEFT outpaint: encode padded crop"
+    }
+  },
+  "10008:400:mask_latent": {
+    "inputs": {
+      "samples": ["10008:400:encode", 0],
+      "mask": ["10008:400:pad_crop", 1]
+    },
+    "class_type": "SetLatentNoiseMask",
+    "_meta": {
+      "title": "LEFT outpaint: apply pad mask to latent"
+    }
+  },
+  "10008:400:sample": {
+    "inputs": {
+      "seed": "{TOMORI_SEED}",
+      "steps": "{TOMORI_OUTPAINT_STEPS}",
+      "cfg": "{TOMORI_OUTPAINT_CFG}",
+      "sampler_name": "{TOMORI_OUTPAINT_SAMPLER}",
+      "scheduler": "simple",
+      "denoise": "{TOMORI_OUTPAINT_DENOISE}",
+      "LanPaint_NumSteps": "{TOMORI_OUTPAINT_THINKING_STEPS}",
+      "LanPaint_PromptMode": "{TOMORI_LANPAINT_PROMPT_MODE}",
+      "LanPaint_Info": "LanPaint KSampler.",
+      "Inpainting_mode": "{TOMORI_LANPAINT_INPAINTING_MODE}",
+      "More Info, Bug Report, Star on GitHub ⭐": "lanpaint_star_button",
+      "model": ["10001:284", 0],
+      "positive": ["10008:350", 0],
+      "negative": ["10008:351", 0],
+      "latent_image": ["10008:400:mask_latent", 0]
+    },
+    "class_type": "LanPaint_KSampler",
+    "_meta": {
+      "title": "LEFT outpaint: LanPaint sampler"
+    }
+  },
+  "10008:400:decode": {
+    "inputs": {
+      "samples": ["10008:400:sample", 0],
+      "vae": ["10001:17", 0]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "LEFT outpaint: decode generated crop"
+    }
+  },
+  "10008:400:blend_crop": {
+    "inputs": {
+      "destination": ["10008:400:pad_crop", 0],
+      "source": ["10008:400:decode", 0],
+      "x": 0,
+      "y": 0,
+      "resize_source": false,
+      "mask": ["10008:400:pad_crop", 1]
+    },
+    "class_type": "ImageCompositeMasked",
+    "_meta": {
+      "title": "LEFT outpaint: blend generated strip into cropped canvas"
+    }
+  },
+  "10008:400:pad_full": {
+    "inputs": {
+      "image": ["10002:178", 0],
+      "left": "{TOMORI_OUTPAINT_PAD_LEFT}",
+      "top": 0,
+      "right": 0,
+      "bottom": 0,
+      "feathering": "{TOMORI_OUTPAINT_STAGE_FEATHER}"
+    },
+    "class_type": "ImagePadForOutpaint",
+    "_meta": {
+      "title": "LEFT outpaint: pad full current canvas"
+    }
+  },
+  "10008:400:paste": {
+    "inputs": {
+      "destination": ["10008:400:pad_full", 0],
+      "source": ["10008:400:blend_crop", 0],
+      "x": 0,
+      "y": 0,
+      "resize_source": false
+    },
+    "class_type": "ImageCompositeMasked",
+    "_meta": {
+      "title": "LEFT outpaint: paste generated crop over full canvas"
+    }
+  },
+  "10008:409": {
+    "inputs": {
+      "tt_value": ["10008:400:paste", 0],
+      "ff_value": ["10002:178", 0],
+      "cond": ["10008:360", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "LEFT outpaint enabled?"
+    }
+  },
+  "10008:420:crop": {
+    "inputs": {
+      "image": ["10008:409", 0],
+      "width": "{TOMORI_OUTPAINT_RIGHT_CROP_WIDTH}",
+      "height": "{TOMORI_OUTPAINT_RIGHT_CROP_HEIGHT}",
+      "x": "{TOMORI_OUTPAINT_RIGHT_CROP_X}",
+      "y": 0
+    },
+    "class_type": "ImageCrop",
+    "_meta": {
+      "title": "RIGHT outpaint: crop edge context"
+    }
+  },
+  "10008:420:pad_crop": {
+    "inputs": {
+      "image": ["10008:420:crop", 0],
+      "left": 0,
+      "top": 0,
+      "right": "{TOMORI_OUTPAINT_PAD_RIGHT}",
+      "bottom": 0,
+      "feathering": "{TOMORI_OUTPAINT_STAGE_FEATHER}"
+    },
+    "class_type": "ImagePadForOutpaint",
+    "_meta": {
+      "title": "RIGHT outpaint: pad cropped edge and create mask"
+    }
+  },
+  "10008:420:encode": {
+    "inputs": {
+      "pixels": ["10008:420:pad_crop", 0],
+      "vae": ["10001:17", 0]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "RIGHT outpaint: encode padded crop"
+    }
+  },
+  "10008:420:mask_latent": {
+    "inputs": {
+      "samples": ["10008:420:encode", 0],
+      "mask": ["10008:420:pad_crop", 1]
+    },
+    "class_type": "SetLatentNoiseMask",
+    "_meta": {
+      "title": "RIGHT outpaint: apply pad mask to latent"
+    }
+  },
+  "10008:420:sample": {
+    "inputs": {
+      "seed": "{TOMORI_SEED}",
+      "steps": "{TOMORI_OUTPAINT_STEPS}",
+      "cfg": "{TOMORI_OUTPAINT_CFG}",
+      "sampler_name": "{TOMORI_OUTPAINT_SAMPLER}",
+      "scheduler": "simple",
+      "denoise": "{TOMORI_OUTPAINT_DENOISE}",
+      "LanPaint_NumSteps": "{TOMORI_OUTPAINT_THINKING_STEPS}",
+      "LanPaint_PromptMode": "{TOMORI_LANPAINT_PROMPT_MODE}",
+      "LanPaint_Info": "LanPaint KSampler.",
+      "Inpainting_mode": "{TOMORI_LANPAINT_INPAINTING_MODE}",
+      "More Info, Bug Report, Star on GitHub ⭐": "lanpaint_star_button",
+      "model": ["10001:284", 0],
+      "positive": ["10008:350", 0],
+      "negative": ["10008:351", 0],
+      "latent_image": ["10008:420:mask_latent", 0]
+    },
+    "class_type": "LanPaint_KSampler",
+    "_meta": {
+      "title": "RIGHT outpaint: LanPaint sampler"
+    }
+  },
+  "10008:420:decode": {
+    "inputs": {
+      "samples": ["10008:420:sample", 0],
+      "vae": ["10001:17", 0]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "RIGHT outpaint: decode generated crop"
+    }
+  },
+  "10008:420:blend_crop": {
+    "inputs": {
+      "destination": ["10008:420:pad_crop", 0],
+      "source": ["10008:420:decode", 0],
+      "x": 0,
+      "y": 0,
+      "resize_source": false,
+      "mask": ["10008:420:pad_crop", 1]
+    },
+    "class_type": "ImageCompositeMasked",
+    "_meta": {
+      "title": "RIGHT outpaint: blend generated strip into cropped canvas"
+    }
+  },
+  "10008:420:pad_full": {
+    "inputs": {
+      "image": ["10008:409", 0],
+      "left": 0,
+      "top": 0,
+      "right": "{TOMORI_OUTPAINT_PAD_RIGHT}",
+      "bottom": 0,
+      "feathering": "{TOMORI_OUTPAINT_STAGE_FEATHER}"
+    },
+    "class_type": "ImagePadForOutpaint",
+    "_meta": {
+      "title": "RIGHT outpaint: pad full current canvas"
+    }
+  },
+  "10008:420:paste": {
+    "inputs": {
+      "destination": ["10008:420:pad_full", 0],
+      "source": ["10008:420:blend_crop", 0],
+      "x": "{TOMORI_OUTPAINT_PAD_RIGHT}",
+      "y": 0,
+      "resize_source": false
+    },
+    "class_type": "ImageCompositeMasked",
+    "_meta": {
+      "title": "RIGHT outpaint: paste generated crop over full canvas"
+    }
+  },
+  "10008:429": {
+    "inputs": {
+      "tt_value": ["10008:420:paste", 0],
+      "ff_value": ["10008:409", 0],
+      "cond": ["10008:361", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "RIGHT outpaint enabled?"
+    }
+  },
+  "10008:440:crop": {
+    "inputs": {
+      "image": ["10008:429", 0],
+      "width": "{TOMORI_OUTPAINT_TOP_CROP_WIDTH}",
+      "height": "{TOMORI_OUTPAINT_TOP_CROP_HEIGHT}",
+      "x": 0,
+      "y": 0
+    },
+    "class_type": "ImageCrop",
+    "_meta": {
+      "title": "TOP outpaint: crop edge context"
+    }
+  },
+  "10008:440:pad_crop": {
+    "inputs": {
+      "image": ["10008:440:crop", 0],
+      "left": 0,
+      "top": "{TOMORI_OUTPAINT_PAD_TOP}",
+      "right": 0,
+      "bottom": 0,
+      "feathering": "{TOMORI_OUTPAINT_STAGE_FEATHER}"
+    },
+    "class_type": "ImagePadForOutpaint",
+    "_meta": {
+      "title": "TOP outpaint: pad cropped edge and create mask"
+    }
+  },
+  "10008:440:encode": {
+    "inputs": {
+      "pixels": ["10008:440:pad_crop", 0],
+      "vae": ["10001:17", 0]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "TOP outpaint: encode padded crop"
+    }
+  },
+  "10008:440:mask_latent": {
+    "inputs": {
+      "samples": ["10008:440:encode", 0],
+      "mask": ["10008:440:pad_crop", 1]
+    },
+    "class_type": "SetLatentNoiseMask",
+    "_meta": {
+      "title": "TOP outpaint: apply pad mask to latent"
+    }
+  },
+  "10008:440:sample": {
+    "inputs": {
+      "seed": "{TOMORI_SEED}",
+      "steps": "{TOMORI_OUTPAINT_STEPS}",
+      "cfg": "{TOMORI_OUTPAINT_CFG}",
+      "sampler_name": "{TOMORI_OUTPAINT_SAMPLER}",
+      "scheduler": "simple",
+      "denoise": "{TOMORI_OUTPAINT_DENOISE}",
+      "LanPaint_NumSteps": "{TOMORI_OUTPAINT_THINKING_STEPS}",
+      "LanPaint_PromptMode": "{TOMORI_LANPAINT_PROMPT_MODE}",
+      "LanPaint_Info": "LanPaint KSampler.",
+      "Inpainting_mode": "{TOMORI_LANPAINT_INPAINTING_MODE}",
+      "More Info, Bug Report, Star on GitHub ⭐": "lanpaint_star_button",
+      "model": ["10001:284", 0],
+      "positive": ["10008:352", 0],
+      "negative": ["10008:353", 0],
+      "latent_image": ["10008:440:mask_latent", 0]
+    },
+    "class_type": "LanPaint_KSampler",
+    "_meta": {
+      "title": "TOP outpaint: LanPaint sampler"
+    }
+  },
+  "10008:440:decode": {
+    "inputs": {
+      "samples": ["10008:440:sample", 0],
+      "vae": ["10001:17", 0]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "TOP outpaint: decode generated crop"
+    }
+  },
+  "10008:440:blend_crop": {
+    "inputs": {
+      "destination": ["10008:440:pad_crop", 0],
+      "source": ["10008:440:decode", 0],
+      "x": 0,
+      "y": 0,
+      "resize_source": false,
+      "mask": ["10008:440:pad_crop", 1]
+    },
+    "class_type": "ImageCompositeMasked",
+    "_meta": {
+      "title": "TOP outpaint: blend generated strip into cropped canvas"
+    }
+  },
+  "10008:440:pad_full": {
+    "inputs": {
+      "image": ["10008:429", 0],
+      "left": 0,
+      "top": "{TOMORI_OUTPAINT_PAD_TOP}",
+      "right": 0,
+      "bottom": 0,
+      "feathering": "{TOMORI_OUTPAINT_STAGE_FEATHER}"
+    },
+    "class_type": "ImagePadForOutpaint",
+    "_meta": {
+      "title": "TOP outpaint: pad full current canvas"
+    }
+  },
+  "10008:440:paste": {
+    "inputs": {
+      "destination": ["10008:440:pad_full", 0],
+      "source": ["10008:440:blend_crop", 0],
+      "x": 0,
+      "y": 0,
+      "resize_source": false
+    },
+    "class_type": "ImageCompositeMasked",
+    "_meta": {
+      "title": "TOP outpaint: paste generated crop over full canvas"
+    }
+  },
+  "10008:449": {
+    "inputs": {
+      "tt_value": ["10008:440:paste", 0],
+      "ff_value": ["10008:429", 0],
+      "cond": ["10008:362", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "TOP outpaint enabled?"
+    }
+  },
+  "10008:460:crop": {
+    "inputs": {
+      "image": ["10008:449", 0],
+      "width": "{TOMORI_OUTPAINT_BOTTOM_CROP_WIDTH}",
+      "height": "{TOMORI_OUTPAINT_BOTTOM_CROP_HEIGHT}",
+      "x": 0,
+      "y": "{TOMORI_OUTPAINT_BOTTOM_CROP_Y}"
+    },
+    "class_type": "ImageCrop",
+    "_meta": {
+      "title": "BOTTOM outpaint: crop edge context"
+    }
+  },
+  "10008:460:pad_crop": {
+    "inputs": {
+      "image": ["10008:460:crop", 0],
+      "left": 0,
+      "top": 0,
+      "right": 0,
+      "bottom": "{TOMORI_OUTPAINT_PAD_BOTTOM}",
+      "feathering": "{TOMORI_OUTPAINT_STAGE_FEATHER}"
+    },
+    "class_type": "ImagePadForOutpaint",
+    "_meta": {
+      "title": "BOTTOM outpaint: pad cropped edge and create mask"
+    }
+  },
+  "10008:460:encode": {
+    "inputs": {
+      "pixels": ["10008:460:pad_crop", 0],
+      "vae": ["10001:17", 0]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "BOTTOM outpaint: encode padded crop"
+    }
+  },
+  "10008:460:mask_latent": {
+    "inputs": {
+      "samples": ["10008:460:encode", 0],
+      "mask": ["10008:460:pad_crop", 1]
+    },
+    "class_type": "SetLatentNoiseMask",
+    "_meta": {
+      "title": "BOTTOM outpaint: apply pad mask to latent"
+    }
+  },
+  "10008:460:sample": {
+    "inputs": {
+      "seed": "{TOMORI_SEED}",
+      "steps": "{TOMORI_OUTPAINT_STEPS}",
+      "cfg": "{TOMORI_OUTPAINT_CFG}",
+      "sampler_name": "{TOMORI_OUTPAINT_SAMPLER}",
+      "scheduler": "simple",
+      "denoise": "{TOMORI_OUTPAINT_DENOISE}",
+      "LanPaint_NumSteps": "{TOMORI_OUTPAINT_THINKING_STEPS}",
+      "LanPaint_PromptMode": "{TOMORI_LANPAINT_PROMPT_MODE}",
+      "LanPaint_Info": "LanPaint KSampler.",
+      "Inpainting_mode": "{TOMORI_LANPAINT_INPAINTING_MODE}",
+      "More Info, Bug Report, Star on GitHub ⭐": "lanpaint_star_button",
+      "model": ["10001:284", 0],
+      "positive": ["10008:354", 0],
+      "negative": ["10008:355", 0],
+      "latent_image": ["10008:460:mask_latent", 0]
+    },
+    "class_type": "LanPaint_KSampler",
+    "_meta": {
+      "title": "BOTTOM outpaint: LanPaint sampler"
+    }
+  },
+  "10008:460:decode": {
+    "inputs": {
+      "samples": ["10008:460:sample", 0],
+      "vae": ["10001:17", 0]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "BOTTOM outpaint: decode generated crop"
+    }
+  },
+  "10008:460:blend_crop": {
+    "inputs": {
+      "destination": ["10008:460:pad_crop", 0],
+      "source": ["10008:460:decode", 0],
+      "x": 0,
+      "y": 0,
+      "resize_source": false,
+      "mask": ["10008:460:pad_crop", 1]
+    },
+    "class_type": "ImageCompositeMasked",
+    "_meta": {
+      "title": "BOTTOM outpaint: blend generated strip into cropped canvas"
+    }
+  },
+  "10008:460:pad_full": {
+    "inputs": {
+      "image": ["10008:449", 0],
+      "left": 0,
+      "top": 0,
+      "right": 0,
+      "bottom": "{TOMORI_OUTPAINT_PAD_BOTTOM}",
+      "feathering": "{TOMORI_OUTPAINT_STAGE_FEATHER}"
+    },
+    "class_type": "ImagePadForOutpaint",
+    "_meta": {
+      "title": "BOTTOM outpaint: pad full current canvas"
+    }
+  },
+  "10008:460:paste": {
+    "inputs": {
+      "destination": ["10008:460:pad_full", 0],
+      "source": ["10008:460:blend_crop", 0],
+      "x": 0,
+      "y": "{TOMORI_OUTPAINT_PAD_BOTTOM}",
+      "resize_source": false
+    },
+    "class_type": "ImageCompositeMasked",
+    "_meta": {
+      "title": "BOTTOM outpaint: paste generated crop over full canvas"
+    }
+  },
+  "10008:469": {
+    "inputs": {
+      "tt_value": ["10008:460:paste", 0],
+      "ff_value": ["10008:449", 0],
+      "cond": ["10008:363", 0]
+    },
+    "class_type": "ImpactConditionalBranch",
+    "_meta": {
+      "title": "BOTTOM outpaint enabled?"
+    }
+  },
+  "10010:10005:194:florence": {
+    "inputs": {
+      "image": ["10002:178", 0],
+      "model_name": "{TOMORI_FLORENCE2_MODEL}",
+      "task": "Polygon Mask (text prompt)",
+      "precision": "{TOMORI_FLORENCE2_PRECISION}",
+      "attention": "{TOMORI_FLORENCE2_ATTENTION}",
+      "fill_mask": true,
+      "output_mask_select": "",
+      "keep_model_loaded": "{TOMORI_FLORENCE2_KEEP_MODEL_LOADED}",
+      "text_prompt": "{TOMORI_MASK_PROMPT}"
+    },
+    "class_type": "AILab_Florence2",
+    "_meta": {
+      "title": "Mask detect: requested target (Florence2)"
+    }
+  },
+  "10010:10006:232:florence": {
+    "inputs": {
+      "image": ["10002:178", 0],
+      "model_name": "{TOMORI_FLORENCE2_MODEL}",
+      "task": "Polygon Mask (text prompt)",
+      "precision": "{TOMORI_FLORENCE2_PRECISION}",
+      "attention": "{TOMORI_FLORENCE2_ATTENTION}",
+      "fill_mask": true,
+      "output_mask_select": "",
+      "keep_model_loaded": "{TOMORI_FLORENCE2_KEEP_MODEL_LOADED}",
+      "text_prompt": "{TOMORI_INPAINT_FACE_MASK_PROMPT}"
+    },
+    "class_type": "AILab_Florence2",
+    "_meta": {
+      "title": "Protection mask: face detect (Florence2)"
+    }
+  },
+  "10010:10006:237:florence": {
+    "inputs": {
+      "image": ["10002:178", 0],
+      "model_name": "{TOMORI_FLORENCE2_MODEL}",
+      "task": "Polygon Mask (text prompt)",
+      "precision": "{TOMORI_FLORENCE2_PRECISION}",
+      "attention": "{TOMORI_FLORENCE2_ATTENTION}",
+      "fill_mask": true,
+      "output_mask_select": "",
+      "keep_model_loaded": "{TOMORI_FLORENCE2_KEEP_MODEL_LOADED}",
+      "text_prompt": "{TOMORI_INPAINT_CLOTHING_MASK_PROMPT}"
+    },
+    "class_type": "AILab_Florence2",
+    "_meta": {
+      "title": "Protection mask: clothing prompt detect (Florence2)"
+    }
+  },
+  "10010:10006:242:florence": {
+    "inputs": {
+      "image": ["10002:178", 0],
+      "model_name": "{TOMORI_FLORENCE2_MODEL}",
+      "task": "Polygon Mask (text prompt)",
+      "precision": "{TOMORI_FLORENCE2_PRECISION}",
+      "attention": "{TOMORI_FLORENCE2_ATTENTION}",
+      "fill_mask": true,
+      "output_mask_select": "",
+      "keep_model_loaded": "{TOMORI_FLORENCE2_KEEP_MODEL_LOADED}",
+      "text_prompt": "{TOMORI_INPAINT_ARMS_MASK_PROMPT}"
+    },
+    "class_type": "AILab_Florence2",
+    "_meta": {
+      "title": "Protection mask: arms detect (Florence2)"
+    }
+  },
+  "10010:10006:247:florence": {
+    "inputs": {
+      "image": ["10002:178", 0],
+      "model_name": "{TOMORI_FLORENCE2_MODEL}",
+      "task": "Polygon Mask (text prompt)",
+      "precision": "{TOMORI_FLORENCE2_PRECISION}",
+      "attention": "{TOMORI_FLORENCE2_ATTENTION}",
+      "fill_mask": true,
+      "output_mask_select": "",
+      "keep_model_loaded": "{TOMORI_FLORENCE2_KEEP_MODEL_LOADED}",
+      "text_prompt": "{TOMORI_INPAINT_NECK_MASK_PROMPT}"
+    },
+    "class_type": "AILab_Florence2",
+    "_meta": {
+      "title": "Protection mask: neck detect (Florence2)"
+    }
+  },
+  "10010:10006:252:florence": {
+    "inputs": {
+      "image": ["10002:178", 0],
+      "model_name": "{TOMORI_FLORENCE2_MODEL}",
+      "task": "Polygon Mask (text prompt)",
+      "precision": "{TOMORI_FLORENCE2_PRECISION}",
+      "attention": "{TOMORI_FLORENCE2_ATTENTION}",
+      "fill_mask": true,
+      "output_mask_select": "",
+      "keep_model_loaded": "{TOMORI_FLORENCE2_KEEP_MODEL_LOADED}",
+      "text_prompt": "{TOMORI_INPAINT_SKIN_MASK_PROMPT}"
+    },
+    "class_type": "AILab_Florence2",
+    "_meta": {
+      "title": "Protection mask: skin detect (Florence2)"
+    }
+  }
+}

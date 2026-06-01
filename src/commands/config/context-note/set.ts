@@ -14,12 +14,13 @@
 import type { ButtonInteraction, ChatInputCommandInteraction, Client, ModalSubmitInteraction } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { configRepository, personaRepository } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 
 const MODAL_CUSTOM_ID = "config_context_note_modal";
 const CONTEXT_NOTE_MAX_LENGTH = 2000;
@@ -102,7 +103,7 @@ export async function execute(
   try {
     // 5. Persona scope: show paginated persona picker first
     if (scope === "persona") {
-      const allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+      const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
 
       if (allPersonas.length === 0) {
         await replyInfoEmbed(interaction, locale, {
@@ -131,7 +132,7 @@ export async function execute(
       modalHost = personaSelection.interaction;
       selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
 
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         return;
       }
     }
@@ -213,20 +214,16 @@ export async function execute(
     const isRemoving = !rawNote;
 
     // 11. Persist to the appropriate table
-    if (scope === "persona" && selectedPersona?.tomori_id) {
-      await sql`
-        UPDATE tomoris
-        SET context_note = ${noteToStore},
-            context_note_depth = ${depthToStore}
-        WHERE tomori_id = ${selectedPersona.tomori_id}
-      `;
-    } else {
-      await sql`
-        UPDATE tomori_configs
-        SET context_note = ${noteToStore},
-            context_note_depth = ${depthToStore}
-        WHERE server_id = ${tomoriState.server_id}
-      `;
+    const persisted =
+      scope === "persona" && selectedPersona?.persona_id
+        ? await personaRepository.setContextNote(selectedPersona.persona_id, noteToStore, depthToStore)
+        : await configRepository.updateChatConfig(tomoriState.server_id, {
+            context_note: noteToStore,
+            context_note_depth: depthToStore,
+          });
+
+    if (!persisted) {
+      throw new Error("Failed to persist context note");
     }
 
     // 12. Invalidate cache AFTER the successful write
@@ -235,7 +232,7 @@ export async function execute(
     // 13. Reply with scoped success message
     const scopeLabel =
       scope === "persona" && selectedPersona
-        ? selectedPersona.tomori_nickname
+        ? selectedPersona.persona_nickname
         : localizer(locale, "commands.config.context-note.set.global_option");
 
     if (isRemoving) {
@@ -258,7 +255,7 @@ export async function execute(
     }
 
     log.info(
-      `Context note ${isRemoving ? "cleared" : "updated"} for server ${serverId} scope=${scope}${selectedPersona ? ` persona=${selectedPersona.tomori_id}` : ""} depth=${depthToStore}`,
+      `Context note ${isRemoving ? "cleared" : "updated"} for server ${serverId} scope=${scope}${selectedPersona ? ` persona=${selectedPersona.persona_id}` : ""} depth=${depthToStore}`,
     );
   } catch (error) {
     log.error("Failed to set context note:", error as Error);

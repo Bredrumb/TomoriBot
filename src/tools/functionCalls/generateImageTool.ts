@@ -6,18 +6,18 @@
 
 import { AttachmentBuilder } from "discord.js";
 import { GoogleGenAI } from "@google/genai";
+import sharp from "sharp";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import { resolveAvatarByIdentity } from "@/utils/discord/avatarResolver";
-import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhookManager";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import {
   buildImageToolNoticeDescription,
   buildReferencedMessageUrl,
   sendToolProgressNotice,
 } from "@/utils/discord/toolProgressNotice";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
-import { sql } from "../../utils/db/client";
-import { checkImageQuota, incrementImageQuota } from "../../utils/quota/imageQuotaManager";
+import { checkImageQuota, incrementImageQuota, type QuotaCheckResult } from "../../utils/quota/imageQuotaManager";
 import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
 import { resolveNativeImageGenerationCapability } from "@/utils/provider/providerCapabilityResolver";
 import { generateCustomImageViaEndpoint } from "@/providers/custom/customEndpointDispatcher";
@@ -26,38 +26,164 @@ import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/ut
 import { formatCustomEndpointModelDisplay } from "@/utils/provider/customProviderUtils";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
+import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
+import { MessageIdMap } from "@/utils/text/messageIdMap";
+import type { ProviderNativeImageGenerationResult } from "@/types/provider/featureInterfaces";
+import { optimizeImageBuffer } from "@/utils/image/imageProcessor";
+
+const IMAGE_REFERENCE_MAX_COUNT = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_COUNT ?? "3", 10);
+const IMAGE_REFERENCE_MAX_TOTAL_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_TOTAL_BYTES ?? "6291456", 10);
+const IMAGE_REFERENCE_TINY_MAX_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_TINY_MAX_BYTES ?? "950000", 10);
+const IMAGE_REFERENCE_MAX_SINGLE_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_SINGLE_BYTES ?? "2097152", 10);
 
 /**
  * Tool for generating images using the active provider's native image API
  */
 export class GenerateImageTool extends BaseTool {
   name = "generate_image";
-  description =
-    "Generate an AI image using the active provider's native image model. Use this only when the user explicitly asks you to make, draw, generate, create, edit, or continue an image; do not call it for casual visual discussion. If the user asks you to make/draw/generate an image and this tool is available, call this tool instead of only describing the image. Provide a detailed text prompt describing what image you want to create. If you provide a media_id or target_identity reference, focus the prompt on edits or additions only and avoid re-describing the reference image. You can also specify an aspect ratio (default is 1:1). After generating, the image will be sent directly to the Discord channel.";
+  description = "Generate, edit, or outpaint an image. Sends the result directly to Discord.";
   category = "utility" as const;
   requiresFeatureFlag = "image_gen";
 
+  // Keep these schema descriptions short. Long tool descriptions get injected into
+  // every model call and were starting to drown out the user's actual request.
   parameters: ToolParameterSchema = {
     type: "object",
     properties: {
       prompt: {
         type: "string",
         description:
-          "A detailed text description of the image you want to generate. Be specific about style, composition, colors, mood, and any important details. For image-to-image, describe only the modifications or additions you want and avoid re-describing the reference image.",
+          "Describe the desired image. For inpaint, describe only the local replacement. For outpaint, describe what should continue into the new canvas.",
       },
       media_id: {
         type: "string",
+        description: "Reference media ID such as media_1. Use for img2img, inpaint, or outpaint.",
+      },
+      inpaint: {
+        type: "boolean",
+        description: "Set true only for localized edits. Do not set for outpaint.",
+      },
+      mask_prompt: {
+        type: "string",
         description:
-          "Optional: The media reference ID (e.g., media_1) from the system hint for the message containing images to use as reference for image-to-image generation. The tool will extract all images from this message and use them to guide the generation along with your prompt. If not provided, generates a new image from scratch (text-to-image).",
+          "For inpaint: simplest generic noun for the existing target. Use 'body', 'dress', 'earring', or 'background'; avoid possessives/adjectives like 'the baby's body'. Do not describe the requested change.",
+      },
+      clothing_segment_categories: {
+        type: "array",
+        description:
+          "Clothing-parser categories for clothing targets. For dresses, include Dress, Upper-clothes, and Skirt.",
+        items: {
+          type: "string",
+          enum: [
+            "Hat",
+            "Sunglasses",
+            "Upper-clothes",
+            "Skirt",
+            "Dress",
+            "Belt",
+            "Pants",
+            "Bag",
+            "Scarf",
+            "Left-shoe",
+            "Right-shoe",
+          ],
+        },
+      },
+      clothing_mode: {
+        type: "boolean",
+        description: "Set true for clothing, worn accessories, jewelry, or paired wearable items.",
+      },
+      mask_threshold: {
+        type: "number",
+        description: "Inpaint detection threshold. Lower is broader; higher is stricter.",
+      },
+      mask_grow: {
+        type: "number",
+        description: "Mask expansion in pixels.",
+      },
+      mask_feather: {
+        type: "number",
+        description: "Mask feather in pixels.",
+      },
+      cfg: {
+        type: "number",
+        description: "Prompt guidance. Higher follows the prompt more strongly.",
+      },
+      denoise: {
+        type: "number",
+        description: "Img2img/inpaint strength from 0 to 1. Lower preserves more.",
+      },
+      mask_mode: {
+        type: "string",
+        description: "Use target to edit the mask_prompt region; background edits surroundings while protecting it.",
+        enum: ["target", "background"],
+      },
+      inpaint_preset: {
+        type: "string",
+        description: "Inpaint category. Prefer presets over raw tuning.",
+        enum: ["small_detail", "tight_recolor", "broad_recolor", "background", "extend"],
+      },
+      inpaint_mode: {
+        type: "string",
+        description: "Inpaint behavior: normal edits the mask, extend grows nearby content, outpaint expands canvas.",
+        enum: ["normal", "extend", "outpaint"],
+      },
+      outpaint: {
+        type: "boolean",
+        description:
+          "Set true to expand the canvas. Requires media_id or target_identity. Do not also set inpaint=true.",
+      },
+      outpaint_strategy: {
+        type: "string",
+        description: "Outpaint strategy. full_canvas is the default.",
+        enum: ["full_canvas", "edge_extend", "zoom_out"],
+      },
+      outpaint_amount: {
+        type: "string",
+        description: "Canvas expansion preset: slight, moderate, large, or dramatic.",
+        enum: ["slight", "moderate", "large", "dramatic"],
+      },
+      outpaint_left_prompt: {
+        type: "string",
+        description: "Left-edge outpaint guidance.",
+      },
+      outpaint_right_prompt: {
+        type: "string",
+        description: "Right-edge outpaint guidance.",
+      },
+      outpaint_top_prompt: {
+        type: "string",
+        description: "Top-edge outpaint guidance.",
+      },
+      outpaint_bottom_prompt: {
+        type: "string",
+        description: "Bottom-edge outpaint guidance.",
+      },
+      extend_direction: {
+        type: "string",
+        description:
+          "Extension direction. Use all for zoom-out/pull-back requests, or one edge for directional expansions.",
+        enum: ["down", "up", "left", "right", "down_left", "down_right", "up_left", "up_right", "all"],
+      },
+      extend_pixels: {
+        type: "number",
+        description: "Approximate extension size in pixels. Prefer outpaint_amount when possible.",
+      },
+      outpaint_overlap: {
+        type: "number",
+        description: "Optional outpaint transition overlap in pixels.",
+      },
+      outpaint_zoom_scale: {
+        type: "number",
+        description: "Optional zoom-out source scale from 0.5 to 0.95.",
       },
       target_identity: {
         type: "string",
-        description:
-          "Optional: User or persona identity whose profile picture/avatar should be used as a reference image. Accepts 'self', an exact persona nickname, or a natural user name from the current conversation or server. Deprecated raw IDs are still accepted at execution time for compatibility. Can be combined with media_id references.",
+        description: "User/persona identity whose avatar should be used as a reference.",
       },
       aspect_ratio: {
         type: "string",
-        description: "Optional: The aspect ratio for the generated image. Default is '1:1' (square).",
+        description: "Aspect ratio. Default is 1:1.",
         enum: ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"],
       },
     },
@@ -90,23 +216,241 @@ export class GenerateImageTool extends BaseTool {
     return context.tomoriState.config.imagegen_enabled;
   }
 
+  private shouldUseInpaint(args: Record<string, unknown>): boolean {
+    if (
+      typeof args.mask_mode === "string" ||
+      typeof args.mask_prompt === "string" ||
+      typeof args.inpaint_preset === "string"
+    ) {
+      return true;
+    }
+    if (typeof args.inpaint_mode === "string" && ["extend", "outpaint"].includes(args.inpaint_mode.toLowerCase())) {
+      return true;
+    }
+    // Outpaint is implemented by providers as a reference-image edit with a
+    // generated padding mask, so it intentionally uses the inpaint-capable path.
+    if (args.outpaint === true) {
+      return true;
+    }
+    if (typeof args.outpaint === "string" && args.outpaint.toLowerCase() === "true") {
+      return true;
+    }
+    if (args.inpaint === true) {
+      return true;
+    }
+    if (typeof args.inpaint === "string") {
+      return args.inpaint.toLowerCase() === "true";
+    }
+
+    return false;
+  }
+
+  private shouldUseOutpaint(args: Record<string, unknown>): boolean {
+    if (args.outpaint === true) {
+      return true;
+    }
+    if (typeof args.outpaint === "string" && args.outpaint.toLowerCase() === "true") {
+      return true;
+    }
+    return typeof args.inpaint_mode === "string" && args.inpaint_mode.toLowerCase() === "outpaint";
+  }
+
+  private isExplicitInpaintTrue(args: Record<string, unknown>): boolean {
+    if (args.inpaint === true) {
+      return true;
+    }
+    return typeof args.inpaint === "string" && args.inpaint.toLowerCase() === "true";
+  }
+
+  private resolveOutpaintDirection(prompt: string, direction: string | null, strategy: string | null): string | null {
+    if (strategy === "zoom_out") {
+      return "all";
+    }
+    if (direction && direction !== "all") {
+      return direction;
+    }
+    const normalizedPrompt = prompt.toLowerCase();
+    const explicitlyZoomOut =
+      /\b(?:zoom out|pull back|wider shot|wide shot|wide[-\s]?angle(?: shot)?|wide framing|wider view|wide view|more distant shot)\b/.test(
+        normalizedPrompt,
+      );
+    const explicitlyAllDirections = /\b(?:all directions|all sides|every side|around the whole image)\b/.test(
+      normalizedPrompt,
+    );
+    if (explicitlyZoomOut || explicitlyAllDirections) {
+      return "all";
+    }
+
+    if (
+      /\b(?:legs?|feet|foot|shoes?|boots?|knees?|calves|thighs?|lower body|lower half|full[-\s]?body|full outfit|whole outfit|entire outfit|entire silhouette|floor|ground|below|underneath)\b/.test(
+        normalizedPrompt,
+      )
+    ) {
+      return "down";
+    }
+    if (/\b(?:sky|clouds?|ceiling|headroom|top of (?:the )?head|above)\b/.test(normalizedPrompt)) {
+      return "up";
+    }
+    return direction;
+  }
+
+  private resolveOutpaintStrategy(prompt: string, strategy: string | null): string | null {
+    const normalizedStrategy =
+      strategy
+        ?.trim()
+        .toLowerCase()
+        .replace(/[-\s]+/g, "_") ?? "";
+    if (
+      normalizedStrategy === "full_canvas" ||
+      normalizedStrategy === "edge_extend" ||
+      normalizedStrategy === "zoom_out"
+    ) {
+      return normalizedStrategy;
+    }
+    if (/\b(?:full[-\s]?canvas|novelai[-\s]?style|expanded[-\s]?canvas)\b/i.test(prompt)) {
+      return "full_canvas";
+    }
+    if (
+      /\b(?:zoom out|pull back|wider shot|wide shot|wide[-\s]?angle(?: shot)?|wide framing|wider view|wide view|more distant shot|full[-\s]?body|full outfit|whole outfit|entire outfit|entire silhouette)\b/i.test(
+        prompt,
+      )
+    ) {
+      return "full_canvas";
+    }
+    return null;
+  }
+
+  private formatOutpaintDirection(direction: string | null): string {
+    const normalized = direction?.trim().toLowerCase() || "down";
+    if (normalized === "all") {
+      return "all directions";
+    }
+    return normalized.replaceAll("_", " ");
+  }
+
+  private formatNoticeValue(value: string, maxLength = 120): string {
+    const cleaned = value.replaceAll("`", "'").replace(/\s+/g, " ").trim();
+    return cleaned.length > maxLength ? `${cleaned.slice(0, maxLength - 3).trimEnd()}...` : cleaned;
+  }
+
+  private parseClampedNumber(value: unknown, min: number, max: number): number | null {
+    if (value === undefined || value === null || value === "") {
+      return null;
+    }
+
+    const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+    if (!Number.isFinite(parsed)) {
+      return null;
+    }
+
+    return Math.min(max, Math.max(min, parsed));
+  }
+
+  private parseOptionalBoolean(value: unknown): boolean | null {
+    if (typeof value === "boolean") {
+      return value;
+    }
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === "true") {
+        return true;
+      }
+      if (normalized === "false") {
+        return false;
+      }
+    }
+
+    return null;
+  }
+
+  private resolveMediaId(rawMediaId: string | undefined, context: ToolContext): string | undefined {
+    if (!rawMediaId) {
+      return undefined;
+    }
+
+    return MessageIdMap.isOpaqueKey(rawMediaId)
+      ? (context.messageIdMap ?? context.streamContext?.messageIdMap)?.resolve(rawMediaId)
+      : rawMediaId;
+  }
+
+  private shouldSuppressThoughtLogDiagnostic(context: ToolContext): boolean {
+    if (!context.tomoriState.config.thought_log_channel_disc_id) {
+      return true;
+    }
+    if (
+      "isDMBased" in context.channel &&
+      typeof context.channel.isDMBased === "function" &&
+      context.channel.isDMBased()
+    ) {
+      return true;
+    }
+
+    const privateChannelIds = context.tomoriState.config.private_channel_ids ?? [];
+    const parentId = context.channel.isThread() ? context.channel.parentId : null;
+    return (
+      privateChannelIds.includes(context.channel.id) || (parentId !== null && privateChannelIds.includes(parentId))
+    );
+  }
+
+  private async sendDiagnosticImagesToThoughtLog(
+    context: ToolContext,
+    diagnostics: ProviderNativeImageGenerationResult["diagnosticImages"],
+    prompt: string,
+  ): Promise<void> {
+    if (!diagnostics?.length || this.shouldSuppressThoughtLogDiagnostic(context)) {
+      return;
+    }
+
+    const thoughtLogChannelId = context.tomoriState.config.thought_log_channel_disc_id;
+    if (!thoughtLogChannelId) {
+      return;
+    }
+
+    const thoughtLogChannel = await context.client.channels.fetch(thoughtLogChannelId).catch(() => null);
+    if (
+      !thoughtLogChannel ||
+      !("send" in thoughtLogChannel) ||
+      typeof thoughtLogChannel.send !== "function" ||
+      ("isDMBased" in thoughtLogChannel &&
+        typeof thoughtLogChannel.isDMBased === "function" &&
+        thoughtLogChannel.isDMBased())
+    ) {
+      log.warn(`GenerateImageTool: Thought log channel ${thoughtLogChannelId} is missing. Skipping diagnostic image.`);
+      return;
+    }
+
+    const promptPreview = prompt.length > 700 ? `${prompt.slice(0, 697).trimEnd()}...` : prompt;
+    const sourceLine = context.message?.url ?? context.channel.toString();
+    for (const [index, diagnostic] of diagnostics.entries()) {
+      const extension = diagnostic.mimeType === "image/jpeg" ? "jpg" : "png";
+      const attachment = new AttachmentBuilder(Buffer.from(diagnostic.imageData, "base64"), {
+        name: diagnostic.filename ?? `inpaint_mask_${index + 1}.${extension}`,
+      });
+      await thoughtLogChannel.send({
+        content: [
+          `**Image generation diagnostic:** ${diagnostic.label}`,
+          ...(diagnostic.details ? [`**Settings**\n${diagnostic.details}`] : []),
+          `Source: ${sourceLine}`,
+          `Prompt: ${promptPreview}`,
+        ].join("\n"),
+        files: [attachment],
+      });
+    }
+  }
+
   /**
-   * Get the diffusion model codename from the database
+   * Get the diffusion model codename from the database via repository
    * @param diffusionModelId - Database ID of the diffusion model
    * @returns The model codename string (e.g., "gemini-2.5-flash-image")
    */
   private async getDiffusionModelCodename(diffusionModelId: number): Promise<string> {
-    const result = await sql`
-			SELECT codename
-			FROM image_diffusion_models
-			WHERE diffusion_model_id = ${diffusionModelId}
-		`.values();
+    const model = await llmModelRepo.loadDiffusionModelById(diffusionModelId);
 
-    if (result.length === 0) {
+    if (!model) {
       throw new Error(`Diffusion model not found in database: ${diffusionModelId}`);
     }
 
-    return result[0][0] as string;
+    return model.codename;
   }
 
   private async sendGeneratedImage(
@@ -216,12 +560,12 @@ export class GenerateImageTool extends BaseTool {
       }> = [];
 
       // 2. Extract images from direct attachments
-      const imageAttachments = message.attachments.filter((attachment) => attachment.contentType?.startsWith("image/"));
+      const imageAttachments = message.attachments.filter((attachment) => this.isLikelyImageAttachment(attachment));
 
       for (const attachment of imageAttachments.values()) {
         imageUrls.push({
           url: attachment.url,
-          mimeType: attachment.contentType || "image/jpeg",
+          mimeType: attachment.contentType || this.inferImageMimeType(attachment.name || attachment.url || ""),
           source: `attachment: ${attachment.name}`,
         });
       }
@@ -284,6 +628,7 @@ export class GenerateImageTool extends BaseTool {
           const imageResponse = await safeDownload(imageInfo.url, {
             maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
             timeoutMs: 15_000,
+            externalSignal: context.abortSignal,
           });
           if (!imageResponse.success || !imageResponse.buffer) {
             log.warn(`Failed to fetch image from ${imageInfo.source}: ${imageResponse.details ?? imageResponse.error}`);
@@ -291,11 +636,11 @@ export class GenerateImageTool extends BaseTool {
           }
 
           // Convert to base64
-          const base64ImageData = imageResponse.buffer.toString("base64");
+          const optimized = await optimizeImageBuffer(imageResponse.buffer, imageInfo.mimeType);
 
           inlineDataArray.push({
-            mimeType: imageInfo.mimeType,
-            data: base64ImageData,
+            mimeType: optimized.mimeType,
+            data: optimized.data,
           });
 
           log.info(`Successfully converted image from ${imageInfo.source} to base64`);
@@ -331,6 +676,7 @@ export class GenerateImageTool extends BaseTool {
     prompt: string,
     aspectRatio: string,
     referenceImages?: Array<{ mimeType: string; data: string }>,
+    abortSignal?: AbortSignal,
   ): Promise<{ imageData: string | null; mimeType: string | null }> {
     // Helpful debug log for provider/model combo
     log.info(
@@ -417,6 +763,7 @@ export class GenerateImageTool extends BaseTool {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(requestPayload),
+      signal: abortSignal,
     });
 
     if (!response.ok) {
@@ -482,6 +829,7 @@ export class GenerateImageTool extends BaseTool {
         const imageResponse = await safeDownload(imageUrl, {
           maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
           timeoutMs: 15_000,
+          externalSignal: abortSignal,
         });
         if (imageResponse.success && imageResponse.buffer) {
           const mimeType = imageResponse.contentType?.split(";")[0] || null;
@@ -521,7 +869,6 @@ export class GenerateImageTool extends BaseTool {
       };
     }
 
-    // Check image generation quota BEFORE generating
     const userDiscId = context.userId || context.message?.author.id || "";
     if (!userDiscId) {
       return {
@@ -530,59 +877,130 @@ export class GenerateImageTool extends BaseTool {
       };
     }
 
-    const quotaCheck = await checkImageQuota(context.tomoriState.server_id, userDiscId);
+    // Extract arguments
+    const prompt = args.prompt as string;
+    const rawMediaId = args.media_id as string | undefined;
+    const messageId = this.resolveMediaId(rawMediaId, context);
+    const targetIdentity = (args.target_identity as string | undefined) ?? (args.user_id as string | undefined);
+    const requestedAspectRatio = typeof args.aspect_ratio === "string" ? args.aspect_ratio : null;
+    let aspectRatio = requestedAspectRatio || "1:1";
+    const usesReferences = !!(messageId || targetIdentity);
+    const inpaint = this.shouldUseInpaint(args);
+    const outpaint = this.shouldUseOutpaint(args);
+    const explicitInpaint = this.isExplicitInpaintTrue(args);
+    const maskPrompt = (args.mask_prompt as string | undefined)?.trim() || (outpaint ? "main foreground object" : null);
+    const maskThreshold = this.parseClampedNumber(args.mask_threshold, 0, 1);
+    const maskGrow = this.parseClampedNumber(args.mask_grow, 0, 128);
+    const maskFeather = this.parseClampedNumber(args.mask_feather, 0, 100);
+    const clothingSegmentCategories = Array.isArray(args.clothing_segment_categories)
+      ? args.clothing_segment_categories.filter((category): category is string => typeof category === "string")
+      : null;
+    const clothingMode = this.parseOptionalBoolean(args.clothing_mode);
+    const cfg = this.parseClampedNumber(args.cfg, 0, 30);
+    const denoise = this.parseClampedNumber(args.denoise, 0, 1);
+    const maskMode = typeof args.mask_mode === "string" ? args.mask_mode : null;
+    const inpaintPreset = typeof args.inpaint_preset === "string" ? args.inpaint_preset : null;
+    const inpaintMode = outpaint ? "outpaint" : typeof args.inpaint_mode === "string" ? args.inpaint_mode : null;
+    const rawOutpaintStrategy = typeof args.outpaint_strategy === "string" ? args.outpaint_strategy : null;
+    const outpaintStrategy = outpaint ? this.resolveOutpaintStrategy(prompt, rawOutpaintStrategy) : rawOutpaintStrategy;
+    const outpaintAmount = typeof args.outpaint_amount === "string" ? args.outpaint_amount : null;
+    const rawExtendDirection = typeof args.extend_direction === "string" ? args.extend_direction : null;
+    const extendDirection = outpaint
+      ? this.resolveOutpaintDirection(prompt, rawExtendDirection, outpaintStrategy)
+      : rawExtendDirection;
+    const extendPixels = this.parseClampedNumber(args.extend_pixels, 0, 512);
+    const outpaintOverlap = this.parseClampedNumber(args.outpaint_overlap, 0, 256);
+    const outpaintZoomScale = this.parseClampedNumber(args.outpaint_zoom_scale, 0.5, 0.95);
+    const outpaintLeftPrompt =
+      typeof args.outpaint_left_prompt === "string" ? args.outpaint_left_prompt.trim() || null : null;
+    const outpaintRightPrompt =
+      typeof args.outpaint_right_prompt === "string" ? args.outpaint_right_prompt.trim() || null : null;
+    const outpaintTopPrompt =
+      typeof args.outpaint_top_prompt === "string" ? args.outpaint_top_prompt.trim() || null : null;
+    const outpaintBottomPrompt =
+      typeof args.outpaint_bottom_prompt === "string" ? args.outpaint_bottom_prompt.trim() || null : null;
 
-    if (!quotaCheck.allowed) {
-      // Build user-friendly error message based on quota type
-      let errorMessage = "";
-      let resetInfo = "";
-
-      if (quotaCheck.resetTime) {
-        const now = new Date();
-        const resetTime = quotaCheck.resetTime;
-        const hoursUntilReset = Math.ceil((resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
-
-        if (hoursUntilReset < 24) {
-          resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_hours", {
-            hours: hoursUntilReset.toString(),
-          });
-        } else {
-          const daysUntilReset = Math.ceil(hoursUntilReset / 24);
-          resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_days", {
-            days: daysUntilReset.toString(),
-          });
-        }
-      }
-
-      if (quotaCheck.reason === "user_quota_exceeded") {
-        errorMessage = localizer(context.locale, "tools.generate_image.user_quota_exceeded", { reset_info: resetInfo });
-      } else if (quotaCheck.reason === "serverwide_quota_exceeded") {
-        errorMessage = localizer(context.locale, "tools.generate_image.serverwide_quota_exceeded", {
-          reset_info: resetInfo,
-        });
-      } else {
-        errorMessage = localizer(context.locale, "tools.generate_image.quota_exceeded_generic");
-      }
-
+    if (rawMediaId && !messageId) {
       return {
         success: false,
-        error: "Image generation quota exceeded",
-        message: errorMessage,
+        error: `Unknown media_id: "${rawMediaId}".`,
+      };
+    }
+    if (inpaint && !usesReferences) {
+      return {
+        success: false,
+        error: "Inpaint requires media_id or target_identity.",
+      };
+    }
+    if (outpaint && explicitInpaint) {
+      return {
+        success: false,
+        error:
+          "Outpaint requests must not also set inpaint=true. Use outpaint=true or inpaint_mode='outpaint' by itself; the ComfyUI provider will use the required inpaint-style workflow internally.",
+      };
+    }
+    if (inpaint && !outpaint && !maskPrompt) {
+      return {
+        success: false,
+        error: "Inpaint requires mask_prompt describing the existing region to edit.",
       };
     }
 
-    // Extract arguments
-    const prompt = args.prompt as string;
-    const messageId = args.media_id as string | undefined;
-    const targetIdentity = (args.target_identity as string | undefined) ?? (args.user_id as string | undefined);
-    const aspectRatio = (args.aspect_ratio as string) || "1:1";
-    const usesReferences = !!(messageId || targetIdentity);
+    // Default to allowed; overwritten below for server-credential users
+    let quotaCheck: QuotaCheckResult = { allowed: true };
 
     try {
-      // Get the diffusion model codename from database
+      // Resolve credentials first so we can skip server quota for personal BYOK users
       const creds = await resolveCapabilityCredentials(context.tomoriState.server_id, "image-standard", {
         userId: context.internalUserId ?? null,
       });
+
+      // Personal BYOK users bring their own API quota — bypass server quota entirely
+      if (creds.source === "server") {
+        quotaCheck = await checkImageQuota(context.tomoriState.server_id, userDiscId);
+      }
+
+      if (!quotaCheck.allowed) {
+        // Build user-friendly error message based on quota type
+        let errorMessage = "";
+        let resetInfo = "";
+
+        if (quotaCheck.resetTime) {
+          const now = new Date();
+          const resetTime = quotaCheck.resetTime;
+          const hoursUntilReset = Math.ceil((resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
+
+          if (hoursUntilReset < 24) {
+            resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_hours", {
+              hours: hoursUntilReset.toString(),
+            });
+          } else {
+            const daysUntilReset = Math.ceil(hoursUntilReset / 24);
+            resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_days", {
+              days: daysUntilReset.toString(),
+            });
+          }
+        }
+
+        if (quotaCheck.reason === "user_quota_exceeded") {
+          errorMessage = localizer(context.locale, "tools.generate_image.user_quota_exceeded", {
+            reset_info: resetInfo,
+          });
+        } else if (quotaCheck.reason === "serverwide_quota_exceeded") {
+          errorMessage = localizer(context.locale, "tools.generate_image.serverwide_quota_exceeded", {
+            reset_info: resetInfo,
+          });
+        } else {
+          errorMessage = localizer(context.locale, "tools.generate_image.quota_exceeded_generic");
+        }
+
+        return {
+          success: false,
+          error: "Image generation quota exceeded",
+          message: errorMessage,
+        };
+      }
+
       const diffusionModelId =
         getResolvedCapabilityModelId(creds, "image-standard") ?? context.tomoriState.config.diffusion_model_id;
 
@@ -607,27 +1025,49 @@ export class GenerateImageTool extends BaseTool {
       if (!context.suppressProgressNotices) {
         const baseNoticeDescription = localizer(
           context.locale,
-          usesReferences ? "genai.image.generating_with_references_description" : "genai.image.generating_description",
+          usesReferences ? "tools.image.generating_with_references_description" : "tools.image.generating_description",
         );
         const referenceSourceCount = Number(messageId ? 1 : 0) + Number(targetIdentity ? 1 : 0);
         const referencedMessageUrl = messageId ? buildReferencedMessageUrl(context, messageId) : null;
         const extraNoticeLines: string[] = [];
+        const imageModeKey = outpaint
+          ? "tools.image.mode_outpaint"
+          : inpaint
+            ? "tools.image.mode_inpaint"
+            : usesReferences
+              ? "tools.image.mode_img2img"
+              : "tools.image.mode_txt2img";
+        extraNoticeLines.push(
+          localizer(context.locale, "tools.image.notice_mode_line", {
+            mode: localizer(context.locale, imageModeKey),
+          }),
+        );
+        if (outpaint) {
+          extraNoticeLines.push(
+            localizer(context.locale, "tools.image.notice_outpaint_direction_line", {
+              direction: this.formatOutpaintDirection(extendDirection),
+            }),
+          );
+        }
+        if (inpaint && !outpaint && maskPrompt) {
+          extraNoticeLines.push(`Mask: \`${this.formatNoticeValue(maskPrompt)}\``);
+        }
         if (referencedMessageUrl) {
           extraNoticeLines.push(
-            localizer(context.locale, "genai.image.notice_reference_line", {
+            localizer(context.locale, "tools.image.notice_reference_line", {
               message_url: referencedMessageUrl,
             }),
           );
         }
         if (!referencedMessageUrl && referenceSourceCount) {
           extraNoticeLines.push(
-            localizer(context.locale, "genai.image.notice_reference_count_line", {
+            localizer(context.locale, "tools.image.notice_reference_count_line", {
               count: referenceSourceCount.toString(),
             }),
           );
         } else if (referencedMessageUrl && referenceSourceCount > 1) {
           extraNoticeLines.push(
-            localizer(context.locale, "genai.image.notice_reference_count_line", {
+            localizer(context.locale, "tools.image.notice_reference_count_line", {
               count: referenceSourceCount.toString(),
             }),
           );
@@ -636,13 +1076,13 @@ export class GenerateImageTool extends BaseTool {
           context,
           "image_generation",
           {
-            titleKey: "genai.image.generating_title",
+            titleKey: "tools.image.generating_title",
             description: buildImageToolNoticeDescription(
               context.locale,
               baseNoticeDescription,
               displayModelName,
               prompt,
-              localizer(context.locale, "genai.image.generating_footer"),
+              localizer(context.locale, "tools.image.generating_footer"),
               extraNoticeLines,
             ),
             color: ColorCode.INFO,
@@ -661,12 +1101,14 @@ export class GenerateImageTool extends BaseTool {
         log.info(`Using ${messageImages.length} reference image(s) from message ${messageId} for generation`);
       }
 
-      if (targetIdentity) {
+      const allowAvatarReference = !!targetIdentity && !(inpaint && !!messageId);
+
+      if (targetIdentity && allowAvatarReference) {
         try {
           const avatarData = await resolveAvatarByIdentity(targetIdentity, context, {
             forceStatic: false,
           });
-          const avatarBase64 = await this.fetchAndConvertImageToBase64(avatarData.avatarUrl);
+          const avatarBase64 = await this.fetchAndConvertImageToBase64(avatarData.avatarUrl, context.abortSignal);
           referenceImages.push({
             mimeType: "image/png",
             data: avatarBase64,
@@ -676,20 +1118,73 @@ export class GenerateImageTool extends BaseTool {
           log.info(`Added profile picture reference for ${avatarTypeLabel} ${avatarData.username} (${targetIdentity})`);
         } catch (avatarErr) {
           log.error(`Failed to fetch profile picture for identity ${targetIdentity}`, avatarErr as Error);
-          return {
-            success: false,
-            error: "Failed to fetch profile picture for target_identity",
-            message:
-              avatarErr instanceof Error
-                ? avatarErr.message
-                : "Could not fetch an avatar for that identity. Please confirm the name or persona and try again.",
-          };
+          if (referenceImages.length > 0) {
+            log.warn(
+              `Continuing image generation without target_identity "${targetIdentity}" because message reference image(s) are available`,
+            );
+          } else {
+            return {
+              success: false,
+              error: "Failed to fetch profile picture for target_identity",
+              message:
+                avatarErr instanceof Error
+                  ? avatarErr.message
+                  : "Could not fetch an avatar for that identity. Please confirm the name or persona and try again.",
+            };
+          }
+        }
+      }
+
+      const normalizedReferenceImages = await this.normalizeReferenceImages(referenceImages, {
+        keepAtLeastOne: inpaint,
+      });
+      if (normalizedReferenceImages.length !== referenceImages.length) {
+        log.info(
+          `Reference images normalized from ${referenceImages.length} to ${normalizedReferenceImages.length} to avoid oversized requests`,
+        );
+      }
+      referenceImages.length = 0;
+      referenceImages.push(...normalizedReferenceImages);
+      if (inpaint && !requestedAspectRatio && referenceImages.length > 0) {
+        const referenceAspectRatio = await this.inferReferenceImageAspectRatio(referenceImages[0]);
+        if (referenceAspectRatio) {
+          aspectRatio = referenceAspectRatio;
+          log.info(`Inpaint aspect ratio inferred from reference image: ${aspectRatio}`);
         }
       }
 
       // Call appropriate provider API
       log.info(
         `Generating image with ${executionProvider} via ${displayModelName}: "${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}" (aspect ratio: ${aspectRatio})`,
+      );
+      log.info(
+        `GenerateImageTool image edit settings ${JSON.stringify({
+          inpaint,
+          maskPrompt,
+          maskThreshold: inpaint ? maskThreshold : null,
+          maskGrow: inpaint ? maskGrow : null,
+          maskFeather: inpaint ? maskFeather : null,
+          clothingMode: inpaint ? clothingMode : null,
+          clothingSegmentCategories: inpaint ? clothingSegmentCategories : null,
+          outpaint: inpaint ? outpaint : null,
+          outpaintStrategy: inpaint ? outpaintStrategy : null,
+          outpaintAmount: inpaint ? outpaintAmount : null,
+          outpaintOverlap: inpaint ? outpaintOverlap : null,
+          outpaintZoomScale: inpaint ? outpaintZoomScale : null,
+          outpaintDirectionalPrompts:
+            inpaint && outpaint
+              ? {
+                  left: outpaintLeftPrompt !== null,
+                  right: outpaintRightPrompt !== null,
+                  top: outpaintTopPrompt !== null,
+                  bottom: outpaintBottomPrompt !== null,
+                }
+              : null,
+          extendDirection: inpaint ? extendDirection : null,
+          extendPixels: inpaint ? extendPixels : null,
+          cfg: inpaint ? cfg : null,
+          denoise: usesReferences ? denoise : null,
+        })}`,
       );
 
       let generatedImageData: string | null = null;
@@ -702,14 +1197,84 @@ export class GenerateImageTool extends BaseTool {
           : null;
 
       if (creds.customEndpoint) {
-        const result = await generateCustomImageViaEndpoint({
-          endpoint: creds.customEndpoint,
-          apiKey,
-          prompt,
-          aspectRatio,
-          referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
-        });
-        generatedImageData = result.imageData;
+        try {
+          const result = await generateCustomImageViaEndpoint({
+            endpoint: creds.customEndpoint,
+            apiKey,
+            prompt,
+            aspectRatio,
+            referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+            inpaint,
+            maskPrompt,
+            maskThreshold,
+            maskGrow,
+            maskFeather,
+            cfg,
+            denoise,
+            inpaintMaskMode: maskMode,
+            inpaintPreset,
+            inpaintMode,
+            outpaint,
+            outpaintStrategy,
+            outpaintAmount,
+            outpaintOverlap,
+            outpaintZoomScale,
+            outpaintLeftPrompt,
+            outpaintRightPrompt,
+            outpaintTopPrompt,
+            outpaintBottomPrompt,
+            inpaintExtendDirection: extendDirection,
+            inpaintExtendPixels: extendPixels,
+            clothingMode,
+            clothingSegmentCategories,
+          });
+          generatedImageData = result.imageData;
+          await this.sendDiagnosticImagesToThoughtLog(context, result.diagnosticImages, prompt);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          const tooLarge =
+            msg.toLowerCase().includes("request entity too large") ||
+            msg.includes("413") ||
+            msg.toLowerCase().includes("payload too large");
+          if (tooLarge && referenceImages.length > 0) {
+            log.warn("Custom endpoint request was too large; retrying with tiny single-reference payload");
+            const tinyRef = await this.buildTinyReferenceImage(referenceImages[0]);
+            const retryResult = await generateCustomImageViaEndpoint({
+              endpoint: creds.customEndpoint,
+              apiKey,
+              prompt,
+              aspectRatio,
+              referenceImages: [tinyRef],
+              inpaint,
+              maskPrompt,
+              maskThreshold,
+              maskGrow,
+              maskFeather,
+              cfg,
+              denoise,
+              inpaintMaskMode: maskMode,
+              inpaintPreset,
+              inpaintMode,
+              outpaint,
+              outpaintStrategy,
+              outpaintAmount,
+              outpaintOverlap,
+              outpaintZoomScale,
+              outpaintLeftPrompt,
+              outpaintRightPrompt,
+              outpaintTopPrompt,
+              outpaintBottomPrompt,
+              inpaintExtendDirection: extendDirection,
+              inpaintExtendPixels: extendPixels,
+              clothingMode,
+              clothingSegmentCategories,
+            });
+            generatedImageData = retryResult.imageData;
+            await this.sendDiagnosticImagesToThoughtLog(context, retryResult.diagnosticImages, prompt);
+          } else {
+            throw err;
+          }
+        }
       } else if (nativeImageProvider) {
         const result = await nativeImageProvider.generateNativeImage({
           apiKey,
@@ -727,6 +1292,7 @@ export class GenerateImageTool extends BaseTool {
           prompt,
           aspectRatio,
           referenceImages.length > 0 ? referenceImages : undefined,
+          context.abortSignal,
         );
         generatedImageData = result.imageData;
       } else if (imageGenerationImplementation === "google") {
@@ -828,8 +1394,10 @@ export class GenerateImageTool extends BaseTool {
 
       log.success("Successfully generated and sent image to Discord");
 
-      // Increment quota after successful generation
-      await incrementImageQuota(context.tomoriState.server_id, userDiscId);
+      // Increment quota after successful generation (server providers only)
+      if (creds.source === "server") {
+        await incrementImageQuota(context.tomoriState.server_id, userDiscId);
+      }
 
       // Note: We intentionally DO NOT include imageMetadata for generated images
       // because Discord CDN URLs are protected and cannot be fetched by external
@@ -906,15 +1474,247 @@ export class GenerateImageTool extends BaseTool {
   /**
    * Fetch an image URL and convert to base64 (used for profile pictures)
    */
-  private async fetchAndConvertImageToBase64(imageUrl: string): Promise<string> {
+  private async fetchAndConvertImageToBase64(imageUrl: string, abortSignal?: AbortSignal): Promise<string> {
+    const dataUrlMatches = imageUrl.match(/^data:image\/[^;]+;base64,(.+)$/);
+    if (dataUrlMatches?.[1]) {
+      return dataUrlMatches[1];
+    }
+
+    if (!imageUrl.startsWith("http://") && !imageUrl.startsWith("https://")) {
+      throw new Error(`Profile picture URL is not fetchable: ${imageUrl.split(":")[0] || "unknown"} protocol`);
+    }
+
     const response = await safeDownload(imageUrl, {
       maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
       timeoutMs: 15_000,
+      externalSignal: abortSignal,
     });
     if (!response.success || !response.buffer) {
       throw new Error(`Failed to fetch image: ${response.details ?? response.error ?? "unknown error"}`);
     }
 
     return response.buffer.toString("base64");
+  }
+  private inferImageMimeType(urlOrName: string, fallback = "image/jpeg"): string {
+    const lower = urlOrName.toLowerCase();
+    if (lower.endsWith(".png")) return "image/png";
+    if (lower.endsWith(".webp")) return "image/webp";
+    if (lower.endsWith(".gif")) return "image/gif";
+    if (lower.endsWith(".bmp")) return "image/bmp";
+    if (lower.endsWith(".avif")) return "image/avif";
+    if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+    return fallback;
+  }
+
+  private isLikelyImageAttachment(attachment: {
+    contentType?: string | null;
+    name?: string | null;
+    url?: string;
+  }): boolean {
+    if (attachment.contentType?.startsWith("image/")) {
+      return true;
+    }
+    const inferred = this.inferImageMimeType(attachment.name || attachment.url || "", "");
+    return inferred.startsWith("image/");
+  }
+
+  private async normalizeReferenceImages(
+    referenceImages: Array<{ mimeType: string; data: string }>,
+    options?: { keepAtLeastOne?: boolean },
+  ): Promise<Array<{ mimeType: string; data: string }>> {
+    // Provider payload limits are easier to hit with Discord images than with
+    // generated references. Downscale instead of failing when a user posts a
+    // high-resolution source image, especially for inpaint/outpaint.
+    const normalized: Array<{ mimeType: string; data: string }> = [];
+    let totalBytes = 0;
+    const capped = referenceImages.slice(0, IMAGE_REFERENCE_MAX_COUNT);
+    if (referenceImages.length > IMAGE_REFERENCE_MAX_COUNT) {
+      log.warn(
+        `Reference image count ${referenceImages.length} exceeded cap ${IMAGE_REFERENCE_MAX_COUNT}; keeping first ${IMAGE_REFERENCE_MAX_COUNT}`,
+      );
+    }
+
+    for (const ref of capped) {
+      try {
+        const raw = Buffer.from(ref.data, "base64");
+        const optimized = await optimizeImageBuffer(raw, ref.mimeType || "image/jpeg");
+        const optimizedBytes = Buffer.byteLength(optimized.data, "base64");
+        const effectiveMaxBytes = Math.min(
+          IMAGE_REFERENCE_MAX_SINGLE_BYTES,
+          Math.max(1, IMAGE_REFERENCE_MAX_TOTAL_BYTES - totalBytes),
+        );
+        const normalizedRef =
+          optimizedBytes > effectiveMaxBytes
+            ? await this.buildReferenceImageWithinByteLimit(optimized, effectiveMaxBytes)
+            : optimized;
+        const normalizedBytes = Buffer.byteLength(normalizedRef.data, "base64");
+        if (totalBytes + normalizedBytes > IMAGE_REFERENCE_MAX_TOTAL_BYTES) {
+          if (normalized.length === 0 && options?.keepAtLeastOne) {
+            log.warn(
+              `Keeping first downscaled oversize reference image (${normalizedBytes} bytes) for inpaint fallback to avoid empty reference set`,
+            );
+            normalized.push({
+              mimeType: normalizedRef.mimeType,
+              data: normalizedRef.data,
+            });
+            totalBytes += normalizedBytes;
+            continue;
+          }
+          log.warn(
+            `Skipping reference image (${normalizedBytes} bytes) to stay under total cap ${IMAGE_REFERENCE_MAX_TOTAL_BYTES} bytes`,
+          );
+          continue;
+        }
+        totalBytes += normalizedBytes;
+        normalized.push({
+          mimeType: normalizedRef.mimeType,
+          data: normalizedRef.data,
+        });
+      } catch (err) {
+        log.warn("Failed to normalize one reference image, skipping it", err as Error);
+      }
+    }
+
+    if (normalized.length === 0 && referenceImages.length > 0) {
+      const first = referenceImages[0];
+      const fallbackBytes = Buffer.byteLength(first.data, "base64");
+      if (fallbackBytes <= IMAGE_REFERENCE_MAX_TOTAL_BYTES || options?.keepAtLeastOne) {
+        const fallback =
+          fallbackBytes > IMAGE_REFERENCE_MAX_SINGLE_BYTES || fallbackBytes > IMAGE_REFERENCE_MAX_TOTAL_BYTES
+            ? await this.buildReferenceImageWithinByteLimit(
+                first,
+                Math.min(IMAGE_REFERENCE_MAX_SINGLE_BYTES, IMAGE_REFERENCE_MAX_TOTAL_BYTES),
+              )
+            : first;
+        const fallbackNormalizedBytes = Buffer.byteLength(fallback.data, "base64");
+        if (fallbackNormalizedBytes > IMAGE_REFERENCE_MAX_TOTAL_BYTES) {
+          log.warn(
+            `Keeping oversize fallback reference image (${fallbackNormalizedBytes} bytes) because keepAtLeastOne=true`,
+          );
+        }
+        normalized.push(fallback);
+      }
+    }
+
+    return normalized;
+  }
+
+  private async buildReferenceImageWithinByteLimit(
+    referenceImage: {
+      mimeType: string;
+      data: string;
+    },
+    maxBytes: number,
+  ): Promise<{ mimeType: string; data: string }> {
+    const input = Buffer.from(referenceImage.data, "base64");
+    let quality = 82;
+    for (const maxDim of [2048, 1792, 1536, 1280, 1024, 896, 768, 640]) {
+      const encoded = await sharp(input)
+        .rotate()
+        .resize({
+          width: maxDim,
+          height: maxDim,
+          fit: "inside",
+          withoutEnlargement: true,
+        })
+        .jpeg({ quality, mozjpeg: true })
+        .toBuffer();
+      if (encoded.byteLength <= maxBytes) {
+        log.info(
+          `Downscaled reference image to fit payload cap: max ${maxDim}px, ${encoded.byteLength} bytes <= ${maxBytes}`,
+        );
+        return {
+          mimeType: "image/jpeg",
+          data: encoded.toString("base64"),
+        };
+      }
+      quality = Math.max(45, quality - 6);
+    }
+
+    const finalBuffer = await sharp(input)
+      .rotate()
+      .resize({
+        width: 512,
+        height: 512,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: 42, mozjpeg: true })
+      .toBuffer();
+    log.warn(
+      `Reference image still exceeds desired payload cap after downscale (${finalBuffer.byteLength} > ${maxBytes})`,
+    );
+    return {
+      mimeType: "image/jpeg",
+      data: finalBuffer.toString("base64"),
+    };
+  }
+
+  private async buildTinyReferenceImage(referenceImage: {
+    mimeType: string;
+    data: string;
+  }): Promise<{ mimeType: string; data: string }> {
+    const input = Buffer.from(referenceImage.data, "base64");
+    let quality = 72;
+    for (const maxDim of [1024, 896, 768, 640, 512]) {
+      const encoded = await sharp(input)
+        .resize({
+          width: maxDim,
+          height: maxDim,
+          fit: "inside",
+          withoutEnlargement: true,
+        })
+        .jpeg({ quality, mozjpeg: true })
+        .toBuffer();
+      if (encoded.byteLength <= IMAGE_REFERENCE_TINY_MAX_BYTES) {
+        return {
+          mimeType: "image/jpeg",
+          data: encoded.toString("base64"),
+        };
+      }
+      quality = Math.max(45, quality - 8);
+    }
+
+    const finalBuffer = await sharp(input)
+      .resize({
+        width: 512,
+        height: 512,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: 42, mozjpeg: true })
+      .toBuffer();
+    return {
+      mimeType: "image/jpeg",
+      data: finalBuffer.toString("base64"),
+    };
+  }
+
+  private async inferReferenceImageAspectRatio(referenceImage: {
+    mimeType: string;
+    data: string;
+  }): Promise<string | null> {
+    try {
+      const metadata = await sharp(Buffer.from(referenceImage.data, "base64")).metadata();
+      if (!metadata.width || !metadata.height) {
+        return null;
+      }
+      const divisor = this.greatestCommonDivisor(metadata.width, metadata.height);
+      return `${Math.round(metadata.width / divisor)}:${Math.round(metadata.height / divisor)}`;
+    } catch (err) {
+      log.warn("Failed to infer reference image aspect ratio", err as Error);
+      return null;
+    }
+  }
+
+  private greatestCommonDivisor(a: number, b: number): number {
+    let x = Math.abs(Math.round(a));
+    let y = Math.abs(Math.round(b));
+    while (y !== 0) {
+      const next = x % y;
+      x = y;
+      y = next;
+    }
+    return x || 1;
   }
 }

@@ -2,9 +2,9 @@ import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder
 import { AttachmentBuilder, EmbedBuilder, MessageFlags } from "discord.js";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow } from "@/types/db/schema";
-import { exportServerConfig } from "@/utils/db/dataExport";
+import { exportRepository } from "@/utils/db/repositories";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("export").setDescription(localizer("en-US", "commands.server.config.export.description"));
@@ -31,7 +31,7 @@ export async function execute(
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const exportResult = await exportServerConfig(interaction.guild?.id ?? interaction.user.id);
+    const exportResult = await exportRepository.exportServerConfig(interaction.guild?.id ?? interaction.user.id);
     if (!exportResult.success || !exportResult.data) {
       await interaction.editReply({
         embeds: [

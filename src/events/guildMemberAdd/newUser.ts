@@ -5,15 +5,13 @@ import type { StructuredContextItem } from "@/types/misc/context";
 import type { EnhancedImageContent } from "@/types/tool/enhancedContextTypes";
 import type { TomoriState } from "@/types/db/schema";
 import { ContextItemTag } from "@/types/misc/context";
-import tomoriChat, { suppressNextSelfReply } from "@/events/messageCreate/tomoriChat";
+import { tomoriChat, suppressNextSelfReply } from "@/events/messageCreate/tomoriChat";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { registerUser } from "@/utils/db/dbWrite";
+import { userRepository } from "@/utils/db/repositories";
 import { buildForcedMentionsForUser, ensureDiscordUserMention } from "@/utils/discord/mentionHelper";
-import {
-  getOrCreateWebhook,
-  resolvePersonaWebhookIdentity,
-  sendWebhookMessageWithIdentity,
-} from "@/utils/discord/webhookManager";
+import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
+import { resolvePersonaWebhookIdentity } from "@/utils/discord/webhook/identity";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { downloadImage } from "@/utils/image/avatarHelper";
 import { log } from "@/utils/misc/logger";
@@ -255,11 +253,11 @@ async function triggerWelcomeMessage(client: Client, member: GuildMember): Promi
   const chosenPersona =
     selectedWelcomePersonaId === null
       ? availablePersonas[Math.floor(Math.random() * availablePersonas.length)]
-      : (availablePersonas.find((persona) => persona.tomori_id === selectedWelcomePersonaId) ??
+      : (availablePersonas.find((persona) => persona.persona_id === selectedWelcomePersonaId) ??
         availablePersonas.find((persona) => !persona.is_alter) ??
         availablePersonas[0]);
 
-  if (!chosenPersona?.tomori_id) {
+  if (!chosenPersona?.persona_id) {
     log.warn(`Skipping welcome for ${member.user.tag}: no persona could be resolved`);
     return;
   }
@@ -310,36 +308,24 @@ async function triggerWelcomeMessage(client: Client, member: GuildMember): Promi
 
   suppressNextSelfReply(welcomeChannel.id);
   log.info(
-    `Triggering welcome message for ${member.user.tag} in channel ${welcomeChannel.id} using persona ${chosenPersona.tomori_nickname}`,
+    `Triggering welcome message for ${member.user.tag} in channel ${welcomeChannel.id} using persona ${chosenPersona.persona_nickname}`,
   );
 
-  await tomoriChat(
+  await tomoriChat({
     client,
-    lastMessage,
-    false,
-    true,
-    false,
-    undefined,
-    undefined,
-    false,
-    0,
-    false,
-    undefined,
-    undefined,
-    chosenPersona.tomori_id,
-    false,
-    false,
-    undefined,
-    "system",
-    `welcome:${member.guild.id}:${member.id}:${lastMessage.id}`,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    [welcomeContextItem],
-    forcedMentions.length > 0 ? forcedMentions : undefined,
-  );
+    message: lastMessage,
+    isFromQueue: false,
+    isManuallyTriggered: true,
+    forceReason: false,
+    isStopResponse: false,
+    selectedPersonaId: chosenPersona.persona_id,
+    isPersonaJob: false,
+    isUserImpersonation: false,
+    textQuotaSource: "system",
+    textQuotaTriggerKey: `welcome:${member.guild.id}:${member.id}:${lastMessage.id}`,
+    injectedContextItems: [welcomeContextItem],
+    forcedMentions: forcedMentions.length > 0 ? forcedMentions : undefined,
+  });
 
   await ensureDiscordUserMention({
     client,
@@ -394,7 +380,7 @@ const handler = async (_client: Client, member: GuildMember): Promise<void> => {
     const userLanguage = member.guild.preferredLocale;
     log.info(`New user ${member.user.tag} joined server, registering with language: ${userLanguage}`);
 
-    const userData = await registerUser(
+    const userData = await userRepository.register(
       member.id,
       resolvePreferredDiscordDisplayName({
         memberDisplayName: member.displayName,

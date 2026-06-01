@@ -15,7 +15,7 @@
  */
 
 import type { StPresetRow, StPresetNodeRow } from "@/types/db/schema";
-import { loadActivePreset, loadAllNodes } from "@/utils/db/stPresetDb";
+import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 import { log } from "@/utils/misc/logger";
 
 // ─── Types ──────────────────────────────────────────────────────────────
@@ -75,7 +75,7 @@ export async function getCachedActivePreset(serverId: number): Promise<CachedPre
   // 2. Cache miss or stale — load from DB
   cacheMisses++;
   try {
-    const preset = await loadActivePreset(serverId);
+    const preset = await presetRepository.loadActivePreset(serverId);
 
     if (!preset) {
       // No active preset — cache the negative result to avoid repeated queries
@@ -91,7 +91,7 @@ export async function getCachedActivePreset(serverId: number): Promise<CachedPre
     }
 
     // 4. Load all nodes for the active preset
-    const nodes = await loadAllNodes(preset.preset_id);
+    const nodes = await presetRepository.loadAllNodes(preset.preset_id);
 
     const data: CachedPresetData = { preset, nodes };
     cache.set(serverId, { data, cachedAt: now });

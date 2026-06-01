@@ -3,7 +3,7 @@ import { MessageFlags } from "discord.js";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replySummaryEmbed } from "@/utils/discord/interactionHelper";
+import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>

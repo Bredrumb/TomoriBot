@@ -14,8 +14,14 @@ import {
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
 import { resolveChannelTarget } from "@/utils/discord/targetResolver";
 import { getKnownPersonaSpeakerNames, stripLeadingKnownSpeakerPrefixes } from "@/utils/discord/modelAuthoredText";
-import { getOrCreateWebhook, sendWebhookMessageWithIdentity } from "@/utils/discord/webhookManager";
+import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import { log } from "@/utils/misc/logger";
+import { storePendingBoomerang, type PendingBoomerang } from "@/tools/functionCalls/crossChannelMessageTool";
+import { resolveContextAuthorLabel } from "@/utils/discord/contextAuthorLabel";
+import { convertMentions } from "@/utils/text/contextBuilder";
+import { isRefreshMarkerEmbed } from "@/utils/discord/embedDetection";
+import type { Message } from "discord.js";
 
 const MAX_THREAD_NAME_LENGTH = 100;
 const MAX_FIRST_MESSAGE_LENGTH = 2000;
@@ -169,7 +175,7 @@ async function resolvePersonaWebhook(
 export class CreateThreadTool extends BaseTool {
   name = "create_thread";
   description =
-    "Create a new public thread in the current server and send the first message into it as the active persona. If channel_name is omitted or blank, the thread is created in the current channel. Use channel_name to target another text or announcement channel by the same channel-name resolution rules as cross_channel_message.";
+    "Create a new public thread in the current server and send the first message into it as the active persona. ONLY invoke this tool when the user has explicitly and unambiguously requested the creation of a new thread. Do not infer thread creation intent from conversational context, topic changes, or suggestions. If a thread was already created earlier in this conversation, do not create another one unless the user makes a new, explicit request for a separate thread. If channel_name is omitted or blank, the thread is created in the current channel. Use channel_name to target another text or announcement channel by the same channel-name resolution rules as cross_channel_message.";
   category = "discord" as const;
   requiresFeatureFlag = "thread_creation";
 
@@ -268,7 +274,7 @@ export class CreateThreadTool extends BaseTool {
 
     const speakerNames = await getKnownPersonaSpeakerNames(context.guildId, [
       context.personaUsername,
-      context.tomoriState.tomori_nickname,
+      context.tomoriState.persona_nickname,
     ]);
     const firstMessage = stripLeadingKnownSpeakerPrefixes(firstMessageRaw, speakerNames).trim();
 
@@ -442,8 +448,63 @@ export class CreateThreadTool extends BaseTool {
         });
       }
 
+      // Fetch the messages now in the new thread for boomerang context
+      let threadMessages: PendingBoomerang["targetChannelMessages"] = [];
+      try {
+        const fetched = await thread.messages.fetch({ limit: 10 });
+        const messagesArray = [...fetched.values()];
+        const filtered: Message[] = [];
+        for (const m of messagesArray) {
+          if (m.embeds.length > 0 && m.embeds.some(isRefreshMarkerEmbed)) {
+            break;
+          }
+          filtered.push(m);
+        }
+        filtered.reverse();
+        threadMessages = await Promise.all(
+          filtered.map(async (m) => ({
+            author: await resolveContextAuthorLabel(m, {
+              guildId: context.guildId,
+              personalMemoriesEnabled: context.tomoriState.config.personal_memories_enabled,
+            }),
+            content: m.content
+              ? await convertMentions(
+                  m.content,
+                  context.client,
+                  context.guildId ?? "",
+                  undefined,
+                  context.tomoriState.persona_nickname,
+                  context.tomoriState.config.personal_memories_enabled,
+                )
+              : "(no text content)",
+            timestamp: m.createdAt.toISOString(),
+          })),
+        );
+      } catch (msgFetchError) {
+        log.warn(`CreateThreadTool: Failed to fetch thread messages for boomerang:`, msgFetchError);
+      }
+
+      storePendingBoomerang({
+        sourceChannelId: context.channel.id,
+        targetChannelName: thread.name,
+        targetChannelId: thread.id,
+        task: `Created thread '${thread.name}' in #${targetChannel.name} and sent the first message.`,
+        success: true,
+        personaId: context.activePersonaId ?? context.tomoriState.persona_id ?? undefined,
+        isUserImpersonation: context.isUserImpersonation === true,
+        impersonatedUserId: context.impersonatedUserId,
+        targetChannelMessages: threadMessages,
+        introText:
+          `You have just finished creating a new thread named \`${thread.name}\` in \`#${targetChannel.name}\`. ` +
+          `The thread is live and the first message has already been sent — do not attempt to create another thread.`,
+        outroText: "Now give a short, natural acknowledgment back right now saying that the thread is ready.",
+      });
+
+      log.info(`CreateThreadTool: Boomerang stored for source channel ${context.channel.id} → thread #${thread.name}`);
+
       return {
         success: true,
+        endTurn: true,
         message: `Created thread \`${thread.name}\` in channel \`${targetChannel.name}\` and sent the first message.`,
         data: {
           status: "thread_created_successfully",
@@ -452,8 +513,8 @@ export class CreateThreadTool extends BaseTool {
           parent_channel_id: targetChannel.id,
           parent_channel_name: targetChannel.name,
           used_webhook_context: Boolean(personaWebhook && context.personaUsername),
+          boomerang: true,
         },
-        endTurn: true,
       };
     } catch (error) {
       log.error(`CreateThreadTool: Failed to create thread in #${targetChannel.name}`, error as Error);

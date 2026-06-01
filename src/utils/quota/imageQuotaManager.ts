@@ -1,8 +1,14 @@
-import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
-import type { SQL } from "bun";
-import type { ImageQuotaConfigRow, ImageQuotaRow, ServerwideQuotaRow } from "@/types/db/schema";
-import { imageQuotaConfigSchema, imageQuotaSchema, serverwideQuotaSchema } from "@/types/db/schema";
+import type { ImageQuotaConfigRow } from "@/types/db/schema";
+import {
+  cleanupOldImageQuotas as repositoryCleanupOldImageQuotas,
+  getOrCreateImageConfig,
+  incrementImageQuota as repositoryIncrementImageQuota,
+  resetServerwideImagePeriod,
+  resetServerwideImageQuotaPool,
+  touchServerwideImageQuota,
+  touchUserImageQuota,
+} from "@/utils/db/repositories/QuotaRepository";
 
 /**
  * Result of quota check operations
@@ -20,37 +26,7 @@ export interface QuotaCheckResult {
  * Creates default config if not exists (10 daily user quota, unlimited serverwide)
  */
 export async function getQuotaConfig(serverId: number): Promise<ImageQuotaConfigRow> {
-  try {
-    // 1. Try to fetch existing config
-    const [existing] = await sql<
-      ImageQuotaConfigRow[]
-    >`SELECT * FROM image_quota_configs WHERE server_id = ${serverId}`;
-
-    if (existing) {
-      return imageQuotaConfigSchema.parse(existing);
-    }
-
-    // 2. Create default config if not exists
-    const [newConfig] = await sql<ImageQuotaConfigRow[]>`
-			INSERT INTO image_quota_configs (server_id, daily_user_quota, serverwide_quota, serverwide_quota_resets_in, enabled)
-			VALUES (${serverId}, 0, 0, 365, false)
-			RETURNING *
-		`;
-
-    log.info("Created default image quota config");
-
-    return imageQuotaConfigSchema.parse(newConfig);
-  } catch (error) {
-    log.error("Failed to get quota config", error);
-    // Return safe defaults on error
-    return {
-      server_id: serverId,
-      daily_user_quota: 0,
-      serverwide_quota: 0,
-      serverwide_quota_resets_in: 365,
-      enabled: false,
-    };
-  }
+  return getOrCreateImageConfig(serverId);
 }
 
 /**
@@ -72,18 +48,10 @@ export async function checkUserDailyQuota(
     const today = new Date().toISOString().split("T")[0];
 
     // 3. Get or create user's quota record for today
-    const [userQuota] = await sql<ImageQuotaRow[]>`
-			INSERT INTO image_quotas (server_id, user_disc_id, usage_count, quota_date)
-			VALUES (${serverId}, ${userDiscId}, 0, ${today}::date)
-			ON CONFLICT (server_id, user_disc_id, quota_date)
-			DO UPDATE SET server_id = EXCLUDED.server_id
-			RETURNING *
-		`;
-
-    const parsedQuota = imageQuotaSchema.parse(userQuota);
+    const userQuota = await touchUserImageQuota(serverId, userDiscId, today);
 
     // 4. Check if user has exceeded their daily quota
-    const remaining = config.daily_user_quota - parsedQuota.usage_count;
+    const remaining = config.daily_user_quota - userQuota.usage_count;
 
     if (remaining <= 0) {
       // Calculate midnight tonight for reset time
@@ -122,53 +90,25 @@ export async function checkServerwideQuota(serverId: number, config: ImageQuotaC
 
   try {
     // 2. Get or create server-wide quota record
-    const [serverwideQuota] = await sql<ServerwideQuotaRow[]>`
-			INSERT INTO serverwide_quotas (
-				server_id,
-				usage_count,
-				quota_period_start,
-				quota_period_end
-			)
-			VALUES (
-				${serverId},
-				0,
-				CURRENT_TIMESTAMP,
-				CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
-			)
-			ON CONFLICT (server_id)
-			DO UPDATE SET server_id = EXCLUDED.server_id
-			RETURNING *
-		`;
-
-    const parsedQuota = serverwideQuotaSchema.parse(serverwideQuota);
+    const serverwideQuota = await touchServerwideImageQuota(serverId, config.serverwide_quota_resets_in);
 
     // 3. Check if quota period has expired (needs reset)
     const now = new Date();
-    const periodEnd = new Date(parsedQuota.quota_period_end);
+    const periodEnd = new Date(serverwideQuota.quota_period_end);
 
     if (now >= periodEnd) {
       // Reset the server-wide quota
-      const [resetQuota] = await sql<ServerwideQuotaRow[]>`
-				UPDATE serverwide_quotas
-				SET
-					usage_count = 0,
-					quota_period_start = CURRENT_TIMESTAMP,
-					quota_period_end = CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
-				WHERE server_id = ${serverId}
-				RETURNING *
-			`;
-
-      const parsedResetQuota = serverwideQuotaSchema.parse(resetQuota);
+      const resetQuota = await resetServerwideImagePeriod(serverId, config.serverwide_quota_resets_in);
 
       return {
         allowed: true,
         serverwideRemaining: config.serverwide_quota,
-        resetTime: new Date(parsedResetQuota.quota_period_end),
+        resetTime: new Date(resetQuota.quota_period_end),
       };
     }
 
     // 4. Check if server has exceeded its quota
-    const remaining = config.serverwide_quota - parsedQuota.usage_count;
+    const remaining = config.serverwide_quota - serverwideQuota.usage_count;
 
     if (remaining <= 0) {
       return {
@@ -201,12 +141,8 @@ export async function checkImageQuota(serverId: number, userDiscId: string): Pro
     // 1. Get quota configuration
     const config = await getQuotaConfig(serverId);
 
-    // 2. If quota system is disabled, allow all
-    if (!config.enabled) {
-      return { allowed: true };
-    }
-
-    // 3. Check user daily quota first (most common limit)
+    // 2. Check user daily quota first (most common limit)
+    // Note: daily_user_quota === 0 means unlimited (handled inside checkUserDailyQuota)
     const userCheck = await checkUserDailyQuota(serverId, userDiscId, config);
     if (!userCheck.allowed) {
       return userCheck;
@@ -238,26 +174,7 @@ export async function checkImageQuota(serverId: number, userDiscId: string): Pro
  */
 export async function incrementImageQuota(serverId: number, userDiscId: string): Promise<void> {
   try {
-    const today = new Date().toISOString().split("T")[0];
-
-    // 1. Increment user's daily quota (using transaction for consistency)
-    await sql.begin(async (tx: SQL) => {
-      // Increment user quota
-      await tx`
-				INSERT INTO image_quotas (server_id, user_disc_id, usage_count, quota_date)
-				VALUES (${serverId}, ${userDiscId}, 1, ${today}::date)
-				ON CONFLICT (server_id, user_disc_id, quota_date)
-				DO UPDATE SET usage_count = image_quotas.usage_count + 1
-			`;
-
-      // Increment server-wide quota
-      await tx`
-				UPDATE serverwide_quotas
-				SET usage_count = usage_count + 1
-				WHERE server_id = ${serverId}
-			`;
-    });
-
+    await repositoryIncrementImageQuota(serverId, userDiscId);
     log.info("Incremented image quotas");
   } catch (error) {
     log.error("Failed to increment image quota", error);
@@ -271,11 +188,7 @@ export async function incrementImageQuota(serverId: number, userDiscId: string):
  */
 export async function cleanupOldImageQuotas(): Promise<number> {
   try {
-    const result = await sql<{ cleanup_old_image_quotas: number }[]>`
-			SELECT cleanup_old_image_quotas() AS cleanup_old_image_quotas
-		`;
-
-    const deletedCount = result[0]?.cleanup_old_image_quotas || 0;
+    const deletedCount = await repositoryCleanupOldImageQuotas();
 
     if (deletedCount > 0) {
       log.info("Cleaned up old image quota records");
@@ -294,17 +207,7 @@ export async function cleanupOldImageQuotas(): Promise<number> {
  */
 export async function resetServerwideQuota(serverId: number): Promise<void> {
   try {
-    const config = await getQuotaConfig(serverId);
-
-    await sql`
-			UPDATE serverwide_quotas
-			SET
-				usage_count = 0,
-				quota_period_start = CURRENT_TIMESTAMP,
-				quota_period_end = CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
-			WHERE server_id = ${serverId}
-		`;
-
+    await resetServerwideImageQuotaPool(serverId);
     log.info("Manually reset serverwide quota");
   } catch (error) {
     log.error("Failed to reset serverwide quota", error);

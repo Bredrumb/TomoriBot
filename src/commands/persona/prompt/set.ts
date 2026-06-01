@@ -8,18 +8,12 @@ import type {
 import { MessageFlags, TextInputStyle } from "discord.js";
 import type { UserRow, TomoriState } from "@/types/db/schema";
 import { log, ColorCode } from "@/utils/misc/logger";
-import {
-  acknowledgeModalSubmitForRefresh,
-  promptWithRawModal,
-  replyComponentsV2Status,
-  replyInfoEmbed,
-  type AvatarSessionCache,
-  replyPaginatedPersonaChoicesV2,
-  updateButtonComponentsV2Status,
-} from "@/utils/discord/interactionHelper";
+import { acknowledgeModalSubmitForRefresh, promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
-import { sql } from "@/utils/db/client";
+import { personaRepository } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
 import { combineModalPromptParts, splitPromptIntoModalParts } from "@/utils/text/modalPromptParts";
 
@@ -97,7 +91,7 @@ export async function execute(
       return;
     }
 
-    const allPersonas = await loadAllPersonasForServer(serverDiscId);
+    const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.unknown_error_title",
@@ -119,8 +113,7 @@ export async function execute(
       });
 
       if (!personaSelection.success) {
-        if (personaSelection.reason === "cancelled" || personaSelection.reason === "fatal") return;
-        continue;
+        return;
       }
       if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
         return;
@@ -129,7 +122,7 @@ export async function execute(
       personaSelectionInteraction = personaSelection.interaction;
       const selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
 
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await updateButtonComponentsV2Status(
           personaSelectionInteraction,
           locale,
@@ -213,12 +206,15 @@ export async function execute(
         return;
       }
 
-      await sql`
-			  INSERT INTO persona_configs (tomori_id, persona_prompt)
-			  VALUES (${selectedPersona.tomori_id}, ${personaPrompt || null})
-			  ON CONFLICT (tomori_id) DO UPDATE
-			  SET persona_prompt = EXCLUDED.persona_prompt
-		  `;
+      const ok = await personaRepository.setPrompt(selectedPersona.persona_id, personaPrompt || "");
+      if (!ok) {
+        await replyInfoEmbed(modalSubmitInteraction, locale, {
+          titleKey: "general.errors.update_failed_title",
+          descriptionKey: "general.errors.update_failed_description",
+          color: ColorCode.ERROR,
+        });
+        continue;
+      }
 
       invalidateTomoriStateCache(serverDiscId);
 
@@ -231,14 +227,14 @@ export async function execute(
           ? "commands.teach.personaprompt.success_description"
           : "commands.forget.personaprompt.success_description",
         ColorCode.SUCCESS,
-        { persona_name: selectedPersona.tomori_nickname },
+        { persona_name: selectedPersona.persona_nickname },
         "general.pagination.reloading_persona_picker",
       );
     }
   } catch (error) {
     await log.error("Error in /teach personaprompt command", error, {
       serverId: tomoriState?.server_id,
-      tomoriId: tomoriState?.tomori_id,
+      personaId: tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "teach personaprompt",

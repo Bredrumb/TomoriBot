@@ -5,7 +5,7 @@ import type { ErrorContext } from "@/types/db/schema";
 import type { SummaryEmbedOptions } from "@/types/discord/embed";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replySummaryEmbed } from "@/utils/discord/interactionHelper";
+import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 
 /**
@@ -101,7 +101,9 @@ export async function execute(
     const configSpeechVoiceAssignMention = commandRegistry.getCommandMention("config", "speech", "voice-assign");
     const configSpeechTranscriptsMention = commandRegistry.getCommandMention("config", "speech", "transcripts");
 
-    // Build options based on provider
+    // AC-2 allowlist rationale: /help api-key is provider-specific UI copy,
+    // not orchestration. Each case selects localized instructions for where a
+    // user gets that provider's key and which config commands apply.
     let embedOptions: SummaryEmbedOptions;
 
     switch (provider) {
@@ -128,6 +130,8 @@ export async function execute(
         };
         break;
 
+      // Provider-specific help pages are user-facing copy, not runtime provider dispatch.
+      // Phase 3 #6.5 allows these display switches to remain outside core orchestration.
       case "google":
         embedOptions = {
           titleKey: "commands.help.api-key.google_title",

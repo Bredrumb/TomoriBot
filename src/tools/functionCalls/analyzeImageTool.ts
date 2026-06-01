@@ -11,7 +11,7 @@ import type { ToolContext, ToolResult, ToolParameterSchema } from "@/types/tool/
 import { log, ColorCode } from "@/utils/misc/logger";
 import { sendToolProgressNotice } from "@/utils/discord/toolProgressNotice";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
-import { loadLlmById } from "@/utils/db/dbRead";
+import { llmModelRepo } from "@/utils/db/repositories";
 import {
   toZaiApiModelName,
   ZAI_CODING_CHAT_COMPLETIONS_URL,
@@ -135,7 +135,7 @@ export class AnalyzeImageTool extends BaseTool {
         visionLlmId === context.tomoriState.vision_llm?.llm_id
           ? context.tomoriState.vision_llm
           : visionLlmId
-            ? await loadLlmById(visionLlmId)
+            ? await llmModelRepo.loadById(visionLlmId)
             : null;
 
       if (!visionLlm) {
@@ -149,9 +149,9 @@ export class AnalyzeImageTool extends BaseTool {
         context,
         "image_analysis",
         {
-          titleKey: "genai.vision.analyzing_title",
-          descriptionKey: "genai.vision.analyzing_description",
-          footerKey: "genai.vision.analyzing_footer",
+          titleKey: "tools.vision.analyzing_title",
+          descriptionKey: "tools.vision.analyzing_description",
+          footerKey: "tools.vision.analyzing_footer",
           color: ColorCode.INFO,
         },
         "AnalyzeImageTool",
@@ -176,11 +176,7 @@ export class AnalyzeImageTool extends BaseTool {
         analysisResult = await this.callGoogleVision(apiKey, apiModelName, images, prompt);
       } else {
         // OpenAI-compatible providers (openrouter, zai, zaicoding, deepseek, custom)
-        const endpointUrl = this.getEndpointUrl(
-          provider,
-          context,
-          creds.customEndpoint?.endpoint_url ?? creds.savedConfig.custom_endpoint_url,
-        );
+        const endpointUrl = this.getEndpointUrl(provider, context, creds.customEndpoint?.endpoint_url ?? null);
         analysisResult = await this.callOpenAICompatibleVision(apiKey, apiModelName, endpointUrl, images, prompt);
       }
 
@@ -406,6 +402,7 @@ export class AnalyzeImageTool extends BaseTool {
         const imageResponse = await safeDownload(imageInfo.url, {
           maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
           timeoutMs: 15_000,
+          externalSignal: context.abortSignal,
         });
         if (!imageResponse.success || !imageResponse.buffer) {
           log.warn(`Failed to fetch image from ${imageInfo.source}: ${imageResponse.details ?? imageResponse.error}`);

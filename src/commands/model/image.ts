@@ -1,16 +1,14 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-// Import sql
-import { sql } from "@/utils/db/client";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
-// Import types for validation
-import { type UserRow, type ErrorContext, tomoriConfigSchema } from "@/types/db/schema";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import type { UserRow, ErrorContext } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";
-import { loadAvailableDiffusionModelsForProvider } from "@/utils/db/dbRead";
+import { configRepository, llmModelRepo } from "@/utils/db/repositories";
 import { getDiffusionModelById } from "@/utils/image/naiDiffusionModels";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { getProviderDisplayName, getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
@@ -150,12 +148,14 @@ export async function execute(
     const nextStandardModelId = clearTarget === "nai" ? tomoriState.config.diffusion_model_id : null;
     const nextNaiModelId = clearTarget === "standard" ? tomoriState.config.nai_diffusion_model_id : null;
 
-    await sql`
-      UPDATE tomori_configs
-      SET diffusion_model_id = ${nextStandardModelId},
-          nai_diffusion_model_id = ${nextNaiModelId}
-      WHERE server_id = ${tomoriState.server_id}
-    `;
+    await Promise.all([
+      configRepository.updateModelConfig(tomoriState.server_id, {
+        diffusion_model_id: nextStandardModelId,
+      }),
+      configRepository.updateNovelaiImagegenConfig(tomoriState.server_id, {
+        nai_diffusion_model_id: nextNaiModelId,
+      }),
+    ]);
 
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
@@ -218,9 +218,7 @@ export async function execute(
         currentSelectedId ? getDiffusionModelById(currentSelectedId) : Promise.resolve(null),
       ]);
       const selectedModelName =
-        selectedSavedConfig?.custom_model_name ??
-        getImageModelDisplayName(selectedConfiguredModel) ??
-        getProviderDisplayName(selectedProvider);
+        getImageModelDisplayName(selectedConfiguredModel) ?? getProviderDisplayName(selectedProvider);
 
       if (selectedModelId === currentSelectedId) {
         await replyInfoEmbed(responseInteraction, locale, {
@@ -234,15 +232,11 @@ export async function execute(
         return;
       }
 
-      const [updatedRow] = await sql`
-        UPDATE tomori_configs
-        SET diffusion_model_id = ${selectedModelId}
-        WHERE server_id = ${tomoriState.server_id}
-        RETURNING *
-      `;
+      const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
+        diffusion_model_id: selectedModelId,
+      });
 
-      const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-      if (!validatedConfig.success || !updatedRow) {
+      if (!updated) {
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
@@ -267,7 +261,7 @@ export async function execute(
     }
 
     const availableModels =
-      (await loadAvailableDiffusionModelsForProvider(selectedProvider, false, {
+      (await llmModelRepo.loadAvailableDiffusionModels(selectedProvider, false, {
         kind: "server",
         ownerId: tomoriState.server_id,
       })) ?? [];
@@ -340,7 +334,7 @@ export async function execute(
 
     if (!selectedModel?.diffusion_model_id) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "CommandExecutionError",
@@ -377,28 +371,19 @@ export async function execute(
       return;
     }
 
-    // 10. Update the config in the database using direct SQL
-    const [updatedRow] =
+    // 10. Update the config in the database via the repository
+    const updated =
       targetColumn === "nai_diffusion_model_id"
-        ? await sql`
-              UPDATE tomori_configs
-              SET nai_diffusion_model_id = ${selectedModel.diffusion_model_id}
-              WHERE server_id = ${tomoriState.server_id}
-              RETURNING *
-          `
-        : await sql`
-              UPDATE tomori_configs
-              SET diffusion_model_id = ${selectedModel.diffusion_model_id}
-              WHERE server_id = ${tomoriState.server_id}
-              RETURNING *
-          `;
+        ? await configRepository.updateNovelaiImagegenConfig(tomoriState.server_id, {
+            nai_diffusion_model_id: selectedModel.diffusion_model_id,
+          })
+        : await configRepository.updateModelConfig(tomoriState.server_id, {
+            diffusion_model_id: selectedModel.diffusion_model_id,
+          });
 
-    // 11. Validate the returned data
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-
-    if (!validatedConfig.success || !updatedRow) {
+    if (!updated) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
@@ -407,14 +392,11 @@ export async function execute(
           guildId: interaction.guild?.id ?? interaction.user.id,
           selectedModelCodename: selectedModel.codename,
           targetDiffusionModelId: selectedModel.diffusion_model_id,
-          validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
         },
       };
       await log.error(
-        "Failed to update or validate diffusion model config after DB update",
-        validatedConfig.success
-          ? new Error("Database update returned no rows or unexpected data")
-          : new Error("Updated config data failed validation"),
+        "Failed to update diffusion model config after DB update",
+        new Error("Database update returned no rows"),
         context,
       );
 
@@ -454,17 +436,17 @@ export async function execute(
   } catch (error) {
     // 13. Log error with context
     let serverIdForError: number | null = null;
-    let tomoriIdForError: number | null = null;
+    let personaIdForError: number | null = null;
     if (interaction.guild?.id) {
       const state = await getCachedTomoriState(interaction.guild.id);
       serverIdForError = state?.server_id ?? null;
-      tomoriIdForError = state?.tomori_id ?? null;
+      personaIdForError = state?.persona_id ?? null;
     }
 
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: serverIdForError,
-      tomoriId: tomoriIdForError,
+      personaId: personaIdForError,
       errorType: "CommandExecutionError",
       metadata: {
         command: "config model image",

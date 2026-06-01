@@ -5,14 +5,13 @@
   type ModalSubmitInteraction,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { invalidateUserCache } from "@/utils/cache/userCache";
-import { sql } from "@/utils/db/client";
-import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { userRepository } from "@/utils/db/repositories";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { UserRow } from "@/types/db/schema";
 import {
-  formatTextArrayLiteral,
   formatNaiTagsForModalValue,
   MAX_TAG_LENGTH,
   MAX_TAGS,
@@ -32,6 +31,16 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
+  const userId = userData.user_id;
+  if (userId === undefined) {
+    await replyInfoEmbed(interaction, locale, {
+      titleKey: "general.errors.update_failed_title",
+      descriptionKey: "general.errors.update_failed_description",
+      color: ColorCode.ERROR,
+    });
+    return;
+  }
+
   let modalSubmitInteraction: ModalSubmitInteraction | null = null;
 
   try {
@@ -62,14 +71,9 @@ export async function execute(
     const tagsInput = modalResult.values?.[TAGS_INPUT_ID] ?? "";
 
     if (tagsInput.trim().length === 0) {
-      const cleared = await sql<Array<{ user_id: number }>>`
-				UPDATE users
-				SET nai_char_tags = ARRAY[]::TEXT[]
-				WHERE user_disc_id = ${userData.user_disc_id}
-				RETURNING user_id
-			`;
+      const cleared = await userRepository.update(userId, { nai_char_tags: [] });
 
-      if (!cleared.length) {
+      if (!cleared) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
@@ -77,8 +81,6 @@ export async function execute(
         });
         return;
       }
-
-      invalidateUserCache(userData.user_disc_id);
 
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.novelai.tags.me.cleared_title",
@@ -128,15 +130,9 @@ export async function execute(
       return;
     }
 
-    const tagArrayLiteral = formatTextArrayLiteral(validationResult.tags);
-    const updated = await sql<Array<{ user_id: number }>>`
-			UPDATE users
-			SET nai_char_tags = ${tagArrayLiteral}::TEXT[]
-			WHERE user_disc_id = ${userData.user_disc_id}
-			RETURNING user_id
-		`;
+    const updated = await userRepository.update(userId, { nai_char_tags: validationResult.tags });
 
-    if (!updated.length) {
+    if (!updated) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",
@@ -144,8 +140,6 @@ export async function execute(
       });
       return;
     }
-
-    invalidateUserCache(userData.user_disc_id);
 
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.novelai.tags.me.success_title",

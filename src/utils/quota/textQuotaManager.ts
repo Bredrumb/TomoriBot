@@ -1,8 +1,14 @@
-import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
-import type { SQL } from "bun";
-import type { TextQuotaConfigRow, TextQuotaRow, TextServerwideQuotaRow } from "@/types/db/schema";
-import { textQuotaConfigSchema, textQuotaSchema, textServerwideQuotaSchema } from "@/types/db/schema";
+import type { TextQuotaConfigRow } from "@/types/db/schema";
+import {
+  cleanupOldTextQuotas as repositoryCleanupOldTextQuotas,
+  getOrCreateTextConfig,
+  incrementTextQuota as repositoryIncrementTextQuota,
+  resetServerwideTextPeriod,
+  resetServerwideTextQuotaPool,
+  touchServerwideTextQuota,
+  touchUserTextQuota,
+} from "@/utils/db/repositories/QuotaRepository";
 
 /**
  * Result of text quota check operations
@@ -20,35 +26,7 @@ export interface TextQuotaCheckResult {
  * Creates default config if not exists (unlimited by default)
  */
 export async function getTextQuotaConfig(serverId: number): Promise<TextQuotaConfigRow> {
-  try {
-    // 1. Try to fetch existing config
-    const [existing] = await sql<TextQuotaConfigRow[]>`SELECT * FROM text_quota_configs WHERE server_id = ${serverId}`;
-
-    if (existing) {
-      return textQuotaConfigSchema.parse(existing);
-    }
-
-    // 2. Create default config if not exists
-    const [newConfig] = await sql<TextQuotaConfigRow[]>`
-			INSERT INTO text_quota_configs (server_id, daily_user_quota, serverwide_quota, serverwide_quota_resets_in, enabled)
-			VALUES (${serverId}, 0, 0, 365, false)
-			RETURNING *
-		`;
-
-    log.info("Created default text quota config");
-
-    return textQuotaConfigSchema.parse(newConfig);
-  } catch (error) {
-    log.error("Failed to get text quota config", error);
-    // Return safe defaults on error
-    return {
-      server_id: serverId,
-      daily_user_quota: 0,
-      serverwide_quota: 0,
-      serverwide_quota_resets_in: 365,
-      enabled: false,
-    };
-  }
+  return getOrCreateTextConfig(serverId);
 }
 
 /**
@@ -70,18 +48,10 @@ export async function checkUserDailyTextQuota(
     const today = new Date().toISOString().split("T")[0];
 
     // 3. Get or create user's quota record for today
-    const [userQuota] = await sql<TextQuotaRow[]>`
-			INSERT INTO text_quotas (server_id, user_disc_id, usage_count, quota_date)
-			VALUES (${serverId}, ${userDiscId}, 0, ${today}::date)
-			ON CONFLICT (server_id, user_disc_id, quota_date)
-			DO UPDATE SET server_id = EXCLUDED.server_id
-			RETURNING *
-		`;
-
-    const parsedQuota = textQuotaSchema.parse(userQuota);
+    const userQuota = await touchUserTextQuota(serverId, userDiscId, today);
 
     // 4. Check if user has exceeded their daily quota
-    const remaining = config.daily_user_quota - parsedQuota.usage_count;
+    const remaining = config.daily_user_quota - userQuota.usage_count;
 
     if (remaining <= 0) {
       // Calculate midnight tonight for reset time
@@ -123,53 +93,25 @@ export async function checkServerwideTextQuota(
 
   try {
     // 2. Get or create server-wide quota record
-    const [serverwideQuota] = await sql<TextServerwideQuotaRow[]>`
-			INSERT INTO text_serverwide_quotas (
-				server_id,
-				usage_count,
-				quota_period_start,
-				quota_period_end
-			)
-			VALUES (
-				${serverId},
-				0,
-				CURRENT_TIMESTAMP,
-				CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
-			)
-			ON CONFLICT (server_id)
-			DO UPDATE SET server_id = EXCLUDED.server_id
-			RETURNING *
-		`;
-
-    const parsedQuota = textServerwideQuotaSchema.parse(serverwideQuota);
+    const serverwideQuota = await touchServerwideTextQuota(serverId, config.serverwide_quota_resets_in);
 
     // 3. Check if quota period has expired (needs reset)
     const now = new Date();
-    const periodEnd = new Date(parsedQuota.quota_period_end);
+    const periodEnd = new Date(serverwideQuota.quota_period_end);
 
     if (now >= periodEnd) {
       // Reset the server-wide quota
-      const [resetQuota] = await sql<TextServerwideQuotaRow[]>`
-				UPDATE text_serverwide_quotas
-				SET
-					usage_count = 0,
-					quota_period_start = CURRENT_TIMESTAMP,
-					quota_period_end = CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
-				WHERE server_id = ${serverId}
-				RETURNING *
-			`;
-
-      const parsedResetQuota = textServerwideQuotaSchema.parse(resetQuota);
+      const resetQuota = await resetServerwideTextPeriod(serverId, config.serverwide_quota_resets_in);
 
       return {
         allowed: true,
         serverwideRemaining: config.serverwide_quota,
-        resetTime: new Date(parsedResetQuota.quota_period_end),
+        resetTime: new Date(resetQuota.quota_period_end),
       };
     }
 
     // 4. Check if server has exceeded its quota
-    const remaining = config.serverwide_quota - parsedQuota.usage_count;
+    const remaining = config.serverwide_quota - serverwideQuota.usage_count;
 
     if (remaining <= 0) {
       return {
@@ -202,12 +144,8 @@ export async function checkTextQuota(serverId: number, userDiscId: string): Prom
     // 1. Get quota configuration
     const config = await getTextQuotaConfig(serverId);
 
-    // 2. If quota system is disabled, allow all
-    if (!config.enabled) {
-      return { allowed: true };
-    }
-
-    // 3. Check user daily quota first (most common limit)
+    // 2. Check user daily quota first (most common limit)
+    // Note: daily_user_quota === 0 means unlimited (handled inside checkUserDailyTextQuota)
     const userCheck = await checkUserDailyTextQuota(serverId, userDiscId, config);
     if (!userCheck.allowed) {
       return userCheck;
@@ -241,39 +179,7 @@ export async function checkTextQuota(serverId: number, userDiscId: string): Prom
  */
 export async function incrementTextQuota(serverId: number, userDiscId: string): Promise<void> {
   try {
-    // 1. Fetch config to determine which counters are actively limited
-    const config = await getTextQuotaConfig(serverId);
-
-    const shouldIncrementUser = config.enabled && config.daily_user_quota > 0;
-    const shouldIncrementServerwide = config.enabled && config.serverwide_quota > 0;
-
-    // 2. Nothing to count if no limits are configured
-    if (!shouldIncrementUser && !shouldIncrementServerwide) {
-      return;
-    }
-
-    const today = new Date().toISOString().split("T")[0];
-
-    // 3. Increment only the active counters inside a transaction
-    await sql.begin(async (tx: SQL) => {
-      if (shouldIncrementUser) {
-        await tx`
-				INSERT INTO text_quotas (server_id, user_disc_id, usage_count, quota_date)
-				VALUES (${serverId}, ${userDiscId}, 1, ${today}::date)
-				ON CONFLICT (server_id, user_disc_id, quota_date)
-				DO UPDATE SET usage_count = text_quotas.usage_count + 1
-			`;
-      }
-
-      if (shouldIncrementServerwide) {
-        await tx`
-				UPDATE text_serverwide_quotas
-				SET usage_count = usage_count + 1
-				WHERE server_id = ${serverId}
-			`;
-      }
-    });
-
+    await repositoryIncrementTextQuota(serverId, userDiscId);
     log.info("Incremented text quotas");
   } catch (error) {
     log.error("Failed to increment text quota", error);
@@ -287,11 +193,7 @@ export async function incrementTextQuota(serverId: number, userDiscId: string): 
  */
 export async function cleanupOldTextQuotas(): Promise<number> {
   try {
-    const result = await sql<{ cleanup_old_text_quotas: number }[]>`
-			SELECT cleanup_old_text_quotas() AS cleanup_old_text_quotas
-		`;
-
-    const deletedCount = result[0]?.cleanup_old_text_quotas || 0;
+    const deletedCount = await repositoryCleanupOldTextQuotas();
 
     if (deletedCount > 0) {
       log.info("Cleaned up old text quota records");
@@ -310,17 +212,7 @@ export async function cleanupOldTextQuotas(): Promise<number> {
  */
 export async function resetTextServerwideQuota(serverId: number): Promise<void> {
   try {
-    const config = await getTextQuotaConfig(serverId);
-
-    await sql`
-			UPDATE text_serverwide_quotas
-			SET
-				usage_count = 0,
-				quota_period_start = CURRENT_TIMESTAMP,
-				quota_period_end = CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
-			WHERE server_id = ${serverId}
-		`;
-
+    await resetServerwideTextQuotaPool(serverId);
     log.info("Manually reset text serverwide quota");
   } catch (error) {
     log.error("Failed to reset text serverwide quota", error);

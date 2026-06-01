@@ -5,6 +5,7 @@ import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
 
 const SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
   ContextItemTag.SYSTEM_HUMANIZER_RULES,
+  ContextItemTag.SYSTEM_PERSONA_PROMPT,
   ContextItemTag.SYSTEM_PERSONALITY,
   ContextItemTag.KNOWLEDGE_SERVER_INFO,
   ContextItemTag.KNOWLEDGE_SERVER_EMOJIS,
@@ -71,7 +72,27 @@ export async function buildOpenAICompatibleMessages(
         continue;
       }
 
-      if (part.type !== "image" || !options.seesImages) {
+      if (part.type === "video") {
+        // Generic OpenAI-compatible endpoints don't support video embedding.
+        // Add a text placeholder so the model is aware a video was attached.
+        contentParts.push({
+          type: "text",
+          text: "[System: A video is attached to this message that this model cannot process.]",
+        });
+        continue;
+      }
+
+      if (part.type !== "image") {
+        continue;
+      }
+      if (!options.seesImages) {
+        // Image part present but model cannot process it — add a text placeholder
+        // so the model is still aware an image was attached. This can happen when
+        // context was built with images included for a vision-capable fallback model.
+        contentParts.push({
+          type: "text",
+          text: "[System: An image is attached to this message that this model cannot process.]",
+        });
         continue;
       }
 
@@ -330,9 +351,25 @@ async function convertImagePartToOpenAIContentPart(
       },
     };
   } catch (error) {
-    log.warn(`Failed to fetch image: ${part.uri}`, {
-      error: error instanceof Error ? error.message : String(error),
-    });
+    const fallback = (part as { fallbackUri?: string }).fallbackUri;
+    if (fallback && fallback !== part.uri) {
+      try {
+        const optimized = await fetchAndOptimizeImage(fallback, part.mimeType);
+        log.info(`OpenAICompatible: Image loaded via fallback CDN URL ${fallback}`);
+        return {
+          type: "image_url",
+          image_url: { url: `data:${optimized.mimeType};base64,${optimized.data}` },
+        };
+      } catch (fallbackErr) {
+        log.warn(`OpenAICompatible: Image processing error (proxy + CDN both failed) ${part.uri}`, {
+          error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+        });
+      }
+    } else {
+      log.warn(`Failed to fetch image: ${part.uri}`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
     return null;
   }
 }

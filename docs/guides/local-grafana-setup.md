@@ -1,4 +1,6 @@
-# Local Grafana Setup (Cloud SQL + GCP Monitoring)
+---
+title: "Local Grafana Setup"
+---
 
 This guide connects your local Grafana instance to TomoriBot's production Cloud SQL database
 and GCP monitoring stack (BigQuery logs, Cloud Logging, Cloud Monitoring).

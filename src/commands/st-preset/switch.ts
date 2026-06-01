@@ -8,8 +8,9 @@ import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
-import { loadPresetsForServer, setActivePreset } from "@/utils/db/stPresetDb";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 import type { UserRow, ErrorContext, StPresetRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 
@@ -61,7 +62,7 @@ export async function execute(
 
   try {
     // 2. Load all presets for this server (filter rows where preset_id is defined)
-    const allPresets = (await loadPresetsForServer(tomoriState.server_id)).filter(
+    const allPresets = (await presetRepository.loadPresetsForServer(tomoriState.server_id)).filter(
       (p): p is StPresetRow & { preset_id: number } => p.preset_id !== undefined,
     );
 
@@ -139,7 +140,7 @@ export async function execute(
     }
 
     // 8. Activate the selected preset (deactivates all others for this server)
-    const activated = await setActivePreset(tomoriState.server_id, selectedPreset.preset_id);
+    const activated = await presetRepository.setActivePreset(tomoriState.server_id, selectedPreset.preset_id);
     if (!activated) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
@@ -164,7 +165,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: null,
-      tomoriId: null,
+      personaId: null,
       errorType: "CommandExecutionError",
       metadata: { command: "st-preset switch" },
     };
