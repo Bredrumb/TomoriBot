@@ -16,7 +16,19 @@ import {
   buildReferencedMessageUrl,
   sendToolProgressNotice,
 } from "@/utils/discord/toolProgressNotice";
-import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
+import {
+  BaseTool,
+  type Tool,
+  type ToolAssemblyContext,
+  type ToolContext,
+  type ToolParameterSchema,
+  type ToolResult,
+} from "../../types/tool/interfaces";
+import { createToolVariant } from "@/tools/assembly";
+import {
+  resolveImageToolCapabilities,
+  type ImageToolCapabilities,
+} from "@/tools/functionCalls/generateImageToolCapabilities";
 import { checkImageQuota, incrementImageQuota, type QuotaCheckResult } from "../../utils/quota/imageQuotaManager";
 import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
 import { resolveNativeImageGenerationCapability } from "@/utils/provider/providerCapabilityResolver";
@@ -35,6 +47,98 @@ const IMAGE_REFERENCE_MAX_COUNT = Number.parseInt(process.env.IMAGE_REFERENCE_MA
 const IMAGE_REFERENCE_MAX_TOTAL_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_TOTAL_BYTES ?? "6291456", 10);
 const IMAGE_REFERENCE_TINY_MAX_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_TINY_MAX_BYTES ?? "950000", 10);
 const IMAGE_REFERENCE_MAX_SINGLE_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_SINGLE_BYTES ?? "2097152", 10);
+
+const IMAGE_TO_IMAGE_PARAMETER_NAMES = ["media_id", "target_identity", "denoise"] as const;
+const INPAINT_PARAMETER_NAMES = [
+  "inpaint",
+  "mask_prompt",
+  "clothing_segment_categories",
+  "clothing_mode",
+  "mask_threshold",
+  "mask_grow",
+  "mask_feather",
+  "cfg",
+  "mask_mode",
+  "inpaint_preset",
+  "inpaint_mode",
+] as const;
+const OUTPAINT_PARAMETER_NAMES = [
+  "outpaint",
+  "outpaint_strategy",
+  "outpaint_amount",
+  "outpaint_left_prompt",
+  "outpaint_right_prompt",
+  "outpaint_top_prompt",
+  "outpaint_bottom_prompt",
+  "extend_direction",
+  "extend_pixels",
+  "outpaint_overlap",
+  "outpaint_zoom_scale",
+] as const;
+
+function getSupportedImageModeLabels(capabilities: ImageToolCapabilities): string[] {
+  const labels = [];
+  if (capabilities.textToImage) labels.push("text-to-image");
+  if (capabilities.imageToImage) labels.push("image-to-image");
+  if (capabilities.inpaint) labels.push("inpainting");
+  if (capabilities.outpaint) labels.push("outpainting");
+  return labels;
+}
+
+function buildImageToolDescription(capabilities: ImageToolCapabilities): string {
+  const modeList = getSupportedImageModeLabels(capabilities).join(", ");
+  return `Generate images using the active image backend (${capabilities.sourceLabel}). This schema only exposes supported modes for the configured backend: ${modeList}. Sends the result directly to Discord.`;
+}
+
+function includeImageParameter(parameterName: string, capabilities: ImageToolCapabilities): boolean {
+  if (parameterName === "prompt" || parameterName === "aspect_ratio") {
+    return true;
+  }
+
+  if (IMAGE_TO_IMAGE_PARAMETER_NAMES.includes(parameterName as (typeof IMAGE_TO_IMAGE_PARAMETER_NAMES)[number])) {
+    return capabilities.imageToImage || capabilities.inpaint || capabilities.outpaint;
+  }
+
+  if (INPAINT_PARAMETER_NAMES.includes(parameterName as (typeof INPAINT_PARAMETER_NAMES)[number])) {
+    return capabilities.inpaint || capabilities.outpaint;
+  }
+
+  if (OUTPAINT_PARAMETER_NAMES.includes(parameterName as (typeof OUTPAINT_PARAMETER_NAMES)[number])) {
+    return capabilities.outpaint;
+  }
+
+  return false;
+}
+
+function buildImageToolParameters(tool: Tool, capabilities: ImageToolCapabilities): ToolParameterSchema {
+  const properties: ToolParameterSchema["properties"] = {};
+
+  for (const [parameterName, parameterSchema] of Object.entries(tool.parameters.properties)) {
+    if (includeImageParameter(parameterName, capabilities)) {
+      properties[parameterName] = parameterSchema;
+    }
+  }
+
+  return {
+    ...tool.parameters,
+    properties,
+    required: tool.parameters.required.filter((parameterName) => parameterName in properties),
+  };
+}
+
+export function buildGenerateImageToolVariant(tool: Tool, capabilities: ImageToolCapabilities | null): Tool | null {
+  if (
+    !capabilities ||
+    (!capabilities.textToImage && !capabilities.imageToImage && !capabilities.inpaint && !capabilities.outpaint)
+  ) {
+    return null;
+  }
+
+  return createToolVariant(tool, {
+    description: buildImageToolDescription(capabilities),
+    parameters: buildImageToolParameters(tool, capabilities),
+  });
+}
 
 /**
  * Tool for generating images using the active provider's native image API
@@ -205,6 +309,11 @@ export class GenerateImageTool extends BaseTool {
    */
   isAvailableForContext(_provider: string, context?: ToolContext): boolean {
     return (context?.tomoriState.config.diffusion_model_id ?? null) !== null;
+  }
+
+  async assembleForContext(context: ToolAssemblyContext): Promise<Tool | null> {
+    const capabilities = await resolveImageToolCapabilities(context.state);
+    return buildGenerateImageToolVariant(this, capabilities);
   }
 
   /**

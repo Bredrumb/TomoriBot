@@ -11,17 +11,62 @@
  * wrong-tool-name fuzzy-matching errors observed in NovelAI streams.
  */
 
-import { BaseTool, type ToolContext, type ToolResult } from "@/types/tool/interfaces";
+import {
+  BaseTool,
+  type Tool,
+  type ToolAssemblyContext,
+  type ToolContext,
+  type ToolParameterSchema,
+  type ToolResult,
+} from "@/types/tool/interfaces";
+import { createToolVariant } from "@/tools/assembly";
 import { log } from "@/utils/misc/logger";
 import { executeWebSearchWithFallback } from "./dispatcher";
+import { resolveWebSearchToolCapabilities, type WebSearchToolCapabilities } from "./capabilities";
 import { SEARCH_CATEGORIES, type SearchCategory } from "./types";
+
+function formatCategoryList(categories: SearchCategory[]): string {
+  return categories.map((category) => `'${category}'`).join(", ");
+}
+
+export function buildWebSearchToolVariant(tool: Tool, capabilities: WebSearchToolCapabilities | null): Tool | null {
+  if (!capabilities || capabilities.categories.length === 0) {
+    return null;
+  }
+
+  const categoryDescription =
+    capabilities.categories.length === 1 && capabilities.categories[0] === "text"
+      ? "Search category. Only 'text' is available for the active search backend this turn."
+      : `Search category. Available categories for the active search backend this turn: ${formatCategoryList(
+          capabilities.categories,
+        )}.`;
+
+  const parameters: ToolParameterSchema = {
+    ...tool.parameters,
+    properties: {
+      ...tool.parameters.properties,
+      category: {
+        ...tool.parameters.properties.category,
+        description: categoryDescription,
+        enum: [...capabilities.categories],
+      },
+    },
+  };
+
+  return createToolVariant(tool, {
+    description:
+      `Search the web using ${capabilities.engineLabel}. ` +
+      `The schema only exposes categories supported by the active backend: ${formatCategoryList(
+        capabilities.categories,
+      )}.`,
+    parameters,
+  });
+}
 
 export class WebSearchTool extends BaseTool {
   name = "web_search";
   description =
-    "Search the web for information. Supports text/image/video/news categories, " +
-    "plus SearXNG-only science/it/files/music types when available. " +
-    "Routes through the best available search engine automatically.";
+    "Search the web for information. The category enum is narrowed during tool assembly to the active backend's supported categories. Routes through the best available search engine automatically.";
 
   category = "search" as const;
   requiresFeatureFlag = "web_search";
@@ -40,10 +85,7 @@ export class WebSearchTool extends BaseTool {
       category: {
         type: "string" as const,
         description:
-          "Search category. Use 'text' for general web results (default), 'image' for pictures, " +
-          "'video' for videos, and 'news' for recent articles. Use SearXNG-only 'science', 'it', " +
-          "'files', or 'music' only when the user clearly asks for that category ('it' for code snippets, and 'science' for research papers); these may be unavailable " +
-          "when no SearXNG backend is configured.",
+          "Search category. The assembled schema only includes categories supported by the active backend for this turn.",
         enum: [...SEARCH_CATEGORIES],
       },
       count: {
@@ -59,6 +101,12 @@ export class WebSearchTool extends BaseTool {
 
   isAvailableFor(_provider: string): boolean {
     return true;
+  }
+
+  async assembleForContext(context: ToolAssemblyContext): Promise<Tool | null> {
+    const serverId = Number.parseInt(context.state.server_id, 10);
+    const capabilities = await resolveWebSearchToolCapabilities(Number.isInteger(serverId) ? serverId : undefined);
+    return buildWebSearchToolVariant(this, capabilities);
   }
 
   protected isEnabled(context: ToolContext): boolean {

@@ -49,6 +49,6 @@ Then run `bun run dev` once the container is healthy (`docker ps` shows `(health
 ### 3. No SearXNG
 Leave `SEARXNG_BASE_URL` unset — the chain falls back to `Brave → DDG → Felo` exactly as before. Nothing breaks.
 
-SearXNG-only categories return the normal "category unavailable" message when no SearXNG sidecar is configured. The common categories (`text`, `image`, `video`, `news`) still work through Brave when a Brave API key is configured.
+When no SearXNG sidecar is configured, the assembled `web_search` schema no longer advertises SearXNG-only categories. The common categories (`text`, `image`, `video`, `news`) still appear when Brave is configured, and text-only search appears when only DDG/Felo MCP fallback is available.
 
 *Note: Per-engine timeout and the health-probe cache duration are tunable via `WEB_SEARCH_TIMEOUT_MS` and `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` (see `.env.optional.example`).*

@@ -190,6 +190,39 @@ export type ToolModelCapabilityRequirements = Partial<Pick<LlmRow, ToolModelCapa
 export type ToolAvailabilityLlmState = Pick<LlmRow, "llm_codename" | ToolModelCapabilityKey>;
 
 /**
+ * Minimal state used while assembling the LLM-visible tool schema before
+ * provider-specific adapters serialize it.
+ */
+export interface ToolAssemblyState {
+  server_id: string;
+  /** True when the active persona has either a local voice sample or provider-hosted voice assigned. */
+  activePersonaHasElevenlabsVoice: boolean;
+  /** Present when the active persona should use instruct-based VoiceDesign synthesis. */
+  activePersonaVoiceDesignPrompt?: string | null;
+  /** Display/name marker for the active speech voice selection. */
+  activePersonaVoiceName?: string | null;
+  llm: ToolAvailabilityLlmState;
+  diffusion_model_id?: number | null;
+  nai_diffusion_model_id?: number | null;
+  video_model_id?: number | null;
+  config: {
+    sticker_usage_enabled: boolean;
+    web_search_enabled: boolean;
+    self_teaching_enabled: boolean;
+    manage_message_enabled: boolean;
+    imagegen_enabled: boolean;
+    videogen_enabled: boolean;
+    voice_message_enabled: boolean;
+    thread_creation_enabled: boolean;
+  };
+}
+
+export interface ToolAssemblyContext {
+  provider: string;
+  state: ToolAssemblyState;
+}
+
+/**
  * Generic tool interface
  * All tools must implement this interface regardless of provider
  */
@@ -207,6 +240,9 @@ export interface Tool {
 
   // Provider compatibility check
   isAvailableFor(provider: string): boolean;
+
+  // Optional LLM-visible schema assembly hook
+  assembleForContext?(context: ToolAssemblyContext): Tool | null | Promise<Tool | null>;
 
   // Optional tool configuration
   requiredModelCapabilities?: ToolModelCapabilityRequirements;

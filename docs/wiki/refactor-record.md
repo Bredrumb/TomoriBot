@@ -10,6 +10,20 @@ Snapshot date: 2026-05-28
 
 ---
 
+## Dynamic Tool Schema Assembler
+
+Added a focused assembler seam for backend-sensitive tool schemas. Built-in tools now pass through `src/tools/assembly.ts` after centralized availability filtering and before provider adapter serialization. Tools without `assembleForContext()` are returned unchanged; tools with dynamic backend constraints can return a narrowed per-turn `Tool` variant or `null`.
+
+Initial adopters:
+
+- `web_search` now advertises only categories supported by the active backend: SearXNG all categories, Brave base categories, DuckDuckGo/Felo text-only, and no tool when no search backend is available.
+- `generate_image` now prunes image-to-image, inpaint, and outpaint arguments unless the configured standard image backend supports them. ComfyUI reads existing `workflow_supports`; non-Comfy custom endpoints can opt into future `image_modes` metadata and otherwise fail closed to text-to-image only.
+- `generate_voice_message` moved script-markup and VoiceDesign schema shaping out of `availability.ts` into the tool assembler hook.
+
+Deferred candidates: video generation provider/model option tables, permission-sensitive Discord message/thread tools, sticker-name schema hints, and fetch-url backend details.
+
+---
+
 ## Module Restructure
 
 Records which refactor phases produced real responsibility-owned modules and which left thin facades over a new god file. The integrity check script `scripts/archived/checkRefactorIntegrity.ts` was used to detect facade-shaped barrels, active `*.legacy.ts` files, and oversized runtime/orchestrator files.

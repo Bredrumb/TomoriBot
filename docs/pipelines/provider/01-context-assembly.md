@@ -23,6 +23,11 @@ provider class) constructs the adapter and `StreamConfig`, then calls
 `StreamOrchestrator.streamToDiscord(adapter, config, context)`, which calls `adapter.startStream`
 to begin this stage.
 
+Tool declarations are prepared before this stage by `getAvailableToolsWithMCP()`. That path first
+filters tools by provider/config/model constraints, then runs the dynamic tool assembler
+(`src/tools/assembly.ts`) so provider adapters receive normal `Tool` objects whose descriptions and
+parameter schemas already match the active backend for the turn.
+
 ## Input
 
 - `config: StreamConfig` — extends `ProviderConfig` with Discord-specific settings (buffer sizes,
@@ -68,13 +73,15 @@ After context assembly completes (before the generator loop begins):
   in the correct role ordering required by the provider.
 - Function interaction history (if present) has been replayed in alternating model/user turns with
   image metadata attached to the corresponding user turn.
-- `config.tools` (if non-empty) has been attached to the request config.
+- `config.tools` (if non-empty) has been attached to the request config after dynamic tool assembly
+  and provider-specific serialization.
 
 ## Extension points
 
 | Surface | Plugin-relevance |
 |---|---|
 | `BaseStreamAdapter.startStream()` abstract method | **A plugin adding a new provider implements this method.** The contract is defined in `src/types/stream/interfaces.ts:182`. The full implementation must yield `RawStreamChunk` objects (stage 02) and conform to the generator signature. |
+| Dynamic tool assembly | `src/tools/assembly.ts` is the standard seam for tools whose LLM-visible schema depends on active backend capability. A built-in tool implements `assembleForContext(context)` and returns a per-turn variant or `null`; provider adapters should keep consuming the assembled `Tool[]`. |
 | `StructuredContextItem` routing (system vs. dialogue) | Each adapter decides which `ContextItemTag` values become system instructions vs. dialogue turns. Google's `SYSTEM_INSTRUCTION_TAGS` set at `src/providers/google/googleStreamAdapter.ts:94` is the canonical example. A plugin changing context routing would subclass the relevant adapter or provide its own. → plugin plan candidate |
 | `buildProviderStopStrings()` | `src/providers/utils/stopStrings.ts`. Internal — stop-string merging is a provider-operational concern; the `llm_stop_strings` DB column is the configuration surface. |
 | Image / video / GIF fetching (`fetchAndOptimizeImage`, `safeDownload`, `extractGifKeyframes`) | Internal — media fetching is tightly coupled to provider-specific inline-data limits and format requirements. |

@@ -1,5 +1,6 @@
 import { ChannelType } from "discord.js";
-import type { Tool, ToolAvailabilityLlmState, ToolContext } from "@/types/tool/interfaces";
+import type { Tool, ToolAssemblyState, ToolAvailabilityLlmState, ToolContext } from "@/types/tool/interfaces";
+import { assembleToolsForContext } from "@/tools/assembly";
 import { ELEVENLABS_SERVICE_NAME } from "@/utils/audio/elevenLabsAccount";
 import { getCachedEnabledGuildMcpConfigs } from "@/utils/cache/guildMcpConfigCache";
 import { sql } from "@/utils/db/client";
@@ -9,36 +10,12 @@ import { log } from "@/utils/misc/logger";
 import { resolveActiveSpeechEndpoint } from "@/utils/provider/speechEndpointResolver";
 import { hasOptApiKey } from "@/utils/security/crypto";
 import { configToFeatureFlags, filterToolsByFeatureFlags } from "@/utils/tools/featureFlagMapper";
-import { VOICE_TOOL_VARIANTS, type VoiceScriptMarkup } from "@/tools/functionCalls/generateVoiceMessageTool";
-import { shouldUseVoiceDesignForPersona } from "@/providers/custom/styles/ttsVoiceDesignAdapter";
 
 /**
  * Minimal state interface for context building operations.
  * Contains only what's needed for feature flag checking without full Discord context.
  */
-export interface ToolStateForContext {
-  server_id: string;
-  /** True when the active persona has either a local voice sample or provider-hosted voice assigned. */
-  activePersonaHasElevenlabsVoice: boolean;
-  /** Present when the active persona should use instruct-based VoiceDesign synthesis. */
-  activePersonaVoiceDesignPrompt?: string | null;
-  /** Display/name marker for the active speech voice selection. */
-  activePersonaVoiceName?: string | null;
-  llm: ToolAvailabilityLlmState;
-  diffusion_model_id?: number | null;
-  nai_diffusion_model_id?: number | null;
-  video_model_id?: number | null;
-  config: {
-    sticker_usage_enabled: boolean;
-    web_search_enabled: boolean;
-    self_teaching_enabled: boolean;
-    manage_message_enabled: boolean;
-    imagegen_enabled: boolean;
-    videogen_enabled: boolean;
-    voice_message_enabled: boolean;
-    thread_creation_enabled: boolean;
-  };
-}
+export type ToolStateForContext = ToolAssemblyState;
 
 export interface AvailableToolsWithMCP {
   builtInTools: Tool[];
@@ -323,47 +300,13 @@ export async function getAvailableToolsWithMCP(
             })`,
           );
         }
-      } else {
-        const scriptMarkup =
-          (activeSpeechEndpoint?.endpoint.extra_config?.script_markup as string | undefined) ?? "bracket-tags";
-        const voiceDesign = shouldUseVoiceDesignForPersona(
-          activeSpeechEndpoint?.endpoint,
-          stateForContext.activePersonaVoiceDesignPrompt,
-          stateForContext.activePersonaVoiceName,
-        );
-        const variant = voiceDesign
-          ? VOICE_TOOL_VARIANTS["voice-design"]
-          : (VOICE_TOOL_VARIANTS[scriptMarkup as VoiceScriptMarkup] ?? VOICE_TOOL_VARIANTS["bracket-tags"]);
-
-        builtInTools = builtInTools.map((tool) => {
-          if (tool.name !== "generate_voice_message") return tool;
-          return Object.create(tool, {
-            description: { value: variant.toolDescription, enumerable: true },
-            parameters: {
-              value: {
-                ...tool.parameters,
-                properties: {
-                  ...tool.parameters.properties,
-                  script: {
-                    ...tool.parameters.properties.script,
-                    description: variant.scriptDescription,
-                  },
-                  ...(voiceDesign
-                    ? {
-                        voice_instructions: {
-                          type: "string" as const,
-                          description: VOICE_TOOL_VARIANTS["voice-design"].voiceInstructionsDescription,
-                        },
-                      }
-                    : {}),
-                },
-              },
-              enumerable: true,
-            },
-          });
-        });
       }
     }
+
+    builtInTools = await assembleToolsForContext(builtInTools, {
+      provider,
+      state: stateForContext,
+    });
 
     const totalCount = builtInTools.length + mcpFunctionNames.length;
 

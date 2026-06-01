@@ -1,6 +1,14 @@
 import { AttachmentBuilder, Routes } from "discord.js";
 import type { Webhook } from "discord.js";
-import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
+import {
+  BaseTool,
+  type Tool,
+  type ToolAssemblyContext,
+  type ToolContext,
+  type ToolParameterSchema,
+  type ToolResult,
+} from "@/types/tool/interfaces";
+import { createToolVariant } from "@/tools/assembly";
 import { synthesizeSpeechViaElevenLabsAdapter } from "@/providers/custom/styles/elevenLabsAdapter";
 import { synthesizeSpeechViaTtsClone } from "@/providers/custom/styles/ttsCloningAdapter";
 import {
@@ -83,6 +91,33 @@ export const VOICE_TOOL_VARIANTS = {
 
 export type VoiceScriptMarkup = keyof typeof VOICE_TOOL_VARIANTS;
 
+export function buildVoiceMessageToolVariant(tool: Tool, scriptMarkup: VoiceScriptMarkup): Tool {
+  const variant = VOICE_TOOL_VARIANTS[scriptMarkup] ?? VOICE_TOOL_VARIANTS["bracket-tags"];
+  const parameters: ToolParameterSchema = {
+    ...tool.parameters,
+    properties: {
+      ...tool.parameters.properties,
+      script: {
+        ...tool.parameters.properties.script,
+        description: variant.scriptDescription,
+      },
+      ...(scriptMarkup === "voice-design"
+        ? {
+            voice_instructions: {
+              type: "string" as const,
+              description: VOICE_TOOL_VARIANTS["voice-design"].voiceInstructionsDescription,
+            },
+          }
+        : {}),
+    },
+  };
+
+  return createToolVariant(tool, {
+    description: variant.toolDescription,
+    parameters,
+  });
+}
+
 export class GenerateVoiceMessageTool extends BaseTool {
   name = "generate_voice_message";
   description = VOICE_TOOL_VARIANTS["bracket-tags"].toolDescription;
@@ -103,6 +138,25 @@ export class GenerateVoiceMessageTool extends BaseTool {
     },
     required: ["title", "script"],
   };
+
+  async assembleForContext(context: ToolAssemblyContext): Promise<Tool | null> {
+    const serverId = Number.parseInt(context.state.server_id, 10);
+    const activeSpeechEndpoint = Number.isInteger(serverId) ? await resolveActiveSpeechEndpoint(serverId) : null;
+    const scriptMarkup =
+      (activeSpeechEndpoint?.endpoint.extra_config?.script_markup as string | undefined) ?? "bracket-tags";
+    const voiceDesign = shouldUseVoiceDesignForPersona(
+      activeSpeechEndpoint?.endpoint,
+      context.state.activePersonaVoiceDesignPrompt,
+      context.state.activePersonaVoiceName,
+    );
+    const variant = voiceDesign
+      ? "voice-design"
+      : scriptMarkup in VOICE_TOOL_VARIANTS
+        ? (scriptMarkup as VoiceScriptMarkup)
+        : "bracket-tags";
+
+    return buildVoiceMessageToolVariant(this, variant);
+  }
 
   private resolveThreadId(context: ToolContext): string | undefined {
     return "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()

@@ -30,7 +30,7 @@ If you customize TomoriBot's system prompt, persona instructions, or external pr
 | `process_gif` | `{gif_tool}` | Base Tool; development only; requires a vision-capable chat model | Extract keyframes from a GIF for analysis. |
 | `process_youtube_video` | `{youtube_tool}` | Base Tool; requires a model with YouTube/video support | Analyze a specific YouTube link on demand. |
 | `analyze_image` | `{image_analysis_tool}` | Base Tool; requires a configured `vision_llm`; only shown when the current chat model cannot already see images | Delegate image understanding to a separate vision model. |
-| `generate_image` | `{image_generation_tool}` | `imagegen_enabled`; active provider must support native image generation | Generate or edit an image with the current provider. |
+| `generate_image` | `{image_generation_tool}` | `imagegen_enabled`; active provider must support native image generation | Generate an image with the current provider; reference, inpaint, and outpaint arguments are shown only when the configured backend supports them. |
 | `generate_image_nai` | `{anime_image_generation_tool}` | `imagegen_enabled`; NovelAI provider or NovelAI optional API key | Generate or edit anime-styled images with NovelAI. |
 | `generate_voice_message` | `{voice_message_tool}` | ElevenLabs optional API key; active persona needs an ElevenLabs voice; `voice_message_enabled` | Send a spoken Discord voice reply instead of plain text. |
 
@@ -44,13 +44,13 @@ Family macros below may resolve to the listed bundled tools or to compatible gui
 
 #### Unified `web_search`
 
-A single LLM-visible tool replaces the previous four `brave_*` tools. It takes a `category` enum (`text` / `image` / `video` / `news` / `science` / `it` / `files` / `music`) and routes through an internal **engine chain** — **Brave → SearXNG → DuckDuckGo → Felo** — picking the first engine that is both available and supports the requested category. Brave supports the common four categories (`text`, `image`, `video`, `news`); SearXNG supports those plus the SearXNG-only verticals (`science`, `it`, `files`, `music`); DDG and Felo only support `text`. Non-text categories fall back to a friendly "category unavailable" message when no engine in the chain handles them.
+A single LLM-visible tool replaces the previous four `brave_*` tools. Its assembled `category` enum is narrowed for the active backend before the provider adapter sees it. SearXNG exposes all categories (`text` / `image` / `video` / `news` / `science` / `it` / `files` / `music`), Brave exposes the common four categories (`text`, `image`, `video`, `news`), and DDG/Felo expose `text` only. If no backend is available, `web_search` is omitted.
 
 Search progress embeds show the selected category as a separate localized label (for example, "Searching videos for `beaver`...") rather than mutating the query string.
 
 | Tool name | Prompt macro | Requirements | Purpose |
 |---|---|---|---|
-| `web_search` | `{web_search_tool}` / `{image_search_tool}` / `{video_search_tool}` / `{news_search_tool}` | `web_search_enabled` | Search the web. The `category` arg selects text/image/video/news plus SearXNG-only science/it/files/music verticals. Optional `count` arg sets result count (image: max 10 sent to Discord; text-like categories: max 20 in result list). The dispatcher hides engine selection from the model — saves ~400 tokens/turn vs. the previous 4-tool surface. |
+| `web_search` | `{web_search_tool}` / `{image_search_tool}` / `{video_search_tool}` / `{news_search_tool}` | `web_search_enabled`; at least one search backend currently available | Search the web. The assembled `category` arg only lists categories supported by the active backend. Optional `count` arg sets result count (image: max 10 sent to Discord; text-like categories: max 20 in result list). The dispatcher hides engine selection from the model — saves ~400 tokens/turn vs. the previous 4-tool surface. |
 | `fetch_url` | `{url_fetch_tool}` | `web_search_enabled`; active bundled fetch path; unavailable on NovelAI | Read a specific web page or URL in more detail. Arguments mirror the bundled MCP fetch server: `url`, optional `max_length`, optional `start_index`, optional `raw`. |
 | `url-metadata` | `{url_metadata_tool}` | `web_search_enabled`; active DuckDuckGo/Felo MCP search server | Retrieve page metadata for a URL when a metadata-specific fetcher is available. |
 

@@ -14,6 +14,8 @@ import { ToolRegistry } from "../toolRegistry";
 import { toolRepository } from "@/utils/db/repositories";
 import { getLlmDisplayName } from "@/utils/provider/modelDisplay";
 import { getCachedActivePreset } from "@/utils/cache/stPresetCache";
+import { resolveImageToolCapabilities } from "@/tools/functionCalls/generateImageToolCapabilities";
+import { resolveWebSearchToolCapabilities } from "@/tools/webSearch/capabilities";
 
 /**
  * Tool for reviewing TomoriBot's capabilities and available commands
@@ -124,6 +126,43 @@ export class ReviewCapabilitiesTool extends BaseTool {
       const isUncensored = llm.is_uncensored ?? false;
       const hasStandardImageSlot = config.diffusion_model_id != null;
       const hasVideoSlot = config.video_model_id != null;
+      const toolAssemblyState = {
+        server_id: context.tomoriState.server_id.toString(),
+        activePersonaHasElevenlabsVoice: Boolean(
+          context.tomoriState.speech_voice_sample_id ||
+            context.tomoriState.speech_voice_design_prompt?.trim() ||
+            context.tomoriState.speech_voice_id?.trim(),
+        ),
+        activePersonaVoiceDesignPrompt: context.tomoriState.speech_voice_design_prompt?.trim() || null,
+        activePersonaVoiceName: context.tomoriState.speech_voice_name,
+        diffusion_model_id: config.diffusion_model_id,
+        nai_diffusion_model_id: config.nai_diffusion_model_id,
+        video_model_id: config.video_model_id,
+        llm: {
+          llm_codename: llm.llm_codename,
+          has_tools: llm.has_tools,
+          sees_images: llm.sees_images,
+          sees_videos: llm.sees_videos,
+          sees_youtube: llm.sees_youtube,
+          supports_structoutput: llm.supports_structoutput,
+        },
+        config: {
+          sticker_usage_enabled: config.sticker_usage_enabled,
+          web_search_enabled: config.web_search_enabled,
+          self_teaching_enabled: config.self_teaching_enabled,
+          manage_message_enabled: config.manage_message_enabled,
+          imagegen_enabled: config.imagegen_enabled,
+          videogen_enabled: config.videogen_enabled,
+          voice_message_enabled: config.voice_message_enabled ?? true,
+          thread_creation_enabled: config.thread_creation_enabled,
+        },
+      };
+      const webSearchCapabilities =
+        config.web_search_enabled && hasTools
+          ? await resolveWebSearchToolCapabilities(context.tomoriState.server_id)
+          : null;
+      const imageToolCapabilities =
+        config.imagegen_enabled && hasStandardImageSlot ? await resolveImageToolCapabilities(toolAssemblyState) : null;
 
       // 2. Build dynamic capabilities markdown with model information
       let capabilitiesContent = "# Your Chat Capabilities\n\n";
@@ -173,13 +212,15 @@ export class ReviewCapabilitiesTool extends BaseTool {
       // 4. Search & Information section (only if tools are available)
       if (hasTools) {
         capabilitiesContent += "## Search & Information\n\n";
-        capabilitiesContent += "You CAN search and retrieve information:\n";
-        capabilitiesContent += "- **Web search** (web_search for current information)\n";
-        capabilitiesContent += "- **Image search** (web_search with image category for finding images)\n";
-        capabilitiesContent += "- **Video search** (web_search with video category for finding videos)\n";
-        capabilitiesContent += "- **News search** (web_search with news category for latest news)\n";
-        capabilitiesContent +=
-          "- **Specialty search** (web_search with SearXNG-only science, IT, files, or music categories when available)\n";
+        if (webSearchCapabilities) {
+          capabilitiesContent += "You CAN search and retrieve information:\n";
+          capabilitiesContent += `- **Web search** (web_search categories currently exposed: ${webSearchCapabilities.categories.join(", ")})\n`;
+        } else if (config.web_search_enabled) {
+          capabilitiesContent +=
+            "Web search is enabled, but no configured search backend is currently available for the tool schema.\n";
+        } else {
+          capabilitiesContent += "Web search is disabled by server configuration.\n";
+        }
         capabilitiesContent += "- **URL fetching** (fetch for retrieving webpage content)\n\n";
       }
 
@@ -202,17 +243,27 @@ export class ReviewCapabilitiesTool extends BaseTool {
 
       // 5c. Image Generation section (conditional on provider and configuration)
       capabilitiesContent += "## Image Generation\n\n";
-      if (config.imagegen_enabled && hasStandardImageSlot) {
+      if (config.imagegen_enabled && hasStandardImageSlot && imageToolCapabilities) {
+        const imageModes = [
+          imageToolCapabilities.textToImage ? "text-to-image" : null,
+          imageToolCapabilities.imageToImage ? "image-to-image" : null,
+          imageToolCapabilities.inpaint ? "inpainting" : null,
+          imageToolCapabilities.outpaint ? "outpainting" : null,
+        ].filter((mode): mode is string => mode !== null);
         capabilitiesContent += "You CAN generate images:\n";
-        capabilitiesContent += "- **Text-to-Image**: Generate images from detailed text prompts\n";
-        capabilitiesContent += "- **Image-to-Image**: Edit or transform reference images using a prompt\n";
+        capabilitiesContent += `- **Current generate_image modes**: ${imageModes.join(", ")}\n`;
         capabilitiesContent += "- **Aspect Ratios**: 1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9\n";
-        capabilitiesContent +=
-          "- **Reference Sources**: Message attachments, embedded images, Discord stickers, custom emojis, or user profile pictures\n";
+        if (imageToolCapabilities.imageToImage || imageToolCapabilities.inpaint || imageToolCapabilities.outpaint) {
+          capabilitiesContent +=
+            "- **Reference Sources**: Message attachments, embedded images, Discord stickers, custom emojis, or user profile pictures\n";
+        }
         capabilitiesContent +=
           "- Users can ask you to generate an image (triggers the generate_image tool), or use `/generate image` directly\n";
         capabilitiesContent +=
           "- When generating, describe in detail: style, composition, colors, mood, and important details\n\n";
+      } else if (config.imagegen_enabled && hasStandardImageSlot && !imageToolCapabilities) {
+        capabilitiesContent +=
+          "Image generation is enabled and a model is configured, but the active image backend could not be resolved for the tool schema.\n\n";
       } else if (config.imagegen_enabled && !hasStandardImageSlot) {
         capabilitiesContent +=
           "Image generation is enabled but no diffusion model is configured. An admin needs to set one with `/config model image`.\n\n";
@@ -261,7 +312,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent +=
           "- **STT**: Automatically transcribe user audio attachments (voice messages, audio files)\n";
         capabilitiesContent +=
-          "- **Expression tags**: Use tags like [happy], [sad], [whispers], [laughs] in voice scripts for emotional delivery\n";
+          "- **Voice script format**: Follow the active `generate_voice_message` schema; it shows whether bracket tags, emoji, plain text, or `voice_instructions` are supported\n";
         capabilitiesContent +=
           "- Users can also ask you to speak or say something out loud (triggers the voice message tool)\n\n";
       } else if (!voiceEnabled) {
@@ -332,12 +383,22 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent += "## Function Calling\n\n";
         capabilitiesContent += "You CAN call functions/tools to perform actions:\n";
         capabilitiesContent += "- **review_capabilities** (check your own capabilities - this function!)\n";
-        capabilitiesContent +=
-          "- **web_search** (search text, image, video, news, and available specialty categories)\n";
+        capabilitiesContent += webSearchCapabilities
+          ? `- **web_search** (currently exposed categories: ${webSearchCapabilities.categories.join(", ")})\n`
+          : "- **web_search** (not currently exposed because no search backend is available or web search is disabled)\n";
         capabilitiesContent += "- **fetch** (retrieve content from URLs)\n";
         const imageGenNote = config.imagegen_enabled
           ? hasStandardImageSlot
-            ? "create AI images from text prompts"
+            ? imageToolCapabilities
+              ? `current modes: ${[
+                  imageToolCapabilities.textToImage ? "text-to-image" : null,
+                  imageToolCapabilities.imageToImage ? "image-to-image" : null,
+                  imageToolCapabilities.inpaint ? "inpainting" : null,
+                  imageToolCapabilities.outpaint ? "outpainting" : null,
+                ]
+                  .filter((mode): mode is string => mode !== null)
+                  .join(", ")}`
+              : "image backend could not be resolved"
             : "no standard image model configured"
           : "disabled by server configuration";
         capabilitiesContent += `- **generate_image** (${imageGenNote})\n`;
