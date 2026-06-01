@@ -12,7 +12,7 @@ export interface TriggerConfig {
  */
 export type ContextPart =
   | { type: "text"; text: string }
-  | { type: "image"; uri: string; mimeType: string } // URI could be a public URL or a data URI
+  | { type: "image"; uri: string; mimeType: string; fallbackUri?: string } // URI could be a public URL or a data URI; fallbackUri tried on fetch failure
   | { type: "video"; uri: string; mimeType: string; isYouTubeLink?: boolean }; // Video support with YouTube detection
 
 export interface ConversationUserReference {
@@ -28,6 +28,7 @@ export enum ContextItemTag {
   SYSTEM_INSTRUCTION_BLOCK = "system_instruction_block", // For the main consolidated system prompt
   SYSTEM_PERSONALITY = "system_personality", // Specific to bot's core personality attributes
   SYSTEM_HUMANIZER_RULES = "system_humanizer_rules", // Specific to humanization instructions
+  SYSTEM_PERSONA_PROMPT = "system_persona_prompt", // Specific to persona prompt
   SYSTEM_FUNCTION_GUIDE = "system_function_guide", // New: For instructions on using available functions
 
   // Knowledge base and environmental context

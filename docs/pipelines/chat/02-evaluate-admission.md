@@ -1,0 +1,97 @@
+---
+title: "02: Admission Check"
+---
+
+The gatekeeper. Decides if/how a message becomes a generation turn.
+
+**File:** `src/utils/chat/admission.ts:66-267`
+
+## Mission
+
+Decide whether this message turns into a generation pass and, if so, eagerly
+load the early state (persona list, main `TomoriState`) downstream stages need
+to start one. Returns a discriminated `ChatAdmission` — runnable or one of four
+non-runnable dispositions.
+
+## Input
+
+`ChatIncoming` (from stage 01).
+
+## Output
+
+`ChatAdmission` — discriminated union (`src/utils/chat/types.ts:93-126`):
+
+- **`RunnableChatAdmission { disposition: "run", ...gathered state }`** —
+  proceed to stage 04. Eagerly populated fields:
+  - `serverDiscId`, `userDiscId`, `cooldownUserDiscId`
+  - `isDMChannel`, `guild`
+  - `tomoriState`, `allPersonas` (main persona + sibling personas)
+- **`NonRunnableChatAdmission { disposition, reason, error? }`** — terminate
+  at stage 03. Disposition variants:
+  - `"ignore"` — bot/webhook/self-reply suppression, easter eggs, audio failure
+  - `"queued"` — channel busy; the queue policy in `admissionQueue` decided
+    enqueue rather than reject
+  - `"blocked"` — privacy, permissions, rate limit, unsupported channel,
+    bot-reply-block, full-privacy user
+  - `"error"` — unexpected failure (rare)
+
+## Side effects
+
+- **Voice transcription** — if the message has audio attachments, transcribes
+  them and either posts a transcript-as-webhook (chat mode) or caches the
+  transcript text (legacy mode); message content is mutated in-place via
+  `applyEffectiveMessageContent` to inject the transcript inline so downstream
+  stages see the spoken text.
+- **Self-reply chain bookkeeping** — `updateSelfReplyChainState` and
+  `setSelfReplyChainOriginUser` updated based on message authorship and
+  manual-trigger flag.
+- **`$whoami` easter egg** — sends an info embed to the channel and returns
+  `ignore` when content === `"$whoami"`.
+- **Audio transcription failure embed** — sends a user-visible warn embed when
+  STT fails with an attributable reason, the message has no text content, and
+  the turn is allowed to surface user errors. Passive guild messages stay
+  quiet.
+- **Suppression cleanup** — clears `selfReplySuppressionUntil` entries that
+  have expired.
+- **Text-quota state cleanup** — `cleanupTextQuotaTriggerStates()` prunes stale
+  entries.
+- **Persona-job mutation** — if the message is a likely-self message and not
+  manually triggered, sets `incoming.isPersonaJob = true` so downstream stages
+  can distinguish persona-driven self-replies from user messages.
+
+## Invariants
+
+After this stage runs:
+
+- If `disposition === "run"`, `tomoriState` and `allPersonas` are non-undefined.
+- Privacy-level `FULL` users are blocked unconditionally (except for
+  self-reminders and manual triggers).
+- DM channels never carry a guild; guild text/thread/voice channels always do.
+- An audio transcript that succeeded leaves a `voice_transcript` cache entry
+  keyed by message ID (legacy mode) or a posted webhook message (chat mode),
+  not both.
+
+## Extension points
+
+This stage is **a long sequence of fixed checks**, not a polymorphic seam.
+Extensibility lives in the helpers it calls:
+
+| Helper | File | What it does | Plugin-relevance |
+|---|---|---|---|
+| `isMatrixRelayMessage`, `isRealUserLikeMessage` | `triggerProcessor.ts` | Trigger-source classification | A new bridge plugin would extend trigger detection here |
+| `transcribeMessageAudioAttachment` | `audioAttachmentTranscription.ts` | STT dispatch | STT providers register via `customEndpointService` — existing mechanism, not chat-specific |
+| `evaluateAdmissionQueueAndTriggerGate` | `admissionQueue.ts` | Channel-busy + trigger gate decision tree; includes cross-persona trigger guard that bypasses the follow-up path when the incoming message explicitly targets a different persona than the active one | → plugin plan candidate if plugins want to add admission policies |
+| `getSelfReplyChainOriginUser`, `updateSelfReplyChainState` | `selfReplyState.ts` | Self-reply chain memory | Internal — tightly coupled to cascade-trigger limit semantics |
+
+**The stage itself is internal** — there is no current seam for "replace
+`evaluateChatAdmission`." A future plugin-extension for early admission veto
+would likely take the form of a pre-admission hook (`beforeAdmission(incoming)
+→ Disposition | null`) running before the fixed checks, not a wholesale
+override.
+
+## Related docs
+
+- Self-reply chain mechanics: → folded into stage 05 docs (cascade limits)
+- Trigger word + screaming regex: → `triggerProcessor.ts` (no dedicated doc;
+  internal helper)
+- Voice transcription: → no dedicated doc yet; helper-only subsystem

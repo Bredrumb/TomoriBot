@@ -1,11 +1,11 @@
 import type { Client, Message, TextBasedChannel, TextChannel } from "discord.js";
 import { ChannelType } from "discord.js";
 import { log, ColorCode } from "../utils/misc/logger";
-import { deleteReminderById, getDueReminders } from "../utils/db/dbRead";
-import { rescheduleReminder } from "../utils/db/dbWrite";
+import { serverScheduleRepository } from "@/utils/db/repositories";
+
 import type { ReminderRow } from "../types/db/schema";
-import { calculateLateness } from "../utils/text/stringHelper";
-import tomoriChat, { suppressNextSelfReply } from "../events/messageCreate/tomoriChat";
+import { calculateLateness } from "@/utils/text/processors/timeUtils";
+import { tomoriChat, suppressNextSelfReply } from "../events/messageCreate/tomoriChat";
 import { createStandardEmbed } from "../utils/discord/embedHelper";
 import { getCachedAllPersonas } from "../utils/cache/tomoriStateCache";
 import {
@@ -14,8 +14,8 @@ import {
   sendWebhookMessageWithIdentity,
 } from "../utils/discord/webhookManager";
 import { ensureDiscordUserMention } from "../utils/discord/mentionHelper";
-import { isBridgeUserId } from "../utils/bridge";
-import { sendMatrixReminderMention } from "../utils/matrix";
+import { isBridgeUserId } from "../utils/bridges";
+import { sendMatrixReminderMention } from "../utils/bridges/matrix";
 
 function getNextRecurringReminderTime(
   reminderTime: Date,
@@ -37,7 +37,7 @@ export class ReminderProcessor {
 
   public async processDueReminders(): Promise<void> {
     try {
-      const dueReminders = await getDueReminders();
+      const dueReminders = await serverScheduleRepository.getDueReminders();
 
       if (!dueReminders || dueReminders.length === 0) {
         return;
@@ -123,44 +123,48 @@ export class ReminderProcessor {
 
       suppressNextSelfReply(channel.id);
 
-      await tomoriChat(
-        this.client,
-        lastMessage,
-        false,
-        true,
-        false,
-        undefined,
-        undefined,
-        false,
-        0,
-        false,
-        reminder.user_discord_id,
-        {
+      const disposition = await tomoriChat({
+        client: this.client,
+        message: lastMessage,
+        isFromQueue: false,
+        isManuallyTriggered: true,
+        forceReason: false,
+        isStopResponse: false,
+        reminderRecipientID: reminder.user_discord_id,
+        reminderData: {
           reminder_purpose: reminder.reminder_purpose,
           reminder_lateness: lateness,
           self_reminder: isSelfReminder,
         },
-        reminder.persona_id ?? undefined,
-        false,
-        false,
-        undefined,
-        "system",
-        undefined, // textQuotaTriggerKey
-        undefined, // textQuotaUserDiscId
-        undefined, // manualSystemPrompt
-        undefined, // manualPrefill
-        undefined, // naiContinuationPrefill
-        undefined, // emptyResponseFinishReason
-        undefined, // injectedContextItems
-        undefined, // forcedMentions
-        undefined, // manualTriggerInvoker
+        selectedPersonaId: reminder.persona_id ?? undefined,
+        isPersonaJob: false,
+        isUserImpersonation: false,
+        textQuotaSource: "system",
+        shouldSurfaceUserErrors: true,
         // Tasks (self_reminder) may spawn follow-up tasks; user reminders block create_task to prevent loops
-        isSelfReminder ? undefined : { disableReminderTool: true },
-      );
+        manualStreamingContextOverrides: isSelfReminder ? undefined : { disableReminderTool: true },
+      });
 
-      log.info(`tomoriChat call completed for reminder ${reminder.reminder_id}`);
+      log.info(`tomoriChat call completed for reminder ${reminder.reminder_id} (disposition: ${disposition})`);
 
-      if (!isSelfReminder && isBridgeUserId(reminder.user_discord_id)) {
+      // 1. If the chat call was rejected before it could run (ignored/blocked/error), do not delete
+      //    the DB row — let the next reconcile cycle retry. Without this guard, a reminder that fires
+      //    while the channel is in a transient blocked/ignored state would be lost forever.
+      if (disposition !== "run" && disposition !== "queued") {
+        log.warn(
+          `Reminder ${reminder.reminder_id} not executed (disposition: ${disposition}); leaving DB row intact for next reconcile cycle.`,
+        );
+        return;
+      }
+
+      // 2. "queued" means the reminder is waiting behind a busy channel. The queued replay carries
+      //    the reminder context (reminderRecipientID/reminderData on QueuedMessage) and will execute
+      //    later, so we still delete/reschedule the DB row to prevent the reconcile loop from
+      //    double-firing. But we skip the post-reminder mention fallback below — firing it now would
+      //    mention the user before the queued reply actually lands.
+      const isQueued = disposition === "queued";
+
+      if (!isQueued && !isSelfReminder && isBridgeUserId(reminder.user_discord_id)) {
         await sendMatrixReminderMention(
           channel,
           reminder,
@@ -168,7 +172,7 @@ export class ReminderProcessor {
           reminderStartTime,
           this.client.user?.id ?? "",
         );
-      } else if (!isSelfReminder) {
+      } else if (!isQueued && !isSelfReminder) {
         await this.ensureReminderRecipientMention(channel, reminder, lastMessage.id, reminderStartTime);
       }
 
@@ -178,16 +182,16 @@ export class ReminderProcessor {
 
       if (isRecurring && reminder.reminder_id) {
         const nextTriggerTime = getNextRecurringReminderTime(reminder.reminder_time, repetitionIntervalHours);
-        const rescheduled = await rescheduleReminder(reminder.reminder_id, nextTriggerTime);
+        const rescheduled = await serverScheduleRepository.rescheduleReminder(reminder.reminder_id, nextTriggerTime);
 
         if (rescheduled) {
           log.success(`Reminder ${reminder.reminder_id} executed and rescheduled for ${nextTriggerTime.toISOString()}`);
         } else {
           log.error(`Failed to reschedule recurring reminder ${reminder.reminder_id}; deleting to prevent duplicates`);
-          await deleteReminderById(reminder.reminder_id);
+          await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
         }
       } else if (reminder.reminder_id) {
-        await deleteReminderById(reminder.reminder_id);
+        await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
         log.success(`Reminder ${reminder.reminder_id} executed and deleted successfully`);
       } else {
         log.error("Cannot delete reminder: reminder_id is undefined");
@@ -234,7 +238,7 @@ export class ReminderProcessor {
 
     try {
       const personas = await getCachedAllPersonas(channel.guild.id);
-      const persona = personas.find((p) => p.tomori_id === reminder.persona_id);
+      const persona = personas.find((p) => p.persona_id === reminder.persona_id);
       if (!persona?.is_alter) return false;
 
       const isThread = "isThread" in channel && typeof channel.isThread === "function" && channel.isThread();
@@ -271,7 +275,7 @@ export class ReminderProcessor {
   private async handleReminderExecutionFailure(reminder: ReminderRow, errorReason: string): Promise<void> {
     try {
       if (reminder.reminder_id) {
-        await deleteReminderById(reminder.reminder_id);
+        await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
       }
 
       try {

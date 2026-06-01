@@ -1,31 +1,14 @@
 import type { TomoriState } from "@/types/db/schema";
 import { DatabaseUnavailableError } from "@/types/errors";
-import { loadAllPersonasForServer } from "../db/dbRead";
+import { personaRepository } from "@/utils/db/repositories";
+import { cache, lastDbError, invalidateTomoriStateCache } from "./tomoriStateCacheStore";
 import { log } from "../misc/logger";
 
-/**
- * Cache entry structure for TomoriState data per server.
- * Now holds arrays of personas (main + alters) for multi-persona support.
- * Includes timestamp for TTL (Time To Live) expiration tracking.
- */
-interface TomoriStateCacheEntry {
-  personas: TomoriState[]; // Array of all personas (main first, then alters)
-  mainPersona: TomoriState; // Quick reference to main persona (is_alter=false)
-  cachedAt: number; // Timestamp in milliseconds
-}
-
-/**
- * In-memory cache map: serverDiscId -> cache entry
- * Reduces database queries from 3-4 per message to 0 (cache hit).
- */
-const cache = new Map<string, TomoriStateCacheEntry>();
-
-/**
- * Tracks recent DB errors per server so the UI layer can distinguish
- * "server not set up" from "DB temporarily unavailable" when the cache
- * returns null/empty. Entries are cleared on successful loads and invalidation.
- */
-const lastDbError = new Map<string, { message: string; timestamp: number }>();
+// Re-export so existing callers can still import these from "tomoriStateCache".
+// New code (especially repositories) should import directly from
+// "tomoriStateCacheStore" to avoid the circular dependency through the
+// repositories barrel.
+export { invalidateTomoriStateCache };
 
 /**
  * How long a DB error entry stays relevant (2 minutes).
@@ -109,7 +92,7 @@ export function getLastDbError(serverDiscId: string): { message: string; timesta
  * 1. Check in-memory cache
  *    - HIT & FRESH (<10 min) -> Return immediately (0 DB queries)
  *    - MISS or STALE -> Continue to step 2
- * 2. Load from DB via loadAllPersonasForServer()
+ * 2. Load from DB via personaRepository.loadAllForServer()
  * 3. Cache in memory for next requests
  *
  * @param serverDiscId - Discord server ID
@@ -137,7 +120,7 @@ export async function getCachedAllPersonas(serverDiscId: string): Promise<Tomori
 
   try {
     // 3. Load fresh data from database (all personas)
-    const personas = await loadAllPersonasForServer(serverDiscId);
+    const personas = await personaRepository.loadAllForServer(serverDiscId);
 
     // Successful load — clear any stale DB error for this server
     lastDbError.delete(serverDiscId);
@@ -231,17 +214,6 @@ export async function getCachedMainPersona(serverDiscId: string): Promise<Tomori
  */
 export async function getCachedTomoriState(serverDiscId: string): Promise<TomoriState | null> {
   return getCachedMainPersona(serverDiscId);
-}
-
-/**
- * Invalidates in-memory cache for a specific server.
- * Called by command handlers when config/settings change.
- *
- * @param serverDiscId - Discord server ID to invalidate
- */
-export function invalidateTomoriStateCache(serverDiscId: string): void {
-  cache.delete(serverDiscId);
-  lastDbError.delete(serverDiscId);
 }
 
 /**

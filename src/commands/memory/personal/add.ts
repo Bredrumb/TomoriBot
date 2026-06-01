@@ -5,21 +5,16 @@ import type {
   ModalSubmitInteraction,
 } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
-import { sql } from "@/utils/db/client";
 import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
-import {
-  loadTomoriState,
-  isBlacklisted,
-  loadAllPersonasForServer,
-  loadPersonalMemoriesForUserLineage,
-} from "@/utils/db/dbRead";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { personaRepository, personalMemoryRepository, userRepository } from "@/utils/db/repositories";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import type { ModalResult, SelectOption } from "@/types/discord/modal";
-import { validateMemoryContent, checkPersonalMemoryLimit, getMemoryLimits } from "@/utils/db/memoryLimits";
-import { addPersonalMemoryByTomori } from "@/utils/db/dbWrite";
+import { validateMemoryContent, getMemoryLimits } from "@/utils/misc/memoryLimits";
+
 import type { ModalComponent } from "@/types/discord/modal";
 import { dedupeCaseInsensitive, getNonEmptyNumberedLines, readTxtUpload } from "@/utils/teach/batchUploadUtils";
 
@@ -27,9 +22,13 @@ import { dedupeCaseInsensitive, getNonEmptyNumberedLines, readTxtUpload } from "
 const MODAL_CUSTOM_ID = "teach_personalmemory_add_modal";
 const MEMORY_INPUT_ID = "personal_memory_input";
 const MEMORY_FILE_UPLOAD_ID = "personal_memory_file_upload";
+const MEMORY_TAGS_INPUT_ID = "personal_memory_tags_input";
 const PERSONAL_SCOPE_VALUE = "persona";
 const GLOBAL_SCOPE_VALUE = "global";
 const GLOBAL_PERSONAL_MEMORY_LINEAGE_ID = 0;
+
+const MAX_TAGS = 5;
+const MAX_TAG_LENGTH = 32;
 
 // Get memory limits from environment variables
 const memoryLimits = getMemoryLimits();
@@ -95,7 +94,7 @@ export async function execute(
     const memoryScope =
       (interaction.options.getString("scope") as typeof PERSONAL_SCOPE_VALUE | typeof GLOBAL_SCOPE_VALUE | null) ??
       PERSONAL_SCOPE_VALUE;
-    tomoriState = await loadTomoriState(serverId);
+    tomoriState = await personaRepository.loadState(serverId);
 
     // 3. Check if Tomori is set up on the server (needed for config check)
     if (!tomoriState) {
@@ -114,7 +113,7 @@ export async function execute(
     const modalComponents: ModalComponent[] = [];
 
     if (memoryScope === PERSONAL_SCOPE_VALUE) {
-      allPersonas = await loadAllPersonasForServer(serverId);
+      allPersonas = await personaRepository.loadAllForServer(serverId);
       if (allPersonas.length === 0) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.tomori_not_setup_title",
@@ -126,10 +125,10 @@ export async function execute(
       }
 
       const personaSelectOptions: SelectOption[] = allPersonas
-        .filter((persona) => persona.tomori_id !== undefined)
+        .filter((persona) => persona.persona_id !== undefined)
         .map((persona) => ({
-          label: safeSelectOptionText(persona.tomori_nickname),
-          value: persona.tomori_id?.toString() ?? "",
+          label: safeSelectOptionText(persona.persona_nickname),
+          value: persona.persona_id?.toString() ?? "",
           description: persona.is_alter
             ? localizer(locale, "commands.teach.memory.personal.alter_persona_description")
             : localizer(locale, "commands.teach.memory.personal.main_persona_description"),
@@ -163,6 +162,15 @@ export async function execute(
       maxValues: 1,
       required: false,
     });
+    modalComponents.push({
+      customId: MEMORY_TAGS_INPUT_ID,
+      labelKey: "Memory Tags",
+      descriptionKey: "Up to 5 comma-separated case-sensitive tags, use '/memory tagging set' to enable tagged memory",
+      placeholder: "mango,drinks,snacks",
+      style: TextInputStyle.Short,
+      required: false,
+      maxLength: MAX_TAGS * (MAX_TAG_LENGTH + 2),
+    });
 
     // 6. Prompt user with a modal with Component Type 18 support (Rule 10, 12, 19, 25)
     modalResult = await promptWithPaginatedModal(interaction, locale, {
@@ -184,9 +192,20 @@ export async function execute(
     // 9. Get input from modal
     const typedMemory = modalResult.values?.[MEMORY_INPUT_ID]?.trim() ?? "";
     const uploadedTextFile = modalResult.attachments?.[MEMORY_FILE_UPLOAD_ID];
+    const rawTagsInput = modalResult.values?.[MEMORY_TAGS_INPUT_ID]?.trim() ?? "";
+    const parsedTags = rawTagsInput
+      ? [
+          ...new Set(
+            rawTagsInput
+              .split(",")
+              .map((t) => t.trim().replace(/^["']+|["']+$/g, ""))
+              .filter((t) => t.length > 0 && t.length <= MAX_TAG_LENGTH),
+          ),
+        ].slice(0, MAX_TAGS)
+      : [];
     if (memoryScope === PERSONAL_SCOPE_VALUE) {
       const selectedPersonaId = modalResult.values?.persona_select;
-      selectedPersona = allPersonas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
+      selectedPersona = allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
       if (!selectedPersona) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "general.errors.invalid_option_title",
@@ -273,9 +292,8 @@ export async function execute(
     }
 
     // 11. Check if user has opted out of personalization (privacy setting)
-    const { getPrivacyLevel } = await import("@/utils/db/dbRead");
     const { PrivacyLevel } = await import("../../../types/db/schema");
-    const userPrivacyLevel = await getPrivacyLevel(interaction.user.id);
+    const userPrivacyLevel = await userRepository.getPrivacyLevel(interaction.user.id);
 
     // Only block FULL privacy level (MINIMAL and PARTIAL can manually teach)
     if (userPrivacyLevel === PrivacyLevel.FULL) {
@@ -293,7 +311,11 @@ export async function execute(
 
     // 12. Load existing memories for duplicate detection
     const currentMemories = userData.user_id
-      ? await loadPersonalMemoriesForUserLineage(userData.user_id, targetLineageId, memoryScope === GLOBAL_SCOPE_VALUE)
+      ? await personalMemoryRepository.loadForUserLineage(
+          userData.user_id,
+          targetLineageId,
+          memoryScope === GLOBAL_SCOPE_VALUE,
+        )
       : [];
 
     const existingMemories = new Set(currentMemories.map((row) => row.content.trim().toLowerCase()));
@@ -311,7 +333,7 @@ export async function execute(
     }
 
     // 13.5 Check personal memory limit after final scope resolution
-    const personalLimitCheck = await checkPersonalMemoryLimit(
+    const personalLimitCheck = await personalMemoryRepository.checkPersonalMemoryLimit(
       targetUserId,
       targetLineageId,
       memoryScope === GLOBAL_SCOPE_VALUE,
@@ -347,24 +369,21 @@ export async function execute(
     // 14. Insert lineage-scoped memory rows
     let insertSuccess = true;
     if (memoriesToAdd.length === 1) {
-      const insertedMemory = await addPersonalMemoryByTomori(targetUserId, targetLineageId, memoriesToAdd[0] ?? "");
+      const insertedMemory = await personalMemoryRepository.add(
+        targetUserId,
+        targetLineageId,
+        memoriesToAdd[0] ?? "",
+        parsedTags,
+      );
       insertSuccess = insertedMemory !== null;
     } else {
-      try {
-        await sql.transaction(async (tx) => {
-          for (const memory of memoriesToAdd) {
-            await tx`
-							INSERT INTO personal_memories (user_id, persona_lineage_id, content)
-							VALUES (${targetUserId}, ${targetLineageId}, ${memory})
-						`;
-          }
-        });
-      } catch (insertError) {
-        insertSuccess = false;
-        await log.error("Batch insert failed for personal memories", insertError, {
+      // Batch path: delegate to repository which wraps the transaction internally
+      insertSuccess = await personalMemoryRepository.addBatch(targetUserId, targetLineageId, memoriesToAdd, parsedTags);
+      if (!insertSuccess) {
+        await log.error("Batch insert failed for personal memories", new Error("addBatch returned false"), {
           userId: userData.user_id,
           serverId: tomoriState.server_id,
-          tomoriId: selectedPersona?.tomori_id ?? tomoriState.tomori_id,
+          personaId: selectedPersona?.persona_id ?? tomoriState.persona_id,
           errorType: "DatabaseValidationError",
           metadata: {
             command: "teach personalmemory",
@@ -380,7 +399,7 @@ export async function execute(
       const context: ErrorContext = {
         userId: userData.user_id,
         serverId: tomoriState.server_id, // Include server context
-        tomoriId: selectedPersona?.tomori_id ?? tomoriState.tomori_id,
+        personaId: selectedPersona?.persona_id ?? tomoriState.persona_id,
         errorType: "DatabaseValidationError",
         metadata: {
           command: "teach personalmemory",
@@ -414,7 +433,7 @@ export async function execute(
     const personalizationEnabled = tomoriState?.config.personal_memories_enabled ?? true;
     // Only check blacklisting for guild contexts (DM users can't be blacklisted)
     const userIsBlacklisted = interaction.guild
-      ? ((await isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false)
+      ? ((await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false)
       : false;
 
     if (!personalizationEnabled) {
@@ -455,7 +474,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: tomoriState?.tomori_id,
+      personaId: tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "teach personalmemory",

@@ -11,16 +11,12 @@ import {
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import type { UserRow, ErrorContext, StPresetNodeRow, StPresetRow } from "@/types/db/schema";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
-import {
-  loadActivePreset,
-  loadPresetsForServer,
-  loadToggleableNodes,
-  updateNodeEnabledStates,
-} from "@/utils/db/stPresetDb";
+import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 
 // ─── Constants ───────────────────────────────────────────────────────
 
@@ -125,13 +121,20 @@ function buildCheckboxGroups(pageNodes: StPresetNodeRow[], pageOffset: number): 
     const chunk = pageNodes.slice(i, i + MAX_OPTIONS_PER_GROUP);
     const groupIndex = Math.floor(i / MAX_OPTIONS_PER_GROUP);
 
-    const options: CheckboxGroupOption[] = chunk.map((node) => ({
-      label: node.name.length > 100 ? `${node.name.slice(0, 97)}...` : node.name,
-      value: node.identifier,
-      // Comment-only nodes show extracted comment text from inside {{// ... }} blocks
-      description: node.is_comment ? buildCommentNodeDescription(node.content) : buildNodeDescription(node.content),
-      default: node.is_enabled,
-    }));
+    const options: CheckboxGroupOption[] = chunk.map((node, chunkIdx) => {
+      const rawName = node.name.trim();
+      // Discord requires 1–100 chars; fall back to positional label for blank names
+      const nodeNumber = pageOffset + i + chunkIdx + 1;
+      const label =
+        rawName.length === 0 ? `Node ${nodeNumber}` : rawName.length > 100 ? `${rawName.slice(0, 97)}...` : rawName;
+      return {
+        label,
+        value: node.identifier,
+        // Comment-only nodes show extracted comment text from inside {{// ... }} blocks
+        description: node.is_comment ? buildCommentNodeDescription(node.content) : buildNodeDescription(node.content),
+        default: node.is_enabled,
+      };
+    });
 
     // Build a dynamic label like "Nodes 1–10" or "Nodes 51–60"
     // (pageOffset converts page-relative indices to overall node numbers)
@@ -224,9 +227,9 @@ export async function execute(
 
   try {
     // 2. Find the active preset, or fall back to the first available preset
-    let preset = await loadActivePreset(tomoriState.server_id);
+    let preset = await presetRepository.loadActivePreset(tomoriState.server_id);
     if (!preset) {
-      const allPresets = await loadPresetsForServer(tomoriState.server_id);
+      const allPresets = await presetRepository.loadPresetsForServer(tomoriState.server_id);
       preset = allPresets[0] ?? null;
     }
 
@@ -241,7 +244,7 @@ export async function execute(
     }
 
     // 3. Load toggleable nodes from DB (non-marker, ordered by node_order)
-    const dbNodes = await loadToggleableNodes(preset.preset_id);
+    const dbNodes = await presetRepository.loadToggleableNodes(preset.preset_id);
     if (dbNodes.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.st-preset.node.toggle.no_nodes_title",
@@ -270,7 +273,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: null,
-      tomoriId: null,
+      personaId: null,
       errorType: "CommandExecutionError",
       metadata: { command: "st-preset node toggle" },
     };
@@ -369,7 +372,7 @@ async function executeSinglePageToggle(
 
   // Persist changes
   if (summary.changes.length > 0) {
-    await updateNodeEnabledStates(presetId, summary.enabledMap, preset.server_id);
+    await presetRepository.updateNodeEnabledStates(presetId, summary.enabledMap, preset.server_id);
   }
 
   // Reply with summary
@@ -489,10 +492,10 @@ async function executeMultiPageToggle(
 
       // Persist changes
       if (summary.changes.length > 0) {
-        await updateNodeEnabledStates(presetId, summary.enabledMap, preset.server_id);
+        await presetRepository.updateNodeEnabledStates(presetId, summary.enabledMap, preset.server_id);
 
         // Reload nodes from DB so the next modal shows updated defaults
-        currentNodes = await loadToggleableNodes(presetId);
+        currentNodes = await presetRepository.loadToggleableNodes(presetId);
       }
 
       // Reply with summary on the modal interaction

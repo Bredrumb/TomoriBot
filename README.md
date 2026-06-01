@@ -6,7 +6,7 @@
 <div align="center">
 
   <a href="https://github.com/Bredrumb/TomoriBot">
-    <img src="img/tomoricon.png" alt="Logo" width="80" height="80">
+    <img src="assets/img/tomoricon.png" alt="Logo" width="80" height="80">
   </a>
 
 <h3 align="center">TomoriBot</h3>
@@ -43,7 +43,7 @@ English | [日本語](README_ja.md)
 
 
 <!-- PROJECT LOGO -->
-![TomoriBot Banner](img/tomobanner.png)
+![TomoriBot Banner](assets/img/tomobanner.png)
 [![Bun][Bun.sh]][Bun-url][![Discord.js][Discord.js]][Discord-url][![TypeScript][TypeScript.js]][TypeScript-url][![PostgreSQL][PostgreSQL.org]][PostgreSQL-url]
 
   
@@ -72,40 +72,40 @@ If you're enjoying TomoriBot, please consider giving her a ⭐ on GitHub or supp
 ## Feature Showcase
 
 
-![Screenshots 1](img/scs/1.png)
+![Screenshots 1](assets/img/scs/1.png)
 <h3 align="center">Agentic AI-Powered Conversation</h3>
 <p align="center">TomoriBot has LOTS of tools that allows her to go beyond just chatting, such as searching the web, setting recurrent tasks/reminders, utilizing your server's emotes/stickers, and memory options such as RAG and STM that allow her to remember context across channels and servers. </p>
 
 <br />
 
 
-![Screenshots 2](img/scs/2.png)
+![Screenshots 2](assets/img/scs/2.png)
 <h3 align="center">Complete Multimodal Input/Output</h3>
 <p align="center">TomoriBot can process images, audio, and video sent       
-  directly in Discord and generate them in return using your own local model endpoints or through API keys, all of which are encrypted inside a persistent database. Ready-to-use ComfyUI workflows and audio servers can be found inside this repo's <code>/scripts/</code> folder!</p>
+  directly in Discord and generate them in return using your own local model endpoints or through API keys, all of which are encrypted inside a persistent database. Ready-to-use ComfyUI workflows can be found in <code>assets/comfyui-workflows/</code> and local audio inference servers in <code>servers/</code>!</p>
 
 <br />
 
-![Screenshots 3](img/scs/3.png)
+![Screenshots 3](assets/img/scs/3.png)
 <h3 align="center">Multi-Persona Support</h3>
 <p align="center">TomoriBot's in-server personality, behavior, and avatar can be easily changed, created, as well as exported for others as Personas (akin to shareable AI Character Cards). Import and even transform your favorite SillyTavern cards through <code>/persona generate</code>. You can have an unlimited amount of different personas in a single server, each having their own memories and agendas. You can also orchestrate them to work with each other to do work in your server (or just mess around with each other).</p>
 
 <br />
 
 
-![Screenshots 4](img/scs/4.png)
+![Screenshots 4](assets/img/scs/4.png)
 <h3 align="center">100+ Native Commands for Configuration</h3>
 <p align="center">Everything can be managed through Discord's native slash commands and interactive UI. Completely manage personas, prompts, tweak model parameters, set up MCP tool servers, adjust permissions, configure memory, set server member rate limits, and much more! You can also ask TomoriBot directly on what she can do and what her slash commands are. Currently, a Web Dashboard is in the works for even easier management.</p>
 
 <br />
 
 
-![Screenshots 6](img/scs/6.png)
+![Screenshots 6](assets/img/scs/6.png)
 
 <h3 align="center">SillyTavern Integration (Beta)</h3>
 <p align="center">Use your favorite SillyTavern presets directly in Discord through TomoriBot which adjusts her prompt completely, just plop the .json right in through <code>st-preset</code>. Discord's new native checkbox groups for modals makes it easy to toggle nodes on and off like in SillyTavern. You can also import SillyTavern character cards directly through <code>/persona import</code> or you can modify them first with <code>/persona generate</code>.</p>
 
-![Screenshots 5](img/scs/5.png)
+![Screenshots 5](assets/img/scs/5.png)
 <h3 align="center">Lots of More Features, and Counting!</h3>
 <p align="center">A bunch of fun features that are easy to setup ranging from practical automatic greetings for new server members and cross-channel movement, to silly ones like user impersonations for some trolling. New ones are constantly in development, so please report through GitHub issues or the official Discord for any bugs (or to share any fun suggestions).</p>
 
@@ -117,7 +117,7 @@ TomoriBot supports a wide range of LLM providers, image generation APIs, voice s
 
 ## Local & Self-Hosted Endpoints
 
-Besides APIs, you can also connect TomoriBot to your own self-hosted models. She supports local LLMs (via Ollama, KoboldCPP, LM Studio, vLLM, etc.), local image/video generation via ComfyUI, as well as local TTS and STT endpoints:
+Besides APIs, you can also connect TomoriBot to your own self-hosted models. She supports local LLMs (via Ollama, KoboldCPP, LM Studio, vLLM, etc.), local image/video generation via ComfyUI, local TTS and STT endpoints, as well as local SearXNG and Browser web fetch sidecars!
 
 **[Read the Local & Self-Hosted Endpoints guide here](docs/wiki/local-endpoints.md)**
 
@@ -356,6 +356,32 @@ The bot will automatically:
 
 Once you see `TomoriBot up and running!`, without errors in your logs, the bot is online and ready to use.
 
+#### Optional Sidecars (`bun launch`)
+
+If you want to run optional sidecar services alongside the bot — such as SearXNG for web search, Crawl4AI for browser-rendered page fetches, or a local TTS server — use `bun launch` instead of `bun run dev`. It starts the requested sidecars, waits for them to be ready, then launches the bot in watch mode automatically:
+
+```sh
+# Bot only — identical to bun run dev
+bun launch
+
+# With SearXNG and Crawl4AI Docker sidecars
+bun launch --searxng --crawl4ai
+
+# With a local TTS server (venv must be set up first — see docs/integrations/voice/tts/)
+bun launch --qwen3tts
+
+# See all available flags
+bun launch --help
+```
+
+Available flags: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--whisperx`
+
+Docker sidecars (`--searxng`, `--crawl4ai`) are created on first run and reused on subsequent runs — no manual `docker run` needed. Python TTS/STT sidecars require their venv to be set up once beforehand; see the individual setup guides in `docs/integrations/voice/`.
+
+**Hot reload** applies only to the bot (`src/`). Sidecar servers are unaffected by file changes and stay running until you stop them manually.
+
+**Ctrl+C** stops the bot and any Python sidecar processes. Docker containers (`--searxng`, `--crawl4ai`) are intentionally left running — stop them manually with `docker stop searxng` / `docker stop crawl4ai` when you're done.
+
 #### Basic Commands
 
 - `/config setup` - Initial bot setup for your server
@@ -373,46 +399,6 @@ Simply mention the bot in a server or use the configured trigger words to start 
 
 Or slide into TomoriBot's DMs and say hi!
 
-### Using Codex CLI with TomoriBot
-
-If you want TomoriBot to use your ChatGPT account through a local OpenAI-compatible bridge, you can run [ChatMock](https://github.com/RayBytes/ChatMock) and point TomoriBot's `custom` provider at it.
-
-#### What ChatMock does
-
-- ChatMock runs a local OpenAI-compatible API server
-- TomoriBot can use that local server through the `custom` provider
-
-#### 1. Start ChatMock
-
-Install and start ChatMock by following its instructions on GitHub:
-
-- [ChatMock repository](https://github.com/RayBytes/ChatMock)
-
-After installing, run:
-```sh
-chatmock login
-chatmock serve
-```
-
-By default, ChatMock listens on `http://127.0.0.1:8000/v1`
-
-#### 2. Configure TomoriBot to use ChatMock
-
-In Discord, configure TomoriBot's `custom` provider and use:
-
-- **Endpoint URL**: `http://127.0.0.1:8000/v1`
-- **Model Name**: the exact model string ChatMock should receive, such as `gpt-5.4` or `gpt-5.3-codex`
-
-Do **not** use bare `http://127.0.0.1:8000` because TomoriBot appends `/chat/completions` to the configured base URL
-
-Enable these capability flags for ChatMock:
-- **Function Calling / Tools**: Yes
-- **Image Understanding**: Yes
-- **Video Understanding**: No
-- **Structured Output**: Yes
-
-**Note**: Codex CLI does not allow you to change its `system` prompt so TomoriBot's `system` prompt is turned into a `user` turn in context as a workaround. Please configure the `CHATMOCK_PORT` .env variable to match your actual ChatMock port so this workaround works properly (defaults to 8000).
-
 ### Maintenance Scripts
 
 | Command | Description |
@@ -424,9 +410,9 @@ Enable these capability flags for ChatMock:
 | `bun run nuke-db` | Drops all tables (start the bot afterwards to reinitialise). Usually used in conjunction with backups for clean installs |
 | `bun run purge-commands` | Clear all registered Discord slash commands |
 | `bun run rotate-keys` | Migrate all encrypted fields to the current key version |
-| `bun run vl-db` | Creates a disposable local PostgreSQL database and validates fresh schema initialization, backup/restore scripts, key audits, legacy-provider audit, `nuke-db`, and re-initialization |
+| `bun run db:lifecycle` | Creates a disposable local PostgreSQL database and validates fresh schema initialization, backup/restore scripts, key audits, legacy-provider audit, `nuke-db`, and re-initialization |
 
-`bun run backup` and `bun run vl-db` require PostgreSQL client tools (`pg_dump` and `psql`) in PATH. `bun run vl-db` also needs a local PostgreSQL user with permission to create and drop disposable databases.
+`bun run backup` and `bun run db:lifecycle` require PostgreSQL client tools (`pg_dump` and `psql`) in PATH. `bun run db:lifecycle` also needs a local PostgreSQL user with permission to create and drop disposable databases.
 
 ### Updating TomoriBot
 
@@ -470,31 +456,34 @@ For Docker Compose, start from `.env.example`, then add `POSTGRES_PASSWORD` if y
 # Build TomoriBot's container (first time or after code changes)
 docker compose build
 
-# Start TomoriBot and her database (uses docker-compose.yaml)
+# Start TomoriBot and her database only
 docker compose up
 ```
 
 **Note:** Docker Compose automatically configures the database connection. The PostgreSQL service runs in development mode (no SSL) and connects to the internal Docker network.
 
-#### Monitoring with Grafana (Optional)
+#### Optional Docker Sidecars
 
-To monitor your TomoriBot instance with Grafana dashboards:
+TomoriBot supports optional Docker sidecars to enhance her tools and add local monitoring. All sidecars are opt-in via Docker Compose profiles:
 
 ```sh
-# Start both TomoriBot and Grafana together
-docker compose -f docker-compose.yaml -f docker-compose.monitor.yaml up
+# + SearXNG web search (self-hosted metasearch)
+docker compose --profile searxng up
+
+# + Crawl4AI browser-rendered page fetching
+docker compose --profile fetch-crawl4ai up
+
+# + Both at once
+docker compose --profile searxng --profile fetch-crawl4ai up
 ```
 
-This will:
-- Launch TomoriBot with PostgreSQL (on ports 15432 for DB)
-- Launch Grafana on port 3000 with auto-configured PostgreSQL datasource
-- Connect both services on the same Docker network
+See the guides below for full setup details:
 
-Access Grafana at `http://localhost:3000`:
-- **Username**: `admin`
-- **Password**: Set via `GRAFANA_PASSWORD` in `.env` (defaults to `admin`)
+- **[SearXNG Web Search Sidecar](docs/guides/setup-searxng.md)** - A self-hosted metasearch instance to bypass single-engine API limits for the `web_search` tool.
+- **[Crawl4AI Sidecar](docs/guides/setup-fetch-sidecars.md)** - A browser-rendering sidecar to fetch and process JavaScript-heavy webpages for the `fetch_url` tool.
+- **[Local Grafana Monitoring](docs/guides/local-monitoring.md)** - Instructions on how to spin up a local Grafana dashboard to monitor TomoriBot's performance and database metrics.
 
-The PostgreSQL datasource is automatically configured and ready to create dashboards for monitoring bot metrics, database queries, and performance.
+> **Using `bun run dev` instead of Docker Compose?** Use `bun launch --searxng --crawl4ai` — it handles the Docker container lifecycle for you automatically. See the [Optional Sidecars](#optional-sidecars-bun-launch) section above.
 
 <!-- ROADMAP -->
 ## Roadmap
@@ -549,7 +538,7 @@ Since TomoriBot is still in Beta, any contributions made are **greatly appreciat
 
 ### To contribute new features
 
-The TomoriBot wiki for contributors is still WIP but there are already comprehensive documentation available at `/docs/` that can help you understand TomoriBot's architecture more. Please make sure that `bun run check`, `bun run lint`, `bun run check-locales`, and `bun run vl-db` do not return any errors before doing a pull request of a new feature.
+The TomoriBot wiki for contributors is still WIP but there are already comprehensive documentation available at `/docs/` that can help you understand TomoriBot's architecture more. Please make sure that `bun run check`, `bun run lint`, `bun run check-locales`, and `bun run db:lifecycle` do not return any errors before doing a pull request of a new feature.
 
 <!-- LEGAL -->
 ## Legal & License

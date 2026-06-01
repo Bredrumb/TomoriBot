@@ -6,14 +6,19 @@ import type {
   UserSelectMenuInteraction,
 } from "discord.js";
 import { ActionRowBuilder, ComponentType, EmbedBuilder, MessageFlags, UserSelectMenuBuilder } from "discord.js";
-import { sql } from "@/utils/db/client";
-import { getQuotaConfig } from "@/utils/quota/imageQuotaManager";
-import { getTextQuotaConfig } from "@/utils/quota/textQuotaManager";
-import { getVideoQuotaConfig } from "@/utils/quota/videoQuotaManager";
+import { serverRepository } from "@/utils/db/repositories/ServerRepository";
+import {
+  resetServerwideImageQuotaPool,
+  resetServerwideTextQuotaPool,
+  resetServerwideVideoQuotaPool,
+  resetUserDailyImageQuota,
+  resetUserDailyTextQuota,
+  resetUserDailyVideoQuota,
+} from "@/utils/db/repositories/QuotaRepository";
 import type { UserRow } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 
 type QuotaResetScope = "user" | "server";
 type QuotaResetType = "imagegen" | "textgen" | "videogen";
@@ -108,11 +113,9 @@ export async function execute(
   const scope = rawScope as QuotaResetScope;
   const quotaType = rawQuotaType as QuotaResetType;
 
-  const [serverRow] = await sql<{ server_id: number }[]>`
-		SELECT server_id FROM servers WHERE server_disc_id = ${interaction.guild.id}
-	`;
+  const serverId = await serverRepository.loadServerIdByDiscId(interaction.guild.id);
 
-  if (!serverRow) {
+  if (!serverId) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.server_not_found_title",
       descriptionKey: "general.errors.server_not_found_description",
@@ -120,8 +123,6 @@ export async function execute(
     });
     return;
   }
-
-  const serverId = serverRow.server_id;
   try {
     if (scope === "user") {
       const targetUser = await promptUserSelection(interaction, locale);
@@ -236,88 +237,29 @@ async function promptUserSelection(interaction: ChatInputCommandInteraction, loc
 }
 
 async function resetUserDailyQuota(serverId: number, userDiscId: string, quotaType: QuotaResetType): Promise<void> {
-  const today = new Date().toISOString().split("T")[0];
-
   if (quotaType === "imagegen") {
-    await sql`
-			INSERT INTO image_quotas (server_id, user_disc_id, usage_count, quota_date)
-			VALUES (${serverId}, ${userDiscId}, 0, ${today}::date)
-			ON CONFLICT (server_id, user_disc_id, quota_date)
-			DO UPDATE SET usage_count = 0
-		`;
+    await resetUserDailyImageQuota(serverId, userDiscId);
     return;
   }
 
   if (quotaType === "textgen") {
-    await sql`
-		INSERT INTO text_quotas (server_id, user_disc_id, usage_count, quota_date)
-		VALUES (${serverId}, ${userDiscId}, 0, ${today}::date)
-		ON CONFLICT (server_id, user_disc_id, quota_date)
-		DO UPDATE SET usage_count = 0
-	`;
+    await resetUserDailyTextQuota(serverId, userDiscId);
     return;
   }
 
-  await sql`
-		INSERT INTO video_quotas (server_id, user_disc_id, usage_count, quota_date)
-		VALUES (${serverId}, ${userDiscId}, 0, ${today}::date)
-		ON CONFLICT (server_id, user_disc_id, quota_date)
-		DO UPDATE SET usage_count = 0
-	`;
+  await resetUserDailyVideoQuota(serverId, userDiscId);
 }
 
 async function resetServerwideQuotaPool(serverId: number, quotaType: QuotaResetType): Promise<void> {
   if (quotaType === "imagegen") {
-    const config = await getQuotaConfig(serverId);
-    await sql`
-			INSERT INTO serverwide_quotas (server_id, usage_count, quota_period_start, quota_period_end)
-			VALUES (
-				${serverId},
-				0,
-				CURRENT_TIMESTAMP,
-				CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
-			)
-			ON CONFLICT (server_id)
-			DO UPDATE SET
-				usage_count = 0,
-				quota_period_start = CURRENT_TIMESTAMP,
-				quota_period_end = CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
-		`;
+    await resetServerwideImageQuotaPool(serverId);
     return;
   }
 
   if (quotaType === "textgen") {
-    const config = await getTextQuotaConfig(serverId);
-    await sql`
-		INSERT INTO text_serverwide_quotas (server_id, usage_count, quota_period_start, quota_period_end)
-		VALUES (
-			${serverId},
-			0,
-			CURRENT_TIMESTAMP,
-			CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
-		)
-		ON CONFLICT (server_id)
-		DO UPDATE SET
-			usage_count = 0,
-			quota_period_start = CURRENT_TIMESTAMP,
-			quota_period_end = CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
-	`;
+    await resetServerwideTextQuotaPool(serverId);
     return;
   }
 
-  const config = await getVideoQuotaConfig(serverId);
-  await sql`
-		INSERT INTO video_serverwide_quotas (server_id, usage_count, quota_period_start, quota_period_end)
-		VALUES (
-			${serverId},
-			0,
-			CURRENT_TIMESTAMP,
-			CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
-		)
-		ON CONFLICT (server_id)
-		DO UPDATE SET
-			usage_count = 0,
-			quota_period_start = CURRENT_TIMESTAMP,
-			quota_period_end = CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
-	`;
+  await resetServerwideVideoQuotaPool(serverId);
 }

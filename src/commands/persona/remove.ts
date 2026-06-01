@@ -11,9 +11,8 @@ import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "
 import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import type { UserRow } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
-import { loadAllPersonasForServer } from "../../utils/db/dbRead";
-import { sql } from "../../utils/db/client";
-import { deletePersonaAvatarFromS3 } from "../../utils/storage/avatarStorage";
+import { personaRepository } from "@/utils/db/repositories";
+import { deletePersonaAvatarFromStorage } from "../../utils/storage/avatarStorage";
 
 // Constants for modal configuration
 const MODAL_CUSTOM_ID = "persona_remove_modal";
@@ -69,12 +68,12 @@ export async function execute(
     }
 
     // 3. Load all personas for this server
-    const allPersonas = await loadAllPersonasForServer(interaction.guild.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
 
     // 4. Filter to removable personas:
     // - all alters
     // - duplicate-tagged personas created by schema migration cleanup, even if marked as main
-    const removablePersonas = allPersonas.filter((p) => p.is_alter || isDuplicateTaggedName(p.tomori_nickname));
+    const removablePersonas = allPersonas.filter((p) => p.is_alter || isDuplicateTaggedName(p.persona_nickname));
 
     // 5. Error if no alters exist
     if (removablePersonas.length === 0) {
@@ -89,7 +88,7 @@ export async function execute(
 
     // 6. Build select options for modal
     const alterSelectOptions: SelectOption[] = removablePersonas.map((persona, index) => ({
-      label: safeSelectOptionText(persona.tomori_nickname),
+      label: safeSelectOptionText(persona.persona_nickname),
       value: index.toString(), // Use index to avoid truncation issues
     }));
 
@@ -128,28 +127,22 @@ export async function execute(
       10,
     );
     const personaToRemove = removablePersonas[selectedIndex];
-    if (!personaToRemove?.tomori_id) {
+    if (!personaToRemove?.persona_id) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.unknown_error_title",
         descriptionKey: "general.errors.unknown_error_description",
         color: ColorCode.ERROR,
         flags: MessageFlags.Ephemeral,
       });
-      log.warn("Persona removal failed due to missing tomori_id for selected alter.");
+      log.warn("Persona removal failed due to missing persona_id for selected alter.");
       return;
     }
-    const personaId = personaToRemove.tomori_id;
+    const personaId = personaToRemove.persona_id;
 
     // 8. Delete selected persona from database.
     // For non-alter duplicate-tagged rows, ensure at least one main persona remains.
     if (!personaToRemove.is_alter) {
-      const [mainCountRow] = await sql<Array<{ main_count: number | string }>>`
-				SELECT COUNT(*)::int AS main_count
-				FROM tomoris
-				WHERE server_id = ${personaToRemove.server_id}
-				  AND is_alter = false
-			`;
-      const mainCount = Number(mainCountRow?.main_count ?? 0);
+      const mainCount = await personaRepository.countMainPersonasForServer(personaToRemove.server_id);
       if (mainCount <= 1) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "general.errors.update_failed_title",
@@ -161,13 +154,19 @@ export async function execute(
       }
     }
 
-    await sql`
-			DELETE FROM tomoris
-			WHERE tomori_id = ${personaId}
-		`;
+    const removed = await personaRepository.removePersona(personaId);
+    if (!removed) {
+      await replyInfoEmbed(modalSubmitInteraction, locale, {
+        titleKey: "general.errors.update_failed_title",
+        descriptionKey: "general.errors.update_failed_description",
+        color: ColorCode.ERROR,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
 
     if (personaToRemove.webhook_avatar_url) {
-      await deletePersonaAvatarFromS3(personaToRemove.webhook_avatar_url);
+      await deletePersonaAvatarFromStorage(personaToRemove.webhook_avatar_url);
     }
 
     // 9. Invalidate cache
@@ -177,13 +176,13 @@ export async function execute(
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.persona.remove.success_title",
       description: localizer(locale, "commands.persona.remove.success_description", {
-        nickname: personaToRemove.tomori_nickname,
+        nickname: personaToRemove.persona_nickname,
       }),
       color: ColorCode.SUCCESS,
     });
 
     log.success(
-      `Removed alter persona "${personaToRemove.tomori_nickname}" (ID: ${personaId}) from guild ${interaction.guild.id}`,
+      `Removed alter persona "${personaToRemove.persona_nickname}" (ID: ${personaId}) from guild ${interaction.guild.id}`,
     );
   } catch (error) {
     log.error("Error executing persona remove command:", error, {

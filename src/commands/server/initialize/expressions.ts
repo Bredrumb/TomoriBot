@@ -10,24 +10,20 @@
 
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
-import { loadTomoriState } from "@/utils/db/dbRead";
+import { personaRepository, serverRepository } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 import { getAllEmotionKeys } from "@/types/misc/emotions";
-import {
-  type ExpressionClassification,
-  type ExpressionBatchResult,
-  ExpressionBatchResultSchema,
-} from "@/providers/utils/structuredOutput";
+import { type ExpressionBatchResult, ExpressionBatchResultSchema } from "@/providers/utils/structuredOutput";
 import type { StructuredOutputResult } from "@/types/provider/featureInterfaces";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { lazySyncGuildEmojis } from "@/utils/cache/emojiLazySync";
 import { lazySyncGuildStickers } from "@/utils/cache/stickerLazySync";
 import { callExpressionInitializationForProvider } from "@/providers/utils/providerFeatureExecutors";
 import { providerSupportsFeature } from "@/utils/provider/providerInfoRegistry";
+import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { resolveStructuredOutputCapability } from "@/utils/provider/providerCapabilityResolver";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
 
@@ -44,24 +40,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         .setDescription(localizer("en-US", "commands.server.initialize.expressions.overwrite_description"))
         .setRequired(false),
     );
-
-/**
- * Database row type for uninitialized emojis
- */
-interface UninitializedEmoji {
-  emoji_disc_id: string;
-  emoji_name: string;
-  is_animated: boolean;
-}
-
-/**
- * Database row type for uninitialized stickers
- */
-interface UninitializedSticker {
-  sticker_disc_id: string;
-  sticker_name: string;
-  sticker_format: number;
-}
 
 /**
  * Convert ColorCode hex string to Discord number format
@@ -108,7 +86,7 @@ ${getAllEmotionKeys().join(", ")}
 Guidelines:
 - Focus on the PRIMARY emotion conveyed by the visual design
 - "neutral" is for emotionally ambiguous or abstract designs
-- Descriptions should be ONE concise sentence describing what you see
+- Descriptions should be ONE concise sentence (10-200 characters) describing what you see
 - Match emoji/sticker names case-insensitively`;
 }
 
@@ -132,76 +110,6 @@ For each expression, determine:
 2. A concise visual description (one sentence)
 
 Return results in the specified JSON format.`;
-}
-
-/**
- * Update expressions in database with LLM-generated metadata
- *
- * @param serverId - Internal server ID
- * @param results - Array of classification results from LLM
- * @returns Object with counts of updated emojis and stickers
- */
-async function updateExpressionsInDB(
-  serverId: number,
-  results: ExpressionClassification[],
-): Promise<{ emojiCount: number; stickerCount: number }> {
-  let emojiCount = 0;
-  let stickerCount = 0;
-
-  // 1. Use transaction for atomicity
-  await sql.transaction(async (tx) => {
-    // 2. Process each result
-    for (const result of results) {
-      // 3. Try updating emoji first (case-insensitive name match, only if uninitialized)
-      const emojiRows = await tx`
-				UPDATE server_emojis
-				SET
-					emotion_key = ${result.emotion_key},
-					emoji_desc = ${result.description},
-					updated_at = CURRENT_TIMESTAMP
-				WHERE server_id = ${serverId}
-					AND LOWER(emoji_name) = LOWER(${result.name})
-					AND (
-						emotion_key IS NULL
-						OR emotion_key = 'unset'
-						OR emoji_desc IS NULL
-						OR emoji_desc = ''
-					)
-				RETURNING emoji_disc_id
-			`;
-
-      // 4. If emoji was updated, increment count and continue
-      if (emojiRows.length > 0) {
-        emojiCount++;
-        continue;
-      }
-
-      // 5. If no emoji found, try sticker (only if uninitialized)
-      const stickerRows = await tx`
-				UPDATE server_stickers
-				SET
-					emotion_key = ${result.emotion_key},
-					sticker_desc = ${result.description},
-					updated_at = CURRENT_TIMESTAMP
-				WHERE server_id = ${serverId}
-					AND LOWER(sticker_name) = LOWER(${result.name})
-					AND (
-						emotion_key IS NULL
-						OR emotion_key = 'unset'
-						OR sticker_desc IS NULL
-						OR sticker_desc = ''
-					)
-				RETURNING sticker_disc_id
-			`;
-
-      // 6. If sticker was updated, increment count
-      if (stickerRows.length > 0) {
-        stickerCount++;
-      }
-    }
-  });
-
-  return { emojiCount, stickerCount };
 }
 
 /**
@@ -230,8 +138,8 @@ export async function execute(
   }
 
   // 2. Load Tomori state for this server
-  const tomoriState = await loadTomoriState(interaction.guild.id);
-  if (!tomoriState) {
+  const baseTomoriState = await personaRepository.loadState(interaction.guild.id);
+  if (!baseTomoriState) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.tomori_not_setup_title",
       descriptionKey: "general.errors.tomori_not_setup_description",
@@ -243,6 +151,11 @@ export async function execute(
 
   // 3. Defer reply early (this operation may take time)
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  // 3a. Overlay the invoking user's personal (BYOK) provider so the expression
+  //     generation runs on their personal model/key when configured. Done after
+  //     deferReply since it performs DB reads (keeps the 3s ack window safe).
+  const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
 
   const overwrite = interaction.options.getBoolean("overwrite") ?? false;
 
@@ -334,43 +247,17 @@ export async function execute(
     // Handle overwrite before querying for uninitialized
     if (overwrite) {
       log.info(`[Initialize Expressions] Overwriting existing expressions for guild ${interaction.guild.name}`);
-      await sql`
-        UPDATE server_emojis
-        SET emotion_key = NULL, emoji_desc = NULL
-        WHERE server_id = ${tomoriState.server_id}
-      `;
-      await sql`
-        UPDATE server_stickers
-        SET emotion_key = NULL, sticker_desc = NULL
-        WHERE server_id = ${tomoriState.server_id}
-      `;
+      await Promise.all([
+        serverRepository.clearEmojiExpressions(tomoriState.server_id),
+        serverRepository.clearStickerExpressions(tomoriState.server_id),
+      ]);
     }
 
-    // 6. Query database for uninitialized emojis
-    const uninitializedEmojis = await sql<UninitializedEmoji[]>`
-			SELECT emoji_disc_id, emoji_name, is_animated
-			FROM server_emojis
-			WHERE server_id = ${tomoriState.server_id}
-				AND (
-					emotion_key IS NULL
-					OR emotion_key = 'unset'
-					OR emoji_desc IS NULL
-					OR emoji_desc = ''
-				)
-		`;
-
-    // 7. Query database for uninitialized stickers
-    const uninitializedStickers = await sql<UninitializedSticker[]>`
-			SELECT sticker_disc_id, sticker_name, sticker_format
-			FROM server_stickers
-			WHERE server_id = ${tomoriState.server_id}
-				AND (
-					emotion_key IS NULL
-					OR emotion_key = 'unset'
-					OR sticker_desc IS NULL
-					OR sticker_desc = ''
-				)
-		`;
+    // 6. Query database for uninitialized expressions
+    const [uninitializedEmojis, uninitializedStickers] = await Promise.all([
+      serverRepository.loadUninitializedEmojis(tomoriState.server_id),
+      serverRepository.loadUninitializedStickers(tomoriState.server_id),
+    ]);
 
     // 8. Check if there's anything to initialize
     const totalUninitialized = uninitializedEmojis.length + uninitializedStickers.length;
@@ -545,7 +432,7 @@ export async function execute(
     }
 
     // 17. Update database with results
-    const { emojiCount, stickerCount } = await updateExpressionsInDB(
+    const { emojiCount, stickerCount } = await serverRepository.initializeExpressions(
       tomoriState.server_id,
       validationResult.data.expressions,
     );
@@ -601,7 +488,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id ?? null,
-      tomoriId: tomoriState?.tomori_id ?? null,
+      personaId: tomoriState?.persona_id ?? null,
       errorType: "CommandExecutionError",
       metadata: {
         command: "server initialize expressions",

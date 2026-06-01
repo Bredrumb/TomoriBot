@@ -1,0 +1,98 @@
+---
+title: "01: Context Assembly"
+---
+
+Translates the provider-agnostic `StructuredContextItem[]` into a provider-native API request and opens the HTTP streaming connection.
+
+**Contract:** `BaseStreamAdapter.startStream` — `src/types/stream/interfaces.ts:245`
+**Canonical implementation:** `GoogleStreamAdapter.startStream` — `src/providers/google/googleStreamAdapter.ts:151-291`
+
+## Mission
+
+Each provider's `StreamAdapter` subclass implements `startStream(config, context)` as an async
+generator. The first half of that method — covered in this stage — handles all *request
+construction* before any HTTP bytes arrive. It converts the provider-agnostic
+`StructuredContextItem[]` from `StreamContext.contextItems` into the format the provider's SDK
+expects (e.g., Gemini `Content[]`), attaches tools and function interaction history, applies
+per-provider config options (stop strings, thinking mode, generation parameters), and opens the
+HTTP streaming connection to the provider's API. Stage 02 covers what happens after the
+connection is open (the generator loop).
+
+The [`LLMProvider.streamToDiscord()`](../provider/#pipeline-wide-concerns) facade (on each
+provider class) constructs the adapter and `StreamConfig`, then calls
+`StreamOrchestrator.streamToDiscord(adapter, config, context)`, which calls `adapter.startStream`
+to begin this stage.
+
+## Input
+
+- `config: StreamConfig` — extends `ProviderConfig` with Discord-specific settings (buffer sizes,
+  timing, humanizer degree). Defined at `src/types/stream/interfaces.ts:62`.
+- `context: StreamContext` — full Discord + application state. Defined at
+  `src/types/stream/interfaces.ts:88`. Key fields consumed in this stage:
+  - `context.contextItems: StructuredContextItem[]` — the assembled conversation context from the
+    [context-build pipeline](../context-build/), each item tagged with a `ContextItemTag` that
+    determines its placement (system instruction vs. dialogue turn).
+  - `context.functionInteractionHistory` — paired `(functionCall, functionResponse)` records from
+    prior iterations of the [tool-loop pipeline](../tool-loop/), replayed as model + user turns.
+  - `context.currentTurnModelParts` — provider-native model parts accumulated within the current
+    tool-loop iteration (used to replay partial model output before a tool call).
+  - `context.tomoriState` — server config, including stop strings, speaker-pattern flag, thinking
+    mode toggles.
+  - `context.messageIdMap` — opaque map for resolving `media_N` / `ref_N` keys back to Discord
+    message snowflake IDs (used by Google's GIF and video routing).
+
+## Output
+
+This stage produces no separate return value — it transitions into the generator loop (stage 02).
+As a side effect of setup, the HTTP streaming connection to the provider API is opened by the
+end of this stage.
+
+## Side effects
+
+- **Google:** Calls `GoogleStreamAdapter.buildTokenCountPayload(contextItems, model, messageIdMap)`,
+  which materialises all `StructuredContextItem` parts into Gemini `Content[]` objects. Images are
+  fetched and base64-encoded via `fetchAndOptimizeImage()`; GIFs are processed via
+  `extractGifKeyframes()` in dev or replaced with a text placeholder in production. Videos are
+  fetched and inlined if under `VIDEO_CONTEXT_MAX_INLINE_MB`.
+- **All adapters:** Calls `buildProviderStopStrings()` to merge configured `llm_stop_strings` with
+  persona-specific speaker-pattern stop strings and provider-native stop sequences.
+- **All adapters:** Initialises speaker-guard state (per-adapter rolling tail buffers used in
+  stage 02).
+
+## Invariants
+
+After context assembly completes (before the generator loop begins):
+
+- The provider SDK client has been initialised with the correct API key from `config.apiKey`.
+- The assembled native request payload includes all dialogue turns derived from `context.contextItems`,
+  in the correct role ordering required by the provider.
+- Function interaction history (if present) has been replayed in alternating model/user turns with
+  image metadata attached to the corresponding user turn.
+- `config.tools` (if non-empty) has been attached to the request config.
+
+## Extension points
+
+| Surface | Plugin-relevance |
+|---|---|
+| `BaseStreamAdapter.startStream()` abstract method | **A plugin adding a new provider implements this method.** The contract is defined in `src/types/stream/interfaces.ts:182`. The full implementation must yield `RawStreamChunk` objects (stage 02) and conform to the generator signature. |
+| `StructuredContextItem` routing (system vs. dialogue) | Each adapter decides which `ContextItemTag` values become system instructions vs. dialogue turns. Google's `SYSTEM_INSTRUCTION_TAGS` set at `src/providers/google/googleStreamAdapter.ts:94` is the canonical example. A plugin changing context routing would subclass the relevant adapter or provide its own. → plugin plan candidate |
+| `buildProviderStopStrings()` | `src/providers/utils/stopStrings.ts`. Internal — stop-string merging is a provider-operational concern; the `llm_stop_strings` DB column is the configuration surface. |
+| Image / video / GIF fetching (`fetchAndOptimizeImage`, `safeDownload`, `extractGifKeyframes`) | Internal — media fetching is tightly coupled to provider-specific inline-data limits and format requirements. |
+
+## Configuration
+
+| Source | Key / Env var | Default | Purpose |
+|---|---|---|---|
+| `TomoriState.config` | `llm_stop_strings` | `null` | Custom stop strings appended to provider stops |
+| `TomoriState.config` | `llm_stop_speaker_pattern_enabled` | `false` | Adds a persona-name speaker-label stop string |
+| `TomoriState.config` | `llm_thinking_enabled` / `llm_thinking_budget_tokens` | provider-specific | Enables chain-of-thought mode (Google / Anthropic thinking config) |
+| Env var | `VIDEO_CONTEXT_MAX_INLINE_MB` | `20` | Max video size (MB) allowed for inline base64 in Google context |
+| Env var | `RUN_ENV` | — | `"production"` replaces GIF frames with text placeholders to avoid memory pressure |
+
+## Related docs
+
+- Context items that arrive here: → [context-build pipeline](../context-build/)
+- Function history that is replayed here: → [tool-loop pipeline — Stage 02 `executeToolCall`](../tool-loop/02-execute-tool-call)
+- Type definitions: `StructuredContextItem` → `src/types/misc/context.ts`; `StreamConfig` / `StreamContext` → `src/types/stream/interfaces.ts`
+- Provider adapter registry: `src/utils/provider/providerInfoRegistry.ts`
+- Adding a new provider end-to-end: → `docs/guides/adding-new-provider.md`

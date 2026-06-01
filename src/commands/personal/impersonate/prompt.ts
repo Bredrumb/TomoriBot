@@ -1,11 +1,12 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
-import { sql } from "@/utils/db/client";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { invalidateUserCache } from "@/utils/cache/userCache";
-import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
+import { userRepository } from "@/utils/db/repositories";
 
 const MODAL_CUSTOM_ID = "personal_impersonate_prompt_modal";
 const PROMPT_INPUT_ID = "personal_impersonate_prompt_input";
@@ -89,14 +90,9 @@ export async function execute(
       return;
     }
 
-    const [updatedUser] = await sql`
-			UPDATE users
-			SET impersonation_prompt = ${normalizedNextPrompt}
-			WHERE user_disc_id = ${interaction.user.id}
-			RETURNING *
-		`;
-
-    if (!updatedUser) {
+    // biome-ignore lint/style/noNonNullAssertion: userData.user_id is always provided by command framework
+    const ok = await userRepository.setImpersonatePrompt(userData.user_id!, normalizedNextPrompt);
+    if (!ok) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",

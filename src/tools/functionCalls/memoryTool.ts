@@ -105,30 +105,30 @@ export class MemoryTool extends BaseTool {
       targetUserArg?.trim() || legacyTargetUserNicknameArg?.trim() || legacyTargetUserDiscordIdArg?.trim();
 
     // Import database functions
-    const { addPersonalMemoryByTomori, addServerMemoryByTomori } = await import("../../utils/db/dbWrite");
-    const { isBlacklisted, loadUserRow } = await import("../../utils/db/dbRead");
-    const { sendStandardEmbed } = await import("../../utils/discord/embedHelper");
+    const { sendMemoryEmbedWithExpand } = await import("../../utils/discord/expandableMemoryNotice");
     const { ColorCode } = await import("../../utils/misc/logger");
     const { convertMentions } = await import("../../utils/text/contextBuilder");
+    const { sanitizeUnknownTemplatePlaceholders } = await import("@/utils/text/processors/mentionProcessor");
 
-    // Import memory validation functions
-    const { validateMemoryContent, checkPersonalMemoryLimit, checkServerMemoryLimit } = await import(
-      "../../utils/db/memoryLimits"
+    // Import memory validation and repository singletons
+    const { validateMemoryContent } = await import("@/utils/misc/memoryLimits");
+    const { personalMemoryRepository, serverMemoryRepository, userRepository } = await import(
+      "@/utils/db/repositories"
     );
 
     // Critical state validation (from tomoriChat.ts:1078-1104)
     const tomoriState = context.tomoriState;
     const resolvedUserId = context.message?.author?.id || context.userId;
-    const userRow = resolvedUserId ? await loadUserRow(resolvedUserId) : null;
+    const userRow = resolvedUserId ? await userRepository.loadByDiscordId(resolvedUserId) : null;
 
-    if (!tomoriState || !userRow?.user_id || !tomoriState.server_id || !tomoriState.tomori_id || !resolvedUserId) {
+    if (!tomoriState || !userRow?.user_id || !tomoriState.server_id || !tomoriState.persona_id || !resolvedUserId) {
       // Log which specific value is missing for diagnostics
       const missing = [
         !tomoriState && "tomoriState",
         !userRow && "userRow",
         userRow && !userRow.user_id && "userRow.user_id",
         tomoriState && !tomoriState.server_id && "tomoriState.server_id",
-        tomoriState && !tomoriState.tomori_id && "tomoriState.tomori_id",
+        tomoriState && !tomoriState.persona_id && "tomoriState.persona_id",
         !resolvedUserId && "resolvedUserId",
       ].filter(Boolean);
       log.error(`Critical state missing before handling create_long_term_memory: [${missing.join(", ")}]`);
@@ -143,7 +143,7 @@ export class MemoryTool extends BaseTool {
     }
 
     const personaNickname =
-      context.personaUsername || tomoriState.tomori_nickname || context.client.user?.username || "TomoriBot";
+      context.personaUsername || tomoriState.persona_nickname || context.client.user?.username || "TomoriBot";
 
     // Validate memory content (from tomoriChat.ts:1105-1113)
     if (typeof memoryContentArg !== "string" || !memoryContentArg.trim()) {
@@ -239,7 +239,9 @@ export class MemoryTool extends BaseTool {
       }
     }
 
-    const memoryContent = memoryContentArg.trim();
+    // Sanitize unknown {word} placeholders (e.g. {bredrumb}) — the LLM sometimes wraps
+    // usernames in braces imitating {user}. Strip the braces so the name appears plainly.
+    const memoryContent = sanitizeUnknownTemplatePlaceholders(memoryContentArg.trim());
 
     // Validate memory content length after any bridge/self fallback rewrites.
     const contentValidation = validateMemoryContent(memoryContent);
@@ -264,7 +266,7 @@ export class MemoryTool extends BaseTool {
     // The schema migration repairs this, but block the write if it somehow persists.
     if (tomoriState.persona_lineage_id === 0) {
       log.error(
-        `Self-teach blocked: Tomori ${tomoriState.tomori_id} has persona_lineage_id=0. Schema migration may not have run.`,
+        `Self-teach blocked: Tomori ${tomoriState.persona_id} has persona_lineage_id=0. Schema migration may not have run.`,
       );
       return {
         success: false,
@@ -280,7 +282,10 @@ export class MemoryTool extends BaseTool {
       // Server-wide memory handling (from tomoriChat.ts:1127-1179)
       try {
         // Check server memory limit before adding
-        const serverLimitCheck = await checkServerMemoryLimit(tomoriState.server_id, tomoriState.persona_lineage_id);
+        const serverLimitCheck = await serverMemoryRepository.checkServerMemoryLimit(
+          tomoriState.server_id,
+          tomoriState.persona_lineage_id,
+        );
         if (!serverLimitCheck.isValid) {
           return {
             success: false,
@@ -295,9 +300,9 @@ export class MemoryTool extends BaseTool {
           };
         }
 
-        const dbResult = await addServerMemoryByTomori(
+        const dbResult = await serverMemoryRepository.add(
           tomoriState.server_id,
-          tomoriState.tomori_id,
+          tomoriState.persona_id,
           tomoriState.persona_lineage_id,
           userRow.user_id,
           memoryContent,
@@ -317,12 +322,15 @@ export class MemoryTool extends BaseTool {
             context.client,
             serverId,
             userRow.user_nickname, // Use triggerer's name for {user} replacement
-            tomoriState.tomori_nickname, // Use bot's current nickname for {bot} replacement
+            tomoriState.persona_nickname, // Use bot's current nickname for {bot} replacement
             tomoriState?.config.personal_memories_enabled,
           );
 
-          // Send notification embed to the channel
-          await sendStandardEmbed(
+          // Send notification embed to the channel.
+          // The expand helper attaches a "Show Full Memory" button when the
+          // processed content exceeds 200 chars (the embed truncation threshold),
+          // letting users read the full memory ephemerally without channel clutter.
+          await sendMemoryEmbedWithExpand(
             context.channel,
             context.locale,
             {
@@ -340,6 +348,7 @@ export class MemoryTool extends BaseTool {
               },
               footerKey: "genai.self_teach.server_memory_footer",
             },
+            processedMemoryContent,
             {
               webhook: context.webhook,
               personaUsername: context.personaUsername,
@@ -390,7 +399,7 @@ export class MemoryTool extends BaseTool {
 
       try {
         // Load target user (from tomoriChat.ts:1204-1206)
-        const targetUserRow = await loadUserRow(resolvedTargetUserId as string);
+        const targetUserRow = await userRepository.loadByDiscordId(resolvedTargetUserId as string);
 
         if (!targetUserRow?.user_id) {
           log.warn(`Self-teach: Resolved target user ${resolvedTargetUserId} not found in Tomori records`);
@@ -407,9 +416,8 @@ export class MemoryTool extends BaseTool {
         const targetUserDisplayName = resolvedTargetUserLabel || targetUserRow.user_nickname;
 
         // Check if user has opted out of personalization (privacy setting)
-        const { getPrivacyLevel } = await import("../../utils/db/dbRead");
         const { PrivacyLevel } = await import("../../types/db/schema");
-        const userPrivacyLevel = await getPrivacyLevel(resolvedTargetUserId as string);
+        const userPrivacyLevel = await userRepository.getPrivacyLevel(resolvedTargetUserId as string);
 
         // Block self-teaching for PARTIAL and FULL privacy levels
         if (userPrivacyLevel === PrivacyLevel.PARTIAL || userPrivacyLevel === PrivacyLevel.FULL) {
@@ -428,7 +436,7 @@ export class MemoryTool extends BaseTool {
         }
 
         // Check personal memory limit before adding
-        const personalLimitCheck = await checkPersonalMemoryLimit(
+        const personalLimitCheck = await personalMemoryRepository.checkPersonalMemoryLimit(
           targetUserRow.user_id,
           tomoriState.persona_lineage_id,
           true,
@@ -449,7 +457,7 @@ export class MemoryTool extends BaseTool {
         }
 
         // Save personal memory (from tomoriChat.ts:1262-1335)
-        const dbResult = await addPersonalMemoryByTomori(
+        const dbResult = await personalMemoryRepository.add(
           targetUserRow.user_id,
           tomoriState.persona_lineage_id,
           memoryContent,
@@ -471,7 +479,7 @@ export class MemoryTool extends BaseTool {
             context.client,
             serverId,
             targetUserDisplayName, // Use target user's name for {user} replacement
-            tomoriState.tomori_nickname, // Use bot's current nickname for {bot} replacement
+            tomoriState.persona_nickname, // Use bot's current nickname for {bot} replacement
             tomoriState?.config.personal_memories_enabled,
           );
 
@@ -482,7 +490,8 @@ export class MemoryTool extends BaseTool {
           if (!serverDiscId) {
             throw new Error("Critical security error: No valid server or user ID available for blacklist checking");
           }
-          const targetUserIsBlacklisted = (await isBlacklisted(serverDiscId, resolvedTargetUserId as string)) ?? false;
+          const targetUserIsBlacklisted =
+            (await userRepository.isBlacklisted(serverDiscId, resolvedTargetUserId as string)) ?? false;
 
           let personalMemoryFooterKey: string;
           if (!personalizationEnabled) {
@@ -497,9 +506,11 @@ export class MemoryTool extends BaseTool {
           // Done before the notification embed so cache is always fresh even if embed fails
           invalidateUserCache(resolvedTargetUserId as string);
 
-          // Send notification embed (non-fatal: missing permissions won't block the memory save)
+          // Send notification embed (non-fatal: missing permissions won't block the memory save).
+          // The expand helper attaches a "Show Full Memory" button when the
+          // processed content exceeds 200 chars (the embed truncation threshold).
           try {
-            await sendStandardEmbed(
+            await sendMemoryEmbedWithExpand(
               context.channel,
               context.locale,
               {
@@ -519,6 +530,7 @@ export class MemoryTool extends BaseTool {
                 },
                 footerKey: personalMemoryFooterKey,
               },
+              processedMemoryContent,
               {
                 webhook: context.webhook,
                 personaUsername: context.personaUsername,

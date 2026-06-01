@@ -18,26 +18,19 @@ import {
   buildChecklistPageActionRows,
   collectCheckedIds,
   formatChecklistChannelMentions,
-  formatTextArrayLiteral,
   loadGuildTextChecklistChannels,
   type ChecklistChannelTarget,
 } from "@/utils/discord/channelChecklistManager";
-import {
-  promptWithPaginatedModal,
-  promptWithRawModal,
-  replyInfoEmbed,
-  safeSelectOptionText,
-} from "@/utils/discord/interactionHelper";
-import {
-  tomoriConfigSchema,
-  type AutochatPersonaOverride as AutochatPersonaOverrideRow,
-  type ErrorContext,
-  type TomoriConfigRow,
-  type TomoriState,
-  type UserRow,
+import { promptWithPaginatedModal, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import type {
+  AutochatPersonaOverride as AutochatPersonaOverrideRow,
+  ErrorContext,
+  TomoriState,
+  UserRow,
 } from "@/types/db/schema";
 import { getCachedAllPersonas, getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { sql } from "@/utils/db/client";
+import { configRepository } from "@/utils/db/repositories";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -104,7 +97,10 @@ export async function execute(
       return;
     }
 
-    const initialSelectedIds = new Set(tomoriState.config.autoch_disc_ids ?? []);
+    const availableChannelIds = new Set(availableChannels.map((c) => c.id));
+    const initialSelectedIds = new Set(
+      (tomoriState.config.autoch_disc_ids ?? []).filter((id) => availableChannelIds.has(id)),
+    );
     const initialPersonaOverrides = buildAutochatPersonaOverrideMap(tomoriState.config.autoch_persona_overrides);
 
     if (availableChannels.length <= CHECKLIST_CHANNELS_PER_PAGE) {
@@ -403,14 +399,14 @@ async function persistUpdate(
       enabled_channels: formatChecklistChannelMentions(enabledIds, availableChannels, locale),
       disabled_count: disabledIds.length.toString(),
       disabled_channels: formatChecklistChannelMentions(disabledIds, availableChannels, locale),
-      selected_count: validatedConfig.data.autoch_disc_ids.length.toString(),
+      selected_count: nextSelectedIds.size.toString(),
     },
     color: ColorCode.SUCCESS,
   });
 
   return {
-    selectedIds: new Set(validatedConfig.data.autoch_disc_ids),
-    personaOverrides: buildAutochatPersonaOverrideMap(validatedConfig.data.autoch_persona_overrides),
+    selectedIds: nextSelectedIds,
+    personaOverrides: nextPersonaOverrides,
   };
 }
 
@@ -456,7 +452,7 @@ async function executeSingleChannel(
   }
 
   const mainPersona = allPersonas.find((persona) => !persona.is_alter) ?? allPersonas[0];
-  if (!mainPersona?.tomori_id) {
+  if (!mainPersona?.persona_id) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",
@@ -468,14 +464,14 @@ async function executeSingleChannel(
 
   const selectedIds = new Set(tomoriState.config.autoch_disc_ids ?? []);
   const previousPersonaOverrides = buildAutochatPersonaOverrideMap(tomoriState.config.autoch_persona_overrides);
-  const currentPersonaId = previousPersonaOverrides.get(channel.id) ?? mainPersona.tomori_id;
-  const currentPersona = allPersonas.find((persona) => persona.tomori_id === currentPersonaId) ?? mainPersona;
+  const currentPersonaId = previousPersonaOverrides.get(channel.id) ?? mainPersona.persona_id;
+  const currentPersona = allPersonas.find((persona) => persona.persona_id === currentPersonaId) ?? mainPersona;
 
   const personaOptions: SelectOption[] = allPersonas
-    .filter((persona) => persona.tomori_id !== undefined)
+    .filter((persona) => persona.persona_id !== undefined)
     .map((persona) => ({
-      label: safeSelectOptionText(persona.tomori_nickname),
-      value: persona.tomori_id?.toString() ?? "",
+      label: safeSelectOptionText(persona.persona_nickname),
+      value: persona.persona_id?.toString() ?? "",
       description: persona.is_alter
         ? localizer(locale, "commands.server.auto-trigger.channels.alter_persona_description")
         : localizer(locale, "commands.server.auto-trigger.channels.main_persona_description"),
@@ -498,7 +494,7 @@ async function executeSingleChannel(
         labelKey: "commands.server.auto-trigger.channels.single_persona_label",
         descriptionKey: "commands.server.auto-trigger.channels.single_persona_description",
         placeholder: localizer(locale, "commands.server.auto-trigger.channels.single_persona_placeholder", {
-          persona: currentPersona.tomori_nickname,
+          persona: currentPersona.persona_nickname,
         }),
         required: false,
         options: personaOptions,
@@ -516,7 +512,7 @@ async function executeSingleChannel(
 
   if (selectedPersonaValue) {
     const parsedPersonaId = Number.parseInt(selectedPersonaValue, 10);
-    const resolvedPersona = allPersonas.find((persona) => persona.tomori_id === parsedPersonaId);
+    const resolvedPersona = allPersonas.find((persona) => persona.persona_id === parsedPersonaId);
     if (!resolvedPersona || Number.isNaN(parsedPersonaId)) {
       await replyInfoEmbed(modalResult.interaction, locale, {
         titleKey: "general.errors.invalid_option_title",
@@ -534,10 +530,10 @@ async function executeSingleChannel(
 
   if (isEnabled) {
     nextSelectedIds.add(channel.id);
-    if (desiredPersona.tomori_id === mainPersona.tomori_id) {
+    if (desiredPersona.persona_id === mainPersona.persona_id) {
       nextPersonaOverrides.delete(channel.id);
-    } else if (desiredPersona.tomori_id) {
-      nextPersonaOverrides.set(channel.id, desiredPersona.tomori_id);
+    } else if (desiredPersona.persona_id) {
+      nextPersonaOverrides.set(channel.id, desiredPersona.persona_id);
     }
   } else {
     nextSelectedIds.delete(channel.id);
@@ -578,7 +574,7 @@ async function executeSingleChannel(
       : "commands.server.auto-trigger.channels.single_success_disabled_description",
     descriptionVars: {
       channel: `<#${channel.id}>`,
-      persona: desiredPersona.tomori_nickname,
+      persona: desiredPersona.persona_nickname,
     },
     color: ColorCode.SUCCESS,
   });
@@ -589,10 +585,10 @@ function buildAutochatPersonaOverrideMap(
 ): Map<string, number> {
   const entries = new Map<string, number>();
   for (const override of overrides ?? []) {
-    if (!override?.channel_disc_id || !Number.isInteger(override.tomori_id)) {
+    if (!override?.channel_disc_id || !Number.isInteger(override.persona_id)) {
       continue;
     }
-    entries.set(override.channel_disc_id, override.tomori_id);
+    entries.set(override.channel_disc_id, override.persona_id);
   }
   return entries;
 }
@@ -614,9 +610,9 @@ function pruneAutochatPersonaOverrides(overrides: Map<string, number>, selectedI
 function serializeAutochatPersonaOverrides(overrides: Map<string, number>): AutochatPersonaOverrideRow[] {
   return [...overrides.entries()]
     .sort(([leftChannelId], [rightChannelId]) => leftChannelId.localeCompare(rightChannelId))
-    .map(([channel_disc_id, tomori_id]) => ({
+    .map(([channel_disc_id, persona_id]) => ({
       channel_disc_id,
-      tomori_id,
+      persona_id,
     }));
 }
 
@@ -655,23 +651,21 @@ async function updateAutochatConfig(
   responseInteraction: ModalSubmitInteraction,
   nextSelectedIds: Set<string>,
   nextPersonaOverrides: Map<string, number>,
-): Promise<{ data: TomoriConfigRow } | null> {
-  const [updatedRow] = await sql`
-    UPDATE tomori_configs
-    SET autoch_disc_ids = ${formatTextArrayLiteral([...nextSelectedIds])}::text[],
-        autoch_persona_overrides = ${JSON.stringify(serializeAutochatPersonaOverrides(nextPersonaOverrides))}::jsonb
-    WHERE server_id = ${tomoriState.server_id}
-    RETURNING *
-  `;
+): Promise<true | null> {
+  const updated = await configRepository.updateAutoTriggerConfig(tomoriState.server_id, {
+    autoch_disc_ids: [...nextSelectedIds],
+    autoch_persona_overrides: serializeAutochatPersonaOverrides(nextPersonaOverrides),
+  });
 
-  if (!updatedRow) {
+  if (!updated) {
     const context: ErrorContext = {
-      tomoriId: tomoriState.tomori_id,
+      personaId: tomoriState.persona_id,
       serverId: tomoriState.server_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "server auto-trigger channels",
         guildId,
+        targetTable: "server_auto_trigger_configs",
       },
     };
     await log.error("Failed to update auto-trigger channel config", new Error("Database update failed"), context);
@@ -683,27 +677,5 @@ async function updateAutochatConfig(
     return null;
   }
 
-  const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-  if (!validatedConfig.success) {
-    const context: ErrorContext = {
-      tomoriId: tomoriState.tomori_id,
-      serverId: tomoriState.server_id,
-      errorType: "SchemaValidationError",
-      metadata: {
-        command: "server auto-trigger channels",
-        validationErrors: validatedConfig.error.flatten(),
-      },
-    };
-    await log.error("Failed to validate updated config after auto-trigger update", validatedConfig.error, context);
-    await replyInfoEmbed(responseInteraction, locale, {
-      titleKey: "general.errors.update_failed_title",
-      descriptionKey: "general.errors.update_failed_description",
-      color: ColorCode.ERROR,
-    });
-    return null;
-  }
-
-  return {
-    data: validatedConfig.data,
-  };
+  return true;
 }

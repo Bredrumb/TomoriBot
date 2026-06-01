@@ -1,8 +1,20 @@
+import type { Message } from "discord.js";
+import { isAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
+import {
+  isSupportedImageAttachmentContentType,
+  isSupportedVideoAttachmentContentType,
+} from "@/utils/chat/contextMedia";
 import { log } from "@/utils/misc/logger";
 
 export const PERSONAL_DELIBERATE_TOOL_MODES = ["off", "follow", "on"] as const;
 export type PersonalDeliberateToolMode = (typeof PERSONAL_DELIBERATE_TOOL_MODES)[number];
-export type DeliberateToolTriggerMap = Record<string, string[]>;
+export type DeliberateToolTrigger =
+  | string
+  | {
+      type: "literal" | "regex";
+      value: string;
+    };
+export type DeliberateToolTriggerMap = Record<string, DeliberateToolTrigger[]>;
 
 export type DeliberateToolIntentMatchSource = "built-in" | "custom" | "follow-up";
 
@@ -51,7 +63,7 @@ function hasReminderCreationIntent(text: string): boolean {
 const TOOL_INTENT_PATTERNS: RegExp[] = [
   /\b(search|web\s*search|look\s+up|browse|google|fetch|read\s+this\s+(?:url|link|page)|open\s+this\s+(?:url|link|page))\b/i,
   /\b(latest|today|current|currently|up[- ]?to[- ]?date|news|recent)\b/i,
-  /\b(remember|save\s+(?:this|that|it)|forget|delete\s+(?:that\s+)?memory|update\s+(?:your\s+)?memory|store\s+(?:this|that|it))\b/i,
+  /\b(remember|save\s+(?:this|that|it)|forget|(?:delete|update)\s+(?:(?:this|that|your|my|the)\s+)?memory|store\s+(?:this|that|it))\b/i,
   /\b(look\s+at|analy[sz]e|inspect|describe|what(?:'s| is)\s+in)\b.*\b(image|picture|photo|pic|img|pfp|avatar|profile\s+picture|gif|video|youtube|attachment)\b/i,
   /\b(image|picture|photo|pic|img|pfp|avatar|profile\s+picture|gif|video|youtube|attachment)\b.*\b(look\s+at|analy[sz]e|inspect|describe|summari[sz]e)\b/i,
   /\b(generate|create|make|draw)\b.*\b(image|picture|photo|pic|img|pfp|video|voice|audio|speech|thread)\b/i,
@@ -118,6 +130,7 @@ const TOOL_FOLLOW_UP_PATTERNS: RegExp[] = [
 ];
 
 const WEB_TOOL_NAMES = [
+  "web_search",
   "web-search",
   "felo-search",
   "iask-search",
@@ -128,6 +141,7 @@ const WEB_TOOL_NAMES = [
   "brave_news_search",
   "brave_local_search",
   "brave_summarizer",
+  "fetch_url",
   "fetch",
   "url-metadata",
 ];
@@ -205,6 +219,10 @@ export function normalizeDeliberateToolTrigger(trigger: string | null | undefine
   return (trigger ?? "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+export function normalizeDeliberateToolRegexTrigger(trigger: string | null | undefined): string {
+  return (trigger ?? "").trim();
+}
+
 function literalTriggerMatches(text: string, trigger: string): boolean {
   const normalizedTrigger = normalizeDeliberateToolTrigger(trigger);
   if (!normalizedTrigger) return false;
@@ -215,6 +233,22 @@ function literalTriggerMatches(text: string, trigger: string): boolean {
     ? new RegExp(`(^|[^\\p{L}\\p{N}_-])${escaped}($|[^\\p{L}\\p{N}_-])`, "iu")
     : new RegExp(escaped, "iu");
   return pattern.test(text);
+}
+
+function regexTriggerMatches(text: string, trigger: string): boolean {
+  const normalizedTrigger = normalizeDeliberateToolRegexTrigger(trigger);
+  if (!normalizedTrigger) return false;
+
+  try {
+    return new RegExp(normalizedTrigger, "iu").test(text);
+  } catch (error) {
+    log.warn(`Invalid custom deliberate tool regex trigger ignored: ${normalizedTrigger}`, error);
+    return false;
+  }
+}
+
+function getCustomTriggerValue(trigger: DeliberateToolTrigger): string {
+  return typeof trigger === "string" ? trigger : trigger.value;
 }
 
 export function getDeliberateToolTriggerTargetLabel(targetValue: string): string {
@@ -307,11 +341,20 @@ function getCustomDeliberateToolIntentResult(
     if (toolNames.length === 0 || !Array.isArray(triggers)) continue;
 
     for (const trigger of triggers) {
-      const normalizedTrigger = normalizeDeliberateToolTrigger(trigger);
-      if (!normalizedTrigger) continue;
-      // "^" is the deliberate-tool wildcard: expose this target on every turn.
-      if (normalizedTrigger !== "^" && !literalTriggerMatches(text, normalizedTrigger)) continue;
-      addToolMatches(allowedToolNames, matches, toolNames, normalizedTrigger, "custom");
+      if (typeof trigger === "string" || trigger.type === "literal") {
+        const normalizedTrigger = normalizeDeliberateToolTrigger(getCustomTriggerValue(trigger));
+        if (!normalizedTrigger) continue;
+        // "^" is the deliberate-tool wildcard: expose this target on every turn.
+        if (normalizedTrigger !== "^" && !literalTriggerMatches(text, normalizedTrigger)) continue;
+        addToolMatches(allowedToolNames, matches, toolNames, normalizedTrigger, "custom");
+        continue;
+      }
+
+      if (trigger.type === "regex") {
+        const normalizedTrigger = normalizeDeliberateToolRegexTrigger(trigger.value);
+        if (!normalizedTrigger || !regexTriggerMatches(text, normalizedTrigger)) continue;
+        addToolMatches(allowedToolNames, matches, toolNames, `/${normalizedTrigger}/`, "custom");
+      }
     }
   }
 
@@ -525,7 +568,9 @@ export function applyDeliberateToolAllowlist<T extends { name: string }>(params:
     return { builtInTools, mcpFunctionNames };
   }
 
-  const filteredBuiltInTools = builtInTools.filter((tool) => isToolAllowedByDeliberateMode(tool.name, allowedToolNames));
+  const filteredBuiltInTools = builtInTools.filter((tool) =>
+    isToolAllowedByDeliberateMode(tool.name, allowedToolNames),
+  );
   const filteredMcpFunctionNames = filterDeliberateToolNames(mcpFunctionNames, allowedToolNames);
 
   log.info(
@@ -545,4 +590,92 @@ export function resolveDeliberateToolMode(
   if (personalMode === "on") return true;
   if (personalMode === "off") return false;
   return Boolean(serverDeliberateToolMode);
+}
+
+/**
+ * Inspects the most recent messages in a channel to detect tools the model
+ * recently invoked or was asked to invoke, so the deliberate-tool allowlist
+ * can keep those tools exposed for short follow-up turns ("do it again", etc.).
+ * Stops as soon as one message yields any tool names.
+ */
+export function getRecentToolAffordanceNames(
+  recentMessages: Message[],
+  currentMessageId: string,
+  clientUserId?: string | null,
+): string[] {
+  const toolNames: string[] = [];
+
+  const lookbackMessages = recentMessages
+    .filter((recentMessage) => recentMessage.id !== currentMessageId)
+    .slice(-8)
+    .reverse();
+
+  for (const msg of lookbackMessages) {
+    const isPersonaOutput = Boolean(msg.webhookId) || (Boolean(clientUserId) && msg.author.id === clientUserId);
+
+    if (!isPersonaOutput) {
+      const recentIntentResult = getDeliberateToolIntentResult(msg.content);
+      toolNames.push(...recentIntentResult.allowedToolNames);
+      if (toolNames.length > 0) break;
+      continue;
+    }
+
+    const attachments = [...msg.attachments.values()];
+
+    if (attachments.some(isAudioAttachment)) {
+      toolNames.push("generate_voice_message");
+    }
+
+    if (attachments.some((attachment) => isSupportedImageAttachmentContentType(attachment.contentType))) {
+      toolNames.push("generate_image", "generate_image_nai");
+    }
+
+    if (attachments.some((attachment) => isSupportedVideoAttachmentContentType(attachment.contentType))) {
+      toolNames.push("generate_video");
+    }
+
+    if (toolNames.length > 0) break;
+  }
+
+  return Array.from(new Set(toolNames));
+}
+
+type RetainedToolAffordance = {
+  remainingTurns: number;
+};
+
+// Channel-keyed in-memory store of tool names that should remain exposed for
+// the next N turns after a successful invocation. Counter decrements each
+// consume; entries self-evict at zero.
+const retainedToolAffordancesByChannel = new Map<string, Map<string, RetainedToolAffordance>>();
+
+export function retainSuccessfulToolAffordance(channelId: string, toolName: string, turns: number): void {
+  if (turns <= 0) return;
+
+  let channelAffordances = retainedToolAffordancesByChannel.get(channelId);
+  if (!channelAffordances) {
+    channelAffordances = new Map<string, RetainedToolAffordance>();
+    retainedToolAffordancesByChannel.set(channelId, channelAffordances);
+  }
+
+  channelAffordances.set(toolName, { remainingTurns: turns });
+}
+
+export function consumeRetainedToolAffordanceNames(channelId: string): string[] {
+  const channelAffordances = retainedToolAffordancesByChannel.get(channelId);
+  if (!channelAffordances) return [];
+
+  const toolNames = [...channelAffordances.keys()];
+  for (const [toolName, affordance] of channelAffordances.entries()) {
+    affordance.remainingTurns -= 1;
+    if (affordance.remainingTurns <= 0) {
+      channelAffordances.delete(toolName);
+    }
+  }
+
+  if (channelAffordances.size === 0) {
+    retainedToolAffordancesByChannel.delete(channelId);
+  }
+
+  return toolNames;
 }

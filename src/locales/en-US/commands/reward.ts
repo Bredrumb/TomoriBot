@@ -1,0 +1,43 @@
+// locales/en-US/commands/reward.ts
+
+export default {
+  reward: {
+    description: `Reward me with fun interactions.`,
+    headpat: {
+      description: `Give me a headpat!`,
+      reason_description: `Why are you rewarding me?`,
+      embed_title: `🫳 Headpat Time!`,
+      embed_description: `{user} is currently headpatting {bot}.`,
+      history_label: `Headpat`,
+    },
+    hug: {
+      description: `Give me a hug!`,
+      reason_description: `Why are you rewarding me?`,
+      embed_title: `🤗 Hug Time!`,
+      embed_description: `{user} is giving {bot} a warm hug.`,
+      history_label: `Hug`,
+    },
+    kiss: {
+      description: `Give me a kiss!`,
+      reason_description: `Why are you rewarding me?`,
+      embed_title: `💋 Kiss Time!`,
+      embed_description: `{user} just kissed {bot}.`,
+      history_label: `Kiss`,
+    },
+    tickle: {
+      description: `Tickle me!`,
+      reason_description: `Why are you rewarding me?`,
+      embed_title: `🤭 Tickle Time!`,
+      embed_description: `{user} is tickling {bot}.`,
+      history_label: `Tickle`,
+    },
+    feed: {
+      description: `Feed me a delicious snack!`,
+      reason_description: `Why are you rewarding me?`,
+      food_description: `What are you feeding me?`,
+      embed_title: `🍴 Snack Time!`,
+      embed_description: `{user} just fed {bot}{food_text}.`,
+      history_label: `Feed`,
+    },
+  },
+};

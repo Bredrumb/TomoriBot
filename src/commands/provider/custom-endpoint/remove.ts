@@ -1,39 +1,53 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import type { CustomEndpointCapability, CustomEndpointRow, ErrorContext, UserRow } from "@/types/db/schema";
-import { invalidateAllChannelLlmCacheForServer } from "@/utils/cache/channelLlmCache";
+import type {
+  CustomEndpointCapability,
+  CustomEndpointRow,
+  ErrorContext,
+  AssembledServerConfig,
+  UserRow,
+} from "@/types/db/schema";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadCustomEndpointsForServer } from "@/utils/db/dbRead";
+import { configRepository, llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import {
   buildCustomEndpointCheckboxGroups,
   collectCheckedCustomEndpointValues,
   MAX_CUSTOM_MODEL_GROUPS,
 } from "@/utils/discord/customModelRemovalModal";
-import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
-import { sql } from "@/utils/db/client";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { removeCustomEndpointRegistration } from "@/utils/provider/customEndpointService";
 import { buildServerCustomProviderName } from "@/utils/provider/customProviderUtils";
 import { localizer } from "@/utils/text/localizer";
 
-async function resolveCurrentProvider(serverId: number, capability: CustomEndpointCapability): Promise<string | null> {
+async function resolveCurrentProvider(
+  config: Pick<AssembledServerConfig, "llm_id" | "diffusion_model_id" | "embedding_model_id" | "video_model_id">,
+  capability: CustomEndpointCapability,
+): Promise<string | null> {
   switch (capability) {
     case "speech":
     case "transcription":
       return null;
-    case "text":
-    case "image":
-    case "embedding":
+    case "text": {
+      if (!config.llm_id) return null;
+      const llm = await llmModelRepo.loadById(config.llm_id);
+      return llm?.llm_provider ? llm.llm_provider.toLowerCase() : null;
+    }
+    case "image": {
+      if (!config.diffusion_model_id) return null;
+      const model = await llmModelRepo.loadDiffusionModelById(config.diffusion_model_id);
+      return model?.provider ? String(model.provider).toLowerCase() : null;
+    }
+    case "embedding": {
+      if (!config.embedding_model_id) return null;
+      const model = await llmModelRepo.loadEmbeddingModelById(config.embedding_model_id);
+      return model?.provider ? String(model.provider).toLowerCase() : null;
+    }
     case "video": {
-      const [row] =
-        capability === "text"
-          ? await sql`SELECT llm_provider AS provider FROM llms WHERE llm_id = (SELECT llm_id FROM tomori_configs WHERE server_id = ${serverId}) LIMIT 1`
-          : capability === "image"
-            ? await sql`SELECT provider FROM image_diffusion_models WHERE diffusion_model_id = (SELECT diffusion_model_id FROM tomori_configs WHERE server_id = ${serverId}) LIMIT 1`
-            : capability === "embedding"
-              ? await sql`SELECT provider FROM embedding_models WHERE embedding_model_id = (SELECT embedding_model_id FROM tomori_configs WHERE server_id = ${serverId}) LIMIT 1`
-              : await sql`SELECT provider FROM video_generation_models WHERE video_model_id = (SELECT video_model_id FROM tomori_configs WHERE server_id = ${serverId}) LIMIT 1`;
-      return row?.provider ? String(row.provider).toLowerCase() : null;
+      if (!config.video_model_id) return null;
+      const model = await llmModelRepo.loadVideoGenerationModelById(config.video_model_id);
+      return model?.provider ? String(model.provider).toLowerCase() : null;
     }
   }
 }
@@ -72,28 +86,32 @@ function formatRemovedEndpoints(locale: string, endpoints: CustomEndpointRow[]):
 async function clearCurrentProviderSelections(
   serverId: number,
   capabilitiesToClear: Set<CustomEndpointCapability>,
+  currentLlmId: number | null,
+  currentVisionLlmId: number | null,
 ): Promise<void> {
   for (const capability of capabilitiesToClear) {
     switch (capability) {
-      case "text":
-        await sql`
-					UPDATE tomori_configs
-					SET llm_id = NULL,
-					    custom_endpoint_url = NULL,
-					    custom_model_name = NULL,
-					    custom_num_ctx = NULL,
-					    vision_llm_id = CASE WHEN vision_llm_id = llm_id THEN NULL ELSE vision_llm_id END
-					WHERE server_id = ${serverId}
-				`;
+      case "text": {
+        // Self-referencing case: if vision_llm_id pointed at the now-removed text
+        // model, null it too. Resolved in TS so the patch stays a flat partial.
+        const shouldClearVision = currentVisionLlmId !== null && currentVisionLlmId === currentLlmId;
+        await configRepository.updateModelConfig(serverId, {
+          llm_id: null,
+          custom_endpoint_url: null,
+          custom_model_name: null,
+          custom_num_ctx: null,
+          ...(shouldClearVision ? { vision_llm_id: null } : {}),
+        });
         break;
+      }
       case "embedding":
-        await sql`UPDATE tomori_configs SET embedding_model_id = NULL WHERE server_id = ${serverId}`;
+        await configRepository.updateModelConfig(serverId, { embedding_model_id: null });
         break;
       case "image":
-        await sql`UPDATE tomori_configs SET diffusion_model_id = NULL WHERE server_id = ${serverId}`;
+        await configRepository.updateModelConfig(serverId, { diffusion_model_id: null });
         break;
       case "video":
-        await sql`UPDATE tomori_configs SET video_model_id = NULL WHERE server_id = ${serverId}`;
+        await configRepository.updateModelConfig(serverId, { video_model_id: null });
         break;
     }
   }
@@ -120,7 +138,7 @@ export async function execute(
   }
 
   try {
-    const registeredEndpoints = await loadCustomEndpointsForServer(tomoriState.server_id);
+    const registeredEndpoints = await llmProviderRepo.loadCustomEndpointsForServer(tomoriState.server_id);
     if (registeredEndpoints.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.config.custom_models.remove.none_title",
@@ -178,7 +196,7 @@ export async function execute(
     const removedCapabilities = new Set(endpointsToRemove.map((endpoint) => endpoint.capability));
     const currentProviders = new Map<CustomEndpointCapability, string | null>();
     for (const capability of removedCapabilities) {
-      currentProviders.set(capability, await resolveCurrentProvider(tomoriState.server_id, capability));
+      currentProviders.set(capability, await resolveCurrentProvider(tomoriState.config, capability));
     }
 
     const removedEndpoints: CustomEndpointRow[] = [];
@@ -190,6 +208,7 @@ export async function execute(
           kind: "server",
           ownerId: tomoriState.server_id,
           baseConfig: tomoriState.config,
+          serverDiscId: interaction.guild?.id ?? interaction.user.id,
         },
         label: endpoint.label,
         capability: endpoint.capability,
@@ -216,13 +235,16 @@ export async function execute(
       return;
     }
 
-    await clearCurrentProviderSelections(tomoriState.server_id, capabilitiesToClear);
-
-    if (removedEndpoints.some((endpoint) => endpoint.capability === "text")) {
-      invalidateAllChannelLlmCacheForServer(tomoriState.server_id);
+    await clearCurrentProviderSelections(
+      tomoriState.server_id,
+      capabilitiesToClear,
+      tomoriState.config.llm_id ?? null,
+      tomoriState.config.vision_llm_id ?? null,
+    );
+    if (capabilitiesToClear.size > 0) {
+      invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
     }
 
-    invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
     await replyInfoEmbed(modalResult.interaction, locale, {
       titleKey: "commands.config.custom_models.remove.success_title",
       descriptionKey: "commands.config.custom_models.remove.success_description",
@@ -235,7 +257,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState.server_id,
-      tomoriId: tomoriState.tomori_id,
+      personaId: tomoriState.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "config custom-endpoint remove",

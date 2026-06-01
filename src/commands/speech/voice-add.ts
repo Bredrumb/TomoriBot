@@ -6,11 +6,12 @@ import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder
 import { MessageFlags } from "discord.js";
 import ffmpegPath from "ffmpeg-static";
 import { parseBuffer } from "music-metadata";
-import { sql } from "@/utils/db/client";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { storeVoiceSample } from "@/utils/storage/voiceSampleStorage";
+import { insertVoiceSample, updateVoiceSamplePath, deleteVoiceSample } from "@/utils/db/repositories/SpeechRepository";
+import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 
@@ -83,7 +84,17 @@ async function normalizeToWav(inputBuffer: Buffer): Promise<Buffer> {
 
     return await fs.readFile(tmpOut);
   } finally {
-    await Promise.all([fs.unlink(tmpIn).catch(() => {}), fs.unlink(tmpOut).catch(() => {})]);
+    await Promise.all([
+      fs.unlink(tmpIn).catch((err: unknown) => {
+        if ((err as NodeJS.ErrnoException).code !== "ENOENT")
+          log.warn("[VoiceAdd] Failed to delete temp input file", err);
+      }),
+      fs.unlink(tmpOut).catch((err: unknown) => {
+        // tmpOut may not exist if transcoding failed before producing output
+        if ((err as NodeJS.ErrnoException).code !== "ENOENT")
+          log.warn("[VoiceAdd] Failed to delete temp output file", err);
+      }),
+    ]);
   }
 }
 
@@ -164,12 +175,8 @@ export async function execute(
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   // Resolve server context.
-  const [serverRow] = await sql<[{ server_id: number }]>`
-    SELECT server_id FROM servers
-    WHERE server_disc_id = ${interaction.guild?.id ?? interaction.user.id}
-    LIMIT 1
-  `;
-  if (!serverRow) {
+  const serverId = await serverRepository.loadServerIdByDiscId(interaction.guild?.id ?? interaction.user.id);
+  if (!serverId) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.tomori_not_setup_title",
       descriptionKey: "general.errors.tomori_not_setup_description",
@@ -177,7 +184,6 @@ export async function execute(
     });
     return;
   }
-  const serverId = serverRow.server_id;
 
   try {
     // Download the audio attachment with the configured size limit.
@@ -247,12 +253,8 @@ export async function execute(
     const durationMs = Math.round(durationSecs * 1000);
 
     // Insert a placeholder row to reserve a sample_id, then update with the real storage reference.
-    const [insertedRow] = await sql<[{ sample_id: number }]>`
-      INSERT INTO voice_samples (server_id, name, file_path, ref_text, duration_ms)
-      VALUES (${serverId}, ${sampleName}, '', ${refText}, ${durationMs})
-      RETURNING sample_id
-    `;
-    if (!insertedRow) {
+    const sampleId = await insertVoiceSample(serverId, sampleName, refText, durationMs);
+    if (!sampleId) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",
@@ -260,15 +262,15 @@ export async function execute(
       });
       return;
     }
-
-    const sampleId = insertedRow.sample_id;
     const storedReference = await storeVoiceSample({
       serverId,
       sampleId,
       buffer: wavBuffer,
     });
     if (!storedReference) {
-      await sql`DELETE FROM voice_samples WHERE sample_id = ${sampleId}`.catch(() => {});
+      await deleteVoiceSample(sampleId).catch((err: unknown) =>
+        log.warn("[VoiceAdd] Failed to delete voice sample record after storage failure", err),
+      );
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",
@@ -278,11 +280,7 @@ export async function execute(
     }
 
     // Update the row with the resolved storage reference.
-    await sql`
-      UPDATE voice_samples
-      SET file_path = ${storedReference}
-      WHERE sample_id = ${sampleId}
-    `;
+    await updateVoiceSamplePath(sampleId, storedReference);
 
     const durationDisplay = durationSecs > 0 ? `${Math.floor(durationSecs)}s` : localizer(locale, "general.unknown");
 

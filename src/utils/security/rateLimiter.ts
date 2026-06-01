@@ -246,6 +246,37 @@ interface MemoryCheckResult {
   reducedMediaWindow?: number; // Suggested reduced media window during warning
 }
 
+export interface MemoryEmergencyEvent {
+  rssUsedMB: number;
+  memoryLimitMB: number;
+  percentUsed: number;
+  cooldownMs: number;
+  enteredAt: number;
+}
+
+export type MemoryEmergencyHandler = (event: MemoryEmergencyEvent) => void;
+
+const memoryEmergencyHandlers = new Set<MemoryEmergencyHandler>();
+
+export function registerMemoryEmergencyHandler(handler: MemoryEmergencyHandler): () => void {
+  memoryEmergencyHandlers.add(handler);
+  return () => {
+    memoryEmergencyHandlers.delete(handler);
+  };
+}
+
+function notifyMemoryEmergencyHandlers(event: MemoryEmergencyEvent): void {
+  for (const handler of memoryEmergencyHandlers) {
+    try {
+      handler(event);
+    } catch (error) {
+      log.error("Memory emergency handler failed", error, {
+        errorType: "memory_emergency_handler_failed",
+      });
+    }
+  }
+}
+
 class MemoryGuard {
   private isInEmergencyMode = false;
   private emergencyModeEnteredAt = 0;
@@ -350,6 +381,13 @@ class MemoryGuard {
     const protection = MEMORY_PROTECTION();
     this.isInEmergencyMode = true;
     this.emergencyModeEnteredAt = Date.now();
+    const event: MemoryEmergencyEvent = {
+      rssUsedMB,
+      memoryLimitMB: protection.CONTAINER_MEMORY_LIMIT_MB,
+      percentUsed,
+      cooldownMs: protection.EMERGENCY_COOLDOWN_MS,
+      enteredAt: this.emergencyModeEnteredAt,
+    };
 
     log.error(
       `CRITICAL MEMORY PRESSURE: ${rssUsedMB.toFixed(2)} MB / ${protection.CONTAINER_MEMORY_LIMIT_MB} MB RSS (${(percentUsed * 100).toFixed(1)}%). Entering emergency mode.`,
@@ -362,6 +400,8 @@ class MemoryGuard {
         },
       },
     );
+
+    notifyMemoryEmergencyHandlers(event);
 
     // Force garbage collection if available
     if (global.gc) {

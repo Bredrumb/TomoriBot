@@ -6,34 +6,24 @@ import type {
   SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
   acknowledgeModalSubmitForRefresh,
   promptWithPaginatedModal,
   promptWithRawModal,
-  promptWithUnacknowledgedConfirmation,
-  replyComponentsV2Status,
-  replyInfoEmbed,
-  type AvatarSessionCache,
-  replyPaginatedPersonaChoicesV2,
   safeSelectOptionText,
-  updateButtonComponentsV2Status,
-} from "@/utils/discord/interactionHelper";
+} from "@/utils/discord/ui/modals";
+import { promptWithUnacknowledgedConfirmation } from "@/utils/discord/ui/confirmation";
+import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
-import {
-  isBlacklisted,
-  loadAllPersonasForServer,
-  loadPersonalMemoriesForUserLineage,
-  loadTomoriState,
-  getPrivacyLevel,
-} from "@/utils/db/dbRead";
+import { personaRepository, personalMemoryRepository, userRepository } from "@/utils/db/repositories";
 import { invalidateUserCache } from "@/utils/cache/userCache";
-import { getMemoryLimits, validateMemoryContent } from "@/utils/db/memoryLimits";
+import { getMemoryLimits, validateMemoryContent } from "@/utils/misc/memoryLimits";
 import type { SelectOption } from "@/types/discord/modal";
 import {
-  personalMemorySchema,
   PrivacyLevel,
   type ErrorContext,
   type PersonalMemoryRow,
@@ -45,9 +35,13 @@ const SELECT_MODAL_CUSTOM_ID = "memory_personal_edit_select_modal";
 const EDIT_MODAL_CUSTOM_ID = "memory_personal_edit_value_modal";
 const MEMORY_SELECT_ID = "memory_select";
 const MEMORY_INPUT_ID = "personal_memory_input";
+const MEMORY_TAGS_INPUT_ID = "personal_memory_tags_input";
 const PERSONAL_SCOPE_VALUE = "persona";
 const GLOBAL_SCOPE_VALUE = "global";
 const GLOBAL_PERSONAL_MEMORY_LINEAGE_ID = 0;
+
+const MAX_TAGS = 5;
+const MAX_TAG_LENGTH = 32;
 
 const memoryLimits = getMemoryLimits();
 
@@ -58,43 +52,20 @@ function formatMemoryPreview(memory: string, maxLength = 120): string {
 async function performPersonalMemoryEdit(
   memoryToEdit: PersonalMemoryRow,
   newContent: string,
+  newTags: string[],
   userData: UserRow,
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
-  const [updatedMemory] = await sql`
-    UPDATE personal_memories
-    SET content = ${newContent}
-    WHERE personal_memory_id = ${memoryToEdit.personal_memory_id}
-      AND user_id = ${userData.user_id}
-    RETURNING *
-  `;
-
-  const validationResult = personalMemorySchema.safeParse(updatedMemory);
-  if (!validationResult.success || !updatedMemory) {
-    const context: ErrorContext = {
-      userId: userData.user_id,
-      serverId: null,
-      tomoriId: null,
-      errorType: "DatabaseUpdateError",
-      metadata: {
-        command: "memory personal edit",
-        table: "personal_memories",
-        operation: "UPDATE",
-        personalMemoryId: memoryToEdit.personal_memory_id,
-        validationErrors: validationResult.success ? null : validationResult.error.flatten(),
-      },
-    };
-
-    await log.error(
-      "Failed to update or validate personal memory",
-      validationResult.success
-        ? new Error("Database update returned no rows or unexpected data")
-        : new Error("Updated personal memory failed validation"),
-      context,
+  if (!memoryToEdit.personal_memory_id) {
+    log.error(
+      `performPersonalMemoryEdit called with memory row missing personal_memory_id for user ${userData.user_disc_id}`,
     );
-
+    return false;
+  }
+  const ok = await personalMemoryRepository.edit(memoryToEdit.personal_memory_id, newContent, newTags ?? []);
+  if (!ok) {
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
       descriptionKey: "general.errors.update_failed_description",
@@ -167,7 +138,7 @@ export async function execute(
 
   try {
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
-    tomoriState = await loadTomoriState(serverDiscId);
+    tomoriState = await personaRepository.loadState(serverDiscId);
     const memoryScope =
       (interaction.options.getString("scope") as typeof PERSONAL_SCOPE_VALUE | typeof GLOBAL_SCOPE_VALUE | null) ??
       PERSONAL_SCOPE_VALUE;
@@ -186,7 +157,7 @@ export async function execute(
       personalizationDisabledWarning = true;
     }
 
-    const userPrivacyLevel = await getPrivacyLevel(interaction.user.id);
+    const userPrivacyLevel = await userRepository.getPrivacyLevel(interaction.user.id);
     if (userPrivacyLevel === PrivacyLevel.FULL) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.teach.memory.personal.opted_out_error_title",
@@ -198,7 +169,7 @@ export async function execute(
     }
 
     if (memoryScope === PERSONAL_SCOPE_VALUE) {
-      const allPersonas = await loadAllPersonasForServer(serverDiscId);
+      const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
       if (allPersonas.length === 0) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.tomori_not_setup_title",
@@ -220,8 +191,7 @@ export async function execute(
         });
 
         if (!personaSelection.success) {
-          if (personaSelection.reason === "cancelled" || personaSelection.reason === "fatal") return;
-          continue;
+          return;
         }
         if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
           return;
@@ -257,7 +227,7 @@ export async function execute(
         }
 
         const currentMemories = userData.user_id
-          ? (await loadPersonalMemoriesForUserLineage(userData.user_id, targetLineageId, false)).filter(
+          ? (await personalMemoryRepository.loadForUserLineage(userData.user_id, targetLineageId, false)).filter(
               (memory) => memory.persona_lineage_id === targetLineageId,
             )
           : [];
@@ -366,6 +336,17 @@ export async function execute(
               maxLength: memoryLimits.maxMemoryLength,
               value: selectedMemory.content,
             },
+            {
+              customId: MEMORY_TAGS_INPUT_ID,
+              labelKey: "Memory Tags",
+              descriptionKey:
+                "Up to 5 comma-separated case-sensitive tags, use '/memory tagging set' to enable tagged memory",
+              placeholder: "mango,drinks,snacks",
+              style: TextInputStyle.Short,
+              required: false,
+              maxLength: MAX_TAGS * (MAX_TAG_LENGTH + 2),
+              value: (selectedMemory.tags ?? []).join(", "),
+            },
           ],
         });
 
@@ -383,6 +364,17 @@ export async function execute(
 
         const editModalInteraction = editModalResult.interaction;
         const editedMemory = editModalResult.values?.[MEMORY_INPUT_ID]?.trim() ?? "";
+        const rawTagsInput = editModalResult.values?.[MEMORY_TAGS_INPUT_ID]?.trim() ?? "";
+        const editedTags = rawTagsInput
+          ? [
+              ...new Set(
+                rawTagsInput
+                  .split(",")
+                  .map((t) => t.trim().replace(/^["']+|["']+$/g, ""))
+                  .filter((t) => t.length > 0 && t.length <= MAX_TAG_LENGTH),
+              ),
+            ].slice(0, MAX_TAGS)
+          : [];
         if (!editModalInteraction) {
           log.error("Personal memory edit modal unexpectedly missing interaction");
           return;
@@ -401,7 +393,10 @@ export async function execute(
           continue;
         }
 
-        if (editedMemory === selectedMemory.content.trim()) {
+        const existingTags = selectedMemory.tags ?? [];
+        const tagsUnchanged =
+          editedTags.length === existingTags.length && editedTags.every((t, i) => t === existingTags[i]);
+        if (editedMemory === selectedMemory.content.trim() && tagsUnchanged) {
           await replyInfoEmbed(editModalInteraction, locale, {
             titleKey: "commands.memory.personal.edit.no_changes_title",
             descriptionKey: "commands.memory.personal.edit.no_changes_description",
@@ -430,6 +425,7 @@ export async function execute(
         const editSucceeded = await performPersonalMemoryEdit(
           selectedMemory,
           editedMemory,
+          editedTags,
           userData,
           editModalInteraction,
           locale,
@@ -468,11 +464,11 @@ export async function execute(
     }
 
     const userIsBlacklisted = interaction.guild
-      ? ((await isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false)
+      ? ((await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false)
       : false;
 
     const globalMemories = userData.user_id
-      ? await loadPersonalMemoriesForUserLineage(userData.user_id, GLOBAL_PERSONAL_MEMORY_LINEAGE_ID, false)
+      ? await personalMemoryRepository.loadForUserLineage(userData.user_id, GLOBAL_PERSONAL_MEMORY_LINEAGE_ID, false)
       : [];
 
     if (globalMemories.length === 0) {
@@ -559,6 +555,17 @@ export async function execute(
           maxLength: memoryLimits.maxMemoryLength,
           value: selectedMemory.content,
         },
+        {
+          customId: MEMORY_TAGS_INPUT_ID,
+          labelKey: "Memory Tags",
+          descriptionKey:
+            "Up to 5 comma-separated case-sensitive tags, use '/memory tagging set' to enable tagged memory",
+          placeholder: "mango,drinks,snacks",
+          style: TextInputStyle.Short,
+          required: false,
+          maxLength: MAX_TAGS * (MAX_TAG_LENGTH + 2),
+          value: (selectedMemory.tags ?? []).join(", "),
+        },
       ],
     });
 
@@ -569,6 +576,17 @@ export async function execute(
 
     const editModalInteraction = editModalResult.interaction;
     const editedMemory = editModalResult.values?.[MEMORY_INPUT_ID]?.trim() ?? "";
+    const rawTagsInput = editModalResult.values?.[MEMORY_TAGS_INPUT_ID]?.trim() ?? "";
+    const editedTags = rawTagsInput
+      ? [
+          ...new Set(
+            rawTagsInput
+              .split(",")
+              .map((t) => t.trim())
+              .filter((t) => t.length > 0 && t.length <= MAX_TAG_LENGTH),
+          ),
+        ].slice(0, MAX_TAGS)
+      : [];
     if (!editModalInteraction) {
       log.error("Global personal memory edit modal unexpectedly missing interaction");
       return;
@@ -587,7 +605,10 @@ export async function execute(
       return;
     }
 
-    if (editedMemory === selectedMemory.content.trim()) {
+    const globalExistingTags = selectedMemory.tags ?? [];
+    const globalTagsUnchanged =
+      editedTags.length === globalExistingTags.length && editedTags.every((t, i) => t === globalExistingTags[i]);
+    if (editedMemory === selectedMemory.content.trim() && globalTagsUnchanged) {
       await replyInfoEmbed(editModalInteraction, locale, {
         titleKey: "commands.memory.personal.edit.no_changes_title",
         descriptionKey: "commands.memory.personal.edit.no_changes_description",
@@ -616,6 +637,7 @@ export async function execute(
     const editSucceeded = await performPersonalMemoryEdit(
       selectedMemory,
       editedMemory,
+      editedTags,
       userData,
       editModalInteraction,
       locale,
@@ -659,7 +681,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: selectedPersona?.tomori_id ?? tomoriState?.tomori_id,
+      personaId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "memory personal edit",

@@ -1,8 +1,9 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import type { CustomEndpointApiStyle, CustomEndpointCapability, ErrorContext, UserRow } from "@/types/db/schema";
-import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
 import {
@@ -220,7 +221,12 @@ export async function execute(
       }
 
       const registered = await registerCustomEndpoint({
-        scope: { kind: "server", ownerId: tomoriState.server_id, baseConfig: tomoriState.config },
+        scope: {
+          kind: "server",
+          ownerId: tomoriState.server_id,
+          baseConfig: tomoriState.config,
+          serverDiscId: interaction.guild?.id ?? interaction.user.id,
+        },
         label,
         capability,
         apiStyle,
@@ -244,8 +250,6 @@ export async function execute(
         return;
       }
 
-      invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
-
       const isTtsCloneSpeech = capability === "speech" && apiStyle === "tts-clone";
       const isVoiceDesignSpeech = isTtsCloneSpeech && parsed.voiceMode === "voice-design";
       const isAutoSpeech = isTtsCloneSpeech && parsed.voiceMode === "auto";
@@ -265,7 +269,7 @@ export async function execute(
       const context: ErrorContext = {
         userId: userData.user_id,
         serverId: tomoriState.server_id,
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         errorType: "CommandExecutionError",
         metadata: {
           command: "provider custom-endpoint add",
@@ -401,7 +405,12 @@ export async function execute(
         : undefined;
 
     const registered = await registerCustomEndpoint({
-      scope: { kind: "server", ownerId: tomoriState.server_id, baseConfig: tomoriState.config },
+      scope: {
+        kind: "server",
+        ownerId: tomoriState.server_id,
+        baseConfig: tomoriState.config,
+        serverDiscId: interaction.guild?.id ?? interaction.user.id,
+      },
       label,
       capability,
       apiStyle,
@@ -424,8 +433,6 @@ export async function execute(
       return;
     }
 
-    invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
-
     await replyInfoEmbed(modalSubmit, locale, {
       titleKey: "commands.config.custom_models.add.success_title",
       descriptionKey: "commands.config.custom_models.add.success_description",
@@ -436,7 +443,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState.server_id,
-      tomoriId: tomoriState.tomori_id,
+      personaId: tomoriState.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "provider custom-endpoint add",

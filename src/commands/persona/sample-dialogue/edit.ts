@@ -6,27 +6,24 @@ import type {
   SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
   acknowledgeModalSubmitForRefresh,
   promptWithPaginatedModal,
   promptWithRawModal,
-  promptWithUnacknowledgedConfirmation,
-  replyComponentsV2Status,
-  replyInfoEmbed,
-  type AvatarSessionCache,
-  replyPaginatedPersonaChoicesV2,
   safeSelectOptionText,
-  updateButtonComponentsV2Status,
-} from "@/utils/discord/interactionHelper";
+} from "@/utils/discord/ui/modals";
+import { promptWithUnacknowledgedConfirmation } from "@/utils/discord/ui/confirmation";
+import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { isBlacklisted, loadAllPersonasForServer } from "@/utils/db/dbRead";
-import { getMemoryLimits, validateSampleDialogue } from "@/utils/db/memoryLimits";
+import { personaRepository, userRepository } from "@/utils/db/repositories";
+import { getMemoryLimits, validateSampleDialogue } from "@/utils/misc/memoryLimits";
 import { splitPromptIntoModalParts, combineModalPromptParts } from "@/utils/text/modalPromptParts";
 import type { SelectOption } from "@/types/discord/modal";
-import { tomoriSchema, type ErrorContext, type TomoriState, type UserRow } from "@/types/db/schema";
+import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 
 const SELECT_MODAL_CUSTOM_ID = "persona_sampledialogue_edit_select_modal";
 const EDIT_MODAL_CUSTOM_ID = "persona_sampledialogue_edit_value_modal";
@@ -48,36 +45,24 @@ function makeDialogueKey(userInput: string, botInput: string): string {
 }
 
 async function repairMismatchedDialogues(
-  tomoriId: number,
+  personaId: number,
   inLength: number,
   outLength: number,
 ): Promise<{ repairedIn: string[]; repairedOut: string[] } | null> {
   const safeLength = Math.min(inLength, outLength);
 
   log.warn(
-    `Self-healing: truncating sample dialogues for tomori ${tomoriId} from (in: ${inLength}, out: ${outLength}) to ${safeLength} pairs`,
+    `Self-healing: truncating sample dialogues for tomori ${personaId} from (in: ${inLength}, out: ${outLength}) to ${safeLength} pairs`,
   );
 
-  const [updatedRow] = await sql`
-    UPDATE tomoris
-    SET
-      sample_dialogues_in = sample_dialogues_in[1:${safeLength}],
-      sample_dialogues_out = sample_dialogues_out[1:${safeLength}]
-    WHERE tomori_id = ${tomoriId}
-    RETURNING sample_dialogues_in, sample_dialogues_out
-  `;
-
-  if (!updatedRow) {
-    log.error(`Self-healing failed: no rows returned for tomori ${tomoriId}`);
+  const repaired = await personaRepository.repairSampleDialogues(personaId, safeLength);
+  if (!repaired) {
+    log.error(`Self-healing failed: no rows returned for tomori ${personaId}`);
     return null;
   }
 
-  log.success(`Self-healing complete: sample dialogues for tomori ${tomoriId} repaired to ${safeLength} pairs`);
-
-  return {
-    repairedIn: (updatedRow.sample_dialogues_in as string[]) ?? [],
-    repairedOut: (updatedRow.sample_dialogues_out as string[]) ?? [],
-  };
+  log.success(`Self-healing complete: sample dialogues for tomori ${personaId} repaired to ${safeLength} pairs`);
+  return repaired;
 }
 
 async function performSampleDialogueEdit(
@@ -90,37 +75,37 @@ async function performSampleDialogueEdit(
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
-  const pgIndex = selectedIndex + 1;
-  const [updatedRow] = await sql`
-    UPDATE tomoris
-    SET
-      sample_dialogues_in[${pgIndex}] = ${newUserInput},
-      sample_dialogues_out[${pgIndex}] = ${newBotInput}
-    WHERE tomori_id = ${selectedPersona.tomori_id}
-    RETURNING *
-  `;
+  if (selectedPersona.persona_id === undefined) {
+    await log.error("Cannot edit sample dialogue for persona without persona_id");
+    await replyInfoEmbed(replyInteraction, locale, {
+      titleKey: "general.errors.update_failed_title",
+      descriptionKey: "general.errors.update_failed_description",
+      color: ColorCode.ERROR,
+    });
+    return false;
+  }
 
-  const validationResult = tomoriSchema.safeParse(updatedRow);
-  if (!validationResult.success || !updatedRow) {
+  const pgIndex = selectedIndex + 1;
+  const updated = await personaRepository.editSampleDialoguePairAt(
+    selectedPersona.persona_id,
+    pgIndex,
+    newUserInput,
+    newBotInput,
+  );
+
+  if (!updated) {
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: selectedPersona.server_id,
-      tomoriId: selectedPersona.tomori_id,
+      personaId: selectedPersona.persona_id,
       errorType: "DatabaseUpdateError",
       metadata: {
         command: "persona sample-dialogue edit",
         selectedIndex,
-        validationErrors: validationResult.success ? null : validationResult.error.flatten(),
       },
     };
 
-    await log.error(
-      "Failed to update or validate sample dialogue arrays",
-      validationResult.success
-        ? new Error("Database update returned no rows or unexpected data")
-        : new Error("Updated tomori row failed validation"),
-      context,
-    );
+    await log.error("Failed to update sample dialogue arrays", new Error("Database update returned no rows"), context);
 
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
@@ -135,7 +120,7 @@ async function performSampleDialogueEdit(
   }
 
   log.success(
-    `Updated sample dialogue ${selectedIndex} for tomori ${selectedPersona.tomori_id} by ${userData.user_disc_id}`,
+    `Updated sample dialogue ${selectedIndex} for tomori ${selectedPersona.persona_id} by ${userData.user_disc_id}`,
   );
 
   if (!suppressSuccessReply) {
@@ -180,7 +165,7 @@ export async function execute(
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
 
     if (interaction.guild) {
-      const blacklisted = (await isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
+      const blacklisted = (await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
       if (blacklisted && !hasManagePermission) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.user_blacklisted_title",
@@ -203,7 +188,7 @@ export async function execute(
       return;
     }
 
-    let allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+    let allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -225,8 +210,7 @@ export async function execute(
       });
 
       if (!personaSelection.success) {
-        if (personaSelection.reason === "cancelled" || personaSelection.reason === "fatal") return;
-        continue;
+        return;
       }
       if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
         return;
@@ -234,7 +218,7 @@ export async function execute(
 
       personaSelectionInteraction = personaSelection.interaction;
       selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await updateButtonComponentsV2Status(
           personaSelectionInteraction,
           locale,
@@ -262,7 +246,7 @@ export async function execute(
 
       if (currentIn.length !== currentOut.length && currentIn.length > 0 && currentOut.length > 0) {
         const repaired = await repairMismatchedDialogues(
-          selectedPersona.tomori_id,
+          selectedPersona.persona_id,
           currentIn.length,
           currentOut.length,
         );
@@ -532,13 +516,13 @@ export async function execute(
         "general.pagination.reloading_persona_picker",
       );
 
-      allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+      allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     }
   } catch (error) {
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: selectedPersona?.tomori_id ?? tomoriState?.tomori_id,
+      personaId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "persona sample-dialogue edit",

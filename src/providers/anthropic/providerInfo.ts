@@ -22,5 +22,8 @@ export const anthropicProviderInfo: ProviderInfo = {
     conversationCompaction: true,
     historyExtraction: true,
   },
+  featureImplementations: {
+    liveTokenCounting: "anthropic",
+  },
   supportedParams: ["temperature", "topP", "topK"] as const,
 };

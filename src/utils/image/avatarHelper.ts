@@ -4,6 +4,7 @@
  */
 
 import type { Client, Guild } from "discord.js";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { TomoriPresetRow } from "../../types/db/schema";
@@ -193,6 +194,59 @@ export function validatePNGBuffer(
  */
 const presetAvatarCache = new Map<number, string | null>();
 
+type PresetAvatarInput = Pick<TomoriPresetRow, "persona_preset_id" | "persona_preset_name" | "preset_avatar_path">;
+
+export function decodeBase64DataUri(dataUri: string): Buffer | null {
+  const base64Marker = "base64,";
+  const markerIndex = dataUri.indexOf(base64Marker);
+  if (markerIndex === -1) {
+    return null;
+  }
+
+  const base64Payload = dataUri.slice(markerIndex + base64Marker.length).trim();
+  if (base64Payload.length === 0) {
+    return null;
+  }
+
+  try {
+    return Buffer.from(base64Payload, "base64");
+  } catch {
+    return null;
+  }
+}
+
+export function hashAvatarBuffer(buffer: Buffer): string {
+  return createHash("sha256").update(buffer).digest("hex");
+}
+
+export async function getPresetAvatarBuffer(preset: PresetAvatarInput): Promise<Buffer | null> {
+  const cachedAvatarDataUri = getCachedPresetAvatar(preset.persona_preset_id);
+  if (cachedAvatarDataUri) {
+    const decoded = decodeBase64DataUri(cachedAvatarDataUri);
+    if (decoded) {
+      return decoded;
+    }
+  }
+
+  const presetAvatarPath = preset.preset_avatar_path?.trim();
+  if (!presetAvatarPath) {
+    return null;
+  }
+
+  try {
+    const absolutePath = path.join(process.cwd(), presetAvatarPath);
+    return await readFile(absolutePath);
+  } catch (error) {
+    log.warn(`Failed to load preset avatar file "${presetAvatarPath}" for preset ${preset.persona_preset_id}`, error);
+    return null;
+  }
+}
+
+export async function getPresetAvatarHash(preset: PresetAvatarInput): Promise<string | null> {
+  const avatarBuffer = await getPresetAvatarBuffer(preset);
+  return avatarBuffer ? hashAvatarBuffer(avatarBuffer) : null;
+}
+
 /**
  * Initializes the preset avatar cache by loading all preset avatars into memory
  * This should be called once at bot startup for optimal performance
@@ -209,7 +263,7 @@ export async function initializePresetAvatarCache(presets: TomoriPresetRow[]): P
     for (const preset of presets) {
       // Skip if no avatar path is set
       if (!preset.preset_avatar_path) {
-        presetAvatarCache.set(preset.tomori_preset_id, null);
+        presetAvatarCache.set(preset.persona_preset_id, null);
         continue;
       }
 
@@ -223,8 +277,8 @@ export async function initializePresetAvatarCache(presets: TomoriPresetRow[]): P
         // 5. Validate it's a PNG
         const validation = validatePNGBuffer(imageBuffer);
         if (!validation.isValid) {
-          log.warn(`Invalid PNG for preset "${preset.tomori_preset_name}": ${validation.error}`);
-          presetAvatarCache.set(preset.tomori_preset_id, null);
+          log.warn(`Invalid PNG for preset "${preset.persona_preset_name}": ${validation.error}`);
+          presetAvatarCache.set(preset.persona_preset_id, null);
           continue;
         }
 
@@ -233,16 +287,16 @@ export async function initializePresetAvatarCache(presets: TomoriPresetRow[]): P
         const dataUri = `data:image/png;base64,${base64}`;
 
         // 7. Cache it
-        presetAvatarCache.set(preset.tomori_preset_id, dataUri);
+        presetAvatarCache.set(preset.persona_preset_id, dataUri);
         log.success(
-          `Cached avatar for preset "${preset.tomori_preset_name}" (${(imageBuffer.length / 1024).toFixed(2)} KB)`,
+          `Cached avatar for preset "${preset.persona_preset_name}" (${(imageBuffer.length / 1024).toFixed(2)} KB)`,
         );
       } catch (error) {
         // File doesn't exist or can't be read - cache as null
         log.warn(
-          `Could not load avatar for preset "${preset.tomori_preset_name}": ${error instanceof Error ? error.message : "Unknown error"}`,
+          `Could not load avatar for preset "${preset.persona_preset_name}": ${error instanceof Error ? error.message : "Unknown error"}`,
         );
-        presetAvatarCache.set(preset.tomori_preset_id, null);
+        presetAvatarCache.set(preset.persona_preset_id, null);
       }
     }
 
@@ -261,4 +315,12 @@ export async function initializePresetAvatarCache(presets: TomoriPresetRow[]): P
  */
 export function getCachedPresetAvatar(presetId: number): string | null {
   return presetAvatarCache.get(presetId) ?? null;
+}
+
+export function clearPresetAvatarCache(): void {
+  presetAvatarCache.clear();
+}
+
+export function getPresetAvatarCacheSize(): number {
+  return presetAvatarCache.size;
 }

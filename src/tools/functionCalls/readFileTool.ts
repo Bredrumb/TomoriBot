@@ -160,8 +160,8 @@ export class ReadFileTool extends BaseTool {
         context,
         "document_reading",
         {
-          titleKey: "genai.document.reading_title",
-          descriptionKey: "genai.document.reading_description",
+          titleKey: "tools.document.reading_title",
+          descriptionKey: "tools.document.reading_description",
           descriptionVars: { filename: docAttachment.name },
           color: ColorCode.INFO,
         },
@@ -222,8 +222,8 @@ export class ReadFileTool extends BaseTool {
           context,
           "document_reading",
           {
-            titleKey: "genai.document.truncated_title",
-            descriptionKey: "genai.document.truncated_description",
+            titleKey: "tools.document.truncated_title",
+            descriptionKey: "tools.document.truncated_description",
             descriptionVars: {
               filename: docAttachment.name,
               limit: (result.text?.length ?? 0).toLocaleString(),

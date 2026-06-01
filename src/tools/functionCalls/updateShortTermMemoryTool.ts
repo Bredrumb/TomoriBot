@@ -17,6 +17,7 @@
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { updateShortTermMemorySummary, MAX_SUMMARY_LENGTH } from "../../utils/cache/shortTermMemoryCache";
 import { log } from "../../utils/misc/logger";
+import { sanitizeUnknownTemplatePlaceholders } from "@/utils/text/processors/mentionProcessor";
 
 export class UpdateShortTermMemoryTool extends BaseTool {
   name = "update_short_term_memory";
@@ -136,7 +137,8 @@ export class UpdateShortTermMemoryTool extends BaseTool {
       }
 
       // 3. Validate summary length (use configured max from env)
-      const trimmedSummary = summary.trim();
+      // Sanitize unknown {word} placeholders the LLM may have written (e.g. {bredrumb})
+      const trimmedSummary = sanitizeUnknownTemplatePlaceholders(summary.trim());
 
       if (trimmedSummary.length > MAX_SUMMARY_LENGTH) {
         log.info(
@@ -158,19 +160,19 @@ export class UpdateShortTermMemoryTool extends BaseTool {
           : null;
 
       // 5. Update both the user-scoped STM and, in guilds, the shared server STM
-      const tomoriId = context.tomoriState?.tomori_id ?? null;
+      const personaId = context.tomoriState?.persona_id ?? null;
       const personaLineageId = context.tomoriState?.persona_lineage_id ?? null;
-      const userCacheKey = tomoriId
-        ? `shortterm:user:${triggeringUserId}:${channelId}:${tomoriId}`
+      const userCacheKey = personaId
+        ? `shortterm:user:${triggeringUserId}:${channelId}:${personaId}`
         : `shortterm:user:${triggeringUserId}:${channelId}`;
       const serverCacheKey =
         serverId === "DM"
           ? "n/a"
-          : tomoriId
-            ? `shortterm:server:${serverId}:${channelId}:${tomoriId}`
+          : personaId
+            ? `shortterm:server:${serverId}:${channelId}:${personaId}`
             : `shortterm:server:${serverId}:${channelId}`;
       log.info(
-        `[updateShortTermMemoryTool] [TOOL_EXECUTE] Calling updateShortTermMemorySummary - userCacheKey=${userCacheKey}, serverCacheKey=${serverCacheKey}, summaryLength=${trimmedSummary.length}, serverId=${serverId}, tomoriId=${tomoriId}, personaLineageId=${personaLineageId}`,
+        `[updateShortTermMemoryTool] [TOOL_EXECUTE] Calling updateShortTermMemorySummary - userCacheKey=${userCacheKey}, serverCacheKey=${serverCacheKey}, summaryLength=${trimmedSummary.length}, serverId=${serverId}, personaId=${personaId}, personaLineageId=${personaLineageId}`,
       );
 
       updateShortTermMemorySummary(
@@ -180,7 +182,7 @@ export class UpdateShortTermMemoryTool extends BaseTool {
         serverId,
         serverName,
         channelName,
-        tomoriId,
+        personaId,
         personaLineageId,
         parentChannelId,
       );

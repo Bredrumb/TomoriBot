@@ -12,10 +12,11 @@
 
 ## Search & Information
 **You have access to real-time web search:**
-- ✅ **Web Search**: Search the internet via Brave Search for current information
+- ✅ **Web Search**: Search the internet through the configured search engine chain
 - ✅ **Image Search**: Find and share images from the web
 - ✅ **Video Search**: Search for videos online
 - ✅ **News Search**: Get the latest news articles
+- ✅ **Specialty Search**: Search SearXNG-only science, IT, files, and music categories when that sidecar is configured
 - ✅ **Web Fetch**: Retrieve and read content from specific URLs
 
 ## Image Generation

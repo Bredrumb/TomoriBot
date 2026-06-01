@@ -1,18 +1,16 @@
 import { SQL } from "bun";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { log } from "@/utils/misc/logger";
 
 /**
  * Creates and configures a PostgreSQL client using Bun's SQL constructor.
  *
- * Environment-Based SSL Configuration:
- * - Development (RUN_ENV !== 'production'): SSL disabled for localhost
- * - Production (RUN_ENV === 'production'): Full TLS with CA certificate verification
+ * SSL behaviour:
+ * - Development (`RUN_ENV !== 'production'`): SSL disabled for localhost
+ * - Production (`RUN_ENV === 'production'`): full TLS with CA certificate verification
  *
- * Certificate: docker/certs/rds-ca-bundle.pem (production only)
- *
- * Note: Uses console.log instead of logger to avoid circular dependency
- * (logger.ts imports sql from this file)
+ * Certificate path: `docker/certs/rds-ca-bundle.pem` (production only).
  *
  * @returns Configured SQL instance with appropriate TLS settings
  */
@@ -30,8 +28,6 @@ function createDatabaseClient(): SQL {
   // Allow initialization without password for scripts that don't use the database
   // (e.g., localization checks, linting). Database operations will fail if attempted.
   if (!password) {
-    // console.warn("\x1b[33m[WARN]\x1b[0m POSTGRES_PASSWORD not set - database client created but operations will fail",);
-    // Return a dummy client that will error on actual use
     return new SQL({
       hostname: host,
       port: port,
@@ -41,8 +37,22 @@ function createDatabaseClient(): SQL {
     });
   }
 
-  // Production: TLS with CA certificate verification
+  // Production: TLS for TCP connections (AWS RDS); no TLS for unix sockets (Cloud SQL Auth Proxy)
   if (isProduction) {
+    // Unix socket path (e.g. /cloudsql/<connection-name>) — Cloud SQL Auth Proxy handles TLS
+    // internally; the client connects via a local socket and must not add a second TLS layer.
+    if (host.startsWith("/")) {
+      return new SQL({
+        path: host, // Use path for Unix socket connections
+        port: port,
+        username: user,
+        password: password,
+        database: database,
+        // biome-ignore lint/suspicious/noExplicitAny: `path` is a valid Bun SQL unix socket option not yet reflected in the type definitions
+      } as any);
+    }
+
+    // TCP connection (AWS RDS) — TLS with CA certificate verification
     // Allow overriding CA bundle location; fall back to common paths for dev and container builds.
     const caPathEnv = process.env.POSTGRES_CA_CERT_PATH;
     const candidatePaths = [
@@ -58,7 +68,6 @@ function createDatabaseClient(): SQL {
         throw new Error("CA bundle not found in any known path");
       }
       const ca = readFileSync(certPath, "utf8");
-      // console.log("\x1b[36m[INFO]\x1b[0m Database SSL mode: verify-full (production with CA certificate)",);
 
       return new SQL({
         hostname: host,
@@ -72,7 +81,7 @@ function createDatabaseClient(): SQL {
         },
       });
     } catch (error) {
-      console.error("\x1b[31m[ERROR]\x1b[0m Failed to load AWS RDS CA certificate:", error);
+      void log.error("Failed to load AWS RDS CA certificate", error);
       throw new Error(
         "Production database requires a CA certificate. " +
           `Searched paths: ${candidatePaths.join(", ")}. ` +
@@ -82,7 +91,7 @@ function createDatabaseClient(): SQL {
   }
 
   // Development: No SSL for localhost PostgreSQL
-  console.log("\x1b[36m[INFO]\x1b[0m Database SSL mode: disabled (development)");
+  log.info("Database SSL mode: disabled (development)");
   return new SQL({
     hostname: host,
     port: port,
@@ -118,10 +127,8 @@ function getClient(): SQL {
  */
 export function resetDatabaseConnection(): void {
   if (cachedClient) {
-    // Bun's SQL client doesn't have an explicit close method, but clearing
-    // the reference allows garbage collection and forces reconnection
     cachedClient = null;
-    console.log("\x1b[33m[WARN]\x1b[0m Database connection reset (prepared statement cache cleared)");
+    log.warn("Database connection reset (prepared statement cache cleared)");
   }
 }
 
@@ -172,23 +179,17 @@ export async function withCachedPlanRetry<T>(queryFn: () => Promise<T>, operatio
     const isCachedPlanError = errorMessage.includes("cached plan must not change result type");
 
     if (isCachedPlanError) {
-      console.log(
-        `\x1b[33m[WARN]\x1b[0m Cached plan error detected during ${operationName}, resetting connection and retrying...`,
-      );
-
-      // Reset the connection to clear prepared statement cache
+      log.warn(`Cached plan error during "${operationName}", resetting connection and retrying`);
       resetDatabaseConnection();
 
       try {
-        // Retry the query with fresh connection
         return await queryFn();
       } catch (retryError) {
-        console.error(`\x1b[31m[ERROR]\x1b[0m Retry failed for ${operationName}:`, retryError);
+        await log.error(`Retry failed for "${operationName}"`, retryError);
         return null;
       }
     }
 
-    // Not a cached plan error - rethrow for normal error handling
     throw error;
   }
 }

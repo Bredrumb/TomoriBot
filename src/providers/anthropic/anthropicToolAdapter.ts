@@ -9,7 +9,6 @@
  *   wrapped inside a user message, not as a separate role
  */
 
-import { isBraveSearchAvailable } from "@/tools/restAPIs/brave/braveSearchService";
 import type { MCPCapableToolAdapter, Tool, ToolContext, ToolResult } from "@/types/tool/interfaces";
 import type { TypedMCPToolResult } from "@/types/tool/mcpTypes";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
@@ -133,33 +132,13 @@ export class AnthropicToolAdapter implements MCPCapableToolAdapter {
     try {
       const allTools: Record<string, unknown>[] = [];
 
-      // 1. Check Brave Search availability for filtering
-      const hasBraveApiKey = await isBraveSearchAvailable(serverId);
-      log.info(
-        `Anthropic adapter: Brave Search ${hasBraveApiKey ? "available" : "not available"} for server ${serverId || "global"}`,
-      );
-
-      const braveSearchToolNames = [
-        "brave_web_search",
-        "brave_image_search",
-        "brave_video_search",
-        "brave_news_search",
-      ];
-
-      // 2. Filter built-in tools based on Brave Search availability
-      let filteredBuiltInTools = builtInTools;
-      if (!hasBraveApiKey) {
-        filteredBuiltInTools = builtInTools.filter((tool) => !braveSearchToolNames.includes(tool.name));
-        const excludedCount = builtInTools.length - filteredBuiltInTools.length;
-        if (excludedCount > 0) {
-          log.info(`Anthropic adapter: Excluded ${excludedCount} Brave search tools (no API key)`);
-        }
-      }
-
-      // 3. Convert and add built-in tools in Anthropic format
-      if (filteredBuiltInTools.length > 0) {
-        allTools.push(...this.convertToolsArray(filteredBuiltInTools));
-        log.info(`Anthropic adapter: Converted ${filteredBuiltInTools.length} built-in tools`);
+      // 1. The unified `web_search` tool is gated centrally in `availability.ts`
+      //    via its `requiresFeatureFlag = "web_search"`. No per-adapter Brave-key
+      //    filtering needed here anymore — the dispatcher inside the tool itself
+      //    decides which engine (Brave/DDG/Felo) serves the request at call time.
+      if (builtInTools.length > 0) {
+        allTools.push(...this.convertToolsArray(builtInTools));
+        log.info(`Anthropic adapter: Converted ${builtInTools.length} built-in tools`);
       }
 
       // 4. Add global MCP tools

@@ -22,5 +22,10 @@ export const zaiProviderInfo: ProviderInfo = {
     conversationCompaction: true,
     historyExtraction: true,
   },
+  featureImplementations: {
+    imageGeneration: "zai",
+    videoGeneration: "zai",
+    liveTokenCounting: "zai",
+  },
   supportedParams: ["temperature", "topP", "topK", "frequencyPenalty", "presencePenalty", "minP"] as const,
 };

@@ -8,16 +8,13 @@ import {
   type SlashCommandSubcommandBuilder,
   type TextChannel,
 } from "discord.js";
-import {
-  checkMessageTriggerCooldownWithWhitelist,
-  setMessageTriggerCooldownWithWhitelist,
-} from "@/utils/db/cooldownManager";
 import { sendCooldownDM } from "@/utils/discord/cooldownDM";
-import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
-import { loadTomoriState } from "@/utils/db/dbRead";
-import { sql } from "@/utils/db/client";
-import { getOrCreateWebhook, resolvePersonaWebhookIdentity } from "@/utils/discord/webhookManager";
-import { getCooldownTypeFooterKey } from "@/utils/db/messageCooldown";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { personaRepository } from "@/utils/db/repositories";
+import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
+import { resolvePersonaWebhookIdentity } from "@/utils/discord/webhook/identity";
+import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
 import { checkImageQuota } from "@/utils/quota/imageQuotaManager";
 import { hasOptApiKey } from "@/utils/security/crypto";
 import { CooldownType, type TomoriState, type UserRow } from "@/types/db/schema";
@@ -27,7 +24,7 @@ import { runHiddenImageTurn } from "@/utils/provider/hiddenImageTurn";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
-import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/db/personaAccess";
+import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 
 // ─── Modal field identifiers ──────────────────────────────────────────────────
 
@@ -94,8 +91,8 @@ interface SceneImageBackendAvailability {
  * and overriding the `buildContext()` persona identity in the hidden agent.
  */
 interface PersonaSummary {
-  tomori_id: number;
-  tomori_nickname: string;
+  persona_id: number;
+  persona_nickname: string;
   webhook_avatar_url: string | null;
   is_alter: boolean;
   /** From persona_configs — null when no persona-specific prompt is set. */
@@ -103,7 +100,7 @@ interface PersonaSummary {
   /** Appearance/personality attribute list used by buildContext(). */
   attribute_list: string[];
   /** Lineage ID used by buildContext() for persona-scoped memory/RAG. */
-  persona_lineage_id: number;
+  persona_lineage_id: number | null;
 }
 
 type ImageQuotaCheckResult = Awaited<ReturnType<typeof checkImageQuota>>;
@@ -167,33 +164,20 @@ function getBackendOptions(locale: string, providerName: string) {
  * @param serverId - Numeric DB server ID from tomoriState
  */
 async function loadServerPersonaSummaries(serverId: number): Promise<PersonaSummary[]> {
-  return await sql<PersonaSummary[]>`
-		SELECT
-			t.tomori_id,
-			t.tomori_nickname,
-			t.webhook_avatar_url,
-			t.is_alter,
-			t.attribute_list,
-			t.persona_lineage_id,
-			pc.persona_prompt
-		FROM tomoris t
-		LEFT JOIN persona_configs pc ON pc.tomori_id = t.tomori_id
-		WHERE t.server_id = ${serverId}
-		ORDER BY t.is_alter ASC, t.updated_at DESC NULLS LAST, t.tomori_id DESC
-	`;
+  return personaRepository.loadServerPersonaSummaries(serverId);
 }
 
 /**
  * Builds string-select options from persona summaries for the modal.
  * The active persona (matching activeTomoriId) is marked as default.
  * @param personas - List of persona summaries from loadServerPersonaSummaries
- * @param activeTomoriId - The currently active persona's tomori_id
+ * @param activeTomoriId - The currently active persona's persona_id
  */
 function getPersonaSelectOptions(personas: PersonaSummary[], activeTomoriId: number) {
   return personas.map((p) => ({
-    label: p.tomori_nickname,
-    value: p.tomori_id.toString(),
-    default: p.tomori_id === activeTomoriId,
+    label: p.persona_nickname,
+    value: p.persona_id.toString(),
+    default: p.persona_id === activeTomoriId,
   }));
 }
 
@@ -211,9 +195,7 @@ async function resolveSceneImageBackendAvailability(params: {
     hasNaiImageSlot &&
     (hasNovelAiOptKey || (params.provider === "novelai" && Boolean(params.tomoriState.config.api_key)));
   const currentProviderAvailable =
-    params.provider !== "novelai" &&
-    Boolean(params.tomoriState.config.diffusion_model_id) &&
-    !(hasNovelAiOptKey && params.tomoriState.config.nai_exclusive_imggen);
+    params.provider !== "novelai" && Boolean(params.tomoriState.config.diffusion_model_id);
   const defaultBackend = currentProviderAvailable ? "current_provider" : novelAiAvailable ? "novelai" : null;
 
   return {
@@ -332,7 +314,7 @@ export async function execute(
   }
 
   // 4. Load server state.
-  const baseTomoriState = await loadTomoriState(interaction.guild.id);
+  const baseTomoriState = await personaRepository.loadState(interaction.guild.id);
   if (!baseTomoriState) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
@@ -351,7 +333,7 @@ export async function execute(
   // 5. Cooldown check.
   const cooldownType = tomoriState.config.cooldown_type ?? CooldownType.OFF;
   const cooldownLength = tomoriState.config.cooldown_length ?? 5;
-  const cooldownResult = await checkMessageTriggerCooldownWithWhitelist(
+  const cooldownResult = await cooldownRepository.checkMessageTriggerCooldownWithWhitelist(
     interaction.guild.id,
     interaction.user.id,
     interaction.channel.id,
@@ -370,7 +352,7 @@ export async function execute(
       return;
     }
 
-    const footerKey = getCooldownTypeFooterKey(cooldownResult.cooldownType);
+    const footerKey = cooldownRepository.getCooldownTypeFooterKey(cooldownResult.cooldownType);
     await sendCooldownDM(
       interaction.user,
       locale,
@@ -378,7 +360,7 @@ export async function execute(
       "commands.bot.generate.image.cooldown_active",
       {
         seconds: cooldownResult.remainingSeconds.toString(),
-        botName: tomoriState.tomori_nickname,
+        botName: tomoriState.persona_nickname,
       },
       footerKey,
       interaction,
@@ -483,9 +465,9 @@ export async function execute(
   }
 
   // 11. Show the modal (fire-and-forget UX — no public bot response until image posts).
-  const defaultPersonaId = availablePersonaSummaries.some((persona) => persona.tomori_id === tomoriState.tomori_id)
-    ? (tomoriState.tomori_id ?? fallbackPersonaSummary?.tomori_id ?? -1)
-    : (fallbackPersonaSummary?.tomori_id ?? -1);
+  const defaultPersonaId = availablePersonaSummaries.some((persona) => persona.persona_id === tomoriState.persona_id)
+    ? (tomoriState.persona_id ?? fallbackPersonaSummary?.persona_id ?? -1)
+    : (fallbackPersonaSummary?.persona_id ?? -1);
   const modalResult = await promptWithRawModal(
     interaction,
     locale,
@@ -570,13 +552,13 @@ export async function execute(
 
     // 13. Resolve the selected sender persona and its webhook identity.
     const selectedPersonaIdStr = modalResult.values?.[PERSONA_INPUT_ID];
-    const selectedPersonaId = selectedPersonaIdStr ? Number.parseInt(selectedPersonaIdStr, 10) : tomoriState.tomori_id;
+    const selectedPersonaId = selectedPersonaIdStr ? Number.parseInt(selectedPersonaIdStr, 10) : tomoriState.persona_id;
     const selectedPersona =
-      availablePersonaSummaries.find((p) => p.tomori_id === selectedPersonaId) ?? fallbackPersonaSummary;
+      availablePersonaSummaries.find((p) => p.persona_id === selectedPersonaId) ?? fallbackPersonaSummary;
 
     if (
       !selectedPersona ||
-      !isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, selectedPersona.tomori_id)
+      !isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, selectedPersona.persona_id)
     ) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.message_cooldown_title",
@@ -591,7 +573,7 @@ export async function execute(
     let senderPersonaAvatarUrl: string | undefined;
 
     if (selectedPersona) {
-      senderPersonaUsername = selectedPersona.tomori_nickname;
+      senderPersonaUsername = selectedPersona.persona_nickname;
 
       // Attempt to get or create the channel webhook for persona-identity posting.
       // Threads and channels without ManageWebhooks permission fall back to a direct bot message.
@@ -619,7 +601,7 @@ export async function execute(
     }
 
     log.info(
-      `[/bot generate image] Starting hidden image agent for channel ${interaction.channel.id} — backend=${selectedBackend}, preset=${settingPreset.plannerLabel}, sender=${selectedPersona?.tomori_nickname ?? "active"}`,
+      `[/bot generate image] Starting hidden image agent for channel ${interaction.channel.id} — backend=${selectedBackend}, preset=${settingPreset.plannerLabel}, sender=${selectedPersona?.persona_nickname ?? "active"}`,
     );
 
     // 14. Invoke the hidden image agent turn.
@@ -629,9 +611,9 @@ export async function execute(
     // Pass a context override only when the selected persona differs from the active one,
     // so buildContext() prompts the model as the chosen sender persona.
     const contextPersonaOverride =
-      selectedPersona && selectedPersona.tomori_id !== tomoriState.tomori_id
+      selectedPersona && selectedPersona.persona_id !== tomoriState.persona_id
         ? {
-            tomoriNickname: selectedPersona.tomori_nickname,
+            tomoriNickname: selectedPersona.persona_nickname,
             personaPrompt: selectedPersona.persona_prompt,
             tomoriAttributes: selectedPersona.attribute_list,
             personaLineageId: selectedPersona.persona_lineage_id,
@@ -682,7 +664,7 @@ export async function execute(
     });
 
     // 15. Record the cooldown entry after confirmed success.
-    await setMessageTriggerCooldownWithWhitelist(
+    await cooldownRepository.setMessageTriggerCooldownWithWhitelist(
       interaction.guild.id,
       interaction.user.id,
       interaction.channel.id,

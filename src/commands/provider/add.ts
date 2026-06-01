@@ -5,13 +5,14 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { loadSavedProviderConfig, loadSavedProviderConfigs, loadUniqueProviders } from "@/utils/db/dbRead";
-import { upsertSavedProviderConfig } from "@/utils/db/dbWrite";
+import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import type { ModalComponent, SelectOption } from "@/types/discord/modal";
 import { ProviderFactory } from "@/utils/provider/providerFactory";
@@ -55,7 +56,11 @@ export async function execute(
     return;
   }
 
-  const uniqueProviders = ((await loadUniqueProviders()) ?? []).filter(
+  const [rawProviders, freeProviders] = await Promise.all([
+    llmModelRepo.loadUniqueProviders(),
+    llmModelRepo.loadProvidersWithFreeModels(),
+  ]);
+  const uniqueProviders = (rawProviders ?? []).filter(
     (provider) => provider.toLowerCase() !== "custom" && !isCustomProvider(provider),
   );
   if (!uniqueProviders.length) {
@@ -69,17 +74,21 @@ export async function execute(
   }
 
   // 1. Load already-saved providers for this server so we can mark them in the select menu
-  const savedProviders = await loadSavedProviderConfigs(tomoriState.server_id);
+  const savedProviders = await llmProviderRepo.loadSavedProviderConfigs(tomoriState.server_id);
   const savedProviderNames = new Set(savedProviders.map((cfg) => cfg.provider.toLowerCase()));
 
+  const freeSuffix = localizer(locale, "commands.provider.add.free_suffix");
   const alreadyExistingSuffix = localizer(locale, "commands.provider.add.already_existing_suffix");
 
   const providerSelectOptions: SelectOption[] = uniqueProviders.map((provider) => {
     const isExisting = savedProviderNames.has(provider.toLowerCase());
+    const isFree = freeProviders.has(provider.toLowerCase());
+    const baseName = getProviderDisplayName(provider);
+    const label = [baseName, isFree && `(${freeSuffix})`, isExisting && `(${alreadyExistingSuffix})`]
+      .filter(Boolean)
+      .join(" ");
     return {
-      label: isExisting
-        ? `${getProviderDisplayName(provider)} (${alreadyExistingSuffix})`
-        : getProviderDisplayName(provider),
+      label,
       value: provider.toLowerCase(),
       description: isExisting ? localizer(locale, "commands.provider.add.already_existing_description") : undefined,
     };
@@ -161,7 +170,7 @@ export async function execute(
       return;
     }
 
-    const existingConfig = await loadSavedProviderConfig(tomoriState.server_id, selectedProvider);
+    const existingConfig = await llmProviderRepo.loadSavedProviderConfig(tomoriState.server_id, selectedProvider);
     if (apiKeyInput.length < 10) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.provider.api-key.set.invalid_key_title",
@@ -232,7 +241,7 @@ export async function execute(
       existingConfig,
     });
 
-    const upserted = await upsertSavedProviderConfig(tomoriState.server_id, savedConfig);
+    const upserted = await llmProviderRepo.upsertSavedProviderConfig(tomoriState.server_id, savedConfig);
     if (!upserted) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
@@ -254,7 +263,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState.server_id,
-      tomoriId: tomoriState.tomori_id,
+      personaId: tomoriState.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "config provider add",

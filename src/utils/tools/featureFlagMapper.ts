@@ -28,11 +28,12 @@ export const BUILTIN_TOOL_FEATURE_FLAGS: Record<string, string> = {
   // Video generation tools
   generate_video: "video_gen",
 
-  // Brave Search tools (HTTP-based)
-  brave_web_search: "web_search",
-  brave_image_search: "web_search",
-  brave_video_search: "web_search",
-  brave_news_search: "web_search",
+  // Unified web search tool (replaces the four LLM-visible Brave entries).
+  // Engine routing (Brave → DDG → Felo) is handled inside the tool's dispatcher.
+  web_search: "web_search",
+
+  // Unified URL fetch tool. Phase 1 routes only through the internal MCP fetch engine.
+  fetch_url: "web_search",
 };
 
 /**
@@ -43,6 +44,7 @@ export const MCP_TOOL_FEATURE_FLAGS: Record<string, string> = {
   // DuckDuckGo search functions
   "web-search": "web_search",
   "felo-search": "web_search",
+  fetch: "web_search",
   "fetch-url": "web_search", // Related to web search functionality
   "url-metadata": "web_search", // Related to web search functionality
 

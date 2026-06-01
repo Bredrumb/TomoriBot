@@ -17,7 +17,6 @@ import type { TypedMCPToolResult } from "../../types/tool/mcpTypes";
 import { getMCPManager } from "../../utils/mcp/mcpManager";
 import { getMCPExecutor } from "../../utils/mcp/mcpExecutor";
 import { getGuildMcpManager } from "../../utils/mcp/guildMcpManager";
-import { isBraveSearchAvailable } from "../../tools/restAPIs/brave/braveSearchService";
 
 /**
  * Google-specific function declaration format
@@ -215,36 +214,13 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
       // Start with built-in tools
       const allFunctionDeclarations: Record<string, unknown>[] = [];
 
-      // Check if Brave Search is available for conditional tool selection
-      const hasBraveApiKey = await isBraveSearchAvailable(serverId);
-      log.info(
-        `Brave Search ${hasBraveApiKey ? "available" : "not available"} for server ${serverId || "global"} - implementing conditional search tool selection`,
-      );
-
-      // Brave search tool names for filtering
-      const braveSearchToolNames = [
-        "brave_web_search",
-        "brave_image_search",
-        "brave_video_search",
-        "brave_news_search",
-      ];
-
-      // Filter built-in tools based on Brave API key availability
-      let filteredBuiltInTools = builtInTools;
-      if (!hasBraveApiKey) {
-        // No Brave API key - exclude Brave search tools
-        filteredBuiltInTools = builtInTools.filter((tool) => !braveSearchToolNames.includes(tool.name));
-        const excludedCount = builtInTools.length - filteredBuiltInTools.length;
-        if (excludedCount > 0) {
-          log.info(`Excluded ${excludedCount} Brave search tools (no API key available)`);
-        }
-      }
-
-      // Convert filtered built-in tools
-      if (filteredBuiltInTools.length > 0) {
-        const builtInDeclarations = filteredBuiltInTools.map((tool) => this.convertTool(tool));
+      // Brave-key dance removed: the unified `web_search` tool is gated centrally
+      // in `availability.ts` via `requiresFeatureFlag = "web_search"`, and the
+      // engine chain inside the tool decides Brave-vs-DDG-vs-Felo at call time.
+      if (builtInTools.length > 0) {
+        const builtInDeclarations = builtInTools.map((tool) => this.convertTool(tool));
         allFunctionDeclarations.push(...builtInDeclarations);
-        log.info(`Converted ${filteredBuiltInTools.length} built-in tools to Google format`);
+        log.info(`Converted ${builtInTools.length} built-in tools to Google format`);
       }
 
       // Add MCP tools if available (using pre-filtered list or legacy filtering)
@@ -328,8 +304,10 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
                     return false;
                   }
 
-                  // Filter out DuckDuckGo search functions if Brave API key is available
-                  if (hasBraveApiKey && duckduckgoSearchFunctions.includes(functionName)) {
+                  // Post-refactor: DDG/Felo MCP function names are unconditionally
+                  // hidden in `availability.ts` and consumed only via the unified
+                  // `web_search` tool. The legacy Brave-key gate here is a no-op now.
+                  if (duckduckgoSearchFunctions.includes(functionName)) {
                     return false;
                   }
 

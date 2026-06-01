@@ -1,25 +1,16 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
-import { sql } from "@/utils/db/client";
-import {
-  tomoriSchema, // Use tomoriSchema for validation
-  type UserRow,
-  type ErrorContext,
-  type TomoriState,
-} from "@/types/db/schema";
+import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
-import { isBlacklisted, loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { personaRepository, userRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import type { ModalResult, SelectOption } from "@/types/discord/modal";
-import { checkAttributeLimit, getMemoryLimits, validateAttribute } from "@/utils/db/memoryLimits";
-import {
-  dedupeCaseInsensitive,
-  formatTextArrayLiteral,
-  getNonEmptyNumberedLines,
-  readTxtUpload,
-} from "@/utils/teach/batchUploadUtils";
+import { getMemoryLimits, validateAttribute } from "@/utils/misc/memoryLimits";
+
+import { dedupeCaseInsensitive, getNonEmptyNumberedLines, readTxtUpload } from "@/utils/teach/batchUploadUtils";
 
 // Get memory limits from environment variables
 const memoryLimits = getMemoryLimits();
@@ -29,6 +20,7 @@ const MODAL_CUSTOM_ID = "teach_attribute_add_modal";
 const PERSONA_SELECT_ID = "persona_select";
 const ATTRIBUTE_INPUT_ID = "attribute_input";
 const ATTRIBUTE_FILE_UPLOAD_ID = "attribute_file_upload";
+const ATTRIBUTE_PUBLIC_ID = "attribute_public";
 
 // Rule 21: Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
@@ -71,7 +63,7 @@ export async function execute(
     // 3. Check blacklisting only for guild contexts
     // Users with Manage Server permission can bypass blacklist (they can unblacklist themselves anyway)
     if (interaction.guild) {
-      const blacklisted = (await isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
+      const blacklisted = (await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
       if (blacklisted && !hasManagePermission) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.user_blacklisted_title",
@@ -98,12 +90,12 @@ export async function execute(
     }
 
     // 6. Resolve target persona options
-    const allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     const personaSelectOptions: SelectOption[] = allPersonas
-      .filter((persona) => persona.tomori_id !== undefined)
+      .filter((persona) => persona.persona_id !== undefined)
       .map((persona) => ({
-        label: safeSelectOptionText(persona.tomori_nickname),
-        value: persona.tomori_id?.toString() ?? "",
+        label: safeSelectOptionText(persona.persona_nickname),
+        value: persona.persona_id?.toString() ?? "",
         description: persona.is_alter
           ? localizer(locale, "commands.teach.attribute.alter_persona_description")
           : localizer(locale, "commands.teach.attribute.main_persona_description"),
@@ -161,6 +153,13 @@ export async function execute(
           maxValues: 1,
           required: false,
         },
+        {
+          kind: "checkbox",
+          customId: ATTRIBUTE_PUBLIC_ID,
+          labelKey: "commands.teach.attribute.public_checkbox_label",
+          descriptionKey: "commands.teach.attribute.public_checkbox_description",
+          default: false,
+        },
       ],
     });
 
@@ -178,8 +177,8 @@ export async function execute(
     // 10. Resolve selected persona + attribute input
     // biome-ignore lint/style/noNonNullAssertion: Outcome 'submit' + required persona select guarantees value
     const selectedPersonaId = modalResult.values![PERSONA_SELECT_ID];
-    selectedPersona = allPersonas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
-    if (!selectedPersona?.tomori_id) {
+    selectedPersona = allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
+    if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -189,6 +188,7 @@ export async function execute(
     }
 
     const typedAttribute = modalResult.values?.[ATTRIBUTE_INPUT_ID]?.trim() ?? "";
+    const isPublicAttribute = modalResult.values?.[ATTRIBUTE_PUBLIC_ID] === "true";
     const uploadedTextFile = modalResult.attachments?.[ATTRIBUTE_FILE_UPLOAD_ID];
     const pendingAttributes: string[] = [];
 
@@ -268,7 +268,7 @@ export async function execute(
     }
 
     // 13.5 Check limit against final import size
-    const attributeLimitCheck = await checkAttributeLimit(selectedPersona.tomori_id);
+    const attributeLimitCheck = await personaRepository.checkAttributeLimit(selectedPersona.persona_id);
     const currentCount = attributeLimitCheck.currentCount ?? currentAttributes.length;
     const maxAllowed = attributeLimitCheck.maxAllowed ?? memoryLimits.maxAttributes;
     const availableSlots = Math.max(0, maxAllowed - currentCount);
@@ -299,46 +299,13 @@ export async function execute(
     }
 
     // 14. Update target persona row in the database
-    const [updatedTomoriResult] =
-      attributesToAdd.length === 1
-        ? await sql`
-					UPDATE tomoris
-					SET attribute_list = array_append(attribute_list, ${attributesToAdd[0]})
-					WHERE tomori_id = ${selectedPersona.tomori_id}
-					RETURNING *
-				`
-        : await sql`
-					UPDATE tomoris
-					SET attribute_list = array_cat(attribute_list, ${formatTextArrayLiteral(attributesToAdd)}::text[])
-					WHERE tomori_id = ${selectedPersona.tomori_id}
-					RETURNING *
-				`;
+    const ok = await personaRepository.addAttributes(selectedPersona.persona_id, attributesToAdd, isPublicAttribute);
 
-    // 15. Validate the result from the database (Rule 3, 5, 6)
-    const validationResult = tomoriSchema.safeParse(updatedTomoriResult);
-
-    if (!validationResult.success) {
-      // Rule 22: Log error with context
-      const context: ErrorContext = {
-        userId: userData.user_id,
-        serverId: tomoriState.server_id,
-        tomoriId: selectedPersona.tomori_id,
-        errorType: "DatabaseValidationError",
-        metadata: {
-          command: "teach attribute",
-          userDiscordId: interaction.user.id, // Keep Discord ID for easier user lookup
-          newAttribute: attributesToAdd.join("\n"),
-          validationErrors: validationResult.error.issues,
-        },
-      };
-      await log.error("Failed to validate updated tomori data after adding attribute", validationResult.error, context);
-
-      // Use modal interaction for reply
+    if (!ok) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",
         color: ColorCode.ERROR,
-        // No flags needed
       });
       return;
     }
@@ -360,9 +327,21 @@ export async function execute(
         attributesToAdd.length > 1 || uploadedTextFile
           ? {
               added_count: attributesToAdd.length.toString(),
+              visibility: localizer(
+                locale,
+                isPublicAttribute
+                  ? "commands.teach.attribute.visibility_public"
+                  : "commands.teach.attribute.visibility_private",
+              ),
             }
           : {
               attribute: attributesToAdd[0],
+              visibility: localizer(
+                locale,
+                isPublicAttribute
+                  ? "commands.teach.attribute.visibility_public"
+                  : "commands.teach.attribute.visibility_private",
+              ),
             },
       color: ColorCode.SUCCESS,
     });
@@ -371,7 +350,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id, // Use optional chaining as tomoriState might be null if error happened early
-      tomoriId: tomoriState?.tomori_id,
+      personaId: tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "teach attribute",

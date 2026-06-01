@@ -1,12 +1,12 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
-import { loadAvailableModelsForProvider } from "@/utils/db/dbRead";
+import { configRepository, llmModelRepo } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
-import { type UserRow, type ErrorContext, type LlmRow, tomoriConfigSchema } from "@/types/db/schema";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import type { UserRow, ErrorContext, LlmRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";
 import { replyLegacyOpenRouterOtherModelMoved } from "@/utils/discord/openrouterModelMigrationNotice";
@@ -120,15 +120,11 @@ export async function execute(
         return;
       }
 
-      const [updatedRow] = await sql`
-				UPDATE tomori_configs
-				SET vision_llm_id = ${selectedSavedConfig.vision_llm_id}
-				WHERE server_id = ${tomoriState.server_id}
-				RETURNING *
-			`;
+      const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
+        vision_llm_id: selectedSavedConfig.vision_llm_id,
+      });
 
-      const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-      if (!validatedConfig.success || !updatedRow) {
+      if (!updated) {
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
@@ -144,7 +140,7 @@ export async function execute(
           ? "commands.model.vision.success_description"
           : "commands.model.vision.success_no_tools_description",
         descriptionVars: {
-          model_name: selectedSavedConfig.custom_model_name ?? getProviderDisplayName(selectedProvider),
+          model_name: getProviderDisplayName(selectedProvider),
           chat_model: tomoriState.llm.llm_codename,
           provider: getProviderDisplayName(selectedProvider),
         },
@@ -153,7 +149,7 @@ export async function execute(
       return;
     }
 
-    const allModels = await loadAvailableModelsForProvider(selectedProvider, false, {
+    const allModels = await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
       kind: "server",
       ownerId: tomoriState.server_id,
     });
@@ -232,15 +228,11 @@ export async function execute(
         return;
       }
 
-      const [updatedRow] = await sql`
-				UPDATE tomori_configs
-				SET vision_llm_id = NULL
-				WHERE server_id = ${tomoriState.server_id}
-				RETURNING *
-			`;
+      const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
+        vision_llm_id: null,
+      });
 
-      const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-      if (!validatedConfig.success || !updatedRow) {
+      if (!updated) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
@@ -296,18 +288,13 @@ export async function execute(
     }
 
     // 11. Update vision_llm_id in the database
-    const [updatedRow] = await sql`
-			UPDATE tomori_configs
-			SET vision_llm_id = ${selectedModel.llm_id}
-			WHERE server_id = ${tomoriState.server_id}
-			RETURNING *
-		`;
+    const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
+      vision_llm_id: selectedModel.llm_id,
+    });
 
-    // 12. Validate the returned data
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-    if (!validatedConfig.success || !updatedRow) {
+    if (!updated) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
@@ -316,14 +303,11 @@ export async function execute(
           guildId: serverId,
           selectedModelCodename: selectedModel.llm_codename,
           targetVisionLlmId: selectedModel.llm_id,
-          validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
         },
       };
       await log.error(
-        "Failed to update or validate vision model config after DB update",
-        validatedConfig.success
-          ? new Error("Database update returned no rows or unexpected data")
-          : new Error("Updated config data failed validation"),
+        "Failed to update vision model config after DB update",
+        new Error("Database update failed"),
         context,
       );
 
@@ -365,7 +349,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id ?? null,
-      tomoriId: tomoriState?.tomori_id ?? null,
+      personaId: tomoriState?.persona_id ?? null,
       errorType: "CommandExecutionError",
       metadata: {
         command: "config model vision",

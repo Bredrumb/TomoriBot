@@ -26,7 +26,7 @@ import type {
 } from "@/types/tool/mcpTypes";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { getCachedEnabledGuildMcpConfigs } from "@/utils/cache/guildMcpConfigCache";
-import { decryptGuildMcpAuthToken } from "@/utils/db/guildMcpDb";
+import { toolRepository } from "@/utils/db/repositories/ToolRepository";
 import { sendToolNotice } from "@/utils/discord/toolProgressNotice";
 import { sendFetchProgressNotice } from "@/utils/mcp/mcpExecutor";
 import { validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
@@ -245,7 +245,7 @@ class GuildMcpManager {
               context,
               "mcp_tool_call",
               {
-                titleKey: "genai.mcp.tool_invoke_title",
+                titleKey: "tools.mcp.tool_invoke_title",
                 titleVars: { server: conn.name, function: functionName },
                 description: formattedArgs,
               },
@@ -322,7 +322,7 @@ class GuildMcpManager {
 
     // No parameters case
     if (entries.length === 0) {
-      return localizer(locale, "genai.mcp.tool_invoke_no_params");
+      return localizer(locale, "tools.mcp.tool_invoke_no_params");
     }
 
     // Format each argument as "key: value", truncating long values
@@ -335,7 +335,7 @@ class GuildMcpManager {
       return `${key}: ${truncated}`;
     });
 
-    const header = localizer(locale, "genai.mcp.tool_invoke_description");
+    const header = localizer(locale, "tools.mcp.tool_invoke_description");
     let body = lines.join("\n");
 
     // Truncate the whole body if it exceeds limit
@@ -497,7 +497,7 @@ class GuildMcpManager {
 
     try {
       // 1. Decrypt auth token if present
-      const authToken = await decryptGuildMcpAuthToken(config);
+      const authToken = await toolRepository.decryptMcpAuthToken(config);
 
       // 2. Create MCP client
       const client = new MCPClient({

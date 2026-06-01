@@ -1,16 +1,16 @@
 import { PrivacyLevel, type UserRow } from "@/types/db/schema";
-import { loadUserRow, getPrivacyLevel, isBlacklisted } from "../db/dbRead";
+import { userRepository } from "@/utils/db/repositories";
 import { log } from "../misc/logger";
 
 /**
  * Cache entry structure for user data.
  * Includes user row, privacy level, and per-server blacklist status.
- * Blacklist is per-server, so we store a map of serverDiscId -> isBlacklisted.
+ * Blacklist is per-server, so we store a map of serverDiscId -> userRepository.isBlacklisted.
  */
 interface UserCacheEntry {
   userRow: UserRow | null; // null if user doesn't exist in DB
   privacyLevel: PrivacyLevel;
-  blacklistStatus: Map<string, boolean>; // serverDiscId -> isBlacklisted
+  blacklistStatus: Map<string, boolean>; // serverDiscId -> userRepository.isBlacklisted
   cachedAt: number; // Timestamp in milliseconds
 }
 
@@ -61,7 +61,10 @@ async function getOrCreateCacheEntry(userDiscId: string): Promise<UserCacheEntry
 
   try {
     // Load user row and privacy level in parallel
-    const [userRow, privacyLevel] = await Promise.all([loadUserRow(userDiscId), getPrivacyLevel(userDiscId)]);
+    const [userRow, privacyLevel] = await Promise.all([
+      userRepository.loadByDiscordId(userDiscId),
+      userRepository.getPrivacyLevel(userDiscId),
+    ]);
 
     // Create new cache entry (preserve existing blacklist entries if available)
     const newEntry: UserCacheEntry = {
@@ -141,7 +144,7 @@ export async function getCachedBlacklistStatus(serverDiscId: string, userDiscId:
   blacklistCacheMisses++;
 
   try {
-    const isUserBlacklisted = await isBlacklisted(serverDiscId, userDiscId);
+    const isUserBlacklisted = await userRepository.isBlacklisted(serverDiscId, userDiscId);
     entry.blacklistStatus.set(serverDiscId, isUserBlacklisted);
     return isUserBlacklisted;
   } catch (error) {

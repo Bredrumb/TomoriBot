@@ -6,11 +6,12 @@ import {
 } from "discord.js";
 import type { CheckboxGroupOption } from "@/types/discord/modal";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { configRepository } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
-import { type UserRow, type ErrorContext, tomoriConfigSchema } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import type { UserRow, ErrorContext } from "@/types/db/schema";
 
 const MODAL_CUSTOM_ID = "nsfw_jailbreaks_modal";
 const CHECKBOX_ID = "nsfw_jailbreaks_checkbox_group";
@@ -120,34 +121,20 @@ export async function execute(
       return;
     }
 
-    const [updatedRow] = await sql`
-      UPDATE tomori_configs
-      SET
-        uncensor_injection_enabled = ${nextState.uncensor_injection_enabled},
-        uncensor_unicode_space_enabled = ${nextState.uncensor_unicode_space_enabled},
-        uncensor_sanitize_enabled = ${nextState.uncensor_sanitize_enabled}
-      WHERE server_id = ${tomoriState.server_id}
-      RETURNING *
-    `;
+    const updated = await configRepository.updateNsfwConfig(tomoriState.server_id, nextState);
 
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-    if (!updatedRow || !validatedConfig.success) {
+    if (!updated) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
         metadata: {
           command: "nsfw jailbreaks",
           guildId: interaction.guild?.id ?? interaction.user.id,
-          validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
         },
       };
-      await log.error(
-        "Failed to update or validate jailbreak config",
-        validatedConfig.success ? new Error("Database update returned no rows") : validatedConfig.error,
-        context,
-      );
+      await log.error("Failed to update jailbreak config", new Error("Database update failed"), context);
       await replyInfoEmbed(modalResult.interaction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",
@@ -177,7 +164,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: state?.server_id ?? null,
-      tomoriId: state?.tomori_id ?? null,
+      personaId: state?.persona_id ?? null,
       errorType: "CommandExecutionError",
       metadata: {
         command: "nsfw jailbreaks",

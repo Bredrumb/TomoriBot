@@ -22,5 +22,9 @@ export const novelaiProviderInfo: ProviderInfo = {
     conversationCompaction: false,
     historyExtraction: false,
   },
+  featureImplementations: {
+    imageGeneration: "novelai",
+  },
+  usageCostMode: "none",
   supportedParams: ["temperature", "topP", "topK", "minP"] as const,
 };

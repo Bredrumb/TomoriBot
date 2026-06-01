@@ -1,0 +1,60 @@
+// locales/en-US/commands/openrouter.ts
+
+export default {
+  openrouter: {
+    description: `Manage OpenRouter-specific models and settings.`,
+    models: {
+      description: `Manage saved OpenRouter model registrations.`,
+      add: {
+        description: `Register an OpenRouter model codename for this server.`,
+        capability_description: `Which OpenRouter capability list to add this model to.`,
+        model_name_description: `Exact OpenRouter model codename to register.`,
+        success_title: `OpenRouter Model Added`,
+        success_description: `Registered OpenRouter {capability} model \`{model_name}\` for this server. It now appears in the normal OpenRouter picker for that capability.`,
+        already_registered_title: `Model Already Registered`,
+        already_registered_description: `OpenRouter {capability} model \`{model_name}\` is already registered for this server.`,
+        already_available_title: `Already Available`,
+        already_available_description: `OpenRouter {capability} model \`{model_name}\` is already built in. No extra registration is needed.`,
+        not_found_title: `Model Not Found`,
+        not_found_description: `Could not find OpenRouter model \`{model_name}\`. Use the exact OpenRouter codename and try again.`,
+      },
+      remove: {
+        description: `Remove registered OpenRouter models from this server.`,
+        none_title: `No Registered Models`,
+        none_description: `This server does not have any extra OpenRouter models registered yet.`,
+        too_many_title: `Too Many Registered Models`,
+        too_many_description: `There are too many registered OpenRouter models to edit in one modal. Reduce the list first, then try again. Max groups: {max_groups}.`,
+        modal_title: `Remove OpenRouter Models`,
+        checkbox_description: `Leave models checked to keep them registered. Uncheck any models you want to remove.`,
+        checkbox_text_label: `Registered Text Models`,
+        checkbox_text_label_continued: `Registered Text Models (Continued)`,
+        checkbox_embedding_label: `Registered Embedding Models`,
+        checkbox_embedding_label_continued: `Registered Embedding Models (Continued)`,
+        checkbox_image_label: `Registered Image Models`,
+        checkbox_image_label_continued: `Registered Image Models (Continued)`,
+        checkbox_video_label: `Registered Video Models`,
+        checkbox_video_label_continued: `Registered Video Models (Continued)`,
+        capability_text: `Text`,
+        capability_embedding: `Embedding`,
+        capability_image: `Image`,
+        capability_video: `Video`,
+        no_removals_title: `Nothing Removed`,
+        no_removals_description: `No OpenRouter model registrations were removed.`,
+        success_title: `OpenRouter Model Removed`,
+        success_description: `Removed these OpenRouter registrations from this server: {models_removed}.`,
+        success_still_referenced_description: `Removed these OpenRouter registrations from this server: {models_removed}. Existing selections that already use any of them were left unchanged, so switch away from them manually if you no longer want to use them.`,
+        already_available_title: `Built-In Model`,
+        already_available_description: `OpenRouter model \`{model_name}\` is a built-in model and cannot be removed with this command.`,
+      },
+    },
+    model: {
+      description: `Manage saved OpenRouter model registrations.`,
+      add: {
+        description: `Register an OpenRouter model codename for this server.`,
+      },
+      remove: {
+        description: `Remove a registered OpenRouter model codename from this server.`,
+      },
+    },
+  },
+};

@@ -22,6 +22,9 @@ const IMAGE_CONTEXT_MAX_DIMENSION = Number.parseInt(process.env.IMAGE_CONTEXT_MA
 /** JPEG quality used when an image is downscaled (default 85) */
 const IMAGE_CONTEXT_JPEG_QUALITY = Number.parseInt(process.env.IMAGE_CONTEXT_JPEG_QUALITY ?? "85", 10);
 
+/** Timeout in milliseconds for fetching images for LLM context (default 20 s) */
+const IMAGE_FETCH_TIMEOUT_MS = Number.parseInt(process.env.IMAGE_FETCH_TIMEOUT_MS ?? "20000", 10);
+
 /** Result of fetching and optionally optimizing an image for LLM context */
 export interface OptimizedImage {
   /** Raw base64-encoded image data (no data-URI prefix) */
@@ -51,7 +54,7 @@ export async function fetchAndOptimizeImage(url: string, sourceMimeType?: string
   // 1. Fetch the raw image bytes
   const downloadResult = await safeDownload(url, {
     maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
-    timeoutMs: 15_000,
+    timeoutMs: IMAGE_FETCH_TIMEOUT_MS,
   });
   if (!downloadResult.success || !downloadResult.buffer) {
     throw new Error(`Image fetch failed: ${downloadResult.details ?? downloadResult.error ?? "unknown error"}`);

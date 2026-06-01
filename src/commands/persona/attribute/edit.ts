@@ -6,33 +6,31 @@ import type {
   SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
   acknowledgeModalSubmitForRefresh,
   promptWithPaginatedModal,
   promptWithRawModal,
-  promptWithUnacknowledgedConfirmation,
-  replyComponentsV2Status,
-  replyInfoEmbed,
-  type AvatarSessionCache,
-  replyPaginatedPersonaChoicesV2,
   safeSelectOptionText,
-  updateButtonComponentsV2Status,
-} from "@/utils/discord/interactionHelper";
+} from "@/utils/discord/ui/modals";
+import { promptWithUnacknowledgedConfirmation } from "@/utils/discord/ui/confirmation";
+import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { isBlacklisted, loadAllPersonasForServer } from "@/utils/db/dbRead";
-import { getMemoryLimits, validateAttribute } from "@/utils/db/memoryLimits";
+import { personaRepository, userRepository } from "@/utils/db/repositories";
+import { getMemoryLimits, validateAttribute } from "@/utils/misc/memoryLimits";
 import { splitPromptIntoModalParts, combineModalPromptParts } from "@/utils/text/modalPromptParts";
 import type { SelectOption } from "@/types/discord/modal";
-import { tomoriSchema, type ErrorContext, type TomoriState, type UserRow } from "@/types/db/schema";
+import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 
 const SELECT_MODAL_CUSTOM_ID = "persona_attribute_edit_select_modal";
 const EDIT_MODAL_CUSTOM_ID = "persona_attribute_edit_value_modal";
 const ATTRIBUTE_SELECT_ID = "attribute_select";
 const ATTRIBUTE_PART1_ID = "attribute_part1";
 const ATTRIBUTE_PART2_ID = "attribute_part2";
+const ATTRIBUTE_PUBLIC_ID = "attribute_public";
 const ATTRIBUTE_PART_MAX_LENGTH = 4000; // Discord text input character limit
 
 const memoryLimits = getMemoryLimits();
@@ -45,40 +43,38 @@ async function performAttributeEdit(
   selectedPersona: TomoriState,
   selectedIndex: number,
   newAttribute: string,
+  isPublic: boolean,
   userData: UserRow,
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
-  const pgIndex = selectedIndex + 1;
-  const [updatedRow] = await sql`
-    UPDATE tomoris
-    SET attribute_list[${pgIndex}] = ${newAttribute}
-    WHERE tomori_id = ${selectedPersona.tomori_id}
-    RETURNING *
-  `;
+  if (selectedPersona.persona_id === undefined) {
+    await log.error("Cannot edit attribute for persona without persona_id");
+    await replyInfoEmbed(replyInteraction, locale, {
+      titleKey: "general.errors.update_failed_title",
+      descriptionKey: "general.errors.update_failed_description",
+      color: ColorCode.ERROR,
+    });
+    return false;
+  }
 
-  const validationResult = tomoriSchema.safeParse(updatedRow);
-  if (!validationResult.success || !updatedRow) {
+  const pgIndex = selectedIndex + 1;
+  const updated = await personaRepository.editAttributeAt(selectedPersona.persona_id, pgIndex, newAttribute, isPublic);
+
+  if (!updated) {
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: selectedPersona.server_id,
-      tomoriId: selectedPersona.tomori_id,
+      personaId: selectedPersona.persona_id,
       errorType: "DatabaseUpdateError",
       metadata: {
         command: "persona attribute edit",
         selectedIndex,
-        validationErrors: validationResult.success ? null : validationResult.error.flatten(),
       },
     };
 
-    await log.error(
-      "Failed to update or validate persona attribute list",
-      validationResult.success
-        ? new Error("Database update returned no rows or unexpected data")
-        : new Error("Updated tomori row failed validation"),
-      context,
-    );
+    await log.error("Failed to update persona attribute list", new Error("Database update returned no rows"), context);
 
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
@@ -93,7 +89,7 @@ async function performAttributeEdit(
   }
 
   log.success(
-    `Updated attribute ${selectedIndex} for tomori ${selectedPersona.tomori_id} by ${userData.user_disc_id}: "${formatAttributePreview(newAttribute, 60)}"`,
+    `Updated attribute ${selectedIndex} for tomori ${selectedPersona.persona_id} by ${userData.user_disc_id}: "${formatAttributePreview(newAttribute, 60)}"`,
   );
 
   if (!suppressSuccessReply) {
@@ -102,6 +98,10 @@ async function performAttributeEdit(
       descriptionKey: "commands.persona.attribute.edit.success_description",
       descriptionVars: {
         attribute: formatAttributePreview(newAttribute, 96),
+        visibility: localizer(
+          locale,
+          isPublic ? "commands.teach.attribute.visibility_public" : "commands.teach.attribute.visibility_private",
+        ),
       },
       color: ColorCode.SUCCESS,
     });
@@ -137,7 +137,7 @@ export async function execute(
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
 
     if (interaction.guild) {
-      const blacklisted = (await isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
+      const blacklisted = (await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
       if (blacklisted && !hasManagePermission) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.user_blacklisted_title",
@@ -160,7 +160,7 @@ export async function execute(
       return;
     }
 
-    let allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+    let allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -182,8 +182,7 @@ export async function execute(
       });
 
       if (!personaSelection.success) {
-        if (personaSelection.reason === "cancelled" || personaSelection.reason === "fatal") return;
-        continue;
+        return;
       }
       if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
         return;
@@ -191,7 +190,7 @@ export async function execute(
 
       personaSelectionInteraction = personaSelection.interaction;
       selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await updateButtonComponentsV2Status(
           personaSelectionInteraction,
           locale,
@@ -269,6 +268,9 @@ export async function execute(
 
       const selectedIndex = Number.parseInt(selectedIndexRaw, 10);
       const selectedAttribute = currentAttributes[selectedIndex];
+      const selectedAttributeIsPublic =
+        selectedPersona.persona_attributes?.find((attribute) => attribute.attribute_order === selectedIndex + 1)
+          ?.is_public ?? false;
       if (!selectedAttribute) {
         await replyInfoEmbed(selectModalInteraction, locale, {
           titleKey: "general.errors.operation_failed_title",
@@ -332,6 +334,13 @@ export async function execute(
             maxLength: ATTRIBUTE_PART_MAX_LENGTH,
             value: attributeParts[1] || undefined,
           },
+          {
+            kind: "checkbox",
+            customId: ATTRIBUTE_PUBLIC_ID,
+            labelKey: "commands.persona.attribute.edit.public_checkbox_label",
+            descriptionKey: "commands.persona.attribute.edit.public_checkbox_description",
+            default: selectedAttributeIsPublic,
+          },
         ],
       });
 
@@ -351,6 +360,7 @@ export async function execute(
       const editedPart1 = editModalResult.values?.[ATTRIBUTE_PART1_ID]?.trim() ?? "";
       const editedPart2 = editModalResult.values?.[ATTRIBUTE_PART2_ID]?.trim() ?? "";
       const editedAttribute = combineModalPromptParts([editedPart1, editedPart2], ATTRIBUTE_PART_MAX_LENGTH);
+      const editedIsPublic = editModalResult.values?.[ATTRIBUTE_PUBLIC_ID] === "true";
       if (!editModalInteraction) {
         log.error("Attribute edit modal unexpectedly missing interaction");
         return;
@@ -370,7 +380,7 @@ export async function execute(
         continue;
       }
 
-      if (editedAttribute === selectedAttribute.trim()) {
+      if (editedAttribute === selectedAttribute.trim() && editedIsPublic === selectedAttributeIsPublic) {
         await replyInfoEmbed(editModalInteraction, locale, {
           titleKey: "commands.persona.attribute.edit.no_changes_title",
           descriptionKey: "commands.persona.attribute.edit.no_changes_description",
@@ -399,6 +409,7 @@ export async function execute(
         selectedPersona,
         selectedIndex,
         editedAttribute,
+        editedIsPublic,
         userData,
         editModalInteraction,
         locale,
@@ -417,17 +428,23 @@ export async function execute(
         ColorCode.SUCCESS,
         {
           attribute: formatAttributePreview(editedAttribute, 96),
+          visibility: localizer(
+            locale,
+            editedIsPublic
+              ? "commands.teach.attribute.visibility_public"
+              : "commands.teach.attribute.visibility_private",
+          ),
         },
         "general.pagination.reloading_persona_picker",
       );
 
-      allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+      allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     }
   } catch (error) {
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: selectedPersona?.tomori_id ?? tomoriState?.tomori_id,
+      personaId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "persona attribute edit",

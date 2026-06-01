@@ -10,9 +10,9 @@ import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { localizer } from "@/utils/text/localizer";
 import { findUnsupportedPresetMacros } from "@/utils/text/stPresetEngine";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { safeDownload } from "@/utils/security/safeDownload";
-import { insertPresetWithNodes, setActivePreset } from "@/utils/db/stPresetDb";
+import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 import type { UserRow, ErrorContext, StPresetNodeRow } from "@/types/db/schema";
 
 // ─── Constants ───────────────────────────────────────────────────────
@@ -679,8 +679,11 @@ export async function execute(
     // 7. Normalize supported ST preset formats (modern Prompt Manager or legacy text-completions)
     const normalizedPreset = normalizePresetShape(rawPreset);
     if (!normalizedPreset) {
-      await interaction.editReply({
-        content: localizer(locale, "commands.st-preset.import.not_a_preset"),
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.st-preset.import.not_a_preset_title",
+        descriptionKey: "commands.st-preset.import.not_a_preset_description",
+        color: ColorCode.ERROR,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -700,7 +703,7 @@ export async function execute(
     const presetName = derivePresetName(attachment.name ?? "Unnamed Preset");
 
     // 10. Insert into database
-    const preset = await insertPresetWithNodes(tomoriState.server_id, presetName, rawPreset, nodes);
+    const preset = await presetRepository.insertPresetWithNodes(tomoriState.server_id, presetName, rawPreset, nodes);
 
     if (!preset) {
       await interaction.editReply({
@@ -711,7 +714,7 @@ export async function execute(
 
     // 11. Activate the newly imported preset (deactivates any previously active preset)
     if (preset.preset_id) {
-      await setActivePreset(tomoriState.server_id, preset.preset_id);
+      await presetRepository.setActivePreset(tomoriState.server_id, preset.preset_id);
     }
 
     // 12. Count node types for the summary
@@ -791,7 +794,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: null,
-      tomoriId: null,
+      personaId: null,
       errorType: "CommandExecutionError",
       metadata: { command: "st-preset import" },
     };

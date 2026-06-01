@@ -1,8 +1,9 @@
-import { sql } from "@/utils/db/client";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { sendStandardEmbed } from "../../utils/discord/embedHelper";
 import type { Client, Guild } from "discord.js";
 import { findBestChannel } from "@/utils/discord/eventHelper";
+import { serverRepository } from "@/utils/db/repositories/ServerRepository";
+import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
 
 /**
  * Sends welcome message when bot joins a new guild.
@@ -15,20 +16,14 @@ const handler = async (client: Client, guild: Guild): Promise<void> => {
   try {
     log.info(`Bot joined new server: ${guild.name} (${guild.id})`);
 
-    // 1. Check if server exists in database
-    const [existingServer] = await sql`
-            SELECT server_id FROM servers 
-            WHERE server_disc_id = ${guild.id}
-        `;
+    // 1. Check if server exists in database via repository
+    const serverId = await serverRepository.loadServerIdByDiscId(guild.id);
 
-    // 2. Check if Tomori exists if server found
+    // 2. Check if Tomori exists if server found via repository
     let tomoriExists = false;
-    if (existingServer?.server_id) {
-      const [existingTomori] = await sql`
-                SELECT tomori_id FROM tomoris 
-                WHERE server_id = ${existingServer.server_id}
-            `;
-      tomoriExists = !!existingTomori;
+    if (serverId) {
+      const personas = await personaRepository.loadServerPersonaSummaries(serverId);
+      tomoriExists = personas !== null && personas.length > 0;
     }
 
     // 3. Try to send to system channel first, fallback to best channel

@@ -18,7 +18,6 @@ import type {
 import type { TypedMCPToolResult } from "@/types/tool/mcpTypes";
 import { getMCPManager } from "@/utils/mcp/mcpManager";
 import { getMCPExecutor } from "@/utils/mcp/mcpExecutor";
-import { isBraveSearchAvailable } from "@/tools/restAPIs/brave/braveSearchService";
 
 /**
  * OpenAI-compatible function declaration format
@@ -182,40 +181,17 @@ export class NovelaiToolAdapter implements MCPCapableToolAdapter {
    */
   async getAllToolsInOpenAIFormat(
     builtInTools: Tool[],
-    serverId?: number,
+    _serverId?: number,
     allowedMCPFunctions?: string[],
   ): Promise<Array<Record<string, unknown>>> {
     try {
       const allTools: Record<string, unknown>[] = [];
 
-      // Check if Brave Search is available
-      const hasBraveApiKey = await isBraveSearchAvailable(serverId);
-      log.info(
-        `NovelAI adapter: Brave Search ${hasBraveApiKey ? "available" : "not available"} for server ${serverId || "global"}`,
-      );
-
-      const braveSearchToolNames = [
-        "brave_web_search",
-        "brave_image_search",
-        "brave_video_search",
-        "brave_news_search",
-      ];
-
-      // Filter built-in tools based on Brave API key availability
-      let filteredBuiltInTools = builtInTools;
-      if (!hasBraveApiKey) {
-        filteredBuiltInTools = builtInTools.filter((tool) => !braveSearchToolNames.includes(tool.name));
-        const excludedCount = builtInTools.length - filteredBuiltInTools.length;
-        if (excludedCount > 0) {
-          log.info(`NovelAI adapter: Excluded ${excludedCount} Brave search tools (no API key)`);
-        }
-      }
-
-      // Convert filtered built-in tools
-      if (filteredBuiltInTools.length > 0) {
-        const builtInToolsFormatted = this.convertToolsArray(filteredBuiltInTools);
+      // Brave-key dance removed — unified web_search is gated centrally.
+      if (builtInTools.length > 0) {
+        const builtInToolsFormatted = this.convertToolsArray(builtInTools);
         allTools.push(...builtInToolsFormatted);
-        log.info(`NovelAI adapter: Converted ${filteredBuiltInTools.length} built-in tools`);
+        log.info(`NovelAI adapter: Converted ${builtInTools.length} built-in tools`);
       }
 
       // Add MCP tools if available
@@ -226,6 +202,8 @@ export class NovelaiToolAdapter implements MCPCapableToolAdapter {
         // MCP functions disabled for NovelAI GLM — either redundant with
         // other providers or too token-expensive for GLM's strict prompt budget.
         // "fetch" is the dedicated fetch MCP server; "fetch-url" is DDG's variant.
+        // Note: brave_* names are no longer LLM-visible (replaced by unified
+        // `web_search` tool) so they don't need to appear here.
         const disabledMCPFunctions = [
           "felo-search",
           "iask-search",
@@ -233,7 +211,6 @@ export class NovelaiToolAdapter implements MCPCapableToolAdapter {
           "fetch-url",
           "url-metadata",
           "fetch",
-          "brave_news_search",
         ];
 
         const mcpTools = mcpManager.getMCPTools();

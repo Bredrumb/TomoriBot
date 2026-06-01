@@ -1,0 +1,93 @@
+// locales/en-US/commands/mcp.ts
+
+export default {
+  mcp: {
+    description: `Manage remote MCP (Model Context Protocol) tool servers`,
+    add: {
+      description: `Register a new remote MCP server for this guild. Use /help mcp for a setup guide.`,
+      modal_title: `Add MCP Server`,
+      name_label: `Server Name`,
+      name_placeholder: `my-mcp-server`,
+      url_label: `Server URL`,
+      url_placeholder: `https://mcp.example.com/sse`,
+      auth_token_label: `Auth Token (Optional)`,
+      auth_token_placeholder: `Bearer token or Smithery API key (leave blank if none)`,
+      server_type_label: `Server Type (Optional)`,
+      server_type_description: `What this server replaces (disables matching built-in tools)`,
+      none_option: `General Purpose`,
+      none_option_description: `No built-in tools will be disabled`,
+      web_search_option: `Web Search`,
+      web_search_option_description: `Disables built-in Brave and DuckDuckGo search tools`,
+      url_fetcher_option: `URL Fetcher`,
+      url_fetcher_option_description: `Disables built-in URL fetch tool`,
+      invalid_input_title: `Missing Input`,
+      invalid_input_description: `Both server name and URL are required.`,
+      invalid_name_title: `Invalid Server Name`,
+      invalid_name_description: `Server name must be 1-32 characters using only letters, numbers, and hyphens. It must start with a letter or number.`,
+      invalid_url_title: `Invalid URL`,
+      invalid_url_invalid_format_description: `The MCP server URL is not a valid URL.`,
+      invalid_url_protocol_description: `The MCP server URL must use HTTP or HTTPS.`,
+      invalid_url_http_localhost_only_description: `In development, HTTP is only allowed for localhost MCP servers. Use HTTPS for remote servers.`,
+      invalid_url_https_required_description: `Production only allows HTTPS MCP servers with TLS.`,
+      invalid_url_localhost_blocked_description: `Production does not allow localhost MCP servers.`,
+      invalid_url_dns_failed_description: `The hostname \`{hostname}\` could not be resolved from this server.`,
+      invalid_url_private_address_description: `Production only allows publicly routable MCP hosts. The hostname resolved to blocked address \`{address}\`.`,
+      limit_reached_title: `Server Limit Reached`,
+      limit_reached_description: `This guild has reached the maximum of {max} MCP servers. Remove an existing server before adding a new one.`,
+      connection_failed_title: `Connection Failed`,
+      connection_failed_description: `Could not connect to the MCP server.
+**Error:** {error}`,
+      duplicate_name_title: `Duplicate Name`,
+      duplicate_name_description: `An MCP server named "{name}" already exists in this guild.`,
+      success_title: `MCP Server Added`,
+      success_description: `**{name}** has been registered successfully.
+**URL:** \`{url}\`
+**Tools discovered:** {tool_count} ({tool_names})
+
+Only add MCP servers you trust.
+A malicious server may send misleading instructions, collect data sent to its tools, or return harmful or false results.`,
+    },
+    remove: {
+      description: `Remove a registered MCP server from this guild.`,
+      modal_title: `Remove MCP Servers`,
+      checkbox_label: `Registered MCP Servers`,
+      checkbox_label_continued: `Registered MCP Servers (Continued)`,
+      checkbox_description: `Uncheck any MCP servers you want to remove.`,
+      too_many_title: `Too Many MCP Servers`,
+      too_many_description: `This guild has **{count}** registered MCP servers. Discord only allows **{max_groups}** checkbox groups (**{max_entries}** total options) per modal.`,
+      no_removals_title: `No MCP Servers Removed`,
+      no_removals_description: `No MCP servers were unchecked. Registered servers remain unchanged.`,
+      success_title: `MCP Servers Updated`,
+      success_description: `Removed and disconnected the following MCP servers.
+{servers_removed}`,
+    },
+    list: {
+      description: `List all registered MCP servers for this guild.`,
+      empty_title: `No MCP Servers`,
+      empty_description: `This guild has no registered MCP servers. Use \`/config mcp add\` to register one.`,
+      title: `Registered MCP Servers`,
+      header_description: `**{count}** server(s) registered:
+
+{servers}`,
+    },
+    toggle: {
+      description: `Enable or disable a registered MCP server.`,
+      modal_title: `Toggle MCP Server`,
+      select_label: `Select Server`,
+      select_description: `Choose the MCP server to toggle`,
+      select_placeholder: `Select a server to toggle...`,
+      state_label: `Enable or Disable`,
+      state_description: `Choose whether to enable or disable the server`,
+      currently_enabled: `Enabled`,
+      currently_disabled: `Disabled`,
+      enable_option: `Enable`,
+      enable_option_description: `Enable this MCP server for tool calling`,
+      not_found_title: `Server Not Found`,
+      not_found_description: `No MCP server named "{name}" was found in this guild.`,
+      enabled_success_title: `MCP Server Enabled`,
+      enabled_success_description: `MCP server "{name}" has been enabled and will be available for tool calling.`,
+      disabled_success_title: `MCP Server Disabled`,
+      disabled_success_description: `MCP server "{name}" has been disabled and disconnected.`,
+    },
+  },
+};

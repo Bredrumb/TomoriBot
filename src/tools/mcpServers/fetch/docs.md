@@ -7,6 +7,10 @@ A Model Context Protocol server that provides web content fetching capabilities.
 
 The fetch tool will truncate the response, but by using the `start_index` argument, you can specify where to start the content extraction. This lets models read a webpage in chunks, until they find the information they need.
 
+### TomoriBot Visibility
+
+TomoriBot keeps this MCP server running as the internal `mcp_fetch` engine for the built-in `fetch_url` tool. The raw MCP function name `fetch` is not exposed directly to the LLM.
+
 ### Available Tools
 
 - `fetch` - Fetches a URL from the internet and extracts its contents as markdown.

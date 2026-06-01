@@ -2,12 +2,11 @@ import type {
   CustomEndpointRow,
   PersonalProviderCapability,
   SavedProviderConfigRow,
-  TomoriConfigRow,
+  AssembledServerConfig,
   UserSavedProviderConfigRow,
 } from "@/types/db/schema";
-import { personalProviderCapabilitySchema, tomoriConfigSchema } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
-import { loadSavedProviderConfig, loadUserSavedProviderConfigs } from "@/utils/db/dbRead";
+import { personalProviderCapabilitySchema } from "@/types/db/schema";
+import { configRepository, llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { resolveCustomEndpointForProvider } from "@/utils/provider/customEndpointService";
 import { decryptApiKey } from "@/utils/security/crypto";
@@ -31,7 +30,7 @@ interface ResolverOptions {
 }
 
 type CapabilityConfigColumns = Pick<
-  TomoriConfigRow,
+  AssembledServerConfig,
   | "llm_id"
   | "embedding_model_id"
   | "diffusion_model_id"
@@ -107,42 +106,7 @@ export function getResolvedCapabilityModelId(
 }
 
 async function loadCapabilityConfig(serverId: number): Promise<CapabilityConfigColumns | null> {
-  const [row] = await sql`
-		SELECT
-			llm_id,
-			embedding_model_id,
-			diffusion_model_id,
-			nai_diffusion_model_id,
-			video_model_id,
-			vision_llm_id,
-			user_byok_mode
-		FROM tomori_configs
-		WHERE server_id = ${serverId}
-		LIMIT 1
-	`;
-
-  if (!row) {
-    return null;
-  }
-
-  const parsed = tomoriConfigSchema
-    .pick({
-      llm_id: true,
-      embedding_model_id: true,
-      diffusion_model_id: true,
-      nai_diffusion_model_id: true,
-      video_model_id: true,
-      vision_llm_id: true,
-      user_byok_mode: true,
-    })
-    .safeParse(row);
-
-  if (!parsed.success) {
-    log.warn(`Failed to validate capability config for server ${serverId}: ${parsed.error.message}`);
-    return null;
-  }
-
-  return parsed.data;
+  return configRepository.loadModelCapabilityIds(serverId);
 }
 
 async function resolveProviderForCapability(serverId: number, capability: Capability): Promise<string> {
@@ -156,91 +120,61 @@ async function resolveProviderForCapability(serverId: number, capability: Capabi
       if (!config.llm_id) {
         throw new CredentialUnavailableError("unknown", capability, "missing_model_id");
       }
-      const [row] = await sql`
-				SELECT llm_provider
-				FROM llms
-				WHERE llm_id = ${config.llm_id}
-				LIMIT 1
-			`;
-      if (!row?.llm_provider) {
+      const llm = await llmModelRepo.loadById(config.llm_id);
+      if (!llm?.llm_provider) {
         throw new CredentialUnavailableError("unknown", capability, "missing_model_id");
       }
-      return String(row.llm_provider).toLowerCase();
+      return llm.llm_provider.toLowerCase();
     }
     case "embedding": {
       if (!config.embedding_model_id) {
         throw new CredentialUnavailableError("unknown", capability, "missing_model_id");
       }
-      const [row] = await sql`
-				SELECT provider
-				FROM embedding_models
-				WHERE embedding_model_id = ${config.embedding_model_id}
-				LIMIT 1
-			`;
-      if (!row?.provider) {
+      const embModel = await llmModelRepo.loadEmbeddingModelById(config.embedding_model_id);
+      if (!embModel?.provider) {
         throw new CredentialUnavailableError("unknown", capability, "missing_model_id");
       }
-      return String(row.provider).toLowerCase();
+      return String(embModel.provider).toLowerCase();
     }
     case "image-standard": {
       if (!config.diffusion_model_id) {
         throw new CredentialUnavailableError("unknown", capability, "missing_model_id");
       }
-      const [row] = await sql`
-				SELECT provider
-				FROM image_diffusion_models
-				WHERE diffusion_model_id = ${config.diffusion_model_id}
-				LIMIT 1
-			`;
-      if (!row?.provider) {
+      const diffModel = await llmModelRepo.loadDiffusionModelById(config.diffusion_model_id);
+      if (!diffModel?.provider) {
         throw new CredentialUnavailableError("unknown", capability, "missing_model_id");
       }
-      return String(row.provider).toLowerCase();
+      return String(diffModel.provider).toLowerCase();
     }
     case "image-nai": {
       if (!config.nai_diffusion_model_id) {
         throw new CredentialUnavailableError("unknown", capability, "missing_model_id");
       }
-      const [row] = await sql`
-				SELECT provider
-				FROM image_diffusion_models
-				WHERE diffusion_model_id = ${config.nai_diffusion_model_id}
-				LIMIT 1
-			`;
-      if (!row?.provider) {
+      const naiModel = await llmModelRepo.loadDiffusionModelById(config.nai_diffusion_model_id);
+      if (!naiModel?.provider) {
         throw new CredentialUnavailableError("unknown", capability, "missing_model_id");
       }
-      return String(row.provider).toLowerCase();
+      return String(naiModel.provider).toLowerCase();
     }
     case "video": {
       if (!config.video_model_id) {
         throw new CredentialUnavailableError("unknown", capability, "missing_model_id");
       }
-      const [row] = await sql`
-				SELECT provider
-				FROM video_generation_models
-				WHERE video_model_id = ${config.video_model_id}
-				LIMIT 1
-			`;
-      if (!row?.provider) {
+      const videoModel = await llmModelRepo.loadVideoGenerationModelById(config.video_model_id);
+      if (!videoModel?.provider) {
         throw new CredentialUnavailableError("unknown", capability, "missing_model_id");
       }
-      return String(row.provider).toLowerCase();
+      return String(videoModel.provider).toLowerCase();
     }
     case "vision": {
       if (!config.vision_llm_id) {
         throw new CredentialUnavailableError("unknown", capability, "missing_model_id");
       }
-      const [row] = await sql`
-				SELECT llm_provider
-				FROM llms
-				WHERE llm_id = ${config.vision_llm_id}
-				LIMIT 1
-			`;
-      if (!row?.llm_provider) {
+      const visionLlm = await llmModelRepo.loadById(config.vision_llm_id);
+      if (!visionLlm?.llm_provider) {
         throw new CredentialUnavailableError("unknown", capability, "missing_model_id");
       }
-      return String(row.llm_provider).toLowerCase();
+      return visionLlm.llm_provider.toLowerCase();
     }
   }
 }
@@ -307,7 +241,7 @@ async function resolvePersonalCredentials(userId: number, capability: Capability
   const personalCapability = mapCapabilityToPersonalCapability(capability);
   personalProviderCapabilitySchema.parse(personalCapability);
 
-  const qualifyingRows = (await loadUserSavedProviderConfigs(userId))
+  const qualifyingRows = (await llmProviderRepo.loadUserSavedProviderConfigs(userId))
     .filter((row) => row.enabled_capabilities.includes(personalCapability))
     .filter((row) => getCapabilityModelId(row, capability) !== null)
     .sort((left, right) => left.provider.localeCompare(right.provider));
@@ -352,7 +286,7 @@ export async function resolveCapabilityCredentials(
   }
 
   const provider = await resolveProviderForCapability(serverId, capability);
-  const savedConfig = await loadSavedProviderConfig(serverId, provider);
+  const savedConfig = await llmProviderRepo.loadSavedProviderConfig(serverId, provider);
 
   if (!savedConfig) {
     throw new CredentialUnavailableError(provider, capability, "no_saved_config", "server");

@@ -1,5 +1,5 @@
 import type { PersonalProviderCapability, TomoriState, UserSavedProviderConfigRow } from "@/types/db/schema";
-import { loadLlmById, loadUserSavedProviderConfigs } from "@/utils/db/dbRead";
+import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 
 export interface PersonalProviderOverlayResult {
@@ -42,7 +42,7 @@ export async function applyPersonalProviderSelectionsToTomoriState(
     };
   }
 
-  const rows = await loadUserSavedProviderConfigs(userId);
+  const rows = await llmProviderRepo.loadUserSavedProviderConfigs(userId);
   if (rows.length === 0) {
     return {
       tomoriState,
@@ -66,10 +66,11 @@ export async function applyPersonalProviderSelectionsToTomoriState(
     nextConfig.llm_disabled_params = activeConfigs.text.llm_disabled_params ?? nextConfig.llm_disabled_params;
     nextConfig.llm_logit_biases = activeConfigs.text.llm_logit_biases ?? nextConfig.llm_logit_biases;
     nextConfig.thinking_level = activeConfigs.text.thinking_level ?? nextConfig.thinking_level;
-    nextConfig.fallback_llm_ids = activeConfigs.text.fallback_llm_ids ?? nextConfig.fallback_llm_ids;
-    nextConfig.custom_endpoint_url = activeConfigs.text.custom_endpoint_url ?? nextConfig.custom_endpoint_url;
-    nextConfig.custom_model_name = activeConfigs.text.custom_model_name ?? nextConfig.custom_model_name;
-    nextConfig.custom_num_ctx = activeConfigs.text.custom_num_ctx ?? nextConfig.custom_num_ctx;
+    const personalFallbackIds = (activeConfigs.text.fallback_model_refs ?? [])
+      .filter((r) => r.type === "llm")
+      .map((r) => r.id);
+    nextConfig.fallback_llm_ids = personalFallbackIds.length > 0 ? personalFallbackIds : nextConfig.fallback_llm_ids;
+    // custom_endpoint_url/name/ctx are no longer on user saved configs; resolved from custom_endpoints at runtime
   }
 
   if (activeConfigs.embedding?.embedding_model_id) {
@@ -90,7 +91,7 @@ export async function applyPersonalProviderSelectionsToTomoriState(
 
   let nextLlm = tomoriState.llm;
   if (activeConfigs.text?.llm_id) {
-    const personalLlm = await loadLlmById(activeConfigs.text.llm_id);
+    const personalLlm = await llmModelRepo.loadById(activeConfigs.text.llm_id);
     if (personalLlm) {
       nextLlm = personalLlm;
     }
@@ -98,7 +99,7 @@ export async function applyPersonalProviderSelectionsToTomoriState(
 
   let nextVisionLlm = tomoriState.vision_llm;
   if (activeConfigs.vision?.vision_llm_id) {
-    const personalVisionLlm = await loadLlmById(activeConfigs.vision.vision_llm_id);
+    const personalVisionLlm = await llmModelRepo.loadById(activeConfigs.vision.vision_llm_id);
     if (personalVisionLlm) {
       nextVisionLlm = personalVisionLlm;
     }
@@ -106,10 +107,13 @@ export async function applyPersonalProviderSelectionsToTomoriState(
 
   // Load personal fallback LLMs for text capability (isolate personal provider fallback chain)
   let nextFallbackLlms: typeof tomoriState.fallback_llms;
-  if (activeConfigs.text?.fallback_llm_ids && activeConfigs.text.fallback_llm_ids.length > 0) {
+  const personalFallbackRefIds = (activeConfigs.text?.fallback_model_refs ?? [])
+    .filter((r) => r.type === "llm")
+    .map((r) => r.id);
+  if (personalFallbackRefIds.length > 0) {
     const personalFallbacks: typeof tomoriState.fallback_llms = [];
-    for (const llmId of activeConfigs.text.fallback_llm_ids) {
-      const fallbackLlm = await loadLlmById(llmId);
+    for (const llmId of personalFallbackRefIds) {
+      const fallbackLlm = await llmModelRepo.loadById(llmId);
       if (fallbackLlm) {
         personalFallbacks.push(fallbackLlm);
       }

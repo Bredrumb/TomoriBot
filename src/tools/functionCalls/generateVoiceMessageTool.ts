@@ -13,7 +13,7 @@ import { setCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { generateVoiceMessageMetadata } from "@/utils/audio/voiceMessageMetadata";
 import type { VoiceMessageMetadata } from "@/utils/audio/voiceMessageMetadata";
 import { getOptApiKey } from "@/utils/security/crypto";
-import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhookManager";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import { resolveActiveSpeechEndpoint } from "@/utils/provider/speechEndpointResolver";
 import { log } from "@/utils/misc/logger";
 
@@ -370,11 +370,10 @@ export class GenerateVoiceMessageTool extends BaseTool {
 
     // Determine which synthesis path to use based on what the active persona has configured.
     // Priority: speech_voice_design_prompt (instruct-capable local TTS) >
-    // speech_voice_sample_id (local clone TTS) > speech_voice_id / elevenlabs_voice_id (ElevenLabs).
+    // speech_voice_sample_id (local clone TTS) > speech_voice_id (ElevenLabs or other provider).
     const voiceDesignPrompt = context.tomoriState.speech_voice_design_prompt?.trim() ?? "";
     const voiceSampleId = context.tomoriState.speech_voice_sample_id ?? null;
-    const voiceId =
-      (context.tomoriState.speech_voice_id?.trim() || context.tomoriState.elevenlabs_voice_id?.trim()) ?? "";
+    const voiceId = context.tomoriState.speech_voice_id?.trim() ?? "";
 
     // 1. Try the new custom-endpoint credential path (Phase 4.1+).
     // 2. Fall back to the legacy opt_api_keys entry for backward compatibility
@@ -391,7 +390,7 @@ export class GenerateVoiceMessageTool extends BaseTool {
       return {
         success: false,
         error:
-          "The active speech endpoint is configured for VoiceDesign, but the active persona does not have a voice design prompt yet. A server manager can add one with /speech voice-design.",
+          "The active speech endpoint is configured for VoiceDesign, but the active persona does not have a voice design prompt yet. A server manager can add one with /speech voice-design set.",
       };
     }
 
@@ -399,7 +398,7 @@ export class GenerateVoiceMessageTool extends BaseTool {
       return {
         success: false,
         error:
-          "No voice is configured for the active persona. A server manager can set one with /speech voice-assign or /speech voice-design.",
+          "No voice is configured for the active persona. A server manager can set one with /speech voice-assign or /speech voice-design set.",
       };
     }
 
@@ -412,11 +411,7 @@ export class GenerateVoiceMessageTool extends BaseTool {
     // design prompts to older clone-only wrappers that ignore or reject instruct.
     // Auto endpoints are for mixed deployments: clone personas keep using their
     // stored samples, while VoiceDesign personas send `instruct` to the same URL.
-    if (
-      voiceDesignPrompt &&
-      speechEndpoint?.endpoint.api_style === "tts-clone" &&
-      shouldUseVoiceDesign
-    ) {
+    if (voiceDesignPrompt && speechEndpoint?.endpoint.api_style === "tts-clone" && shouldUseVoiceDesign) {
       const designResult = await synthesizeSpeechViaTtsVoiceDesign({
         endpoint: speechEndpoint.endpoint,
         script,
@@ -438,7 +433,9 @@ export class GenerateVoiceMessageTool extends BaseTool {
       const voiceMeta = await generateVoiceMessageMetadata(designResult.audioBuffer, mimeType);
 
       if (!voiceMeta) {
-        log.warn("[VoiceWaveform] TTS voice-design waveform generation returned null — falling back to plain attachment");
+        log.warn(
+          "[VoiceWaveform] TTS voice-design waveform generation returned null — falling back to plain attachment",
+        );
       }
 
       const sentMessageId = await this.sendVoiceOrFallback({

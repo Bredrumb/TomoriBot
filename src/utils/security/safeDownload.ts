@@ -32,6 +32,12 @@ export interface SafeDownloadOptions {
    * The timeout AbortSignal is always applied by safeDownload.
    */
   requestInit?: Omit<RequestInit, "signal">;
+
+  /**
+   * Optional external AbortSignal (e.g. from ToolContext.abortSignal).
+   * When fired, it also aborts the internal timeout controller early.
+   */
+  externalSignal?: AbortSignal;
 }
 
 /**
@@ -87,7 +93,7 @@ export interface SafeDownloadResult {
  * ```
  */
 export async function safeDownload(url: string, options: SafeDownloadOptions): Promise<SafeDownloadResult> {
-  const { maxSizeMB, timeoutMs = 10000, knownSize, requestInit } = options;
+  const { maxSizeMB, timeoutMs = 10000, knownSize, requestInit, externalSignal } = options;
   const maxSizeBytes = maxSizeMB * 1024 * 1024;
 
   // 1. Pre-check known size if provided (early rejection, no network call)
@@ -107,9 +113,73 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
     };
   }
 
-  // 2. Setup timeout controller
+  // Handle data URIs natively without a network request
+  if (url.startsWith("data:")) {
+    // Early rejection: base64 is ~1.33x the size of the raw data.
+    // Using 0.75x of string length gives a safe lower-bound estimate of the byte size.
+    // If the estimate itself exceeds the max, it's definitively too large.
+    const estimatedSizeBytes = url.length * 0.75;
+    if (estimatedSizeBytes > maxSizeBytes) {
+      log.warn(
+        `Data URI estimated size ${(estimatedSizeBytes / (1024 * 1024)).toFixed(2)} MB exceeds limit of ${maxSizeMB} MB`,
+        {
+          metadata: { estimatedSizeMB: estimatedSizeBytes / (1024 * 1024), maxSizeMB },
+        },
+      );
+
+      return {
+        success: false,
+        error: "size_exceeded",
+        details: `Data URI estimated size ${(estimatedSizeBytes / (1024 * 1024)).toFixed(2)} MB exceeds ${maxSizeMB} MB limit`,
+      };
+    }
+
+    try {
+      const response = await fetch(url);
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      if (buffer.length > maxSizeBytes) {
+        log.warn(`Data URI ${(buffer.length / (1024 * 1024)).toFixed(2)} MB exceeds limit of ${maxSizeMB} MB`, {
+          metadata: { actualSizeMB: buffer.length / (1024 * 1024), maxSizeMB },
+        });
+
+        return {
+          success: false,
+          error: "size_exceeded",
+          details: `Data URI size ${(buffer.length / (1024 * 1024)).toFixed(2)} MB exceeds ${maxSizeMB} MB limit`,
+        };
+      }
+
+      return {
+        success: true,
+        buffer,
+        contentType: response.headers.get("content-type") ?? undefined,
+      };
+    } catch (error) {
+      log.error("Failed to parse data URI in safeDownload", {
+        errorType: "download_network_error",
+        metadata: { error: error instanceof Error ? error.message : String(error) },
+      });
+
+      return {
+        success: false,
+        error: "invalid_response",
+        details: `Failed to parse data URI: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  }
+
+  // 2. Setup timeout controller; chain optional external signal into it
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      clearTimeout(timeoutId);
+      return { success: false, error: "timeout", details: "Aborted before download started" };
+    }
+    externalSignal.addEventListener("abort", () => controller.abort(), { once: true });
+  }
 
   try {
     // 3. Fetch with timeout and abort signal

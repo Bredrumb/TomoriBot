@@ -6,37 +6,33 @@ import type {
   SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
   acknowledgeModalSubmitForRefresh,
   promptWithPaginatedModal,
   promptWithRawModal,
-  promptWithUnacknowledgedConfirmation,
-  replyComponentsV2Status,
-  replyInfoEmbed,
-  type AvatarSessionCache,
-  replyPaginatedPersonaChoicesV2,
   safeSelectOptionText,
-  updateButtonComponentsV2Status,
-} from "@/utils/discord/interactionHelper";
+} from "@/utils/discord/ui/modals";
+import { promptWithUnacknowledgedConfirmation } from "@/utils/discord/ui/confirmation";
+import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { isBlacklisted, loadAllPersonasForServer } from "@/utils/db/dbRead";
-import { getMemoryLimits, validateMemoryContent } from "@/utils/db/memoryLimits";
+import { personaRepository, userRepository } from "@/utils/db/repositories";
+import { getMemoryLimits, validateMemoryContent } from "@/utils/misc/memoryLimits";
+import { serverMemoryRepository } from "@/utils/db/repositories";
 import type { SelectOption } from "@/types/discord/modal";
-import {
-  serverMemorySchema,
-  type ErrorContext,
-  type ServerMemoryRow,
-  type TomoriState,
-  type UserRow,
-} from "@/types/db/schema";
+import type { ErrorContext, ServerMemoryRow, TomoriState, UserRow } from "@/types/db/schema";
 
 const SELECT_MODAL_CUSTOM_ID = "memory_server_edit_select_modal";
 const EDIT_MODAL_CUSTOM_ID = "memory_server_edit_value_modal";
 const MEMORY_SELECT_ID = "memory_select";
 const MEMORY_INPUT_ID = "server_memory_input";
+const MEMORY_TAGS_INPUT_ID = "server_memory_tags_input";
+
+const MAX_TAGS = 5;
+const MAX_TAG_LENGTH = 32;
 
 const memoryLimits = getMemoryLimits();
 
@@ -48,52 +44,30 @@ async function performServerMemoryEdit(
   selectedPersona: TomoriState,
   memoryToEdit: ServerMemoryRow,
   newContent: string,
+  newTags: string[],
   userData: UserRow,
   hasManagePermission: boolean,
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
-  const updateQuery = hasManagePermission
-    ? sql`
-        UPDATE server_memories
-        SET content = ${newContent}
-        WHERE server_memory_id = ${memoryToEdit.server_memory_id}
-        RETURNING *
-      `
-    : sql`
-        UPDATE server_memories
-        SET content = ${newContent}
-        WHERE server_memory_id = ${memoryToEdit.server_memory_id}
-          AND user_id = ${userData.user_id}
-        RETURNING *
-      `;
+  // Check permission: user must be owner or have manage permission
+  // biome-ignore lint/style/noNonNullAssertion: userData.user_id is always provided by command framework
+  if (!hasManagePermission && memoryToEdit.user_id !== userData.user_id!) {
+    await replyInfoEmbed(replyInteraction, locale, {
+      titleKey: "general.errors.update_failed_title",
+      descriptionKey: "general.errors.update_failed_description",
+      color: ColorCode.ERROR,
+    });
+    return false;
+  }
 
-  const [updatedMemory] = await updateQuery;
-  const validationResult = serverMemorySchema.safeParse(updatedMemory);
-  if (!validationResult.success || !updatedMemory) {
-    const context: ErrorContext = {
-      userId: userData.user_id,
-      serverId: selectedPersona.server_id,
-      tomoriId: selectedPersona.tomori_id,
-      errorType: "DatabaseUpdateError",
-      metadata: {
-        command: "memory server edit",
-        table: "server_memories",
-        operation: "UPDATE",
-        serverMemoryId: memoryToEdit.server_memory_id,
-        validationErrors: validationResult.success ? null : validationResult.error.flatten(),
-      },
-    };
-
-    await log.error(
-      "Failed to update or validate server memory",
-      validationResult.success
-        ? new Error("Database update returned no rows or unexpected data")
-        : new Error("Updated server memory failed validation"),
-      context,
-    );
-
+  if (!memoryToEdit.server_memory_id) {
+    log.error(`performServerMemoryEdit called with memory row missing server_memory_id`);
+    return false;
+  }
+  const ok = await serverMemoryRepository.edit(memoryToEdit.server_memory_id, newContent, newTags ?? []);
+  if (!ok) {
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
       descriptionKey: "general.errors.update_failed_description",
@@ -151,7 +125,7 @@ export async function execute(
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
 
     if (interaction.guild) {
-      const blacklisted = (await isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
+      const blacklisted = (await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
       if (blacklisted && !hasManagePermission) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.user_blacklisted_title",
@@ -174,7 +148,7 @@ export async function execute(
       return;
     }
 
-    const allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -196,8 +170,7 @@ export async function execute(
       });
 
       if (!personaSelection.success) {
-        if (personaSelection.reason === "cancelled" || personaSelection.reason === "fatal") return;
-        continue;
+        return;
       }
       if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
         return;
@@ -205,7 +178,7 @@ export async function execute(
 
       personaSelectionInteraction = personaSelection.interaction;
       selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await updateButtonComponentsV2Status(
           personaSelectionInteraction,
           locale,
@@ -229,19 +202,11 @@ export async function execute(
       }
 
       const targetPersonaLineageId = selectedPersona.persona_lineage_id ?? 0;
-      let memoriesQuery = sql`
-        SELECT server_memory_id, server_id, tomori_id, persona_lineage_id, user_id, content, created_at, updated_at
-        FROM server_memories
-        WHERE server_id = ${tomoriState.server_id}
-          AND persona_lineage_id = ${targetPersonaLineageId}
-      `;
-
-      if (!hasManagePermission) {
-        memoriesQuery = sql`${memoriesQuery} AND user_id = ${userData.user_id}`;
-      }
-
-      memoriesQuery = sql`${memoriesQuery} ORDER BY created_at DESC, server_memory_id DESC`;
-      const memories = (await memoriesQuery) as ServerMemoryRow[];
+      const memories = await serverMemoryRepository.loadServerMemoriesScoped(
+        tomoriState.server_id,
+        targetPersonaLineageId,
+        hasManagePermission ? undefined : userData.user_id,
+      );
 
       if (memories.length === 0) {
         const descriptionKey = hasManagePermission
@@ -350,6 +315,17 @@ export async function execute(
             maxLength: memoryLimits.maxMemoryLength,
             value: selectedMemory.content,
           },
+          {
+            customId: MEMORY_TAGS_INPUT_ID,
+            labelKey: "Memory Tags",
+            descriptionKey:
+              "Up to 5 comma-separated case-sensitive tags, use '/memory tagging set' to enable tagged memory",
+            placeholder: "mango,drinks,snacks",
+            style: TextInputStyle.Short,
+            required: false,
+            maxLength: MAX_TAGS * (MAX_TAG_LENGTH + 2),
+            value: (selectedMemory.tags ?? []).join(", "),
+          },
         ],
       });
 
@@ -367,6 +343,17 @@ export async function execute(
 
       const editModalInteraction = editModalResult.interaction;
       const editedMemory = editModalResult.values?.[MEMORY_INPUT_ID]?.trim() ?? "";
+      const rawTagsInput = editModalResult.values?.[MEMORY_TAGS_INPUT_ID]?.trim() ?? "";
+      const editedTags = rawTagsInput
+        ? [
+            ...new Set(
+              rawTagsInput
+                .split(",")
+                .map((t) => t.trim().replace(/^["']+|["']+$/g, ""))
+                .filter((t) => t.length > 0 && t.length <= MAX_TAG_LENGTH),
+            ),
+          ].slice(0, MAX_TAGS)
+        : [];
       if (!editModalInteraction) {
         log.error("Server memory edit modal unexpectedly missing interaction");
         return;
@@ -385,7 +372,10 @@ export async function execute(
         continue;
       }
 
-      if (editedMemory === selectedMemory.content.trim()) {
+      const existingTags = selectedMemory.tags ?? [];
+      const tagsUnchanged =
+        editedTags.length === existingTags.length && editedTags.every((t, i) => t === existingTags[i]);
+      if (editedMemory === selectedMemory.content.trim() && tagsUnchanged) {
         await replyInfoEmbed(editModalInteraction, locale, {
           titleKey: "commands.memory.server.edit.no_changes_title",
           descriptionKey: "commands.memory.server.edit.no_changes_description",
@@ -415,6 +405,7 @@ export async function execute(
         selectedPersona,
         selectedMemory,
         editedMemory,
+        editedTags,
         userData,
         hasManagePermission,
         editModalInteraction,
@@ -442,7 +433,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: selectedPersona?.tomori_id ?? tomoriState?.tomori_id,
+      personaId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "memory server edit",

@@ -115,7 +115,9 @@ export function parseCapabilityModalFields(
       const rawMarkup = values[ModalFieldId.script_markup]?.trim().toLowerCase();
       result.scriptMarkup = rawMarkup === "bracket-tags" || rawMarkup === "emoji" ? rawMarkup : "plain";
       result.supportsInstruct =
-        result.voiceMode === "voice-design" || result.voiceMode === "auto" || values[ModalFieldId.supports_instruct] === "true";
+        result.voiceMode === "voice-design" ||
+        result.voiceMode === "auto" ||
+        values[ModalFieldId.supports_instruct] === "true";
       break;
     }
     case "transcription": {

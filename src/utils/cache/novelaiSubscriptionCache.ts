@@ -137,3 +137,7 @@ export async function refreshNovelAISubscription(guildId: string, apiKey: string
 export function getNovelaiSubscriptionCacheSize(): number {
   return subscriptionCache.size;
 }
+
+export function clearNovelaiSubscriptionCache(): void {
+  subscriptionCache.clear();
+}

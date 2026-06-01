@@ -4,7 +4,7 @@
  *
  * Supports two scopes:
  * - persona: Show documents scoped to a selected persona
- * - serverwide: Show documents with tomori_id IS NULL
+ * - serverwide: Show documents with persona_id IS NULL
  */
 
 import {
@@ -15,22 +15,19 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
-import { isRagAvailable } from "@/utils/db/ragDetection";
+import { isRagAvailable } from "@/utils/db/ragAvailability";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
   acknowledgeModalSubmitForRefresh,
-  replyInfoEmbed,
-  replyComponentsV2Status,
-  updateButtonComponentsV2Status,
-  type AvatarSessionCache,
-  replyPaginatedPersonaChoicesV2,
   promptWithPaginatedModal,
   safeSelectOptionText,
-} from "@/utils/discord/interactionHelper";
+} from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { personaRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import type { SelectOption } from "@/types/discord/modal";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 
@@ -42,7 +39,7 @@ type HistoryScope = "persona" | "serverwide";
  * Performs the actual document deletion and replies with success/failure.
  *
  * @param tomoriState - The server's Tomori state
- * @param targetTomoriId - Persona ID (null for serverwide)
+ * @param targetPersonaId - Persona ID (null for serverwide)
  * @param documentId - The document to delete
  * @param userData - The executing user's data
  * @param replyInteraction - The interaction to reply on
@@ -50,43 +47,21 @@ type HistoryScope = "persona" | "serverwide";
  */
 async function performHistoryDocumentRemoval(
   tomoriState: TomoriState,
-  targetTomoriId: number | null,
+  targetPersonaId: number | null,
   documentId: number,
-  userData: UserRow,
+  _userData: UserRow,
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
-  // Delete the document (chunks cascade via FK)
-  const deletedRows =
-    targetTomoriId === null
-      ? await sql`
-				DELETE FROM documents
-				WHERE document_id = ${documentId}
-				  AND server_id = ${tomoriState.server_id}
-				  AND tomori_id IS NULL
-				  AND source_type = 'history'
-				RETURNING document_name
-			`
-      : await sql`
-				DELETE FROM documents
-				WHERE document_id = ${documentId}
-				  AND server_id = ${tomoriState.server_id}
-				  AND tomori_id = ${targetTomoriId}
-				  AND source_type = 'history'
-				RETURNING document_name
-			`;
-  const [deletedRow] = deletedRows;
+  // Delete the history document (chunks cascade via FK)
+  const documentName = await serverMemoryRepository.removeHistoryDocument(
+    documentId,
+    tomoriState.server_id,
+    targetPersonaId,
+  );
 
-  if (!deletedRow?.document_name) {
-    const context: ErrorContext = {
-      tomoriId: targetTomoriId ?? tomoriState.tomori_id,
-      serverId: tomoriState.server_id,
-      userId: userData.user_id,
-      errorType: "DatabaseUpdateError",
-      metadata: { command: "memory history remove", documentId },
-    };
-    await log.error("Failed to delete history document row", new Error("Document deletion returned no rows"), context);
+  if (!documentName) {
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
       descriptionKey: "general.errors.update_failed_description",
@@ -103,7 +78,7 @@ async function performHistoryDocumentRemoval(
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "commands.memory.history.remove.success_title",
       descriptionKey: "commands.memory.history.remove.success_description",
-      descriptionVars: { name: deletedRow.document_name },
+      descriptionVars: { name: documentName },
       color: ColorCode.SUCCESS,
     });
   }
@@ -156,7 +131,7 @@ export async function execute(
   }
 
   let tomoriState: TomoriState | null = null;
-  let targetTomoriId: number | null = null;
+  let targetPersonaId: number | null = null;
   let personaSelectionInteraction: ButtonInteraction | null = null;
 
   try {
@@ -203,7 +178,7 @@ export async function execute(
     const avatarSessionCache: AvatarSessionCache = new Map();
     while (true) {
       if (scope === "persona") {
-        const allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+        const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
         if (allPersonas.length === 0) {
           await replyInfoEmbed(interaction, locale, {
             titleKey: "general.errors.tomori_not_setup_title",
@@ -223,8 +198,7 @@ export async function execute(
         });
 
         if (!personaSelection.success) {
-          if (personaSelection.reason === "cancelled" || personaSelection.reason === "fatal") return;
-          continue;
+          return;
         }
         if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
           return;
@@ -232,7 +206,7 @@ export async function execute(
 
         personaSelectionInteraction = personaSelection.interaction;
         const selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-        if (!selectedPersona?.tomori_id) {
+        if (!selectedPersona?.persona_id) {
           await updateButtonComponentsV2Status(
             personaSelectionInteraction,
             locale,
@@ -244,29 +218,12 @@ export async function execute(
           );
           continue;
         }
-        targetTomoriId = selectedPersona.tomori_id;
+        targetPersonaId = selectedPersona.persona_id;
       }
 
       // 6. Query history-extracted documents for the selected scope
       const selectionInteraction = personaSelectionInteraction ?? interaction;
-      const documents =
-        targetTomoriId === null
-          ? await sql<Array<{ document_id: number; document_name: string }>>`
-						SELECT document_id, document_name
-						FROM documents
-						WHERE server_id = ${tomoriState.server_id}
-						  AND tomori_id IS NULL
-						  AND source_type = 'history'
-						ORDER BY created_at DESC
-					`
-          : await sql<Array<{ document_id: number; document_name: string }>>`
-						SELECT document_id, document_name
-						FROM documents
-						WHERE server_id = ${tomoriState.server_id}
-						  AND tomori_id = ${targetTomoriId}
-						  AND source_type = 'history'
-						ORDER BY created_at DESC
-					`;
+      const documents = await serverMemoryRepository.loadHistoryDocuments(tomoriState.server_id, targetPersonaId);
 
       if (!documents || documents.length === 0) {
         if (personaSelectionInteraction) {
@@ -285,6 +242,7 @@ export async function execute(
             descriptionKey: "commands.memory.history.remove.none_description",
             color: ColorCode.WARN,
           });
+          return;
         }
         continue;
       }
@@ -313,6 +271,9 @@ export async function execute(
       // Handle modal outcome - keep the persona picker loop alive when the modal closes
       if (modalResult.outcome !== "submit") {
         log.info(`History document removal modal ${modalResult.outcome} for user ${userData.user_id}`);
+        if (scope === "serverwide") {
+          return;
+        }
         await replyComponentsV2Status(
           interaction,
           locale,
@@ -358,7 +319,7 @@ export async function execute(
       // 8. Perform deletion
       const removalSucceeded = await performHistoryDocumentRemoval(
         tomoriState,
-        targetTomoriId,
+        targetPersonaId,
         selectedId,
         userData,
         modalResult.interaction,
@@ -378,12 +339,15 @@ export async function execute(
         { name: selectedDocument.document_name },
         "general.pagination.reloading_persona_picker",
       );
+      if (scope === "serverwide") {
+        return;
+      }
     }
   } catch (error) {
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: targetTomoriId ?? tomoriState?.tomori_id,
+      personaId: targetPersonaId ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "memory history remove",

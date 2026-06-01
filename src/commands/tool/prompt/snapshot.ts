@@ -2,7 +2,8 @@ import type { ChatInputCommandInteraction, Client, Message, SlashCommandSubcomma
 import { AttachmentBuilder, EmbedBuilder, MessageFlags } from "discord.js";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { sliceMessagesAtResetMarker } from "@/utils/discord/embedDetection";
 import {
   checkTargetEmbedTitle,
@@ -11,11 +12,11 @@ import {
 } from "@/utils/discord/embedClassifier";
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { getCachedChannelLlm } from "@/utils/cache/channelLlmCache";
-import { loadSavedProviderConfig } from "@/utils/db/dbRead";
+import { llmProviderRepo } from "@/utils/db/repositories";
 import { buildContext } from "@/utils/text/contextBuilder";
 import { getCachedActivePreset } from "@/utils/cache/stPresetCache";
 import { getCachedPrivacyLevel, getCachedUserRow } from "@/utils/cache/userCache";
-import { normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
+import { getStaticProviderInfo, normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { PrivacyLevel, type UserRow, type TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
@@ -217,9 +218,7 @@ async function buildSnapshotToolFilter(params: {
   const directIntent = getDeliberateToolIntentResult(intentText, persona.config.deliberate_tool_triggers);
   const followUpIntent = getFollowUpToolIntentResult(
     intentText,
-    latestUserMessage
-      ? getSnapshotRecentToolAffordanceNames(messagesArray, latestUserMessage.id, clientUserId)
-      : [],
+    latestUserMessage ? getSnapshotRecentToolAffordanceNames(messagesArray, latestUserMessage.id, clientUserId) : [],
   );
   const allowedToolNames = Array.from(new Set([...directIntent.allowedToolNames, ...followUpIntent.allowedToolNames]));
 
@@ -325,7 +324,7 @@ export async function execute(
 
     // 6. Build persona select options — index-based values avoid Discord's 100-char value limit
     const personaOptions = personas.map((persona, index) => ({
-      label: safeSelectOptionText(persona.tomori_nickname),
+      label: safeSelectOptionText(persona.persona_nickname),
       value: index.toString(),
       description: persona.is_alter ? "Alter Persona" : "Main Persona",
     }));
@@ -385,7 +384,10 @@ export async function execute(
 
       const overrideProvider = effectiveLlm.llm_provider.toLowerCase();
       if (overrideProvider !== selectedPersona.llm.llm_provider.toLowerCase()) {
-        const overrideSavedConfig = await loadSavedProviderConfig(selectedPersona.server_id, overrideProvider);
+        const overrideSavedConfig = await llmProviderRepo.loadSavedProviderConfig(
+          selectedPersona.server_id,
+          overrideProvider,
+        );
         if (overrideSavedConfig) {
           effectivePersona = {
             ...effectivePersona,
@@ -431,20 +433,21 @@ export async function execute(
     //      used by the live chat pipeline in tomoriChat.ts so snapshot reflects
     //      exactly what the LLM would actually see
     const { sliced: messagesArray } = sliceMessagesAtResetMarker(allMessagesArray);
-    const snapshotToolFilter = fetchTools && format === "json"
-      ? await buildSnapshotToolFilter({
-          messagesArray,
-          clientUserId: client.user?.id,
-          persona: effectivePersona,
-          invokingUserData: userData,
-        })
-      : null;
+    const snapshotToolFilter =
+      fetchTools && format === "json"
+        ? await buildSnapshotToolFilter({
+            messagesArray,
+            clientUserId: client.user?.id,
+            persona: effectivePersona,
+            invokingUserData: userData,
+          })
+        : null;
 
     // 11. Build persona nickname index for webhook attribution
     const personaByNickname = new Map<string, TomoriState>();
     for (const p of personas) {
-      if (!p.tomori_nickname) continue;
-      const key = p.tomori_nickname.toLowerCase();
+      if (!p.persona_nickname) continue;
+      const key = p.persona_nickname.toLowerCase();
       if (!personaByNickname.has(key)) personaByNickname.set(key, p);
     }
     const mainPersona = personas.find((p) => !p.is_alter) ?? tomoriState;
@@ -476,6 +479,7 @@ export async function execute(
 
     const simplifiedMessages: SimpleMsg[] = [];
     const userListSet = new Set<string>();
+    const syntheticUsers = new Map<string, { displayName: string; type: "persona" | "webhook" }>();
 
     for (const message of messagesArray) {
       // Skip fully-private users (same gate as real context building)
@@ -490,17 +494,18 @@ export async function execute(
       let personaName: string | null = null;
 
       if (message.author.id === client.user?.id) {
-        authorName = mainPersona.tomori_nickname ?? tomoriState.tomori_nickname ?? message.author.username;
+        authorName = mainPersona.persona_nickname ?? tomoriState.persona_nickname ?? message.author.username;
         authorType = "persona";
         personaName = authorName;
       } else if (message.webhookId) {
         const webhookName = message.author.username?.trim();
         const matchedPersona = webhookName ? personaByNickname.get(webhookName.toLowerCase()) : undefined;
         if (matchedPersona) {
-          authorName = matchedPersona.tomori_nickname;
+          authorName = matchedPersona.persona_nickname;
           authorType = "persona";
-          personaName = matchedPersona.tomori_nickname;
-          effectiveAuthorId = `persona:${matchedPersona.tomori_id ?? matchedPersona.tomori_nickname}`;
+          personaName = matchedPersona.persona_nickname;
+          effectiveAuthorId = `persona:${matchedPersona.persona_id ?? matchedPersona.persona_nickname}`;
+          syntheticUsers.set(effectiveAuthorId, { displayName: authorName, type: "persona" });
         } else if (webhookName) {
           authorName = webhookName;
         }
@@ -565,7 +570,7 @@ export async function execute(
       //   b) Link-preview embeds (Twitter/YouTube/articles) are extracted as
       //      `[System: Link preview embed content: ...]` and their images are added
       //      to imageAttachments — ONLY for non-Tomori-authored messages.
-      const botNickname = mainPersona.tomori_nickname ?? tomoriState.tomori_nickname ?? null;
+      const botNickname = mainPersona.persona_nickname ?? tomoriState.persona_nickname ?? null;
       const isTomoriAuthored = message.author.id === client.user?.id;
       const embedTextSegments: string[] = [];
       if (message.embeds.length > 0) {
@@ -633,17 +638,27 @@ export async function execute(
       const messageContent = combinedContent.length > 0 ? combinedContent : null;
       const mediaSourceMessageIds = hasLocalMedia ? [message.id] : undefined;
 
-      // Merge consecutive messages from the same author (same as real context building)
+      // Merge consecutive same-author messages, mirroring the real context path
+      // (buildSimplifiedHistory): collapse only when both sides are pure text — if
+      // either side carries media, keep separate turns so per-message media IDs stay
+      // unambiguous.
       const prevMsg = simplifiedMessages[simplifiedMessages.length - 1];
-      if (prevMsg && prevMsg.authorId === effectiveAuthorId && prevMsg.content && messageContent) {
+      const currentHasMedia =
+        imageAttachments.length > 0 || videoAttachments.length > 0 || (mediaSourceMessageIds?.length ?? 0) > 0;
+      const prevHasMedia =
+        !!prevMsg &&
+        (prevMsg.imageAttachments.length > 0 ||
+          prevMsg.videoAttachments.length > 0 ||
+          (prevMsg.mediaSourceMessageIds?.length ?? 0) > 0);
+      const shouldKeepSeparateMediaTurn = currentHasMedia || prevHasMedia;
+      if (
+        prevMsg &&
+        prevMsg.authorId === effectiveAuthorId &&
+        prevMsg.content &&
+        messageContent &&
+        !shouldKeepSeparateMediaTurn
+      ) {
         prevMsg.content += `\n${messageContent}`;
-        if (imageAttachments.length > 0) prevMsg.imageAttachments.push(...imageAttachments);
-        if (videoAttachments.length > 0) prevMsg.videoAttachments.push(...videoAttachments);
-        if (mediaSourceMessageIds?.length) {
-          prevMsg.mediaSourceMessageIds = [
-            ...new Set([...(prevMsg.mediaSourceMessageIds ?? []), ...mediaSourceMessageIds]),
-          ];
-        }
       } else if (messageContent || imageAttachments.length > 0 || videoAttachments.length > 0) {
         simplifiedMessages.push({
           id: message.id,
@@ -669,6 +684,30 @@ export async function execute(
     const channelDesc = "topic" in textChannel ? (textChannel.topic as string | null) : null;
 
     // 13. Assemble context using the selected persona — buildContext handles preset routing internally
+    // Mirror personal memories: only include public attributes for personas present in the
+    // fetched conversation history (userListSet contains "persona:{id}" entries from line 506).
+    const personaIdsInHistory = new Set(
+      Array.from(userListSet)
+        .filter((id) => id.startsWith("persona:"))
+        .map((id) => Number.parseInt(id.slice("persona:".length), 10))
+        .filter((id) => !Number.isNaN(id)),
+    );
+    const publicPersonaAttributes = personas
+      .filter(
+        (persona) =>
+          typeof persona.persona_id === "number" &&
+          persona.persona_id !== selectedPersona.persona_id &&
+          personaIdsInHistory.has(persona.persona_id),
+      )
+      .map((persona) => ({
+        personaId: persona.persona_id as number,
+        personaName: persona.persona_nickname,
+        attributes: (persona.persona_attributes ?? [])
+          .filter((attribute) => attribute.is_public)
+          .map((attribute) => attribute.attribute_text),
+      }))
+      .filter((persona) => persona.attributes.length > 0);
+
     const contextBuild = await buildContext({
       guildId: interaction.guild.id,
       serverName: interaction.guild.name,
@@ -676,7 +715,7 @@ export async function execute(
       simplifiedMessageHistory: simplifiedMessages,
       userList: Array.from(userListSet),
       matrixUsers: new Map<string, string>(),
-      syntheticUsers: new Map<string, { displayName: string; type: "persona" | "webhook" }>(),
+      syntheticUsers,
       channelDesc,
       channelName,
       channelId: interaction.channelId,
@@ -685,15 +724,17 @@ export async function execute(
       client,
       triggererName: interaction.user.displayName || interaction.user.globalName || interaction.user.username,
       // snapshot.triggererUserRow unlocks STM context (actualTriggeringUserId guard inside buildContext)
-      snapshot: { triggererUserRow: userData },
-      tomoriNickname: selectedPersona.tomori_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
+      snapshot: { triggererUserRow: userData, tomoriState: effectivePersona },
+      tomoriNickname: selectedPersona.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
       tomoriAttributes: selectedPersona.attribute_list,
+      publicPersonaAttributes,
       tomoriConfig: effectivePersona.config,
       personaPrompt: selectedPersona.persona_prompt ?? null,
       personaLineageId: selectedPersona.persona_lineage_id,
       isDMChannel,
       seesImages: effectiveLlm.sees_images,
       seesVideos: effectiveLlm.sees_videos,
+      hasVisionTool: !!effectivePersona.vision_llm && !effectiveLlm.sees_images,
     });
 
     // Mutable copy — tail directives are spliced/pushed in below
@@ -708,7 +749,7 @@ export async function execute(
     const lowerPriorityTailDirectives = [...contextBuild.lowerPriorityTailDirectives];
     const emojiPenaltyDirective = getEmojiPenaltyDirective(
       contextItems,
-      selectedPersona.tomori_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
+      selectedPersona.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
     );
     if (emojiPenaltyDirective) lowerPriorityTailDirectives.push(emojiPenaltyDirective);
 
@@ -779,7 +820,7 @@ export async function execute(
     const descriptionParts: string[] = [];
     descriptionParts.push(
       localizer(locale, "commands.tool.prompt.snapshot.dm_description", {
-        persona_name: selectedPersona.tomori_nickname,
+        persona_name: selectedPersona.persona_nickname,
         format: formatLabel,
       }),
     );
@@ -788,7 +829,7 @@ export async function execute(
         "```yaml",
         `server_id: ${interaction.guild.id}`,
         `channel: #${channelName}`,
-        `persona: ${selectedPersona.tomori_nickname}`,
+        `persona: ${selectedPersona.persona_nickname}`,
         `provider: ${providerName}`,
         `model: ${modelName}`,
         `preset: ${presetName ?? "(native)"}`,
@@ -890,6 +931,7 @@ const TAG_LABELS: Record<string, TagLabel> = {
   [ContextItemTag.SYSTEM_INSTRUCTION_BLOCK]: { title: "System Instruction Block", hint: "system-managed" },
   [ContextItemTag.SYSTEM_PERSONALITY]: { title: "Persona Attributes", hint: "/persona attribute" },
   [ContextItemTag.SYSTEM_HUMANIZER_RULES]: { title: "System Prompt", hint: "/config system-prompt" },
+  [ContextItemTag.SYSTEM_PERSONA_PROMPT]: { title: "Persona Prompt", hint: "/persona prompt" },
   [ContextItemTag.SYSTEM_FUNCTION_GUIDE]: { title: "Function Guide", hint: "system-managed" },
   [ContextItemTag.KNOWLEDGE_SERVER_INFO]: { title: "Discord Server Info", hint: "system-managed" },
   [ContextItemTag.KNOWLEDGE_SERVER_EMOJIS]: { title: "Server Emojis", hint: "system-managed" },
@@ -906,6 +948,7 @@ const TAG_LABELS: Record<string, TagLabel> = {
     subsections: [
       { title: "Personal/Server Memories", hint: "/memory" },
       { title: "Discord Presence/Role/Channel", hint: "system-managed" },
+      { title: "Other Personas' Public Attributes", hint: "/persona attribute" },
     ],
   },
   [ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY]: { title: "Short-Term Memory", hint: "/server stm manage" },
@@ -1016,15 +1059,22 @@ async function buildJsonSnapshot(
   const seesVideos = activeLlm.sees_videos;
 
   let requestData: Record<string, unknown>;
+  const providerInfo = getStaticProviderInfo(providerName);
+  const providerKey = providerInfo?.name ?? normalizeProviderName(providerName);
+  const providerFamily = providerInfo?.apiFamily ?? "openai-compatible";
+  const googleSnapshotAdapterFactories: Record<
+    string,
+    () => GoogleStreamAdapter | VertexStreamAdapter | VertexexpressStreamAdapter
+  > = {
+    google: () => new GoogleStreamAdapter(),
+    vertex: () => new VertexStreamAdapter(),
+    vertexexpress: () => new VertexexpressStreamAdapter(),
+  };
+  const googleSnapshotAdapterFactory = googleSnapshotAdapterFactories[providerKey];
 
-  if (providerName === "google" || providerName === "vertex" || providerName === "vertexexpress") {
+  if (googleSnapshotAdapterFactory) {
     // 1. Assemble context into Google/Vertex Content[] format
-    const adapter =
-      providerName === "google"
-        ? new GoogleStreamAdapter()
-        : providerName === "vertex"
-          ? new VertexStreamAdapter()
-          : new VertexexpressStreamAdapter();
+    const adapter = googleSnapshotAdapterFactory();
     const payload = await adapter.buildTokenCountPayload(contextItems, modelName);
 
     // 2. Sanitize — replace inlineData.data (base64) with placeholder (mirrors logSanitizedRequest)
@@ -1045,13 +1095,7 @@ async function buildJsonSnapshot(
       systemInstruction: payload.systemInstruction,
       contents: sanitizedContents,
     };
-  } else if (
-    providerName === "openrouter" ||
-    providerName === "deepseek" ||
-    providerName === "zai" ||
-    providerName === "zaicoding" ||
-    providerName === "nvidia"
-  ) {
+  } else if (providerFamily === "openrouter" || providerFamily === "openai-compatible") {
     // 1. Assemble context into OpenAI-compatible messages format
     const adapter = new OpenrouterStreamAdapter();
     const messages = await adapter.buildProbeMessages(contextItems, seesImages, seesVideos);
@@ -1074,7 +1118,7 @@ async function buildJsonSnapshot(
     });
 
     requestData = { model: modelName, messages: sanitized };
-  } else if (providerName === "anthropic") {
+  } else if (providerFamily === "anthropic") {
     // 1. Assemble context into Anthropic system + messages format
     const adapter = new AnthropicStreamAdapter();
     const { system, messages } = await adapter.buildProbeMessages(contextItems, seesImages);
@@ -1186,32 +1230,21 @@ async function buildJsonSnapshot(
  * Unknown providers fall back to the OpenRouter adapter for OpenAI-compat shape.
  */
 function selectToolAdapter(providerName: string): MCPCapableToolAdapter {
-  switch (providerName) {
-    case "google":
-      return getGoogleToolAdapter();
-    case "vertex":
-      return getVertexToolAdapter();
-    case "vertexexpress":
-      return getVertexexpressToolAdapter();
-    case "anthropic":
-      return getAnthropicToolAdapter();
-    case "openrouter":
-      return getOpenrouterToolAdapter();
-    case "deepseek":
-      return getDeepseekToolAdapter();
-    case "zai":
-      return getZaiToolAdapter();
-    case "zaicoding":
-      return getZaicodingToolAdapter();
-    case "nvidia":
-      return getNvidiaToolAdapter();
-    case "novelai":
-      return getNovelaiToolAdapter();
-    case "custom":
-      return getCustomToolAdapter();
-    default:
-      return getOpenrouterToolAdapter();
-  }
+  const adapterFactories: Record<string, () => MCPCapableToolAdapter> = {
+    google: getGoogleToolAdapter,
+    vertex: getVertexToolAdapter,
+    vertexexpress: getVertexexpressToolAdapter,
+    anthropic: getAnthropicToolAdapter,
+    openrouter: getOpenrouterToolAdapter,
+    deepseek: getDeepseekToolAdapter,
+    zai: getZaiToolAdapter,
+    zaicoding: getZaicodingToolAdapter,
+    nvidia: getNvidiaToolAdapter,
+    novelai: getNovelaiToolAdapter,
+    custom: getCustomToolAdapter,
+  };
+  const providerKey = getStaticProviderInfo(providerName)?.name ?? normalizeProviderName(providerName);
+  return (adapterFactories[providerKey] ?? getOpenrouterToolAdapter)();
 }
 
 /**
@@ -1235,10 +1268,7 @@ async function fetchProviderTools(
   const toolStateForContext: ToolStateForContext = {
     server_id: persona.server_id.toString(),
     activePersonaHasElevenlabsVoice: Boolean(
-      persona.speech_voice_sample_id ||
-        persona.speech_voice_design_prompt?.trim() ||
-        persona.speech_voice_id?.trim() ||
-        persona.elevenlabs_voice_id?.trim(),
+      persona.speech_voice_sample_id || persona.speech_voice_design_prompt?.trim() || persona.speech_voice_id?.trim(),
     ),
     activePersonaVoiceDesignPrompt: persona.speech_voice_design_prompt?.trim() || null,
     activePersonaVoiceName: persona.speech_voice_name,
@@ -1260,7 +1290,6 @@ async function fetchProviderTools(
       manage_message_enabled: persona.config.manage_message_enabled,
       imagegen_enabled: persona.config.imagegen_enabled,
       videogen_enabled: persona.config.videogen_enabled,
-      nai_exclusive_imggen: persona.config.nai_exclusive_imggen,
       voice_message_enabled: persona.config.voice_message_enabled,
       thread_creation_enabled: persona.config.thread_creation_enabled,
     },
@@ -1301,36 +1330,14 @@ function buildRequestConfig(persona: TomoriState, providerName: string, modelNam
   const activeLlm = persona.persona_llm ?? persona.llm;
   const config = persona.config;
   const disabledParams = config.llm_disabled_params ?? [];
+  const providerInfo = getStaticProviderInfo(providerName);
+  const providerKey = providerInfo?.name ?? normalizeProviderName(providerName);
+  const providerFamily = providerInfo?.apiFamily ?? "openai-compatible";
+  const supportsParam = (param: string) =>
+    providerInfo?.supportedParams.some((supportedParam) => supportedParam === param) ?? true;
 
-  if (providerName === "google") {
-    // 1. Google: show raw configured values (unfiltered, mirrors GoogleProviderConfig)
-    const maxOutputTokens =
-      config.llm_max_output_tokens ?? Number.parseInt(process.env.GOOGLE_MAX_OUTPUT_TOKENS || "8192", 10);
-    const out: Record<string, unknown> = {
-      generation_config: {
-        temperature: config.llm_temperature,
-        top_k: config.llm_top_k,
-        top_p: config.llm_top_p,
-        frequency_penalty: config.llm_frequency_penalty,
-        presence_penalty: config.llm_presence_penalty,
-        max_output_tokens: maxOutputTokens,
-        stop_sequences: [],
-      },
-      safety_settings: [
-        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
-      ],
-    };
-    const thinkingConfig = serializeGoogleThinkingConfig(buildGoogleThinkingConfig(modelName, config.thinking_level));
-    if (thinkingConfig) out.thinking_config = thinkingConfig;
-    if (disabledParams.length > 0) out.disabled_params = disabledParams;
-    return out;
-  }
-
-  if (providerName === "vertex" || providerName === "vertexexpress") {
-    // 2. Vertex family: mirrors VertexProvider/VertexexpressProvider request config
+  if (providerFamily === "google-genai") {
+    // 1. Google/Vertex family: show raw configured values (unfiltered, mirrors provider config)
     const maxOutputTokens =
       config.llm_max_output_tokens ?? Number.parseInt(process.env.GOOGLE_MAX_OUTPUT_TOKENS || "8192", 10);
     const out: Record<string, unknown> = {
@@ -1348,13 +1355,16 @@ function buildRequestConfig(persona: TomoriState, providerName: string, modelNam
         { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
       ],
     };
+    const generationConfig = out.generation_config as Record<string, unknown>;
+    if (supportsParam("frequencyPenalty")) generationConfig.frequency_penalty = config.llm_frequency_penalty;
+    if (supportsParam("presencePenalty")) generationConfig.presence_penalty = config.llm_presence_penalty;
     const thinkingConfig = serializeGoogleThinkingConfig(buildGoogleThinkingConfig(modelName, config.thinking_level));
     if (thinkingConfig) out.thinking_config = thinkingConfig;
     if (disabledParams.length > 0) out.disabled_params = disabledParams;
     return out;
   }
 
-  if (providerName === "anthropic") {
+  if (providerFamily === "anthropic") {
     // 3. Anthropic: uses selectAnthropicSamplingParams to coalesce temp+top_p
     const selection = selectAnthropicSamplingParams({
       temperature: config.llm_temperature,
@@ -1365,7 +1375,7 @@ function buildRequestConfig(persona: TomoriState, providerName: string, modelNam
     const stopSequences = buildProviderStopStrings({
       providerName: "anthropic",
       model: modelName,
-      personaName: persona.tomori_nickname,
+      personaName: persona.persona_nickname,
     });
 
     const thinkingRequest = buildAnthropicThinkingRequest(modelName, config.thinking_level);
@@ -1390,7 +1400,7 @@ function buildRequestConfig(persona: TomoriState, providerName: string, modelNam
   const stopStrings = buildProviderStopStrings({
     providerName,
     model: modelName,
-    personaName: persona.tomori_nickname,
+    personaName: persona.persona_nickname,
   });
 
   const out: Record<string, unknown> = { max_tokens: maxTokens };
@@ -1403,43 +1413,52 @@ function buildRequestConfig(persona: TomoriState, providerName: string, modelNam
   if (stopStrings) out.stop = stopStrings;
   if (disabledParams.length > 0) out.disabled_params = disabledParams;
 
-  if (providerName === "openrouter") {
-    const reasoningRequest = buildOpenRouterReasoningRequest(config.thinking_level);
-    if (reasoningRequest.reasoning) out.reasoning = reasoningRequest.reasoning;
-  }
-
-  if (providerName === "deepseek") {
-    const thinkingRequest = buildDeepSeekThinkingRequest(modelName, config.thinking_level);
-    if (thinkingRequest.thinking) out.thinking = thinkingRequest.thinking;
-    if (thinkingRequest.omitSampling) {
-      delete out.temperature;
-      delete out.top_p;
-      delete out.frequency_penalty;
-      delete out.presence_penalty;
-    }
-  }
-
-  if (providerName === "zai" || providerName === "zaicoding") {
-    const thinkingRequest = buildZaiThinkingRequest(config.thinking_level);
-    if (thinkingRequest.thinking) out.thinking = thinkingRequest.thinking;
-    if (thinkingRequest.omitSampling) {
-      delete out.temperature;
-      delete out.top_p;
-      delete out.frequency_penalty;
-      delete out.presence_penalty;
-    }
-  }
-
-  if (providerName === "custom") {
-    const customThinking = buildCustomThinkingRequest(config.custom_endpoint_url, config.thinking_level);
-    if (customThinking.reasoning_effort) {
-      out.reasoning_effort = customThinking.reasoning_effort;
-    }
-  }
-
-  if (providerName === "novelai") {
-    out.thinking_directive = getNovelAiThinkingDirective(config.thinking_level);
-  }
+  const requestConfigMutators: Record<string, () => void> = {
+    openrouter: () => {
+      const reasoningRequest = buildOpenRouterReasoningRequest(config.thinking_level);
+      if (reasoningRequest.reasoning) out.reasoning = reasoningRequest.reasoning;
+    },
+    deepseek: () => {
+      const thinkingRequest = buildDeepSeekThinkingRequest(modelName, config.thinking_level);
+      if (thinkingRequest.thinking) out.thinking = thinkingRequest.thinking;
+      if (thinkingRequest.omitSampling) {
+        delete out.temperature;
+        delete out.top_p;
+        delete out.frequency_penalty;
+        delete out.presence_penalty;
+      }
+    },
+    zai: () => {
+      const thinkingRequest = buildZaiThinkingRequest(config.thinking_level);
+      if (thinkingRequest.thinking) out.thinking = thinkingRequest.thinking;
+      if (thinkingRequest.omitSampling) {
+        delete out.temperature;
+        delete out.top_p;
+        delete out.frequency_penalty;
+        delete out.presence_penalty;
+      }
+    },
+    zaicoding: () => {
+      const thinkingRequest = buildZaiThinkingRequest(config.thinking_level);
+      if (thinkingRequest.thinking) out.thinking = thinkingRequest.thinking;
+      if (thinkingRequest.omitSampling) {
+        delete out.temperature;
+        delete out.top_p;
+        delete out.frequency_penalty;
+        delete out.presence_penalty;
+      }
+    },
+    custom: () => {
+      const customThinking = buildCustomThinkingRequest(config.custom_endpoint_url, config.thinking_level);
+      if (customThinking.reasoning_effort) {
+        out.reasoning_effort = customThinking.reasoning_effort;
+      }
+    },
+    novelai: () => {
+      out.thinking_directive = getNovelAiThinkingDirective(config.thinking_level);
+    },
+  };
+  requestConfigMutators[providerKey]?.();
 
   // Acknowledge has_tools flag is mirrored from adapter runtime — informational
   if (!activeLlm.has_tools) out.tools_disabled = true;

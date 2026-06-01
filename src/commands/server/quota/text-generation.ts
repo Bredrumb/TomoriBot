@@ -1,11 +1,16 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
+import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 import { getTextQuotaConfig } from "@/utils/quota/textQuotaManager";
+import {
+  updateTextDailyUserQuota,
+  updateTextServerwideQuota,
+  updateTextServerwideResetDays,
+} from "@/utils/db/repositories/QuotaRepository";
 import type { UserRow } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 
 // Quota limit constants
 const MIN_USER_QUOTA = 0; // 0 = unlimited
@@ -83,11 +88,9 @@ export async function execute(
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   // 4. Get server ID from database
-  const [serverRow] = await sql<{ server_id: number }[]>`
-		SELECT server_id FROM servers WHERE server_disc_id = ${interaction.guild.id}
-	`;
+  const serverId = await serverRepository.loadServerIdByDiscId(interaction.guild.id);
 
-  if (!serverRow) {
+  if (!serverId) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.server_not_found_title",
       descriptionKey: "general.errors.server_not_found_description",
@@ -95,8 +98,6 @@ export async function execute(
     });
     return;
   }
-
-  const serverId = serverRow.server_id;
 
   // 5. Get which options were provided
   const dailyUserQuota = interaction.options.getInteger("daily_user_quota");
@@ -172,11 +173,7 @@ async function updateDailyUserQuota(serverId: number, limit: number, locale: str
   await getTextQuotaConfig(serverId);
 
   // 2. Update config
-  await sql`
-		UPDATE text_quota_configs
-		SET daily_user_quota = ${limit}
-		WHERE server_id = ${serverId}
-	`;
+  await updateTextDailyUserQuota(serverId, limit);
 
   // 3. Format and return success message
   const limitText = limit === 0 ? localizer(locale, "commands.server.quota.textgen.unlimited") : `${limit}`;
@@ -196,34 +193,12 @@ async function updateServerwideQuota(serverId: number, limit: number, locale: st
   const currentConfig = await getTextQuotaConfig(serverId);
 
   // 2. Update config
-  await sql`
-		UPDATE text_quota_configs
-		SET serverwide_quota = ${limit}
-		WHERE server_id = ${serverId}
-	`;
-
-  // 3. If changing from unlimited (0) to a limit, initialize text_serverwide_quotas table
-  if (currentConfig.serverwide_quota === 0 && limit > 0) {
-    await sql`
-			INSERT INTO text_serverwide_quotas (
-				server_id,
-				usage_count,
-				quota_period_start,
-				quota_period_end
-			)
-			VALUES (
-				${serverId},
-				0,
-				CURRENT_TIMESTAMP,
-				CURRENT_TIMESTAMP + (${currentConfig.serverwide_quota_resets_in} || ' days')::interval
-			)
-			ON CONFLICT (server_id)
-			DO UPDATE SET
-				usage_count = 0,
-				quota_period_start = CURRENT_TIMESTAMP,
-				quota_period_end = CURRENT_TIMESTAMP + (${currentConfig.serverwide_quota_resets_in} || ' days')::interval
-		`;
-  }
+  await updateTextServerwideQuota(
+    serverId,
+    limit,
+    currentConfig.serverwide_quota_resets_in,
+    currentConfig.serverwide_quota,
+  );
 
   // 4. Format and return success message
   const limitText = limit === 0 ? localizer(locale, "commands.server.quota.textgen.unlimited") : `${limit}`;
@@ -243,20 +218,7 @@ async function updateResetDays(serverId: number, days: number, locale: string): 
   const currentConfig = await getTextQuotaConfig(serverId);
 
   // 2. Update config
-  await sql`
-		UPDATE text_quota_configs
-		SET serverwide_quota_resets_in = ${days}
-		WHERE server_id = ${serverId}
-	`;
-
-  // 3. Update existing quota period end date if serverwide quota is active
-  if (currentConfig.serverwide_quota > 0) {
-    await sql`
-			UPDATE text_serverwide_quotas
-			SET quota_period_end = quota_period_start + (${days} || ' days')::interval
-			WHERE server_id = ${serverId}
-		`;
-  }
+  await updateTextServerwideResetDays(serverId, days, currentConfig.serverwide_quota > 0);
 
   // 4. Format and return success message
   return localizer(locale, "commands.server.quota.textgen.serverwide_quota_resets_in_success_description", {

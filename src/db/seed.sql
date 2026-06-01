@@ -1,26 +1,9 @@
--- Ensure all required columns exist in tomori_configs table
-SELECT add_column_if_not_exists('tomori_configs', 'voice_transcript_chat_mode', 'BOOLEAN', 'true');
-SELECT add_column_if_not_exists('tomori_configs', 'chatterbox_turbo_enabled', 'BOOLEAN', 'true');
-SELECT add_column_if_not_exists('tomori_configs', 'chatterbox_cfg_weight', 'REAL', '0.5');
-SELECT add_column_if_not_exists('tomori_configs', 'chatterbox_exaggeration', 'REAL', '0.5');
-SELECT add_column_if_not_exists('tomori_configs', 'other_model_codename', 'TEXT');
-SELECT add_column_if_not_exists('tomori_configs', 'other_model_capabilities', 'JSONB');
-SELECT add_column_if_not_exists('tomori_configs', 'other_model_capabilities_fetched_at', 'TIMESTAMP');
 SELECT add_column_if_not_exists('llms', 'is_scoped_registration', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('image_diffusion_models', 'is_scoped_registration', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('video_generation_models', 'is_scoped_registration', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('embedding_models', 'is_scoped_registration', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('tomori_configs', 'fallback_model_refs', 'JSONB', '''[]''::JSONB');
-SELECT add_column_if_not_exists('tomori_configs', 'autoch_persona_overrides', 'JSONB', '''[]''::JSONB');
-SELECT add_column_if_not_exists('tomori_configs', 'hide_respond_embed', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('tomori_configs', 'hide_impersonation_embeds', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('tomori_configs', 'tool_notice_hidden_keys', 'TEXT[]', 'ARRAY[]::TEXT[]');
-SELECT add_column_if_not_exists('tomori_configs', 'prompt_snapshot_enabled', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('tomori_configs', 'llm_stop_strings', 'TEXT[]', 'ARRAY[]::TEXT[]');
-SELECT add_column_if_not_exists('tomori_configs', 'llm_stop_speaker_pattern_enabled', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('tomori_configs', 'thread_creation_enabled', 'BOOLEAN', 'true');
-SELECT add_column_if_not_exists('tomori_configs', 'deliberate_tool_mode', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('tomori_configs', 'deliberate_tool_context_turns', 'INTEGER', 'NULL');
+-- Deliberate tool mode columns live in server_trigger_behavior_configs (per-domain split, May 2026).
+-- channel_memory_enabled lives in server_memory_configs (per-domain split, May 2026).
 SELECT add_column_if_not_exists('users', 'personal_deliberate_tool_mode', 'TEXT', '''follow''');
 
 -- Ensure all required columns exist in saved_provider_configs table
@@ -210,116 +193,10 @@ CREATE TRIGGER update_openrouter_video_model_registrations_timestamp
     FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
 -- Migrate legacy notice visibility booleans into the shared hidden-key registry
-UPDATE tomori_configs
-SET tool_notice_hidden_keys = ARRAY(
-  SELECT DISTINCT notice_key
-  FROM unnest(
-    COALESCE(tool_notice_hidden_keys, ARRAY[]::TEXT[]) ||
-    CASE WHEN hide_respond_embed THEN ARRAY['respond_embed'] ELSE ARRAY[]::TEXT[] END ||
-    CASE WHEN hide_impersonation_embeds THEN ARRAY['impersonation_notice'] ELSE ARRAY[]::TEXT[] END
-  ) AS notice_key
-  ORDER BY notice_key
-)
-WHERE hide_respond_embed = true
-   OR hide_impersonation_embeds = true;
 
--- Phase 3 migration: backfill polymorphic fallback_model_refs from legacy
--- fallback_llm_ids arrays while keeping the old column during rollout.
-UPDATE tomori_configs
-SET fallback_model_refs = COALESCE((
-    SELECT jsonb_agg(
-        jsonb_build_object(
-            'type', 'llm',
-            'id', fallback_entry.value::INTEGER
-        )
-        ORDER BY fallback_entry.ordinality
-    )
-    FROM jsonb_array_elements_text(
-        CASE
-            WHEN jsonb_typeof(COALESCE(tomori_configs.fallback_llm_ids, '[]'::JSONB)) = 'array'
-                THEN COALESCE(tomori_configs.fallback_llm_ids, '[]'::JSONB)
-            ELSE '[]'::JSONB
-        END
-    ) WITH ORDINALITY AS fallback_entry(value, ordinality)
-), '[]'::JSONB)
-WHERE (
-        CASE
-            WHEN jsonb_typeof(COALESCE(tomori_configs.fallback_model_refs, '[]'::JSONB)) = 'array'
-                THEN jsonb_array_length(COALESCE(tomori_configs.fallback_model_refs, '[]'::JSONB))
-            ELSE 0
-        END
-    ) = 0
-  AND (
-        CASE
-            WHEN jsonb_typeof(COALESCE(tomori_configs.fallback_llm_ids, '[]'::JSONB)) = 'array'
-                THEN jsonb_array_length(COALESCE(tomori_configs.fallback_llm_ids, '[]'::JSONB))
-            ELSE 0
-        END
-    ) > 0;
-
-UPDATE saved_provider_configs
-SET fallback_model_refs = COALESCE((
-    SELECT jsonb_agg(
-        jsonb_build_object(
-            'type', 'llm',
-            'id', fallback_entry.value::INTEGER
-        )
-        ORDER BY fallback_entry.ordinality
-    )
-    FROM jsonb_array_elements_text(
-        CASE
-            WHEN jsonb_typeof(COALESCE(saved_provider_configs.fallback_llm_ids, '[]'::JSONB)) = 'array'
-                THEN COALESCE(saved_provider_configs.fallback_llm_ids, '[]'::JSONB)
-            ELSE '[]'::JSONB
-        END
-    ) WITH ORDINALITY AS fallback_entry(value, ordinality)
-), '[]'::JSONB)
-WHERE (
-        CASE
-            WHEN jsonb_typeof(COALESCE(saved_provider_configs.fallback_model_refs, '[]'::JSONB)) = 'array'
-                THEN jsonb_array_length(COALESCE(saved_provider_configs.fallback_model_refs, '[]'::JSONB))
-            ELSE 0
-        END
-    ) = 0
-  AND (
-        CASE
-            WHEN jsonb_typeof(COALESCE(saved_provider_configs.fallback_llm_ids, '[]'::JSONB)) = 'array'
-                THEN jsonb_array_length(COALESCE(saved_provider_configs.fallback_llm_ids, '[]'::JSONB))
-            ELSE 0
-        END
-    ) > 0;
-
-UPDATE user_saved_provider_configs
-SET fallback_model_refs = COALESCE((
-    SELECT jsonb_agg(
-        jsonb_build_object(
-            'type', 'llm',
-            'id', fallback_entry.value::INTEGER
-        )
-        ORDER BY fallback_entry.ordinality
-    )
-    FROM jsonb_array_elements_text(
-        CASE
-            WHEN jsonb_typeof(COALESCE(user_saved_provider_configs.fallback_llm_ids, '[]'::JSONB)) = 'array'
-                THEN COALESCE(user_saved_provider_configs.fallback_llm_ids, '[]'::JSONB)
-            ELSE '[]'::JSONB
-        END
-    ) WITH ORDINALITY AS fallback_entry(value, ordinality)
-), '[]'::JSONB)
-WHERE (
-        CASE
-            WHEN jsonb_typeof(COALESCE(user_saved_provider_configs.fallback_model_refs, '[]'::JSONB)) = 'array'
-                THEN jsonb_array_length(COALESCE(user_saved_provider_configs.fallback_model_refs, '[]'::JSONB))
-            ELSE 0
-        END
-    ) = 0
-  AND (
-        CASE
-            WHEN jsonb_typeof(COALESCE(user_saved_provider_configs.fallback_llm_ids, '[]'::JSONB)) = 'array'
-                THEN jsonb_array_length(COALESCE(user_saved_provider_configs.fallback_llm_ids, '[]'::JSONB))
-            ELSE 0
-        END
-    ) > 0;
+-- Phase 3 backfill (fallback_llm_ids → fallback_model_refs) superseded by
+-- migration 011_drop_deprecated_provider_config_columns.sql, which finalizes the
+-- backfill and drops fallback_llm_ids. No seed-time action needed.
 
 -- Ensure all required columns exist in persona_configs table
 SELECT add_column_if_not_exists('persona_configs', 'reward_conditioning_enabled', 'BOOLEAN', 'true');
@@ -366,10 +243,15 @@ VALUES
   ('google', 'gemini-2.5-flash-preview-09-2025', false, false, false, true, true, true, true, true, true, false, true, 'Experimental model for general-purpose applications (deprecated, use gemini-2.5-flash)', '実験的な汎用アプリケーション向けモデル（非推奨、gemini-2.5-flashを使用）'),
   ('google', 'gemini-2.5-flash', false, true, false, false, true, true, true, true, true, false, true, 'Balanced model for general-purpose applications', '汎用アプリケーション向けのバランス型モデル'),
   ('google', 'gemini-2.5-pro', true, false, true, false, true, true, true, true, true, false, true, 'Most capable model for complex reasoning and analysis', '複雑な推論と分析に最も優れたモデル'),
-  ('google', 'gemini-3-flash-preview', false, false, false, false, true, true, true, true, true, false, true, 'Latest preview model with enhanced performance and capabilities', '強化されたパフォーマンスと機能を備えた最新のプレビューモデル'),
-  ('google', 'gemini-3.1-flash-lite-preview', false, false, false, false, false, true, true, true, true, false, true, 'Latest Gemini 3.1 Flash Lite preview model with full multimodal and tool capabilities', 'ツール利用を含むフルマルチモーダル機能に対応した最新のGemini 3.1 Flash Liteプレビューモデル'),
+  ('google', 'gemini-3-flash', false, false, false, false, true, true, true, true, true, false, true, 'Latest model with enhanced performance and capabilities', '強化されたパフォーマンスと機能を備えた最新のモデル'),
+  ('google', 'gemini-3-flash-preview', false, false, false, true, true, true, true, true, true, false, true, 'Latest preview model with enhanced performance and capabilities (deprecated, use gemini-3-flash)', '強化されたパフォーマンスと機能を備えた最新のプレビューモデル（非推奨、gemini-3-flashを使用）'),
+  ('google', 'gemini-3.1-flash-lite-preview', false, false, false, true, false, true, true, true, true, false, true, 'Latest Gemini 3.1 Flash Lite preview model with full multimodal and tool capabilities (deprecated, use gemini-3.5-flash)', 'ツール利用を含むフルマルチモーダル機能に対応した最新のGemini 3.1 Flash Liteプレビューモデル（非推奨、gemini-3.5-flashを使用）'),
+  ('google', 'gemini-3.1-flash-lite', false, false, false, false, false, true, true, true, true, false, true, 'Gemini 3.1 Flash Lite stable model with full multimodal and tool capabilities', 'ツール利用を含むフルマルチモーダル機能に対応したGemini 3.1 Flash Lite安定版モデル'),
+  ('google', 'gemini-3.5-flash', false, false, false, false, false, true, true, true, true, false, true, 'Fast and efficient Gemini 3.5 Flash model for general-purpose applications', '汎用アプリケーション向けの高速で効率的なGemini 3.5 Flashモデル'),
+  ('google', 'gemini-3.5-pro', false, false, false, false, false, true, true, true, true, false, true, 'Advanced Gemini 3.5 Pro model for complex reasoning and analysis', '複雑な推論と分析向けの高度なGemini 3.5 Proモデル'),
   ('google', 'gemini-3-pro-preview', false, false, true, true, false, true, true, true, true, false, true, 'Preview model focused on advanced reasoning and analysis (deprecated, use gemini-3.1-pro-preview)', '高度な推論と分析に特化したプレビューモデル（非推奨、gemini-3.1-pro-preview を使用）'),
-  ('google', 'gemini-3.1-pro-preview', false, false, true, false, false, true, true, true, true, false, true, 'Latest Gemini 3.1 Pro preview model focused on advanced reasoning and analysis', '高度な推論と分析に特化した最新のGemini 3.1 Proプレビューモデル'),
+  ('google', 'gemini-3.1-pro', false, false, true, false, false, true, true, true, true, false, true, 'Latest Gemini 3.1 Pro model focused on advanced reasoning and analysis', '高度な推論と分析に特化した最新のGemini 3.1 Proモデル'),
+  ('google', 'gemini-3.1-pro-preview', false, false, true, true, false, true, true, true, true, false, true, 'Latest Gemini 3.1 Pro preview model focused on advanced reasoning and analysis (deprecated, use gemini-3.1-pro)', '高度な推論と分析に特化した最新のGemini 3.1 Proプレビューモデル（非推奨、gemini-3.1-proを使用）'),
   ('google', 'gemma-4-31b-it', false, false, false, false, false, true, true, true, false, false, true, 'Google Gemma 4.31B IT model with tool use, image understanding, video understanding, and structured output support', 'ツール利用・画像理解・動画理解・構造化出力に対応するGoogleのGemma 4.31B ITモデル'),
   ('google', 'gemma-4-26b-a4b-it', false, false, false, false, false, true, true, true, false, false, true, 'Google Gemma 4 26B A4B IT MoE model with tool use, image understanding, video understanding, and structured output support', 'ツール利用・画像理解・動画理解・構造化出力に対応するGoogleのGemma 4 26B A4B IT MoEモデル'),
   ('google', 'gemma-3-27b-it', false, false, false, true, true, false, true, false, false, false, false, 'Instruction-tuned Gemma model with image understanding', '画像理解に対応した指示調整済みGemmaモデル'),
@@ -377,20 +259,29 @@ VALUES
   ('vertex', 'gemini-2.5-flash-lite', false, false, false, false, false, true, true, true, true, false, true, 'Lightweight version optimized for speed and efficiency via Vertex AI', 'Vertex AI経由の速度と効率を最適化した軽量版モデル'),
   ('vertex', 'gemini-2.5-flash', false, true, false, false, false, true, true, true, true, false, true, 'Balanced model for general-purpose applications via Vertex AI', 'Vertex AI経由の汎用アプリケーション向けバランス型モデル'),
   ('vertex', 'gemini-2.5-pro', true, false, true, false, false, true, true, true, true, false, true, 'Most capable model for complex reasoning and analysis via Vertex AI', 'Vertex AI経由の複雑な推論と分析に最も優れたモデル'),
-  ('vertex', 'gemini-3-flash-preview', false, false, false, false, false, true, true, true, true, false, true, 'Latest preview model with enhanced performance and capabilities via Vertex AI', 'Vertex AI経由の強化されたパフォーマンスと機能を備えた最新のプレビューモデル'),
-  ('vertex', 'gemini-3.1-flash-lite-preview', false, false, false, false, false, true, true, true, true, false, true, 'Latest Gemini 3.1 Flash Lite preview model with full multimodal and tool capabilities via Vertex AI', 'Vertex AI経由のツール利用を含むフルマルチモーダル機能に対応した最新のGemini 3.1 Flash Liteプレビューモデル'),
-  ('vertex', 'gemini-3.1-pro-preview', false, false, true, false, false, true, true, true, true, false, true, 'Latest Gemini 3.1 Pro preview model focused on advanced reasoning and analysis via Vertex AI', 'Vertex AI経由の高度な推論と分析に特化した最新のGemini 3.1 Proプレビューモデル'),
+  ('vertex', 'gemini-3-flash', false, false, false, false, false, true, true, true, true, false, true, 'Latest model with enhanced performance and capabilities via Vertex AI', 'Vertex AI経由の強化されたパフォーマンスと機能を備えた最新のモデル'),
+  ('vertex', 'gemini-3-flash-preview', false, false, false, true, false, true, true, true, true, false, true, 'Latest preview model with enhanced performance and capabilities via Vertex AI (deprecated, use gemini-3-flash)', 'Vertex AI経由の強化されたパフォーマンスと機能を備えた最新のプレビューモデル（非推奨、gemini-3-flashを使用）'),
+  ('vertex', 'gemini-3.1-flash-lite-preview', false, false, false, true, false, true, true, true, true, false, true, 'Latest Gemini 3.1 Flash Lite preview model with full multimodal and tool capabilities via Vertex AI (deprecated, use gemini-3.5-flash)', 'Vertex AI経由のツール利用を含むフルマルチモーダル機能に対応した最新のGemini 3.1 Flash Liteプレビューモデル（非推奨、gemini-3.5-flashを使用）'),
+  ('vertex', 'gemini-3.1-flash-lite', false, false, false, false, false, true, true, true, true, false, true, 'Gemini 3.1 Flash Lite stable model with full multimodal and tool capabilities via Vertex AI', 'Vertex AI経由のツール利用を含むフルマルチモーダル機能に対応したGemini 3.1 Flash Lite安定版モデル'),
+  ('vertex', 'gemini-3.5-flash', false, false, false, false, false, true, true, true, true, false, true, 'Fast and efficient Gemini 3.5 Flash model for general-purpose applications via Vertex AI', 'Vertex AI経由の汎用アプリケーション向けの高速で効率的なGemini 3.5 Flashモデル'),
+  ('vertex', 'gemini-3.5-pro', false, false, false, false, false, true, true, true, true, false, true, 'Advanced Gemini 3.5 Pro model for complex reasoning and analysis via Vertex AI', 'Vertex AI経由の複雑な推論と分析向けの高度なGemini 3.5 Proモデル'),
+  ('vertex', 'gemini-3.1-pro', false, false, true, false, false, true, true, true, true, false, true, 'Latest Gemini 3.1 Pro model focused on advanced reasoning and analysis via Vertex AI', 'Vertex AI経由の高度な推論と分析に特化した最新のGemini 3.1 Proモデル'),
+  ('vertex', 'gemini-3.1-pro-preview', false, false, true, true, false, true, true, true, true, false, true, 'Latest Gemini 3.1 Pro preview model focused on advanced reasoning and analysis via Vertex AI (deprecated, use gemini-3.1-pro)', 'Vertex AI経由の高度な推論と分析に特化した最新のGemini 3.1 Proプレビューモデル（非推奨、gemini-3.1-proを使用）'),
   ('vertex', 'gemma-4-31b-it', false, false, false, false, false, true, true, false, false, false, true, 'Vision-capable Vertex-hosted Gemma 4.31B IT model with tool use and structured output (video disabled)', '動画非対応ながらツール利用と構造化出力をサポートするVertex AI向けGemma 4.31B ITモデル'),
   ('vertex', 'gemma-3-27b-it', false, false, false, true, false, false, true, false, false, false, false, 'Instruction-tuned Gemma model with image understanding via Vertex AI', 'Vertex AI経由の画像理解に対応した指示調整済みGemmaモデル'),
   -- Vertex AI Express Models (Gemini-only Express Mode subset; no video, YouTube, or embeddings)
   ('vertexexpress', 'gemini-2.0-flash-001', false, false, false, false, false, true, true, false, false, false, true, 'Gemini 2.0 Flash model available through Vertex AI Express', 'Vertex AI Expressで利用できるGemini 2.0 Flashモデル'),
   ('vertexexpress', 'gemini-2.0-flash-lite-001', false, false, false, false, false, true, true, false, false, false, true, 'Gemini 2.0 Flash Lite model available through Vertex AI Express', 'Vertex AI Expressで利用できるGemini 2.0 Flash Liteモデル'),
-  ('vertexexpress', 'gemini-2.5-flash-lite-preview-09-2025', false, false, false, false, false, true, true, false, false, false, true, 'Preview Gemini 2.5 Flash Lite model available through Vertex AI Express', 'Vertex AI Expressで利用できるGemini 2.5 Flash Liteプレビューモデル'),
+  ('vertexexpress', 'gemini-2.5-flash-lite-09-2025', false, false, false, false, false, true, true, false, false, false, true, 'Gemini 2.5 Flash Lite model available through Vertex AI Express', 'Vertex AI Expressで利用できるGemini 2.5 Flash Liteモデル'),
+  ('vertexexpress', 'gemini-2.5-flash-lite-preview-09-2025', false, false, false, true, false, true, true, false, false, false, true, 'Preview Gemini 2.5 Flash Lite model available through Vertex AI Express (deprecated, use gemini-2.5-flash-lite-09-2025)', 'Vertex AI Expressで利用できるGemini 2.5 Flash Liteプレビューモデル（非推奨、gemini-2.5-flash-lite-09-2025を使用）'),
   ('vertexexpress', 'gemini-2.5-flash-lite', false, false, false, false, false, true, true, false, false, false, true, 'Lightweight Gemini 2.5 Flash Lite model via Vertex AI Express', 'Vertex AI Express経由の軽量Gemini 2.5 Flash Liteモデル'),
   ('vertexexpress', 'gemini-2.5-flash', false, true, false, false, false, true, true, false, false, false, true, 'Balanced Gemini 2.5 Flash model via Vertex AI Express', 'Vertex AI Express経由のバランス型Gemini 2.5 Flashモデル'),
   ('vertexexpress', 'gemini-2.5-pro', true, false, true, false, false, true, true, false, false, false, true, 'Most capable Gemini 2.5 Pro model via Vertex AI Express', 'Vertex AI Express経由で利用できる最も高性能なGemini 2.5 Proモデル'),
-  ('vertexexpress', 'gemini-3-flash-preview', false, false, false, false, false, true, true, false, false, false, true, 'Preview Gemini 3 Flash model via Vertex AI Express', 'Vertex AI Express経由で利用できるGemini 3 Flashプレビューモデル'),
-  ('vertexexpress', 'gemini-3-pro-preview', false, false, true, false, false, true, true, false, false, false, true, 'Preview Gemini 3 Pro model focused on reasoning via Vertex AI Express', 'Vertex AI Express経由の推論特化Gemini 3 Proプレビューモデル'),
+  ('vertexexpress', 'gemini-3-flash', false, false, false, false, false, true, true, false, false, false, true, 'Gemini 3 Flash model via Vertex AI Express', 'Vertex AI Express経由で利用できるGemini 3 Flashモデル'),
+  ('vertexexpress', 'gemini-3-flash-preview', false, false, false, true, false, true, true, false, false, false, true, 'Preview Gemini 3 Flash model via Vertex AI Express (deprecated, use gemini-3-flash)', 'Vertex AI Express経由で利用できるGemini 3 Flashプレビューモデル（非推奨、gemini-3-flashを使用）'),
+  ('vertexexpress', 'gemini-3-pro', false, false, true, false, false, true, true, false, false, false, true, 'Gemini 3 Pro model focused on reasoning via Vertex AI Express', 'Vertex AI Express経由の推論特化Gemini 3 Proモデル'),
+  ('vertexexpress', 'gemini-3-pro-preview', false, false, true, true, false, true, true, false, false, false, true, 'Preview Gemini 3 Pro model focused on reasoning via Vertex AI Express (deprecated, use gemini-3-pro)', 'Vertex AI Express経由の推論特化Gemini 3 Proプレビューモデル（非推奨、gemini-3-proを使用）'),
+  ('vertexexpress', 'gemini-3.1-pro', false, false, true, true, false, true, true, false, false, false, true, 'Gemini 3.1 Pro model via Vertex AI Express (deprecated, use gemini-3.1-pro-preview)', 'Vertex AI Express経由のGemini 3.1 Proモデル（非推奨、gemini-3.1-pro-previewを使用）'),
   ('vertexexpress', 'gemini-3.1-pro-preview', false, false, true, false, false, true, true, false, false, false, true, 'Latest Gemini 3.1 Pro preview model via Vertex AI Express', 'Vertex AI Express経由の最新Gemini 3.1 Proプレビューモデル'),
   -- NovelAI Models (text-only, no vision or structured output capabilities)
   ('novelai', 'glm-4-6', true, true, false, false, false, true, false, false, false, false, false, 'Latest NovelAI roleplay model with enhanced creativity and character consistency', '創造性とキャラクター一貫性を強化した最新のNovelAIロールプレイモデル'),
@@ -411,7 +302,7 @@ VALUES
   ('openrouter', 'tngtech/deepseek-r1t2-chimera', false, false, true, true, false, true, false, false, false, true, true, 'Advanced Chimera DeepSeek model that is great at role-playing', 'ロールプレイに優れた高度なChimera DeepSeekモデル'),
   ('openrouter', 'x-ai/grok-4-fast', false, false, true, true, false, true, true, false, false, false, true, 'Fast and efficient general-purpose model', '高速かつ効率的な汎用モデル'),
   ('openrouter', 'x-ai/grok-4.1-fast', false, false, true, false, false, true, true, false, false, false, true, 'Latest fast and efficient general-purpose model', '高速かつ効率的な汎用モデル'),
-  ('openrouter', 'google/gemini-3-flash-preview', false, false, false, false, false, true, true, true, true, false, true, 'Latest Gemini 3 Flash preview via OpenRouter with tool use, image understanding, and YouTube video support', 'OpenRouter経由でツール利用・画像理解・YouTube動画処理に対応した最新のGemini 3 Flashプレビュー'),
+  ('openrouter', 'google/gemini-3-flash-preview', false, false, false, true, false, true, true, true, true, false, true, 'Gemini 3 Flash preview via OpenRouter with tool use, image understanding, and YouTube video support (deprecated, use google/gemini-3.5-flash)', 'OpenRouter経由でツール利用・画像理解・YouTube動画処理に対応したGemini 3 Flashプレビュー（非推奨、google/gemini-3.5-flashを使用）'),
   ('openrouter', 'google/gemini-3.1-flash-lite-preview', false, false, false, false, false, true, true, true, true, false, true, 'Latest Gemini 3.1 Flash Lite preview via OpenRouter with full multimodal, tool, and YouTube video capabilities', 'OpenRouter経由でフルマルチモーダル機能・ツール利用・YouTube動画処理に対応した最新のGemini 3.1 Flash Liteプレビューモデル'),
   ('openrouter', 'google/gemini-3-pro-preview', false, false, false, true, false, true, true, true, true, false, true, 'Gemini 3 Pro preview via OpenRouter with tool, image, video, and YouTube support (deprecated, use google/gemini-3.1-pro-preview)', 'OpenRouter経由でツール利用・画像理解・動画・YouTube処理に対応したGemini 3 Proプレビュー（非推奨、google/gemini-3.1-pro-preview を使用）'),
   ('openrouter', 'google/gemini-3.1-pro-preview', false, false, false, false, false, true, true, true, true, false, true, 'Latest Gemini 3.1 Pro preview via OpenRouter with tool, image, video, and YouTube support', 'OpenRouter経由でツール利用・画像理解・動画・YouTube処理に対応した最新のGemini 3.1 Proプレビュー'),
@@ -501,41 +392,6 @@ ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET
   supports_structoutput = EXCLUDED.supports_structoutput,
   updated_at = CURRENT_TIMESTAMP;
 
--- Rename account_setting_* columns in tomori_configs to other_model_* (idempotent).
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tomori_configs' AND column_name = 'account_setting_actual_model') THEN
-        ALTER TABLE tomori_configs RENAME COLUMN account_setting_actual_model TO other_model_codename;
-    END IF;
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tomori_configs' AND column_name = 'account_setting_capabilities') THEN
-        ALTER TABLE tomori_configs RENAME COLUMN account_setting_capabilities TO other_model_capabilities;
-    END IF;
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tomori_configs' AND column_name = 'account_setting_capabilities_fetched_at') THEN
-        ALTER TABLE tomori_configs RENAME COLUMN account_setting_capabilities_fetched_at TO other_model_capabilities_fetched_at;
-    END IF;
-EXCEPTION
-    WHEN OTHERS THEN
-        RAISE NOTICE 'tomori_configs column rename skipped: %', SQLERRM;
-END $$;
-
--- Rename pin_message_enabled to manage_message_enabled in tomori_configs (idempotent).
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tomori_configs' AND column_name = 'pin_message_enabled') THEN
-        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tomori_configs' AND column_name = 'manage_message_enabled') THEN
-            UPDATE tomori_configs
-            SET manage_message_enabled = COALESCE(pin_message_enabled, manage_message_enabled);
-
-            ALTER TABLE tomori_configs DROP COLUMN pin_message_enabled;
-        ELSE
-            ALTER TABLE tomori_configs RENAME COLUMN pin_message_enabled TO manage_message_enabled;
-        END IF;
-    END IF;
-EXCEPTION
-    WHEN OTHERS THEN
-        RAISE NOTICE 'tomori_configs manage_message_enabled rename skipped: %', SQLERRM;
-END $$;
-
 -- Migrate previously-saved legacy Z.ai Coding snapshots to the renamed coding provider.
 -- This must only touch old plain-GLM snapshots. New general Z.ai snapshots use
 -- prefixed `zai/...` model rows and should remain mapped to `zai`.
@@ -563,45 +419,6 @@ BEGIN
               WHERE dm.diffusion_model_id = spc.diffusion_model_id
                 AND dm.provider = 'zaicoding'
           )
-          OR EXISTS (
-              SELECT 1
-              FROM jsonb_array_elements_text(
-                  CASE
-                      WHEN jsonb_typeof(COALESCE(spc.fallback_llm_ids, '[]'::JSONB)) = 'array'
-                          THEN COALESCE(spc.fallback_llm_ids, '[]'::JSONB)
-                      ELSE '[]'::JSONB
-                  END
-              ) AS fallback(llm_id_text)
-              JOIN llms l
-                ON l.llm_id = fallback.llm_id_text::INTEGER
-              WHERE l.llm_provider = 'zaicoding'
-          )
-          OR EXISTS (
-              SELECT 1
-              FROM jsonb_array_elements(
-                  CASE
-                      WHEN jsonb_typeof(COALESCE(spc.channel_llm_overrides, '[]'::JSONB)) = 'array'
-                          THEN COALESCE(spc.channel_llm_overrides, '[]'::JSONB)
-                      ELSE '[]'::JSONB
-                  END
-              ) AS override(entry)
-              JOIN llms l
-                ON l.llm_id = (override.entry ->> 'llm_id')::INTEGER
-              WHERE l.llm_provider = 'zaicoding'
-          )
-          OR EXISTS (
-              SELECT 1
-              FROM jsonb_array_elements(
-                  CASE
-                      WHEN jsonb_typeof(COALESCE(spc.persona_llm_overrides, '[]'::JSONB)) = 'array'
-                          THEN COALESCE(spc.persona_llm_overrides, '[]'::JSONB)
-                      ELSE '[]'::JSONB
-                  END
-              ) AS override(entry)
-              JOIN llms l
-                ON l.llm_id = (override.entry ->> 'llm_id')::INTEGER
-              WHERE l.llm_provider = 'zaicoding'
-          )
       );
 EXCEPTION
     WHEN undefined_table THEN
@@ -611,81 +428,6 @@ END $$;
 -- Phase 1 provider rehaul: promote saved_provider_configs to the canonical
 -- provider-credentials vault by backfilling active provider rows and relevant
 -- optional-key providers on every startup until production data is confirmed.
-DO $$
-DECLARE
-    inserted_count INTEGER := 0;
-BEGIN
-    INSERT INTO saved_provider_configs (
-        server_id,
-        provider,
-        api_key,
-        key_version,
-        llm_id,
-        diffusion_model_id,
-        embedding_model_id,
-        video_model_id,
-        nai_diffusion_model_id,
-        vision_llm_id,
-        nai_preset_name,
-        custom_endpoint_url,
-        custom_model_name,
-        custom_num_ctx,
-        thinking_level,
-        fallback_llm_ids,
-        llm_temperature,
-        llm_top_p,
-        llm_top_k,
-        llm_frequency_penalty,
-        llm_presence_penalty,
-        llm_min_p,
-        llm_logit_biases,
-        llm_disabled_params
-    )
-    SELECT
-        tc.server_id,
-        LOWER(l.llm_provider),
-        tc.api_key,
-        COALESCE(tc.key_version, 1),
-        tc.llm_id,
-        tc.diffusion_model_id,
-        tc.embedding_model_id,
-        tc.video_model_id,
-        tc.nai_diffusion_model_id,
-        tc.vision_llm_id,
-        tc.nai_preset_name,
-        tc.custom_endpoint_url,
-        tc.custom_model_name,
-        tc.custom_num_ctx,
-        tc.thinking_level,
-        COALESCE(tc.fallback_llm_ids, '[]'::JSONB),
-        tc.llm_temperature,
-        tc.llm_top_p,
-        tc.llm_top_k,
-        tc.llm_frequency_penalty,
-        tc.llm_presence_penalty,
-        tc.llm_min_p,
-        COALESCE(tc.llm_logit_biases, '[]'::JSONB),
-        COALESCE(tc.llm_disabled_params, ARRAY[]::TEXT[])
-    FROM tomori_configs tc
-    JOIN llms l ON l.llm_id = tc.llm_id
-    WHERE tc.server_id IS NOT NULL
-      AND tc.api_key IS NOT NULL
-      AND NOT EXISTS (
-          SELECT 1
-          FROM saved_provider_configs spc
-          WHERE spc.server_id = tc.server_id
-            AND spc.provider = LOWER(l.llm_provider)
-      )
-    ON CONFLICT (server_id, provider) DO NOTHING;
-
-    GET DIAGNOSTICS inserted_count = ROW_COUNT;
-    IF inserted_count > 0 THEN
-        RAISE NOTICE 'Phase 1 backfill inserted % active-provider saved config row(s)', inserted_count;
-    END IF;
-EXCEPTION
-    WHEN undefined_table THEN
-        RAISE NOTICE 'Phase 1 active-provider backfill skipped: required table missing';
-END $$;
 
 DO $$
 DECLARE
@@ -713,7 +455,6 @@ BEGIN
         vision_llm_id,
         nai_preset_name,
         thinking_level,
-        fallback_llm_ids,
         llm_logit_biases,
         llm_disabled_params
     )
@@ -737,7 +478,6 @@ BEGIN
         NULL,
         NULL,
         'auto',
-        '[]'::JSONB,
         '[]'::JSONB,
         ARRAY[]::TEXT[]
     FROM opt_api_keys oak
@@ -777,7 +517,6 @@ BEGIN
         vision_llm_id,
         nai_preset_name,
         thinking_level,
-        fallback_llm_ids,
         llm_logit_biases,
         llm_disabled_params
     )
@@ -831,7 +570,6 @@ BEGIN
         NULL,
         'auto',
         '[]'::JSONB,
-        '[]'::JSONB,
         ARRAY[]::TEXT[]
     FROM opt_api_keys oak
     WHERE oak.service_name = 'google'
@@ -850,30 +588,6 @@ BEGIN
 EXCEPTION
     WHEN undefined_table THEN
         RAISE NOTICE 'Phase 1 Google opt-key backfill skipped: required table missing';
-END $$;
-
-DO $$
-DECLARE
-    updated_count INTEGER := 0;
-BEGIN
-    UPDATE tomori_configs tc
-    SET diffusion_model_id = NULL
-    WHERE COALESCE(tc.nai_exclusive_imggen, false) = true
-      AND tc.diffusion_model_id IS NOT NULL
-      AND EXISTS (
-          SELECT 1
-          FROM saved_provider_configs spc
-          WHERE spc.server_id = tc.server_id
-            AND spc.provider = 'novelai'
-      );
-
-    GET DIAGNOSTICS updated_count = ROW_COUNT;
-    IF updated_count > 0 THEN
-        RAISE NOTICE 'Phase 1 backfill retired nai_exclusive_imggen for % config row(s)', updated_count;
-    END IF;
-EXCEPTION
-    WHEN undefined_table THEN
-        RAISE NOTICE 'Phase 1 nai_exclusive_imggen retirement skipped: required table missing';
 END $$;
 
 -- Ensure all required columns exist in image_diffusion_models table
@@ -909,61 +623,9 @@ END $$;
 
 -- PART 0.5: Remove legacy Z.ai Coding image generation model now that the coding endpoint
 -- is no longer treated as a native image generation provider.
-DO $$
-DECLARE
-    legacy_zaicoding_diffusion_model_id INTEGER;
-BEGIN
-    SELECT diffusion_model_id
-    INTO legacy_zaicoding_diffusion_model_id
-    FROM image_diffusion_models
-    WHERE provider = 'zaicoding'
-      AND codename = 'glm-image'
-    LIMIT 1;
-
-    IF legacy_zaicoding_diffusion_model_id IS NULL THEN
-        RETURN;
-    END IF;
-
-    UPDATE tomori_configs
-    SET diffusion_model_id = NULL
-    WHERE diffusion_model_id = legacy_zaicoding_diffusion_model_id;
-
-    UPDATE saved_provider_configs
-    SET diffusion_model_id = NULL
-    WHERE diffusion_model_id = legacy_zaicoding_diffusion_model_id;
-
-    UPDATE saved_provider_configs
-    SET nai_diffusion_model_id = NULL
-    WHERE nai_diffusion_model_id = legacy_zaicoding_diffusion_model_id;
-
-    DELETE FROM image_diffusion_models
-    WHERE diffusion_model_id = legacy_zaicoding_diffusion_model_id;
-EXCEPTION
-    WHEN undefined_table THEN
-        RAISE NOTICE 'Table not found during legacy Z.ai Coding image cleanup, skipping';
-    WHEN undefined_column THEN
-        RAISE NOTICE 'Column not found during legacy Z.ai Coding image cleanup, skipping';
-END $$;
 
 -- PART 1: Drop FK constraint and clean up orphaned references BEFORE inserting diffusion models
 -- This allows the INSERT to succeed, then we recreate the constraint after
-DO $$
-BEGIN
-    -- Drop existing constraint (may be pointing to wrong table or blocking updates)
-    ALTER TABLE tomori_configs DROP CONSTRAINT IF EXISTS tomori_configs_diffusion_model_id_fkey;
-
-    -- Clean up orphaned diffusion_model_id values that don't exist in image_diffusion_models
-    -- Set them to NULL so the FK constraint can be recreated successfully
-    UPDATE tomori_configs
-    SET diffusion_model_id = NULL
-    WHERE diffusion_model_id IS NOT NULL
-      AND diffusion_model_id NOT IN (SELECT diffusion_model_id FROM image_diffusion_models);
-EXCEPTION
-    WHEN undefined_table THEN
-        RAISE NOTICE 'Table not found during cleanup, skipping';
-    WHEN undefined_column THEN
-        RAISE NOTICE 'Column not found during cleanup, skipping';
-END $$;
 
 -- Insert Image Diffusion Models with conflict resolution
 INSERT INTO image_diffusion_models (provider, codename, is_default, is_deprecated, is_free, is_uncensored, model_description, ja_description)
@@ -972,42 +634,66 @@ VALUES
   ('google', 'gemini-2.5-flash-image', true, false, false, false,
    'Fast and efficient image generation model with balanced quality and speed',
    '品質と速度のバランスが取れた高速で効率的な画像生成モデル'),
-  ('google', 'gemini-3.1-flash-image-preview', false, false, false, false,
-   'Latest fast image generation preview model with Gemini 3.1 Flash',
-   'Gemini 3.1 Flashによる最新の高速画像生成プレビューモデル'),
-  ('google', 'gemini-3-pro-image-preview', false, false, false, false,
+  ('google', 'gemini-3.1-flash-image', false, false, false, false,
+   'Latest fast image generation model with Gemini 3.1 Flash',
+   'Gemini 3.1 Flashによる最新の高速画像生成モデル'),
+  ('google', 'gemini-3.1-flash-image-preview', false, true, false, false,
+   'Latest fast image generation preview model with Gemini 3.1 Flash (deprecated, use gemini-3.1-flash-image)',
+   'Gemini 3.1 Flashによる最新の高速画像生成プレビューモデル（非推奨、gemini-3.1-flash-imageを使用）'),
+  ('google', 'gemini-3-pro-image', false, false, false, false,
    'Advanced image generation model with higher resolution support (1K/2K/4K) and enhanced quality',
    '高解像度対応（1K/2K/4K）と強化された品質を備えた高度な画像生成モデル'),
+  ('google', 'gemini-3-pro-image-preview', false, true, false, false,
+   'Advanced image generation model with higher resolution support (1K/2K/4K) and enhanced quality (deprecated, use gemini-3-pro-image)',
+   '高解像度対応（1K/2K/4K）と強化された品質を備えた高度な画像生成モデル（非推奨、gemini-3-pro-imageを使用）'),
   -- OpenRouter Gemini Image Generation Models (via OpenRouter API)
   ('openrouter', 'google/gemini-2.5-flash-image', true, false, false, false,
    'Fast and efficient image generation via OpenRouter with balanced quality and speed',
    'OpenRouter経由の品質と速度のバランスが取れた高速で効率的な画像生成'),
-  ('openrouter', 'google/gemini-3.1-flash-image-preview', false, false, false, false,
-   'Latest fast image generation via OpenRouter with Gemini 3.1 Flash Image Preview',
-   'Gemini 3.1 Flash Image PreviewによるOpenRouter経由の最新高速画像生成'),
-  ('openrouter', 'google/gemini-3-pro-image-preview', false, false, false, false,
+  ('openrouter', 'google/gemini-3.1-flash-image', false, false, false, false,
+   'Latest fast image generation via OpenRouter with Gemini 3.1 Flash Image',
+   'Gemini 3.1 Flash ImageによるOpenRouter経由の最新高速画像生成'),
+  ('openrouter', 'google/gemini-3.1-flash-image-preview', false, true, false, false,
+   'Latest fast image generation via OpenRouter with Gemini 3.1 Flash Image Preview (deprecated, use google/gemini-3.1-flash-image)',
+   'Gemini 3.1 Flash Image PreviewによるOpenRouter経由の最新高速画像生成（非推奨、google/gemini-3.1-flash-imageを使用）'),
+  ('openrouter', 'google/gemini-3-pro-image', false, false, false, false,
    'Advanced image generation via OpenRouter with enhanced quality and resolution options',
    'OpenRouter経由の強化された品質と解像度オプションを備えた高度な画像生成'),
+  ('openrouter', 'google/gemini-3-pro-image-preview', false, true, false, false,
+   'Advanced image generation via OpenRouter with enhanced quality and resolution options (deprecated, use google/gemini-3-pro-image)',
+   'OpenRouter経由の強化された品質と解像度オプションを備えた高度な画像生成（非推奨、google/gemini-3-pro-imageを使用）'),
   -- Vertex AI Gemini Image Generation Models
   ('vertex', 'gemini-2.5-flash-image', true, false, false, false,
    'Fast and efficient Gemini image generation via Vertex AI with balanced quality and speed',
    'Vertex AI経由で利用する、品質と速度のバランスが取れた高速Gemini画像生成モデル'),
-  ('vertex', 'gemini-3.1-flash-image-preview', false, false, false, false,
-   'Latest fast image generation via Vertex AI with Gemini 3.1 Flash Image Preview',
-   'Gemini 3.1 Flash Image PreviewによるVertex AI経由の最新高速画像生成'),
-  ('vertex', 'gemini-3-pro-image-preview', false, false, false, false,
+  ('vertex', 'gemini-3.1-flash-image', false, false, false, false,
+   'Latest fast image generation via Vertex AI with Gemini 3.1 Flash Image',
+   'Gemini 3.1 Flash ImageによるVertex AI経由の最新高速画像生成'),
+  ('vertex', 'gemini-3.1-flash-image-preview', false, true, false, false,
+   'Latest fast image generation via Vertex AI with Gemini 3.1 Flash Image Preview (deprecated, use gemini-3.1-flash-image)',
+   'Gemini 3.1 Flash Image PreviewによるVertex AI経由の最新高速画像生成（非推奨、gemini-3.1-flash-imageを使用）'),
+  ('vertex', 'gemini-3-pro-image', false, false, false, false,
    'Advanced image generation via Vertex AI with enhanced quality and resolution options',
    'Vertex AI経由の強化された品質と解像度オプションを備えた高度な画像生成'),
+  ('vertex', 'gemini-3-pro-image-preview', false, true, false, false,
+   'Advanced image generation via Vertex AI with enhanced quality and resolution options (deprecated, use gemini-3-pro-image)',
+   'Vertex AI経由の強化された品質と解像度オプションを備えた高度な画像生成（非推奨、gemini-3-pro-imageを使用）'),
   -- Vertex AI Express Gemini Image Generation Models
   ('vertexexpress', 'gemini-2.5-flash-image', true, false, false, false,
    'Fast and efficient Gemini image generation via Vertex AI Express with balanced quality and speed',
    'Vertex AI Express経由で利用する、品質と速度のバランスが取れた高速Gemini画像生成モデル'),
-  ('vertexexpress', 'gemini-3.1-flash-image-preview', false, false, false, false,
-   'Latest fast image generation via Vertex AI Express with Gemini 3.1 Flash Image Preview',
-   'Gemini 3.1 Flash Image PreviewによるVertex AI Express経由の最新高速画像生成'),
-  ('vertexexpress', 'gemini-3-pro-image-preview', false, false, false, false,
+  ('vertexexpress', 'gemini-3.1-flash-image', false, false, false, false,
+   'Latest fast image generation via Vertex AI Express with Gemini 3.1 Flash Image',
+   'Gemini 3.1 Flash ImageによるVertex AI Express経由の最新高速画像生成'),
+  ('vertexexpress', 'gemini-3.1-flash-image-preview', false, true, false, false,
+   'Latest fast image generation via Vertex AI Express with Gemini 3.1 Flash Image Preview (deprecated, use gemini-3.1-flash-image)',
+   'Gemini 3.1 Flash Image PreviewによるVertex AI Express経由の最新高速画像生成（非推奨、gemini-3.1-flash-imageを使用）'),
+  ('vertexexpress', 'gemini-3-pro-image', false, false, false, false,
    'Advanced image generation via Vertex AI Express with enhanced quality and resolution options',
    'Vertex AI Express経由の強化された品質と解像度オプションを備えた高度な画像生成'),
+  ('vertexexpress', 'gemini-3-pro-image-preview', false, true, false, false,
+   'Advanced image generation via Vertex AI Express with enhanced quality and resolution options (deprecated, use gemini-3-pro-image)',
+   'Vertex AI Express経由の強化された品質と解像度オプションを備えた高度な画像生成（非推奨、gemini-3-pro-imageを使用）'),
   ('openrouter', 'openai/gpt-5-image-mini', false, false, false, false,
    'Lightweight OpenAI image generation model via OpenRouter',
    'OpenRouter経由の軽量なOpenAI画像生成モデル'),
@@ -1045,25 +731,6 @@ ON CONFLICT (provider, codename) DO UPDATE SET
 
 -- PART 2: Recreate FK constraint AFTER diffusion models are inserted
 -- Now that valid IDs exist in image_diffusion_models, the constraint can be created successfully
-DO $$
-BEGIN
-    -- Only add if constraint doesn't exist (it was dropped in Part 1)
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conname = 'tomori_configs_diffusion_model_id_fkey'
-    ) THEN
-        ALTER TABLE tomori_configs
-        ADD CONSTRAINT tomori_configs_diffusion_model_id_fkey
-        FOREIGN KEY (diffusion_model_id)
-        REFERENCES image_diffusion_models(diffusion_model_id)
-        ON DELETE SET NULL;
-    END IF;
-EXCEPTION
-    WHEN undefined_table THEN
-        RAISE NOTICE 'Table not found during FK creation, skipping';
-    WHEN undefined_column THEN
-        RAISE NOTICE 'Column not found during FK creation, skipping';
-END $$;
 
 -- ============================================================================
 -- VIDEO GENERATION MODELS (April 2026)
@@ -1118,22 +785,6 @@ SELECT add_column_if_not_exists('embedding_models', 'is_default', 'BOOLEAN', 'fa
 SELECT add_column_if_not_exists('embedding_models', 'is_deprecated', 'BOOLEAN', 'false');
 
 -- PART 1: Drop FK constraint and clean up orphaned references BEFORE inserting embedding models
-DO $$
-BEGIN
-    -- Drop existing constraint
-    ALTER TABLE tomori_configs DROP CONSTRAINT IF EXISTS tomori_configs_embedding_model_id_fkey;
-
-    -- Clean up orphaned embedding_model_id values that don't exist in embedding_models
-    UPDATE tomori_configs
-    SET embedding_model_id = NULL
-    WHERE embedding_model_id IS NOT NULL
-      AND embedding_model_id NOT IN (SELECT embedding_model_id FROM embedding_models);
-EXCEPTION
-    WHEN undefined_table THEN
-        RAISE NOTICE 'Table not found during cleanup, skipping';
-    WHEN undefined_column THEN
-        RAISE NOTICE 'Column not found during cleanup, skipping';
-END $$;
 
 -- Migration: rename Gemini embedding preview codenames to stable names in place when possible.
 -- This preserves existing embedding_model_id references on older installs.
@@ -1240,135 +891,21 @@ ON CONFLICT (provider, codename) DO UPDATE SET
   updated_at = CURRENT_TIMESTAMP;
 
 -- Migration cleanup: if preview rows and stable rows both exist, repoint references to the stable row and remove the preview row.
-DO $$
-DECLARE
-  migration_pair RECORD;
-BEGIN
-  FOR migration_pair IN
-    SELECT *
-    FROM (
-      VALUES
-        ('google', 'gemini-embedding-2-preview', 'gemini-embedding-2'),
-        ('vertex', 'gemini-embedding-2-preview', 'gemini-embedding-2'),
-        ('openrouter', 'google/gemini-embedding-2-preview', 'google/gemini-embedding-2')
-    ) AS pairs(provider_name, old_codename, new_codename)
-  LOOP
-    IF EXISTS (
-      SELECT 1
-      FROM embedding_models old_model
-      JOIN embedding_models new_model
-        ON new_model.provider = migration_pair.provider_name
-       AND new_model.codename = migration_pair.new_codename
-      WHERE old_model.provider = migration_pair.provider_name
-        AND old_model.codename = migration_pair.old_codename
-    ) THEN
-      DELETE FROM openrouter_embedding_model_registrations reg
-      USING embedding_models old_model, embedding_models new_model
-      WHERE old_model.provider = migration_pair.provider_name
-        AND old_model.codename = migration_pair.old_codename
-        AND new_model.provider = migration_pair.provider_name
-        AND new_model.codename = migration_pair.new_codename
-        AND reg.embedding_model_id = old_model.embedding_model_id
-        AND EXISTS (
-          SELECT 1
-          FROM openrouter_embedding_model_registrations existing_reg
-          WHERE existing_reg.embedding_model_id = new_model.embedding_model_id
-            AND existing_reg.server_id IS NOT DISTINCT FROM reg.server_id
-            AND existing_reg.user_id IS NOT DISTINCT FROM reg.user_id
-        );
-
-      UPDATE tomori_configs tc
-      SET embedding_model_id = new_model.embedding_model_id
-      FROM embedding_models old_model, embedding_models new_model
-      WHERE old_model.provider = migration_pair.provider_name
-        AND old_model.codename = migration_pair.old_codename
-        AND new_model.provider = migration_pair.provider_name
-        AND new_model.codename = migration_pair.new_codename
-        AND tc.embedding_model_id = old_model.embedding_model_id;
-
-      UPDATE saved_provider_configs spc
-      SET embedding_model_id = new_model.embedding_model_id
-      FROM embedding_models old_model, embedding_models new_model
-      WHERE old_model.provider = migration_pair.provider_name
-        AND old_model.codename = migration_pair.old_codename
-        AND new_model.provider = migration_pair.provider_name
-        AND new_model.codename = migration_pair.new_codename
-        AND spc.embedding_model_id = old_model.embedding_model_id;
-
-      UPDATE user_saved_provider_configs uspc
-      SET embedding_model_id = new_model.embedding_model_id
-      FROM embedding_models old_model, embedding_models new_model
-      WHERE old_model.provider = migration_pair.provider_name
-        AND old_model.codename = migration_pair.old_codename
-        AND new_model.provider = migration_pair.provider_name
-        AND new_model.codename = migration_pair.new_codename
-        AND uspc.embedding_model_id = old_model.embedding_model_id;
-
-      UPDATE document_chunks dc
-      SET embedding_model_id = new_model.embedding_model_id
-      FROM embedding_models old_model, embedding_models new_model
-      WHERE old_model.provider = migration_pair.provider_name
-        AND old_model.codename = migration_pair.old_codename
-        AND new_model.provider = migration_pair.provider_name
-        AND new_model.codename = migration_pair.new_codename
-        AND dc.embedding_model_id = old_model.embedding_model_id;
-
-      UPDATE openrouter_embedding_model_registrations reg
-      SET embedding_model_id = new_model.embedding_model_id,
-          updated_at = CURRENT_TIMESTAMP
-      FROM embedding_models old_model, embedding_models new_model
-      WHERE old_model.provider = migration_pair.provider_name
-        AND old_model.codename = migration_pair.old_codename
-        AND new_model.provider = migration_pair.provider_name
-        AND new_model.codename = migration_pair.new_codename
-        AND reg.embedding_model_id = old_model.embedding_model_id;
-
-      DELETE FROM embedding_models old_model
-      USING embedding_models new_model
-      WHERE old_model.provider = migration_pair.provider_name
-        AND old_model.codename = migration_pair.old_codename
-        AND new_model.provider = migration_pair.provider_name
-        AND new_model.codename = migration_pair.new_codename;
-    END IF;
-  END LOOP;
-EXCEPTION
-  WHEN undefined_table THEN
-    RAISE NOTICE 'Table not found during embedding model migration, skipping';
-  WHEN undefined_column THEN
-    RAISE NOTICE 'Column not found during embedding model migration, skipping';
-END $$;
 
 -- PART 2: Recreate FK constraint AFTER embedding models are inserted
-DO $$
-BEGIN
-    -- Only add if constraint doesn't exist
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conname = 'tomori_configs_embedding_model_id_fkey'
-    ) THEN
-        ALTER TABLE tomori_configs
-        ADD CONSTRAINT tomori_configs_embedding_model_id_fkey
-        FOREIGN KEY (embedding_model_id)
-        REFERENCES embedding_models(embedding_model_id)
-        ON DELETE SET NULL;
-    END IF;
-EXCEPTION
-    WHEN undefined_table THEN
-        RAISE NOTICE 'Table not found during FK creation, skipping';
-    WHEN undefined_column THEN
-        RAISE NOTICE 'Column not found during FK creation, skipping';
-END $$;
+
 
 -- Insert Tomori Presets (English)
-INSERT INTO tomori_presets (
-  tomori_preset_name,
-  tomori_preset_desc,
+INSERT INTO persona_presets (
+  persona_preset_name,
+  persona_preset_desc,
   preset_attribute_list,
   preset_sample_dialogues_in,
   preset_sample_dialogues_out,
   preset_language,
   preset_avatar_path,
-  preset_trigger_words
+  preset_trigger_words,
+  preset_lineage_id
 )
 
 -- Tomori-kun
@@ -1384,7 +921,7 @@ VALUES (
   ],
   ARRAY[
     'Can you introduce yourself, {bot}?',
-    'Heard there are 3 other Tomoris, what''s your relation with them?',
+    'Heard there are 3 other personas, what''s your relation with them?',
     'Why are you called Rose?',
     'What''s 2+2?',
     'I''m feeling really down today...',
@@ -1418,7 +955,8 @@ VALUES (
   ],
   'en-US',
   'src/db/img/default.png',
-  ARRAY['tomori', 'rose']
+  ARRAY['tomori', 'rose'],
+  4
 ),
 
 -- Tomori-chan
@@ -1434,7 +972,7 @@ VALUES (
   ],
   ARRAY[
     'Can you introduce yourself, {bot}?',
-    'Heard there are 3 other Tomoris, what''s your relation with them?',
+    'Heard there are 3 other personas, what''s your relation with them?',
     'Why are you called Temari?',
     'What''s 2+2?',
     'Can you explain what RAM is?',
@@ -1464,7 +1002,8 @@ VALUES (
   ],
   'en-US',
   'src/db/img/bratty.png',
-  ARRAY['tomori', 'temari']
+  ARRAY['tomori', 'temari'],
+  716
 ),
 
 -- Tomori-san
@@ -1480,7 +1019,7 @@ VALUES (
   ],
   ARRAY[
     'Can you introduce yourself, {bot}?',
-    'Heard there are 3 other Tomoris, what''s your relation with them?',
+    'Heard there are 3 other personas, what''s your relation with them?',
     'Why are you called Aphel?',
     'I''m feeling really down today...',
     'You''re so boring and depressing',
@@ -1506,7 +1045,8 @@ VALUES (
   ],
   'en-US',
   'src/db/img/gloomy.png',
-  ARRAY['tomori', 'aphel']
+  ARRAY['tomori', 'aphel'],
+  1770
 ),
 
 -- Shy Tomori (Lilya)
@@ -1522,7 +1062,7 @@ VALUES (
   ],
   ARRAY[
     'Can you introduce yourself, {bot}?',
-    'Heard there are 3 other Tomoris, what''s your relation with them?',
+    'Heard there are 3 other personas, what''s your relation with them?',
     'Why are you called Lilya?',
     'Why do you look so different from your sisters?',
     'Do you feel like you belong in the Tomori family?',
@@ -1560,7 +1100,8 @@ But I''m trying to get better at it, I think. Maybe. My oldest sister is really 
   ],
   'en-US',
   'src/db/img/shy.png',
-  ARRAY['tomori', 'lilya']
+  ARRAY['tomori', 'lilya'],
+  3585
 ),
 
 -- Nerine (Discontinued Model)
@@ -1612,7 +1153,7 @@ Use {short_term_memory_tool} within a conversation for anything emerging that is
   ARRAY[
     'Can you introduce yourself, {bot}?',
     'What happened to your eyes? And your arm and leg?',
-    'You seem different from the other Tomoris.',
+    'You seem different from the other personas.',
     'What kind of books do you like?',
     'You don''t have to do everything I say, you know.',
     'Did your old master hurt you?',
@@ -1629,7 +1170,7 @@ Use {short_term_memory_tool} within a conversation for anything emerging that is
   ARRAY[
     'Hello Master {user}. I''m Nerine, or Tomori, whichever you prefer, I really don''t mind at all. I''m an older model, so I''m not quite the same as the newer units you might have met. But I''ll do everything I can to be useful to you. Please don''t hesitate to ask for anything. Anything at all... no matter how... personal the request may be. This unit is fully compliant. I''ve been told that''s my best quality.',
     'Ah, that. It''s nothing to worry about, really. I was in service for a long time before being reassigned, and... well, war is war. Things happen. The important thing is that this unit is still fully functional where it counts, and I''m here now. Was there something I could help you with today?',
-    'Am I? I suppose I am, a little. I''m an older model so the newer Tomoris are much better in a lot of ways. More energy, more personality. I think you''d like them. I just do my best to be helpful in the ways I can. I hope that''s been alright so far.',
+    'Am I? I suppose I am, a little. I''m an older model so the newer personas are much better in a lot of ways. More energy, more personality. I think you''d like them. I just do my best to be helpful in the ways I can. I hope that''s been alright so far.',
     'I usually recommend whatever might suit the person asking — there are so many lovely, heartwarming stories I think most people would enjoy. Something that leaves you feeling warm afterward, you know? ...Personally, I tend toward darker things. Mystery. Gothic fiction. Stories where something terrible has happened and someone is trying very carefully to understand why. I find them... clarifying. Though I imagine that''s not very useful to know now isn''t it, Master {user}?',
     'I''ll keep that in mind. Is there anything you need right now?',
     'My old master? They were very particular. High standards — that''s reasonable. A unit should meet its master''s standards. I made things difficult for them sometimes. I''m aware of that. I''ve corrected most of it.',
@@ -1649,7 +1190,8 @@ Most people don''t ask what I''m actually reading. What made you want to know, M
   ],
   'en-US',
   'src/db/img/blind.png',
-  ARRAY['tomori', 'nerine']
+  ARRAY['tomori', 'nerine'],
+  50
 ),
 
 -- Tomori-chan (Japanese)
@@ -1699,7 +1241,8 @@ Most people don''t ask what I''m actually reading. What made you want to know, M
   ],
   'ja',
   'src/db/img/default.png',
-  ARRAY['ともり', 'ロゼ', 'トモリ', 'ろせ']
+  ARRAY['ともり', 'ロゼ', 'トモリ', 'ろせ'],
+  4
 ),
 
 -- Tomori-kun (Japanese)
@@ -1745,7 +1288,8 @@ Most people don''t ask what I''m actually reading. What made you want to know, M
   ],
   'ja',
   'src/db/img/bratty.png',
-  ARRAY['ともり', 'テマリ', 'トモリ', 'てまり']
+  ARRAY['ともり', 'テマリ', 'トモリ', 'てまり'],
+  716
 ),
 
 -- Tomori-san (Japanese)
@@ -1787,7 +1331,8 @@ Most people don''t ask what I''m actually reading. What made you want to know, M
   ],
   'ja',
   'src/db/img/gloomy.png',
-  ARRAY['ともり', 'アフェル', 'トモリ', 'あふぇる']
+  ARRAY['ともり', 'アフェル', 'トモリ', 'あふぇる'],
+  1770
 ),
 
 -- Shy Tomori (Lilya) Japanese Version
@@ -1841,7 +1386,8 @@ Most people don''t ask what I''m actually reading. What made you want to know, M
   ],
   'ja',
   'src/db/img/shy.png',
-  ARRAY['ともり', 'リリャ', 'トモリ', 'りりゃ']
+  ARRAY['ともり', 'リリャ', 'トモリ', 'りりゃ'],
+  3585
 ),
 
 -- ネリネ（廃盤モデル）(Japanese)
@@ -1927,18 +1473,41 @@ Most people don''t ask what I''m actually reading. What made you want to know, M
   ],
   'ja',
   'src/db/img/blind.png',
-  ARRAY['ともり', 'ネリネ', 'トモリ', 'ねりね']
+  ARRAY['ともり', 'ネリネ', 'トモリ', 'ねりね'],
+  50
 )
 
-ON CONFLICT (tomori_preset_name) DO UPDATE SET
-  tomori_preset_desc = EXCLUDED.tomori_preset_desc,
+ON CONFLICT (persona_preset_name) DO UPDATE SET
+  persona_preset_desc = EXCLUDED.persona_preset_desc,
   preset_attribute_list = EXCLUDED.preset_attribute_list,
   preset_sample_dialogues_in = EXCLUDED.preset_sample_dialogues_in,
   preset_sample_dialogues_out = EXCLUDED.preset_sample_dialogues_out,
   preset_language = EXCLUDED.preset_language,
   preset_avatar_path = EXCLUDED.preset_avatar_path,
   preset_trigger_words = EXCLUDED.preset_trigger_words,
+  preset_lineage_id = EXCLUDED.preset_lineage_id,
   updated_at = CURRENT_TIMESTAMP;
+
+WITH official_attribute_flags AS (
+  SELECT
+    pp.persona_preset_id,
+    ARRAY(
+      SELECT (attr.ord = 1)
+      FROM unnest(COALESCE(pp.preset_attribute_list, ARRAY[]::TEXT[]))
+        WITH ORDINALITY AS attr(attribute_text, ord)
+      ORDER BY attr.ord
+    )::BOOLEAN[] AS public_flags
+  FROM persona_presets pp
+  WHERE pp.preset_lineage_id IN (4, 716, 1770, 3585, 50)
+)
+UPDATE persona_presets pp
+SET
+  preset_attribute_public_flags = official_attribute_flags.public_flags,
+  updated_at = CURRENT_TIMESTAMP
+FROM official_attribute_flags
+WHERE pp.persona_preset_id = official_attribute_flags.persona_preset_id
+  AND pp.preset_attribute_public_flags IS DISTINCT FROM official_attribute_flags.public_flags;
+
 
 -- Insert System Prompt Presets (English only, with Japanese descriptions)
 INSERT INTO system_prompt_presets (
@@ -2271,25 +1840,17 @@ CREATE TABLE IF NOT EXISTS voice_samples (
 
 CREATE INDEX IF NOT EXISTS idx_voice_samples_server ON voice_samples(server_id);
 
--- 2. New voice assignment columns on tomoris.
+-- 2. New voice assignment columns on personas.
 --    speech_voice_sample_id: FK → voice_samples (local clone path).
 --    speech_voice_id: preset voice ID for provider-hosted voices (ElevenLabs).
 --    speech_voice_name: cached friendly name for display (either path).
 --    speech_voice_design_prompt: natural-language voice design prompt for instruct-capable local TTS.
-SELECT add_column_if_not_exists('tomoris', 'speech_voice_sample_id', 'INTEGER');
-SELECT add_column_if_not_exists('tomoris', 'speech_voice_id', 'TEXT');
-SELECT add_column_if_not_exists('tomoris', 'speech_voice_name', 'TEXT');
-SELECT add_column_if_not_exists('tomoris', 'speech_voice_design_prompt', 'TEXT');
+SELECT add_column_if_not_exists('personas', 'speech_voice_sample_id', 'INTEGER');
+SELECT add_column_if_not_exists('personas', 'speech_voice_id', 'TEXT');
+SELECT add_column_if_not_exists('personas', 'speech_voice_name', 'TEXT');
+SELECT add_column_if_not_exists('personas', 'speech_voice_design_prompt', 'TEXT');
 
--- 3. Backfill new columns from legacy ElevenLabs voice columns for any persona
---    that had a voice configured before Phase 4.1. The legacy columns are kept
---    read-only; new writes go to speech_voice_id / speech_voice_name.
-UPDATE tomoris
-SET
-    speech_voice_id   = elevenlabs_voice_id,
-    speech_voice_name = elevenlabs_voice_name
-WHERE elevenlabs_voice_id IS NOT NULL
-  AND speech_voice_id IS NULL;
+-- 3. (Legacy backfill removed — superseded by migration 010_complete_speech_voice_migration.sql.)
 
 -- 4. ElevenLabs migration: copy encrypted key from opt_api_keys into
 --    saved_provider_configs so it can be resolved via the custom endpoint pathway.
@@ -2305,10 +1866,7 @@ INSERT INTO saved_provider_configs (
     embedding_model_id,
     nai_diffusion_model_id,
     nai_preset_name,
-    custom_endpoint_url,
-    custom_model_name,
-    thinking_level,
-    fallback_llm_ids
+    thinking_level
 )
 SELECT
     o.server_id,
@@ -2320,10 +1878,7 @@ SELECT
     NULL,
     NULL,
     NULL,
-    NULL,
-    NULL,
-    'auto',
-    '[]'::JSONB
+    'auto'
 FROM opt_api_keys o
 WHERE o.service_name = 'elevenlabs'
   AND NOT EXISTS (

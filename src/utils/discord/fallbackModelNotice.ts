@@ -3,7 +3,7 @@ import type { LlmRow } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { isNoticeEmbedVisible, routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
-import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhookManager";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -145,9 +145,13 @@ export async function sendFallbackModelUsageNotice({
             components: [disabledButtonRow],
             ...(threadId ? { threadId } : {}),
           })
-          .catch(() => {});
+          .catch((err: unknown) =>
+            log.warn("[FallbackNotice] Failed to disable buttons via webhook after collector end", err),
+          );
       } else {
-        await noticeMessage.edit({ components: [disabledButtonRow] }).catch(() => {});
+        await noticeMessage
+          .edit({ components: [disabledButtonRow] })
+          .catch((err: unknown) => log.warn("[FallbackNotice] Failed to disable buttons after collector end", err));
       }
     });
   } catch (error) {

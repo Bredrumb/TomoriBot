@@ -4,12 +4,11 @@
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
+import { configRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { tomoriConfigSchema, tomoriSchema } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 
 // Constants for threshold limits (Rule #20)
@@ -120,33 +119,28 @@ Positive values use a shared fixed or random range.
 
     const nextTarget = isAlwaysReplyMode ? 0 : rollAutochatTarget(threshold, maxThreshold);
 
-    // Update config and reset the shared cycle atomically.
-    const { updatedConfigRow, updatedTomoriRow } = await sql.transaction(async (tx) => {
-      const [configRow] = await tx`
-          UPDATE tomori_configs
-          SET autoch_threshold = ${threshold},
-              autoch_threshold_max = ${maxThreshold}
-          WHERE server_id = ${tomoriState.server_id}
-          RETURNING *
-        `;
+    // Guard: invariants for a setup persona (mirrors prior inline-SQL assumptions).
+    if (tomoriState.server_id === undefined || tomoriState.persona_id === undefined) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "general.errors.tomori_not_setup_title",
+        descriptionKey: "general.errors.tomori_not_setup_description",
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
 
-      const [tomoriRow] = await tx`
-          UPDATE tomoris
-          SET autoch_counter = 0,
-              autoch_next_target = ${nextTarget}
-          WHERE tomori_id = ${tomoriState.tomori_id}
-          RETURNING *
-        `;
+    // Update config and reset the shared cycle atomically via repository.
+    const updatedRuntime = await configRepository.setAutoChatThreshold(
+      tomoriState.server_id,
+      tomoriState.persona_id,
+      threshold,
+      maxThreshold,
+      nextTarget,
+    );
 
-      return {
-        updatedConfigRow: configRow ?? null,
-        updatedTomoriRow: tomoriRow ?? null,
-      };
-    });
-
-    if (!updatedConfigRow || !updatedTomoriRow) {
+    if (!updatedRuntime) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
@@ -155,57 +149,14 @@ Positive values use a shared fixed or random range.
           threshold,
           maxThreshold,
           nextTarget,
-          targetTables: ["tomori_configs", "tomoris"],
+          targetTables: ["server_auto_trigger_configs", "persona_autoch_runtime_state"],
         },
       };
       await log.error(
         "Failed to update auto-chat range config/state",
-        new Error("Database update returned no rows"),
+        new Error("configRepository.setAutoChatThreshold returned null"),
         context,
       );
-
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    // Validate the returned data (Rules #3, #5)
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedConfigRow);
-    if (!validatedConfig.success) {
-      const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
-        serverId: tomoriState.server_id,
-        errorType: "SchemaValidationError",
-        metadata: {
-          command: "server auto-trigger threshold",
-          validationErrors: validatedConfig.error.flatten(),
-        },
-      };
-      await log.error("Failed to validate updated config", validatedConfig.error, context);
-
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    const validatedTomori = tomoriSchema.safeParse(updatedTomoriRow);
-    if (!validatedTomori.success) {
-      const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
-        serverId: tomoriState.server_id,
-        errorType: "SchemaValidationError",
-        metadata: {
-          command: "server auto-trigger threshold",
-          validationErrors: validatedTomori.error.flatten(),
-        },
-      };
-      await log.error("Failed to validate updated Tomori auto-chat state", validatedTomori.error, context);
 
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.update_failed_title",

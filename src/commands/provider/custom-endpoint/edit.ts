@@ -2,8 +2,8 @@ import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder
 import { MessageFlags } from "discord.js";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadCustomEndpointsForServer } from "@/utils/db/dbRead";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { llmProviderRepo } from "@/utils/db/repositories";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { executeCustomEndpointEditCommand } from "@/utils/provider/customEndpointEditCommand";
 import { localizer } from "@/utils/text/localizer";
@@ -70,7 +70,7 @@ export async function execute(
         capabilityTranscription: "commands.config.custom_models.remove.capability_transcription",
       },
       strictRemoteValidation: false,
-      loadEndpoints: loadCustomEndpointsForServer,
+      loadEndpoints: llmProviderRepo.loadCustomEndpointsForServer,
       onSuccess: () => {
         invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
       },
@@ -79,7 +79,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState.server_id,
-      tomoriId: tomoriState.tomori_id,
+      personaId: tomoriState.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "config custom-endpoint edit",

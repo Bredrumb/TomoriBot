@@ -10,15 +10,14 @@ import sharp from "sharp";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import { resolveAvatarByIdentity } from "@/utils/discord/avatarResolver";
-import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhookManager";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import {
   buildImageToolNoticeDescription,
   buildReferencedMessageUrl,
   sendToolProgressNotice,
 } from "@/utils/discord/toolProgressNotice";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
-import { sql } from "../../utils/db/client";
-import { checkImageQuota, incrementImageQuota } from "../../utils/quota/imageQuotaManager";
+import { checkImageQuota, incrementImageQuota, type QuotaCheckResult } from "../../utils/quota/imageQuotaManager";
 import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
 import { resolveNativeImageGenerationCapability } from "@/utils/provider/providerCapabilityResolver";
 import { generateCustomImageViaEndpoint } from "@/providers/custom/customEndpointDispatcher";
@@ -27,6 +26,7 @@ import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/ut
 import { formatCustomEndpointModelDisplay } from "@/utils/provider/customProviderUtils";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
+import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import type { ProviderNativeImageGenerationResult } from "@/types/provider/featureInterfaces";
 import { optimizeImageBuffer } from "@/utils/image/imageProcessor";
@@ -41,8 +41,7 @@ const IMAGE_REFERENCE_MAX_SINGLE_BYTES = Number.parseInt(process.env.IMAGE_REFER
  */
 export class GenerateImageTool extends BaseTool {
   name = "generate_image";
-  description =
-    "Generate, edit, or outpaint an image. Sends the result directly to Discord.";
+  description = "Generate, edit, or outpaint an image. Sends the result directly to Discord.";
   category = "utility" as const;
   requiresFeatureFlag = "image_gen";
 
@@ -58,8 +57,7 @@ export class GenerateImageTool extends BaseTool {
       },
       media_id: {
         type: "string",
-        description:
-          "Reference media ID such as media_1. Use for img2img, inpaint, or outpaint.",
+        description: "Reference media ID such as media_1. Use for img2img, inpaint, or outpaint.",
       },
       inpaint: {
         type: "boolean",
@@ -93,8 +91,7 @@ export class GenerateImageTool extends BaseTool {
       },
       clothing_mode: {
         type: "boolean",
-        description:
-          "Set true for clothing, worn accessories, jewelry, or paired wearable items.",
+        description: "Set true for clothing, worn accessories, jewelry, or paired wearable items.",
       },
       mask_threshold: {
         type: "number",
@@ -118,8 +115,7 @@ export class GenerateImageTool extends BaseTool {
       },
       mask_mode: {
         type: "string",
-        description:
-          "Use target to edit the mask_prompt region; background edits surroundings while protecting it.",
+        description: "Use target to edit the mask_prompt region; background edits surroundings while protecting it.",
         enum: ["target", "background"],
       },
       inpaint_preset: {
@@ -144,8 +140,7 @@ export class GenerateImageTool extends BaseTool {
       },
       outpaint_amount: {
         type: "string",
-        description:
-          "Canvas expansion preset: slight, moderate, large, or dramatic.",
+        description: "Canvas expansion preset: slight, moderate, large, or dramatic.",
         enum: ["slight", "moderate", "large", "dramatic"],
       },
       outpaint_left_prompt: {
@@ -184,8 +179,7 @@ export class GenerateImageTool extends BaseTool {
       },
       target_identity: {
         type: "string",
-        description:
-          "User/persona identity whose avatar should be used as a reference.",
+        description: "User/persona identity whose avatar should be used as a reference.",
       },
       aspect_ratio: {
         type: "string",
@@ -223,7 +217,11 @@ export class GenerateImageTool extends BaseTool {
   }
 
   private shouldUseInpaint(args: Record<string, unknown>): boolean {
-    if (typeof args.mask_mode === "string" || typeof args.mask_prompt === "string" || typeof args.inpaint_preset === "string") {
+    if (
+      typeof args.mask_mode === "string" ||
+      typeof args.mask_prompt === "string" ||
+      typeof args.inpaint_preset === "string"
+    ) {
       return true;
     }
     if (typeof args.inpaint_mode === "string" && ["extend", "outpaint"].includes(args.inpaint_mode.toLowerCase())) {
@@ -297,8 +295,16 @@ export class GenerateImageTool extends BaseTool {
   }
 
   private resolveOutpaintStrategy(prompt: string, strategy: string | null): string | null {
-    const normalizedStrategy = strategy?.trim().toLowerCase().replace(/[-\s]+/g, "_") ?? "";
-    if (normalizedStrategy === "full_canvas" || normalizedStrategy === "edge_extend" || normalizedStrategy === "zoom_out") {
+    const normalizedStrategy =
+      strategy
+        ?.trim()
+        .toLowerCase()
+        .replace(/[-\s]+/g, "_") ?? "";
+    if (
+      normalizedStrategy === "full_canvas" ||
+      normalizedStrategy === "edge_extend" ||
+      normalizedStrategy === "zoom_out"
+    ) {
       return normalizedStrategy;
     }
     if (/\b(?:full[-\s]?canvas|novelai[-\s]?style|expanded[-\s]?canvas)\b/i.test(prompt)) {
@@ -433,22 +439,18 @@ export class GenerateImageTool extends BaseTool {
   }
 
   /**
-   * Get the diffusion model codename from the database
+   * Get the diffusion model codename from the database via repository
    * @param diffusionModelId - Database ID of the diffusion model
    * @returns The model codename string (e.g., "gemini-2.5-flash-image")
    */
   private async getDiffusionModelCodename(diffusionModelId: number): Promise<string> {
-    const result = await sql`
-			SELECT codename
-			FROM image_diffusion_models
-			WHERE diffusion_model_id = ${diffusionModelId}
-		`.values();
+    const model = await llmModelRepo.loadDiffusionModelById(diffusionModelId);
 
-    if (result.length === 0) {
+    if (!model) {
       throw new Error(`Diffusion model not found in database: ${diffusionModelId}`);
     }
 
-    return result[0][0] as string;
+    return model.codename;
   }
 
   private async sendGeneratedImage(
@@ -626,6 +628,7 @@ export class GenerateImageTool extends BaseTool {
           const imageResponse = await safeDownload(imageInfo.url, {
             maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
             timeoutMs: 15_000,
+            externalSignal: context.abortSignal,
           });
           if (!imageResponse.success || !imageResponse.buffer) {
             log.warn(`Failed to fetch image from ${imageInfo.source}: ${imageResponse.details ?? imageResponse.error}`);
@@ -673,6 +676,7 @@ export class GenerateImageTool extends BaseTool {
     prompt: string,
     aspectRatio: string,
     referenceImages?: Array<{ mimeType: string; data: string }>,
+    abortSignal?: AbortSignal,
   ): Promise<{ imageData: string | null; mimeType: string | null }> {
     // Helpful debug log for provider/model combo
     log.info(
@@ -759,6 +763,7 @@ export class GenerateImageTool extends BaseTool {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(requestPayload),
+      signal: abortSignal,
     });
 
     if (!response.ok) {
@@ -824,6 +829,7 @@ export class GenerateImageTool extends BaseTool {
         const imageResponse = await safeDownload(imageUrl, {
           maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
           timeoutMs: 15_000,
+          externalSignal: abortSignal,
         });
         if (imageResponse.success && imageResponse.buffer) {
           const mimeType = imageResponse.contentType?.split(";")[0] || null;
@@ -863,53 +869,11 @@ export class GenerateImageTool extends BaseTool {
       };
     }
 
-    // Check image generation quota BEFORE generating
     const userDiscId = context.userId || context.message?.author.id || "";
     if (!userDiscId) {
       return {
         success: false,
         error: "Unable to identify user for quota checking",
-      };
-    }
-
-    const quotaCheck = await checkImageQuota(context.tomoriState.server_id, userDiscId);
-
-    if (!quotaCheck.allowed) {
-      // Build user-friendly error message based on quota type
-      let errorMessage = "";
-      let resetInfo = "";
-
-      if (quotaCheck.resetTime) {
-        const now = new Date();
-        const resetTime = quotaCheck.resetTime;
-        const hoursUntilReset = Math.ceil((resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
-
-        if (hoursUntilReset < 24) {
-          resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_hours", {
-            hours: hoursUntilReset.toString(),
-          });
-        } else {
-          const daysUntilReset = Math.ceil(hoursUntilReset / 24);
-          resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_days", {
-            days: daysUntilReset.toString(),
-          });
-        }
-      }
-
-      if (quotaCheck.reason === "user_quota_exceeded") {
-        errorMessage = localizer(context.locale, "tools.generate_image.user_quota_exceeded", { reset_info: resetInfo });
-      } else if (quotaCheck.reason === "serverwide_quota_exceeded") {
-        errorMessage = localizer(context.locale, "tools.generate_image.serverwide_quota_exceeded", {
-          reset_info: resetInfo,
-        });
-      } else {
-        errorMessage = localizer(context.locale, "tools.generate_image.quota_exceeded_generic");
-      }
-
-      return {
-        success: false,
-        error: "Image generation quota exceeded",
-        message: errorMessage,
       };
     }
 
@@ -947,10 +911,12 @@ export class GenerateImageTool extends BaseTool {
     const extendPixels = this.parseClampedNumber(args.extend_pixels, 0, 512);
     const outpaintOverlap = this.parseClampedNumber(args.outpaint_overlap, 0, 256);
     const outpaintZoomScale = this.parseClampedNumber(args.outpaint_zoom_scale, 0.5, 0.95);
-    const outpaintLeftPrompt = typeof args.outpaint_left_prompt === "string" ? args.outpaint_left_prompt.trim() || null : null;
+    const outpaintLeftPrompt =
+      typeof args.outpaint_left_prompt === "string" ? args.outpaint_left_prompt.trim() || null : null;
     const outpaintRightPrompt =
       typeof args.outpaint_right_prompt === "string" ? args.outpaint_right_prompt.trim() || null : null;
-    const outpaintTopPrompt = typeof args.outpaint_top_prompt === "string" ? args.outpaint_top_prompt.trim() || null : null;
+    const outpaintTopPrompt =
+      typeof args.outpaint_top_prompt === "string" ? args.outpaint_top_prompt.trim() || null : null;
     const outpaintBottomPrompt =
       typeof args.outpaint_bottom_prompt === "string" ? args.outpaint_bottom_prompt.trim() || null : null;
 
@@ -980,11 +946,61 @@ export class GenerateImageTool extends BaseTool {
       };
     }
 
+    // Default to allowed; overwritten below for server-credential users
+    let quotaCheck: QuotaCheckResult = { allowed: true };
+
     try {
-      // Get the diffusion model codename from database
+      // Resolve credentials first so we can skip server quota for personal BYOK users
       const creds = await resolveCapabilityCredentials(context.tomoriState.server_id, "image-standard", {
         userId: context.internalUserId ?? null,
       });
+
+      // Personal BYOK users bring their own API quota — bypass server quota entirely
+      if (creds.source === "server") {
+        quotaCheck = await checkImageQuota(context.tomoriState.server_id, userDiscId);
+      }
+
+      if (!quotaCheck.allowed) {
+        // Build user-friendly error message based on quota type
+        let errorMessage = "";
+        let resetInfo = "";
+
+        if (quotaCheck.resetTime) {
+          const now = new Date();
+          const resetTime = quotaCheck.resetTime;
+          const hoursUntilReset = Math.ceil((resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
+
+          if (hoursUntilReset < 24) {
+            resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_hours", {
+              hours: hoursUntilReset.toString(),
+            });
+          } else {
+            const daysUntilReset = Math.ceil(hoursUntilReset / 24);
+            resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_days", {
+              days: daysUntilReset.toString(),
+            });
+          }
+        }
+
+        if (quotaCheck.reason === "user_quota_exceeded") {
+          errorMessage = localizer(context.locale, "tools.generate_image.user_quota_exceeded", {
+            reset_info: resetInfo,
+          });
+        } else if (quotaCheck.reason === "serverwide_quota_exceeded") {
+          errorMessage = localizer(context.locale, "tools.generate_image.serverwide_quota_exceeded", {
+            reset_info: resetInfo,
+          });
+        } else {
+          errorMessage = localizer(context.locale, "tools.generate_image.quota_exceeded_generic");
+        }
+
+        return {
+          success: false,
+          error: "Image generation quota exceeded",
+          message: errorMessage,
+        };
+      }
+
       const diffusionModelId =
         getResolvedCapabilityModelId(creds, "image-standard") ?? context.tomoriState.config.diffusion_model_id;
 
@@ -1009,26 +1025,26 @@ export class GenerateImageTool extends BaseTool {
       if (!context.suppressProgressNotices) {
         const baseNoticeDescription = localizer(
           context.locale,
-          usesReferences ? "genai.image.generating_with_references_description" : "genai.image.generating_description",
+          usesReferences ? "tools.image.generating_with_references_description" : "tools.image.generating_description",
         );
         const referenceSourceCount = Number(messageId ? 1 : 0) + Number(targetIdentity ? 1 : 0);
         const referencedMessageUrl = messageId ? buildReferencedMessageUrl(context, messageId) : null;
         const extraNoticeLines: string[] = [];
         const imageModeKey = outpaint
-          ? "genai.image.mode_outpaint"
+          ? "tools.image.mode_outpaint"
           : inpaint
-            ? "genai.image.mode_inpaint"
+            ? "tools.image.mode_inpaint"
             : usesReferences
-              ? "genai.image.mode_img2img"
-              : "genai.image.mode_txt2img";
+              ? "tools.image.mode_img2img"
+              : "tools.image.mode_txt2img";
         extraNoticeLines.push(
-          localizer(context.locale, "genai.image.notice_mode_line", {
+          localizer(context.locale, "tools.image.notice_mode_line", {
             mode: localizer(context.locale, imageModeKey),
           }),
         );
         if (outpaint) {
           extraNoticeLines.push(
-            localizer(context.locale, "genai.image.notice_outpaint_direction_line", {
+            localizer(context.locale, "tools.image.notice_outpaint_direction_line", {
               direction: this.formatOutpaintDirection(extendDirection),
             }),
           );
@@ -1038,20 +1054,20 @@ export class GenerateImageTool extends BaseTool {
         }
         if (referencedMessageUrl) {
           extraNoticeLines.push(
-            localizer(context.locale, "genai.image.notice_reference_line", {
+            localizer(context.locale, "tools.image.notice_reference_line", {
               message_url: referencedMessageUrl,
             }),
           );
         }
         if (!referencedMessageUrl && referenceSourceCount) {
           extraNoticeLines.push(
-            localizer(context.locale, "genai.image.notice_reference_count_line", {
+            localizer(context.locale, "tools.image.notice_reference_count_line", {
               count: referenceSourceCount.toString(),
             }),
           );
         } else if (referencedMessageUrl && referenceSourceCount > 1) {
           extraNoticeLines.push(
-            localizer(context.locale, "genai.image.notice_reference_count_line", {
+            localizer(context.locale, "tools.image.notice_reference_count_line", {
               count: referenceSourceCount.toString(),
             }),
           );
@@ -1060,13 +1076,13 @@ export class GenerateImageTool extends BaseTool {
           context,
           "image_generation",
           {
-            titleKey: "genai.image.generating_title",
+            titleKey: "tools.image.generating_title",
             description: buildImageToolNoticeDescription(
               context.locale,
               baseNoticeDescription,
               displayModelName,
               prompt,
-              localizer(context.locale, "genai.image.generating_footer"),
+              localizer(context.locale, "tools.image.generating_footer"),
               extraNoticeLines,
             ),
             color: ColorCode.INFO,
@@ -1092,7 +1108,7 @@ export class GenerateImageTool extends BaseTool {
           const avatarData = await resolveAvatarByIdentity(targetIdentity, context, {
             forceStatic: false,
           });
-          const avatarBase64 = await this.fetchAndConvertImageToBase64(avatarData.avatarUrl);
+          const avatarBase64 = await this.fetchAndConvertImageToBase64(avatarData.avatarUrl, context.abortSignal);
           referenceImages.push({
             mimeType: "image/png",
             data: avatarBase64,
@@ -1190,6 +1206,11 @@ export class GenerateImageTool extends BaseTool {
             referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
             inpaint,
             maskPrompt,
+            maskThreshold,
+            maskGrow,
+            maskFeather,
+            cfg,
+            denoise,
             inpaintMaskMode: maskMode,
             inpaintPreset,
             inpaintMode,
@@ -1226,6 +1247,11 @@ export class GenerateImageTool extends BaseTool {
               referenceImages: [tinyRef],
               inpaint,
               maskPrompt,
+              maskThreshold,
+              maskGrow,
+              maskFeather,
+              cfg,
+              denoise,
               inpaintMaskMode: maskMode,
               inpaintPreset,
               inpaintMode,
@@ -1266,6 +1292,7 @@ export class GenerateImageTool extends BaseTool {
           prompt,
           aspectRatio,
           referenceImages.length > 0 ? referenceImages : undefined,
+          context.abortSignal,
         );
         generatedImageData = result.imageData;
       } else if (imageGenerationImplementation === "google") {
@@ -1367,8 +1394,10 @@ export class GenerateImageTool extends BaseTool {
 
       log.success("Successfully generated and sent image to Discord");
 
-      // Increment quota after successful generation
-      await incrementImageQuota(context.tomoriState.server_id, userDiscId);
+      // Increment quota after successful generation (server providers only)
+      if (creds.source === "server") {
+        await incrementImageQuota(context.tomoriState.server_id, userDiscId);
+      }
 
       // Note: We intentionally DO NOT include imageMetadata for generated images
       // because Discord CDN URLs are protected and cannot be fetched by external
@@ -1445,7 +1474,7 @@ export class GenerateImageTool extends BaseTool {
   /**
    * Fetch an image URL and convert to base64 (used for profile pictures)
    */
-  private async fetchAndConvertImageToBase64(imageUrl: string): Promise<string> {
+  private async fetchAndConvertImageToBase64(imageUrl: string, abortSignal?: AbortSignal): Promise<string> {
     const dataUrlMatches = imageUrl.match(/^data:image\/[^;]+;base64,(.+)$/);
     if (dataUrlMatches?.[1]) {
       return dataUrlMatches[1];
@@ -1458,6 +1487,7 @@ export class GenerateImageTool extends BaseTool {
     const response = await safeDownload(imageUrl, {
       maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
       timeoutMs: 15_000,
+      externalSignal: abortSignal,
     });
     if (!response.success || !response.buffer) {
       throw new Error(`Failed to fetch image: ${response.details ?? response.error ?? "unknown error"}`);
@@ -1476,7 +1506,11 @@ export class GenerateImageTool extends BaseTool {
     return fallback;
   }
 
-  private isLikelyImageAttachment(attachment: { contentType?: string | null; name?: string | null; url?: string }): boolean {
+  private isLikelyImageAttachment(attachment: {
+    contentType?: string | null;
+    name?: string | null;
+    url?: string;
+  }): boolean {
     if (attachment.contentType?.startsWith("image/")) {
       return true;
     }
@@ -1607,7 +1641,9 @@ export class GenerateImageTool extends BaseTool {
       })
       .jpeg({ quality: 42, mozjpeg: true })
       .toBuffer();
-    log.warn(`Reference image still exceeds desired payload cap after downscale (${finalBuffer.byteLength} > ${maxBytes})`);
+    log.warn(
+      `Reference image still exceeds desired payload cap after downscale (${finalBuffer.byteLength} > ${maxBytes})`,
+    );
     return {
       mimeType: "image/jpeg",
       data: finalBuffer.toString("base64"),
@@ -1654,7 +1690,10 @@ export class GenerateImageTool extends BaseTool {
     };
   }
 
-  private async inferReferenceImageAspectRatio(referenceImage: { mimeType: string; data: string }): Promise<string | null> {
+  private async inferReferenceImageAspectRatio(referenceImage: {
+    mimeType: string;
+    data: string;
+  }): Promise<string | null> {
     try {
       const metadata = await sharp(Buffer.from(referenceImage.data, "base64")).metadata();
       if (!metadata.width || !metadata.height) {

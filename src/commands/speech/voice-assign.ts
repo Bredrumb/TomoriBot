@@ -5,19 +5,18 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
-import { updateTomori } from "@/utils/db/dbWrite";
+import { personaRepository } from "@/utils/db/repositories";
+import { loadVoiceSamples } from "@/utils/db/repositories/SpeechRepository";
+
 import {
   acknowledgeModalSubmitForRefresh,
   promptWithPaginatedModal,
-  replyInfoEmbed,
-  replyComponentsV2Status,
-  type AvatarSessionCache,
-  replyPaginatedPersonaChoicesV2,
   safeSelectOptionText,
-} from "@/utils/discord/interactionHelper";
+} from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { replyComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { ELEVENLABS_SERVICE_NAME } from "@/utils/audio/elevenLabsAccount";
 import { type ElevenLabsVoiceCatalogEntry, fetchElevenLabsVoiceCatalog } from "@/utils/audio/elevenLabsVoiceCatalog";
@@ -80,7 +79,7 @@ export async function execute(
   }
 
   try {
-    const allPersonas = await loadAllPersonasForServer(serverDiscId);
+    const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -130,12 +129,7 @@ export async function execute(
 
     if (effectiveStyle === "tts-clone") {
       // --- TTS clone path: all server samples available for assignment ---
-      const sampleRows = await sql<{ sample_id: number; name: string; ref_text: string | null; duration_ms: number }[]>`
-        SELECT sample_id, name, ref_text, duration_ms
-        FROM voice_samples
-        WHERE server_id = ${serverId}
-        ORDER BY name
-      `;
+      const sampleRows = await loadVoiceSamples(serverId);
 
       if (!sampleRows.length) {
         await replyInfoEmbed(interaction, locale, {
@@ -159,14 +153,13 @@ export async function execute(
           onSelect: async () => {},
         });
         if (!personaSelection.success) {
-          if (personaSelection.reason === "cancelled" || personaSelection.reason === "fatal") return;
-          continue;
+          return;
         }
         if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) return;
 
         const personaButtonInteraction = personaSelection.interaction as ButtonInteraction;
         selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-        if (!selectedPersona?.tomori_id) {
+        if (!selectedPersona?.persona_id) {
           await replyInfoEmbed(personaButtonInteraction, locale, {
             titleKey: "general.errors.invalid_option_title",
             descriptionKey: "general.errors.invalid_option_description",
@@ -231,7 +224,7 @@ export async function execute(
         const voiceNameIfDesignPromptRemains = selectedPersona.speech_voice_design_prompt?.trim()
           ? "VoiceDesign"
           : null;
-        const updatedTomori = await updateTomori(selectedPersona.tomori_id, {
+        const updatedTomori = await personaRepository.update(selectedPersona.persona_id, {
           speech_voice_sample_id: sampleIdToAssign,
           // Keep any saved VoiceDesign prompt as reusable persona data. In auto
           // endpoint mode, speech_voice_name marks which saved voice type is
@@ -261,8 +254,8 @@ export async function execute(
             : "commands.speech.voice_assign.success_description",
           ColorCode.SUCCESS,
           isClear
-            ? { persona: selectedPersona.tomori_nickname }
-            : { persona: selectedPersona.tomori_nickname, voice: chosenSample?.name ?? "" },
+            ? { persona: selectedPersona.persona_nickname }
+            : { persona: selectedPersona.persona_nickname, voice: chosenSample?.name ?? "" },
           "general.pagination.reloading_persona_picker",
         );
       }
@@ -302,14 +295,13 @@ export async function execute(
         onSelect: async () => {},
       });
       if (!personaSelection.success) {
-        if (personaSelection.reason === "cancelled" || personaSelection.reason === "fatal") return;
-        continue;
+        return;
       }
       if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) return;
 
       const personaButtonInteraction = personaSelection.interaction as ButtonInteraction;
       selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await replyInfoEmbed(personaButtonInteraction, locale, {
           titleKey: "general.errors.invalid_option_title",
           descriptionKey: "general.errors.invalid_option_description",
@@ -367,11 +359,10 @@ export async function execute(
         return;
       }
 
-      const updatedTomori = await updateTomori(selectedPersona.tomori_id, {
+      const updatedTomori = await personaRepository.update(selectedPersona.persona_id, {
         speech_voice_id: chosenVoice?.voiceId ?? null,
-        speech_voice_name: chosenVoice?.name ?? (selectedPersona.speech_voice_design_prompt?.trim() ? "VoiceDesign" : null),
-        elevenlabs_voice_id: chosenVoice?.voiceId ?? null,
-        elevenlabs_voice_name: chosenVoice?.name ?? null,
+        speech_voice_name:
+          chosenVoice?.name ?? (selectedPersona.speech_voice_design_prompt?.trim() ? "VoiceDesign" : null),
         speech_voice_sample_id: null,
       });
 
@@ -395,8 +386,8 @@ export async function execute(
           : "commands.speech.voice_assign.success_description",
         ColorCode.SUCCESS,
         isClear
-          ? { persona: selectedPersona.tomori_nickname }
-          : { persona: selectedPersona.tomori_nickname, voice: chosenVoice?.name ?? "" },
+          ? { persona: selectedPersona.persona_nickname }
+          : { persona: selectedPersona.persona_nickname, voice: chosenVoice?.name ?? "" },
         "general.pagination.reloading_persona_picker",
       );
     }
@@ -405,13 +396,13 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: selectedPersona?.server_id ?? null,
-      tomoriId: selectedPersona?.tomori_id ?? null,
+      personaId: selectedPersona?.persona_id ?? null,
       errorType: "CommandExecutionError",
       metadata: {
         command: "speech voice-assign",
         guildId: interaction.guild?.id ?? interaction.user.id,
         executorDiscordId: interaction.user.id,
-        selectedPersonaId: selectedPersona?.tomori_id ?? null,
+        selectedPersonaId: selectedPersona?.persona_id ?? null,
       },
     };
     await log.error("Error executing /speech voice-assign", error as Error, context);

@@ -2275,6 +2275,11 @@ export async function generateComfyUiImageViaEndpoint(params: {
   referenceImageDataUrl?: string | null;
   inpaint?: boolean;
   maskPrompt?: string | null;
+  maskThreshold?: number | null;
+  maskGrow?: number | null;
+  maskFeather?: number | null;
+  cfg?: number | null;
+  denoise?: number | null;
   seed?: number | null;
   inpaintMaskMode?: string | null;
   inpaintMode?: string | null;
@@ -2305,6 +2310,11 @@ export async function generateComfyUiImageViaEndpoint(params: {
     referenceImageDataUrl,
     inpaint,
     maskPrompt,
+    maskThreshold,
+    maskGrow,
+    maskFeather,
+    cfg,
+    denoise,
     seed,
     inpaintMaskMode,
     inpaintMode,
@@ -2335,6 +2345,11 @@ export async function generateComfyUiImageViaEndpoint(params: {
     referenceImageDataUrl,
     inpaint,
     maskPrompt,
+    maskThreshold,
+    maskGrow,
+    maskFeather,
+    cfg,
+    denoise,
     seed,
     inpaintMaskMode,
     inpaintMode,

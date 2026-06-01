@@ -1,6 +1,5 @@
 import { TextInputStyle, MessageFlags } from "discord.js";
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
-import { sql } from "@/utils/db/client";
 import type { SetupConfig, UserRow } from "../../types/db/schema";
 import type { SelectOption, RadioGroupOption } from "../../types/discord/modal";
 import { setupConfigSchema } from "../../types/db/schema";
@@ -11,15 +10,10 @@ import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { ProviderFactory } from "../../utils/provider/providerFactory";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { encryptApiKey } from "../../utils/security/crypto";
-import { setupServer } from "../../utils/db/dbWrite";
-import {
-  loadTomoriState,
-  loadUniqueProviders,
-  loadPresetOptionsByLocale,
-  loadDefaultModelForProvider,
-} from "@/utils/db/dbRead";
+import { configRepository, llmModelRepo, personaRepository, serverRepository } from "@/utils/db/repositories";
+
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { getCachedPresetAvatar } from "@/utils/image/avatarHelper";
+import { getCachedPresetAvatar, getPresetAvatarBuffer } from "@/utils/image/avatarHelper";
 import { lazySyncGuildEmojis } from "@/utils/cache/emojiLazySync";
 import { lazySyncGuildStickers } from "@/utils/cache/stickerLazySync";
 import { formatLlmDisplayLabel } from "@/utils/provider/modelDisplay";
@@ -77,111 +71,116 @@ export async function execute(
 
   try {
     // 2. Check if a main persona (is_alter=false) exists for this server.
-    //    Previous check used loadTomoriState() which returns ANY persona (main or alter),
+    //    Previous check used personaRepository.loadState() which returns ANY persona (main or alter),
     //    causing a deadlock when the main persona was missing but alters remained:
     //    - Other commands require a main persona → "Initial Setup Required"
     //    - Setup found an alter → "Already Set Up"
     //    Now we specifically check for a main persona to break this deadlock.
-    const existingServerRows = await sql`
-			SELECT s.server_id
-			FROM servers s
-			WHERE s.server_disc_id = ${serverId}
-			LIMIT 1
-		`;
-    const existingInternalServerId = existingServerRows[0]?.server_id ?? null;
+    const existingInternalServerId = await serverRepository.loadServerIdByDiscId(serverId);
 
     if (existingInternalServerId) {
       // 2a. Check if a main persona exists for this server
-      const mainPersonaRows = await sql`
-				SELECT t.tomori_id
-				FROM tomoris t
-				WHERE t.server_id = ${existingInternalServerId}
-				  AND t.is_alter = false
-				LIMIT 1
-			`;
+      const hasMain = await personaRepository.hasMainPersona(existingInternalServerId);
 
-      if (mainPersonaRows.length > 0) {
-        const existingTomoriState = await loadTomoriState(serverId);
-        const providerAddMention = commandRegistry.getCommandMention("config", "provider", "add");
+      if (hasMain) {
+        const existingTomoriState = await personaRepository.loadState(serverId);
+
+        // 3. Main persona row exists AND state is fully valid — server is healthy, block re-setup.
+        //    If personaRepository.loadState returns null despite the row existing, the server is in a broken
+        //    state (missing split config rows or deleted LLM). Fall through to cleanup so the
+        //    user isn't permanently locked out by a setup guard that uses a weaker health check
+        //    than the commands that actually require a healthy state.
+        if (existingTomoriState) {
+          const providerAddMention = commandRegistry.getCommandMention("config", "provider", "add");
+          const modelTextMention = commandRegistry.getCommandMention("config", "model", "text");
+          const userByokToggleMention = commandRegistry.getCommandMention("server", "user-byok", "toggle");
+          const helpPersonalProviderMention = commandRegistry.getCommandMention("help", "personal-provider");
+          const currentModelValue =
+            existingTomoriState.config.llm_id && existingTomoriState.llm
+              ? formatLlmDisplayLabel(
+                  existingTomoriState.llm,
+                  existingTomoriState.config.custom_model_name,
+                  existingTomoriState.config.other_model_codename,
+                )
+              : existingTomoriState.config.user_byok_mode
+                ? localizer(locale, "commands.choices.none_user_byok")
+                : localizer(locale, "commands.choices.none");
+
+          await replySummaryEmbed(interaction, locale, {
+            titleKey: "commands.config.setup.already_setup_title",
+            descriptionKey: "commands.config.setup.already_setup_summary_description",
+            color: ColorCode.WARN,
+            fields: [
+              {
+                nameKey: "commands.config.setup.current_provider_field",
+                value: currentModelValue,
+              },
+              {
+                nameKey: "commands.config.setup.current_byok_field",
+                value: localizer(
+                  locale,
+                  existingTomoriState.config.user_byok_mode
+                    ? "commands.config.setup.current_byok_enabled_value"
+                    : "commands.config.setup.current_byok_disabled_value",
+                  {
+                    toggle_command: userByokToggleMention,
+                  },
+                ),
+              },
+              {
+                nameKey: "commands.config.setup.already_setup_next_steps_field",
+                value: localizer(locale, "commands.config.setup.already_setup_next_steps_value", {
+                  provider_add_command: providerAddMention,
+                  model_text_command: modelTextMention,
+                  byok_toggle_command: userByokToggleMention,
+                  help_personal_provider: helpPersonalProviderMention,
+                }),
+              },
+            ],
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        // 3a. Main persona row exists but personaRepository.loadState returned null — broken state
+        //     (e.g. config row deleted, or llm_id points to a removed model).
+        //     Do NOT nuke personas here: alters may be perfectly healthy and only the config
+        //     row or model reference is missing. Guide the user to targeted repair commands.
+        log.warn(
+          `[Setup] Server ${serverId} has a main persona row but state validation failed — surfacing repair guidance`,
+        );
         const modelTextMention = commandRegistry.getCommandMention("config", "model", "text");
-        const userByokToggleMention = commandRegistry.getCommandMention("server", "user-byok", "toggle");
-        const helpPersonalProviderMention = commandRegistry.getCommandMention("help", "personal-provider");
-        const currentModelValue =
-          existingTomoriState?.config.llm_id && existingTomoriState.llm
-            ? formatLlmDisplayLabel(
-                existingTomoriState.llm,
-                existingTomoriState.config.custom_model_name,
-                existingTomoriState.config.other_model_codename,
-              )
-            : existingTomoriState?.config.user_byok_mode
-              ? localizer(locale, "commands.choices.none_user_byok")
-              : localizer(locale, "commands.choices.none");
-
-        // 3. Main persona exists — server is fully set up, block re-setup
-        await replySummaryEmbed(interaction, locale, {
-          titleKey: "commands.config.setup.already_setup_title",
-          descriptionKey: "commands.config.setup.already_setup_summary_description",
-          color: ColorCode.WARN,
-          fields: [
-            {
-              nameKey: "commands.config.setup.current_provider_field",
-              value: currentModelValue,
-            },
-            {
-              nameKey: "commands.config.setup.current_byok_field",
-              value: localizer(
-                locale,
-                existingTomoriState?.config.user_byok_mode
-                  ? "commands.config.setup.current_byok_enabled_value"
-                  : "commands.config.setup.current_byok_disabled_value",
-                {
-                  toggle_command: userByokToggleMention,
-                },
-              ),
-            },
-            {
-              nameKey: "commands.config.setup.already_setup_next_steps_field",
-              value: localizer(locale, "commands.config.setup.already_setup_next_steps_value", {
-                provider_add_command: providerAddMention,
-                model_text_command: modelTextMention,
-                byok_toggle_command: userByokToggleMention,
-                help_personal_provider: helpPersonalProviderMention,
-              }),
-            },
-          ],
+        const providerAddMention = commandRegistry.getCommandMention("config", "provider", "add");
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "commands.config.setup.broken_state_title",
+          descriptionKey: "commands.config.setup.broken_state_description",
+          descriptionVars: {
+            model_text_command: modelTextMention,
+            provider_add_command: providerAddMention,
+          },
+          color: ColorCode.ERROR,
           flags: MessageFlags.Ephemeral,
         });
         return;
       }
 
-      // 3a. No main persona but server data exists (orphaned alters/config).
-      //     Clean up orphaned data so setupServer can create fresh rows
-      //     without hitting unique constraint violations on tomori_configs.server_id.
-      log.warn(`[Setup] Server ${serverId} has no main persona but orphaned data exists — cleaning up for fresh setup`);
-
-      // Delete orphaned tomoris (alters without a main). CASCADE handles persona_configs.
-      // tomori_configs.tomori_id is SET NULL on delete (not cascaded), so we delete config separately.
-      await sql`
-				DELETE FROM tomoris
-				WHERE server_id = ${existingInternalServerId}
-			`;
-
-      // Delete orphaned tomori_configs to clear the server_id unique constraint
-      await sql`
-				DELETE FROM tomori_configs
-				WHERE server_id = ${existingInternalServerId}
-			`;
+      // 3b. No main persona row — orphaned alters or empty server entry.
+      //     Wipe every config-table row to clear orphaned data; alter rows in `personas`
+      //     are preserved since serverRepository.setup only inserts a new main persona (is_alter=false).
+      log.warn(`[Setup] Server ${serverId} has no main persona — clearing config, preserving alters`);
+      await configRepository.resetAllServerConfigs(existingInternalServerId);
 
       // Invalidate cache so stale persona data is not served
       invalidateTomoriStateCache(serverId);
 
-      log.info(`[Setup] Cleaned up orphaned data for server ${serverId}, proceeding with fresh setup`);
+      log.info(`[Setup] Cleared stale config for server ${serverId}, preserving alters, proceeding with fresh setup`);
     }
 
     // Load dynamic data for the modal
-    const [uniqueProviders, presetOptions] = await Promise.all([
-      loadUniqueProviders(),
-      loadPresetOptionsByLocale(locale, 100),
+    const [uniqueProviders, presetOptions, freeProviders] = await Promise.all([
+      llmModelRepo.loadUniqueProviders(),
+      configRepository.loadPresetOptionsByLocale(locale, 100),
+      llmModelRepo.loadProvidersWithFreeModels(),
     ]);
 
     // Check if we have the required data
@@ -204,13 +203,17 @@ export async function execute(
     }
 
     // Create provider options for the select menu
+    const freeSuffix = localizer(locale, "commands.provider.add.free_suffix");
     const providerSelectOptions: SelectOption[] = uniqueProviders
       .filter((provider) => provider.toLowerCase() !== "custom" && !isCustomProvider(provider))
-      .map((provider) => ({
-        label: getProviderDisplayName(provider),
-        value: provider,
-        description: undefined,
-      }));
+      .map((provider) => {
+        const isFree = freeProviders.has(provider.toLowerCase());
+        return {
+          label: isFree ? `${getProviderDisplayName(provider)} (${freeSuffix})` : getProviderDisplayName(provider),
+          value: provider,
+          description: undefined,
+        };
+      });
     providerSelectOptions.push({
       label: localizer(locale, "commands.config.setup.api_provider_custom_endpoint_label"),
       value: SETUP_CUSTOM_ENDPOINT_PROVIDER,
@@ -389,7 +392,7 @@ export async function execute(
         // Test the API key with a real API call using provider factory
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "commands.config.setup.api_key_validating",
-          descriptionKey: "commands.config.setup.api_key_validating",
+          description: localizer(locale, "commands.config.setup.api_key_validating_description"),
           color: ColorCode.INFO,
         });
 
@@ -453,14 +456,9 @@ export async function execute(
       }
 
       // Get the full preset data from database
-      const presetRows = await sql`
-			SELECT tomori_preset_id, tomori_preset_name 
-			FROM tomori_presets 
-			WHERE tomori_preset_name = ${selectedPresetOption.name}
-			LIMIT 1
-		`;
+      const presetRow = await configRepository.loadPresetByName(selectedPresetOption.name);
 
-      if (!presetRows.length) {
+      if (!presetRow) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "general.errors.operation_failed_title",
           descriptionKey: "commands.config.setup.preset_not_found",
@@ -469,7 +467,7 @@ export async function execute(
         return;
       }
 
-      const selectedPresetId = presetRows[0].tomori_preset_id;
+      const selectedPresetId = presetRow.persona_preset_id;
       log.info(`Selected preset ID: ${selectedPresetId} (${selectedPresetOption.name})`);
 
       // 5. Validate humanizer degree (required, must be 0-3)
@@ -566,7 +564,7 @@ export async function execute(
 
       // Setup the server
       try {
-        await setupServer(interaction.guild, setupConfig);
+        await serverRepository.setup(interaction.guild, setupConfig);
       } catch (error) {
         log.error("Server setup failed:", error);
         await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -580,17 +578,18 @@ export async function execute(
       // NovelAI auto-disable: flip emoji and sticker usage off immediately after setup.
       // The schema defaults both to true, but NovelAI's token budget makes them
       // counterproductive — they consume context without the model being able to use them.
-      // The user is notified in the success embed and can re-enable via /config tools manage.
-      if (normalizedProvider === "novelai") {
+      // The user is notified in the success embed and can re-enable via /capabilities manage.
+      // Load the newly-created TomoriState once and reuse for both the NovelAI
+      // capability auto-disable and the emoji/sticker sync below — avoids a
+      // duplicate cache fetch and gives us the internal server_id.
+      const newTomoriState = await personaRepository.loadState(serverId);
+
+      if (normalizedProvider === "novelai" && newTomoriState) {
         try {
-          await sql`
-						UPDATE tomori_configs
-						SET emoji_usage_enabled = false,
-						    sticker_usage_enabled = false
-						WHERE server_id = (
-							SELECT server_id FROM servers WHERE discord_id = ${serverId}
-						)
-					`;
+          await configRepository.updateCapabilitiesConfig(newTomoriState.server_id, {
+            emoji_usage_enabled: false,
+            sticker_usage_enabled: false,
+          });
           log.info(`[Setup] Auto-disabled emoji/sticker usage for NovelAI server ${serverId}`);
         } catch (disableError) {
           // Non-critical — log but don't fail setup
@@ -603,13 +602,10 @@ export async function execute(
       // Ensures emoji/sticker conversion works immediately without requiring an extra message
       if (!isDMChannel && interaction.guild) {
         try {
-          // 1. Load the newly created TomoriState to get server_id
-          const newTomoriState = await loadTomoriState(serverId);
-
           if (newTomoriState) {
             log.info(`[Setup] Force syncing emojis/stickers for guild ${interaction.guild.name}`);
 
-            // 2. Force sync both emojis and stickers (ignore 24hr cache)
+            // Force sync both emojis and stickers (ignore 24hr cache)
             await Promise.all([
               lazySyncGuildEmojis(interaction.guild, newTomoriState.server_id, true),
               lazySyncGuildStickers(interaction.guild, newTomoriState.server_id, true),
@@ -620,7 +616,7 @@ export async function execute(
             log.warn(`[Setup] Failed to load TomoriState after setup for guild ${interaction.guild.id}`);
           }
         } catch (syncError) {
-          // 3. Log error but don't fail setup - expressions will sync on first message anyway
+          // Log error but don't fail setup - expressions will sync on first message anyway
           log.warn(`[Setup] Failed to sync expressions during setup (will sync on first message): ${syncError}`);
         }
       }
@@ -633,9 +629,12 @@ export async function execute(
         try {
           // 1. Try to get cached preset avatar
           const cachedAvatar = getCachedPresetAvatar(selectedPresetId);
+          const presetAvatarBuffer = cachedAvatar ? null : await getPresetAvatarBuffer(presetRow);
 
           // 2. Prepare avatar value (base64 data URI or null)
-          const avatarValue = cachedAvatar || null;
+          const avatarValue =
+            cachedAvatar ??
+            (presetAvatarBuffer ? `data:image/png;base64,${presetAvatarBuffer.toString("base64")}` : null);
 
           // 3. Update guild avatar via Discord API
           const endpoint = `https://discord.com/api/v10/guilds/${interaction.guild.id}/members/@me`;
@@ -649,7 +648,7 @@ export async function execute(
           });
 
           if (response.ok) {
-            const actionDescription = cachedAvatar
+            const actionDescription = avatarValue
               ? `Set preset avatar for "${selectedPresetOption.name}"`
               : "Reset guild avatar to bot default";
             log.info(`${actionDescription} for guild ${interaction.guild.id} during setup`);
@@ -675,7 +674,7 @@ export async function execute(
       const humanizerLabel = humanizerLabels[humanizerDegree] || "Unknown";
       let configuredModelName: string | null = null;
       if (!configuredModelName && normalizedProvider) {
-        const defaultModel = await loadDefaultModelForProvider(normalizedProvider);
+        const defaultModel = await llmModelRepo.loadDefaultModel(normalizedProvider);
         if (defaultModel) {
           configuredModelName = defaultModel.llm_codename;
         }

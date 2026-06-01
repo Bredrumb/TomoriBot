@@ -10,15 +10,11 @@
 
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, EmbedBuilder, MessageFlags } from "discord.js";
 import type { ButtonInteraction, ChatInputCommandInteraction, ModalSubmitInteraction } from "discord.js";
-import type { CustomEndpointCapability, CustomEndpointRow, TomoriConfigRow } from "@/types/db/schema";
+import type { CustomEndpointCapability, CustomEndpointRow, AssembledServerConfig } from "@/types/db/schema";
 import type { ModalComponent } from "@/types/discord/modal";
 import type { SelectOption } from "@/types/discord/modal";
-import {
-  promptWithPaginatedModal,
-  promptWithRawModal,
-  replyInfoEmbed,
-  safeSelectOptionText,
-} from "@/utils/discord/interactionHelper";
+import { promptWithPaginatedModal, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
 import {
@@ -44,8 +40,8 @@ const DEFAULT_WORKFLOW_SUPPORTS = {
 };
 
 type RegistrationScope =
-  | { kind: "server"; ownerId: number; baseConfig: TomoriConfigRow }
-  | { kind: "personal"; ownerId: number; baseConfig: TomoriConfigRow };
+  | { kind: "server"; ownerId: number; baseConfig: AssembledServerConfig }
+  | { kind: "personal"; ownerId: number; baseConfig: AssembledServerConfig };
 
 export interface ExecuteCustomEndpointEditOptions {
   interaction: ChatInputCommandInteraction;
@@ -219,9 +215,7 @@ function buildWorkflowEditModalComponents(
 }
 
 function isComfyUiMediaEndpoint(endpoint: CustomEndpointRow): boolean {
-  return (
-    (endpoint.capability === "image" || endpoint.capability === "video") && endpoint.api_style === "comfyui"
-  );
+  return (endpoint.capability === "image" || endpoint.capability === "video") && endpoint.api_style === "comfyui";
 }
 
 /** Build a concise embed summarising the selected endpoint's current configuration. */
@@ -301,9 +295,15 @@ function buildEndpointSummaryEmbed(locale: string, endpoint: CustomEndpointRow):
   if (endpoint.capability === "image" && endpoint.api_style === "comfyui") {
     const supports = readWorkflowSupports(extra);
     const enabled = [
-      supports.txt2img ? localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_txt2img") : null,
-      supports.img2img ? localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_img2img") : null,
-      supports.inpaint ? localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_inpaint") : null,
+      supports.txt2img
+        ? localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_txt2img")
+        : null,
+      supports.img2img
+        ? localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_img2img")
+        : null,
+      supports.inpaint
+        ? localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_inpaint")
+        : null,
     ].filter((item): item is string => !!item);
     lines.push(
       `**${localizer(locale, "commands.config.custom_models.capability_modal.workflow_supports_label")}:** ${enabled.join(", ")}`,
@@ -535,8 +535,7 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
         workflowButtonInteraction = await summaryMessage.awaitMessageComponent({
           componentType: ComponentType.Button,
           filter: (i: ButtonInteraction) =>
-            i.user.id === interaction.user.id &&
-            (i.customId === WORKFLOW_BUTTON_ID || i.customId === CANCEL_BUTTON_ID),
+            i.user.id === interaction.user.id && (i.customId === WORKFLOW_BUTTON_ID || i.customId === CANCEL_BUTTON_ID),
           time: 300_000,
         });
       } catch {

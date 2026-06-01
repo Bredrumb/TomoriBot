@@ -49,7 +49,11 @@ function inferImageMimeType(urlOrName: string, fallback = "image/jpeg"): string 
   return fallback;
 }
 
-function isLikelyImageAttachment(attachment: { contentType?: string | null; name?: string | null; url?: string }): boolean {
+function isLikelyImageAttachment(attachment: {
+  contentType?: string | null;
+  name?: string | null;
+  url?: string;
+}): boolean {
   if (attachment.contentType?.startsWith("image/")) {
     return true;
   }

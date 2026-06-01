@@ -5,16 +5,16 @@
  * The ID is shown in context as "ID:123".
  */
 
-import { sql } from "@/utils/db/client";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { PrivacyLevel } from "../../types/db/schema";
-import { validateMemoryContent } from "../../utils/db/memoryLimits";
+import { validateMemoryContent } from "@/utils/misc/memoryLimits";
 import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { invalidateUserCache } from "../../utils/cache/userCache";
-import { sendStandardEmbed } from "../../utils/discord/embedHelper";
+import { sendMemoryEmbedWithExpand } from "../../utils/discord/expandableMemoryNotice";
 import { convertMentions } from "../../utils/text/contextBuilder";
-import { isBlacklisted, loadUserRow, getPrivacyLevel, loadPersonalMemoriesForUserLineage } from "@/utils/db/dbRead";
+import { sanitizeUnknownTemplatePlaceholders } from "@/utils/text/processors/mentionProcessor";
+import { personalMemoryRepository, serverMemoryRepository, userRepository } from "@/utils/db/repositories";
 import { resolveUserTarget } from "@/utils/discord/targetResolver";
 
 export class UpdateLongTermMemoryTool extends BaseTool {
@@ -109,7 +109,8 @@ export class UpdateLongTermMemoryTool extends BaseTool {
     }
 
     const memoryId = Math.trunc(memoryIdArg);
-    const newContent = memoryContentArg.trim();
+    // Sanitize unknown {word} placeholders before saving (e.g. {bredrumb} → bredrumb)
+    const newContent = sanitizeUnknownTemplatePlaceholders(memoryContentArg.trim());
     const isDeleteRequested = newContent.length === 0;
 
     const contentValidation = isDeleteRequested ? { isValid: true } : validateMemoryContent(newContent);
@@ -175,8 +176,8 @@ export class UpdateLongTermMemoryTool extends BaseTool {
     const isPersonalUpdate = Boolean(resolvedTargetUserId);
 
     const tomoriState = context.tomoriState;
-    if (!tomoriState?.server_id || !tomoriState.tomori_id) {
-      log.error("Missing server_id or tomori_id in Tomori state for memory update");
+    if (!tomoriState?.server_id || !tomoriState.persona_id) {
+      log.error("Missing server_id or persona_id in Tomori state for memory update");
       return {
         success: false,
         error: "Internal bot error: Missing server context",
@@ -201,20 +202,20 @@ export class UpdateLongTermMemoryTool extends BaseTool {
     }
 
     const personaNickname =
-      context.personaUsername || tomoriState.tomori_nickname || context.client.user?.username || "TomoriBot";
+      context.personaUsername || tomoriState.persona_nickname || context.client.user?.username || "TomoriBot";
 
     try {
       if (!isPersonalUpdate) {
         if (isDeleteRequested) {
           const resolvedTriggererUserId = context.message?.author?.id || context.userId;
-          const triggererRow = resolvedTriggererUserId ? await loadUserRow(resolvedTriggererUserId) : null;
-          const [deletedServerMemory] = await sql`
-						DELETE FROM server_memories
-						WHERE server_memory_id = ${memoryId}
-						  AND server_id = ${tomoriState.server_id}
-						  AND persona_lineage_id = ${tomoriState.persona_lineage_id}
-						RETURNING server_memory_id, content, user_id
-					`;
+          const triggererRow = resolvedTriggererUserId
+            ? await userRepository.loadByDiscordId(resolvedTriggererUserId)
+            : null;
+          const deletedServerMemory = await serverMemoryRepository.removeByIdWithLineage(
+            memoryId,
+            tomoriState.server_id,
+            tomoriState.persona_lineage_id,
+          );
 
           if (deletedServerMemory) {
             const processedMemoryContent = await convertMentions(
@@ -222,11 +223,11 @@ export class UpdateLongTermMemoryTool extends BaseTool {
               context.client,
               serverDiscId,
               triggererRow?.user_nickname,
-              tomoriState.tomori_nickname,
+              tomoriState.persona_nickname,
               tomoriState?.config.personal_memories_enabled,
             );
 
-            await sendStandardEmbed(
+            await sendMemoryEmbedWithExpand(
               context.channel,
               context.locale,
               {
@@ -245,6 +246,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
                 },
                 footerKey: "genai.self_teach.server_memory_footer",
               },
+              processedMemoryContent,
               {
                 webhook: context.webhook,
                 personaUsername: context.personaUsername,
@@ -277,28 +279,28 @@ export class UpdateLongTermMemoryTool extends BaseTool {
         }
 
         // 1) Server memory update (server_id + lineage scoped)
-        const [updatedServerMemory] = await sql`
-					UPDATE server_memories
-					SET content = ${newContent}, updated_at = CURRENT_TIMESTAMP
-					WHERE server_memory_id = ${memoryId}
-					  AND server_id = ${tomoriState.server_id}
-					  AND persona_lineage_id = ${tomoriState.persona_lineage_id}
-					RETURNING server_memory_id, content, user_id
-				`;
+        const updatedServerMemory = await serverMemoryRepository.updateByIdWithLineage(
+          memoryId,
+          newContent,
+          tomoriState.server_id,
+          tomoriState.persona_lineage_id,
+        );
 
         if (updatedServerMemory) {
           const resolvedTriggererUserId = context.message?.author?.id || context.userId;
-          const triggererRow = resolvedTriggererUserId ? await loadUserRow(resolvedTriggererUserId) : null;
+          const triggererRow = resolvedTriggererUserId
+            ? await userRepository.loadByDiscordId(resolvedTriggererUserId)
+            : null;
           const processedMemoryContent = await convertMentions(
             newContent,
             context.client,
             serverDiscId,
             triggererRow?.user_nickname,
-            tomoriState.tomori_nickname,
+            tomoriState.persona_nickname,
             tomoriState?.config.personal_memories_enabled,
           );
 
-          await sendStandardEmbed(
+          await sendMemoryEmbedWithExpand(
             context.channel,
             context.locale,
             {
@@ -317,6 +319,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
               },
               footerKey: "genai.self_teach.server_memory_footer",
             },
+            processedMemoryContent,
             {
               webhook: context.webhook,
               personaUsername: context.personaUsername,
@@ -360,7 +363,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
         };
       }
 
-      const targetUserRow = await loadUserRow(resolvedTargetUserId as string);
+      const targetUserRow = await userRepository.loadByDiscordId(resolvedTargetUserId as string);
       if (!targetUserRow?.user_id) {
         return {
           success: false,
@@ -409,7 +412,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
         targetUserRow.user_disc_id;
 
       if (!isDeleteRequested) {
-        const userPrivacyLevel = await getPrivacyLevel(resolvedTargetUserId as string);
+        const userPrivacyLevel = await userRepository.getPrivacyLevel(resolvedTargetUserId as string);
         if (userPrivacyLevel === PrivacyLevel.PARTIAL || userPrivacyLevel === PrivacyLevel.FULL) {
           return {
             success: false,
@@ -423,7 +426,11 @@ export class UpdateLongTermMemoryTool extends BaseTool {
       }
 
       const personaLineageId = tomoriState.persona_lineage_id ?? 0;
-      const personalMemories = await loadPersonalMemoriesForUserLineage(targetUserRow.user_id, personaLineageId, true);
+      const personalMemories = await personalMemoryRepository.loadForUserLineage(
+        targetUserRow.user_id,
+        personaLineageId,
+        true,
+      );
       const targetMemory = personalMemories.find((memory) => memory.personal_memory_id === memoryId);
       if (!targetMemory) {
         return {
@@ -436,7 +443,9 @@ export class UpdateLongTermMemoryTool extends BaseTool {
         };
       }
 
-      const isUserBlacklisted = guild ? await isBlacklisted(serverDiscId, resolvedTargetUserId as string) : false;
+      const isUserBlacklisted = guild
+        ? await userRepository.isBlacklisted(serverDiscId, resolvedTargetUserId as string)
+        : false;
       const footerKey = !tomoriState.config.personal_memories_enabled
         ? "genai.self_teach.personal_memory_footer_personalization_disabled"
         : isUserBlacklisted
@@ -444,16 +453,11 @@ export class UpdateLongTermMemoryTool extends BaseTool {
           : "genai.self_teach.personal_memory_footer_manage";
 
       if (isDeleteRequested) {
-        const [deletedMemory] = await sql`
-					DELETE FROM personal_memories
-					WHERE personal_memory_id = ${memoryId}
-					  AND user_id = ${targetUserRow.user_id}
-					  AND (
-						persona_lineage_id = ${personaLineageId}
-						OR persona_lineage_id = 0
-					  )
-					RETURNING personal_memory_id, content
-				`;
+        const deletedMemory = await personalMemoryRepository.removeByIdForUserAndLineage(
+          memoryId,
+          targetUserRow.user_id,
+          personaLineageId,
+        );
 
         if (!deletedMemory) {
           log.error(`Failed to delete personal memory ${memoryId} for user ${targetUserRow.user_id}`);
@@ -474,11 +478,11 @@ export class UpdateLongTermMemoryTool extends BaseTool {
           context.client,
           serverDiscId,
           userDisplayName,
-          tomoriState.tomori_nickname,
+          tomoriState.persona_nickname,
           tomoriState?.config.personal_memories_enabled,
         );
 
-        await sendStandardEmbed(
+        await sendMemoryEmbedWithExpand(
           context.channel,
           context.locale,
           {
@@ -499,6 +503,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
             },
             footerKey,
           },
+          processedMemoryContent,
           {
             webhook: context.webhook,
             personaUsername: context.personaUsername,
@@ -519,17 +524,12 @@ export class UpdateLongTermMemoryTool extends BaseTool {
         };
       }
 
-      const [updatedMemory] = await sql`
-				UPDATE personal_memories
-				SET content = ${newContent}, updated_at = CURRENT_TIMESTAMP
-				WHERE personal_memory_id = ${memoryId}
-				  AND user_id = ${targetUserRow.user_id}
-				  AND (
-					persona_lineage_id = ${personaLineageId}
-					OR persona_lineage_id = 0
-				  )
-				RETURNING personal_memory_id, content
-			`;
+      const updatedMemory = await personalMemoryRepository.updateByIdForUserAndLineage(
+        memoryId,
+        newContent,
+        targetUserRow.user_id,
+        personaLineageId,
+      );
 
       if (!updatedMemory) {
         log.error(`Failed to update personal memory ${memoryId} for user ${targetUserRow.user_id}`);
@@ -550,11 +550,11 @@ export class UpdateLongTermMemoryTool extends BaseTool {
         context.client,
         serverDiscId,
         userDisplayName,
-        tomoriState.tomori_nickname,
+        tomoriState.persona_nickname,
         tomoriState?.config.personal_memories_enabled,
       );
 
-      await sendStandardEmbed(
+      await sendMemoryEmbedWithExpand(
         context.channel,
         context.locale,
         {
@@ -575,6 +575,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
           },
           footerKey,
         },
+        processedMemoryContent,
         {
           webhook: context.webhook,
           personaUsername: context.personaUsername,

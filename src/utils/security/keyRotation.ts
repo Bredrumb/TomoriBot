@@ -6,7 +6,11 @@
  * - Round-robin distribution across multiple API keys
  * - Automatic failover on API errors
  * - Cooldown-based recovery (60s for rate limits, 5min for other errors)
- * - Main key pointer design (uses tomori_configs.api_key as virtual key in pool)
+ * - Main key pointer design (uses the server model config api_key as virtual key in pool)
+ *
+ * Schema split (migration 014): config columns live in api_key_rotation; telemetry lives in
+ * api_key_rotation_runtime_state. Selection queries LEFT JOIN both tables so callers receive the
+ * full ApiKeyRotationRow shape. Telemetry writes target only the runtime state table.
  */
 
 import { sql } from "@/utils/db/client";
@@ -42,7 +46,7 @@ export interface SelectedKeyResult {
   apiKey: string;
   /** The rotation_key_id to use for recording success/error (null for main key without pointer) */
   rotationKeyId: number | null;
-  /** Whether this is the main key from tomori_configs */
+  /** Whether this is the main key from the assembled server config */
   isMainKey: boolean;
 }
 
@@ -72,8 +76,8 @@ function isKeyInCooldown(
  * If rotation is not active (< 2 keys), returns null to signal using main key directly.
  *
  * Selection Algorithm:
- * 1. Query api_key_rotation for server_id
- * 2. If 0-1 rows → no rotation, return null (use tomori_configs.api_key directly)
+ * 1. Query api_key_rotation JOIN api_key_rotation_runtime_state for server_id
+ * 2. If 0-1 rows → no rotation, return null (use the assembled server config api_key directly)
  * 3. If 2+ rows → rotation active:
  *    a. Filter: is_enabled = true AND cooldown expired
  *    b. Sort by: usage_count ASC (round-robin)
@@ -92,13 +96,20 @@ export async function selectApiKey(
   const provider = tomoriState.llm.llm_provider.toLowerCase();
 
   try {
-    // 1. Query all rotation keys for this server and provider
+    // 1. Query all rotation keys for this server and provider, joining runtime telemetry
     const rotationKeys = await sql`
-			SELECT * FROM api_key_rotation
-			WHERE server_id = ${serverId}
-			AND provider = ${provider}
-			ORDER BY usage_count ASC, rotation_key_id ASC
-		`;
+      SELECT
+        akr.rotation_key_id, akr.server_id, akr.provider, akr.api_key, akr.key_version,
+        akr.is_main_key_pointer, akr.is_enabled, akr.created_at, akr.updated_at,
+        COALESCE(rs.usage_count, 0)  AS usage_count,
+        COALESCE(rs.error_count, 0)  AS error_count,
+        rs.last_used_at, rs.last_error_at, rs.last_error_type, rs.last_error_message
+      FROM api_key_rotation akr
+      LEFT JOIN api_key_rotation_runtime_state rs USING (rotation_key_id)
+      WHERE akr.server_id = ${serverId}
+        AND akr.provider = ${provider}
+      ORDER BY COALESCE(rs.usage_count, 0) ASC, akr.rotation_key_id ASC
+    `;
 
     // 2. If less than 2 keys, rotation is not active
     if (!rotationKeys || rotationKeys.length < 2) {
@@ -137,9 +148,9 @@ export async function selectApiKey(
       let decryptedKey: string;
 
       if (key.is_main_key_pointer) {
-        // Main key pointer: decrypt from tomori_configs.api_key
+        // Main key pointer: decrypt from the assembled server config api_key
         if (!tomoriState.config.api_key) {
-          log.warn(`Main key pointer exists but tomori_configs.api_key is null for server ${serverId}`);
+          log.warn(`Main key pointer exists but server config api_key is null for server ${serverId}`);
           continue;
         }
         const keyVersion = tomoriState.config.key_version || 1;
@@ -195,11 +206,18 @@ export async function hasAvailableRotationKey(
 
   try {
     const rotationKeys = await sql`
-			SELECT * FROM api_key_rotation
-			WHERE server_id = ${serverId}
-			AND provider = ${provider}
-			ORDER BY usage_count ASC, rotation_key_id ASC
-		`;
+      SELECT
+        akr.rotation_key_id, akr.server_id, akr.provider, akr.api_key, akr.key_version,
+        akr.is_main_key_pointer, akr.is_enabled, akr.created_at, akr.updated_at,
+        COALESCE(rs.usage_count, 0)  AS usage_count,
+        COALESCE(rs.error_count, 0)  AS error_count,
+        rs.last_used_at, rs.last_error_at, rs.last_error_type, rs.last_error_message
+      FROM api_key_rotation akr
+      LEFT JOIN api_key_rotation_runtime_state rs USING (rotation_key_id)
+      WHERE akr.server_id = ${serverId}
+        AND akr.provider = ${provider}
+      ORDER BY COALESCE(rs.usage_count, 0) ASC, akr.rotation_key_id ASC
+    `;
 
     if (!rotationKeys || rotationKeys.length < 2) {
       return false;
@@ -246,22 +264,26 @@ export async function hasAvailableRotationKey(
 
 /**
  * Records a successful API call for a rotation key.
- * Increments usage_count, resets error_count, and updates last_used_at.
+ * Increments usage_count, resets error_count and cooldown fields in the runtime state table.
+ * Uses UPSERT to ensure the runtime row exists even if somehow absent after migration.
  *
  * @param rotationKeyId - The rotation_key_id to update
  */
 export async function recordKeySuccess(rotationKeyId: number): Promise<void> {
   try {
     await sql`
-			UPDATE api_key_rotation
-			SET usage_count = usage_count + 1,
-			    error_count = 0,
-			    last_used_at = CURRENT_TIMESTAMP,
-			    last_error_at = NULL,
-			    last_error_type = NULL,
-			    last_error_message = NULL
-			WHERE rotation_key_id = ${rotationKeyId}
-		`;
+      INSERT INTO api_key_rotation_runtime_state
+        (rotation_key_id, usage_count, error_count, last_used_at, last_error_at, last_error_type, last_error_message)
+      VALUES
+        (${rotationKeyId}, 1, 0, CURRENT_TIMESTAMP, NULL, NULL, NULL)
+      ON CONFLICT (rotation_key_id) DO UPDATE SET
+        usage_count      = api_key_rotation_runtime_state.usage_count + 1,
+        error_count      = 0,
+        last_used_at     = CURRENT_TIMESTAMP,
+        last_error_at    = NULL,
+        last_error_type  = NULL,
+        last_error_message = NULL
+    `;
 
     log.info(`Recorded success for rotation key ${rotationKeyId}`);
   } catch (error) {
@@ -271,7 +293,8 @@ export async function recordKeySuccess(rotationKeyId: number): Promise<void> {
 
 /**
  * Records an API error for a rotation key.
- * Sets cooldown based on error type and increments error_count.
+ * Sets cooldown based on error type and increments error_count in the runtime state table.
+ * Uses UPSERT to ensure the runtime row exists even if somehow absent after migration.
  *
  * @param rotationKeyId - The rotation_key_id to update
  * @param errorType - Type of error ('rate_limit' for 429, 'api_error' for others)
@@ -284,13 +307,16 @@ export async function recordKeyError(
 ): Promise<void> {
   try {
     await sql`
-			UPDATE api_key_rotation
-			SET error_count = error_count + 1,
-			    last_error_at = CURRENT_TIMESTAMP,
-			    last_error_type = ${errorType},
-			    last_error_message = ${errorMessage.substring(0, 500)}
-			WHERE rotation_key_id = ${rotationKeyId}
-		`;
+      INSERT INTO api_key_rotation_runtime_state
+        (rotation_key_id, usage_count, error_count, last_error_at, last_error_type, last_error_message)
+      VALUES
+        (${rotationKeyId}, 0, 1, CURRENT_TIMESTAMP, ${errorType}, ${errorMessage.substring(0, 500)})
+      ON CONFLICT (rotation_key_id) DO UPDATE SET
+        error_count        = api_key_rotation_runtime_state.error_count + 1,
+        last_error_at      = CURRENT_TIMESTAMP,
+        last_error_type    = ${errorType},
+        last_error_message = ${errorMessage.substring(0, 500)}
+    `;
 
     const cooldownSecs = errorType === "rate_limit" ? RATE_LIMIT_COOLDOWN_MS / 1000 : API_ERROR_COOLDOWN_MS / 1000;
 
@@ -305,6 +331,7 @@ export async function recordKeyError(
 /**
  * Adds a new rotation key to the pool.
  * Also creates the main key pointer if this is the first rotation key.
+ * Each api_key_rotation insert is followed by a runtime state row insert.
  *
  * @param serverId - The internal server ID
  * @param provider - The LLM provider name (must match current provider)
@@ -317,27 +344,45 @@ export async function addRotationKey(serverId: number, provider: string, apiKey:
   try {
     // 1. Check if main key pointer already exists
     const existingPointer = await sql`
-			SELECT rotation_key_id FROM api_key_rotation
-			WHERE server_id = ${serverId} AND is_main_key_pointer = true
-			LIMIT 1
-		`;
+      SELECT rotation_key_id FROM api_key_rotation
+      WHERE server_id = ${serverId} AND is_main_key_pointer = true
+      LIMIT 1
+    `;
 
-    // 2. If no pointer exists, create one first (enables rotation)
+    // 2. If no pointer exists, create one first (enables rotation), then seed runtime state
     if (!existingPointer || existingPointer.length === 0) {
       log.info(`Creating main key pointer for server ${serverId} to enable rotation`);
-      await sql`
-				INSERT INTO api_key_rotation (server_id, provider, api_key, is_main_key_pointer, is_enabled)
-				VALUES (${serverId}, ${normalizedProvider}, NULL, true, true)
-			`;
+      const pointerResult = await sql`
+        INSERT INTO api_key_rotation (server_id, provider, api_key, is_main_key_pointer, is_enabled)
+        VALUES (${serverId}, ${normalizedProvider}, NULL, true, true)
+        RETURNING rotation_key_id
+      `;
+      const pointerId = pointerResult[0]?.rotation_key_id as number | undefined;
+      if (pointerId) {
+        await sql`
+          INSERT INTO api_key_rotation_runtime_state (rotation_key_id)
+          VALUES (${pointerId})
+          ON CONFLICT (rotation_key_id) DO NOTHING
+        `;
+      }
     }
 
-    // 3. Encrypt and store the new rotation key
+    // 3. Encrypt and store the new rotation key, then seed runtime state
     const { encrypted, version } = await encryptApiKey(apiKey);
 
-    await sql`
-			INSERT INTO api_key_rotation (server_id, provider, api_key, key_version, is_main_key_pointer, is_enabled)
-			VALUES (${serverId}, ${normalizedProvider}, ${encrypted}, ${version}, false, true)
-		`;
+    const keyResult = await sql`
+      INSERT INTO api_key_rotation (server_id, provider, api_key, key_version, is_main_key_pointer, is_enabled)
+      VALUES (${serverId}, ${normalizedProvider}, ${encrypted}, ${version}, false, true)
+      RETURNING rotation_key_id
+    `;
+    const keyId = keyResult[0]?.rotation_key_id as number | undefined;
+    if (keyId) {
+      await sql`
+        INSERT INTO api_key_rotation_runtime_state (rotation_key_id)
+        VALUES (${keyId})
+        ON CONFLICT (rotation_key_id) DO NOTHING
+      `;
+    }
 
     log.success(`Added rotation key for server ${serverId} (provider: ${normalizedProvider})`);
     return true;
@@ -350,6 +395,7 @@ export async function addRotationKey(serverId: number, provider: string, apiKey:
 /**
  * Purges all rotation keys for a server.
  * This includes the main key pointer and all additional rotation keys.
+ * Runtime state rows cascade-delete automatically via FK ON DELETE CASCADE.
  *
  * @param serverId - The internal server ID
  * @returns The number of keys deleted
@@ -357,9 +403,9 @@ export async function addRotationKey(serverId: number, provider: string, apiKey:
 export async function purgeRotationKeys(serverId: number): Promise<number> {
   try {
     const result = await sql`
-			DELETE FROM api_key_rotation
-			WHERE server_id = ${serverId}
-		`;
+      DELETE FROM api_key_rotation
+      WHERE server_id = ${serverId}
+    `;
 
     const deletedCount = result.count || 0;
     log.success(`Purged ${deletedCount} rotation key(s) for server ${serverId}`);
@@ -373,6 +419,7 @@ export async function purgeRotationKeys(serverId: number): Promise<number> {
 /**
  * Purges all rotation keys for a specific server+provider pair.
  * Used when removing a saved provider config to ensure a clean break.
+ * Runtime state rows cascade-delete automatically via FK ON DELETE CASCADE.
  *
  * @param serverId - The internal server ID
  * @param provider - The provider name (lowercase) to purge keys for
@@ -381,10 +428,10 @@ export async function purgeRotationKeys(serverId: number): Promise<number> {
 export async function purgeRotationKeysForProvider(serverId: number, provider: string): Promise<number> {
   try {
     const result = await sql`
-			DELETE FROM api_key_rotation
-			WHERE server_id = ${serverId}
-			  AND provider = ${provider.toLowerCase()}
-		`;
+      DELETE FROM api_key_rotation
+      WHERE server_id = ${serverId}
+        AND provider = ${provider.toLowerCase()}
+    `;
 
     const deletedCount = result.count || 0;
     if (deletedCount > 0) {
@@ -406,9 +453,9 @@ export async function purgeRotationKeysForProvider(serverId: number, provider: s
 export async function getRotationKeyCount(serverId: number): Promise<number> {
   try {
     const result = await sql`
-			SELECT COUNT(*) as count FROM api_key_rotation
-			WHERE server_id = ${serverId} AND is_main_key_pointer = false
-		`;
+      SELECT COUNT(*) as count FROM api_key_rotation
+      WHERE server_id = ${serverId} AND is_main_key_pointer = false
+    `;
 
     return Number(result[0]?.count || 0);
   } catch (error) {
@@ -419,6 +466,7 @@ export async function getRotationKeyCount(serverId: number): Promise<number> {
 
 /**
  * Gets all rotation keys for a server (for loading into TomoriState).
+ * JOINs runtime state so the returned rows include usage/error telemetry.
  *
  * @param serverId - The internal server ID
  * @returns Array of validated ApiKeyRotationRow objects
@@ -426,10 +474,17 @@ export async function getRotationKeyCount(serverId: number): Promise<number> {
 export async function loadRotationKeys(serverId: number): Promise<ApiKeyRotationRow[]> {
   try {
     const rows = await sql`
-			SELECT * FROM api_key_rotation
-			WHERE server_id = ${serverId}
-			ORDER BY usage_count ASC, rotation_key_id ASC
-		`;
+      SELECT
+        akr.rotation_key_id, akr.server_id, akr.provider, akr.api_key, akr.key_version,
+        akr.is_main_key_pointer, akr.is_enabled, akr.created_at, akr.updated_at,
+        COALESCE(rs.usage_count, 0)  AS usage_count,
+        COALESCE(rs.error_count, 0)  AS error_count,
+        rs.last_used_at, rs.last_error_at, rs.last_error_type, rs.last_error_message
+      FROM api_key_rotation akr
+      LEFT JOIN api_key_rotation_runtime_state rs USING (rotation_key_id)
+      WHERE akr.server_id = ${serverId}
+      ORDER BY COALESCE(rs.usage_count, 0) ASC, akr.rotation_key_id ASC
+    `;
 
     if (!rows || rows.length === 0) {
       return [];
@@ -464,9 +519,9 @@ export async function loadRotationKeys(serverId: number): Promise<ApiKeyRotation
 export async function isRotationActive(serverId: number): Promise<boolean> {
   try {
     const result = await sql`
-			SELECT COUNT(*) as count FROM api_key_rotation
-			WHERE server_id = ${serverId}
-		`;
+      SELECT COUNT(*) as count FROM api_key_rotation
+      WHERE server_id = ${serverId}
+    `;
 
     return Number(result[0]?.count || 0) >= 2;
   } catch (error) {

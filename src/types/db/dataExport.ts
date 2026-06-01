@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { SUPPORTED_PARAM_VALUES } from "@/constants/supportedParams";
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_VALUES } from "@/constants/thinkingLevels";
-import { getMemoryLimits } from "@/utils/db/memoryLimits";
+import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { logitBiasEntrySchema } from "@/types/provider/logitBias";
-import { PrivacyLevel } from "@/types/db/schema";
+import { PrivacyLevel, deliberateToolTriggerEntrySchema } from "@/types/db/schema";
 
 /**
  * Version identifier for export/import format
@@ -28,6 +28,24 @@ export const DATA_EXPORT_TYPES = {
 export type DataExportType = (typeof DATA_EXPORT_TYPES)[keyof typeof DATA_EXPORT_TYPES];
 
 /**
+ * A single memory entry. Accepts plain strings (legacy exports) or tagged objects;
+ * both forms normalise to { content, tags } on parse.
+ */
+export const memoryItemSchema = z.union([
+  z.string().transform((s) => ({ content: s, tags: [] as string[] })),
+  z.object({
+    content: z.string(),
+    tags: z.preprocess(
+      (v) =>
+        Array.isArray(v) ? v.map((t: unknown) => (typeof t === "string" ? t.replace(/^["']+|["']+$/g, "") : t)) : [],
+      z.array(z.string().max(32)).max(5),
+    ),
+  }),
+]);
+
+export type MemoryItem = { content: string; tags: string[] };
+
+/**
  * Get personal data export schema with dynamic memory limits from environment
  * Validates the structure of exported personal user data
  */
@@ -37,7 +55,7 @@ export function getPersonalExportDataSchema() {
     user_nickname: z.string().min(1).max(100),
     language_pref: z.string().min(2).max(10),
     impersonation_prompt: z.string().nullable().optional(),
-    personal_memories: z.array(z.string()).max(limits.maxPersonalMemories),
+    personal_memories: z.array(memoryItemSchema).max(limits.maxPersonalMemories),
   });
 }
 
@@ -68,7 +86,7 @@ export type PersonalSettingsExportData = z.infer<typeof personalSettingsExportDa
 export function getPersonalMemoriesExportDataSchema() {
   const limits = getMemoryLimits();
   return z.object({
-    personal_memories: z.array(z.string()).max(limits.maxPersonalMemories),
+    personal_memories: z.array(memoryItemSchema).max(limits.maxPersonalMemories),
   });
 }
 
@@ -89,18 +107,26 @@ export function getPersonalExportSchema() {
 export type PersonalExport = z.infer<ReturnType<typeof getPersonalExportSchema>>;
 
 /**
- * Server configuration export schema
- * Excludes sensitive data (API keys) and data managed by other commands (trigger words, personality)
+ * Portable server_model_configs export fields.
+ * Excludes model-selection FKs and encrypted credential mirrors.
  */
-export const serverConfigExportSchema = z.object({
+export const serverModelConfigExportSchema = z.object({
   llm_temperature: z.number().min(0.0).max(2.0),
+  thinking_level: z.enum(THINKING_LEVEL_VALUES).default(DEFAULT_THINKING_LEVEL),
+  llm_disabled_params: z.array(z.enum(SUPPORTED_PARAM_VALUES)).default([]),
+});
+
+/**
+ * Portable server_chat_configs export fields.
+ * Excludes provider/model fallback refs because they are server-specific model pointers.
+ */
+export const serverChatConfigExportSchema = z.object({
   llm_top_p: z.number().min(0.0).max(1.0).default(0.95),
   llm_top_k: z.number().int().min(0).max(40).default(0),
   llm_frequency_penalty: z.number().min(-2.0).max(2.0).default(0.0),
   llm_presence_penalty: z.number().min(-2.0).max(2.0).default(0.0),
   llm_min_p: z.number().min(0.0).max(1.0).default(0.05),
   llm_max_output_tokens: z.number().int().min(1).nullable().optional(),
-  llm_disabled_params: z.array(z.enum(SUPPORTED_PARAM_VALUES)).default([]),
   llm_logit_biases: z.preprocess(
     (val) => (typeof val === "string" ? JSON.parse(val) : val),
     z.array(logitBiasEntrySchema).default([]),
@@ -108,21 +134,90 @@ export const serverConfigExportSchema = z.object({
   llm_stop_strings: z.array(z.string()).default([]),
   llm_stop_speaker_pattern_enabled: z.boolean().default(false),
   humanizer_degree: z.number().int().min(0).max(3),
-  thinking_level: z.enum(THINKING_LEVEL_VALUES).default(DEFAULT_THINKING_LEVEL),
   timezone_offset: z.number().int().min(-12).max(14),
   message_fetch_limit: z.number().int().min(20).max(100).default(80),
   system_prompt: z.string().nullable().default(null),
+  cascade_limit: z.number().int().min(0).max(10).optional(),
+  match_limit: z.number().int().min(1).max(10).optional(),
+  send_message_limit: z.number().int().min(0).max(40).optional(),
+  context_note: z.string().nullable().optional(),
+  context_note_depth: z.number().int().min(0).max(100).optional(),
+  self_debug_enabled: z.boolean().default(false),
+});
+
+/** Portable server_member_permissions_configs export fields. */
+export const serverMemberPermissionsConfigExportSchema = z.object({
   server_memteaching_enabled: z.boolean().default(true),
   attribute_memteaching_enabled: z.boolean().default(false),
   sampledialogue_memteaching_enabled: z.boolean().default(false),
   self_teaching_enabled: z.boolean().default(true),
-  web_search_enabled: z.boolean().default(true),
   personal_memories_enabled: z.boolean().default(true),
+  prompt_snapshot_enabled: z.boolean().optional(),
+});
+
+/** Portable server_capabilities_configs export fields. */
+export const serverCapabilitiesConfigExportSchema = z.object({
+  web_search_enabled: z.boolean().default(true),
   emoji_usage_enabled: z.boolean().default(true),
   sticker_usage_enabled: z.boolean().default(true),
   imagegen_enabled: z.boolean().default(true),
+  manage_message_enabled: z.boolean().optional(),
+  videogen_enabled: z.boolean().optional(),
+  voice_message_enabled: z.boolean().optional(),
+  thread_creation_enabled: z.boolean().optional(),
+  tool_use_enabled: z.boolean().optional(),
+});
+
+/** Portable server_notice_embeds_configs export fields. */
+export const serverNoticeEmbedsConfigExportSchema = z.object({
   tool_notice_hidden_keys: z.array(z.string()).default([]),
-  self_debug_enabled: z.boolean().default(false),
+});
+
+/** Portable server_nsfw_configs export fields. */
+export const serverNsfwConfigExportSchema = z.object({
+  uncensor_injection_enabled: z.boolean().optional(),
+  uncensor_unicode_space_enabled: z.boolean().optional(),
+  uncensor_sanitize_enabled: z.boolean().optional(),
+});
+
+/** Portable server_speech_configs export fields. */
+export const serverSpeechConfigExportSchema = z.object({
+  voice_transcript_chat_mode: z.boolean().optional(),
+  chatterbox_turbo_enabled: z.boolean().optional(),
+  chatterbox_cfg_weight: z.number().min(0.0).optional(),
+  chatterbox_exaggeration: z.number().min(0.0).optional(),
+});
+
+/**
+ * Portable server_channel_scope_configs export fields.
+ * Discord channel IDs remain excluded because they are not portable.
+ */
+export const serverChannelScopeConfigExportSchema = z.object({
+  stm_privacy_bypass: z.boolean().optional(),
+});
+
+/**
+ * server_auto_trigger_configs currently has no portable export fields.
+ * Channel IDs, persona overrides, and channel-coupled thresholds are server-specific.
+ */
+export const serverAutoTriggerConfigExportSchema = z.object({});
+
+/** Portable server_trigger_behavior_configs export fields. */
+export const serverTriggerBehaviorConfigExportSchema = z.object({
+  always_reply_enabled: z.boolean().optional(),
+  deliberate_trigger_mode: z.boolean().optional(),
+  deliberate_tool_mode: z.boolean().optional(), // Added May 2026
+  deliberate_tool_context_turns: z.number().int().min(0).max(10).nullable().optional(), // Added May 2026
+  deliberate_tool_triggers: z.record(z.string(), z.array(deliberateToolTriggerEntrySchema)).optional(), // Added May 2026 - keyed by tool target, values are literal strings or {type, value} entries (regex). Shared schema with DB row to prevent drift.
+  cooldown_type: z.number().int().min(0).max(4).optional(),
+  cooldown_length: z.number().int().min(1).max(86400).optional(),
+});
+
+/**
+ * Portable server_novelai_imagegen_configs export fields.
+ * Excludes model-selection FKs.
+ */
+export const serverNovelaiImagegenConfigExportSchema = z.object({
   nai_style_tags: z.array(z.string()).optional(),
   nai_negative_tags: z.array(z.string()).optional(),
   nai_sampler: z.string().nullable().optional(),
@@ -130,38 +225,47 @@ export const serverConfigExportSchema = z.object({
   nai_scale: z.number().min(0.0).max(10.0).nullable().optional(),
   nai_noise_schedule: z.string().nullable().optional(),
   nai_cfg_rescale: z.number().min(0.0).max(1.0).nullable().optional(),
-  nai_exclusive_imggen: z.boolean().default(false),
   nai_preset_name: z.string().nullable().optional(),
-  // Behavior settings (added since initial schema)
-  cascade_limit: z.number().int().min(0).max(10).optional(),
-  match_limit: z.number().int().min(1).max(10).optional(),
-  send_message_limit: z.number().int().min(0).max(40).optional(),
-  always_reply_enabled: z.boolean().optional(),
-  deliberate_trigger_mode: z.boolean().optional(),
-  deliberate_tool_mode: z.boolean().optional(),
-  deliberate_tool_context_turns: z.number().int().min(0).max(10).nullable().optional(),
-  deliberate_tool_triggers: z.record(z.string(), z.array(z.string())).optional(),
-  cooldown_type: z.number().int().min(0).max(4).optional(),
-  cooldown_length: z.number().int().min(1).max(86400).optional(),
-  stm_privacy_bypass: z.boolean().optional(),
-  user_byok_mode: z.boolean().optional(),
-  context_note: z.string().nullable().optional(),
-  context_note_depth: z.number().int().min(0).max(100).optional(),
-  // Feature toggles (added since initial schema)
-  manage_message_enabled: z.boolean().optional(),
-  videogen_enabled: z.boolean().optional(),
-  voice_message_enabled: z.boolean().optional(),
-  thread_creation_enabled: z.boolean().optional(),
-  voice_transcript_chat_mode: z.boolean().optional(),
-  chatterbox_turbo_enabled: z.boolean().optional(),
-  chatterbox_cfg_weight: z.number().min(0.0).optional(),
-  chatterbox_exaggeration: z.number().min(0.0).optional(),
-  uncensor_injection_enabled: z.boolean().optional(),
-  uncensor_unicode_space_enabled: z.boolean().optional(),
-  uncensor_sanitize_enabled: z.boolean().optional(),
-  tool_use_enabled: z.boolean().optional(),
-  prompt_snapshot_enabled: z.boolean().optional(),
 });
+
+/** Portable server_byok_configs export fields. */
+export const serverByokConfigExportSchema = z.object({
+  user_byok_mode: z.boolean().optional(),
+});
+
+/** Portable server_memory_configs export fields. */
+export const serverMemoryConfigExportSchema = z.object({
+  memory_tagging_enabled: z.boolean().optional(),
+  channel_memory_enabled: z.boolean().optional(),
+});
+
+/**
+ * Portable server_welcome_configs export fields.
+ * Discord channel/persona references remain excluded.
+ */
+export const serverWelcomeConfigExportSchema = z.object({
+  welcome_prompt: z.string().nullable().optional(),
+});
+
+/**
+ * Server configuration export schema.
+ * Flat JSON shape is preserved for existing export/import file compatibility,
+ * but the schema is now composed by split config-table ownership.
+ */
+export const serverConfigExportSchema = serverModelConfigExportSchema
+  .merge(serverChatConfigExportSchema)
+  .merge(serverMemberPermissionsConfigExportSchema)
+  .merge(serverCapabilitiesConfigExportSchema)
+  .merge(serverNoticeEmbedsConfigExportSchema)
+  .merge(serverNsfwConfigExportSchema)
+  .merge(serverSpeechConfigExportSchema)
+  .merge(serverAutoTriggerConfigExportSchema)
+  .merge(serverChannelScopeConfigExportSchema)
+  .merge(serverTriggerBehaviorConfigExportSchema)
+  .merge(serverNovelaiImagegenConfigExportSchema)
+  .merge(serverByokConfigExportSchema)
+  .merge(serverMemoryConfigExportSchema)
+  .merge(serverWelcomeConfigExportSchema);
 
 export type ServerConfigExport = z.infer<typeof serverConfigExportSchema>;
 
@@ -171,7 +275,7 @@ export type ServerConfigExport = z.infer<typeof serverConfigExportSchema>;
 export function getServerMemoriesExportDataSchema() {
   const limits = getMemoryLimits();
   return z.object({
-    server_memories: z.array(z.string()).max(limits.maxServerMemories),
+    server_memories: z.array(memoryItemSchema).max(limits.maxServerMemories),
   });
 }
 
@@ -194,7 +298,7 @@ export function getServerExportDataSchema() {
   const limits = getMemoryLimits();
   return z.object({
     config: serverConfigExportSchema,
-    server_memories: z.array(z.string()).max(limits.maxServerMemories),
+    server_memories: z.array(memoryItemSchema).max(limits.maxServerMemories),
   });
 }
 
