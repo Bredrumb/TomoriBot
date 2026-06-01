@@ -30,6 +30,7 @@ export default {
         scope_choice_persona: `ペルソナ`,
         scope_choice_automatic: `自動`,
         scope_choice_global: `グローバル`,
+        channels_description: `任意：特定チャンネルのみに制限（カンマ区切り、例: #general,#bot-chat）。空白の場合は全チャンネルで利用可能。`,
         rag_disabled_title: `ドキュメントRAGが無効です`,
         rag_disabled_description: `文書の参照にはデータベースに [pgvector](https://github.com/pgvector/pgvector) PostgreSQL拡張が必要です。pgvector をインストールして TomoriBot を再起動してください（[セットアップガイド](https://github.com/Bredrumb/TomoriBot#readme)を参照）。`,
         no_permission_title: `権限がありません`,

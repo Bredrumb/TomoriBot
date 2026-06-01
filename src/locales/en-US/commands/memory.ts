@@ -30,6 +30,7 @@ export default {
         scope_choice_persona: `Persona`,
         scope_choice_automatic: `Automatic`,
         scope_choice_global: `Global`,
+        channels_description: `Restrict to specific channels (comma-separated, e.g. #general,#news). Blank = all channels.`,
         rag_disabled_title: `Document RAG Disabled`,
         rag_disabled_description: `Document retrieval requires the [pgvector](https://github.com/pgvector/pgvector) PostgreSQL extension in your database. Install pgvector and restart me to enable it (see the [setup guide](https://github.com/Bredrumb/TomoriBot#readme)).`,
         no_permission_title: `Permission Denied`,
