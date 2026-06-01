@@ -131,6 +131,7 @@ describe("tool schema assembly", () => {
       imageToImage: false,
       inpaint: false,
       outpaint: false,
+      negativePrompt: false,
       sourceLabel: "Z.ai",
     };
 
@@ -146,6 +147,7 @@ describe("tool schema assembly", () => {
       imageToImage: true,
       inpaint: false,
       outpaint: false,
+      negativePrompt: false,
       sourceLabel: "Google",
     };
 
@@ -163,6 +165,7 @@ describe("tool schema assembly", () => {
       imageToImage: true,
       inpaint: true,
       outpaint: true,
+      negativePrompt: true,
       sourceLabel: "ComfyUI",
     };
 
@@ -181,6 +184,7 @@ describe("tool schema assembly", () => {
       imageToImage: false,
       inpaint: false,
       outpaint: false,
+      negativePrompt: false,
       sourceLabel: "disabled",
     });
 

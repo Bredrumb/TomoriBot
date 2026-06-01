@@ -3,6 +3,7 @@ import type { ToolAssemblyState } from "@/types/tool/interfaces";
 import { sql } from "@/utils/db/client";
 import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
 import { log } from "@/utils/misc/logger";
+import { readImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
 import { resolveCustomEndpointForProvider } from "@/utils/provider/customEndpointService";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
@@ -12,6 +13,7 @@ export interface ImageToolCapabilities {
   imageToImage: boolean;
   inpaint: boolean;
   outpaint: boolean;
+  negativePrompt: boolean;
   sourceLabel: string;
 }
 
@@ -20,6 +22,7 @@ const TEXT_ONLY_IMAGE_CAPABILITIES: Omit<ImageToolCapabilities, "sourceLabel"> =
   imageToImage: false,
   inpaint: false,
   outpaint: false,
+  negativePrompt: false,
 };
 
 const REFERENCE_IMAGE_CAPABILITIES: Omit<ImageToolCapabilities, "sourceLabel"> = {
@@ -27,6 +30,7 @@ const REFERENCE_IMAGE_CAPABILITIES: Omit<ImageToolCapabilities, "sourceLabel"> =
   imageToImage: true,
   inpaint: false,
   outpaint: false,
+  negativePrompt: false,
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -34,7 +38,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function readBooleanField(record: Record<string, unknown>, fieldName: string, fallback: boolean): boolean {
-  return typeof record[fieldName] === "boolean" ? record[fieldName] : fallback;
+  const value = record[fieldName];
+  return typeof value === "boolean" ? value : fallback;
 }
 
 function readEndpointImageModeConfig(endpoint: CustomEndpointRow): Record<string, unknown> | null {
@@ -49,18 +54,15 @@ function readEndpointImageModeConfig(endpoint: CustomEndpointRow): Record<string
 
 function resolveCustomEndpointImageCapabilities(endpoint: CustomEndpointRow): ImageToolCapabilities {
   const imageModeConfig = readEndpointImageModeConfig(endpoint);
+  const supports = readImageEndpointSupports(endpoint);
 
   if (endpoint.api_style === "comfyui") {
-    const textToImage = imageModeConfig ? readBooleanField(imageModeConfig, "txt2img", true) : true;
-    const imageToImage = imageModeConfig ? readBooleanField(imageModeConfig, "img2img", true) : true;
-    const inpaint = imageModeConfig ? readBooleanField(imageModeConfig, "inpaint", false) : false;
-    const outpaint = imageModeConfig ? readBooleanField(imageModeConfig, "outpaint", inpaint) : inpaint;
-
     return {
-      textToImage,
-      imageToImage,
-      inpaint,
-      outpaint,
+      textToImage: supports.txt2img,
+      imageToImage: supports.img2img,
+      inpaint: supports.inpaint,
+      outpaint: imageModeConfig ? readBooleanField(imageModeConfig, "outpaint", supports.inpaint) : supports.inpaint,
+      negativePrompt: supports.negative_prompt,
       sourceLabel: endpoint.display_name,
     };
   }
@@ -68,16 +70,18 @@ function resolveCustomEndpointImageCapabilities(endpoint: CustomEndpointRow): Im
   if (imageModeConfig) {
     const inpaint = readBooleanField(imageModeConfig, "inpaint", false);
     return {
-      textToImage: readBooleanField(imageModeConfig, "txt2img", true),
-      imageToImage: readBooleanField(imageModeConfig, "img2img", false),
+      textToImage: supports.txt2img,
+      imageToImage: supports.img2img,
       inpaint,
       outpaint: readBooleanField(imageModeConfig, "outpaint", false),
+      negativePrompt: supports.negative_prompt,
       sourceLabel: endpoint.display_name,
     };
   }
 
   return {
     ...TEXT_ONLY_IMAGE_CAPABILITIES,
+    negativePrompt: supports.negative_prompt,
     sourceLabel: endpoint.display_name,
   };
 }

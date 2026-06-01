@@ -22,6 +22,12 @@ import {
   parseCapabilityModalFields,
 } from "@/utils/provider/customEndpointCapabilityModal";
 import { registerCustomEndpoint, validateCustomEndpointReachability } from "@/utils/provider/customEndpointService";
+import {
+  buildImageEndpointSupportsComponent,
+  IMAGE_ENDPOINT_SUPPORTS_ID,
+  imageEndpointSupportsFromSubmittedValues,
+  readImageEndpointSupports,
+} from "@/utils/provider/customImageEndpointSupport";
 import { IMPORT_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { localizer } from "@/utils/text/localizer";
@@ -32,12 +38,6 @@ const EDIT_BUTTON_ID = "edit_fields";
 const CANCEL_BUTTON_ID = "cancel_edit";
 const WORKFLOW_BUTTON_ID = "edit_workflow";
 const WORKFLOW_UPLOAD_ID = "workflow_json";
-const WORKFLOW_SUPPORTS_ID = "workflow_supports";
-const DEFAULT_WORKFLOW_SUPPORTS = {
-  txt2img: true,
-  img2img: true,
-  inpaint: false,
-};
 
 type RegistrationScope =
   | { kind: "server"; ownerId: number; baseConfig: AssembledServerConfig }
@@ -125,82 +125,8 @@ async function loadWorkflowJson(url: string | null): Promise<Record<string, unkn
   return JSON.parse(downloadResult.buffer.toString("utf8")) as Record<string, unknown>;
 }
 
-function readWorkflowSupports(extra: Record<string, unknown>): typeof DEFAULT_WORKFLOW_SUPPORTS {
-  const rawSupports = extra.workflow_supports;
-  if (!rawSupports || typeof rawSupports !== "object" || Array.isArray(rawSupports)) {
-    return DEFAULT_WORKFLOW_SUPPORTS;
-  }
-
-  const supports = rawSupports as Record<string, unknown>;
-  return {
-    txt2img: typeof supports.txt2img === "boolean" ? supports.txt2img : DEFAULT_WORKFLOW_SUPPORTS.txt2img,
-    img2img: typeof supports.img2img === "boolean" ? supports.img2img : DEFAULT_WORKFLOW_SUPPORTS.img2img,
-    inpaint: typeof supports.inpaint === "boolean" ? supports.inpaint : DEFAULT_WORKFLOW_SUPPORTS.inpaint,
-  };
-}
-
-function workflowSupportsFromSubmittedValues(values: string[]): typeof DEFAULT_WORKFLOW_SUPPORTS {
-  const selected = new Set(values);
-  return {
-    txt2img: selected.has("txt2img"),
-    img2img: selected.has("img2img"),
-    inpaint: selected.has("inpaint"),
-  };
-}
-
-function buildWorkflowSupportsComponent(
-  locale: string,
-  supports: typeof DEFAULT_WORKFLOW_SUPPORTS = DEFAULT_WORKFLOW_SUPPORTS,
-): ModalComponent {
-  return {
-    kind: "checkboxGroup" as const,
-    customId: WORKFLOW_SUPPORTS_ID,
-    labelKey: "commands.config.custom_models.capability_modal.workflow_supports_label",
-    descriptionKey: "commands.config.custom_models.capability_modal.workflow_supports_description",
-    options: [
-      {
-        value: "txt2img",
-        label: localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_txt2img"),
-        description: localizer(
-          locale,
-          "commands.config.custom_models.capability_modal.workflow_support_txt2img_description",
-        ),
-        default: supports.txt2img,
-      },
-      {
-        value: "img2img",
-        label: localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_img2img"),
-        description: localizer(
-          locale,
-          "commands.config.custom_models.capability_modal.workflow_support_img2img_description",
-        ),
-        default: supports.img2img,
-      },
-      {
-        value: "inpaint",
-        label: localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_inpaint"),
-        description: localizer(
-          locale,
-          "commands.config.custom_models.capability_modal.workflow_support_inpaint_description",
-        ),
-        default: supports.inpaint,
-      },
-    ],
-    minValues: 1,
-    maxValues: 3,
-    required: true,
-  };
-}
-
-function buildWorkflowEditModalComponents(
-  locale: string,
-  endpoint: CustomEndpointRow,
-  extra: Record<string, unknown>,
-): ModalComponent[] {
+function buildWorkflowEditModalComponents(): ModalComponent[] {
   const components: ModalComponent[] = [];
-  if (endpoint.capability === "image") {
-    components.push(buildWorkflowSupportsComponent(locale, readWorkflowSupports(extra)));
-  }
 
   components.push({
     customId: WORKFLOW_UPLOAD_ID,
@@ -292,8 +218,8 @@ function buildEndpointSummaryEmbed(locale: string, endpoint: CustomEndpointRow):
     }
   }
 
-  if (endpoint.capability === "image" && endpoint.api_style === "comfyui") {
-    const supports = readWorkflowSupports(extra);
+  if (endpoint.capability === "image") {
+    const supports = readImageEndpointSupports(endpoint);
     const enabled = [
       supports.txt2img
         ? localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_txt2img")
@@ -303,6 +229,9 @@ function buildEndpointSummaryEmbed(locale: string, endpoint: CustomEndpointRow):
         : null,
       supports.inpaint
         ? localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_inpaint")
+        : null,
+      supports.negative_prompt
+        ? localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_negative_prompt")
         : null,
     ].filter((item): item is string => !!item);
     lines.push(
@@ -423,6 +352,15 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
       transcriptionLanguage: extra.language as string | null,
     },
   );
+  if (existingEndpoint.capability === "image") {
+    editModalComponents.push(
+      buildImageEndpointSupportsComponent(
+        locale,
+        existingEndpoint.api_style,
+        readImageEndpointSupports(existingEndpoint),
+      ),
+    );
+  }
 
   const editModalResult = await promptWithRawModal(buttonInteraction, locale, {
     modalCustomId: editModalCustomId,
@@ -475,6 +413,14 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
         ...extraConfig,
         model: parsed.transcriptionModel || (extra.model as string | null) || "whisper-1",
         language: parsed.transcriptionLanguage ?? (extra.language as string | null) ?? null,
+      };
+    } else if (existingEndpoint.capability === "image") {
+      extraConfig = {
+        ...extraConfig,
+        workflow_supports: imageEndpointSupportsFromSubmittedValues(
+          editModalResult.multiValues?.[IMAGE_ENDPOINT_SUPPORTS_ID],
+          existingEndpoint.api_style,
+        ),
       };
     }
 
@@ -547,7 +493,7 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
         const workflowModalResult = await promptWithRawModal(workflowButtonInteraction, locale, {
           modalCustomId: `custom_endpoint_edit_workflow_${interaction.id}`,
           modalTitleKey: `commands.config.custom_models.capability_modal.${existingEndpoint.capability}_workflow_edit_title`,
-          components: buildWorkflowEditModalComponents(locale, existingEndpoint, extraConfig),
+          components: buildWorkflowEditModalComponents(),
         });
 
         if (workflowModalResult.outcome !== "submit") {
@@ -559,18 +505,6 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
         await workflowModalResult.interaction!.deferUpdate();
 
         const workflowAttachment = workflowModalResult.attachments?.[WORKFLOW_UPLOAD_ID];
-        const workflowSupportValues = workflowModalResult.multiValues?.[WORKFLOW_SUPPORTS_ID];
-        if (existingEndpoint.capability === "image") {
-          extraConfig = {
-            ...extraConfig,
-            workflow_supports: workflowSupportsFromSubmittedValues(
-              workflowSupportValues ??
-                Object.entries(readWorkflowSupports(extraConfig))
-                  .filter(([, enabled]) => enabled)
-                  .map(([support]) => support),
-            ),
-          };
-        }
         if (workflowAttachment) {
           const workflow = await loadWorkflowJson(workflowAttachment.url);
           extraConfig = {

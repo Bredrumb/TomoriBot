@@ -9,7 +9,7 @@ import { GoogleGenAI } from "@google/genai";
 import sharp from "sharp";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
-import { resolveAvatarByIdentity } from "@/utils/discord/avatarResolver";
+import { resolveAvatarByIdentity, type ResolvedAvatarData } from "@/utils/discord/avatarResolver";
 import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import {
   buildImageToolNoticeDescription,
@@ -42,11 +42,20 @@ import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import type { ProviderNativeImageGenerationResult } from "@/types/provider/featureInterfaces";
 import { optimizeImageBuffer } from "@/utils/image/imageProcessor";
+import type { CustomEndpointRow } from "@/types/db/schema";
+import { readImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
+import { buildImageTagDetectionNoticeLines } from "@/utils/image/imageNoticeContext";
 
 const IMAGE_REFERENCE_MAX_COUNT = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_COUNT ?? "3", 10);
 const IMAGE_REFERENCE_MAX_TOTAL_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_TOTAL_BYTES ?? "6291456", 10);
 const IMAGE_REFERENCE_TINY_MAX_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_TINY_MAX_BYTES ?? "950000", 10);
 const IMAGE_REFERENCE_MAX_SINGLE_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_SINGLE_BYTES ?? "2097152", 10);
+
+type ImageReference = {
+  mimeType: string;
+  data: string;
+  sourceType?: "message" | "avatar";
+};
 
 const IMAGE_TO_IMAGE_PARAMETER_NAMES = ["media_id", "target_identity", "denoise"] as const;
 const INPAINT_PARAMETER_NAMES = [
@@ -87,7 +96,10 @@ function getSupportedImageModeLabels(capabilities: ImageToolCapabilities): strin
 
 function buildImageToolDescription(capabilities: ImageToolCapabilities): string {
   const modeList = getSupportedImageModeLabels(capabilities).join(", ");
-  return `Generate images using the active image backend (${capabilities.sourceLabel}). This schema only exposes supported modes for the configured backend: ${modeList}. Sends the result directly to Discord.`;
+  const negativePromptNote = capabilities.negativePrompt
+    ? " Default negative image tags are sent through the backend negative-prompt channel."
+    : " This backend has no declared negative-prompt channel, so default negative image tags are not sent.";
+  return `Generate images using the active image backend (${capabilities.sourceLabel}). This schema only exposes supported modes for the configured backend: ${modeList}.${negativePromptNote} Sends the result directly to Discord.`;
 }
 
 function includeImageParameter(parameterName: string, capabilities: ImageToolCapabilities): boolean {
@@ -461,6 +473,14 @@ export class GenerateImageTool extends BaseTool {
   private buildEffectiveNegativePrompt(tags: readonly string[] | null | undefined): string | undefined {
     const cleanedTags = tags?.map((tag) => tag.trim()).filter((tag) => tag.length > 0) ?? [];
     return cleanedTags.length > 0 ? cleanedTags.join(", ") : undefined;
+  }
+
+  private customEndpointSupportsNegativePrompt(endpoint: CustomEndpointRow | undefined): boolean {
+    if (!endpoint) {
+      return false;
+    }
+
+    return readImageEndpointSupports(endpoint).negative_prompt;
   }
 
   private parseClampedNumber(value: unknown, min: number, max: number): number | null {
@@ -1159,86 +1179,18 @@ export class GenerateImageTool extends BaseTool {
 
       const apiKey = creds.apiKey;
       const executionProvider = creds.provider;
-
-      if (!context.suppressProgressNotices) {
-        const baseNoticeDescription = localizer(
-          context.locale,
-          usesReferences ? "tools.image.generating_with_references_description" : "tools.image.generating_description",
-        );
-        const referenceSourceCount = Number(messageId ? 1 : 0) + Number(targetIdentity ? 1 : 0);
-        const referencedMessageUrl = messageId ? buildReferencedMessageUrl(context, messageId) : null;
-        const extraNoticeLines: string[] = [];
-        const imageModeKey = outpaint
-          ? "tools.image.mode_outpaint"
-          : inpaint
-            ? "tools.image.mode_inpaint"
-            : usesReferences
-              ? "tools.image.mode_img2img"
-              : "tools.image.mode_txt2img";
-        extraNoticeLines.push(
-          localizer(context.locale, "tools.image.notice_mode_line", {
-            mode: localizer(context.locale, imageModeKey),
-          }),
-        );
-        if (outpaint) {
-          extraNoticeLines.push(
-            localizer(context.locale, "tools.image.notice_outpaint_direction_line", {
-              direction: this.formatOutpaintDirection(extendDirection),
-            }),
-          );
-        }
-        if ((context.tomoriState.config.image_default_positive_tags ?? []).length > 0) {
-          extraNoticeLines.push(localizer(context.locale, "tools.image.notice_default_positive_tags_line"));
-        }
-        if (inpaint && !outpaint && maskPrompt) {
-          extraNoticeLines.push(`Mask: \`${this.formatNoticeValue(maskPrompt)}\``);
-        }
-        if (referencedMessageUrl) {
-          extraNoticeLines.push(
-            localizer(context.locale, "tools.image.notice_reference_line", {
-              message_url: referencedMessageUrl,
-            }),
-          );
-        }
-        if (!referencedMessageUrl && referenceSourceCount) {
-          extraNoticeLines.push(
-            localizer(context.locale, "tools.image.notice_reference_count_line", {
-              count: referenceSourceCount.toString(),
-            }),
-          );
-        } else if (referencedMessageUrl && referenceSourceCount > 1) {
-          extraNoticeLines.push(
-            localizer(context.locale, "tools.image.notice_reference_count_line", {
-              count: referenceSourceCount.toString(),
-            }),
-          );
-        }
-        await sendToolProgressNotice(
-          context,
-          "image_generation",
-          {
-            titleKey: "tools.image.generating_title",
-            description: buildImageToolNoticeDescription(
-              context.locale,
-              baseNoticeDescription,
-              displayModelName,
-              prompt,
-              localizer(context.locale, "tools.image.generating_footer"),
-              extraNoticeLines,
-            ),
-            color: ColorCode.INFO,
-          },
-          "GenerateImageTool",
-        );
-      }
+      const appliedNegativePrompt = this.customEndpointSupportsNegativePrompt(creds.customEndpoint)
+        ? effectiveNegativePrompt
+        : undefined;
 
       // Collect reference images from message attachments and/or profile picture
-      const referenceImages: Array<{ mimeType: string; data: string }> = [];
+      const referenceImages: ImageReference[] = [];
+      let avatarReferenceData: ResolvedAvatarData | null = null;
 
       if (messageId) {
         log.info(`Extracting images from message ${messageId} for image-to-image generation`);
         const messageImages = await this.extractImagesFromMessage(messageId, context);
-        referenceImages.push(...messageImages);
+        referenceImages.push(...messageImages.map((image) => ({ ...image, sourceType: "message" as const })));
         log.info(`Using ${messageImages.length} reference image(s) from message ${messageId} for generation`);
       }
 
@@ -1253,7 +1205,9 @@ export class GenerateImageTool extends BaseTool {
           referenceImages.push({
             mimeType: "image/png",
             data: avatarBase64,
+            sourceType: "avatar",
           });
+          avatarReferenceData = avatarData;
           const avatarTypeLabel =
             avatarData.sourceType === "persona" ? "persona" : avatarData.sourceType === "webhook" ? "webhook" : "user";
           log.info(`Added profile picture reference for ${avatarTypeLabel} ${avatarData.username} (${targetIdentity})`);
@@ -1294,6 +1248,96 @@ export class GenerateImageTool extends BaseTool {
         }
       }
 
+      if (!context.suppressProgressNotices) {
+        const actualUsesReferences = referenceImages.length > 0;
+        const baseNoticeDescription = localizer(
+          context.locale,
+          actualUsesReferences
+            ? "tools.image.generating_with_references_description"
+            : "tools.image.generating_description",
+        );
+        const referencedMessageUrl = messageId ? buildReferencedMessageUrl(context, messageId) : null;
+        const messageReferenceCount = referenceImages.filter((reference) => reference.sourceType === "message").length;
+        const avatarReferenceUsed =
+          avatarReferenceData && referenceImages.some((reference) => reference.sourceType === "avatar")
+            ? avatarReferenceData
+            : null;
+        const extraNoticeLines: string[] = [];
+        const imageModeKey = outpaint
+          ? "tools.image.mode_outpaint"
+          : inpaint
+            ? "tools.image.mode_inpaint"
+            : actualUsesReferences
+              ? "tools.image.mode_img2img"
+              : "tools.image.mode_txt2img";
+        const modeNoticeLine = localizer(context.locale, "tools.image.notice_mode_line", {
+          mode: localizer(context.locale, imageModeKey),
+        });
+        if (outpaint) {
+          extraNoticeLines.push(
+            localizer(context.locale, "tools.image.notice_outpaint_direction_line", {
+              direction: this.formatOutpaintDirection(extendDirection),
+            }),
+          );
+        }
+        if ((context.tomoriState.config.image_default_positive_tags ?? []).length > 0) {
+          extraNoticeLines.push(localizer(context.locale, "tools.image.notice_default_positive_tags_line"));
+        }
+        if (appliedNegativePrompt) {
+          extraNoticeLines.push(localizer(context.locale, "tools.image.notice_default_negative_tags_line"));
+        }
+        extraNoticeLines.push(...buildImageTagDetectionNoticeLines(context));
+        if (inpaint && !outpaint && maskPrompt) {
+          extraNoticeLines.push(`Mask: \`${this.formatNoticeValue(maskPrompt)}\``);
+        }
+        if (messageReferenceCount > 0) {
+          extraNoticeLines.push(
+            referencedMessageUrl
+              ? localizer(context.locale, "tools.image.notice_reference_line", {
+                  message_url: referencedMessageUrl,
+                })
+              : localizer(context.locale, "tools.image.notice_reference_count_line", {
+                  count: messageReferenceCount.toString(),
+                }),
+          );
+        }
+        if (avatarReferenceUsed) {
+          extraNoticeLines.push(
+            localizer(context.locale, "tools.image.notice_avatar_reference_line", {
+              name: avatarReferenceUsed.username,
+            }),
+          );
+        }
+        if (referenceImages.length > 1) {
+          extraNoticeLines.push(
+            localizer(context.locale, "tools.image.notice_reference_count_line", {
+              count: referenceImages.length.toString(),
+            }),
+          );
+        }
+        extraNoticeLines.push(localizer(context.locale, "tools.image.notice_image_tags_tip_line"));
+        await sendToolProgressNotice(
+          context,
+          "image_generation",
+          {
+            titleKey: "tools.image.generating_title",
+            description: buildImageToolNoticeDescription(
+              context.locale,
+              baseNoticeDescription,
+              displayModelName,
+              prompt,
+              localizer(context.locale, "tools.image.generating_footer"),
+              extraNoticeLines,
+              [modeNoticeLine],
+            ),
+            color: ColorCode.INFO,
+          },
+          "GenerateImageTool",
+        );
+      }
+
+      const providerReferenceImages = referenceImages.map(({ mimeType, data }) => ({ mimeType, data }));
+
       // Call appropriate provider API
       log.info(
         `Generating image with ${executionProvider} via ${displayModelName}: "${effectivePrompt.substring(0, 100)}${effectivePrompt.length > 100 ? "..." : ""}" (aspect ratio: ${aspectRatio})`,
@@ -1329,7 +1373,7 @@ export class GenerateImageTool extends BaseTool {
       );
 
       let generatedImageData: string | null = null;
-      let referenceImagesUsed = referenceImages.length > 0;
+      let referenceImagesUsed = providerReferenceImages.length > 0;
       let referenceImagesIgnoredReason = "";
       const imageGenerationImplementation = resolveProviderFeatureImplementation(executionProvider, "imageGeneration");
       const nativeImageProvider =
@@ -1343,9 +1387,9 @@ export class GenerateImageTool extends BaseTool {
             endpoint: creds.customEndpoint,
             apiKey,
             prompt: effectivePrompt,
-            negativePrompt: effectiveNegativePrompt,
+            negativePrompt: appliedNegativePrompt,
             aspectRatio,
-            referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+            referenceImages: providerReferenceImages.length > 0 ? providerReferenceImages : undefined,
             inpaint,
             maskPrompt,
             maskThreshold,
@@ -1378,14 +1422,14 @@ export class GenerateImageTool extends BaseTool {
             msg.toLowerCase().includes("request entity too large") ||
             msg.includes("413") ||
             msg.toLowerCase().includes("payload too large");
-          if (tooLarge && referenceImages.length > 0) {
+          if (tooLarge && providerReferenceImages.length > 0) {
             log.warn("Custom endpoint request was too large; retrying with tiny single-reference payload");
-            const tinyRef = await this.buildTinyReferenceImage(referenceImages[0]);
+            const tinyRef = await this.buildTinyReferenceImage(providerReferenceImages[0]);
             const retryResult = await generateCustomImageViaEndpoint({
               endpoint: creds.customEndpoint,
               apiKey,
               prompt: effectivePrompt,
-              negativePrompt: effectiveNegativePrompt,
+              negativePrompt: appliedNegativePrompt,
               aspectRatio,
               referenceImages: [tinyRef],
               inpaint,
@@ -1423,9 +1467,9 @@ export class GenerateImageTool extends BaseTool {
           apiKey,
           model: modelCodename,
           prompt: effectivePrompt,
-          negativePrompt: effectiveNegativePrompt,
+          negativePrompt: appliedNegativePrompt,
           aspectRatio,
-          ...(referenceImages.length > 0 ? { referenceImages } : {}),
+          ...(providerReferenceImages.length > 0 ? { referenceImages: providerReferenceImages } : {}),
         });
         generatedImageData = result.imageData;
       } else if (imageGenerationImplementation === "openrouter") {
@@ -1435,7 +1479,7 @@ export class GenerateImageTool extends BaseTool {
           modelCodename,
           effectivePrompt,
           aspectRatio,
-          referenceImages.length > 0 ? referenceImages : undefined,
+          providerReferenceImages.length > 0 ? providerReferenceImages : undefined,
           context.abortSignal,
         );
         generatedImageData = result.imageData;
@@ -1465,8 +1509,8 @@ export class GenerateImageTool extends BaseTool {
           },
         };
 
-        if (referenceImages.length > 0) {
-          messagePayload.media = referenceImages;
+        if (providerReferenceImages.length > 0) {
+          messagePayload.media = providerReferenceImages;
         }
 
         const response = await chat.sendMessage(messagePayload);
@@ -1482,7 +1526,7 @@ export class GenerateImageTool extends BaseTool {
         }
       } else if (imageGenerationImplementation === "zai") {
         // Use Z.ai native image generation API
-        if (referenceImages.length > 0) {
+        if (providerReferenceImages.length > 0) {
           referenceImagesUsed = false;
           referenceImagesIgnoredReason =
             " Reference images were ignored because the active provider's image endpoint is text-to-image only.";
@@ -1492,7 +1536,7 @@ export class GenerateImageTool extends BaseTool {
           apiKey,
           model: modelCodename,
           prompt: effectivePrompt,
-          negativePrompt: effectiveNegativePrompt,
+          negativePrompt: appliedNegativePrompt,
           aspectRatio,
           endpointUrl:
             executionProvider === "zaicoding" ? ZAI_CODING_IMAGES_GENERATIONS_URL : ZAI_GENERAL_IMAGES_GENERATIONS_URL,
@@ -1500,7 +1544,7 @@ export class GenerateImageTool extends BaseTool {
         generatedImageData = result.imageData;
       } else if (imageGenerationImplementation === "nvidia") {
         // Use NVIDIA native image generation API
-        if (referenceImages.length > 0) {
+        if (providerReferenceImages.length > 0) {
           referenceImagesUsed = false;
           referenceImagesIgnoredReason =
             " Reference images were ignored because the active provider's image endpoint is text-to-image only.";
@@ -1510,9 +1554,9 @@ export class GenerateImageTool extends BaseTool {
           apiKey,
           model: modelCodename,
           prompt: effectivePrompt,
-          negativePrompt: effectiveNegativePrompt,
+          negativePrompt: appliedNegativePrompt,
           aspectRatio,
-          referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+          referenceImages: providerReferenceImages.length > 0 ? providerReferenceImages : undefined,
         });
         generatedImageData = result.imageData;
       } else {
@@ -1665,13 +1709,13 @@ export class GenerateImageTool extends BaseTool {
   }
 
   private async normalizeReferenceImages(
-    referenceImages: Array<{ mimeType: string; data: string }>,
+    referenceImages: ImageReference[],
     options?: { keepAtLeastOne?: boolean },
-  ): Promise<Array<{ mimeType: string; data: string }>> {
+  ): Promise<ImageReference[]> {
     // Provider payload limits are easier to hit with Discord images than with
     // generated references. Downscale instead of failing when a user posts a
     // high-resolution source image, especially for inpaint/outpaint.
-    const normalized: Array<{ mimeType: string; data: string }> = [];
+    const normalized: ImageReference[] = [];
     let totalBytes = 0;
     const capped = referenceImages.slice(0, IMAGE_REFERENCE_MAX_COUNT);
     if (referenceImages.length > IMAGE_REFERENCE_MAX_COUNT) {
@@ -1700,6 +1744,7 @@ export class GenerateImageTool extends BaseTool {
               `Keeping first downscaled oversize reference image (${normalizedBytes} bytes) for inpaint fallback to avoid empty reference set`,
             );
             normalized.push({
+              ...ref,
               mimeType: normalizedRef.mimeType,
               data: normalizedRef.data,
             });
@@ -1713,6 +1758,7 @@ export class GenerateImageTool extends BaseTool {
         }
         totalBytes += normalizedBytes;
         normalized.push({
+          ...ref,
           mimeType: normalizedRef.mimeType,
           data: normalizedRef.data,
         });
@@ -1738,7 +1784,11 @@ export class GenerateImageTool extends BaseTool {
             `Keeping oversize fallback reference image (${fallbackNormalizedBytes} bytes) because keepAtLeastOne=true`,
           );
         }
-        normalized.push(fallback);
+        normalized.push({
+          ...first,
+          mimeType: fallback.mimeType,
+          data: fallback.data,
+        });
       }
     }
 

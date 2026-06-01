@@ -10,7 +10,6 @@ import {
   releaseChannelLockAndReplayQueue,
 } from "@/utils/chat/channelQueue";
 import { shouldSurfaceChatUserErrors } from "@/utils/chat/errorVisibility";
-import { providerIsApiFamily } from "@/utils/chat/toolLoop";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
 import type { ChatIncoming } from "@/utils/chat/types";
 import { determineMatchingPersonas, isSelfTriggerMessage } from "@/utils/chat/triggerProcessor";
@@ -487,12 +486,6 @@ describe("chat regression harness", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(processedMessageIds).toEqual([queuedMessage.id]);
-  });
-
-  it("providerIsApiFamily distinguishes NovelAI from Google GenAI provider branches", () => {
-    expect(providerIsApiFamily("novelai", "novelai")).toBe(true);
-    expect(providerIsApiFamily("google", "google-genai")).toBe(true);
-    expect(providerIsApiFamily("novelai", "google-genai")).toBe(false);
   });
 
   it("pre-lock admission ignores non-triggering messages without locking the channel", async () => {

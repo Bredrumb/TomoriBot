@@ -78,19 +78,28 @@ function buildLabeledGenerationNoticeDescription(
   prompt: string,
   timingLine: string,
   extraLines: string[] = [],
+  metadataExtraLines: string[] = [],
 ): string {
   const safeModel = `\`${escapeMarkdown(model.trim())}\``;
   const safePrompt = `\`${escapeMarkdown(truncateNoticeText(prompt, IMAGE_NOTICE_PROMPT_PREVIEW_LENGTH))}\``;
+  const trimmedBaseDescription = baseDescription.trim();
+  const trimmedTimingLine = timingLine.trim();
+  const baseWithTiming =
+    trimmedTimingLine.length === 0
+      ? trimmedBaseDescription
+      : /[.!?。]$/.test(trimmedBaseDescription)
+        ? `${trimmedBaseDescription} ${trimmedTimingLine}`
+        : locale.startsWith("ja")
+          ? `${trimmedBaseDescription}。${trimmedTimingLine}`
+          : `${trimmedBaseDescription}. ${trimmedTimingLine}`;
   const metadataLines = [
     localizer(locale, modelLineKey, { model: safeModel }),
     localizer(locale, promptLineKey, { prompt: safePrompt }),
+    ...metadataExtraLines.map((line) => line.trim()).filter((line) => line.length > 0),
   ].filter((line) => line.length > 0);
-  const trailingLines = [
-    ...extraLines.map((line) => line.trim()).filter((line) => line.length > 0),
-    timingLine.trim(),
-  ].filter((line) => line.length > 0);
+  const trailingLines = extraLines.map((line) => line.trim()).filter((line) => line.length > 0);
 
-  return [baseDescription.trim(), metadataLines.join("\n"), trailingLines.join("\n")]
+  return [baseWithTiming, metadataLines.join("\n"), trailingLines.join("\n")]
     .filter((part) => part.length > 0)
     .join("\n\n");
 }
@@ -102,6 +111,7 @@ export function buildImageToolNoticeDescription(
   prompt: string,
   timingLine: string,
   extraLines: string[] = [],
+  metadataExtraLines: string[] = [],
 ): string {
   return buildLabeledGenerationNoticeDescription(
     locale,
@@ -112,6 +122,7 @@ export function buildImageToolNoticeDescription(
     prompt,
     timingLine,
     extraLines,
+    metadataExtraLines,
   );
 }
 

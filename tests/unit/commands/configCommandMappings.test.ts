@@ -2,11 +2,11 @@ import { describe, expect, it } from "bun:test";
 import {
   buildCapabilitiesManageConfigWritePlan,
   type CapabilitiesManageConfigState,
-} from "@/commands/capabilities/manageConfigMapping";
+} from "@/utils/discord/manageConfigMapping";
 import {
   buildServerMemberPermissionsConfigWritePlan,
   type ServerMemberPermissionsCommandConfigState,
-} from "@/commands/server/memberPermissionsConfigMapping";
+} from "@/utils/discord/memberPermissionsConfigMapping";
 
 function sorted(values: string[]): string[] {
   return values.toSorted();

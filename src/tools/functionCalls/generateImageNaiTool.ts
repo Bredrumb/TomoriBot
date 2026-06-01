@@ -29,6 +29,7 @@ import { extractImagesFromMessage } from "../../utils/image/imageExtractor";
 import { segmentImage } from "../../utils/image/segmentationService";
 import { resolveNaiImageParams, type EffectiveNaiImageParams } from "@/utils/image/naiImageParams";
 import { normalizeNaiReferenceImage } from "@/utils/image/imageProcessor";
+import { buildImageTagDetectionNoticeLines } from "@/utils/image/imageNoticeContext";
 import { resolveNaiDiffusionModel } from "@/utils/image/naiDiffusionModels";
 import {
   NAI_CHAR_REF_INFO_EXTRACTED,
@@ -1001,6 +1002,10 @@ export class GenerateImageNaiTool extends BaseTool {
         if ((context.tomoriState.config.image_default_positive_tags ?? []).length > 0) {
           extraNoticeLines.push(localizer(context.locale, "tools.image.notice_default_positive_tags_line"));
         }
+        if ((context.tomoriState.config.image_default_negative_tags ?? []).length > 0) {
+          extraNoticeLines.push(localizer(context.locale, "tools.image.notice_default_negative_tags_line"));
+        }
+        extraNoticeLines.push(...buildImageTagDetectionNoticeLines(context));
         if (messageId) {
           const referencedMessageUrl = buildReferencedMessageUrl(context, messageId);
           extraNoticeLines.push(
@@ -1014,6 +1019,7 @@ export class GenerateImageNaiTool extends BaseTool {
           );
         }
         extraNoticeLines.push(...buildCharacterNoticeLines(context.locale, characters));
+        extraNoticeLines.push(localizer(context.locale, "tools.image.notice_image_tags_tip_line"));
         await sendToolProgressNotice(
           context,
           isInpaintMode ? "image_editing" : "image_generation",

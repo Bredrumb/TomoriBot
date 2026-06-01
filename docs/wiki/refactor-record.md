@@ -17,14 +17,14 @@ Added a focused assembler seam for backend-sensitive tool schemas. Built-in tool
 Initial adopters:
 
 - `web_search` now advertises only categories supported by the active backend: SearXNG all categories, Brave base categories, DuckDuckGo/Felo text-only, and no tool when no search backend is available.
-- `generate_image` now prunes image-to-image, inpaint, and outpaint arguments unless the configured standard image backend supports them. ComfyUI reads existing `workflow_supports`; non-Comfy custom endpoints can opt into future `image_modes` metadata and otherwise fail closed to text-to-image only.
+- `generate_image` now prunes image-to-image, inpaint, and outpaint arguments unless the configured standard image backend supports them. Custom image endpoints declare image request support through `workflow_supports`; ComfyUI defaults to text-to-image, image-to-image, and negative prompts, while generic endpoints default to text-to-image only.
 - `generate_voice_message` moved script-markup and VoiceDesign schema shaping out of `availability.ts` into the tool assembler hook.
 
 Deferred candidates: video generation provider/model option tables, permission-sensitive Discord message/thread tools, sticker-name schema hints, and fetch-url backend details.
 
 ## NovelAI Image Tags Decoupling
 
-Image tags moved out of `/novelai image-tags` into provider-neutral commands: `/persona image-tags`, `/personal image-tags`, and `/config image-tags default-positive/default-negative`. User and persona tags are rendered in context as public `Physical Appearance` lines. `generate_image` now receives default positive tag guidance, while default negative tags are consumed only by NovelAI or standard backends with real negative-prompt support.
+Image tags moved out of `/novelai image-tags` into provider-neutral commands: `/persona image-tags`, `/personal image-tags`, and `/config image-tags default-positive/default-negative`. User and persona tags are rendered in context as public `Physical Appearance` lines. `generate_image` now receives default positive tag guidance, while default negative tags are consumed only by NovelAI or custom image endpoints with the `Negative Prompt` support checkbox enabled.
 
 ---
 

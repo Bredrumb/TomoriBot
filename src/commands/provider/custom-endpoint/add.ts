@@ -13,14 +13,17 @@ import {
   parseCapabilityModalFields,
 } from "@/utils/provider/customEndpointCapabilityModal";
 import { registerCustomEndpoint, validateCustomEndpointReachability } from "@/utils/provider/customEndpointService";
+import {
+  buildImageEndpointSupportsComponent,
+  IMAGE_ENDPOINT_SUPPORTS_ID,
+  imageEndpointSupportsFromSubmittedValues,
+} from "@/utils/provider/customImageEndpointSupport";
 import { isValidCustomEndpointLabel, normalizeCustomEndpointLabel } from "@/utils/provider/customProviderUtils";
 import { IMPORT_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { localizer } from "@/utils/text/localizer";
 
 const WORKFLOW_UPLOAD_ID = "workflow_json";
-const WORKFLOW_SUPPORTS_ID = "workflow_supports";
-const DEFAULT_WORKFLOW_SUPPORTS = ["txt2img", "img2img"];
 
 /** Download and parse a workflow JSON from a URL returned by Discord's CDN. */
 async function loadWorkflowJson(url: string | null): Promise<Record<string, unknown> | null> {
@@ -315,47 +318,7 @@ export async function execute(
         maxValues: 1,
         required: false,
       },
-      ...(capability === "image" && apiStyle === "comfyui"
-        ? [
-            {
-              kind: "checkboxGroup" as const,
-              customId: WORKFLOW_SUPPORTS_ID,
-              labelKey: "commands.config.custom_models.capability_modal.workflow_supports_label",
-              descriptionKey: "commands.config.custom_models.capability_modal.workflow_supports_description",
-              options: [
-                {
-                  value: "txt2img",
-                  label: localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_txt2img"),
-                  description: localizer(
-                    locale,
-                    "commands.config.custom_models.capability_modal.workflow_support_txt2img_description",
-                  ),
-                  default: true,
-                },
-                {
-                  value: "img2img",
-                  label: localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_img2img"),
-                  description: localizer(
-                    locale,
-                    "commands.config.custom_models.capability_modal.workflow_support_img2img_description",
-                  ),
-                  default: true,
-                },
-                {
-                  value: "inpaint",
-                  label: localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_inpaint"),
-                  description: localizer(
-                    locale,
-                    "commands.config.custom_models.capability_modal.workflow_support_inpaint_description",
-                  ),
-                },
-              ],
-              minValues: 1,
-              maxValues: 3,
-              required: true,
-            },
-          ]
-        : []),
+      ...(capability === "image" ? [buildImageEndpointSupportsComponent(locale, apiStyle)] : []),
     ],
   });
 
@@ -372,7 +335,7 @@ export async function execute(
     const modelName = modalResult.values?.[ModalFieldId.model_name]?.trim() || null;
     const displayName = modalResult.values?.[ModalFieldId.display_name]?.trim() || label;
     const workflowAttachment = modalResult.attachments?.[WORKFLOW_UPLOAD_ID];
-    const workflowSupportValues = new Set(modalResult.multiValues?.[WORKFLOW_SUPPORTS_ID] ?? DEFAULT_WORKFLOW_SUPPORTS);
+    const workflowSupportValues = modalResult.multiValues?.[IMAGE_ENDPOINT_SUPPORTS_ID];
 
     if ((capability === "image" || capability === "video") && apiStyle === "comfyui" && !workflowAttachment) {
       await replyInfoEmbed(modalSubmit, locale, {
@@ -396,13 +359,7 @@ export async function execute(
 
     const workflow = workflowAttachment ? await loadWorkflowJson(workflowAttachment.url) : null;
     const workflowSupports =
-      capability === "image" && apiStyle === "comfyui"
-        ? {
-            txt2img: workflowSupportValues.has("txt2img"),
-            img2img: workflowSupportValues.has("img2img"),
-            inpaint: workflowSupportValues.has("inpaint"),
-          }
-        : undefined;
+      capability === "image" ? imageEndpointSupportsFromSubmittedValues(workflowSupportValues, apiStyle) : undefined;
 
     const registered = await registerCustomEndpoint({
       scope: {
