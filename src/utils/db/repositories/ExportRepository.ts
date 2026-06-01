@@ -68,9 +68,9 @@ export class ExportRepository {
     includeGlobalMemories = true,
   ): Promise<ExportResult> {
     try {
-      // 1. Query user data from database (includes NovelAI character fields)
+      // 1. Query user data from database (includes image appearance fields)
       const rows = await sql`
-        SELECT user_id, user_nickname, language_pref, impersonation_prompt, nai_char_tags, nai_char_ref_url
+        SELECT user_id, user_nickname, language_pref, impersonation_prompt, physical_appearance_tags, nai_char_ref_url
         FROM users
         WHERE user_disc_id = ${userDiscId}
         LIMIT 1
@@ -191,8 +191,8 @@ export class ExportRepository {
           COALESCE(scac.imagegen_enabled, true)                     AS imagegen_enabled,
           COALESCE(snec.tool_notice_hidden_keys, ARRAY[]::TEXT[])   AS tool_notice_hidden_keys,
           COALESCE(scc.self_debug_enabled, false)                   AS self_debug_enabled,
-          snaic.nai_style_tags                                       AS nai_style_tags,
-          snaic.nai_negative_tags                                    AS nai_negative_tags,
+          snaic.image_default_positive_tags                                       AS image_default_positive_tags,
+          snaic.image_default_negative_tags                                    AS image_default_negative_tags,
           snaic.nai_sampler                                          AS nai_sampler,
           snaic.nai_steps                                            AS nai_steps,
           snaic.nai_scale                                            AS nai_scale,
@@ -362,8 +362,8 @@ export class ExportRepository {
             imagegen_enabled: configData.imagegen_enabled,
             tool_notice_hidden_keys: configData.tool_notice_hidden_keys ?? [],
             self_debug_enabled: configData.self_debug_enabled,
-            nai_style_tags: configData.nai_style_tags ?? undefined,
-            nai_negative_tags: configData.nai_negative_tags ?? undefined,
+            image_default_positive_tags: configData.image_default_positive_tags ?? undefined,
+            image_default_negative_tags: configData.image_default_negative_tags ?? undefined,
             nai_sampler: configData.nai_sampler ?? null,
             nai_steps: configData.nai_steps ?? null,
             nai_scale: configData.nai_scale ?? null,
@@ -473,14 +473,14 @@ export class ExportRepository {
   }
 
   /**
-   * Exports personal settings only (nickname, language, impersonation prompt, NovelAI character data).
+   * Exports personal settings only (nickname, language, impersonation prompt, image appearance data).
    * @param userDiscId - Discord user ID to export data for
    */
   async exportPersonalSettings(userDiscId: string): Promise<ExportResult> {
     try {
-      // 1. Query user settings including NovelAI character fields and behavioral preferences
+      // 1. Query user settings including image appearance fields and behavioral preferences
       const rows = await sql`
-        SELECT user_nickname, language_pref, impersonation_prompt, nai_char_tags, nai_char_ref_url,
+        SELECT user_nickname, language_pref, impersonation_prompt, physical_appearance_tags, nai_char_ref_url,
                privacy_level, personal_dtm, personal_deliberate_tool_mode, shortterm_cache_crossserver_opt_in
         FROM users
         WHERE user_disc_id = ${userDiscId}
@@ -502,7 +502,7 @@ export class ExportRepository {
           user_nickname: userData.user_nickname,
           language_pref: userData.language_pref,
           impersonation_prompt: userData.impersonation_prompt ?? null,
-          nai_char_tags: userData.nai_char_tags ?? [],
+          physical_appearance_tags: userData.physical_appearance_tags ?? [],
           nai_char_ref_url: userData.nai_char_ref_url ?? null,
           privacy_level: userData.privacy_level ?? undefined,
           personal_dtm: userData.personal_dtm ?? undefined,

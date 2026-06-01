@@ -93,7 +93,8 @@ export async function runGenerationTurn(
         });
 
         if (result.status !== "error") {
-          if (rotationKeyId != null) await recordKeySuccess(rotationKeyId);
+          // Don't credit a timed-out key as successful — a timeout is not a clean completion.
+          if (result.status !== "timeout" && rotationKeyId != null) await recordKeySuccess(rotationKeyId);
           break;
         }
 
@@ -118,7 +119,8 @@ export async function runGenerationTurn(
         );
       }
 
-      if (result.status !== "error" || index === attempts.length - 1) {
+      const isRetryableStatus = result.status === "error" || result.status === "timeout";
+      if (!isRetryableStatus || index === attempts.length - 1) {
         if (index > 0 && shouldSendFallbackNotice(context, result)) {
           log.info(`Fallback generation succeeded with ${attempt.label} after ${failures.length} failed attempt(s).`);
           await sendFallbackNoticeIfNeeded(context, attempt, failures);

@@ -1,8 +1,10 @@
 /**
- * Default NovelAI prompt tags persisted in server config.
+ * Default image prompt tags persisted in server config.
+ * Positive tags are appended to standard image prompts and prepended to NovelAI tag prompts.
+ * Negative tags are consumed by image providers with a real negative-prompt channel.
  * These mirror the schema defaults in `src/db/schema.sql`.
  */
-export const DEFAULT_NAI_STYLE_TAGS = [
+export const DEFAULT_IMAGE_POSITIVE_TAGS = [
   "absurdres",
   "aesthetic",
   "very aesthetic",
@@ -12,7 +14,7 @@ export const DEFAULT_NAI_STYLE_TAGS = [
   "newest",
 ];
 
-export const DEFAULT_NAI_NEGATIVE_TAGS = [
+export const DEFAULT_IMAGE_NEGATIVE_TAGS = [
   "lowres",
   "worst quality",
   "low quality",

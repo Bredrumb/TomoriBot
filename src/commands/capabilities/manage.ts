@@ -19,7 +19,7 @@ import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/disco
 import {
   buildCapabilitiesManageConfigWritePlan,
   getCapabilitiesManagePermissionDefinitions,
-} from "./manageConfigMapping";
+} from "@/utils/discord/manageConfigMapping";
 
 const PERMISSIONS_MAX_OPTIONS_PER_GROUP = 10;
 

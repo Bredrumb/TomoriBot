@@ -271,7 +271,7 @@ export async function getUserPresenceDetails(
             const segments: string[] = [`Playing ${activity.name}`];
             if (activity.details) segments.push(activity.details);
             if (activity.state) segments.push(activity.state);
-            return appendAssetText(segments.join(" — ")) + timeSpent;
+            return appendAssetText(segments.join(": ")) + timeSpent;
           }
           case ActivityType.Streaming:
             return appendAssetText(`Streaming ${activity.name}`) + timeSpent;
@@ -296,7 +296,7 @@ export async function getUserPresenceDetails(
             if (activity.details && !parts.includes(activity.details)) parts.push(activity.details);
             if (largeText && !parts.includes(largeText)) parts.push(largeText);
             if (smallText && !parts.includes(smallText)) parts.push(smallText);
-            return parts.length > 0 ? `Custom status: ${parts.join(" — ")}` : "Custom status";
+            return parts.length > 0 ? `Custom status: ${parts.join(": ")}` : "Custom status";
           }
           case ActivityType.Competing:
             return appendAssetText(`Competing in ${activity.name}`) + timeSpent;

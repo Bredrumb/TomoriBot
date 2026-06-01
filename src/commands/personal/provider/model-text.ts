@@ -1,7 +1,7 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import { llmModelRepo } from "@/utils/db/repositories";
-import { promptForSavedProvider } from "@/commands/model/providerPicker";
+import { promptForSavedProvider } from "@/utils/discord/providerPicker";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";

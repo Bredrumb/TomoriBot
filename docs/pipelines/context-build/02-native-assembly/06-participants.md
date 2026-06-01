@@ -15,8 +15,8 @@ For every user ID in `userList` (collected from message history by the
 chat pipeline), emit a rich detail block: display name, mention aliases
 (unique-resolution computed), online/presence status, server roles,
 per-user personal memories (with tag-filtering against the conversation
-corpus, like server memories in stage 03), pending reminders, and image
-appearance tags for image generation. Then fold in Matrix bridge users and
+corpus, like server memories in stage 03), pending reminders, and public
+Physical Appearance tags for image generation. Then fold in Matrix bridge users and
 synthetic webhook users (persona-flavored). Close with channel name +
 current time-of-day (timezone-aware).
 
@@ -30,7 +30,7 @@ Substantial — see signature in `participants.ts:38-58`. Notable:
 - `userList: string[]` — Discord user IDs from history
 - `triggererName`, `botName`, `personaLineageId`
 - `tomoriState`, `tomoriConfig` (provides `personal_memories_enabled`,
-  `imagegen_enabled`, `timezone_offset`)
+  `timezone_offset`)
 - `isDMChannel`, `isUserImpersonation`, `impersonatedUserId`,
   `impersonatedIdentityName`
 - `matrixUsers: Map<string, string>` — Matrix user ID → stripped display name
@@ -57,8 +57,10 @@ mention handle shown below (case-insensitive). [...]
 
 {botName} (This is you!)
 - Status: Online - Currently active and responding to messages
+- Physical Appearance: blue hair, red eyes, white hoodie
 
 UserA (Mention: @{UserA}; Aliases: @{aliceA}, @{alice_global})
+- Physical Appearance: 1girl, short hair, red eyes
 - Status: Online - Playing Stardew Valley
 - Server Roles: Mod, Member
 - Memories: [id:42] Likes cats (tags: pets, animals)
@@ -106,8 +108,8 @@ After this stage runs:
 - Personal memories are filtered by privacy (`PrivacyLevel.MINIMAL`
   required) AND blacklist AND `personal_memories_enabled` AND
   conversation-corpus tag match (if `memory_tagging_enabled`).
-- Image-appearance tags are populated only when `imagegen_enabled` is
-  true.
+- Physical Appearance tags are public for users/personas present in chat and
+  remain separate from public attributes.
 - Matrix and synthetic users are appended *after* normal users and are
   marked non-mentionable (`mentionable: false`).
 - The closing footer always emits, even with one participant.
@@ -117,12 +119,11 @@ After this stage runs:
 | Source | Field | Effect |
 |---|---|---|
 | `tomoriConfig` | `personal_memories_enabled` | Master switch for per-user memories + nickname usage |
-| `tomoriConfig` | `imagegen_enabled` | Whether to include `nai_char_tags` as appearance tags |
 | `tomoriConfig` | `memory_tagging_enabled` | (Set upstream in `nativeBuilder`) Drives `conversationCorpus` tag filter for personal memories |
 | `tomoriConfig` | `timezone_offset` | Hours offset for current-time footer |
 | Client intent | `GuildPresences` | Required for online/activity status; without it, only static info is shown |
 | User row | `personal_dtm`, `privacy_level` | Privacy controls — `FULL` users are skipped entirely from listing |
-| User row | `nai_char_tags` | Image-appearance tags |
+| User row | `physical_appearance_tags` | Public physical appearance image tags |
 
 ## Extension points
 
@@ -135,7 +136,7 @@ Multiple plugin-relevant seams:
 | Matrix-user folding (`matrixUsers` map) | A bridge plugin emits its users via this map; the contributor handles them uniformly. A Telegram/Slack bridge plugin would extend the same map. |
 | Synthetic users (persona / webhook) | The chat pipeline pre-populates `syntheticUsers`; a plugin shipping a new "fake participant" type would extend the map. |
 | Pending reminders (`serverScheduleRepository.getPendingRemindersForUser`) | Reminder system is core, not plugin — but a plugin adding "scheduled events" might want a parallel display block here. → plugin plan candidate. |
-| Image-appearance tags (`nai_char_tags`) | Coupled to image-generation tooling; a plugin adding a different image-gen tag scheme would extend the `normalizeImageAppearanceTags` path. |
+| Physical Appearance tags (`physical_appearance_tags`) | Coupled to image-generation tooling; a plugin adding a different image-gen tag scheme would extend the `normalizeImageAppearanceTags` path. |
 | Channel + time-of-day footer | Internal — coupled to `timezoneHelper`. |
 
 **A plugin extension for "alternate participant rendering"** (e.g.
@@ -154,5 +155,5 @@ collapse-when-many-users, show-roles-only-for-mods) would either:
   `src/utils/discord/displayName.ts` helper only
 - Reminder system: → no dedicated doc;
   `serverScheduleRepository` API only
-- Image-generation appearance tags: → no dedicated doc;
-  `nai_char_tags` is documented inline in the persona/user schemas
+- Image-generation Physical Appearance tags: → no dedicated doc;
+  `physical_appearance_tags` is documented inline in the persona/user schemas

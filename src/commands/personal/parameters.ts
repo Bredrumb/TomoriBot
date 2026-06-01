@@ -9,7 +9,7 @@ import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { localizer } from "@/utils/text/localizer";
 import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { llmProviderRepo } from "@/utils/db/repositories";
-import { promptForSavedProvider } from "@/commands/model/providerPicker";
+import { promptForSavedProvider } from "@/utils/discord/providerPicker";
 
 /**
  * Formats a list of changed sampler settings into a human-readable string.

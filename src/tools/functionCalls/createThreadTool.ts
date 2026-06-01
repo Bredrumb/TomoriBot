@@ -496,7 +496,7 @@ export class CreateThreadTool extends BaseTool {
         targetChannelMessages: threadMessages,
         introText:
           `You have just finished creating a new thread named \`${thread.name}\` in \`#${targetChannel.name}\`. ` +
-          `The thread is live and the first message has already been sent — do not attempt to create another thread.`,
+          `The thread is live and the first message has already been sent; do not attempt to create another thread.`,
         outroText: "Now give a short, natural acknowledgment back right now saying that the thread is ready.",
       });
 

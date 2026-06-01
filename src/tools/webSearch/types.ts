@@ -20,7 +20,7 @@ export const BASE_SEARCH_CATEGORIES = ["text", "image", "video", "news"] as cons
  * don't support these and return the normal category-unavailable message when
  * no SearXNG sidecar is configured.
  */
-export const SEARXNG_ONLY_SEARCH_CATEGORIES = ["science", "it", "files", "music"] as const;
+export const SEARXNG_ONLY_SEARCH_CATEGORIES = ["papers", "code", "files", "music"] as const;
 
 export const SEARCH_CATEGORIES = [...BASE_SEARCH_CATEGORIES, ...SEARXNG_ONLY_SEARCH_CATEGORIES] as const;
 

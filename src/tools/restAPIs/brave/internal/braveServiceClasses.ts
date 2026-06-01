@@ -64,7 +64,7 @@ abstract class BaseInternalBraveSearchTool extends BaseTool {
 
 export class InternalBraveWebSearchTool extends BaseInternalBraveSearchTool {
   name = "brave_web_search";
-  description = "Internal Brave Web Search — consumed by BraveEngine via the unified web_search tool.";
+  description = "Internal Brave Web Search: consumed by BraveEngine via the unified web_search tool.";
 
   parameters = {
     type: "object" as const,
@@ -128,7 +128,7 @@ export class InternalBraveWebSearchTool extends BaseInternalBraveSearchTool {
 
 export class InternalBraveImageSearchTool extends BaseInternalBraveSearchTool {
   name = "brave_image_search";
-  description = "Internal Brave Image Search — consumed by BraveEngine via the unified web_search tool.";
+  description = "Internal Brave Image Search: consumed by BraveEngine via the unified web_search tool.";
 
   parameters = {
     type: "object" as const,
@@ -188,7 +188,7 @@ export class InternalBraveImageSearchTool extends BaseInternalBraveSearchTool {
 
 export class InternalBraveVideoSearchTool extends BaseInternalBraveSearchTool {
   name = "brave_video_search";
-  description = "Internal Brave Video Search — consumed by BraveEngine via the unified web_search tool.";
+  description = "Internal Brave Video Search: consumed by BraveEngine via the unified web_search tool.";
 
   parameters = {
     type: "object" as const,
@@ -250,7 +250,7 @@ export class InternalBraveVideoSearchTool extends BaseInternalBraveSearchTool {
 
 export class InternalBraveNewsSearchTool extends BaseInternalBraveSearchTool {
   name = "brave_news_search";
-  description = "Internal Brave News Search — consumed by BraveEngine via the unified web_search tool.";
+  description = "Internal Brave News Search: consumed by BraveEngine via the unified web_search tool.";
 
   parameters = {
     type: "object" as const,

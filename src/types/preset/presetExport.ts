@@ -31,7 +31,7 @@ export const PRESET_MAX_STRING_LENGTH = parsePositiveIntegerEnv("PRESET_MAX_STRI
 export const PRESET_MAX_ATTRIBUTES = parsePositiveIntegerEnv("PRESET_MAX_ATTRIBUTES", 200);
 export const PRESET_MAX_SAMPLE_DIALOGUES = parsePositiveIntegerEnv("PRESET_MAX_SAMPLE_DIALOGUES", 100);
 export const PRESET_MAX_TRIGGER_WORDS = parsePositiveIntegerEnv("PRESET_MAX_TRIGGER_WORDS", 100);
-export const PRESET_MAX_NAI_TAGS = parsePositiveIntegerEnv("PRESET_MAX_NAI_TAGS", 200);
+export const PRESET_MAX_IMAGE_TAGS = parsePositiveIntegerEnv("PRESET_MAX_IMAGE_TAGS", 200);
 
 /**
  * Generated presets use the canonical 6-attribute layout from presetCommon.ts:
@@ -63,8 +63,8 @@ export interface PresetExportData {
   persona_lineage_id?: number;
   /** Official preset lineage, when this export was materialized from a preset pointer */
   preset_lineage_id?: number;
-  /** Imageboard-style persona appearance tags for NovelAI character rendering */
-  nai_tags?: string[];
+  /** Public imageboard-style persona physical appearance tags for image generation */
+  physical_appearance_tags?: string[];
   /** Persona-specific NovelAI character reference image URL */
   nai_char_ref_url?: string | null;
   /** ATTG: Story author name */
@@ -163,7 +163,7 @@ export const presetExportDataSchema = z.object({
       return value;
     }, z.number().int().nonnegative())
     .optional(),
-  nai_tags: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_NAI_TAGS).optional(),
+  physical_appearance_tags: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_IMAGE_TAGS).optional(),
   nai_char_ref_url: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),
   nai_attg_author: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),
   nai_attg_title: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),

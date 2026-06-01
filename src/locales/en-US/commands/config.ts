@@ -6,6 +6,55 @@ export default {
       enable: `Enable`,
       disable: `Disable`,
     },
+    "image-tags": {
+      description: `Configure default image tags used as appearance and style guidance for image generation.`,
+      "default-positive": {
+        description: `Set default positive appearance/style image tags added to image generation prompts.`,
+        modal_title: `Default Positive Image Tags`,
+        tags_input_label: `Default Positive Tags`,
+        tags_input_description: `Comma-separated default positive tags for image generation prompts. Empty resets to defaults.`,
+        tags_input_placeholder: `absurdres, aesthetic, masterpiece, soft lighting`,
+        no_tags_title: `No Tags Provided`,
+        no_tags_description: `Please provide at least one default positive tag.`,
+        too_many_tags_title: `Too Many Tags`,
+        too_many_tags_description: `You can set a maximum of {max_tags} default positive tags for this server.`,
+        tag_too_long_title: `Tag Too Long`,
+        tag_too_long_description: `Each default positive tag must be {max_length} characters or less.`,
+        success_title: `Default Positive Tags Updated`,
+        success_description: `Updated server-wide default positive image tags:
+\`\`\`
+{tag_list}
+\`\`\``,
+        cleared_title: `Default Positive Tags Reset`,
+        cleared_description: `Reset server-wide default positive image tags:
+\`\`\`
+{tag_list}
+\`\`\``,
+      },
+      "default-negative": {
+        description: `Set default negative image tags for unwanted appearance details and artifacts.`,
+        modal_title: `Default Negative Image Tags`,
+        tags_input_label: `Default Negative Tags`,
+        tags_input_description: `Comma-separated default negative tags for providers that support them. Empty resets to defaults.`,
+        tags_input_placeholder: `lowres, blurry, bad anatomy, watermark`,
+        no_tags_title: `No Tags Provided`,
+        no_tags_description: `Please provide at least one default negative tag.`,
+        too_many_tags_title: `Too Many Tags`,
+        too_many_tags_description: `You can set a maximum of {max_tags} default negative tags for this server.`,
+        tag_too_long_title: `Tag Too Long`,
+        tag_too_long_description: `Each default negative tag must be {max_length} characters or less.`,
+        success_title: `Default Negative Tags Updated`,
+        success_description: `Updated server-wide default negative image tags:
+\`\`\`
+{tag_list}
+\`\`\``,
+        cleared_title: `Default Negative Tags Reset`,
+        cleared_description: `Reset server-wide default negative image tags:
+\`\`\`
+{tag_list}
+\`\`\``,
+      },
+    },
     custom: {
       endpoint_url_invalid_title: `Invalid Endpoint URL`,
       endpoint_url_invalid_description: `Please enter a valid HTTP or HTTPS URL for your custom endpoint.`,

@@ -10,7 +10,7 @@ import type { ErrorContext, UserRow, EmbeddingModelRow } from "@/types/db/schema
 import type { SelectOption } from "@/types/discord/modal";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { configRepository, llmModelRepo, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
-import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";
+import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/utils/discord/providerPicker";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";

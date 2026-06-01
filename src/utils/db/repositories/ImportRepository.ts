@@ -167,29 +167,29 @@ export class ImportRepository {
     importData: PersonalSettingsExportData,
   ): Promise<ImportResult> {
     try {
-      // 1. Build the NAI char tags PostgreSQL array literal for safe insertion
-      const naiCharTags = importData.nai_char_tags ?? [];
-      const naiCharTagsArrayLiteral = `{${naiCharTags
+      // 1. Build the physical appearance tags PostgreSQL array literal for safe insertion
+      const physicalAppearanceTags = importData.physical_appearance_tags ?? [];
+      const physicalAppearanceTagsArrayLiteral = `{${physicalAppearanceTags
         .map((tag: string) => `"${tag.replace(/(["\\])/g, "\\$1")}"`)
         .join(",")}}`;
       const naiCharRefUrl = importData.nai_char_ref_url ?? null;
       const impersonationPrompt = importData.impersonation_prompt ?? null;
 
-      // 2. Upsert user row with settings, NovelAI character fields, and behavioral preferences
+      // 2. Upsert user row with settings, image appearance fields, and behavioral preferences
       const updateResult = await sql`
         INSERT INTO users (
           user_disc_id,
           user_nickname,
           language_pref,
           impersonation_prompt,
-          nai_char_tags,
+          physical_appearance_tags,
           nai_char_ref_url
         ) VALUES (
           ${userDiscId},
           ${importData.user_nickname},
           ${importData.language_pref},
           ${impersonationPrompt},
-          ${naiCharTagsArrayLiteral}::text[],
+          ${physicalAppearanceTagsArrayLiteral}::text[],
           ${naiCharRefUrl}
         )
         ON CONFLICT (user_disc_id) DO UPDATE
@@ -197,7 +197,7 @@ export class ImportRepository {
           user_nickname = EXCLUDED.user_nickname,
           language_pref = EXCLUDED.language_pref,
           impersonation_prompt = EXCLUDED.impersonation_prompt,
-          nai_char_tags = EXCLUDED.nai_char_tags,
+          physical_appearance_tags = EXCLUDED.physical_appearance_tags,
           nai_char_ref_url = EXCLUDED.nai_char_ref_url,
           privacy_level = COALESCE(${importData.privacy_level ?? null}, users.privacy_level),
           personal_dtm = COALESCE(${importData.personal_dtm ?? null}, users.personal_dtm),
@@ -210,10 +210,10 @@ export class ImportRepository {
         return { success: false, error: "commands.data.import.error_update_failed" };
       }
 
-      // 3. Count imported fields (base 2 + optional impersonation/NAI/behavioral fields)
+      // 3. Count imported fields (base 2 + optional impersonation/image/behavioral fields)
       let fieldsCount = 2;
       if (impersonationPrompt) fieldsCount++;
-      if (naiCharTags.length > 0) fieldsCount++;
+      if (physicalAppearanceTags.length > 0) fieldsCount++;
       if (naiCharRefUrl) fieldsCount++;
       if (importData.privacy_level !== undefined) fieldsCount++;
       if (importData.personal_dtm !== undefined) fieldsCount++;
@@ -394,8 +394,8 @@ export class ImportRepository {
           ? configRepository.updateChannelScopeConfig(serverId, { stm_privacy_bypass: config.stm_privacy_bypass })
           : Promise.resolve(true),
 
-        config.nai_style_tags !== undefined ||
-        config.nai_negative_tags !== undefined ||
+        config.image_default_positive_tags !== undefined ||
+        config.image_default_negative_tags !== undefined ||
         config.nai_sampler !== undefined ||
         config.nai_steps !== undefined ||
         config.nai_scale !== undefined ||
@@ -403,8 +403,12 @@ export class ImportRepository {
         config.nai_cfg_rescale !== undefined ||
         config.nai_preset_name !== undefined
           ? configRepository.updateNovelaiImagegenConfig(serverId, {
-              ...(config.nai_style_tags !== undefined && { nai_style_tags: config.nai_style_tags }),
-              ...(config.nai_negative_tags !== undefined && { nai_negative_tags: config.nai_negative_tags }),
+              ...(config.image_default_positive_tags !== undefined && {
+                image_default_positive_tags: config.image_default_positive_tags,
+              }),
+              ...(config.image_default_negative_tags !== undefined && {
+                image_default_negative_tags: config.image_default_negative_tags,
+              }),
               ...(config.nai_sampler !== undefined && { nai_sampler: config.nai_sampler }),
               ...(config.nai_steps !== undefined && { nai_steps: config.nai_steps }),
               ...(config.nai_scale !== undefined && { nai_scale: config.nai_scale }),
@@ -551,7 +555,7 @@ export class ImportRepository {
       user_nickname: importData.user_nickname,
       language_pref: importData.language_pref,
       impersonation_prompt: importData.impersonation_prompt ?? null,
-      nai_char_tags: [],
+      physical_appearance_tags: [],
       nai_char_ref_url: null,
     });
     if (!settingsResult.success) return settingsResult;

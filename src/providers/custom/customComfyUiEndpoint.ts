@@ -58,6 +58,7 @@ interface ComfyUiReferenceImage {
 interface ComfyUiGenerationOptions {
   mode: ComfyUiGenerationMode;
   prompt: string;
+  negativePrompt?: string | null;
   aspectRatio?: string;
   durationSeconds?: number;
   resolution?: string;
@@ -987,11 +988,16 @@ function extractNegatedPromptTerms(prompt: string): string[] {
 }
 
 function buildComfyUiNegativePrompt(options: ComfyUiGenerationOptions, inpaint: boolean, maskMode: string): string {
+  const configuredNegativePrompt = options.negativePrompt?.trim();
   if (!inpaint) {
-    return COMFYUI_BASE_NEGATIVE_PROMPT;
+    return [COMFYUI_BASE_NEGATIVE_PROMPT, configuredNegativePrompt].filter(Boolean).join(", ");
   }
 
-  const negativeParts = [COMFYUI_BASE_NEGATIVE_PROMPT, "unrequested changes, changed unmasked area"];
+  const negativeParts = [
+    COMFYUI_BASE_NEGATIVE_PROMPT,
+    ...(configuredNegativePrompt ? [configuredNegativePrompt] : []),
+    "unrequested changes, changed unmasked area",
+  ];
   if (isComfyUiOutpaint(options)) {
     negativeParts.push(
       "moved original image",
@@ -2270,6 +2276,7 @@ export async function generateComfyUiImageViaEndpoint(params: {
   endpoint: CustomEndpointRow;
   apiKey: string;
   prompt: string;
+  negativePrompt?: string | null;
   aspectRatio: string;
   referenceImages?: ProviderNativeImageGenerationRequest["referenceImages"];
   referenceImageDataUrl?: string | null;
@@ -2305,6 +2312,7 @@ export async function generateComfyUiImageViaEndpoint(params: {
     endpoint,
     apiKey,
     prompt,
+    negativePrompt,
     aspectRatio,
     referenceImages,
     referenceImageDataUrl,
@@ -2340,6 +2348,7 @@ export async function generateComfyUiImageViaEndpoint(params: {
   const imageGenerationOptions = {
     mode: "image",
     prompt,
+    negativePrompt,
     aspectRatio,
     referenceImages,
     referenceImageDataUrl,

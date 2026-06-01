@@ -6,6 +6,55 @@ export default {
       enable: `有効化`,
       disable: `無効化`,
     },
+    "image-tags": {
+      description: `画像生成で外見やスタイルの補助として使うデフォルト画像タグを設定します。`,
+      "default-positive": {
+        description: `画像生成プロンプトに追加するデフォルトのポジティブ外見・スタイル画像タグを設定します。`,
+        modal_title: `デフォルトポジティブ画像タグ`,
+        tags_input_label: `デフォルトポジティブタグ`,
+        tags_input_description: `画像生成プロンプトに追加されるカンマ区切りのデフォルトポジティブタグです。空欄で初期値に戻します。`,
+        tags_input_placeholder: `absurdres, aesthetic, masterpiece, soft lighting`,
+        no_tags_title: `タグが未入力です`,
+        no_tags_description: `少なくとも1つのデフォルトポジティブタグを入力してください。`,
+        too_many_tags_title: `タグが多すぎます`,
+        too_many_tags_description: `このサーバーには最大{max_tags}個までデフォルトポジティブタグを設定できます。`,
+        tag_too_long_title: `タグが長すぎます`,
+        tag_too_long_description: `各デフォルトポジティブタグは{max_length}文字以下にしてください。`,
+        success_title: `デフォルトポジティブタグを更新しました`,
+        success_description: `サーバー全体のデフォルトポジティブ画像タグを更新しました:
+\`\`\`
+{tag_list}
+\`\`\``,
+        cleared_title: `デフォルトポジティブタグを初期値に戻しました`,
+        cleared_description: `サーバー全体のデフォルトポジティブ画像タグを初期値に戻しました:
+\`\`\`
+{tag_list}
+\`\`\``,
+      },
+      "default-negative": {
+        description: `不要な外見要素やアーティファクトを避けるデフォルトネガティブ画像タグを設定します。`,
+        modal_title: `デフォルトネガティブ画像タグ`,
+        tags_input_label: `デフォルトネガティブタグ`,
+        tags_input_description: `ネガティブプロンプト対応プロバイダー向けのカンマ区切りデフォルトネガティブタグです。空欄で初期値に戻します。`,
+        tags_input_placeholder: `lowres, blurry, bad anatomy, watermark`,
+        no_tags_title: `タグが未入力です`,
+        no_tags_description: `少なくとも1つのデフォルトネガティブタグを入力してください。`,
+        too_many_tags_title: `タグが多すぎます`,
+        too_many_tags_description: `このサーバーには最大{max_tags}個までデフォルトネガティブタグを設定できます。`,
+        tag_too_long_title: `タグが長すぎます`,
+        tag_too_long_description: `各デフォルトネガティブタグは{max_length}文字以下にしてください。`,
+        success_title: `デフォルトネガティブタグを更新しました`,
+        success_description: `サーバー全体のデフォルトネガティブ画像タグを更新しました:
+\`\`\`
+{tag_list}
+\`\`\``,
+        cleared_title: `デフォルトネガティブタグを初期値に戻しました`,
+        cleared_description: `サーバー全体のデフォルトネガティブ画像タグを初期値に戻しました:
+\`\`\`
+{tag_list}
+\`\`\``,
+      },
+    },
     custom: {
       endpoint_url_invalid_title: `無効なエンドポイントURL`,
       endpoint_url_invalid_description: `カスタムエンドポイントの有効なHTTPまたはHTTPS URLを入力してください。`,

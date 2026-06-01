@@ -3,6 +3,27 @@
 export default {
   persona: {
     description: `Manage personality presets`,
+    "image-tags": {
+      description: `Set comma-separated image tags for a persona's physical appearance to assist image generation.`,
+      persona_select_title: `Select Persona`,
+      modal_title: `Persona Image Tags`,
+      tags_input_label: `Physical Appearance Tags`,
+      tags_input_description: `Comma-separated imageboard-style tags for this persona's physical appearance. Leave empty to clear.`,
+      tags_input_placeholder: `1girl, short hair, red eyes, school uniform`,
+      no_tags_title: `No Tags Provided`,
+      no_tags_description: `Please provide at least one physical appearance tag.`,
+      too_many_tags_title: `Too Many Tags`,
+      too_many_tags_description: `You can set a maximum of {max_tags} image tags per persona.`,
+      tag_too_long_title: `Tag Too Long`,
+      tag_too_long_description: `Each image tag must be {max_length} characters or less.`,
+      success_title: `Physical Appearance Updated`,
+      success_description: `Updated physical appearance tags for **{persona_name}**:
+\`\`\`
+{tag_list}
+\`\`\``,
+      cleared_title: `Physical Appearance Cleared`,
+      cleared_description: `Cleared physical appearance tags for **{persona_name}**.`,
+    },
     attribute: {
       description: `Manage persona attributes.`,
       add: {

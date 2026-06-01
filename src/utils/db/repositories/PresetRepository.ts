@@ -433,7 +433,7 @@ export class PresetRepository {
     }
 
     if (
-      (data.nai_tags?.length ?? 0) > 0 ||
+      (data.physical_appearance_tags?.length ?? 0) > 0 ||
       data.nai_char_ref_url ||
       data.nai_attg_author ||
       data.nai_attg_title ||
@@ -800,7 +800,7 @@ export class PresetRepository {
                 persona_id, persona_nickname, persona_lineage_id,
                 attribute_list, sample_dialogues_in, sample_dialogues_out,
                 is_alter, is_pointer, preset_lineage_id, preset_language,
-                nai_tags, nai_char_ref_url,
+                physical_appearance_tags, nai_char_ref_url,
                 nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
               FROM personas
               WHERE server_id = ${serverId}
@@ -812,7 +812,7 @@ export class PresetRepository {
                 persona_id, persona_nickname, persona_lineage_id,
                 attribute_list, sample_dialogues_in, sample_dialogues_out,
                 is_alter, is_pointer, preset_lineage_id, preset_language,
-                nai_tags, nai_char_ref_url,
+                physical_appearance_tags, nai_char_ref_url,
                 nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
               FROM personas
               WHERE server_id = ${serverId}
@@ -910,7 +910,7 @@ export class PresetRepository {
           persona_prompt: personaPrompt,
           persona_lineage_id: lineageId,
           ...(exportedPresetLineageId !== null ? { preset_lineage_id: exportedPresetLineageId } : {}),
-          nai_tags: presetData.nai_tags || [],
+          physical_appearance_tags: presetData.physical_appearance_tags || [],
           nai_char_ref_url: presetData.nai_char_ref_url ?? null,
           nai_attg_author: presetData.nai_attg_author ?? null,
           nai_attg_title: presetData.nai_attg_title ?? null,
@@ -1063,12 +1063,12 @@ export class PresetRepository {
         .join(",")}}`;
       const shouldUseImportedLineage = identityMode === "preserve" && importedLineageId !== null;
 
-      // 5. Build NAI tags array literal for safe insertion
-      const naiTagsArrayLiteral = `{${(validatedImportData.nai_tags ?? [])
+      // 5. Build physical appearance tags array literal for safe insertion
+      const physicalAppearanceTagsArrayLiteral = `{${(validatedImportData.physical_appearance_tags ?? [])
         .map((item: string) => `"${item.replace(/(["\\])/g, "\\$1")}"`)
         .join(",")}}`;
 
-      // 6. Update personas table with personality data, lineage behavior, and NovelAI fields
+      // 6. Update personas table with personality data, lineage behavior, and image-related fields
       try {
         await sql`
           UPDATE personas
@@ -1085,7 +1085,7 @@ export class PresetRepository {
             is_pointer = false,
             preset_lineage_id = ${importedPresetLineageId},
             preset_language = NULL,
-            nai_tags = ${naiTagsArrayLiteral}::text[],
+            physical_appearance_tags = ${physicalAppearanceTagsArrayLiteral}::text[],
             nai_char_ref_url = ${validatedImportData.nai_char_ref_url ?? null},
             nai_attg_author = ${validatedImportData.nai_attg_author ?? null},
             nai_attg_title = ${validatedImportData.nai_attg_title ?? null},

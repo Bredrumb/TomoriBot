@@ -66,7 +66,7 @@ All SQL is inlined as `private` methods directly on the owning Repository class.
 - `server_trigger_behavior_configs` — `/server always-reply`, `/server deliberate-trigger-mode`, cooldown settings (`ServerScheduleRepository`)
 - `server_auto_trigger_configs` — `/server auto-trigger` channels + threshold (`ServerScheduleRepository`)
 - `server_capabilities_configs` — `/capabilities manage` feature/tool toggles, `/capabilities toggle`
-- `server_novelai_imagegen_configs` — `/novelai` image parameters, `nai_style_tags`, `nai_negative_tags`, `nai_diffusion_model_id`
+- `server_novelai_imagegen_configs` — `/novelai` image parameters, `/config image-tags` defaults, `nai_diffusion_model_id`
 - `server_nsfw_configs` — `/nsfw` jailbreak toggles
 - `server_speech_configs` — `/speech` Chatterbox parameters, `chatterbox_turbo_enabled`, `chatterbox_cfg_weight`, `chatterbox_exaggeration`
 - `server_byok_configs` — `/server user-byok`
@@ -79,14 +79,14 @@ All SQL is inlined as `private` methods directly on the owning Repository class.
 
 - `persona_context_note_configs` — per-persona context note + depth
 - `persona_voice_configs` — `speech_voice_*` (`elevenlabs_voice_*` dropped by migration 010, Phase 6 Step #14.2)
-- `persona_imagegen_configs` — `nai_tags`, `nai_char_ref_url`
+- `persona_imagegen_configs` — `physical_appearance_tags`, `nai_char_ref_url`
 - `persona_textgen_configs` — NovelAI ATTG author/title/tags/genre/stars
 
 ### User personalization normalization (Phase 6 Step #14 — complete)
 
 `users` personalization columns are being extracted to one table:
 
-- `user_personalization_configs` — `shortterm_cache_crossserver_opt_in`, `nai_char_tags`, `nai_char_ref_url`, `impersonation_prompt`, `personal_dtm`
+- `user_personalization_configs` — `shortterm_cache_crossserver_opt_in`, `physical_appearance_tags`, `nai_char_ref_url`, `impersonation_prompt`, `personal_dtm`
 
 ### Model registries
 
@@ -193,8 +193,8 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 - `server_welcome_configs.welcome_persona_id` stores the selected welcome persona; `NULL` means random persona selection per join.
 - `server_auto_trigger_persona_overrides` (junction table, Phase 6 step #15) stores optional per-channel persona overrides for auto-trigger channels. Each row maps `(server_id, channel_disc_id)` → `persona_id` (FK to `personas(persona_id)` with `ON DELETE CASCADE`). Missing entries fall back to the main persona. The assembled config exposes these as `autoch_persona_overrides: [{channel_disc_id, persona_id}]` via a `JSON_AGG` subquery in `PersonaRepository`.
 - `server_notice_embeds_configs.tool_notice_hidden_keys` stores the hidden notice-embed key registry used by `/config notice-embeds visibility`, covering both tool progress notices and selected public command notice embeds.
-- `server_novelai_imagegen_configs.nai_style_tags` stores server-wide NovelAI style/quality tags prepended to every `generate_image_nai` prompt.
-- `server_novelai_imagegen_configs.nai_negative_tags` stores server-wide NovelAI negative tags; an empty array falls back to the `NAI_IMAGE_NEGATIVE_PROMPT` env value.
+- `server_novelai_imagegen_configs.image_default_positive_tags` stores server-wide default positive image tags. `generate_image` injects them as prompt style guidance; NovelAI tag paths prepend them as trusted positive tags.
+- `server_novelai_imagegen_configs.image_default_negative_tags` stores server-wide default negative image tags. NovelAI consumes them as the negative prompt, while standard image providers consume them only when the backend exposes a real negative-prompt channel.
 - `server_novelai_imagegen_configs.nai_diffusion_model_id` stores the dedicated NovelAI image-model selection for `generate_image_nai`; `NULL` means NovelAI image generation is disabled until a NovelAI model is explicitly selected again.
 - `server_novelai_imagegen_configs.nai_sampler`, `nai_steps`, `nai_scale`, `nai_noise_schedule`, and `nai_cfg_rescale` store optional server overrides for NovelAI image generation params; `NULL` means use the env fallback.
 - `server_member_permissions_configs.self_teaching_enabled` and `server_member_permissions_configs.personal_memories_enabled` are exposed in `/capabilities manage` because they gate core bot behavior, but they remain in the member-permissions split table with the other teaching/privacy toggles.
@@ -210,11 +210,11 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 
 `scripts/checks/checkSchemaDrift.ts` validates export coverage per split config table rather than comparing against a `tomori_configs` mirror. It also verifies that `serverConfigExportSchema` is exactly the union of the per-table export slices and that every exported key is selected, emitted, and restored. Runtime-state tables such as `api_key_rotation_runtime_state` and `persona_autoch_runtime_state` remain explicitly excluded from export/import.
 
-### NovelAI profile tags
+### Image tags and NovelAI references
 
-- `personas.nai_tags` stores per-persona NovelAI character tags.
+- `personas.physical_appearance_tags` stores public per-persona physical appearance image tags configured by `/persona image-tags`.
 - `personas.nai_char_ref_url` stores the persisted persona reference image URL/path used by the `/novelai character-reference` workflow.
-- `users.nai_char_tags` stores per-user NovelAI character tags keyed by Discord snowflake (`users.user_disc_id`).
+- `users.physical_appearance_tags` stores public per-user physical appearance image tags keyed by Discord snowflake (`users.user_disc_id`) and configured by `/personal image-tags`.
 - `users.nai_char_ref_url` stores the persisted user reference image URL/path keyed by Discord snowflake.
 
 ### User personalization

@@ -269,8 +269,8 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
   // Build the tool call instruction dynamically based on the selected backend.
   const toolInstruction =
     backend === "current_provider"
-      ? `You MUST call the generate_image tool immediately. Use the conversation context above to construct a detailed prompt describing the scene.`
-      : `You MUST call the generate_image_nai tool immediately. Use the conversation context above to construct danbooru-style tags describing the scene.`;
+      ? `You MUST call the generate_image tool immediately. Use the conversation context above, including any Physical Appearance lines for users/personas, to construct a detailed prompt describing the scene.`
+      : `You MUST call the generate_image_nai tool immediately. Use the conversation context above, including any Physical Appearance lines for users/personas, to construct danbooru-style tags describing the scene.`;
 
   const dirLines: string[] = [
     toolInstruction,

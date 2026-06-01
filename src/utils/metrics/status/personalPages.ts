@@ -102,10 +102,10 @@ export async function showPersonalStatus(
         inline: true,
       },
       {
-        nameKey: "commands.tool.status.field_nai_char_tags",
+        nameKey: "commands.tool.status.field_physical_appearance_tags",
         value:
-          (userData.nai_char_tags?.length ?? 0) > 0
-            ? `${userData.nai_char_tags.length} tags`
+          (userData.physical_appearance_tags?.length ?? 0) > 0
+            ? `${userData.physical_appearance_tags.length} tags`
             : localizer(locale, "commands.choices.none"),
         inline: true,
       },

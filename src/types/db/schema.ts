@@ -3,7 +3,7 @@ import { z } from "zod";
 import { SUPPORTED_PARAM_VALUES, isSupportedParamValue, type SupportedParamValue } from "@/constants/supportedParams";
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_VALUES } from "@/constants/thinkingLevels";
 import { TOOL_NOTICE_KEYS, isToolNoticeKey, type ToolNoticeKey } from "@/constants/toolNotices";
-import { DEFAULT_NAI_NEGATIVE_TAGS, DEFAULT_NAI_STYLE_TAGS } from "@/utils/image/naiTagDefaults";
+import { DEFAULT_IMAGE_NEGATIVE_TAGS, DEFAULT_IMAGE_POSITIVE_TAGS } from "@/utils/image/tagDefaults";
 import { logitBiasEntrySchema, normalizeLogitBiasEntries } from "@/types/provider/logitBias";
 
 export enum HumanizerDegree {
@@ -39,7 +39,7 @@ export const userSchema = z.object({
   registration_locale: z.string().nullable(), // Static locale captured at registration
   privacy_level: z.nativeEnum(PrivacyLevel).default(PrivacyLevel.MINIMAL),
   personal_memories: z.array(z.string()).default([]),
-  nai_char_tags: z.array(z.string()).default([]), // Added March 2026 - User-specific NovelAI character tags
+  physical_appearance_tags: z.array(z.string()).default([]), // Public imageboard-style physical appearance tags
   nai_char_ref_url: z.string().nullable().optional(), // Added March 2026 - User-specific NovelAI character reference image
   impersonation_prompt: z.string().nullable().optional(), // Added March 2026 - Global user-owned prompt for user impersonation replies
   shortterm_cache_crossserver_opt_in: z.boolean().default(false), // Short-term memory cross-server sharing
@@ -94,7 +94,7 @@ export const tomoriSchema = z.object({
   // autoch_counter and autoch_next_target moved to personaAutochRuntimeStateSchema (migration 015).
   is_alter: z.boolean().default(false), // Added January 2026 - Distinguishes main persona (false) from alter personas (true)
   webhook_avatar_url: z.string().nullable().optional(), // Added January 2026 - Stored alter avatar reference (production URL; non-production URL or local avatar path)
-  nai_tags: z.array(z.string()).default([]), // Imageboard-style persona appearance tags for NovelAI character profile resolution
+  physical_appearance_tags: z.array(z.string()).default([]), // Public imageboard-style physical appearance tags
   nai_char_ref_url: z.string().nullable().optional(), // Added March 2026 - Persona-specific NovelAI character reference image
   nai_attg_author: z.string().nullable().optional(), // Added March 2026 - ATTG: Story author name
   nai_attg_title: z.string().nullable().optional(), // Added March 2026 - ATTG: Story title
@@ -682,8 +682,8 @@ export type ServerTriggerBehaviorConfigRow = z.infer<typeof serverTriggerBehavio
 export const serverNovelaiImagegenConfigSchema = z.object({
   server_id: z.number().int(),
   nai_preset_name: z.string().nullable().optional(),
-  nai_style_tags: z.array(z.string()).default([...DEFAULT_NAI_STYLE_TAGS]),
-  nai_negative_tags: z.array(z.string()).default([...DEFAULT_NAI_NEGATIVE_TAGS]),
+  image_default_positive_tags: z.array(z.string()).default([...DEFAULT_IMAGE_POSITIVE_TAGS]),
+  image_default_negative_tags: z.array(z.string()).default([...DEFAULT_IMAGE_NEGATIVE_TAGS]),
   nai_sampler: z.string().nullable().optional(),
   nai_steps: z.number().int().nullable().optional(),
   nai_scale: z.number().nullable().optional(),

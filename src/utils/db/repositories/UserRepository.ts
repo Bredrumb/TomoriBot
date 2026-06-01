@@ -772,7 +772,7 @@ export class UserRepository implements IRepository<UserExportShape> {
       privacy_level: user.privacy_level,
       personal_dtm: (user.personal_dtm as "off" | "follow" | "on") ?? undefined,
       shortterm_cache_crossserver_opt_in: user.shortterm_cache_crossserver_opt_in,
-      nai_char_tags: user.nai_char_tags ?? [],
+      physical_appearance_tags: user.physical_appearance_tags ?? [],
       nai_char_ref_url: user.nai_char_ref_url ?? null,
     };
   }
@@ -810,12 +810,12 @@ export class UserRepository implements IRepository<UserExportShape> {
           privacy_level: parsed.privacy_level,
           personal_dtm: parsed.personal_dtm,
           shortterm_cache_crossserver_opt_in: parsed.shortterm_cache_crossserver_opt_in,
-          nai_char_tags: parsed.nai_char_tags,
+          physical_appearance_tags: parsed.physical_appearance_tags,
           nai_char_ref_url: parsed.nai_char_ref_url ?? undefined,
         }),
         this.sqlUpsertUserPersonalizationConfigs(user.user_id, {
           shortterm_cache_crossserver_opt_in: parsed.shortterm_cache_crossserver_opt_in ?? false,
-          nai_char_tags: parsed.nai_char_tags,
+          physical_appearance_tags: parsed.physical_appearance_tags,
           nai_char_ref_url: parsed.nai_char_ref_url ?? null,
           impersonation_prompt: parsed.impersonation_prompt ?? null,
           personal_dtm: parsed.personal_dtm,
@@ -836,7 +836,7 @@ export class UserRepository implements IRepository<UserExportShape> {
     userId: number,
     data: {
       shortterm_cache_crossserver_opt_in: boolean;
-      nai_char_tags: string[];
+      physical_appearance_tags: string[];
       nai_char_ref_url: string | null | undefined;
       impersonation_prompt: string | null | undefined;
       personal_dtm: "off" | "follow" | "on" | undefined;
@@ -844,16 +844,16 @@ export class UserRepository implements IRepository<UserExportShape> {
   ): Promise<void> {
     await sql`
       INSERT INTO user_personalization_configs (
-        user_id, shortterm_cache_crossserver_opt_in, nai_char_tags,
+        user_id, shortterm_cache_crossserver_opt_in, physical_appearance_tags,
         nai_char_ref_url, impersonation_prompt, personal_dtm
       ) VALUES (
-        ${userId}, ${data.shortterm_cache_crossserver_opt_in}, ${sql.array(data.nai_char_tags, "TEXT")},
+        ${userId}, ${data.shortterm_cache_crossserver_opt_in}, ${sql.array(data.physical_appearance_tags, "TEXT")},
         ${data.nai_char_ref_url ?? null}, ${data.impersonation_prompt ?? null},
         ${data.personal_dtm ?? "follow"}
       )
       ON CONFLICT (user_id) DO UPDATE SET
         shortterm_cache_crossserver_opt_in = EXCLUDED.shortterm_cache_crossserver_opt_in,
-        nai_char_tags                      = EXCLUDED.nai_char_tags,
+        physical_appearance_tags                      = EXCLUDED.physical_appearance_tags,
         nai_char_ref_url                   = EXCLUDED.nai_char_ref_url,
         impersonation_prompt               = EXCLUDED.impersonation_prompt,
         personal_dtm                       = EXCLUDED.personal_dtm,

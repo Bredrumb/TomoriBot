@@ -145,7 +145,8 @@ export function buildGenerateImageToolVariant(tool: Tool, capabilities: ImageToo
  */
 export class GenerateImageTool extends BaseTool {
   name = "generate_image";
-  description = "Generate, edit, or outpaint an image. Sends the result directly to Discord.";
+  description =
+    "Generate, edit, or outpaint an image. Sends the result directly to Discord. When depicting known users or personas, use their Physical Appearance context.";
   category = "utility" as const;
   requiresFeatureFlag = "image_gen";
 
@@ -157,7 +158,7 @@ export class GenerateImageTool extends BaseTool {
       prompt: {
         type: "string",
         description:
-          "Describe the desired image. For inpaint, describe only the local replacement. For outpaint, describe what should continue into the new canvas.",
+          "Describe the desired image. Include relevant Physical Appearance context for known users/personas. For inpaint, describe only the local replacement. For outpaint, describe what should continue into the new canvas.",
       },
       media_id: {
         type: "string",
@@ -440,6 +441,26 @@ export class GenerateImageTool extends BaseTool {
   private formatNoticeValue(value: string, maxLength = 120): string {
     const cleaned = value.replaceAll("`", "'").replace(/\s+/g, " ").trim();
     return cleaned.length > maxLength ? `${cleaned.slice(0, maxLength - 3).trimEnd()}...` : cleaned;
+  }
+
+  private buildEffectivePrompt(prompt: string, styleTags: readonly string[], inpaint: boolean): string {
+    const cleanedPrompt = prompt.trim();
+    const cleanedStyleTags = styleTags.map((tag) => tag.trim()).filter((tag) => tag.length > 0);
+    if (cleanedStyleTags.length === 0) {
+      return cleanedPrompt;
+    }
+
+    const styleGuidance = cleanedStyleTags.join(", ");
+    if (inpaint) {
+      return `Image style guidance to preserve/apply where compatible: ${styleGuidance}\n\nLocal edit request: ${cleanedPrompt}`;
+    }
+
+    return `Image style guidance: ${styleGuidance}\n\nUser request: ${cleanedPrompt}`;
+  }
+
+  private buildEffectiveNegativePrompt(tags: readonly string[] | null | undefined): string | undefined {
+    const cleanedTags = tags?.map((tag) => tag.trim()).filter((tag) => tag.length > 0) ?? [];
+    return cleanedTags.length > 0 ? cleanedTags.join(", ") : undefined;
   }
 
   private parseClampedNumber(value: unknown, min: number, max: number): number | null {
@@ -1028,6 +1049,14 @@ export class GenerateImageTool extends BaseTool {
       typeof args.outpaint_top_prompt === "string" ? args.outpaint_top_prompt.trim() || null : null;
     const outpaintBottomPrompt =
       typeof args.outpaint_bottom_prompt === "string" ? args.outpaint_bottom_prompt.trim() || null : null;
+    const effectivePrompt = this.buildEffectivePrompt(
+      prompt,
+      context.tomoriState.config.image_default_positive_tags ?? [],
+      inpaint,
+    );
+    const effectiveNegativePrompt = this.buildEffectiveNegativePrompt(
+      context.tomoriState.config.image_default_negative_tags,
+    );
 
     if (rawMediaId && !messageId) {
       return {
@@ -1158,6 +1187,9 @@ export class GenerateImageTool extends BaseTool {
             }),
           );
         }
+        if ((context.tomoriState.config.image_default_positive_tags ?? []).length > 0) {
+          extraNoticeLines.push(localizer(context.locale, "tools.image.notice_default_positive_tags_line"));
+        }
         if (inpaint && !outpaint && maskPrompt) {
           extraNoticeLines.push(`Mask: \`${this.formatNoticeValue(maskPrompt)}\``);
         }
@@ -1264,7 +1296,7 @@ export class GenerateImageTool extends BaseTool {
 
       // Call appropriate provider API
       log.info(
-        `Generating image with ${executionProvider} via ${displayModelName}: "${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}" (aspect ratio: ${aspectRatio})`,
+        `Generating image with ${executionProvider} via ${displayModelName}: "${effectivePrompt.substring(0, 100)}${effectivePrompt.length > 100 ? "..." : ""}" (aspect ratio: ${aspectRatio})`,
       );
       log.info(
         `GenerateImageTool image edit settings ${JSON.stringify({
@@ -1310,7 +1342,8 @@ export class GenerateImageTool extends BaseTool {
           const result = await generateCustomImageViaEndpoint({
             endpoint: creds.customEndpoint,
             apiKey,
-            prompt,
+            prompt: effectivePrompt,
+            negativePrompt: effectiveNegativePrompt,
             aspectRatio,
             referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
             inpaint,
@@ -1338,7 +1371,7 @@ export class GenerateImageTool extends BaseTool {
             clothingSegmentCategories,
           });
           generatedImageData = result.imageData;
-          await this.sendDiagnosticImagesToThoughtLog(context, result.diagnosticImages, prompt);
+          await this.sendDiagnosticImagesToThoughtLog(context, result.diagnosticImages, effectivePrompt);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           const tooLarge =
@@ -1351,7 +1384,8 @@ export class GenerateImageTool extends BaseTool {
             const retryResult = await generateCustomImageViaEndpoint({
               endpoint: creds.customEndpoint,
               apiKey,
-              prompt,
+              prompt: effectivePrompt,
+              negativePrompt: effectiveNegativePrompt,
               aspectRatio,
               referenceImages: [tinyRef],
               inpaint,
@@ -1379,7 +1413,7 @@ export class GenerateImageTool extends BaseTool {
               clothingSegmentCategories,
             });
             generatedImageData = retryResult.imageData;
-            await this.sendDiagnosticImagesToThoughtLog(context, retryResult.diagnosticImages, prompt);
+            await this.sendDiagnosticImagesToThoughtLog(context, retryResult.diagnosticImages, effectivePrompt);
           } else {
             throw err;
           }
@@ -1388,7 +1422,8 @@ export class GenerateImageTool extends BaseTool {
         const result = await nativeImageProvider.generateNativeImage({
           apiKey,
           model: modelCodename,
-          prompt,
+          prompt: effectivePrompt,
+          negativePrompt: effectiveNegativePrompt,
           aspectRatio,
           ...(referenceImages.length > 0 ? { referenceImages } : {}),
         });
@@ -1398,7 +1433,7 @@ export class GenerateImageTool extends BaseTool {
         const result = await this.generateImageWithOpenRouter(
           apiKey,
           modelCodename,
-          prompt,
+          effectivePrompt,
           aspectRatio,
           referenceImages.length > 0 ? referenceImages : undefined,
           context.abortSignal,
@@ -1421,7 +1456,7 @@ export class GenerateImageTool extends BaseTool {
             };
           };
         } = {
-          message: prompt,
+          message: effectivePrompt,
           config: {
             responseModalities: ["IMAGE"],
             imageConfig: {
@@ -1456,7 +1491,8 @@ export class GenerateImageTool extends BaseTool {
         const result = await generateZaiNativeImage({
           apiKey,
           model: modelCodename,
-          prompt,
+          prompt: effectivePrompt,
+          negativePrompt: effectiveNegativePrompt,
           aspectRatio,
           endpointUrl:
             executionProvider === "zaicoding" ? ZAI_CODING_IMAGES_GENERATIONS_URL : ZAI_GENERAL_IMAGES_GENERATIONS_URL,
@@ -1473,7 +1509,8 @@ export class GenerateImageTool extends BaseTool {
         const result = await generateNvidiaNativeImage({
           apiKey,
           model: modelCodename,
-          prompt,
+          prompt: effectivePrompt,
+          negativePrompt: effectiveNegativePrompt,
           aspectRatio,
           referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
         });

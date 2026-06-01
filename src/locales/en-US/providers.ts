@@ -106,7 +106,7 @@ The selected model requires allowing data for paid model training, but your Open
       "400_default_message": `Invalid request sent to OpenRouter`,
       "401_default_message": `Your OpenRouter API key is invalid or expired`,
       "402_default_message": `Your OpenRouter account has insufficient credits`,
-      "403_default_message": `Access denied — check your OpenRouter account settings`,
+      "403_default_message": `Access denied: check your OpenRouter account settings`,
       "408_default_message": `The OpenRouter request timed out`,
       "429_default_message": `OpenRouter rate limit exceeded, please wait before retrying`,
       "500_default_message": `OpenRouter encountered an internal server error`,

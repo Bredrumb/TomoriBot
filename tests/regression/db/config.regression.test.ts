@@ -79,8 +79,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Config — regression", () => {
         fallback_llm_ids: [1, 2],
       }),
       configRepository.updateNovelaiImagegenConfig(refs.serverId, {
-        nai_style_tags: ["_rt_style"],
-        nai_negative_tags: ["_rt_negative"],
+        image_default_positive_tags: ["_rt_style"],
+        image_default_negative_tags: ["_rt_negative"],
       }),
     ]);
 
@@ -94,8 +94,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Config — regression", () => {
         fallback_model_refs: unknown;
         llm_disabled_params: string[];
         fallback_llm_ids: unknown;
-        nai_style_tags: string[];
-        nai_negative_tags: string[];
+        image_default_positive_tags: string[];
+        image_default_negative_tags: string[];
       }>
     >`
       SELECT
@@ -103,8 +103,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Config — regression", () => {
         scc.fallback_model_refs,
         smc.llm_disabled_params,
         smc.fallback_llm_ids,
-        snaic.nai_style_tags,
-        snaic.nai_negative_tags
+        snaic.image_default_positive_tags,
+        snaic.image_default_negative_tags
       FROM server_chat_configs scc
       JOIN server_model_configs smc USING (server_id)
       JOIN server_novelai_imagegen_configs snaic USING (server_id)
@@ -115,8 +115,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Config — regression", () => {
     expect(normalizeJsonb(row.fallback_model_refs)).toEqual([{ type: "llm", id: 1 }]);
     expect(row.llm_disabled_params).toEqual(["temperature"]);
     expect(normalizeJsonb(row.fallback_llm_ids)).toEqual([1, 2]);
-    expect(row.nai_style_tags).toEqual(["_rt_style"]);
-    expect(row.nai_negative_tags).toEqual(["_rt_negative"]);
+    expect(row.image_default_positive_tags).toEqual(["_rt_style"]);
+    expect(row.image_default_negative_tags).toEqual(["_rt_negative"]);
   });
 
   it("updateCapabilitiesAndMemberPermissionsConfig writes each column to its owning split table", async () => {

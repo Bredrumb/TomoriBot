@@ -1018,7 +1018,7 @@ export async function execute(
               sampleDialoguesIn: presetData.sample_dialogues_in,
               sampleDialoguesOut: presetData.sample_dialogues_out,
               personaLineageId: identityMode === "preserve" ? importedLineageId : null,
-              naiTags: presetData.nai_tags ?? [],
+              physicalAppearanceTags: presetData.physical_appearance_tags ?? [],
               naiCharRefUrl: presetData.nai_char_ref_url ?? null,
               naiAttgAuthor: presetData.nai_attg_author ?? null,
               naiAttgTitle: presetData.nai_attg_title ?? null,

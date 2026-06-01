@@ -286,12 +286,14 @@ export async function execute(
     }
 
     const negativePromptParts =
-      (tomoriState.config.nai_negative_tags?.length ?? 0) > 0
-        ? [...(tomoriState.config.nai_negative_tags ?? [])]
+      (tomoriState.config.image_default_negative_tags?.length ?? 0) > 0
+        ? [...(tomoriState.config.image_default_negative_tags ?? [])]
         : [NAI_DEFAULT_NEGATIVE_PROMPT];
     const userNegativeTags = splitTags(negativeTagsInput);
     negativePromptParts.push(...userNegativeTags);
     const effectiveNegativePrompt = negativePromptParts.join(", ");
+    const positivePromptParts = [...(tomoriState.config.image_default_positive_tags ?? []), ...splitTags(prompt)];
+    const effectivePrompt = positivePromptParts.join(", ");
 
     let characterPayload: NaiGenerationCharacterPayload | undefined;
     if (characterReference) {
@@ -317,7 +319,7 @@ export async function execute(
     const imageBuffer = await generateNovelAiImage({
       apiKey,
       model: resolvedModel.codename,
-      prompt,
+      prompt: effectivePrompt,
       negativePrompt: effectiveNegativePrompt,
       orientation,
       imageParams: effectiveImageParams,

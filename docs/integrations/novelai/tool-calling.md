@@ -10,18 +10,19 @@ The implementation lives primarily in `src/providers/novelai/novelaiStreamAdapte
 
 ## Image Generation State
 
- - `generate_image_nai` now requires an explicit `server_novelai_imagegen_configs.nai_diffusion_model_id`. When that dedicated slot is `NULL`, the tool stays hidden and NovelAI image generation remains disabled until `/config model image` sets a NovelAI model again.
+- `generate_image_nai` now requires an explicit `server_novelai_imagegen_configs.nai_diffusion_model_id`. When that dedicated slot is `NULL`, the tool stays hidden and NovelAI image generation remains disabled until `/config model image` sets a NovelAI model again.
 - `/config model image` now also handles the dedicated NovelAI image slot when the selected provider is NovelAI.
- - `generate_image_nai` now resolves its sampler, steps, scale, noise schedule, and `cfg_rescale` from `server_novelai_imagegen_configs` first, falling back to the `NAI_IMAGE_*` / `NAI_CFG_RESCALE` env values when the server override is `NULL`.
- - `/novelai image params` is the admin-facing command for those parameter overrides.
- - `/novelai image generate` is the slash-command image generation entrypoint for direct tag-based NAI image creation, and now opens a modal for prompt, extra negative tags, optional character reference, and orientation selection.
+- `generate_image_nai` now resolves its sampler, steps, scale, noise schedule, and `cfg_rescale` from `server_novelai_imagegen_configs` first, falling back to the `NAI_IMAGE_*` / `NAI_CFG_RESCALE` env values when the server override is `NULL`.
+- `/novelai image params` is the admin-facing command for those parameter overrides.
+- Image tag profile commands are provider-neutral: `/persona image-tags`, `/personal image-tags`, `/config image-tags default-positive`, and `/config image-tags default-negative`.
+- `/novelai image generate` is the slash-command image generation entrypoint for direct tag-based NAI image creation, and now opens a modal for prompt, extra negative tags, optional character reference, and orientation selection.
 - `/novelai character-reference` now persists persona/user reference images through `src/utils/storage/charrefStorage.ts`.
 - `generate_image_nai` now supports a structured `characters[]` array for V4 models.
-- `generate_image_nai` now uses a simpler active character schema: each `characters[]` item is one visible character instance, and `characters[].tags` must contain that character's full appearance plus their role in the scene. Profile-driven autofill by `id` and `remove_tags` suppression are currently disabled in the active schema/runtime. If known persona/user appearance tags are available in conversation context, the model is expected to copy the relevant tags into `characters[].tags` directly. For erotic scenes, clothing tags can be omitted and the intended nude state can be stated directly in `tags`.
-- Saved character references are still persisted by `/novelai character-reference`, but the current active `generate_image_nai` character prompting flow does not inject profile-driven refs or profile-driven appearance tags.
+- `generate_image_nai` now uses a simpler active character schema: each `characters[]` item is one visible character instance, and `characters[].tags` must contain that character's full appearance plus their role in the scene. Profile-driven autofill by `id` and `remove_tags` suppression are currently disabled in the active schema/runtime. If known persona/user Physical Appearance tags are available in conversation context, the model is expected to copy the relevant tags into `characters[].tags` directly. For erotic scenes, clothing tags can be omitted and the intended nude state can be stated directly in `tags`.
+- Saved character references are still persisted by `/novelai character-reference`, but the current active `generate_image_nai` character prompting flow does not inject profile-driven refs or profile-driven Physical Appearance tags.
 - Multi-character generations intentionally skip saved reference images and rely on per-character tags only, because NovelAI still treats Director/Precise Reference as whole-image guidance rather than strict per-character binding.
 - Character placement now populates both top-level `characterPrompts[]` and `v4_prompt.caption.char_captions[]` from the inline `characters[].tags` only. Coordinate mode is enabled when two or more characters are present.
-- Context building now surfaces saved NAI appearance tags inline on the relevant conversation entries instead of a separate `# Image Profiles` block, so identity and image appearance guidance stay together in one place.
+- Context building now surfaces saved Physical Appearance tags inline on the relevant conversation entries instead of a separate `# Image Profiles` block, so identity and image appearance guidance stay together in one place.
 - Nested tool schemas are now preserved recursively by the provider adapters, so structured array/object params such as `characters[]` survive tool conversion instead of being flattened to `items.type`.
 
 ## Architecture

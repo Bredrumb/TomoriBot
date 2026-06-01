@@ -58,7 +58,7 @@ const NAI_IMAGE_ENABLE_TAG_RESOLUTION =
 const NAI_INPAINT_STRENGTH = Number.parseFloat(process.env.NAI_INPAINT_STRENGTH || "1.0");
 const NAI_ENABLE_CHAR_REFERENCES = (process.env.NAI_ENABLE_CHAR_REFERENCES || "true").toLowerCase() === "true";
 // Intentionally disabled: profile-driven autofill can conflict with inline tags the
-// LLM picks from context.  The LLM reads appearance tags from context and writes them
+// LLM picks from context. The LLM reads Physical Appearance tags from context and writes them
 // directly into `tags` — no DB merge needed.  Re-enable only after conflict resolution
 // strategy is designed and validated.
 const NAI_ENABLE_PROFILE_CHARACTER_AUTOFILL = false;
@@ -132,7 +132,7 @@ interface SuggestTagsResponse {
 export class GenerateImageNaiTool extends BaseTool {
   name = "generate_image_nai";
   description =
-    "Generate an anime-styled AI image with NovelAI diffusion's uncensored models. Use this only when the user explicitly asks you to make, draw, generate, create, edit, or continue an image; do not call it for casual visual discussion. If the user asks you to make/draw/generate an image and this tool is available, call this tool instead of only describing the image. Put shared scene, background, composition, camera, lighting, atmosphere, and style tags in 'prompt'. Use 'characters' for visible people in the image, and describe each character fully in that character's 'tags'.";
+    "Generate an anime-styled AI image with NovelAI diffusion's uncensored models. Use this only when the user explicitly asks you to make, draw, generate, create, edit, or continue an image; do not call it for casual visual discussion. If the user asks you to make/draw/generate an image and this tool is available, call this tool instead of only describing the image. Put shared scene, background, composition, camera, lighting, atmosphere, and style tags in 'prompt'. Use 'characters' for visible people in the image, and describe each character fully in that character's 'tags'. When known users or personas have Physical Appearance context, copy the relevant comma-separated tags into the matching character tags.";
   category = "utility" as const;
   requiresFeatureFlag = "image_gen";
   requiresFollowUp = true; // Allow model to generate a text response after image is sent, preventing orphaned self-reply
@@ -163,14 +163,14 @@ export class GenerateImageNaiTool extends BaseTool {
       characters: {
         type: "array",
         description:
-          "Visible characters in the image. Each array item is one character instance. In multi-character scenes, give every intended visible character its own entry and its own role tags. Always describe that character's full appearance plus what they are doing in that same entry's 'tags', especially exact name tag if it exists (eg. hataya misuzu, hatsune miku. If saved appearance tags for a known character are shown in conversation context, copy the relevant ones into 'tags'.",
+          "Visible characters in the image. Each array item is one character instance. In multi-character scenes, give every intended visible character its own entry and its own role tags. Always describe that character's full appearance plus what they are doing in that same entry's 'tags', especially exact name tag if it exists (eg. hataya misuzu, hatsune miku). If Physical Appearance tags for a known character are shown in conversation context, copy the relevant ones into 'tags'.",
         items: {
           type: "object",
           properties: {
             tags: {
               type: "string",
               description:
-                "Required. Imageboard-style tags for this character. Include the full appearance plus that character's role in the scene: hair, eyes, outfit or nude state, body traits, pose, action, expression, gaze, and interaction as needed, and then add [brackets] to strengthen tags to the model, and {braces} to weaken them if needed (eg. '1girl, {{chibi}}, black hair, ponytail, brown eyes, medium breasts, white shirt, black skirt, [[school uniform]], eating, hotdog, sitting'). In multi-character scenes, every visible character needs their own full tags. If saved appearance tags for a known character are shown in conversation context, copy them here to the correct corresponding character before adding scene-specific actions or expressions. For erotic scenes, omit relevant clothing tags and directly use explicit tags saying what's visible and what the act/position is (eg. 'nude, pussy, penis, sex') when that is the intended result.",
+                "Required. Imageboard-style tags for this character. Include the full appearance plus that character's role in the scene: hair, eyes, outfit or nude state, body traits, pose, action, expression, gaze, and interaction as needed, and then add [brackets] to strengthen tags to the model, and {braces} to weaken them if needed (eg. '1girl, {{chibi}}, black hair, ponytail, brown eyes, medium breasts, white shirt, black skirt, [[school uniform]], eating, hotdog, sitting'). In multi-character scenes, every visible character needs their own full tags. If Physical Appearance tags for a known character are shown in conversation context, copy them here to the correct corresponding character before adding scene-specific actions or expressions. For erotic scenes, omit relevant clothing tags and directly use explicit tags saying what's visible and what the act/position is (eg. 'nude, pussy, penis, sex') when that is the intended result.",
             },
             spoken_text: {
               type: "string",
@@ -380,11 +380,11 @@ export class GenerateImageNaiTool extends BaseTool {
   private async loadPersonaNaiProfile(serverId: number, personaId: number): Promise<NAIIdentityProfile | null> {
     const rows = await sql<
       Array<{
-        nai_tags: string[] | null;
+        physical_appearance_tags: string[] | null;
         nai_char_ref_url: string | null;
       }>
     >`
-			SELECT nai_tags, nai_char_ref_url
+			SELECT physical_appearance_tags, nai_char_ref_url
 			FROM personas
 			WHERE server_id = ${serverId}
 			  AND persona_id = ${personaId}
@@ -397,7 +397,7 @@ export class GenerateImageNaiTool extends BaseTool {
     }
 
     return {
-      tags: row.nai_tags ?? [],
+      tags: row.physical_appearance_tags ?? [],
       refUrl: row.nai_char_ref_url,
     };
   }
@@ -405,11 +405,11 @@ export class GenerateImageNaiTool extends BaseTool {
   private async loadUserNaiProfileByDiscordId(userDiscId: string): Promise<NAIIdentityProfile | null> {
     const rows = await sql<
       Array<{
-        nai_char_tags: string[] | null;
+        physical_appearance_tags: string[] | null;
         nai_char_ref_url: string | null;
       }>
     >`
-			SELECT nai_char_tags, nai_char_ref_url
+			SELECT physical_appearance_tags, nai_char_ref_url
 			FROM users
 			WHERE user_disc_id = ${userDiscId}
 			LIMIT 1
@@ -421,7 +421,7 @@ export class GenerateImageNaiTool extends BaseTool {
     }
 
     return {
-      tags: row.nai_char_tags ?? [],
+      tags: row.physical_appearance_tags ?? [],
       refUrl: row.nai_char_ref_url,
     };
   }
@@ -545,7 +545,7 @@ export class GenerateImageNaiTool extends BaseTool {
           );
         } else if (resolvedTags.length === 0) {
           log.warn(
-            `[NAI] Saved character profile for id=${normalizedId} has no NAI appearance tags; inline action tags alone may render as a generic character`,
+            `[NAI] Saved character profile for id=${normalizedId} has no physical appearance tags; inline action tags alone may render as a generic character`,
           );
         }
       }
@@ -998,8 +998,8 @@ export class GenerateImageNaiTool extends BaseTool {
           isInpaintMode ? { edit_target: editTarget as string } : undefined,
         );
         const extraNoticeLines: string[] = [];
-        if ((context.tomoriState.config.nai_style_tags ?? []).length > 0) {
-          extraNoticeLines.push(localizer(context.locale, "tools.image.notice_nai_tags_help_line"));
+        if ((context.tomoriState.config.image_default_positive_tags ?? []).length > 0) {
+          extraNoticeLines.push(localizer(context.locale, "tools.image.notice_default_positive_tags_line"));
         }
         if (messageId) {
           const referencedMessageUrl = buildReferencedMessageUrl(context, messageId);
@@ -1037,8 +1037,8 @@ export class GenerateImageNaiTool extends BaseTool {
       //    bypass suggest-tags normalization. Character tags are handled separately
       //    through v4_prompt.caption.char_captions when characters[] is provided.
       const effectiveImageParams = resolveNaiImageParams(context.tomoriState.config);
-      const styleTags = context.tomoriState.config.nai_style_tags ?? [];
-      const configuredNegativeTags = context.tomoriState.config.nai_negative_tags ?? [];
+      const styleTags = context.tomoriState.config.image_default_positive_tags ?? [];
+      const configuredNegativeTags = context.tomoriState.config.image_default_negative_tags ?? [];
       const effectiveNegativePrompt =
         configuredNegativeTags.length > 0 ? configuredNegativeTags.join(", ") : NAI_DEFAULT_NEGATIVE_PROMPT;
 

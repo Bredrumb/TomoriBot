@@ -348,18 +348,18 @@ export async function showServerModelStatus(
         inline: true,
       },
       {
-        nameKey: "commands.tool.status.field_nai_style_tags",
+        nameKey: "commands.tool.status.field_image_default_positive_tags",
         value:
-          config.nai_style_tags.length > 0
-            ? config.nai_style_tags.join(", ")
+          config.image_default_positive_tags.length > 0
+            ? config.image_default_positive_tags.join(", ")
             : localizer(locale, "commands.choices.none"),
         inline: false,
       },
       {
-        nameKey: "commands.tool.status.field_nai_negative_tags",
+        nameKey: "commands.tool.status.field_image_default_negative_tags",
         value:
-          config.nai_negative_tags.length > 0
-            ? config.nai_negative_tags.join(", ")
+          config.image_default_negative_tags.length > 0
+            ? config.image_default_negative_tags.join(", ")
             : localizer(locale, "commands.choices.none"),
         inline: false,
       },

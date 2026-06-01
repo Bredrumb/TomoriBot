@@ -66,7 +66,7 @@ export type PersonaVoiceConfigsRow = {
 /** Row shape for persona_imagegen_configs (Phase 6). */
 export type PersonaImagegenConfigsRow = {
   persona_id: number;
-  nai_tags: string[];
+  physical_appearance_tags: string[];
   nai_char_ref_url: string | null;
 };
 
@@ -144,7 +144,7 @@ const TOMORI_POINTER_CONTENT_FIELDS = new Set<string>([
   "sample_dialogues_out",
   "context_note",
   "context_note_depth",
-  "nai_tags",
+  "physical_appearance_tags",
   "nai_char_ref_url",
   "nai_attg_author",
   "nai_attg_title",
@@ -703,14 +703,14 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   }
 
   /**
-   * Replace the persona's NovelAI character tags (imageboard-style).
-   * Writes only `nai_tags` to both the new `persona_imagegen_configs` table
-   * and the `personas.nai_tags` column — preserves `nai_char_ref_url`.
+   * Replace the persona's physical appearance image tags.
+   * Writes only `physical_appearance_tags` to both the split imagegen table
+   * and the `personas.physical_appearance_tags` mirror, preserving `nai_char_ref_url`.
    *
    * @param personaId - Internal persona DB ID
-   * @param tags     - Full replacement tag array (use [] to clear)
+   * @param tags - Full replacement tag array (use [] to clear)
    */
-  async setNaiTags(personaId: number, tags: string[]): Promise<boolean> {
+  async setPhysicalAppearanceTags(personaId: number, tags: string[]): Promise<boolean> {
     try {
       const materialized = await this.materializeIfPointer(personaId);
       if (!materialized) {
@@ -719,21 +719,21 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
       await Promise.all([
         sql`
-          INSERT INTO persona_imagegen_configs (persona_id, nai_tags)
+          INSERT INTO persona_imagegen_configs (persona_id, physical_appearance_tags)
           VALUES (${personaId}, ${sql.array(tags, "TEXT")})
           ON CONFLICT (persona_id) DO UPDATE SET
-            nai_tags   = EXCLUDED.nai_tags,
+            physical_appearance_tags   = EXCLUDED.physical_appearance_tags,
             updated_at = NOW()
         `,
         sql`
           UPDATE personas
-          SET nai_tags = ${sql.array(tags, "TEXT")}, updated_at = NOW()
+          SET physical_appearance_tags = ${sql.array(tags, "TEXT")}, updated_at = NOW()
           WHERE persona_id = ${personaId}
         `,
       ]);
       return true;
     } catch (e) {
-      log.error(`Error setting NAI tags for persona ${personaId}:`, e);
+      log.error(`Error setting physical appearance tags for persona ${personaId}:`, e);
       return false;
     }
   }
@@ -1024,7 +1024,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     sampleDialoguesIn: string[];
     sampleDialoguesOut: string[];
     personaLineageId?: number | null;
-    naiTags?: string[];
+    physicalAppearanceTags?: string[];
     naiCharRefUrl?: string | null;
     naiAttgAuthor?: string | null;
     naiAttgTitle?: string | null;
@@ -1042,7 +1042,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
           sample_dialogues_out,
           is_alter,
           persona_lineage_id,
-          nai_tags,
+          physical_appearance_tags,
           nai_char_ref_url,
           nai_attg_author,
           nai_attg_title,
@@ -1058,7 +1058,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
           ${sql.array(params.sampleDialoguesOut, "TEXT")},
           true,
           COALESCE(${params.personaLineageId ?? null}::bigint, nextval('persona_lineage_id_seq')),
-          ${sql.array(params.naiTags ?? [], "TEXT")},
+          ${sql.array(params.physicalAppearanceTags ?? [], "TEXT")},
           ${params.naiCharRefUrl ?? null},
           ${params.naiAttgAuthor ?? null},
           ${params.naiAttgTitle ?? null},
@@ -1591,7 +1591,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   private async sqlLoadPersonaImagegenConfigs(personaId: number): Promise<PersonaImagegenConfigsRow | null> {
     try {
       const [row] = await sql`
-        SELECT persona_id, nai_tags, nai_char_ref_url
+        SELECT persona_id, physical_appearance_tags, nai_char_ref_url
         FROM persona_imagegen_configs WHERE persona_id = ${personaId}
       `;
       return row ? (row as unknown as PersonaImagegenConfigsRow) : null;
@@ -1647,10 +1647,10 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   private async sqlUpsertPersonaImagegenConfigs(row: PersonaImagegenConfigsRow): Promise<void> {
     await sql`
-      INSERT INTO persona_imagegen_configs (persona_id, nai_tags, nai_char_ref_url)
-      VALUES (${row.persona_id}, ${sql.array(row.nai_tags, "TEXT")}, ${row.nai_char_ref_url})
+      INSERT INTO persona_imagegen_configs (persona_id, physical_appearance_tags, nai_char_ref_url)
+      VALUES (${row.persona_id}, ${sql.array(row.physical_appearance_tags, "TEXT")}, ${row.nai_char_ref_url})
       ON CONFLICT (persona_id) DO UPDATE SET
-        nai_tags       = EXCLUDED.nai_tags,
+        physical_appearance_tags       = EXCLUDED.physical_appearance_tags,
         nai_char_ref_url = EXCLUDED.nai_char_ref_url,
         updated_at     = NOW()
     `;
@@ -1701,7 +1701,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   private async sqlDualWriteImagegenToTomoris(row: PersonaImagegenConfigsRow): Promise<void> {
     await sql`
       UPDATE personas SET
-        nai_tags         = ${sql.array(row.nai_tags, "TEXT")},
+        physical_appearance_tags         = ${sql.array(row.physical_appearance_tags, "TEXT")},
         nai_char_ref_url = ${row.nai_char_ref_url},
         updated_at       = NOW()
       WHERE persona_id = ${row.persona_id}
@@ -1877,7 +1877,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         stbc.deliberate_tool_mode, stbc.deliberate_tool_context_turns,
         stbc.deliberate_tool_triggers,
         -- 11. server_novelai_imagegen_configs
-        snaic.nai_preset_name, snaic.nai_style_tags, snaic.nai_negative_tags,
+        snaic.nai_preset_name, snaic.image_default_positive_tags, snaic.image_default_negative_tags,
         snaic.nai_sampler, snaic.nai_steps, snaic.nai_scale,
         snaic.nai_noise_schedule, snaic.nai_cfg_rescale, snaic.nai_diffusion_model_id,
         -- 12. server_byok_configs
@@ -1978,7 +1978,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         stbc.deliberate_tool_mode, stbc.deliberate_tool_context_turns,
         stbc.deliberate_tool_triggers,
         -- 11. server_novelai_imagegen_configs
-        snaic.nai_preset_name, snaic.nai_style_tags, snaic.nai_negative_tags,
+        snaic.nai_preset_name, snaic.image_default_positive_tags, snaic.image_default_negative_tags,
         snaic.nai_sampler, snaic.nai_steps, snaic.nai_scale,
         snaic.nai_noise_schedule, snaic.nai_cfg_rescale, snaic.nai_diffusion_model_id,
         -- 12. server_byok_configs

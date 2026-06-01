@@ -63,13 +63,13 @@ export type PersonalExportData = z.infer<ReturnType<typeof getPersonalExportData
 
 /**
  * Personal settings-only export schema.
- * Includes user-specific NovelAI character tags and reference image URL.
+ * Includes user-specific physical appearance image tags and NovelAI reference image URL.
  */
 export const personalSettingsExportDataSchema = z.object({
   user_nickname: z.string().min(1).max(100),
   language_pref: z.string().min(2).max(10),
   impersonation_prompt: z.string().nullable().optional(),
-  nai_char_tags: z.array(z.string()).default([]),
+  physical_appearance_tags: z.array(z.string()).default([]),
   nai_char_ref_url: z.string().nullable().optional(),
   // Behavioral preferences (added since initial schema)
   privacy_level: z.nativeEnum(PrivacyLevel).optional(),
@@ -218,8 +218,8 @@ export const serverTriggerBehaviorConfigExportSchema = z.object({
  * Excludes model-selection FKs.
  */
 export const serverNovelaiImagegenConfigExportSchema = z.object({
-  nai_style_tags: z.array(z.string()).optional(),
-  nai_negative_tags: z.array(z.string()).optional(),
+  image_default_positive_tags: z.array(z.string()).optional(),
+  image_default_negative_tags: z.array(z.string()).optional(),
   nai_sampler: z.string().nullable().optional(),
   nai_steps: z.number().int().min(1).max(50).nullable().optional(),
   nai_scale: z.number().min(0.0).max(10.0).nullable().optional(),

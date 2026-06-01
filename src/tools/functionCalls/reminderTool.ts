@@ -295,7 +295,7 @@ export class ReminderTool extends BaseTool {
       if (channelResolution.status === "ambiguous") {
         const shownCount = channelResolution.candidates.length;
         const overflowCount = channelResolution.totalCount - shownCount;
-        const overflowNote = overflowCount > 0 ? ` (and ${overflowCount} more — use a raw channel ID for others)` : "";
+        const overflowNote = overflowCount > 0 ? ` (and ${overflowCount} more; use a raw channel ID for others)` : "";
         const candidateLabels = channelResolution.candidates.map((c) => c.label).join(", ");
         return {
           success: false,

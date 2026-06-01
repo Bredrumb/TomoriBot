@@ -153,8 +153,8 @@ SELECT add_column_if_not_exists('personas', 'preset_language', 'TEXT');
 UPDATE personas SET is_pointer = false WHERE is_pointer IS NULL;
 ALTER TABLE personas ALTER COLUMN is_pointer SET DEFAULT false;
 ALTER TABLE personas ALTER COLUMN is_pointer SET NOT NULL;
--- nai_tags: Imageboard-style persona appearance tags for NovelAI character profile resolution
-SELECT add_column_if_not_exists('personas', 'nai_tags', 'TEXT[]', 'ARRAY[]::TEXT[]');
+-- physical_appearance_tags: Public imageboard-style physical appearance tags for image generation
+SELECT add_column_if_not_exists('personas', 'physical_appearance_tags', 'TEXT[]', 'ARRAY[]::TEXT[]');
 -- nai_char_ref_url: Stored reference image URL/path for NovelAI character consistency
 SELECT add_column_if_not_exists('personas', 'nai_char_ref_url', 'TEXT');
 -- elevenlabs_voice_id / elevenlabs_voice_name were added here (March 2026) and
@@ -734,8 +734,8 @@ SELECT add_column_if_not_exists('users', 'registration_locale', 'TEXT');
 -- Add cross-server short-term memory sharing opt-in (Phase 1: Short-term memory system)
 SELECT add_column_if_not_exists('users', 'shortterm_cache_crossserver_opt_in', 'BOOLEAN', 'false');
 
--- User-specific NovelAI character tags (March 2026)
-SELECT add_column_if_not_exists('users', 'nai_char_tags', 'TEXT[]', 'ARRAY[]::TEXT[]');
+-- User-specific public imageboard-style physical appearance tags for image generation
+SELECT add_column_if_not_exists('users', 'physical_appearance_tags', 'TEXT[]', 'ARRAY[]::TEXT[]');
 -- User-specific NovelAI character reference image (March 2026)
 SELECT add_column_if_not_exists('users', 'nai_char_ref_url', 'TEXT');
 -- User-specific prompt used during /bot impersonate user-mode replies (March 2026)
@@ -1965,10 +1965,9 @@ CREATE INDEX IF NOT EXISTS idx_nai_presets_model_target ON nai_presets(model_tar
 -- Add fallback model chain for automatic provider failover (March 2026)
 -- DEPRECATED Phase 3 rollout: legacy fallback array kept only for backward compatibility until fallback_model_refs is fully adopted.
 
--- Server-wide NovelAI image prompt tag overrides (March 2026)
--- nai_style_tags and nai_negative_tags were on tomori_configs (legacy god table).
--- Migrated to server_novelai_imagegen_configs (migration 002); tomori_configs
--- was dropped by migration 008. These add_column calls were removed in Task F2 review.
+-- Server-wide image prompt tag defaults (March 2026)
+-- These provider-neutral defaults live in server_novelai_imagegen_configs alongside
+-- remaining NovelAI image parameters until that split table is revisited.
 
 -- Per-server NovelAI image generation parameter overrides (March 2026)
 
@@ -2562,8 +2561,8 @@ CREATE TRIGGER update_server_capabilities_configs_timestamp
 CREATE TABLE IF NOT EXISTS server_novelai_imagegen_configs (
   server_id              INT       PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
   nai_preset_name        TEXT,
-  nai_style_tags         TEXT[]    NOT NULL DEFAULT '{"8k","absurdres","masterpiece","best quality","good quality","newest"}',
-  nai_negative_tags      TEXT[]    NOT NULL DEFAULT '{"lowres","worst quality","low quality","bad quality","old","oldest","unfinished","scan artifacts","jpeg artifacts","jaggy lines","unclear","sketch","blurry","bad anatomy","very displeasing","displeasing","bad hands","bad fingers","missing fingers","bad proportions","bad perspective","bad eyes","bad pupils","multiple heads","extra faces","many arms","poorly drawn face","poorly drawn hands","fused hands","bad feet","too many legs","malformed limbs","extra arms","multiple ears","extra digits","fewer digits","twitter username","username","watermark","signature","2koma","4koma","comic"}',
+  image_default_positive_tags         TEXT[]    NOT NULL DEFAULT '{"absurdres","aesthetic","very aesthetic","masterpiece","best quality","good quality","newest"}',
+  image_default_negative_tags      TEXT[]    NOT NULL DEFAULT '{"lowres","worst quality","low quality","bad quality","old","oldest","unfinished","scan artifacts","jpeg artifacts","jaggy lines","unclear","sketch","blurry","bad anatomy","very displeasing","displeasing","bad hands","bad fingers","missing fingers","bad proportions","bad perspective","bad eyes","bad pupils","multiple heads","extra faces","many arms","poorly drawn face","poorly drawn hands","fused hands","bad feet","too many legs","malformed limbs","extra arms","multiple ears","extra digits","fewer digits","twitter username","username","watermark","signature","2koma","4koma","comic"}',
   nai_sampler            TEXT,
   nai_steps              SMALLINT,
   nai_scale              REAL,
@@ -2727,7 +2726,7 @@ CREATE TRIGGER update_persona_voice_configs_timestamp
 
 CREATE TABLE IF NOT EXISTS persona_imagegen_configs (
   persona_id      INT    PRIMARY KEY REFERENCES personas(persona_id) ON DELETE CASCADE,
-  nai_tags        TEXT[] NOT NULL DEFAULT '{}',
+  physical_appearance_tags        TEXT[] NOT NULL DEFAULT '{}',
   nai_char_ref_url TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -2762,7 +2761,7 @@ CREATE TRIGGER update_persona_textgen_configs_timestamp
 CREATE TABLE IF NOT EXISTS user_personalization_configs (
   user_id                            INT     PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
   shortterm_cache_crossserver_opt_in BOOLEAN NOT NULL DEFAULT false,
-  nai_char_tags                      TEXT[]  NOT NULL DEFAULT '{}',
+  physical_appearance_tags                      TEXT[]  NOT NULL DEFAULT '{}',
   nai_char_ref_url                   TEXT,
   impersonation_prompt               TEXT,
   personal_dtm                       TEXT    NOT NULL DEFAULT 'follow',

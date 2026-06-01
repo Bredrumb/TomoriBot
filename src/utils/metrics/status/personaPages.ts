@@ -109,9 +109,9 @@ export async function showPersonaStatus(
       ? selectedPersona.trigger_words.map((t) => `\`${normalizeTriggerWord(t, { lowercase: false })}\``).join(", ")
       : localizer(locale, "commands.choices.none");
 
-  const naiTagsValue =
-    selectedPersona.nai_tags.length > 0
-      ? selectedPersona.nai_tags.join(", ")
+  const physicalAppearanceTagsValue =
+    selectedPersona.physical_appearance_tags.length > 0
+      ? selectedPersona.physical_appearance_tags.join(", ")
       : localizer(locale, "commands.choices.none");
 
   //     Shows the persona-specific LLM if set, otherwise "Server default"
@@ -292,8 +292,8 @@ export async function showPersonaStatus(
         inline: false,
       },
       {
-        nameKey: "commands.tool.status.field_nai_tags",
-        value: naiTagsValue,
+        nameKey: "commands.tool.status.field_physical_appearance_tags",
+        value: physicalAppearanceTagsValue,
         inline: false,
       },
       {

@@ -3,6 +3,26 @@
 export default {
   personal: {
     description: `Manage your personal settings`,
+    "image-tags": {
+      description: `Set comma-separated image tags for your physical appearance to assist image generation.`,
+      modal_title: `My Image Tags`,
+      tags_input_label: `Physical Appearance Tags`,
+      tags_input_description: `Comma-separated imageboard-style tags for your physical appearance. Leave empty to clear.`,
+      tags_input_placeholder: `1girl, short hair, red eyes, school uniform`,
+      no_tags_title: `No Tags Provided`,
+      no_tags_description: `Please provide at least one physical appearance tag.`,
+      too_many_tags_title: `Too Many Tags`,
+      too_many_tags_description: `You can set a maximum of {max_tags} personal image tags.`,
+      tag_too_long_title: `Tag Too Long`,
+      tag_too_long_description: `Each image tag must be {max_length} characters or less.`,
+      success_title: `Physical Appearance Updated`,
+      success_description: `Updated your physical appearance tags:
+\`\`\`
+{tag_list}
+\`\`\``,
+      cleared_title: `Physical Appearance Cleared`,
+      cleared_description: `Cleared your physical appearance tags.`,
+    },
     custom_models: {
       description: `Manage your personal labeled custom endpoints.`,
       add: {

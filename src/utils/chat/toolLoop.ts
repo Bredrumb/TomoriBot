@@ -196,6 +196,22 @@ async function streamOnce(
     ]);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("SDK_CALL_TIMEOUT:")) {
+      if (!params.context.streamingContext.suppressUserErrors) {
+        await sendStandardEmbed(
+          params.context.channel as Parameters<typeof sendStandardEmbed>[0],
+          params.context.locale,
+          {
+            titleKey: "genai.stream.inactivity_timeout_title",
+            descriptionKey: "genai.stream.inactivity_timeout_description",
+            color: ColorCode.WARN,
+          },
+        ).catch((embedError) => {
+          log.warn(
+            "Failed to send SDK call timeout embed",
+            embedError instanceof Error ? embedError : new Error(String(embedError)),
+          );
+        });
+      }
       return { status: "timeout", data: error };
     }
     throw error;

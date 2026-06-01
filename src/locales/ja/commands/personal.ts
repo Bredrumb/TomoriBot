@@ -3,6 +3,26 @@
 export default {
   personal: {
     description: `あなたの個人的な設定を管理します`,
+    "image-tags": {
+      description: `画像生成を補助するため、自分の外見・身体的特徴をカンマ区切り画像タグで設定します。`,
+      modal_title: `自分の画像タグ`,
+      tags_input_label: `身体的外見タグ`,
+      tags_input_description: `あなたの身体的外見を表す画像掲示板スタイルのカンマ区切りタグです。空欄でクリアします。`,
+      tags_input_placeholder: `1girl, short hair, red eyes, school uniform`,
+      no_tags_title: `タグが未入力です`,
+      no_tags_description: `少なくとも1つの身体的外見タグを入力してください。`,
+      too_many_tags_title: `タグが多すぎます`,
+      too_many_tags_description: `個人画像タグは最大{max_tags}個まで設定できます。`,
+      tag_too_long_title: `タグが長すぎます`,
+      tag_too_long_description: `各画像タグは{max_length}文字以下にしてください。`,
+      success_title: `身体的外見を更新しました`,
+      success_description: `あなたの身体的外見タグを更新しました:
+\`\`\`
+{tag_list}
+\`\`\``,
+      cleared_title: `身体的外見をクリアしました`,
+      cleared_description: `あなたの身体的外見タグをクリアしました。`,
+    },
     custom_models: {
       description: `自分用のラベル付きカスタムエンドポイントを管理します。`,
       add: {

@@ -13,7 +13,7 @@ import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { localizer } from "@/utils/text/localizer";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 import { cleanupCustomProviderArtifacts } from "@/utils/provider/customEndpointService";
-import { promptForSavedProvider } from "@/commands/model/providerPicker";
+import { promptForSavedProvider } from "@/utils/discord/providerPicker";
 import { hasRegisteredCustomProvider } from "@/utils/provider/savedProviderConfig";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>

@@ -122,6 +122,7 @@ export interface ProviderNativeImageReference {
 
 export type ImageGenerationRequest = {
   prompt: string;
+  negativePrompt?: string | null;
   referenceImageDataUrl?: string | null;
   inpaint?: boolean;
   maskPrompt?: string | null;

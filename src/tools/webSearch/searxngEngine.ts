@@ -61,9 +61,9 @@ export class SearxngEngine implements WebSearchEngine {
         return "videos";
       case "news":
         return "news";
-      case "science":
+      case "papers":
         return "science";
-      case "it":
+      case "code":
         return "it";
       case "files":
         return "files";

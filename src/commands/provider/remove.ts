@@ -15,7 +15,7 @@ import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { isCustomProvider, deleteCustomLLMEntry } from "@/utils/discord/customProviderModal";
 import { hasRegisteredCustomProvider, loadProviderDefaultSelectionIds } from "@/utils/provider/savedProviderConfig";
 import { cleanupCustomProviderArtifacts } from "@/utils/provider/customEndpointService";
-import { promptForSavedProvider } from "../model/providerPicker";
+import { promptForSavedProvider } from "@/utils/discord/providerPicker";
 
 async function resolveLlmProvider(llmId: number | null | undefined): Promise<string | null> {
   if (!llmId) return null;

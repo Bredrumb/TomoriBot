@@ -446,7 +446,7 @@ These modals have dynamic or large option sets that exceed Radio Group/Checkbox 
 | `/persona sample-dialogue add`   | `persona/sample-dialogue/add.ts`| Dynamic persona list, uses pagination                     |
 | `/memory personal add`           | `memory/personal/add.ts`        | Dynamic memory list                                       |
 | `/memory server add`             | `memory/server/add.ts`          | Dynamic memory list                                       |
-| `/novelai image-tags character`        | `novelai/tags/character.ts`      | Dynamic persona list                                      |
+| `/persona image-tags`        | `persona/image-tags.ts`      | Persona picker first, then a prefilled free-form tag modal |
 | `/persona attribute remove`      | `persona/attribute/remove.ts`   | Dynamic attribute list, uses pagination                   |
 | `/scheduled-task remove`      | `scheduled-task/remove.ts`   | Dynamic reminder list                                     |
 | `/server welcome-channel set`    | `server/welcome-channel/set.ts`  | Channel option + dynamic persona list                     |
@@ -460,9 +460,9 @@ These modals collect free-form text and have no structured option set:
 | `/config system-prompt set` | `config/system-prompt/set.ts`  | Free-form paragraph text (up to 16000 chars, 4 fields)  |
 | `/config random-trigger add`| `config/random-trigger/add.ts` | Free-form trigger word/phrase (text input portion stays) |
 | `/novelai attg`            | `novelai/attg.ts`             | 5 free-form text fields (author, title, tags, etc.)     |
-| `/novelai image-tags me`         | `novelai/tags/me.ts`          | Free-form tag text                                      |
-| `/novelai image-tags negative`   | `novelai/tags/negative.ts`    | Free-form tag text                                      |
-| `/novelai image-tags style`      | `novelai/tags/style.ts`       | Free-form tag text                                      |
+| `/personal image-tags`         | `personal/image-tags.ts`          | Free-form physical appearance image tag text            |
+| `/config image-tags default-negative`   | `config/image-tags/default-negative.ts`    | Free-form default negative tag text                     |
+| `/config image-tags default-positive`      | `config/image-tags/default-positive.ts`       | Free-form default positive tag text                  |
 | `/persona create`          | `persona/create.ts`           | Free-form text fields + file upload                     |
 | `/persona generate`        | `persona/generate.ts`         | Free-form name + file upload                            |
 | `/server trigger add`      | `server/trigger/add.ts`       | Free-form text fields (word, response, cooldown)        |

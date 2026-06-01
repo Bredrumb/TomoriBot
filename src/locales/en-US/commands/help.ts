@@ -87,7 +87,7 @@ ElevenLabs: run {elevenlabs}, then use {voice_assign} later for more personas.
       },
       chatterbox: {
         title: `Chatterbox-Turbo Speech`,
-        description: `Chatterbox-Turbo is a fast, lightweight English-only voice clone server. It supports bracket-style delivery tags such as \`[excited]\` or \`[whisper]\` to shape delivery — register it with **Script Markup** set to **Bracket Tags** so TomoriBot passes those tags through intact.`,
+        description: `Chatterbox-Turbo is a fast, lightweight English-only voice clone server. It supports bracket-style delivery tags such as \`[excited]\` or \`[whisper]\` to shape delivery: register it with **Script Markup** set to **Bracket Tags** so TomoriBot passes those tags through intact.`,
         steps_title: `Setup Steps`,
         steps_description: `**Prerequisites**: Python 3.10+, CUDA 12.x + drivers (optional, for GPU)
 
@@ -101,7 +101,7 @@ ElevenLabs: run {elevenlabs}, then use {voice_assign} later for more personas.
       },
       qwen3tts: {
         title: `Qwen3-TTS Speech`,
-        description: `Qwen3-TTS 12Hz Base is a multilingual voice clone server supporting 10 languages: Chinese, English, Japanese, Korean, German, French, Russian, Portuguese, Spanish, and Italian. The bundled Qwen3-TTS server can also run the VoiceDesign model for natural-language voice descriptions, or auto-switch between clone and VoiceDesign requests on one endpoint URL. All modes expect plain speech text only — no emotion markup. Register them with **Script Markup** set to **Plain**.`,
+        description: `Qwen3-TTS 12Hz Base is a multilingual voice clone server supporting 10 languages: Chinese, English, Japanese, Korean, German, French, Russian, Portuguese, Spanish, and Italian. The bundled Qwen3-TTS server can also run the VoiceDesign model for natural-language voice descriptions, or auto-switch between clone and VoiceDesign requests on one endpoint URL. All modes expect plain speech text only; no emotion markup. Register them with **Script Markup** set to **Plain**.`,
         steps_title: `Setup Steps`,
         steps_description: `**Prerequisites**
 • Python 3.10+
@@ -251,7 +251,7 @@ Transcription supports ~100 languages (auto-detected).`,
       documents_description: `- Upload text, PDF, or Markdown files as server knowledge using \`/memory document add\`
 - Extract channel history into searchable knowledge with \`/memory history import\`
 - I retrieve and reference relevant document content when answering questions
-- I can also read file attachments shared directly in chat (PDF, source code, markdown, JSON, YAML, and more) — just ask me to read it!
+- I can also read file attachments shared directly in chat (PDF, source code, markdown, JSON, YAML, and more): just ask me to read it!
 - Requires an embedding model (configure with \`/config model embedding\`)
 - Remove uploaded or history-extracted documents with \`/memory document remove\` and \`/memory history remove\``,
       impersonation_title: `Impersonation & Tools`,
@@ -280,16 +280,16 @@ Transcription supports ~100 languages (auto-detected).`,
       step1_title: `Step 1: Get an API Key`,
       step1_description: `TomoriBot supports multiple AI providers. You'll need an API key from one of them.
 - Use {helpApikey} to learn how to get one
-  - **Google Gemini** — general-purpose, free tier, runs all features
-  - **OpenRouter** — access to many AI models in one place
-  - **NovelAI** — uncensored role-playing and storytelling
-  - **DeepSeek** — cost-effective reasoning models
-  - **NVIDIA NIM** — hosted NVIDIA models
-  - **Anthropic** — Claude models
-  - **Vertex AI** — Google Cloud models via ADC
-  - **Vertex AI Express** — Google Cloud API-key BYOK via Express Mode (Preview, Gemini subset)
-  - **Z.ai (Zhipu)** — Chinese AI models with a coding plan ⚠️ *ToS restricts usage to coding/agent scenarios only*
-  - **Custom** — any OpenAI-compatible endpoint (Ollama, vLLM, LiteLLM, etc.)
+  - **Google Gemini**: general-purpose, free tier, runs all features
+  - **OpenRouter**: access to many AI models in one place
+  - **NovelAI**: uncensored role-playing and storytelling
+  - **DeepSeek**: cost-effective reasoning models
+  - **NVIDIA NIM**: hosted NVIDIA models
+  - **Anthropic**: Claude models
+  - **Vertex AI**: Google Cloud models via ADC
+  - **Vertex AI Express**: Google Cloud API-key BYOK via Express Mode (Preview, Gemini subset)
+  - **Z.ai (Zhipu)**: Chinese AI models with a coding plan ⚠️ *ToS restricts usage to coding/agent scenarios only*
+  - **Custom**: any OpenAI-compatible endpoint (Ollama, vLLM, LiteLLM, etc.)
 - Do **NOT** share this API key with anyone else
 - Custom endpoints can add a Bearer auth token after setup via {configApiKeySet} or {configProviderSwitch}`,
       step2_title: `Step 2: Run the Setup Command`,

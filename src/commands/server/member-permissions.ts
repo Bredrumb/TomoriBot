@@ -15,7 +15,7 @@ import { localizer } from "@/utils/text/localizer";
 import {
   buildServerMemberPermissionsConfigWritePlan,
   SERVER_MEMBER_PERMISSION_DEFINITIONS,
-} from "./memberPermissionsConfigMapping";
+} from "@/utils/discord/memberPermissionsConfigMapping";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

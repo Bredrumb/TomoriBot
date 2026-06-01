@@ -53,11 +53,11 @@ export const VOICE_TOOL_VARIANTS = {
     toolDescription:
       "Generate a spoken Discord audio message using the active persona's configured voice. " +
       "Use this only when voice delivery materially improves the reply. " +
-      "Write the script as natural plain speech text only — do not include any bracketed tags or special markup. " +
+      "Write the script as natural plain speech text only; do not include any bracketed tags or special markup. " +
       "The tool sends the audio directly to the channel with no text caption.",
     scriptDescription:
       "The exact spoken script for the voice message. Keep it concise and natural for speech. " +
-      "Plain text only — do not write bracketed tags or any special markup.",
+      "Plain text only: do not write bracketed tags or any special markup.",
   },
   emoji: {
     toolDescription:
@@ -79,7 +79,7 @@ export const VOICE_TOOL_VARIANTS = {
       "The tool sends the audio directly to the channel with no text caption.",
     scriptDescription:
       "The exact spoken script for the voice message. Keep it concise and natural for speech. " +
-      "Plain text only — put delivery direction in voice_instructions instead of in the spoken script.",
+      "Plain text only: put delivery direction in voice_instructions instead of in the spoken script.",
     voiceInstructionsDescription:
       "Optional one-off delivery direction for this voice message only. Examples: sound mad, about to cry, whispery and tired. " +
       "Do not repeat the spoken script here.",

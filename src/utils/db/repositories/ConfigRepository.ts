@@ -42,8 +42,8 @@ const TEXT_ARRAY_CONFIG_COLUMNS = new Set([
   "crosschannel_blocklist_ids",
   "llm_disabled_params",
   "llm_stop_strings",
-  "nai_negative_tags",
-  "nai_style_tags",
+  "image_default_negative_tags",
+  "image_default_positive_tags",
   "private_channel_ids",
   "rp_channel_ids",
   "tool_notice_hidden_keys",
@@ -78,8 +78,8 @@ export type ServerCapabilitiesConfigsRow = {
 /** Row shape for server_novelai_imagegen_configs (Phase 6). */
 export type ServerNovelaiImagegenConfigsRow = {
   nai_preset_name: string | null;
-  nai_style_tags: string[];
-  nai_negative_tags: string[];
+  image_default_positive_tags: string[];
+  image_default_negative_tags: string[];
   nai_sampler: string | null;
   nai_steps: number | null;
   nai_scale: number | null;
@@ -1083,7 +1083,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   private async sqlLoadNovelaiImagegenConfigs(serverId: number): Promise<ServerNovelaiImagegenConfigsRow | null> {
     try {
       const [row] = await sql`
-        SELECT nai_preset_name, nai_style_tags, nai_negative_tags, nai_sampler,
+        SELECT nai_preset_name, image_default_positive_tags, image_default_negative_tags, nai_sampler,
                nai_steps, nai_scale, nai_noise_schedule, nai_cfg_rescale, nai_diffusion_model_id
         FROM server_novelai_imagegen_configs
         WHERE server_id = ${serverId}
@@ -1169,19 +1169,19 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   private async sqlUpsertNovelaiImagegenConfigs(serverId: number, row: ServerNovelaiImagegenConfigsRow): Promise<void> {
     await sql`
       INSERT INTO server_novelai_imagegen_configs (
-        server_id, nai_preset_name, nai_style_tags, nai_negative_tags,
+        server_id, nai_preset_name, image_default_positive_tags, image_default_negative_tags,
         nai_sampler, nai_steps, nai_scale, nai_noise_schedule, nai_cfg_rescale,
         nai_diffusion_model_id
       ) VALUES (
-        ${serverId}, ${row.nai_preset_name}, ${sql.array(row.nai_style_tags, "TEXT")},
-        ${sql.array(row.nai_negative_tags, "TEXT")}, ${row.nai_sampler}, ${row.nai_steps},
+        ${serverId}, ${row.nai_preset_name}, ${sql.array(row.image_default_positive_tags, "TEXT")},
+        ${sql.array(row.image_default_negative_tags, "TEXT")}, ${row.nai_sampler}, ${row.nai_steps},
         ${row.nai_scale}, ${row.nai_noise_schedule}, ${row.nai_cfg_rescale},
         ${row.nai_diffusion_model_id}
       )
       ON CONFLICT (server_id) DO UPDATE SET
         nai_preset_name        = EXCLUDED.nai_preset_name,
-        nai_style_tags         = EXCLUDED.nai_style_tags,
-        nai_negative_tags      = EXCLUDED.nai_negative_tags,
+        image_default_positive_tags         = EXCLUDED.image_default_positive_tags,
+        image_default_negative_tags      = EXCLUDED.image_default_negative_tags,
         nai_sampler            = EXCLUDED.nai_sampler,
         nai_steps              = EXCLUDED.nai_steps,
         nai_scale              = EXCLUDED.nai_scale,

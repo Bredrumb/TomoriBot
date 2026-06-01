@@ -22,10 +22,10 @@ export class MemoryTool extends BaseTool {
   parameters: ToolParameterSchema = {
     type: "object",
     properties: {
-      memory_content: {
+      information: {
         type: "string",
         description:
-          "The specific piece of information, fact, or preference to remember. Be concise and clear. Write in third-person. Use {user} to refer to the target user and {bot} to refer to yourself — never hardcode names. Example: '{user} likes dogs' or '{bot} should greet {user} formally'.",
+          "The specific piece of information, fact, or preference to remember. Be concise and clear. Write in third-person. Use {user} to refer to the target user and {bot} to refer to yourself; never hardcode names. Example: '{user} likes dogs' or '{bot} should greet {user} formally'.",
       },
       memory_scope: {
         type: "string",

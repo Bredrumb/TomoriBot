@@ -83,10 +83,9 @@ export async function buildUsersInConversationContextItem(params: {
           userId: userIdToProcess,
           displayName: params.botName,
           detailLines: ["- Status: Online - Currently active and responding to messages"],
-          imageAppearanceTags:
-            !params.isUserImpersonation && params.tomoriConfig.imagegen_enabled
-              ? normalizeImageAppearanceTags(params.tomoriState?.nai_tags)
-              : undefined,
+          imageAppearanceTags: !params.isUserImpersonation
+            ? normalizeImageAppearanceTags(params.tomoriState?.physical_appearance_tags)
+            : undefined,
           isBot: true,
           mentionAliases: [],
           primaryAlias: null,
@@ -204,10 +203,9 @@ export async function buildUsersInConversationContextItem(params: {
       userId: userRow.user_disc_id,
       displayName,
       detailLines,
-      imageAppearanceTags:
-        !params.isUserImpersonation && params.tomoriConfig.imagegen_enabled
-          ? normalizeImageAppearanceTags(userRow.nai_char_tags)
-          : undefined,
+      imageAppearanceTags: !params.isUserImpersonation
+        ? normalizeImageAppearanceTags(userRow.physical_appearance_tags)
+        : undefined,
       isBot: false,
       mentionAliases: Array.from(aliasSet),
       primaryAlias,
@@ -389,11 +387,11 @@ async function applySyntheticPersonaAppearance(
   params: Parameters<typeof buildUsersInConversationContextItem>[0],
   userEntries: UserConversationEntry[],
 ): Promise<void> {
-  if (params.isUserImpersonation || !params.tomoriConfig.imagegen_enabled || !params.syntheticUsers?.size) return;
+  if (params.isUserImpersonation || !params.syntheticUsers?.size) return;
   if (!Array.from(params.syntheticUsers.values()).some((entry) => entry.type === "persona")) return;
 
   const allPersonas = await getCachedAllPersonas(params.guildId).catch((error) => {
-    log.warn("Failed to load personas for image profile context", error);
+    log.warn("Failed to load personas for physical appearance context", error);
     return [];
   });
   const personaById = new Map(
@@ -409,7 +407,7 @@ async function applySyntheticPersonaAppearance(
     const persona = personaById.get(personaId);
     const targetEntry = userEntries.find((entry) => entry.userId === syntheticId);
     if (persona && targetEntry) {
-      targetEntry.imageAppearanceTags = normalizeImageAppearanceTags(persona.nai_tags);
+      targetEntry.imageAppearanceTags = normalizeImageAppearanceTags(persona.physical_appearance_tags);
     }
   }
 }
@@ -515,7 +513,7 @@ function renderUserEntries(
     }
 
     if (entry.imageAppearanceTags && entry.imageAppearanceTags.length > 0) {
-      text += `- Appearance Tags: ${entry.imageAppearanceTags.join(", ")}\n`;
+      text += `- Physical Appearance: ${entry.imageAppearanceTags.join(", ")}\n`;
     }
     for (const line of entry.detailLines) text += `${line}\n`;
     text += "\n";

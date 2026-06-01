@@ -21,7 +21,7 @@ import type { SelectOption } from "@/types/discord/modal";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { replyLegacyOpenRouterOtherModelMoved } from "@/utils/discord/openrouterModelMigrationNotice";
 import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
-import { promptForSavedProvider } from "@/commands/model/providerPicker";
+import { promptForSavedProvider } from "@/utils/discord/providerPicker";
 import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
 
 const SLOT_IDS = [

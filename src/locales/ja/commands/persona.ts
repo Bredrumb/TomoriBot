@@ -3,6 +3,27 @@
 export default {
   persona: {
     description: `人格プリセットを管理する`,
+    "image-tags": {
+      description: `画像生成を補助するため、ペルソナの外見・身体的特徴をカンマ区切り画像タグで設定します。`,
+      persona_select_title: `ペルソナを選択`,
+      modal_title: `ペルソナ画像タグ`,
+      tags_input_label: `身体的外見タグ`,
+      tags_input_description: `このペルソナの身体的外見を表す画像掲示板スタイルのカンマ区切りタグです。空欄でクリアします。`,
+      tags_input_placeholder: `1girl, short hair, red eyes, school uniform`,
+      no_tags_title: `タグが未入力です`,
+      no_tags_description: `少なくとも1つの身体的外見タグを入力してください。`,
+      too_many_tags_title: `タグが多すぎます`,
+      too_many_tags_description: `1ペルソナあたり最大{max_tags}個まで画像タグを設定できます。`,
+      tag_too_long_title: `タグが長すぎます`,
+      tag_too_long_description: `各画像タグは{max_length}文字以下にしてください。`,
+      success_title: `身体的外見を更新しました`,
+      success_description: `**{persona_name}** の身体的外見タグを更新しました:
+\`\`\`
+{tag_list}
+\`\`\``,
+      cleared_title: `身体的外見をクリアしました`,
+      cleared_description: `**{persona_name}** の身体的外見タグをクリアしました。`,
+    },
     attribute: {
       description: `ペルソナの属性を管理します。`,
       add: {

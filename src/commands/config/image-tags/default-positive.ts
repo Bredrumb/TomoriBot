@@ -1,4 +1,4 @@
-﻿import {
+import {
   TextInputStyle,
   type ChatInputCommandInteraction,
   type Client,
@@ -12,20 +12,22 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { UserRow } from "@/types/db/schema";
-import { DEFAULT_NAI_STYLE_TAGS } from "@/utils/image/naiTagDefaults";
+import { DEFAULT_IMAGE_POSITIVE_TAGS } from "@/utils/image/tagDefaults";
 import {
-  formatNaiTagsForModalValue,
+  formatImageTagsForModalValue,
   MAX_TAG_LENGTH,
   MAX_TAGS,
-  parseAndValidateNaiTags,
+  parseAndValidateImageTags,
   TAGS_MODAL_MAX_LENGTH,
-} from "@/utils/novelai/tagHelpers";
+} from "@/utils/image/tagHelpers";
 
-const MODAL_CUSTOM_ID = "novelai_tags_style_modal";
-const TAGS_INPUT_ID = "style_tags_input";
+const MODAL_CUSTOM_ID = "config_image_tags_default_positive_modal";
+const TAGS_INPUT_ID = "default_positive_tags_input";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
-  subcommand.setName("style").setDescription(localizer("en-US", "commands.novelai.tags.style.description"));
+  subcommand
+    .setName("default-positive")
+    .setDescription(localizer("en-US", "commands.config.image-tags.default-positive.description"));
 
 export async function execute(
   _client: Client,
@@ -37,15 +39,6 @@ export async function execute(
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.guild_only_title",
       descriptionKey: "general.errors.guild_only_description",
-      color: ColorCode.ERROR,
-    });
-    return;
-  }
-
-  if (!interaction.memberPermissions?.has("ManageGuild")) {
-    await replyInfoEmbed(interaction, locale, {
-      titleKey: "general.errors.permission_denied_title",
-      descriptionKey: "general.errors.permission_denied_description",
       color: ColorCode.ERROR,
     });
     return;
@@ -64,16 +57,16 @@ export async function execute(
   let modalSubmitInteraction: ModalSubmitInteraction | null = null;
 
   try {
-    const currentTagsValue = formatNaiTagsForModalValue(tomoriState.config.nai_style_tags);
+    const currentTagsValue = formatImageTagsForModalValue(tomoriState.config.image_default_positive_tags);
     const modalResult = await promptWithRawModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
-      modalTitleKey: "commands.novelai.tags.style.modal_title",
+      modalTitleKey: "commands.config.image-tags.default-positive.modal_title",
       components: [
         {
           customId: TAGS_INPUT_ID,
-          labelKey: "commands.novelai.tags.style.tags_input_label",
-          descriptionKey: "commands.novelai.tags.style.tags_input_description",
-          placeholder: "commands.novelai.tags.style.tags_input_placeholder",
+          labelKey: "commands.config.image-tags.default-positive.tags_input_label",
+          descriptionKey: "commands.config.image-tags.default-positive.tags_input_description",
+          placeholder: "commands.config.image-tags.default-positive.tags_input_placeholder",
           style: TextInputStyle.Paragraph,
           required: false,
           maxLength: TAGS_MODAL_MAX_LENGTH,
@@ -92,7 +85,7 @@ export async function execute(
 
     if (tagsInput.trim().length === 0) {
       const cleared = await configRepository.updateNovelaiImagegenConfig(tomoriState.server_id, {
-        nai_style_tags: [...DEFAULT_NAI_STYLE_TAGS],
+        image_default_positive_tags: [...DEFAULT_IMAGE_POSITIVE_TAGS],
       });
 
       if (!cleared) {
@@ -107,22 +100,22 @@ export async function execute(
       invalidateTomoriStateCache(interaction.guild.id);
 
       await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "commands.novelai.tags.style.cleared_title",
-        descriptionKey: "commands.novelai.tags.style.cleared_description",
+        titleKey: "commands.config.image-tags.default-positive.cleared_title",
+        descriptionKey: "commands.config.image-tags.default-positive.cleared_description",
         descriptionVars: {
-          tag_list: DEFAULT_NAI_STYLE_TAGS.join(", "),
+          tag_list: DEFAULT_IMAGE_POSITIVE_TAGS.join(", "),
         },
         color: ColorCode.SUCCESS,
       });
       return;
     }
 
-    const validationResult = parseAndValidateNaiTags(tagsInput);
+    const validationResult = parseAndValidateImageTags(tagsInput);
 
     if (!validationResult.isValid && validationResult.reason === "empty") {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "commands.novelai.tags.style.no_tags_title",
-        descriptionKey: "commands.novelai.tags.style.no_tags_description",
+        titleKey: "commands.config.image-tags.default-positive.no_tags_title",
+        descriptionKey: "commands.config.image-tags.default-positive.no_tags_description",
         color: ColorCode.ERROR,
       });
       return;
@@ -130,8 +123,8 @@ export async function execute(
 
     if (!validationResult.isValid && validationResult.reason === "too_many") {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "commands.novelai.tags.style.too_many_tags_title",
-        descriptionKey: "commands.novelai.tags.style.too_many_tags_description",
+        titleKey: "commands.config.image-tags.default-positive.too_many_tags_title",
+        descriptionKey: "commands.config.image-tags.default-positive.too_many_tags_description",
         descriptionVars: { max_tags: MAX_TAGS.toString() },
         color: ColorCode.ERROR,
       });
@@ -140,8 +133,8 @@ export async function execute(
 
     if (!validationResult.isValid && validationResult.reason === "tag_too_long") {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "commands.novelai.tags.style.tag_too_long_title",
-        descriptionKey: "commands.novelai.tags.style.tag_too_long_description",
+        titleKey: "commands.config.image-tags.default-positive.tag_too_long_title",
+        descriptionKey: "commands.config.image-tags.default-positive.tag_too_long_description",
         descriptionVars: { max_length: MAX_TAG_LENGTH.toString() },
         color: ColorCode.ERROR,
       });
@@ -158,7 +151,7 @@ export async function execute(
     }
 
     const updated = await configRepository.updateNovelaiImagegenConfig(tomoriState.server_id, {
-      nai_style_tags: validationResult.tags,
+      image_default_positive_tags: validationResult.tags,
     });
 
     if (!updated) {
@@ -173,18 +166,18 @@ export async function execute(
     invalidateTomoriStateCache(interaction.guild.id);
 
     await replyInfoEmbed(modalSubmitInteraction, locale, {
-      titleKey: "commands.novelai.tags.style.success_title",
-      descriptionKey: "commands.novelai.tags.style.success_description",
+      titleKey: "commands.config.image-tags.default-positive.success_title",
+      descriptionKey: "commands.config.image-tags.default-positive.success_description",
       descriptionVars: {
         tag_list: validationResult.tags.join(", "),
       },
       color: ColorCode.SUCCESS,
     });
   } catch (error) {
-    await log.error("Error in /novelai image-tags style command", error, {
+    await log.error("Error in /config image-tags default-positive command", error, {
       errorType: "CommandExecutionError",
       metadata: {
-        command: "novelai tags style",
+        command: "config image-tags default-positive",
         guildId: interaction.guild.id,
         serverId: tomoriState.server_id,
       },

@@ -22,6 +22,10 @@ Initial adopters:
 
 Deferred candidates: video generation provider/model option tables, permission-sensitive Discord message/thread tools, sticker-name schema hints, and fetch-url backend details.
 
+## NovelAI Image Tags Decoupling
+
+Image tags moved out of `/novelai image-tags` into provider-neutral commands: `/persona image-tags`, `/personal image-tags`, and `/config image-tags default-positive/default-negative`. User and persona tags are rendered in context as public `Physical Appearance` lines. `generate_image` now receives default positive tag guidance, while default negative tags are consumed only by NovelAI or standard backends with real negative-prompt support.
+
 ---
 
 ## Module Restructure

@@ -138,11 +138,6 @@ function getCommandLocalizationAliases(key: string): string[] {
     aliases.push(configAlias);
   }
 
-  const novelAiImageTagsMatch = key.match(/^commands\.novelai\.image-tags\.([a-z0-9-]+)\.description$/);
-  if (novelAiImageTagsMatch) {
-    aliases.push(`commands.novelai.tags.${novelAiImageTagsMatch[1]}.description`);
-  }
-
   const conditioningMatch = key.match(
     /^commands\.conditioning\.(reward|punish)\.([a-z0-9-]+)\.([a-z][a-z0-9]*(?:_[a-z0-9]+)*_description|description)$/,
   );
