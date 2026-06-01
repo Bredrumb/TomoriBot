@@ -30,10 +30,32 @@ import { providerSupportsFeature } from "@/utils/provider/providerInfoRegistry";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
 
 const MODAL_CUSTOM_ID = "tool_compact_modal";
-const TYPE_FIELD_ID = "summary_type";
 const REFRESH_FIELD_ID = "refresh_context";
 const ANALYZE_IMAGES_FIELD_ID = "analyze_images";
-const ADDITIONAL_INST_FIELD_ID = "additional_instructions";
+const SYSTEM_PROMPT_FIELD_ID = "system_prompt";
+
+const DEFAULT_CONVERSATION_SYSTEM_PROMPT =
+  "You are a skilled conversation analyst who creates clear, readable summaries of Discord conversations. " +
+  "Your goal is to distill the conversation into a well-written, human-readable narrative that captures the essential elements: " +
+  "key facts, relationships between participants, important decisions, ongoing tasks, and the overall flow of discussion. " +
+  "Write in natural prose that's easy to understand, avoiding unnecessary jargon or robotic phrasing. " +
+  "Be concise but thorough: every sentence should add value. Output plain text only.";
+
+const DEFAULT_ROLEPLAY_SYSTEM_PROMPT =
+  "You are a skilled storyteller who crafts clear, engaging summaries of roleplay scenes. " +
+  "Analyze the roleplay narrative and produce a structured JSON summary that captures the scene and each character's current state. " +
+  "Write with clarity and literary quality: your descriptions should paint a vivid picture while remaining concise. " +
+  "Base every detail on what's actually present in the context; if something isn't shown, mark it as 'Unknown' or 'Not specified'. " +
+  "Keep each field brief but evocative: think short phrases or 2-3 well-crafted sentences that tell the story.\n\n" +
+  "The JSON structure should contain:\n" +
+  "- overall_scene_summary: A narrative overview of the current scene, setting, atmosphere, and what's happening\n" +
+  "- characters: An array where each character has:\n" +
+  "  - name: The character's name\n" +
+  "  - current_goals: What the character is trying to accomplish or their immediate intentions\n" +
+  "  - emotional_status: The character's current feelings, mood, and emotional state\n" +
+  "  - physical_status: The character's physical condition, location, pose, health, or any injuries/ailments\n" +
+  "  - appearance_clothing: How the character currently looks and what they're wearing\n" +
+  "  - inventory: Notable items the character has on them or is currently using";
 
 /**
  * Configure /tool compact subcommand
@@ -42,6 +64,16 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
   subcommand
     .setName("compact")
     .setDescription(localizer("en-US", "commands.tool.compact.description"))
+    .addStringOption((option) =>
+      option
+        .setName("type")
+        .setDescription(localizer("en-US", "commands.tool.compact.type_description"))
+        .addChoices(
+          { name: localizer("en-US", "commands.tool.compact.modal.type_choice_conversation"), value: "conversation" },
+          { name: localizer("en-US", "commands.tool.compact.modal.type_choice_roleplay"), value: "roleplay" },
+        )
+        .setRequired(true),
+    )
     .addChannelOption((option) =>
       option
         .setName("channel")
@@ -474,15 +506,8 @@ function buildConversationPrompt(params: {
   conversationText: string;
   imageReferences: ImageReference[];
   supplementaryContext: string;
-  additionalInstructions?: string;
+  systemPrompt: string;
 }): { systemPrompt: string; userPrompt: string } {
-  const systemPrompt =
-    "You are a skilled conversation analyst who creates clear, readable summaries of Discord conversations. " +
-    "Your goal is to distill the conversation into a well-written, human-readable narrative that captures the essential elements: " +
-    "key facts, relationships between participants, important decisions, ongoing tasks, and the overall flow of discussion. " +
-    "Write in natural prose that's easy to understand, avoiding unnecessary jargon or robotic phrasing. " +
-    "Be concise but thorough: every sentence should add value. Output plain text only.";
-
   const sections: string[] = [];
   sections.push("MAIN CONTEXT (chronological):");
   sections.push(params.conversationText || "(no recent messages)");
@@ -497,15 +522,10 @@ function buildConversationPrompt(params: {
     sections.push(params.supplementaryContext);
   }
 
-  if (params.additionalInstructions) {
-    sections.push("\nADDITIONAL INSTRUCTIONS:");
-    sections.push(params.additionalInstructions);
-  }
-
   sections.push("\nPlease keep the summary under 3500 characters.");
 
   return {
-    systemPrompt,
+    systemPrompt: params.systemPrompt,
     userPrompt: sections.join("\n"),
   };
 }
@@ -514,24 +534,8 @@ function buildRoleplayPrompt(params: {
   conversationText: string;
   imageReferences: ImageReference[];
   supplementaryContext: string;
-  additionalInstructions?: string;
+  systemPrompt: string;
 }): { systemPrompt: string; userPrompt: string } {
-  const systemPrompt =
-    "You are a skilled storyteller who crafts clear, engaging summaries of roleplay scenes. " +
-    "Analyze the roleplay narrative and produce a structured JSON summary that captures the scene and each character's current state. " +
-    "Write with clarity and literary quality: your descriptions should paint a vivid picture while remaining concise. " +
-    "Base every detail on what's actually present in the context; if something isn't shown, mark it as 'Unknown' or 'Not specified'. " +
-    "Keep each field brief but evocative: think short phrases or 2-3 well-crafted sentences that tell the story.\n\n" +
-    "The JSON structure should contain:\n" +
-    "- overall_scene_summary: A narrative overview of the current scene, setting, atmosphere, and what's happening\n" +
-    "- characters: An array where each character has:\n" +
-    "  - name: The character's name\n" +
-    "  - current_goals: What the character is trying to accomplish or their immediate intentions\n" +
-    "  - emotional_status: The character's current feelings, mood, and emotional state\n" +
-    "  - physical_status: The character's physical condition, location, pose, health, or any injuries/ailments\n" +
-    "  - appearance_clothing: How the character currently looks and what they're wearing\n" +
-    "  - inventory: Notable items the character has on them or is currently using";
-
   const sections: string[] = [];
   sections.push("MAIN CONTEXT (chronological):");
   sections.push(params.conversationText || "(no recent messages)");
@@ -546,13 +550,8 @@ function buildRoleplayPrompt(params: {
     sections.push(params.supplementaryContext);
   }
 
-  if (params.additionalInstructions) {
-    sections.push("\nADDITIONAL INSTRUCTIONS:");
-    sections.push(params.additionalInstructions);
-  }
-
   return {
-    systemPrompt,
+    systemPrompt: params.systemPrompt,
     userPrompt: sections.join("\n"),
   };
 }
@@ -718,6 +717,9 @@ export async function execute(
     return;
   }
 
+  // Read the summary type from the slash command option
+  const summaryType = interaction.options.getString("type", true) as CompactSummaryMode;
+
   // Read optional redirect channel — if provided, summary posts there instead of here
   const targetChannelOption = interaction.options.getChannel("channel");
   const targetThreadId = interaction.options.getString("thread")?.trim();
@@ -742,25 +744,10 @@ export async function execute(
     return;
   }
 
+  const defaultSystemPrompt =
+    summaryType === "roleplay" ? DEFAULT_ROLEPLAY_SYSTEM_PROMPT : DEFAULT_CONVERSATION_SYSTEM_PROMPT;
+
   const modalComponents: ModalComponent[] = [
-    {
-      // Radio Group: mutually exclusive mode selection (exactly one choice)
-      kind: "radioGroup" as const,
-      customId: TYPE_FIELD_ID,
-      labelKey: "commands.tool.compact.modal.type_label",
-      descriptionKey: "commands.tool.compact.modal.type_description",
-      required: true,
-      options: [
-        {
-          label: localizer(locale, "commands.tool.compact.modal.type_choice_conversation"),
-          value: "conversation",
-        },
-        {
-          label: localizer(locale, "commands.tool.compact.modal.type_choice_roleplay"),
-          value: "roleplay",
-        },
-      ],
-    },
     {
       // Checkbox Group with 1 option — checked = yes, unchecked = no.
       // min_values: 0 + required: false allows unchecked submission (the "no" path).
@@ -796,12 +783,13 @@ export async function execute(
       ],
     },
     {
-      customId: ADDITIONAL_INST_FIELD_ID,
-      labelKey: "commands.tool.compact.modal.additional_instructions_label",
-      placeholder: "commands.tool.compact.modal.additional_instructions_placeholder",
+      customId: SYSTEM_PROMPT_FIELD_ID,
+      labelKey: "commands.tool.compact.modal.system_prompt_label",
+      placeholder: "commands.tool.compact.modal.system_prompt_placeholder",
       required: false,
       style: TextInputStyle.Paragraph,
-      maxLength: 1000,
+      maxLength: 2000,
+      value: defaultSystemPrompt,
     },
   ];
 
@@ -826,11 +814,12 @@ export async function execute(
     return;
   }
 
-  const summaryType = (modalResult.values[TYPE_FIELD_ID] || "conversation") as CompactSummaryMode;
   // Checkbox Group returns selected values in multiValues; "yes" present = true
   const refresh = (modalResult.multiValues?.[REFRESH_FIELD_ID] ?? []).includes("yes");
   const analyzeImages = (modalResult.multiValues?.[ANALYZE_IMAGES_FIELD_ID] ?? []).includes("yes");
-  const additionalInstructions = modalResult.values[ADDITIONAL_INST_FIELD_ID]?.trim();
+  const systemPrompt =
+    modalResult.values[SYSTEM_PROMPT_FIELD_ID]?.trim() ||
+    (summaryType === "roleplay" ? DEFAULT_ROLEPLAY_SYSTEM_PROMPT : DEFAULT_CONVERSATION_SYSTEM_PROMPT);
 
   const serverDiscId = interaction.guild?.id ?? interaction.user.id;
   const tomoriState = await loadTomoriState(serverDiscId);
@@ -1008,7 +997,7 @@ export async function execute(
         conversationText,
         imageReferences,
         supplementaryContext,
-        additionalInstructions,
+        systemPrompt,
       });
 
       log.info(`[Compact] Conversation system prompt:\n${prompt.systemPrompt}`);
@@ -1048,7 +1037,7 @@ export async function execute(
         conversationText,
         imageReferences,
         supplementaryContext,
-        additionalInstructions,
+        systemPrompt,
       });
 
       log.info(`[Compact] Roleplay system prompt:\n${prompt.systemPrompt}`);
