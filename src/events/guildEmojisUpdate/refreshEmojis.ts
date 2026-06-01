@@ -3,7 +3,7 @@ import { sql } from "@/utils/db/client";
 import type { EventFunction, EventArg } from "../../types/discord/global"; // Rule 14
 import type { ErrorContext } from "../../types/db/schema"; // Rule 14
 import { log } from "../../utils/misc/logger"; // Rule 18
-import { syncEmojisToDatabase } from "../../utils/db/emojiStickerSync";
+import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 import { invalidateEmojiStickerCache } from "../../utils/cache/emojiStickerCache";
 
 /**
@@ -26,20 +26,13 @@ const handleGuildEmojisUpdate: EventFunction = async (_client: Client, ...args: 
   let serverId: number | undefined; // Variable to hold the internal server ID
 
   try {
-    // 2. Check if server is registered and get internal server_id (Rule 4, 16)
-    const [serverRow] = await sql`
-            SELECT server_id
-            FROM servers
-            WHERE server_disc_id = ${guild.id}
-            LIMIT 1
-        `;
+    // 2. Check if server is registered and get internal server_id via repository (Rule 4, 16)
+    serverId = (await serverRepository.loadServerIdByDiscId(guild.id)) ?? undefined;
 
-    if (!serverRow?.server_id) {
+    if (!serverId) {
       log.warn(`Received emoji update for guild ${guild.id} but server is not registered in DB. Skipping refresh.`);
       return; // Server not setup, nothing to refresh
     }
-    // biome-ignore lint/style/noNonNullAssertion: Row existence guarantees server_id is present (Rule 8)
-    serverId = serverRow.server_id!; // Assign the found server ID
 
     // 3. Fetch the current complete list of emojis from Discord API
     // CRITICAL: Must fetch() to ensure cache is complete - cache may be incomplete on startup
@@ -50,7 +43,7 @@ const handleGuildEmojisUpdate: EventFunction = async (_client: Client, ...args: 
     // 4. Sync emojis to database using shared helper
     await sql.transaction(async (tx) => {
       // biome-ignore lint/style/noNonNullAssertion: serverId is guaranteed to exist after checks above
-      await syncEmojisToDatabase(tx, serverId!, currentEmojis);
+      await serverRepository.syncEmojis(tx, serverId!, currentEmojis);
     });
 
     // 5. Invalidate in-memory cache to force refresh on next message

@@ -17,7 +17,6 @@ import type {
   AnyThreadChannel,
 } from "discord.js";
 import type { ZodType } from "zod";
-import { sql } from "../../utils/db/client";
 import { StreamOrchestrator } from "../../utils/discord/streamOrchestrator";
 import { OpenrouterStreamAdapter, type OpenrouterStreamConfig } from "./openrouterStreamAdapter";
 import { generateConversationSummaryOpenrouter, generateRoleplaySummaryOpenrouter } from "./compactGenerator";
@@ -62,7 +61,7 @@ import {
   getOpenRouterTokenLimits,
   isOpenRouterCapabilityCacheReady,
 } from "../../utils/cache/openrouterCapabilityCache";
-import { loadDefaultModelForProvider, loadAvailableModelsForProvider } from "../../utils/db/dbRead";
+import { configRepository, llmModelRepo } from "@/utils/db/repositories";
 import { getMCPManager } from "../../utils/mcp/mcpManager";
 import { isBraveSearchAvailable } from "../../tools/restAPIs/brave/braveSearchService";
 import { openrouterProviderInfo } from "./providerInfo";
@@ -93,7 +92,7 @@ async function getDefaultOpenrouterModel(): Promise<string> {
 
   // 2. Cache not ready or no default found - query database for is_default model
   try {
-    const dbDefault = await loadDefaultModelForProvider(providerName);
+    const dbDefault = await llmModelRepo.loadDefaultModel(providerName);
     if (dbDefault) {
       log.info(`Using database default ${providerName} model: ${dbDefault.llm_codename}`);
       return dbDefault.llm_codename;
@@ -106,7 +105,7 @@ async function getDefaultOpenrouterModel(): Promise<string> {
 
   // 3. Fallback to first non-deprecated model from database
   try {
-    const availableModels = await loadAvailableModelsForProvider(providerName);
+    const availableModels = await llmModelRepo.loadAvailableModelsForProvider(providerName);
     if (availableModels && availableModels.length > 0) {
       const firstModel = availableModels[0].llm_codename;
       log.warn(`No default model found, using first available ${providerName} model: ${firstModel}`);
@@ -374,8 +373,7 @@ export class OpenrouterProvider
       activePersonaHasElevenlabsVoice: Boolean(
         request.tomoriState.speech_voice_sample_id ||
           request.tomoriState.speech_voice_design_prompt?.trim() ||
-          request.tomoriState.speech_voice_id?.trim() ||
-          request.tomoriState.elevenlabs_voice_id?.trim(),
+          request.tomoriState.speech_voice_id?.trim(),
       ),
       activePersonaVoiceDesignPrompt: request.tomoriState.speech_voice_design_prompt?.trim() || null,
       activePersonaVoiceName: request.tomoriState.speech_voice_name,
@@ -397,7 +395,6 @@ export class OpenrouterProvider
         manage_message_enabled: false,
         imagegen_enabled: false,
         videogen_enabled: false,
-        nai_exclusive_imggen: false,
         voice_message_enabled: false,
         thread_creation_enabled: false,
       },
@@ -455,8 +452,7 @@ export class OpenrouterProvider
         activePersonaHasElevenlabsVoice: Boolean(
           tomoriState.speech_voice_sample_id ||
             tomoriState.speech_voice_design_prompt?.trim() ||
-            tomoriState.speech_voice_id?.trim() ||
-            tomoriState.elevenlabs_voice_id?.trim(),
+            tomoriState.speech_voice_id?.trim(),
         ),
         activePersonaVoiceDesignPrompt: tomoriState.speech_voice_design_prompt?.trim() || null,
         activePersonaVoiceName: tomoriState.speech_voice_name,
@@ -478,7 +474,6 @@ export class OpenrouterProvider
           manage_message_enabled: tomoriState.config.manage_message_enabled,
           imagegen_enabled: tomoriState.config.imagegen_enabled,
           videogen_enabled: tomoriState.config.videogen_enabled,
-          nai_exclusive_imggen: tomoriState.config.nai_exclusive_imggen,
           voice_message_enabled: tomoriState.config.voice_message_enabled,
           thread_creation_enabled: tomoriState.config.thread_creation_enabled,
         },
@@ -521,13 +516,12 @@ export class OpenrouterProvider
         );
       }
 
-      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } =
-        applyDeliberateToolAllowlist({
-          providerLabel: "OpenRouter provider",
-          builtInTools: finalBuiltInTools,
-          mcpFunctionNames: finalMcpFunctionNames,
-          allowedToolNames: streamingContext?.deliberateToolAllowedNames,
-        }));
+      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } = applyDeliberateToolAllowlist({
+        providerLabel: "OpenRouter provider",
+        builtInTools: finalBuiltInTools,
+        mcpFunctionNames: finalMcpFunctionNames,
+        allowedToolNames: streamingContext?.deliberateToolAllowedNames,
+      }));
 
       // Use the enhanced tool adapter to get all tools (built-in + MCP)
       const openrouterAdapter = getOpenrouterToolAdapter();
@@ -611,12 +605,10 @@ export class OpenrouterProvider
 
               // Store refreshed capabilities in database
               const now = new Date();
-              await sql`
-                UPDATE tomori_configs
-                SET other_model_capabilities = ${JSON.stringify(capabilities)}::jsonb,
-                    other_model_capabilities_fetched_at = ${now}
-                WHERE server_id = ${tomoriState.server_id}
-              `;
+              await configRepository.updateModelConfig(tomoriState.server_id, {
+                other_model_capabilities: capabilities,
+                other_model_capabilities_fetched_at: now,
+              });
 
               effectiveHasTools = capabilities.hasTools;
               effectiveSeesImages = capabilities.seesImages;

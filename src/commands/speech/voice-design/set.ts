@@ -8,9 +8,11 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
-import { updateTomori } from "@/utils/db/dbWrite";
-import { promptWithRawModal, replyInfoEmbed, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/interactionHelper";
+import { personaRepository } from "@/utils/db/repositories";
+
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { resolveActiveSpeechEndpoint } from "@/utils/provider/speechEndpointResolver";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
@@ -78,7 +80,7 @@ export async function execute(
       return;
     }
 
-    const allPersonas = await loadAllPersonasForServer(serverDiscId);
+    const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -105,7 +107,7 @@ export async function execute(
 
     const personaButtonInteraction = personaSelection.interaction as ButtonInteraction;
     selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-    if (!selectedPersona?.tomori_id) {
+    if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(personaButtonInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -160,7 +162,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: selectedPersona?.server_id ?? null,
-      tomoriId: selectedPersona?.tomori_id ?? null,
+      personaId: selectedPersona?.persona_id ?? null,
       errorType: "CommandExecutionError",
       metadata: {
         command: "speech voice-design set",
@@ -185,7 +187,7 @@ async function saveVoiceDesignPrompt(
   selectedPersona: TomoriState,
   designPrompt: string,
 ): Promise<void> {
-  if (!selectedPersona.tomori_id) {
+  if (!selectedPersona.persona_id) {
     await replyInfoEmbed(responseInteraction, locale, {
       titleKey: "general.errors.invalid_option_title",
       descriptionKey: "general.errors.invalid_option_description",
@@ -197,7 +199,7 @@ async function saveVoiceDesignPrompt(
   // Keep clone/provider voice assignments as reusable persona data. In auto
   // endpoint mode, speech_voice_name marks VoiceDesign as the active voice
   // choice while preserving any saved sample/provider voice for later.
-  const updatedTomori = await updateTomori(selectedPersona.tomori_id, {
+  const updatedTomori = await personaRepository.update(selectedPersona.persona_id, {
     speech_voice_design_prompt: designPrompt,
     speech_voice_name: "VoiceDesign",
   });
@@ -216,7 +218,7 @@ async function saveVoiceDesignPrompt(
     titleKey: "commands.speech.voice_design.success_title",
     descriptionKey: "commands.speech.voice_design.success_description",
     descriptionVars: {
-      persona: selectedPersona.tomori_nickname,
+      persona: selectedPersona.persona_nickname,
       preview: designPrompt.length > 120 ? `${designPrompt.slice(0, 117)}...` : designPrompt,
     },
     color: ColorCode.SUCCESS,

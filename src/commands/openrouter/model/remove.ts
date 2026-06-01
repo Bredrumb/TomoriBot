@@ -7,7 +7,8 @@ import {
   collectCheckedOpenRouterModelValues,
   MAX_OPENROUTER_MODEL_GROUPS,
 } from "@/utils/discord/openrouterModelRemovalModal";
-import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
   loadRegisteredOpenRouterModelsForScope,
@@ -156,7 +157,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState.server_id,
-      tomoriId: tomoriState.tomori_id,
+      personaId: tomoriState.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "openrouter model remove",

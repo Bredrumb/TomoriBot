@@ -1,4 +1,4 @@
-import type { TomoriConfigRow } from "@/types/db/schema";
+import type { AssembledServerConfig } from "@/types/db/schema";
 import { log } from "@/utils/misc/logger";
 
 export const NAI_IMAGE_SAMPLERS = [
@@ -24,7 +24,7 @@ export type EffectiveNaiImageParams = {
 };
 
 type NaiImageParamOverrides = Pick<
-  TomoriConfigRow,
+  AssembledServerConfig,
   "nai_steps" | "nai_scale" | "nai_sampler" | "nai_noise_schedule" | "nai_cfg_rescale"
 >;
 

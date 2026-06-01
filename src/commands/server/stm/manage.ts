@@ -12,7 +12,8 @@ import {
   getShortTermMemoriesForServer,
 } from "@/utils/cache/shortTermMemoryCache";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { promptWithRawModal, replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -116,7 +117,7 @@ export async function execute(
     }
 
     for (const entry of entriesToClear) {
-      clearShortTermMemoryForServerChannel(interaction.guildId, entry.channelId, entry.tomoriId);
+      clearShortTermMemoryForServerChannel(interaction.guildId, entry.channelId, entry.personaId);
     }
 
     await replyInfoEmbed(modalInteraction, locale, {
@@ -155,8 +156,8 @@ export async function execute(
 function getActiveServerStmEntries(guildId: string, personas: TomoriState[], locale: string): ActiveServerStmEntry[] {
   const personaNameById = new Map<number, string>();
   for (const persona of personas) {
-    if (persona.tomori_id != null) {
-      personaNameById.set(persona.tomori_id, persona.tomori_nickname);
+    if (persona.persona_id != null) {
+      personaNameById.set(persona.persona_id, persona.persona_nickname);
     }
   }
 
@@ -164,8 +165,8 @@ function getActiveServerStmEntries(guildId: string, personas: TomoriState[], loc
     .map((entry) => ({
       ...entry,
       personaName:
-        entry.tomoriId != null
-          ? (personaNameById.get(entry.tomoriId) ?? `${localizer(locale, "general.unknown")} (${entry.tomoriId})`)
+        entry.personaId != null
+          ? (personaNameById.get(entry.personaId) ?? `${localizer(locale, "general.unknown")} (${entry.personaId})`)
           : localizer(locale, "commands.server.stm.manage.unscoped_label"),
     }))
     .sort((a, b) => b.lastUpdated - a.lastUpdated);
@@ -229,7 +230,7 @@ function buildEntryDescription(
 }
 
 function getEntryValue(entry: ShortTermMemoryEntry): string {
-  return `${entry.channelId}:${entry.tomoriId ?? "none"}`;
+  return `${entry.channelId}:${entry.personaId ?? "none"}`;
 }
 
 function collectCheckedValues(multiValues: Record<string, string[]> | undefined, groupCount: number): Set<string> {

@@ -5,13 +5,14 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { getCachedGuildMcpConfigs, invalidateGuildMcpConfigCache } from "@/utils/cache/guildMcpConfigCache";
+import { getCachedGuildMcpConfigs } from "@/utils/cache/guildMcpConfigCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
-import { updateGuildMcpServerEnabled } from "@/utils/db/guildMcpDb";
+import { toolRepository } from "@/utils/db/repositories/ToolRepository";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 
 // ─── Constants ───────────────────────────────────────────────────────
@@ -157,7 +158,7 @@ export async function execute(
     const enabled = (modalResult.multiValues?.[STATE_SELECT_ID] ?? []).includes("enable");
 
     // 5. Update DB
-    const updated = await updateGuildMcpServerEnabled(tomoriState.server_id, name, enabled);
+    const updated = await toolRepository.updateMcpServerEnabled(tomoriState.server_id, name, enabled, serverId);
     if (!updated) {
       await replyInfoEmbed(replyInteraction, locale, {
         titleKey: "commands.mcp.toggle.not_found_title",
@@ -168,10 +169,7 @@ export async function execute(
       return;
     }
 
-    // 6. Invalidate cache after successful DB write
-    invalidateGuildMcpConfigCache(tomoriState.server_id);
-
-    // 7. If disabling, disconnect from pool
+    // 6. If disabling, disconnect from pool (cache invalidated by repository)
     if (!enabled) {
       await getGuildMcpManager().disconnectGuildServer(tomoriState.server_id, name);
     }
@@ -196,7 +194,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: null,
-      tomoriId: null,
+      personaId: null,
       errorType: "CommandExecutionError",
       metadata: { command: "config mcp toggle" },
     };

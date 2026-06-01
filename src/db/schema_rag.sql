@@ -8,7 +8,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 CREATE TABLE IF NOT EXISTS documents (
   document_id SERIAL PRIMARY KEY,
   server_id INT NOT NULL,
-  tomori_id INT NULL, -- NULL = serverwide document, non-NULL = persona-scoped document
+  persona_id INT NULL, -- NULL = serverwide document, non-NULL = persona-scoped document
   uploader_user_id INT NULL,
   document_name TEXT NOT NULL,
   file_name TEXT,
@@ -19,33 +19,33 @@ CREATE TABLE IF NOT EXISTS documents (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE,
   FOREIGN KEY (uploader_user_id) REFERENCES users(user_id) ON DELETE SET NULL,
-  FOREIGN KEY (tomori_id) REFERENCES tomoris(tomori_id) ON DELETE CASCADE
+  FOREIGN KEY (persona_id) REFERENCES personas(persona_id) ON DELETE CASCADE
 );
 
--- Add tomori_id column for existing databases
-SELECT add_column_if_not_exists('documents', 'tomori_id', 'INTEGER');
+-- Add persona_id column for existing databases
+SELECT add_column_if_not_exists('documents', 'persona_id', 'INTEGER');
 
 -- Channel tag filtering for documents (May 2026)
 SELECT add_column_if_not_exists('documents', 'channel_tags', 'TEXT[]', 'ARRAY[]::TEXT[]');
 
 -- Normalize stale persona references to serverwide scope (existing pre-scope rows are already NULL)
 UPDATE documents
-SET tomori_id = NULL
-WHERE tomori_id IS NOT NULL
-  AND tomori_id NOT IN (SELECT tomori_id FROM tomoris);
+SET persona_id = NULL
+WHERE persona_id IS NOT NULL
+  AND persona_id NOT IN (SELECT persona_id FROM personas);
 
--- Add FK for documents.tomori_id if missing
+-- Add FK for documents.persona_id if missing
 DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1
         FROM pg_constraint
-        WHERE conname = 'documents_tomori_id_fkey'
+        WHERE conname = 'documents_persona_id_fkey'
     ) THEN
         ALTER TABLE documents
-        ADD CONSTRAINT documents_tomori_id_fkey
-        FOREIGN KEY (tomori_id)
-        REFERENCES tomoris(tomori_id)
+        ADD CONSTRAINT documents_persona_id_fkey
+        FOREIGN KEY (persona_id)
+        REFERENCES personas(persona_id)
         ON DELETE CASCADE;
     END IF;
 END $$;
@@ -65,8 +65,8 @@ END $$;
 -- Scope-aware uniqueness: allow same document name across different personas,
 -- but keep names unique within each scope (persona or serverwide).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_scope_name_unique
-ON documents(server_id, COALESCE(tomori_id, -1), document_name);
-CREATE INDEX IF NOT EXISTS idx_documents_server_tomori ON documents(server_id, tomori_id);
+ON documents(server_id, COALESCE(persona_id, -1), document_name);
+CREATE INDEX IF NOT EXISTS idx_documents_server_persona ON documents(server_id, persona_id);
 
 -- Create updated_at trigger for documents table
 DROP TRIGGER IF EXISTS update_documents_timestamp ON documents;

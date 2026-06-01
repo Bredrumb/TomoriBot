@@ -1,6 +1,6 @@
 import { getMCPManager } from "../../utils/mcp/mcpManager";
 import { getGuildMcpManager } from "../../utils/mcp/guildMcpManager";
-import { loadAllEnabledGuildMcpServers } from "../../utils/db/guildMcpDb";
+import { toolRepository } from "@/utils/db/repositories/ToolRepository";
 import { log } from "../../utils/misc/logger";
 import type { ErrorContext } from "../../types/db/schema";
 import { registerMCPAdapter } from "../../tools/toolRegistry";
@@ -112,7 +112,7 @@ export default async (): Promise<void> => {
     const runEnv = process.env.RUN_ENV || "development";
     if (runEnv !== "production") {
       try {
-        const allEnabled = await loadAllEnabledGuildMcpServers();
+        const allEnabled = await toolRepository.loadAllEnabledMcpServers();
         if (allEnabled.length > 0) {
           log.info(`[GuildMCP] Dev mode: eager-connecting ${allEnabled.length} enabled guild MCP server(s)...`);
           // Non-blocking — failures are logged but don't prevent startup

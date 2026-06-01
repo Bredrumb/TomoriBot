@@ -16,7 +16,7 @@ import {
 import type { ModalCheckboxGroupField } from "@/types/discord/modal";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { invalidateWhitelistCache } from "@/utils/cache/channelWhitelistCache";
-import { getPersonaWhitelistChannels, replacePersonaWhitelistChannels } from "@/utils/db/personaWhitelist";
+import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
 import {
   CHECKLIST_CHANNELS_PER_PAGE,
   CHECKLIST_MAX_PAGE_BUTTONS,
@@ -27,15 +27,10 @@ import {
   loadGuildTextChecklistChannels,
   type ChecklistChannelTarget,
 } from "@/utils/discord/channelChecklistManager";
-import {
-  acknowledgeModalSubmitForRefresh,
-  promptWithRawModal,
-  replyComponentsV2Status,
-  replyInfoEmbed,
-  type AvatarSessionCache,
-  replyPaginatedPersonaChoicesV2,
-  updateButtonComponentsV2Status,
-} from "@/utils/discord/interactionHelper";
+import { acknowledgeModalSubmitForRefresh, promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
@@ -45,7 +40,7 @@ const CHECKBOX_ID_PREFIX = "server_whitelist_persona_checkbox_group";
 const PAGE_BUTTON_PREFIX = "server_whitelist_persona_page_";
 const DONE_BUTTON_ID = "server_whitelist_persona_done";
 
-type PersonaWithId = TomoriState & { tomori_id: number };
+type PersonaWithId = TomoriState & { persona_id: number };
 type ResponseInteraction = ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction;
 type PageSelectionResult =
   | {
@@ -69,7 +64,7 @@ export async function execute(
   const errorContext: ErrorContext = {
     userId: user.user_id,
     serverId: null,
-    tomoriId: null,
+    personaId: null,
   };
   let responseInteraction: ResponseInteraction = interaction;
 
@@ -98,10 +93,10 @@ export async function execute(
     }
 
     errorContext.serverId = tomoriState.server_id;
-    errorContext.tomoriId = tomoriState.tomori_id;
+    errorContext.personaId = tomoriState.persona_id;
 
     const allPersonas = allPersonasRaw.filter(
-      (persona): persona is PersonaWithId => typeof persona.tomori_id === "number",
+      (persona): persona is PersonaWithId => typeof persona.persona_id === "number",
     );
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
@@ -123,8 +118,7 @@ export async function execute(
       });
 
       if (!personaSelection.success) {
-        if (personaSelection.reason === "cancelled" || personaSelection.reason === "fatal") return;
-        continue;
+        return;
       }
       if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
         return;
@@ -133,7 +127,7 @@ export async function execute(
       responseInteraction = personaSelection.interaction;
       const personaSelectionInteraction = personaSelection.interaction;
       const selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await updateButtonComponentsV2Status(
           personaSelectionInteraction,
           locale,
@@ -146,7 +140,7 @@ export async function execute(
         continue;
       }
 
-      errorContext.tomoriId = selectedPersona.tomori_id;
+      errorContext.personaId = selectedPersona.persona_id;
 
       if (availableChannels.length === 0) {
         await updateButtonComponentsV2Status(
@@ -156,7 +150,7 @@ export async function execute(
           "commands.server.whitelist.persona.no_channels_description",
           ColorCode.WARN,
           {
-            persona_name: selectedPersona.tomori_nickname,
+            persona_name: selectedPersona.persona_nickname,
           },
           "general.pagination.reloading_persona_picker",
         );
@@ -171,7 +165,7 @@ export async function execute(
           "commands.server.whitelist.persona.too_many_pages_description",
           ColorCode.WARN,
           {
-            persona_name: selectedPersona.tomori_nickname,
+            persona_name: selectedPersona.persona_nickname,
             channel_count: availableChannels.length.toString(),
             max_pages: CHECKLIST_MAX_PAGE_BUTTONS.toString(),
           },
@@ -180,7 +174,10 @@ export async function execute(
         continue;
       }
 
-      const currentEntries = await getPersonaWhitelistChannels(tomoriState.server_id, selectedPersona.tomori_id);
+      const currentEntries = await whitelistRepository.getPersonaWhitelistChannels(
+        tomoriState.server_id,
+        selectedPersona.persona_id,
+      );
       const currentSelectedIds = new Set(currentEntries.map((entry) => entry.channel_disc_id));
 
       if (availableChannels.length <= CHECKLIST_CHANNELS_PER_PAGE) {
@@ -387,14 +384,14 @@ async function persistUpdateAndRefreshPicker(
       "commands.server.whitelist.persona.no_changes_description",
       ColorCode.INFO,
       {
-        persona_name: persona.tomori_nickname,
+        persona_name: persona.persona_nickname,
       },
       "general.pagination.reloading_persona_picker",
     );
     return;
   }
 
-  await replacePersonaWhitelistChannels(serverId, persona.tomori_id, normalizedSelectedIds);
+  await whitelistRepository.replacePersonaWhitelistChannels(serverId, persona.persona_id, normalizedSelectedIds);
   invalidateWhitelistCache(guildId);
 
   if (normalizedSelectedIds.length === 0) {
@@ -405,12 +402,12 @@ async function persistUpdateAndRefreshPicker(
       "commands.server.whitelist.persona.success_clear_description",
       ColorCode.SUCCESS,
       {
-        persona_name: persona.tomori_nickname,
+        persona_name: persona.persona_nickname,
       },
       "general.pagination.reloading_persona_picker",
     );
 
-    log.info(`Cleared channel whitelist restriction for persona ${persona.tomori_id} in server ${guildId}`);
+    log.info(`Cleared channel whitelist restriction for persona ${persona.persona_id} in server ${guildId}`);
     return;
   }
 
@@ -421,7 +418,7 @@ async function persistUpdateAndRefreshPicker(
     "commands.server.whitelist.persona.success_description",
     ColorCode.SUCCESS,
     {
-      persona_name: persona.tomori_nickname,
+      persona_name: persona.persona_nickname,
       selected_count: normalizedSelectedIds.length.toString(),
       selected_channels: formatChecklistChannelMentions(normalizedSelectedIds, availableChannels, locale),
     },
@@ -429,7 +426,7 @@ async function persistUpdateAndRefreshPicker(
   );
 
   log.info(
-    `Updated channel whitelist restriction for persona ${persona.tomori_id} in server ${guildId}: [${normalizedSelectedIds.join(", ")}]`,
+    `Updated channel whitelist restriction for persona ${persona.persona_id} in server ${guildId}: [${normalizedSelectedIds.join(", ")}]`,
   );
 }
 
@@ -479,7 +476,7 @@ function buildPageSelectComponents(
       {
         type: ComponentType.TextDisplay,
         content: localizer(locale, "commands.server.whitelist.persona.select_page_description", {
-          persona_name: persona.tomori_nickname,
+          persona_name: persona.persona_nickname,
           channel_count: channelCount.toString(),
           total_pages: totalPages.toString(),
           selected_count: selectedCount.toString(),

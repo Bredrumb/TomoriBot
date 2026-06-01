@@ -42,13 +42,12 @@ export type ExpressionBatchResult = z.infer<typeof ExpressionBatchResultSchema>;
 /**
  * Build JSON schema object for structured output (shared across providers)
  */
-export function buildExpressionResponseSchema(expectedExpressionCount?: number) {
+export function buildExpressionResponseSchema() {
   return {
     type: "object" as const,
     properties: {
       expressions: {
         type: "array" as const,
-        ...(typeof expectedExpressionCount === "number" ? { maxItems: expectedExpressionCount } : {}),
         items: {
           type: "object" as const,
           properties: {
@@ -63,8 +62,6 @@ export function buildExpressionResponseSchema(expectedExpressionCount?: number) 
             },
             description: {
               type: "string" as const,
-              minLength: 10,
-              maxLength: 200,
               description: "One concise sentence describing the visual appearance",
             },
           },

@@ -1,26 +1,8 @@
 import type { DiffusionModelRow, EmbeddingModelRow, LlmRow, VideoGenerationModelRow } from "@/types/db/schema";
 import { getOrFetchOpenRouterCapabilities } from "@/utils/cache/openrouterCapabilityCache";
 import { sql } from "@/utils/db/client";
-import {
-  loadDiffusionModelByProviderAndCodename,
-  loadEmbeddingModelByProviderAndCodename,
-  loadLlmByProviderAndCodename,
-  loadScopedOpenRouterDiffusionModels,
-  loadScopedOpenRouterEmbeddingModels,
-  loadScopedOpenRouterModels,
-  loadScopedOpenRouterVideoGenerationModels,
-  loadVideoGenerationModelByProviderAndCodename,
-} from "@/utils/db/dbRead";
-import {
-  deleteOpenRouterEmbeddingModelRegistration,
-  deleteOpenRouterImageModelRegistration,
-  deleteOpenRouterModelRegistration,
-  deleteOpenRouterVideoModelRegistration,
-  upsertOpenRouterEmbeddingModelRegistration,
-  upsertOpenRouterImageModelRegistration,
-  upsertOpenRouterModelRegistration,
-  upsertOpenRouterVideoModelRegistration,
-} from "@/utils/db/dbWrite";
+import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+
 import { log } from "@/utils/misc/logger";
 import { isOpenRouterGeminiModelCodename } from "@/utils/provider/openrouterModelCapabilities";
 
@@ -75,10 +57,6 @@ export type RemoveOpenRouterModelResult =
 
 function normalizeModelCodename(modelName: string): string {
   return modelName.trim().toLowerCase();
-}
-
-function deriveModelFamily(modelCodename: string): string {
-  return modelCodename.split("/").pop() ?? modelCodename;
 }
 
 function buildRegisteredEntryFromLlm(llm: LlmRow): RegisteredOpenRouterModelEntry | null {
@@ -143,174 +121,34 @@ async function upsertScopedOpenRouterLlm(modelCodename: string): Promise<LlmRow 
     return null;
   }
 
-  const rows = await sql`
-		INSERT INTO llms (
-			llm_provider,
-			llm_codename,
-			is_scoped_registration,
-			is_smartest,
-			is_default,
-			is_reasoning,
-			is_deprecated,
-			is_free,
-			has_tools,
-			sees_images,
-			sees_videos,
-			sees_youtube,
-			is_uncensored,
-			supports_structoutput,
-			llm_description,
-			ja_description
-		) VALUES (
-			'openrouter',
-			${modelCodename},
-			true,
-			false,
-			false,
-			false,
-			false,
-			false,
-			${capabilities.hasTools},
-			${capabilities.seesImages},
-			${capabilities.seesVideos},
-			${isOpenRouterGeminiModelCodename(modelCodename)},
-			false,
-			${capabilities.supportsStructuredOutput},
-			${modelCodename},
-			${modelCodename}
-		)
-		ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET
-			is_scoped_registration = true,
-			is_deprecated = false,
-			has_tools = EXCLUDED.has_tools,
-			sees_images = EXCLUDED.sees_images,
-			sees_videos = EXCLUDED.sees_videos,
-			sees_youtube = EXCLUDED.sees_youtube,
-			supports_structoutput = EXCLUDED.supports_structoutput,
-			llm_description = EXCLUDED.llm_description,
-			ja_description = EXCLUDED.ja_description,
-			updated_at = CURRENT_TIMESTAMP
-		RETURNING llm_id
-	`;
-
-  const llmId = Number(rows[0]?.llm_id);
-  return Number.isInteger(llmId) ? await loadLlmByProviderAndCodename("openrouter", modelCodename) : null;
+  const llmId = await llmModelRepo.upsertScopedLlm(modelCodename, {
+    hasTools: capabilities.hasTools,
+    seesImages: capabilities.seesImages,
+    seesVideos: capabilities.seesVideos,
+    seesYoutube: isOpenRouterGeminiModelCodename(modelCodename),
+    supportsStructuredOutput: capabilities.supportsStructuredOutput,
+  });
+  return llmId ? await llmModelRepo.loadByProviderAndCodename("openrouter", modelCodename) : null;
 }
 
 async function upsertScopedOpenRouterEmbeddingModel(modelCodename: string): Promise<EmbeddingModelRow | null> {
-  const rows = await sql`
-		INSERT INTO embedding_models (
-			provider,
-			codename,
-			model_family,
-			is_scoped_registration,
-			model_description,
-			ja_description,
-			is_default,
-			is_deprecated
-		) VALUES (
-			'openrouter',
-			${modelCodename},
-			${deriveModelFamily(modelCodename)},
-			true,
-			${modelCodename},
-			${modelCodename},
-			false,
-			false
-		)
-		ON CONFLICT (provider, codename) DO UPDATE SET
-			model_family = EXCLUDED.model_family,
-			is_scoped_registration = true,
-			model_description = EXCLUDED.model_description,
-			ja_description = EXCLUDED.ja_description,
-			is_default = false,
-			is_deprecated = false,
-			updated_at = CURRENT_TIMESTAMP
-		RETURNING embedding_model_id
-	`;
-
-  const embeddingModelId = Number(rows[0]?.embedding_model_id);
-  return Number.isInteger(embeddingModelId)
-    ? await loadEmbeddingModelByProviderAndCodename("openrouter", modelCodename)
+  const embeddingModelId = await llmModelRepo.upsertScopedEmbeddingModel(modelCodename);
+  return embeddingModelId
+    ? await llmModelRepo.loadEmbeddingModelByProviderAndCodename("openrouter", modelCodename)
     : null;
 }
 
 async function upsertScopedOpenRouterDiffusionModel(modelCodename: string): Promise<DiffusionModelRow | null> {
-  const rows = await sql`
-		INSERT INTO image_diffusion_models (
-			provider,
-			codename,
-			is_scoped_registration,
-			model_description,
-			ja_description,
-			is_default,
-			is_deprecated,
-			is_free,
-			is_uncensored
-		) VALUES (
-			'openrouter',
-			${modelCodename},
-			true,
-			${modelCodename},
-			${modelCodename},
-			false,
-			false,
-			false,
-			false
-		)
-		ON CONFLICT (provider, codename) DO UPDATE SET
-			is_scoped_registration = true,
-			model_description = EXCLUDED.model_description,
-			ja_description = EXCLUDED.ja_description,
-			is_default = false,
-			is_deprecated = false,
-			is_free = EXCLUDED.is_free,
-			is_uncensored = EXCLUDED.is_uncensored,
-			updated_at = CURRENT_TIMESTAMP
-		RETURNING diffusion_model_id
-	`;
-
-  const diffusionModelId = Number(rows[0]?.diffusion_model_id);
-  return Number.isInteger(diffusionModelId)
-    ? await loadDiffusionModelByProviderAndCodename("openrouter", modelCodename)
+  const diffusionModelId = await llmModelRepo.upsertScopedDiffusionModel(modelCodename);
+  return diffusionModelId
+    ? await llmModelRepo.loadDiffusionModelByProviderAndCodename("openrouter", modelCodename)
     : null;
 }
 
 async function upsertScopedOpenRouterVideoModel(modelCodename: string): Promise<VideoGenerationModelRow | null> {
-  const rows = await sql`
-		INSERT INTO video_generation_models (
-			provider,
-			codename,
-			is_scoped_registration,
-			model_description,
-			ja_description,
-			is_default,
-			is_deprecated,
-			is_free
-		) VALUES (
-			'openrouter',
-			${modelCodename},
-			true,
-			${modelCodename},
-			${modelCodename},
-			false,
-			false,
-			false
-		)
-		ON CONFLICT (provider, codename) DO UPDATE SET
-			is_scoped_registration = true,
-			model_description = EXCLUDED.model_description,
-			ja_description = EXCLUDED.ja_description,
-			is_default = false,
-			is_deprecated = false,
-			is_free = EXCLUDED.is_free,
-			updated_at = CURRENT_TIMESTAMP
-		RETURNING video_model_id
-	`;
-
-  const videoModelId = Number(rows[0]?.video_model_id);
-  return Number.isInteger(videoModelId)
-    ? await loadVideoGenerationModelByProviderAndCodename("openrouter", modelCodename)
+  const videoModelId = await llmModelRepo.upsertScopedVideoModel(modelCodename);
+  return videoModelId
+    ? await llmModelRepo.loadVideoGenerationModelByProviderAndCodename("openrouter", modelCodename)
     : null;
 }
 
@@ -320,22 +158,22 @@ async function loadRegisteredOpenRouterEntriesForCapability(
 ): Promise<RegisteredOpenRouterModelEntry[]> {
   switch (capability) {
     case "text":
-      return (await loadScopedOpenRouterModels(scope, true))
+      return (await llmProviderRepo.loadScopedOpenRouterModels(scope, true))
         .filter((model) => model.is_scoped_registration)
         .map(buildRegisteredEntryFromLlm)
         .filter((model): model is RegisteredOpenRouterModelEntry => model !== null);
     case "embedding":
-      return (await loadScopedOpenRouterEmbeddingModels(scope, true))
+      return (await llmProviderRepo.loadScopedOpenRouterEmbeddingModels(scope, true))
         .filter((model) => model.is_scoped_registration)
         .map(buildRegisteredEntryFromEmbeddingModel)
         .filter((model): model is RegisteredOpenRouterModelEntry => model !== null);
     case "image":
-      return (await loadScopedOpenRouterDiffusionModels(scope, true))
+      return (await llmProviderRepo.loadScopedOpenRouterDiffusionModels(scope, true))
         .filter((model) => model.is_scoped_registration)
         .map(buildRegisteredEntryFromDiffusionModel)
         .filter((model): model is RegisteredOpenRouterModelEntry => model !== null);
     case "video":
-      return (await loadScopedOpenRouterVideoGenerationModels(scope, true))
+      return (await llmProviderRepo.loadScopedOpenRouterVideoGenerationModels(scope, true))
         .filter((model) => model.is_scoped_registration)
         .map(buildRegisteredEntryFromVideoModel)
         .filter((model): model is RegisteredOpenRouterModelEntry => model !== null);
@@ -348,19 +186,19 @@ async function loadOpenRouterBuiltInEntry(
 ): Promise<RegisteredOpenRouterModelEntry | null> {
   switch (capability) {
     case "text": {
-      const llm = await loadLlmByProviderAndCodename("openrouter", modelCodename);
+      const llm = await llmModelRepo.loadByProviderAndCodename("openrouter", modelCodename);
       return llm && !llm.is_scoped_registration ? buildRegisteredEntryFromLlm(llm) : null;
     }
     case "embedding": {
-      const model = await loadEmbeddingModelByProviderAndCodename("openrouter", modelCodename);
+      const model = await llmModelRepo.loadEmbeddingModelByProviderAndCodename("openrouter", modelCodename);
       return model && !model.is_scoped_registration ? buildRegisteredEntryFromEmbeddingModel(model) : null;
     }
     case "image": {
-      const model = await loadDiffusionModelByProviderAndCodename("openrouter", modelCodename);
+      const model = await llmModelRepo.loadDiffusionModelByProviderAndCodename("openrouter", modelCodename);
       return model && !model.is_scoped_registration ? buildRegisteredEntryFromDiffusionModel(model) : null;
     }
     case "video": {
-      const model = await loadVideoGenerationModelByProviderAndCodename("openrouter", modelCodename);
+      const model = await llmModelRepo.loadVideoGenerationModelByProviderAndCodename("openrouter", modelCodename);
       return model && !model.is_scoped_registration ? buildRegisteredEntryFromVideoModel(model) : null;
     }
   }
@@ -370,22 +208,25 @@ async function isTextModelStillReferenced(llmId: number): Promise<boolean> {
   const [row] = await sql<Array<{ in_use: boolean }>>`
 		SELECT EXISTS (
 		  SELECT 1
-		  FROM tomori_configs
+		  FROM server_model_configs
 		  WHERE llm_id = ${llmId}
 		     OR vision_llm_id = ${llmId}
 		     OR COALESCE(fallback_llm_ids, '[]'::JSONB) @> jsonb_build_array(${llmId})
-		     OR EXISTS (
-		        SELECT 1
-		        FROM jsonb_array_elements(
-		          CASE
-		            WHEN jsonb_typeof(COALESCE(tomori_configs.fallback_model_refs, '[]'::JSONB)) = 'array'
-		              THEN COALESCE(tomori_configs.fallback_model_refs, '[]'::JSONB)
-		            ELSE '[]'::JSONB
-		          END
-		        ) AS ref
-		        WHERE ref ->> 'type' = 'llm'
-		          AND ref ->> 'id' = ${String(llmId)}
-		     )
+		  UNION ALL
+		  SELECT 1
+		  FROM server_chat_configs
+		  WHERE EXISTS (
+		    SELECT 1
+		    FROM jsonb_array_elements(
+		      CASE
+		        WHEN jsonb_typeof(COALESCE(server_chat_configs.fallback_model_refs, '[]'::JSONB)) = 'array'
+		          THEN COALESCE(server_chat_configs.fallback_model_refs, '[]'::JSONB)
+		        ELSE '[]'::JSONB
+		      END
+		    ) AS ref
+		    WHERE ref ->> 'type' = 'llm'
+		      AND ref ->> 'id' = ${String(llmId)}
+		  )
 		  UNION ALL
 		  SELECT 1
 		  FROM persona_configs
@@ -399,7 +240,6 @@ async function isTextModelStillReferenced(llmId: number): Promise<boolean> {
 		  FROM saved_provider_configs
 		  WHERE llm_id = ${llmId}
 		     OR vision_llm_id = ${llmId}
-		     OR COALESCE(fallback_llm_ids, '[]'::JSONB) @> jsonb_build_array(${llmId})
 		     OR EXISTS (
 		        SELECT 1
 		        FROM jsonb_array_elements(
@@ -417,7 +257,6 @@ async function isTextModelStillReferenced(llmId: number): Promise<boolean> {
 		  FROM user_saved_provider_configs
 		  WHERE llm_id = ${llmId}
 		     OR vision_llm_id = ${llmId}
-		     OR COALESCE(fallback_llm_ids, '[]'::JSONB) @> jsonb_build_array(${llmId})
 		     OR EXISTS (
 		        SELECT 1
 		        FROM jsonb_array_elements(
@@ -440,7 +279,7 @@ async function isEmbeddingModelStillReferenced(embeddingModelId: number): Promis
   const [row] = await sql<Array<{ in_use: boolean }>>`
 		SELECT EXISTS (
 		  SELECT 1
-		  FROM tomori_configs
+		  FROM server_model_configs
 		  WHERE embedding_model_id = ${embeddingModelId}
 		  UNION ALL
 		  SELECT 1
@@ -460,9 +299,12 @@ async function isDiffusionModelStillReferenced(diffusionModelId: number): Promis
   const [row] = await sql<Array<{ in_use: boolean }>>`
 		SELECT EXISTS (
 		  SELECT 1
-		  FROM tomori_configs
+		  FROM server_model_configs
 		  WHERE diffusion_model_id = ${diffusionModelId}
-		     OR nai_diffusion_model_id = ${diffusionModelId}
+		  UNION ALL
+		  SELECT 1
+		  FROM server_novelai_imagegen_configs
+		  WHERE nai_diffusion_model_id = ${diffusionModelId}
 		  UNION ALL
 		  SELECT 1
 		  FROM saved_provider_configs
@@ -483,7 +325,7 @@ async function isVideoModelStillReferenced(videoModelId: number): Promise<boolea
   const [row] = await sql<Array<{ in_use: boolean }>>`
 		SELECT EXISTS (
 		  SELECT 1
-		  FROM tomori_configs
+		  FROM server_model_configs
 		  WHERE video_model_id = ${videoModelId}
 		  UNION ALL
 		  SELECT 1
@@ -541,11 +383,11 @@ export async function registerOpenRouterModelForScope(
 
       const registration =
         scope.kind === "server"
-          ? await upsertOpenRouterModelRegistration({
+          ? await llmProviderRepo.upsertOpenRouterModelRegistration({
               serverId: scope.ownerId,
               llmId: entry.modelId,
             })
-          : await upsertOpenRouterModelRegistration({
+          : await llmProviderRepo.upsertOpenRouterModelRegistration({
               userId: scope.ownerId,
               llmId: entry.modelId,
             });
@@ -568,11 +410,11 @@ export async function registerOpenRouterModelForScope(
 
       const registration =
         scope.kind === "server"
-          ? await upsertOpenRouterEmbeddingModelRegistration({
+          ? await llmProviderRepo.upsertOpenRouterEmbeddingModelRegistration({
               serverId: scope.ownerId,
               embeddingModelId: entry.modelId,
             })
-          : await upsertOpenRouterEmbeddingModelRegistration({
+          : await llmProviderRepo.upsertOpenRouterEmbeddingModelRegistration({
               userId: scope.ownerId,
               embeddingModelId: entry.modelId,
             });
@@ -595,11 +437,11 @@ export async function registerOpenRouterModelForScope(
 
       const registration =
         scope.kind === "server"
-          ? await upsertOpenRouterImageModelRegistration({
+          ? await llmProviderRepo.upsertOpenRouterImageModelRegistration({
               serverId: scope.ownerId,
               diffusionModelId: entry.modelId,
             })
-          : await upsertOpenRouterImageModelRegistration({
+          : await llmProviderRepo.upsertOpenRouterImageModelRegistration({
               userId: scope.ownerId,
               diffusionModelId: entry.modelId,
             });
@@ -622,11 +464,11 @@ export async function registerOpenRouterModelForScope(
 
       const registration =
         scope.kind === "server"
-          ? await upsertOpenRouterVideoModelRegistration({
+          ? await llmProviderRepo.upsertOpenRouterVideoModelRegistration({
               serverId: scope.ownerId,
               videoModelId: entry.modelId,
             })
-          : await upsertOpenRouterVideoModelRegistration({
+          : await llmProviderRepo.upsertOpenRouterVideoModelRegistration({
               userId: scope.ownerId,
               videoModelId: entry.modelId,
             });
@@ -655,7 +497,7 @@ export async function removeOpenRouterModelForScope(
 
   switch (capability) {
     case "text": {
-      const model = await loadLlmByProviderAndCodename("openrouter", normalizedModelName);
+      const model = await llmModelRepo.loadByProviderAndCodename("openrouter", normalizedModelName);
       const entry = model ? buildRegisteredEntryFromLlm(model) : null;
       if (!model || !entry) {
         return { status: "not_found" };
@@ -666,11 +508,11 @@ export async function removeOpenRouterModelForScope(
 
       const deleted =
         scope.kind === "server"
-          ? await deleteOpenRouterModelRegistration({
+          ? await llmProviderRepo.deleteOpenRouterModelRegistration({
               serverId: scope.ownerId,
               llmId: entry.modelId,
             })
-          : await deleteOpenRouterModelRegistration({
+          : await llmProviderRepo.deleteOpenRouterModelRegistration({
               userId: scope.ownerId,
               llmId: entry.modelId,
             });
@@ -679,21 +521,11 @@ export async function removeOpenRouterModelForScope(
         return { status: "not_found" };
       }
 
-      const [remainingRegistrationCountRow] = await sql<Array<{ count: string | number }>>`
-				SELECT COUNT(*) AS count
-				FROM openrouter_model_registrations
-				WHERE llm_id = ${entry.modelId}
-			`;
-      const remainingRegistrationCount = Number(remainingRegistrationCountRow?.count ?? 0);
+      const remainingRegistrationCount = await llmModelRepo.countLlmRegistrations(entry.modelId);
       const stillReferenced = await isTextModelStillReferenced(entry.modelId);
 
       if (remainingRegistrationCount === 0 && !stillReferenced) {
-        await sql`
-					DELETE FROM llms
-					WHERE llm_id = ${entry.modelId}
-					  AND llm_provider = 'openrouter'
-					  AND COALESCE(is_scoped_registration, false) = true
-				`;
+        await llmModelRepo.deleteOrphanedLlm(entry.modelId);
       }
 
       return {
@@ -703,7 +535,7 @@ export async function removeOpenRouterModelForScope(
       };
     }
     case "embedding": {
-      const model = await loadEmbeddingModelByProviderAndCodename("openrouter", normalizedModelName);
+      const model = await llmModelRepo.loadEmbeddingModelByProviderAndCodename("openrouter", normalizedModelName);
       const entry = model ? buildRegisteredEntryFromEmbeddingModel(model) : null;
       if (!model || !entry) {
         return { status: "not_found" };
@@ -714,11 +546,11 @@ export async function removeOpenRouterModelForScope(
 
       const deleted =
         scope.kind === "server"
-          ? await deleteOpenRouterEmbeddingModelRegistration({
+          ? await llmProviderRepo.deleteOpenRouterEmbeddingModelRegistration({
               serverId: scope.ownerId,
               embeddingModelId: entry.modelId,
             })
-          : await deleteOpenRouterEmbeddingModelRegistration({
+          : await llmProviderRepo.deleteOpenRouterEmbeddingModelRegistration({
               userId: scope.ownerId,
               embeddingModelId: entry.modelId,
             });
@@ -727,21 +559,11 @@ export async function removeOpenRouterModelForScope(
         return { status: "not_found" };
       }
 
-      const [remainingRegistrationCountRow] = await sql<Array<{ count: string | number }>>`
-				SELECT COUNT(*) AS count
-				FROM openrouter_embedding_model_registrations
-				WHERE embedding_model_id = ${entry.modelId}
-			`;
-      const remainingRegistrationCount = Number(remainingRegistrationCountRow?.count ?? 0);
+      const remainingRegistrationCount = await llmModelRepo.countEmbeddingModelRegistrations(entry.modelId);
       const stillReferenced = await isEmbeddingModelStillReferenced(entry.modelId);
 
       if (remainingRegistrationCount === 0 && !stillReferenced) {
-        await sql`
-					DELETE FROM embedding_models
-					WHERE embedding_model_id = ${entry.modelId}
-					  AND provider = 'openrouter'
-					  AND COALESCE(is_scoped_registration, false) = true
-				`;
+        await llmModelRepo.deleteOrphanedEmbeddingModel(entry.modelId);
       }
 
       return {
@@ -751,7 +573,7 @@ export async function removeOpenRouterModelForScope(
       };
     }
     case "image": {
-      const model = await loadDiffusionModelByProviderAndCodename("openrouter", normalizedModelName);
+      const model = await llmModelRepo.loadDiffusionModelByProviderAndCodename("openrouter", normalizedModelName);
       const entry = model ? buildRegisteredEntryFromDiffusionModel(model) : null;
       if (!model || !entry) {
         return { status: "not_found" };
@@ -762,11 +584,11 @@ export async function removeOpenRouterModelForScope(
 
       const deleted =
         scope.kind === "server"
-          ? await deleteOpenRouterImageModelRegistration({
+          ? await llmProviderRepo.deleteOpenRouterImageModelRegistration({
               serverId: scope.ownerId,
               diffusionModelId: entry.modelId,
             })
-          : await deleteOpenRouterImageModelRegistration({
+          : await llmProviderRepo.deleteOpenRouterImageModelRegistration({
               userId: scope.ownerId,
               diffusionModelId: entry.modelId,
             });
@@ -775,21 +597,11 @@ export async function removeOpenRouterModelForScope(
         return { status: "not_found" };
       }
 
-      const [remainingRegistrationCountRow] = await sql<Array<{ count: string | number }>>`
-				SELECT COUNT(*) AS count
-				FROM openrouter_image_model_registrations
-				WHERE diffusion_model_id = ${entry.modelId}
-			`;
-      const remainingRegistrationCount = Number(remainingRegistrationCountRow?.count ?? 0);
+      const remainingRegistrationCount = await llmModelRepo.countDiffusionModelRegistrations(entry.modelId);
       const stillReferenced = await isDiffusionModelStillReferenced(entry.modelId);
 
       if (remainingRegistrationCount === 0 && !stillReferenced) {
-        await sql`
-					DELETE FROM image_diffusion_models
-					WHERE diffusion_model_id = ${entry.modelId}
-					  AND provider = 'openrouter'
-					  AND COALESCE(is_scoped_registration, false) = true
-				`;
+        await llmModelRepo.deleteOrphanedDiffusionModel(entry.modelId);
       }
 
       return {
@@ -799,7 +611,7 @@ export async function removeOpenRouterModelForScope(
       };
     }
     case "video": {
-      const model = await loadVideoGenerationModelByProviderAndCodename("openrouter", normalizedModelName);
+      const model = await llmModelRepo.loadVideoGenerationModelByProviderAndCodename("openrouter", normalizedModelName);
       const entry = model ? buildRegisteredEntryFromVideoModel(model) : null;
       if (!model || !entry) {
         return { status: "not_found" };
@@ -810,11 +622,11 @@ export async function removeOpenRouterModelForScope(
 
       const deleted =
         scope.kind === "server"
-          ? await deleteOpenRouterVideoModelRegistration({
+          ? await llmProviderRepo.deleteOpenRouterVideoModelRegistration({
               serverId: scope.ownerId,
               videoModelId: entry.modelId,
             })
-          : await deleteOpenRouterVideoModelRegistration({
+          : await llmProviderRepo.deleteOpenRouterVideoModelRegistration({
               userId: scope.ownerId,
               videoModelId: entry.modelId,
             });
@@ -823,21 +635,11 @@ export async function removeOpenRouterModelForScope(
         return { status: "not_found" };
       }
 
-      const [remainingRegistrationCountRow] = await sql<Array<{ count: string | number }>>`
-				SELECT COUNT(*) AS count
-				FROM openrouter_video_model_registrations
-				WHERE video_model_id = ${entry.modelId}
-			`;
-      const remainingRegistrationCount = Number(remainingRegistrationCountRow?.count ?? 0);
+      const remainingRegistrationCount = await llmModelRepo.countVideoModelRegistrations(entry.modelId);
       const stillReferenced = await isVideoModelStillReferenced(entry.modelId);
 
       if (remainingRegistrationCount === 0 && !stillReferenced) {
-        await sql`
-					DELETE FROM video_generation_models
-					WHERE video_model_id = ${entry.modelId}
-					  AND provider = 'openrouter'
-					  AND COALESCE(is_scoped_registration, false) = true
-				`;
+        await llmModelRepo.deleteOrphanedVideoModel(entry.modelId);
       }
 
       return {

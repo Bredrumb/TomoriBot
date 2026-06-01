@@ -1,0 +1,17 @@
+# SearXNG botbuster / rate-limit config.
+#
+# The SearXNG limiter is meant to block scrapers on public instances. Since
+# this sidecar is on a private Docker network where only TomoriBot can reach
+# it, we disable bot detection entirely — Tomori's automated requests would
+# otherwise be flagged.
+#
+# Reference: https://docs.searxng.org/admin/searx.limiter.html
+
+[real_ip]
+x_for = 1
+ipv4_prefix = 32
+ipv6_prefix = 56
+
+[botdetection.ip_limit]
+filter_link_local = false
+link_token = false

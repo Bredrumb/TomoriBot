@@ -1,0 +1,109 @@
+[2m23:13:46[22m [34m[types][39m Generated [2m1ms[22m
+[2m23:13:46[22m [34m[content][39m Syncing content
+[2m23:13:46[22m [34m[content][39m Synced content
+[2m23:13:46[22m [34m[vite][39m Re-optimizing dependencies because vite config has changed
+
+[42m[1m astro [22m[49m [32mv5.18.2[39m [2mready in[22m 1095 [2mms[22m
+
+[2m┃[22m Local    [36mhttp://localhost:4321/[39m
+[2m┃[22m Network  [2muse --host to expose[22m
+
+[2m23:13:46[22m [32mwatching for file changes...[39m
+[2m23:17:21[22m Configuration file updated. Restarting...
+[2m23:17:21[22m [34m[vite][39m Re-optimizing dependencies because lockfile has changed
+[2m23:17:21[22m [34m[content][39m Syncing content
+[2m23:17:22[22m [34m[content][39m Synced content
+[2m23:17:22[22m [34m[types][39m Generated [2m567ms[22m
+[2m23:17:22[22m [34m[vite][39m Re-optimizing dependencies because vite config has changed
+[33m[1m23:40:51[22m [WARN] [glob-loader][39m Duplicate id "pipelines/tool-loop/index" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\tool-loop\README.md. Later items with the same id will overwrite earlier ones.
+[2m23:40:51[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/tool-loop/README.md[39m
+[33m[1m23:40:51[22m [WARN] [glob-loader][39m Duplicate id "pipelines/context-build/02-native-assembly/index" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\context-build\02-native-assembly\README.md. Later items with the same id will overwrite earlier ones.
+[2m23:40:51[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/context-build/02-native-assembly/README.md[39m
+[33m[1m23:40:51[22m [WARN] [glob-loader][39m Duplicate id "pipelines/chat/06-per-turn/index" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\chat\06-per-turn\README.md. Later items with the same id will overwrite earlier ones.
+[2m23:40:51[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/chat/06-per-turn/README.md[39m
+[33m[1m23:41:57[22m [WARN] [glob-loader][39m Duplicate id "pipelines/memory/stm/02-summary-upgrade" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\memory\stm\02-summary-upgrade.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:57[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/memory/stm/02-summary-upgrade.md[39m
+[33m[1m23:41:57[22m [WARN] [glob-loader][39m Duplicate id "pipelines/chat/06-per-turn/04-post-turn-effects" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\chat\06-per-turn\04-post-turn-effects.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:57[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/chat/06-per-turn/04-post-turn-effects.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/context-build/02-native-assembly/07-short-term-memory" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\context-build\02-native-assembly\07-short-term-memory.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/context-build/02-native-assembly/07-short-term-memory.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/chat/04-channel-lock" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\chat\04-channel-lock.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/chat/04-channel-lock.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/context-build/02-native-assembly/03-server-memories" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\context-build\02-native-assembly\03-server-memories.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/context-build/02-native-assembly/03-server-memories.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/context-build/02-native-assembly/02-server-info" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\context-build\02-native-assembly\02-server-info.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/context-build/02-native-assembly/02-server-info.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/chat/02-evaluate-admission" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\chat\02-evaluate-admission.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/chat/02-evaluate-admission.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/context-build/02-native-assembly/06-participants" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\context-build\02-native-assembly\06-participants.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/context-build/02-native-assembly/06-participants.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/chat/06-per-turn/02-create-response-sink" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\chat\06-per-turn\02-create-response-sink.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/chat/06-per-turn/02-create-response-sink.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/provider/03-chunk-normalization" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\provider\03-chunk-normalization.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/provider/03-chunk-normalization.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/context-build/02-native-assembly/04-server-emojis" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\context-build\02-native-assembly\04-server-emojis.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/context-build/02-native-assembly/04-server-emojis.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/context-build/01-preset-routing" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\context-build\01-preset-routing.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/context-build/01-preset-routing.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/context-build/02-native-assembly/11-dialogue-history" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\context-build\02-native-assembly\11-dialogue-history.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/context-build/02-native-assembly/11-dialogue-history.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/tool-loop/04-build-result" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\tool-loop\04-build-result.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/tool-loop/04-build-result.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/chat/03-handle-disposition" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\chat\03-handle-disposition.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/chat/03-handle-disposition.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/chat/06-per-turn/01-build-context" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\chat\06-per-turn\01-build-context.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/chat/06-per-turn/01-build-context.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/chat/06-per-turn/03-run-generation-turn" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\chat\06-per-turn\03-run-generation-turn.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/chat/06-per-turn/03-run-generation-turn.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/provider/05-buffer-management" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\provider\05-buffer-management.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/provider/05-buffer-management.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/provider/07-discord-delivery" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\provider\07-discord-delivery.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/provider/07-discord-delivery.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/provider/02-raw-chunk-generation" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\provider\02-raw-chunk-generation.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/provider/02-raw-chunk-generation.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/provider/01-context-assembly" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\provider\01-context-assembly.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/provider/01-context-assembly.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/provider/04-orchestrator-state-machine" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\provider\04-orchestrator-state-machine.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/provider/04-orchestrator-state-machine.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/context-build/02-native-assembly/09-conditioning" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\context-build\02-native-assembly\09-conditioning.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/context-build/02-native-assembly/09-conditioning.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/context-build/02-native-assembly/08-rag-documents" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\context-build\02-native-assembly\08-rag-documents.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/context-build/02-native-assembly/08-rag-documents.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/tool-loop/02-execute-tool-call" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\tool-loop\02-execute-tool-call.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/tool-loop/02-execute-tool-call.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/tool-loop/03-enhanced-context-restart" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\tool-loop\03-enhanced-context-restart.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/tool-loop/03-enhanced-context-restart.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/chat/05-plan-turns" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\chat\05-plan-turns.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/chat/05-plan-turns.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/memory/ltm/01-ltm-create" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\memory\ltm\01-ltm-create.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/memory/ltm/01-ltm-create.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/memory/stm/01-passive-capture" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\memory\stm\01-passive-capture.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/memory/stm/01-passive-capture.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/provider/06-segment-normalization" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\provider\06-segment-normalization.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/provider/06-segment-normalization.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/context-build/02-native-assembly/01-prompt-items" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\context-build\02-native-assembly\01-prompt-items.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/context-build/02-native-assembly/01-prompt-items.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/context-build/02-native-assembly/05-server-stickers" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\context-build\02-native-assembly\05-server-stickers.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/context-build/02-native-assembly/05-server-stickers.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/context-build/02-native-assembly/10-sample-dialogues" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\context-build\02-native-assembly\10-sample-dialogues.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/context-build/02-native-assembly/10-sample-dialogues.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/chat/01-normalize-invocation" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\chat\01-normalize-invocation.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/chat/01-normalize-invocation.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/tool-loop/01-stream-once" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\tool-loop\01-stream-once.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/tool-loop/01-stream-once.md[39m
+[33m[1m23:41:58[22m [WARN] [glob-loader][39m Duplicate id "pipelines/memory/ltm/02-ltm-update-delete" found in C:\Github\TomoriBot\apps\docs\src\content\docs\pipelines\memory\ltm\02-ltm-update-delete.md. Later items with the same id will overwrite earlier ones.
+[2m23:41:58[22m [34m[glob-loader][39m Reloaded data from [32mpipelines/memory/ltm/02-ltm-update-delete.md[39m
+[2m23:42:30[22m Configuration file updated. Restarting...
+[2m23:42:30[22m [34m[vite][39m Re-optimizing dependencies because vite config has changed
+[2m23:42:31[22m [34m[content][39m Syncing content
+[2m23:42:31[22m [34m[content][39m Synced content
+[2m23:42:31[22m [34m[types][39m Generated [2m609ms[22m
+[2m23:42:31[22m [34m[vite][39m Re-optimizing dependencies because vite config has changed
+[33m[1m23:45:30[22m [WARN] [glob-loader][39m Duplicate id "subsystems/cooldowns" found in C:\Github\TomoriBot\apps\docs\src\content\docs\subsystems\cooldowns.md. Later items with the same id will overwrite earlier ones.
+[2m23:45:30[22m [34m[glob-loader][39m Reloaded data from [32msubsystems/cooldowns.md[39m
+[33m[1m23:45:30[22m [WARN] [glob-loader][39m Duplicate id "subsystems/prompt-snapshot" found in C:\Github\TomoriBot\apps\docs\src\content\docs\subsystems\prompt-snapshot.md. Later items with the same id will overwrite earlier ones.
+[2m23:45:30[22m [34m[glob-loader][39m Reloaded data from [32msubsystems/prompt-snapshot.md[39m
+[33m[1m23:45:30[22m [WARN] [glob-loader][39m Duplicate id "guides/local-grafana-setup" found in C:\Github\TomoriBot\apps\docs\src\content\docs\guides\local-grafana-setup.md. Later items with the same id will overwrite earlier ones.
+[2m23:45:30[22m [34m[glob-loader][39m Reloaded data from [32mguides/local-grafana-setup.md[39m
+[33m[1m23:45:30[22m [WARN] [glob-loader][39m Duplicate id "subsystems/localization" found in C:\Github\TomoriBot\apps\docs\src\content\docs\subsystems\localization.md. Later items with the same id will overwrite earlier ones.
+[2m23:45:30[22m [34m[glob-loader][39m Reloaded data from [32msubsystems/localization.md[39m

@@ -18,8 +18,7 @@ import {
 import { GoogleGenAI } from "@google/genai";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
-import { loadTomoriState } from "../../utils/db/dbRead";
-import { sql } from "../../utils/db/client";
+import { personaRepository, llmModelRepo } from "@/utils/db/repositories";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
 import type { UserRow } from "../../types/db/schema";
 import { checkImageQuota, incrementImageQuota } from "../../utils/quota/imageQuotaManager";
@@ -56,17 +55,13 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * @returns The model codename string (e.g., "gemini-2.5-flash-image")
  */
 async function getDiffusionModelCodename(diffusionModelId: number): Promise<string> {
-  const result = await sql`
-		SELECT codename
-		FROM image_diffusion_models
-		WHERE diffusion_model_id = ${diffusionModelId}
-	`.values();
+  const model = await llmModelRepo.loadDiffusionModelById(diffusionModelId);
 
-  if (result.length === 0) {
+  if (!model) {
     throw new Error(`Diffusion model not found: ${diffusionModelId}`);
   }
 
-  return result[0][0] as string;
+  return model.codename;
 }
 
 /**
@@ -260,7 +255,7 @@ export async function execute(
 
   // 2. Load TomoriState for this server/user
   const serverId = interaction.guild?.id ?? interaction.user.id;
-  const baseTomoriState = await loadTomoriState(serverId);
+  const baseTomoriState = await personaRepository.loadState(serverId);
 
   // 3. Validate TomoriState exists
   if (!baseTomoriState) {
@@ -577,30 +572,23 @@ export async function execute(
         model: modelCodename,
       });
 
-      const messagePayload: {
-        message: string;
-        media?: Array<{ mimeType: string; data: string }>;
-        config?: {
-          responseModalities: string[];
-          imageConfig: {
-            aspectRatio: string;
-          };
-        };
-      } = {
-        message: prompt,
+      // Build parts: reference images (as inlineData) followed by the text prompt.
+      // SendMessageParameters.message is PartListUnion — inline images must be
+      // passed as inlineData parts, not via a non-existent "media" field.
+      const messageParts: Array<{ inlineData: { mimeType: string; data: string } } | string> = [
+        ...referenceImages.map((img) => ({ inlineData: { mimeType: img.mimeType, data: img.data } })),
+        prompt,
+      ];
+
+      const response = await chat.sendMessage({
+        message: messageParts,
         config: {
           responseModalities: ["IMAGE"],
           imageConfig: {
             aspectRatio: aspectRatio,
           },
         },
-      };
-
-      if (referenceImages.length > 0) {
-        messagePayload.media = referenceImages;
-      }
-
-      const response = await chat.sendMessage(messagePayload);
+      });
 
       // Extract generated image from response
       if (response?.candidates && response.candidates.length > 0 && response.candidates[0]?.content?.parts) {

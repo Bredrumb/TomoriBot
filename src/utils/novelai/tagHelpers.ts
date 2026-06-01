@@ -10,13 +10,6 @@ export type NaiTagValidationResult =
     };
 
 /**
- * Formats a TEXT[] value for a PostgreSQL array literal.
- */
-export function formatTextArrayLiteral(items: string[]): string {
-  return `{${items.map((item) => `"${item.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
-}
-
-/**
  * Formats stored tag arrays back into the comma-separated modal format.
  */
 export function formatNaiTagsForModalValue(tags: string[] | null | undefined): string | undefined {

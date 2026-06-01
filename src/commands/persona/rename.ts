@@ -11,16 +11,10 @@ import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "../../utils/discord/interactionHelper";
-import {
-  type UserRow,
-  type ErrorContext,
-  tomoriSchema,
-  personaConfigSchema,
-  type TomoriState,
-} from "../../types/db/schema";
+import type { UserRow, ErrorContext, TomoriState } from "../../types/db/schema";
 import type { ModalResult, SelectOption } from "../../types/discord/modal";
-import { loadAllPersonasForServer } from "../../utils/db/dbRead";
-import { sql } from "@/utils/db/client";
+import { personaRepository } from "@/utils/db/repositories";
+import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 
 // Constants for validation
 const NICKNAME_MIN_LENGTH = 2;
@@ -82,7 +76,7 @@ export async function execute(
 
   try {
     // 2. Resolve all personas for selector
-    const allPersonas = await loadAllPersonasForServer(serverDiscId);
+    const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -94,10 +88,10 @@ export async function execute(
     }
 
     const personaSelectOptions: SelectOption[] = allPersonas
-      .filter((persona) => persona.tomori_id !== undefined)
+      .filter((persona) => persona.persona_id !== undefined)
       .map((persona) => ({
-        label: safeSelectOptionText(persona.tomori_nickname),
-        value: persona.tomori_id?.toString() ?? "",
+        label: safeSelectOptionText(persona.persona_nickname),
+        value: persona.persona_id?.toString() ?? "",
         description: persona.is_alter
           ? localizer(locale, "commands.persona.rename.alter_persona_description")
           : localizer(locale, "commands.persona.rename.main_persona_description"),
@@ -154,8 +148,8 @@ export async function execute(
     attemptedNickname = modalResult.values?.[NEW_NAME_INPUT_ID] ?? "";
     const newNickname = attemptedNickname.trim();
 
-    selectedPersona = allPersonas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
-    if (!selectedPersona?.tomori_id) {
+    selectedPersona = allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
+    if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -179,7 +173,7 @@ export async function execute(
     }
 
     // 5. Store the old nickname for the success message
-    const oldNickname = selectedPersona.tomori_nickname;
+    const oldNickname = selectedPersona.persona_nickname;
 
     // 6. Check if the nickname is actually changing
     if (newNickname === oldNickname) {
@@ -194,15 +188,12 @@ export async function execute(
       return;
     }
 
-    const duplicateNameRows = await sql<Array<{ tomori_id: number }>>`
-			SELECT tomori_id
-			FROM tomoris
-			WHERE server_id = ${selectedPersona.server_id}
-			  AND tomori_id <> ${selectedPersona.tomori_id}
-			  AND lower(btrim(tomori_nickname)) = lower(btrim(${newNickname}))
-			LIMIT 1
-		`;
-    if (duplicateNameRows.length > 0) {
+    const hasNicknameConflict = await personaRepository.hasNicknameConflict(
+      selectedPersona.server_id,
+      selectedPersona.persona_id,
+      newNickname,
+    );
+    if (hasNicknameConflict) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.persona.name_conflict_title",
         descriptionKey: "commands.persona.name_conflict_description",
@@ -212,41 +203,26 @@ export async function execute(
       return;
     }
 
-    // --- Transaction Start (Conceptually) ---
-    // We perform two separate updates, but ideally this would be a transaction
-    // if the database supported it easily with Bun's current driver.
+    // 7. Update the nickname in the `personas` table
+    const renamed = await personaRepository.renamePersona(selectedPersona.persona_id, newNickname);
 
-    // 7. Update the nickname in the `tomoris` table
-    const [updatedTomoriRow] = await sql`
-            UPDATE tomoris
-            SET tomori_nickname = ${newNickname}
-            WHERE tomori_id = ${selectedPersona.tomori_id}
-            RETURNING *
-        `;
-
-    // 8. Validate the returned `tomoris` data
-    const validatedTomori = tomoriSchema.safeParse(updatedTomoriRow);
-
-    if (!validatedTomori.success || !updatedTomoriRow) {
-      // Log error specific to tomoris update failure
+    if (!renamed) {
+      // Log error specific to personas update failure
       const context: ErrorContext = {
-        tomoriId: selectedPersona.tomori_id,
+        personaId: selectedPersona.persona_id,
         serverId: selectedPersona.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
         metadata: {
           command: "config rename",
-          table: "tomoris",
+          table: "personas",
           guildId: serverDiscId,
           newNickname,
-          validationErrors: validatedTomori.success ? null : validatedTomori.error.flatten(),
         },
       };
       await log.error(
-        "Failed to update or validate tomori_nickname in tomoris table",
-        validatedTomori.success
-          ? new Error("Database update returned no rows or unexpected data")
-          : new Error("Updated tomori data failed validation"),
+        "Failed to update persona_nickname in personas table",
+        new Error("Database update returned no rows"),
         context,
       );
 
@@ -261,36 +237,25 @@ export async function execute(
     // 9. Add new nickname to trigger words if not already present
     const currentTriggers = selectedPersona.trigger_words ?? [];
     let triggerUpdateNeeded = false;
-    const updatedTriggers = [...currentTriggers]; // Create a mutable copy
 
     // Case-insensitive check if the nickname exists
-    if (!currentTriggers.some((trigger) => trigger.toLowerCase() === newNickname.toLowerCase())) {
-      updatedTriggers.push(newNickname);
+    if (!currentTriggers.some((trigger) => normalizeTriggerWord(trigger) === normalizeTriggerWord(newNickname))) {
       triggerUpdateNeeded = true;
-      log.info(`Adding new nickname '${newNickname}' to trigger words for tomori ${selectedPersona.tomori_id}`);
+      log.info(`Adding new nickname '${newNickname}' to trigger words for tomori ${selectedPersona.persona_id}`);
     } else {
       log.info(
-        `Nickname '${newNickname}' already exists in trigger words for tomori ${selectedPersona.tomori_id}. Skipping update.`,
+        `Nickname '${newNickname}' already exists in trigger words for tomori ${selectedPersona.persona_id}. Skipping update.`,
       );
     }
 
     // 10. Update trigger_words in `persona_configs` if needed
     if (triggerUpdateNeeded) {
-      const [updatedConfigRow] = await sql`
-				INSERT INTO persona_configs (tomori_id, trigger_words)
-				VALUES (${selectedPersona.tomori_id}, ARRAY[${newNickname}]::text[])
-				ON CONFLICT (tomori_id) DO UPDATE
-				SET trigger_words = array_append(persona_configs.trigger_words, ${newNickname})
-				RETURNING *
-			`;
+      const triggerAdded = await personaRepository.addTrigger(selectedPersona.persona_id, [newNickname]);
 
-      // 11. Validate the returned `persona_configs` data
-      const validatedConfig = personaConfigSchema.safeParse(updatedConfigRow);
-
-      if (!validatedConfig.success || !updatedConfigRow) {
+      if (!triggerAdded) {
         // Log error specific to persona_configs update failure
         const context: ErrorContext = {
-          tomoriId: selectedPersona.tomori_id,
+          personaId: selectedPersona.persona_id,
           serverId: selectedPersona.server_id,
           userId: userData.user_id,
           errorType: "DatabaseUpdateError",
@@ -300,17 +265,13 @@ export async function execute(
             column: "trigger_words",
             guildId: serverDiscId,
             newNickname,
-            updatedTriggers, // Log the array we tried to set
-            validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
           },
         };
         // Log this as a warning since the primary nickname update succeeded,
         // but inform the user of the partial failure.
         await log.error(
-          "Failed to update or validate trigger_words in persona_configs table",
-          validatedConfig.success
-            ? new Error("Database update returned no rows or unexpected data")
-            : new Error("Updated config data failed validation"),
+          "Failed to update trigger_words in persona_configs table",
+          new Error("Database update returned no rows"),
           context,
         );
 
@@ -326,9 +287,8 @@ export async function execute(
         });
         return; // Stop execution after informing about partial success
       }
-      log.success(`Successfully updated trigger words for tomori ${selectedPersona.tomori_id}`);
+      log.success(`Successfully updated trigger words for tomori ${selectedPersona.persona_id}`);
     }
-    // --- Transaction End (Conceptually) ---
 
     // 12. Update bot's server nickname only when renaming the main persona
     let nicknameUpdateSuccess = false;
@@ -391,13 +351,13 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: selectedPersona?.server_id ?? null,
-      tomoriId: selectedPersona?.tomori_id ?? null,
+      personaId: selectedPersona?.persona_id ?? null,
       errorType: "CommandExecutionError",
       metadata: {
         command: "config rename",
         guildId: serverDiscId,
         executorDiscordId: interaction.user.id,
-        selectedPersonaId: selectedPersona?.tomori_id ?? null,
+        selectedPersonaId: selectedPersona?.persona_id ?? null,
         nicknameAttempted: attemptedNickname,
       },
     };

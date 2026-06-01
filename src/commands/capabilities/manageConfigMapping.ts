@@ -1,0 +1,219 @@
+import type {
+  AssembledServerConfig,
+  ServerCapabilitiesConfigRow,
+  ServerMemberPermissionsConfigRow,
+} from "@/types/db/schema";
+
+type BooleanColumn<T> = {
+  [K in keyof T]-?: T[K] extends boolean ? K : never;
+}[keyof T];
+
+type ServerCapabilitiesBooleanColumn = BooleanColumn<ServerCapabilitiesConfigRow>;
+type ServerMemberPermissionsBooleanColumn = BooleanColumn<ServerMemberPermissionsConfigRow>;
+
+export type CapabilitiesManageCapabilityColumn = Extract<
+  ServerCapabilitiesBooleanColumn,
+  | "emoji_usage_enabled"
+  | "sticker_usage_enabled"
+  | "web_search_enabled"
+  | "manage_message_enabled"
+  | "thread_creation_enabled"
+  | "imagegen_enabled"
+  | "videogen_enabled"
+  | "voice_message_enabled"
+>;
+
+export type CapabilitiesManageMemberPermissionColumn = Extract<
+  ServerMemberPermissionsBooleanColumn,
+  "self_teaching_enabled" | "personal_memories_enabled"
+>;
+
+export type CapabilitiesManageConfigState = Pick<
+  AssembledServerConfig,
+  CapabilitiesManageCapabilityColumn | CapabilitiesManageMemberPermissionColumn
+>;
+
+interface PermissionDefinitionBase {
+  /** Value used as the checkbox option identifier */
+  value: string;
+  /** Locale key for the option label */
+  labelKey: string;
+  /** Locale key for the short option description shown in the checkbox */
+  descKey: string;
+  /** Extracts current state from a config row */
+  getState: (config: CapabilitiesManageConfigState) => boolean;
+  /** If true, this option is only shown when an ElevenLabs key is configured */
+  requiresElevenLabs?: boolean;
+}
+
+export type CapabilitiesManagePermissionDefinition =
+  | (PermissionDefinitionBase & {
+      table: "memberPermissions";
+      /** The server_member_permissions_configs column to update */
+      dbColumn: CapabilitiesManageMemberPermissionColumn;
+    })
+  | (PermissionDefinitionBase & {
+      table: "capabilities";
+      /** The server_capabilities_configs column to update */
+      dbColumn: CapabilitiesManageCapabilityColumn;
+    });
+
+export type CapabilitiesManageConfigChange =
+  | {
+      value: string;
+      table: "memberPermissions";
+      dbColumn: CapabilitiesManageMemberPermissionColumn;
+      isEnabled: boolean;
+      labelKey: string;
+    }
+  | {
+      value: string;
+      table: "capabilities";
+      dbColumn: CapabilitiesManageCapabilityColumn;
+      isEnabled: boolean;
+      labelKey: string;
+    };
+
+export interface CapabilitiesManageConfigWritePlan {
+  method: "updateCapabilitiesAndMemberPermissionsConfig";
+  patch: {
+    capabilities: Partial<ServerCapabilitiesConfigRow>;
+    memberPermissions: Partial<ServerMemberPermissionsConfigRow>;
+  };
+  changes: CapabilitiesManageConfigChange[];
+}
+
+export const CAPABILITIES_MANAGE_PERMISSION_DEFINITIONS: readonly CapabilitiesManagePermissionDefinition[] = [
+  {
+    value: "selfteaching",
+    table: "memberPermissions",
+    dbColumn: "self_teaching_enabled",
+    labelKey: "commands.capabilities.manage.selfteaching_option",
+    descKey: "commands.capabilities.manage.selfteaching_desc",
+    getState: (c) => c.self_teaching_enabled,
+  },
+  {
+    value: "personalization",
+    table: "memberPermissions",
+    dbColumn: "personal_memories_enabled",
+    labelKey: "commands.capabilities.manage.personalization_option",
+    descKey: "commands.capabilities.manage.personalization_desc",
+    getState: (c) => c.personal_memories_enabled,
+  },
+  {
+    value: "emojiusage",
+    table: "capabilities",
+    dbColumn: "emoji_usage_enabled",
+    labelKey: "commands.capabilities.manage.emojiusage_option",
+    descKey: "commands.capabilities.manage.emojiusage_desc",
+    getState: (c) => c.emoji_usage_enabled,
+  },
+  {
+    value: "stickerusage",
+    table: "capabilities",
+    dbColumn: "sticker_usage_enabled",
+    labelKey: "commands.capabilities.manage.stickerusage_option",
+    descKey: "commands.capabilities.manage.stickerusage_desc",
+    getState: (c) => c.sticker_usage_enabled,
+  },
+  {
+    value: "websearch",
+    table: "capabilities",
+    dbColumn: "web_search_enabled",
+    labelKey: "commands.capabilities.manage.websearch_option",
+    descKey: "commands.capabilities.manage.websearch_desc",
+    getState: (c) => c.web_search_enabled,
+  },
+  {
+    value: "managemessage",
+    table: "capabilities",
+    dbColumn: "manage_message_enabled",
+    labelKey: "commands.capabilities.manage.managemessage_option",
+    descKey: "commands.capabilities.manage.managemessage_desc",
+    getState: (c) => c.manage_message_enabled,
+  },
+  {
+    value: "threadcreation",
+    table: "capabilities",
+    dbColumn: "thread_creation_enabled",
+    labelKey: "commands.capabilities.manage.threadcreation_option",
+    descKey: "commands.capabilities.manage.threadcreation_desc",
+    getState: (c) => c.thread_creation_enabled,
+  },
+  {
+    value: "imagegen",
+    table: "capabilities",
+    dbColumn: "imagegen_enabled",
+    labelKey: "commands.capabilities.manage.imagegen_option",
+    descKey: "commands.capabilities.manage.imagegen_desc",
+    getState: (c) => c.imagegen_enabled,
+  },
+  {
+    value: "videogen",
+    table: "capabilities",
+    dbColumn: "videogen_enabled",
+    labelKey: "commands.capabilities.manage.videogen_option",
+    descKey: "commands.capabilities.manage.videogen_desc",
+    getState: (c) => c.videogen_enabled,
+  },
+  {
+    value: "voicemessage",
+    table: "capabilities",
+    dbColumn: "voice_message_enabled",
+    labelKey: "commands.capabilities.manage.voicemessage_option",
+    descKey: "commands.capabilities.manage.voicemessage_desc",
+    getState: (c) => c.voice_message_enabled ?? true,
+    requiresElevenLabs: true,
+  },
+];
+
+export function getCapabilitiesManagePermissionDefinitions(options?: {
+  includeElevenLabs?: boolean;
+}): readonly CapabilitiesManagePermissionDefinition[] {
+  if (options?.includeElevenLabs === false) {
+    return CAPABILITIES_MANAGE_PERMISSION_DEFINITIONS.filter((def) => !def.requiresElevenLabs);
+  }
+  return CAPABILITIES_MANAGE_PERMISSION_DEFINITIONS;
+}
+
+export function buildCapabilitiesManageConfigWritePlan(
+  config: CapabilitiesManageConfigState,
+  selectedValues: Iterable<string>,
+  options?: { includeElevenLabs?: boolean },
+): CapabilitiesManageConfigWritePlan {
+  const selectedValueSet = new Set(selectedValues);
+  const definitions = getCapabilitiesManagePermissionDefinitions(options);
+  const changes: CapabilitiesManageConfigChange[] = [];
+  const capabilities: Partial<ServerCapabilitiesConfigRow> = {};
+  const memberPermissions: Partial<ServerMemberPermissionsConfigRow> = {};
+
+  for (const def of definitions) {
+    const wasEnabled = def.getState(config);
+    const isEnabled = selectedValueSet.has(def.value);
+    if (wasEnabled === isEnabled) continue;
+
+    const change = {
+      value: def.value,
+      table: def.table,
+      dbColumn: def.dbColumn,
+      isEnabled,
+      labelKey: def.labelKey,
+    } as CapabilitiesManageConfigChange;
+    changes.push(change);
+
+    if (change.table === "memberPermissions") {
+      memberPermissions[change.dbColumn] = change.isEnabled;
+    } else {
+      capabilities[change.dbColumn] = change.isEnabled;
+    }
+  }
+
+  return {
+    method: "updateCapabilitiesAndMemberPermissionsConfig",
+    patch: {
+      capabilities,
+      memberPermissions,
+    },
+    changes,
+  };
+}

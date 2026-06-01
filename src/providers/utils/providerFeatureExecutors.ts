@@ -133,7 +133,7 @@ export async function callExpressionInitializationForProvider(
       temperature: request.temperature,
       schemaName: "expression_batch_result",
     },
-    buildExpressionResponseSchema(request.images.length),
+    buildExpressionResponseSchema(),
     ExpressionBatchResultSchema,
   );
 }

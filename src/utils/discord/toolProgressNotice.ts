@@ -1,15 +1,15 @@
 import { escapeMarkdown, type BaseGuildTextChannel } from "discord.js";
 import type { StandardEmbedOptions } from "@/types/discord/embed";
 import type { ToolContext } from "@/types/tool/interfaces";
-import type { TomoriConfigRow } from "@/types/db/schema";
+import type { AssembledServerConfig } from "@/types/db/schema";
 import { type ToolNoticeKey, TOOL_NOTICE_DEFINITIONS } from "@/constants/toolNotices";
 import { sendStandardEmbed, type WebhookEmbedContext } from "@/utils/discord/embedHelper";
-import { getOrCreateWebhook } from "@/utils/discord/webhookManager";
+import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { localizer } from "@/utils/text/localizer";
 import { log } from "@/utils/misc/logger";
 
-const HIDE_NOTICE_FOOTER_KEY = "genai.tool_notice.hide_footer";
-const KILL_HINT_FOOTER_KEY = "genai.tool_notice.hide_footer_with_kill";
+const HIDE_NOTICE_FOOTER_KEY = "tools.tool_notice.hide_footer";
+const KILL_HINT_FOOTER_KEY = "tools.tool_notice.hide_footer_with_kill";
 const IMAGE_NOTICE_PROMPT_PREVIEW_LENGTH = 700;
 
 function resolveDescription(locale: string, options: StandardEmbedOptions): string {
@@ -106,8 +106,8 @@ export function buildImageToolNoticeDescription(
   return buildLabeledGenerationNoticeDescription(
     locale,
     baseDescription,
-    "genai.image.notice_model_line",
-    "genai.image.notice_prompt_line",
+    "tools.image.notice_model_line",
+    "tools.image.notice_prompt_line",
     model,
     prompt,
     timingLine,
@@ -151,8 +151,8 @@ export function buildVideoToolNoticeDescription(
   return buildLabeledGenerationNoticeDescription(
     locale,
     baseDescription,
-    "genai.video.notice_model_line",
-    "genai.video.notice_prompt_line",
+    "tools.video.notice_model_line",
+    "tools.video.notice_prompt_line",
     model,
     prompt,
     timingLine,
@@ -160,11 +160,11 @@ export function buildVideoToolNoticeDescription(
   );
 }
 
-export function isNoticeEmbedVisible(config: TomoriConfigRow, key: ToolNoticeKey): boolean {
+export function isNoticeEmbedVisible(config: AssembledServerConfig, key: ToolNoticeKey): boolean {
   return !(config.tool_notice_hidden_keys ?? []).includes(key);
 }
 
-export function isToolNoticeVisible(config: TomoriConfigRow, key: ToolNoticeKey): boolean {
+export function isToolNoticeVisible(config: AssembledServerConfig, key: ToolNoticeKey): boolean {
   return isNoticeEmbedVisible(config, key);
 }
 

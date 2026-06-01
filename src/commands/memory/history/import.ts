@@ -9,7 +9,7 @@
  * Supports three scopes:
  * - persona: Store facts for a specific persona (user selects via paginated buttons)
  * - automatic: Detect personas from webhook authors, create per-persona documents
- * - global: Store facts serverwide (tomori_id = NULL)
+ * - global: Store facts serverwide (persona_id = NULL)
  */
 
 import type {
@@ -20,16 +20,15 @@ import type {
   TextBasedChannel,
 } from "discord.js";
 import { MessageFlags, EmbedBuilder } from "discord.js";
-import { sql } from "@/utils/db/client";
-import { isRagAvailable } from "@/utils/db/ragDetection";
+import { isRagAvailable } from "@/utils/db/ragAvailability";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadAllPersonasForServer, loadEmbeddingModelById } from "@/utils/db/dbRead";
-import { getMemoryLimits } from "@/utils/db/memoryLimits";
+import { llmModelRepo, personaRepository, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
+import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { memoryGuard, reserveDocumentQuota } from "@/utils/security/rateLimiter";
-import { insertDocumentWithChunks } from "@/utils/documents/documentService";
 import { generateEmbeddingsBatched, providerSupportsEmbeddingTaskType } from "@/utils/embeddings/embeddingProvider";
 import { fetchHistoryUntilMarker } from "@/utils/discord/historyFetcher";
 import { formatMessagesForExtraction } from "@/utils/discord/historyFormatter";
@@ -269,7 +268,7 @@ async function storeExtractedFacts(params: {
   entries: HistoryMemoryEntry[];
   documentName: string;
   serverId: number;
-  tomoriId: number | null;
+  personaId: number | null;
   uploaderUserId: number | null;
   embeddingModelId: number;
   embeddingFamily: string;
@@ -286,7 +285,7 @@ async function storeExtractedFacts(params: {
     entries,
     documentName,
     serverId,
-    tomoriId,
+    personaId,
     uploaderUserId,
     embeddingModelId,
     embeddingFamily,
@@ -307,21 +306,7 @@ async function storeExtractedFacts(params: {
   const textContent = chunks.join("\n\n");
 
   // 2. Check document count limit
-  const [docCountRow] =
-    tomoriId === null
-      ? await sql`
-				SELECT COUNT(*) as doc_count
-				FROM documents
-				WHERE server_id = ${serverId}
-				  AND tomori_id IS NULL
-			`
-      : await sql`
-				SELECT COUNT(*) as doc_count
-				FROM documents
-				WHERE server_id = ${serverId}
-				  AND tomori_id = ${tomoriId}
-			`;
-  const docCount = Number(docCountRow?.doc_count || 0);
+  const docCount = await serverMemoryRepository.countDocumentsScoped(serverId, personaId);
   if (docCount >= memoryLimits.maxDocumentsPerServer) {
     await replyInteraction.editReply({
       embeds: [
@@ -341,23 +326,7 @@ async function storeExtractedFacts(params: {
   }
 
   // 3. Check chunk count limit
-  const [chunkCountRow] =
-    tomoriId === null
-      ? await sql`
-				SELECT COUNT(*) as chunk_count
-				FROM document_chunks dc
-				JOIN documents d ON d.document_id = dc.document_id
-				WHERE d.server_id = ${serverId}
-				  AND d.tomori_id IS NULL
-			`
-      : await sql`
-				SELECT COUNT(*) as chunk_count
-				FROM document_chunks dc
-				JOIN documents d ON d.document_id = dc.document_id
-				WHERE d.server_id = ${serverId}
-				  AND d.tomori_id = ${tomoriId}
-			`;
-  const currentChunkCount = Number(chunkCountRow?.chunk_count || 0);
+  const currentChunkCount = await serverMemoryRepository.countChunksScoped(serverId, personaId);
   if (currentChunkCount + chunks.length > memoryLimits.maxDocumentChunksPerServer) {
     await replyInteraction.editReply({
       embeds: [
@@ -399,9 +368,9 @@ async function storeExtractedFacts(params: {
   });
 
   // 6. Insert document with chunks
-  const documentId = await insertDocumentWithChunks({
+  const documentId = await ragRepository.insertWithChunks({
     serverId,
-    tomoriId,
+    personaId,
     uploaderUserId,
     documentName,
     fileName: null,
@@ -583,7 +552,7 @@ export async function execute(
       return;
     }
 
-    const embeddingModel = await loadEmbeddingModelById(embeddingModelId);
+    const embeddingModel = await llmModelRepo.loadEmbeddingModelById(embeddingModelId);
     if (!embeddingModel) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.memory.history.import.no_embedding_model_title",
@@ -623,7 +592,7 @@ export async function execute(
     const messageFetchLimit = normalizeMessageFetchLimit(tomoriState.config.message_fetch_limit);
 
     // Load all personas for formatting and detection
-    const allPersonas = await loadAllPersonasForServer(guildId);
+    const allPersonas = await personaRepository.loadAllForServer(guildId);
 
     // ====================================================================
     // SCOPE: PERSONA — Pattern 4 → Pattern 2 hybrid (persona selector first)
@@ -653,7 +622,7 @@ export async function execute(
 
       personaSelectionInteraction = personaSelection.interaction;
       const selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await replyInfoEmbed(personaSelectionInteraction, locale, {
           titleKey: "general.errors.invalid_option_title",
           descriptionKey: "general.errors.invalid_option_description",
@@ -662,9 +631,9 @@ export async function execute(
         return;
       }
 
-      const targetTomoriId = selectedPersona.tomori_id;
+      const targetPersonaId = selectedPersona.persona_id;
       const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_persona", {
-        persona_name: selectedPersona.tomori_nickname,
+        persona_name: selectedPersona.persona_nickname,
       });
 
       // Defer the button interaction for long processing
@@ -673,14 +642,7 @@ export async function execute(
       });
 
       // Check duplicate name
-      const existing = await sql`
-				SELECT document_id FROM documents
-				WHERE server_id = ${tomoriState.server_id}
-				  AND tomori_id = ${targetTomoriId}
-				  AND document_name = ${nameInput}
-				LIMIT 1
-			`;
-      if (existing.length > 0) {
+      if (await serverMemoryRepository.documentExistsByName(tomoriState.server_id, targetPersonaId, nameInput)) {
         await personaSelectionInteraction.editReply({
           embeds: [
             new EmbedBuilder()
@@ -714,7 +676,7 @@ export async function execute(
         entries: pipelineResult.entries,
         documentName: nameInput,
         serverId: tomoriState.server_id,
-        tomoriId: targetTomoriId,
+        personaId: targetPersonaId,
         uploaderUserId: userData.user_id ?? null,
         embeddingModelId,
         embeddingFamily: embeddingModel.model_family,
@@ -757,15 +719,8 @@ export async function execute(
 
       const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_global");
 
-      // Check duplicate name (serverwide scope = tomori_id IS NULL)
-      const existing = await sql`
-				SELECT document_id FROM documents
-				WHERE server_id = ${tomoriState.server_id}
-				  AND tomori_id IS NULL
-				  AND document_name = ${nameInput}
-				LIMIT 1
-			`;
-      if (existing.length > 0) {
+      // Check duplicate name (serverwide scope = persona_id IS NULL)
+      if (await serverMemoryRepository.documentExistsByName(tomoriState.server_id, null, nameInput)) {
         await interaction.editReply({
           embeds: [
             new EmbedBuilder()
@@ -799,7 +754,7 @@ export async function execute(
         entries: pipelineResult.entries,
         documentName: nameInput,
         serverId: tomoriState.server_id,
-        tomoriId: null,
+        personaId: null,
         uploaderUserId: userData.user_id ?? null,
         embeddingModelId,
         embeddingFamily: embeddingModel.model_family,
@@ -863,14 +818,7 @@ export async function execute(
       const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_global");
 
       // Check duplicate name in global scope
-      const existing = await sql`
-				SELECT document_id FROM documents
-				WHERE server_id = ${tomoriState.server_id}
-				  AND tomori_id IS NULL
-				  AND document_name = ${nameInput}
-				LIMIT 1
-			`;
-      if (existing.length > 0) {
+      if (await serverMemoryRepository.documentExistsByName(tomoriState.server_id, null, nameInput)) {
         await interaction.editReply({
           embeds: [
             new EmbedBuilder()
@@ -888,7 +836,7 @@ export async function execute(
         entries,
         documentName: nameInput,
         serverId: tomoriState.server_id,
-        tomoriId: null,
+        personaId: null,
         uploaderUserId: userData.user_id ?? null,
         embeddingModelId,
         embeddingFamily: embeddingModel.model_family,
@@ -921,25 +869,18 @@ export async function execute(
     // Create per-persona documents
     const personaResults: string[] = [];
 
-    for (const tomoriId of detectedTomoriIds) {
-      const persona = allPersonas.find((p) => p.tomori_id === tomoriId);
+    for (const personaId of detectedTomoriIds) {
+      const persona = allPersonas.find((p) => p.persona_id === personaId);
       if (!persona) continue;
 
-      const docName = `${nameInput} (${persona.tomori_nickname})`;
+      const docName = `${nameInput} (${persona.persona_nickname})`;
       const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_persona", {
-        persona_name: persona.tomori_nickname,
+        persona_name: persona.persona_nickname,
       });
 
       // Check duplicate name for this persona
-      const existing = await sql`
-				SELECT document_id FROM documents
-				WHERE server_id = ${tomoriState.server_id}
-				  AND tomori_id = ${tomoriId}
-				  AND document_name = ${docName}
-				LIMIT 1
-			`;
-      if (existing.length > 0) {
-        log.warn(`Skipping duplicate document "${docName}" for persona ${tomoriId} during automatic scope`);
+      if (await serverMemoryRepository.documentExistsByName(tomoriState.server_id, personaId, docName)) {
+        log.warn(`Skipping duplicate document "${docName}" for persona ${personaId} during automatic scope`);
         continue;
       }
 
@@ -947,7 +888,7 @@ export async function execute(
         entries,
         documentName: docName,
         serverId: tomoriState.server_id,
-        tomoriId,
+        personaId,
         uploaderUserId: userData.user_id ?? null,
         embeddingModelId,
         embeddingFamily: embeddingModel.model_family,
@@ -964,7 +905,7 @@ export async function execute(
       if (storeResult) {
         personaResults.push(
           localizer(locale, "commands.memory.history.import.success_automatic_persona_line", {
-            persona_name: persona.tomori_nickname,
+            persona_name: persona.persona_nickname,
             doc_name: docName,
             chunk_count: storeResult.chunkCount.toString(),
           }),
@@ -991,7 +932,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: tomoriState?.tomori_id,
+      personaId: tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "memory history import",

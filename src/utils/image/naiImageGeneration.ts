@@ -114,8 +114,9 @@ export async function generateNovelAiImage(options: {
   orientation: string;
   imageParams: EffectiveNaiImageParams;
   characterPayload?: NaiGenerationCharacterPayload;
+  abortSignal?: AbortSignal;
 }): Promise<Buffer> {
-  const { apiKey, model, prompt, negativePrompt, orientation, imageParams, characterPayload } = options;
+  const { apiKey, model, prompt, negativePrompt, orientation, imageParams, characterPayload, abortSignal } = options;
 
   const dimensions = ORIENTATION_PRESETS[orientation] || ORIENTATION_PRESETS.portrait;
   const seed = Math.floor(Math.random() * 2147483647);
@@ -260,6 +261,7 @@ export async function generateNovelAiImage(options: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(requestPayload),
+        signal: abortSignal,
       });
 
       if (response.ok) {
@@ -313,6 +315,7 @@ export async function generateNovelAiImage(options: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(requestPayload),
+    signal: abortSignal,
   });
 
   if (!response.ok) {

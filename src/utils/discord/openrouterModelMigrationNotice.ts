@@ -1,7 +1,7 @@
 import type { ButtonInteraction, ChatInputCommandInteraction, ModalSubmitInteraction } from "discord.js";
 import { MessageFlags } from "discord.js";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode } from "@/utils/misc/logger";
 
 type OpenRouterModelMigrationInteraction = ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction;

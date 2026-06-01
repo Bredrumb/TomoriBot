@@ -6,21 +6,18 @@ import type {
   SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
-import { personalMemorySchema, type UserRow, type ErrorContext, type TomoriState } from "@/types/db/schema";
+import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
   acknowledgeModalSubmitForRefresh,
-  replyInfoEmbed,
-  replyComponentsV2Status,
-  updateButtonComponentsV2Status,
-  type AvatarSessionCache,
-  replyPaginatedPersonaChoicesV2,
   promptWithPaginatedModal,
   safeSelectOptionText,
-} from "@/utils/discord/interactionHelper";
-import { loadTomoriState, loadAllPersonasForServer, loadPersonalMemoriesForUserLineage } from "@/utils/db/dbRead";
+} from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
+import { personaRepository, personalMemoryRepository } from "@/utils/db/repositories";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import type { SelectOption } from "@/types/discord/modal";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
@@ -55,42 +52,8 @@ async function performPersonalMemoryRemoval(
     return false;
   }
 
-  // Delete selected memory row from personal_memories
-  const [updatedUserResult] = await sql`
-		DELETE FROM personal_memories
-		WHERE personal_memory_id = ${memoryToRemove.personal_memory_id}
-		  AND user_id = ${userData.user_id}
-		RETURNING *
-	`;
-
-  // Validate the returned (updated) data
-  const validationResult = personalMemorySchema.safeParse(updatedUserResult);
-
-  if (!validationResult.success || !updatedUserResult) {
-    // Log error specific to this update failure
-    const context: ErrorContext = {
-      userId: userData.user_id,
-      serverId: null,
-      tomoriId: null,
-      errorType: "DatabaseUpdateError",
-      metadata: {
-        command: "forget personalmemory",
-        table: "personal_memories",
-        column: "content",
-        operation: "DELETE",
-        memoryToRemove,
-        validationErrors: validationResult.success ? null : validationResult.error.flatten(),
-      },
-    };
-
-    await log.error(
-      "Failed to update or validate user data after deleting personal memory",
-      validationResult.success
-        ? new Error("Database update returned no rows or unexpected data")
-        : new Error("Updated user data failed validation"),
-      context,
-    );
-
+  const ok = await personalMemoryRepository.remove(memoryToRemove.personal_memory_id);
+  if (!ok) {
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
       descriptionKey: "general.errors.update_failed_description",
@@ -177,7 +140,7 @@ export async function execute(
 
   try {
     // 2. Load server's Tomori state to check personalization setting (Rule 17)
-    tomoriState = await loadTomoriState(interaction.guild?.id ?? interaction.user.id);
+    tomoriState = await personaRepository.loadState(interaction.guild?.id ?? interaction.user.id);
     const memoryScope =
       (interaction.options.getString("scope") as typeof PERSONAL_SCOPE_VALUE | typeof GLOBAL_SCOPE_VALUE | null) ??
       PERSONAL_SCOPE_VALUE;
@@ -201,7 +164,7 @@ export async function execute(
     let targetLineageId = GLOBAL_PERSONAL_MEMORY_LINEAGE_ID;
     let selectionInteraction: ChatInputCommandInteraction | ButtonInteraction = interaction;
     if (memoryScope === PERSONAL_SCOPE_VALUE) {
-      const allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+      const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
       if (allPersonas.length === 0) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.tomori_not_setup_title",
@@ -223,8 +186,7 @@ export async function execute(
         });
 
         if (!personaSelection.success) {
-          if (personaSelection.reason === "cancelled" || personaSelection.reason === "fatal") return;
-          continue;
+          return;
         }
         if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
           return;
@@ -263,7 +225,7 @@ export async function execute(
         // 5. Get current personal memories from lineage-scoped table
         // (Inside PERSONAL_SCOPE_VALUE block, so always persona-scoped)
         const fetchedMemories = userData.user_id
-          ? await loadPersonalMemoriesForUserLineage(userData.user_id, targetLineageId, false)
+          ? await personalMemoryRepository.loadForUserLineage(userData.user_id, targetLineageId, false)
           : [];
         const currentMemories = fetchedMemories.filter((memory) => memory.persona_lineage_id === targetLineageId);
 
@@ -380,7 +342,7 @@ export async function execute(
     } else {
       // 4b. GLOBAL scope: load lineage-0 memories directly (no persona picker needed)
       const globalMemories = userData.user_id
-        ? await loadPersonalMemoriesForUserLineage(userData.user_id, GLOBAL_PERSONAL_MEMORY_LINEAGE_ID, false)
+        ? await personalMemoryRepository.loadForUserLineage(userData.user_id, GLOBAL_PERSONAL_MEMORY_LINEAGE_ID, false)
         : [];
 
       // 5b. Check if there are any global memories to remove
@@ -464,7 +426,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: tomoriState?.tomori_id,
+      personaId: tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "forget personalmemory",

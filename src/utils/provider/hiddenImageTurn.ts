@@ -26,7 +26,7 @@ import type { ToolContext } from "@/types/tool/interfaces";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { FunctionCall } from "@/types/provider/interfaces";
 import { decryptApiKey } from "@/utils/security/crypto";
-import { stripBridgePrefix } from "@/utils/bridge";
+import { stripBridgePrefix } from "@/utils/bridges";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -102,7 +102,7 @@ export interface HiddenImageTurnParams {
     tomoriNickname: string;
     personaPrompt: string | null;
     tomoriAttributes: string[];
-    personaLineageId: number;
+    personaLineageId: number | null;
   };
 }
 
@@ -190,7 +190,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
       authorId,
       authorName,
       authorType: isBotMessage ? "persona" : "user",
-      personaName: isBotMessage ? tomoriState.tomori_nickname : null,
+      personaName: isBotMessage ? tomoriState.persona_nickname : null,
       content: msg.cleanContent || msg.content || null,
       createdAt: msg.createdTimestamp,
       imageAttachments: [], // Skip — see comment above
@@ -225,7 +225,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     // Use the selected sender persona's identity if an override is provided;
     // otherwise fall back to the active tomoriState values.
     const persona = contextPersonaOverride ?? {
-      tomoriNickname: tomoriState.tomori_nickname,
+      tomoriNickname: tomoriState.persona_nickname,
       personaPrompt: tomoriState.persona_prompt ?? null,
       tomoriAttributes: tomoriState.attribute_list,
       personaLineageId: tomoriState.persona_lineage_id,
@@ -246,7 +246,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
       tomoriAttributes: persona.tomoriAttributes,
       tomoriConfig: tomoriState.config,
       personaPrompt: persona.personaPrompt,
-      personaLineageId: persona.personaLineageId,
+      personaLineageId: persona.personaLineageId ?? undefined,
       isDMChannel: false,
       triggererUserId: internalUserId ?? undefined,
     });

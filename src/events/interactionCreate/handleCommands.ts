@@ -1,9 +1,8 @@
 import { MessageFlags, type Client, type Interaction } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
 import { ColorCode, log } from "../../utils/misc/logger";
-import { CooldownType, userSchema, type UserRow, type ErrorContext } from "../../types/db/schema";
-import { registerUser } from "../../utils/db/dbWrite";
+import type { UserRow, ErrorContext } from "../../types/db/schema";
+import { cooldownRepository, userRepository } from "@/utils/db/repositories";
 import { loadCommandData, type CommandExecutionMap, type CommandCooldownMap } from "../../utils/discord/commandLoader";
 import { resolvePreferredDiscordDisplayName } from "../../utils/discord/displayName";
 
@@ -37,17 +36,7 @@ let cooldownMap: CommandCooldownMap | null = null;
  * @returns Boolean indicating if command is on cooldown
  */
 async function checkCooldown(userId: string, category: string): Promise<boolean> {
-  const now = Date.now();
-  const [cooldown] = await sql`
-    SELECT expiry_time
-    FROM cooldowns
-    WHERE cooldown_type = ${CooldownType.COMMAND_CATEGORY}
-    AND user_disc_id = ${userId}
-    AND command_category = ${category}
-    AND expiry_time > ${now}
-  `;
-
-  return Boolean(cooldown);
+  return cooldownRepository.hasCommandCategoryCooldown(userId, category);
 }
 
 /**
@@ -57,18 +46,7 @@ async function checkCooldown(userId: string, category: string): Promise<boolean>
  * @returns Remaining cooldown time in seconds
  */
 async function getRemainingCooldown(userId: string, category: string): Promise<number> {
-  const now = Date.now();
-  const [cooldown] = await sql`
-    SELECT expiry_time
-    FROM cooldowns
-    WHERE cooldown_type = ${CooldownType.COMMAND_CATEGORY}
-    AND user_disc_id = ${userId}
-    AND command_category = ${category}
-    AND expiry_time > ${now}
-  `;
-
-  if (!cooldown) return 0;
-  return Math.ceil((Number(cooldown.expiry_time) - now) / 1000);
+  return cooldownRepository.getRemainingCommandCategoryCooldownSeconds(userId, category);
 }
 
 /**
@@ -78,24 +56,7 @@ async function getRemainingCooldown(userId: string, category: string): Promise<n
  * @param duration - Cooldown duration in milliseconds
  */
 async function setCooldown(userId: string, category: string, duration: number): Promise<void> {
-  const expiryTime = Date.now() + duration;
-
-  await sql`
-    INSERT INTO cooldowns (
-      cooldown_type,
-      user_disc_id,
-      command_category,
-      expiry_time
-    )
-    VALUES (
-      ${CooldownType.COMMAND_CATEGORY},
-      ${userId},
-      ${category},
-      ${expiryTime}
-    )
-    ON CONFLICT (cooldown_type, COALESCE(server_disc_id, ''), COALESCE(user_disc_id, ''), COALESCE(channel_disc_id, ''), COALESCE(command_category, ''))
-    DO UPDATE SET expiry_time = ${expiryTime}
-  `;
+  await cooldownRepository.setCommandCategoryCooldown(userId, category, duration);
 }
 
 const handler = async (client: Client, interaction: Interaction): Promise<void> => {
@@ -221,12 +182,10 @@ const handler = async (client: Client, interaction: Interaction): Promise<void> 
 
       // 5. Get or create user data
       let userData: UserRow | undefined;
-      const [existingUser] = await sql`
-        SELECT * FROM users WHERE user_disc_id = ${interaction.user.id}
-      `;
+      const existingUser = await userRepository.loadByDiscordId(interaction.user.id);
 
       if (existingUser) {
-        userData = userSchema.parse(existingUser);
+        userData = existingUser;
       } else {
         // Get locale to use for new user (works for both guilds and DMs)
         const userLanguage = interaction.locale;
@@ -239,8 +198,8 @@ const handler = async (client: Client, interaction: Interaction): Promise<void> 
                 : null
             : null;
 
-        // Use the registerUser helper (Rule #17) - works for both guild and DM contexts
-        const registeredUser = await registerUser(
+        // Use the userRepository.register helper (Rule #17) - works for both guild and DM contexts
+        const registeredUser = await userRepository.register(
           interaction.user.id,
           resolvePreferredDiscordDisplayName({
             memberDisplayName,

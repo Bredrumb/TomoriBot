@@ -8,13 +8,14 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
+import { configRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
-import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { type ErrorContext, type UserRow, tomoriConfigSchema } from "@/types/db/schema";
+import type { ErrorContext, UserRow } from "@/types/db/schema";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
 import type { LogitBiasEntry } from "@/types/provider/logitBias";
 import { formatLogitBiasValue } from "@/types/provider/logitBias";
@@ -119,33 +120,22 @@ export async function execute(
     if (clearAll) {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-      const [updatedRow] = await sql`
-				UPDATE tomori_configs
-				SET llm_logit_biases = '[]'::jsonb
-				WHERE server_id = ${tomoriState.server_id}
-				RETURNING *
-			`;
+      const updated = await configRepository.updateChatConfig(tomoriState.server_id, {
+        llm_logit_biases: [],
+      });
 
-      const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-      if (!updatedRow || !validatedConfig.success) {
+      if (!updated) {
         const context: ErrorContext = {
-          tomoriId: tomoriState.tomori_id,
+          personaId: tomoriState.persona_id,
           serverId: tomoriState.server_id,
           userId: userData.user_id,
           errorType: "DatabaseUpdateError",
           metadata: {
             command: "config logitbias remove",
             clearAll,
-            validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
           },
         };
-        await log.error(
-          "Failed to clear llm_logit_biases config",
-          validatedConfig.success
-            ? new Error("Database update returned no rows or unexpected data")
-            : new Error("Updated config data failed validation"),
-          context,
-        );
+        await log.error("Failed to clear llm_logit_biases config", new Error("Database update failed"), context);
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
@@ -271,33 +261,22 @@ export async function execute(
       return;
     }
 
-    const [updatedRow] = await sql`
-			UPDATE tomori_configs
-			SET llm_logit_biases = ${JSON.stringify(remainingEntries)}::jsonb
-			WHERE server_id = ${tomoriState.server_id}
-			RETURNING *
-		`;
+    const updated = await configRepository.updateChatConfig(tomoriState.server_id, {
+      llm_logit_biases: remainingEntries,
+    });
 
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-    if (!updatedRow || !validatedConfig.success) {
+    if (!updated) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
         metadata: {
           command: "config logitbias remove",
           removedCount: removedEntries.length,
-          validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
         },
       };
-      await log.error(
-        "Failed to update llm_logit_biases after removals",
-        validatedConfig.success
-          ? new Error("Database update returned no rows or unexpected data")
-          : new Error("Updated config data failed validation"),
-        context,
-      );
+      await log.error("Failed to update llm_logit_biases after removals", new Error("Database update failed"), context);
       await replyInfoEmbed(modalInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",
@@ -322,7 +301,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: tomoriState?.tomori_id,
+      personaId: tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "config logitbias remove",

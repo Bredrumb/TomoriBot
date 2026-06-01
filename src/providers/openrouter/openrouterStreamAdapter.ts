@@ -18,7 +18,8 @@ import type { FunctionCall, FunctionResponseImageMetadata, ThoughtLogEntry } fro
 import { ContextItemTag, type StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
-import { truncateBeforeGenericSpeakerLine } from "../../utils/text/stringHelper";
+import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
+import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import {
   getOpenRouterCapabilities,
   getOpenRouterSupportedParameters,
@@ -29,13 +30,15 @@ import { buildProviderStopStrings } from "../utils/stopStrings";
 import { fetchAndOptimizeImage } from "../../utils/image/imageProcessor";
 import { buildOpenrouterProviderRouting } from "./providerRouting";
 import { buildOpenRouterReasoningRequest } from "@/utils/provider/thinkingControl";
+import { BaseStreamAdapter } from "../../types/stream/interfaces";
+import { ReasoningContentSpillGuard } from "@/providers/utils/reasoningContentSpillGuard";
+import { ThinkBlockContentStripper } from "@/providers/utils/thinkBlockContentStripper";
 import type {
   ProcessedChunk,
   ProviderError,
   RawStreamChunk,
   StreamConfig,
   StreamContext,
-  StreamProvider,
 } from "../../types/stream/interfaces";
 
 /**
@@ -139,7 +142,7 @@ const OPENROUTER_VERBOSE_FETCH = (process.env.OPENROUTER_VERBOSE_FETCH ?? "true"
 /**
  * OpenRouter streaming adapter implementation
  */
-export class OpenrouterStreamAdapter implements StreamProvider {
+export class OpenrouterStreamAdapter extends BaseStreamAdapter {
   private static readonly TEMPERATURE_OMIT_MODELS = new Set<string>([
     // Models that don't support temperature parameter
     // (empty - pony-alpha removed as deprecated)
@@ -171,6 +174,7 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 
   private static readonly SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
     ContextItemTag.SYSTEM_HUMANIZER_RULES,
+    ContextItemTag.SYSTEM_PERSONA_PROMPT,
     ContextItemTag.SYSTEM_PERSONALITY,
     ContextItemTag.KNOWLEDGE_SERVER_INFO,
     ContextItemTag.KNOWLEDGE_SERVER_EMOJIS, // Text-based with semantic metadata (deterministic ordering)
@@ -185,9 +189,19 @@ export class OpenrouterStreamAdapter implements StreamProvider {
   // Accumulator for reasoning_details across streaming chunks (required for Gemini models)
   // biome-ignore lint/suspicious/noExplicitAny: reasoning_details has complex nested structure that varies by provider
   private reasoningDetailsAccumulator: any[] = [];
+  private readonly thinkBlockStripper = new ThinkBlockContentStripper({ loggerName: "OpenRouter" });
+  private readonly reasoningContentSpillGuard = new ReasoningContentSpillGuard("OpenRouter");
   private speakerGuardPendingTail = "";
   private streamedTextTail = "";
   private speakerGuardEnabled = false;
+
+  constructor() {
+    super({
+      name: "openrouter",
+      version: "1.0.0",
+      supportsFunctionCalling: true,
+    });
+  }
 
   /**
    * Build OpenRouter chat messages from structured context.
@@ -398,6 +412,13 @@ export class OpenrouterStreamAdapter implements StreamProvider {
     this.speakerGuardPendingTail = "";
     this.streamedTextTail = "";
     this.speakerGuardEnabled = false;
+    this.reasoningContentSpillGuard.reset();
+    // Persona-label fallback closer for unclosed leaked think blocks.
+    const personaNickname = context.tomoriState.persona_nickname?.trim();
+    const personaSpeakerLabelRegex = personaNickname
+      ? new RegExp(`(?:^|\\n)\\s*${escapeRegExp(personaNickname)}\\s*[:：]`, "i")
+      : null;
+    this.thinkBlockStripper.reset(personaSpeakerLabelRegex);
 
     // Cast config to OpenrouterStreamConfig to access provider-specific fields
     const openrouterConfig = config as OpenrouterStreamConfig;
@@ -408,7 +429,7 @@ export class OpenrouterStreamAdapter implements StreamProvider {
       context.currentTurnModelParts,
       context.functionInteractionHistory,
       openrouterConfig.seesImages ?? true, // Default to true for backward compatibility
-      context.tomoriState.tomori_nickname ?? "Assistant",
+      context.tomoriState.persona_nickname ?? "Assistant",
       openrouterConfig.seesVideos ?? false, // Default false — videos are strictly opt-in per model
       context.messageIdMap,
     );
@@ -442,7 +463,7 @@ export class OpenrouterStreamAdapter implements StreamProvider {
       const stopStrings = buildProviderStopStrings({
         providerName: "openrouter",
         model: config.model,
-        personaName: context.tomoriState.tomori_nickname,
+        personaName: context.tomoriState.persona_nickname,
         configuredStops: context.tomoriState.config.llm_stop_strings,
         includePersonaSpeakerStop: speakerStopPatternEnabled,
       });
@@ -872,7 +893,9 @@ export class OpenrouterStreamAdapter implements StreamProvider {
           const chunksToEmit = this.splitChunkWithTextAndToolSignals(normalizedChunk);
 
           for (const chunkToEmit of chunksToEmit) {
-            const deduplicatedChunk = this.deduplicateChunkTextAgainstRecentStream(chunkToEmit);
+            const strippedChunk = this.stripThinkBlocksFromChunkContent(chunkToEmit);
+            const spillGuardedChunk = this.applyReasoningContentSpillGuard(strippedChunk);
+            const deduplicatedChunk = this.deduplicateChunkTextAgainstRecentStream(spillGuardedChunk);
             const guardResult = this.applySpeakerBoundaryFallbackGuard(deduplicatedChunk);
 
             if (this.shouldFlushSpeakerGuardTailBeforeNonTextChunk(guardResult.chunk)) {
@@ -939,6 +962,30 @@ export class OpenrouterStreamAdapter implements StreamProvider {
         }
       }
 
+      const flushedSpillChunk = this.flushReasoningContentSpillGuardToChunk();
+      if (flushedSpillChunk) {
+        yield {
+          data: flushedSpillChunk,
+          provider: "openrouter",
+          metadata: {
+            timestamp: Date.now(),
+            model: config.model,
+          },
+        };
+      }
+
+      const flushedThinkChunk = this.flushThinkStripperToChunk();
+      if (flushedThinkChunk) {
+        yield {
+          data: flushedThinkChunk,
+          provider: "openrouter",
+          metadata: {
+            timestamp: Date.now(),
+            model: config.model,
+          },
+        };
+      }
+
       if (this.speakerGuardEnabled && this.speakerGuardPendingTail.length > 0) {
         yield {
           data: {
@@ -963,6 +1010,17 @@ export class OpenrouterStreamAdapter implements StreamProvider {
       if (controller) {
         controller.abort();
       }
+      const flushedSpillChunk = this.flushReasoningContentSpillGuardToChunk();
+      if (flushedSpillChunk) {
+        yield {
+          data: flushedSpillChunk,
+          provider: "openrouter",
+          metadata: {
+            timestamp: Date.now(),
+            model: config.model,
+          },
+        };
+      }
       if (this.speakerGuardEnabled && this.speakerGuardPendingTail.length > 0) {
         yield {
           data: {
@@ -983,17 +1041,144 @@ export class OpenrouterStreamAdapter implements StreamProvider {
         };
         this.speakerGuardPendingTail = "";
       }
-      // Convert OpenRouter API errors to our format
-      const providerError = this.handleProviderError(error);
-      yield {
-        data: { error: providerError },
-        provider: "openrouter",
-        metadata: {
-          timestamp: Date.now(),
-          error: true,
-        },
-      };
+      const flushedThinkChunk = this.flushThinkStripperToChunk();
+      if (flushedThinkChunk) {
+        yield {
+          data: flushedThinkChunk,
+          provider: "openrouter",
+          metadata: {
+            timestamp: Date.now(),
+            model: config.model,
+          },
+        };
+      }
+      yield this.createProviderErrorChunk(error);
     }
+  }
+
+  /**
+   * Strip `<think>...</think>` blocks that leak into `delta.content` (some OpenRouter
+   * backends emit reasoning here instead of `delta.reasoning`). Captured thought text
+   * is appended to the chunk's `delta.reasoning` so `processChunk` surfaces it as a
+   * ThoughtLogEntry rather than visible prose.
+   *
+   * Includes the same two safeguards as the OpenAI-compatible adapter:
+   *   1. Stray `</think>` with no opener routes preceding text to thoughts (not content).
+   *   2. Persona speaker label (e.g. "Nerine:") at a line boundary acts as an implicit
+   *      `</think>` when the model fails to close cleanly.
+   */
+  private stripThinkBlocksFromChunkContent(chunk: OpenrouterStreamChunk): OpenrouterStreamChunk {
+    const firstChoice = chunk.choices?.[0];
+    const content = firstChoice?.delta?.content;
+    if (!firstChoice?.delta || typeof content !== "string" || content.length === 0) {
+      return chunk;
+    }
+
+    const stripped = this.thinkBlockStripper.strip(content);
+    if (!stripped.changed) {
+      return chunk;
+    }
+
+    const existingReasoning = typeof firstChoice.delta.reasoning === "string" ? firstChoice.delta.reasoning : "";
+    const mergedReasoning =
+      stripped.thoughtText.length > 0
+        ? existingReasoning.length > 0
+          ? `${existingReasoning}${stripped.thoughtText}`
+          : stripped.thoughtText
+        : (firstChoice.delta.reasoning ?? undefined);
+
+    return {
+      ...chunk,
+      choices: [
+        {
+          ...firstChoice,
+          delta: {
+            ...firstChoice.delta,
+            content: stripped.visibleText,
+            reasoning: mergedReasoning,
+          },
+        },
+        ...(chunk.choices?.slice(1) ?? []),
+      ],
+    };
+  }
+
+  private applyReasoningContentSpillGuard(chunk: OpenrouterStreamChunk): OpenrouterStreamChunk {
+    const firstChoice = chunk.choices?.[0];
+    if (!firstChoice?.delta) {
+      return chunk;
+    }
+
+    this.reasoningContentSpillGuard.observeReasoning(firstChoice.delta.reasoning);
+
+    const content = firstChoice.delta.content;
+    if (typeof content !== "string" || content.length === 0) {
+      return chunk;
+    }
+
+    const guardResult = this.reasoningContentSpillGuard.filterContent(content);
+    if (!guardResult.changed) {
+      return chunk;
+    }
+
+    const existingReasoning = typeof firstChoice.delta.reasoning === "string" ? firstChoice.delta.reasoning : "";
+    const mergedReasoning = guardResult.spilledThought
+      ? existingReasoning
+        ? `${existingReasoning}${guardResult.spilledThought}`
+        : guardResult.spilledThought
+      : (firstChoice.delta.reasoning ?? undefined);
+
+    return {
+      ...chunk,
+      choices: [
+        {
+          ...firstChoice,
+          delta: {
+            ...firstChoice.delta,
+            content: guardResult.content,
+            reasoning: mergedReasoning,
+          },
+        },
+        ...(chunk.choices?.slice(1) ?? []),
+      ],
+    };
+  }
+
+  private flushReasoningContentSpillGuardToChunk(): OpenrouterStreamChunk | null {
+    const guardResult = this.reasoningContentSpillGuard.flush();
+    if (!guardResult.changed || !guardResult.content) {
+      return null;
+    }
+
+    return {
+      choices: [
+        {
+          index: 0,
+          delta: {
+            content: guardResult.content,
+          },
+        },
+      ],
+    };
+  }
+
+  private flushThinkStripperToChunk(): OpenrouterStreamChunk | null {
+    const stripped = this.thinkBlockStripper.flush();
+    if (!stripped.changed || (!stripped.visibleText && !stripped.thoughtText)) {
+      return null;
+    }
+
+    return {
+      choices: [
+        {
+          index: 0,
+          delta: {
+            content: stripped.visibleText,
+            reasoning: stripped.thoughtText || undefined,
+          },
+        },
+      ],
+    };
   }
 
   private deduplicateChunkTextAgainstRecentStream(chunk: OpenrouterStreamChunk): OpenrouterStreamChunk {
@@ -1373,6 +1558,8 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 
       const errorCode = (openrouterChunk.error as { code?: string | number }).code;
       const errorMessage = (openrouterChunk.error as { message?: string }).message || "OpenRouter API error";
+      const normalizedCode =
+        typeof errorCode === "string" || typeof errorCode === "number" ? String(errorCode) : "unknown";
 
       // Check for malformed tool call errors (model produced invalid tool call structure)
       // These occur when the model generates null/invalid values where strings are expected
@@ -1412,14 +1599,17 @@ export class OpenrouterStreamAdapter implements StreamProvider {
         };
       }
 
-      // For other errors, return as error
+      // Use the shared code→type mapper so SSE-injected errors get the same
+      // type/retryable treatment as HTTP-level errors (e.g. 503 → provider_overloaded).
+      const { type: errorType, retryable } = this.mapErrorCodeToType(normalizedCode, errorMessage);
+
       return {
         type: "error",
         error: {
-          type: "api_error",
+          type: errorType,
           message: errorMessage,
-          code: typeof errorCode === "string" || typeof errorCode === "number" ? String(errorCode) : "unknown",
-          retryable: false,
+          code: normalizedCode,
+          retryable,
           originalError: openrouterChunk.error,
         } as ProviderError,
       };
@@ -1811,6 +2001,44 @@ export class OpenrouterStreamAdapter implements StreamProvider {
   }
 
   /**
+   * Map a resolved error code and message to a ProviderError type and retryable flag.
+   * Used by both handleProviderError (thrown exceptions) and processChunk (SSE-injected errors)
+   * so both paths stay in sync.
+   */
+  private mapErrorCodeToType(
+    finalCode: string,
+    finalMessage: string,
+  ): { type: ProviderError["type"]; retryable: boolean } {
+    if (finalCode.includes("400") || finalMessage.includes("400")) {
+      return { type: "api_error", retryable: false };
+    } else if (finalCode.includes("401") || finalMessage.includes("401")) {
+      return { type: "api_error", retryable: false };
+    } else if (finalCode.includes("402") || finalMessage.includes("402")) {
+      return { type: "rate_limit", retryable: false }; // Insufficient credits
+    } else if (finalCode.includes("413") || finalMessage.includes("413")) {
+      return { type: "api_error", retryable: false }; // Payload too large
+    } else if (finalCode.includes("404") || finalMessage.includes("404")) {
+      return { type: "api_error", retryable: false };
+    } else if (finalCode.includes("408") || finalMessage.includes("408")) {
+      return { type: "timeout", retryable: true };
+    } else if (finalCode.includes("429") || finalMessage.includes("429")) {
+      return { type: "rate_limit", retryable: true };
+    } else if (
+      finalCode.includes("502") ||
+      finalCode.includes("503") ||
+      finalMessage.includes("502") ||
+      finalMessage.includes("503")
+    ) {
+      return { type: "provider_overloaded", retryable: true };
+    } else if (finalMessage.toLowerCase().includes("timeout")) {
+      return { type: "timeout", retryable: true };
+    } else if (finalMessage.toLowerCase().includes("content")) {
+      return { type: "content_blocked", retryable: false };
+    }
+    return { type: "unknown", retryable: false };
+  }
+
+  /**
    * Handle OpenRouter-specific errors using official error codes
    */
   handleProviderError(error: unknown): ProviderError {
@@ -1913,68 +2141,23 @@ export class OpenrouterStreamAdapter implements StreamProvider {
     const finalMessage = String(extractedMessage || errorMessage || "Unknown error");
     const finalCode = errorCode || "unknown";
 
-    // Map common HTTP status codes and OpenRouter error codes
-    let errorType: ProviderError["type"] = "unknown";
-    let retryable = false;
-
     // Special case: Privacy policy / data policy error
-    // This occurs when the model requires allowing data for training but user's
-    // OpenRouter privacy settings block it
     if (
       finalMessage.includes("data policy") ||
       finalMessage.includes("Paid model training") ||
       finalMessage.includes("openrouter.ai/settings/privacy")
     ) {
-      errorType = "api_error";
-      retryable = false;
-      // Return enhanced error message with instructions
       return {
-        type: errorType,
+        type: "api_error",
         message: `OpenRouter Privacy Policy Error: The selected model requires allowing data for paid model training, but your account privacy settings block this.\n\nTo fix this:\n1. Go to https://openrouter.ai/settings/privacy\n2. Adjust your "Data Policy" settings to allow this model\n3. Or choose a different model that matches your privacy preferences\n\nOriginal error: ${finalMessage}`,
         code: finalCode,
-        retryable,
+        retryable: false,
         originalError: error,
         userMessage: extractedMessage,
       };
     }
 
-    // Status code mapping (from error messages or codes)
-    if (finalCode.includes("400") || finalMessage.includes("400")) {
-      errorType = "api_error";
-      retryable = false;
-    } else if (finalCode.includes("401") || finalMessage.includes("401")) {
-      errorType = "api_error";
-      retryable = false;
-    } else if (finalCode.includes("402") || finalMessage.includes("402")) {
-      errorType = "rate_limit"; // Insufficient credits
-      retryable = false;
-    } else if (finalCode.includes("413") || finalMessage.includes("413")) {
-      errorType = "api_error"; // Payload too large
-      retryable = false;
-    } else if (finalCode.includes("404") || finalMessage.includes("404")) {
-      errorType = "api_error";
-      retryable = false;
-    } else if (finalCode.includes("408") || finalMessage.includes("408")) {
-      errorType = "timeout";
-      retryable = true;
-    } else if (finalCode.includes("429") || finalMessage.includes("429")) {
-      errorType = "rate_limit";
-      retryable = true;
-    } else if (
-      finalCode.includes("502") ||
-      finalCode.includes("503") ||
-      finalMessage.includes("502") ||
-      finalMessage.includes("503")
-    ) {
-      errorType = "provider_overloaded";
-      retryable = true;
-    } else if (finalMessage.toLowerCase().includes("timeout")) {
-      errorType = "timeout";
-      retryable = true;
-    } else if (finalMessage.toLowerCase().includes("content")) {
-      errorType = "content_blocked";
-      retryable = false;
-    }
+    const { type: errorType, retryable } = this.mapErrorCodeToType(finalCode, finalMessage);
 
     return {
       type: errorType,
@@ -2060,23 +2243,6 @@ export class OpenrouterStreamAdapter implements StreamProvider {
   }
 
   /**
-   * Get provider metadata
-   */
-  getProviderInfo(): {
-    name: string;
-    version: string;
-    supportsStreaming: boolean;
-    supportsFunctionCalling: boolean;
-  } {
-    return {
-      name: "openrouter",
-      version: "1.0.0",
-      supportsStreaming: true,
-      supportsFunctionCalling: true,
-    };
-  }
-
-  /**
    * Assemble context items into OpenAI message format
    */
   private async assembleOpenrouterContext(
@@ -2142,6 +2308,10 @@ export class OpenrouterStreamAdapter implements StreamProvider {
             // Only process images if the model supports them
             if (!seesImages) {
               log.info(`Skipping image (model doesn't support images): ${part.uri || "[inlineData]"}`);
+              contentParts.push({
+                type: "text",
+                text: "[System: An image is attached to this message that this model cannot process.]",
+              });
               continue;
             }
 
@@ -2288,9 +2458,25 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 
                 log.success(`Successfully added image to message`);
               } catch (imgErr) {
-                log.warn(`Error processing image: ${part.uri}`, {
-                  error: imgErr instanceof Error ? imgErr.message : String(imgErr),
-                });
+                const fallback = (part as { fallbackUri?: string }).fallbackUri;
+                if (fallback && fallback !== part.uri) {
+                  try {
+                    const optimized = await fetchAndOptimizeImage(fallback, part.mimeType);
+                    imageTargetParts.push({
+                      type: "image_url",
+                      image_url: { url: `data:${optimized.mimeType};base64,${optimized.data}` },
+                    });
+                    log.info(`OpenrouterStreamAdapter: Image loaded via fallback CDN URL ${fallback}`);
+                  } catch (fallbackErr) {
+                    log.warn(`OpenrouterStreamAdapter: Image processing error (proxy + CDN both failed) ${part.uri}`, {
+                      error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+                    });
+                  }
+                } else {
+                  log.warn(`Error processing image: ${part.uri}`, {
+                    error: imgErr instanceof Error ? imgErr.message : String(imgErr),
+                  });
+                }
               }
             }
           } else if (part.type === "video") {
@@ -2300,6 +2486,10 @@ export class OpenrouterStreamAdapter implements StreamProvider {
 
             if (!seesVideos) {
               log.info(`Skipping video (model doesn't support videos): ${part.uri}`);
+              videoTargetParts.push({
+                type: "text",
+                text: "[System: A video is attached to this message that this model cannot process.]",
+              });
               continue;
             }
 

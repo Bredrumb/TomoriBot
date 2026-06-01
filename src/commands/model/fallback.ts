@@ -1,11 +1,13 @@
 import type { ChatInputCommandInteraction, ButtonInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder } from "discord.js";
-import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { loadAvailableModelsForProvider, loadCustomEndpointsForServer } from "@/utils/db/dbRead";
-import { setFallbackModelRefs } from "@/utils/db/dbWrite";
+import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
+import { llmModelRepo, llmOverrideRepo, llmProviderRepo } from "@/utils/db/repositories";
+
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { safeReply } from "@/utils/discord/safeReply";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import type { LlmRow, UserRow, FallbackModelRef, FallbackEntry, CustomEndpointRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
@@ -226,7 +228,7 @@ export async function execute(
     // Custom endpoint path — enumerate registered endpoints for this label
     const parsed = parseCustomProvider(selectedProvider);
     const label = parsed?.label ?? null;
-    const allEndpoints = await loadCustomEndpointsForServer(tomoriState.server_id);
+    const allEndpoints = await llmProviderRepo.loadCustomEndpointsForServer(tomoriState.server_id);
     availableEndpoints = label ? allEndpoints.filter((ep) => ep.label === label && ep.capability === "text") : [];
 
     if (availableEndpoints.length === 0) {
@@ -247,7 +249,7 @@ export async function execute(
   } else {
     // Standard provider path
     availableModels =
-      (await loadAvailableModelsForProvider(selectedProvider, false, {
+      (await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
         kind: "server",
         ownerId: tomoriState.server_id,
       })) ?? [];
@@ -342,7 +344,7 @@ export async function execute(
       modalInteraction = pageButtonInteraction as ButtonInteraction;
     } catch {
       // Timeout — clean up and exit
-      await interaction.editReply({ embeds: [], components: [] }).catch(() => {});
+      await safeReply(interaction.editReply({ embeds: [], components: [] }), "fallback model timeout cleanup");
       return;
     }
   }
@@ -462,7 +464,7 @@ export async function execute(
   }
 
   // 12. Write to database
-  const writeOk = await setFallbackModelRefs(tomoriState.server_id, finalRefs);
+  const writeOk = await llmOverrideRepo.setFallbackModelRefs(tomoriState.server_id, finalRefs, { serverDiscId });
   if (!writeOk) {
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
@@ -472,10 +474,7 @@ export async function execute(
     return;
   }
 
-  // 13. Invalidate cache so the next generation uses the new fallback chain
-  invalidateTomoriStateCache(serverDiscId);
-
-  // 14. Reply with success — modalSubmitInteraction is already deferred and handles both picker and direct flows
+  // 13. Reply with success — modalSubmitInteraction is already deferred and handles both picker and direct flows
   if (finalRefs.length === 0) {
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.model.fallback.cleared_title",

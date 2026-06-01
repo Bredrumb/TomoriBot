@@ -16,14 +16,14 @@ import {
   buildChecklistPageActionRows,
   collectCheckedIds,
   formatChecklistChannelMentions,
-  formatTextArrayLiteral,
   loadGuildTextChecklistChannels,
   type ChecklistChannelTarget,
 } from "@/utils/discord/channelChecklistManager";
-import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
-import { tomoriConfigSchema, type ErrorContext, type TomoriState, type UserRow } from "@/types/db/schema";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { sql } from "@/utils/db/client";
+import { configRepository } from "@/utils/db/repositories";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -72,7 +72,10 @@ export async function execute(
       return;
     }
 
-    const initialSelectedIds = new Set(tomoriState.config.rp_channel_ids ?? []);
+    const availableChannelIds = new Set(availableChannels.map((c) => c.id));
+    const initialSelectedIds = new Set(
+      (tomoriState.config.rp_channel_ids ?? []).filter((id) => availableChannelIds.has(id)),
+    );
 
     if (availableChannels.length <= CHECKLIST_CHANNELS_PER_PAGE) {
       await executeSinglePage(
@@ -327,16 +330,13 @@ async function persistUpdate(
     return previousSelectedIds;
   }
 
-  const [updatedRow] = await sql`
-    UPDATE tomori_configs
-    SET rp_channel_ids = ${formatTextArrayLiteral([...nextSelectedIds])}::text[]
-    WHERE server_id = ${tomoriState.server_id}
-    RETURNING *
-  `;
+  const updated = await configRepository.updateChannelScopeConfig(tomoriState.server_id, {
+    rp_channel_ids: [...nextSelectedIds],
+  });
 
-  if (!updatedRow) {
+  if (!updated) {
     const context: ErrorContext = {
-      tomoriId: tomoriState.tomori_id,
+      personaId: tomoriState.persona_id,
       serverId: tomoriState.server_id,
       errorType: "CommandExecutionError",
       metadata: {
@@ -345,26 +345,6 @@ async function persistUpdate(
       },
     };
     await log.error("Failed to update rp_channel_ids config", new Error("Database update failed"), context);
-    await replyInfoEmbed(responseInteraction, locale, {
-      titleKey: "general.errors.update_failed_title",
-      descriptionKey: "general.errors.update_failed_description",
-      color: ColorCode.ERROR,
-    });
-    return previousSelectedIds;
-  }
-
-  const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-  if (!validatedConfig.success) {
-    const context: ErrorContext = {
-      tomoriId: tomoriState.tomori_id,
-      serverId: tomoriState.server_id,
-      errorType: "SchemaValidationError",
-      metadata: {
-        command: "server rp-channels",
-        validationErrors: validatedConfig.error.flatten(),
-      },
-    };
-    await log.error("Failed to validate updated config after RP-channel update", validatedConfig.error, context);
     await replyInfoEmbed(responseInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
       descriptionKey: "general.errors.update_failed_description",
@@ -383,10 +363,10 @@ async function persistUpdate(
       enabled_channels: formatChecklistChannelMentions(enabledIds, availableChannels, locale),
       disabled_count: disabledIds.length.toString(),
       disabled_channels: formatChecklistChannelMentions(disabledIds, availableChannels, locale),
-      selected_count: validatedConfig.data.rp_channel_ids.length.toString(),
+      selected_count: nextSelectedIds.size.toString(),
     },
     color: ColorCode.SUCCESS,
   });
 
-  return new Set(validatedConfig.data.rp_channel_ids);
+  return nextSelectedIds;
 }

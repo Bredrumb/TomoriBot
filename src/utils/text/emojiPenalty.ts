@@ -89,11 +89,13 @@ export function shouldApplyEmojiPenalty(contextItems: StructuredContextItem[], c
   const messagesToCheck = Math.min(botMessages.length, penaltyConfig.lookbackCount);
   const recentBotMessages = botMessages.slice(-messagesToCheck);
 
-  // 6. Count total CUSTOM emojis across recent messages (ignore Unicode emojis)
+  // 6. Count total CUSTOM emojis across recent messages (ignore Unicode emojis).
+  // Normalise Discord emoji mentions to shortcodes first to avoid double-counting :name: inside <:name:id>.
   let totalCustomEmojis = 0;
   for (const message of recentBotMessages) {
     const text = extractTextFromContextItem(message);
-    totalCustomEmojis += extractCustomEmojis(text).length;
+    const normalizedText = text.replace(/<a?:([a-zA-Z0-9_~]+):\d+>/g, ":$1:");
+    totalCustomEmojis += extractCustomEmojis(normalizedText).length;
   }
 
   // 7. Check if threshold exceeded
@@ -230,11 +232,14 @@ export function getRecentlyUsedCustomEmojis(
   const messagesToCheck = Math.min(botMessages.length, uniqueConfig.lookbackCount);
   const recentBotMessages = botMessages.slice(-messagesToCheck);
 
-  // 6. Extract all custom emojis from recent messages
+  // 6. Extract all custom emojis from recent messages.
+  // History text stores already-converted Discord format (<:name:id>), so normalise it to
+  // shortcode form first — otherwise the `:name:` substring inside the mention is double-matched.
   const usedEmojis = new Set<string>();
   for (const message of recentBotMessages) {
     const text = extractTextFromContextItem(message);
-    const customEmojis = extractCustomEmojis(text);
+    const normalizedText = text.replace(/<a?:([a-zA-Z0-9_~]+):\d+>/g, ":$1:");
+    const customEmojis = extractCustomEmojis(normalizedText);
     for (const emoji of customEmojis) {
       usedEmojis.add(emoji.toLowerCase()); // Store lowercase for case-insensitive matching
     }

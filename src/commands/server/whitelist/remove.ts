@@ -5,13 +5,12 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { getAllWhitelistChannels, removeChannelWhitelist } from "@/utils/db/channelWhitelist";
-import { getAllWhitelistPersonas, removeChannelPersonaWhitelist } from "@/utils/db/personaWhitelist";
-import { getAllWhitelistRoles, removeRoleWhitelist } from "@/utils/db/roleWhitelist";
+import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
 import { invalidateWhitelistCache } from "@/utils/cache/channelWhitelistCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import type { ChannelPersonaWhitelistRow, ErrorContext, RoleWhitelistRow, UserRow } from "@/types/db/schema";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
 import { CooldownType } from "@/types/db/schema";
@@ -48,7 +47,7 @@ export async function execute(
   const errorContext: ErrorContext = {
     userId: user.user_id,
     serverId: null,
-    tomoriId: null,
+    personaId: null,
   };
 
   try {
@@ -74,19 +73,19 @@ export async function execute(
     }
 
     errorContext.serverId = tomoriState.server_id;
-    errorContext.tomoriId = tomoriState.tomori_id;
+    errorContext.personaId = tomoriState.persona_id;
 
     // 3. Get all whitelisted personas, channels, and roles for this server
     const [allPersonas, whitelistPersonas, whitelistChannels, whitelistRoles] = await Promise.all([
       getCachedAllPersonas(interaction.guildId),
-      getAllWhitelistPersonas(tomoriState.server_id),
-      getAllWhitelistChannels(tomoriState.server_id),
-      getAllWhitelistRoles(tomoriState.server_id),
+      whitelistRepository.getAllWhitelistPersonas(tomoriState.server_id),
+      whitelistRepository.getAllWhitelistChannels(tomoriState.server_id),
+      whitelistRepository.getAllWhitelistRoles(tomoriState.server_id),
     ]);
     const personaNameMap = new Map<number, string>();
     for (const persona of allPersonas) {
-      if (typeof persona.tomori_id === "number") {
-        personaNameMap.set(persona.tomori_id, persona.tomori_nickname);
+      if (typeof persona.persona_id === "number") {
+        personaNameMap.set(persona.persona_id, persona.persona_nickname);
       }
     }
 
@@ -290,11 +289,21 @@ export async function execute(
     const [personaResults, channelResults, roleResults] = await Promise.all([
       Promise.all(
         personasToRemove.map((entry) =>
-          removeChannelPersonaWhitelist(tomoriState.server_id, entry.channel_disc_id, entry.tomori_id),
+          whitelistRepository.removeChannelPersonaWhitelist(
+            tomoriState.server_id,
+            entry.channel_disc_id,
+            entry.persona_id,
+          ),
         ),
       ),
-      Promise.all(channelsToRemove.map((channelId) => removeChannelWhitelist(tomoriState.server_id, channelId))),
-      Promise.all(rolesToRemove.map((roleId) => removeRoleWhitelist(tomoriState.server_id, roleId))),
+      Promise.all(
+        channelsToRemove.map((channelId) =>
+          whitelistRepository.removeChannelWhitelist(tomoriState.server_id, channelId),
+        ),
+      ),
+      Promise.all(
+        rolesToRemove.map((roleId) => whitelistRepository.removeRoleWhitelist(tomoriState.server_id, roleId)),
+      ),
     ]);
 
     const failedRemovals =
@@ -364,7 +373,7 @@ export async function execute(
     );
 
     log.info(
-      `Whitelist entries removed in server ${interaction.guildId}: personas=[${personasToRemove.map((entry) => `${entry.channel_disc_id}:${entry.tomori_id}`).join(", ")}], channels=[${channelsToRemove.join(", ")}], roles=[${rolesToRemove.join(", ")}]`,
+      `Whitelist entries removed in server ${interaction.guildId}: personas=[${personasToRemove.map((entry) => `${entry.channel_disc_id}:${entry.persona_id}`).join(", ")}], channels=[${channelsToRemove.join(", ")}], roles=[${rolesToRemove.join(", ")}]`,
     );
   } catch (error) {
     log.error("Error executing /server whitelist remove command", error, errorContext);
@@ -422,7 +431,7 @@ async function buildRoleCheckboxOptions(
 }
 
 function getPersonaWhitelistEntryValue(entry: ChannelPersonaWhitelistRow): string {
-  return `${entry.channel_disc_id}:${entry.tomori_id}`;
+  return `${entry.channel_disc_id}:${entry.persona_id}`;
 }
 
 async function formatPersonaWhitelistEntryLabel(
@@ -431,7 +440,7 @@ async function formatPersonaWhitelistEntryLabel(
   personaNameMap: Map<number, string>,
   locale: string,
 ): Promise<string> {
-  const personaName = personaNameMap.get(entry.tomori_id) ?? `ID:${entry.tomori_id}`;
+  const personaName = personaNameMap.get(entry.persona_id) ?? `ID:${entry.persona_id}`;
 
   try {
     const channel = await interaction.guild?.channels.fetch(entry.channel_disc_id);

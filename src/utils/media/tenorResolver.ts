@@ -6,6 +6,17 @@
 import { log } from "../misc/logger";
 
 /**
+ * Maximum time to wait for Tenor's HTML page to respond, in milliseconds.
+ * Configurable via TENOR_FETCH_TIMEOUT_MS env var. Defaults to 5 s — generous for a static
+ * HTML fetch, and short enough that a stalled Tenor server can't block the chat turn.
+ * Clamped to a minimum of 1 s.
+ */
+const TENOR_FETCH_TIMEOUT_MS = (() => {
+  const parsed = Number.parseInt(process.env.TENOR_FETCH_TIMEOUT_MS || "5000", 10);
+  return Number.isFinite(parsed) ? Math.max(1000, parsed) : 5000;
+})();
+
+/**
  * Resolve a Tenor view URL to the direct GIF CDN URL
  *
  * @param tenorViewUrl - Tenor view URL (e.g., https://tenor.com/view/...)
@@ -24,8 +35,13 @@ export async function resolveTenorUrl(tenorViewUrl: string): Promise<string | nu
     const slugMatch = tenorViewUrl.match(/\/view\/([a-zA-Z0-9%-]+)-gif-\d+/);
     const urlSlug = slugMatch?.[1] || "";
 
-    // 1. Fetch the Tenor page HTML
-    const response = await fetch(tenorViewUrl);
+    // 1. Fetch the Tenor page HTML with a bounded timeout.
+    // Why: undici's default headersTimeout is 300_000 ms (5 min). If Tenor stalls on a
+    // malformed/unknown GIF id (e.g. 20-digit overflow IDs) or serves a hanging Cloudflare
+    // interstitial, an unguarded fetch blocks the entire chat turn for 5 minutes before
+    // throwing. A failed resolve is non-fatal — the Tenor URL is kept as descriptive text
+    // context — so we can afford an aggressive timeout.
+    const response = await fetch(tenorViewUrl, { signal: AbortSignal.timeout(TENOR_FETCH_TIMEOUT_MS) });
     if (!response.ok) {
       log.warn(`Tenor Resolver: Failed to fetch Tenor page: ${response.status}`);
       return null;
@@ -50,6 +66,13 @@ export async function resolveTenorUrl(tenorViewUrl: string): Promise<string | nu
     log.warn("Tenor Resolver: Could not extract GIF URL from Tenor page");
     return null;
   } catch (error) {
+    // Distinguish timeout (expected, non-fatal) from genuine errors so logs stay actionable.
+    // AbortSignal.timeout() rejects with a DOMException of name "TimeoutError" / "AbortError".
+    const errName = error instanceof Error ? error.name : "";
+    if (errName === "TimeoutError" || errName === "AbortError") {
+      log.warn(`Tenor Resolver: Fetch timed out after ${TENOR_FETCH_TIMEOUT_MS}ms — keeping URL as text`);
+      return null;
+    }
     log.error("Tenor Resolver: Error resolving Tenor URL", error instanceof Error ? error : new Error(String(error)));
     return null;
   }

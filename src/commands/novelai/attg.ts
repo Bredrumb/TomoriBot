@@ -18,8 +18,7 @@ import {
   replyPaginatedPersonaChoicesV2,
 } from "../../utils/discord/interactionHelper";
 import type { TomoriState, UserRow } from "../../types/db/schema";
-import { sql } from "@/utils/db/client";
-import { loadAllPersonasForServer } from "../../utils/db/dbRead";
+import { personaRepository } from "@/utils/db/repositories";
 
 // ─── Modal field IDs ───────────────────────────────────────────────────────────
 const MODAL_CUSTOM_ID = "nai_attg_modal";
@@ -83,7 +82,7 @@ export async function execute(
 
   try {
     // 2. Load all personas for the server
-    const allPersonas = await loadAllPersonasForServer(interaction.guild.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -110,8 +109,7 @@ export async function execute(
       });
 
       if (!personaResult.success) {
-        if (personaResult.reason === "cancelled" || personaResult.reason === "fatal") return;
-        continue;
+        return;
       }
       if (personaResult.selectedIndex === undefined || !personaResult.interaction) {
         return;
@@ -120,7 +118,7 @@ export async function execute(
       personaSelectionInteraction = personaResult.interaction;
       selectedPersona = allPersonas[personaResult.selectedIndex] ?? null;
 
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await replyInfoEmbed(personaSelectionInteraction, locale, {
           titleKey: "general.errors.invalid_option_title",
           descriptionKey: "general.errors.invalid_option_description",
@@ -221,20 +219,17 @@ export async function execute(
         stars = parsed;
       }
 
-      const personaId = selectedPersona.tomori_id;
+      const personaId = selectedPersona.persona_id;
 
       // 6. If all fields are empty → clear all ATTG columns (set to NULL)
       if (!author && !title && !tags && !genre && stars === null) {
-        await sql`
-				UPDATE tomoris
-				SET
-					nai_attg_author = NULL,
-					nai_attg_title  = NULL,
-					nai_attg_tags   = NULL,
-					nai_attg_genre  = NULL,
-					nai_attg_stars  = NULL
-				WHERE tomori_id = ${personaId}
-			`;
+        await personaRepository.setNaiAttg(personaId, {
+          nai_attg_author: null,
+          nai_attg_title: null,
+          nai_attg_tags: null,
+          nai_attg_genre: null,
+          nai_attg_stars: null,
+        });
 
         // 6a. Invalidate cache so next access gets fresh data
         invalidateTomoriStateCache(interaction.guild.id);
@@ -246,24 +241,20 @@ export async function execute(
           "commands.novelai.attg.cleared_title",
           "commands.novelai.attg.cleared_description",
           ColorCode.SUCCESS,
-          { persona_name: selectedPersona.tomori_nickname },
+          { persona_name: selectedPersona.persona_nickname },
           "general.pagination.reloading_persona_picker",
         );
         continue;
       }
 
-      // 7. Write non-empty values to DB.
-      //    NULL-coalesced with existing values so unmodified fields are preserved.
-      await sql`
-			UPDATE tomoris
-			SET
-				nai_attg_author = ${author},
-				nai_attg_title  = ${title},
-				nai_attg_tags   = ${tags},
-				nai_attg_genre  = ${genre},
-				nai_attg_stars  = ${stars}
-			WHERE tomori_id = ${personaId}
-		`;
+      // 7. Write submitted values to DB.
+      await personaRepository.setNaiAttg(personaId, {
+        nai_attg_author: author,
+        nai_attg_title: title,
+        nai_attg_tags: tags,
+        nai_attg_genre: genre,
+        nai_attg_stars: stars,
+      });
 
       // 7a. Invalidate cache after successful write
       invalidateTomoriStateCache(interaction.guild.id);
@@ -276,7 +267,7 @@ export async function execute(
         "commands.novelai.attg.success_title",
         "commands.novelai.attg.success_description",
         ColorCode.SUCCESS,
-        { persona_name: selectedPersona.tomori_nickname },
+        { persona_name: selectedPersona.persona_nickname },
         "general.pagination.reloading_persona_picker",
       );
     }
@@ -286,7 +277,7 @@ export async function execute(
       metadata: {
         command: "nai attg",
         guildId: interaction.guild?.id ?? null,
-        personaId: selectedPersona?.tomori_id ?? null,
+        personaId: selectedPersona?.persona_id ?? null,
       },
     };
     await log.error("Error in /novelai attg command", error, context);

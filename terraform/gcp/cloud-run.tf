@@ -99,6 +99,14 @@ resource "google_cloud_run_v2_service" "tomoribot" {
         value = google_storage_bucket.voice_samples.name
       }
 
+      # SearXNG sidecar reachable on the loopback interface of the same pod.
+      env {
+        name  = "SEARXNG_BASE_URL"
+        value = "http://localhost:8080/"
+      }
+
+      depends_on = ["searxng"]
+
       volume_mounts {
         name       = "cloudsql"
         mount_path = "/cloudsql"
@@ -110,11 +118,58 @@ resource "google_cloud_run_v2_service" "tomoribot" {
       }
 
     }
+
+    # ------------------------------------------------------------
+    # SearXNG metasearch sidecar (Phase 2).
+    # Cloud Run v2 multi-container — containers share localhost.
+    # ------------------------------------------------------------
+    containers {
+      name  = "searxng"
+      image = var.searxng_image
+
+      ports {
+        container_port = 8080
+      }
+
+      env {
+        name = "SEARXNG_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.searxng_secret.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name  = "SEARXNG_BASE_URL"
+        value = "http://localhost:8080/"
+      }
+
+      resources {
+        limits = {
+          cpu    = var.searxng_cpu
+          memory = var.searxng_memory
+        }
+        cpu_idle = false
+      }
+
+      startup_probe {
+        http_get {
+          path = "/healthz"
+          port = 8080
+        }
+        initial_delay_seconds = 5
+        period_seconds        = 5
+        failure_threshold     = 6
+      }
+    }
   }
 
   depends_on = [
     google_project_service.apis,
     google_sql_database_instance.main,
     google_secret_manager_secret.tomoribot,
+    google_secret_manager_secret.searxng_secret,
   ]
 }

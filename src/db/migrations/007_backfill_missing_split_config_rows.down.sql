@@ -1,0 +1,8 @@
+-- 007_backfill_missing_split_config_rows (down)
+--
+-- This migration backfills missing data from tomori_configs into the 14 split tables.
+-- Data backfills are not safely reversible because we cannot reliably distinguish
+-- which rows were inserted by this migration versus rows that were already present
+-- or newly created after this migration ran.
+--
+-- As such, this down migration is an explicit no-op.

@@ -1,8 +1,9 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { loadAvailableEmbeddingModelsForProvider } from "@/utils/db/dbRead";
+import { llmModelRepo } from "@/utils/db/repositories";
 import { promptForSavedProvider } from "@/commands/model/providerPicker";
-import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { EmbeddingModelRow, ErrorContext, SavedProviderConfigRow, UserRow } from "@/types/db/schema";
@@ -67,7 +68,7 @@ export async function execute(
     if (!providerSelection) return;
 
     const availableModels =
-      (await loadAvailableEmbeddingModelsForProvider(providerSelection.provider, false, {
+      (await llmModelRepo.loadAvailableEmbeddingModels(providerSelection.provider, false, {
         kind: "personal",
         ownerId: userData.user_id,
       })) ?? [];

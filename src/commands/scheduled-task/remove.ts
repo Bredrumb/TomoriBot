@@ -6,38 +6,25 @@ import type {
   SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
   acknowledgeModalSubmitForRefresh,
-  replyInfoEmbed,
-  replyComponentsV2Status,
   promptWithPaginatedModal,
   safeSelectOptionText,
-} from "@/utils/discord/interactionHelper";
+} from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { replyComponentsV2Status } from "@/utils/discord/ui/statusComponents";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
-import { deleteReminderById } from "@/utils/db/dbRead";
+import { serverScheduleRepository } from "@/utils/db/repositories";
+import type { ReminderSelectionRow } from "@/utils/db/repositories";
 import { formatTimeWithOffset, formatUTCOffset } from "@/utils/text/timezoneHelper";
-import { isBridgeUserId } from "@/utils/bridge";
+import { isBridgeUserId } from "@/utils/bridges";
 
 const MODAL_CUSTOM_ID = "scheduled_task_remove_modal";
 const REMINDER_SELECT_ID = "reminder_select";
-
-type ReminderSelectionRow = {
-  reminder_id: number;
-  reminder_purpose: string;
-  reminder_time: Date;
-  repetition_interval_hours: number | null;
-  channel_disc_id: string;
-  created_by_user_id: number | null;
-  created_by_nickname: string | null;
-  user_discord_id: string;
-  user_nickname: string;
-  persona_nickname: string | null;
-};
 
 /**
  * @param reminderToRemove - Reminder data to remove
@@ -51,7 +38,7 @@ async function performReminderRemoval(
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
-  const deleted = await deleteReminderById(reminderToRemove.reminder_id);
+  const deleted = await serverScheduleRepository.deleteReminderById(reminderToRemove.reminder_id);
 
   if (!deleted) {
     await replyInfoEmbed(replyInteraction, locale, {
@@ -127,30 +114,10 @@ export async function execute(
     const state = tomoriState;
 
     // 1. Load all reminders for this server, tagged with their owning persona name
-    let remindersQuery = sql<ReminderSelectionRow[]>`
-      SELECT
-        r.reminder_id,
-        r.reminder_purpose,
-        r.reminder_time,
-        r.repetition_interval_hours,
-        r.channel_disc_id,
-        r.created_by_user_id,
-        r.user_discord_id,
-        r.user_nickname,
-        u.user_nickname AS created_by_nickname,
-        t.tomori_nickname AS persona_nickname
-      FROM reminders r
-      LEFT JOIN users u ON r.created_by_user_id = u.user_id
-      LEFT JOIN tomoris t ON r.persona_id = t.tomori_id
-      WHERE r.server_id = ${tomoriState.server_id}
-    `;
-
-    if (!hasManagePermission) {
-      remindersQuery = sql`${remindersQuery} AND r.created_by_user_id = ${userData.user_id}`;
-    }
-
-    remindersQuery = sql`${remindersQuery} ORDER BY r.reminder_time ASC`;
-    const reminders = await remindersQuery;
+    const reminders = await serverScheduleRepository.loadReminderSelections(
+      tomoriState.server_id,
+      hasManagePermission ? undefined : userData.user_id,
+    );
 
     if (!reminders || reminders.length === 0) {
       await replyInfoEmbed(interaction, locale, {
@@ -164,7 +131,7 @@ export async function execute(
 
     // 2. Build select options — persona_id NULL means the main persona owns the reminder
     const reminderSelectOptions: SelectOption[] = reminders.map((reminder: ReminderSelectionRow, index: number) => {
-      const personaName = reminder.persona_nickname ?? state.tomori_nickname;
+      const personaName = reminder.persona_nickname ?? state.persona_nickname;
       const formattedTime = formatTimeWithOffset(new Date(reminder.reminder_time), timezoneOffset, {
         year: "numeric",
         month: "short",
@@ -279,7 +246,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: tomoriState?.tomori_id,
+      personaId: tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "scheduled-task remove",

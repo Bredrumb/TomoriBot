@@ -9,13 +9,12 @@ import {
 } from "discord.js";
 import { localizer } from "@/utils/text/localizer";
 import { ColorCode, log } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
-import { loadAllPersonasForServer, loadTomoriState } from "@/utils/db/dbRead";
-import {
-  getOrCreateWebhook,
-  resolvePersonaWebhookIdentity,
-  sendWebhookMessageWithIdentity,
-} from "@/utils/discord/webhookManager";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { personaRepository } from "@/utils/db/repositories";
+import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
+import { resolvePersonaWebhookIdentity } from "@/utils/discord/webhook/identity";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import {
   isGuildMessageCommandChannel,
   resolveGuildWebhookTargetChannel,
@@ -23,19 +22,15 @@ import {
 } from "@/utils/discord/guildMessageChannel";
 import type { SelectOption } from "@/types/discord/modal";
 import type { UserRow } from "@/types/db/schema";
-import tomoriChat from "@/events/messageCreate/tomoriChat";
-import {
-  checkMessageTriggerCooldownWithWhitelist,
-  setMessageTriggerCooldownWithWhitelist,
-} from "@/utils/db/cooldownManager";
+import { tomoriChat } from "@/events/messageCreate/tomoriChat";
 import { CooldownType } from "@/types/db/schema";
-import { getCooldownTypeFooterKey } from "@/utils/db/messageCooldown";
+import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
 import { sendCooldownDM } from "@/utils/discord/cooldownDM";
 import { isNoticeEmbedVisible } from "@/utils/discord/toolProgressNotice";
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { getCachedUserRow } from "@/utils/cache/userCache";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
-import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/db/personaAccess";
+import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 
 /**
  * Configures the /bot impersonate subcommand
@@ -165,7 +160,7 @@ async function handlePersonaImpersonation(
   const invokingMember = interaction.member as import("discord.js").GuildMember | null;
 
   // 1. Load all personas (main + alters) - keep this under 3 seconds
-  const allPersonas = await loadAllPersonasForServer(serverId);
+  const allPersonas = await personaRepository.loadAllForServer(serverId);
   if (!allPersonas || allPersonas.length === 0) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.bot.impersonate.no_personas_title",
@@ -216,7 +211,7 @@ async function handlePersonaImpersonation(
 
   // 2. Build select options for modal
   const personaSelectOptions: SelectOption[] = availablePersonas.map((persona, index) => ({
-    label: safeSelectOptionText(persona.tomori_nickname),
+    label: safeSelectOptionText(persona.persona_nickname),
     value: index.toString(), // Use index to avoid ID truncation issues
     description: persona.is_alter ? "Alter Persona" : "Main Persona",
   }));
@@ -261,8 +256,8 @@ async function handlePersonaImpersonation(
 
   const selectedPersona = availablePersonas[selectedIndex];
   if (
-    !selectedPersona?.tomori_id ||
-    !isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, selectedPersona.tomori_id)
+    !selectedPersona?.persona_id ||
+    !isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, selectedPersona.persona_id)
   ) {
     log.info(
       `[/bot impersonate persona] Rejected persona selection at index ${selectedIndex} in channel ${channel.id} due to persona access rules or stale modal state`,
@@ -357,20 +352,20 @@ async function handlePersonaImpersonation(
     // tomoriChat runs with isManuallyTriggered=false so trigger rules apply as usual.
     // The self-message detection skips the sending persona; other personas may respond.
     if (sentMessage) {
-      void tomoriChat(client, sentMessage, false);
+      void tomoriChat({ client, message: sentMessage, isFromQueue: false });
     }
 
     // 8. Send success confirmation to user
     await replyInfoEmbed(modalResult.interaction, locale, {
       titleKey: "commands.bot.impersonate.persona_success_title",
       descriptionKey: "commands.bot.impersonate.persona_success_description",
-      descriptionVars: { persona: selectedPersona.tomori_nickname },
+      descriptionVars: { persona: selectedPersona.persona_nickname },
       color: ColorCode.SUCCESS,
     });
   } catch (error) {
     log.error("Failed to send impersonated message", {
       error,
-      personaId: selectedPersona.tomori_id,
+      personaId: selectedPersona.persona_id,
       serverId,
     });
     await replyInfoEmbed(modalResult.interaction, locale, {
@@ -442,7 +437,7 @@ async function handleUserImpersonation(
 
   try {
     // 2. Load tomori state for cooldown configuration
-    const tomoriState = await loadTomoriState(interaction.guild.id);
+    const tomoriState = await personaRepository.loadState(interaction.guild.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.unknown_error_title",
@@ -461,7 +456,7 @@ async function handleUserImpersonation(
       `[/bot impersonate ${commandTarget}] Checking cooldown - globalType: ${cooldownType}, globalLength: ${cooldownLength}s, guild: ${interaction.guild.id}, user: ${interaction.user.id}, channel: ${interaction.channel.id}`,
     );
 
-    const cooldownResult = await checkMessageTriggerCooldownWithWhitelist(
+    const cooldownResult = await cooldownRepository.checkMessageTriggerCooldownWithWhitelist(
       interaction.guild.id,
       interaction.user.id,
       interaction.channel.id,
@@ -485,7 +480,7 @@ async function handleUserImpersonation(
       }
 
       // Show cooldown warning via DM (with ephemeral fallback)
-      const footerKey = getCooldownTypeFooterKey(cooldownResult.cooldownType);
+      const footerKey = cooldownRepository.getCooldownTypeFooterKey(cooldownResult.cooldownType);
       await sendCooldownDM(
         interaction.user,
         locale,
@@ -493,7 +488,7 @@ async function handleUserImpersonation(
         cooldownActiveKey,
         {
           seconds: cooldownResult.remainingSeconds.toString(),
-          botName: tomoriState.tomori_nickname,
+          botName: tomoriState.persona_nickname,
         },
         footerKey,
         interaction,
@@ -519,7 +514,7 @@ async function handleUserImpersonation(
         )
       : null;
 
-    if (!isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, tomoriState.tomori_id)) {
+    if (!isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, tomoriState.persona_id)) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.message_cooldown_title",
         descriptionKey: "commands.bot.impersonate.main_persona_access_blocked",
@@ -588,46 +583,32 @@ async function handleUserImpersonation(
 
     // 6. Call tomoriChat with user impersonation enabled
     // tomoriChat will handle everything: context building, refresh embeds, provider call, webhook, etc.
-    await tomoriChat(
+    await tomoriChat({
       client,
-      latestMessage,
-      false, // Not from queue
-      true, // isManuallyTriggered - bypasses bot author check
-      undefined, // No forced reasoning
-      undefined, // No reasoning query
-      undefined, // No LLM override
-      false, // Not a stop response
-      0, // No retry count
-      false, // Don't skip lock
-      undefined, // No reminder recipient
-      undefined, // No reminder data
-      undefined, // No selected persona
-      false, // Not a persona job
-      true, // isUserImpersonation - enables role reversal
-      impersonatedUserId, // impersonatedUserId - the user to mimic
-      "user", // textQuotaSource
-      interaction.id, // textQuotaTriggerKey
-      interaction.user.id, // textQuotaUserDiscId
-      undefined, // manualSystemPrompt
-      undefined, // manualPrefill
-      undefined, // naiContinuationPrefill
-      undefined, // emptyResponseFinishReason
-      undefined, // injectedContextItems
-      undefined, // forcedMentions
-      {
+      message: latestMessage,
+      isFromQueue: false,
+      isManuallyTriggered: true,
+      isStopResponse: false,
+      isPersonaJob: false,
+      isUserImpersonation: true,
+      impersonatedUserId,
+      textQuotaSource: "user",
+      textQuotaTriggerKey: interaction.id,
+      textQuotaUserDiscId: interaction.user.id,
+      manualTriggerInvoker: {
         userDiscId: interaction.user.id,
         username: interaction.user.username,
         locale,
         member: interaction.member as import("discord.js").GuildMember | null,
       },
-    );
+    });
 
     // 7. Set cooldown after successful response (shares cooldown pool with message triggers and /bot respond)
     // Uses whitelist-aware version to respect per-channel cooldown overrides
     log.info(
       `[/bot impersonate ${commandTarget}] Setting cooldown - globalType: ${cooldownType}, globalLength: ${cooldownLength}s`,
     );
-    await setMessageTriggerCooldownWithWhitelist(
+    await cooldownRepository.setMessageTriggerCooldownWithWhitelist(
       interaction.guild.id,
       interaction.user.id,
       interaction.channel.id,

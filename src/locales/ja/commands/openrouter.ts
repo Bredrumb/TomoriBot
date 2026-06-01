@@ -1,0 +1,60 @@
+// locales/ja/commands/openrouter.ts
+
+export default {
+  openrouter: {
+    description: `OpenRouter専用のモデルと設定を管理します。`,
+    models: {
+      description: `保存済みOpenRouterモデル登録を管理します。`,
+      add: {
+        description: `このサーバー用にOpenRouterモデルコードネームを登録します。`,
+        capability_description: `このモデルを追加するOpenRouter機能リストを選びます。`,
+        model_name_description: `登録する正確なOpenRouterモデルコードネーム。`,
+        success_title: `OpenRouterモデルを追加しました`,
+        success_description: `OpenRouterの{capability}モデル \`{model_name}\` をこのサーバーに登録しました。この機能の通常のOpenRouterモデル選択に表示されます。`,
+        already_registered_title: `既に登録されています`,
+        already_registered_description: `OpenRouterの{capability}モデル \`{model_name}\` はこのサーバーに既に登録されています。`,
+        already_available_title: `最初から利用可能です`,
+        already_available_description: `OpenRouterの{capability}モデル \`{model_name}\` は最初から組み込み済みです。追加登録は不要です。`,
+        not_found_title: `モデルが見つかりません`,
+        not_found_description: `OpenRouter モデル \`{model_name}\` が見つかりませんでした。正確なOpenRouterコードネームを入力して再試行してください。`,
+      },
+      remove: {
+        description: `このサーバーから登録済みのOpenRouterモデルを削除します。`,
+        none_title: `登録済みモデルがありません`,
+        none_description: `このサーバーにはまだ追加のOpenRouterモデル登録がありません。`,
+        too_many_title: `登録済みモデルが多すぎます`,
+        too_many_description: `1つのモーダルで編集するには登録済みOpenRouterモデルが多すぎます。先に数を減らしてから再試行してください。最大グループ数: {max_groups}。`,
+        modal_title: `OpenRouterモデルを削除`,
+        checkbox_description: `登録を残すモデルはチェックしたままにし、削除したいモデルだけチェックを外してください。`,
+        checkbox_text_label: `登録済みテキストモデル`,
+        checkbox_text_label_continued: `登録済みテキストモデル（続き）`,
+        checkbox_embedding_label: `登録済み埋め込みモデル`,
+        checkbox_embedding_label_continued: `登録済み埋め込みモデル（続き）`,
+        checkbox_image_label: `登録済み画像モデル`,
+        checkbox_image_label_continued: `登録済み画像モデル（続き）`,
+        checkbox_video_label: `登録済み動画モデル`,
+        checkbox_video_label_continued: `登録済み動画モデル（続き）`,
+        capability_text: `テキスト`,
+        capability_embedding: `埋め込み`,
+        capability_image: `画像`,
+        capability_video: `動画`,
+        no_removals_title: `削除はありません`,
+        no_removals_description: `OpenRouterモデル登録は何も削除されませんでした。`,
+        success_title: `OpenRouterモデルを削除しました`,
+        success_description: `このサーバーから次のOpenRouter登録を削除しました: {models_removed}。`,
+        success_still_referenced_description: `このサーバーから次のOpenRouter登録を削除しました: {models_removed}。すでにそれらを使っている既存の選択はそのまま残るため、不要なら手動で切り替えてください。`,
+        already_available_title: `組み込みモデルです`,
+        already_available_description: `OpenRouter モデル \`{model_name}\` は組み込みモデルなので、このコマンドでは削除できません。`,
+      },
+    },
+    model: {
+      description: `保存済みOpenRouterモデル登録を管理します。`,
+      add: {
+        description: `このサーバー用にOpenRouterモデルコードネームを登録します。`,
+      },
+      remove: {
+        description: `このサーバーから登録済みのOpenRouterモデルコードネームを削除します。`,
+      },
+    },
+  },
+};
