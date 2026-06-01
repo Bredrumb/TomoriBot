@@ -19,9 +19,10 @@ Configure via `/custom-endpoints` in Discord, pointing at your local endpoint UR
 
 ### Local Image Generation (ComfyUI)
 
-TomoriBot ships a ready-to-use ComfyUI workflow for txt2img and img2img. Use `/help custom-endpoint` to learn how to create a TomoriBot-compatible ComfyUI workflow for images and videos as well.
+TomoriBot ships a ready-to-use Anima3 ComfyUI workflow for txt2img and img2img. Use `/help custom-endpoint` to learn how to create a TomoriBot-compatible ComfyUI workflow for images and videos as well.
 
-- **Workflow file**: [`assets/comfyui-workflows/`](../../assets/comfyui-workflows/)
+- **Anima3 workflow**: [`assets/comfyui-workflows/tomoribot-anima3-comfyui.json`](../../assets/comfyui-workflows/tomoribot-anima3-comfyui.json)
+- **Workflow notes**: [`assets/comfyui-workflows/README.md`](../../assets/comfyui-workflows/README.md)
 - Upload the `.json` workflow during `/config custom-endpoints add` (capability: `image`, API style: `comfyui`)
 - ComfyUI must be reachable on the network, TomoriBot polls its `/history` endpoint until the image is ready
 

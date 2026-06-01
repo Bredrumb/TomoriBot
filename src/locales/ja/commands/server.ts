@@ -633,7 +633,7 @@ RP設定を無効化したチャンネル **{disabled_count}** 件: {disabled_ch
       tool_description: `このトリガーで利用可能にするツール対象。`,
       tool_placeholder: `ツール対象を選択...`,
       trigger_label: `トリガーフレーズ`,
-      trigger_description: `メッセージ内で検出するフレーズ。例: pic や make a song。`,
+      trigger_description: `メッセージ内で検出するフレーズ。例: pic や make a song。^ を指定すると、このツール対象を常に利用可能にします。`,
       trigger_placeholder: `pic`,
       regex_trigger_label: `正規表現パターン`,
       regex_trigger_description: `通常のフレーズの代わりに検出する任意の正規表現パターン。フラグは大文字小文字を区別しないUnicode一致に固定されます。`,

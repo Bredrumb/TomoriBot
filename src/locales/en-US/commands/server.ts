@@ -634,7 +634,7 @@ Use {help_matrix} for setup steps, Matrix-only command notes, and the current li
       tool_description: `Which tool target this trigger should expose.`,
       tool_placeholder: `Select a tool target...`,
       trigger_label: `Trigger Phrase`,
-      trigger_description: `Literal phrase to detect in messages, such as pic or make a song.`,
+      trigger_description: `Literal phrase to detect, e.g. pic or make a song. Use ^ to always expose this tool target.`,
       trigger_placeholder: `pic`,
       regex_trigger_label: `Regex Pattern`,
       regex_trigger_description: `Optional regex to detect instead of a literal phrase. Matching is case-insensitive Unicode.`,

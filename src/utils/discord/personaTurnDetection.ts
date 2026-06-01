@@ -37,6 +37,9 @@ export function findLastPersonaTurnBlock(options: {
 
     if (!msg.webhookId) {
       if (clientUserId && msg.author.id === clientUserId && !msg.content.trim() && msg.embeds.length > 0) {
+        if (blockMessages.length > 0) {
+          blockMessages.push(msg);
+        }
         continue;
       }
 

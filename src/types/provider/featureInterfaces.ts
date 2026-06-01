@@ -120,10 +120,23 @@ export interface ProviderNativeImageReference {
   data: string;
 }
 
-export interface ProviderNativeImageGenerationRequest {
+export type ImageGenerationRequest = {
+  prompt: string;
+  referenceImageDataUrl?: string | null;
+  inpaint?: boolean;
+  maskPrompt?: string | null;
+  maskThreshold?: number | null;
+  maskGrow?: number | null;
+  maskFeather?: number | null;
+  cfg?: number | null;
+  denoise?: number | null;
+  referenceDenoise?: number | null;
+  seed?: number | null;
+};
+
+export interface ProviderNativeImageGenerationRequest extends ImageGenerationRequest {
   apiKey: string;
   model: string;
-  prompt: string;
   aspectRatio: string;
   endpointUrl?: string;
   referenceImages?: ProviderNativeImageReference[];
@@ -132,6 +145,13 @@ export interface ProviderNativeImageGenerationRequest {
 export interface ProviderNativeImageGenerationResult {
   imageData: string | null;
   mimeType: string | null;
+  diagnosticImages?: Array<{
+    label: string;
+    imageData: string;
+    mimeType: string;
+    filename?: string;
+    details?: string;
+  }>;
 }
 
 export interface SupportsEmbeddings {

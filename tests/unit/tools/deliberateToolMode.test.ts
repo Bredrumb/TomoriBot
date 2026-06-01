@@ -18,4 +18,14 @@ describe("deliberate tool mode", () => {
 
     expect(result.builtInTools.map((tool) => tool.name)).toEqual(["web_search"]);
   });
+
+  it("supports wildcard custom triggers without breaking regex triggers", () => {
+    expect(getDeliberateToolAllowedNames("", { image: ["^"] })).toContain("generate_image");
+    expect(
+      getDeliberateToolAllowedNames("please sketch this", { image: [{ type: "regex", value: "\\bsketch\\b" }] }),
+    ).toContain("generate_image");
+    expect(getDeliberateToolAllowedNames("hello", { image: [{ type: "literal", value: "pic" }] })).not.toContain(
+      "generate_image",
+    );
+  });
 });
