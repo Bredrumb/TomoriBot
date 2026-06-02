@@ -19,6 +19,18 @@ describe("deliberate tool mode", () => {
     expect(result.builtInTools.map((tool) => tool.name)).toEqual(["web_search"]);
   });
 
+  it("allows update_task for reminder edit/delete intent", () => {
+    expect(getDeliberateToolAllowedNames("cancel reminder ID:42")).toContain("update_task");
+    expect(getDeliberateToolAllowedNames("reschedule that task for tomorrow")).toContain("update_task");
+  });
+
+  it("exposes create_task and update_task for reminder custom triggers", () => {
+    const allowedNames = getDeliberateToolAllowedNames("scheduler please", { reminder: ["scheduler"] });
+
+    expect(allowedNames).toContain("create_task");
+    expect(allowedNames).toContain("update_task");
+  });
+
   it("supports wildcard custom triggers without breaking regex triggers", () => {
     expect(getDeliberateToolAllowedNames("", { image: ["^"] })).toContain("generate_image");
     expect(

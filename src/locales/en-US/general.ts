@@ -182,6 +182,16 @@ export default {
     task_set_title: `✅ {persona_nickname} Set Up a Task`,
     task_set_description: `I'll execute "**{reminder_purpose}**" at \`{reminder_time}\``,
     task_set_footer: `The task will run in {time_remaining}. Delete reminders with \`/scheduled-task remove\`.`,
+    task_updated_title: `✅ {persona_nickname} Updated a Scheduled Task`,
+    task_updated_description: `Updated ID:{reminder_id}: "**{reminder_purpose}**"
+Next trigger: \`{reminder_time}\`
+Repeat: {repeat_text}`,
+    task_updated_footer: `Edit or delete scheduled tasks with \`/scheduled-task edit\` and \`/scheduled-task remove\`.`,
+    task_deleted_title: `🗑️ {persona_nickname} Deleted a Scheduled Task`,
+    task_deleted_description: `Deleted ID:{reminder_id}: "**{reminder_purpose}**"`,
+    task_deleted_footer: `This scheduled task will no longer run.`,
+    task_update_repeat_none: `one-time`,
+    task_update_repeat_hours: `every {repetition_interval_hours} hour(s)`,
     reminder_triggered_title: `🔵 Reminder Triggered`,
     task_triggered_title: `🔵 Task Triggered`,
     triggered_description: `{reminder_purpose}`,

@@ -48,6 +48,10 @@ const REMINDER_ANAPHORA_PATTERN =
   /\b(?:set|create|make|start|schedule|add|try|do)\b.{0,80}\b(?:one|another|it|that|the\s+same)\b.{0,80}\b(?:from\s+now|for\s+(?:a\s+)?(?:longer\s+)?time|seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?|months?)\b/i;
 const REMINDER_TOOL_CORRECTION_PATTERN =
   /\b(?:didn'?t|did\s+not|forgot|failed|should(?:'ve|\s+have))\b.{0,100}\b(?:reminder|timer|alarm|create_task|scheduling?)\s+(?:tool|protocol)?\b/i;
+const REMINDER_UPDATE_PATTERN =
+  /\b(?:edit|update|change|modify|reschedule|move|delay|postpone|cancel|delete|remove|clear|stop)\b.{0,100}\b(?:reminder|timer|alarm|task|scheduled\s+task|task\s+reminder)\b/i;
+const REMINDER_UPDATE_REVERSE_PATTERN =
+  /\b(?:reminder|timer|alarm|task|scheduled\s+task|task\s+reminder)\b.{0,100}\b(?:edit|update|change|modify|reschedule|move|delay|postpone|cancel|delete|remove|clear|stop)\b/i;
 
 function hasReminderCreationIntent(text: string): boolean {
   return (
@@ -58,6 +62,10 @@ function hasReminderCreationIntent(text: string): boolean {
     (REMINDER_TOOL_CORRECTION_PATTERN.test(text) &&
       (RELATIVE_TIME_PATTERN.test(text) || SCHEDULE_TIME_PATTERN.test(text)))
   );
+}
+
+function hasReminderUpdateIntent(text: string): boolean {
+  return REMINDER_UPDATE_PATTERN.test(text) || REMINDER_UPDATE_REVERSE_PATTERN.test(text);
 }
 
 const TOOL_INTENT_PATTERNS: RegExp[] = [
@@ -145,6 +153,7 @@ const WEB_TOOL_NAMES = [
   "fetch",
   "url-metadata",
 ];
+const REMINDER_TOOL_NAMES = ["create_task", "update_task"];
 const MEMORY_TOOL_NAMES = ["create_long_term_memory", "update_long_term_memory"];
 const IMAGE_GENERATION_TOOL_NAMES = ["generate_image", "generate_image_nai"];
 const VIDEO_GENERATION_TOOL_NAMES = ["generate_video"];
@@ -166,7 +175,7 @@ export const DELIBERATE_TOOL_TRIGGER_TARGETS = [
   { value: "image", label: "Image generation", toolNames: IMAGE_GENERATION_TOOL_NAMES },
   { value: "video", label: "Video generation", toolNames: VIDEO_GENERATION_TOOL_NAMES },
   { value: "voice", label: "Voice message", toolNames: VOICE_GENERATION_TOOL_NAMES },
-  { value: "reminder", label: "Reminder/task", toolNames: ["create_task"] },
+  { value: "reminder", label: "Reminder/task", toolNames: REMINDER_TOOL_NAMES },
   { value: "cross-channel", label: "Cross-channel message", toolNames: ["cross_channel_message"] },
   { value: "search", label: "Web search/fetch", toolNames: WEB_TOOL_NAMES },
   { value: "memory", label: "Memory", toolNames: [...MEMORY_TOOL_NAMES, ...SHORT_TERM_MEMORY_TOOL_NAMES] },
@@ -297,6 +306,10 @@ export function hasDeliberateToolIntent(
     return true;
   }
 
+  if (hasReminderUpdateIntent(text)) {
+    return true;
+  }
+
   if (CROSS_CHANNEL_INTENT_PATTERNS.some((pattern) => pattern.test(text))) {
     return true;
   }
@@ -386,6 +399,10 @@ export function getDeliberateToolIntentResult(
 
   if (hasReminderCreationIntent(text)) {
     addToolMatches(allowedToolNames, matches, ["create_task"], "reminder/timer request", "built-in");
+  }
+
+  if (hasReminderUpdateIntent(text)) {
+    addToolMatches(allowedToolNames, matches, ["update_task"], "reminder/task update request", "built-in");
   }
 
   if (

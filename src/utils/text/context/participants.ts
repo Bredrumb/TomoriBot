@@ -4,9 +4,14 @@ import { personalMemoryRepository, serverScheduleRepository, userRepository } fr
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { log } from "@/utils/misc/logger";
 import { formatMemoryWithId } from "@/utils/memory/memoryId";
-import { getCurrentTimeWithOffset, formatUTCOffset, getTimeOfDayPhrase } from "@/utils/text/timezoneHelper";
+import {
+  getCurrentTimeWithOffset,
+  formatTimeWithOffset,
+  formatUTCOffset,
+  getTimeOfDayPhrase,
+} from "@/utils/text/timezoneHelper";
 import { ContextItemTag, type ConversationUserReference, type StructuredContextItem } from "@/types/misc/context";
-import { PrivacyLevel, type AssembledServerConfig, type TomoriState } from "@/types/db/schema";
+import { PrivacyLevel, type AssembledServerConfig, type ReminderRow, type TomoriState } from "@/types/db/schema";
 import { getUserPresenceDetails } from "./history";
 import type { MentionConverter } from "./templates";
 
@@ -34,6 +39,27 @@ const normalizeImageAppearanceTags = (tags: string[] | null | undefined): string
   const normalizedTags = tags?.map((tag) => tag.trim()).filter((tag) => tag.length > 0) ?? [];
   return normalizedTags.length > 0 ? normalizedTags : undefined;
 };
+
+export function formatPendingReminderForContext(
+  reminder: Pick<ReminderRow, "reminder_id" | "reminder_purpose" | "reminder_time" | "repetition_interval_hours">,
+  timezoneOffset: number,
+): string {
+  const formattedTime = `${formatTimeWithOffset(new Date(reminder.reminder_time), timezoneOffset, {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })} (${formatUTCOffset(timezoneOffset)})`;
+  const reminderIdPrefix = typeof reminder.reminder_id === "number" ? `ID:${reminder.reminder_id} ` : "";
+  const repeatText =
+    typeof reminder.repetition_interval_hours === "number" && reminder.repetition_interval_hours >= 1
+      ? `, repeats every ${reminder.repetition_interval_hours} hour(s)`
+      : "";
+
+  return `${reminderIdPrefix}"${reminder.reminder_purpose}" (scheduled for ${formattedTime}${repeatText})`;
+}
 
 export async function buildUsersInConversationContextItem(params: {
   client: Client;
@@ -346,16 +372,8 @@ async function buildUserDetailLines(
   if (pendingReminders && pendingReminders.length > 0) {
     detailLines.push("- Reminders:");
     for (const reminder of pendingReminders) {
-      const formattedTime = new Date(reminder.reminder_time).toLocaleString("en-US", {
-        weekday: "short",
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        timeZoneName: "short",
-      });
-      detailLines.push(`  - "${reminder.reminder_purpose}" (scheduled for ${formattedTime})`);
+      const timezoneOffset = params.tomoriConfig.timezone_offset ?? 0;
+      detailLines.push(`  - ${formatPendingReminderForContext(reminder, timezoneOffset)}`);
     }
   }
 

@@ -30,6 +30,7 @@ const STATIC_TOOL_PROMPT_MACROS: Record<string, string> = {
   "{memory_update_tool}": "update_long_term_memory",
   "{short_term_memory_tool}": "update_short_term_memory",
   "{task_tool}": "create_task",
+  "{task_update_tool}": "update_task",
   "{cross_channel_tool}": "cross_channel_message",
   "{sticker_tool}": "select_sticker_for_response",
   "{manage_message_tool}": "manage_message",
@@ -140,6 +141,12 @@ export const TOOL_PROMPT_MACRO_DOCS: ToolPromptMacroDocEntry[] = [
     type: "static",
     currentTarget: "create_task",
     notes: "Create reminders or scheduled self-tasks.",
+  },
+  {
+    macro: "{task_update_tool}",
+    type: "static",
+    currentTarget: "update_task",
+    notes: "Update an existing reminder/task by ID, or delete it by sending blank content.",
   },
   {
     macro: "{cross_channel_tool}",

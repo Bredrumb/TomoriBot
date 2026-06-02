@@ -182,6 +182,16 @@ export default {
     task_set_title: `✅ {persona_nickname}がタスクを設定しました`,
     task_set_description: `「**{reminder_purpose}**」を\`{reminder_time}\`に実行します`,
     task_set_footer: `{time_remaining}後にタスクを実行します。リマインダーは\`/scheduled-task remove\`で削除できます。`,
+    task_updated_title: `✅ {persona_nickname}が予定タスクを更新しました`,
+    task_updated_description: `ID:{reminder_id}を更新しました: 「**{reminder_purpose}**」
+次回実行: \`{reminder_time}\`
+繰り返し: {repeat_text}`,
+    task_updated_footer: `予定タスクは\`/scheduled-task edit\`と\`/scheduled-task remove\`でも編集・削除できます。`,
+    task_deleted_title: `🗑️ {persona_nickname}が予定タスクを削除しました`,
+    task_deleted_description: `ID:{reminder_id}を削除しました: 「**{reminder_purpose}**」`,
+    task_deleted_footer: `この予定タスクは今後実行されません。`,
+    task_update_repeat_none: `1回のみ`,
+    task_update_repeat_hours: `{repetition_interval_hours}時間ごと`,
     reminder_triggered_title: `🔵 リマインダー通知`,
     task_triggered_title: `🔵 タスク通知`,
     triggered_description: `{reminder_purpose}`,

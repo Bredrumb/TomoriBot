@@ -65,7 +65,7 @@ UserA (Mention: @{UserA}; Aliases: @{aliceA}, @{alice_global})
 - Server Roles: Mod, Member
 - Memories: [id:42] Likes cats (tags: pets, animals)
 - Reminders:
-  - "Take meds" (scheduled for Tue, May 21, 2026 10:00 AM PDT)
+  - ID:42 "Take meds" (scheduled for Tue, May 21, 2026 10:00 AM (UTC-7), repeats every 24 hour(s))
 
 Conversation context: #general (ID: 1234...).
 Current time: May 21, 2026 18:30 UTC+09:00 (JST), evening.
@@ -81,7 +81,9 @@ Current time: May 21, 2026 18:30 UTC+09:00 (JST), evening.
   - `userRepository.isBlacklisted` (cached via `userCache`)
   - `userRepository.getPrivacyLevel` (cached)
   - `personalMemoryRepository.loadForUserLineage` if eligible
-  - `serverScheduleRepository.getPendingRemindersForUser` for each user
+  - `serverScheduleRepository.getPendingRemindersForUser` for each user;
+    pending reminders include `ID:N` so the LLM can target them with
+    `update_task` for requester-scoped edits/deletes
 - **Discord fetches**:
   - `guild.members.fetch(userId)` for role / display-name resolution
   - `client.users.fetch(userId)` fallback for users not in guild

@@ -419,7 +419,8 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent +=
           "- **interact_with_recent_message** (react to or reply to a recent message for fun/backtracking)\n";
         capabilitiesContent += "- **reveal_message_metadata** (annotate recent message refs and sent timestamps)\n";
-        capabilitiesContent += "- **create_reminder** (set reminders for users)\n";
+        capabilitiesContent += "- **create_task** (set reminders or scheduled self-tasks)\n";
+        capabilitiesContent += "- **update_task** (edit or delete requester-scoped reminders/tasks by ID)\n";
         capabilitiesContent +=
           "- **cross_channel_message** (instantly send a message to another channel in the server, with optional boomerang report-back)\n";
         capabilitiesContent += "- **select_sticker_for_response** (choose stickers)\n";

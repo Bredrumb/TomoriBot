@@ -59,6 +59,21 @@ export type ReminderSelectionRow = {
   persona_nickname: string | null;
 };
 
+export type ReminderMutationActor = {
+  requester_user_id?: number;
+  requester_discord_id?: string;
+  requester_bridge_user_id?: string;
+};
+
+export type ReminderScopedMutationResult =
+  | {
+      status: "updated" | "deleted";
+      reminder: ReminderRow;
+    }
+  | {
+      status: "not_found" | "unauthorized" | "invalid_row" | "db_error";
+    };
+
 /** Data shape for creating or updating a random trigger. */
 interface RandomTriggerData {
   serverId: number;
@@ -182,6 +197,31 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
     owner_user_id?: number;
   }): Promise<ReminderRow | null> {
     return this.sqlUpdateReminder(reminderData);
+  }
+
+  /**
+   * Updates core reminder fields, scoped to the server and requester authority.
+   */
+  async updateReminderCoreForRequester(reminderData: {
+    reminder_id: number;
+    server_id: number;
+    reminder_purpose: string;
+    reminder_time: Date;
+    repetition_interval_hours: number | null;
+    actor: ReminderMutationActor;
+  }): Promise<ReminderScopedMutationResult> {
+    return this.sqlUpdateReminderCoreForRequester(reminderData);
+  }
+
+  /**
+   * Deletes a reminder, scoped to the server and requester authority.
+   */
+  async deleteReminderForRequester(reminderData: {
+    reminder_id: number;
+    server_id: number;
+    actor: ReminderMutationActor;
+  }): Promise<ReminderScopedMutationResult> {
+    return this.sqlDeleteReminderForRequester(reminderData);
   }
 
   // ── random trigger reads ───────────────────────────────────────────────────
@@ -736,6 +776,170 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
       };
       await log.error(`Error updating reminder ${reminderData.reminder_id}`, error, context);
       return null;
+    }
+  }
+
+  private async reminderExistsInServer(reminderId: number, serverId: number): Promise<boolean> {
+    const [existingReminder] = await sql`
+      SELECT reminder_id
+      FROM reminders
+      WHERE reminder_id = ${reminderId}
+        AND server_id = ${serverId}
+      LIMIT 1
+    `;
+
+    return Boolean(existingReminder);
+  }
+
+  private async sqlUpdateReminderCoreForRequester(reminderData: {
+    reminder_id: number;
+    server_id: number;
+    reminder_purpose: string;
+    reminder_time: Date;
+    repetition_interval_hours: number | null;
+    actor: ReminderMutationActor;
+  }): Promise<ReminderScopedMutationResult> {
+    const requesterUserId = reminderData.actor.requester_user_id ?? -1;
+    const requesterDiscordId = reminderData.actor.requester_discord_id ?? "";
+    const requesterBridgeUserId = reminderData.actor.requester_bridge_user_id ?? "";
+
+    try {
+      const [updatedReminder] = await sql`
+        UPDATE reminders
+        SET
+          reminder_purpose = ${reminderData.reminder_purpose},
+          reminder_time = ${reminderData.reminder_time},
+          repetition_interval_hours = ${reminderData.repetition_interval_hours},
+          updated_at = CURRENT_TIMESTAMP
+        WHERE reminder_id = ${reminderData.reminder_id}
+          AND server_id = ${reminderData.server_id}
+          AND (
+            created_by_user_id = ${requesterUserId}
+            OR (
+              COALESCE(self_reminder, false) = false
+              AND user_discord_id = ${requesterDiscordId}
+            )
+            OR (
+              COALESCE(self_reminder, false) = false
+              AND user_discord_id = ${requesterBridgeUserId}
+            )
+          )
+        RETURNING *
+      `;
+
+      if (!updatedReminder) {
+        const existsInServer = await this.reminderExistsInServer(reminderData.reminder_id, reminderData.server_id);
+        return { status: existsInServer ? "unauthorized" : "not_found" };
+      }
+
+      const validatedReminder = reminderSchema.safeParse(updatedReminder);
+      if (!validatedReminder.success) {
+        const context: ErrorContext = {
+          serverId: reminderData.server_id,
+          userId: reminderData.actor.requester_user_id,
+          errorType: "SchemaValidationError",
+          metadata: {
+            operation: "updateReminderCoreForRequester",
+            reminderId: reminderData.reminder_id,
+            validationErrors: validatedReminder.error.flatten(),
+          },
+        };
+        await log.error(
+          `Failed to validate reminder after scoped update (ID: ${reminderData.reminder_id})`,
+          validatedReminder.error,
+          context,
+        );
+        return { status: "invalid_row" };
+      }
+
+      log.success(
+        `Reminder updated by requester (ID: ${reminderData.reminder_id}) to ${reminderData.reminder_time.toISOString()}`,
+      );
+      emitScheduledWorkNudge(`reminder-update:${reminderData.reminder_id}`);
+      return { status: "updated", reminder: validatedReminder.data };
+    } catch (error) {
+      const context: ErrorContext = {
+        serverId: reminderData.server_id,
+        userId: reminderData.actor.requester_user_id,
+        errorType: "DatabaseUpdateError",
+        metadata: {
+          operation: "updateReminderCoreForRequester",
+          reminderId: reminderData.reminder_id,
+        },
+      };
+      await log.error(`Error updating reminder ${reminderData.reminder_id} by requester`, error, context);
+      return { status: "db_error" };
+    }
+  }
+
+  private async sqlDeleteReminderForRequester(reminderData: {
+    reminder_id: number;
+    server_id: number;
+    actor: ReminderMutationActor;
+  }): Promise<ReminderScopedMutationResult> {
+    const requesterUserId = reminderData.actor.requester_user_id ?? -1;
+    const requesterDiscordId = reminderData.actor.requester_discord_id ?? "";
+    const requesterBridgeUserId = reminderData.actor.requester_bridge_user_id ?? "";
+
+    try {
+      const [deletedReminder] = await sql`
+        DELETE FROM reminders
+        WHERE reminder_id = ${reminderData.reminder_id}
+          AND server_id = ${reminderData.server_id}
+          AND (
+            created_by_user_id = ${requesterUserId}
+            OR (
+              COALESCE(self_reminder, false) = false
+              AND user_discord_id = ${requesterDiscordId}
+            )
+            OR (
+              COALESCE(self_reminder, false) = false
+              AND user_discord_id = ${requesterBridgeUserId}
+            )
+          )
+        RETURNING *
+      `;
+
+      if (!deletedReminder) {
+        const existsInServer = await this.reminderExistsInServer(reminderData.reminder_id, reminderData.server_id);
+        return { status: existsInServer ? "unauthorized" : "not_found" };
+      }
+
+      const validatedReminder = reminderSchema.safeParse(deletedReminder);
+      if (!validatedReminder.success) {
+        const context: ErrorContext = {
+          serverId: reminderData.server_id,
+          userId: reminderData.actor.requester_user_id,
+          errorType: "SchemaValidationError",
+          metadata: {
+            operation: "deleteReminderForRequester",
+            reminderId: reminderData.reminder_id,
+            validationErrors: validatedReminder.error.flatten(),
+          },
+        };
+        await log.error(
+          `Failed to validate reminder after scoped delete (ID: ${reminderData.reminder_id})`,
+          validatedReminder.error,
+          context,
+        );
+        return { status: "invalid_row" };
+      }
+
+      log.success(`Reminder deleted by requester (ID: ${reminderData.reminder_id})`);
+      emitScheduledWorkNudge(`reminder-delete:${reminderData.reminder_id}`);
+      return { status: "deleted", reminder: validatedReminder.data };
+    } catch (error) {
+      const context: ErrorContext = {
+        serverId: reminderData.server_id,
+        userId: reminderData.actor.requester_user_id,
+        errorType: "DatabaseDeleteError",
+        metadata: {
+          operation: "deleteReminderForRequester",
+          reminderId: reminderData.reminder_id,
+        },
+      };
+      await log.error(`Error deleting reminder ${reminderData.reminder_id} by requester`, error, context);
+      return { status: "db_error" };
     }
   }
 
