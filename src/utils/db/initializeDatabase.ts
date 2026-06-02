@@ -1,5 +1,5 @@
 import type { SQL } from "bun";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { markAllMigrationsApplied, runMigrations } from "@/db/migrationRunner";
 import { invalidateTomoriStateCaches } from "@/utils/cache/tomoriStateCacheStore";
@@ -24,7 +24,7 @@ function getSchemaPaths(): {
   schemaPath: string;
   ragSchemaPath: string;
   stPresetSchemaPath: string;
-  seedPath: string;
+  seedDir: string;
   serverwideQuotaRenameMigrationPath: string;
   personaRenameMigrationPath: string;
 } {
@@ -34,7 +34,7 @@ function getSchemaPaths(): {
     schemaPath: path.join(dbDir, "schema.sql"),
     ragSchemaPath: path.join(dbDir, "schema_rag.sql"),
     stPresetSchemaPath: path.join(dbDir, "schema_stpreset.sql"),
-    seedPath: path.join(dbDir, "seed.sql"),
+    seedDir: path.join(dbDir, "seed"),
     serverwideQuotaRenameMigrationPath: path.join(dbDir, "migrations", "009_rename_serverwide_quotas.sql"),
     personaRenameMigrationPath: path.join(dbDir, "migrations", "016_rename_tomori_schema_to_persona.sql"),
   };
@@ -53,6 +53,20 @@ async function executeSqlFile(client: SQL, filePath: string): Promise<void> {
   const statements = splitSqlStatements(sqlText);
   for (const stmt of statements) {
     await client.unsafe(stmt);
+  }
+}
+
+async function executeSqlDirectory(client: SQL, dir: string): Promise<void> {
+  const files = (await readdir(dir))
+    .filter((file) => file.endsWith(".sql"))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+  if (files.length === 0) {
+    throw new Error(`No SQL seed files found in ${dir}`);
+  }
+
+  for (const file of files) {
+    await executeSqlFile(client, path.join(dir, file));
   }
 }
 
@@ -217,7 +231,7 @@ export async function initializeDatabase(options: InitializeDatabaseOptions = {}
     schemaPath,
     ragSchemaPath,
     stPresetSchemaPath,
-    seedPath,
+    seedDir,
     serverwideQuotaRenameMigrationPath,
     personaRenameMigrationPath,
   } = getSchemaPaths();
@@ -245,7 +259,7 @@ export async function initializeDatabase(options: InitializeDatabaseOptions = {}
       await executeSqlFile(client, stPresetSchemaPath);
       log.success("PostgreSQL ST preset schema verified");
 
-      await executeSqlFile(client, seedPath);
+      await executeSqlDirectory(client, seedDir);
       log.success("PostgreSQL database seed verified");
 
       // Fresh installs load the current static schema snapshot first, so historical

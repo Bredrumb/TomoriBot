@@ -157,7 +157,14 @@ mock.module("@/utils/security/keyRotation", () => ({
 }));
 
 mock.module("@/utils/chat/toolLoop", () => ({
-  providerIsApiFamily: () => false,
+  providerIsApiFamily: (providerName: string, apiFamily: string) => {
+    const families: Record<string, string> = {
+      google: "google-genai",
+      novelai: "novelai",
+      openrouter: "openrouter",
+    };
+    return families[providerName.toLowerCase()] === apiFamily;
+  },
   runToolLoop: runToolLoopMock,
 }));
 

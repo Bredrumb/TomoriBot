@@ -122,10 +122,33 @@ CREATE TRIGGER update_persona_imagegen_configs_timestamp
   BEFORE UPDATE ON persona_imagegen_configs
   FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
-INSERT INTO persona_imagegen_configs (persona_id, nai_tags, nai_char_ref_url)
-SELECT persona_id, COALESCE(nai_tags, '{}'), nai_char_ref_url
-FROM personas
-ON CONFLICT (persona_id) DO NOTHING;
+-- Backfill image tags from personas. Migration 021 (decouple_image_tags) renames
+-- this column nai_tags -> physical_appearance_tags. On a schema.sql-first legacy
+-- boot the table was created by schema.sql in its post-021 shape, so we must write
+-- physical_appearance_tags; the source personas.nai_tags column still exists
+-- (schema.sql only adds physical_appearance_tags, it does not drop nai_tags — 021
+-- does that later). Detecting the post-021 target avoids `column "nai_tags" of
+-- relation "persona_imagegen_configs" does not exist` (42703).
+DO $img$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'persona_imagegen_configs'
+      AND column_name = 'physical_appearance_tags'
+  ) THEN
+    INSERT INTO persona_imagegen_configs (persona_id, physical_appearance_tags, nai_char_ref_url)
+    SELECT persona_id, COALESCE(nai_tags, '{}'), nai_char_ref_url
+    FROM personas
+    ON CONFLICT (persona_id) DO NOTHING;
+  ELSE
+    INSERT INTO persona_imagegen_configs (persona_id, nai_tags, nai_char_ref_url)
+    SELECT persona_id, COALESCE(nai_tags, '{}'), nai_char_ref_url
+    FROM personas
+    ON CONFLICT (persona_id) DO NOTHING;
+  END IF;
+END $img$;
 
 -- ── persona_textgen_configs ──────────────────────────────────────────────────
 

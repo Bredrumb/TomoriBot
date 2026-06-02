@@ -317,7 +317,7 @@ TomoriBot has two complementary schema mechanisms:
 | Mechanism | File | Runs | Purpose |
 |---|---|---|---|
 | Pre-schema legacy rename bridge | Selected rename migrations called by `initializeDatabase.ts` | Before static schema, only when legacy tables are detected | Preserve data for table renames where the latest static schema would otherwise create the target table first |
-| Static schema init | `schema.sql`, `schema_rag.sql`, `schema_stpreset.sql`, `seed.sql` | Every boot (idempotent) | Baseline tables, functions, seed data |
+| Static schema init | `schema.sql`, `schema_rag.sql`, `schema_stpreset.sql`, `seed/*.sql` | Every boot (idempotent) | Baseline tables, functions, reference seed data |
 | Migration runner | `src/db/migrations/NNN_*.sql` | Once per version (tracked) | Structural changes that cannot be idempotent (DROP, RENAME, table splits) |
 
 `initializeDatabase.ts` first runs narrow legacy rename bridges for known table renames such as
@@ -373,17 +373,18 @@ bun run scripts/db/migrate.ts
 - For destructive migrations (`DROP COLUMN`, `DROP TABLE`): require a soak period of at least one release where the column/table is unused but still present, so rollback is a code revert rather than a data restore.
 - Forward-only migrations on shared tables are not acceptable — they turn every deployment into a one-way door.
 
-### When to use migrations vs. seed.sql
+### When to use migrations vs. seed files
 
-Use **`seed.sql`** (idempotent, runs every boot) for:
-- Adding new columns with `add_column_if_not_exists`
-- Upserting lookup/reference data
+Use **`src/db/seed/*.sql`** (idempotent, runs every boot) for:
+- Upserting lookup/reference data such as model catalogs, bundled persona presets, system prompts, and NovelAI presets
+- Maintaining derived reference fields that must track the bundled seed rows on every startup
 
 Use a **numbered migration** for:
+- Adding new columns that older installations need before or after a rollout
 - `DROP COLUMN` / `DROP TABLE`
 - `ALTER TABLE ... RENAME`
 - Creating new tables that are part of a schema split
-- Any change that cannot be expressed idempotently
+- One-time legacy data backfills or any change that should not rerun on every boot
 
 ### Static schema (idempotent baseline)
 
@@ -395,7 +396,7 @@ The static files are startup-safe:
 
 Startup schema execution is shared through `src/utils/db/initializeDatabase.ts`. The bot entry point and
 `bun run db:lifecycle` both use this path, so fresh-install validation exercises the same schema, optional RAG schema,
-ST preset schema, and seed data load as runtime startup.
+ST preset schema, ordered seed-directory load, and migration marker behavior as runtime startup.
 
 ## Operational Notes
 

@@ -361,7 +361,10 @@ async function main(): Promise<void> {
   childProcesses.push(bot);
 
   // 3. Graceful shutdown — kill all managed processes on Ctrl+C.
+  let isShuttingDown = false;
   const shutdown = () => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
     console.log(`\n${pc.yellow("[launch] Shutting down...")}`);
     for (const p of childProcesses) {
       try { p.kill(); } catch { /* already exited */ }

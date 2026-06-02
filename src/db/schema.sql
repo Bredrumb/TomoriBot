@@ -977,6 +977,7 @@ CREATE TABLE IF NOT EXISTS conditioning_history (
   persona_lineage_id BIGINT NOT NULL,
   conditioning_type TEXT NOT NULL CHECK (conditioning_type IN ('reward', 'punish')),
   action_key TEXT NOT NULL,
+  action_text TEXT,
   reason_text TEXT NOT NULL,
   reason_normalized TEXT NOT NULL,
   user_id INT NOT NULL,
@@ -998,6 +999,12 @@ ON conditioning_history(server_id, persona_lineage_id, conditioning_type, action
 
 CREATE INDEX IF NOT EXISTS idx_conditioning_history_server_lineage_type_updated
 ON conditioning_history(server_id, persona_lineage_id, conditioning_type, updated_at DESC);
+
+-- action_text holds the optional human-readable action label (nullable). Reconciled
+-- here so databases created before it was added (and fresh installs, since the
+-- column-add otherwise only lives in migration 023 which is marked-applied-not-run
+-- on a clean schema) pick it up. See ConditioningMemoryRepository.
+SELECT add_column_if_not_exists('conditioning_history', 'action_text', 'TEXT');
 
 CREATE INDEX IF NOT EXISTS idx_conditioning_history_server_lineage_updated
 ON conditioning_history(server_id, persona_lineage_id, updated_at DESC);

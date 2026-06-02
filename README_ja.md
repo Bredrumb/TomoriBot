@@ -591,10 +591,10 @@ TomoriBotはまだベータ版のため、どんなコントリビュートで�
    - すべてのキーとネストされたオブジェクトをコピー
    - `{variable}`のようなプレースホルダーを保持したまま、ユーザー向けテキストをすべて翻訳
 
-3. **プリセット翻訳を追加**（オプションですが推奨） `src/db/seed.sql`に：
-   - 各プリセットの`tomori_preset_desc`フィールドを翻訳
+3. **プリセット翻訳を追加**（オプションですが推奨） `src/db/seed/02_personas.sql`に：
+   - 各プリセットの`persona_preset_desc`フィールドを翻訳
    - `preset_attribute_list`、`preset_sample_dialogues_in`、`preset_sample_dialogues_out`配列を翻訳
-   - `llm_description`フィールドを翻訳してLLM説明を追加（`ja_description`の既存パターンに従う）
+   - `src/db/seed/01_models.sql`で`llm_description`フィールドを翻訳してLLM説明を追加（`ja_description`の既存パターンに従う）
    - `preset_language`をあなたのロケールコードに設定
 
 4. **翻訳をテスト**：
@@ -603,7 +603,7 @@ TomoriBotはまだベータ版のため、どんなコントリビュートで�
    bun run check-locales
    ```
 
-5. **プルリクエストを送信** 新しいロケールファイルとseed.sqlへの追加内容を含めて
+5. **プルリクエストを送信** 新しいロケールファイルと`src/db/seed/*.sql`への追加内容を含めて
 
 ### 新機能にコントリビュートするには
 

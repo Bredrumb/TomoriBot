@@ -580,7 +580,7 @@ export async function execute(
         await configRepository.applyNaiPreset(tomoriState.server_id, defaultPreset, selectedModel.llm_codename);
       } else {
         log.warn(
-          `Default NAI preset "${defaultPresetEntry.name}" not found in DB. Was seed.sql run? Skipping auto-apply.`,
+          `Default NAI preset "${defaultPresetEntry.name}" not found in DB. Was the seed directory loaded? Skipping auto-apply.`,
         );
       }
     }

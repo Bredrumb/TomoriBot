@@ -522,10 +522,10 @@ Since TomoriBot is still in Beta, any contributions made are **greatly appreciat
    - Copy all keys and nested objects
    - Translate all user-facing text while preserving placeholders like `{variable}`
 
-3. **Add preset translations** (optional but recommended) in `src/db/seed.sql`:
-   - Translate the `tomori_preset_desc` field for each preset
+3. **Add preset translations** (optional but recommended) in `src/db/seed/02_personas.sql`:
+   - Translate the `persona_preset_desc` field for each preset
    - Translate the `preset_attribute_list`, `preset_sample_dialogues_in`, and `preset_sample_dialogues_out` arrays
-   - Add LLM descriptions by translating the `llm_description` field (following the existing pattern with `ja_description`)
+   - Add LLM descriptions in `src/db/seed/01_models.sql` by translating the `llm_description` field (following the existing pattern with `ja_description`)
    - Set `preset_language` to your locale code
 
 4. **Test your translations**:
@@ -534,7 +534,7 @@ Since TomoriBot is still in Beta, any contributions made are **greatly appreciat
    bun run check-locales
    ```
 
-5. **Submit a pull request** with your new locale file(s) and any `src/db/seed.sql` additions
+5. **Submit a pull request** with your new locale file(s) and any `src/db/seed/*.sql` additions
 
 ### To contribute new features
 

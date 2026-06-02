@@ -29,8 +29,9 @@ sidebar:
    - run `src/db/schema.sql`
    - run `src/db/schema_rag.sql` only when pgvector is detected
    - run `src/db/schema_stpreset.sql`
-   - run `src/db/seed.sql`
-   - run pending numbered migrations from `src/db/migrations/`
+   - run ordered `src/db/seed/*.sql` files
+   - run pending numbered migrations from `src/db/migrations/` (fresh databases instead record every historical migration as applied via `markAllMigrationsApplied`, because `schema.sql` already embodies the final shape)
+     - Because `schema.sql` is applied *before* the migration runner, a legacy untracked production database (still carrying `tomori_configs`, never seen by the runner) reaches the historical "expand + backfill" migrations with the split tables already in their final post-migration shape. The data-mover backfills that copy out of the god table (`002`, `003`, `004`, `007`) therefore detect whether the destination still has the pre-`021` image-tag columns (`nai_style_tags`/`nai_tags`/`nai_char_tags`) or the post-`021` ones (`image_default_positive_tags`/`physical_appearance_tags`) and write the matching column set. Without this guard the backfill fails with `column "nai_style_tags" of relation "server_novelai_imagegen_configs" does not exist` (42703). Migration `021` reconciles the rename afterwards, so no tag data is lost.
 6. Cleanup expired cooldown rows at startup (`cleanupExpiredCooldowns`).
 7. Attempt optional `pg_cron` registration for hourly cooldown cleanup job.
 8. Initialize tool registry (`initializeTools`).

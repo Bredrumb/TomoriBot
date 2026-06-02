@@ -255,7 +255,7 @@ Do not scatter exact provider-name checks across commands. Put routing in the pr
 
 ## 8. Seed Model Inventory
 
-Add the provider's models to `src/db/seed.sql` or the relevant migration path.
+Add the provider's models to `src/db/seed/01_models.sql` or the relevant migration path.
 
 Tables currently used by the app:
 
@@ -483,7 +483,7 @@ Run `bun run check-locales` only if you changed locale files or command metadata
 - `src/utils/provider/providerCapabilityResolver.ts`
 - `src/providers/utils/providerFeatureExecutors.ts`
 - `src/events/clientReady/02_registerMCPs.ts`
-- `src/db/seed.sql`
+- `src/db/seed/01_models.sql`
 
 ---
 

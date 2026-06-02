@@ -6,16 +6,17 @@ This guide covers how to add a new official persona preset to TomoriBot's seed d
 
 ## Steps
 
-1. Add a preset row to `src/db/seed.sql` in the `persona_presets` table. Required fields:
+1. Add a preset row to `src/db/seed/02_personas.sql` in the `persona_presets` table. Required fields:
    - `preset_lineage_id` — a stable identity anchor for this character. Reuse the same lineage ID
      across locale variants of the same character so they are treated as one canonical identity,
      and so applying the preset can stamp a consistent `persona_lineage_id` (memory scope) onto
      the persona.
    - Name, system prompt, and any default attributes.
    - `preset_attribute_public_flags` — boolean visibility flags aligned 1:1 with
-     `preset_attribute_list`. Pointer personas resolve these from the live preset row, and
-     materialized copies store them in `persona_attributes.is_public`. Official appearance
-     attributes are public by default.
+     `preset_attribute_list`. The bundled Tomori rows derive these in the post-insert
+     `official_attribute_flags` block; update that block if a new official preset needs
+     public attributes. Pointer personas resolve these from the live preset row, and
+     materialized copies store them in `persona_attributes.is_public`.
 
 2. Add an optional avatar path (stored under `src/db/img/`). Preset application applies the avatar
    once to the guild (main persona) or uploads it to storage (alter) through `/config setup`,

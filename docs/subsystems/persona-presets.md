@@ -2,7 +2,7 @@
 title: "Persona Presets"
 ---
 
-Official persona presets are seeded from `src/db/seed.sql` into `persona_presets`. They are the canonical definitions for bundled characters such as Tomori/Rose, Temari, Aphel, Lilya, and Nerine.
+Official persona presets are seeded from `src/db/seed/02_personas.sql` into `persona_presets`. They are the canonical definitions for bundled characters such as Tomori/Rose, Temari, Aphel, Lilya, and Nerine.
 
 This page covers how official preset text/config content is applied and kept current through the copy-on-write pointer model. Avatar media is applied as a one-time Discord/storage operation and is called out separately below.
 

@@ -412,25 +412,69 @@ CREATE TRIGGER update_server_novelai_imagegen_configs_timestamp
   BEFORE UPDATE ON server_novelai_imagegen_configs
   FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
-INSERT INTO server_novelai_imagegen_configs (
-  server_id, nai_preset_name, nai_style_tags, nai_negative_tags,
-  nai_sampler, nai_steps, nai_scale, nai_noise_schedule, nai_cfg_rescale,
-  nai_diffusion_model_id
-)
-SELECT
-  server_id,
-  nai_preset_name,
-  COALESCE(nai_style_tags, '{"8k","absurdres","masterpiece","best quality","good quality","newest"}'),
-  COALESCE(nai_negative_tags, '{"lowres","worst quality","low quality","bad quality","old","oldest","unfinished","scan artifacts","jpeg artifacts","jaggy lines","unclear","sketch","blurry","bad anatomy","very displeasing","displeasing","bad hands","bad fingers","missing fingers","bad proportions","bad perspective","bad eyes","bad pupils","multiple heads","extra faces","many arms","poorly drawn face","poorly drawn hands","fused hands","bad feet","too many legs","malformed limbs","extra arms","multiple ears","extra digits","fewer digits","twitter username","username","watermark","signature","2koma","4koma","comic"}'),
-  nai_sampler,
-  nai_steps,
-  nai_scale,
-  nai_noise_schedule,
-  nai_cfg_rescale,
-  nai_diffusion_model_id
-FROM tomori_configs
-WHERE server_id IS NOT NULL
-ON CONFLICT (server_id) DO NOTHING;
+-- Backfill the NovelAI image config from the tomori_configs god table.
+-- The destination column names depend on whether migration 021 (decouple_image_tags)
+-- has already shaped this table:
+--   * Incremental path — this migration just created the table above, so it still
+--     has the pre-021 nai_style_tags / nai_negative_tags columns.
+--   * schema.sql-first path (legacy untracked production boot) — schema.sql created
+--     server_novelai_imagegen_configs in its post-021 shape
+--     (image_default_positive_tags / image_default_negative_tags), so the CREATE
+--     above was a no-op and we must write the renamed columns instead.
+-- The source data always lives on tomori_configs.nai_style_tags / .nai_negative_tags;
+-- migration 021 reconciles defaults/NOT NULL afterwards. Detecting the post-021
+-- column avoids the `column "nai_style_tags" of relation
+-- "server_novelai_imagegen_configs" does not exist` (42703) failure on legacy boots.
+DO $nai$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'server_novelai_imagegen_configs'
+      AND column_name = 'image_default_positive_tags'
+  ) THEN
+    INSERT INTO server_novelai_imagegen_configs (
+      server_id, nai_preset_name, image_default_positive_tags, image_default_negative_tags,
+      nai_sampler, nai_steps, nai_scale, nai_noise_schedule, nai_cfg_rescale,
+      nai_diffusion_model_id
+    )
+    SELECT
+      server_id,
+      nai_preset_name,
+      COALESCE(nai_style_tags, '{"absurdres","aesthetic","very aesthetic","masterpiece","best quality","good quality","newest"}'),
+      COALESCE(nai_negative_tags, '{"lowres","worst quality","low quality","bad quality","old","oldest","unfinished","scan artifacts","jpeg artifacts","jaggy lines","unclear","sketch","blurry","bad anatomy","very displeasing","displeasing","bad hands","bad fingers","missing fingers","bad proportions","bad perspective","bad eyes","bad pupils","multiple heads","extra faces","many arms","poorly drawn face","poorly drawn hands","fused hands","bad feet","too many legs","malformed limbs","extra arms","multiple ears","extra digits","fewer digits","twitter username","username","watermark","signature","2koma","4koma","comic"}'),
+      nai_sampler,
+      nai_steps,
+      nai_scale,
+      nai_noise_schedule,
+      nai_cfg_rescale,
+      nai_diffusion_model_id
+    FROM tomori_configs
+    WHERE server_id IS NOT NULL
+    ON CONFLICT (server_id) DO NOTHING;
+  ELSE
+    INSERT INTO server_novelai_imagegen_configs (
+      server_id, nai_preset_name, nai_style_tags, nai_negative_tags,
+      nai_sampler, nai_steps, nai_scale, nai_noise_schedule, nai_cfg_rescale,
+      nai_diffusion_model_id
+    )
+    SELECT
+      server_id,
+      nai_preset_name,
+      COALESCE(nai_style_tags, '{"8k","absurdres","masterpiece","best quality","good quality","newest"}'),
+      COALESCE(nai_negative_tags, '{"lowres","worst quality","low quality","bad quality","old","oldest","unfinished","scan artifacts","jpeg artifacts","jaggy lines","unclear","sketch","blurry","bad anatomy","very displeasing","displeasing","bad hands","bad fingers","missing fingers","bad proportions","bad perspective","bad eyes","bad pupils","multiple heads","extra faces","many arms","poorly drawn face","poorly drawn hands","fused hands","bad feet","too many legs","malformed limbs","extra arms","multiple ears","extra digits","fewer digits","twitter username","username","watermark","signature","2koma","4koma","comic"}'),
+      nai_sampler,
+      nai_steps,
+      nai_scale,
+      nai_noise_schedule,
+      nai_cfg_rescale,
+      nai_diffusion_model_id
+    FROM tomori_configs
+    WHERE server_id IS NOT NULL
+    ON CONFLICT (server_id) DO NOTHING;
+  END IF;
+END $nai$;
 
 -- ── server_nsfw_configs ──────────────────────────────────────────────────────
 

@@ -125,7 +125,7 @@ Both store the same entry shape so switching providers can restore the exact sam
 
 To broaden text-first support beyond OpenAI BPE families, add tokenizer-family resolvers instead of per-model one-offs.
 
-Use `src/db/seed.sql` to inventory the non-deprecated model families that need tokenizer assets. The practical target is one tokenizer implementation per family, not one tokenizer file per seeded row.
+Use `src/db/seed/01_models.sql` to inventory the non-deprecated model families that need tokenizer assets. The practical target is one tokenizer implementation per family, not one tokenizer file per seeded row.
 
 ## Local Tokenizer Assets
 
