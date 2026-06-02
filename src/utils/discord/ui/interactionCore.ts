@@ -1336,9 +1336,10 @@ function buildPersonaPageComponents(
   ];
 
   pagePersonas.forEach((persona, idx) => {
+    const personaPrompt = persona.persona_prompt?.trim();
     const firstAttribute = persona.attribute_list?.[0]?.trim();
     const snippet = safeSelectOptionText(
-      firstAttribute || localizer(locale, "general.pagination.persona_no_attributes"),
+      personaPrompt || firstAttribute || localizer(locale, "general.pagination.persona_no_attributes"),
       PERSONA_SNIPPET_MAX_LENGTH,
     );
 

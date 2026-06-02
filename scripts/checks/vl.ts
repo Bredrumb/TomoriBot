@@ -17,8 +17,8 @@ type ResultItem = {
   summary?: string;
   /** Inline hint shown on failure — takes precedence over the global HINTS lookup */
   hint?: string;
-  /** Used by CATEGORIES to identify test-file items without string matching */
-  _category?: string;
+  /** Used by CATEGORIES to identify test-file buckets without string matching */
+  _category?: "unit-test" | "regression-test";
 };
 
 async function runCheck(name: string, command: string[], fatal: boolean = true): Promise<ResultItem> {
@@ -32,173 +32,191 @@ async function runCheck(name: string, command: string[], fatal: boolean = true):
   return { name, exitCode, fatal };
 }
 
-/** Maps test file basename → display name and isolation hint */
-const TEST_FILE_META: Record<string, { displayName: string; hint: string }> = {
-  "chat.regression.test.ts": {
-    displayName: "Reply Decision & Channel Queue",
-    hint: "Run `bun test tests/regression/chat/` and check `tests/regression/chat/fixtures/`",
-  },
-  "cache-invalidation.regression.test.ts": {
-    displayName: "Cache Invalidation",
-    hint: "Run `bun test tests/regression/db/cache-invalidation.regression.test.ts`",
-  },
-  "config.regression.test.ts": {
-    displayName: "Config Repository",
-    hint: "Run `bun test tests/regression/db/config.regression.test.ts`",
-  },
-  "llm.regression.test.ts": {
-    displayName: "LLM Repository",
-    hint: "Run `bun test tests/regression/db/llm.regression.test.ts`",
-  },
-  "memory.regression.test.ts": {
-    displayName: "Memory Repository",
-    hint: "Run `bun test tests/regression/db/memory.regression.test.ts`",
-  },
-  "persona.regression.test.ts": {
-    displayName: "Persona Repository",
-    hint: "Run `bun test tests/regression/db/persona.regression.test.ts`",
-  },
-  "repositories.regression.test.ts": {
-    displayName: "Repository Delegation & Cache",
-    hint: "Run `bun test tests/regression/db/repositories.regression.test.ts`",
-  },
-  "server.regression.test.ts": {
-    displayName: "Server Repository",
-    hint: "Run `bun test tests/regression/db/server.regression.test.ts`",
-  },
-  "tool-rag.regression.test.ts": {
-    displayName: "Tool & RAG Repository",
-    hint: "Run `bun test tests/regression/db/tool-rag.regression.test.ts`",
-  },
-  "user.regression.test.ts": {
-    displayName: "User Repository",
-    hint: "Run `bun test tests/regression/db/user.regression.test.ts`",
-  },
-  "configCommandMappings.test.ts": {
-    displayName: "Config Command Mapping Contracts",
-    hint: "Run `bun test tests/unit/commands/configCommandMappings.test.ts`",
-  },
-  "chunkProcessor.test.ts": {
-    displayName: "Sentence Chunk Splitter",
-    hint: "Run `bun test tests/unit/processors/chunkProcessor.test.ts`",
-  },
-  "llmOutputProcessor.test.ts": {
-    displayName: "LLM Output Processor",
-    hint: "Run `bun test tests/unit/processors/llmOutputProcessor.test.ts`",
-  },
-  "mentionProcessor.test.ts": {
-    displayName: "Mention & Template Sanitizer",
-    hint: "Run `bun test tests/unit/processors/mentionProcessor.test.ts`",
-  },
-  "generationTurnFallback.test.ts": {
-    displayName: "Generation Turn Fallback",
-    hint: "Run `bun test tests/unit/processors/generationTurnFallback.test.ts`",
-  },
-  "preset-import.regression.test.ts": {
-    displayName: "Preset Import",
-    hint: "Run `bun test tests/regression/db/preset-import.regression.test.ts`",
-  },
-  "personaQueue.test.ts": {
-    displayName: "Persona Queue",
-    hint: "Run `bun test tests/unit/chat/personaQueue.test.ts`",
-  },
-  "presetAttributePublicFlags.test.ts": {
-    displayName: "Preset Attribute Public Flags",
-    hint: "Run `bun test tests/unit/preset/presetAttributePublicFlags.test.ts`",
-  },
-  "reasoningContentSpillGuard.test.ts": {
-    displayName: "Reasoning Content Spill Guard",
-    hint: "Run `bun test tests/unit/providers/reasoningContentSpillGuard.test.ts`",
-  },
-  "thinkBlockContentStripper.test.ts": {
-    displayName: "Think Block Content Stripper",
-    hint: "Run `bun test tests/unit/providers/thinkBlockContentStripper.test.ts`",
-  },
-  "bufferManager.test.ts": {
-    displayName: "Stream Buffer Manager",
-    hint: "Run `bun test tests/unit/stream/bufferManager.test.ts`",
-  },
-  "deliberateToolMode.test.ts": {
-    displayName: "Deliberate Tool Mode",
-    hint: "Run `bun test tests/unit/tools/deliberateToolMode.test.ts`",
-  },
-  "fetchUrlUrlSafety.test.ts": {
-    displayName: "Fetch URL Safety",
-    hint: "Run `bun test tests/unit/tools/fetchUrlUrlSafety.test.ts`",
-  },
-  "channelPrompt.test.ts": {
-    displayName: "Channel Prompt Context Assembly",
-    hint: "Run `bun test tests/unit/context/channelPrompt.test.ts`",
-  },
-  "channelPromptCacheStore.test.ts": {
-    displayName: "Channel Prompt Cache Store",
-    hint: "Run `bun test tests/unit/cache/channelPromptCacheStore.test.ts`",
-  },
-  "generatedImageMessage.test.ts": {
-    displayName: "Generated Image Message",
-    hint: "Run `bun test tests/unit/discord/generatedImageMessage.test.ts`",
-  },
-  "customImageEndpointSupport.test.ts": {
-    displayName: "Custom Image Endpoint Support",
-    hint: "Run `bun test tests/unit/provider/customImageEndpointSupport.test.ts`",
-  },
-  "providerInfoRegistry.test.ts": {
-    displayName: "Provider Info Registry",
-    hint: "Run `bun test tests/unit/providers/providerInfoRegistry.test.ts`",
-  },
-  "toolAssembly.test.ts": {
-    displayName: "Tool Assembly",
-    hint: "Run `bun test tests/unit/tools/toolAssembly.test.ts`",
-  },
+const WORD_DISPLAY_OVERRIDES: Record<string, string> = {
+  ai: "AI",
+  api: "API",
+  byok: "BYOK",
+  db: "DB",
+  dtm: "DTM",
+  id: "ID",
+  ids: "IDs",
+  json: "JSON",
+  junit: "JUnit",
+  llm: "LLM",
+  mcp: "MCP",
+  nai: "NAI",
+  nsfw: "NSFW",
+  rag: "RAG",
+  sql: "SQL",
+  stt: "STT",
+  ttl: "TTL",
+  tts: "TTS",
+  ui: "UI",
+  url: "URL",
+  xml: "XML",
+  google: "Google",
+  novelai: "NovelAI",
+  openrouter: "OpenRouter",
+  searxng: "SearXNG",
 };
 
-/** One decoded `<testsuite>` element from bun's JUnit reporter output. */
-type JUnitSuite = { name: string; file: string; tests: number; failures: number; skipped: number };
+function decodeXmlAttr(value: string): string {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+function normalizeTestPath(file: string): string {
+  return file.replace(/\\/g, "/");
+}
+
+function classifyTestFile(file: string): "unit-test" | "regression-test" {
+  const normalized = normalizeTestPath(file);
+  return normalized.includes("/regression/") || normalized.startsWith("tests/regression/")
+    ? "regression-test"
+    : "unit-test";
+}
+
+function testCategoryRank(category: ResultItem["_category"]): number {
+  return category === "regression-test" ? 1 : 0;
+}
+
+function testHintForFile(file: string): string {
+  return `Run \`bun test ${normalizeTestPath(file)}\``;
+}
+
+function fileNameFromPath(file: string): string {
+  return normalizeTestPath(file).split("/").pop() ?? file;
+}
+
+function stripTestSuffix(fileName: string): string {
+  return fileName.replace(/\.test\.ts$/, "").replace(/\.regression$/, "");
+}
+
+function humanizeDisplayName(value: string): string {
+  const spaced = value
+    .replace(/[—–]/g, "-")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[._-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return spaced
+    .split(" ")
+    .map((word) => {
+      const lower = word.toLowerCase();
+      if (WORD_DISPLAY_OVERRIDES[lower]) return WORD_DISPLAY_OVERRIDES[lower];
+      if (word === "&") return word;
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(" ");
+}
+
+function displayNameFromSuiteName(suiteName: string): string {
+  return humanizeDisplayName(
+    suiteName
+      .replace(/\s*[—–-]\s*regression\s*$/i, "")
+      .replace(/\s+regression\s*$/i, ""),
+  );
+}
+
+function displayNameFromTestFile(file: string, topLevelDescribeNames: string[] = []): string {
+  const uniqueDescribeNames = [...new Set(topLevelDescribeNames.filter(Boolean))];
+  if (uniqueDescribeNames.length === 1) {
+    return displayNameFromSuiteName(uniqueDescribeNames[0]);
+  }
+
+  return humanizeDisplayName(stripTestSuffix(fileNameFromPath(file)));
+}
+
+/** One decoded file-level `<testsuite>` element from bun's JUnit reporter output. */
+type JUnitSuite = {
+  name: string;
+  file: string;
+  tests: number;
+  failures: number;
+  skipped: number;
+  topLevelDescribeNames: string[];
+};
+
+function buildTestResultItem(suite: JUnitSuite): ResultItem {
+  const passCount = Math.max(0, suite.tests - suite.failures - suite.skipped);
+  return {
+    name: displayNameFromTestFile(suite.file, suite.topLevelDescribeNames),
+    exitCode: suite.failures > 0 ? 1 : 0,
+    fatal: suite.failures > 0,
+    summary: `(${passCount} pass, ${suite.skipped} skip, ${suite.failures} fail)`,
+    hint: testHintForFile(suite.file),
+    _category: classifyTestFile(suite.file),
+  };
+}
+
+function sortTestItems(items: ResultItem[]): ResultItem[] {
+  return items.sort((a, b) => {
+    const categoryOrder = testCategoryRank(a._category) - testCategoryRank(b._category);
+    if (categoryOrder !== 0) return categoryOrder;
+    return a.name.localeCompare(b.name);
+  });
+}
 
 /**
  * Parses bun's JUnit XML into one ResultItem per test FILE.
  *
  * Bun emits a file-level `<testsuite>` (where `name` equals the `file` path)
- * plus a nested suite per `describe` block (same `file`, `name` = describe text).
- * We keep only the file-level suites so each file contributes exactly one row,
- * then map its basename through `TEST_FILE_META` for a friendly display name.
+ * plus nested suites for `describe` blocks. We keep the file-level suites for
+ * counts and collect direct child describe names as optional display-name hints.
  * Returns `null` when the XML has no usable suites so the caller can fall back.
  */
 function parseJUnitSuites(xml: string): ResultItem[] | null {
-  const suites: JUnitSuite[] = [];
-  const attr = (tag: string, key: string): string => tag.match(new RegExp(`${key}="([^"]*)"`))?.[1] ?? "";
+  const fileSuites = new Map<string, Omit<JUnitSuite, "topLevelDescribeNames">>();
+  const topLevelDescribeNames = new Map<string, string[]>();
+  const stack: Array<{ name: string; file: string }> = [];
+  const attr = (tag: string, key: string): string => decodeXmlAttr(tag.match(new RegExp(`${key}="([^"]*)"`))?.[1] ?? "");
+  const countAttr = (tag: string, key: string): number => Number.parseInt(attr(tag, key) || "0", 10);
 
-  for (const tag of xml.match(/<testsuite\b[^>]*>/g) ?? []) {
+  for (const tag of xml.match(/<\/?testsuite\b[^>]*>/g) ?? []) {
+    if (tag.startsWith("</")) {
+      stack.pop();
+      continue;
+    }
+
     const name = attr(tag, "name");
-    const file = attr(tag, "file");
-    // File-level aggregate only — name === file. Skip nested describe suites.
-    if (!file || name !== file) continue;
-    suites.push({
-      name,
-      file,
-      tests: Number.parseInt(attr(tag, "tests") || "0", 10),
-      failures: Number.parseInt(attr(tag, "failures") || "0", 10),
-      skipped: Number.parseInt(attr(tag, "skipped") || "0", 10),
-    });
+    const file = normalizeTestPath(attr(tag, "file"));
+    const parent = stack.at(-1);
+
+    if (file && name === file) {
+      fileSuites.set(file, {
+        name,
+        file,
+        tests: countAttr(tag, "tests"),
+        failures: countAttr(tag, "failures"),
+        skipped: countAttr(tag, "skipped"),
+      });
+    } else if (file && name && parent?.file === file && parent.name === file) {
+      const names = topLevelDescribeNames.get(file) ?? [];
+      names.push(name);
+      topLevelDescribeNames.set(file, names);
+    }
+
+    if (!tag.endsWith("/>")) {
+      stack.push({ name, file });
+    }
   }
 
-  if (suites.length === 0) return null;
+  if (fileSuites.size === 0) return null;
 
-  return suites
-    .sort((a, b) => a.file.localeCompare(b.file))
-    .map((suite) => {
-      const fileName = suite.file.split(/\\|\//).pop() ?? suite.file;
-      const passCount = Math.max(0, suite.tests - suite.failures - suite.skipped);
-      const meta = TEST_FILE_META[fileName];
-      return {
-        name: meta?.displayName ?? fileName,
-        exitCode: suite.failures > 0 ? 1 : 0,
-        fatal: suite.failures > 0,
-        summary: `(${passCount} pass, ${suite.skipped} skip, ${suite.failures} fail)`,
-        hint: meta?.hint,
-        _category: "test",
-      } satisfies ResultItem;
-    });
+  return sortTestItems(
+    [...fileSuites.values()].map((suite) =>
+      buildTestResultItem({
+        ...suite,
+        topLevelDescribeNames: topLevelDescribeNames.get(suite.file) ?? [],
+      }),
+    ),
+  );
 }
 
 /**
@@ -213,25 +231,25 @@ function parseConsoleOutput(output: string, exitCode: number): ResultItem[] {
   const seen = new Set<string>();
 
   for (let i = 1; i < testBlocks.length; i += 2) {
-    const fileName = testBlocks[i].split(/\\|\//).pop() ?? testBlocks[i];
-    if (seen.has(fileName)) continue;
-    seen.add(fileName);
+    const file = normalizeTestPath(testBlocks[i]);
+    if (seen.has(file)) continue;
+    seen.add(file);
 
     const blockContent = testBlocks[i + 1] ?? "";
     const passCount = (blockContent.match(/\(pass\)/g) ?? []).length;
     const skipCount = (blockContent.match(/\(skip\)/g) ?? []).length;
     const failCount = (blockContent.match(/\(fail\)/g) ?? []).length;
-    const fileFailed = failCount > 0;
-    const meta = TEST_FILE_META[fileName];
 
-    items.push({
-      name: meta?.displayName ?? fileName,
-      exitCode: fileFailed ? 1 : 0,
-      fatal: fileFailed,
-      summary: `(${passCount} pass, ${skipCount} skip, ${failCount} fail)`,
-      hint: meta?.hint,
-      _category: "test",
-    });
+    items.push(
+      buildTestResultItem({
+        name: file,
+        file,
+        tests: passCount + skipCount + failCount,
+        failures: failCount,
+        skipped: skipCount,
+        topLevelDescribeNames: [],
+      }),
+    );
   }
 
   if (items.length === 0) {
@@ -241,11 +259,11 @@ function parseConsoleOutput(output: string, exitCode: number): ResultItem[] {
       fatal: exitCode !== 0,
       summary: exitCode !== 0 ? "(no test output — possible compilation error)" : "(0 pass, 0 skip, 0 fail)",
       hint: "Run `bun run test` directly to see the full runner output.",
-      _category: "test",
+      _category: "unit-test",
     });
   }
 
-  return items;
+  return sortTestItems(items);
 }
 
 /**
@@ -355,11 +373,10 @@ const dbConfigured = !!(process.env.POSTGRES_PASSWORD || process.env.DATABASE_UR
 
 const CATEGORIES = {
   CODE: (r: ResultItem) =>
-    r.name.includes("Type Check") ||
-    r.name.includes("Linting") ||
-    r.name.includes("Dependency Audit") ||
-    r.name.includes("SQL Audit"),
-  TESTS: (r: ResultItem) => r._category === "test",
+    r.name.includes("Type Check") || r.name.includes("Linting") || r.name.includes("SQL Audit"),
+  SECURITY: (r: ResultItem) => r.name.includes("Dependency Audit"),
+  UNIT_TESTS: (r: ResultItem) => r._category === "unit-test",
+  REGRESSION_TESTS: (r: ResultItem) => r._category === "regression-test",
   DB: (r: ResultItem) => r.name.includes("Schema Drift") || r.name.includes("Lifecycle"),
   LOCALES: (r: ResultItem) => r.name.includes("Localization"),
 };
@@ -415,7 +432,7 @@ async function main() {
   ];
 
   console.log("\n====================================");
-  console.log("📋 VALIDATION CHECKLIST RESULTS");
+  console.log("VALIDATION RESULTS");
   console.log("====================================\n");
 
   // Compute before printing — avoids relying on printItem side-effects and handles
@@ -468,24 +485,41 @@ async function main() {
     }
   };
 
-  console.log("Code Quality");
-  for (const r of results.filter((r) => CATEGORIES.CODE(r))) printItem(r);
+  const printSection = (title: string, items: ResultItem[], emptyMessage?: string) => {
+    console.log(title);
+    if (items.length === 0 && emptyMessage) {
+      console.log(`  [⚪] ${emptyMessage}`);
+      return;
+    }
+    for (const item of items) printItem(item);
+  };
 
-  console.log("\nUnit Tests (bun run test)");
-  for (const r of results.filter((r) => CATEGORIES.TESTS(r))) printItem(r);
+  printSection("Code Quality", results.filter((r) => CATEGORIES.CODE(r)));
 
-  console.log("\nDatabase Validation");
-  for (const r of results.filter((r) => CATEGORIES.DB(r))) printItem(r);
+  printSection("\nProject Security", results.filter((r) => CATEGORIES.SECURITY(r)));
 
-  console.log("\nLocalization");
-  for (const r of results.filter((r) => CATEGORIES.LOCALES(r))) printItem(r);
+  printSection(
+    "\nUnit Tests (bun run test)",
+    results.filter((r) => CATEGORIES.UNIT_TESTS(r)),
+    "No unit test files reported by runner",
+  );
+
+  printSection(
+    "\nRegression Tests (bun run test)",
+    results.filter((r) => CATEGORIES.REGRESSION_TESTS(r)),
+    "No regression test files reported by runner",
+  );
+
+  printSection("\nDatabase Validation", results.filter((r) => CATEGORIES.DB(r)));
+
+  printSection("\nLocalization", results.filter((r) => CATEGORIES.LOCALES(r)));
 
   console.log("\n====================================");
   if (allFatalPassed) {
-    console.log("\n✅ All required checks passed. You are ready to open a PR.");
+    console.log("\n✅ All required checks passed.\n");
     process.exit(0);
   } else {
-    console.log("\n❌ Some required checks failed. Please fix the errors above before opening a PR.");
+    console.log("\n❌ Some required checks failed. Please fix the errors above before opening a PR.\n");
     process.exit(1);
   }
 }

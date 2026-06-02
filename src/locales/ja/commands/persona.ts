@@ -9,7 +9,7 @@ export default {
       modal_title: `ペルソナ画像タグ`,
       tags_input_label: `身体的外見タグ`,
       tags_input_description: `このペルソナの身体的外見を表す画像掲示板スタイルのカンマ区切りタグです。空欄でクリアします。`,
-      tags_input_placeholder: `1girl, short hair, red eyes, school uniform`,
+      tags_input_placeholder: `short white hair, red eyes, school uniform`,
       no_tags_title: `タグが未入力です`,
       no_tags_description: `少なくとも1つの身体的外見タグを入力してください。`,
       too_many_tags_title: `タグが多すぎます`,

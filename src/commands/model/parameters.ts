@@ -11,6 +11,7 @@ import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { promptForSavedProvider } from "@/utils/discord/providerPicker";
 import { localizer } from "@/utils/text/localizer";
+import { buildModelParametersSamplerPatch } from "@/utils/discord/modelParametersConfigMapping";
 
 /**
  * Formats a list of changed sampler settings into a human-readable string.
@@ -211,17 +212,20 @@ export async function execute(
     }
 
     // 5. Build the updated config by overlaying only the options the user explicitly passed
-    const nextConfig = {
-      ...savedConfig,
-      llm_temperature: interaction.options.getNumber("temperature") ?? savedConfig.llm_temperature,
-      llm_top_p: interaction.options.getNumber("top_p") ?? savedConfig.llm_top_p,
-      llm_top_k: interaction.options.getInteger("top_k") ?? savedConfig.llm_top_k,
-      llm_frequency_penalty: interaction.options.getNumber("frequency_penalty") ?? savedConfig.llm_frequency_penalty,
-      llm_presence_penalty: interaction.options.getNumber("presence_penalty") ?? savedConfig.llm_presence_penalty,
-      llm_min_p: interaction.options.getNumber("min_p") ?? savedConfig.llm_min_p,
-      llm_max_output_tokens: nextMaxOutputTokens ?? savedConfig.llm_max_output_tokens ?? null,
-      thinking_level: (nextThinkingLevel as ThinkingLevelValue | null) ?? savedConfig.thinking_level,
-    };
+    const samplerPatch = buildModelParametersSamplerPatch(
+      {
+        temperature: interaction.options.getNumber("temperature"),
+        top_p: interaction.options.getNumber("top_p"),
+        top_k: interaction.options.getInteger("top_k"),
+        frequency_penalty: interaction.options.getNumber("frequency_penalty"),
+        presence_penalty: interaction.options.getNumber("presence_penalty"),
+        min_p: interaction.options.getNumber("min_p"),
+        max_output_tokens: nextMaxOutputTokens,
+        thinking_level: nextThinkingLevel as ThinkingLevelValue | null,
+      },
+      savedConfig,
+    );
+    const nextConfig = { ...savedConfig, ...samplerPatch };
 
     // 6. Collect display labels for the success message
     const changedSettings: Array<{ label: string; value: string }> = [];

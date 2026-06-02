@@ -88,7 +88,7 @@ export default {
       notice_outpaint_direction_line: `**Outpaint direction:** {direction}`,
       notice_reference_line: `Reference: {message_url}`,
       notice_character_prompt_line: `**Character {index}:** {prompt}`,
-      notice_image_tags_tip_line: `Tip: Use the \`image-tags\` commands to save Physical Appearance tags for more consistent characters.`,
+      notice_image_tags_tip_line: `Tip: Use the \`image-tags\` commands for more consistent characters.`,
       notice_avatar_reference_line: `Avatar reference: {name}.`,
       notice_reference_count_line: `Using {count} reference image(s).`,
       generated_after_seconds_line: `Generated after {seconds} seconds`,

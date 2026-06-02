@@ -28,7 +28,7 @@ function isUniqueViolation(error: unknown): boolean {
 // Modal configuration constants
 const MODAL_CUSTOM_ID = "preset_default_modal";
 const PRESET_SELECT_ID = "preset_select";
-const PRESET_LINEAGE_BY_AVATAR: Record<string, number> = {
+export const PRESET_LINEAGE_BY_AVATAR: Record<string, number> = {
   "default.png": 4, // Default / Boyish
   "bratty.png": 716,
   "gloomy.png": 1770,
@@ -47,7 +47,7 @@ function dedupeCaseInsensitive(values: string[]): string[] {
   return dedupeTriggerWords(values, { lowercase: false });
 }
 
-function resolvePresetTriggerWords(preset: TomoriPresetRow, locale: string): string[] {
+export function resolvePresetTriggerWords(preset: TomoriPresetRow, locale: string): string[] {
   const presetTriggerWords = dedupeCaseInsensitive(preset.preset_trigger_words ?? []);
   if (presetTriggerWords.length > 0) {
     return presetTriggerWords;
@@ -64,7 +64,11 @@ function capitalizeTriggerFallbackName(candidate: string): string {
   return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1).toLowerCase()}`;
 }
 
-function resolveAvailablePersonaName(defaultName: string, triggerWords: string[], takenNames: string[]): string | null {
+export function resolveAvailablePersonaName(
+  defaultName: string,
+  triggerWords: string[],
+  takenNames: string[],
+): string | null {
   const taken = new Set(takenNames.map((name) => normalizeForComparison(name)));
   const candidates = [defaultName, ...triggerWords];
 
@@ -100,7 +104,7 @@ function normalizePresetLineageId(value: unknown): number | null {
   return null;
 }
 
-function resolvePresetLineageId(preset: TomoriPresetRow): number | null {
+export function resolvePresetLineageId(preset: TomoriPresetRow): number | null {
   const explicitLineageId = normalizePresetLineageId(preset.preset_lineage_id);
   if (explicitLineageId !== null) {
     return explicitLineageId;

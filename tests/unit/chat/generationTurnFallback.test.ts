@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { Client, Message } from "discord.js";
 import type { LlmRow, TomoriState } from "@/types/db/schema";
-import type { ProviderConfig } from "@/types/provider/interfaces";
+import type { ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { FallbackNoticeAttempt } from "@/utils/discord/fallbackModelNotice";
 import type { ChatResponseSink, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import type { ToolLoopParams } from "@/utils/chat/toolLoop";
@@ -17,6 +17,15 @@ type TestStopContext = {
 };
 
 mock.module("@/utils/misc/logger", () => ({
+  // ColorCode must be included so that command modules imported by other test
+  // files can satisfy their static `import { ColorCode }` bindings even when
+  // this file's mock is the one in effect (bun applies mocks globally).
+  ColorCode: {
+    SUCCESS: 0x57f287,
+    WARN: 0xfee75c,
+    ERROR: 0xed4245,
+    INFO: 0x5865f2,
+  },
   log: {
     error: () => undefined,
     info: () => undefined,
@@ -44,13 +53,38 @@ mock.module("@/utils/cache/novelaiSubscriptionCache", () => ({
 }));
 
 mock.module("@/utils/cache/openrouterCapabilityCache", () => ({
+  clearOpenRouterOnDemandCapabilityCache: () => undefined,
+  getOpenRouterCapabilities: () => undefined,
+  getOpenRouterCapabilityCacheSize: () => 0,
+  getOpenRouterOnDemandCapabilityCacheSize: () => 0,
+  getOpenRouterPricing: () => undefined,
+  getOpenRouterSupportedParameters: () => undefined,
+  getOpenRouterTokenizer: () => undefined,
   getOpenRouterTokenLimits: () => undefined,
+  getOrFetchOpenRouterCapabilities: async () => undefined,
+  initializeOpenRouterCapabilityCache: async () => undefined,
   isOpenRouterCapabilityCacheReady: () => false,
+  testAccountSettingModel: async () => ({ valid: false }),
 }));
 
 mock.module("@/utils/db/repositories", () => ({
   llmProviderRepo: {
     loadSavedProviderConfig: async () => null,
+  },
+  // Stub exports for other commonly-imported repos so command modules loaded by
+  // other test files can satisfy their static import bindings.
+  configRepository: {
+    updateNsfwConfig: async () => true,
+  },
+  personaRepository: {
+    loadAllForServer: async () => [],
+  },
+  userRepository: {
+    loadOrCreateUser: async () => null,
+    updateLastSeen: async () => undefined,
+  },
+  serverRepository: {
+    loadServerState: async () => null,
   },
 }));
 
@@ -124,7 +158,33 @@ mock.module("@/utils/security/keyRotation", () => ({
 
 mock.module("@/utils/chat/toolLoop", () => ({
   providerIsApiFamily: () => false,
-  runToolLoop: async (params: ToolLoopParams) => {
+  runToolLoop: runToolLoopMock,
+}));
+
+type ToolExecutionResult = {
+  success: boolean;
+  data?: unknown;
+  error?: string;
+  message?: string;
+};
+
+type FunctionHistoryEntry = {
+  functionCall: {
+    name: string;
+    args: Record<string, unknown>;
+  };
+  functionResponse: {
+    functionResponse: {
+      name: string;
+      response: {
+        result: unknown;
+      };
+    };
+  };
+};
+
+async function runToolLoopMock(params: ToolLoopParams): Promise<GenerationTurnResult> {
+  if (queuedResults.length > 0) {
     toolLoopCalls.push({
       model: params.tomoriState.llm.llm_codename,
       suppressUserErrors: params.context.streamingContext.suppressUserErrors,
@@ -134,8 +194,161 @@ mock.module("@/utils/chat/toolLoop", () => ({
       throw new Error("No queued generation result for test");
     }
     return next;
-  },
-}));
+  }
+
+  return runToolLoopContractShim(params);
+}
+
+async function runToolLoopContractShim(params: ToolLoopParams): Promise<GenerationTurnResult> {
+  const maxIterations = Number.parseInt(process.env.BOT_MAX_FUNCTION_CALL_ITERATIONS ?? "10", 10);
+  const maxConsecutiveToolErrors = Number.parseInt(process.env.BOT_MAX_CONSECUTIVE_TOOL_ERRORS ?? "3", 10);
+  const streamResults: StreamResult[] = [];
+  const functionHistory: FunctionHistoryEntry[] = [];
+  let consecutiveToolErrors = 0;
+
+  for (let iteration = 0; iteration < maxIterations; iteration++) {
+    const streamResult = await callProviderStream(params, functionHistory);
+    streamResults.push(streamResult);
+
+    if (streamResult.status === "completed") {
+      return {
+        status: "completed",
+        streamResults,
+        personaResponses: streamResult.accumulatedText
+          ? [
+              {
+                personaName: params.tomoriState.persona_nickname,
+                text: streamResult.accumulatedText,
+                personaId: params.tomoriState.persona_id,
+                personaLineageId: params.tomoriState.persona_lineage_id,
+              },
+            ]
+          : [],
+      };
+    }
+
+    if (streamResult.status !== "function_call") {
+      return {
+        status: streamResult.status === "timeout" ? "timeout" : "error",
+        streamResults,
+        personaResponses: [],
+      };
+    }
+
+    const functionCall = parseFunctionCall(streamResult);
+    if (!functionCall) {
+      return { status: "error", streamResults, personaResponses: [] };
+    }
+
+    const toolResult = await executeToolForShim(params, functionCall);
+    if (toolResult.success && handleContextRestartForShim(params, toolResult.data)) {
+      continue;
+    }
+
+    if (!toolResult.success) {
+      consecutiveToolErrors++;
+    } else {
+      consecutiveToolErrors = 0;
+    }
+
+    functionHistory.push({
+      functionCall,
+      functionResponse: {
+        functionResponse: {
+          name: functionCall.name,
+          response: {
+            result: toolResult.success
+              ? (toolResult.data ?? { status: "completed" })
+              : {
+                  status: "tool_execution_failed",
+                  reason: toolResult.message || toolResult.error || "Tool execution failed without specific error",
+                  tool_name: functionCall.name,
+                },
+          },
+        },
+      },
+    });
+
+    if (consecutiveToolErrors >= maxConsecutiveToolErrors) {
+      return { status: "error", streamResults, personaResponses: [] };
+    }
+  }
+
+  return { status: "timeout", streamResults, personaResponses: [] };
+}
+
+async function callProviderStream(
+  params: ToolLoopParams,
+  functionHistory: FunctionHistoryEntry[],
+): Promise<StreamResult> {
+  const provider = params.provider as unknown as {
+    streamToDiscord: (...args: unknown[]) => Promise<StreamResult>;
+  };
+
+  return provider.streamToDiscord(
+    params.context.channel,
+    params.context.client,
+    params.tomoriState,
+    params.providerConfig,
+    params.context,
+    [],
+    params.context.emojiStrings,
+    functionHistory,
+  );
+}
+
+function parseFunctionCall(streamResult: StreamResult): { name: string; args: Record<string, unknown> } | null {
+  const data = streamResult.data;
+  if (!data || typeof data !== "object") return null;
+  const candidate = data as { name?: unknown; args?: unknown };
+  if (typeof candidate.name !== "string" || candidate.name.length === 0) return null;
+  return {
+    name: candidate.name,
+    args:
+      candidate.args && typeof candidate.args === "object" && !Array.isArray(candidate.args)
+        ? (candidate.args as Record<string, unknown>)
+        : {},
+  };
+}
+
+async function executeToolForShim(
+  params: ToolLoopParams,
+  functionCall: { name: string; args: Record<string, unknown> },
+): Promise<ToolExecutionResult> {
+  const allowedToolNames = params.context.streamingContext.deliberateToolAllowedNames;
+  if (
+    params.context.deliberateToolModeActive &&
+    Array.isArray(allowedToolNames) &&
+    !allowedToolNames.includes(functionCall.name)
+  ) {
+    return {
+      success: false,
+      error: `Tool "${functionCall.name}" was not exposed for this deliberate tool mode turn.`,
+    };
+  }
+
+  const { ToolRegistry } = (await import("@/tools/toolRegistry")) as {
+    ToolRegistry: {
+      executeTool: (name: string, args: Record<string, unknown>, context?: unknown) => Promise<ToolExecutionResult>;
+    };
+  };
+
+  return ToolRegistry.executeTool(functionCall.name, functionCall.args, params.context);
+}
+
+function handleContextRestartForShim(params: ToolLoopParams, data: unknown): boolean {
+  if (!data || typeof data !== "object") return false;
+  const result = data as { type?: unknown; enhanced_context_item?: unknown };
+  if (typeof result.type !== "string" || !result.type.startsWith("context_restart")) return false;
+
+  if (result.enhanced_context_item) {
+    params.context.contextItems.push(result.enhanced_context_item as never);
+  }
+  if (result.type.includes("youtube")) {
+    params.context.streamingContext.disableYouTubeProcessing = true;
+  }
+  return true;
+}
 
 const fakeProvider = {
   createConfig: async (tomoriState: TomoriState, apiKey: string): Promise<ProviderConfig> => ({

@@ -12,11 +12,33 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 
 // Constants for threshold limits (Rule #20)
-const MIN_THRESHOLD = 0; // 0 means always-reply in configured auto-chat channels
-const MIN_RANDOM_THRESHOLD = 1;
-const MAX_THRESHOLD = 100; // The absolute maximum value allowed
+export const MIN_THRESHOLD = 0; // 0 means always-reply in configured auto-chat channels
+export const MIN_RANDOM_THRESHOLD = 1;
+export const MAX_THRESHOLD = 100; // The absolute maximum value allowed
 
-function rollAutochatTarget(minThreshold: number, maxThreshold: number): number {
+export interface ThresholdValidationResult {
+  isValid: boolean;
+  isAlwaysReplyMode: boolean;
+  isRangeMode: boolean;
+}
+
+/**
+ * Validates a threshold+max pair and identifies which auto-chat mode applies.
+ * (0,0) = always-reply; (n,n) = fixed; (min,max where max>min) = random range.
+ */
+export function validateThresholdInput(threshold: number, maxThreshold: number): ThresholdValidationResult {
+  const isAlwaysReplyMode = threshold === MIN_THRESHOLD && maxThreshold === MIN_THRESHOLD;
+  const isRangeMode = threshold >= MIN_RANDOM_THRESHOLD && maxThreshold > threshold;
+  const isValid =
+    isAlwaysReplyMode ||
+    (threshold >= MIN_RANDOM_THRESHOLD &&
+      threshold <= MAX_THRESHOLD &&
+      maxThreshold >= threshold &&
+      maxThreshold <= MAX_THRESHOLD);
+  return { isValid, isAlwaysReplyMode, isRangeMode };
+}
+
+export function rollAutochatTarget(minThreshold: number, maxThreshold: number): number {
   if (minThreshold <= 0 || maxThreshold <= 0) {
     return 0;
   }
@@ -81,18 +103,9 @@ Positive values use a shared fixed or random range.
     // Get the threshold values from options
     const threshold = interaction.options.getInteger("threshold", true);
     const maxThreshold = interaction.options.getInteger("max") ?? threshold;
-    const isAlwaysReplyMode = threshold === MIN_THRESHOLD && maxThreshold === MIN_THRESHOLD;
-    const isRangeMode = threshold >= MIN_RANDOM_THRESHOLD && maxThreshold > threshold;
+    const { isValid, isAlwaysReplyMode, isRangeMode } = validateThresholdInput(threshold, maxThreshold);
 
-    // Validate the threshold/range against the allowed values.
-    const isValidThreshold =
-      isAlwaysReplyMode ||
-      (threshold >= MIN_RANDOM_THRESHOLD &&
-        threshold <= MAX_THRESHOLD &&
-        maxThreshold >= threshold &&
-        maxThreshold <= MAX_THRESHOLD);
-
-    if (!isValidThreshold) {
+    if (!isValid) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.server.auto-trigger.threshold.invalid_range_title",
         descriptionKey: "commands.server.auto-trigger.threshold.invalid_range_specific_description",

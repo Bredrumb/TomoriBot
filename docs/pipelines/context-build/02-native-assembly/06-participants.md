@@ -60,7 +60,7 @@ mention handle shown below (case-insensitive). [...]
 - Physical Appearance: blue hair, red eyes, white hoodie
 
 UserA (Mention: @{UserA}; Aliases: @{aliceA}, @{alice_global})
-- Physical Appearance: 1girl, short hair, red eyes
+- Physical Appearance: short white hair, red eyes
 - Status: Online - Playing Stardew Valley
 - Server Roles: Mod, Member
 - Memories: [id:42] Likes cats (tags: pets, animals)

@@ -9,7 +9,7 @@ export default {
       modal_title: `Persona Image Tags`,
       tags_input_label: `Physical Appearance Tags`,
       tags_input_description: `Comma-separated imageboard-style tags for this persona's physical appearance. Leave empty to clear.`,
-      tags_input_placeholder: `1girl, short hair, red eyes, school uniform`,
+      tags_input_placeholder: `short white hair, red eyes, school uniform`,
       no_tags_title: `No Tags Provided`,
       no_tags_description: `Please provide at least one physical appearance tag.`,
       too_many_tags_title: `Too Many Tags`,
