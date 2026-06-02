@@ -139,6 +139,10 @@ describe("tool schema assembly", () => {
 
     expect(getPropertyNames(tool as Tool)).toEqual(["aspect_ratio", "prompt"]);
     expect((tool as Tool).description).toContain("text-to-image");
+    // Prompt guidance must not reference modes the backend cannot perform
+    const promptDescription = (tool as Tool).parameters.properties.prompt.description;
+    expect(promptDescription).not.toContain("inpaint");
+    expect(promptDescription).not.toContain("outpaint");
   });
 
   it("assembles generate_image with image-to-image reference fields", () => {
@@ -157,6 +161,12 @@ describe("tool schema assembly", () => {
     expect(getPropertyNames(tool as Tool)).toContain("target_identity");
     expect(getPropertyNames(tool as Tool)).not.toContain("mask_prompt");
     expect(getPropertyNames(tool as Tool)).not.toContain("outpaint");
+    // media_id/denoise/prompt guidance should mention img2img only — no inpaint/outpaint
+    const properties = (tool as Tool).parameters.properties;
+    expect(properties.media_id.description).toBe("Reference media ID such as media_1. Use for img2img.");
+    expect(properties.denoise.description).toBe("Img2img strength from 0 to 1. Lower preserves more.");
+    expect(properties.prompt.description).not.toContain("inpaint");
+    expect(properties.prompt.description).not.toContain("outpaint");
   });
 
   it("assembles generate_image with inpainting and outpainting fields", () => {
@@ -176,6 +186,14 @@ describe("tool schema assembly", () => {
     expect(propertyNames).toContain("inpaint_preset");
     expect(propertyNames).toContain("outpaint");
     expect(propertyNames).toContain("outpaint_amount");
+    // Full-capability backend should surface all mode guidance
+    const properties = (tool as Tool).parameters.properties;
+    expect(properties.prompt.description).toContain("For inpaint");
+    expect(properties.prompt.description).toContain("For outpaint");
+    expect(properties.media_id.description).toBe(
+      "Reference media ID such as media_1. Use for img2img, inpaint, or outpaint.",
+    );
+    expect(properties.denoise.description).toBe("Img2img/inpaint strength from 0 to 1. Lower preserves more.");
   });
 
   it("omits generate_image when no image modes are supported", () => {

@@ -64,8 +64,8 @@ export async function buildUsersInConversationContextItem(params: {
 
   let usersInConversationText = "[System: The following users are having a conversation:\n\n";
   usersInConversationText += params.isUserImpersonation
-    ? 'To ping users, prepend an "@" symbol to a unique mention handle shown below (case-insensitive). If a user says mention requires clarification, ask for clarification instead of guessing. Use mentions only when the notification matters.\n\n'
-    : `If ${params.botName} wants to ping any of these users, prepend an "@" symbol to a unique mention handle shown below (case-insensitive). If a user says mention requires clarification, ask for clarification instead of guessing. Use mentions only when the notification matters.\n\n`;
+    ? 'To ping users, prepend an "@" symbol to a unique mention handle shown below (case-insensitive). If there is ambiguity with names, ask for clarification instead of guessing. Use mentions only when the notification matters.\n\n'
+    : `If ${params.botName} wants to ping any of these users, prepend an "@" symbol to a unique mention handle shown below (case-insensitive). If there is ambiguity with names, ask for clarification instead of guessing. Use mentions only when the notification matters.\n\n`;
 
   const userEntries: UserConversationEntry[] = [];
   const conversationUsers: ConversationUserReference[] = [];

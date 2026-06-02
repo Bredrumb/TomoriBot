@@ -99,9 +99,20 @@ function createSqlClient(url: string): SQL {
   return new SQL(url, { max: 1, idleTimeout: 1, connectionTimeout: 5 });
 }
 
+/**
+ * Optional JUnit reporter flags. When `BUN_TEST_JUNIT_OUTFILE` is set (the `vl`
+ * checklist sets it), `bun test` also writes a JUnit XML file so the caller can
+ * reliably enumerate every test file with pass/fail/skip counts — piped console
+ * output omits per-file headers for files that log nothing.
+ */
+function junitReporterArgs(): string[] {
+  const outfile = process.env.BUN_TEST_JUNIT_OUTFILE;
+  return outfile ? ["--reporter=junit", `--reporter-outfile=${outfile}`] : [];
+}
+
 /** Spawns `bun test tests/` and returns the child exit code. */
 async function spawnBunTest(extraEnv: Record<string, string> = {}): Promise<number> {
-  const proc = Bun.spawn(["bun", "test", "tests/"], {
+  const proc = Bun.spawn(["bun", "test", "tests/", ...junitReporterArgs()], {
     env: { ...process.env, ...extraEnv },
     stdout: "inherit",
     stderr: "inherit",
@@ -199,7 +210,7 @@ async function main(): Promise<void> {
       TEST_DB_READY: "1",
     };
 
-    proc = Bun.spawn(["bun", "test", "tests/"], {
+    proc = Bun.spawn(["bun", "test", "tests/", ...junitReporterArgs()], {
       env: { ...process.env, ...testEnv },
       stdout: "inherit",
       stderr: "inherit",

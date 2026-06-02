@@ -115,8 +115,8 @@ I have built-in features to help reduce costs from abusers or spammers in your s
     refresh: {
       description: `Clears the recent conversation history.`,
       title: `🧹 Conversation History Cleared`,
-      response: `All messages above this one will now be ignored and the channel's STM has been cleared.`,
-      footer: `Delete this embed to allow those older messages to be included again.`,
+      response: `All messages above this one will now be ignored.\n This channel's STM has also been cleared.`,
+      footer: `Delete this embed to allow older messages above to be included again.`,
     },
     status: {
       description: `Show current personal, server, or persona status.`,

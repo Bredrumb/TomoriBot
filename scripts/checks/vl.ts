@@ -1,3 +1,6 @@
+import { rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { spawn } from "bun";
 import { config } from "dotenv";
 
@@ -123,48 +126,102 @@ const TEST_FILE_META: Record<string, { displayName: string; hint: string }> = {
     displayName: "Fetch URL Safety",
     hint: "Run `bun test tests/unit/tools/fetchUrlUrlSafety.test.ts`",
   },
+  "channelPrompt.test.ts": {
+    displayName: "Channel Prompt Context Assembly",
+    hint: "Run `bun test tests/unit/context/channelPrompt.test.ts`",
+  },
+  "channelPromptCacheStore.test.ts": {
+    displayName: "Channel Prompt Cache Store",
+    hint: "Run `bun test tests/unit/cache/channelPromptCacheStore.test.ts`",
+  },
+  "generatedImageMessage.test.ts": {
+    displayName: "Generated Image Message",
+    hint: "Run `bun test tests/unit/discord/generatedImageMessage.test.ts`",
+  },
+  "customImageEndpointSupport.test.ts": {
+    displayName: "Custom Image Endpoint Support",
+    hint: "Run `bun test tests/unit/provider/customImageEndpointSupport.test.ts`",
+  },
+  "providerInfoRegistry.test.ts": {
+    displayName: "Provider Info Registry",
+    hint: "Run `bun test tests/unit/providers/providerInfoRegistry.test.ts`",
+  },
+  "toolAssembly.test.ts": {
+    displayName: "Tool Assembly",
+    hint: "Run `bun test tests/unit/tools/toolAssembly.test.ts`",
+  },
 };
 
+/** One decoded `<testsuite>` element from bun's JUnit reporter output. */
+type JUnitSuite = { name: string; file: string; tests: number; failures: number; skipped: number };
+
 /**
- * Runs all tests and returns one ResultItem per test file found in the output.
- * On any failure the full bun test output is printed before returning.
+ * Parses bun's JUnit XML into one ResultItem per test FILE.
+ *
+ * Bun emits a file-level `<testsuite>` (where `name` equals the `file` path)
+ * plus a nested suite per `describe` block (same `file`, `name` = describe text).
+ * We keep only the file-level suites so each file contributes exactly one row,
+ * then map its basename through `TEST_FILE_META` for a friendly display name.
+ * Returns `null` when the XML has no usable suites so the caller can fall back.
  */
-async function runTests(): Promise<ResultItem[]> {
-  console.log(`> Running Tests (bun run test)...`);
-  const proc = spawn(["bun", "run", "test"], { stdout: "pipe", stderr: "pipe" });
-  const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
-  const exitCode = await proc.exited;
+function parseJUnitSuites(xml: string): ResultItem[] | null {
+  const suites: JUnitSuite[] = [];
+  const attr = (tag: string, key: string): string => tag.match(new RegExp(`${key}="([^"]*)"`))?.[1] ?? "";
 
-  const output = stdout + stderr;
-
-  // Print full output only on failure so vl stays concise on green runs
-  if (exitCode !== 0) {
-    console.log(output);
+  for (const tag of xml.match(/<testsuite\b[^>]*>/g) ?? []) {
+    const name = attr(tag, "name");
+    const file = attr(tag, "file");
+    // File-level aggregate only — name === file. Skip nested describe suites.
+    if (!file || name !== file) continue;
+    suites.push({
+      name,
+      file,
+      tests: Number.parseInt(attr(tag, "tests") || "0", 10),
+      failures: Number.parseInt(attr(tag, "failures") || "0", 10),
+      skipped: Number.parseInt(attr(tag, "skipped") || "0", 10),
+    });
   }
 
-  // Split output into alternating [separator, block] pairs per test file
+  if (suites.length === 0) return null;
+
+  return suites
+    .sort((a, b) => a.file.localeCompare(b.file))
+    .map((suite) => {
+      const fileName = suite.file.split(/\\|\//).pop() ?? suite.file;
+      const passCount = Math.max(0, suite.tests - suite.failures - suite.skipped);
+      const meta = TEST_FILE_META[fileName];
+      return {
+        name: meta?.displayName ?? fileName,
+        exitCode: suite.failures > 0 ? 1 : 0,
+        fatal: suite.failures > 0,
+        summary: `(${passCount} pass, ${suite.skipped} skip, ${suite.failures} fail)`,
+        hint: meta?.hint,
+        _category: "test",
+      } satisfies ResultItem;
+    });
+}
+
+/**
+ * Legacy fallback: parse `bun test`'s piped console output into per-file items.
+ * Used only when the JUnit XML is unavailable (older bun, reporter failure).
+ * Note: bun omits per-file headers for files that log nothing, so this path can
+ * under-report — the JUnit path above is preferred.
+ */
+function parseConsoleOutput(output: string, exitCode: number): ResultItem[] {
   const testBlocks = output.split(/([a-zA-Z0-9_\\/\-.]+\.test\.ts):/);
   const items: ResultItem[] = [];
   const seen = new Set<string>();
 
   for (let i = 1; i < testBlocks.length; i += 2) {
     const fileName = testBlocks[i].split(/\\|\//).pop() ?? testBlocks[i];
-    // Guard against the same basename appearing in both a path and a short form
     if (seen.has(fileName)) continue;
     seen.add(fileName);
 
     const blockContent = testBlocks[i + 1] ?? "";
-
-    // 1. Count per-test markers in this block — bun uses text markers in non-TTY/piped mode.
-    //    The global "N pass / N skip / N fail" summary only appears at the very end of the
-    //    output (inside the last file's block), so counting per-line markers avoids bleed-over.
     const passCount = (blockContent.match(/\(pass\)/g) ?? []).length;
     const skipCount = (blockContent.match(/\(skip\)/g) ?? []).length;
     const failCount = (blockContent.match(/\(fail\)/g) ?? []).length;
-
-    // 2. Determine per-file exit code
     const fileFailed = failCount > 0;
-
     const meta = TEST_FILE_META[fileName];
 
     items.push({
@@ -177,8 +234,6 @@ async function runTests(): Promise<ResultItem[]> {
     });
   }
 
-  // Safety net: if no file headers were found (e.g., compilation error before any test ran),
-  // emit a single fallback item so the Tests section is never silently empty
   if (items.length === 0) {
     items.push({
       name: "Tests (bun run test)",
@@ -191,6 +246,46 @@ async function runTests(): Promise<ResultItem[]> {
   }
 
   return items;
+}
+
+/**
+ * Runs all tests and returns one ResultItem per test file. Prefers bun's JUnit
+ * reporter (reliable per-file enumeration) and falls back to console parsing.
+ * On any failure the full bun test output is printed before returning.
+ */
+async function runTests(): Promise<ResultItem[]> {
+  console.log(`> Running Tests (bun run test)...`);
+
+  // runTests.ts forwards these reporter flags to `bun test` when this env var is set.
+  const junitOutfile = join(tmpdir(), `tomori-vl-junit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.xml`);
+  const proc = spawn(["bun", "run", "test"], {
+    stdout: "pipe",
+    stderr: "pipe",
+    env: { ...process.env, BUN_TEST_JUNIT_OUTFILE: junitOutfile },
+  });
+  const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+  const exitCode = await proc.exited;
+
+  const output = stdout + stderr;
+
+  // Print full output only on failure so vl stays concise on green runs
+  if (exitCode !== 0) {
+    console.log(output);
+  }
+
+  // 1. Prefer the JUnit XML — it lists every file regardless of console logging.
+  let items: ResultItem[] | null = null;
+  try {
+    const xml = await Bun.file(junitOutfile).text();
+    items = parseJUnitSuites(xml);
+  } catch {
+    // JUnit file missing/unreadable — fall back below.
+  } finally {
+    await rm(junitOutfile, { force: true }).catch(() => undefined);
+  }
+
+  // 2. Fall back to console parsing if JUnit was unavailable.
+  return items ?? parseConsoleOutput(output, exitCode);
 }
 
 async function runLint(): Promise<ResultItem> {

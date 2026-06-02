@@ -351,7 +351,7 @@ Rules:
 - `speech`: elevenlabs, voice-add, voice-remove, voice-assign, transcripts, chatterbox(parameters)
 - `nsfw`: jailbreaks
 - `optional-key`: brave/set/remove
-- `server`: trigger(add/delete), whitelist(channel/persona/role/remove), stm(manage), cooldown(triggers), auto-trigger(channels/threshold), matrix(link/unlink), quota(image-generation/text-generation/video-generation/reset), rp-channels, crosschannel-blocklist, welcome-channel(set/remove), private-channels, user-blacklist(add/remove), member-permissions, always-reply, thought-logs-channel
+- `server`: trigger(add/delete), whitelist(channel/persona/role/remove), stm(manage), cooldown(triggers), auto-trigger(channels/threshold), matrix(link/unlink), quota(image-generation/text-generation/video-generation/reset), rp-channels, crosschannel-blocklist, welcome-channel(set/remove), private-channels, user-blacklist(add/remove), member-permissions, always-reply, thought-logs-channel, channel-prompt
 - `novelai`: attg, image(params/generate), character-reference
 - `server`: trigger(add/delete), whitelist(channel/persona/role/remove), stm(manage), cooldown(triggers), auto-trigger(*), matrix(link/unlink), quota(image-generation/text-generation/video-generation/reset), rp-channels, crosschannel-blocklist, welcome-channel(set/remove), private-channels, user-blacklist(add/remove)
 - `persona`: create, generate, import, export, default, swap, remove, image-tags, attribute(add/edit/remove), sample-dialogue(add/edit/remove), prompt(set/remove), history(import/remove)
@@ -362,6 +362,8 @@ Rules:
 - `tool`: ping, status, refresh, compact, comment
 
 `/server auto-trigger` is channel-scoped and uses one shared cycle across its configured channels. Threshold `0` enables always-reply in those channels. Positive values use either a fixed trigger (`min = max`) or a shared inclusive random range (`min-max`), rerolling after each successful auto-trigger. The cycle only advances on qualifying real user-like messages; TomoriBot and alter webhook self-messages do not advance or consume the auto-trigger counter. Removing a channel disables auto-trigger behavior for that channel. `/server auto-trigger channels` can also target a single channel and assign one persona to that room's auto-trigger fallback instead of always using the main persona.
+
+`/server channel-prompt` is a flat, modal-driven command that scopes a system prompt to one channel. It takes a required `channel` option, then opens a prefilled 4-part modal (up to 16000 chars, part 1 optional) plus a Radio Group for Prompt Mode (`Append` / `Replace`). `Append` injects the channel prompt as a distinct `SYSTEM_CHANNEL_PROMPT` block after the server system prompt; `Replace` substitutes the channel prompt for the server system prompt's slot — persona prompt and persona attributes are never affected. Submitting with all prompt parts empty removes the channel's override. State lives in the standalone `channel_prompt_overrides` table (per-channel, never exported) and is resolved per request via `getCachedChannelPrompt`. The override surfaces in `/tool prompt snapshot` under the `Channel Prompt` header.
 
 `/bot generate image` is a modal-driven, fire-and-forget scene snapshot command. It plans against the current channel context with the active text provider, then renders with either the current provider's native image path or NovelAI's tag-based image tool when a NovelAI backend is available. Personal provider overlays apply before the hidden turn is built so personal text/image routing is respected.
 

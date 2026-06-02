@@ -15,6 +15,7 @@ import { AttachmentBuilder } from "discord.js";
 import JSZip from "jszip";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
+import { buildGeneratedImageComponentsV2Payload } from "@/utils/discord/generatedImageMessage";
 import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import {
   buildImageToolNoticeDescription,
@@ -29,7 +30,6 @@ import { extractImagesFromMessage } from "../../utils/image/imageExtractor";
 import { segmentImage } from "../../utils/image/segmentationService";
 import { resolveNaiImageParams, type EffectiveNaiImageParams } from "@/utils/image/naiImageParams";
 import { normalizeNaiReferenceImage } from "@/utils/image/imageProcessor";
-import { buildImageTagDetectionNoticeLines } from "@/utils/image/imageNoticeContext";
 import { resolveNaiDiffusionModel } from "@/utils/image/naiDiffusionModels";
 import {
   NAI_CHAR_REF_INFO_EXTRACTED,
@@ -245,11 +245,14 @@ export class GenerateImageNaiTool extends BaseTool {
   private async sendGeneratedImage(
     context: ToolContext,
     attachment: AttachmentBuilder,
+    attachmentFilename: string,
+    elapsedMs: number,
   ): Promise<import("discord.js").Message> {
     const threadId =
       "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
         ? context.channel.id
         : undefined;
+    const componentsPayload = buildGeneratedImageComponentsV2Payload(attachmentFilename, elapsedMs, context.locale);
 
     if (context.webhook && context.personaUsername) {
       try {
@@ -257,6 +260,8 @@ export class GenerateImageNaiTool extends BaseTool {
           context.webhook,
           {
             files: [attachment],
+            ...componentsPayload,
+            withComponents: true,
             ...(threadId ? { threadId } : {}),
           },
           {
@@ -266,11 +271,41 @@ export class GenerateImageNaiTool extends BaseTool {
           },
         );
       } catch (error) {
-        log.warn("Failed to send NAI generated image via webhook, falling back to bot message", error as Error);
+        log.warn(
+          "Failed to send NAI generated image via webhook with Components V2, retrying without components",
+          error,
+        );
+        try {
+          return await sendWebhookMessageWithIdentity(
+            context.webhook,
+            {
+              files: [attachment],
+              ...(threadId ? { threadId } : {}),
+            },
+            {
+              username: context.personaUsername,
+              avatarUrl: context.personaAvatarUrl,
+              avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
+            },
+          );
+        } catch (fallbackError) {
+          log.warn(
+            "Failed to send NAI generated image via webhook, falling back to bot message",
+            fallbackError as Error,
+          );
+        }
       }
     }
 
-    return await context.channel.send({ files: [attachment] });
+    try {
+      return await context.channel.send({
+        files: [attachment],
+        ...componentsPayload,
+      });
+    } catch (error) {
+      log.warn("Failed to send NAI generated image with Components V2, falling back to attachment-only message", error);
+      return await context.channel.send({ files: [attachment] });
+    }
   }
 
   /**
@@ -862,6 +897,8 @@ export class GenerateImageNaiTool extends BaseTool {
    * @returns Tool result with success/error status
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
+    const startedAtMs = Date.now();
+
     // 1. Validate parameters
     const validation = this.validateParameters(args);
     if (!validation.isValid) {
@@ -999,13 +1036,6 @@ export class GenerateImageNaiTool extends BaseTool {
           isInpaintMode ? { edit_target: editTarget as string } : undefined,
         );
         const extraNoticeLines: string[] = [];
-        if ((context.tomoriState.config.image_default_positive_tags ?? []).length > 0) {
-          extraNoticeLines.push(localizer(context.locale, "tools.image.notice_default_positive_tags_line"));
-        }
-        if ((context.tomoriState.config.image_default_negative_tags ?? []).length > 0) {
-          extraNoticeLines.push(localizer(context.locale, "tools.image.notice_default_negative_tags_line"));
-        }
-        extraNoticeLines.push(...buildImageTagDetectionNoticeLines(context));
         if (messageId) {
           const referencedMessageUrl = buildReferencedMessageUrl(context, messageId);
           extraNoticeLines.push(
@@ -1019,6 +1049,7 @@ export class GenerateImageNaiTool extends BaseTool {
           );
         }
         extraNoticeLines.push(...buildCharacterNoticeLines(context.locale, characters));
+        extraNoticeLines.push("");
         extraNoticeLines.push(localizer(context.locale, "tools.image.notice_image_tags_tip_line"));
         await sendToolProgressNotice(
           context,
@@ -1255,11 +1286,17 @@ export class GenerateImageNaiTool extends BaseTool {
 
       // 7. Send image to Discord
       const filePrefix = isInpaintMode ? "nai_inpainted" : "nai_generated";
+      const attachmentFilename = `${filePrefix}_${Date.now()}.png`;
       const attachment = new AttachmentBuilder(imageBuffer, {
-        name: `${filePrefix}_${Date.now()}.png`,
+        name: attachmentFilename,
       });
 
-      const sentMessage = await this.sendGeneratedImage(context, attachment);
+      const sentMessage = await this.sendGeneratedImage(
+        context,
+        attachment,
+        attachmentFilename,
+        Date.now() - startedAtMs,
+      );
 
       log.success(`Successfully ${isInpaintMode ? "inpainted" : "generated"} and sent NAI image to Discord`);
 

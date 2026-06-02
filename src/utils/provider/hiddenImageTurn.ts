@@ -18,6 +18,7 @@ import type { Client, Guild, Webhook } from "discord.js";
 import { log } from "@/utils/misc/logger";
 import { buildContext } from "@/utils/text/contextBuilder";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
+import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
 import { getProviderForTomori } from "@/utils/provider/providerFactory";
 import { ToolRegistry } from "@/tools/toolRegistry";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
@@ -231,6 +232,11 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
       personaLineageId: tomoriState.persona_lineage_id,
     };
 
+    // Reflect any per-channel system prompt override in the hidden planning turn.
+    const channelPromptOverride = tomoriState.server_id
+      ? await getCachedChannelPrompt(tomoriState.server_id, channel.id)
+      : null;
+
     const contextBuild = await buildContext({
       guildId: guild.id,
       serverName: guild.name,
@@ -245,6 +251,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
       tomoriNickname: persona.tomoriNickname,
       tomoriAttributes: persona.tomoriAttributes,
       tomoriConfig: tomoriState.config,
+      channelPromptOverride,
       personaPrompt: persona.personaPrompt,
       personaLineageId: persona.personaLineageId ?? undefined,
       isDMChannel: false,

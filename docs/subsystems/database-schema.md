@@ -115,6 +115,8 @@ All SQL is inlined as `private` methods directly on the owning Repository class.
 - `personal_spotlight_personas`
 - `channel_persona_whitelist`
 - `channel_whitelist`
+- `channel_llm_overrides` (per-channel model override)
+- `channel_prompt_overrides` (per-channel system prompt override)
 - `role_whitelist`
 
 ### Ops and reliability
@@ -188,6 +190,7 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 - `server_model_configs.video_model_id` stores the active server-scoped video generation model selection; `NULL` means video generation is disabled until a model is explicitly selected again.
 - `server_channel_scope_configs.thought_log_channel_disc_id` stores the optional server-scoped channel where provider reasoning summaries are posted after successful streamed chat turns.
 - `server_channel_scope_configs.crosschannel_blocklist_ids` stores the server-scoped channel blocklist for tool-driven `cross_channel_message` dispatch. Blocking a forum/media parent also blocks visits into threads under that parent.
+- `channel_prompt_overrides` (`(server_id, channel_disc_id)` PK) stores the optional per-channel system prompt set by `/server channel-prompt`. `channel_prompt_mode` is `append` (the prompt is injected as a distinct `SYSTEM_CHANNEL_PROMPT` block after the server system prompt) or `replace` (the prompt takes over the system-prompt slot). Persona prompt and persona attributes are never affected. Resolved per request via `getCachedChannelPrompt` (TTL cache with negative caching). Per-channel data is server-local and is not exported.
 - `server_welcome_configs.welcome_channel_disc_id` stores the single configured join-welcome channel per server.
 - `server_welcome_configs.welcome_prompt` stores the required additional greeting instruction shown in `/server welcome-channel set`.
 - `server_welcome_configs.welcome_persona_id` stores the selected welcome persona; `NULL` means random persona selection per join.

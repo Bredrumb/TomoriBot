@@ -52,7 +52,7 @@ export default {
       comfyui_page3_title: `ComfyUI Img2Img`,
       comfyui_page3_description: `3ページ目では、画像参照つきのフローと img2img 的な扱いを説明します。`,
       comfyui_page3_image_refs_field: `参照画像の集め方`,
-      comfyui_page3_image_refs_value: `\`generate_image\` では、\`media_id\` で参照した Discord メッセージ内の全画像が追加され、\`target_identity\` を使うとユーザーまたはペルソナのアバターも追加参照として渡せます。\`generate_video\` では、\`media_id\` で参照したメッセージの最初の画像だけが開始フレーム候補になります。`,
+      comfyui_page3_image_refs_value: `\`generate_image\` では、\`media_id\` で参照した Discord メッセージ内の全画像が追加され、\`target_identity\` を使うと 1 人以上のユーザーまたはペルソナのアバターを追加参照として渡せます。\`generate_video\` では、\`media_id\` で参照したメッセージの最初の画像だけが開始フレーム候補になります。`,
       comfyui_page3_reference_tokens_field: `参照画像プレースホルダー`,
       comfyui_page3_reference_tokens_value: `TomoriBot は \`{TOMORI_REFERENCE_IMAGE_COUNT}\`、\`{TOMORI_REFERENCE_IMAGES}\`、\`{TOMORI_REFERENCE_IMAGES_JSON}\` に加えて、\`{TOMORI_REFERENCE_IMAGE_1_DATA_URL}\`、\`{TOMORI_REFERENCE_IMAGE_1_BASE64}\`、\`{TOMORI_REFERENCE_IMAGE_1_MIME_TYPE}\`、URL がある場合は \`{TOMORI_REFERENCE_IMAGE_1_URL}\` も渡します。複数ある場合は \`_2_\`、\`_3_\`… と同じ形式で増えます。`,
       comfyui_page3_reference_note_field: `重要な注意点`,

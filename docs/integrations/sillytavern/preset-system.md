@@ -235,15 +235,15 @@ When the preset walker encounters a marker node, it pulls items from the corresp
 
 | ST Marker | ContextItemTag | Native Block | Typical TomoriBot Source |
 |-----------|---------------|--------------|--------------------------|
-| `main` | `SYSTEM_HUMANIZER_RULES` (first item only) | System prompt | `/config system-prompt set` if present, otherwise the built-in fallback |
-| `charDescription` | `SYSTEM_HUMANIZER_RULES` (remaining items) | Persona prompt | `/persona prompt set` |
+| `main` | `SYSTEM_HUMANIZER_RULES` (first item only), then `SYSTEM_CHANNEL_PROMPT` | System prompt + per-channel append prompt | `/config system-prompt set` (or fallback), plus `/server channel-prompt` in append mode |
+| `charDescription` | `SYSTEM_PERSONA_PROMPT` | Persona prompt | `/persona prompt set` |
 | `charPersonality` | `SYSTEM_PERSONALITY` | Personality attributes | `/persona attribute add` |
 | `dialogueExamples` | `DIALOGUE_SAMPLE` | Sample dialogues | `/persona sample-dialogue add` |
 | `chatHistory` | `DIALOGUE_HISTORY` | Conversation history | Live channel message history |
 | `worldInfoBefore` | `KNOWLEDGE_SERVER_DOCUMENTS` | RAG documents | Retrieved document context / uploaded docs |
 | `worldInfoAfter` | `KNOWLEDGE_SERVER_DOCUMENTS` | RAG documents | Retrieved document context / uploaded docs |
 
-**Special case: `main` and `charDescription`** — Both markers share the `SYSTEM_HUMANIZER_RULES` tag because the native builder groups system prompt + persona prompt under one tag. The `main` marker pulls only the first item (system prompt), leaving the rest for `charDescription` (persona prompt).
+**Special case: `main`** — The `main` marker pulls the first `SYSTEM_HUMANIZER_RULES` item (the system prompt) and then the `SYSTEM_CHANNEL_PROMPT` item if present, keeping a per-channel append prompt directly after the system prompt. In `replace` mode there is no separate channel block — the channel prompt has already taken over the `SYSTEM_HUMANIZER_RULES` content upstream. The persona prompt is carried by `SYSTEM_PERSONA_PROMPT` and pulled by `charDescription`.
 
 These marker-controlled blocks are usually **moved, not removed**. The real suppressions are narrow:
 - The built-in fallback system prompt is removed only when a preset is active and the user has not set `/config system-prompt set`

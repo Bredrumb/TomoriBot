@@ -52,7 +52,7 @@ export default {
       comfyui_page3_title: `ComfyUI Img2Img`,
       comfyui_page3_description: `Page 3 covers reference-image behavior for image and video flows.`,
       comfyui_page3_image_refs_field: `How References Are Gathered`,
-      comfyui_page3_image_refs_value: `For \`generate_image\`, \`media_id\` contributes all images from the referenced Discord message and \`target_identity\` can add a user or persona avatar as another reference. For \`generate_video\`, \`media_id\` contributes the first image from that message as the starting frame.`,
+      comfyui_page3_image_refs_value: `For \`generate_image\`, \`media_id\` contributes all images from the referenced Discord message and \`target_identity\` can add one or more user or persona avatars as extra references. For \`generate_video\`, \`media_id\` contributes the first image from that message as the starting frame.`,
       comfyui_page3_reference_tokens_field: `Reference Placeholders`,
       comfyui_page3_reference_tokens_value: `TomoriBot exposes \`{TOMORI_REFERENCE_IMAGE_COUNT}\`, \`{TOMORI_REFERENCE_IMAGES}\`, \`{TOMORI_REFERENCE_IMAGES_JSON}\`, and indexed values such as \`{TOMORI_REFERENCE_IMAGE_1_DATA_URL}\`, \`{TOMORI_REFERENCE_IMAGE_1_BASE64}\`, \`{TOMORI_REFERENCE_IMAGE_1_MIME_TYPE}\`, and \`{TOMORI_REFERENCE_IMAGE_1_URL}\` when a source URL exists. The same indexed pattern continues for \`_2_\`, \`_3_\`, and so on.`,
       comfyui_page3_reference_note_field: `Important Caveat`,

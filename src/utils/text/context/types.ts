@@ -64,6 +64,13 @@ export interface BuildContextParams {
     attributes: string[];
   }>;
   tomoriConfig: AssembledServerConfig;
+  /**
+   * Per-channel system prompt override resolved at the call site (null when none).
+   * `append` injects the prompt as a distinct SYSTEM_CHANNEL_PROMPT block after the
+   * server system prompt; `replace` substitutes the channel prompt for the server
+   * system prompt's content. Persona prompt and persona attributes are never affected.
+   */
+  channelPromptOverride?: { prompt: string; mode: import("@/types/db/schema").ChannelPromptMode } | null;
   personaPrompt?: string | null;
   personaLineageId?: number;
   isDMChannel?: boolean;

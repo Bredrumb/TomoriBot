@@ -287,6 +287,36 @@ RP設定を無効化したチャンネル **{disabled_count}** 件: {disabled_ch
         not_configured_description: `このサーバーには現在歓迎チャンネルが設定されていません。`,
       },
     },
+    "channel-prompt": {
+      description: `特定のチャンネルだけに適用するシステムプロンプトを設定します（そのチャンネルでサーバープロンプトに追記または置き換え）。`,
+      channel_description: `このプロンプトを適用するチャンネルです。`,
+      modal_title: `チャンネルシステムプロンプト`,
+      part1_label: `チャンネルプロンプト（パート1）`,
+      part1_description: `すべての欄を空にして送信すると、このチャンネルのプロンプトが削除されます。`,
+      part1_placeholder: `このチャンネルだけで適用したい振る舞い…`,
+      part2_label: `チャンネルプロンプト（パート2）`,
+      part2_placeholder: `続き（任意）…`,
+      part3_label: `チャンネルプロンプト（パート3）`,
+      part3_placeholder: `続き（任意）…`,
+      part4_label: `チャンネルプロンプト（パート4）`,
+      part4_placeholder: `続き（任意）…`,
+      mode_label: `プロンプトモード`,
+      mode_description: `このチャンネルで、サーバーのシステムプロンプトとどう組み合わせるかを選びます。`,
+      mode_append_label: `追記`,
+      mode_append_desc: `このチャンネルでサーバーのシステムプロンプトの後に追加されます（デフォルト）。`,
+      mode_replace_label: `置き換え`,
+      mode_replace_desc: `このチャンネルでサーバーのシステムプロンプトを完全に置き換えます。`,
+      nothing_to_remove_title: `チャンネルプロンプトは未設定です`,
+      nothing_to_remove_description: `{channel} には削除するチャンネルプロンプトがありません。`,
+      removed_title: `チャンネルプロンプトを削除しました`,
+      removed_description: `{channel} のチャンネルプロンプトを削除しました。今後はサーバーのシステムプロンプトが適用されます。`,
+      saved_title: `チャンネルプロンプトを保存しました`,
+      saved_description: `モード: **{mode}**（{channel}）。
+
+\`\`\`
+{preview}
+\`\`\``,
+    },
     "thought-logs-channel": {
       description: `このサーバーの思考ログチャンネルを設定または解除します。`,
       channel_description: `推論サマリーを投稿するテキストチャンネルです。同じチャンネルをもう一度選ぶと無効化されます。`,

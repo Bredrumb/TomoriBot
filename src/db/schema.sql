@@ -2776,3 +2776,29 @@ CREATE TRIGGER update_user_personalization_configs_timestamp
 
 -- Memory tag filtering toggle (May 2026)
 -- Note: memory_tagging_enabled and channel_memory_enabled now live in server_memory_configs (per-domain split).
+
+-- ============================================================================
+-- CHANNEL SYSTEM PROMPT OVERRIDES (June 2026)
+-- Per-channel system prompt scoping. When a row exists for a channel, its
+-- prompt either appends after (mode = 'append') or fully replaces
+-- (mode = 'replace') the server-level system prompt in that channel only.
+-- Per-channel data (not portable across servers), so it is never exported.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS channel_prompt_overrides (
+    server_id INT NOT NULL REFERENCES servers(server_id) ON DELETE CASCADE,
+    channel_disc_id TEXT NOT NULL,
+    channel_prompt TEXT NOT NULL,
+    channel_prompt_mode TEXT NOT NULL DEFAULT 'append' CHECK (channel_prompt_mode IN ('append', 'replace')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (server_id, channel_disc_id)
+);
+
+-- Index for fast per-server channel prompt lookups
+CREATE INDEX IF NOT EXISTS idx_channel_prompt_overrides_server ON channel_prompt_overrides(server_id);
+
+-- updated_at trigger for channel_prompt_overrides (DROP first for idempotency)
+DROP TRIGGER IF EXISTS update_channel_prompt_overrides_timestamp ON channel_prompt_overrides;
+CREATE TRIGGER update_channel_prompt_overrides_timestamp
+    BEFORE UPDATE ON channel_prompt_overrides
+    FOR EACH ROW EXECUTE FUNCTION update_timestamp();

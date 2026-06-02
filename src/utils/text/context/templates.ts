@@ -102,6 +102,7 @@ export async function buildPromptContextItems(params: {
     attributes: string[];
   }>;
   tomoriConfig: AssembledServerConfig;
+  channelPromptOverride?: { prompt: string; mode: import("@/types/db/schema").ChannelPromptMode } | null;
   personaPrompt?: string | null;
   isUserImpersonation: boolean;
   impersonatedIdentityName: string | null;
@@ -114,8 +115,16 @@ export async function buildPromptContextItems(params: {
   const contextItems: StructuredContextItem[] = [];
 
   if (!params.isUserImpersonation) {
-    const systemPrompt =
+    const channelOverride = params.channelPromptOverride;
+
+    // 1. Resolve the server-level system prompt (or default fallback).
+    const baseSystemPrompt =
       params.tomoriConfig.system_prompt?.trim() || (params.suppressDefaultSystemPrompt ? null : DEFAULT_SYSTEM_PROMPT);
+
+    // 2. Replace mode: the channel prompt fully takes over the system-prompt slot's
+    //    content (persona prompt + attributes below are untouched). Otherwise keep
+    //    the server/default system prompt in that slot.
+    const systemPrompt = channelOverride?.mode === "replace" ? channelOverride.prompt : baseSystemPrompt;
 
     if (systemPrompt) {
       const humanizerText = await params.convertMentions(
@@ -131,6 +140,25 @@ export async function buildPromptContextItems(params: {
         role: "system",
         parts: [{ type: "text", text: humanizerText }],
         metadataTag: ContextItemTag.SYSTEM_HUMANIZER_RULES,
+      });
+    }
+
+    // 3. Append mode: emit the channel prompt as its own distinct block placed
+    //    immediately after the system prompt (and before the persona prompt).
+    if (channelOverride?.mode === "append" && channelOverride.prompt.trim()) {
+      const channelPromptText = await params.convertMentions(
+        await params.toolPromptMacroResolver.expand(channelOverride.prompt),
+        params.client,
+        params.guildId,
+        "User",
+        params.botName,
+        params.tomoriConfig.personal_memories_enabled,
+        params.snapshot,
+      );
+      contextItems.push({
+        role: "system",
+        parts: [{ type: "text", text: channelPromptText }],
+        metadataTag: ContextItemTag.SYSTEM_CHANNEL_PROMPT,
       });
     }
   }

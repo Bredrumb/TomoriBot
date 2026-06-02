@@ -23,6 +23,8 @@ export default {
 \`\`\``,
       cleared_title: `Physical Appearance Cleared`,
       cleared_description: `Cleared physical appearance tags for **{persona_name}**.`,
+      no_permission_title: `🔴 Permission Denied`,
+      no_permission_description: `You need the **Manage Server** permission to edit persona image tags.`,
     },
     attribute: {
       description: `Manage persona attributes.`,

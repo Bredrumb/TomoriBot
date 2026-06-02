@@ -698,6 +698,40 @@ Each item can have optional descriptions and can be marked as spoilers.
 }
 ```
 
+### TomoriBot Generated Image Pattern
+
+Generated image tool output uses Components V2 so the timing subtext appears visually below the rendered image instead of above the attachment. The message sends the image as an attachment, exposes that attachment through a Media Gallery item, then follows it with a Text Display using Discord subtext markdown.
+
+```json
+{
+  "flags": 32768,
+  "components": [
+    {
+      "type": 12,
+      "items": [
+        {
+          "media": {
+            "url": "attachment://generated_1770000000000.png"
+          }
+        }
+      ]
+    },
+    {
+      "type": 10,
+      "content": "-# Generated after 4.2 seconds."
+    }
+  ]
+}
+```
+
+Implementation notes:
+
+- The attachment filename must exactly match the `attachment://<filename>` URL.
+- Components V2 messages must set `MessageFlags.IsComponentsV2` and must not include `content` or `embeds`.
+- Attachments on Components V2 messages do not render unless they are referenced by a component.
+- Webhook sends through discord.js must also pass `withComponents: true`.
+- Image delivery should fall back to the legacy `files`-only payload if the Components V2 send fails.
+
 ---
 
 ## File

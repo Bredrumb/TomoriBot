@@ -116,6 +116,14 @@ Caching reduces repeated DB/API calls and helps meet Discord interaction timing 
 - Stores original markdown behind rendered table images
 - Default TTL: `MARKDOWN_TABLE_CACHE_TTL_MINUTES` (default 120)
 
+### 14b) Channel system prompt cache (`channelPromptCache.ts`)
+
+- **Scope:** per `(server_id, channel_disc_id)` — one entry per channel that may carry an override
+- **Value:** `{ prompt, mode }` (`append`/`replace`) for the per-channel system prompt, or `null`
+- **Negative caching:** channels with no override cache `null` so DM channels and unconfigured channels cost a single cheap lookup
+- Default TTL: `TOMORI_STATE_CACHE_TTL_MINUTES` (default 10)
+- Backed by the standalone `channel_prompt_overrides` table; `ChannelPromptRepository` invalidates the entry after each successful write/delete (`invalidateChannelPromptCache`). Mirrors the per-channel LLM override cache (`channelLlmCache.ts`).
+
 ### 14) Persona picker avatar session cache (transient, in `utils/discord/ui/personaPagination.ts`)
 
 Unlike the caches above, this one is **not** stored in `src/utils/cache/`. It is an ephemeral
@@ -155,6 +163,7 @@ Common examples:
 - whitelist/inherited cooldown override changes -> `invalidateWhitelistCache(serverDiscId, channelDiscId?)`
 - emoji/sticker update events -> `invalidateEmojiStickerCache(serverId)`
 - persona webhook/avatar changes -> webhook invalidation helpers
+- channel system prompt changes -> `invalidateChannelPromptCache(serverId, channelDiscId)` (handled inside `ChannelPromptRepository`)
 
 ## Emergency Memory Cleanup
 

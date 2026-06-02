@@ -815,6 +815,26 @@ export const channelLlmOverrideSchema = z.object({
 });
 export type ChannelLlmOverrideRow = z.infer<typeof channelLlmOverrideSchema>;
 
+/** Prompt-mode values for a per-channel system prompt override. */
+export const CHANNEL_PROMPT_MODES = ["append", "replace"] as const;
+export type ChannelPromptMode = (typeof CHANNEL_PROMPT_MODES)[number];
+
+/**
+ * Schema for per-channel system prompt overrides.
+ * When a row exists for a channel, its prompt either appends after
+ * (mode = "append") or fully replaces (mode = "replace") the server-level
+ * system prompt in that channel only. Persona prompt/attributes are untouched.
+ */
+export const channelPromptOverrideSchema = z.object({
+  server_id: z.number(),
+  channel_disc_id: z.string(),
+  channel_prompt: z.string(),
+  channel_prompt_mode: z.enum(CHANNEL_PROMPT_MODES).default("append"),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type ChannelPromptOverrideRow = z.infer<typeof channelPromptOverrideSchema>;
+
 export const tomoriPresetSchema = z.object({
   persona_preset_id: z.number(),
   persona_preset_name: z.string(),

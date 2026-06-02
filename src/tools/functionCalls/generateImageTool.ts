@@ -10,6 +10,7 @@ import sharp from "sharp";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import { resolveAvatarByIdentity, type ResolvedAvatarData } from "@/utils/discord/avatarResolver";
+import { buildGeneratedImageComponentsV2Payload } from "@/utils/discord/generatedImageMessage";
 import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import {
   buildImageToolNoticeDescription,
@@ -44,7 +45,6 @@ import type { ProviderNativeImageGenerationResult } from "@/types/provider/featu
 import { optimizeImageBuffer } from "@/utils/image/imageProcessor";
 import type { CustomEndpointRow } from "@/types/db/schema";
 import { readImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
-import { buildImageTagDetectionNoticeLines } from "@/utils/image/imageNoticeContext";
 
 const IMAGE_REFERENCE_MAX_COUNT = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_COUNT ?? "3", 10);
 const IMAGE_REFERENCE_MAX_TOTAL_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_TOTAL_BYTES ?? "6291456", 10);
@@ -102,6 +102,98 @@ function buildImageToolDescription(capabilities: ImageToolCapabilities): string 
   return `Generate images using the active image backend (${capabilities.sourceLabel}). This schema only exposes supported modes for the configured backend: ${modeList}.${negativePromptNote} Sends the result directly to Discord.`;
 }
 
+/**
+ * Join mode labels into a human-readable list ("a", "a or b", "a, b, or c").
+ * Keeps capability-specific parameter guidance limited to supported modes.
+ * @param modes - Ordered list of supported mode labels
+ * @returns Comma/"or"-joined list, or empty string when no modes are supported
+ */
+function formatModeList(modes: string[]): string {
+  // 1. Zero or one item needs no conjunction
+  if (modes.length <= 1) {
+    return modes[0] ?? "";
+  }
+  // 2. Two items join with a bare "or"
+  if (modes.length === 2) {
+    return `${modes[0]} or ${modes[1]}`;
+  }
+  // 3. Three or more use an Oxford-comma list
+  return `${modes.slice(0, -1).join(", ")}, or ${modes[modes.length - 1]}`;
+}
+
+/**
+ * Build the `prompt` description, appending edit-mode guidance only for modes
+ * the active backend supports. Prevents inpaint/outpaint instructions from
+ * leaking into backends (e.g. text-to-image-only) that cannot perform them.
+ * @param capabilities - Resolved backend capabilities
+ * @returns Capability-trimmed prompt description
+ */
+function buildImagePromptDescription(capabilities: ImageToolCapabilities): string {
+  let description =
+    "Describe the desired image. Include relevant Physical Appearance context for known users/personas.";
+  // 1. Only mention inpaint guidance when the backend can inpaint
+  if (capabilities.inpaint) {
+    description += " For inpaint, describe only the local replacement.";
+  }
+  // 2. Only mention outpaint guidance when the backend can outpaint
+  if (capabilities.outpaint) {
+    description += " For outpaint, describe what should continue into the new canvas.";
+  }
+  return description;
+}
+
+/**
+ * Build the `media_id` description, listing only the reference-consuming modes
+ * the active backend supports (img2img, inpaint, outpaint).
+ * @param capabilities - Resolved backend capabilities
+ * @returns Capability-trimmed media_id description
+ */
+function buildImageMediaIdDescription(capabilities: ImageToolCapabilities): string {
+  const referenceModes: string[] = [];
+  if (capabilities.imageToImage) referenceModes.push("img2img");
+  if (capabilities.inpaint) referenceModes.push("inpaint");
+  if (capabilities.outpaint) referenceModes.push("outpaint");
+  const modeList = formatModeList(referenceModes);
+  return modeList ? `Reference media ID such as media_1. Use for ${modeList}.` : "Reference media ID such as media_1.";
+}
+
+/**
+ * Build the `denoise` description, naming only the strength-controlled modes
+ * the active backend supports. Outpaint runs through the inpaint path, so it is
+ * folded into the inpaint label.
+ * @param capabilities - Resolved backend capabilities
+ * @returns Capability-trimmed denoise description
+ */
+function buildImageDenoiseDescription(capabilities: ImageToolCapabilities): string {
+  const strengthModes: string[] = [];
+  if (capabilities.imageToImage) strengthModes.push("img2img");
+  if (capabilities.inpaint || capabilities.outpaint) strengthModes.push("inpaint");
+  const label = strengthModes.join("/") || "img2img";
+  // Capitalize the leading mode label to match the rest of the schema's prose
+  const capitalized = `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
+  return `${capitalized} strength from 0 to 1. Lower preserves more.`;
+}
+
+/**
+ * Resolve a capability-aware description override for parameters whose static
+ * text references modes that may be unsupported by the active backend.
+ * @param parameterName - Schema property name
+ * @param capabilities - Resolved backend capabilities
+ * @returns Override description, or null to keep the static description as-is
+ */
+function resolveImageParameterDescription(parameterName: string, capabilities: ImageToolCapabilities): string | null {
+  switch (parameterName) {
+    case "prompt":
+      return buildImagePromptDescription(capabilities);
+    case "media_id":
+      return buildImageMediaIdDescription(capabilities);
+    case "denoise":
+      return buildImageDenoiseDescription(capabilities);
+    default:
+      return null;
+  }
+}
+
 function includeImageParameter(parameterName: string, capabilities: ImageToolCapabilities): boolean {
   if (parameterName === "prompt" || parameterName === "aspect_ratio") {
     return true;
@@ -126,9 +218,16 @@ function buildImageToolParameters(tool: Tool, capabilities: ImageToolCapabilitie
   const properties: ToolParameterSchema["properties"] = {};
 
   for (const [parameterName, parameterSchema] of Object.entries(tool.parameters.properties)) {
-    if (includeImageParameter(parameterName, capabilities)) {
-      properties[parameterName] = parameterSchema;
+    if (!includeImageParameter(parameterName, capabilities)) {
+      continue;
     }
+
+    // Override descriptions that reference unsupported modes; clone the schema so
+    // the shared static class definition is never mutated in place.
+    const overriddenDescription = resolveImageParameterDescription(parameterName, capabilities);
+    properties[parameterName] = overriddenDescription
+      ? { ...parameterSchema, description: overriddenDescription }
+      : parameterSchema;
   }
 
   return {
@@ -295,8 +394,12 @@ export class GenerateImageTool extends BaseTool {
         description: "Optional zoom-out source scale from 0.5 to 0.95.",
       },
       target_identity: {
-        type: "string",
-        description: "User/persona identity whose avatar should be used as a reference.",
+        type: "array",
+        description:
+          "One or more user/persona identities whose avatars should be used as references (e.g. ['Aphel', 'Miku']). Each name is resolved to that user's or persona's avatar.",
+        items: {
+          type: "string",
+        },
       },
       aspect_ratio: {
         type: "string",
@@ -513,6 +616,47 @@ export class GenerateImageTool extends BaseTool {
     return null;
   }
 
+  /**
+   * Normalize the `target_identity` argument into an ordered, de-duplicated list
+   * of identity strings. Accepts the new string-array form, a single string
+   * (legacy/lenient models), and the deprecated `user_id` alias.
+   * @param args - Raw tool arguments
+   * @returns Trimmed, case-insensitively de-duplicated identity names
+   */
+  private parseTargetIdentities(args: Record<string, unknown>): string[] {
+    const raw = args.target_identity ?? args.user_id;
+    const collected: string[] = [];
+
+    // 1. Gather raw entries from either an array or a single string
+    if (Array.isArray(raw)) {
+      for (const entry of raw) {
+        if (typeof entry === "string") {
+          collected.push(entry);
+        }
+      }
+    } else if (typeof raw === "string") {
+      collected.push(raw);
+    }
+
+    // 2. Trim, drop empties, and de-duplicate while preserving first-seen order
+    const seen = new Set<string>();
+    const identities: string[] = [];
+    for (const candidate of collected) {
+      const trimmed = candidate.trim();
+      if (!trimmed) {
+        continue;
+      }
+      const key = trimmed.toLowerCase();
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      identities.push(trimmed);
+    }
+
+    return identities;
+  }
+
   private resolveMediaId(rawMediaId: string | undefined, context: ToolContext): string | undefined {
     if (!rawMediaId) {
       return undefined;
@@ -606,11 +750,20 @@ export class GenerateImageTool extends BaseTool {
   private async sendGeneratedImage(
     context: ToolContext,
     attachment: AttachmentBuilder,
+    attachmentFilename: string,
+    elapsedMs: number,
+    referencedIdentities: string[] = [],
   ): Promise<import("discord.js").Message> {
     const threadId =
       "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
         ? context.channel.id
         : undefined;
+    const componentsPayload = buildGeneratedImageComponentsV2Payload(
+      attachmentFilename,
+      elapsedMs,
+      context.locale,
+      referencedIdentities,
+    );
 
     if (context.webhook && context.personaUsername) {
       try {
@@ -618,6 +771,8 @@ export class GenerateImageTool extends BaseTool {
           context.webhook,
           {
             files: [attachment],
+            ...componentsPayload,
+            withComponents: true,
             ...(threadId ? { threadId } : {}),
           },
           {
@@ -627,11 +782,35 @@ export class GenerateImageTool extends BaseTool {
           },
         );
       } catch (error) {
-        log.warn("Failed to send generated image via webhook, falling back to bot message", error as Error);
+        log.warn("Failed to send generated image via webhook with Components V2, retrying without components", error);
+        try {
+          return await sendWebhookMessageWithIdentity(
+            context.webhook,
+            {
+              files: [attachment],
+              ...(threadId ? { threadId } : {}),
+            },
+            {
+              username: context.personaUsername,
+              avatarUrl: context.personaAvatarUrl,
+              avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
+            },
+          );
+        } catch (fallbackError) {
+          log.warn("Failed to send generated image via webhook, falling back to bot message", fallbackError as Error);
+        }
       }
     }
 
-    return await context.channel.send({ files: [attachment] });
+    try {
+      return await context.channel.send({
+        files: [attachment],
+        ...componentsPayload,
+      });
+    } catch (error) {
+      log.warn("Failed to send generated image with Components V2, falling back to attachment-only message", error);
+      return await context.channel.send({ files: [attachment] });
+    }
   }
 
   /**
@@ -1001,6 +1180,8 @@ export class GenerateImageTool extends BaseTool {
    * @returns Promise resolving to tool result with generated image
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
+    const startedAtMs = Date.now();
+
     // Validate parameters
     const validation = this.validateParameters(args);
     if (!validation.isValid) {
@@ -1031,10 +1212,10 @@ export class GenerateImageTool extends BaseTool {
     const prompt = args.prompt as string;
     const rawMediaId = args.media_id as string | undefined;
     const messageId = this.resolveMediaId(rawMediaId, context);
-    const targetIdentity = (args.target_identity as string | undefined) ?? (args.user_id as string | undefined);
+    const targetIdentities = this.parseTargetIdentities(args);
     const requestedAspectRatio = typeof args.aspect_ratio === "string" ? args.aspect_ratio : null;
     let aspectRatio = requestedAspectRatio || "1:1";
-    const usesReferences = !!(messageId || targetIdentity);
+    const usesReferences = !!(messageId || targetIdentities.length > 0);
     const inpaint = this.shouldUseInpaint(args);
     const outpaint = this.shouldUseOutpaint(args);
     const explicitInpaint = this.isExplicitInpaintTrue(args);
@@ -1183,9 +1364,11 @@ export class GenerateImageTool extends BaseTool {
         ? effectiveNegativePrompt
         : undefined;
 
-      // Collect reference images from message attachments and/or profile picture
+      // Collect reference images from message attachments and/or profile pictures
       const referenceImages: ImageReference[] = [];
-      let avatarReferenceData: ResolvedAvatarData | null = null;
+      // Resolved avatar metadata, in request order, for every identity that was
+      // successfully fetched. Used to surface referenced users in the notice/embed.
+      const avatarReferences: ResolvedAvatarData[] = [];
 
       if (messageId) {
         log.info(`Extracting images from message ${messageId} for image-to-image generation`);
@@ -1194,39 +1377,55 @@ export class GenerateImageTool extends BaseTool {
         log.info(`Using ${messageImages.length} reference image(s) from message ${messageId} for generation`);
       }
 
-      const allowAvatarReference = !!targetIdentity && !(inpaint && !!messageId);
+      // Skip avatar references during inpaint when a message image is the edit source —
+      // the source image already defines the layout being edited.
+      const allowAvatarReference = targetIdentities.length > 0 && !(inpaint && !!messageId);
 
-      if (targetIdentity && allowAvatarReference) {
-        try {
-          const avatarData = await resolveAvatarByIdentity(targetIdentity, context, {
-            forceStatic: false,
-          });
-          const avatarBase64 = await this.fetchAndConvertImageToBase64(avatarData.avatarUrl, context.abortSignal);
-          referenceImages.push({
-            mimeType: "image/png",
-            data: avatarBase64,
-            sourceType: "avatar",
-          });
-          avatarReferenceData = avatarData;
-          const avatarTypeLabel =
-            avatarData.sourceType === "persona" ? "persona" : avatarData.sourceType === "webhook" ? "webhook" : "user";
-          log.info(`Added profile picture reference for ${avatarTypeLabel} ${avatarData.username} (${targetIdentity})`);
-        } catch (avatarErr) {
-          log.error(`Failed to fetch profile picture for identity ${targetIdentity}`, avatarErr as Error);
-          if (referenceImages.length > 0) {
-            log.warn(
-              `Continuing image generation without target_identity "${targetIdentity}" because message reference image(s) are available`,
-            );
-          } else {
+      if (allowAvatarReference) {
+        const failedIdentities: string[] = [];
+
+        // 1. Resolve each requested identity to an avatar, normalizing gif → png at
+        //    the URL level via forceStatic (same behavior as peek_profile_picture).
+        for (const identity of targetIdentities) {
+          try {
+            const avatarData = await resolveAvatarByIdentity(identity, context, {
+              forceStatic: true,
+            });
+            const avatarBase64 = await this.fetchAndConvertImageToBase64(avatarData.avatarUrl, context.abortSignal);
+            referenceImages.push({
+              mimeType: "image/png",
+              data: avatarBase64,
+              sourceType: "avatar",
+            });
+            avatarReferences.push(avatarData);
+            const avatarTypeLabel =
+              avatarData.sourceType === "persona"
+                ? "persona"
+                : avatarData.sourceType === "webhook"
+                  ? "webhook"
+                  : "user";
+            log.info(`Added profile picture reference for ${avatarTypeLabel} ${avatarData.username} (${identity})`);
+          } catch (avatarErr) {
+            log.error(`Failed to fetch profile picture for identity ${identity}`, avatarErr as Error);
+            failedIdentities.push(identity);
+          }
+        }
+
+        // 2. Only fail outright when every reference source came up empty; otherwise
+        //    continue with whatever references (message images / other avatars) resolved.
+        if (failedIdentities.length > 0) {
+          if (referenceImages.length === 0) {
             return {
               success: false,
               error: "Failed to fetch profile picture for target_identity",
-              message:
-                avatarErr instanceof Error
-                  ? avatarErr.message
-                  : "Could not fetch an avatar for that identity. Please confirm the name or persona and try again.",
+              message: `Could not fetch an avatar for: ${failedIdentities.join(", ")}. Please confirm the name(s) or persona(s) and try again.`,
             };
           }
+          log.warn(
+            `Continuing image generation without target_identit${failedIdentities.length > 1 ? "ies" : "y"} ${failedIdentities
+              .map((identity) => `"${identity}"`)
+              .join(", ")} because other reference image(s) are available`,
+          );
         }
       }
 
@@ -1248,6 +1447,12 @@ export class GenerateImageTool extends BaseTool {
         }
       }
 
+      // Avatars are appended after message references and normalized in order, so the
+      // avatars that survived the count/byte caps are a prefix of the resolved list.
+      const survivingAvatarCount = referenceImages.filter((reference) => reference.sourceType === "avatar").length;
+      const usedAvatarReferences = avatarReferences.slice(0, survivingAvatarCount);
+      const referencedIdentityNames = usedAvatarReferences.map((avatarReference) => avatarReference.username);
+
       if (!context.suppressProgressNotices) {
         const actualUsesReferences = referenceImages.length > 0;
         const baseNoticeDescription = localizer(
@@ -1258,10 +1463,6 @@ export class GenerateImageTool extends BaseTool {
         );
         const referencedMessageUrl = messageId ? buildReferencedMessageUrl(context, messageId) : null;
         const messageReferenceCount = referenceImages.filter((reference) => reference.sourceType === "message").length;
-        const avatarReferenceUsed =
-          avatarReferenceData && referenceImages.some((reference) => reference.sourceType === "avatar")
-            ? avatarReferenceData
-            : null;
         const extraNoticeLines: string[] = [];
         const imageModeKey = outpaint
           ? "tools.image.mode_outpaint"
@@ -1280,13 +1481,6 @@ export class GenerateImageTool extends BaseTool {
             }),
           );
         }
-        if ((context.tomoriState.config.image_default_positive_tags ?? []).length > 0) {
-          extraNoticeLines.push(localizer(context.locale, "tools.image.notice_default_positive_tags_line"));
-        }
-        if (appliedNegativePrompt) {
-          extraNoticeLines.push(localizer(context.locale, "tools.image.notice_default_negative_tags_line"));
-        }
-        extraNoticeLines.push(...buildImageTagDetectionNoticeLines(context));
         if (inpaint && !outpaint && maskPrompt) {
           extraNoticeLines.push(`Mask: \`${this.formatNoticeValue(maskPrompt)}\``);
         }
@@ -1301,10 +1495,10 @@ export class GenerateImageTool extends BaseTool {
                 }),
           );
         }
-        if (avatarReferenceUsed) {
+        if (referencedIdentityNames.length > 0) {
           extraNoticeLines.push(
             localizer(context.locale, "tools.image.notice_avatar_reference_line", {
-              name: avatarReferenceUsed.username,
+              name: referencedIdentityNames.join(", "),
             }),
           );
         }
@@ -1315,6 +1509,7 @@ export class GenerateImageTool extends BaseTool {
             }),
           );
         }
+        extraNoticeLines.push("");
         extraNoticeLines.push(localizer(context.locale, "tools.image.notice_image_tags_tip_line"));
         await sendToolProgressNotice(
           context,
@@ -1575,12 +1770,19 @@ export class GenerateImageTool extends BaseTool {
 
       // Convert base64 to buffer and send to Discord
       const imageBuffer = Buffer.from(generatedImageData, "base64");
+      const attachmentFilename = `generated_${Date.now()}.png`;
       const attachment = new AttachmentBuilder(imageBuffer, {
-        name: `generated_${Date.now()}.png`,
+        name: attachmentFilename,
       });
 
       // Send image to Discord channel and capture the sent message for metadata
-      const sentMessage = await this.sendGeneratedImage(context, attachment);
+      const sentMessage = await this.sendGeneratedImage(
+        context,
+        attachment,
+        attachmentFilename,
+        Date.now() - startedAtMs,
+        referencedIdentityNames,
+      );
 
       log.success("Successfully generated and sent image to Discord");
 

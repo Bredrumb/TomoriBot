@@ -46,6 +46,18 @@ export async function execute(
     return;
   }
 
+  // Check permissions (ManageGuild required)
+  const hasPermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
+  if (!hasPermission) {
+    await replyInfoEmbed(interaction, locale, {
+      titleKey: "commands.persona.image-tags.no_permission_title",
+      descriptionKey: "commands.persona.image-tags.no_permission_description",
+      color: ColorCode.ERROR,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
   let personaSelectionInteraction: ButtonInteraction | null = null;
   let modalSubmitInteraction: ModalSubmitInteraction | null = null;
   let selectedPersona: TomoriState | null = null;

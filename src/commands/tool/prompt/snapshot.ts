@@ -12,6 +12,7 @@ import {
 } from "@/utils/discord/embedClassifier";
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { getCachedChannelLlm } from "@/utils/cache/channelLlmCache";
+import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
 import { llmProviderRepo } from "@/utils/db/repositories";
 import { buildContext } from "@/utils/text/contextBuilder";
 import { getCachedActivePreset } from "@/utils/cache/stPresetCache";
@@ -378,6 +379,10 @@ export async function execute(
     const channelLlmOverride = await getCachedChannelLlm(selectedPersona.server_id, interaction.channelId);
     const effectiveLlm = selectedPersona.persona_llm ?? channelLlmOverride ?? selectedPersona.llm;
 
+    // Resolve any per-channel system prompt override so the snapshot reflects what the
+    // live pipeline would inject for this channel (append/replace). Mirrors contextPipeline.ts.
+    const channelPromptOverride = await getCachedChannelPrompt(selectedPersona.server_id, interaction.channelId);
+
     let effectivePersona = selectedPersona;
     if (effectiveLlm !== selectedPersona.llm) {
       effectivePersona = { ...selectedPersona, llm: effectiveLlm };
@@ -504,7 +509,7 @@ export async function execute(
           authorName = matchedPersona.persona_nickname;
           authorType = "persona";
           personaName = matchedPersona.persona_nickname;
-          effectiveAuthorId = `persona:${matchedPersona.persona_id ?? matchedPersona.persona_nickname}`;
+          effectiveAuthorId = String(matchedPersona.persona_id ?? matchedPersona.persona_nickname);
           syntheticUsers.set(effectiveAuthorId, { displayName: authorName, type: "persona" });
         } else if (webhookName) {
           authorName = webhookName;
@@ -685,11 +690,12 @@ export async function execute(
 
     // 13. Assemble context using the selected persona — buildContext handles preset routing internally
     // Mirror personal memories: only include public attributes for personas present in the
-    // fetched conversation history (userListSet contains "persona:{id}" entries from line 506).
+    // fetched conversation history (userListSet contains bare numeric persona_id strings, matching
+    // the real pipeline's contextPipeline.ts key format so applySyntheticPersonaAppearance works).
     const personaIdsInHistory = new Set(
       Array.from(userListSet)
-        .filter((id) => id.startsWith("persona:"))
-        .map((id) => Number.parseInt(id.slice("persona:".length), 10))
+        .filter((id) => /^\d+$/.test(id))
+        .map((id) => Number.parseInt(id, 10))
         .filter((id) => !Number.isNaN(id)),
     );
     const publicPersonaAttributes = personas
@@ -729,6 +735,7 @@ export async function execute(
       tomoriAttributes: selectedPersona.attribute_list,
       publicPersonaAttributes,
       tomoriConfig: effectivePersona.config,
+      channelPromptOverride,
       personaPrompt: selectedPersona.persona_prompt ?? null,
       personaLineageId: selectedPersona.persona_lineage_id,
       isDMChannel,
@@ -931,6 +938,7 @@ const TAG_LABELS: Record<string, TagLabel> = {
   [ContextItemTag.SYSTEM_INSTRUCTION_BLOCK]: { title: "System Instruction Block", hint: "system-managed" },
   [ContextItemTag.SYSTEM_PERSONALITY]: { title: "Persona Attributes", hint: "/persona attribute" },
   [ContextItemTag.SYSTEM_HUMANIZER_RULES]: { title: "System Prompt", hint: "/config system-prompt" },
+  [ContextItemTag.SYSTEM_CHANNEL_PROMPT]: { title: "Channel Prompt", hint: "/server channel-prompt" },
   [ContextItemTag.SYSTEM_PERSONA_PROMPT]: { title: "Persona Prompt", hint: "/persona prompt" },
   [ContextItemTag.SYSTEM_FUNCTION_GUIDE]: { title: "Function Guide", hint: "system-managed" },
   [ContextItemTag.KNOWLEDGE_SERVER_INFO]: { title: "Discord Server Info", hint: "system-managed" },

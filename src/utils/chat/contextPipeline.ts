@@ -20,6 +20,7 @@ import {
 } from "@/utils/tools/deliberateToolMode";
 import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
 import { buildContext, type SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
+import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { stripBridgePrefix, extractBridgeUserId, isMatrixBridgeWebhookUsername, isBridgeUserId } from "@/utils/bridges";
 import { checkTargetEmbedTitle } from "@/utils/discord/embedClassifier";
@@ -283,6 +284,12 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     }))
     .filter((persona) => persona.attributes.length > 0);
 
+  // Resolve any per-channel system prompt override (append/replace). Negative results
+  // are cached, so DM channels (which can never have an override) cost one cheap lookup.
+  const channelPromptOverride = effectivePersona.server_id
+    ? await getCachedChannelPrompt(effectivePersona.server_id, channel.id)
+    : null;
+
   const contextBuild = await buildContext({
     guildId: turn.serverDiscId,
     serverName: turn.serverName,
@@ -303,6 +310,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     tomoriAttributes: effectivePersona.attribute_list,
     publicPersonaAttributes,
     tomoriConfig: effectivePersona.config,
+    channelPromptOverride,
     personaPrompt: effectivePersona.persona_prompt ?? null,
     personaLineageId: effectivePersona.persona_lineage_id,
     isDMChannel: turn.isDMChannel,

@@ -69,6 +69,29 @@ function truncateNoticeText(value: string, maxLength: number): string {
   return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
+function joinNoticeLines(lines: string[]): string {
+  const paragraphs: string[] = [];
+  let currentParagraph: string[] = [];
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    if (trimmedLine.length === 0) {
+      if (currentParagraph.length > 0) {
+        paragraphs.push(currentParagraph.join("\n"));
+        currentParagraph = [];
+      }
+      continue;
+    }
+    currentParagraph.push(trimmedLine);
+  }
+
+  if (currentParagraph.length > 0) {
+    paragraphs.push(currentParagraph.join("\n"));
+  }
+
+  return paragraphs.join("\n\n");
+}
+
 function buildLabeledGenerationNoticeDescription(
   locale: string,
   baseDescription: string,
@@ -97,11 +120,9 @@ function buildLabeledGenerationNoticeDescription(
     localizer(locale, promptLineKey, { prompt: safePrompt }),
     ...metadataExtraLines.map((line) => line.trim()).filter((line) => line.length > 0),
   ].filter((line) => line.length > 0);
-  const trailingLines = extraLines.map((line) => line.trim()).filter((line) => line.length > 0);
+  const trailingLines = joinNoticeLines(extraLines);
 
-  return [baseWithTiming, metadataLines.join("\n"), trailingLines.join("\n")]
-    .filter((part) => part.length > 0)
-    .join("\n\n");
+  return [baseWithTiming, metadataLines.join("\n"), trailingLines].filter((part) => part.length > 0).join("\n\n");
 }
 
 export function buildImageToolNoticeDescription(

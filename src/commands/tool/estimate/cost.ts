@@ -12,6 +12,7 @@ import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomori
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { buildContext } from "@/utils/text/contextBuilder";
+import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
 import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
 import { truncateDialogueHistory } from "@/utils/text/contextTruncator";
 import {
@@ -897,6 +898,12 @@ async function buildRuntimeParityContext(
   const serverName = isDMChannel ? "Direct Message" : interaction.guild?.name || "Unknown Server";
   const serverDescription = isDMChannel ? null : interaction.guild?.description || null;
 
+  // Resolve per-channel system prompt override so the estimate stays in parity with
+  // what the live pipeline would actually inject for this channel (append/replace).
+  const channelPromptOverride = tomoriState.server_id
+    ? await getCachedChannelPrompt(tomoriState.server_id, interaction.channelId)
+    : null;
+
   const contextBuild = await buildContext({
     guildId: serverDiscId,
     serverName,
@@ -913,6 +920,7 @@ async function buildRuntimeParityContext(
     tomoriNickname: tomoriState.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
     tomoriAttributes: tomoriState.attribute_list,
     tomoriConfig: tomoriState.config,
+    channelPromptOverride,
     personaPrompt: tomoriState.persona_prompt ?? null,
     personaLineageId: tomoriState.persona_lineage_id,
     isDMChannel,

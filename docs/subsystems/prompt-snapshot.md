@@ -51,6 +51,9 @@ Flat-text, annotation-heavy. Each context block is prefixed with a locator heade
 === Persona Attributes (`/persona attribute`) ===
 ...attribute list...
 
+=== Channel Prompt (`/server channel-prompt`) ===
+...per-channel append-mode prompt (only present when an append override applies to this channel)...
+
 === Server Memories (`/memory server`) ===
 ...server memory lines...
 

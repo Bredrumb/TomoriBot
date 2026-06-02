@@ -23,6 +23,8 @@ export default {
 \`\`\``,
       cleared_title: `身体的外見をクリアしました`,
       cleared_description: `**{persona_name}** の身体的外見タグをクリアしました。`,
+      no_permission_title: `🔴 権限がありません`,
+      no_permission_description: `ペルソナ画像タグを編集するには**サーバーの管理**権限が必要です。`,
     },
     attribute: {
       description: `ペルソナの属性を管理します。`,

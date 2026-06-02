@@ -36,7 +36,7 @@ tail directives *after* this output, so the actual prompt the LLM sees is:
 
 | # | Contributor | File | Output tag | Skipped when |
 |---|-------------|------|-----------|--------------|
-| 01 | Prompt items | [`01-prompt-items.md`](./01-prompt-items) | `SYSTEM_HUMANIZER_RULES`, `SYSTEM_PERSONA_PROMPT`, `SYSTEM_PERSONALITY` | (always emits at least one in non-impersonation) |
+| 01 | Prompt items | [`01-prompt-items.md`](./01-prompt-items) | `SYSTEM_HUMANIZER_RULES`, `SYSTEM_CHANNEL_PROMPT`, `SYSTEM_PERSONA_PROMPT`, `SYSTEM_PERSONALITY` | (always emits at least one in non-impersonation) |
 | 02 | Server info | [`02-server-info.md`](./02-server-info) | `KNOWLEDGE_SERVER_INFO` | (always emits) |
 | 03 | Server memories | [`03-server-memories.md`](./03-server-memories) | `KNOWLEDGE_SERVER_MEMORIES` | impersonation; no memories |
 | 04 | Server emojis | [`04-server-emojis.md`](./04-server-emojis) | `KNOWLEDGE_SERVER_EMOJIS` | DM; `emoji_usage_enabled=false`; no guild emojis |
