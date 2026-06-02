@@ -192,6 +192,8 @@ export default {
     task_deleted_footer: `この予定タスクは今後実行されません。`,
     task_update_repeat_none: `1回のみ`,
     task_update_repeat_hours: `{repetition_interval_hours}時間ごと`,
+    expand_task_button: `全文を表示`,
+    expand_task_title: `タスクの全文`,
     reminder_triggered_title: `🔵 リマインダー通知`,
     task_triggered_title: `🔵 タスク通知`,
     triggered_description: `{reminder_purpose}`,

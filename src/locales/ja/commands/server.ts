@@ -580,7 +580,7 @@ RP設定を無効化したチャンネル **{disabled_count}** 件: {disabled_ch
         already_initialized_title: `初期化するものがありません`,
         already_initialized_description: `すべての絵文字とスタンプはすでに分析・分類されています。`,
         partial_success_title: `部分的に成功`,
-        partial_success_description: `{total}個の絵文字/スタンプのうち{successful}個を分析しました。{failed}個は処理されませんでした。残りの絵文字/スタンプを処理するには、このコマンドを再度実行してください。`,
+        partial_success_description: `{total}個の絵文字/スタンプのうち{successful}個を分析しました。{failed}個は数回試行しても処理できなかったためスキップされました。ボットのログを確認するか、後ほど \`/server initialize expressions\` を再実行してください。`,
         no_matches_title: `一致するものが見つかりません`,
         no_matches_description: `AIは絵文字/スタンプを分析しましたが、データベースと一致する結果が見つかりませんでした。処理エラーの可能性があります。`,
         llm_error_title: `AI分析に失敗しました`,
@@ -588,7 +588,7 @@ RP設定を無効化したチャンネル **{disabled_count}** 件: {disabled_ch
         validation_error_title: `無効なAI応答`,
         validation_error_description: `AIが無効な応答形式を返しました。これはモデルの問題である可能性があります。`,
         progress_analyzing: `{total}枚の画像を分析中...`,
-        progress_analyzing_batch: `{total_uninitialized}枚のうち{batch_size}枚の画像を分析中（バッチ処理中 - 残りの絵文字/スタンプを処理するには、このコマンドを再度実行してください）`,
+        progress_analyzing_batch: `バッチ{batch_number}を分析中：{batch_size}個の絵文字/スタンプ — {grand_total}個中{processed}個完了、残り{remaining}個...`,
       },
     },
     matrix: {

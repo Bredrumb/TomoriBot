@@ -105,7 +105,7 @@ export class MemoryTool extends BaseTool {
       targetUserArg?.trim() || legacyTargetUserNicknameArg?.trim() || legacyTargetUserDiscordIdArg?.trim();
 
     // Import database functions
-    const { sendMemoryEmbedWithExpand } = await import("../../utils/discord/expandableMemoryNotice");
+    const { sendMemoryEmbedWithExpand } = await import("../../utils/discord/expandableEmbedNotice");
     const { ColorCode } = await import("../../utils/misc/logger");
     const { convertMentions } = await import("../../utils/text/contextBuilder");
     const { sanitizeUnknownTemplatePlaceholders } = await import("@/utils/text/processors/mentionProcessor");

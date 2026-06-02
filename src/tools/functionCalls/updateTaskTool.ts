@@ -6,7 +6,7 @@
  */
 
 import { extractBridgeUserId, isMatrixBridgeWebhookUsername } from "@/utils/bridges";
-import { sendStandardEmbed } from "@/utils/discord/embedHelper";
+import { sendTaskEmbedWithExpand } from "@/utils/discord/expandableEmbedNotice";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { validateFutureTime } from "@/utils/text/processors/timeUtils";
@@ -376,7 +376,8 @@ export class UpdateTaskTool extends BaseTool {
       const personaNickname =
         context.personaUsername || tomoriState.persona_nickname || context.client.user?.username || "TomoriBot";
 
-      await sendStandardEmbed(
+      // Attach a "Show Full Task" button when the deleted purpose was truncated.
+      await sendTaskEmbedWithExpand(
         context.channel,
         context.locale,
         {
@@ -392,6 +393,7 @@ export class UpdateTaskTool extends BaseTool {
           },
           footerKey: "reminders.task_deleted_footer",
         },
+        deleteResult.reminder.reminder_purpose,
         {
           webhook: context.webhook,
           personaUsername: context.personaUsername,
@@ -463,7 +465,8 @@ export class UpdateTaskTool extends BaseTool {
     const reminderTimeText = formatReminderTime(finalReminderTime, timezoneOffset);
     const repeatText = formatRepeatText(context.locale, finalRepetitionIntervalHours);
 
-    await sendStandardEmbed(
+    // Attach a "Show Full Task" button when the new purpose was truncated.
+    await sendTaskEmbedWithExpand(
       context.channel,
       context.locale,
       {
@@ -481,6 +484,7 @@ export class UpdateTaskTool extends BaseTool {
         },
         footerKey: "reminders.task_updated_footer",
       },
+      parsedArgs.newPurpose,
       {
         webhook: context.webhook,
         personaUsername: context.personaUsername,

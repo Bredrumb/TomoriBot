@@ -160,7 +160,7 @@ export class ReminderTool extends BaseTool {
 
     // Import database functions and utilities
     const { userRepository, serverScheduleRepository } = await import("@/utils/db/repositories");
-    const { sendStandardEmbed } = await import("../../utils/discord/embedHelper");
+    const { sendTaskEmbedWithExpand } = await import("../../utils/discord/expandableEmbedNotice");
     const { ColorCode } = await import("../../utils/misc/logger");
 
     // Get server and user context
@@ -533,7 +533,10 @@ export class ReminderTool extends BaseTool {
             }
           : baseDescriptionVars;
 
-        await sendStandardEmbed(
+        // Send the confirmation embed. The expand helper attaches a "Show Full Task"
+        // button when the full purpose exceeds the 200-char truncation threshold,
+        // letting users read the entire purpose ephemerally without channel clutter.
+        await sendTaskEmbedWithExpand(
           context.channel,
           context.locale,
           {
@@ -568,6 +571,7 @@ export class ReminderTool extends BaseTool {
                   time_remaining: timeRemainingStr,
                 },
           },
+          reminderPurpose,
           {
             webhook: context.webhook,
             personaUsername: context.personaUsername,

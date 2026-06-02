@@ -11,7 +11,7 @@ import { PrivacyLevel } from "../../types/db/schema";
 import { validateMemoryContent } from "@/utils/misc/memoryLimits";
 import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { invalidateUserCache } from "../../utils/cache/userCache";
-import { sendMemoryEmbedWithExpand } from "../../utils/discord/expandableMemoryNotice";
+import { sendMemoryEmbedWithExpand } from "../../utils/discord/expandableEmbedNotice";
 import { convertMentions } from "../../utils/text/contextBuilder";
 import { sanitizeUnknownTemplatePlaceholders } from "@/utils/text/processors/mentionProcessor";
 import { personalMemoryRepository, serverMemoryRepository, userRepository } from "@/utils/db/repositories";
