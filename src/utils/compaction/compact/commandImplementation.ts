@@ -33,11 +33,12 @@ export async function executeCompactCommand(
     return;
   }
 
+  const summaryType = interaction.options.getString("type", true) as import("@/types/misc/compact").CompactSummaryMode;
   const targetChannelOption = interaction.options.getChannel("channel");
   const targetThreadId = interaction.options.getString("thread")?.trim();
   if (!(await validateDestinationOptions(interaction, locale, targetChannelOption?.id, targetThreadId))) return;
 
-  const modalSelection = await promptForCompactOptions(interaction, locale);
+  const modalSelection = await promptForCompactOptions(interaction, locale, summaryType);
   if (!modalSelection) return;
 
   const serverDiscId = interaction.guild?.id ?? interaction.user.id;
@@ -146,7 +147,7 @@ export async function executeCompactCommand(
       endpointUrl: tomoriState.config.custom_endpoint_url ?? undefined,
       context,
       supplementaryContext,
-      additionalInstructions: modalSelection.additionalInstructions,
+      systemPrompt: modalSelection.systemPrompt,
       analyzeImages: modalSelection.analyzeImages,
     });
 

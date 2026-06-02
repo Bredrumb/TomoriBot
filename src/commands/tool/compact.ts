@@ -8,6 +8,16 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
   subcommand
     .setName("compact")
     .setDescription(localizer("en-US", "commands.tool.compact.description"))
+    .addStringOption((option) =>
+      option
+        .setName("type")
+        .setDescription(localizer("en-US", "commands.tool.compact.type_description"))
+        .addChoices(
+          { name: localizer("en-US", "commands.tool.compact.modal.type_choice_conversation"), value: "conversation" },
+          { name: localizer("en-US", "commands.tool.compact.modal.type_choice_roleplay"), value: "roleplay" },
+        )
+        .setRequired(true),
+    )
     .addChannelOption((option) =>
       option
         .setName("channel")
