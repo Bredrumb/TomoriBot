@@ -19,13 +19,11 @@ const DEFAULT_CONVERSATION_SYSTEM_PROMPT =
 
 const DEFAULT_ROLEPLAY_SYSTEM_PROMPT =
   "You are a skilled storyteller who crafts clear, engaging summaries of roleplay scenes. " +
-  "Analyze the roleplay narrative and produce a structured JSON summary that captures the scene and each character's current state. " +
-  "Write with clarity and literary quality: your descriptions should paint a vivid picture while remaining concise. " +
-  "Base every detail on what's actually present in the context; if something isn't shown, mark it as 'Unknown' or 'Not specified'. " +
-  "Keep each field brief but evocative: think short phrases or 2-3 well-crafted sentences that tell the story.\n\n" +
-  "The JSON structure should contain:\n" +
-  "- overall_scene_summary: A narrative overview of the current scene, setting, atmosphere, and what's happening\n" +
-  "- characters: An array where each character has name, current_goals, emotional_status, physical_status, appearance_clothing, and inventory";
+  "Analyze the roleplay narrative and produce a structured JSON summary that captures the scene. " +
+  "Write with clarity and literary quality: your description should paint a vivid picture while remaining concise. " +
+  "Base every detail on what's actually present in the context; if something isn't shown, note that it is unclear. " +
+  "The JSON structure should contain a single field:\n" +
+  "- overall_scene_summary: A narrative overview of the current scene, setting, atmosphere, and what's happening";
 
 export { DEFAULT_CONVERSATION_SYSTEM_PROMPT, DEFAULT_ROLEPLAY_SYSTEM_PROMPT };
 

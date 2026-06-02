@@ -12,7 +12,7 @@ import { buildConversationContext } from "./historyExtraction";
 import { promptForCompactOptions } from "./modal";
 import { buildConversationEmbed, buildRoleplayEmbeds, isDiscordThreadChannel, sendEmbedsInChunks } from "./rendering";
 import { generateCompactSummary } from "./summaryGeneration";
-import { buildRoleplayAvatarMap, buildSupplementaryContext } from "./supplementaryContext";
+import { buildSupplementaryContext } from "./supplementaryContext";
 import type { SendableChannel } from "./types";
 
 const DISCORD_SNOWFLAKE_PATTERN = /^\d{17,20}$/;
@@ -161,16 +161,8 @@ export async function executeCompactCommand(
         ? [buildConversationEmbed(locale, String(result.summary), modalSelection.refresh)]
         : buildRoleplayEmbeds(
             locale,
-            typeof result.summary === "string"
-              ? { overall_scene_summary: result.summary, characters: [] }
-              : result.summary,
+            typeof result.summary === "string" ? result.summary : result.summary.overall_scene_summary,
             modalSelection.refresh,
-            await buildRoleplayAvatarMap({
-              userIds: context.userIds,
-              client,
-              guild: interaction.guild ?? null,
-              serverDiscId,
-            }),
           );
 
     await sendEmbedsInChunks(outputChannel, embeds);
