@@ -35,6 +35,10 @@ import { formatCustomEndpointModelDisplay } from "@/utils/provider/customProvide
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 
+type SendableVideoChannel = NonNullable<ChatInputCommandInteraction["channel"]> & {
+  send: (options: { embeds: EmbedBuilder[]; files: AttachmentBuilder[] }) => Promise<unknown>;
+};
+
 // Modal configuration constants
 const MODAL_CUSTOM_ID = "generate_video_modal";
 const PROMPT_INPUT_ID = "prompt_input";
@@ -95,6 +99,23 @@ async function convertAttachmentToBase64(attachment: APIAttachment): Promise<{ m
     mimeType: attachment.content_type,
     data: base64Data,
   };
+}
+
+function buildComfyUiAttachmentReference(attachment: APIAttachment): { mimeType: string; data: string; url: string; fallbackUrl?: string } {
+  if (!attachment.content_type?.startsWith("image/")) {
+    throw new Error(`Invalid image type: ${attachment.content_type}`);
+  }
+
+  return {
+    mimeType: attachment.content_type,
+    data: "",
+    url: attachment.proxy_url || attachment.url,
+    ...(attachment.proxy_url && attachment.proxy_url !== attachment.url ? { fallbackUrl: attachment.url } : {}),
+  };
+}
+
+function isSendableVideoChannel(channel: ChatInputCommandInteraction["channel"]): channel is SendableVideoChannel {
+  return !!channel && typeof (channel as { send?: unknown }).send === "function";
 }
 
 /**
@@ -324,13 +345,15 @@ export async function execute(
     }
 
     // 10. Process reference image (if provided)
-    let referenceImages: Array<{ mimeType: string; data: string }> | undefined;
+    let referenceImages: Array<{ mimeType: string; data: string; url?: string; fallbackUrl?: string }> | undefined;
 
     if (imageAttachment) {
       try {
         log.info(`Processing reference image for image-to-video: ${imageAttachment.filename}`);
-        const converted = await convertAttachmentToBase64(imageAttachment);
-        referenceImages = [converted];
+        referenceImages =
+          videoCreds.customEndpoint?.api_style === "comfyui"
+            ? [buildComfyUiAttachmentReference(imageAttachment)]
+            : [await convertAttachmentToBase64(imageAttachment)];
       } catch (error) {
         log.warn(`Failed to process video reference image:`, error as Error);
         await modalSubmitInteraction.editReply({
@@ -369,6 +392,7 @@ export async function execute(
 
     // 13. Route to provider and generate video
     let videoData: Buffer | null = null;
+    let videoFilename = `generated_${Date.now()}.mp4`;
     const videoImplementation = resolveProviderFeatureImplementation(executionProvider, "videoGeneration");
 
     if (videoCreds.customEndpoint) {
@@ -381,6 +405,7 @@ export async function execute(
         loop,
       });
       videoData = result.videoData;
+      videoFilename = result.filename ?? videoFilename;
     } else if (videoImplementation === "google") {
       const { generateGoogleNativeVideo } = await import("@/providers/google/googleVideoGeneration");
       const result = await generateGoogleNativeVideo({
@@ -392,6 +417,7 @@ export async function execute(
         loop,
       });
       videoData = result.videoData;
+      videoFilename = result.filename ?? videoFilename;
     } else if (videoImplementation === "openrouter") {
       const { generateOpenRouterNativeVideo } = await import("@/providers/openrouter/openrouterVideoGeneration");
       const result = await generateOpenRouterNativeVideo({
@@ -403,6 +429,7 @@ export async function execute(
         loop,
       });
       videoData = result.videoData;
+      videoFilename = result.filename ?? videoFilename;
     } else if (videoImplementation === "zai") {
       const { generateZaiNativeVideo } = await import("@/providers/zai/zaiVideoGeneration");
       const result = await generateZaiNativeVideo({
@@ -414,6 +441,7 @@ export async function execute(
         loop,
       });
       videoData = result.videoData;
+      videoFilename = result.filename ?? videoFilename;
     } else {
       await modalSubmitInteraction.editReply({
         embeds: [
@@ -463,25 +491,71 @@ export async function execute(
     const elapsedMs = performance.now() - startTime;
     const elapsedSec = (elapsedMs / 1000).toFixed(1);
 
+    log.info(
+      `Sending generated video to Discord ${JSON.stringify({
+        filename: videoFilename,
+        bytes: videoData.length,
+      })}`,
+    );
+
     const attachment = new AttachmentBuilder(videoData, {
-      name: `generated_${Date.now()}.mp4`,
+      name: videoFilename,
     });
 
-    await modalSubmitInteraction.editReply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle(localizer(locale, "commands.generate.video.success_title"))
-          .setDescription(
-            localizer(locale, "commands.generate.video.success_description", {
-              model: displayModelName,
-              elapsed: elapsedSec,
-              prompt: prompt.length > 200 ? `${prompt.substring(0, 200)}...` : prompt,
-            }),
-          )
-          .setColor(ColorCode.SUCCESS),
-      ],
-      files: [attachment],
-    });
+    const successEmbed = new EmbedBuilder()
+      .setTitle(localizer(locale, "commands.generate.video.success_title"))
+      .setDescription(
+        localizer(locale, "commands.generate.video.success_description", {
+          model: displayModelName,
+          elapsed: elapsedSec,
+          prompt: prompt.length > 200 ? `${prompt.substring(0, 200)}...` : prompt,
+        }),
+      )
+      .setColor(ColorCode.SUCCESS);
+
+    try {
+      await modalSubmitInteraction.editReply({
+        embeds: [successEmbed],
+        files: [attachment],
+      });
+    } catch (error) {
+      const discordError = error as Error & {
+        code?: string | number;
+        status?: number;
+        method?: string;
+        url?: string;
+        rawError?: unknown;
+      };
+      log.warn(
+        `Failed to attach generated video to interaction reply; trying channel send ${JSON.stringify({
+          filename: videoFilename,
+          bytes: videoData.length,
+          error: discordError.message,
+          code: discordError.code ?? null,
+          status: discordError.status ?? null,
+          method: discordError.method ?? null,
+          url: discordError.url ?? null,
+          rawError: discordError.rawError ?? null,
+        })}`,
+      );
+
+      if (!isSendableVideoChannel(interaction.channel)) {
+        throw error;
+      }
+      const channelAttachment = new AttachmentBuilder(videoData, {
+        name: videoFilename,
+      });
+      await interaction.channel.send({
+        embeds: [successEmbed],
+        files: [channelAttachment],
+      });
+      await modalSubmitInteraction
+        .editReply({
+          embeds: [successEmbed],
+          files: [],
+        })
+        .catch(() => {});
+    }
 
     // 17. Increment quota
     await incrementVideoQuota(tomoriState.server_id, interaction.user.id);

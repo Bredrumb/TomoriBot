@@ -85,7 +85,7 @@
     "class_type": "CLIPTextEncode",
     "inputs": {
       "clip": ["3", 0],
-      "text": "overexposed, static, still image, blurry details, subtitles, watermark, text, low quality, worst quality, jpeg artifacts, malformed hands, malformed face, deformed limbs, extra fingers, fused fingers, duplicate subject, crowded background, bad anatomy"
+      "text": "{TOMORI_VIDEO_NEGATIVE_PROMPT}"
     }
   },
   "13": {
@@ -98,7 +98,8 @@
       "end_image": ["2", 0],
       "width": "{TOMORI_WIDTH}",
       "height": "{TOMORI_HEIGHT}",
-      "length": "{TOMORI_VIDEO_FRAME_COUNT}"
+      "length": "{TOMORI_VIDEO_FRAME_COUNT}",
+      "batch_size": 1
     }
   },
   "14": {
@@ -106,8 +107,8 @@
     "inputs": {
       "add_noise": "enable",
       "noise_seed": "{TOMORI_SEED}",
-      "steps": 4,
-      "cfg": 1,
+      "steps": "{TOMORI_VIDEO_STEPS}",
+      "cfg": "{TOMORI_VIDEO_CFG}",
       "sampler_name": "euler",
       "scheduler": "simple",
       "start_at_step": 0,
@@ -124,8 +125,8 @@
     "inputs": {
       "add_noise": "disable",
       "noise_seed": 0,
-      "steps": 4,
-      "cfg": 1,
+      "steps": "{TOMORI_VIDEO_STEPS}",
+      "cfg": "{TOMORI_VIDEO_CFG}",
       "sampler_name": "euler",
       "scheduler": "simple",
       "start_at_step": 2,
@@ -148,7 +149,8 @@
     "class_type": "CreateVideo",
     "inputs": {
       "images": ["16", 0],
-      "fps": "{TOMORI_VIDEO_FPS}"
+      "audio": ["21", 0],
+      "fps": "{TOMORI_VIDEO_OUTPUT_FPS}"
     }
   },
   "18": {
@@ -158,6 +160,39 @@
       "filename_prefix": "tomoribot/generated_video",
       "format": "auto",
       "codec": "auto"
+    }
+  },
+  "19": {
+    "class_type": "MMAudioModelLoader",
+    "inputs": {
+      "mmaudio_model": "mmaudio_large_44k_v2_fp16.safetensors",
+      "base_precision": "fp16"
+    }
+  },
+  "20": {
+    "class_type": "MMAudioFeatureUtilsLoader",
+    "inputs": {
+      "vae_model": "mmaudio_vae_44k_fp16.safetensors",
+      "synchformer_model": "mmaudio_synchformer_fp16.safetensors",
+      "clip_model": "apple_DFN5B-CLIP-ViT-H-14-384_fp16.safetensors",
+      "mode": "44k",
+      "precision": "fp16"
+    }
+  },
+  "21": {
+    "class_type": "MMAudioSampler",
+    "inputs": {
+      "mmaudio_model": ["19", 0],
+      "feature_utils": ["20", 0],
+      "images": ["16", 0],
+      "duration": "{TOMORI_VIDEO_OUTPUT_DURATION}",
+      "steps": "{TOMORI_VIDEO_AUDIO_STEPS}",
+      "cfg": "{TOMORI_VIDEO_AUDIO_CFG}",
+      "seed": "{TOMORI_SEED}",
+      "prompt": "{TOMORI_VIDEO_AUDIO_PROMPT}",
+      "negative_prompt": "{TOMORI_VIDEO_AUDIO_NEGATIVE_PROMPT}",
+      "mask_away_clip": false,
+      "force_offload": true
     }
   }
 }
