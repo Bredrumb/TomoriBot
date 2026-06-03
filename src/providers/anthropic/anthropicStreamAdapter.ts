@@ -26,6 +26,7 @@ import {
   mergeConsecutiveSameRole,
   type NormalizableMessage,
   providerRequiresAlternation,
+  relocateAssistantMediaContextItems,
 } from "../utils/strictChatCompat";
 import { buildProviderStopStrings } from "../utils/stopStrings";
 import { BaseStreamAdapter } from "../../types/stream/interfaces";
@@ -767,10 +768,11 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     enforceAlternation: boolean = true,
   ): Promise<{ systemPrompt: string | null; messages: AnthropicMessage[] }> {
     const messages: AnthropicMessage[] = [];
+    const relocatedContextItems = relocateAssistantMediaContextItems(contextItems);
     const systemParts: string[] = [];
 
     // 1. Process context items
-    for (const item of contextItems) {
+    for (const item of relocatedContextItems) {
       // Extract text from parts array
       let itemTextContent = "";
       if (item.parts.some((p) => p.type === "text")) {
@@ -886,7 +888,10 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
               messages.push({
                 role: "user",
                 content: [
-                  { type: "text", text: assistantMediaRelocationNotice(pendingBotImageBlocks.length) },
+                  {
+                    type: "text",
+                    text: assistantMediaRelocationNotice(pendingBotImageBlocks.length, item.sender?.name),
+                  },
                   ...pendingBotImageBlocks,
                 ],
               });

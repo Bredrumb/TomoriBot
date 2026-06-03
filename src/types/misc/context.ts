@@ -22,6 +22,11 @@ export interface ConversationUserReference {
   mentionable: boolean; // True only when this target can be converted into a Discord mention
 }
 
+export interface ContextItemSender {
+  name: string;
+  type: "user" | "persona";
+}
+
 // New: Define the possible metadata tags for context items (Rule 13)
 export enum ContextItemTag {
   // System-level instructions and configurations
@@ -60,6 +65,7 @@ export type StructuredContextItem = {
   parts: ContextPart[];
   metadataTag?: ContextItemTag; // Optional tag for internal processing
   messageId?: string; // Optional Discord message ID for tools that need to reference the original message
+  sender?: ContextItemSender; // Hidden sender metadata for provider-side history normalization
   conversationUsers?: ConversationUserReference[]; // Hidden metadata for user resolution and mention handling
 };
 

@@ -78,6 +78,10 @@ export async function appendDialogueHistoryContext(params: {
         : params.isUserImpersonation || !isCurrentPersonaMessage
           ? "user"
           : "model";
+    const sender: StructuredContextItem["sender"] = {
+      name: msg.personaName ?? msg.authorName,
+      type: msg.authorType,
+    };
 
     if (!contextNoteEmitted && effectiveContextNote && index === contextNoteTargetIndex) {
       pushDialogueHistoryContextItem(
@@ -138,10 +142,12 @@ export async function appendDialogueHistoryContext(params: {
         "user",
         [...mediaParts, ...detachedSystemParts, ...textParts],
         msg.id,
+        undefined,
+        sender,
       );
     } else {
-      pushDialogueHistoryContextItem(params.contextItems, "user", detachedSystemParts, msg.id);
-      pushDialogueHistoryContextItem(params.contextItems, role, parts, msg.id);
+      pushDialogueHistoryContextItem(params.contextItems, "user", detachedSystemParts, msg.id, undefined, sender);
+      pushDialogueHistoryContextItem(params.contextItems, role, parts, msg.id, undefined, sender);
     }
   }
 

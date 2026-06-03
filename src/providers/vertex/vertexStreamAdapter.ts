@@ -30,6 +30,7 @@ import { log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import { safeDownload } from "@/utils/security/safeDownload";
+import { relocateAssistantMediaContextItems } from "@/providers/utils/strictChatCompat";
 import { buildProviderStopStrings } from "../utils/stopStrings";
 import { BaseStreamAdapter } from "../../types/stream/interfaces";
 import type {
@@ -1016,8 +1017,9 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
   ): Promise<{ systemInstruction?: string; dialogueContents: Content[] }> {
     const systemInstructionParts: string[] = [];
     const dialogueContents: Content[] = [];
+    const relocatedContextItems = relocateAssistantMediaContextItems(contextItems);
 
-    for (const item of contextItems) {
+    for (const item of relocatedContextItems) {
       let itemTextContent = "";
       if (item.parts.some((p) => p.type === "text")) {
         itemTextContent = item.parts

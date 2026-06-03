@@ -89,6 +89,10 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
 - **Text part assembly** — `${authorName}: ${content}` prefix, mention
   conversion, humanizer transform (model items at HEAVY+), uncensor
   input transforms.
+- **Sender metadata** — dialogue items carry hidden `sender` metadata
+  (`personaName` when available, otherwise `authorName`) so strict-chat
+  media relocation can attribute model-role images without parsing the
+  visible `{Name}:` text prefix.
 - **Detached system parts** — system hints that should not be merged with
   the message text are split into a separate `user`-role item via
   `pushDialogueHistoryContextItem`.

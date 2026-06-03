@@ -32,7 +32,7 @@ import { buildOpenrouterProviderRouting } from "./providerRouting";
 import { buildOpenRouterReasoningRequest } from "@/utils/provider/thinkingControl";
 import { BaseStreamAdapter } from "../../types/stream/interfaces";
 import { ReasoningContentSpillGuard } from "@/providers/utils/reasoningContentSpillGuard";
-import { assistantMediaRelocationNotice } from "@/providers/utils/strictChatCompat";
+import { assistantMediaRelocationNotice, relocateAssistantMediaContextItems } from "@/providers/utils/strictChatCompat";
 import { ThinkBlockContentStripper } from "@/providers/utils/thinkBlockContentStripper";
 import type {
   ProcessedChunk,
@@ -2256,17 +2256,18 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       preToolCallTextParts?: Array<Record<string, unknown>>;
     }>,
     seesImages: boolean = true,
-    // Media wording is now provider-agnostic (assistantMediaRelocationNotice); the bot name is no
-    // longer interpolated. Kept positionally to avoid churning every caller's argument order.
+    // Media wording is provider-agnostic and now comes from per-item sender metadata. Kept
+    // positionally to avoid churning every caller's argument order.
     _botName: string = "Assistant",
     seesVideos: boolean = false,
     messageIdMap?: StreamContext["messageIdMap"],
   ): Promise<Array<Record<string, unknown>>> {
     const messages: Array<Record<string, unknown>> = [];
+    const relocatedContextItems = relocateAssistantMediaContextItems(contextItems);
     const systemInstructionParts: string[] = [];
 
     // Process context items following StructuredContextItem format
-    for (const item of contextItems) {
+    for (const item of relocatedContextItems) {
       // Extract text from parts array
       let itemTextContent = "";
       if (item.parts.some((p) => p.type === "text")) {
@@ -2555,7 +2556,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                 content: [
                   {
                     type: "text",
-                    text: assistantMediaRelocationNotice(pendingBotImageParts.length),
+                    text: assistantMediaRelocationNotice(pendingBotImageParts.length, item.sender?.name),
                   },
                   ...pendingBotImageParts,
                 ],

@@ -1,6 +1,9 @@
 import type { FunctionCall, FunctionResponseImageMetadata } from "@/types/provider/interfaces";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
-import { relocateAssistantMediaToUserTurns } from "@/providers/utils/strictChatCompat";
+import {
+  relocateAssistantMediaContextItems,
+  relocateAssistantMediaToUserTurns,
+} from "@/providers/utils/strictChatCompat";
 import { log } from "@/utils/misc/logger";
 import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
 
@@ -38,9 +41,10 @@ export async function buildOpenAICompatibleMessages(
   options: BuildOpenAICompatibleMessagesOptions,
 ): Promise<Array<Record<string, unknown>>> {
   let messages: Array<Record<string, unknown>> = [];
+  const contextItems = relocateAssistantMediaContextItems(options.contextItems);
   const systemInstructionParts: string[] = [];
 
-  for (const item of options.contextItems) {
+  for (const item of contextItems) {
     const itemTextContent = item.parts
       .filter((part) => part.type === "text")
       .map((part) => part.text)
@@ -109,7 +113,11 @@ export async function buildOpenAICompatibleMessages(
       // the dialogue loop) peels any image parts into a synthetic user turn and flattens the
       // remaining text-only assistant content back to a string — matching the previous output.
       if (contentParts.length > 0) {
-        messages.push({ role, content: contentParts });
+        messages.push({
+          role,
+          content: contentParts,
+          ...(item.sender?.name && { assistantMediaSenderName: item.sender.name }),
+        });
       }
       continue;
     }

@@ -17,7 +17,7 @@ The shared helpers live in [`src/providers/utils/strictChatCompat.ts`](../../src
 |---|---|---|
 | **Role alternation** | `strict_role_alternation` | Merge consecutive same-role turns into one, and prepend a synthetic leading `user` turn when the first dialogue turn is `assistant`. Tool-bearing turns (top-level `tool_calls`/`tool_call_id`) act as merge boundaries so their wiring is never dropped. |
 | **Prefix completion** | `supports_prefix_completion` | Set `prefix: true` on the trailing assistant prefill turn so the backend continues it (DeepSeek / Z.ai vendor extension). |
-| **Media relocation** | *(always-on, not a toggle)* | Peel media off `assistant` turns into a following `[System: …]` `user` turn — the `assistant` role cannot carry media in input history across OpenAI/Anthropic/Gemini-shaped APIs. |
+| **Media relocation** | *(always-on, not a toggle)* | Peel media off `assistant` turns into a following `[System: …]` `user` turn with sender attribution — the `assistant` role cannot carry media in input history across OpenAI/Anthropic/Gemini-shaped APIs. |
 
 ### Orthogonality (why two toggles, not one)
 
@@ -37,13 +37,29 @@ custom endpoint with both toggles OFF still gets it. It was already unconditiona
 seam existed; do not gate it. The canonical wording is shared across all providers:
 
 ```
-[System: The previous assistant message included the following image(s).]
+[System: The following image was sent by {name}.]
+[System: The following images were sent by {name}.]
 ```
 
-(singular/plural by count, via `assistantMediaRelocationNotice`). Anthropic and OpenRouter
-previously emitted `[System: This image was sent by {botName}.]`; that was consolidated to the
-wording above so every provider is identical. The OpenAI-compatible builder's wording was already
-the canonical one, so deepseek/zai/zaicoding output is unchanged.
+When no sender is available, the fallback is the same canonical sentence without the name:
+
+```
+[System: The following image was sent]
+[System: The following images were sent]
+```
+
+The sender comes from `StructuredContextItem.sender`, populated from each
+`SimplifiedMessageForContext` row's `personaName` / `authorName` before provider serialization.
+Relocation runs on that neutral representation first, so multi-persona histories can attribute
+each relocated image to the persona that actually sent it, including image-only turns where parsing
+a leading `{Name}:` text label would fail.
+
+Anthropic and OpenRouter previously used a single per-request name
+(`[System: This image was sent by {botName}.]`) for every relocated image. That could mislabel
+images sent earlier by other personas. The OpenAI-compatible family previously used the generic
+`[System: The previous assistant message included ...]` wording. The current wording intentionally
+supersedes the plan-07 byte-identical golden-body bar for the media notice only; role alternation
+and prefix-completion goldens remain unchanged.
 
 ## Resolution: column-is-truth (D4)
 

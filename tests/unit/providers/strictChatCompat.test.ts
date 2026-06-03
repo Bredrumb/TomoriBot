@@ -8,8 +8,10 @@ import {
   type NormalizableMessage,
   providerRequiresAlternation,
   providerRequiresPrefixCompletion,
+  relocateAssistantMediaContextItems,
   relocateAssistantMediaToUserTurns,
 } from "@/providers/utils/strictChatCompat";
+import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 
 describe("providerRequires* safety nets", () => {
   it("flags anthropic for alternation, deepseek/zai/zaicoding for prefix", () => {
@@ -190,12 +192,66 @@ describe("ensureLeadingUserTurn", () => {
 
 describe("assistantMediaRelocationNotice", () => {
   it("uses singular vs plural wording", () => {
-    expect(assistantMediaRelocationNotice(1)).toBe(
-      "[System: The previous assistant message included the following image.]",
-    );
-    expect(assistantMediaRelocationNotice(2)).toBe(
-      "[System: The previous assistant message included the following images.]",
-    );
+    expect(assistantMediaRelocationNotice(1, "Tomori")).toBe("[System: The following image was sent by Tomori.]");
+    expect(assistantMediaRelocationNotice(2, "Tomori")).toBe("[System: The following images were sent by Tomori.]");
+  });
+
+  it("falls back to generic wording when no sender is available", () => {
+    expect(assistantMediaRelocationNotice(1)).toBe("[System: The following image was sent]");
+    expect(assistantMediaRelocationNotice(2)).toBe("[System: The following images were sent]");
+  });
+});
+
+describe("relocateAssistantMediaContextItems", () => {
+  const img = { type: "image", uri: "data:image/png;base64,AAA", mimeType: "image/png" } as const;
+
+  it("relocates model images with sender attribution while preserving model text", () => {
+    const input: StructuredContextItem[] = [
+      { role: "user", parts: [{ type: "text", text: "look" }] },
+      {
+        role: "model",
+        parts: [{ type: "text", text: "here" }, img],
+        metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+        messageId: "m1",
+        sender: { name: "Tomori", type: "persona" },
+      },
+    ];
+
+    expect(relocateAssistantMediaContextItems(input)).toEqual([
+      { role: "user", parts: [{ type: "text", text: "look" }] },
+      {
+        role: "model",
+        parts: [{ type: "text", text: "here" }],
+        metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+        messageId: "m1",
+        sender: { name: "Tomori", type: "persona" },
+      },
+      {
+        role: "user",
+        parts: [{ type: "text", text: assistantMediaRelocationNotice(1, "Tomori") }, img],
+        metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+        messageId: "m1",
+        sender: { name: "Tomori", type: "persona" },
+      },
+    ]);
+  });
+
+  it("attributes image-only model turns instead of dropping the sender", () => {
+    const input: StructuredContextItem[] = [
+      {
+        role: "model",
+        parts: [img],
+        sender: { name: "Kana", type: "persona" },
+      },
+    ];
+
+    expect(relocateAssistantMediaContextItems(input)).toEqual([
+      {
+        role: "user",
+        parts: [{ type: "text", text: assistantMediaRelocationNotice(1, "Kana") }, img],
+        sender: { name: "Kana", type: "persona" },
+      },
+    ]);
   });
 });
 
@@ -223,6 +279,16 @@ describe("relocateAssistantMediaToUserTurns", () => {
       {
         role: "user",
         content: [{ type: "text", text: assistantMediaRelocationNotice(2) }, img, img],
+      },
+    ]);
+  });
+
+  it("uses serialized sender metadata when present", () => {
+    const input = [{ role: "assistant", content: [img], assistantMediaSenderName: "Mika" }];
+    expect(relocateAssistantMediaToUserTurns(input)).toEqual([
+      {
+        role: "user",
+        content: [{ type: "text", text: assistantMediaRelocationNotice(1, "Mika") }, img],
       },
     ]);
   });

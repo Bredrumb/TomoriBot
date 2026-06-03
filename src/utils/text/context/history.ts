@@ -180,6 +180,7 @@ export function pushDialogueHistoryContextItem(
   parts: ContextPart[],
   messageId: string,
   metadataTag?: ContextItemTag,
+  sender?: StructuredContextItem["sender"],
 ): void {
   if (parts.length === 0) {
     return;
@@ -190,6 +191,7 @@ export function pushDialogueHistoryContextItem(
     parts,
     metadataTag: metadataTag ?? ContextItemTag.DIALOGUE_HISTORY,
     messageId,
+    ...(sender && { sender }),
   });
 }
 

@@ -1,3 +1,5 @@
+import type { ContextPart, StructuredContextItem } from "@/types/misc/context";
+
 // Shared "strict chat-completion" message normalizations.
 //
 // Several provider APIs require message shapes that others merely tolerate. Historically each
@@ -210,15 +212,71 @@ export function ensureLeadingUserTurn<T extends NormalizableMessage>(messages: T
 
 /**
  * Canonical system notice prepended to a synthetic user turn that carries media peeled off an
- * assistant turn. One wording is used across every provider path (the previously divergent
- * Anthropic / OpenRouter `[System: This image was sent by …]` wording is consolidated here).
+ * assistant turn. One wording is used across every provider path, with per-sender attribution
+ * when the neutral context item still carries it.
  *
  * @param imageCount - Number of relocated images (controls singular/plural).
+ * @param senderName - Optional sender display name for per-persona attribution.
  */
-export function assistantMediaRelocationNotice(imageCount: number): string {
-  return `[System: The previous assistant message included ${
-    imageCount === 1 ? "the following image" : "the following images"
-  }.]`;
+export function assistantMediaRelocationNotice(imageCount: number, senderName?: string | null): string {
+  const normalizedSenderName = senderName?.trim();
+  const imagePhrase = imageCount === 1 ? "image was" : "images were";
+
+  if (!normalizedSenderName) {
+    return `[System: The following ${imagePhrase} sent]`;
+  }
+
+  return `[System: The following ${imagePhrase} sent by ${normalizedSenderName}.]`;
+}
+
+/**
+ * Move neutral `image` parts off model turns into following synthetic user turns while sender
+ * metadata is still attached to the originating context item. Provider serializers then see only
+ * user-role media and one canonical attributed notice.
+ *
+ * @param contextItems - Provider-agnostic context items in prompt order.
+ * @returns A new context item array with model-role image parts relocated.
+ */
+export function relocateAssistantMediaContextItems(contextItems: StructuredContextItem[]): StructuredContextItem[] {
+  const result: StructuredContextItem[] = [];
+
+  for (const item of contextItems) {
+    // 1. Only model turns can carry assistant media that provider APIs reject.
+    if (item.role !== "model") {
+      result.push(item);
+      continue;
+    }
+
+    const imageParts = item.parts.filter(isContextImagePart);
+    if (imageParts.length === 0) {
+      result.push(item);
+      continue;
+    }
+
+    // 2. Preserve any non-image model content as the original assistant/model turn.
+    const remainingParts = item.parts.filter((part) => part.type !== "image");
+    if (remainingParts.length > 0) {
+      result.push({
+        ...item,
+        parts: remainingParts,
+      });
+    }
+
+    // 3. Emit the relocated images as a user turn, attributing them to the original sender.
+    result.push({
+      role: "user",
+      parts: [
+        { type: "text", text: assistantMediaRelocationNotice(imageParts.length, item.sender?.name) },
+        ...imageParts,
+      ],
+      ...(item.metadataTag && { metadataTag: item.metadataTag }),
+      ...(item.messageId && { messageId: item.messageId }),
+      ...(item.sender && { sender: item.sender }),
+      ...(item.conversationUsers && { conversationUsers: item.conversationUsers }),
+    });
+  }
+
+  return result;
 }
 
 /**
@@ -238,6 +296,7 @@ export function assistantMediaRelocationNotice(imageCount: number): string {
  */
 export function relocateAssistantMediaToUserTurns(
   messages: Array<Record<string, unknown>>,
+  fallbackSenderName?: string | null,
 ): Array<Record<string, unknown>> {
   const result: Array<Record<string, unknown>> = [];
 
@@ -267,13 +326,20 @@ export function relocateAssistantMediaToUserTurns(
     }
 
     // 4. ... then the synthetic user turn carrying the relocated images.
+    const senderName =
+      typeof message.assistantMediaSenderName === "string" ? message.assistantMediaSenderName : fallbackSenderName;
     result.push({
       role: "user",
-      content: [{ type: "text", text: assistantMediaRelocationNotice(imageParts.length) }, ...imageParts],
+      content: [{ type: "text", text: assistantMediaRelocationNotice(imageParts.length, senderName) }, ...imageParts],
     });
   }
 
   return result;
+}
+
+/** Type guard for image parts in the provider-neutral context representation. */
+function isContextImagePart(part: ContextPart): part is Extract<ContextPart, { type: "image" }> {
+  return part.type === "image";
 }
 
 /** Join the `text` of all `{ type: "text" }` parts with newlines, ignoring non-text parts. */
