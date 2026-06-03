@@ -17,6 +17,8 @@ Any OpenAI-compatible server works out of the box using the `/custom-endpoints` 
 
 Configure via `/custom-endpoints` in Discord, pointing at your local endpoint URL (e.g. `http://192.168.1.10:11434/v1`).
 
+**Multiple models under one label:** a single endpoint label is one logical connection (shared URL, API style, and auth key). To host several models of the same capability on it — e.g. multiple Ollama tags — run `/custom-endpoint add` again with the *same label and capability* and a distinct **model name**; `endpoint URL` and `API style` are optional on repeat adds and are inherited from the existing label. Adding a model does not change the active selection. When you later run `/model text` (or `image`/`embedding`/`video`) and pick the label, a picker lists every registered model so you can choose one; `/custom-endpoint edit` and `remove` operate on individual models.
+
 ### Local Image Generation (ComfyUI)
 
 TomoriBot ships a ready-to-use Anima3 ComfyUI workflow for txt2img and img2img. Use `/help custom-endpoint` to learn how to create a TomoriBot-compatible ComfyUI workflow for images and videos as well.

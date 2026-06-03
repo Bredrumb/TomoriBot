@@ -26,11 +26,11 @@ export default {
     custom_models: {
       description: `自分用のラベル付きカスタムエンドポイントを管理します。`,
       add: {
-        description: `個人用カスタムエンドポイントに1機能を登録します。`,
-        label_description: `一致する機能で共有するバンドル用ラベル。例: ComfyUI。`,
+        description: `個人用エンドポイントのラベルにモデルを登録します（同じラベルを再利用して追加可能）。`,
+        label_description: `接続ラベル。同じ機能のモデルを複数登録するには再利用します。例: ollama, comfyui`,
         capability_description: `このエンドポイントが提供する機能。`,
-        api_style_description: `このエンドポイントが使うAPI形式。`,
-        endpoint_url_description: `エンドポイントのベースURL。`,
+        api_style_description: `API形式。既存ラベルにモデルを追加する場合は任意（ラベルから継承）。`,
+        endpoint_url_description: `ベースURL。例: http://localhost:5001/v1。既存ラベル再利用時は任意（継承）。`,
         auth_token_description: `保護されたエンドポイント用のBearerトークン（任意）。`,
         success_title: `個人用カスタムエンドポイントを追加しました`,
         success_description: `**{display_name}** を個人ラベル **{label}** の **{capability}** として追加しました。`,

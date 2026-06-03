@@ -40,12 +40,17 @@ function getCapabilityLabelKey(
 }
 
 function buildCheckboxOptions(endpoints: CustomEndpointRow[]): CheckboxGroupOption[] {
-  return endpoints.map((endpoint) => ({
-    value: endpoint.custom_endpoint_id?.toString() ?? `${endpoint.capability}:${endpoint.label}`,
-    label: truncateModalText(endpoint.label, 100),
-    description: truncateModalText(endpoint.display_name || endpoint.endpoint_url, 100),
-    default: true,
-  }));
+  return endpoints.map((endpoint) => {
+    // A label may host several models; include model_name in the label so each option is distinct.
+    const modelName = endpoint.model_name?.trim();
+    const optionLabel = modelName ? `${endpoint.label} — ${modelName}` : endpoint.label;
+    return {
+      value: endpoint.custom_endpoint_id?.toString() ?? `${endpoint.capability}:${endpoint.label}`,
+      label: truncateModalText(optionLabel, 100),
+      description: truncateModalText(endpoint.display_name || endpoint.endpoint_url, 100),
+      default: true,
+    };
+  });
 }
 
 export function buildCustomEndpointCheckboxGroups(

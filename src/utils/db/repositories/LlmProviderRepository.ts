@@ -542,12 +542,14 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
    */
   async loadCustomEndpointsForServer(serverId: number): Promise<CustomEndpointRow[]> {
     try {
+      // Returns every model row; a label+capability may now hold several models (distinguished by
+      // model_name), so we no longer collapse with DISTINCT ON. Ordered for stable picker listing.
       const rows = await sql<unknown[]>`
-        SELECT DISTINCT ON (label, capability) *
+        SELECT *
         FROM custom_endpoints
         WHERE server_id = ${serverId}
           AND user_id IS NULL
-        ORDER BY label ASC, capability ASC, updated_at DESC, custom_endpoint_id DESC
+        ORDER BY label ASC, capability ASC, model_name ASC NULLS FIRST, custom_endpoint_id ASC
       `;
 
       return rows
@@ -566,12 +568,14 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
    */
   async loadCustomEndpointsForUser(userId: number): Promise<CustomEndpointRow[]> {
     try {
+      // Returns every model row; a label+capability may now hold several models (distinguished by
+      // model_name), so we no longer collapse with DISTINCT ON. Ordered for stable picker listing.
       const rows = await sql<unknown[]>`
-        SELECT DISTINCT ON (label, capability) *
+        SELECT *
         FROM custom_endpoints
         WHERE user_id = ${userId}
           AND server_id IS NULL
-        ORDER BY label ASC, capability ASC, updated_at DESC, custom_endpoint_id DESC
+        ORDER BY label ASC, capability ASC, model_name ASC NULLS FIRST, custom_endpoint_id ASC
       `;
 
       return rows
@@ -676,6 +680,62 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
     } catch (error) {
       const owner = serverId !== null ? `server ${serverId}` : `user ${userId}`;
       log.error(`Error loading custom endpoint for ${owner}, label ${label}, capability ${capability}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Returns the custom endpoint that owns a specific synthetic model row.
+   *
+   * Used at runtime to resolve the currently-active model back to its exact endpoint when several
+   * models share a label+capability. Matching is by (owner, capability, model_ref_id) — the
+   * model_ref_id uniquely identifies the synthetic model, so label is not required.
+   *
+   * @param params - Scope (serverId or userId), capability, and the synthetic model's id
+   */
+  async loadCustomEndpointByModelRef(params: {
+    serverId?: number | null;
+    userId?: number | null;
+    capability: CustomEndpointCapability;
+    modelRefId: number;
+  }): Promise<CustomEndpointRow | null> {
+    const { serverId = null, userId = null, capability, modelRefId } = params;
+
+    try {
+      const rows =
+        serverId !== null
+          ? await sql`
+              SELECT *
+              FROM custom_endpoints
+              WHERE server_id = ${serverId}
+                AND user_id IS NULL
+                AND capability = ${capability}
+                AND model_ref_id = ${modelRefId}
+              ORDER BY updated_at DESC, custom_endpoint_id DESC
+              LIMIT 1
+            `
+          : await sql`
+              SELECT *
+              FROM custom_endpoints
+              WHERE user_id = ${userId}
+                AND server_id IS NULL
+                AND capability = ${capability}
+                AND model_ref_id = ${modelRefId}
+              ORDER BY updated_at DESC, custom_endpoint_id DESC
+              LIMIT 1
+            `;
+
+      if (!rows.length) return null;
+
+      const parsed = customEndpointSchema.safeParse(rows[0]);
+      if (!parsed.success) {
+        log.warn(`Invalid custom endpoint row for model_ref_id ${modelRefId}/${capability}: ${parsed.error.message}`);
+        return null;
+      }
+
+      return parsed.data;
+    } catch (error) {
+      log.error(`Error loading custom endpoint by model_ref_id ${modelRefId}/${capability}:`, error);
       return null;
     }
   }
@@ -1170,6 +1230,7 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
       apiStyle: CustomEndpointApiStyle;
       endpointUrl: string;
       modelName?: string | null;
+      modelRefId?: number | null;
       displayName: string;
       numCtx?: number | null;
       requiresAuth: boolean;
@@ -1179,6 +1240,9 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
       seesVideos?: boolean;
       supportsStructOutput?: boolean;
       isDefault?: boolean;
+      // When set, update that exact row (edit path) instead of inserting. This lets an edit change
+      // model_name without colliding with sibling models under the same label+capability.
+      customEndpointId?: number | null;
     },
     options: LlmProviderCacheOptions = {},
   ): Promise<CustomEndpointRow | null> {
@@ -1190,6 +1254,7 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
       apiStyle,
       endpointUrl,
       modelName = null,
+      modelRefId = null,
       displayName,
       numCtx = null,
       requiresAuth,
@@ -1199,28 +1264,50 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
       seesVideos = false,
       supportsStructOutput = false,
       isDefault = true,
+      customEndpointId = null,
     } = params;
 
     try {
       const rows =
-        serverId !== null
+        customEndpointId !== null
           ? await sql`
+              UPDATE custom_endpoints SET
+                api_style = ${apiStyle},
+                endpoint_url = ${endpointUrl},
+                model_name = ${modelName},
+                model_ref_id = ${modelRefId},
+                display_name = ${displayName},
+                num_ctx = ${numCtx},
+                requires_auth = ${requiresAuth},
+                extra_config = ${JSON.stringify(extraConfig)}::jsonb,
+                has_tools = ${hasTools},
+                sees_images = ${seesImages},
+                sees_videos = ${seesVideos},
+                supports_structoutput = ${supportsStructOutput},
+                is_default = ${isDefault},
+                updated_at = CURRENT_TIMESTAMP
+              WHERE custom_endpoint_id = ${customEndpointId}
+              RETURNING *
+            `
+          : serverId !== null
+            ? await sql`
               INSERT INTO custom_endpoints (
                 server_id, user_id, label, capability, api_style,
-                endpoint_url, model_name, display_name, num_ctx, requires_auth,
+                endpoint_url, model_name, model_ref_id, display_name, num_ctx, requires_auth,
                 extra_config, has_tools, sees_images, sees_videos,
                 supports_structoutput, is_default
               ) VALUES (
                 ${serverId}, NULL, ${label}, ${capability}, ${apiStyle},
-                ${endpointUrl}, ${modelName}, ${displayName}, ${numCtx}, ${requiresAuth},
+                ${endpointUrl}, ${modelName}, ${modelRefId}, ${displayName}, ${numCtx}, ${requiresAuth},
                 ${JSON.stringify(extraConfig)}::jsonb, ${hasTools}, ${seesImages}, ${seesVideos},
                 ${supportsStructOutput}, ${isDefault}
               )
-              ON CONFLICT (server_id, label, capability) WHERE user_id IS NULL
+              ON CONFLICT (server_id, label, capability, COALESCE(model_name, '')) WHERE user_id IS NULL
               DO UPDATE SET
                 api_style = EXCLUDED.api_style,
                 endpoint_url = EXCLUDED.endpoint_url,
                 model_name = EXCLUDED.model_name,
+                model_ref_id = EXCLUDED.model_ref_id,
                 display_name = EXCLUDED.display_name,
                 num_ctx = EXCLUDED.num_ctx,
                 requires_auth = EXCLUDED.requires_auth,
@@ -1233,24 +1320,25 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
                 updated_at = CURRENT_TIMESTAMP
               RETURNING *
             `
-          : userId !== null
-            ? await sql`
+            : userId !== null
+              ? await sql`
                 INSERT INTO custom_endpoints (
                   server_id, user_id, label, capability, api_style,
-                  endpoint_url, model_name, display_name, num_ctx, requires_auth,
+                  endpoint_url, model_name, model_ref_id, display_name, num_ctx, requires_auth,
                   extra_config, has_tools, sees_images, sees_videos,
                   supports_structoutput, is_default
                 ) VALUES (
                   NULL, ${userId}, ${label}, ${capability}, ${apiStyle},
-                  ${endpointUrl}, ${modelName}, ${displayName}, ${numCtx}, ${requiresAuth},
+                  ${endpointUrl}, ${modelName}, ${modelRefId}, ${displayName}, ${numCtx}, ${requiresAuth},
                   ${JSON.stringify(extraConfig)}::jsonb, ${hasTools}, ${seesImages}, ${seesVideos},
                   ${supportsStructOutput}, ${isDefault}
                 )
-                ON CONFLICT (user_id, label, capability) WHERE server_id IS NULL
+                ON CONFLICT (user_id, label, capability, COALESCE(model_name, '')) WHERE server_id IS NULL
                 DO UPDATE SET
                   api_style = EXCLUDED.api_style,
                   endpoint_url = EXCLUDED.endpoint_url,
                   model_name = EXCLUDED.model_name,
+                  model_ref_id = EXCLUDED.model_ref_id,
                   display_name = EXCLUDED.display_name,
                   num_ctx = EXCLUDED.num_ctx,
                   requires_auth = EXCLUDED.requires_auth,
@@ -1263,7 +1351,7 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
                   updated_at = CURRENT_TIMESTAMP
                 RETURNING *
               `
-            : [];
+              : [];
 
       if (!rows.length) return null;
 
@@ -1333,6 +1421,45 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
     } catch (error) {
       const owner = serverId !== null ? `server ${serverId}` : `user ${userId}`;
       log.error(`Error deleting custom endpoint ${label}/${capability} for ${owner}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Deletes a single custom endpoint row by its primary key.
+   *
+   * Used when removing one model from a label+capability that may hold several. Caller supplies the
+   * owning serverId (when server-scoped) so the appropriate caches are invalidated.
+   *
+   * @param customEndpointId - Primary key of the endpoint row to delete
+   * @param options          - Cache invalidation options; serverId triggers channel/tomori cache busts
+   */
+  async deleteCustomEndpointById(
+    customEndpointId: number,
+    options: ChannelLlmCacheOptions & { serverId?: number | null } = {},
+  ): Promise<boolean> {
+    try {
+      const result = await sql`
+        DELETE FROM custom_endpoints
+        WHERE custom_endpoint_id = ${customEndpointId}
+      `;
+
+      const ok = result.count > 0;
+      const serverId = options.serverId ?? null;
+      if (ok && serverId !== null) {
+        const { invalidateAllChannelLlmCacheForServer, invalidateChannelLlmCache } = await import(
+          "@/utils/cache/channelLlmCacheStore"
+        );
+        if (options.channelDiscId) {
+          invalidateChannelLlmCache(serverId, options.channelDiscId);
+        } else {
+          invalidateAllChannelLlmCacheForServer(serverId);
+        }
+        if (options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
+      }
+      return ok;
+    } catch (error) {
+      log.error(`Error deleting custom endpoint by id ${customEndpointId}:`, error);
       return false;
     }
   }

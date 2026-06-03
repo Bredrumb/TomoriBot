@@ -152,7 +152,7 @@ export async function resolveImageToolCapabilities(state: ToolAssemblyState): Pr
 
   const provider = diffusionModel.provider.trim().toLowerCase();
   if (isCustomProvider(provider)) {
-    const endpoint = await resolveCustomEndpointForProvider(provider, "image");
+    const endpoint = await resolveCustomEndpointForProvider(provider, "image", diffusionModelId);
     if (!endpoint) {
       log.warn(`Image tool assembly could not resolve custom endpoint for provider ${provider}`);
       return null;

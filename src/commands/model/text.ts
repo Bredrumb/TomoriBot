@@ -20,6 +20,7 @@ import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolve
 import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/utils/discord/providerPicker";
 import { replyLegacyOpenRouterOtherModelMoved } from "@/utils/discord/openrouterModelMigrationNotice";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
+import { promptCustomModelSelection } from "@/utils/provider/customModelPicker";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 
 const MODAL_CUSTOM_ID = "config_model_text_modal";
@@ -344,10 +345,15 @@ export async function execute(
     const responseInteraction = providerSelection.interaction;
     const selectedSavedConfig = savedProviders.find((p) => p.provider.toLowerCase() === selectedProvider) ?? null;
 
-    // 3a. Custom provider: activate the already-registered labeled endpoint directly
+    // 3a. Custom provider: pick among the label's registered text models, then activate the choice.
     if (isCustomProvider(selectedProvider)) {
-      const customModel = selectedSavedConfig?.llm_id ? await llmModelRepo.loadById(selectedSavedConfig.llm_id) : null;
-      if (!selectedSavedConfig || !customModel?.llm_id) {
+      const customAvailableModels = selectedSavedConfig
+        ? await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
+            kind: "server",
+            ownerId: tomoriState.server_id,
+          })
+        : null;
+      if (!selectedSavedConfig || !customAvailableModels?.length) {
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "commands.model.text.no_models_title",
           descriptionKey: "commands.model.text.no_models_description",
@@ -355,6 +361,50 @@ export async function execute(
         });
         return;
       }
+
+      // Single registered model activates directly; multiple show a string-select picker.
+      const selection = await promptCustomModelSelection<LlmRow>({
+        interaction: responseInteraction,
+        locale,
+        choices: customAvailableModels.map((m) => ({
+          model: m,
+          value: m.llm_codename,
+          label: m.llm_description?.trim() || m.llm_codename,
+          description: getLocalizedDescription(m, userData.language_pref),
+        })),
+        modalCustomId: "config_model_text_custom_modal",
+        modalTitleKey: "commands.model.text.modal_title",
+        selectLabelKey: "commands.model.text.select_label",
+        selectDescriptionKey: "commands.model.text.select_description",
+        selectPlaceholderKey: "commands.model.text.select_placeholder",
+      });
+      if (!selection) return;
+
+      const customModel = selection.model;
+      if (selection.submitInteraction) {
+        modalSubmitInteraction = selection.submitInteraction;
+      }
+      const customReplyTarget = selection.submitInteraction ?? responseInteraction;
+
+      if (!customModel.llm_id) {
+        await replyInfoEmbed(customReplyTarget, locale, {
+          titleKey: "commands.model.text.invalid_model_title",
+          descriptionKey: "commands.model.text.invalid_model_description",
+          color: ColorCode.ERROR,
+        });
+        return;
+      }
+
+      if (customModel.llm_id === tomoriState.config.llm_id) {
+        await replyInfoEmbed(customReplyTarget, locale, {
+          titleKey: "commands.model.text.already_selected_title",
+          descriptionKey: "commands.model.text.already_selected_description",
+          descriptionVars: { model_name: customModel.llm_description ?? customModel.llm_codename },
+          color: ColorCode.WARN,
+        });
+        return;
+      }
+
       const resolvedLogitBiases = resolveLogitBiasEntriesForLlm(
         selectedSavedConfig.llm_logit_biases ?? tomoriState.config.llm_logit_biases ?? [],
         customModel,
@@ -393,7 +443,7 @@ export async function execute(
       const updatedRow = updatedModel;
 
       if (!updatedRow) {
-        await replyInfoEmbed(responseInteraction, locale, {
+        await replyInfoEmbed(customReplyTarget, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
           color: ColorCode.ERROR,
@@ -402,7 +452,7 @@ export async function execute(
       }
 
       invalidateTomoriStateCache(serverId);
-      await replyInfoEmbed(responseInteraction, locale, {
+      await replyInfoEmbed(customReplyTarget, locale, {
         titleKey: "commands.model.text.success_title",
         descriptionKey: "commands.model.text.success_description",
         descriptionVars: {

@@ -28,7 +28,7 @@ export default {
       personal_field: `Personal Scope`,
       personal_value: `Use {add_command} to register your own labeled endpoint and {remove_command} to remove selected capabilities from it.`,
       selection_field: `Selecting Them`,
-      selection_value: `After registration, choose the label from {text_command}, {image_command}, or {video_command}. Vision-capable text endpoints also appear in \`/config model vision\`.`,
+      selection_value: `After registration, choose the label from {text_command}, {image_command}, or {video_command}; if the label has several models for that capability, a picker lets you choose one. Vision-capable text endpoints also appear in \`/config model vision\`. Re-run the add command with the same label and capability but a different model name to register an additional model on that connection (its endpoint URL and API style are inherited).`,
       labels_field: `Labels And Removal`,
       labels_value: `A label groups every capability under one custom provider bundle. {server_remove_command} and {personal_remove_command} remove only the capabilities you uncheck. {server_provider_remove_command} and {personal_provider_remove_command} delete the whole labeled bundle.`,
       comfyui_page1_title: `ComfyUI Setup`,

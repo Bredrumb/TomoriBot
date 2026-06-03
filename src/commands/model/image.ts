@@ -11,6 +11,7 @@ import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/utils/d
 import { configRepository, llmModelRepo } from "@/utils/db/repositories";
 import { getDiffusionModelById } from "@/utils/image/naiDiffusionModels";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
+import { promptCustomModelSelection } from "@/utils/provider/customModelPicker";
 import { getProviderDisplayName, getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 
@@ -198,8 +199,17 @@ export async function execute(
 
     if (isCustomProvider(selectedProvider)) {
       const selectedSavedConfig = savedProviders.find((row) => row.provider.toLowerCase() === selectedProvider) ?? null;
-      const selectedModelId = selectedSavedConfig?.diffusion_model_id ?? null;
-      if (!selectedModelId) {
+      const customAvailableModels = selectedSavedConfig
+        ? ((await llmModelRepo.loadAvailableDiffusionModels(selectedProvider, false, {
+            kind: "server",
+            ownerId: tomoriState.server_id,
+          })) ?? [])
+        : [];
+      const customModelChoices = customAvailableModels.filter(
+        (model): model is typeof model & { diffusion_model_id: number } =>
+          model.diffusion_model_id !== undefined && model.diffusion_model_id !== null,
+      );
+      if (!selectedSavedConfig || customModelChoices.length === 0) {
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "commands.model.image.no_models_title",
           descriptionKey: "commands.model.image.no_models_description",
@@ -212,16 +222,33 @@ export async function execute(
         return;
       }
 
+      // Single registered model activates directly; multiple show a string-select picker.
+      const selection = await promptCustomModelSelection({
+        interaction: responseInteraction,
+        locale,
+        choices: customModelChoices.map((model) => ({
+          model,
+          value: model.diffusion_model_id.toString(),
+          label: getImageModelDisplayName(model) ?? model.codename,
+          description: getLocalizedDescription(model, userData.language_pref),
+        })),
+        modalCustomId: "config_model_image_custom_modal",
+        modalTitleKey: "commands.model.image.modal_title",
+        selectLabelKey: "commands.model.image.select_label",
+        selectDescriptionKey: "commands.model.image.select_description",
+        selectPlaceholderKey: "commands.model.image.select_placeholder",
+      });
+      if (!selection) return;
+
+      const selectedConfiguredModel = selection.model;
+      const customReplyTarget = selection.submitInteraction ?? responseInteraction;
+      const selectedModelId = selectedConfiguredModel.diffusion_model_id;
       const currentSelectedId = tomoriState.config.diffusion_model_id ?? null;
-      const [selectedConfiguredModel, previousModel] = await Promise.all([
-        getDiffusionModelById(selectedModelId),
-        currentSelectedId ? getDiffusionModelById(currentSelectedId) : Promise.resolve(null),
-      ]);
       const selectedModelName =
         getImageModelDisplayName(selectedConfiguredModel) ?? getProviderDisplayName(selectedProvider);
 
       if (selectedModelId === currentSelectedId) {
-        await replyInfoEmbed(responseInteraction, locale, {
+        await replyInfoEmbed(customReplyTarget, locale, {
           titleKey: "commands.model.image.already_selected_title",
           descriptionKey: "commands.model.image.already_selected_description",
           descriptionVars: {
@@ -232,12 +259,13 @@ export async function execute(
         return;
       }
 
+      const previousModel = currentSelectedId ? await getDiffusionModelById(currentSelectedId) : null;
       const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
         diffusion_model_id: selectedModelId,
       });
 
       if (!updated) {
-        await replyInfoEmbed(responseInteraction, locale, {
+        await replyInfoEmbed(customReplyTarget, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
           color: ColorCode.ERROR,
@@ -246,7 +274,7 @@ export async function execute(
       }
 
       invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
-      await replyInfoEmbed(responseInteraction, locale, {
+      await replyInfoEmbed(customReplyTarget, locale, {
         titleKey: "commands.model.image.success_title",
         descriptionKey: "commands.model.image.success_description",
         descriptionVars: {

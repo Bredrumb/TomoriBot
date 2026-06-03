@@ -1569,6 +1569,122 @@ export class LlmModelRepository {
         return;
     }
   }
+
+  /**
+   * Deletes a synthetic custom model row by its primary key in the capability-appropriate table.
+   *
+   * Preferred over the codename-based delete when removing one model among several under a label,
+   * since the id is unambiguous regardless of how the codename was derived.
+   *
+   * @param modelRefId - Primary key in llms / embedding_models / image_diffusion_models / video_generation_models
+   * @param capability - Selects the target table
+   */
+  async deleteSyntheticCustomCapabilityModelById(
+    modelRefId: number,
+    capability: CustomEndpointCapability,
+  ): Promise<void> {
+    switch (capability) {
+      case "text":
+        await sql`DELETE FROM llms WHERE llm_id = ${modelRefId}`;
+        return;
+      case "embedding":
+        await sql`DELETE FROM embedding_models WHERE embedding_model_id = ${modelRefId}`;
+        return;
+      case "image":
+        await sql`DELETE FROM image_diffusion_models WHERE diffusion_model_id = ${modelRefId}`;
+        return;
+      case "video":
+        await sql`DELETE FROM video_generation_models WHERE video_model_id = ${modelRefId}`;
+        return;
+      case "speech":
+      case "transcription":
+        return;
+    }
+  }
+
+  /**
+   * Updates an existing synthetic custom model row in place by its primary key.
+   *
+   * Used on the edit path so a renamed model_name (which changes the derived codename) updates the
+   * same row rather than orphaning it — config rows reference the model by id, so the id is stable.
+   *
+   * @param params - modelRefId + capability select the row/table; remaining fields are the new values
+   */
+  async updateSyntheticCustomCapabilityModelById(params: {
+    modelRefId: number;
+    capability: CustomEndpointCapability;
+    codename: string;
+    displayName: string;
+    hasTools: boolean;
+    seesImages: boolean;
+    seesVideos: boolean;
+    supportsStructOutput: boolean;
+  }): Promise<void> {
+    switch (params.capability) {
+      case "text":
+        await sql`
+          UPDATE llms SET
+            llm_codename = ${params.codename},
+            has_tools = ${params.hasTools},
+            sees_images = ${params.seesImages},
+            sees_videos = ${params.seesVideos},
+            supports_structoutput = ${params.supportsStructOutput},
+            llm_description = ${params.displayName},
+            ja_description = ${params.displayName},
+            updated_at = CURRENT_TIMESTAMP
+          WHERE llm_id = ${params.modelRefId}
+        `;
+        return;
+      case "embedding":
+        await sql`
+          UPDATE embedding_models SET
+            codename = ${params.codename},
+            model_description = ${params.displayName},
+            ja_description = ${params.displayName},
+            updated_at = CURRENT_TIMESTAMP
+          WHERE embedding_model_id = ${params.modelRefId}
+        `;
+        return;
+      case "image":
+        await sql`
+          UPDATE image_diffusion_models SET
+            codename = ${params.codename},
+            model_description = ${params.displayName},
+            ja_description = ${params.displayName},
+            updated_at = CURRENT_TIMESTAMP
+          WHERE diffusion_model_id = ${params.modelRefId}
+        `;
+        return;
+      case "video":
+        await sql`
+          UPDATE video_generation_models SET
+            codename = ${params.codename},
+            model_description = ${params.displayName},
+            ja_description = ${params.displayName},
+            updated_at = CURRENT_TIMESTAMP
+          WHERE video_model_id = ${params.modelRefId}
+        `;
+        return;
+      case "speech":
+      case "transcription":
+        return;
+    }
+  }
+
+  /**
+   * Deletes every synthetic model row owned by a custom provider across all capability tables.
+   *
+   * Used when tearing down a custom provider entirely — a label+capability may now own several
+   * synthetic models, so codename-by-codename deletion is insufficient.
+   *
+   * @param provider - Internal custom provider name (e.g. "custom:s123:home")
+   */
+  async deleteAllSyntheticModelsForProvider(provider: string): Promise<void> {
+    await sql`DELETE FROM llms WHERE llm_provider = ${provider}`;
+    await sql`DELETE FROM embedding_models WHERE provider = ${provider}`;
+    await sql`DELETE FROM image_diffusion_models WHERE provider = ${provider}`;
+    await sql`DELETE FROM video_generation_models WHERE provider = ${provider}`;
+  }
 }
 
 /** Singleton instance — import this in callers. */

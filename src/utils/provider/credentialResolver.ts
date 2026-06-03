@@ -95,6 +95,32 @@ function getCapabilityModelId(
   }
 }
 
+/**
+ * Reads the active model id for a capability from live server config columns.
+ *
+ * Used to tell the custom-endpoint resolver which specific model is active (server scope), so the
+ * correct endpoint row is chosen when a label hosts several models of the same capability.
+ */
+function capabilityModelIdFromColumns(config: CapabilityConfigColumns | null, capability: Capability): number | null {
+  if (!config) {
+    return null;
+  }
+  switch (capability) {
+    case "text":
+      return config.llm_id ?? null;
+    case "embedding":
+      return config.embedding_model_id ?? null;
+    case "image-standard":
+      return config.diffusion_model_id ?? null;
+    case "image-nai":
+      return config.nai_diffusion_model_id ?? null;
+    case "video":
+      return config.video_model_id ?? null;
+    case "vision":
+      return config.vision_llm_id ?? null;
+  }
+}
+
 export function getResolvedCapabilityModelId(
   resolved: Pick<ResolvedCredentials, "savedConfig" | "source">,
   capability: Capability,
@@ -185,6 +211,7 @@ async function decryptResolvedApiKey(
   capability: Capability,
   source: "server" | "personal",
   contextLabel: string,
+  activeModelId?: number | null,
 ): Promise<ResolvedCredentials> {
   const customEndpointCapability =
     capability === "image-standard"
@@ -194,9 +221,11 @@ async function decryptResolvedApiKey(
         : capability === "image-nai"
           ? null
           : capability;
+  // Pass the active model id so the right endpoint row is chosen when several models share a
+  // label+capability; resolution falls back to the label's default when no id matches.
   const customEndpoint =
     isCustomProvider(provider) && customEndpointCapability
-      ? await resolveCustomEndpointForProvider(provider, customEndpointCapability)
+      ? await resolveCustomEndpointForProvider(provider, customEndpointCapability, activeModelId)
       : null;
 
   if (!savedConfig.api_key) {
@@ -263,6 +292,7 @@ async function resolvePersonalCredentials(userId: number, capability: Capability
     capability,
     "personal",
     `user ${userId}`,
+    getCapabilityModelId(savedConfig, capability),
   );
 }
 
@@ -292,5 +322,12 @@ export async function resolveCapabilityCredentials(
     throw new CredentialUnavailableError(provider, capability, "no_saved_config", "server");
   }
 
-  return await decryptResolvedApiKey(savedConfig, provider, capability, "server", `server ${serverId}`);
+  return await decryptResolvedApiKey(
+    savedConfig,
+    provider,
+    capability,
+    "server",
+    `server ${serverId}`,
+    capabilityModelIdFromColumns(capabilityConfig, capability),
+  );
 }

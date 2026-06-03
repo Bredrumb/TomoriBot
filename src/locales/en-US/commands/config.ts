@@ -88,11 +88,11 @@ export default {
     custom_models: {
       description: `Manage labeled custom endpoints.`,
       add: {
-        description: `Register one capability under a labeled custom endpoint.`,
-        label_description: `Bundle label shared by matching capabilities, e.g. ComfyUI.`,
+        description: `Register a model under a custom endpoint label (reuse the label to add more).`,
+        label_description: `Connection label; reuse it to host several models of a capability. e.g. ollama, comfyui`,
         capability_description: `Which capability this endpoint provides.`,
-        api_style_description: `Which API format this endpoint speaks.`,
-        endpoint_url_description: `Base URL for the endpoint, e.g. http://localhost:5001.`,
+        api_style_description: `API format. Optional when adding another model to an existing label (inherited).`,
+        endpoint_url_description: `Base URL, e.g. http://localhost:5001. Optional when reusing a label (inherited).`,
         auth_token_description: `Optional bearer token for protected endpoints.`,
         success_title: `Custom Endpoint Added`,
         success_description: `Added **{display_name}** under label **{label}** for **{capability}**. Select it with \`/config model\`.`,
@@ -157,6 +157,9 @@ export default {
         local_address_blocked: `Personal endpoints block localhost and private IPs by default. If you're self-hosting, set \`ALLOW_PERSONAL_LOCAL_ENDPOINTS=true\` in your \`.env\` to allow local addresses.`,
         workflow_required: `ComfyUI image and video endpoints require a workflow JSON attachment.`,
         model_name_required: `Text and embedding endpoints require a remote model name.`,
+        model_name_required_sibling: `This label already has a model for that capability, so the new one needs its own model name to tell them apart.`,
+        api_style_required: `This is a new endpoint label, so an API style is required. (Adding a model to an existing label reuses its API style automatically.)`,
+        endpoint_url_required: `This is a new endpoint label, so an endpoint URL is required. (Adding a model to an existing label reuses its URL automatically.)`,
         transcription_model_required: `Transcription endpoints require a model identifier such as \`large-v3\` or \`whisper-1\`.`,
       },
       capability_modal: {

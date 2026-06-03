@@ -28,7 +28,7 @@ export default {
       personal_field: `個人登録`,
       personal_value: `{add_command} で自分専用のラベル付きエンドポイントを登録し、{remove_command} で選んだ機能だけ削除できます。`,
       selection_field: `使い方`,
-      selection_value: `登録後は {text_command}、{image_command}、{video_command} からラベルを選択してください。画像理解対応のテキストエンドポイントは \`/config model vision\` にも表示されます。`,
+      selection_value: `登録後は {text_command}、{image_command}、{video_command} からラベルを選択してください。そのラベルに同じ機能のモデルが複数ある場合は、選択メニューから1つ選べます。画像理解対応のテキストエンドポイントは \`/config model vision\` にも表示されます。同じラベル・同じ機能で別のモデル名を指定して追加コマンドを再実行すると、その接続にモデルを追加登録できます（エンドポイントURLとAPIスタイルは引き継がれます）。`,
       labels_field: `ラベルと削除`,
       labels_value: `1つのラベルは対応する全機能をまとめたカスタムプロバイダーバンドルです。{server_remove_command} と {personal_remove_command} はチェックを外した機能だけ削除します。{server_provider_remove_command} と {personal_provider_remove_command} はそのラベル全体を削除します。`,
       comfyui_page1_title: `ComfyUI セットアップ`,

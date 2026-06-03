@@ -155,7 +155,7 @@ export class CustomProvider
   }
 
   async generateEmbeddings(request: EmbeddingRequest): Promise<number[][]> {
-    const customEndpoint = await resolveCustomEndpointForProvider(request.provider, "embedding");
+    const customEndpoint = await resolveCustomEndpointForProvider(request.provider, "embedding", request.modelId);
     const endpointUrl = customEndpoint?.endpoint_url ?? null;
     const modelName = customEndpoint?.model_name ?? request.model;
 
@@ -438,7 +438,13 @@ export class CustomProvider
     let endpointModelNameHint: string | null = null;
     let endpointNumCtxHint: number | null = null;
     if (!endpointUrl) {
-      const textEndpoint = await resolveCustomEndpointForProvider(tomoriState.llm.llm_provider.toLowerCase(), "text");
+      // Pass the active model id so the correct endpoint is chosen when the label hosts several
+      // text models; falls back to the label default when unset (legacy rows / single model).
+      const textEndpoint = await resolveCustomEndpointForProvider(
+        tomoriState.llm.llm_provider.toLowerCase(),
+        "text",
+        tomoriState.llm.llm_id,
+      );
       endpointUrl = textEndpoint?.endpoint_url ?? null;
       endpointModelNameHint = textEndpoint?.model_name ?? null;
       endpointNumCtxHint = textEndpoint?.num_ctx ?? null;

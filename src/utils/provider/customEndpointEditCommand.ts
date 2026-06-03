@@ -548,6 +548,9 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
       seesVideos: existingEndpoint.sees_videos,
       supportsStructOutput,
       extraConfig,
+      // Edit the exact selected row in place (update its model + row by id) so a renamed model_name
+      // does not collide with — or orphan — sibling models under the same label+capability.
+      editingEndpointId: existingEndpoint.custom_endpoint_id,
     });
 
     if (!registered) {

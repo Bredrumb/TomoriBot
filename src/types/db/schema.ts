@@ -250,6 +250,11 @@ export const customEndpointSchema = z.object({
   api_style: customEndpointApiStyleSchema,
   endpoint_url: z.string(),
   model_name: z.string().nullable().optional(),
+  // Links this endpoint row to the synthetic model row it owns (llms / embedding_models /
+  // image_diffusion_models / video_generation_models, disambiguated by `capability`). Lets the
+  // runtime resolve the specific selected model back to its endpoint when several models share a
+  // label+capability. Null for legacy rows until backfilled and for speech/transcription.
+  model_ref_id: z.number().int().nullable().optional(),
   display_name: z.string(),
   num_ctx: z.number().int().min(512).nullable().optional(),
   requires_auth: z.boolean().default(false),

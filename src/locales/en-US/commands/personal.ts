@@ -26,11 +26,11 @@ export default {
     custom_models: {
       description: `Manage your personal labeled custom endpoints.`,
       add: {
-        description: `Register one capability under a personal custom endpoint.`,
-        label_description: `Bundle label shared by matching capabilities, e.g. ComfyUI.`,
+        description: `Register a model under a personal custom endpoint label (reuse the label to add more).`,
+        label_description: `Connection label; reuse it to host several models of a capability. e.g. ollama, comfyui`,
         capability_description: `Which capability this endpoint provides.`,
-        api_style_description: `Which API format this endpoint speaks.`,
-        endpoint_url_description: `Base URL for the endpoint e.g. http://localhost:5001/v1.`,
+        api_style_description: `API format. Optional when adding another model to an existing label (inherited).`,
+        endpoint_url_description: `Base URL, e.g. http://localhost:5001/v1. Optional when reusing a label (inherited).`,
         auth_token_description: `Optional bearer token for protected endpoints.`,
         success_title: `Personal Custom Endpoint Added`,
         success_description: `Added **{display_name}** under your personal custom label **{label}** for **{capability}**.`,

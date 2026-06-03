@@ -1,14 +1,8 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import type {
-  CustomEndpointCapability,
-  CustomEndpointRow,
-  ErrorContext,
-  AssembledServerConfig,
-  UserRow,
-} from "@/types/db/schema";
+import type { CustomEndpointCapability, CustomEndpointRow, ErrorContext, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { configRepository, llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+import { llmProviderRepo } from "@/utils/db/repositories";
 import {
   buildCustomEndpointCheckboxGroups,
   collectCheckedCustomEndpointValues,
@@ -18,39 +12,7 @@ import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { removeCustomEndpointRegistration } from "@/utils/provider/customEndpointService";
-import { buildServerCustomProviderName } from "@/utils/provider/customProviderUtils";
 import { localizer } from "@/utils/text/localizer";
-
-async function resolveCurrentProvider(
-  config: Pick<AssembledServerConfig, "llm_id" | "diffusion_model_id" | "embedding_model_id" | "video_model_id">,
-  capability: CustomEndpointCapability,
-): Promise<string | null> {
-  switch (capability) {
-    case "speech":
-    case "transcription":
-      return null;
-    case "text": {
-      if (!config.llm_id) return null;
-      const llm = await llmModelRepo.loadById(config.llm_id);
-      return llm?.llm_provider ? llm.llm_provider.toLowerCase() : null;
-    }
-    case "image": {
-      if (!config.diffusion_model_id) return null;
-      const model = await llmModelRepo.loadDiffusionModelById(config.diffusion_model_id);
-      return model?.provider ? String(model.provider).toLowerCase() : null;
-    }
-    case "embedding": {
-      if (!config.embedding_model_id) return null;
-      const model = await llmModelRepo.loadEmbeddingModelById(config.embedding_model_id);
-      return model?.provider ? String(model.provider).toLowerCase() : null;
-    }
-    case "video": {
-      if (!config.video_model_id) return null;
-      const model = await llmModelRepo.loadVideoGenerationModelById(config.video_model_id);
-      return model?.provider ? String(model.provider).toLowerCase() : null;
-    }
-  }
-}
 
 function getCapabilityLabel(locale: string, capability: CustomEndpointCapability): string {
   switch (capability) {
@@ -74,47 +36,15 @@ function formatRemovedEndpoints(locale: string, endpoints: CustomEndpointRow[]):
 
   for (const endpoint of endpoints) {
     const existing = grouped.get(endpoint.capability) ?? [];
-    existing.push(`\`${endpoint.label}\``);
+    // Surface the model name when present so removing one model among several reads clearly.
+    const display = endpoint.model_name?.trim() ? `${endpoint.label} (${endpoint.model_name.trim()})` : endpoint.label;
+    existing.push(`\`${display}\``);
     grouped.set(endpoint.capability, existing);
   }
 
   return Array.from(grouped.entries())
     .map(([capability, entries]) => `${getCapabilityLabel(locale, capability)}: ${entries.join(", ")}`)
     .join("; ");
-}
-
-async function clearCurrentProviderSelections(
-  serverId: number,
-  capabilitiesToClear: Set<CustomEndpointCapability>,
-  currentLlmId: number | null,
-  currentVisionLlmId: number | null,
-): Promise<void> {
-  for (const capability of capabilitiesToClear) {
-    switch (capability) {
-      case "text": {
-        // Self-referencing case: if vision_llm_id pointed at the now-removed text
-        // model, null it too. Resolved in TS so the patch stays a flat partial.
-        const shouldClearVision = currentVisionLlmId !== null && currentVisionLlmId === currentLlmId;
-        await configRepository.updateModelConfig(serverId, {
-          llm_id: null,
-          custom_endpoint_url: null,
-          custom_model_name: null,
-          custom_num_ctx: null,
-          ...(shouldClearVision ? { vision_llm_id: null } : {}),
-        });
-        break;
-      }
-      case "embedding":
-        await configRepository.updateModelConfig(serverId, { embedding_model_id: null });
-        break;
-      case "image":
-        await configRepository.updateModelConfig(serverId, { diffusion_model_id: null });
-        break;
-      case "video":
-        await configRepository.updateModelConfig(serverId, { video_model_id: null });
-        break;
-    }
-  }
 }
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
@@ -193,16 +123,15 @@ export async function execute(
       return;
     }
 
-    const removedCapabilities = new Set(endpointsToRemove.map((endpoint) => endpoint.capability));
-    const currentProviders = new Map<CustomEndpointCapability, string | null>();
-    for (const capability of removedCapabilities) {
-      currentProviders.set(capability, await resolveCurrentProvider(tomoriState.config, capability));
-    }
-
+    // Remove each selected model by its endpoint id. The service deletes the row + its synthetic
+    // model and precisely clears any live/saved active selection that pointed at that exact model,
+    // leaving sibling models under the same label untouched.
     const removedEndpoints: CustomEndpointRow[] = [];
-    const capabilitiesToClear = new Set<CustomEndpointCapability>();
-
     for (const endpoint of endpointsToRemove) {
+      if (endpoint.custom_endpoint_id == null) {
+        continue;
+      }
+
       const removed = await removeCustomEndpointRegistration({
         scope: {
           kind: "server",
@@ -210,19 +139,14 @@ export async function execute(
           baseConfig: tomoriState.config,
           serverDiscId: interaction.guild?.id ?? interaction.user.id,
         },
+        customEndpointId: endpoint.custom_endpoint_id,
         label: endpoint.label,
         capability: endpoint.capability,
+        modelRefId: endpoint.model_ref_id ?? null,
       });
 
-      if (!removed) {
-        continue;
-      }
-
-      removedEndpoints.push(endpoint);
-
-      const removedProvider = buildServerCustomProviderName(tomoriState.server_id, endpoint.label);
-      if (currentProviders.get(endpoint.capability) === removedProvider) {
-        capabilitiesToClear.add(endpoint.capability);
+      if (removed) {
+        removedEndpoints.push(endpoint);
       }
     }
 
@@ -235,15 +159,7 @@ export async function execute(
       return;
     }
 
-    await clearCurrentProviderSelections(
-      tomoriState.server_id,
-      capabilitiesToClear,
-      tomoriState.config.llm_id ?? null,
-      tomoriState.config.vision_llm_id ?? null,
-    );
-    if (capabilitiesToClear.size > 0) {
-      invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
-    }
+    invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
     await replyInfoEmbed(modalResult.interaction, locale, {
       titleKey: "commands.config.custom_models.remove.success_title",

@@ -12,6 +12,7 @@ import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { configRepository, llmModelRepo, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/utils/discord/providerPicker";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
+import { promptCustomModelSelection } from "@/utils/provider/customModelPicker";
 import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
@@ -91,7 +92,17 @@ export async function execute(
 
     if (isCustomProvider(selectedProvider)) {
       const selectedSavedConfig = savedProviders.find((row) => row.provider.toLowerCase() === selectedProvider) ?? null;
-      if (!selectedSavedConfig?.embedding_model_id) {
+      const customAvailableModels = selectedSavedConfig
+        ? ((await llmModelRepo.loadAvailableEmbeddingModels(selectedProvider, false, {
+            kind: "server",
+            ownerId: tomoriState.server_id,
+          })) ?? [])
+        : [];
+      const customModelChoices = customAvailableModels.filter(
+        (model): model is typeof model & { embedding_model_id: number } =>
+          model.embedding_model_id !== undefined && model.embedding_model_id !== null,
+      );
+      if (!selectedSavedConfig || customModelChoices.length === 0) {
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "commands.model.embedding.no_models_title",
           descriptionKey: "commands.model.embedding.no_models_description",
@@ -104,16 +115,32 @@ export async function execute(
         return;
       }
 
+      // Single registered model activates directly; multiple show a string-select picker.
+      const selection = await promptCustomModelSelection({
+        interaction: responseInteraction,
+        locale,
+        choices: customModelChoices.map((model) => ({
+          model,
+          value: model.embedding_model_id.toString(),
+          label: getEmbeddingModelDisplayName(model) ?? model.codename,
+          description: getLocalizedDescription(model, userData.language_pref),
+        })),
+        modalCustomId: "config_model_embedding_custom_modal",
+        modalTitleKey: "commands.model.embedding.modal_title",
+        selectLabelKey: "commands.model.embedding.select_label",
+        selectDescriptionKey: "commands.model.embedding.select_description",
+        selectPlaceholderKey: "commands.model.embedding.select_placeholder",
+      });
+      if (!selection) return;
+
+      const selectedConfiguredModel = selection.model;
+      const customReplyTarget = selection.submitInteraction ?? responseInteraction;
       const currentSelectedId = tomoriState.config.embedding_model_id ?? null;
-      const [selectedConfiguredModel, previousModel] = await Promise.all([
-        llmModelRepo.loadEmbeddingModelById(selectedSavedConfig.embedding_model_id),
-        currentSelectedId ? llmModelRepo.loadEmbeddingModelById(currentSelectedId) : Promise.resolve(null),
-      ]);
       const selectedModelName =
         getEmbeddingModelDisplayName(selectedConfiguredModel) ?? getProviderDisplayName(selectedProvider);
 
-      if (selectedSavedConfig.embedding_model_id === currentSelectedId) {
-        await replyInfoEmbed(responseInteraction, locale, {
+      if (selectedConfiguredModel.embedding_model_id === currentSelectedId) {
+        await replyInfoEmbed(customReplyTarget, locale, {
           titleKey: "commands.model.embedding.already_selected_title",
           descriptionKey: "commands.model.embedding.already_selected_description",
           descriptionVars: {
@@ -124,12 +151,13 @@ export async function execute(
         return;
       }
 
+      const previousModel = currentSelectedId ? await llmModelRepo.loadEmbeddingModelById(currentSelectedId) : null;
       const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
-        embedding_model_id: selectedSavedConfig.embedding_model_id,
+        embedding_model_id: selectedConfiguredModel.embedding_model_id,
       });
 
       if (!updated) {
-        await replyInfoEmbed(responseInteraction, locale, {
+        await replyInfoEmbed(customReplyTarget, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
           color: ColorCode.ERROR,
@@ -138,7 +166,7 @@ export async function execute(
       }
 
       invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
-      await replyInfoEmbed(responseInteraction, locale, {
+      await replyInfoEmbed(customReplyTarget, locale, {
         titleKey: "commands.model.embedding.success_title",
         descriptionKey: "commands.model.embedding.success_description",
         descriptionVars: {

@@ -537,6 +537,7 @@ export async function execute(
       provider: embeddingModel.provider,
       apiKey: embeddingCreds.apiKey,
       model: embeddingModel.codename,
+      modelId: embeddingModel.embedding_model_id,
       inputs: chunks,
       taskType: (await providerSupportsEmbeddingTaskType(embeddingModel.provider)) ? "RETRIEVAL_DOCUMENT" : undefined,
       batchSize: 16,

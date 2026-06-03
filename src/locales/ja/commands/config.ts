@@ -88,11 +88,11 @@ export default {
     custom_models: {
       description: `ラベル付きカスタムエンドポイントを管理します。`,
       add: {
-        description: `ラベル付きカスタムエンドポイントに1機能を登録します。`,
-        label_description: `一致する機能で共有するバンドル用ラベル。例: ComfyUI。`,
+        description: `カスタムエンドポイントのラベルにモデルを登録します（同じラベルを再利用して追加可能）。`,
+        label_description: `接続ラベル。同じ機能のモデルを複数登録するには再利用します。例: ollama, comfyui`,
         capability_description: `このエンドポイントが提供する機能。`,
-        api_style_description: `このエンドポイントが使うAPI形式。`,
-        endpoint_url_description: `エンドポイントのベースURL。`,
+        api_style_description: `API形式。既存ラベルにモデルを追加する場合は任意（ラベルから継承）。`,
+        endpoint_url_description: `ベースURL。例: http://localhost:5001。既存ラベル再利用時は任意（継承）。`,
         auth_token_description: `保護されたエンドポイント用のBearerトークン（任意）。`,
         success_title: `カスタムエンドポイントを追加しました`,
         success_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加しました。\`/config model\` から選択できます。`,
@@ -157,6 +157,9 @@ export default {
         local_address_blocked: `パーソナルエンドポイントはデフォルトでlocalhostとプライベートIPをブロックします。セルフホストの場合は、ローカルアドレスを許可するために \`.env\` に \`ALLOW_PERSONAL_LOCAL_ENDPOINTS=true\` を設定してください。`,
         workflow_required: `ComfyUI の画像/動画エンドポイントではワークフローJSONの添付が必要です。`,
         model_name_required: `テキストと埋め込みのエンドポイントではモデル名が必要です。`,
+        model_name_required_sibling: `このラベルにはその機能のモデルが既に登録されているため、新しいモデルには区別用のモデル名が必要です。`,
+        api_style_required: `これは新しいエンドポイントラベルなので、APIスタイルが必要です。（既存ラベルにモデルを追加する場合は、そのAPIスタイルが自動的に再利用されます。）`,
+        endpoint_url_required: `これは新しいエンドポイントラベルなので、エンドポイントURLが必要です。（既存ラベルにモデルを追加する場合は、そのURLが自動的に再利用されます。）`,
         transcription_model_required: `文字起こしエンドポイントには \`large-v3\` や \`whisper-1\` などのモデル識別子が必要です。`,
       },
       capability_modal: {

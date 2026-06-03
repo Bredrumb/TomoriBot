@@ -54,6 +54,9 @@ export interface CustomEndpointRegistrationInput {
   seesVideos?: boolean;
   supportsStructOutput?: boolean;
   extraConfig?: Record<string, unknown>;
+  // When set, edit that exact endpoint row in place (update its model + row by id) instead of
+  // registering a new model. Add flows omit it; the edit command supplies the selected row's id.
+  editingEndpointId?: number;
 }
 
 export interface CustomEndpointRegistrationResult {
@@ -81,7 +84,7 @@ async function upsertSyntheticTextModel(
   provider: string,
   endpoint: CustomEndpointRegistrationInput,
 ): Promise<number | null> {
-  const codename = buildSyntheticCustomModelCodename(provider, "text");
+  const codename = buildSyntheticCustomModelCodename(provider, "text", endpoint.modelName);
   const modelId = await llmModelRepo.upsertSyntheticCustomLlm({
     provider,
     codename,
@@ -99,7 +102,7 @@ async function upsertSyntheticEmbeddingModel(
   provider: string,
   endpoint: CustomEndpointRegistrationInput,
 ): Promise<number | null> {
-  const codename = buildSyntheticCustomModelCodename(provider, "embedding");
+  const codename = buildSyntheticCustomModelCodename(provider, "embedding", endpoint.modelName);
   const modelId = await llmModelRepo.upsertSyntheticCustomEmbeddingModel({
     provider,
     codename,
@@ -113,7 +116,7 @@ async function upsertSyntheticImageModel(
   provider: string,
   endpoint: CustomEndpointRegistrationInput,
 ): Promise<number | null> {
-  const codename = buildSyntheticCustomModelCodename(provider, "image");
+  const codename = buildSyntheticCustomModelCodename(provider, "image", endpoint.modelName);
   const modelId = await llmModelRepo.upsertSyntheticCustomDiffusionModel({
     provider,
     codename,
@@ -127,7 +130,7 @@ async function upsertSyntheticVideoModel(
   provider: string,
   endpoint: CustomEndpointRegistrationInput,
 ): Promise<number | null> {
-  const codename = buildSyntheticCustomModelCodename(provider, "video");
+  const codename = buildSyntheticCustomModelCodename(provider, "video", endpoint.modelName);
   const modelId = await llmModelRepo.upsertSyntheticCustomVideoModel({
     provider,
     codename,
@@ -155,10 +158,38 @@ async function upsertSyntheticCapabilityModel(
   }
 }
 
-async function deleteSyntheticCapabilityModel(provider: string, capability: CustomEndpointCapability): Promise<void> {
-  const codename = buildSyntheticCustomModelCodename(provider, capability);
+/**
+ * Writes the synthetic model row backing an endpoint and returns its id.
+ *
+ * On the add path (no existing model ref) it inserts a fresh synthetic model. On the edit path it
+ * updates the existing model row in place by id, so a renamed model_name (which changes the derived
+ * codename) does not orphan the row that live config still references by id.
+ */
+async function writeSyntheticCapabilityModel(
+  provider: string,
+  endpoint: CustomEndpointRegistrationInput,
+  existingModelRefId: number | null,
+): Promise<number | null> {
+  if (existingModelRefId == null) {
+    return await upsertSyntheticCapabilityModel(provider, endpoint);
+  }
 
-  await llmModelRepo.deleteSyntheticCustomCapabilityModel(provider, codename, capability);
+  if (endpoint.capability === "speech" || endpoint.capability === "transcription") {
+    return null;
+  }
+
+  const codename = buildSyntheticCustomModelCodename(provider, endpoint.capability, endpoint.modelName);
+  await llmModelRepo.updateSyntheticCustomCapabilityModelById({
+    modelRefId: existingModelRefId,
+    capability: endpoint.capability,
+    codename,
+    displayName: endpoint.displayName,
+    hasTools: endpoint.hasTools ?? false,
+    seesImages: endpoint.seesImages ?? false,
+    seesVideos: endpoint.seesVideos ?? false,
+    supportsStructOutput: endpoint.supportsStructOutput ?? false,
+  });
+  return existingModelRefId;
 }
 
 function getCapabilityModelId(
@@ -307,31 +338,35 @@ export async function registerCustomEndpoint(
 ): Promise<CustomEndpointRegistrationResult | null> {
   const provider = getInternalProviderName(input.scope, input.label);
   const existingConfig = await getExistingSavedConfig(input.scope, provider);
-  const existingEndpoint =
+  const isEdit = input.editingEndpointId != null;
+
+  // 1. On the edit path, recover the row being edited (model link, prior auth/default flags).
+  const editingRow = isEdit
+    ? ((await llmProviderRepo.loadCustomEndpointsByIds([input.editingEndpointId as number]))[0] ?? null)
+    : null;
+
+  // 2. Determine whether this is the first model of its capability under the label. The first model
+  //    auto-activates and becomes the default; later siblings are register-only (no active switch).
+  const allEndpoints =
     input.scope.kind === "server"
-      ? await llmProviderRepo.loadCustomEndpoint({
-          serverId: input.scope.ownerId,
-          label: input.label,
-          capability: input.capability,
-        })
-      : await llmProviderRepo.loadCustomEndpoint({
-          userId: input.scope.ownerId,
-          label: input.label,
-          capability: input.capability,
-        });
-  const siblingEndpoints =
-    input.scope.kind === "server"
-      ? (await llmProviderRepo.loadCustomEndpointsForServer(input.scope.ownerId)).filter(
-          (endpoint) => endpoint.capability === input.capability,
-        )
-      : (await llmProviderRepo.loadCustomEndpointsForUser(input.scope.ownerId)).filter(
-          (endpoint) => endpoint.capability === input.capability,
-        );
-  const shouldBeDefault = existingEndpoint?.is_default ?? !siblingEndpoints.some((endpoint) => endpoint.is_default);
-  const modelId = await upsertSyntheticCapabilityModel(provider, input);
+      ? await llmProviderRepo.loadCustomEndpointsForServer(input.scope.ownerId)
+      : await llmProviderRepo.loadCustomEndpointsForUser(input.scope.ownerId);
+  const otherSiblings = allEndpoints.filter(
+    (endpoint) =>
+      endpoint.label === input.label &&
+      endpoint.capability === input.capability &&
+      endpoint.custom_endpoint_id !== input.editingEndpointId,
+  );
+  const shouldBeDefault = isEdit ? (editingRow?.is_default ?? false) : otherSiblings.length === 0;
+
+  // 3. Insert (add) or update-in-place (edit) the synthetic model row.
+  const modelId = await writeSyntheticCapabilityModel(provider, input, editingRow?.model_ref_id ?? null);
+
+  // Auth is shared per label (one stored key). A new sibling inherits requires_auth from an existing
+  // sibling/edited row when no fresh token is supplied, so the "one connection" model stays coherent.
+  const authSibling = editingRow ?? otherSiblings[0] ?? null;
   const trimmedAuthToken = input.authToken?.trim();
-  const requiresAuth =
-    trimmedAuthToken && trimmedAuthToken.length > 0 ? true : (existingEndpoint?.requires_auth ?? false);
+  const requiresAuth = trimmedAuthToken && trimmedAuthToken.length > 0 ? true : (authSibling?.requires_auth ?? false);
   const serverScope = input.scope.kind === "server" ? input.scope : null;
 
   const customEndpoint = await llmProviderRepo.upsertCustomEndpoint(
@@ -343,6 +378,7 @@ export async function registerCustomEndpoint(
       apiStyle: input.apiStyle,
       endpointUrl: input.endpointUrl,
       modelName: input.modelName ?? null,
+      modelRefId: modelId,
       displayName: input.displayName,
       numCtx: input.numCtx ?? null,
       requiresAuth,
@@ -352,6 +388,7 @@ export async function registerCustomEndpoint(
       seesVideos: input.seesVideos ?? false,
       supportsStructOutput: input.supportsStructOutput ?? false,
       isDefault: shouldBeDefault,
+      customEndpointId: isEdit ? input.editingEndpointId : null,
     },
     serverScope ? { serverDiscId: serverScope.serverDiscId } : {},
   );
@@ -359,6 +396,13 @@ export async function registerCustomEndpoint(
   if (!customEndpoint) {
     return null;
   }
+
+  // 4. Register-only active selection: keep whatever model is already active for this capability;
+  //    only auto-activate when nothing is selected yet (the very first model under the label).
+  const currentActive = existingConfig ? getCapabilityModelId(existingConfig, input.capability) : null;
+  const activeId = currentActive ?? modelId;
+  const currentVision = existingConfig?.vision_llm_id ?? null;
+  const visionId = input.capability === "text" && input.seesImages ? (currentVision ?? modelId) : currentVision;
 
   const writeOk = serverScope
     ? await (async () => {
@@ -374,11 +418,11 @@ export async function registerCustomEndpoint(
           serverScope.ownerId,
           {
             ...savedConfig,
-            llm_id: input.capability === "text" ? modelId : savedConfig.llm_id,
-            vision_llm_id: input.capability === "text" && input.seesImages ? modelId : savedConfig.vision_llm_id,
-            embedding_model_id: input.capability === "embedding" ? modelId : savedConfig.embedding_model_id,
-            diffusion_model_id: input.capability === "image" ? modelId : savedConfig.diffusion_model_id,
-            video_model_id: input.capability === "video" ? modelId : savedConfig.video_model_id,
+            llm_id: input.capability === "text" ? activeId : savedConfig.llm_id,
+            vision_llm_id: input.capability === "text" && input.seesImages ? visionId : savedConfig.vision_llm_id,
+            embedding_model_id: input.capability === "embedding" ? activeId : savedConfig.embedding_model_id,
+            diffusion_model_id: input.capability === "image" ? activeId : savedConfig.diffusion_model_id,
+            video_model_id: input.capability === "video" ? activeId : savedConfig.video_model_id,
           },
           { serverDiscId: serverScope.serverDiscId },
         );
@@ -394,11 +438,11 @@ export async function registerCustomEndpoint(
 
         return await llmProviderRepo.upsertUserSavedProviderConfig(input.scope.ownerId, {
           ...savedConfig,
-          llm_id: input.capability === "text" ? modelId : savedConfig.llm_id,
-          vision_llm_id: input.capability === "text" && input.seesImages ? modelId : savedConfig.vision_llm_id,
-          embedding_model_id: input.capability === "embedding" ? modelId : savedConfig.embedding_model_id,
-          diffusion_model_id: input.capability === "image" ? modelId : savedConfig.diffusion_model_id,
-          video_model_id: input.capability === "video" ? modelId : savedConfig.video_model_id,
+          llm_id: input.capability === "text" ? activeId : savedConfig.llm_id,
+          vision_llm_id: input.capability === "text" && input.seesImages ? visionId : savedConfig.vision_llm_id,
+          embedding_model_id: input.capability === "embedding" ? activeId : savedConfig.embedding_model_id,
+          diffusion_model_id: input.capability === "image" ? activeId : savedConfig.diffusion_model_id,
+          video_model_id: input.capability === "video" ? activeId : savedConfig.video_model_id,
         });
       })();
 
@@ -421,13 +465,38 @@ export async function setActiveCustomEndpoint(params: {
   return await llmProviderRepo.setActiveCustomEndpoint(params);
 }
 
+/**
+ * Resolves the custom endpoint row backing a provider for a capability.
+ *
+ * When an active model id is supplied, the specific endpoint owning that synthetic model is
+ * returned — this is how the runtime picks the right row when several models share a label+capability.
+ * When omitted (or no match, e.g. legacy rows whose model_ref_id was not backfilled), it falls back
+ * to the most-recently-updated endpoint for the label+capability. Speech/transcription always use
+ * the fallback since they have no synthetic model.
+ *
+ * @param provider      - Internal custom provider name
+ * @param capability    - Endpoint capability
+ * @param activeModelId - Optional id of the currently-active synthetic model for this capability
+ */
 export async function resolveCustomEndpointForProvider(
   provider: string,
   capability: CustomEndpointCapability,
+  activeModelId?: number | null,
 ): Promise<CustomEndpointRow | null> {
   const parsed = parseCustomProvider(provider);
   if (!parsed) {
     return null;
+  }
+
+  if (activeModelId != null) {
+    const byModel = await llmProviderRepo.loadCustomEndpointByModelRef(
+      parsed.scope === "server"
+        ? { serverId: parsed.ownerId, capability, modelRefId: activeModelId }
+        : { userId: parsed.ownerId, capability, modelRefId: activeModelId },
+    );
+    if (byModel) {
+      return byModel;
+    }
   }
 
   return parsed.scope === "server"
@@ -445,50 +514,46 @@ export async function resolveCustomEndpointForProvider(
 
 export async function removeCustomEndpointRegistration(params: {
   scope: RegistrationScope;
+  customEndpointId: number;
   label: string;
   capability: CustomEndpointCapability;
+  modelRefId: number | null;
 }): Promise<boolean> {
   const provider = getInternalProviderName(params.scope, params.label);
   const existingConfig = await getExistingSavedConfig(params.scope, provider);
-  if (!existingConfig) {
-    return false;
-  }
 
-  const modelId = getCapabilityModelId(existingConfig, params.capability);
-
+  // 1. Delete the specific endpoint row (one model among possibly several under this label+capability).
   const deleted =
     params.scope.kind === "server"
-      ? await llmProviderRepo.deleteCustomEndpoint(
-          {
-            serverId: params.scope.ownerId,
-            label: params.label,
-            capability: params.capability,
-          },
-          { serverDiscId: params.scope.serverDiscId },
-        )
-      : await llmProviderRepo.deleteCustomEndpoint({
-          userId: params.scope.ownerId,
-          label: params.label,
-          capability: params.capability,
-        });
+      ? await llmProviderRepo.deleteCustomEndpointById(params.customEndpointId, {
+          serverId: params.scope.ownerId,
+          serverDiscId: params.scope.serverDiscId,
+        })
+      : await llmProviderRepo.deleteCustomEndpointById(params.customEndpointId);
 
   if (!deleted) {
     return false;
   }
 
+  // 2. Clear live server config + channel/persona overrides that pointed at this exact model.
+  //    (No-op when the removed model was not the live-active one for its capability.)
   if (params.scope.kind === "server") {
-    await clearServerScopedLiveReferences(params.scope, params.capability, modelId);
+    await clearServerScopedLiveReferences(params.scope, params.capability, params.modelRefId);
   }
 
-  await deleteSyntheticCapabilityModel(provider, params.capability);
+  // 3. Delete the synthetic model row this endpoint owned.
+  if (params.modelRefId != null) {
+    await llmModelRepo.deleteSyntheticCustomCapabilityModelById(params.modelRefId, params.capability);
+  }
 
+  // 4. If no models remain for the whole label, drop the saved provider config entirely.
   const remaining =
     params.scope.kind === "server"
       ? await llmProviderRepo.loadCustomEndpointsForServer(params.scope.ownerId)
       : await llmProviderRepo.loadCustomEndpointsForUser(params.scope.ownerId);
-  const sameProviderRemaining = remaining.filter((endpoint) => endpoint.label === params.label);
+  const sameLabelRemaining = remaining.filter((endpoint) => endpoint.label === params.label);
 
-  if (sameProviderRemaining.length === 0) {
+  if (sameLabelRemaining.length === 0) {
     if (params.scope.kind === "server") {
       await llmProviderRepo.deleteSavedProviderConfig(params.scope.ownerId, provider, {
         serverDiscId: params.scope.serverDiscId,
@@ -499,24 +564,26 @@ export async function removeCustomEndpointRegistration(params: {
     return true;
   }
 
-  const nextConfig =
-    params.scope.kind === "server"
-      ? {
-          ...(existingConfig as SavedProviderConfigRow),
-          llm_id: params.capability === "text" ? null : existingConfig.llm_id,
-          vision_llm_id: params.capability === "text" ? null : existingConfig.vision_llm_id,
-          embedding_model_id: params.capability === "embedding" ? null : existingConfig.embedding_model_id,
-          diffusion_model_id: params.capability === "image" ? null : existingConfig.diffusion_model_id,
-          video_model_id: params.capability === "video" ? null : existingConfig.video_model_id,
-        }
-      : {
-          ...(existingConfig as UserSavedProviderConfigRow),
-          llm_id: params.capability === "text" ? null : existingConfig.llm_id,
-          vision_llm_id: params.capability === "text" ? null : existingConfig.vision_llm_id,
-          embedding_model_id: params.capability === "embedding" ? null : existingConfig.embedding_model_id,
-          diffusion_model_id: params.capability === "image" ? null : existingConfig.diffusion_model_id,
-          video_model_id: params.capability === "video" ? null : existingConfig.video_model_id,
-        };
+  // 5. Otherwise, only clear the saved config's active slot for this capability if it pointed at the
+  //    removed model. Sibling models stay registered; the user re-picks via /model.
+  if (!existingConfig || params.modelRefId == null) {
+    return true;
+  }
+  const activeForCapability = getCapabilityModelId(existingConfig, params.capability);
+  const visionMatches = params.capability === "text" && existingConfig.vision_llm_id === params.modelRefId;
+  if (activeForCapability !== params.modelRefId && !visionMatches) {
+    return true;
+  }
+
+  const clearActive = activeForCapability === params.modelRefId;
+  const nextConfig = {
+    ...existingConfig,
+    llm_id: params.capability === "text" && clearActive ? null : existingConfig.llm_id,
+    vision_llm_id: visionMatches ? null : existingConfig.vision_llm_id,
+    embedding_model_id: params.capability === "embedding" && clearActive ? null : existingConfig.embedding_model_id,
+    diffusion_model_id: params.capability === "image" && clearActive ? null : existingConfig.diffusion_model_id,
+    video_model_id: params.capability === "video" && clearActive ? null : existingConfig.video_model_id,
+  };
 
   if (params.scope.kind === "server") {
     await llmProviderRepo.upsertSavedProviderConfig(params.scope.ownerId, nextConfig as SavedProviderConfigRow, {
@@ -542,25 +609,17 @@ export async function cleanupCustomProviderArtifacts(provider: string): Promise<
 
   const matchingEndpoints = registeredEndpoints.filter((endpoint) => endpoint.label === parsed.label);
 
+  // Delete each model row under the label (a label+capability may now own several).
   for (const endpoint of matchingEndpoints) {
-    await llmProviderRepo.deleteCustomEndpoint(
-      parsed.scope === "server"
-        ? {
-            serverId: parsed.ownerId,
-            label: endpoint.label,
-            capability: endpoint.capability,
-          }
-        : {
-            userId: parsed.ownerId,
-            label: endpoint.label,
-            capability: endpoint.capability,
-          },
-    );
+    if (endpoint.custom_endpoint_id != null) {
+      await llmProviderRepo.deleteCustomEndpointById(endpoint.custom_endpoint_id, {
+        serverId: parsed.scope === "server" ? parsed.ownerId : null,
+      });
+    }
   }
 
-  for (const capability of ["text", "embedding", "image", "video"] as const) {
-    await deleteSyntheticCapabilityModel(parsed.raw, capability);
-  }
+  // Drop every synthetic model owned by this custom provider across all capability tables.
+  await llmModelRepo.deleteAllSyntheticModelsForProvider(parsed.raw);
 }
 
 export async function validateCustomEndpointReachability(params: {

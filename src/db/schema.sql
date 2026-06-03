@@ -2097,6 +2097,7 @@ CREATE TABLE IF NOT EXISTS custom_endpoints (
   api_style TEXT NOT NULL,
   endpoint_url TEXT NOT NULL,
   model_name TEXT NULL,
+  model_ref_id INT NULL,
   display_name TEXT NOT NULL,
   num_ctx INT NULL,
   requires_auth BOOLEAN DEFAULT false,
@@ -2115,30 +2116,23 @@ CREATE TABLE IF NOT EXISTS custom_endpoints (
 ALTER TABLE custom_endpoints
   DROP CONSTRAINT IF EXISTS custom_endpoints_server_id_user_id_label_capability_key;
 
-WITH ranked_custom_endpoints AS (
-  SELECT
-    custom_endpoint_id,
-    ROW_NUMBER() OVER (
-      PARTITION BY server_id, user_id, label, capability
-      ORDER BY updated_at DESC, custom_endpoint_id DESC
-    ) AS row_num
-  FROM custom_endpoints
-)
-DELETE FROM custom_endpoints
-WHERE custom_endpoint_id IN (
-  SELECT custom_endpoint_id
-  FROM ranked_custom_endpoints
-  WHERE row_num > 1
-);
+-- Idempotent self-heal for databases created before model_ref_id existed (migration 024).
+SELECT add_column_if_not_exists('custom_endpoints', 'model_ref_id', 'INT');
 
 CREATE INDEX IF NOT EXISTS idx_custom_endpoints_server ON custom_endpoints(server_id);
 CREATE INDEX IF NOT EXISTS idx_custom_endpoints_user ON custom_endpoints(user_id);
 CREATE INDEX IF NOT EXISTS idx_custom_endpoints_label ON custom_endpoints(label);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_endpoints_server_label_capability_unique
-  ON custom_endpoints(server_id, label, capability)
+-- Uniqueness is per (owner, label, capability, model_name): a single labeled connection may host
+-- multiple models of the same capability, distinguished by model_name. COALESCE collapses NULL to ''
+-- so at most one unnamed model can coexist with any number of named ones. Drop the older
+-- model-agnostic indexes first (migration 024 widened the key).
+DROP INDEX IF EXISTS idx_custom_endpoints_server_label_capability_unique;
+DROP INDEX IF EXISTS idx_custom_endpoints_user_label_capability_unique;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_endpoints_server_label_capability_model_unique
+  ON custom_endpoints(server_id, label, capability, COALESCE(model_name, ''))
   WHERE user_id IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_endpoints_user_label_capability_unique
-  ON custom_endpoints(user_id, label, capability)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_endpoints_user_label_capability_model_unique
+  ON custom_endpoints(user_id, label, capability, COALESCE(model_name, ''))
   WHERE server_id IS NULL;
 
 DROP TRIGGER IF EXISTS update_custom_endpoints_timestamp ON custom_endpoints;
