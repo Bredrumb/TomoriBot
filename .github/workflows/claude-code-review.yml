@@ -12,16 +12,20 @@ on:
 
 jobs:
   claude-review:
-    # pull_request_target runs in base repo context so OIDC tokens and secrets
-    # are available even for fork PRs. Safe here because we never checkout and
-    # execute the fork's code — Claude reads the diff via GitHub API only.
+    # pull_request_target runs in base repo context, so the base repo's
+    # GITHUB_TOKEN and secrets are available even for fork PRs. Safe here because
+    # we never checkout and execute the fork's code — Claude reads the diff via
+    # the GitHub API only.
 
     runs-on: ubuntu-latest
+    # Scoped to the minimum the reviewer needs: read the diff, write the review.
+    # No `id-token: write` — we pass an explicit github_token below instead of
+    # relying on the OIDC -> Claude GitHub App token exchange, which does not work
+    # for the pull_request_target / fork-PR context.
     permissions:
       contents: read
       pull-requests: write
       issues: read
-      id-token: write
 
     steps:
       - name: Checkout base repository
@@ -37,8 +41,23 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Use the ephemeral, repo-scoped workflow token instead of the OIDC App
+          # exchange. On pull_request_target this is always the BASE repo's token
+          # with the permissions declared above, so it works uniformly for every
+          # PR — including those from contributor forks. Comments post as
+          # github-actions[bot].
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
+          # Lock the session to ONLY what the code-review plugin needs (derived
+          # from its command frontmatter + steps): launch review sub-agents, read
+          # code, inspect git history, and comment via gh. Deliberately excludes
+          # open-ended Bash, Edit/Write, and WebFetch/WebSearch — so a prompt
+          # injection in an untrusted fork PR has no shell or network to exfiltrate
+          # the ephemeral GITHUB_TOKEN through.
+          claude_args: >-
+            --allowedTools
+            "Task,Read,Grep,Glob,TodoWrite,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh pr comment:*),Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh search:*),Bash(git log:*),Bash(git show:*),Bash(git blame:*),Bash(git diff:*)"
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
