@@ -390,6 +390,7 @@ async function main() {
     lintResult,
     auditResult,
     sqlAuditResult,
+    modelCatalogResult,
     testResultItems,
     schemaDriftResult,
     dbLifecycleResult,
@@ -400,6 +401,7 @@ async function main() {
     runLint(),
     runAudit(),
     runCheck("SQL Audit (bun run audit-sql)", ["bun", "run", "audit-sql"], true),
+    runCheck("Seed Catalog (bun run check-models)", ["bun", "run", "check-models"], true),
     runTests(),
     dbConfigured
       ? runCheck("Schema Drift Check (bun run check-schema)", ["bun", "run", "check-schema"], true)
@@ -424,6 +426,7 @@ async function main() {
     lintResult,
     auditResult,
     sqlAuditResult,
+    modelCatalogResult,
     ...testResultItems,
     schemaDriftResult,
     dbLifecycleResult,

@@ -255,13 +255,32 @@ Do not scatter exact provider-name checks across commands. Put routing in the pr
 
 ## 8. Seed Model Inventory
 
-Add the provider's models to `src/db/seed/01_models.sql` or the relevant migration path.
+Models live in a **typed catalog** and are seeded into the database directly from
+it at startup — there is no model seed `.sql` file. Add the provider's rows to
+`src/db/seed/catalog/models.ts` as named-field objects (every capability flag is
+optional and defaults to `false`, so you only list the ones that are `true`). That
+is the whole change — nothing to regenerate or compile.
 
-Tables currently used by the app:
+```ts
+// src/db/seed/catalog/models.ts
+{ provider: "google", codename: "gemini-2.5-flash", isDefault: true, hasTools: true,
+  seesImages: true, seesVideos: true, seesYoutube: true, supportsStructoutput: true,
+  desc: "Balanced model…", ja: "汎用…" },
+```
 
-- `llms` for text/chat models
-- `image_diffusion_models` for native image generation models
-- `embedding_models` for embedding providers/models
+How it runs: `seedModelsFromCatalog()` (in `src/db/seed/catalog/modelSeed.ts`) renders
+each section into one `INSERT … ON CONFLICT` per table and executes it during
+database initialization, before the persona, system prompt, and NovelAI preset
+catalog seeders. Seeding is an idempotent upsert on every
+startup, exactly as the old `01_models.sql` was. To deprecate a model, set
+`isDeprecated: true` on its row; to remove one, delete its row.
+
+Tables currently modeled in the catalog:
+
+- `llmSections` → `llms` for text/chat models
+- `imageSections` → `image_diffusion_models` for native image generation models
+- `videoSections` → `video_generation_models` for native video generation models
+- `embeddingSections` → `embedding_models` for embedding providers/models
 
 Use the tables that match the features you actually support.
 
@@ -272,6 +291,19 @@ Examples:
 - a provider with embeddings also needs `embedding_models`
 
 Do not hardcode default models in provider code when the app already resolves them from the database/cache.
+
+### Invariants (validated at startup and by `bun run check-models`)
+
+`seedModelsFromCatalog()` validates the catalog and **throws before any DB write**
+if an invariant is violated, so a malformed catalog fails fast on boot. The same
+check is available offline via `bun run check-models`, which now validates every
+typed seed catalog (models, personas, system prompts, and NovelAI presets):
+
+- exactly one `isDefault` per provider, and that default is not deprecated;
+- at least one `isSmartest` per provider in `llms`, with at least one not deprecated;
+- unique `(provider, codename)` within each table.
+
+The `custom` provider is exempt (its `custom/bootstrap` row is configured per-server).
 
 ## 8.5 Update User-Facing Help
 
@@ -483,7 +515,10 @@ Run `bun run check-locales` only if you changed locale files or command metadata
 - `src/utils/provider/providerCapabilityResolver.ts`
 - `src/providers/utils/providerFeatureExecutors.ts`
 - `src/events/clientReady/02_registerMCPs.ts`
-- `src/db/seed/01_models.sql`
+- `src/db/seed/catalog/models.ts` (typed model catalog — edit this)
+- `src/db/seed/catalog/types.ts` (catalog input types)
+- `src/db/seed/catalog/modelSeed.ts` (renders + validates the catalog and seeds it at startup)
+- `scripts/checks/checkModelCatalog.ts` (`bun run check-models` — offline seed-catalog invariant check)
 
 ---
 

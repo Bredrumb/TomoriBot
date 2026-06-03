@@ -260,7 +260,11 @@ function buildCheckboxGroups(entries: ConditioningManageEntry[], locale: string)
     const options: CheckboxGroupOption[] = chunk.map((entry, index) => {
       const effectiveIndex = i + index;
       const actionLabel = localizer(locale, `commands.${entry.conditioningType}.${entry.actionKey}.history_label`);
-      let description = localizer(locale, "commands.conditioning.manage.option_reason_description", {
+      const descriptionKey =
+        entry.totalCount > 1
+          ? "commands.conditioning.manage.option_reason_description"
+          : "commands.conditioning.manage.option_reason_description_single";
+      let description = localizer(locale, descriptionKey, {
         count: entry.totalCount.toString(),
         reason: entry.reasonText,
       });

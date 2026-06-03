@@ -4,7 +4,8 @@
  * Covers: loadAvailableLlms, loadLlmById, loadLlmByProviderAndCodename,
  * getLlmsByIds, loadSmartestModel, loadUniqueProviders.
  *
- * LLM rows come from src/db/seed/01_models.sql — no fixture insertion needed.
+ * LLM rows come from the typed catalog (src/db/seed/catalog/models.ts), seeded by
+ * initializeDatabase — no fixture insertion needed.
  *
  * Requires: a local Postgres connection (see docs/guides/testing-db-changes.md)
  */
@@ -14,7 +15,7 @@ import { DB_TESTS_AVAILABLE, setupTestDb } from "./setup/testDb";
 
 describe.skipIf(!DB_TESTS_AVAILABLE)("LLM — regression", () => {
   beforeAll(async () => {
-    await setupTestDb(); // Seed data is applied here — LLMs are seeded by the seed directory
+    await setupTestDb(); // Seed data is applied here — LLMs are seeded from the catalog by initializeDatabase
   });
 
   it("loadAvailableLlms returns at least one non-deprecated model", async () => {

@@ -5,7 +5,7 @@
 --   src/db/schema.sql
 --   src/db/schema_rag.sql  (when pgvector is available)
 --   src/db/schema_stpreset.sql
---   src/db/seed/*.sql
+--   src/db/seed/catalog/*.ts seeders
 --
 -- This migration contains no executable SQL. Its sole purpose is to anchor
 -- the migration version sequence so that all Phase 6+ numbered migrations

@@ -34,6 +34,7 @@ export default {
       checkbox_label_continued: `条件付け項目（続き）`,
       checkbox_description: `チェックを残すと保持されます。チェックを外すと、その注入対象の条件付けグループが削除されます。`,
       option_reason_description: `合計 {count} 回 • 理由: 「{reason}」`,
+      option_reason_description_single: `理由: 「{reason}」`,
       option_label: `{type_marker} {persona_name} • {action}`,
       modal_title: `条件付けを管理`,
       done_button: `完了`,

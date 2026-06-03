@@ -100,7 +100,7 @@ export async function execute(
       color: ColorCode.ERROR,
       flags: MessageFlags.Ephemeral,
     });
-    log.error(`No NAI presets found for model target "${modelTarget}" — was the seed directory loaded?`);
+    log.error(`No NAI presets found for model target "${modelTarget}" — was the seed catalog loaded?`);
     return;
   }
 

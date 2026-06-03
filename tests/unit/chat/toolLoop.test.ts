@@ -67,12 +67,23 @@ mock.module("@/utils/tools/deliberateToolMode", () => ({
   ) => {
     const text = content ?? "";
     const allowedNames: string[] = [];
+    const toolNamesByTriggerKey: Record<string, string[]> = {
+      image: ["generate_image"],
+      reminder: ["create_task", "update_task"],
+    };
     if (/\b(search|look\s+up|latest|today|current|news)\b/i.test(text)) {
       allowedNames.push("web_search");
     }
+    if (
+      /\b(?:edit|update|change|modify|reschedule|move|delay|postpone|cancel|delete|remove|clear|stop)\b.{0,100}\b(?:reminder|timer|alarm|task|scheduled\s+task|task\s+reminder)\b/i.test(
+        text,
+      )
+    ) {
+      allowedNames.push("update_task");
+    }
 
     for (const [triggerKey, triggers] of Object.entries(customTriggers ?? {})) {
-      const toolName = triggerKey === "image" ? "generate_image" : triggerKey;
+      const toolNames = toolNamesByTriggerKey[triggerKey] ?? [triggerKey];
       if (
         triggers.some((trigger) => {
           if (typeof trigger === "string") return trigger === "^" || text.toLowerCase().includes(trigger.toLowerCase());
@@ -81,7 +92,7 @@ mock.module("@/utils/tools/deliberateToolMode", () => ({
             : text.toLowerCase().includes(trigger.value.toLowerCase());
         })
       ) {
-        allowedNames.push(toolName);
+        allowedNames.push(...toolNames);
       }
     }
 

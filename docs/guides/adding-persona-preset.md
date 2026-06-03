@@ -6,17 +6,18 @@ This guide covers how to add a new official persona preset to TomoriBot's seed d
 
 ## Steps
 
-1. Add a preset row to `src/db/seed/02_personas.sql` in the `persona_presets` table. Required fields:
+1. Add a preset row to `src/db/seed/catalog/personas.ts` in `personaSections`. Required fields:
    - `preset_lineage_id` — a stable identity anchor for this character. Reuse the same lineage ID
      across locale variants of the same character so they are treated as one canonical identity,
      and so applying the preset can stamp a consistent `persona_lineage_id` (memory scope) onto
      the persona.
-   - Name, system prompt, and any default attributes.
-   - `preset_attribute_public_flags` — boolean visibility flags aligned 1:1 with
-     `preset_attribute_list`. The bundled Tomori rows derive these in the post-insert
-     `official_attribute_flags` block; update that block if a new official preset needs
-     public attributes. Pointer personas resolve these from the live preset row, and
-     materialized copies store them in `persona_attributes.is_public`.
+   - `name`, `desc`, `attributes`, paired `sampleDialoguesIn` / `sampleDialoguesOut`,
+     `language`, `avatarPath`, and `triggerWords`.
+   - `preset_attribute_public_flags` is not authored in the row. The bundled official
+     lineages derive it in the preserved `official_attribute_flags` update inside
+     `src/db/seed/catalog/personaSeed.ts`: the first attribute is public and the rest
+     are private. Pointer personas resolve these from the live preset row, and materialized
+     copies store them in `persona_attributes.is_public`.
 
 2. Add an optional avatar path (stored under `src/db/img/`). Preset application applies the avatar
    once to the guild (main persona) or uploads it to storage (alter) through `/config setup`,
@@ -26,7 +27,14 @@ This guide covers how to add a new official persona preset to TomoriBot's seed d
    treated as deliberate customization and materialize the persona before changing or resetting its
    avatar.
 
-3. Validate via `/config setup`, `/persona default`, `/persona export`, and `/persona import`.
+3. Add or edit reusable system prompt presets in `src/db/seed/catalog/systemPrompts.ts`.
+   System prompts are split from personas but seed immediately after persona presets at startup.
+
+4. Run `bun run check-models` to validate all seed catalogs offline. It checks persona name
+   uniqueness, paired sample-dialogue arrays, required official attributes, non-empty system
+   prompt text, and NovelAI default uniqueness.
+
+5. Validate via `/config setup`, `/persona default`, `/persona export`, and `/persona import`.
    Pointer personas should resolve the seeded values, reflect later seed edits after cache
    invalidation, and materialize on the first local content edit.
 
@@ -53,8 +61,9 @@ preset with the same lineage; customized files import as independent copies.
 ## Quality Gate
 
 ```bash
-bun run check    # TypeScript strict mode
-bun run lint     # Biome formatting
+bun run check-models # seed catalog invariants
+bun run check        # TypeScript strict mode
+bun run lint         # Biome formatting
 ```
 
 Then run a local seed against a dev database and verify the preset appears correctly under `/persona`.

@@ -1,6 +1,6 @@
 -- Consolidates legacy compatibility/backfill work that previously lived in src/db/seed.sql.
 --
--- Seed catalog data still runs every startup from src/db/seed/*.sql. These
+-- Seed catalog data still runs every startup from src/db/seed/catalog/*.ts. These
 -- blocks are schema compatibility guards and one-time legacy data repairs, so
 -- they belong in the numbered migration stream and are intentionally idempotent.
 

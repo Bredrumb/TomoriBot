@@ -2,7 +2,7 @@
 title: "Persona Presets"
 ---
 
-Official persona presets are seeded from `src/db/seed/02_personas.sql` into `persona_presets`. They are the canonical definitions for bundled characters such as Tomori/Rose, Temari, Aphel, Lilya, and Nerine.
+Official persona presets are seeded from the typed catalog in `src/db/seed/catalog/personas.ts` into `persona_presets`. They are the canonical definitions for bundled characters such as Tomori/Rose, Temari, Aphel, Lilya, and Nerine.
 
 This page covers how official preset text/config content is applied and kept current through the copy-on-write pointer model. Avatar media is applied as a one-time Discord/storage operation and is called out separately below.
 
@@ -47,6 +47,8 @@ Avatars are the exception to live pointer resolution. `persona_presets.preset_av
 
 A `BOOLEAN[]` aligned 1:1 with `preset_attribute_list`. Pointer personas resolve these flags from the live preset row; materialized copies store them in `persona_attributes.is_public`. Official Tomori presets mark their first appearance-style attribute public; public attributes can be shown to other personas triggered by the same message. All other seeded attributes are private.
 
+The flags are still derived at seed time, not authored in each catalog row. `seedPersonasFromCatalog()` runs the preserved `official_attribute_flags` update after the persona upsert for lineage IDs `4`, `716`, `1770`, `3585`, and `50`.
+
 ## Applying Presets
 
 Applying an official preset creates a **copy-on-write pointer** when the preset has a `preset_lineage_id`. The persona follows the live `persona_presets` row until the first local content edit materializes it into an independent copy.
@@ -90,7 +92,9 @@ If any exact-match check fails, import creates an independent copy with `is_poin
 
 ## Editing Official Presets
 
-Editing seeded text/config fields in `persona_presets` changes live pointer personas and future applications. Editing `preset_avatar_path` only affects future preset applications; existing pointer personas keep their current Discord guild avatar or stored `webhook_avatar_url`. Independent copies do not change. Startup invalidates cached Tomori state for servers that have pointer personas after schema/seed/migration work, so long-lived cache entries do not keep stale preset content after seed updates.
+Editing seeded text/config fields in `src/db/seed/catalog/personas.ts` changes live pointer personas and future applications after the next startup seed. Editing `preset_avatar_path` only affects future preset applications; existing pointer personas keep their current Discord guild avatar or stored `webhook_avatar_url`. Independent copies do not change. Startup invalidates cached Tomori state for servers that have pointer personas after schema/catalog-seed/migration work, so long-lived cache entries do not keep stale preset content after seed updates.
+
+System prompt presets are authored separately in `src/db/seed/catalog/systemPrompts.ts` and seeded by `seedSystemPromptsFromCatalog()` immediately after persona presets.
 
 ## Migration behavior
 

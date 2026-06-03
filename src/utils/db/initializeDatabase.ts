@@ -1,6 +1,10 @@
 import type { SQL } from "bun";
-import { readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { seedNaiPresetsFromCatalog } from "@/db/seed/catalog/naiSeed";
+import { seedPersonasFromCatalog } from "@/db/seed/catalog/personaSeed";
+import { seedModelsFromCatalog } from "@/db/seed/catalog/modelSeed";
+import { seedSystemPromptsFromCatalog } from "@/db/seed/catalog/systemPromptSeed";
 import { markAllMigrationsApplied, runMigrations } from "@/db/migrationRunner";
 import { invalidateTomoriStateCaches } from "@/utils/cache/tomoriStateCacheStore";
 import { sql as defaultSql } from "@/utils/db/client";
@@ -24,7 +28,6 @@ function getSchemaPaths(): {
   schemaPath: string;
   ragSchemaPath: string;
   stPresetSchemaPath: string;
-  seedDir: string;
   serverwideQuotaRenameMigrationPath: string;
   personaRenameMigrationPath: string;
 } {
@@ -34,7 +37,6 @@ function getSchemaPaths(): {
     schemaPath: path.join(dbDir, "schema.sql"),
     ragSchemaPath: path.join(dbDir, "schema_rag.sql"),
     stPresetSchemaPath: path.join(dbDir, "schema_stpreset.sql"),
-    seedDir: path.join(dbDir, "seed"),
     serverwideQuotaRenameMigrationPath: path.join(dbDir, "migrations", "009_rename_serverwide_quotas.sql"),
     personaRenameMigrationPath: path.join(dbDir, "migrations", "016_rename_tomori_schema_to_persona.sql"),
   };
@@ -53,20 +55,6 @@ async function executeSqlFile(client: SQL, filePath: string): Promise<void> {
   const statements = splitSqlStatements(sqlText);
   for (const stmt of statements) {
     await client.unsafe(stmt);
-  }
-}
-
-async function executeSqlDirectory(client: SQL, dir: string): Promise<void> {
-  const files = (await readdir(dir))
-    .filter((file) => file.endsWith(".sql"))
-    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-
-  if (files.length === 0) {
-    throw new Error(`No SQL seed files found in ${dir}`);
-  }
-
-  for (const file of files) {
-    await executeSqlFile(client, path.join(dir, file));
   }
 }
 
@@ -231,7 +219,6 @@ export async function initializeDatabase(options: InitializeDatabaseOptions = {}
     schemaPath,
     ragSchemaPath,
     stPresetSchemaPath,
-    seedDir,
     serverwideQuotaRenameMigrationPath,
     personaRenameMigrationPath,
   } = getSchemaPaths();
@@ -259,8 +246,18 @@ export async function initializeDatabase(options: InitializeDatabaseOptions = {}
       await executeSqlFile(client, stPresetSchemaPath);
       log.success("PostgreSQL ST preset schema verified");
 
-      await executeSqlDirectory(client, seedDir);
-      log.success("PostgreSQL database seed verified");
+      // Seed typed catalogs in the same order the old numbered seed files ran.
+      await seedModelsFromCatalog(client);
+      log.success("PostgreSQL model catalog seeded");
+
+      await seedPersonasFromCatalog(client);
+      log.success("PostgreSQL persona catalog seeded");
+
+      await seedSystemPromptsFromCatalog(client);
+      log.success("PostgreSQL system prompt catalog seeded");
+
+      await seedNaiPresetsFromCatalog(client);
+      log.success("PostgreSQL NAI preset catalog seeded");
 
       // Fresh installs load the current static schema snapshot first, so historical
       // migrations are represented by schema.sql and should be recorded, not replayed.

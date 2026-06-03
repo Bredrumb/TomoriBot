@@ -317,7 +317,7 @@ TomoriBot has two complementary schema mechanisms:
 | Mechanism | File | Runs | Purpose |
 |---|---|---|---|
 | Pre-schema legacy rename bridge | Selected rename migrations called by `initializeDatabase.ts` | Before static schema, only when legacy tables are detected | Preserve data for table renames where the latest static schema would otherwise create the target table first |
-| Static schema init | `schema.sql`, `schema_rag.sql`, `schema_stpreset.sql`, `seed/*.sql` | Every boot (idempotent) | Baseline tables, functions, reference seed data |
+| Static schema init | `schema.sql`, `schema_rag.sql`, `schema_stpreset.sql`, typed seed catalogs (`src/db/seed/catalog/`) | Every boot (idempotent) | Baseline tables, functions, reference seed data |
 | Migration runner | `src/db/migrations/NNN_*.sql` | Once per version (tracked) | Structural changes that cannot be idempotent (DROP, RENAME, table splits) |
 
 `initializeDatabase.ts` first runs narrow legacy rename bridges for known table renames such as
@@ -373,11 +373,19 @@ bun run scripts/db/migrate.ts
 - For destructive migrations (`DROP COLUMN`, `DROP TABLE`): require a soak period of at least one release where the column/table is unused but still present, so rollback is a code revert rather than a data restore.
 - Forward-only migrations on shared tables are not acceptable — they turn every deployment into a one-way door.
 
-### When to use migrations vs. seed files
+### When to use migrations vs. seed catalogs
 
-Use **`src/db/seed/*.sql`** (idempotent, runs every boot) for:
+Use **`src/db/seed/catalog/*.ts`** (idempotent, runs every boot through `initializeDatabase.ts`) for:
 - Upserting lookup/reference data such as model catalogs, bundled persona presets, system prompts, and NovelAI presets
 - Maintaining derived reference fields that must track the bundled seed rows on every startup
+
+The catalog seeders render the same idempotent `INSERT … ON CONFLICT` upserts in code.
+Startup order is models (`seedModelsFromCatalog`) → personas (`seedPersonasFromCatalog`)
+→ system prompts (`seedSystemPromptsFromCatalog`) → NovelAI presets (`seedNaiPresetsFromCatalog`).
+There are no startup seed `.sql` files; edit the typed catalog and the change is seeded on
+the next boot. Invariants are validated on startup and via `bun run check-models`.
+`seedPersonasFromCatalog()` also preserves the derived `official_attribute_flags` update
+for official persona attribute visibility flags.
 
 Use a **numbered migration** for:
 - Adding new columns that older installations need before or after a rollout
@@ -396,7 +404,7 @@ The static files are startup-safe:
 
 Startup schema execution is shared through `src/utils/db/initializeDatabase.ts`. The bot entry point and
 `bun run db:lifecycle` both use this path, so fresh-install validation exercises the same schema, optional RAG schema,
-ST preset schema, ordered seed-directory load, and migration marker behavior as runtime startup.
+ST preset schema, typed catalog seeds, and migration marker behavior as runtime startup.
 
 ## Operational Notes
 
