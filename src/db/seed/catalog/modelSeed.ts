@@ -43,7 +43,7 @@ interface TableSpec<T extends RowLike> {
 const llmSpec: TableSpec<LlmInput> = {
   table: "llms",
   columns:
-    "llm_provider, llm_codename, is_smartest, is_default, is_reasoning, is_deprecated, is_free, has_tools, sees_images, sees_videos, sees_youtube, is_uncensored, supports_structoutput, llm_description, ja_description",
+    "llm_provider, llm_codename, is_smartest, is_default, is_reasoning, is_deprecated, is_free, has_tools, sees_images, sees_videos, sees_youtube, is_uncensored, supports_structoutput, strict_role_alternation, supports_prefix_completion, llm_description, ja_description",
   tuple: (m) =>
     [
       str(m.provider),
@@ -59,6 +59,8 @@ const llmSpec: TableSpec<LlmInput> = {
       bool(m.seesYoutube),
       bool(m.isUncensored),
       bool(m.supportsStructoutput),
+      bool(m.strictRoleAlternation),
+      bool(m.supportsPrefixCompletion),
       desc(m.desc),
       desc(m.ja),
     ].join(", "),
@@ -77,6 +79,8 @@ const llmSpec: TableSpec<LlmInput> = {
   sees_youtube = EXCLUDED.sees_youtube,
   is_uncensored = EXCLUDED.is_uncensored,
   supports_structoutput = EXCLUDED.supports_structoutput,
+  strict_role_alternation = EXCLUDED.strict_role_alternation,
+  supports_prefix_completion = EXCLUDED.supports_prefix_completion,
   updated_at = CURRENT_TIMESTAMP`,
   hasSmartest: true,
   sections: llmSections,
@@ -207,6 +211,38 @@ function validateSpec<T extends RowLike>(spec: TableSpec<T>, errors: string[]): 
   }
 }
 
+// Providers whose llms rows MUST carry a strict chat-completion flag. Kept in lockstep with the
+// request-time safety net in src/providers/utils/strictChatCompat.ts (providerRequires*). Defined
+// locally so the seed catalog stays independent of the provider runtime layer.
+const REQUIRED_ALTERNATION_PROVIDERS = new Set<string>(["anthropic"]);
+const REQUIRED_PREFIX_PROVIDERS = new Set<string>(["deepseek", "zai", "zaicoding"]);
+
+/**
+ * Enforce that every llms row whose provider requires a strict chat-completion normalization has
+ * the corresponding flag set. Because the runtime resolves the flag from the active model's column
+ * (D4), a single un-flagged model would silently emit an invalid body for that backend.
+ *
+ * Pure and exported so the invariant can be unit-tested with crafted rows.
+ * @param rows - The llms catalog rows to validate.
+ * @returns A list of violation messages (empty when valid).
+ */
+export function collectStrictChatFlagViolations(rows: LlmInput[]): string[] {
+  const errors: string[] = [];
+  for (const row of rows) {
+    if (REQUIRED_ALTERNATION_PROVIDERS.has(row.provider) && !row.strictRoleAlternation) {
+      errors.push(
+        `llms/${row.provider}: model ${row.codename} must set strictRoleAlternation (required for this provider)`,
+      );
+    }
+    if (REQUIRED_PREFIX_PROVIDERS.has(row.provider) && !row.supportsPrefixCompletion) {
+      errors.push(
+        `llms/${row.provider}: model ${row.codename} must set supportsPrefixCompletion (required for this provider)`,
+      );
+    }
+  }
+  return errors;
+}
+
 /**
  * Validate every model table against the per-provider invariants.
  * @returns A list of human-readable violation messages (empty when valid).
@@ -217,6 +253,7 @@ export function validateModels(): string[] {
   validateSpec(imageSpec, errors);
   validateSpec(videoSpec, errors);
   validateSpec(embeddingSpec, errors);
+  errors.push(...collectStrictChatFlagViolations(rowsOf(llmSpec)));
   return errors;
 }
 

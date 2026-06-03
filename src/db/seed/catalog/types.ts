@@ -47,6 +47,16 @@ export interface LlmInput extends CommonInput {
   seesYoutube?: boolean;
   isUncensored?: boolean;
   supportsStructoutput?: boolean;
+  /**
+   * Requires strict role alternation (merge consecutive same-role turns + leading user turn).
+   * Required for anthropic; enforced by the check-models per-provider invariant.
+   */
+  strictRoleAlternation?: boolean;
+  /**
+   * Supports assistant prefix-completion (`prefix: true` on the trailing prefill turn).
+   * Required for deepseek/zai/zaicoding; enforced by the check-models per-provider invariant.
+   */
+  supportsPrefixCompletion?: boolean;
 }
 
 /** A row in the `image_diffusion_models` table. */

@@ -317,6 +317,10 @@ SELECT add_column_if_not_exists('llms', 'sees_videos', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'sees_youtube', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'is_uncensored', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'supports_structoutput', 'BOOLEAN', 'false');
+-- Strict chat-completion compatibility flags (migration 025). See seed catalog + check-models for
+-- the per-provider required defaults (anthropic → alternation; deepseek/zai/zaicoding → prefix).
+SELECT add_column_if_not_exists('llms', 'strict_role_alternation', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('llms', 'supports_prefix_completion', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'llm_description', 'TEXT');
 SELECT add_column_if_not_exists('llms', 'ja_description', 'TEXT');
 
@@ -2106,6 +2110,8 @@ CREATE TABLE IF NOT EXISTS custom_endpoints (
   sees_images BOOLEAN DEFAULT false,
   sees_videos BOOLEAN DEFAULT false,
   supports_structoutput BOOLEAN DEFAULT false,
+  strict_role_alternation BOOLEAN DEFAULT false,
+  supports_prefix_completion BOOLEAN DEFAULT false,
   is_default BOOLEAN DEFAULT true,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -2118,6 +2124,10 @@ ALTER TABLE custom_endpoints
 
 -- Idempotent self-heal for databases created before model_ref_id existed (migration 024).
 SELECT add_column_if_not_exists('custom_endpoints', 'model_ref_id', 'INT');
+
+-- Idempotent self-heal for the strict chat-completion compatibility flags (migration 025).
+SELECT add_column_if_not_exists('custom_endpoints', 'strict_role_alternation', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('custom_endpoints', 'supports_prefix_completion', 'BOOLEAN', 'false');
 
 CREATE INDEX IF NOT EXISTS idx_custom_endpoints_server ON custom_endpoints(server_id);
 CREATE INDEX IF NOT EXISTS idx_custom_endpoints_user ON custom_endpoints(user_id);

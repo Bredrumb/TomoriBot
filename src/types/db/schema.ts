@@ -167,6 +167,11 @@ export const llmSchema = z.object({
   sees_youtube: z.boolean().default(false),
   is_uncensored: z.boolean().default(false),
   supports_structoutput: z.boolean().default(false),
+  // Strict chat-completion compatibility flags (see docs/subsystems/strict-chat-completion.md).
+  // strict_role_alternation: merge consecutive same-role turns + force a leading user turn.
+  // supports_prefix_completion: allow `prefix: true` on the trailing assistant prefill turn.
+  strict_role_alternation: z.boolean().default(false),
+  supports_prefix_completion: z.boolean().default(false),
   llm_description: z.string().nullable().optional(),
   ja_description: z.string().nullable().optional(),
   created_at: z.date().optional(),
@@ -272,6 +277,10 @@ export const customEndpointSchema = z.object({
   sees_images: z.boolean().default(false),
   sees_videos: z.boolean().default(false),
   supports_structoutput: z.boolean().default(false),
+  // Strict chat-completion compatibility flags for proxies fronting strict backends. Synced to the
+  // endpoint's synthetic llms row so the runtime resolves them uniformly with built-in providers.
+  strict_role_alternation: z.boolean().default(false),
+  supports_prefix_completion: z.boolean().default(false),
   is_default: z.boolean().default(false),
   created_at: z.coerce.date().optional(),
   updated_at: z.coerce.date().optional(),

@@ -46,6 +46,7 @@ rather than sequenced stages.
 - [`subsystems/video-generation.md`](./subsystems/video-generation)
 - [`subsystems/thinking-level.md`](./subsystems/thinking-level)
 - [`subsystems/logit-bias.md`](./subsystems/logit-bias)
+- [`subsystems/strict-chat-completion.md`](./subsystems/strict-chat-completion) — role-alternation / prefix-completion toggles + always-on media relocation
 - [`subsystems/multi-persona.md`](./subsystems/multi-persona) — _(will migrate to `pipelines/webhook-persona/` when that pipeline is walked)_
 - [`subsystems/persona-presets.md`](./subsystems/persona-presets) — _(will migrate to `pipelines/webhook-persona/` when that pipeline is walked)_
 

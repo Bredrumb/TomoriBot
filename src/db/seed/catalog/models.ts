@@ -985,6 +985,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "deepseek",
         codename: "deepseek-v4-flash",
+        supportsPrefixCompletion: true,
         isDefault: true,
         hasTools: true,
         supportsStructoutput: true,
@@ -994,6 +995,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "deepseek",
         codename: "deepseek-v4-pro",
+        supportsPrefixCompletion: true,
         isSmartest: true,
         hasTools: true,
         supportsStructoutput: true,
@@ -1003,6 +1005,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "deepseek",
         codename: "deepseek-chat",
+        supportsPrefixCompletion: true,
         hasTools: true,
         supportsStructoutput: true,
         desc: "DeepSeek chat model for general text generation, seeded tool use, and JSON structured output",
@@ -1011,6 +1014,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "deepseek",
         codename: "deepseek-reasoner",
+        supportsPrefixCompletion: true,
         isSmartest: true,
         isReasoning: true,
         hasTools: true,
@@ -1102,6 +1106,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zaicoding",
         codename: "glm-4.6",
+        supportsPrefixCompletion: true,
         hasTools: true,
         supportsStructoutput: true,
         desc: "Text-only GLM model optimized for roleplay",
@@ -1110,6 +1115,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zaicoding",
         codename: "glm-4.6v",
+        supportsPrefixCompletion: true,
         hasTools: true,
         seesImages: true,
         supportsStructoutput: true,
@@ -1119,6 +1125,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zaicoding",
         codename: "glm-4.6v-flash",
+        supportsPrefixCompletion: true,
         isFree: true,
         hasTools: true,
         seesImages: true,
@@ -1129,6 +1136,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zaicoding",
         codename: "glm-4.7",
+        supportsPrefixCompletion: true,
         isDefault: true,
         isSmartest: true,
         isReasoning: true,
@@ -1140,6 +1148,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zaicoding",
         codename: "glm-4.7-flash",
+        supportsPrefixCompletion: true,
         isFree: true,
         hasTools: true,
         supportsStructoutput: true,
@@ -1149,6 +1158,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zaicoding",
         codename: "glm-5",
+        supportsPrefixCompletion: true,
         isReasoning: true,
         hasTools: true,
         supportsStructoutput: true,
@@ -1158,6 +1168,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zaicoding",
         codename: "glm-5.1",
+        supportsPrefixCompletion: true,
         isReasoning: true,
         hasTools: true,
         supportsStructoutput: true,
@@ -1167,6 +1178,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zaicoding",
         codename: "glm-5-turbo",
+        supportsPrefixCompletion: true,
         hasTools: true,
         supportsStructoutput: true,
         desc: "Fast variant of GLM-5 with tool support",
@@ -1175,6 +1187,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zaicoding",
         codename: "glm-5v-turbo",
+        supportsPrefixCompletion: true,
         isReasoning: true,
         hasTools: true,
         seesImages: true,
@@ -1190,6 +1203,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zai",
         codename: "zai/glm-4.6",
+        supportsPrefixCompletion: true,
         hasTools: true,
         supportsStructoutput: true,
         desc: "Text-only GLM model optimized for roleplay",
@@ -1198,6 +1212,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zai",
         codename: "zai/glm-4.6v",
+        supportsPrefixCompletion: true,
         hasTools: true,
         seesImages: true,
         supportsStructoutput: true,
@@ -1207,6 +1222,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zai",
         codename: "zai/glm-4.6v-flash",
+        supportsPrefixCompletion: true,
         isFree: true,
         hasTools: true,
         seesImages: true,
@@ -1217,6 +1233,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zai",
         codename: "zai/glm-4.7",
+        supportsPrefixCompletion: true,
         isDefault: true,
         isSmartest: true,
         isReasoning: true,
@@ -1228,6 +1245,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zai",
         codename: "zai/glm-4.7-flash",
+        supportsPrefixCompletion: true,
         isFree: true,
         hasTools: true,
         supportsStructoutput: true,
@@ -1237,6 +1255,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zai",
         codename: "zai/glm-5",
+        supportsPrefixCompletion: true,
         isReasoning: true,
         hasTools: true,
         supportsStructoutput: true,
@@ -1246,6 +1265,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zai",
         codename: "zai/glm-5.1",
+        supportsPrefixCompletion: true,
         isReasoning: true,
         hasTools: true,
         supportsStructoutput: true,
@@ -1255,6 +1275,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zai",
         codename: "zai/glm-5-turbo",
+        supportsPrefixCompletion: true,
         hasTools: true,
         supportsStructoutput: true,
         desc: "Fast variant of GLM-5 from the general Z.ai API",
@@ -1263,6 +1284,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zai",
         codename: "zai/glm-5v-turbo",
+        supportsPrefixCompletion: true,
         isReasoning: true,
         hasTools: true,
         seesImages: true,
@@ -1278,6 +1300,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "anthropic",
         codename: "claude-haiku-4-5",
+        strictRoleAlternation: true,
         hasTools: true,
         seesImages: true,
         supportsStructoutput: true,
@@ -1287,6 +1310,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "anthropic",
         codename: "claude-sonnet-4-6",
+        strictRoleAlternation: true,
         isDefault: true,
         hasTools: true,
         seesImages: true,
@@ -1297,6 +1321,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "anthropic",
         codename: "claude-opus-4-6",
+        strictRoleAlternation: true,
         isSmartest: true,
         isReasoning: true,
         hasTools: true,
@@ -1308,6 +1333,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "anthropic",
         codename: "claude-opus-4-7",
+        strictRoleAlternation: true,
         isSmartest: true,
         isReasoning: true,
         hasTools: true,

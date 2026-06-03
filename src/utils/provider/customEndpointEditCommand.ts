@@ -170,6 +170,8 @@ function buildEndpointSummaryEmbed(locale: string, endpoint: CustomEndpointRow):
     if (endpoint.has_tools) caps.push("tools");
     if (endpoint.sees_images) caps.push("vision");
     if (endpoint.supports_structoutput) caps.push("structoutput");
+    if (endpoint.strict_role_alternation) caps.push("rolealt");
+    if (endpoint.supports_prefix_completion) caps.push("prefixcompletion");
     if (caps.length > 0) {
       lines.push(
         `**${localizer(locale, "commands.config.custom_models.capability_modal.text_capabilities_label")}:** ${caps.join(", ")}`,
@@ -345,6 +347,8 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
       hasTools: existingEndpoint.has_tools,
       seesImages: existingEndpoint.sees_images,
       supportsStructOutput: existingEndpoint.supports_structoutput,
+      strictRoleAlternation: existingEndpoint.strict_role_alternation,
+      supportsPrefixCompletion: existingEndpoint.supports_prefix_completion,
       voiceMode: extra.voice_mode as string | null,
       scriptMarkup: extra.script_markup as string | null,
       supportsInstruct: extra.supports_instruct as boolean | undefined,
@@ -396,6 +400,8 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
     const hasTools = parsed.hasTools;
     const seesImages = parsed.seesImages;
     const supportsStructOutput = parsed.supportsStructOutput;
+    const strictRoleAlternation = parsed.strictRoleAlternation;
+    const supportsPrefixCompletion = parsed.supportsPrefixCompletion;
     const authTokenProvided = Boolean(parsed.authToken);
     const authToken = authTokenProvided ? parsed.authToken : undefined;
 
@@ -547,6 +553,8 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
       seesImages,
       seesVideos: existingEndpoint.sees_videos,
       supportsStructOutput,
+      strictRoleAlternation,
+      supportsPrefixCompletion,
       extraConfig,
       // Edit the exact selected row in place (update its model + row by id) so a renamed model_name
       // does not collide with — or orphan — sibling models under the same label+capability.

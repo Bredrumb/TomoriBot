@@ -1,0 +1,237 @@
+import { describe, expect, it } from "bun:test";
+import {
+  applyAssistantPrefixCompletion,
+  assistantMediaRelocationNotice,
+  CONVERSATION_START_USER_TEXT,
+  ensureLeadingUserTurn,
+  mergeConsecutiveSameRole,
+  type NormalizableMessage,
+  providerRequiresAlternation,
+  providerRequiresPrefixCompletion,
+  relocateAssistantMediaToUserTurns,
+} from "@/providers/utils/strictChatCompat";
+
+describe("providerRequires* safety nets", () => {
+  it("flags anthropic for alternation, deepseek/zai/zaicoding for prefix", () => {
+    expect(providerRequiresAlternation("anthropic")).toBe(true);
+    expect(providerRequiresAlternation("custom")).toBe(false);
+    expect(providerRequiresAlternation("deepseek")).toBe(false);
+
+    for (const p of ["deepseek", "zai", "zaicoding"]) {
+      expect(providerRequiresPrefixCompletion(p)).toBe(true);
+    }
+    expect(providerRequiresPrefixCompletion("anthropic")).toBe(false);
+    expect(providerRequiresPrefixCompletion("custom")).toBe(false);
+  });
+});
+
+describe("applyAssistantPrefixCompletion", () => {
+  const prefill = "Sure, here";
+
+  it("sets prefix:true when the trailing assistant message equals the prefill", () => {
+    const body = {
+      messages: [
+        { role: "user", content: "hi" },
+        { role: "assistant", content: prefill },
+      ],
+    };
+    applyAssistantPrefixCompletion(body, prefill);
+    expect((body.messages.at(-1) as Record<string, unknown>).prefix).toBe(true);
+  });
+
+  it("no-ops when prefill is missing", () => {
+    const body = { messages: [{ role: "assistant", content: prefill }] };
+    applyAssistantPrefixCompletion(body, undefined);
+    expect((body.messages.at(-1) as Record<string, unknown>).prefix).toBeUndefined();
+  });
+
+  it("no-ops when the last message is not the prefill assistant turn", () => {
+    const body = {
+      messages: [
+        { role: "assistant", content: prefill },
+        { role: "user", content: "actually no" },
+      ],
+    };
+    applyAssistantPrefixCompletion(body, prefill);
+    expect((body.messages.at(-1) as Record<string, unknown>).prefix).toBeUndefined();
+    expect((body.messages[0] as Record<string, unknown>).prefix).toBeUndefined();
+  });
+
+  it("no-ops when content does not exactly equal the prefill", () => {
+    const body = { messages: [{ role: "assistant", content: `${prefill} more` }] };
+    applyAssistantPrefixCompletion(body, prefill);
+    expect((body.messages[0] as Record<string, unknown>).prefix).toBeUndefined();
+  });
+
+  it("no-ops on an empty messages array", () => {
+    const body: { messages: unknown[] } = { messages: [] };
+    expect(() => applyAssistantPrefixCompletion(body, prefill)).not.toThrow();
+  });
+});
+
+describe("mergeConsecutiveSameRole", () => {
+  it("returns empty for empty input", () => {
+    expect(mergeConsecutiveSameRole<NormalizableMessage>([])).toEqual([]);
+  });
+
+  it("leaves an already-alternating list untouched (string content preserved)", () => {
+    const input: NormalizableMessage[] = [
+      { role: "user", content: "a" },
+      { role: "assistant", content: "b" },
+      { role: "user", content: "c" },
+    ];
+    expect(mergeConsecutiveSameRole(input)).toEqual(input);
+  });
+
+  it("merges consecutive same-role string turns into combined content parts", () => {
+    const input: NormalizableMessage[] = [
+      { role: "user", content: "one" },
+      { role: "user", content: "two" },
+      { role: "assistant", content: "ok" },
+    ];
+    expect(mergeConsecutiveSameRole(input)).toEqual([
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "one" },
+          { type: "text", text: "two" },
+        ],
+      },
+      { role: "assistant", content: "ok" },
+    ]);
+  });
+
+  it("concatenates array content blocks when merging", () => {
+    const input: NormalizableMessage[] = [
+      { role: "user", content: [{ type: "text", text: "x" }] },
+      { role: "user", content: [{ type: "image", source: {} }] },
+    ];
+    expect(mergeConsecutiveSameRole(input)).toEqual([
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "x" },
+          { type: "image", source: {} },
+        ],
+      },
+    ]);
+  });
+
+  it("treats a tool_calls assistant turn as a merge boundary (preserves wiring, no orphan)", () => {
+    // Mirrors the OpenAI-compatible array when strict_role_alternation is ON and function/tool
+    // history follows a trailing dialogue assistant turn. Merging the two adjacent assistant turns
+    // would drop the second's top-level tool_calls and orphan the matching tool result.
+    const input = [
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "let me check that" },
+      {
+        role: "assistant",
+        content: "",
+        tool_calls: [{ id: "call_1", type: "function", function: { name: "search", arguments: "{}" } }],
+      },
+      { role: "tool", tool_call_id: "call_1", content: '{"result":1}' },
+    ] as unknown as NormalizableMessage[];
+
+    const merged = mergeConsecutiveSameRole(input) as unknown as Array<Record<string, unknown>>;
+
+    // 1. The plain dialogue assistant turn is preserved as its own (still-string) turn — not merged.
+    expect(merged[1]).toEqual({ role: "assistant", content: "let me check that" });
+
+    // 2. The tool_calls turn survives intact with its wiring.
+    const toolCallsTurn = merged.find((m) => Array.isArray(m.tool_calls));
+    expect((toolCallsTurn?.tool_calls as Array<{ id: string }>)[0].id).toBe("call_1");
+
+    // 3. The tool result's tool_call_id still references a surviving tool_calls entry (no orphan).
+    const toolMsg = merged.find((m) => m.role === "tool");
+    const referenced = merged.some(
+      (m) =>
+        Array.isArray(m.tool_calls) &&
+        (m.tool_calls as Array<{ id: string }>).some((t) => t.id === toolMsg?.tool_call_id),
+    );
+    expect(referenced).toBe(true);
+  });
+});
+
+describe("ensureLeadingUserTurn", () => {
+  const factory = (): NormalizableMessage => ({ role: "user", content: CONVERSATION_START_USER_TEXT });
+
+  it("prepends a user turn when the first dialogue turn is assistant", () => {
+    const input: NormalizableMessage[] = [
+      { role: "assistant", content: "hello" },
+      { role: "user", content: "hi" },
+    ];
+    expect(ensureLeadingUserTurn(input, factory)).toEqual([
+      { role: "user", content: CONVERSATION_START_USER_TEXT },
+      { role: "assistant", content: "hello" },
+      { role: "user", content: "hi" },
+    ]);
+  });
+
+  it("does nothing when the first dialogue turn is already user", () => {
+    const input: NormalizableMessage[] = [
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "hello" },
+    ];
+    expect(ensureLeadingUserTurn(input, factory)).toEqual(input);
+  });
+
+  it("skips a leading system turn and inserts before the first assistant turn", () => {
+    const input: NormalizableMessage[] = [
+      { role: "system", content: "sys" },
+      { role: "assistant", content: "hello" },
+    ];
+    expect(ensureLeadingUserTurn(input, factory)).toEqual([
+      { role: "system", content: "sys" },
+      { role: "user", content: CONVERSATION_START_USER_TEXT },
+      { role: "assistant", content: "hello" },
+    ]);
+  });
+});
+
+describe("assistantMediaRelocationNotice", () => {
+  it("uses singular vs plural wording", () => {
+    expect(assistantMediaRelocationNotice(1)).toBe(
+      "[System: The previous assistant message included the following image.]",
+    );
+    expect(assistantMediaRelocationNotice(2)).toBe(
+      "[System: The previous assistant message included the following images.]",
+    );
+  });
+});
+
+describe("relocateAssistantMediaToUserTurns", () => {
+  const img = { type: "image_url", image_url: { url: "data:image/png;base64,AAA" } };
+
+  it("peels images off an assistant turn into a following user turn", () => {
+    const input = [
+      { role: "user", content: "look" },
+      { role: "assistant", content: [{ type: "text", text: "here" }, img] },
+    ];
+    expect(relocateAssistantMediaToUserTurns(input)).toEqual([
+      { role: "user", content: "look" },
+      { role: "assistant", content: "here" },
+      {
+        role: "user",
+        content: [{ type: "text", text: assistantMediaRelocationNotice(1) }, img],
+      },
+    ]);
+  });
+
+  it("drops the assistant turn entirely when it only carried images", () => {
+    const input = [{ role: "assistant", content: [img, img] }];
+    expect(relocateAssistantMediaToUserTurns(input)).toEqual([
+      {
+        role: "user",
+        content: [{ type: "text", text: assistantMediaRelocationNotice(2) }, img, img],
+      },
+    ]);
+  });
+
+  it("leaves string-content and non-assistant messages untouched", () => {
+    const input = [
+      { role: "user", content: [{ type: "text", text: "u" }, img] },
+      { role: "assistant", content: "plain" },
+    ];
+    expect(relocateAssistantMediaToUserTurns(input)).toEqual(input);
+  });
+});

@@ -16,6 +16,15 @@ import type {
   OpenAICompatibleToolCallDelta,
 } from "@/providers/openaiCompatible/openaiCompatibleTypes";
 import { ReasoningContentSpillGuard } from "@/providers/utils/reasoningContentSpillGuard";
+import {
+  applyAssistantPrefixCompletion,
+  CONVERSATION_START_USER_TEXT,
+  ensureLeadingUserTurn,
+  mergeConsecutiveSameRole,
+  type NormalizableMessage,
+  providerRequiresAlternation,
+  providerRequiresPrefixCompletion,
+} from "@/providers/utils/strictChatCompat";
 import { ThinkBlockContentStripper } from "@/providers/utils/thinkBlockContentStripper";
 import type { FunctionCall, ThoughtLogEntry } from "@/types/provider/interfaces";
 import type {
@@ -95,7 +104,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     // a per-request basis.  Defaults to true when not provided.
     const supportsSystemRole = this.options.supportsSystemRole?.(apiUrl, config.model ?? "") ?? true;
 
-    const messages = await buildOpenAICompatibleMessages({
+    let messages = await buildOpenAICompatibleMessages({
       adapterName: this.options.adapterName,
       contextItems: context.contextItems,
       currentTurnModelParts: context.currentTurnModelParts,
@@ -103,6 +112,23 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       seesImages: openAICompatibleConfig.seesImages ?? false,
       supportsSystemRole,
     });
+
+    // Strict role alternation (gated): merge consecutive same-role turns and guarantee a leading
+    // user turn so backends like Claude-behind-a-proxy accept the history. The column on the
+    // active llms row is the source of truth (D4); providerRequiresAlternation is the request-time
+    // safety net so a mis-seeded row can never emit an invalid body. Default OFF → byte-identical
+    // for endpoints that do not need it.
+    const enforceAlternation =
+      providerRequiresAlternation(this.options.providerName) ||
+      (context.tomoriState.llm?.strict_role_alternation ?? false);
+    if (enforceAlternation) {
+      const normalized = ensureLeadingUserTurn(
+        mergeConsecutiveSameRole(messages as unknown as NormalizableMessage[]),
+        () => ({ role: "user", content: CONVERSATION_START_USER_TEXT }),
+      );
+      messages = normalized as unknown as Array<Record<string, unknown>>;
+      log.info(`${this.options.adapterName}: Applied strict role alternation (${messages.length} messages)`);
+    }
 
     if (!config.model) {
       throw new Error("Model must be specified in config");
@@ -179,6 +205,17 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
         config: openAICompatibleConfig,
         context,
       });
+
+      // Assistant prefix-completion (gated): flag the trailing assistant prefill turn with
+      // `prefix: true` so DeepSeek/Z.ai-style "continue this turn" backends extend it. Resolved
+      // from the active llms column (D4) with providerRequiresPrefixCompletion as the safety net
+      // that keeps built-in deepseek/zai/zaicoding ON. Runs last so it targets the final message.
+      const enablePrefixCompletion =
+        providerRequiresPrefixCompletion(this.options.providerName) ||
+        (context.tomoriState.llm?.supports_prefix_completion ?? false);
+      if (enablePrefixCompletion) {
+        applyAssistantPrefixCompletion(requestBody, context.outputPrefill?.trim());
+      }
 
       const headers: Record<string, string> = {
         "Content-Type": "application/json",

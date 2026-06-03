@@ -56,6 +56,8 @@ export interface ParsedCapabilityModalFields {
   hasTools: boolean;
   seesImages: boolean;
   supportsStructOutput: boolean;
+  strictRoleAlternation: boolean;
+  supportsPrefixCompletion: boolean;
   scriptMarkup: "plain" | "bracket-tags" | "emoji";
   voiceMode: "clone" | "voice-design" | "auto";
   supportsInstruct: boolean;
@@ -83,6 +85,8 @@ export function parseCapabilityModalFields(
     hasTools: false,
     seesImages: false,
     supportsStructOutput: false,
+    strictRoleAlternation: false,
+    supportsPrefixCompletion: false,
     scriptMarkup: "plain",
     voiceMode: "clone",
     supportsInstruct: false,
@@ -98,6 +102,8 @@ export function parseCapabilityModalFields(
       result.hasTools = selectedCaps.has("tools");
       result.seesImages = selectedCaps.has("vision");
       result.supportsStructOutput = selectedCaps.has("structoutput");
+      result.strictRoleAlternation = selectedCaps.has("rolealt");
+      result.supportsPrefixCompletion = selectedCaps.has("prefixcompletion");
       break;
     }
     case "embedding": {
@@ -191,6 +197,22 @@ export function buildCapabilityAddModalComponents(
               description: localizer(
                 locale,
                 "commands.config.custom_models.capability_modal.text_cap_structoutput_description",
+              ),
+            },
+            {
+              value: "rolealt",
+              label: localizer(locale, "commands.config.custom_models.capability_modal.text_cap_rolealt"),
+              description: localizer(
+                locale,
+                "commands.config.custom_models.capability_modal.text_cap_rolealt_description",
+              ),
+            },
+            {
+              value: "prefixcompletion",
+              label: localizer(locale, "commands.config.custom_models.capability_modal.text_cap_prefixcompletion"),
+              description: localizer(
+                locale,
+                "commands.config.custom_models.capability_modal.text_cap_prefixcompletion_description",
               ),
             },
           ],
@@ -341,6 +363,8 @@ export interface EditModalExistingValues {
   hasTools?: boolean;
   seesImages?: boolean;
   supportsStructOutput?: boolean;
+  strictRoleAlternation?: boolean;
+  supportsPrefixCompletion?: boolean;
   voiceMode?: string | null;
   scriptMarkup?: string | null;
   supportsInstruct?: boolean;
@@ -425,6 +449,24 @@ export function buildCapabilityEditModalComponents(
                 "commands.config.custom_models.capability_modal.text_cap_structoutput_description",
               ),
               default: existing.supportsStructOutput ?? false,
+            },
+            {
+              value: "rolealt",
+              label: localizer(locale, "commands.config.custom_models.capability_modal.text_cap_rolealt"),
+              description: localizer(
+                locale,
+                "commands.config.custom_models.capability_modal.text_cap_rolealt_description",
+              ),
+              default: existing.strictRoleAlternation ?? false,
+            },
+            {
+              value: "prefixcompletion",
+              label: localizer(locale, "commands.config.custom_models.capability_modal.text_cap_prefixcompletion"),
+              description: localizer(
+                locale,
+                "commands.config.custom_models.capability_modal.text_cap_prefixcompletion_description",
+              ),
+              default: existing.supportsPrefixCompletion ?? false,
             },
           ],
           minValues: 0,

@@ -1239,6 +1239,8 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
       seesImages?: boolean;
       seesVideos?: boolean;
       supportsStructOutput?: boolean;
+      strictRoleAlternation?: boolean;
+      supportsPrefixCompletion?: boolean;
       isDefault?: boolean;
       // When set, update that exact row (edit path) instead of inserting. This lets an edit change
       // model_name without colliding with sibling models under the same label+capability.
@@ -1263,6 +1265,8 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
       seesImages = false,
       seesVideos = false,
       supportsStructOutput = false,
+      strictRoleAlternation = false,
+      supportsPrefixCompletion = false,
       isDefault = true,
       customEndpointId = null,
     } = params;
@@ -1284,6 +1288,8 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
                 sees_images = ${seesImages},
                 sees_videos = ${seesVideos},
                 supports_structoutput = ${supportsStructOutput},
+                strict_role_alternation = ${strictRoleAlternation},
+                supports_prefix_completion = ${supportsPrefixCompletion},
                 is_default = ${isDefault},
                 updated_at = CURRENT_TIMESTAMP
               WHERE custom_endpoint_id = ${customEndpointId}
@@ -1295,12 +1301,12 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
                 server_id, user_id, label, capability, api_style,
                 endpoint_url, model_name, model_ref_id, display_name, num_ctx, requires_auth,
                 extra_config, has_tools, sees_images, sees_videos,
-                supports_structoutput, is_default
+                supports_structoutput, strict_role_alternation, supports_prefix_completion, is_default
               ) VALUES (
                 ${serverId}, NULL, ${label}, ${capability}, ${apiStyle},
                 ${endpointUrl}, ${modelName}, ${modelRefId}, ${displayName}, ${numCtx}, ${requiresAuth},
                 ${JSON.stringify(extraConfig)}::jsonb, ${hasTools}, ${seesImages}, ${seesVideos},
-                ${supportsStructOutput}, ${isDefault}
+                ${supportsStructOutput}, ${strictRoleAlternation}, ${supportsPrefixCompletion}, ${isDefault}
               )
               ON CONFLICT (server_id, label, capability, COALESCE(model_name, '')) WHERE user_id IS NULL
               DO UPDATE SET
@@ -1316,6 +1322,8 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
                 sees_images = EXCLUDED.sees_images,
                 sees_videos = EXCLUDED.sees_videos,
                 supports_structoutput = EXCLUDED.supports_structoutput,
+                strict_role_alternation = EXCLUDED.strict_role_alternation,
+                supports_prefix_completion = EXCLUDED.supports_prefix_completion,
                 is_default = EXCLUDED.is_default,
                 updated_at = CURRENT_TIMESTAMP
               RETURNING *
@@ -1326,12 +1334,12 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
                   server_id, user_id, label, capability, api_style,
                   endpoint_url, model_name, model_ref_id, display_name, num_ctx, requires_auth,
                   extra_config, has_tools, sees_images, sees_videos,
-                  supports_structoutput, is_default
+                  supports_structoutput, strict_role_alternation, supports_prefix_completion, is_default
                 ) VALUES (
                   NULL, ${userId}, ${label}, ${capability}, ${apiStyle},
                   ${endpointUrl}, ${modelName}, ${modelRefId}, ${displayName}, ${numCtx}, ${requiresAuth},
                   ${JSON.stringify(extraConfig)}::jsonb, ${hasTools}, ${seesImages}, ${seesVideos},
-                  ${supportsStructOutput}, ${isDefault}
+                  ${supportsStructOutput}, ${strictRoleAlternation}, ${supportsPrefixCompletion}, ${isDefault}
                 )
                 ON CONFLICT (user_id, label, capability, COALESCE(model_name, '')) WHERE server_id IS NULL
                 DO UPDATE SET
@@ -1347,6 +1355,8 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
                   sees_images = EXCLUDED.sees_images,
                   sees_videos = EXCLUDED.sees_videos,
                   supports_structoutput = EXCLUDED.supports_structoutput,
+                  strict_role_alternation = EXCLUDED.strict_role_alternation,
+                  supports_prefix_completion = EXCLUDED.supports_prefix_completion,
                   is_default = EXCLUDED.is_default,
                   updated_at = CURRENT_TIMESTAMP
                 RETURNING *

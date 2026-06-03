@@ -41,28 +41,8 @@ export class ZaiStreamAdapter extends OpenAICompatibleStreamAdapter {
           requestBody.tool_stream = true;
         }
 
-        // 3. Handle output prefill (assistant prefix completion)
-        const outputPrefill = context.outputPrefill?.trim();
-        if (!outputPrefill) {
-          return;
-        }
-
-        const messages = requestBody.messages;
-        if (!Array.isArray(messages) || messages.length === 0) {
-          return;
-        }
-
-        const lastMessage = messages.at(-1);
-        if (
-          !lastMessage ||
-          typeof lastMessage !== "object" ||
-          lastMessage.role !== "assistant" ||
-          lastMessage.content !== outputPrefill
-        ) {
-          return;
-        }
-
-        lastMessage.prefix = true;
+        // 3. Assistant prefix-completion is applied by the shared seam in
+        //    OpenAICompatibleStreamAdapter (providerRequiresPrefixCompletion → "zai").
       },
     });
   }

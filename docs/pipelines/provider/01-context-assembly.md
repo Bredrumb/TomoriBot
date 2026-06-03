@@ -103,3 +103,4 @@ After context assembly completes (before the generator loop begins):
 - Type definitions: `StructuredContextItem` → `src/types/misc/context.ts`; `StreamConfig` / `StreamContext` → `src/types/stream/interfaces.ts`
 - Provider adapter registry: `src/utils/provider/providerInfoRegistry.ts`
 - Adding a new provider end-to-end: → `docs/guides/adding-new-provider.md`
+- Strict chat-completion normalizations applied during assembly (role alternation, prefix completion, always-on media relocation): → [`subsystems/strict-chat-completion.md`](../../subsystems/strict-chat-completion)

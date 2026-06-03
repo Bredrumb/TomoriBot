@@ -1104,18 +1104,20 @@ export class LlmModelRepository {
     seesImages: boolean;
     seesVideos: boolean;
     supportsStructOutput: boolean;
+    strictRoleAlternation: boolean;
+    supportsPrefixCompletion: boolean;
   }): Promise<number | null> {
     try {
       const rows = await sql`
         INSERT INTO llms (
           llm_provider, llm_codename, has_tools, sees_images, sees_videos,
-          sees_youtube, supports_structoutput, is_smartest, is_default,
-          is_reasoning, is_deprecated, is_free, is_uncensored,
+          sees_youtube, supports_structoutput, strict_role_alternation, supports_prefix_completion,
+          is_smartest, is_default, is_reasoning, is_deprecated, is_free, is_uncensored,
           llm_description, ja_description
         ) VALUES (
           ${params.provider}, ${params.codename}, ${params.hasTools}, ${params.seesImages}, ${params.seesVideos},
-          false, ${params.supportsStructOutput}, false, true,
-          false, false, true, true,
+          false, ${params.supportsStructOutput}, ${params.strictRoleAlternation}, ${params.supportsPrefixCompletion},
+          false, true, false, false, true, true,
           ${params.displayName}, ${params.displayName}
         )
         ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET
@@ -1123,6 +1125,8 @@ export class LlmModelRepository {
           sees_images = EXCLUDED.sees_images,
           sees_videos = EXCLUDED.sees_videos,
           supports_structoutput = EXCLUDED.supports_structoutput,
+          strict_role_alternation = EXCLUDED.strict_role_alternation,
+          supports_prefix_completion = EXCLUDED.supports_prefix_completion,
           llm_description = EXCLUDED.llm_description,
           ja_description = EXCLUDED.ja_description,
           updated_at = CURRENT_TIMESTAMP
@@ -1619,6 +1623,8 @@ export class LlmModelRepository {
     seesImages: boolean;
     seesVideos: boolean;
     supportsStructOutput: boolean;
+    strictRoleAlternation: boolean;
+    supportsPrefixCompletion: boolean;
   }): Promise<void> {
     switch (params.capability) {
       case "text":
@@ -1629,6 +1635,8 @@ export class LlmModelRepository {
             sees_images = ${params.seesImages},
             sees_videos = ${params.seesVideos},
             supports_structoutput = ${params.supportsStructOutput},
+            strict_role_alternation = ${params.strictRoleAlternation},
+            supports_prefix_completion = ${params.supportsPrefixCompletion},
             llm_description = ${params.displayName},
             ja_description = ${params.displayName},
             updated_at = CURRENT_TIMESTAMP

@@ -19,6 +19,14 @@ import { localizer } from "../../utils/text/localizer";
 import { fetchAndOptimizeImage } from "../../utils/image/imageProcessor";
 import { isParamDisabled, selectAnthropicSamplingParams } from "@/utils/provider/samplingControl";
 import { buildAnthropicThinkingRequest } from "@/utils/provider/thinkingControl";
+import {
+  assistantMediaRelocationNotice,
+  CONVERSATION_START_USER_TEXT,
+  ensureLeadingUserTurn,
+  mergeConsecutiveSameRole,
+  type NormalizableMessage,
+  providerRequiresAlternation,
+} from "../utils/strictChatCompat";
 import { buildProviderStopStrings } from "../utils/stopStrings";
 import { BaseStreamAdapter } from "../../types/stream/interfaces";
 import type {
@@ -168,13 +176,18 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
 
     const anthropicConfig = config as AnthropicStreamConfig;
 
-    // 2. Assemble context into Anthropic message format
+    // 2. Assemble context into Anthropic message format.
+    //    Strict role alternation is resolved from the active llms column (D4 column-is-truth);
+    //    providerRequiresAlternation("anthropic") is the request-time safety net that keeps it
+    //    ON even if a row were mis-seeded.
+    const enforceAlternation =
+      providerRequiresAlternation("anthropic") || (context.tomoriState.llm?.strict_role_alternation ?? false);
     const { systemPrompt, messages } = await this.assembleAnthropicContext(
       context.contextItems,
       context.currentTurnModelParts,
       context.functionInteractionHistory,
       anthropicConfig.seesImages ?? true,
-      context.prefixStrippingName ?? "Assistant",
+      enforceAlternation,
     );
 
     log.info(
@@ -751,7 +764,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       preToolCallTextParts?: Array<Record<string, unknown>>;
     }>,
     seesImages: boolean = true,
-    botName: string = "Assistant",
+    enforceAlternation: boolean = true,
   ): Promise<{ systemPrompt: string | null; messages: AnthropicMessage[] }> {
     const messages: AnthropicMessage[] = [];
     const systemParts: string[] = [];
@@ -868,10 +881,12 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
             }
 
             if (pendingBotImageBlocks.length > 0) {
+              // Anthropic forbids media on assistant turns; relocate it into a synthetic user turn
+              // using the shared canonical wording (consolidated across all providers).
               messages.push({
                 role: "user",
                 content: [
-                  { type: "text", text: `[System: This image was sent by ${botName}.]` },
+                  { type: "text", text: assistantMediaRelocationNotice(pendingBotImageBlocks.length) },
                   ...pendingBotImageBlocks,
                 ],
               });
@@ -978,8 +993,11 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // 4. Enforce strict user/assistant alternation by merging consecutive same-role messages
-    const mergedMessages = this.enforceStrictAlternation(messages);
+    // 4. Enforce strict user/assistant alternation by merging consecutive same-role messages and
+    //    prepending a leading user turn when needed. Delegated to the shared strict-chat helpers
+    //    so behavior is identical to the previous private implementation. Gated by the resolved
+    //    flag (always ON for anthropic via the safety net, so this is byte-identical).
+    const mergedMessages = enforceAlternation ? this.enforceStrictAlternation(messages) : messages;
 
     log.info(`AnthropicStreamAdapter: Assembled ${mergedMessages.length} messages (after alternation merge)`);
 
@@ -990,59 +1008,24 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
   }
 
   /**
-   * Anthropic requires strict user/assistant alternation.
-   * This method merges consecutive same-role messages into single messages
-   * with combined content blocks.
+   * Anthropic requires strict user/assistant alternation. Merges consecutive same-role messages
+   * into single messages with combined content blocks and guarantees a leading user turn, via the
+   * shared {@link mergeConsecutiveSameRole} / {@link ensureLeadingUserTurn} helpers.
    */
   private enforceStrictAlternation(messages: AnthropicMessage[]): AnthropicMessage[] {
-    if (messages.length === 0) {
-      return [];
-    }
+    // 1. Merge same-role runs (shared helper operates on the neutral message shape).
+    const merged = mergeConsecutiveSameRole(messages as unknown as NormalizableMessage[]);
 
-    const merged: AnthropicMessage[] = [];
-    let current = messages[0];
-
-    for (let i = 1; i < messages.length; i++) {
-      const next = messages[i];
-
-      if (current.role === next.role) {
-        // Merge: combine content blocks
-        const currentBlocks = this.normalizeToContentBlocks(current.content);
-        const nextBlocks = this.normalizeToContentBlocks(next.content);
-        current = {
-          role: current.role,
-          content: [...currentBlocks, ...nextBlocks],
-        };
-      } else {
-        merged.push(current);
-        current = next;
-      }
-    }
-
-    merged.push(current);
-
-    // After merging, ensure first message is user (Anthropic requirement)
-    // If first message is assistant, prepend an empty user message
-    if (merged.length > 0 && merged[0].role === "assistant") {
-      merged.unshift({
-        role: "user",
-        content: "[System: Conversation start]",
-      });
+    // 2. Prepend a synthetic user turn when the conversation would otherwise start with assistant.
+    const withLeading = ensureLeadingUserTurn(merged, () => ({
+      role: "user",
+      content: CONVERSATION_START_USER_TEXT,
+    }));
+    if (withLeading.length > merged.length) {
       log.info("AnthropicStreamAdapter: Prepended user message to satisfy alternation requirement");
     }
 
-    return merged;
-  }
-
-  /**
-   * Normalize message content to an array of content blocks.
-   * Anthropic accepts both string and array content formats.
-   */
-  private normalizeToContentBlocks(content: string | AnthropicContentBlock[]): AnthropicContentBlock[] {
-    if (typeof content === "string") {
-      return [{ type: "text", text: content }];
-    }
-    return content;
+    return withLeading as unknown as AnthropicMessage[];
   }
 
   /**
@@ -1106,7 +1089,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       [],
       undefined,
       seesImages,
-      "Assistant",
+      providerRequiresAlternation("anthropic"),
     );
     return {
       system: systemPrompt ?? "",

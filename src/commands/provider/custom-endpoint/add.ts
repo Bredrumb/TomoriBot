@@ -276,6 +276,8 @@ export async function execute(
         hasTools: parsed.hasTools,
         seesImages: parsed.seesImages,
         supportsStructOutput: parsed.supportsStructOutput,
+        strictRoleAlternation: parsed.strictRoleAlternation,
+        supportsPrefixCompletion: parsed.supportsPrefixCompletion,
         extraConfig,
       });
 

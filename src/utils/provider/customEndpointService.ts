@@ -53,6 +53,10 @@ export interface CustomEndpointRegistrationInput {
   seesImages?: boolean;
   seesVideos?: boolean;
   supportsStructOutput?: boolean;
+  // Strict chat-completion compatibility toggles (text capability). Synced to the synthetic llms
+  // row so the runtime resolves them uniformly with built-in providers.
+  strictRoleAlternation?: boolean;
+  supportsPrefixCompletion?: boolean;
   extraConfig?: Record<string, unknown>;
   // When set, edit that exact endpoint row in place (update its model + row by id) instead of
   // registering a new model. Add flows omit it; the edit command supplies the selected row's id.
@@ -93,6 +97,8 @@ async function upsertSyntheticTextModel(
     seesImages: endpoint.seesImages ?? false,
     seesVideos: endpoint.seesVideos ?? false,
     supportsStructOutput: endpoint.supportsStructOutput ?? false,
+    strictRoleAlternation: endpoint.strictRoleAlternation ?? false,
+    supportsPrefixCompletion: endpoint.supportsPrefixCompletion ?? false,
   });
 
   return modelId;
@@ -188,6 +194,8 @@ async function writeSyntheticCapabilityModel(
     seesImages: endpoint.seesImages ?? false,
     seesVideos: endpoint.seesVideos ?? false,
     supportsStructOutput: endpoint.supportsStructOutput ?? false,
+    strictRoleAlternation: endpoint.strictRoleAlternation ?? false,
+    supportsPrefixCompletion: endpoint.supportsPrefixCompletion ?? false,
   });
   return existingModelRefId;
 }
@@ -387,6 +395,8 @@ export async function registerCustomEndpoint(
       seesImages: input.seesImages ?? false,
       seesVideos: input.seesVideos ?? false,
       supportsStructOutput: input.supportsStructOutput ?? false,
+      strictRoleAlternation: input.strictRoleAlternation ?? false,
+      supportsPrefixCompletion: input.supportsPrefixCompletion ?? false,
       isDefault: shouldBeDefault,
       customEndpointId: isEdit ? input.editingEndpointId : null,
     },

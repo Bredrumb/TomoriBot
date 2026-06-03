@@ -32,6 +32,7 @@ import { buildOpenrouterProviderRouting } from "./providerRouting";
 import { buildOpenRouterReasoningRequest } from "@/utils/provider/thinkingControl";
 import { BaseStreamAdapter } from "../../types/stream/interfaces";
 import { ReasoningContentSpillGuard } from "@/providers/utils/reasoningContentSpillGuard";
+import { assistantMediaRelocationNotice } from "@/providers/utils/strictChatCompat";
 import { ThinkBlockContentStripper } from "@/providers/utils/thinkBlockContentStripper";
 import type {
   ProcessedChunk,
@@ -2255,7 +2256,9 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       preToolCallTextParts?: Array<Record<string, unknown>>;
     }>,
     seesImages: boolean = true,
-    botName: string = "Assistant",
+    // Media wording is now provider-agnostic (assistantMediaRelocationNotice); the bot name is no
+    // longer interpolated. Kept positionally to avoid churning every caller's argument order.
+    _botName: string = "Assistant",
     seesVideos: boolean = false,
     messageIdMap?: StreamContext["messageIdMap"],
   ): Promise<Array<Record<string, unknown>>> {
@@ -2552,7 +2555,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                 content: [
                   {
                     type: "text",
-                    text: `[System: This image was sent by ${botName}.]`,
+                    text: assistantMediaRelocationNotice(pendingBotImageParts.length),
                   },
                   ...pendingBotImageParts,
                 ],
