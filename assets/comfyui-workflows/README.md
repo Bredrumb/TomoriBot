@@ -3,9 +3,9 @@
 This folder contains API-format ComfyUI workflows that can be uploaded when adding
 a TomoriBot custom endpoint with API style `comfyui`.
 
-## Anima3 Image Workflow
+## Anima v1 Image Workflow
 
-Use `tomoribot-anima3-comfyui.json` for Anima3 image generation.
+Use `tomoribot-anima-v1-comfyui.json` for Anima v1 image generation.
 
 Supported modes:
 

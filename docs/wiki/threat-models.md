@@ -2,6 +2,19 @@
 title: "Threat Models"
 ---
 
+## TL;DR
+
+- **API keys are encrypted** in the database with `pgcrypto`. A full DB dump is useless without the `CRYPTO_SECRET`. If the host or secret is compromised, rotate all provider keys immediately.
+- **SQL injection is defended** by Bun SQL template literals. This only holds as long as developers keep using them, so please never concatenate raw values into queries.
+- **Discord roles are the trust boundary.** `ManageGuild` = admin power. A misconfigured Discord role is a real privilege escalation.
+- **LLM output is untrusted.** Prompt injection through memories, documents, web pages, or MCP tool descriptions is a real attack surface, use `/tool prompt snapshot` to check source of malicious prompts.
+- **MCP servers run with host-level trust.** A malicious local MCP server owns the machine. Only run MCP servers you trust, under least-privilege OS accounts.
+- **BYO endpoints can see your data.** Custom text, image, TTS, and STT endpoints receive the full request payload. This is inherent, endpoint operators own that risk.
+- **SSRF is mitigated** by `fetchUserRemoteUrl()` and `safeDownload()`. New code touching user-supplied URLs must use these helpers as skipping them is a SSRF hole.
+- **Set quotas, enable BYOK mode, and disable feature flags** (image gen, video gen, cross-channel messaging, manage-message, prompt snapshot) unless you actually need them to prevent users from abusing your key's rate limits.
+
+---
+
 This document outlines the threat model for TomoriBot using the STRIDE framework and groups risks by attack vector.
 
 Related reference:

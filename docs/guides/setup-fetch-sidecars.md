@@ -105,6 +105,14 @@ When this is set, `fetch_url` automatically switches from the `/md` endpoint to 
 
 ---
 
-## 4. No Browser Sidecar
+## 4. Engine Order & Env Vars
+
+| Variable | Default | Description |
+|---|---|---|
+| `FETCH_URL_ENGINE_ORDER` | `crawl4ai,mcp_fetch` | Comma-separated engine list. Unknown names are ignored, duplicates are collapsed, and `mcp_fetch` is always appended as the final fallback. |
+| `FETCH_URL_HEALTHCHECK_CACHE_SEC` | `60` | How long the Crawl4AI health probe result is cached before re-checking. |
+| `FETCH_URL_ALLOW_PRIVATE_NETWORK` | `false` | Set to `true` to allow fetching localhost/private/internal URLs (development only). |
+
+## 5. No Browser Sidecar
 
 Leave `CRAWL4AI_BASE_URL` unset. The `fetch_url` tool will cleanly fall back to the bundled `mcp_fetch` engine.

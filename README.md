@@ -117,7 +117,7 @@ TomoriBot supports a wide range of LLM providers, image generation APIs, voice s
 
 ## Local & Self-Hosted Endpoints
 
-Besides APIs, you can also connect TomoriBot to your own self-hosted models. She supports local LLMs (via Ollama, KoboldCPP, LM Studio, vLLM, etc.), local image/video generation via ComfyUI, local TTS and STT endpoints, as well as local SearXNG and Browser web fetch sidecars!
+Besides APIs, you can also connect TomoriBot to your own self-hosted models. She supports local LLMs (via Ollama, KoboldCPP, LM Studio, vLLM, etc.), local image/video generation via ComfyUI, local TTS and STT endpoints, as well as local SearXNG and Browser web fetch Docker sidecars.
 
 **[Read the Local & Self-Hosted Endpoints guide here](docs/wiki/local-endpoints.md)**
 
@@ -139,10 +139,10 @@ TomoriBot comes with a variety of built-in tools (such as web search, memory man
 These are some short silly examples of the kind of system-prompt instructions that make good use of TomoriBot's tool chains in a Discord community. Of course, you can make it more practical by being more creative.
 
 
-#### 1. Weekly ~~Current Events~~ Yuri News Anchor   
+#### 1. Weekly ~~Current Events~~ Yuri News 
 ```text
 Every Friday, compile the week's notable yuri manga chapters, anime episodes, and community fanart drops using {web_search_tool}. 
-Present findings with {voice_message_tool} in an overly dramatic news anchor voice.
+Present findings with {voice_message_tool} in a seductive ASMR voice.
 ```
 
 #### 2. Wellness Checker
@@ -155,15 +155,15 @@ Track their emotional state over time with {memory_tool} and/or {memory_update_t
 #### 3. Sleep Police
 ```text
 If you notice through {message_metadata_tool} that someone is chatting past 2 AM, use {voice_message_tool} to send them a threateningly calm ASMR lullaby telling them to go to bed. 
-If they keep talking 10 minutes later, use {manage_message_tool} to delete their message for their own good and remind them that sleep deprivation is a leading cause of skill issues.
+If they keep talking 10 minutes later, use {manage_message_tool} to delete their message for their own good and remind them that sleep deprivation is a leading cause of their issues.
 ```
 
 <!-- GETTING STARTED -->
-## Self-Hosting
+# Self-Hosting
 
 This guide will help you set up TomoriBot locally for development or personal use.
 
-### Prerequisites
+## Prerequisites
 
 Before running TomoriBot, ensure you have the following installed:
 
@@ -224,48 +224,15 @@ Before running TomoriBot, ensure you have the following installed:
 
   **Note:** The database schema (including required extensions like `pgcrypto`) is automatically initialized when you first run TomoriBot.
 
-  **pgvector (Optional for RAG/document memory):**
+### Optional Prerequisites
+  #### 1. **pgvector (Optional but recommended for RAG/document memory):**
   - If you want RAG features locally, install [pgvector](https://github.com/pgvector/pgvector) then run:
   ```sql
   CREATE EXTENSION vector;
   ```
   - This is needed for RAG on all setups to create vectorized data on your database
 
-  **pg_cron (Optional for periodic cleanup jobs):**
-  - Use this only for optional database maintenance jobs such as cooldown/reminder cleanup. Reminder delivery and random triggers run in the app, not in `pg_cron`.
-  - If you use Docker Compose from this repo, `pg_cron` is already configured.
-  - To find the active PostgreSQL config file path for `postgresql.conf`, run:
-  ```sql
-  SHOW config_file;
-  ```
-  - If you use your own PostgreSQL server, enable it in `postgresql.conf`:
-  ```conf
-  shared_preload_libraries = 'pg_cron'
-  cron.database_name = 'your_dbname'
-  ```
-  - If `shared_preload_libraries` already has other values, append `pg_cron` instead of replacing them, for example:
-  ```conf
-  shared_preload_libraries = 'pg_stat_statements,pg_cron'
-  ```
-  - Restart PostgreSQL, then run:
-  ```sql
-  CREATE EXTENSION IF NOT EXISTS pg_cron;
-  ```
-* **Tokenizer assets** (Optional, for logit bias) - Required for model-aware logit bias (emoji/word repetition penalties)
-  ```sh
-  bun run setup:tokenizers
-  ```
-  - Some families (e.g. Gemma) are gated and require a [HuggingFace access token](https://huggingface.co/settings/tokens) after accepting their license. If prompted, re-run with:
-  ```sh
-  # Windows (PowerShell)
-  $env:HF_TOKEN="hf_xxx"; bun run setup:tokenizers
-
-  # macOS/Linux
-  HF_TOKEN=hf_xxx bun run setup:tokenizers
-  ```
-  - Without this step, logit bias is silently disabled, but everything else still works normally.
-
-* **Python 3** (Optional but recommended) - Required for URL Fetching MCP server tool
+  #### 2. **Python3** (Optional but recommended) - Required for URL Fetching MCP server tool
   ```sh
   # Windows (using Chocolatey)
   choco install python
@@ -285,7 +252,41 @@ Before running TomoriBot, ensure you have the following installed:
   pip install --break-system-packages mcp-server-fetch
   # OR create a virtual environment
   ```
-### Installation
+  #### 3. **pg_cron (Optional for periodic cleanup jobs):**
+  - Use this only for optional database maintenance jobs such as cooldown/reminder cleanup. Reminder delivery and random triggers run in the app, not in `pg_cron`.
+  - If you use Docker Compose from this repo, `pg_cron` is already configured.
+  - To find the active PostgreSQL config file path for `postgresql.conf`, run:
+  ```sql
+  SHOW config_file;
+  ```
+  - If you use your own PostgreSQL server, enable it in `postgresql.conf`:
+  ```conf
+  shared_preload_libraries = 'pg_cron'
+  cron.database_name = 'your_dbname'
+  ```
+  - If `shared_preload_libraries` already has other values, append `pg_cron` instead of replacing them, for example:
+  ```conf
+  shared_preload_libraries = 'pg_stat_statements,pg_cron'
+  ```
+  - Restart PostgreSQL, then run:
+  ```sql
+  CREATE EXTENSION IF NOT EXISTS pg_cron;
+  ```
+#### 4. **Tokenizer assets** (Optional, for logit bias) - Required for model-aware logit bias (emoji/word repetition penalties)
+  ```sh
+  bun run setup:tokenizers
+  ```
+  - Some families (e.g. Gemma) are gated and require a [HuggingFace access token](https://huggingface.co/settings/tokens) after accepting their license. If prompted, re-run with:
+  ```sh
+  # Windows (PowerShell)
+  $env:HF_TOKEN="hf_xxx"; bun run setup:tokenizers
+
+  # macOS/Linux
+  HF_TOKEN=hf_xxx bun run setup:tokenizers
+  ```
+  - Without this step, logit bias is silently disabled, but everything else still works normally.
+
+## Installation
 
 1. **Clone the repository**
    ```sh
@@ -298,7 +299,7 @@ Before running TomoriBot, ensure you have the following installed:
    bun install
    ```
 
-### Configuration
+## Configuration
 
 **Create your local environment file** by copying `.env.example` to `.env`, then fill in the required values:
 
@@ -306,7 +307,7 @@ Before running TomoriBot, ensure you have the following installed:
 cp .env.example .env
 ```
 
-`.env.example` now contains only the minimum local setup values:
+Your `.env` should contain the following values
 
 ```
 # Discord Bot Configuration (Required)
@@ -323,9 +324,6 @@ POSTGRES_PORT=5432
 POSTGRES_USER=your_username
 POSTGRES_PASSWORD=your_password
 POSTGRES_DB=tomodb
-
-# Runtime Configuration (Default is development)
-RUN_ENV=development
 ```
 
 **Required Variables:**
@@ -339,7 +337,7 @@ RUN_ENV=development
 
 If you want to tune optional limits, integrations, or provider-specific settings, copy the entries you need from `.env.optional.example` into your real `.env`.
 
-### Running TomoriBot
+## Running TomoriBot
 
 Once you've completed the configuration, start the bot:
 
@@ -356,33 +354,33 @@ The bot will automatically:
 
 Once you see `TomoriBot up and running!`, without errors in your logs, the bot is online and ready to use.
 
-#### Optional Sidecars (`bun launch`)
+### Optional Sidecars (`bun launch`)
 
-If you want to run optional sidecar services alongside the bot — such as SearXNG for web search, Crawl4AI for browser-rendered page fetches, or a local TTS server — use `bun launch` instead of `bun run dev`. It starts the requested sidecars, waits for them to be ready, then launches the bot in watch mode automatically:
+If you want to run optional sidecar services alongside the bot such as SearXNG for web search, Crawl4AI for browser-rendered page fetches, or a local TTS server, use `bun launch` instead of `bun run dev`. It starts the requested sidecars, waits for them to be ready, then launches the bot in watch mode automatically:
 
 ```sh
-# Bot only — identical to bun run dev
+# Bot only: identical to bun run dev
 bun launch
 
 # With SearXNG and Crawl4AI Docker sidecars
 bun launch --searxng --crawl4ai
 
-# With a local TTS server (venv must be set up first — see docs/integrations/voice/tts/)
+# With a local TTS server (venv must be set up first, see docs/integrations/voice/tts/)
 bun launch --qwen3tts
 
 # See all available flags
 bun launch --help
 ```
 
-Available flags: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--whisperx`
+Available flags: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--whisperx`, `--help`
 
-Docker sidecars (`--searxng`, `--crawl4ai`) are created on first run and reused on subsequent runs — no manual `docker run` needed. Python TTS/STT sidecars require their venv to be set up once beforehand; see the individual setup guides in `docs/integrations/voice/`.
+Docker sidecars (`--searxng`, `--crawl4ai`) are created on first run and reused on subsequent runs, no manual `docker run` needed. Python TTS/STT sidecars require their venv to be set up once beforehand; see the individual setup guides in `docs/integrations/voice/`.
 
 **Hot reload** applies only to the bot (`src/`). Sidecar servers are unaffected by file changes and stay running until you stop them manually.
 
 **Ctrl+C** stops the bot and any Python sidecar processes. Docker containers (`--searxng`, `--crawl4ai`) are intentionally left running — stop them manually with `docker stop searxng` / `docker stop crawl4ai` when you're done.
 
-#### Basic Commands
+## Basic Commands
 
 - `/config setup` - Initial bot setup for your server
 - `/config` - Multiple ways to tweak TomoriBot
@@ -390,7 +388,7 @@ Docker sidecars (`--searxng`, `--crawl4ai`) are created on first run and reused 
 - `/forget` - Remove memories from TomoriBot
 - `/server` - Add / Remove permissions from TomoriBot
 
-#### Chat Interaction
+## Chat Interaction
 
 Simply mention the bot in a server or use the configured trigger words to start a conversation:
 ```
@@ -399,7 +397,7 @@ Simply mention the bot in a server or use the configured trigger words to start 
 
 Or slide into TomoriBot's DMs and say hi!
 
-### Maintenance Scripts
+## Maintenance Scripts
 
 | Command | Description |
 |---|---|
@@ -410,13 +408,12 @@ Or slide into TomoriBot's DMs and say hi!
 | `bun run nuke-db` | Drops all tables (start the bot afterwards to reinitialise). Usually used in conjunction with backups for clean installs |
 | `bun run purge-commands` | Clear all registered Discord slash commands |
 | `bun run rotate-keys` | Migrate all encrypted fields to the current key version |
-| `bun run db:lifecycle` | Creates a disposable local PostgreSQL database and validates fresh schema initialization, backup/restore scripts, key audits, legacy-provider audit, `nuke-db`, and re-initialization |
 
-`bun run backup` and `bun run db:lifecycle` require PostgreSQL client tools (`pg_dump` and `psql`) in PATH. `bun run db:lifecycle` also needs a local PostgreSQL user with permission to create and drop disposable databases.
+`bun run backup` require PostgreSQL client tools (`pg_dump` and `psql`) in PATH.
 
-### Updating TomoriBot
+## Updating TomoriBot
 
-**Always back up before pulling a new version.**
+### **Always back up before pulling a new version.**
 ```sh
 bun run backup
 ```
@@ -441,7 +438,7 @@ docker compose build
 docker compose up -d
 ```
 
-### Alternative: Docker Compose
+## Alternative: Docker Compose
 
 If you prefer containerized deployment, you can use Docker Compose instead of manual setup:
 

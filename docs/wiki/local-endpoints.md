@@ -2,6 +2,7 @@
 title: "Local & Self-Hosted Endpoints"
 ---
 
+
 ### Local LLM (Text / Embeddings)
 
 Any OpenAI-compatible server works out of the box using the `/custom-endpoints` command category. Popular options:
@@ -17,13 +18,12 @@ Any OpenAI-compatible server works out of the box using the `/custom-endpoints` 
 
 Configure via `/custom-endpoints` in Discord, pointing at your local endpoint URL (e.g. `http://192.168.1.10:11434/v1`).
 
-**Multiple models under one label:** a single endpoint label is one logical connection (shared URL, API style, and auth key). To host several models of the same capability on it — e.g. multiple Ollama tags — run `/custom-endpoint add` again with the *same label and capability* and a distinct **model name**; `endpoint URL` and `API style` are optional on repeat adds and are inherited from the existing label. Adding a model does not change the active selection. When you later run `/model text` (or `image`/`embedding`/`video`) and pick the label, a picker lists every registered model so you can choose one; `/custom-endpoint edit` and `remove` operate on individual models.
 
 ### Local Image Generation (ComfyUI)
 
-TomoriBot ships a ready-to-use Anima3 ComfyUI workflow for txt2img and img2img. Use `/help custom-endpoint` to learn how to create a TomoriBot-compatible ComfyUI workflow for images and videos as well.
+TomoriBot ships a ready-to-use Anima v1 ComfyUI workflow for txt2img and img2img. Use `/help custom-endpoint` to learn how to create a TomoriBot-compatible ComfyUI workflow for images and videos as well.
 
-- **Anima3 workflow**: [`assets/comfyui-workflows/tomoribot-anima3-comfyui.json`](../../assets/comfyui-workflows/tomoribot-anima3-comfyui.json)
+- **Anima v1 workflow**: [`assets/comfyui-workflows/tomoribot-anima-v1-comfyui.json`](../../assets/comfyui-workflows/tomoribot-anima-v1-comfyui.json)
 - **Workflow notes**: [`assets/comfyui-workflows/README.md`](../../assets/comfyui-workflows/README.md)
 - Upload the `.json` workflow during `/config custom-endpoints add` (capability: `image`, API style: `comfyui`)
 - ComfyUI must be reachable on the network, TomoriBot polls its `/history` endpoint until the image is ready
@@ -60,3 +60,27 @@ TomoriBot can route her built-in web tools through your own self-hosted infrastr
 |---------|------|---------|-------|
 | **SearXNG** | `web_search` | Privacy-respecting metasearch engine proxy to avoid rate limits | [Setup Guide](../guides/setup-searxng.md) |
 | **Crawl4AI** | `fetch_url` | Browser-rendered markdown extraction for JS-heavy sites | [Setup Guide](../guides/setup-fetch-sidecars.md) |
+
+### Starting Sidecars with `bun launch`
+
+Instead of starting sidecar services manually, use `bun launch` which starts the requested sidecars, waits for them to be ready, then launches the bot in watch mode automatically:
+
+```sh
+# Bot only, identical to bun run dev
+bun launch
+
+# With SearXNG and Crawl4AI Docker sidecars
+bun launch --searxng --crawl4ai
+
+# With a local TTS server (venv must be set up first — see docs/integrations/voice/tts/)
+bun launch --qwen3tts
+
+# See all available flags
+bun launch --help
+```
+
+Available flags: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--whisperx`
+
+Docker sidecars (`--searxng`, `--crawl4ai`) are created on first run and reused on subsequent runs. Python TTS/STT sidecars require their venv to be set up once beforehand; see the individual setup guides in `docs/integrations/voice/`.
+
+**Ctrl+C** stops the bot and any Python sidecar processes. Docker containers are intentionally left running — stop them manually with `docker stop searxng` / `docker stop crawl4ai` when done.

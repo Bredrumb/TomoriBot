@@ -46,9 +46,33 @@ Then run `bun run dev` once the container is healthy (`docker ps` shows `(health
 
 ---
 
-### 3. No SearXNG
+### 3. AWS ECS
+
+Add SearXNG as a sidecar container in the same task definition. Set `SEARXNG_BASE_URL=http://localhost:8080/` on the app container and make it depend on the sidecar's healthcheck. Inject `SEARXNG_SECRET` via Secrets Manager.
+
+### 4. GCP Cloud Run
+
+Use a multi-container service with SearXNG alongside the bot. Set `SEARXNG_BASE_URL=http://localhost:8080/`. Inject `SEARXNG_SECRET` via Secret Manager.
+
+---
+
+### 5. No SearXNG
 Leave `SEARXNG_BASE_URL` unset — the chain falls back to `Brave → DDG → Felo` exactly as before. Nothing breaks.
 
 When no SearXNG sidecar is configured, the assembled `web_search` schema no longer advertises SearXNG-only categories. The common categories (`text`, `image`, `video`, `news`) still appear when Brave is configured, and text-only search appears when only DDG/Felo MCP fallback is available.
 
-*Note: Per-engine timeout and the health-probe cache duration are tunable via `WEB_SEARCH_TIMEOUT_MS` and `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` (see `.env.optional.example`).*
+---
+
+## Image Result Tuning
+
+SearXNG image results are HEAD-validated, optionally compressed, and posted as Discord attachments — identical UX to Brave images. If all candidate URLs fail validation, SearXNG returns a text listing of image links instead of a hard failure.
+
+| Variable | Default | Description |
+|---|---|---|
+| `SEARXNG_IMAGE_COUNT` | `3` (max 10) | How many valid images are sent to Discord. Overridden by the LLM's `count` arg. |
+| `SEARXNG_IMAGE_POOL` | `10` | Candidate URL pool when the LLM does not specify `count`. When `count` is specified, the pool is `count × 3` (capped at 30) to absorb hotlink-protection failures. |
+| `IMAGE_MIN_SIZE_BYTES` | `5120` (5 KB) | Images below this size are rejected — filters placeholder/error images. Shared with Brave image search. |
+| `WEB_SEARCH_TIMEOUT_MS` | — | Per-engine request timeout. |
+| `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` | `60` | How long the health probe result is cached before re-checking. |
+
+*(See `.env.optional.example` for all tunables.)*
