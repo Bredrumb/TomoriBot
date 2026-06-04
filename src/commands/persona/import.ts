@@ -850,7 +850,7 @@ export async function execute(
           maxLength: 50,
         });
         const timestamp = Date.now();
-        const avatarFilename = `persona-import-${sanitizedNickname}-${timestamp}.png`;
+        const avatarFilename = `tomori-preset-${sanitizedNickname}-${timestamp}.png`;
         const avatarAttachment = new AttachmentBuilder(avatarImageBuffer, {
           name: avatarFilename,
         });
@@ -982,7 +982,8 @@ export async function execute(
             fallback: "persona",
             maxLength: 50,
           });
-          const avatarFilename = `persona-import-alter-${sanitizedNickname}-${Date.now()}.png`;
+          const timestamp = Date.now();
+          const avatarFilename = `tomori-preset-${sanitizedNickname}-${timestamp}.png`;
           alterSuccessEmbed.setImage(`attachment://${avatarFilename}`);
           alterSuccessEmbed.setFooter({
             text: localizer(locale, "commands.persona.import.alter_avatar_warning"),

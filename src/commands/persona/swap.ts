@@ -381,7 +381,7 @@ export async function execute(
         maxLength: 50,
       });
       const timestamp = Date.now();
-      const avatarFilename = `persona-swap-${sanitizedNickname}-${timestamp}.png`;
+      const avatarFilename = `tomori-preset-${sanitizedNickname}-${timestamp}.png`;
       formerMainAvatarAttachment = new AttachmentBuilder(formerMainAvatarBuffer, {
         name: avatarFilename,
       });

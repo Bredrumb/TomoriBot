@@ -851,10 +851,12 @@ export async function execute(
     }
 
     // 18. Create attachment
-    const filename = `${sanitizeAttachmentFilenamePart(characterName, {
+    const sanitizedNickname = sanitizeAttachmentFilenamePart(characterName, {
       fallback: "persona",
       maxLength: 50,
-    })}_preset.png`;
+    });
+    const timestamp = Date.now();
+    const filename = `tomori-preset-${sanitizedNickname}-${timestamp}.png`;
     const attachment = new AttachmentBuilder(finalPngBuffer, {
       name: filename,
     });
