@@ -165,7 +165,7 @@ export default {
 
 これらのトリガーがメッセージに含まれると、このペルソナが応答します。`,
       alter_success_confirmation: `オルタペルソナ **{nickname}** が {trigger_count} 個の固有トリガーワードで正常にインポートされました！詳細なインポート情報がチャンネルに投稿されました。`,
-      alter_avatar_fallback_main: `🟡 このインポートにはアバター画像が含まれていなかったため、このオルタはフォールバックとして **{nickname}** の現在のメインペルソナアバターを使用します。変更したい場合は \`/server avatar\` を使用できます。`,
+      alter_avatar_fallback_main: `🟡 このインポートにはアバター画像が含まれていなかったため、このオルタはフォールバックとして **{nickname}** の現在のメインペルソナアバターを使用します。変更したい場合は \`/persona avatar\` を使用できます。`,
       alter_avatar_warning: `⚠️ 上記のアバター画像埋め込みを削除しないでください。削除するとオルタペルソナのアバターが失われます。`,
       alter_dm_not_allowed_title: `🔴 DMではオルタペルソナは許可されていません`,
       alter_dm_not_allowed_description: `オルタペルソナはサーバーでのみインポートできます。ダイレクトメッセージではインポートできません。サーバーでこのコマンドを実行してください。`,
@@ -265,6 +265,12 @@ export default {
       avatar_update_failed: `🟡️ Discord APIエラーによりサーバーアバターを更新できませんでしたが、ペルソナは正常に適用されました。`,
       avatar_update_skipped_dm: `プリセットは正常に適用されましたが、アバター更新はダイレクトメッセージでは利用できません`,
     },
+    import_now: {
+      button: `今すぐインポート`,
+      imported: `インポート済み`,
+      already_imported_title: `🟡 インポート済み`,
+      already_imported_description: `このペルソナはすでにインポートされたか、現在インポート処理中です。`,
+    },
     generate: {
       description: `AIによる人格生成（対応プロバイダーが必要）`,
       modal: {
@@ -347,10 +353,14 @@ export default {
 **サンプル対話:**
 {dialogue_preview}`,
       success_next_steps_title: `次のステップ`,
-      success_next_steps_description: `1. 添付されたPNGファイルをダウンロード
-2. PNGファイルと共に\`/persona import\`を使用してこのキャラクターをインポート
-3. 進行中の会話に新しい人格を適用するには\`/tool refresh\`を実行
-4. (任意) 必要に応じて\`/server avatar\`でアバターを変更`,
+      success_next_steps_description: `1. 右側の添付PNGファイルをダウンロード
+2. PNGファイルと共に\`/persona import\`を使用
+3. \`/tool refresh\`を実行して新しい人格を適用
+または「今すぐインポート」ボタンを押す`,
+      success_next_steps_description_dm: `1. 添付されたPNGファイルをダウンロード
+2. PNGファイルと共に\`/persona import\`を使用
+3. \`/tool refresh\`を実行して新しい人格を適用`,
+      success_next_steps_footer: `あとで\`/persona\`でさらに編集できます。`,
       avatar_update_skipped_dm: `アバターとニックネームの更新はダイレクトメッセージでインポートできませんのでご注意ください。`,
     },
     create: {
@@ -394,15 +404,15 @@ export default {
       metadata_embed_failed_title: `🔴 エクスポートに失敗しました`,
       metadata_embed_failed_description: `画像に人格データを埋め込むことができませんでした。もう一度お試しください。`,
       success_title: `🟢 {character_name} の作成に成功しました！`,
-      success_description: `**{character_name}** のペルソナが作成されました！
-**説明:**
+      success_description: `**説明:**
 {character_description}`,
       success_dialogue_title: `サンプル対話`,
       success_next_steps_title: `次のステップ`,
-      success_next_steps_description: `1. 添付されたPNGファイルをダウンロード
-2. PNGファイルと共に\`/persona import\`を使用してこのキャラクターをインポート
-3. 進行中の会話に新しい人格を適用するには\`/tool refresh\`を実行
-4. (任意) 必要に応じて\`/server avatar\`でアバターを変更`,
+      success_next_steps_description: `1. 右側の添付PNGファイルをダウンロード
+2. PNGファイルと共に\`/persona import\`を使用
+3. \`/tool refresh\`を実行して新しい人格を適用
+または「今すぐインポート」ボタンを押す`,
+      success_next_steps_footer: `あとで\`/persona\`でさらに編集できます。`,
       avatar_update_skipped_dm: `アバターとニックネームの更新はダイレクトメッセージでは利用できませんのでご注意ください。`,
     },
     rename: {
@@ -430,6 +440,36 @@ export default {
       nickname_update_failed_footer: `注：サーバーのニックネーム更新に失敗しました（「ニックネームの変更」権限が必要な場合があります）。`,
       partial_success_title: `名前は更新されましたが問題あり`,
       partial_success_description: `私の名前は \`{new_nickname}\` に変更されましたが、一部のトリガーワードの更新に失敗しました。`,
+    },
+    avatar: {
+      description: `このサーバーで選択したペルソナのアバターを設定または削除します。`,
+      no_permission_title: `🔴 権限がありません`,
+      no_permission_description: `ペルソナのアバターを更新するには**サーバー管理**権限が必要です。`,
+      image_description: `アバターとして設定する画像。空白のまま送信すると、代わりに選択したペルソナのアバターをクリアします。`,
+      image_label: `アバター画像`,
+      persona_modal_title: `ペルソナを選択`,
+      persona_select_label: `ペルソナ`,
+      persona_select_description: `アバターを更新するペルソナを選択してください。`,
+      persona_select_placeholder: `ペルソナを選択...`,
+      main_persona_description: `メインペルソナ`,
+      alter_persona_description: `オルタペルソナ`,
+      success_title: `アバターが更新されました`,
+      success_description: `このサーバー用のアバターの更新に成功しました。`,
+      success_alter_description: `ペルソナ「{persona_name}」のアバターを更新しました。`,
+      removed_title: `アバターがリセットされました`,
+      removed_description: `このサーバー用のアバターをデフォルトにリセットしました。`,
+      removed_alter_description: `ペルソナ「{persona_name}」のアバターをリセットしました。`,
+      invalid_image_title: `無効な画像`,
+      invalid_image_description: `有効な画像ファイルを提供してください。`,
+      file_too_large_description: `画像ファイルが大きすぎます。最大ファイルサイズは8MBです。`,
+      invalid_format_description: `PNG、JPG、JPEG、またはGIF画像ファイルを提供してください。`,
+      conversion_error_title: `変換エラー`,
+      conversion_error_description: `画像の処理に失敗しました。別の画像ファイルを試してください。`,
+      api_error_title: `APIエラー`,
+      api_error_description: `Discord APIを通じてアバターの更新に失敗しました。アバターを短時間で変更しすぎたことによるレート制限が原因であることが多いです。しばらく待ってから再度お試しください。
+-# {details}`,
+      error_download_timeout: `アバターのダウンロードが15秒後にタイムアウトしました。もう一度お試しください。`,
+      error_api_timeout: `Discord API呼び出しが15秒後にタイムアウトしました。もう一度お試しください。`,
     },
   },
 };

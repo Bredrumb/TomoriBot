@@ -1031,6 +1031,18 @@ function resolveAccentColor(color?: AccentColorInput): number {
   return Number.parseInt(ColorCode.INFO.replace("#", ""), 16);
 }
 
+/**
+ * Formats the leading "title" line of a Components V2 container. All CV2
+ * containers render their title as an H2 heading for consistent prominence
+ * (status, confirmation, persona picker, persona results all share this).
+ *
+ * @param text - The already-localized title text.
+ * @returns The title prefixed as a Markdown H2 heading.
+ */
+function formatContainerTitle(text: string): string {
+  return `## ${text}`;
+}
+
 function buildV2StatusComponents(
   locale: string,
   titleKey: string,
@@ -1046,7 +1058,7 @@ function buildV2StatusComponents(
     components: [
       {
         type: ComponentType.TextDisplay,
-        content: `**${localizer(locale, titleKey)}**`,
+        content: formatContainerTitle(localizer(locale, titleKey)),
       },
       {
         type: ComponentType.TextDisplay,
@@ -1100,7 +1112,7 @@ function buildV2ConfirmationComponents(
     components: [
       {
         type: ComponentType.TextDisplay,
-        content: `**${title}**`,
+        content: formatContainerTitle(title),
       },
       {
         type: ComponentType.TextDisplay,
@@ -1108,6 +1120,215 @@ function buildV2ConfirmationComponents(
       },
       actionRow,
     ],
+  };
+
+  return [container];
+}
+
+/**
+ * Optional in-container action button (e.g. the "Import Now" button on persona
+ * generate/create results). Rendered as an ActionRow inside the container so it
+ * reads as part of the result card rather than a detached button row.
+ */
+export interface PersonaResultButtonOptions {
+  /** Discord component custom ID for the button. */
+  customId: string;
+  /** Locale key for the button label. */
+  labelKey: string;
+  /** Button style (defaults to {@link ButtonStyle.Success}); excludes Link/Premium. */
+  style?: ButtonStyle.Primary | ButtonStyle.Secondary | ButtonStyle.Success | ButtonStyle.Danger;
+  /** Whether the button is disabled (e.g. after a successful import). */
+  disabled?: boolean;
+  /** Optional unicode emoji shown on the button. */
+  emoji?: string;
+}
+
+/**
+ * A content block rendered (after a divider) inside a persona-result container.
+ * Supports a localized heading plus either a localized or raw body.
+ */
+export interface PersonaResultSection {
+  /** Optional locale key for the bold section heading. */
+  titleKey?: string;
+  /** Variables for the section heading. */
+  titleVars?: Record<string, string | number | boolean>;
+  /** Locale key for the section body (takes precedence over {@link PersonaResultSection.body}). */
+  bodyKey?: string;
+  /** Variables for the localized section body. */
+  bodyVars?: Record<string, string | number | boolean>;
+  /** Raw (already-composed) section body, used when {@link PersonaResultSection.bodyKey} is absent. */
+  body?: string;
+}
+
+/**
+ * Configuration for {@link buildPersonaResultContainer}.
+ */
+export interface PersonaResultContainerOptions {
+  /** Locale used for every localized string in the container. */
+  locale: string;
+  /** Accent color of the container's left bar (maps to the old embed color). */
+  color: AccentColorInput;
+  /** Locale key for the bold title line. */
+  titleKey: string;
+  /** Variables for the title. */
+  titleVars?: Record<string, string | number | boolean>;
+  /** Locale key for the body description. */
+  descriptionKey: string;
+  /** Variables for the description. */
+  descriptionVars?: Record<string, string | number | boolean>;
+  /** Optional hero image attachment name, rendered as a MediaGallery item under the title. */
+  imageAttachmentName?: string;
+  /**
+   * Image arrangement. "image-top" (default) shows the attachment as a full-width
+   * MediaGallery under the title. "thumbnail-section" instead pins it as a
+   * right-aligned Thumbnail accessory on the final section, with the button
+   * directly beneath it — mirroring the persona picker's avatar-above-button look.
+   */
+  layout?: "image-top" | "thumbnail-section";
+  /** Optional content blocks (e.g. sample dialogue, next steps), each after a divider. */
+  sections?: PersonaResultSection[];
+  /** Optional footer note (e.g. DM warning), rendered after a divider in a muted style. */
+  footerKey?: string;
+  /** Variables for the footer. */
+  footerVars?: Record<string, string | number | boolean>;
+  /** Optional action button placed inside the container. */
+  button?: PersonaResultButtonOptions;
+  /**
+   * Horizontal alignment of {@link PersonaResultContainerOptions.button}.
+   * "left" renders it in an ActionRow; "right" renders it as a Section accessory
+   * (the only way to right-align a button in Components V2). Defaults to "left".
+   */
+  buttonAlignment?: "left" | "right";
+  /**
+   * Optional closing note rendered as a final row *after* the button (e.g. a
+   * "you can edit this later" tip), so the button stays tight under the avatar
+   * while the note lives on its own row below.
+   */
+  trailingNoteKey?: string;
+  /** Variables for the trailing note. */
+  trailingNoteVars?: Record<string, string | number | boolean>;
+}
+
+/**
+ * Builds a Components V2 container that mirrors a classic "result" embed — title,
+ * hero image, description, optional next-steps block, optional footer — but can
+ * also host an action button inside the same card. Used by `/persona generate`
+ * and `/persona create` success messages so the "Import Now" button sits within
+ * the result rather than dangling beneath a separate embed.
+ *
+ * @param options - {@link PersonaResultContainerOptions} layout/content inputs.
+ * @returns A single-container `TopLevelComponentData[]` ready for `IsComponentsV2` sends.
+ */
+export function buildPersonaResultContainer(options: PersonaResultContainerOptions): TopLevelComponentData[] {
+  const { locale } = options;
+  const components: ComponentInContainerData[] = [];
+  const sections = options.sections ?? [];
+
+  // The thumbnail layout needs a section to host the avatar accessory, so it
+  // falls back to the default hero-image layout when no sections are supplied.
+  const useThumbnailLayout =
+    options.layout === "thumbnail-section" && Boolean(options.imageAttachmentName) && sections.length > 0;
+
+  // 1. Title line, rendered as an H2 heading like every other CV2 container.
+  components.push({
+    type: ComponentType.TextDisplay,
+    content: formatContainerTitle(localizer(locale, options.titleKey, options.titleVars)),
+  });
+
+  // 2. Hero image directly under the title (CV2 has no embed image slot, so the
+  //    attachment is surfaced through a single-item MediaGallery). Skipped in the
+  //    thumbnail layout, which shows the avatar beside the final section instead.
+  if (options.imageAttachmentName && !useThumbnailLayout) {
+    components.push({
+      type: ComponentType.MediaGallery,
+      items: [{ media: { url: `attachment://${options.imageAttachmentName}` } }],
+    });
+  }
+
+  // 3. Body description.
+  components.push({
+    type: ComponentType.TextDisplay,
+    content: localizer(locale, options.descriptionKey, options.descriptionVars),
+  });
+
+  // 4. Optional content sections (e.g. sample dialogue, next steps), each grouped
+  //    under its own divider. In the thumbnail layout, the final section carries
+  //    the avatar as a right-aligned Thumbnail accessory.
+  sections.forEach((section, index) => {
+    components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
+    const heading = section.titleKey ? `**${localizer(locale, section.titleKey, section.titleVars)}**\n` : "";
+    const sectionBody = section.bodyKey ? localizer(locale, section.bodyKey, section.bodyVars) : (section.body ?? "");
+    const textDisplay = {
+      type: ComponentType.TextDisplay,
+      content: `${heading}${sectionBody}`,
+    } satisfies ComponentInContainerData;
+
+    if (useThumbnailLayout && index === sections.length - 1 && options.imageAttachmentName) {
+      components.push({
+        type: ComponentType.Section,
+        components: [textDisplay],
+        accessory: {
+          type: ComponentType.Thumbnail,
+          media: { url: `attachment://${options.imageAttachmentName}` },
+        },
+      });
+    } else {
+      components.push(textDisplay);
+    }
+  });
+
+  // 5. Optional footer note (e.g. the DM avatar-skipped warning), muted via italics.
+  if (options.footerKey) {
+    components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
+    components.push({
+      type: ComponentType.TextDisplay,
+      content: `-# ${localizer(locale, options.footerKey, options.footerVars)}`,
+    });
+  }
+
+  // 6. Optional action button. Left alignment uses a standard ActionRow; right
+  //    alignment uses a Section with the button as an accessory (CV2's only way
+  //    to right-align a button), mirroring the persona picker's "select" button.
+  if (options.button) {
+    const button: ButtonComponentData = {
+      type: ComponentType.Button,
+      style: options.button.style ?? ButtonStyle.Success,
+      customId: options.button.customId,
+      label: localizer(locale, options.button.labelKey),
+      disabled: options.button.disabled ?? false,
+      ...(options.button.emoji ? { emoji: { name: options.button.emoji } } : {}),
+    };
+
+    // The thumbnail layout always right-aligns so the button sits beneath the avatar.
+    if (useThumbnailLayout || options.buttonAlignment === "right") {
+      components.push({
+        type: ComponentType.Section,
+        // A blank spacer line keeps the button on its own right-aligned row.
+        components: [{ type: ComponentType.TextDisplay, content: "** **" }],
+        accessory: button,
+      });
+    } else {
+      components.push({
+        type: ComponentType.ActionRow,
+        components: [button],
+      } satisfies ActionRowData<ButtonComponentData>);
+    }
+  }
+
+  // 7. Optional closing note after the button, on its own divided row. Keeps the
+  //    button tight under the avatar while the note sits below it.
+  if (options.trailingNoteKey) {
+    components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
+    components.push({
+      type: ComponentType.TextDisplay,
+      content: localizer(locale, options.trailingNoteKey, options.trailingNoteVars),
+    });
+  }
+
+  const container: ContainerComponentData<ComponentInContainerData> = {
+    type: ComponentType.Container,
+    accentColor: resolveAccentColor(options.color),
+    components,
   };
 
   return [container];
@@ -1323,7 +1544,9 @@ function buildPersonaPageComponents(
       components: [
         {
           type: ComponentType.TextDisplay,
-          content: `## ${localizer(locale, options.titleKey ?? "general.pagination.select_persona_title")}`,
+          content: formatContainerTitle(
+            localizer(locale, options.titleKey ?? "general.pagination.select_persona_title"),
+          ),
         },
       ],
       accessory: {

@@ -594,6 +594,10 @@ When sent in a message, pingable mentions (@user, @role, etc) present in this co
 }
 ```
 
+### TomoriBot convention: container titles
+
+TomoriBot renders the leading "title" line of every Components V2 container (status, confirmation, persona picker, persona results) as a Markdown **H2 heading** via the shared `formatContainerTitle` helper in `src/utils/discord/ui/interactionCore.ts`. Keep title locale strings **plain text** (an emoji prefix is fine) — do not embed `##` or `**` in them, or the heading will double up. Body text, section sub-headings, and footers are unaffected.
+
 ---
 
 ## Thumbnail
@@ -728,9 +732,19 @@ Implementation notes:
 
 - The attachment filename must exactly match the `attachment://<filename>` URL.
 - Components V2 messages must set `MessageFlags.IsComponentsV2` and must not include `content` or `embeds`.
+- Keep a message's whole edit lifecycle in one mode. If a command will eventually render a Components V2 result, its intermediate processing and terminal error states should also be Components V2; otherwise `editReply()` can patch a legacy embed/content message into a V2 message and Discord rejects the final payload.
+- In discord.js edits, omitting `embeds` or `content` does not reliably clear an existing legacy field before `MessageFlags.IsComponentsV2` validation. Prefer sending a V2 status container from the first visible state instead of converting an existing legacy reply in place.
 - Attachments on Components V2 messages do not render unless they are referenced by a component.
 - Webhook sends through discord.js must also pass `withComponents: true`.
 - Image delivery should fall back to the legacy `files`-only payload if the Components V2 send fails.
+
+### Migration guidance
+
+When modernizing an embed workflow to Components V2, migrate the complete reply flow together:
+
+- Initial deferred reply edits, "processing" messages, success messages, timeout messages, cancellation messages, and post-processing errors should all use Components V2 components with `MessageFlags.IsComponentsV2`.
+- Files attached to V2 messages must be referenced by `MediaGallery`, `Thumbnail`, or `File`; an unreferenced attachment is not displayed.
+- Shared helpers such as status containers are preferred for repeated states. Local builders are acceptable for command-specific payloads, but do not mix them with legacy embeds on the same original interaction reply after the V2 state has been sent.
 
 ---
 

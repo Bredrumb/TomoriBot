@@ -281,20 +281,13 @@ export async function execute(
   } catch (error) {
     log.error("Error executing /server whitelist persona command", error, errorContext);
 
-    if (responseInteraction.deferred || responseInteraction.replied) {
-      await replyInfoEmbed(responseInteraction, locale, {
-        color: ColorCode.ERROR,
-        titleKey: "general.errors.unknown_error_title",
-        descriptionKey: "general.errors.unknown_error_description",
-      });
-    } else {
-      await replyInfoEmbed(responseInteraction, locale, {
-        color: ColorCode.ERROR,
-        titleKey: "general.errors.unknown_error_title",
-        descriptionKey: "general.errors.unknown_error_description",
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+    await replyComponentsV2Status(
+      responseInteraction,
+      locale,
+      "general.errors.unknown_error_title",
+      "general.errors.unknown_error_description",
+      ColorCode.ERROR,
+    );
   }
 }
 

@@ -216,7 +216,7 @@ Transcription supports ~100 languages (auto-detected).`,
 - I can also do image, video, and news search (via \`/optional-key brave set\`)
 - I can fetch and read content from URLs`,
       personality_title: `Personality & Customization`,
-      personality_description: `- I can change my name and avatar using \`/config rename\` and \`/server avatar\`
+      personality_description: `- I can change my name and avatar using \`/config rename\` and \`/persona avatar\`
 - I can switch between different personas using \`/persona\` (you can also share and save personas using \`/persona export\`!)
 - Multiple characters can coexist as alter personas, each with their own triggers and webhook avatar
 - My behavior and tone can be tweaked with \`/persona attribute add\`, \`/persona sample-dialogue add\`, and \`/persona prompt set\`

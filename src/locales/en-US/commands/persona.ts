@@ -165,7 +165,7 @@ Triggers: {triggers}
 
 This persona will respond when these triggers appear in messages.`,
       alter_success_confirmation: `Successfully imported alter persona **{nickname}** with {trigger_count} unique trigger words! The detailed import information has been posted in the channel.`,
-      alter_avatar_fallback_main: `🟡 This import did not include an avatar image, so this alter is using **{nickname}**'s current main persona avatar as a fallback. You can use \`/server avatar\` to change it.`,
+      alter_avatar_fallback_main: `🟡 This import did not include an avatar image, so this alter is using **{nickname}**'s current main persona avatar as a fallback. You can use \`/persona avatar\` to change it.`,
       alter_avatar_warning: `⚠️ Do not delete the avatar image embed above, or the alter persona avatar will be lost.`,
       alter_dm_not_allowed_title: `🔴 Alter Personas Not Allowed in DMs`,
       alter_dm_not_allowed_description: `Alter personas can only be imported in servers, not in Direct Messages. Please run this command in a server.`,
@@ -265,6 +265,12 @@ Trigger Words ({trigger_word_count}): {triggers}`,
       avatar_update_failed: `🟡️ Server avatar could not be updated due to a Discord API error, but persona was applied successfully.`,
       avatar_update_skipped_dm: `Preset was applied successfully, except avatar updates which are not available in Direct Messages`,
     },
+    import_now: {
+      button: `Import Now`,
+      imported: `Imported`,
+      already_imported_title: `🟡 Already Imported`,
+      already_imported_description: `This persona has already been imported, or an import is currently in progress.`,
+    },
     generate: {
       description: `AI-powered personality generation (requires a compatible provider)`,
       modal: {
@@ -347,10 +353,13 @@ Please try again with different inputs or check your API key.`,
 **Sample Dialogues:**
 {dialogue_preview}`,
       success_next_steps_title: `Next Steps`,
-      success_next_steps_description: `1. Download the attached PNG file
-2. Use \`/persona import\` with the PNG to import this character
-3. Run \`/tool refresh\` on ongoing conversations to apply my new personality
-4. (Optional) Use \`/server avatar\` to change the avatar if desired`,
+      success_next_steps_description: `1. Download the attached PNG file on the right
+2. Use \`/persona import\` with the PNG
+Or press the Import button`,
+      success_next_steps_description_dm: `1. Download the attached PNG file
+2. Use \`/persona import\` with the PNG
+3. Run \`/tool refresh\` to apply my new personality`,
+      success_next_steps_footer: `You may edit me more with \`/persona\` commands after.`,
       avatar_update_skipped_dm: `Please note that avatar and nickname updates are not available to import in Direct Messages.`,
     },
     create: {
@@ -394,15 +403,14 @@ Please try again with different inputs or check your API key.`,
       metadata_embed_failed_title: `🔴 Export Failed`,
       metadata_embed_failed_description: `Failed to embed personality data in the image. Please try again.`,
       success_title: `🟢 {character_name} Created Successfully!`,
-      success_description: `Persona has been created for **{character_name}**!
-**Description:**
+      success_description: `**Description:**
 {character_description}`,
       success_dialogue_title: `Sample Dialogue`,
       success_next_steps_title: `Next Steps`,
-      success_next_steps_description: `1. Download the attached PNG file
-2. Use \`/persona import\` with the PNG to import this character
-3. Run \`/tool refresh\` on ongoing conversations to apply my new personality
-4. (Optional) Use \`/server avatar\` to change the avatar if desired`,
+      success_next_steps_description: `1. Download the attached PNG file on the right
+2. Use \`/persona import\` with the PNG
+Or press the Import button`,
+      success_next_steps_footer: `You may edit me more with \`/persona\` commands after.`,
       avatar_update_skipped_dm: `Please note that avatar and nickname updates are not available in Direct Messages.`,
     },
     rename: {
@@ -430,6 +438,36 @@ Please try again with different inputs or check your API key.`,
       nickname_update_failed_footer: `Note: Server nickname update failed (may require "Change Nickname" permission).`,
       partial_success_title: `Name Updated with Issues`,
       partial_success_description: `My name has been changed to \`{new_nickname}\`, but some trigger word updates failed.`,
+    },
+    avatar: {
+      description: `Set or remove avatar for a selected persona on this server.`,
+      no_permission_title: `🔴 Permission Denied`,
+      no_permission_description: `You need the **Manage Server** permission to update persona avatars.`,
+      image_description: `Image to set as avatar. Leave empty to clear the selected persona avatar instead.`,
+      image_label: `Avatar Image`,
+      persona_modal_title: `Select Persona`,
+      persona_select_label: `Persona`,
+      persona_select_description: `Choose which persona avatar to update.`,
+      persona_select_placeholder: `Select a persona...`,
+      main_persona_description: `Main Persona`,
+      alter_persona_description: `Alter Persona`,
+      success_title: `Avatar Updated`,
+      success_description: `Successfully updated my avatar for this server.`,
+      success_alter_description: `Successfully updated avatar for persona "{persona_name}".`,
+      removed_title: `Avatar Reset`,
+      removed_description: `Successfully reset my avatar to the default for this server.`,
+      removed_alter_description: `Successfully reset avatar for persona "{persona_name}".`,
+      invalid_image_title: `Invalid Image`,
+      invalid_image_description: `Please provide a valid image file.`,
+      file_too_large_description: `The image file is too large. Maximum file size is 8MB.`,
+      invalid_format_description: `Please provide a PNG, JPG, JPEG, or GIF image file.`,
+      conversion_error_title: `Conversion Error`,
+      conversion_error_description: `Failed to process the image. Please try a different image file.`,
+      api_error_title: `API Error`,
+      api_error_description: `Failed to update the avatar through Discord's API. This is often caused by changing avatars too quickly (rate limits). Please wait and try again.
+-# {details}`,
+      error_download_timeout: `Avatar download timed out after 15 seconds. Please try again.`,
+      error_api_timeout: `Discord API call timed out after 15 seconds. Please try again.`,
     },
   },
 };

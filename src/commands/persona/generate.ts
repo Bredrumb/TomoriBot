@@ -3,12 +3,22 @@
  * AI-powered personality generation using supported structured output providers
  */
 
-import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
-import { AttachmentBuilder, MessageFlags, EmbedBuilder } from "discord.js";
+import type {
+  ChatInputCommandInteraction,
+  Client,
+  ComponentInContainerData,
+  ContainerComponentData,
+  ModalSubmitInteraction,
+  SlashCommandSubcommandBuilder,
+  TopLevelComponentData,
+} from "discord.js";
+import { AttachmentBuilder, ComponentType, MessageFlags, EmbedBuilder } from "discord.js";
 import { TextInputStyle } from "discord.js";
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
+import { buildPersonaResultContainer, type PersonaResultContainerOptions } from "@/utils/discord/ui/statusComponents";
+import { attachImportNowCollector, importNowButton } from "@/utils/persona/importNowButton";
 import type { UserRow } from "../../types/db/schema";
 import { personaRepository } from "@/utils/db/repositories";
 import { decryptApiKey } from "../../utils/security/crypto";
@@ -45,6 +55,7 @@ const CHARACTER_INFO_ID = "character_info"; // Combined description and speech e
 const WEB_SEARCH_ID = "web_search";
 const ADDITIONAL_INST_ID = "additional_inst";
 const FILE_UPLOAD_ID = "avatar_image";
+const GENERATION_INPUT_ATTACHMENT_NAME = "preset_generation_input.txt";
 
 function parsePersonaNameInput(input: string): string[] {
   return dedupeTriggerWords(input.split(/[,\u3001]/), { lowercase: false });
@@ -120,7 +131,91 @@ function buildGenerationInputAttachment(params: {
   }
 
   return new AttachmentBuilder(Buffer.from(lines.join("\n"), "utf8"), {
-    name: "preset_generation_input.txt",
+    name: GENERATION_INPUT_ATTACHMENT_NAME,
+  });
+}
+
+function resolveComponentsV2AccentColor(color: string | number): number {
+  if (typeof color === "number") {
+    return color;
+  }
+
+  const normalized = color.trim().replace("#", "");
+  return /^[0-9a-fA-F]{6}$/.test(normalized)
+    ? Number.parseInt(normalized, 16)
+    : Number.parseInt(ColorCode.INFO.replace("#", ""), 16);
+}
+
+function buildGenerateStatusComponents(options: {
+  locale: string;
+  titleKey: string;
+  descriptionKey: string;
+  color: string | number;
+  descriptionVars?: Record<string, string | number | boolean>;
+  details?: string;
+  showInputAttachment?: boolean;
+}): TopLevelComponentData[] {
+  const components: ComponentInContainerData[] = [
+    {
+      type: ComponentType.TextDisplay,
+      content: `## ${localizer(options.locale, options.titleKey)}`,
+    },
+    {
+      type: ComponentType.TextDisplay,
+      content: localizer(options.locale, options.descriptionKey, options.descriptionVars),
+    },
+  ];
+
+  if (options.details) {
+    components.push({
+      type: ComponentType.TextDisplay,
+      content: options.details,
+    });
+  }
+
+  if (options.showInputAttachment) {
+    components.push(
+      { type: ComponentType.Separator, divider: true, spacing: 1 },
+      {
+        type: ComponentType.File,
+        file: { url: `attachment://${GENERATION_INPUT_ATTACHMENT_NAME}` },
+      },
+    );
+  }
+
+  const container: ContainerComponentData<ComponentInContainerData> = {
+    type: ComponentType.Container,
+    accentColor: resolveComponentsV2AccentColor(options.color),
+    components,
+  };
+
+  return [container];
+}
+
+async function editGenerateStatusReply(
+  interaction: ChatInputCommandInteraction | ModalSubmitInteraction,
+  options: {
+    locale: string;
+    titleKey: string;
+    descriptionKey: string;
+    color: string | number;
+    descriptionVars?: Record<string, string | number | boolean>;
+    details?: string;
+    inputAttachment?: AttachmentBuilder;
+  },
+): Promise<void> {
+  await interaction.editReply({
+    components: buildGenerateStatusComponents({
+      locale: options.locale,
+      titleKey: options.titleKey,
+      descriptionKey: options.descriptionKey,
+      color: options.color,
+      descriptionVars: options.descriptionVars,
+      details: options.details,
+      showInputAttachment: Boolean(options.inputAttachment),
+    }),
+    ...(options.inputAttachment ? { files: [options.inputAttachment] } : {}),
+    flags: MessageFlags.IsComponentsV2,
   });
 }
 
@@ -148,6 +243,9 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
+  let replyInteraction: ChatInputCommandInteraction | ModalSubmitInteraction = interaction;
+  let replyUsesComponentsV2 = false;
+
   try {
     // 1. Load Tomori state to check provider (works for both guilds and DMs)
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
@@ -300,6 +398,7 @@ export async function execute(
     }
 
     const modalSubmitInteraction = modalResult.interaction;
+    replyInteraction = modalSubmitInteraction ?? interaction;
     const characterNameInput = modalResult.values?.[CHARACTER_NAME_ID];
     const characterInfo = modalResult.values?.[CHARACTER_INFO_ID];
     const webSearch = modalResult.values?.[WEB_SEARCH_ID];
@@ -588,15 +687,14 @@ export async function execute(
       return;
     }
 
-    // 11. Show processing embed
-    await modalSubmitInteraction.editReply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle(localizer(locale, "commands.persona.generate.processing_title"))
-          .setDescription(localizer(locale, "commands.persona.generate.processing_description"))
-          .setColor(ColorCode.INFO),
-      ],
+    // 11. Show processing status
+    await editGenerateStatusReply(modalSubmitInteraction, {
+      locale,
+      titleKey: "commands.persona.generate.processing_title",
+      descriptionKey: "commands.persona.generate.processing_description",
+      color: ColorCode.INFO,
     });
+    replyUsesComponentsV2 = true;
 
     // 12. Prepare generation parameters
     const genParams: GeneratePresetParams = {
@@ -640,19 +738,16 @@ export async function execute(
     });
 
     if (genResult.error || !genResult.preset) {
-      // Show error embed
-      await modalSubmitInteraction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.persona.generate.generation_failed_title"))
-            .setDescription(
-              localizer(locale, "commands.persona.generate.generation_failed_description", {
-                error: genResult.error || "Unknown error",
-              }),
-            )
-            .setColor(ColorCode.ERROR),
-        ],
-        files: [getInputAttachment()],
+      // Show error status
+      await editGenerateStatusReply(modalSubmitInteraction, {
+        locale,
+        titleKey: "commands.persona.generate.generation_failed_title",
+        descriptionKey: "commands.persona.generate.generation_failed_description",
+        descriptionVars: {
+          error: genResult.error || "Unknown error",
+        },
+        color: ColorCode.ERROR,
+        inputAttachment: getInputAttachment(),
       });
       return;
     }
@@ -678,19 +773,13 @@ export async function execute(
         .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
         .join("\n");
 
-      await modalSubmitInteraction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.persona.generate.validation_failed_title"))
-            .setDescription(
-              `${localizer(
-                locale,
-                "commands.persona.generate.validation_failed_description",
-              )}\n\n**Details:**\n\`\`\`\n${errorDetails.substring(0, 500)}\n\`\`\``,
-            )
-            .setColor(ColorCode.ERROR),
-        ],
-        files: [getInputAttachment()],
+      await editGenerateStatusReply(modalSubmitInteraction, {
+        locale,
+        titleKey: "commands.persona.generate.validation_failed_title",
+        descriptionKey: "commands.persona.generate.validation_failed_description",
+        details: `**Details:**\n\`\`\`\n${errorDetails.substring(0, 500)}\n\`\`\``,
+        color: ColorCode.ERROR,
+        inputAttachment: getInputAttachment(),
       });
       return;
     }
@@ -708,14 +797,12 @@ export async function execute(
         log.info("Uploaded image cropped to 1:1 square (reused buffer)");
       } catch (error) {
         log.error("Failed to process uploaded image:", error);
-        await modalSubmitInteraction.editReply({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(localizer(locale, "commands.persona.generate.image_processing_failed_title"))
-              .setDescription(localizer(locale, "commands.persona.generate.image_processing_failed_description"))
-              .setColor(ColorCode.ERROR),
-          ],
-          files: [getInputAttachment()],
+        await editGenerateStatusReply(modalSubmitInteraction, {
+          locale,
+          titleKey: "commands.persona.generate.image_processing_failed_title",
+          descriptionKey: "commands.persona.generate.image_processing_failed_description",
+          color: ColorCode.ERROR,
+          inputAttachment: getInputAttachment(),
         });
         return;
       }
@@ -727,14 +814,12 @@ export async function execute(
         log.info("Server avatar cropped to 1:1 square");
       } catch (error) {
         log.error("Failed to get server avatar:", error);
-        await modalSubmitInteraction.editReply({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(localizer(locale, "commands.persona.generate.avatar_fetch_failed_title"))
-              .setDescription(localizer(locale, "commands.persona.generate.avatar_fetch_failed_description"))
-              .setColor(ColorCode.ERROR),
-          ],
-          files: [getInputAttachment()],
+        await editGenerateStatusReply(modalSubmitInteraction, {
+          locale,
+          titleKey: "commands.persona.generate.avatar_fetch_failed_title",
+          descriptionKey: "commands.persona.generate.avatar_fetch_failed_description",
+          color: ColorCode.ERROR,
+          inputAttachment: getInputAttachment(),
         });
         return;
       }
@@ -755,14 +840,12 @@ export async function execute(
       log.success("Metadata embedded in PNG");
     } catch (error) {
       log.error("Failed to embed metadata in PNG:", error);
-      await modalSubmitInteraction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.persona.generate.metadata_embed_failed_title"))
-            .setDescription(localizer(locale, "commands.persona.generate.metadata_embed_failed_description"))
-            .setColor(ColorCode.ERROR),
-        ],
-        files: [getInputAttachment()],
+      await editGenerateStatusReply(modalSubmitInteraction, {
+        locale,
+        titleKey: "commands.persona.generate.metadata_embed_failed_title",
+        descriptionKey: "commands.persona.generate.metadata_embed_failed_description",
+        color: ColorCode.ERROR,
+        inputAttachment: getInputAttachment(),
       });
       return;
     }
@@ -776,7 +859,7 @@ export async function execute(
       name: filename,
     });
 
-    // 19. Detect DM context and create success embed with main image
+    // 19. Detect DM context and create success container with main image
     const isDM = !interaction.guild;
 
     // Format attribute preview (first attribute, truncated to 200 chars)
@@ -792,41 +875,74 @@ export async function execute(
       100,
     );
 
-    const successEmbed = new EmbedBuilder()
-      .setTitle(
-        localizer(locale, "commands.persona.generate.success_title", {
-          character_name: characterName,
-        }),
-      )
-      .setDescription(
-        localizer(locale, "commands.persona.generate.success_description", {
-          character_name: characterName,
-          attribute_preview: attributePreview,
-          dialogue_preview: dialoguePreview,
-        }),
-      )
-      .setColor(isDM ? ColorCode.WARN : ColorCode.SUCCESS)
-      .setImage(`attachment://${filename}`)
-      .addFields([
+    // Build the Components V2 result container (title, hero image, description,
+    // next-steps block, plus a DM footer when avatar updates are skipped). The
+    // accent color encodes the same SUCCESS/WARN signal the old embed used.
+    const successContainerOptions: Omit<PersonaResultContainerOptions, "button"> = {
+      locale,
+      color: isDM ? ColorCode.WARN : ColorCode.SUCCESS,
+      titleKey: "commands.persona.generate.success_title",
+      titleVars: { character_name: characterName },
+      descriptionKey: "commands.persona.generate.success_description",
+      descriptionVars: {
+        character_name: characterName,
+        attribute_preview: attributePreview,
+        dialogue_preview: dialoguePreview,
+      },
+      imageAttachmentName: filename,
+      // Guilds get the picker-style thumbnail+button; DMs (no button) keep the hero image.
+      layout: isDM ? "image-top" : "thumbnail-section",
+      // Next Steps is the last section, so in guilds the avatar thumbnail attaches
+      // here and the Import Now button sits tightly beneath it.
+      sections: [
         {
-          name: localizer(locale, "commands.persona.generate.success_next_steps_title"),
-          value: localizer(locale, "commands.persona.generate.success_next_steps_description"),
-          inline: false,
+          titleKey: "commands.persona.generate.success_next_steps_title",
+          // Guild copy matches /persona create (right-aligned PNG + Import button);
+          // DMs have no button/thumbnail, so use the DM-safe variant.
+          bodyKey: isDM
+            ? "commands.persona.generate.success_next_steps_description_dm"
+            : "commands.persona.generate.success_next_steps_description",
         },
-      ]);
+      ],
+      buttonAlignment: "right",
+      // Closing note sits on its own row below the button.
+      trailingNoteKey: "commands.persona.generate.success_next_steps_footer",
+      ...(isDM ? { footerKey: "commands.persona.generate.avatar_update_skipped_dm" } : {}),
+    };
 
-    // Add DM-specific footer if in DM
-    if (isDM) {
-      successEmbed.setFooter({
-        text: localizer(locale, "commands.persona.generate.avatar_update_skipped_dm"),
+    // 20. Send the result. In guilds, attach an "Import Now" button (manager-only)
+    //     so the persona can be imported as an alter without re-uploading the PNG.
+    //     Alter import is guild-only, so DMs get the container without the button.
+    if (isDM || !interaction.guild) {
+      await modalSubmitInteraction.editReply({
+        components: buildPersonaResultContainer(successContainerOptions),
+        files: [attachment],
+        flags: MessageFlags.IsComponentsV2,
+      });
+    } else {
+      await modalSubmitInteraction.editReply({
+        components: buildPersonaResultContainer({
+          ...successContainerOptions,
+          button: importNowButton("active"),
+        }),
+        files: [attachment],
+        flags: MessageFlags.IsComponentsV2,
+      });
+
+      // Wire the Import Now collector to the just-sent public message.
+      const sentMessage = await modalSubmitInteraction.fetchReply();
+      attachImportNowCollector({
+        message: sentMessage,
+        client,
+        guild: interaction.guild,
+        serverDiscId,
+        locale,
+        presetData: validationResult.data,
+        avatarImageBuffer: finalPngBuffer,
+        containerOptions: successContainerOptions,
+        sourceInteraction: modalSubmitInteraction,
       });
     }
-
-    // 20. Send success embed with attachment
-    await modalSubmitInteraction.editReply({
-      embeds: [successEmbed],
-      files: [attachment],
-    });
 
     // Quota already reserved at step 8 - no increment needed
     log.success(`Preset generated successfully for: ${characterName}`);
@@ -834,7 +950,7 @@ export async function execute(
     log.error("Error in preset generate command:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
 
-    // Try to send error embed if possible
+    // Try to send an error response if possible.
     try {
       const errorEmbed = new EmbedBuilder()
         .setTitle(localizer(locale, "general.errors.unexpected_title"))
@@ -845,10 +961,20 @@ export async function execute(
         )
         .setColor(ColorCode.ERROR);
 
-      if (interaction.deferred || interaction.replied) {
-        await interaction.editReply({ embeds: [errorEmbed] });
+      if (replyUsesComponentsV2 && (replyInteraction.deferred || replyInteraction.replied)) {
+        await editGenerateStatusReply(replyInteraction, {
+          locale,
+          titleKey: "general.errors.unexpected_title",
+          descriptionKey: "general.errors.unexpected_description",
+          descriptionVars: {
+            error: errorMessage,
+          },
+          color: ColorCode.ERROR,
+        });
+      } else if (replyInteraction.deferred || replyInteraction.replied) {
+        await replyInteraction.editReply({ embeds: [errorEmbed] });
       } else {
-        await interaction.reply({
+        await replyInteraction.reply({
           embeds: [errorEmbed],
           flags: MessageFlags.Ephemeral,
         });

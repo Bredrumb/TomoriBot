@@ -216,7 +216,7 @@ GPU は **float16** · CPU は **int8**（バイト数が半分なので CPU RAM
 - 画像、動画、ニュース検索も可能です（\`/optional-key brave set\`経由）
 - URLからコンテンツを取得して読むことができます`,
       personality_title: `パーソナリティ＆カスタマイズ`,
-      personality_description: `- \`/config rename\`と\`/server avatar\`で名前とアバターを変更できます
+      personality_description: `- \`/config rename\`と\`/persona avatar\`で名前とアバターを変更できます
 - \`/persona\`で異なるペルソナに切り替えられます（\`/persona export\`でペルソナを共有・保存もできます！）
 - アルターペルソナとして複数のキャラクターが同一サーバーで共存し、それぞれ独自のトリガーとウェブフックアバターを持てます
 - \`/persona attribute add\`、\`/persona sample-dialogue add\`、\`/persona prompt set\`で行動やトーンを調整できます

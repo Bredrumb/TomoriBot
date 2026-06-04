@@ -90,6 +90,16 @@ If any exact-match check fails, import creates an independent copy with `is_poin
 
 `/persona generate` emits the canonical six generated attributes and marks only the generated Appearance attribute public. `/persona create` emits an explicit all-private flag array because its single freeform description is not guaranteed to be an appearance-only field. SillyTavern card conversion also defaults converted attributes to private because ST cards do not carry Tomori public visibility metadata.
 
+### Import Now button
+
+The `/persona generate` and `/persona create` success messages are rendered as Discord [Components V2](https://discord.com/developers/docs/components/reference) containers (`buildPersonaResultContainer` in `src/utils/discord/ui/interactionCore.ts`) rather than classic embeds: the generated PNG is surfaced through a single-item `MediaGallery`, the old embed color maps to the container `accentColor`, and an action button can live inside the same card.
+
+`/persona generate` also renders its processing state and post-processing error states as Components V2. This keeps the original interaction reply in one message mode for its full lifecycle; Discord rejects edits that combine `MessageFlags.IsComponentsV2` with legacy `embeds` or `content`, and an earlier processing embed can otherwise make the final V2 success edit fail. When an error response preserves `preset_generation_input.txt`, the file is referenced through a Components V2 `File` component.
+
+In guild contexts that card carries a manager-only **Import Now** button. Because the success message is public, the restriction is enforced on click (`ManageGuild`), not by visibility. Pressing it imports the freshly generated persona **as an alter** — it never replaces the existing main persona — using the same `importAlterPreset` core (`src/utils/persona/importAlterPreset.ts`) that backs `/persona import type=alter`. The in-memory preset and PNG buffer are reused, so no re-upload or re-download occurs. Wiring lives in `src/utils/persona/importNowButton.ts`.
+
+The button is one-shot (a successful import disables it and relabels it "Imported"; a failure re-arms it) and driven by a per-message collector — DMs never receive it because alter import is guild-only. Collector lifetime is capped below Discord's 15-minute interaction-token window so the timeout teardown can still edit the original reply, and is configurable via `PERSONA_IMPORT_NOW_BUTTON_TIMEOUT_MS` (default 14 minutes).
+
 ## Editing Official Presets
 
 Editing seeded text/config fields in `src/db/seed/catalog/personas.ts` changes live pointer personas and future applications after the next startup seed. Editing `preset_avatar_path` only affects future preset applications; existing pointer personas keep their current Discord guild avatar or stored `webhook_avatar_url`. Independent copies do not change. Startup invalidates cached Tomori state for servers that have pointer personas after schema/catalog-seed/migration work, so long-lived cache entries do not keep stale preset content after seed updates.

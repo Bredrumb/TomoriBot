@@ -3,12 +3,23 @@
  * Manual personality creation with simple form fields
  */
 
-import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
+import type {
+  ChatInputCommandInteraction,
+  Client,
+  ModalSubmitInteraction,
+  SlashCommandSubcommandBuilder,
+} from "discord.js";
 import { AttachmentBuilder, MessageFlags, EmbedBuilder } from "discord.js";
 import { TextInputStyle } from "discord.js";
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
+import {
+  buildPersonaResultContainer,
+  replyComponentsV2Status,
+  type PersonaResultContainerOptions,
+} from "@/utils/discord/ui/statusComponents";
+import { attachImportNowCollector, importNowButton } from "@/utils/persona/importNowButton";
 import type { UserRow } from "../../types/db/schema";
 import { memoryGuard, PERSONA_LIMITS, reservePersonaQuota } from "../../utils/security/rateLimiter";
 import { getMemoryLimits, validateAttribute, validateSampleDialogue } from "@/utils/misc/memoryLimits";
@@ -62,6 +73,9 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
+  let replyInteraction: ChatInputCommandInteraction | ModalSubmitInteraction = interaction;
+  let replyUsesComponentsV2 = false;
+
   try {
     // 1. Check if command is run in a guild (server-only command)
     if (!interaction.guild) {
@@ -138,6 +152,7 @@ export async function execute(
     }
 
     const modalSubmitInteraction = modalResult.interaction;
+    replyInteraction = modalSubmitInteraction ?? interaction;
     const characterNameInput = modalResult.values?.[CHARACTER_NAME_ID];
     const characterDesc = modalResult.values?.[CHARACTER_DESC_ID];
     const exampleUser = modalResult.values?.[EXAMPLE_USER_ID];
@@ -456,63 +471,86 @@ export async function execute(
       name: filename,
     });
 
-    // 12. Detect DM context and create success embed with all created content
+    // 12. Detect DM context (create is guild-only, so this stays false) and
+    //     assemble the Components V2 result container.
     const isDM = !interaction.guild;
 
-    // Truncate description if too long for embed
+    // Truncate description for the container body.
     const descriptionPreview = characterDesc.length > 200 ? `${characterDesc.substring(0, 200)}...` : characterDesc;
 
-    // Build embed fields array
-    const embedFields = [];
-
-    // Only add dialogue field if sample dialogues were provided
+    // Build content sections: sample dialogue (when provided) followed by next steps.
+    const sections: NonNullable<PersonaResultContainerOptions["sections"]> = [];
     if (hasSampleDialogue && exampleUser && exampleBot) {
-      // Truncate dialogue examples if too long
+      // Truncate dialogue examples if too long.
       const userPreview = exampleUser.length > 100 ? `${exampleUser.substring(0, 100)}...` : exampleUser;
       const botPreview = exampleBot.length > 100 ? `${exampleBot.substring(0, 100)}...` : exampleBot;
-
-      embedFields.push({
-        name: localizer(locale, "commands.persona.create.success_dialogue_title"),
-        value: `**User:** ${userPreview}\n**Bot:** ${botPreview}`,
-        inline: false,
+      sections.push({
+        titleKey: "commands.persona.create.success_dialogue_title",
+        body: `**User:** ${userPreview}\n**Bot:** ${botPreview}`,
       });
     }
-
-    // Add next steps field
-    embedFields.push({
-      name: localizer(locale, "commands.persona.create.success_next_steps_title"),
-      value: localizer(locale, "commands.persona.create.success_next_steps_description"),
-      inline: false,
+    // Create is guild-only, so the Import Now button is always present — the
+    // next-steps copy references both the right-aligned PNG and the button.
+    // Next Steps is the last section, so the avatar thumbnail attaches here and
+    // the Import Now button lands tightly beneath it.
+    sections.push({
+      titleKey: "commands.persona.create.success_next_steps_title",
+      bodyKey: "commands.persona.create.success_next_steps_description",
     });
 
-    const successEmbed = new EmbedBuilder()
-      .setTitle(
-        localizer(locale, "commands.persona.create.success_title", {
-          character_name: characterName,
-        }),
-      )
-      .setDescription(
-        localizer(locale, "commands.persona.create.success_description", {
-          character_name: characterName,
-          character_description: descriptionPreview,
-        }),
-      )
-      .setColor(isDM ? ColorCode.WARN : ColorCode.SUCCESS)
-      .setImage(`attachment://${filename}`)
-      .addFields(embedFields);
+    const successContainerOptions: Omit<PersonaResultContainerOptions, "button"> = {
+      locale,
+      color: isDM ? ColorCode.WARN : ColorCode.SUCCESS,
+      titleKey: "commands.persona.create.success_title",
+      titleVars: { character_name: characterName },
+      descriptionKey: "commands.persona.create.success_description",
+      descriptionVars: {
+        character_name: characterName,
+        character_description: descriptionPreview,
+      },
+      imageAttachmentName: filename,
+      layout: "thumbnail-section",
+      sections,
+      buttonAlignment: "right",
+      // Closing note sits on its own row below the button.
+      trailingNoteKey: "commands.persona.create.success_next_steps_footer",
+      ...(isDM ? { footerKey: "commands.persona.create.avatar_update_skipped_dm" } : {}),
+    };
 
-    // Add DM-specific footer if in DM
-    if (isDM) {
-      successEmbed.setFooter({
-        text: localizer(locale, "commands.persona.create.avatar_update_skipped_dm"),
+    // 13. Send the result. Create is guild-only, so attach the manager-only
+    //     "Import Now" button to import the new persona as an alter in place.
+    if (!interaction.guild) {
+      await modalSubmitInteraction.editReply({
+        components: buildPersonaResultContainer(successContainerOptions),
+        files: [attachment],
+        flags: MessageFlags.IsComponentsV2,
+      });
+      replyUsesComponentsV2 = true;
+    } else {
+      await modalSubmitInteraction.editReply({
+        components: buildPersonaResultContainer({
+          ...successContainerOptions,
+          button: importNowButton("active"),
+        }),
+        files: [attachment],
+        flags: MessageFlags.IsComponentsV2,
+      });
+      replyUsesComponentsV2 = true;
+
+      // Wire the Import Now collector to the just-sent public message.
+      const sentMessage = await modalSubmitInteraction.fetchReply();
+      attachImportNowCollector({
+        message: sentMessage,
+        client,
+        guild: interaction.guild,
+        serverDiscId: interaction.guild.id,
+        locale,
+        presetData,
+        avatarImageBuffer: finalPngBuffer,
+        containerOptions: successContainerOptions,
+        sourceInteraction: modalSubmitInteraction,
       });
     }
-
-    // 13. Send success embed with attachment
-    await modalSubmitInteraction.editReply({
-      embeds: [successEmbed],
-      files: [attachment],
-    });
 
     // Quota already reserved at step 5 - no increment needed
     log.success(`Preset created successfully for: ${characterName}`);
@@ -520,7 +558,7 @@ export async function execute(
     log.error("Error in preset create command:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
 
-    // Try to send error embed if possible
+    // Try to send an error response if possible.
     try {
       const errorEmbed = new EmbedBuilder()
         .setTitle(localizer(locale, "general.errors.unexpected_title"))
@@ -531,10 +569,19 @@ export async function execute(
         )
         .setColor(ColorCode.ERROR);
 
-      if (interaction.deferred || interaction.replied) {
-        await interaction.editReply({ embeds: [errorEmbed] });
+      if (replyUsesComponentsV2 && (replyInteraction.deferred || replyInteraction.replied)) {
+        await replyComponentsV2Status(
+          replyInteraction,
+          locale,
+          "general.errors.unexpected_title",
+          "general.errors.unexpected_description",
+          ColorCode.ERROR,
+          { error: errorMessage },
+        );
+      } else if (replyInteraction.deferred || replyInteraction.replied) {
+        await replyInteraction.editReply({ embeds: [errorEmbed] });
       } else {
-        await interaction.reply({
+        await replyInteraction.reply({
           embeds: [errorEmbed],
           flags: MessageFlags.Ephemeral,
         });
