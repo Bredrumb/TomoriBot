@@ -506,7 +506,7 @@ export class ReminderTool extends BaseTool {
         const timeRemainingMs = finalReminderTime.getTime() - Date.now();
         const timeRemainingStr = formatTimeRemaining(timeRemainingMs);
 
-        // Send confirmation embed to the channel
+        // Send confirmation notice to the channel
         // Format the reminder time in the server's configured timezone
         const formattedReminderTime = formatTimeWithOffset(finalReminderTime, timezoneOffset, {
           year: "numeric",
@@ -533,7 +533,7 @@ export class ReminderTool extends BaseTool {
             }
           : baseDescriptionVars;
 
-        // Send the confirmation embed. The expand helper attaches a "Show Full Task"
+        // Send the confirmation notice. The expand helper attaches a "Show Full Task"
         // button when the full purpose exceeds the 200-char truncation threshold,
         // letting users read the entire purpose ephemerally without channel clutter.
         await sendTaskEmbedWithExpand(

@@ -596,7 +596,9 @@ When sent in a message, pingable mentions (@user, @role, etc) present in this co
 
 ### TomoriBot convention: container titles
 
-TomoriBot renders the leading "title" line of every Components V2 container (status, confirmation, persona picker, persona results) as a Markdown **H2 heading** via the shared `formatContainerTitle` helper in `src/utils/discord/ui/interactionCore.ts`. Keep title locale strings **plain text** (an emoji prefix is fine) — do not embed `##` or `**` in them, or the heading will double up. Body text, section sub-headings, and footers are unaffected.
+TomoriBot renders the leading "title" line of every Components V2 container (status, confirmation, persona picker, persona results, memory/task notices) as a Markdown **H2 heading** via the shared `formatContainerTitle` helper in `src/utils/discord/ui/interactionCore.ts`. Keep title locale strings **plain text** (an emoji prefix is fine) — do not embed `##` or `**` in them, or the heading will double up. Body text, section sub-headings, and footers are unaffected.
+
+Memory and scheduled-task notices use `buildNoticeContainer` in `src/utils/discord/ui/interactionCore.ts`. The old embed title maps to the H2 title, the old embed description maps to a Text Display, and the old embed footer maps to muted `-#` subtext after a separator. When the memory/task body is truncated, the Secondary "Expand" button is rendered as an Action Row inside the same container; the ephemeral full-content reveal remains a separate classic embed reply.
 
 ---
 
@@ -735,7 +737,7 @@ Implementation notes:
 - Keep a message's whole edit lifecycle in one mode. If a command will eventually render a Components V2 result, its intermediate processing and terminal error states should also be Components V2; otherwise `editReply()` can patch a legacy embed/content message into a V2 message and Discord rejects the final payload.
 - In discord.js edits, omitting `embeds` or `content` does not reliably clear an existing legacy field before `MessageFlags.IsComponentsV2` validation. Prefer sending a V2 status container from the first visible state instead of converting an existing legacy reply in place.
 - Attachments on Components V2 messages do not render unless they are referenced by a component.
-- Webhook sends through discord.js must also pass `withComponents: true`.
+- Webhook sends and edits through discord.js must also pass `withComponents: true`.
 - Image delivery should fall back to the legacy `files`-only payload if the Components V2 send fails.
 
 ### Migration guidance

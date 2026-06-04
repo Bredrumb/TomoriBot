@@ -1126,6 +1126,111 @@ function buildV2ConfirmationComponents(
 }
 
 /**
+ * Optional in-container notice action button. Rendered as a left-aligned
+ * ActionRow inside the notice card so utility actions stay visually attached
+ * to the notice content.
+ */
+export interface NoticeContainerButtonOptions {
+  /** Discord component custom ID for the button. */
+  customId: string;
+  /** Locale key for the button label. */
+  labelKey: string;
+  /** Button style (defaults to {@link ButtonStyle.Secondary}); excludes Link/Premium. */
+  style?: ButtonStyle.Primary | ButtonStyle.Secondary | ButtonStyle.Success | ButtonStyle.Danger;
+  /** Whether the button is disabled after its collector expires. */
+  disabled?: boolean;
+}
+
+/**
+ * Configuration for {@link buildNoticeContainer}.
+ */
+export interface NoticeContainerOptions {
+  /** Locale used for every localized string in the container. */
+  locale: string;
+  /** Accent color of the container's left bar (maps to the old embed color). */
+  color?: AccentColorInput;
+  /** Locale key for the H2 title line. */
+  titleKey: string;
+  /** Variables for the title. */
+  titleVars?: Record<string, string | number | boolean>;
+  /** Locale key for the body description. */
+  descriptionKey?: string;
+  /** Raw description text, used when the caller has already composed the body. */
+  description?: string;
+  /** Variables for the localized description. */
+  descriptionVars?: Record<string, string | number | boolean>;
+  /** Optional muted footer line. */
+  footerKey?: string;
+  /** Variables for the footer. */
+  footerVars?: Record<string, string | number | boolean>;
+  /** Optional action button placed inside the container. */
+  button?: NoticeContainerButtonOptions;
+}
+
+/**
+ * Builds a compact Components V2 notice container that mirrors the simple
+ * title/description/footer shape of a standard embed while allowing an action
+ * button to live inside the same card.
+ *
+ * @param options - {@link NoticeContainerOptions} content and action inputs.
+ * @returns A single-container `TopLevelComponentData[]` ready for `IsComponentsV2` sends.
+ */
+export function buildNoticeContainer(options: NoticeContainerOptions): TopLevelComponentData[] {
+  const { locale } = options;
+  const components: ComponentInContainerData[] = [];
+  const descriptionText =
+    options.description ??
+    (options.descriptionKey ? localizer(locale, options.descriptionKey, options.descriptionVars) : "");
+
+  // 1. Title line, rendered as an H2 heading like every other CV2 container.
+  components.push({
+    type: ComponentType.TextDisplay,
+    content: formatContainerTitle(localizer(locale, options.titleKey, options.titleVars)),
+  });
+
+  // 2. Body description. Some notices use raw text; others use localized keys.
+  if (descriptionText) {
+    components.push({
+      type: ComponentType.TextDisplay,
+      content: descriptionText,
+    });
+  }
+
+  // 3. Optional embed-style footer, preserved as muted Discord subtext.
+  if (options.footerKey) {
+    components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
+    components.push({
+      type: ComponentType.TextDisplay,
+      content: `-# ${localizer(locale, options.footerKey, options.footerVars)}`,
+    });
+  }
+
+  // 4. Optional utility action, rendered inside the card rather than below it.
+  if (options.button) {
+    const button: ButtonComponentData = {
+      type: ComponentType.Button,
+      style: options.button.style ?? ButtonStyle.Secondary,
+      customId: options.button.customId,
+      label: localizer(locale, options.button.labelKey),
+      disabled: options.button.disabled ?? false,
+    };
+
+    components.push({
+      type: ComponentType.ActionRow,
+      components: [button],
+    } satisfies ActionRowData<ButtonComponentData>);
+  }
+
+  const container: ContainerComponentData<ComponentInContainerData> = {
+    type: ComponentType.Container,
+    accentColor: resolveAccentColor(options.color),
+    components,
+  };
+
+  return [container];
+}
+
+/**
  * Optional in-container action button (e.g. the "Import Now" button on persona
  * generate/create results). Rendered as an ActionRow inside the container so it
  * reads as part of the result card rather than a detached button row.

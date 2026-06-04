@@ -1,14 +1,14 @@
 /**
- * Expandable embed notification helper.
+ * Expandable Components V2 notification helper.
  *
- * Wraps a standard notification embed with an optional "Expand" button. The
- * button is appended only when the underlying content exceeds the embed
- * truncation threshold (default 200 chars). Clicking it replies ephemerally
- * with the full, un-truncated content so users can read everything without
- * cluttering the channel.
+ * Renders a standard notification as a Components V2 container with an optional
+ * in-card "Expand" button. The button is attached only when the underlying
+ * content exceeds the truncation threshold (default 200 chars). Clicking it
+ * replies ephemerally with the full, un-truncated content so users can read
+ * everything without cluttering the channel.
  *
- * The generic `sendEmbedWithExpand` is reused by both memory-learning embeds
- * (`sendMemoryEmbedWithExpand`) and scheduled-task embeds
+ * The generic `sendEmbedWithExpand` is reused by both memory-learning notices
+ * (`sendMemoryEmbedWithExpand`) and scheduled-task notices
  * (`sendTaskEmbedWithExpand`); each wrapper supplies its own locale keys,
  * button custom ID, and collector timeout.
  *
@@ -18,8 +18,6 @@
  */
 
 import {
-  ActionRowBuilder,
-  ButtonBuilder,
   ButtonStyle,
   ComponentType,
   MessageFlags,
@@ -30,13 +28,14 @@ import {
   type Message,
   type NewsChannel,
   type TextChannel,
+  type TopLevelComponentData,
   type Webhook,
 } from "discord.js";
 import type { StandardEmbedOptions } from "@/types/discord/embed";
-import { createStandardEmbed, sendStandardEmbed, type WebhookEmbedContext } from "@/utils/discord/embedHelper";
+import { createStandardEmbed, type WebhookEmbedContext } from "@/utils/discord/embedHelper";
+import { buildNoticeContainer } from "@/utils/discord/ui/statusComponents";
 import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/webhookCore";
 import { ColorCode, log } from "@/utils/misc/logger";
-import { localizer } from "@/utils/text/localizer";
 
 type SupportedChannel =
   | TextChannel
@@ -95,26 +94,53 @@ function canUseWebhookForChannel(channel: SupportedChannel, webhook: Webhook): b
   return webhook.channelId === channel.id;
 }
 
-function buildExpandButtonRow(
+/**
+ * Builds the public notice's full Components V2 tree from the old standard
+ * embed options. The same function is used for initial sends and disabled
+ * button edits so a CV2 notice never falls back to a partial component update.
+ *
+ * @param locale - Locale used for title, body, footer, and button label strings.
+ * @param embedOptions - Existing standard embed inputs supplied by memory/task callers.
+ * @param config - Notice-specific button labels and custom ID.
+ * @param includeExpandButton - Whether the visible card needs an Expand action.
+ * @param expandButtonDisabled - Whether the Expand button should render disabled.
+ * @returns A complete Components V2 notice payload.
+ */
+function buildNoticeComponents(
   locale: string,
+  embedOptions: StandardEmbedOptions,
   config: ExpandableNoticeConfig,
-  disabled = false,
-): ActionRowBuilder<ButtonBuilder> {
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(config.customId)
-      .setLabel(localizer(locale, config.buttonLabelKey))
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(disabled),
-  );
+  includeExpandButton: boolean,
+  expandButtonDisabled = false,
+): TopLevelComponentData[] {
+  return buildNoticeContainer({
+    locale,
+    color: embedOptions.color ?? ColorCode.INFO,
+    titleKey: embedOptions.titleKey,
+    titleVars: embedOptions.titleVars,
+    descriptionKey: embedOptions.descriptionKey,
+    description: embedOptions.description,
+    descriptionVars: embedOptions.descriptionVars,
+    footerKey: embedOptions.footerKey,
+    footerVars: embedOptions.footerVars,
+    button: includeExpandButton
+      ? {
+          customId: config.customId,
+          labelKey: config.buttonLabelKey,
+          style: ButtonStyle.Secondary,
+          disabled: expandButtonDisabled,
+        }
+      : undefined,
+  });
 }
 
 /**
- * Sends a notification embed, attaching an "Expand" button when the full
- * content exceeds the embed truncation threshold. The button shows the full
- * content as an ephemeral reply when clicked. Callers normally use one of the
- * thin wrappers (`sendMemoryEmbedWithExpand`, `sendTaskEmbedWithExpand`) which
- * pre-fill the notice-specific {@link ExpandableNoticeConfig}.
+ * Sends a notification as a Components V2 notice container, attaching an
+ * in-card "Expand" button when the full content exceeds the truncation
+ * threshold. The button shows the full content as an ephemeral reply when
+ * clicked. Callers normally use one of the thin wrappers
+ * (`sendMemoryEmbedWithExpand`, `sendTaskEmbedWithExpand`) which pre-fill the
+ * notice-specific {@link ExpandableNoticeConfig}.
  *
  * @param channel - Destination channel (supports the same channel types as `sendStandardEmbed`).
  * @param locale - Locale used for the button label, expand-popup title, and embed strings.
@@ -135,26 +161,21 @@ export async function sendEmbedWithExpand(
   webhookContext?: WebhookEmbedContext,
 ): Promise<void> {
   const truncationThreshold = config.truncationThreshold ?? DEFAULT_TRUNCATION_THRESHOLD;
+  const shouldAttachExpandButton = fullContent.length > truncationThreshold;
 
-  // 1. Short content was not truncated — fall back to the standard sender unchanged.
-  //    This keeps the embed byte-for-byte identical for the common case and avoids
-  //    paying collector setup cost when there is nothing extra to reveal.
-  if (fullContent.length <= truncationThreshold) {
-    await sendStandardEmbed(channel, locale, embedOptions, webhookContext);
-    return;
-  }
+  // 1. Build the complete CV2 tree up front. Teardown reuses the same renderer
+  //    with only the button disabled, keeping the message in one mode.
+  const activeComponents = buildNoticeComponents(locale, embedOptions, config, shouldAttachExpandButton);
+  const disabledComponents = shouldAttachExpandButton
+    ? buildNoticeComponents(locale, embedOptions, config, true, true)
+    : activeComponents;
 
-  // 2. Build the visible embed and the Expand button row.
-  const visibleEmbed = createStandardEmbed(locale, embedOptions);
-  const expandRow = buildExpandButtonRow(locale, config);
-  const disabledRow = buildExpandButtonRow(locale, config, true);
-
-  // 3. Resolve thread ID — persona webhooks live on the parent channel and need
+  // 2. Resolve thread ID — persona webhooks live on the parent channel and need
   //    `threadId` to post into a thread.
   const threadId =
     "isThread" in channel && typeof channel.isThread === "function" && channel.isThread() ? channel.id : undefined;
 
-  // 4. Try webhook-persona delivery first so the notice appears under the same
+  // 3. Try webhook-persona delivery first so the notice appears under the same
   //    identity as the AI response, then fall back to a plain bot message.
   const webhook = webhookContext?.webhook;
   const useWebhook = Boolean(webhook && webhookContext?.personaUsername && canUseWebhookForChannel(channel, webhook));
@@ -167,8 +188,9 @@ export async function sendEmbedWithExpand(
       noticeMessage = await sendWebhookMessageWithIdentity(
         webhook,
         {
-          embeds: [visibleEmbed],
-          components: [expandRow],
+          components: activeComponents,
+          flags: MessageFlags.IsComponentsV2,
+          withComponents: true,
           ...(threadId ? { threadId } : {}),
         },
         {
@@ -181,17 +203,25 @@ export async function sendEmbedWithExpand(
       );
       sentViaWebhook = true;
     } catch (error) {
-      log.warn("Expand embed: webhook send failed, falling back to plain bot message", error as Error);
+      log.warn("Expand notice: webhook send failed, falling back to plain bot message", error as Error);
     }
   }
 
   if (!noticeMessage) {
     try {
-      noticeMessage = await channel.send({ embeds: [visibleEmbed], components: [expandRow] });
+      noticeMessage = await channel.send({
+        components: activeComponents,
+        flags: MessageFlags.IsComponentsV2,
+      });
     } catch (error) {
-      log.warn("Expand embed: channel send failed", error as Error);
+      log.warn("Expand notice: channel send failed", error as Error);
       return;
     }
+  }
+
+  // 4. Short content was not truncated, so there is no collector to wire.
+  if (!shouldAttachExpandButton) {
+    return;
   }
 
   // 5. Build the ephemeral "full content" embed once — reused for every click.
@@ -229,7 +259,9 @@ export async function sendEmbedWithExpand(
     if (sentViaWebhook && webhook) {
       await webhook
         .editMessage(noticeMessage.id, {
-          components: [disabledRow],
+          components: disabledComponents,
+          flags: MessageFlags.IsComponentsV2,
+          withComponents: true,
           ...(threadId ? { threadId } : {}),
         })
         .catch((err: unknown) =>
@@ -237,7 +269,10 @@ export async function sendEmbedWithExpand(
         );
     } else {
       await noticeMessage
-        .edit({ components: [disabledRow] })
+        .edit({
+          components: disabledComponents,
+          flags: MessageFlags.IsComponentsV2,
+        })
         .catch((err: unknown) => log.warn("[ExpandEmbed] Failed to disable expand button after collector end", err));
     }
   });
@@ -279,7 +314,7 @@ export async function sendMemoryEmbedWithExpand(
 /**
  * Scheduled-task wrapper for {@link sendEmbedWithExpand}. Attaches a
  * "Show Full Task" button when the task/reminder purpose exceeds the
- * truncation threshold (created, updated, and deleted task embeds).
+ * truncation threshold (created, updated, and deleted task notices).
  *
  * @param channel - Destination channel.
  * @param locale - Locale for button label, expand title, and embed strings.

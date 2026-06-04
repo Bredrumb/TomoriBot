@@ -326,7 +326,7 @@ export class MemoryTool extends BaseTool {
             tomoriState?.config.personal_memories_enabled,
           );
 
-          // Send notification embed to the channel.
+          // Send a notification notice to the channel.
           // The expand helper attaches a "Show Full Memory" button when the
           // processed content exceeds 200 chars (the embed truncation threshold),
           // letting users read the full memory ephemerally without channel clutter.
@@ -503,10 +503,10 @@ export class MemoryTool extends BaseTool {
           }
 
           // Invalidate user cache so next message includes new memory
-          // Done before the notification embed so cache is always fresh even if embed fails
+          // Done before the notification notice so cache is always fresh even if the send fails
           invalidateUserCache(resolvedTargetUserId as string);
 
-          // Send notification embed (non-fatal: missing permissions won't block the memory save).
+          // Send notification notice (non-fatal: missing permissions won't block the memory save).
           // The expand helper attaches a "Show Full Memory" button when the
           // processed content exceeds 200 chars (the embed truncation threshold).
           try {
@@ -538,7 +538,7 @@ export class MemoryTool extends BaseTool {
               },
             );
           } catch (embedError) {
-            log.warn("Failed to send personal memory notification embed (non-fatal)", embedError as Error);
+            log.warn("Failed to send personal memory notification notice (non-fatal)", embedError as Error);
           }
 
           return {
