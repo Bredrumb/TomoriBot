@@ -101,7 +101,7 @@ export default {
       teaching_disabled_title: `ドキュメントの教育が無効です`,
       teaching_disabled_description: `現在、このサーバーではメンバーが文書を教える・削除することは許可されていません。\`サーバー管理\`権限を持つメンバーが\`/server member-permissions\`で有効にできます。`,
       no_embedding_model_title: `埋め込みモデルが設定されていません`,
-      no_embedding_model_description: `このプロバイダーには埋め込みモデルが設定されていません。\`/config model embedding\`で設定してください。`,
+      no_embedding_model_description: `このプロバイダーには埋め込みモデルが設定されていません。\`/model embedding\`で設定してください。`,
       no_api_key_title: `APIキーがありません`,
       no_api_key_description: `文書を埋め込むには保存済みの埋め込みプロバイダー認証情報が必要です。\`/config provider add\` を使用してください。`,
       invalid_name_title: `無効な文書名`,

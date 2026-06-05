@@ -585,9 +585,9 @@ export class OpenrouterProvider
         const otherModelCodename = tomoriState.config.other_model_codename;
 
         if (!otherModelCodename) {
-          // Not yet configured — user needs to run /config model text
+          // Not yet configured — user needs to run /model text
           log.warn(
-            "[OTHER-MODEL] No model configured — use /config model text to set your OpenRouter model. Using conservative defaults.",
+            "[OTHER-MODEL] No model configured — use /model text to set your OpenRouter model. Using conservative defaults.",
           );
           effectiveHasTools = false;
           effectiveSeesImages = false;

@@ -134,6 +134,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
     contextItems: StructuredContextItem[],
     model?: string,
     messageIdMap?: StreamContext["messageIdMap"],
+    seesImages = true,
   ): Promise<{
     systemInstruction?: string;
     contents: Content[];
@@ -143,6 +144,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       [],
       undefined,
       messageIdMap,
+      seesImages,
     );
 
     const contents = [...dialogueContents];
@@ -212,7 +214,12 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
     }
 
     // 5. Assemble context (shared logic)
-    const payload = await this.buildTokenCountPayload(context.contextItems, config.model, context.messageIdMap);
+    const payload = await this.buildTokenCountPayload(
+      context.contextItems,
+      config.model,
+      context.messageIdMap,
+      context.tomoriState.llm.sees_images,
+    );
     const finalContents = [...payload.contents];
 
     if (payload.systemInstruction) {
@@ -1014,6 +1021,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       preToolCallTextParts?: Array<Record<string, unknown>>;
     }>,
     messageIdMap?: StreamContext["messageIdMap"],
+    seesImages = true,
   ): Promise<{ systemInstruction?: string; dialogueContents: Content[] }> {
     const systemInstructionParts: string[] = [];
     const dialogueContents: Content[] = [];
@@ -1041,6 +1049,15 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
         for (const part of item.parts) {
           if (part.type === "text") {
             geminiParts.push({ text: part.text });
+          } else if (part.type === "image" && !seesImages) {
+            // Defense-in-depth: an image part reached the adapter but the routed
+            // model cannot process it (context built with images for a
+            // vision-capable fallback model, then the image-blind primary runs).
+            // Emit a text placeholder instead of silently dropping it — mirrors
+            // the Google, OpenRouter, and OpenAI-compatible message builders.
+            geminiParts.push({
+              text: "[System: An image is attached to this message that this model cannot process.]",
+            });
           } else if (part.type === "image" && part.uri && part.mimeType) {
             try {
               if (part.mimeType === "image/gif") {

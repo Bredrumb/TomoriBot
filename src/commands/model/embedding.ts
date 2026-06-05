@@ -278,7 +278,7 @@ export async function execute(
         userId: userData.user_id,
         errorType: "CommandExecutionError",
         metadata: {
-          command: "config model embedding",
+          command: "model embedding",
           guildId: interaction.guild?.id ?? interaction.user.id,
           requestedModelId: selectedModelIdStr,
         },
@@ -326,7 +326,7 @@ export async function execute(
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
         metadata: {
-          command: "config model embedding",
+          command: "model embedding",
           guildId: interaction.guild?.id ?? interaction.user.id,
           selectedModelCodename: selectedModel.codename,
           targetEmbeddingModelId: selectedModel.embedding_model_id,
@@ -394,17 +394,13 @@ export async function execute(
       personaId: tomoriState.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
-        command: "config model embedding",
+        command: "model embedding",
         guildId: interaction.guild?.id ?? interaction.user.id,
         executorDiscordId: interaction.user.id,
         targetEmbeddingModelIdAttempted: selectedModel?.embedding_model_id,
       },
     };
-    await log.error(
-      `Error executing /config model embedding for user ${userData.user_disc_id}`,
-      error as Error,
-      context,
-    );
+    await log.error(`Error executing /model embedding for user ${userData.user_disc_id}`, error as Error, context);
 
     const replyTarget = modalSubmitInteraction ?? responseInteraction;
     await replyInfoEmbed(replyTarget, locale, {

@@ -425,7 +425,7 @@ Use this as the last pass before you call a provider integration "done".
 - only implement this if the app already has a native image-generation path for the provider
 - implement the provider-owned image-generation capability instead of faking it through text chat
 - seed `image_diffusion_models` only for models that are actually wired and tested
-- confirm `/config model image` and any image-generation commands use the provider cleanly
+- confirm `/model image` and any image-generation commands use the provider cleanly
 - if the provider has no native image generation, leave `featureSupport.imageGeneration = "none"` and do not seed image rows
 
 ### Embedding Models
@@ -474,7 +474,7 @@ Minimum test checklist:
 - aliases resolve correctly
 - `/config provider add` and `/config provider switch` validation work
 - `/config setup` and provider-specific error formatting work
-- `/config model text` shows the provider's seeded models
+- `/model text` shows the provider's seeded models
 - normal chat streaming works
 - tool calling works if supported
 - structured output works if supported
@@ -676,7 +676,7 @@ Seed scope: one default general chat model; optionally one reasoning model; per-
 
 **Phase 5: Add `nvidia`** — keep supported model set small and curated; wire provider-owned embeddings and native image generation only when exact NVIDIA endpoint contract is implemented.
 
-**Phase 6: Optional Embedding Decoupling** — allow `/config model embedding` to choose from any seeded embedding provider; stop coupling embedding selection to the active chat provider.
+**Phase 6: Optional Embedding Decoupling** — allow `/model embedding` to choose from any seeded embedding provider; stop coupling embedding selection to the active chat provider.
 
 ### Capability Checklist For Future OpenAI-Compatible Providers
 
@@ -712,8 +712,8 @@ The combined extraction + DeepSeek slice is successful when `custom` still works
 - `src/utils/provider/providerCapabilityResolver.ts`
 - `src/providers/utils/providerFeatureExecutors.ts`
 - `src/commands/config/api-key/set.ts`
-- `src/commands/config/model/image.ts`
-- `src/commands/config/model/embedding.ts`
+- `src/commands/model/image.ts`
+- `src/commands/model/embedding.ts`
 - `src/utils/db/repositories/LlmRepository.ts`
 
 ### Practical Recommendation

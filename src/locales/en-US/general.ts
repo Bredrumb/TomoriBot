@@ -160,7 +160,7 @@ export default {
       rejoin_title: `I'm Back!`,
       rejoin_description: `Looks like I was re-added to this server. My previous settings and personality are still intact! You can manage me using the \`/config\`, \`/persona\`, \`/memory\`, and \`/server\` commands. You can also export or reset your data anytime with \`/memory personal export\`, \`/memory server export\`, \`/personal config\`, and \`/server config\`.
 
-			If you wish to change my provider, use \`/config provider add\` to register a new provider, then \`/config model text\` to activate it.
+			If you wish to change my provider, use \`/config provider add\` to register a new provider, then \`/model text\` to activate it.
 
 			**By using me, you agree to these [Terms of Service](https://github.com/Bredrumb/TomoriBot/blob/main/legal/en-US/terms-of-service.md) and [Privacy Policy](https://github.com/Bredrumb/TomoriBot/blob/main/legal/en-US/privacy-policy.md).** View them anytime with \`/legal terms\` and \`/legal privacy\`.`,
       setup_prompt_title: `Successfully Added`,

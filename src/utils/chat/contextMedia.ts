@@ -73,6 +73,20 @@ export function isSupportedVideoAttachmentContentType(contentType: string | null
   return Boolean(contentType && SUPPORTED_VIDEO_MIME_TYPES.some((type) => contentType.startsWith(type)));
 }
 
+function inferMimeTypeFromFilename(filename: string | null | undefined): string | null {
+  const lower = (filename ?? "").toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".gif")) return "image/gif";
+  if (lower.endsWith(".heic")) return "image/heic";
+  if (lower.endsWith(".heif")) return "image/heif";
+  if (lower.endsWith(".mp4")) return "video/mp4";
+  if (lower.endsWith(".webm")) return "video/webm";
+  if (lower.endsWith(".mov")) return "video/mov";
+  return null;
+}
+
 export function appendSupportedMediaFromMessage(
   sourceMessage: Pick<Message, "attachments">,
   imageAttachments: SimplifiedMessageForContext["imageAttachments"],
@@ -82,22 +96,27 @@ export function appendSupportedMediaFromMessage(
   let videoCount = 0;
 
   for (const attachment of sourceMessage.attachments.values()) {
-    if (isSupportedImageAttachmentContentType(attachment.contentType)) {
+    // Some Discord message types (e.g. IsComponentsV2) may omit contentType in the
+    // API response. Fall back to filename-based inference so attachments aren't
+    // silently dropped, which would cause the whole message to be skipped.
+    const effectiveContentType = attachment.contentType ?? inferMimeTypeFromFilename(attachment.name);
+
+    if (isSupportedImageAttachmentContentType(effectiveContentType)) {
       imageAttachments.push({
         url: attachment.url,
         proxyUrl: attachment.proxyURL,
-        mimeType: attachment.contentType,
+        mimeType: effectiveContentType,
         filename: attachment.name,
       });
       imageCount++;
       continue;
     }
 
-    if (isSupportedVideoAttachmentContentType(attachment.contentType)) {
+    if (isSupportedVideoAttachmentContentType(effectiveContentType)) {
       videoAttachments.push({
         url: attachment.url,
         proxyUrl: attachment.proxyURL,
-        mimeType: attachment.contentType,
+        mimeType: effectiveContentType,
         filename: attachment.name,
         isYouTubeLink: false,
       });

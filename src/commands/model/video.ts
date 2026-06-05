@@ -1,8 +1,8 @@
 /**
- * Video Model Configuration Command (/config model video)
+ * Video Model Configuration Command (/model video)
  * Allows server admins to select which video generation model Tomori uses.
  * Queries available models filtered by the current LLM provider.
- * Mirrors the /config model image command pattern.
+ * Mirrors the /model image command pattern.
  */
 
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
@@ -293,7 +293,7 @@ export async function execute(
         userId: userData.user_id,
         errorType: "CommandExecutionError",
         metadata: {
-          command: "config model video",
+          command: "model video",
           guildId: interaction.guild?.id ?? interaction.user.id,
           requestedModelId: selectedModelIdStr,
           availableModels: availableModels.map((m) => m.video_model_id),
@@ -336,7 +336,7 @@ export async function execute(
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
         metadata: {
-          command: "config model video",
+          command: "model video",
           guildId: interaction.guild?.id ?? interaction.user.id,
           selectedModelCodename: selectedModel.codename,
           targetVideoModelId: selectedModel.video_model_id,
@@ -395,13 +395,13 @@ export async function execute(
       personaId: personaIdForError,
       errorType: "CommandExecutionError",
       metadata: {
-        command: "config model video",
+        command: "model video",
         guildId: interaction.guild?.id ?? interaction.user.id,
         executorDiscordId: interaction.user.id,
         targetVideoModelIdAttempted: selectedModel?.video_model_id,
       },
     };
-    await log.error(`Error executing /config model video for user ${userData.user_disc_id}`, error as Error, context);
+    await log.error(`Error executing /model video for user ${userData.user_disc_id}`, error as Error, context);
 
     // 16. Inform user of unknown error
     const replyTarget = modalSubmitInteraction ?? responseInteraction;

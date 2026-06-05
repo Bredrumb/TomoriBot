@@ -381,7 +381,7 @@ export class PeekProfilePictureTool extends BaseTool {
     if (!visionLlm) {
       return {
         success: false,
-        error: "No vision model configured. Use /config model vision to set one.",
+        error: "No vision model configured. Use /model vision to set one.",
       };
     }
 

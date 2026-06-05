@@ -299,7 +299,7 @@ export async function execute(
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
         metadata: {
-          command: "config model vision",
+          command: "model vision",
           guildId: serverId,
           selectedModelCodename: selectedModel.llm_codename,
           targetVisionLlmId: selectedModel.llm_id,
@@ -352,13 +352,13 @@ export async function execute(
       personaId: tomoriState?.persona_id ?? null,
       errorType: "CommandExecutionError",
       metadata: {
-        command: "config model vision",
+        command: "model vision",
         guildId: serverId,
         executorDiscordId: interaction.user.id,
         targetVisionLlmIdAttempted: selectedModel?.llm_id,
       },
     };
-    await log.error(`Error executing /config model vision for user ${userData.user_disc_id}`, error as Error, context);
+    await log.error(`Error executing /model vision for user ${userData.user_disc_id}`, error as Error, context);
 
     const replyTarget = modalSubmitInteraction ?? responseInteraction;
     await replyInfoEmbed(replyTarget, locale, {

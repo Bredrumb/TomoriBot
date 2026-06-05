@@ -21,4 +21,4 @@ Register with `/config custom-endpoint add`:
 - transcription_model: `large-v3` or the model loaded by your server
 - transcription_language: optional default language hint
 
-Select it with `/config model transcription`.
+Select it with `/model transcription`.

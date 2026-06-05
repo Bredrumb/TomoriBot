@@ -152,7 +152,7 @@ export default {
       current_none: `なし`,
       nai_only_title: `NovelAI画像モデル`,
       nai_only_description: `保存済みの画像プロバイダーはNovelAIのみです。ここで設定したモデルは、\`generate_image_nai\` 用の専用NovelAI画像スロットに保存されます。`,
-      nai_picker_note: `ここでNovelAI画像モデルを設定すると、\`generate_image_nai\` 用の専用NovelAIスロットに保存されます。画像生成ツールを1つだけ使わせたい場合は、\`/config model image clear\` を使ってください。`,
+      nai_picker_note: `ここでNovelAI画像モデルを設定すると、\`generate_image_nai\` 用の専用NovelAIスロットに保存されます。画像生成ツールを1つだけ使わせたい場合は、\`/model image clear\` を使ってください。`,
     },
     video: {
       description: `このサーバーの動画生成モデルを変更します。`,

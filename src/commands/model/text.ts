@@ -519,7 +519,7 @@ export async function execute(
         userId: userData.user_id,
         errorType: "CommandExecutionError",
         metadata: {
-          command: "config model text",
+          command: "model text",
           guildId: interaction.guild?.id ?? interaction.user.id,
           requestedModel: selectedModelCodename,
           availableModels: availableModels.map((m) => m.llm_codename),
@@ -596,7 +596,7 @@ export async function execute(
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
         metadata: {
-          command: "config model text",
+          command: "model text",
           guildId: interaction.guild?.id ?? interaction.user.id,
           selectedModelCodename,
           targetLlmId: selectedModel.llm_id,
@@ -661,13 +661,13 @@ export async function execute(
       personaId: tomoriState.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
-        command: "config model text",
+        command: "model text",
         guildId: interaction.guild?.id ?? interaction.user.id,
         executorDiscordId: interaction.user.id,
         targetLlmIdAttempted: selectedModel?.llm_id,
       },
     };
-    await log.error(`Error executing /config model text for user ${userData.user_disc_id}`, error as Error, context);
+    await log.error(`Error executing /model text for user ${userData.user_disc_id}`, error as Error, context);
 
     const replyTarget = modalSubmitInteraction ?? interaction;
     await replyInfoEmbed(replyTarget, locale, {

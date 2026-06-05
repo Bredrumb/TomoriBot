@@ -7,7 +7,7 @@ This document summarizes the current video generation stack.
 ## Command Surface
 
 - User-facing generation entrypoint: `src/commands/generate/video.ts`
-- Admin model selection: `src/commands/config/model/video.ts`
+- Admin model selection: `src/commands/model/video.ts`
 - Admin quota controls:
   - `src/commands/server/quota/video-generation.ts`
   - `src/commands/server/quota/reset.ts`

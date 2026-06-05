@@ -75,7 +75,7 @@ export default {
       api_key_decrypt_failed_title: `🔴 APIキーエラー`,
       api_key_decrypt_failed_description: `設定済みの動画プロバイダー認証情報の復号に失敗しました。\`/config provider add\` で再設定してください。`,
       no_video_model_title: `🔴 動画モデルがありません`,
-      no_video_model_description: `プロバイダーに動画モデルが設定されていません。\`/config model video\` で設定してください。`,
+      no_video_model_description: `プロバイダーに動画モデルが設定されていません。\`/model video\` で設定してください。`,
       error_title: `🔴 動画生成に失敗しました`,
       unsupported_provider_description: `プロバイダー **{provider}** では動画生成がサポートされていません。`,
       no_data_description: `APIから動画データを受信できませんでした。生成がブロックされたか失敗した可能性があります。`,

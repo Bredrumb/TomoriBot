@@ -245,32 +245,35 @@ export class VertexProvider
       return [];
     }
 
+    // Vertex AI embedContent only processes one content per call (unlike Google AI which
+    // accepts a batch), so we call it once per input and collect results.
     const genAI = this.buildClient(request.apiKey);
-    const response = await genAI.models.embedContent({
-      model: request.model,
-      contents: request.inputs,
-      config: request.taskType ? { taskType: request.taskType } : undefined,
-    });
+    const config = request.taskType ? { taskType: request.taskType } : undefined;
 
-    // Extract embeddings from response (same format as Google)
-    const raw = response as unknown as {
-      embeddings?: Array<{ values?: number[] } | number[]>;
-      embedding?: { values?: number[] } | number[];
-    };
+    const results = await Promise.all(
+      request.inputs.map(async (input) => {
+        const response = await genAI.models.embedContent({
+          model: request.model,
+          contents: input,
+          config,
+        });
 
-    const embeddingsList = Array.isArray(raw?.embeddings) ? raw.embeddings : raw?.embedding ? [raw.embedding] : [];
+        const raw = response as unknown as {
+          embeddings?: Array<{ values?: number[] } | number[]>;
+          embedding?: { values?: number[] } | number[];
+        };
 
-    return embeddingsList
-      .map((entry) => {
-        if (Array.isArray(entry)) {
-          return entry;
-        }
-        if (entry && Array.isArray((entry as { values?: number[] }).values)) {
+        const entry = Array.isArray(raw?.embeddings) ? raw.embeddings[0] : raw?.embedding;
+        if (!entry) return [];
+        if (Array.isArray(entry)) return entry;
+        if (Array.isArray((entry as { values?: number[] }).values)) {
           return (entry as { values: number[] }).values;
         }
         return [];
-      })
-      .filter((values) => values.length > 0);
+      }),
+    );
+
+    return results.filter((values) => values.length > 0);
   }
 
   // ─── SupportsStructuredOutput ────────────────────────────────────────

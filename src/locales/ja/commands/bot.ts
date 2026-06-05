@@ -69,7 +69,7 @@ export default {
       use_reasoning_label: `推論を使用`,
       use_reasoning_description: `利用可能な最も賢いモデルを使用して高度な推論モードを切り替えます。`,
       no_smart_model_title: `推論モデルが見つかりません`,
-      no_smart_model_description: `現在のAIプロバイダーに推論モデルが見つかりませんでした。\`/config model text\`を使用して、推論モデルをサポートするプロバイダーに切り替えてください。`,
+      no_smart_model_description: `現在のAIプロバイダーに推論モデルが見つかりませんでした。\`/model text\`を使用して、推論モデルをサポートするプロバイダーに切り替えてください。`,
       no_messages_title: `メッセージが見つかりません`,
       no_messages_description: `このチャンネルにメッセージが見つかりません。 \`/bot respond\` を使う前に、少なくとも1件メッセージを送信してください。`,
       cooldown_active: `このサーバーの管理者がクールダウンを設定しています。\`/bot respond\` を再度使用するまで、あと **{seconds}** 秒お待ちください。このクールダウンはメッセージトリガーと共有されています。`,

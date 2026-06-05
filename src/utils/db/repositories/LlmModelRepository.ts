@@ -1117,7 +1117,7 @@ export class LlmModelRepository {
         ) VALUES (
           ${params.provider}, ${params.codename}, ${params.hasTools}, ${params.seesImages}, ${params.seesVideos},
           false, ${params.supportsStructOutput}, ${params.strictRoleAlternation}, ${params.supportsPrefixCompletion},
-          false, true, false, false, true, true,
+          false, true, false, false, false, false,
           ${params.displayName}, ${params.displayName}
         )
         ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET

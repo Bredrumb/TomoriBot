@@ -373,7 +373,7 @@ Implemented examples:
 - `/config notice-embeds visibility` manages visible notice embed types in one modal.
 - `/config remove modeloverride` manages channel and persona overrides together in one modal.
 - `/config mcp remove` manages registered MCP servers in one modal.
-- `/config model fallback` manages the fallback chain in one modal, and each slot can be cleared directly with the built-in `None` option.
+- `/model fallback` manages the fallback chain in one modal, and each slot can be cleared directly with the built-in `None` option.
 - `/config random-trigger remove` manages random triggers in one modal when the set fits, with paginated fallback beyond modal limits.
 - `/server trigger remove` manages trigger words for the selected persona in one modal when the set fits, with paginated fallback beyond modal limits.
 
@@ -434,11 +434,11 @@ These modals have dynamic or large option sets that exceed Radio Group/Checkbox 
 | Command                          | File                             | Reason                                                    |
 | -------------------------------- | -------------------------------- | --------------------------------------------------------- |
 | `/config provider switch`        | `config/provider/switch.ts`      | Provider list is dynamic (DB via `loadUniqueProviders()`) |
-| `/config model text`             | `config/model/text.ts`           | Dynamic model list, often 25+, uses pagination            |
-| `/config model image`            | `config/model/image.ts`          | Dynamic model list, uses pagination                       |
-| `/config model vision`           | `config/model/vision.ts`         | Dynamic model list, uses pagination                       |
-| `/config model embedding`        | `config/model/embedding.ts`      | Dynamic model list, uses pagination                       |
-| `/config model fallback`         | `config/model/fallback.ts`       | Dynamic model list, uses pagination                       |
+| `/model text`             | `config/model/text.ts`           | Dynamic model list, often 25+, uses pagination            |
+| `/model image`            | `config/model/image.ts`          | Dynamic model list, uses pagination                       |
+| `/model vision`           | `config/model/vision.ts`         | Dynamic model list, uses pagination                       |
+| `/model embedding`        | `config/model/embedding.ts`      | Dynamic model list, uses pagination                       |
+| `/model fallback`         | `config/model/fallback.ts`       | Dynamic model list, uses pagination                       |
 | `/config system-prompt preset`       | `config/system-prompt/preset.ts`     | Dynamic preset list from DB                               |
 | `/config provider add`            | `config/provider/add.ts`          | Provider select + text input combo; list may grow         |
 | `/persona prompt set`            | `persona/prompt/set.ts`         | Persona picker embed first, then a prefilled free-form prompt modal (up to 16000 chars, 4 fields) |

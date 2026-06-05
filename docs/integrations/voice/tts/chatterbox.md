@@ -21,7 +21,7 @@ Register with `/config custom-endpoint add`:
 - script_markup: `bracket-tags`
 - supports_instruct: `false`
 
-Then run `/config model speech`, `/speech voice-add`, and `/speech voice-assign`.
+Then run `/model speech`, `/speech voice-add`, and `/speech voice-assign`.
 
 Use `/speech chatterbox parameters` to tune the Chatterbox request payload:
 

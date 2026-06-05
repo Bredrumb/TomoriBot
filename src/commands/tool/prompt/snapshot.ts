@@ -18,6 +18,8 @@ import { buildContext } from "@/utils/text/contextBuilder";
 import { getCachedActivePreset } from "@/utils/cache/stPresetCache";
 import { getCachedPrivacyLevel, getCachedUserRow } from "@/utils/cache/userCache";
 import { getStaticProviderInfo, normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
+import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { PrivacyLevel, type UserRow, type TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
@@ -416,6 +418,27 @@ export async function execute(
       }
     }
 
+    // 9c. Mirror live personal-provider routing for media visibility. If the
+    //     invoker's text turns would route to their personal provider, the model
+    //     that actually answers is the personal model — so the snapshot's
+    //     sees_images/sees_videos must reflect that model, exactly like
+    //     contextPipeline.ts. Best-effort: any credential-resolution error falls
+    //     back to the server/persona model view (current behavior).
+    let routedLlm = effectiveLlm;
+    let routedVisionLlm = effectivePersona.vision_llm;
+    try {
+      const textCreds = await resolveCapabilityCredentials(selectedPersona.server_id, "text", {
+        userId: userData.user_id ?? null,
+      });
+      if (textCreds.source === "personal") {
+        const overlay = await applyPersonalProviderSelectionsToTomoriState(selectedPersona, userData.user_id ?? null);
+        routedLlm = overlay.tomoriState.llm;
+        routedVisionLlm = overlay.tomoriState.vision_llm;
+      }
+    } catch (error) {
+      log.warn("prompt snapshot: personal credential resolution failed; using server model view.", error as Error);
+    }
+
     // 10. Fetch channel message history — same pattern as /tool estimate cost
     const textChannel = interaction.channel;
     if (!("messages" in textChannel)) {
@@ -739,9 +762,9 @@ export async function execute(
       personaPrompt: selectedPersona.persona_prompt ?? null,
       personaLineageId: selectedPersona.persona_lineage_id,
       isDMChannel,
-      seesImages: effectiveLlm.sees_images,
-      seesVideos: effectiveLlm.sees_videos,
-      hasVisionTool: !!effectivePersona.vision_llm && !effectiveLlm.sees_images,
+      seesImages: routedLlm.sees_images,
+      seesVideos: routedLlm.sees_videos,
+      hasVisionTool: !!routedVisionLlm && !routedLlm.sees_images,
     });
 
     // Mutable copy — tail directives are spliced/pushed in below

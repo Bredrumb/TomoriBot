@@ -66,15 +66,29 @@ Key fields populated here:
 - **Reminder injection** — if the incoming carries `reminderData`, injects a
   synthetic `[System: …]` message into `simplifiedMessages` so the LLM sees
   the reminder context.
-- **Media capability resolution for context build** — two overrides are
-  applied before calling `buildContext`, stored in separate
+- **Media capability resolution for context build** — overrides are applied
+  before calling `buildContext`, stored in separate
   `contextBuildSeesImages`/`contextBuildSeesVideos` variables (distinct from
   `effectiveSeesImages`/`effectiveSeesVideos` which are kept for the
   `hasVisionTool` flag and must reflect the *primary* model's true
   capability):
-  1. *OpenRouter live flags* — for OpenRouter models with a ready capability
-     cache, live `seesImages`/`seesVideos` replace stale DB values.
-  2. *Fallback-chain elevation* — if the primary model has
+  0. *Personal-routing overlay* — when `textCredentialSource === "personal"`,
+     the turn answers from the user's personal text model, **not**
+     `turn.persona.llm` (the server model). `routedPersona` is resolved via
+     `applyPersonalProviderSelectionsToTomoriState(...)` and supplies the
+     `activeLlm`, fallback chain, and `vision_llm` for every check below — so
+     the "image part vs. `[System: …]` notice" decision matches the model that
+     actually answers (mirrors `resolvePrimaryTomoriState` at call time).
+     Without this, a vision-capable server model (e.g. Vertex) would embed
+     image parts even when the personal model (e.g. DeepSeek) is image-blind,
+     suppressing the notices. The resulting `contextBuildSeesImages`/`Videos`
+     are **concrete booleans** (never `undefined`) so the dialogue builder uses
+     the routed model's capability authoritatively instead of falling back to
+     the server persona's `sees_images` via `tomoriState`.
+  1. *OpenRouter live flags* — for OpenRouter models (on `routedPersona.llm`)
+     with a ready capability cache, live `seesImages`/`seesVideos` replace
+     stale DB values.
+  2. *Fallback-chain elevation* — if the primary (routed) model has
      `sees_images: false` (or `sees_videos: false`) but any entry in
      `fallback_chain`/`fallback_llms` has the capability `true`, the context
      build flag is forced to `true` so image/video URI parts are embedded in

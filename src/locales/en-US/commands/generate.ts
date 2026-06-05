@@ -75,7 +75,7 @@ export default {
       api_key_decrypt_failed_title: `🔴 API Key Error`,
       api_key_decrypt_failed_description: `Failed to decrypt the configured video provider credentials. Please reconfigure them using \`/config provider add\`.`,
       no_video_model_title: `🔴 No Video Model`,
-      no_video_model_description: `No video model configured for your provider. Use \`/config model video\` to set one.`,
+      no_video_model_description: `No video model configured for your provider. Use \`/model video\` to set one.`,
       error_title: `🔴 Video Generation Failed`,
       unsupported_provider_description: `Video generation is not supported for provider **{provider}**.`,
       no_data_description: `No video data was received from the API. The generation may have been blocked or failed.`,

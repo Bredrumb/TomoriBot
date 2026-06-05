@@ -28,7 +28,7 @@ export default {
       personal_field: `Personal Scope`,
       personal_value: `Use {add_command} to register your own labeled endpoint and {remove_command} to remove selected capabilities from it.`,
       selection_field: `Selecting Them`,
-      selection_value: `After registration, choose the label from {text_command}, {image_command}, or {video_command}; if the label has several models for that capability, a picker lets you choose one. Vision-capable text endpoints also appear in \`/config model vision\`. Re-run the add command with the same label and capability but a different model name to register an additional model on that connection (its endpoint URL and API style are inherited).`,
+      selection_value: `After registration, choose the label from {text_command}, {image_command}, or {video_command}; if the label has several models for that capability, a picker lets you choose one. Vision-capable text endpoints also appear in \`/model vision\`. Re-run the add command with the same label and capability but a different model name to register an additional model on that connection (its endpoint URL and API style are inherited).`,
       labels_field: `Labels And Removal`,
       labels_value: `A label groups every capability under one custom provider bundle. {server_remove_command} and {personal_remove_command} remove only the capabilities you uncheck. {server_provider_remove_command} and {personal_provider_remove_command} delete the whole labeled bundle.`,
       comfyui_page1_title: `ComfyUI Setup`,
@@ -252,7 +252,7 @@ Transcription supports ~100 languages (auto-detected).`,
 - Extract channel history into searchable knowledge with \`/memory history import\`
 - I retrieve and reference relevant document content when answering questions
 - I can also read file attachments shared directly in chat (PDF, source code, markdown, JSON, YAML, and more): just ask me to read it!
-- Requires an embedding model (configure with \`/config model embedding\`)
+- Requires an embedding model (configure with \`/model embedding\`)
 - Remove uploaded or history-extracted documents with \`/memory document remove\` and \`/memory history remove\``,
       impersonation_title: `Impersonation & Tools`,
       impersonation_description: `- Use \`/bot impersonate\` to send messages as yourself, a persona, or inject system messages
@@ -264,13 +264,13 @@ Transcription supports ~100 languages (auto-detected).`,
 - Supports Text2Image and Image2Image with customizable aspect ratios
 - Use \`/generate image\` or just ask me to generate an image
 - Reference images can come from message attachments, stickers, emojis, or user avatars
- - Available on Google, Vertex AI, Vertex AI Express, OpenRouter, Z.ai, and NVIDIA NIM providers (configure with \`/config model image\`)`,
+ - Available on Google, Vertex AI, Vertex AI Express, OpenRouter, Z.ai, and NVIDIA NIM providers (configure with \`/model image\`)`,
       videogen_title: `Video Generation`,
       videogen_description: `- I can generate short videos from text prompts or by animating reference images
 - Supports Text2Video and Image2Video with customizable aspect ratios
 - Use \`/generate video\` or just ask me to generate a video
 - Reference images can come from message attachments or user avatars
-- Available on Google, OpenRouter, and Z.ai providers (configure with \`/config model video\`)`,
+- Available on Google, OpenRouter, and Z.ai providers (configure with \`/model video\`)`,
       footer: `Not all features are available for all AI providers. Recommended: Google Gemini. You can also just ask me what I can do!`,
     },
     setup: {
@@ -656,7 +656,7 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
 - Documents are chunked and stored as searchable embeddings
 - I automatically retrieve relevant content based on the conversation
 - Use \`/memory document remove\` or \`/memory history remove\` to remove stored documents
-- Requires an embedding model configured via \`/config model embedding\``,
+- Requires an embedding model configured via \`/model embedding\``,
       shortterm_title: `Short-Term Memory`,
       shortterm_description: `In addition to persistent memories, I keep STM (short-term memory) of recent conversations:
 - Recent messages are cached per channel, and each persona carries the latest STM across channels within the same server

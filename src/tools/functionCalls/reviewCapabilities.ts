@@ -266,7 +266,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
           "Image generation is enabled and a model is configured, but the active image backend could not be resolved for the tool schema.\n\n";
       } else if (config.imagegen_enabled && !hasStandardImageSlot) {
         capabilitiesContent +=
-          "Image generation is enabled but no diffusion model is configured. An admin needs to set one with `/config model image`.\n\n";
+          "Image generation is enabled but no diffusion model is configured. An admin needs to set one with `/model image`.\n\n";
       } else {
         capabilitiesContent += "Image generation is **disabled** by server configuration.\n\n";
       }
@@ -282,7 +282,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent += "- When generating, describe in detail: scene, motion, camera movement, and mood\n\n";
       } else if (config.videogen_enabled && !hasVideoSlot) {
         capabilitiesContent +=
-          "Video generation is enabled but no video model is configured. An admin needs to set one with `/config model video`.\n\n";
+          "Video generation is enabled but no video model is configured. An admin needs to set one with `/model video`.\n\n";
       } else {
         capabilitiesContent += "Video generation is **disabled** by server configuration.\n\n";
       }
@@ -367,7 +367,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent += "- Use this knowledge to answer questions about server-specific topics\n\n";
       } else {
         capabilitiesContent += "The document knowledge base is not configured. An embedding model is required.\n";
-        capabilitiesContent += "- Configure with `/config model embedding` to enable document uploads\n\n";
+        capabilitiesContent += "- Configure with `/model embedding` to enable document uploads\n\n";
       }
 
       // 7. Personality & Configuration section (always available)
@@ -491,14 +491,14 @@ export class ReviewCapabilitiesTool extends BaseTool {
         if (!seesYouTube) missingVision.push("YouTube videos");
 
         unavailableReasons.push(
-          `**Vision Limitations**: Current model cannot process ${missingVision.join(", ")}. Switch to a vision-capable model using \`/config model\` or \`/config api-key\`.`,
+          `**Vision Limitations**: Current model cannot process ${missingVision.join(", ")}. Switch to a vision-capable model using \`/model\` or \`/config api-key\`.`,
         );
       }
 
       // Check for missing function calling
       if (!hasTools) {
         unavailableReasons.push(
-          "**No Function Calling**: Current model does not support tools/functions. Many features (search, reminders, etc.) require function calling. Switch to a model with tool support using `/config model` or `/config api-key`.",
+          "**No Function Calling**: Current model does not support tools/functions. Many features (search, reminders, etc.) require function calling. Switch to a model with tool support using `/model` or `/config api-key`.",
         );
       }
 
@@ -551,7 +551,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       // Check for missing embedding model (needed for document knowledge base)
       if (!config.embedding_model_id) {
         unavailableReasons.push(
-          "**Document Knowledge Base**: No embedding model configured. Enable with `/config model embedding` to upload and search documents.",
+          "**Document Knowledge Base**: No embedding model configured. Enable with `/model embedding` to upload and search documents.",
         );
       }
 
@@ -572,7 +572,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
 
       // 12. Add model switching information
       capabilitiesContent += "**Need different capabilities?** Tell the user they can switch models using:\n";
-      capabilitiesContent += "- `/config model` - Switch to a different model with the current provider\n";
+      capabilitiesContent += "- `/model` - Switch to a different model with the current provider\n";
       capabilitiesContent += "- `/config api-key` - Switch to a different LLM provider entirely\n\n";
       capabilitiesContent += "Different models may support different features (vision, tools, reasoning, etc.).\n";
 
@@ -711,7 +711,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         {
           name: "Document Knowledge Base (RAG)",
           value: !!config.embedding_model_id,
-          note: !config.embedding_model_id ? " (configure with `/config model embedding`)" : "",
+          note: !config.embedding_model_id ? " (configure with `/model embedding`)" : "",
         },
       ];
 
@@ -729,7 +729,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         settingsContent += "- Users can ask you to generate images, or use `/generate image` directly\n\n";
       } else if (config.imagegen_enabled && !config.diffusion_model_id) {
         settingsContent += "Image generation is enabled but no diffusion model is set.\n";
-        settingsContent += "- Configure with `/config model image` to activate\n\n";
+        settingsContent += "- Configure with `/model image` to activate\n\n";
       } else {
         settingsContent += "Image generation is **disabled**. Enable with `/capabilities manage`.\n\n";
       }
@@ -742,7 +742,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         settingsContent += "- Users can ask you to generate videos, or use `/generate video` directly\n\n";
       } else if (config.videogen_enabled && !config.video_model_id) {
         settingsContent += "Video generation is enabled but no video model is set.\n";
-        settingsContent += "- Configure with `/config model video` to activate\n\n";
+        settingsContent += "- Configure with `/model video` to activate\n\n";
       } else {
         settingsContent += "Video generation is **disabled**. Enable with `/capabilities manage`.\n\n";
       }
@@ -1004,7 +1004,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
 
       // 10. How to Enable Features Section
       settingsContent += "## How to Enable Disabled Features\n\n";
-      settingsContent += "- **Model Limitations**: Switch models using `/config model` or `/config api-key`\n";
+      settingsContent += "- **Model Limitations**: Switch models using `/model` or `/config api-key`\n";
       settingsContent += "- **Server Configuration**: Server admin can enable features via `/config [feature]`\n";
       settingsContent +=
         "- **API Keys**: Configure via `/config api-key` (LLM) or `/config brave_apikey` (Brave Search)\n";

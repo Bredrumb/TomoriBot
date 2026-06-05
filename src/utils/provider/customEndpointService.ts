@@ -223,6 +223,7 @@ async function clearServerScopedLiveReferences(
   scope: Extract<RegistrationScope, { kind: "server" }>,
   capability: CustomEndpointCapability,
   modelId: number | null,
+  siblingModelId: number | null,
 ): Promise<void> {
   if (!modelId) {
     return;
@@ -235,7 +236,8 @@ async function clearServerScopedLiveReferences(
   switch (capability) {
     case "text":
       if (scope.baseConfig.llm_id === modelId) {
-        modelPatch.llm_id = null;
+        // Promote to a sibling model when one exists; otherwise clear the slot.
+        modelPatch.llm_id = siblingModelId;
         modelPatch.custom_endpoint_url = null;
         modelPatch.custom_model_name = null;
         modelPatch.custom_num_ctx = null;
@@ -251,13 +253,13 @@ async function clearServerScopedLiveReferences(
       return;
     case "embedding":
       if (scope.baseConfig.embedding_model_id === modelId) {
-        modelPatch.embedding_model_id = null;
+        modelPatch.embedding_model_id = siblingModelId;
       }
       await updateModelConfigIfNeeded(serverId, modelPatch);
       return;
     case "image":
       if (scope.baseConfig.diffusion_model_id === modelId) {
-        modelPatch.diffusion_model_id = null;
+        modelPatch.diffusion_model_id = siblingModelId;
       }
       if (scope.baseConfig.nai_diffusion_model_id === modelId) {
         novelaiPatch.nai_diffusion_model_id = null;
@@ -269,7 +271,7 @@ async function clearServerScopedLiveReferences(
       return;
     case "video":
       if (scope.baseConfig.video_model_id === modelId) {
-        modelPatch.video_model_id = null;
+        modelPatch.video_model_id = siblingModelId;
       }
       await updateModelConfigIfNeeded(serverId, modelPatch);
       return;
@@ -545,24 +547,31 @@ export async function removeCustomEndpointRegistration(params: {
     return false;
   }
 
-  // 2. Clear live server config + channel/persona overrides that pointed at this exact model.
-  //    (No-op when the removed model was not the live-active one for its capability.)
-  if (params.scope.kind === "server") {
-    await clearServerScopedLiveReferences(params.scope, params.capability, params.modelRefId);
-  }
-
-  // 3. Delete the synthetic model row this endpoint owned.
-  if (params.modelRefId != null) {
-    await llmModelRepo.deleteSyntheticCustomCapabilityModelById(params.modelRefId, params.capability);
-  }
-
-  // 4. If no models remain for the whole label, drop the saved provider config entirely.
+  // 2. Load remaining endpoints under the same label to find a sibling to auto-promote to when the
+  //    removed model was the active one. Prefer the default-flagged sibling, then first available.
   const remaining =
     params.scope.kind === "server"
       ? await llmProviderRepo.loadCustomEndpointsForServer(params.scope.ownerId)
       : await llmProviderRepo.loadCustomEndpointsForUser(params.scope.ownerId);
   const sameLabelRemaining = remaining.filter((endpoint) => endpoint.label === params.label);
+  const sameLabelCapabilityRemaining = sameLabelRemaining.filter(
+    (endpoint) => endpoint.capability === params.capability && endpoint.model_ref_id != null,
+  );
+  const siblingModelId =
+    (sameLabelCapabilityRemaining.find((e) => e.is_default) ?? sameLabelCapabilityRemaining[0])?.model_ref_id ?? null;
 
+  // 3. Clear live server config + channel/persona overrides that pointed at this exact model,
+  //    auto-promoting to the sibling when one exists.
+  if (params.scope.kind === "server") {
+    await clearServerScopedLiveReferences(params.scope, params.capability, params.modelRefId, siblingModelId);
+  }
+
+  // 4. Delete the synthetic model row this endpoint owned.
+  if (params.modelRefId != null) {
+    await llmModelRepo.deleteSyntheticCustomCapabilityModelById(params.modelRefId, params.capability);
+  }
+
+  // 5. If no models remain for the whole label, drop the saved provider config entirely.
   if (sameLabelRemaining.length === 0) {
     if (params.scope.kind === "server") {
       await llmProviderRepo.deleteSavedProviderConfig(params.scope.ownerId, provider, {
@@ -574,8 +583,8 @@ export async function removeCustomEndpointRegistration(params: {
     return true;
   }
 
-  // 5. Otherwise, only clear the saved config's active slot for this capability if it pointed at the
-  //    removed model. Sibling models stay registered; the user re-picks via /model.
+  // 6. Otherwise, update the saved config's active slot for this capability. If it pointed at the
+  //    removed model, promote to the sibling; null only when no sibling exists.
   if (!existingConfig || params.modelRefId == null) {
     return true;
   }
@@ -588,11 +597,13 @@ export async function removeCustomEndpointRegistration(params: {
   const clearActive = activeForCapability === params.modelRefId;
   const nextConfig = {
     ...existingConfig,
-    llm_id: params.capability === "text" && clearActive ? null : existingConfig.llm_id,
+    llm_id: params.capability === "text" && clearActive ? siblingModelId : existingConfig.llm_id,
     vision_llm_id: visionMatches ? null : existingConfig.vision_llm_id,
-    embedding_model_id: params.capability === "embedding" && clearActive ? null : existingConfig.embedding_model_id,
-    diffusion_model_id: params.capability === "image" && clearActive ? null : existingConfig.diffusion_model_id,
-    video_model_id: params.capability === "video" && clearActive ? null : existingConfig.video_model_id,
+    embedding_model_id:
+      params.capability === "embedding" && clearActive ? siblingModelId : existingConfig.embedding_model_id,
+    diffusion_model_id:
+      params.capability === "image" && clearActive ? siblingModelId : existingConfig.diffusion_model_id,
+    video_model_id: params.capability === "video" && clearActive ? siblingModelId : existingConfig.video_model_id,
   };
 
   if (params.scope.kind === "server") {

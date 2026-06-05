@@ -28,6 +28,7 @@ import { getCachedVoiceTranscript, setCachedVoiceTranscript } from "@/utils/audi
 import { isAudioAttachment, transcribeMessageAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
 import { resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
 import { getOpenRouterCapabilities, isOpenRouterCapabilityCacheReady } from "@/utils/cache/openrouterCapabilityCache";
+import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { buildQueuedReplyDirective, normalizeTailDirective } from "@/utils/chat/contextDirectives";
 import {
   buildCombinedTailDirectiveMessage,
@@ -108,10 +109,24 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     impersonatedUserNickname = identity.displayName;
   }
 
+  // When this turn routes to the user's personal text provider, the model that
+  // actually answers is the personal model — NOT turn.persona.llm (the server
+  // model). Overlay the personal selections here so the media-visibility decision
+  // below (render an image part vs. emit a "[System: ...]" notice) reflects the
+  // routed model's real sees_images/sees_videos, matching what
+  // resolvePrimaryTomoriState applies at provider-call time. Without this, a
+  // vision-capable server model (e.g. Vertex) would cause images to be rendered as
+  // parts even when the personal model (e.g. DeepSeek) cannot see them, silently
+  // suppressing the "model cannot see images" notices the builder should emit.
+  const routedPersona =
+    turn.textCredentialSource === "personal"
+      ? (await applyPersonalProviderSelectionsToTomoriState(turn.persona, turn.personalRoutingUserId)).tomoriState
+      : turn.persona;
+
   // Resolve live OpenRouter capability flags to avoid stale DB vision values (Fix #3).
   let effectiveSeesImages: boolean | undefined;
   let effectiveSeesVideos: boolean | undefined;
-  const activeLlm = turn.persona.llm;
+  const activeLlm = routedPersona.llm;
   if (
     activeLlm.llm_provider === "openrouter" &&
     activeLlm.llm_codename !== "other-model" &&
@@ -124,17 +139,19 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     }
   }
 
-  // If the primary model cannot see images/videos but any fallback can, build
-  // context with those media parts included so fallback attempts have the URI data.
-  // effectiveSeesImages/Videos are kept unchanged for the hasVisionTool flag below.
+  // If the primary (routed) model cannot see images/videos but any fallback can,
+  // build context with those media parts included so fallback attempts have the
+  // URI data. These flags are concrete booleans (never undefined) so the dialogue
+  // builder uses the routed model's capability authoritatively instead of falling
+  // back to the server persona's sees_images via tomoriState.
   const primarySeesImages = effectiveSeesImages ?? activeLlm.sees_images;
   const primarySeesVideos = effectiveSeesVideos ?? activeLlm.sees_videos;
-  let contextBuildSeesImages: boolean | undefined = effectiveSeesImages;
-  let contextBuildSeesVideos: boolean | undefined = effectiveSeesVideos;
+  let contextBuildSeesImages = primarySeesImages;
+  let contextBuildSeesVideos = primarySeesVideos;
   if (!primarySeesImages || !primarySeesVideos) {
     const fallbackEntries =
-      turn.persona.fallback_chain ??
-      turn.persona.fallback_llms?.map((model) => ({ kind: "llm" as const, model })) ??
+      routedPersona.fallback_chain ??
+      routedPersona.fallback_llms?.map((model) => ({ kind: "llm" as const, model })) ??
       [];
     if (
       !primarySeesImages &&
@@ -324,7 +341,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     explicitLongTermMemoryIntent: streamingContext.explicitLongTermMemoryIntent,
     seesImages: contextBuildSeesImages,
     seesVideos: contextBuildSeesVideos,
-    hasVisionTool: !!effectivePersona.vision_llm && !(effectiveSeesImages ?? effectivePersona.llm.sees_images),
+    hasVisionTool: !!routedPersona.vision_llm && !primarySeesImages,
     messageIdMap,
   });
 

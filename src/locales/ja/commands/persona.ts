@@ -296,32 +296,32 @@ export default {
       field_web_search: `ウェブ検索を使用しますか？`,
       field_additional_inst: `追加の指示`,
       wrong_provider_title: `🔴 互換性のないプロバイダー`,
-      wrong_provider_description: `ペルソナ生成には対応プロバイダーが必要です。現在のプロバイダーは **{current_provider}** です。\`/config model text\`で対応プロバイダーに切り替えてください。`,
+      wrong_provider_description: `ペルソナ生成には対応プロバイダーが必要です。現在のプロバイダーは **{current_provider}** です。\`/model text\`で対応プロバイダーに切り替えてください。`,
       no_api_key_title: `🔴 APIキーがありません`,
       no_api_key_description: `有効なプロバイダーが設定されていません。\`/setup\`（初回）または\`/config provider add\`で登録してください。`,
       model_incompatible_title: `互換性のないモデル`,
       model_incompatible_description: `現在のモデル（**{model_name}**）は、ペルソナ生成に必要な**構造化出力**をサポートしていません。
 
 **次のステップ:**
-\`/config model text\`を使用して、構造化出力をサポートするモデル（例：「STRUCT」機能を持つモデル）に切り替えてください。`,
+\`/model text\`を使用して、構造化出力をサポートするモデル（例：「STRUCT」機能を持つモデル）に切り替えてください。`,
       image_vision_required_title: `🔴 画像ビジョンが必要`,
       image_vision_required_description: `画像がアップロードされましたが、現在のモデル（**{model_name}**）は**画像ビジョン**をサポートしておらず、ビジョンモデルも設定されていません。
 
 **次のステップ:**
-1. \`/config model vision\`を使用して専用ビジョンモデルを設定する、または
-2. \`/config model text\`を使用してビジョン対応モデルに切り替える、または
+1. \`/model vision\`を使用して専用ビジョンモデルを設定する、または
+2. \`/model text\`を使用してビジョン対応モデルに切り替える、または
 3. 画像を削除して画像なしで再生成する`,
       vision_model_provider_unsupported_title: `🔴 ビジョンモデルのプロバイダー非対応`,
       vision_model_provider_unsupported_description: `ビジョンモデル（**{vision_model_name}**）はプロバイダー **{vision_provider}** に設定されていますが、このプロバイダーはペルソナプリセット生成に対応していません。
 
 **次のステップ:**
-1. \`/config model vision\`を使用して対応プロバイダー（Google、OpenRouter、DeepSeek、Z.ai、Custom、NVIDIA NIM）のビジョンモデルを設定する、または
-2. \`/config model text\`を使用してビジョンとプリセット生成の両方に対応したプライマリモデルに切り替える`,
+1. \`/model vision\`を使用して対応プロバイダー（Google、OpenRouter、DeepSeek、Z.ai、Custom、NVIDIA NIM）のビジョンモデルを設定する、または
+2. \`/model text\`を使用してビジョンとプリセット生成の両方に対応したプライマリモデルに切り替える`,
       web_search_tools_required_title: `🔴 ウェブ検索を利用できません`,
       web_search_tools_required_description: `ウェブ検索が選択されましたが、現在のモデル（**{model_name}**）は**ツール**に対応していません。
 
 **次のステップ:**
-1. \`/config model text\`を使用してツール対応モデルに切り替える、または
+1. \`/model text\`を使用してツール対応モデルに切り替える、または
 2. ウェブ検索なしで再生成する（質問されたら「いいえ」を選択）`,
       api_key_decrypt_failed_title: `🔴 APIキーエラー`,
       api_key_decrypt_failed_description: `有効なプロバイダー認証情報の復号化に失敗しました。\`/config provider add\`で再設定してください。`,

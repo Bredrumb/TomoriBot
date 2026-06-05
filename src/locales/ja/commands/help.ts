@@ -28,7 +28,7 @@ export default {
       personal_field: `個人登録`,
       personal_value: `{add_command} で自分専用のラベル付きエンドポイントを登録し、{remove_command} で選んだ機能だけ削除できます。`,
       selection_field: `使い方`,
-      selection_value: `登録後は {text_command}、{image_command}、{video_command} からラベルを選択してください。そのラベルに同じ機能のモデルが複数ある場合は、選択メニューから1つ選べます。画像理解対応のテキストエンドポイントは \`/config model vision\` にも表示されます。同じラベル・同じ機能で別のモデル名を指定して追加コマンドを再実行すると、その接続にモデルを追加登録できます（エンドポイントURLとAPIスタイルは引き継がれます）。`,
+      selection_value: `登録後は {text_command}、{image_command}、{video_command} からラベルを選択してください。そのラベルに同じ機能のモデルが複数ある場合は、選択メニューから1つ選べます。画像理解対応のテキストエンドポイントは \`/model vision\` にも表示されます。同じラベル・同じ機能で別のモデル名を指定して追加コマンドを再実行すると、その接続にモデルを追加登録できます（エンドポイントURLとAPIスタイルは引き継がれます）。`,
       labels_field: `ラベルと削除`,
       labels_value: `1つのラベルは対応する全機能をまとめたカスタムプロバイダーバンドルです。{server_remove_command} と {personal_remove_command} はチェックを外した機能だけ削除します。{server_provider_remove_command} と {personal_provider_remove_command} はそのラベル全体を削除します。`,
       comfyui_page1_title: `ComfyUI セットアップ`,
@@ -252,7 +252,7 @@ GPU は **float16** · CPU は **int8**（バイト数が半分なので CPU RAM
 - \`/memory history import\`でチャンネル履歴を検索可能な知識として抽出できます
 - 質問に答える際に、私は関連するドキュメント内容を取得して参照します
 - チャットで共有されたファイル添付（PDF、ソースコード、Markdown、JSON、YAMLなど）も直接読み取れます、読んでと頼むだけ！
-- 埋め込みモデルが必要です（\`/config model embedding\`で設定）
+- 埋め込みモデルが必要です（\`/model embedding\`で設定）
 - \`/memory document remove\`と\`/memory history remove\`で保存済みドキュメントを削除できます`,
       impersonation_title: `なりきり＆ツール`,
       impersonation_description: `- \`/bot impersonate\`で自分自身、ペルソナ、またはシステムメッセージとしてメッセージを送信できます
@@ -264,13 +264,13 @@ GPU は **float16** · CPU は **int8**（バイト数が半分なので CPU RAM
 - Text2ImageとImage2Imageをカスタマイズタブルなアスペクト比で対応
 - \`/generate image\`を使うか、画像を生成してほしいと頼むだけで動作します
 - 参照画像としてメッセージの添付ファイル、ステッカー、絵文字、ユーザーアバターを使えます
- - Google、Vertex AI、Vertex AI Express、OpenRouter、Z.ai、NVIDIA NIMプロバイダーで利用可能（\`/config model image\`で設定）`,
+ - Google、Vertex AI、Vertex AI Express、OpenRouter、Z.ai、NVIDIA NIMプロバイダーで利用可能（\`/model image\`で設定）`,
       videogen_title: `動画生成`,
       videogen_description: `- テキストプロンプトから短い動画を生成し、参照画像をアニメーション化することもできます
 - Text2VideoとImage2Videoをカスタマイズ可能なアスペクト比で対応
 - \`/generate video\`を使うか、動画を生成してほしいと頼むだけで動作します
 - 参照画像としてメッセージの添付ファイルやユーザーアバターを使えます
-- Google、OpenRouter、Z.aiプロバイダーで利用可能（\`/config model video\`で設定）`,
+- Google、OpenRouter、Z.aiプロバイダーで利用可能（\`/model video\`で設定）`,
       footer: `すべての機能がすべてのAIプロバイダーで利用できるわけではありません。推奨：Google Gemini。私に直接何ができるか聞いてみることもできます！`,
     },
     setup: {
@@ -289,7 +289,7 @@ GPU は **float16** · CPU は **int8**（バイト数が半分なので CPU RAM
   - **Vertex AI** — ADC経由のGoogle Cloudモデル
   - **Vertex AI Express** — Express Mode経由のGoogle Cloud APIキーBYOK（Preview、Gemini限定）
   - **Z.ai (Zhipu)** — 中国のAIモデル、コーディングプランあり ⚠️ *利用規約でコーディング/エージェントのシナリオのみに制限*
-  - **Custom** — OpenAI互換エンドポイント（Ollama、vLLM、LiteLLMなど）
+  - **Custom**: OpenAI互換エンドポイント（Ollama、vLLM、LiteLLMなど）
 - このAPIキーを**他人と共有しないでください**
 - Customエンドポイントはセットアップ後に{configApiKeySet}または{configProviderSwitch}でBearer認証トークンを追加可能`,
       step2_title: `ステップ2：セットアップコマンドを実行`,
@@ -660,7 +660,7 @@ IDの形式は \`!abc:matrix.org\` のようになります。
 - ドキュメントは検索可能な埋め込みとして分割して保存されます
 - 会話に基づいて私は自動的に関連する内容を取得します
 - \`/memory document remove\`または\`/memory history remove\`で保存済みドキュメントを削除
-- \`/config model embedding\`で埋め込みモデルの設定が必要`,
+- \`/model embedding\`で埋め込みモデルの設定が必要`,
       shortterm_title: `短期記憶`,
       shortterm_description: `永続的な記憶に加え、最近の会話はSTM（短期記憶）として保持しています：
 - 最近のメッセージはチャンネルごとにキャッシュされ、各ペルソナは同じサーバー内の他チャンネルにも最新のSTMを持ち越します

@@ -101,7 +101,7 @@ export default {
       teaching_disabled_title: `Document Teaching Disabled`,
       teaching_disabled_description: `Members are not currently allowed to add or remove documents on this server. A server member with \`Manage Server\` permissions can enable this using \`/server member-permissions\`.`,
       no_embedding_model_title: `No Embedding Model Set`,
-      no_embedding_model_description: `An embedding model is not configured for this provider. Please set one using \`/config model embedding\`.`,
+      no_embedding_model_description: `An embedding model is not configured for this provider. Please set one using \`/model embedding\`.`,
       no_api_key_title: `No API Key Set`,
       no_api_key_description: `Saved embedding provider credentials are required to embed documents. Please use \`/config provider add\`.`,
       invalid_name_title: `Invalid Document Name`,

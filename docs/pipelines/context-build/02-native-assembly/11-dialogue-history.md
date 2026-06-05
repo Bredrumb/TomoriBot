@@ -44,11 +44,15 @@ Substantial — see signature in `dialogueHistory.ts:25-44`. Notable:
 - `mediaContextWindow: number | undefined` — override; falls back to
   `memoryGuard.getMediaWindow()`
 - `seesImagesOverride`, `seesVideosOverride` — the chat pipeline resolves
-  these from two sources and passes the result here (overriding stale DB
-  values): (1) live OpenRouter capability flags for OpenRouter models, and
-  (2) elevation to `true` when the primary model cannot see that media type
-  but any model in `fallback_chain`/`fallback_llms` can — so fallback
-  attempts receive full URI data rather than text-only hints
+  these from the **routed** model and passes the result here (overriding stale
+  DB values): (0) when the turn routes to a personal text provider, capability
+  is read from the personal model, not the server persona's `llm`; (1) live
+  OpenRouter capability flags for OpenRouter models; and (2) elevation to
+  `true` when the primary model cannot see that media type but any model in
+  `fallback_chain`/`fallback_llms` can — so fallback attempts receive full URI
+  data rather than text-only hints. The chat pipeline passes concrete booleans,
+  so the `?? tomoriState.llm.sees_images` fallback below only applies to callers
+  that omit the override (e.g. the cost estimator)
 - `hasVisionTool: boolean` — whether the active persona has a vision tool
   configured (changes the "can't see image" framing)
 - `isUserImpersonation`, `impersonatedUserId`

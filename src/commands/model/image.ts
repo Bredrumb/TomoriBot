@@ -367,7 +367,7 @@ export async function execute(
         userId: userData.user_id,
         errorType: "CommandExecutionError",
         metadata: {
-          command: "config model image",
+          command: "model image",
           guildId: interaction.guild?.id ?? interaction.user.id,
           requestedModelId: selectedModelIdStr,
           availableModels: availableModels.map((m) => m.diffusion_model_id),
@@ -416,7 +416,7 @@ export async function execute(
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
         metadata: {
-          command: "config model image",
+          command: "model image",
           guildId: interaction.guild?.id ?? interaction.user.id,
           selectedModelCodename: selectedModel.codename,
           targetDiffusionModelId: selectedModel.diffusion_model_id,
@@ -477,13 +477,13 @@ export async function execute(
       personaId: personaIdForError,
       errorType: "CommandExecutionError",
       metadata: {
-        command: "config model image",
+        command: "model image",
         guildId: interaction.guild?.id ?? interaction.user.id,
         executorDiscordId: interaction.user.id,
         targetDiffusionModelIdAttempted: selectedModel?.diffusion_model_id,
       },
     };
-    await log.error(`Error executing /config model image for user ${userData.user_disc_id}`, error as Error, context);
+    await log.error(`Error executing /model image for user ${userData.user_disc_id}`, error as Error, context);
 
     // 14. Inform user of unknown error
     // Use modalSubmitInteraction if available (error after modal), otherwise interaction (error during modal)

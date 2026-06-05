@@ -69,7 +69,7 @@ export default {
       use_reasoning_label: `Use Reasoning`,
       use_reasoning_description: `Toggle thinking using the highest reasoning budget of this model if available.`,
       no_smart_model_title: `No Reasoning Model Found`,
-      no_smart_model_description: `No reasoning model found for your current AI provider. Use \`/config model text\` to switch to a provider that supports reasoning models.`,
+      no_smart_model_description: `No reasoning model found for your current AI provider. Use \`/model text\` to switch to a provider that supports reasoning models.`,
       no_messages_title: `No Messages Found`,
       no_messages_description: `No messages found in this channel. Send at least one message before using \`/bot respond\`.`,
       cooldown_active: `This server's managers have configured a cooldown. Please wait **{seconds}** seconds before using \`/bot respond\` again. This cooldown is shared with message triggers.`,

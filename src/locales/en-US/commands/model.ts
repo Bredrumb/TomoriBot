@@ -152,7 +152,7 @@ Click the button below and enter your OpenRouter model codename (e.g., \`xai/gro
       current_none: `None`,
       nai_only_title: `NovelAI Image Models`,
       nai_only_description: `Your saved image providers only include NovelAI. Configure the model here and it will be stored in the dedicated NovelAI image slot for \`generate_image_nai\`.`,
-      nai_picker_note: `Setting a NovelAI image model here stores it in the dedicated NovelAI slot used by \`generate_image_nai\`. If you only want one image generation tool available, use \`/config model image clear\`.`,
+      nai_picker_note: `Setting a NovelAI image model here stores it in the dedicated NovelAI slot used by \`generate_image_nai\`. If you only want one image generation tool available, use \`/model image clear\`.`,
     },
     video: {
       description: `Change the video generation model for this server.`,

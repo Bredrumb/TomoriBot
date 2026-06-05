@@ -154,7 +154,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
   subcommand.setName("fallback").setDescription(localizer("en-US", "commands.model.fallback.description"));
 
 /**
- * Handles the /config model fallback command.
+ * Handles the /model fallback command.
  * Allows server admins to configure up to 5 ordered fallback models for automatic failover.
  * Supports mixing models from different providers and custom endpoints.
  *
@@ -197,7 +197,7 @@ export async function execute(
   }
   if (FALLBACK_DEBUG_ENABLED) {
     log.info(
-      `[FallbackDebug][/config model fallback] server_disc_id=${serverDiscId} server_id=${tomoriState.server_id} current_chain=${JSON.stringify(tomoriState.config.fallback_model_refs)}`,
+      `[FallbackDebug][/model fallback] server_disc_id=${serverDiscId} server_id=${tomoriState.server_id} current_chain=${JSON.stringify(tomoriState.config.fallback_model_refs)}`,
     );
   }
 
@@ -458,9 +458,7 @@ export async function execute(
   }
 
   if (FALLBACK_DEBUG_ENABLED) {
-    log.info(
-      `[FallbackDebug][/config model fallback] server_disc_id=${serverDiscId} final_refs=${JSON.stringify(finalRefs)}`,
-    );
+    log.info(`[FallbackDebug][/model fallback] server_disc_id=${serverDiscId} final_refs=${JSON.stringify(finalRefs)}`);
   }
 
   // 12. Write to database

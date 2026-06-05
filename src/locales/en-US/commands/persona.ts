@@ -296,32 +296,32 @@ Trigger Words ({trigger_word_count}): {triggers}`,
       field_web_search: `Search the Web?`,
       field_additional_inst: `Additional Instructions`,
       wrong_provider_title: `🔴 Incompatible Provider`,
-      wrong_provider_description: `Preset generation requires a compatible provider. Your current provider is **{current_provider}**. Use \`/config model text\` to switch to a supported provider.`,
+      wrong_provider_description: `Preset generation requires a compatible provider. Your current provider is **{current_provider}**. Use \`/model text\` to switch to a supported provider.`,
       no_api_key_title: `🔴 No API Key`,
       no_api_key_description: `No active provider is configured. Use \`/setup\` (first time) or \`/config provider add\` to register one.`,
       model_incompatible_title: `Incompatible Model`,
       model_incompatible_description: `Your current model (**{model_name}**) does not support **STRUCTURED OUTPUT**, which is required for persona generation.
 
 **Next steps:**
-Use \`/config model text\` to switch to a model that supports structured output (e.g., models with "STRUCT" capability).`,
+Use \`/model text\` to switch to a model that supports structured output (e.g., models with "STRUCT" capability).`,
       image_vision_required_title: `🔴 Image Vision Required`,
       image_vision_required_description: `You uploaded an image, but your current model (**{model_name}**) does not support **IMAGE VISION** and no vision model is configured.
 
 **Next steps:**
-1. Use \`/config model vision\` to set a dedicated vision model, OR
-2. Use \`/config model text\` to switch to a vision-capable model, OR
+1. Use \`/model vision\` to set a dedicated vision model, OR
+2. Use \`/model text\` to switch to a vision-capable model, OR
 3. Remove the image and regenerate without it`,
       vision_model_provider_unsupported_title: `🔴 Vision Model Provider Unsupported`,
       vision_model_provider_unsupported_description: `Your vision model (**{vision_model_name}**) is on provider **{vision_provider}**, which does not support persona preset generation.
 
 **Next steps:**
-1. Use \`/config model vision\` to set a vision model from a supported provider (Google, OpenRouter, DeepSeek, Z.ai, Custom, NVIDIA NIM), OR
-2. Use \`/config model text\` to switch your primary model to one that supports both vision and preset generation`,
+1. Use \`/model vision\` to set a vision model from a supported provider (Google, OpenRouter, DeepSeek, Z.ai, Custom, NVIDIA NIM), OR
+2. Use \`/model text\` to switch your primary model to one that supports both vision and preset generation`,
       web_search_tools_required_title: `🔴 Web Search Unavailable`,
       web_search_tools_required_description: `You selected web search, but the current model (**{model_name}**) does not support **TOOLS**.
 
 **Next steps:**
-1. Use \`/config model text\` to switch to a tool-enabled model, OR
+1. Use \`/model text\` to switch to a tool-enabled model, OR
 2. Regenerate without web search (choose "No" when asked)`,
       api_key_decrypt_failed_title: `🔴 API Key Error`,
       api_key_decrypt_failed_description: `Failed to decrypt the active provider credentials. Please reconfigure them using \`/config provider add\`.`,

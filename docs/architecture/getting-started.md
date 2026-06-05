@@ -87,7 +87,7 @@ If you want to use only a self-hosted or proxy-backed custom endpoint, `/config 
 
 ```text
 /config custom-endpoint add
-/config model text
+/model text
 ```
 
 Later changes to that registration can be done in place with `/config custom-endpoint edit`.

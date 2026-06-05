@@ -123,12 +123,14 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     contextItems: StructuredContextItem[],
     model?: string,
     messageIdMap?: StreamContext["messageIdMap"],
+    seesImages = true,
   ): Promise<GoogleTokenCountPayload> {
     const { systemInstruction, dialogueContents } = await this.assembleGoogleContext(
       contextItems,
       [],
       undefined,
       messageIdMap,
+      seesImages,
     );
 
     const contents = [...dialogueContents];
@@ -184,7 +186,12 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     }
 
     // Assemble context for Google format (shared with token counting path)
-    const payload = await this.buildTokenCountPayload(context.contextItems, config.model, context.messageIdMap);
+    const payload = await this.buildTokenCountPayload(
+      context.contextItems,
+      config.model,
+      context.messageIdMap,
+      context.tomoriState.llm.sees_images,
+    );
     const finalContents = [...payload.contents];
 
     if (payload.systemInstruction) {
@@ -996,6 +1003,7 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
       preToolCallTextParts?: Array<Record<string, unknown>>;
     }>,
     messageIdMap?: StreamContext["messageIdMap"],
+    seesImages = true,
   ): Promise<{ systemInstruction?: string; dialogueContents: Content[] }> {
     const systemInstructionParts: string[] = [];
     const dialogueContents: Content[] = [];
@@ -1027,6 +1035,17 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
         for (const part of item.parts) {
           if (part.type === "text") {
             geminiParts.push({ text: part.text });
+          } else if (part.type === "image" && !seesImages) {
+            // Defense-in-depth: an image part reached the adapter but the routed
+            // model cannot process it. This happens when context was built with
+            // images included for a vision-capable fallback model (see the
+            // fallback-chain elevation in contextPipeline.ts), then the
+            // image-blind primary runs. Emit a text placeholder so the model is
+            // aware media was attached instead of silently dropping it — mirrors
+            // the OpenRouter and OpenAI-compatible message builders.
+            geminiParts.push({
+              text: "[System: An image is attached to this message that this model cannot process.]",
+            });
           } else if (part.type === "image" && part.uri && part.mimeType) {
             // Handle images with URI - fetch and convert to base64
             try {
