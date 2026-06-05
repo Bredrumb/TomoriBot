@@ -10,11 +10,11 @@ import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { log } from "@/utils/misc/logger";
 import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTermMemoryIntent";
 import {
-  consumeRetainedToolAffordanceNames,
   type DeliberateToolIntentMatch,
   getDeliberateToolIntentResult,
   getFollowUpToolIntentResult,
   getRecentToolAffordanceNames,
+  getRecentTriggeredToolIntentResult,
   resolveDeliberateToolContextTurns,
   resolveDeliberateToolMode,
 } from "@/utils/tools/deliberateToolMode";
@@ -173,25 +173,33 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   );
   const deliberateToolAllowedNames = [...deliberateToolIntentResult.allowedToolNames];
   const deliberateToolTriggerMatches: DeliberateToolIntentMatch[] = [...deliberateToolIntentResult.matches];
+  const deliberateToolContextTurns = resolveDeliberateToolContextTurns(
+    turn.persona.config.deliberate_tool_context_turns,
+  );
 
   const followUpToolIntentResult = getFollowUpToolIntentResult(
     deliberateToolIntentText,
-    getRecentToolAffordanceNames(history.rawMessages, message.id, client.user?.id),
+    getRecentToolAffordanceNames(
+      history.rawMessages,
+      message.id,
+      turn.persona.config.deliberate_tool_triggers,
+      client.user?.id,
+    ),
   );
   deliberateToolAllowedNames.push(...followUpToolIntentResult.allowedToolNames);
   deliberateToolAllowedNames.push(...(streamingContext.endTurnAfterTools ?? []));
   deliberateToolTriggerMatches.push(...followUpToolIntentResult.matches);
 
-  const retainedToolNames = consumeRetainedToolAffordanceNames(channel.id);
+  const recentTriggeredToolIntentResult = getRecentTriggeredToolIntentResult(
+    history.rawMessages,
+    message.id,
+    turn.persona.config.deliberate_tool_triggers,
+    deliberateToolContextTurns,
+    client.user?.id,
+  );
   if (deliberateToolModeActive) {
-    deliberateToolAllowedNames.push(...retainedToolNames);
-    deliberateToolTriggerMatches.push(
-      ...retainedToolNames.map((toolName) => ({
-        toolName,
-        trigger: "recent successful tool",
-        source: "follow-up" as const,
-      })),
-    );
+    deliberateToolAllowedNames.push(...recentTriggeredToolIntentResult.allowedToolNames);
+    deliberateToolTriggerMatches.push(...recentTriggeredToolIntentResult.matches);
   }
 
   // 2. Reminder-driven adjustments: voice/audio reminders should auto-expose
@@ -327,10 +335,6 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     hasVisionTool: !!effectivePersona.vision_llm && !(effectiveSeesImages ?? effectivePersona.llm.sees_images),
     messageIdMap,
   });
-
-  const deliberateToolContextTurns = resolveDeliberateToolContextTurns(
-    effectivePersona.config.deliberate_tool_context_turns,
-  );
 
   const contextItems = appendTailDirectives({
     turn,
