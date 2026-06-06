@@ -3,7 +3,12 @@ import { ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { SendableChannel } from "./types";
 
-export function buildConversationEmbed(locale: string, summaryText: string, refresh: boolean): EmbedBuilder {
+export function buildConversationEmbed(
+  locale: string,
+  summaryText: string,
+  refresh: boolean,
+  editDeadline?: string,
+): EmbedBuilder {
   const title = refresh
     ? localizer(locale, "commands.tool.compact.summary_title_refreshed")
     : localizer(locale, "commands.tool.compact.summary_title");
@@ -13,14 +18,18 @@ export function buildConversationEmbed(locale: string, summaryText: string, refr
     .setDescription(truncateEmbedDescription(summaryText))
     .setColor(ColorCode.SECTION);
 
-  if (refresh) {
-    embed.setFooter({ text: localizer(locale, "commands.tool.compact.refresh_footer") });
-  }
+  const footerText = buildFooterText(locale, refresh, editDeadline);
+  if (footerText) embed.setFooter({ text: footerText });
 
   return embed;
 }
 
-export function buildRoleplayEmbeds(locale: string, summaryText: string, refresh: boolean): EmbedBuilder[] {
+export function buildRoleplayEmbeds(
+  locale: string,
+  summaryText: string,
+  refresh: boolean,
+  editDeadline?: string,
+): EmbedBuilder[] {
   const title = refresh
     ? localizer(locale, "commands.tool.compact.roleplay_scene_title_refreshed")
     : localizer(locale, "commands.tool.compact.roleplay_scene_title");
@@ -30,11 +39,18 @@ export function buildRoleplayEmbeds(locale: string, summaryText: string, refresh
     .setDescription(truncateEmbedDescription(summaryText))
     .setColor(ColorCode.SECTION);
 
-  if (refresh) {
-    embed.setFooter({ text: localizer(locale, "commands.tool.compact.refresh_footer") });
-  }
+  const footerText = buildFooterText(locale, refresh, editDeadline);
+  if (footerText) embed.setFooter({ text: footerText });
 
   return [embed];
+}
+
+function buildFooterText(locale: string, refresh: boolean, editDeadline?: string): string {
+  const parts: string[] = [];
+  if (refresh) parts.push(localizer(locale, "commands.tool.compact.refresh_footer"));
+  if (editDeadline)
+    parts.push(localizer(locale, "commands.tool.compact.edit_footer", { deadline: editDeadline }));
+  return parts.join(" · ");
 }
 
 export function isDiscordThreadChannel(channel: unknown): boolean {

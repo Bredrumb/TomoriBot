@@ -170,20 +170,27 @@ export async function executeCompactCommand(
       return;
     }
 
-    const buildEmbed = (text: string) =>
+    const COLLECTOR_DURATION_MS = 10 * 60 * 1000;
+    const deadlineDate = new Date(Date.now() + COLLECTOR_DURATION_MS);
+    const editDeadline = formatDeadline(deadlineDate);
+
+    const buildEmbed = (text: string, deadline?: string) =>
       modalSelection.summaryType === "conversation"
-        ? buildConversationEmbed(locale, text, modalSelection.refresh)
-        : buildRoleplayEmbeds(locale, text, modalSelection.refresh)[0];
+        ? buildConversationEmbed(locale, text, modalSelection.refresh, deadline)
+        : buildRoleplayEmbeds(locale, text, modalSelection.refresh, deadline)[0];
 
     const summaryText = String(result.summary);
     const buttonRow = buildEditSummaryButtonRow(locale);
-    const summaryMessage = await outputChannel.send({ embeds: [buildEmbed(summaryText)], components: [buttonRow] });
+    const summaryMessage = await outputChannel.send({
+      embeds: [buildEmbed(summaryText, editDeadline)],
+      components: [buttonRow],
+    });
     await editSuccess(modalSelection.submitInteraction, locale, targetChannelOption?.id ?? targetThreadId);
 
     const collector = summaryMessage.createMessageComponentCollector({
       componentType: ComponentType.Button,
       filter: (i) => i.customId === COMPACT_EDIT_BUTTON_ID,
-      time: 10 * 60 * 1000,
+      time: COLLECTOR_DURATION_MS,
     });
 
     collector.on("collect", async (buttonInteraction) => {
@@ -209,14 +216,17 @@ export async function executeCompactCommand(
         });
         const newText = submitted.fields.getTextInputValue("compact_edit_text");
         await submitted.deferUpdate();
-        await summaryMessage.edit({ embeds: [buildEmbed(newText)], components: [buttonRow] });
+        await summaryMessage.edit({ embeds: [buildEmbed(newText, editDeadline)], components: [buttonRow] });
       } catch {
         // Modal dismissed or timed out — no action needed
       }
     });
 
     collector.on("end", async () => {
-      await summaryMessage.edit({ components: [] }).catch(() => {});
+      const liveMessage = await summaryMessage.fetch().catch(() => null);
+      if (!liveMessage) return;
+      const currentText = liveMessage.embeds[0]?.description ?? "";
+      await summaryMessage.edit({ embeds: [buildEmbed(currentText)], components: [] }).catch(() => {});
     });
   } catch (error) {
     log.error("Compact summary command failed", error);
@@ -373,6 +383,15 @@ async function editFailure(
       error,
     },
   );
+}
+
+function formatDeadline(date: Date): string {
+  const hh = String(date.getUTCHours()).padStart(2, "0");
+  const mm = String(date.getUTCMinutes()).padStart(2, "0");
+  const dd = String(date.getUTCDate()).padStart(2, "0");
+  const mo = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const yyyy = String(date.getUTCFullYear());
+  return `${hh}:${mm} ${dd}/${mo}/${yyyy}`;
 }
 
 async function editSuccess(

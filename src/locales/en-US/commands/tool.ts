@@ -113,6 +113,7 @@ I have built-in features to help reduce costs from abusers or spammers in your s
       edit_button_label: `Edit Summary`,
       edit_modal_title: `Edit Summary`,
       edit_field_label: `Summary Text`,
+      edit_footer: `You have until {deadline} UTC to edit this summary.`,
     },
     refresh: {
       description: `Clears the recent conversation history.`,

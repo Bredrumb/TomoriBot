@@ -113,6 +113,7 @@ export default {
       edit_button_label: `要約を編集`,
       edit_modal_title: `要約を編集`,
       edit_field_label: `要約テキスト`,
+      edit_footer: `{deadline} UTC まで要約を編集できます。`,
     },
     refresh: {
       description: `最近の会話履歴をクリアします。`,
