@@ -187,7 +187,8 @@ export async function executeCompactCommand(
     });
 
     collector.on("collect", async (buttonInteraction) => {
-      const currentText = summaryMessage.embeds[0]?.description ?? "";
+      const liveMessage = await buttonInteraction.message.fetch();
+      const currentText = liveMessage.embeds[0]?.description ?? "";
       const editModal = new ModalBuilder()
         .setCustomId("compact_edit_modal")
         .setTitle(localizer(locale, "commands.tool.compact.edit_modal_title"));
