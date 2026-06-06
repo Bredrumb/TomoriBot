@@ -1,4 +1,4 @@
-import { ChannelType, EmbedBuilder } from "discord.js";
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder } from "discord.js";
 import { ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { SendableChannel } from "./types";
@@ -54,6 +54,16 @@ export async function sendEmbedsInChunks(channel: SendableChannel, embeds: Embed
   for (let index = 0; index < embeds.length; index += chunkSize) {
     await channel.send({ embeds: embeds.slice(index, index + chunkSize) });
   }
+}
+
+export const COMPACT_EDIT_BUTTON_ID = "compact_edit_summary";
+
+export function buildEditSummaryButtonRow(locale: string): ActionRowBuilder<ButtonBuilder> {
+  const button = new ButtonBuilder()
+    .setCustomId(COMPACT_EDIT_BUTTON_ID)
+    .setLabel(localizer(locale, "commands.tool.compact.edit_button_label"))
+    .setStyle(ButtonStyle.Secondary);
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(button);
 }
 
 function truncateEmbedDescription(text: string, maxLength = 4000): string {

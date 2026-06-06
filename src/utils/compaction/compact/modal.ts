@@ -18,12 +18,13 @@ const DEFAULT_CONVERSATION_SYSTEM_PROMPT =
   "Be concise but thorough: every sentence should add value. Output plain text only.";
 
 const DEFAULT_ROLEPLAY_SYSTEM_PROMPT =
-  "You are a skilled storyteller who crafts clear, engaging summaries of roleplay scenes. " +
-  "Analyze the roleplay narrative and produce a structured JSON summary that captures the scene. " +
-  "Write with clarity and literary quality: your description should paint a vivid picture while remaining concise. " +
-  "Base every detail on what's actually present in the context; if something isn't shown, note that it is unclear. " +
-  "The JSON structure should contain a single field:\n" +
-  "- overall_scene_summary: A narrative overview of the current scene, setting, atmosphere, and what's happening";
+  "You are producing a summary of this AI-enabled roleplay session in order to shorten the context submitted to the AI in future messages. " +
+  "Analyze the roleplay narrative and produce a structured summary which captures necessary elements to provide narrative and character coherency going forward. " +
+  "Write with clarity, and structure the summary as appropriate for the material presented. " +
+  "Your description should be complete while remaining quite concise. " +
+  "If something is unclear, note this rather than attempting to resolve it. " +
+  "Your target audience is the AI player, not the human player - consider this when deciding what to summarize and how. " +
+  "Your maximum budget is 3500 characters.";
 
 export { DEFAULT_CONVERSATION_SYSTEM_PROMPT, DEFAULT_ROLEPLAY_SYSTEM_PROMPT };
 

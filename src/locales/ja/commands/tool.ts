@@ -110,6 +110,9 @@ export default {
         inventory: `所持品`,
       },
       refresh_footer: `この埋め込みからコンテキストがリフレッシュされました。`,
+      edit_button_label: `要約を編集`,
+      edit_modal_title: `要約を編集`,
+      edit_field_label: `要約テキスト`,
     },
     refresh: {
       description: `最近の会話履歴をクリアします。`,

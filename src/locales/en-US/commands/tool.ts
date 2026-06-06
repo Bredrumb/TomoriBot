@@ -110,6 +110,9 @@ I have built-in features to help reduce costs from abusers or spammers in your s
         inventory: `Inventory of`,
       },
       refresh_footer: `Context refreshed starting with this embed.`,
+      edit_button_label: `Edit Summary`,
+      edit_modal_title: `Edit Summary`,
+      edit_field_label: `Summary Text`,
     },
     refresh: {
       description: `Clears the recent conversation history.`,

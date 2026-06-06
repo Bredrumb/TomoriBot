@@ -1,5 +1,13 @@
 import type { ChatInputCommandInteraction, Client, TextBasedChannel } from "discord.js";
-import { EmbedBuilder, MessageFlags } from "discord.js";
+import {
+  ActionRowBuilder,
+  ComponentType,
+  EmbedBuilder,
+  MessageFlags,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+} from "discord.js";
 import type { UserRow } from "@/types/db/schema";
 import { personaRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -10,7 +18,13 @@ import { decryptApiKey } from "@/utils/security/crypto";
 import { localizer } from "@/utils/text/localizer";
 import { buildConversationContext } from "./historyExtraction";
 import { promptForCompactOptions } from "./modal";
-import { buildConversationEmbed, buildRoleplayEmbeds, isDiscordThreadChannel, sendEmbedsInChunks } from "./rendering";
+import {
+  COMPACT_EDIT_BUTTON_ID,
+  buildConversationEmbed,
+  buildEditSummaryButtonRow,
+  buildRoleplayEmbeds,
+  isDiscordThreadChannel,
+} from "./rendering";
 import { generateCompactSummary } from "./summaryGeneration";
 import { buildSupplementaryContext } from "./supplementaryContext";
 import type { SendableChannel } from "./types";
@@ -156,17 +170,53 @@ export async function executeCompactCommand(
       return;
     }
 
-    const embeds =
+    const buildEmbed = (text: string) =>
       modalSelection.summaryType === "conversation"
-        ? [buildConversationEmbed(locale, String(result.summary), modalSelection.refresh)]
-        : buildRoleplayEmbeds(
-            locale,
-            typeof result.summary === "string" ? result.summary : result.summary.overall_scene_summary,
-            modalSelection.refresh,
-          );
+        ? buildConversationEmbed(locale, text, modalSelection.refresh)
+        : buildRoleplayEmbeds(locale, text, modalSelection.refresh)[0];
 
-    await sendEmbedsInChunks(outputChannel, embeds);
+    const summaryText = String(result.summary);
+    const buttonRow = buildEditSummaryButtonRow(locale);
+    const summaryMessage = await outputChannel.send({ embeds: [buildEmbed(summaryText)], components: [buttonRow] });
     await editSuccess(modalSelection.submitInteraction, locale, targetChannelOption?.id ?? targetThreadId);
+
+    const collector = summaryMessage.createMessageComponentCollector({
+      componentType: ComponentType.Button,
+      filter: (i) => i.customId === COMPACT_EDIT_BUTTON_ID,
+      time: 10 * 60 * 1000,
+    });
+
+    collector.on("collect", async (buttonInteraction) => {
+      const currentText = summaryMessage.embeds[0]?.description ?? "";
+      const editModal = new ModalBuilder()
+        .setCustomId("compact_edit_modal")
+        .setTitle(localizer(locale, "commands.tool.compact.edit_modal_title"));
+      const textInput = new TextInputBuilder()
+        .setCustomId("compact_edit_text")
+        .setLabel(localizer(locale, "commands.tool.compact.edit_field_label"))
+        .setStyle(TextInputStyle.Paragraph)
+        .setMaxLength(4000)
+        .setRequired(true)
+        .setValue(currentText.slice(0, 4000));
+      editModal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(textInput));
+      await buttonInteraction.showModal(editModal);
+
+      try {
+        const submitted = await buttonInteraction.awaitModalSubmit({
+          time: 600000,
+          filter: (i) => i.customId === "compact_edit_modal" && i.user.id === buttonInteraction.user.id,
+        });
+        const newText = submitted.fields.getTextInputValue("compact_edit_text");
+        await submitted.deferUpdate();
+        await summaryMessage.edit({ embeds: [buildEmbed(newText)], components: [buttonRow] });
+      } catch {
+        // Modal dismissed or timed out — no action needed
+      }
+    });
+
+    collector.on("end", async () => {
+      await summaryMessage.edit({ components: [] }).catch(() => {});
+    });
   } catch (error) {
     log.error("Compact summary command failed", error);
     await editFailure(
