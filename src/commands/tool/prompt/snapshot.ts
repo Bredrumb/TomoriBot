@@ -23,6 +23,7 @@ import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/p
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { PrivacyLevel, type UserRow, type TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
+import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
 import { GoogleStreamAdapter } from "@/providers/google/googleStreamAdapter";
 import { OpenrouterStreamAdapter } from "@/providers/openrouter/openrouterStreamAdapter";
 import { AnthropicStreamAdapter } from "@/providers/anthropic/anthropicStreamAdapter";
@@ -60,6 +61,13 @@ import {
   getFollowUpToolIntentResult,
   resolveDeliberateToolMode,
 } from "@/utils/tools/deliberateToolMode";
+import {
+  appendComponentMediaFromMessage,
+  appendSupportedMediaFromMessage,
+  getEffectiveAttachmentContentType,
+  isSupportedImageAttachmentContentType,
+  isSupportedVideoAttachmentContentType,
+} from "@/utils/chat/contextMedia";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -71,18 +79,6 @@ const YOUTUBE_URL_PATTERNS = [
   /(?:https?:\/\/)?(?:www\.)?youtu\.be\/([a-zA-Z0-9_-]{11})/i,
   /(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/i,
   /(?:https?:\/\/)?(?:www\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/i,
-];
-
-const SNAPSHOT_SUPPORTED_VIDEO_MIME_TYPES = [
-  "video/mp4",
-  "video/mpeg",
-  "video/mov",
-  "video/avi",
-  "video/x-flv",
-  "video/mpg",
-  "video/webm",
-  "video/wmv",
-  "video/3gpp",
 ];
 
 type SnapshotToolFilter = {
@@ -133,24 +129,8 @@ function insertBeforeLatestDialoguePair(
   contextSegments.splice(insertAt, 0, injectedItem);
 }
 
-function isSnapshotImageAttachment(contentType: string | null | undefined): boolean {
-  return (
-    contentType?.startsWith("image/png") ||
-    contentType?.startsWith("image/jpeg") ||
-    contentType?.startsWith("image/webp") ||
-    contentType?.startsWith("image/heic") ||
-    contentType?.startsWith("image/heif") ||
-    contentType?.startsWith("image/gif") ||
-    false
-  );
-}
-
 function isSnapshotAudioAttachment(contentType: string | null | undefined): boolean {
   return Boolean(contentType?.startsWith("audio/"));
-}
-
-function isSnapshotVideoAttachment(contentType: string | null | undefined): boolean {
-  return Boolean(contentType && SNAPSHOT_SUPPORTED_VIDEO_MIME_TYPES.some((type) => contentType.startsWith(type)));
 }
 
 function getSnapshotRecentToolAffordanceNames(
@@ -181,12 +161,36 @@ function getSnapshotRecentToolAffordanceNames(
       toolNames.push("generate_voice_message");
     }
 
-    if (attachments.some((attachment) => isSnapshotImageAttachment(attachment.contentType))) {
+    if (
+      attachments.some((attachment) =>
+        isSupportedImageAttachmentContentType(getEffectiveAttachmentContentType(attachment)),
+      )
+    ) {
       toolNames.push("generate_image", "generate_image_nai");
     }
 
-    if (attachments.some((attachment) => isSnapshotVideoAttachment(attachment.contentType))) {
+    if (
+      attachments.some((attachment) =>
+        isSupportedVideoAttachmentContentType(getEffectiveAttachmentContentType(attachment)),
+      )
+    ) {
       toolNames.push("generate_video");
+    }
+
+    if (toolNames.length === 0) {
+      const componentImageAttachments: Parameters<typeof appendComponentMediaFromMessage>[1] = [];
+      const componentVideoAttachments: Parameters<typeof appendComponentMediaFromMessage>[2] = [];
+      const componentCounts = appendComponentMediaFromMessage(
+        msg,
+        componentImageAttachments,
+        componentVideoAttachments,
+      );
+      if (componentCounts.imageCount > 0) {
+        toolNames.push("generate_image", "generate_image_nai");
+      }
+      if (componentCounts.videoCount > 0) {
+        toolNames.push("generate_video");
+      }
     }
 
     if (toolNames.length > 0) break;
@@ -229,6 +233,31 @@ async function buildSnapshotToolFilter(params: {
     disabledByDeliberateMode: allowedToolNames.length === 0,
     allowedToolNames,
   };
+}
+
+async function resolveSnapshotAnsweringState(params: {
+  selectedPersona: TomoriState;
+  effectivePersona: TomoriState;
+  userId: number | null;
+}): Promise<TomoriState> {
+  try {
+    const textCreds = await resolveCapabilityCredentials(params.selectedPersona.server_id, "text", {
+      userId: params.userId,
+    });
+
+    if (textCreds.source !== "personal") {
+      return params.effectivePersona;
+    }
+
+    const overlay = await applyPersonalProviderSelectionsToTomoriState(params.selectedPersona, params.userId);
+    return {
+      ...overlay.tomoriState,
+      persona_llm: undefined,
+    };
+  } catch (error) {
+    log.warn("prompt snapshot: text credential resolution failed; using server/persona model view.", error as Error);
+    return params.effectivePersona;
+  }
 }
 
 // ─── Subcommand registration ──────────────────────────────────────────────────
@@ -418,26 +447,11 @@ export async function execute(
       }
     }
 
-    // 9c. Mirror live personal-provider routing for media visibility. If the
-    //     invoker's text turns would route to their personal provider, the model
-    //     that actually answers is the personal model — so the snapshot's
-    //     sees_images/sees_videos must reflect that model, exactly like
-    //     contextPipeline.ts. Best-effort: any credential-resolution error falls
-    //     back to the server/persona model view (current behavior).
-    let routedLlm = effectiveLlm;
-    let routedVisionLlm = effectivePersona.vision_llm;
-    try {
-      const textCreds = await resolveCapabilityCredentials(selectedPersona.server_id, "text", {
-        userId: userData.user_id ?? null,
-      });
-      if (textCreds.source === "personal") {
-        const overlay = await applyPersonalProviderSelectionsToTomoriState(selectedPersona, userData.user_id ?? null);
-        routedLlm = overlay.tomoriState.llm;
-        routedVisionLlm = overlay.tomoriState.vision_llm;
-      }
-    } catch (error) {
-      log.warn("prompt snapshot: personal credential resolution failed; using server model view.", error as Error);
-    }
+    const answeringState = await resolveSnapshotAnsweringState({
+      selectedPersona,
+      effectivePersona,
+      userId: userData.user_id ?? null,
+    });
 
     // 10. Fetch channel message history — same pattern as /tool estimate cost
     const textChannel = interaction.channel;
@@ -466,7 +480,7 @@ export async function execute(
         ? await buildSnapshotToolFilter({
             messagesArray,
             clientUserId: client.user?.id,
-            persona: effectivePersona,
+            persona: answeringState,
             invokingUserData: userData,
           })
         : null;
@@ -543,26 +557,13 @@ export async function execute(
       const videoAttachments: SimpleMsg["videoAttachments"] = [];
       let hasLocalMedia = false;
 
-      for (const att of message.attachments.values()) {
-        if (att.contentType?.startsWith("image/")) {
-          imageAttachments.push({
-            url: att.url,
-            proxyUrl: att.proxyURL,
-            mimeType: att.contentType,
-            filename: att.name,
-          });
-          hasLocalMedia = true;
-        } else if (att.contentType?.startsWith("video/")) {
-          videoAttachments.push({
-            url: att.url,
-            proxyUrl: att.proxyURL,
-            mimeType: att.contentType,
-            filename: att.name,
-            isYouTubeLink: false,
-          });
-          hasLocalMedia = true;
-        }
-      }
+      const directMediaCounts = appendSupportedMediaFromMessage(message, imageAttachments, videoAttachments);
+      const componentMediaCounts = appendComponentMediaFromMessage(message, imageAttachments, videoAttachments);
+      hasLocalMedia =
+        directMediaCounts.imageCount > 0 ||
+        directMediaCounts.videoCount > 0 ||
+        componentMediaCounts.imageCount > 0 ||
+        componentMediaCounts.videoCount > 0;
 
       for (const sticker of message.stickers.values()) {
         const stickerUrl = `https://cdn.discordapp.com/stickers/${sticker.id}.png`;
@@ -762,9 +763,6 @@ export async function execute(
       personaPrompt: selectedPersona.persona_prompt ?? null,
       personaLineageId: selectedPersona.persona_lineage_id,
       isDMChannel,
-      seesImages: routedLlm.sees_images,
-      seesVideos: routedLlm.sees_videos,
-      hasVisionTool: !!routedVisionLlm && !routedLlm.sees_images,
     });
 
     // Mutable copy — tail directives are spliced/pushed in below
@@ -794,13 +792,15 @@ export async function execute(
       if (uncensorTailMessage) contextItems.push(uncensorTailMessage);
     }
 
+    const resolvedContextItems = await resolveMediaForModel(contextItems, answeringState);
+
     // 14. Retrieve the active preset name for the snapshot header
     const presetData = await getCachedActivePreset(selectedPersona.server_id);
     const presetName = presetData?.preset.preset_name ?? null;
 
-    // 15. Resolve effective model — already computed as effectiveLlm above (step 9b)
-    const providerName = normalizeProviderName(effectiveLlm.llm_provider);
-    const modelName = effectiveLlm.llm_codename;
+    // 15. Resolve effective model — mirrors the routed answering state used for media resolution.
+    const providerName = normalizeProviderName(answeringState.llm.llm_provider);
+    const modelName = answeringState.llm.llm_codename;
     const timestamp = new Date().toISOString();
 
     // 16. Optionally fetch provider-formatted tool definitions (JSON output only).
@@ -808,7 +808,7 @@ export async function execute(
     let toolsData: Array<Record<string, unknown>> | null = null;
     if (fetchTools && format === "json") {
       try {
-        toolsData = await fetchProviderTools(effectivePersona, providerName, snapshotToolFilter);
+        toolsData = await fetchProviderTools(answeringState, providerName, snapshotToolFilter);
       } catch (toolError) {
         log.warn(
           `Failed to fetch tools for prompt snapshot (provider=${providerName}): ${(toolError as Error).message}`,
@@ -818,7 +818,7 @@ export async function execute(
 
     // 16b. Build per-provider sampling/request-config block
     //      Shown in DM for BOTH formats and baked into JSON file top-level
-    const requestConfig = buildRequestConfig(effectivePersona, providerName, modelName);
+    const requestConfig = buildRequestConfig(answeringState, providerName, modelName);
 
     // 17. Build snapshot file content
     let fileContent: string;
@@ -826,8 +826,8 @@ export async function execute(
 
     if (format === "json") {
       const snapshotData = await buildJsonSnapshot(
-        contextItems,
-        effectivePersona,
+        resolvedContextItems,
+        answeringState,
         providerName,
         modelName,
         toolsData,
@@ -836,7 +836,7 @@ export async function execute(
       fileContent = JSON.stringify(snapshotData, null, 2);
       fileName = `prompt-snapshot-${interaction.channelId}-${selectedPersona.persona_lineage_id}-${Date.now()}.json`;
     } else {
-      fileContent = buildTextSnapshot(contextItems);
+      fileContent = buildTextSnapshot(resolvedContextItems);
       fileName = `prompt-snapshot-${interaction.channelId}-${selectedPersona.persona_lineage_id}-${Date.now()}.txt`;
     }
 

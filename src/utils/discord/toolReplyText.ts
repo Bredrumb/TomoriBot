@@ -12,7 +12,7 @@
 
 import type { ToolContext } from "@/types/tool/interfaces";
 import { getKnownPersonaSpeakerNames, stripLeadingKnownSpeakerPrefixes } from "@/utils/discord/modelAuthoredText";
-import { buildMentionLookup } from "@/utils/discord/stream/textConfig";
+import { buildMentionLookup, collectPersonaNameAliases } from "@/utils/discord/stream/textConfig";
 import { resolveGuildMentions } from "@/utils/discord/stream/mentionResolver";
 import { filterDuplicateCustomEmojis } from "@/utils/text/emojiPenalty";
 import { cleanLLMOutput } from "@/utils/text/processors/llmOutputProcessor";
@@ -43,6 +43,9 @@ export async function cleanToolReplyText(content: string, context: ToolContext):
   //    applies uncensor transforms. Runs on the still-prefixed text so own-label stripping can
   //    make its real-turn vs leaked-preamble decision correctly.
   const botName = context.personaUsername ?? context.tomoriState.persona_nickname;
+  // Aliases the active persona also answers to (lore/default name + trigger words), so the cleaner
+  // can peel a leaked multi-name opening label chain like "Tomori: Lilya: ...".
+  const botNameAliases = collectPersonaNameAliases(context.tomoriState, botName);
   const cleaned = cleanLLMOutput(
     filtered,
     botName,
@@ -54,6 +57,7 @@ export async function cleanToolReplyText(content: string, context: ToolContext):
       unicodeSpacesEnabled: context.tomoriState.config.uncensor_unicode_space_enabled ?? false,
       sanitizeEnabled: context.tomoriState.config.uncensor_sanitize_enabled ?? false,
     },
+    botNameAliases,
   );
 
   // 4. Strip any leading *foreign* persona speaker labels (e.g. "Bella:") that the own-name-only

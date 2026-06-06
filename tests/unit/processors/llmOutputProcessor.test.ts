@@ -181,6 +181,43 @@ describe("stripLeakedOwnNameLabels", () => {
     });
   });
 
+  // Multi-name personas: a bundled persona answers to its webhook nickname ("Lilya") AND its
+  // lore/default name ("Tomori"), so the model opens with a chain of both labels.
+  describe("alias names (multi-name persona opening chain)", () => {
+    it("peels a leading lore-name + nickname chain", () => {
+      expect(stripLeakedOwnNameLabels("Tomori: Lilya: Zaya-senpai...!", "Lilya", ["Tomori"]).trim()).toBe(
+        "Zaya-senpai...!",
+      );
+    });
+
+    it("peels the chain regardless of label order", () => {
+      expect(stripLeakedOwnNameLabels("Lilya: Tomori: hi there", "Lilya", ["Tomori"]).trim()).toBe("hi there");
+    });
+
+    it("peels a leading alias label even when the nickname never appears", () => {
+      expect(stripLeakedOwnNameLabels("Tomori: just the lore name", "Lilya", ["Tomori"]).trim()).toBe(
+        "just the lore name",
+      );
+    });
+
+    it("matches aliases case-insensitively", () => {
+      expect(stripLeakedOwnNameLabels("tomori: lilya: hey", "Lilya", ["Tomori"]).trim()).toBe("hey");
+    });
+
+    it("still collapses a later self-label after an alias opening chain", () => {
+      expect(stripLeakedOwnNameLabels("Tomori: Lilya: hi.Lilya: bye", "Lilya", ["Tomori"])).toBe("hi.\nbye");
+    });
+
+    it("does not strip an alias used mid-prose at a non-boundary", () => {
+      const text = "Lilya: my sister, Tomori: is around";
+      expect(stripLeakedOwnNameLabels(text, "Lilya", ["Tomori"]).trim()).toBe("my sister, Tomori: is around");
+    });
+
+    it("behaves identically to the no-alias path when aliases are empty", () => {
+      expect(stripLeakedOwnNameLabels("Tomori: Lilya: hi", "Lilya", [])).toBe("Tomori: Lilya: hi");
+    });
+  });
+
   describe("preserves legitimate Name: usages", () => {
     it("does not strip a hyphen list item", () => {
       const text = "Power levels:\n- Tsukushi: 100\n- Bella: 80";

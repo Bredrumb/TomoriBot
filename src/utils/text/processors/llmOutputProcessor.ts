@@ -112,6 +112,29 @@ export function truncateBeforeGenericSpeakerLine(
 }
 
 /**
+ * Builds a regex alternation that matches a `Name:` turn label in its plain, "**Name:**", or
+ * "**Name**:" bold forms, for any of the supplied names. Names are escaped, de-duplicated, and
+ * ordered longest-first so a longer name ("Shy Tomori") is preferred over a shorter one it
+ * contains ("Tomori"). Blank names are dropped.
+ * @param names - Speaker names the label may use
+ * @returns Regex source string (a non-capturing group), or null if no usable names remain
+ */
+function buildNameLabelAlternation(names: string[]): string | null {
+  const escapedForms: string[] = [];
+  const seen = new Set<string>();
+  for (const name of [...names].sort((a, b) => b.length - a.length)) {
+    const trimmed = name?.trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const escaped = escapeRegExp(trimmed);
+    escapedForms.push(`\\*\\*${escaped}:\\*\\*`, `\\*\\*${escaped}\\*\\*:`, `${escaped}:`);
+  }
+  return escapedForms.length > 0 ? `(?:${escapedForms.join("|")})` : null;
+}
+
+/**
  * Removes leaked uses of the bot's *own* name as a turn label (e.g. "Tomori:"). Conversation
  * history is fed to the model in "Name: text" form, so the model both opens its turn with its own
  * label and sometimes re-emits it. The handling branches on whether the output *opened* with the
@@ -125,6 +148,12 @@ export function truncateBeforeGenericSpeakerLine(
  *      → "30!". A trailing-only label ("...chew toy!Tomori:") is the exception: the preceding text
  *      is the response, so only the bare label is dropped (by stripBoundaryOwnNameLabels).
  *
+ * `aliasNames` covers personas that answer to more than one name — e.g. a bundled persona whose
+ * webhook nickname is "Lilya" but whose lore/default name is "Tomori". The model then opens with a
+ * *chain* of labels ("Tomori: Lilya: <reply>"); the leading-chain loop consumes every self/alias
+ * label so none leaks. Aliases only widen the *opening-chain* match — the leaked-preamble and
+ * later-boundary passes stay scoped to the active name to avoid over-stripping mid-text prose.
+ *
  * Legitimate "Name: value" list items and inline prose are preserved throughout — see
  * stripBoundaryOwnNameLabels for the turn-boundary rules and list-marker guards.
  *
@@ -133,20 +162,32 @@ export function truncateBeforeGenericSpeakerLine(
  *
  * @param text - LLM text (post emoji-resolution)
  * @param botName - Active persona / bot display name
+ * @param aliasNames - Additional names the active persona answers to (e.g. lore/default name)
  * @returns Text with leaked self-labels removed
  */
-export function stripLeakedOwnNameLabels(text: string, botName: string): string {
+export function stripLeakedOwnNameLabels(text: string, botName: string, aliasNames: string[] = []): string {
   if (!text || !botName.trim()) return text;
 
   const escapedName = escapeRegExp(botName);
   // Own-name label in plain, "**Name:**", or "**Name**:" bold forms (reused across the helpers).
+  // Scoped to the *active* name only, so the preamble/boundary passes never strip an alias from prose.
   const labelAlternation = `(?:\\*\\*${escapedName}:\\*\\*|\\*\\*${escapedName}\\*\\*:|${escapedName}:)`;
+  // Opening-chain label covers the active name plus any aliases (lore/default name, trigger names).
+  const leadingAlternation = buildNameLabelAlternation([botName, ...aliasNames]) ?? labelAlternation;
 
-  // 1. Did the model open its turn with its own label? That distinguishes a real (if messy) turn
-  //    from output that leaked a "thought" before re-introducing the persona.
-  const starterPattern = new RegExp(`^\\s*${labelAlternation}[ \\t]*`, "i");
-  const deleaked = starterPattern.test(text)
-    ? text.replace(starterPattern, "") // 2a. Real turn — drop only the starter label.
+  // 1. Consume a leading chain of self/alias labels. Each iteration peels one label, so a multi-name
+  //    leak ("Tomori: Lilya: hi") collapses fully. If at least one peels, the model opened its turn
+  //    with a (self/alias) label — a real turn (branch A); otherwise fall through to branch B.
+  const leadingChainPattern = new RegExp(`^\\s*${leadingAlternation}[ \\t]*`, "i");
+  let working = text;
+  let openedWithLabel = false;
+  while (leadingChainPattern.test(working)) {
+    working = working.replace(leadingChainPattern, "");
+    openedWithLabel = true;
+  }
+
+  const deleaked = openedWithLabel
+    ? working // 2a. Real turn — leading self/alias chain dropped.
     : stripLeakedPreamble(text, labelAlternation); // 2b. Leaked preamble — drop everything before the turn.
 
   // 3. Clean any self-labels that re-introduce the persona at a later turn boundary.
@@ -275,6 +316,8 @@ function stripBoundaryOwnNameLabels(text: string, labelAlternation: string): str
  * @param mentionMap - Map of mention handles to user IDs
  * @param mentionIdSet - Set of known user IDs for disambiguation
  * @param uncensorOptions - Optional uncensor cleanup flags (output side)
+ * @param botNameAliases - Additional names the active persona answers to (e.g. lore/default name),
+ *   used to strip a leaked multi-name opening label chain ("Tomori: Lilya: ...")
  * @returns Cleaned text suitable for Discord messages
  */
 export function cleanLLMOutput(
@@ -288,6 +331,7 @@ export function cleanLLMOutput(
     unicodeSpacesEnabled?: boolean;
     sanitizeEnabled?: boolean;
   },
+  botNameAliases: string[] = [],
 ): string {
   const preserveUnresolvedEmojiShortcodes = shouldPreserveUnresolvedEmojiShortcodes();
   let cleanedText = applyUncensorOutputTransforms(text, uncensorOptions)
@@ -375,7 +419,7 @@ export function cleanLLMOutput(
     // Owns the full own-name leak handling: drop the starter "Name:" label on a real turn, drop a
     // leaked "thought" preamble when the turn did not open with the label, and collapse any later
     // self-labels. Must run with the leading label intact, so no prefix strip precedes it.
-    cleanedText = stripLeakedOwnNameLabels(cleanedText, botName);
+    cleanedText = stripLeakedOwnNameLabels(cleanedText, botName, botNameAliases);
   }
 
   if (!preserveUnresolvedEmojiShortcodes) {

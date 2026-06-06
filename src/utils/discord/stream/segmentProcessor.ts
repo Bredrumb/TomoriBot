@@ -67,6 +67,7 @@ export class StreamSegmentProcessor {
         unicodeSpacesEnabled: textConfig.uncensorUnicodeSpacesEnabled,
         sanitizeEnabled: textConfig.uncensorSanitizeEnabled,
       },
+      textConfig.botNameAliases,
     );
 
     const segmentMentionMap = textConfig.mentionMap ?? new Map<string, string[]>();
@@ -174,6 +175,7 @@ export class StreamSegmentProcessor {
         unicodeSpacesEnabled: textConfig.uncensorUnicodeSpacesEnabled,
         sanitizeEnabled: textConfig.uncensorSanitizeEnabled,
       },
+      textConfig.botNameAliases,
     );
 
     const prefillMentionMap = textConfig.mentionMap ?? new Map<string, string[]>();

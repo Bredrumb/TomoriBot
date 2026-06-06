@@ -28,6 +28,7 @@ import type { StreamingContext } from "@/types/tool/interfaces";
 import type { FunctionCall } from "@/types/provider/interfaces";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { stripBridgePrefix } from "@/utils/bridges";
+import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -298,6 +299,17 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     metadataTag: ContextItemTag.DIALOGUE_HISTORY,
   };
   contextItems = [...contextItems, agentDirective];
+  // This internal planner is intentionally allowed to inspect image context even when the text model's
+  // public OpenRouter capability metadata would normally say otherwise.
+  const mediaResolutionLlm = {
+    ...tomoriState.llm,
+    sees_images: true,
+    ...(tomoriState.llm.llm_provider === "openrouter" ? { llm_codename: "other-model" } : {}),
+  };
+  contextItems = await resolveMediaForModel(contextItems, {
+    ...tomoriState,
+    llm: mediaResolutionLlm,
+  });
 
   // 6. Set up streaming context flags for the hidden turn.
   const targetToolName = backend === "current_provider" ? "generate_image" : "generate_image_nai";

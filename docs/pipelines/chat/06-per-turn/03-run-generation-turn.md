@@ -53,6 +53,10 @@ a non-error result *and* the loop falls through (rare; defensive).
 
 **Per-attempt context prep (`prepareProviderContextItems`):**
 
+- Resolves dialogue `mediaDescriptors` into final image/video parts or
+  model-appropriate system notices using the attempt's `TomoriState`. This is
+  where personal-provider routing, fallback model capability differences, and
+  OpenRouter live media capability corrections affect media visibility.
 - Applies provider-specific token-limit truncation
   (`truncateDialogueHistory`) for Gemini, OpenRouter, NovelAI.
 - If the previous attempt ended with `emptyResponseFinishReason === "length"`

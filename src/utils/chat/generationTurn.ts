@@ -14,6 +14,7 @@ import { log } from "@/utils/misc/logger";
 import { getProviderForTomori, ProviderFactory } from "@/utils/provider/providerFactory";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { decryptApiKey } from "@/utils/security/crypto";
+import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
 import {
   hasAvailableRotationKey,
   MAX_KEY_ATTEMPTS,
@@ -413,7 +414,8 @@ async function prepareProviderContextItems(args: {
   emptyResponseFinishReason: string | null | undefined;
   retryCount: number;
 }): Promise<StructuredContextItem[]> {
-  let contextItems = await applyProviderContextTruncation(args.contextItems, args.tomoriState, args.serverDiscId);
+  let contextItems = await resolveMediaForModel(args.contextItems, args.tomoriState);
+  contextItems = await applyProviderContextTruncation(contextItems, args.tomoriState, args.serverDiscId);
   if (
     shouldApplyLengthEmptyRetryTrim(args.tomoriState.llm.llm_provider, args.emptyResponseFinishReason, args.retryCount)
   ) {

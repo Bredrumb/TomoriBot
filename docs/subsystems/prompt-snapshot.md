@@ -40,7 +40,7 @@ The snapshot mirrors the real `messageCreate → tomoriChat` pipeline as closely
 | Forwarded-message inline expansion | ⚠️ | Basic text is captured; full forwarded-body expansion used by tomoriChat is NOT replicated. |
 | Reply-reference context annotation | ⚠️ | Reply threading isn't re-assembled — only the raw reply chain's content is visible. |
 | Output prefill / speaker-guard stop strings | ✅ | Present in the sampling/config block for providers that use them. |
-| Personal-provider vision capability | ✅ | When the invoker's text turns route to their personal provider (`resolveCapabilityCredentials` → `source: "personal"`), `seesImages`/`seesVideos`/`hasVisionTool` reflect the **personal** model, not the server persona's `llm`. Best-effort: credential errors fall back to the server-model view. |
+| Media capability resolution | ✅ | `buildContext()` emits capability-neutral `mediaDescriptors`; snapshot resolves them after context assembly with the routed answering model, including personal text-provider routing, before TXT serialization or provider-native JSON probe serialization. |
 
 ## Output formats
 

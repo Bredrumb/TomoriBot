@@ -739,6 +739,7 @@ Implementation notes:
 - Attachments on Components V2 messages do not render unless they are referenced by a component.
 - Webhook sends and edits through discord.js must also pass `withComponents: true`.
 - Image delivery should fall back to the legacy `files`-only payload if the Components V2 send fails.
+- Re-fetching a generated image by message/media ID (for image-to-image, inpaint, or vision analysis) must scan `message.components` for `MediaGallery`/`Thumbnail`/`File` media, not just top-level attachments/embeds — the generated file is referenced only inside the component. This discovery is centralized in `collectImageUrlsFromMessage` (`src/utils/image/imageExtractor.ts`), which reuses `appendComponentMediaFromMessage` from `src/utils/chat/contextMedia.ts`. `generate_image`, `generate_image_nai`, and `analyze_image` all go through it, so a Components V2 image found in context can also be reloaded by any tool that accepts a media reference.
 
 ### Migration guidance
 

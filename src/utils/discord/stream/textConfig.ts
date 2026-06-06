@@ -1,3 +1,4 @@
+import type { TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { StreamConfig, StreamContext } from "@/types/stream/interfaces";
 import { getVisibleDeliveryMode, type TextProcessingConfig } from "@/types/stream/types";
@@ -15,11 +16,46 @@ export function createStreamTextProcessingConfig(config: StreamConfig, context: 
     mentionMap,
     mentionIdSet,
     botName,
+    botNameAliases: collectPersonaNameAliases(context.tomoriState, botName),
     registeredSpeakerNamesLower: collectRegisteredSpeakerNames(context.contextItems, botName),
     maxMessageLength: config.maxMessageLength,
     uncensorUnicodeSpacesEnabled: context.tomoriState.config.uncensor_unicode_space_enabled ?? false,
     uncensorSanitizeEnabled: context.tomoriState.config.uncensor_sanitize_enabled ?? false,
   };
+}
+
+/**
+ * Collects the extra names the active persona answers to beyond its current display name, so the
+ * output cleaner can strip a leaked multi-name opening label chain (e.g. "Tomori: Lilya: ...").
+ *
+ * A bundled persona such as "Shy Tomori (Lilya)" carries its lore/default name ("Tomori") in its
+ * description and its configured `trigger_words`, while its webhook nickname is "Lilya". The model
+ * then prefixes its turn with *both* labels; only the active name ("Lilya") is otherwise stripped.
+ *
+ * Sources: the deployment default bot name plus the persona's own trigger words. The active display
+ * name (`botName`) is excluded — it is handled directly by the cleaner — and matching is
+ * case-insensitive to avoid emitting a redundant alias.
+ *
+ * @param tomoriState - Active persona state for this turn
+ * @param botName - The persona's current display name (already handled by the cleaner)
+ * @returns De-duplicated alias names (excluding the active display name)
+ */
+export function collectPersonaNameAliases(tomoriState: TomoriState, botName: string): string[] {
+  const botNameLower = botName.trim().toLowerCase();
+  const aliases: string[] = [];
+  const seen = new Set<string>([botNameLower]);
+
+  const candidates = [process.env.DEFAULT_BOTNAME || "Tomori", ...(tomoriState.trigger_words ?? [])];
+  for (const candidate of candidates) {
+    const trimmed = candidate?.trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    aliases.push(trimmed);
+  }
+
+  return aliases;
 }
 
 function collectRegisteredSpeakerNames(contextItems: StructuredContextItem[], activeSpeakerName?: string): Set<string> {

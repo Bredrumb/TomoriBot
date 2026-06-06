@@ -1037,12 +1037,9 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
             geminiParts.push({ text: part.text });
           } else if (part.type === "image" && !seesImages) {
             // Defense-in-depth: an image part reached the adapter but the routed
-            // model cannot process it. This happens when context was built with
-            // images included for a vision-capable fallback model (see the
-            // fallback-chain elevation in contextPipeline.ts), then the
-            // image-blind primary runs. Emit a text placeholder so the model is
-            // aware media was attached instead of silently dropping it — mirrors
-            // the OpenRouter and OpenAI-compatible message builders.
+            // model cannot process it. The per-attempt media resolver should
+            // normally prevent this; keep a text placeholder here as a backstop
+            // so leaked media parts are not silently dropped.
             geminiParts.push({
               text: "[System: An image is attached to this message that this model cannot process.]",
             });

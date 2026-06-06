@@ -31,7 +31,12 @@ The transformation pipeline runs in this order:
    default, optionally preserves unresolved shortcodes when
    `EMOJI_PRESERVE_UNRESOLVED_SHORTCODES=true`, removes all emoji attempts when
    `emojiUsageEnabled` is `false`, and optionally uncensors Unicode space characters and sanitizes
-   encoded content.
+   encoded content. The own-name strip also peels a leaked *multi-name* opening label chain when a
+   persona answers to more than one name — e.g. the bundled "Shy Tomori (Lilya)" persona prefixes
+   `"Tomori: Lilya: …"` (lore/default name + webhook nickname). `textConfig.botNameAliases`
+   (`collectPersonaNameAliases`: `DEFAULT_BOTNAME` + the persona's `trigger_words`) supplies those
+   extra names; the leaked-preamble and later-boundary passes stay scoped to the active name so
+   mid-prose `"Name:"` usages are preserved.
 
 4. **Guild mention resolution** (`resolveGuildMentions`) — converts name-based handle references
    in the text (e.g., `@alice`) to Discord snowflake mentions (`<@1234567890>`) using the mention
@@ -58,7 +63,8 @@ The transformation pipeline runs in this order:
 - `segment: string` — raw text segment flushed from `state.buffer` by stage 05.
 - `boundary: BufferedDeliveryBoundary | undefined` — flush reason: `"code_open"`, `"code_close"`,
   `"newline"`, `"period"`, `"overflow"`, `"attachment"`, `"final"`, `"tool_call"`.
-- `textConfig: TextProcessingConfig` — mention map, emoji config, speaker name set, delivery mode.
+- `textConfig: TextProcessingConfig` — mention map, emoji config, speaker name set, persona name
+  aliases (`botNameAliases`), delivery mode.
 - `typingConfig: TypingSimulationConfig` — forwarded to stage 07.
 - `context: StreamContext` — channel ID (stop requests), `tomoriState.config`, prefill state.
 - `state: StreamState` — orphan punctuation state, prefill matching state, accumulated text.

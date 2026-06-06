@@ -7,18 +7,24 @@
  * tools to avoid duplicating extraction logic.
  */
 
+import type { Message } from "discord.js";
 import { log } from "../misc/logger";
 import type { ToolContext } from "../../types/tool/interfaces";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { optimizeImageBuffer } from "@/utils/image/imageProcessor";
+import { appendComponentMediaFromMessage } from "@/utils/chat/contextMedia";
+import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 
 /** Intermediate representation of a discovered image URL before base64 conversion */
-interface ImageUrlInfo {
+export interface ImageUrlInfo {
   url: string;
   mimeType: string;
   /** Human-readable source label for logging (e.g. "attachment: photo.png") */
   source: string;
+  /** Discord proxy URL when known — used to dedupe the same media discovered via
+   *  multiple paths (e.g. a Components V2 attachment also listed as a candidate). */
+  proxyUrl?: string;
 }
 
 /** Base64-encoded image data ready for API consumption */
@@ -94,7 +100,7 @@ function extractCustomEmojis(content: string): ImageUrlInfo[] {
 }
 
 /**
- * Extract all images from a Discord message and convert them to base64.
+ * Discover every image URL in a Discord message, without downloading anything.
  *
  * Extraction sources (checked in order):
  * 1. Direct file attachments with image/* MIME type
@@ -102,6 +108,104 @@ function extractCustomEmojis(content: string): ImageUrlInfo[] {
  * 3. Embed thumbnails (fallback for embeds that use thumbnail instead of image)
  * 4. Discord stickers (served as PNG)
  * 5. Custom emojis parsed from message text
+ * 6. Components V2 media (Media Gallery / Thumbnail / File items) — required for
+ *    bot-generated images, whose attachment is referenced only inside a component
+ *    and therefore never appears in the top-level attachment/embed sources above.
+ *
+ * This is the single source of truth for "where can an image live in a message",
+ * shared by every tool that needs to re-fetch image bytes by message/media ID.
+ *
+ * @param message - Fetched Discord message to scan
+ * @returns Array of discovered image URL descriptors (may be empty)
+ */
+export function collectImageUrlsFromMessage(message: Message): ImageUrlInfo[] {
+  const imageUrls: ImageUrlInfo[] = [];
+  // Track URLs already added so the same media discovered via two paths
+  // (e.g. a Components V2 attachment also matched as a component candidate) is
+  // only downloaded once.
+  const seenUrls = new Set<string>();
+
+  const addImageUrl = (info: ImageUrlInfo): void => {
+    if (seenUrls.has(info.url) || (info.proxyUrl && seenUrls.has(info.proxyUrl))) return;
+    seenUrls.add(info.url);
+    if (info.proxyUrl) seenUrls.add(info.proxyUrl);
+    imageUrls.push(info);
+  };
+
+  // 1. Direct attachments
+  const imageAttachments = message.attachments.filter((attachment) => isLikelyImageAttachment(attachment));
+
+  for (const attachment of imageAttachments.values()) {
+    addImageUrl({
+      url: attachment.url,
+      proxyUrl: attachment.proxyURL,
+      mimeType: attachment.contentType || inferImageMimeType(attachment.name || attachment.url || ""),
+      source: `attachment: ${attachment.name}`,
+    });
+  }
+
+  // 2. Embed images and thumbnails
+  for (const embed of message.embeds) {
+    if (embed.image?.url) {
+      addImageUrl({
+        url: embed.image.url,
+        mimeType: "image/jpeg", // Embeds don't provide explicit MIME type
+        source: `embed.image: ${embed.url || "unknown"}`,
+      });
+    }
+
+    if (embed.thumbnail?.url) {
+      addImageUrl({
+        url: embed.thumbnail.url,
+        mimeType: "image/jpeg",
+        source: `embed.thumbnail: ${embed.url || "unknown"}`,
+      });
+    }
+  }
+
+  // 3. Discord stickers
+  if (message.stickers.size > 0) {
+    for (const sticker of message.stickers.values()) {
+      addImageUrl({
+        url: sticker.url,
+        mimeType: "image/png", // Discord serves stickers as PNG
+        source: `sticker: ${sticker.name}`,
+      });
+    }
+  }
+
+  // 4. Custom emojis from message text
+  if (message.content) {
+    for (const emoji of extractCustomEmojis(message.content)) {
+      addImageUrl(emoji);
+    }
+  }
+
+  // 5. Components V2 media (Media Gallery / Thumbnail / File). Reuses the same
+  //    component-walking + attachment-resolution logic the context pipeline uses
+  //    so bot-generated images (referenced only inside a component) are found.
+  const componentImages: SimplifiedMessageForContext["imageAttachments"] = [];
+  const componentVideosIgnored: SimplifiedMessageForContext["videoAttachments"] = [];
+  appendComponentMediaFromMessage(message, componentImages, componentVideosIgnored);
+
+  for (const componentImage of componentImages) {
+    addImageUrl({
+      url: componentImage.url,
+      proxyUrl: componentImage.proxyUrl,
+      mimeType: componentImage.mimeType || inferImageMimeType(componentImage.filename || componentImage.url),
+      source: `component: ${componentImage.filename}`,
+    });
+  }
+
+  return imageUrls;
+}
+
+/**
+ * Extract all images from a Discord message and convert them to base64.
+ *
+ * Delegates discovery to {@link collectImageUrlsFromMessage} (which covers
+ * attachments, embeds, stickers, custom emojis, and Components V2 media), then
+ * downloads and optimizes each one.
  *
  * Each source is fetched independently — individual failures are logged and skipped
  * so that other images in the same message can still be processed.
@@ -119,67 +223,19 @@ export async function extractImagesFromMessage(messageId: string, context: ToolC
     throw new Error(`Message ${messageId} not found`);
   }
 
-  // Collect all discovered image URLs before base64 conversion
-  const imageUrls: ImageUrlInfo[] = [];
-
-  // 2. Direct attachments
-  const imageAttachments = message.attachments.filter((attachment) => isLikelyImageAttachment(attachment));
-
-  for (const attachment of imageAttachments.values()) {
-    imageUrls.push({
-      url: attachment.url,
-      mimeType: attachment.contentType || inferImageMimeType(attachment.name || attachment.url || ""),
-      source: `attachment: ${attachment.name}`,
-    });
-  }
-
-  // 3. Embed images and thumbnails
-  for (const embed of message.embeds) {
-    if (embed.image?.url) {
-      imageUrls.push({
-        url: embed.image.url,
-        mimeType: "image/jpeg", // Embeds don't provide explicit MIME type
-        source: `embed.image: ${embed.url || "unknown"}`,
-      });
-    }
-
-    if (embed.thumbnail?.url) {
-      imageUrls.push({
-        url: embed.thumbnail.url,
-        mimeType: "image/jpeg",
-        source: `embed.thumbnail: ${embed.url || "unknown"}`,
-      });
-    }
-  }
-
-  // 4. Discord stickers
-  if (message.stickers.size > 0) {
-    for (const sticker of message.stickers.values()) {
-      imageUrls.push({
-        url: sticker.url,
-        mimeType: "image/png", // Discord serves stickers as PNG
-        source: `sticker: ${sticker.name}`,
-      });
-    }
-  }
-
-  // 5. Custom emojis from message text
-  if (message.content) {
-    imageUrls.push(...extractCustomEmojis(message.content));
-  }
+  // 2. Discover every image URL in the message (all sources, including Components V2)
+  const imageUrls = collectImageUrlsFromMessage(message);
 
   // Validate we found at least one image source
   if (imageUrls.length === 0) {
     throw new Error(
-      `No images found in message ${messageId} (checked attachments, embeds, stickers, and custom emojis)`,
+      `No images found in message ${messageId} (checked attachments, embeds, stickers, custom emojis, and components)`,
     );
   }
 
-  log.info(
-    `Found ${imageUrls.length} image(s) in message ${messageId} (${imageAttachments.size} attachment(s), ${imageUrls.length - imageAttachments.size} embed/sticker/emoji)`,
-  );
+  log.info(`Found ${imageUrls.length} image(s) in message ${messageId}`);
 
-  // 6. Convert each URL to base64
+  // 3. Convert each URL to base64
   const results: ExtractedImage[] = [];
 
   for (const imageInfo of imageUrls) {
@@ -187,6 +243,7 @@ export async function extractImagesFromMessage(messageId: string, context: ToolC
       const imageResponse = await safeDownload(imageInfo.url, {
         maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
         timeoutMs: 15_000,
+        externalSignal: context.abortSignal,
       });
       if (!imageResponse.success || !imageResponse.buffer) {
         log.warn(`Failed to fetch image from ${imageInfo.source}: ${imageResponse.details ?? imageResponse.error}`);

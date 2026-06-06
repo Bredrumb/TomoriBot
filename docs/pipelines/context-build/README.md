@@ -80,7 +80,7 @@ buildContextNative(BuildContextParams)        ← fixed-order assembly
 
 ```ts
 type BuildContextResult = {
-  contextItems: StructuredContextItem[];     // the LLM prompt
+  contextItems: StructuredContextItem[];     // the prompt skeleton; dialogue items may still carry mediaDescriptors
   tailDirectives: string[];                  // appended at chat-pipeline tail (impersonation, etc.)
   lowerPriorityTailDirectives: string[];     // inserted before latest dialogue pair (STM hint)
   uncensorDirective?: string;                // appended as separate tail item if active
@@ -93,6 +93,14 @@ the impersonation directive, short-term memory may emit the same-channel
 memory directive) and surfaced via the return shape, not appended to
 `contextItems` directly — the chat pipeline's per-turn stage 01 owns the
 final tail-directive ordering.
+
+Dialogue media is resolved after this pipeline for live chat. The dialogue
+history contributor records `mediaDescriptors` and budget notices; per-attempt
+generation calls `resolveMediaForModel(...)` before provider truncation so each
+attempt sees media according to its own routed model capability.
+Blind models still receive a plain notice for media that exists outside the
+current media window; this is an intentional improvement over the old silent
+blind + out-of-window case.
 
 ## Plugin agnostic vs. plugin-relevant
 

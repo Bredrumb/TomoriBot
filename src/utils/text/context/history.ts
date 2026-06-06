@@ -1,5 +1,10 @@
 import { ActivityType, type Client, type PresenceStatus } from "discord.js";
-import { ContextItemTag, type ContextPart, type StructuredContextItem } from "@/types/misc/context";
+import {
+  ContextItemTag,
+  type ContextPart,
+  type MediaDescriptor,
+  type StructuredContextItem,
+} from "@/types/misc/context";
 import type { SimplifiedMessageForContext } from "./types";
 import { log } from "@/utils/misc/logger";
 
@@ -181,8 +186,9 @@ export function pushDialogueHistoryContextItem(
   messageId: string,
   metadataTag?: ContextItemTag,
   sender?: StructuredContextItem["sender"],
+  mediaDescriptors?: MediaDescriptor[],
 ): void {
-  if (parts.length === 0) {
+  if (parts.length === 0 && (!mediaDescriptors || mediaDescriptors.length === 0)) {
     return;
   }
 
@@ -192,6 +198,7 @@ export function pushDialogueHistoryContextItem(
     metadataTag: metadataTag ?? ContextItemTag.DIALOGUE_HISTORY,
     messageId,
     ...(sender && { sender }),
+    ...(mediaDescriptors && mediaDescriptors.length > 0 && { mediaDescriptors }),
   });
 }
 

@@ -16,16 +16,14 @@ context items per message with three orthogonal concerns interleaved:
 
 1. **Role mapping** — persona-authored → `model`; user impersonation flips
    the impersonated user → `model`; everyone else → `user`.
-2. **Media + vision dispatch** — within the media window, attach images
-   and videos as binary parts when the build flags allow them; outside the
-   window or without vision, emit `[System: contains N image(s)]` hints
-   with optional `{image_analysis_tool}` or `increase_media_context`
-   guidance. **Note:** `seesImagesOverride`/`seesVideosOverride` may be
-   elevated above the primary model's capability when a fallback model in
-   the chain supports that media type (see `contextPipeline.ts`). In that
-   case, binary parts are embedded so the fallback model has the URI data;
-   providers that cannot process the parts emit a text placeholder instead
-   of silently skipping them.
+2. **Media descriptor emission** — decide only context budget: whether media
+   is inside the media window, whether counted images fit
+   `MEDIA_IMAGE_MESSAGE_LIMIT`, and whether duplicate images should be dropped.
+   The builder records capability-neutral `mediaDescriptors` instead of
+   deciding whether an image/video becomes a provider media part. The
+   per-attempt resolver (`mediaResolver.ts`) later turns descriptors into
+   final image/video parts, `{image_analysis_tool}` notices, plain blind-model
+   notices, or `increase_media_context` hints.
 3. **Context-note injection** — if `context_note` is configured, inject
    `[System: ${note}]` at `context_note_depth` messages from the end of
    history.
@@ -39,26 +37,14 @@ Substantial — see signature in `dialogueHistory.ts:25-44`. Notable:
 - `simplifiedMessageHistory: SimplifiedMessageForContext[]`
 - `tomoriConfig` (provides `message_fetch_limit`, `humanizer_degree`,
   `context_note`, `context_note_depth`)
-- `tomoriState` (provides `llm.sees_images`, `llm.sees_videos`,
-  `context_note`)
+- `tomoriState` (provides `context_note` and `context_note_depth`; media
+  capability is intentionally not read here)
 - `mediaContextWindow: number | undefined` — override; falls back to
   `memoryGuard.getMediaWindow()`
-- `seesImagesOverride`, `seesVideosOverride` — the chat pipeline resolves
-  these from the **routed** model and passes the result here (overriding stale
-  DB values): (0) when the turn routes to a personal text provider, capability
-  is read from the personal model, not the server persona's `llm`; (1) live
-  OpenRouter capability flags for OpenRouter models; and (2) elevation to
-  `true` when the primary model cannot see that media type but any model in
-  `fallback_chain`/`fallback_llms` can — so fallback attempts receive full URI
-  data rather than text-only hints. The chat pipeline passes concrete booleans,
-  so the `?? tomoriState.llm.sees_images` fallback below only applies to callers
-  that omit the override (e.g. the cost estimator)
-- `hasVisionTool: boolean` — whether the active persona has a vision tool
-  configured (changes the "can't see image" framing)
 - `isUserImpersonation`, `impersonatedUserId`
 - `messageIdMap` — compact ID ↔ Discord message ID, populated as media
   hints emit
-- `uncensorInputOptions`, `toolPromptMacroResolver`, `convertMentions`
+- `uncensorInputOptions`, `convertMentions`
 
 ## Output
 
@@ -73,21 +59,29 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
 - **Role mapping** computed from author type and impersonation flags.
 - **Media-window calculation** — `effectiveMediaWindow = min(requested,
   message_fetch_limit)`; `mediaWindowCutoff = totalMessages - effectiveMediaWindow`.
-- **Image/video parts emission** (within window, with vision):
+- **Media descriptor emission**:
   - Filters `MEDIA_IMAGE_MESSAGE_LIMIT` (env, default 3) most-recent
     messages that carry "counted" images (non-emoji, non-sticker).
   - Drops duplicate images that recur in a later in-window message
     (`duplicateImageLastIndex` lookup).
-  - Pushes `{ type: "image", uri, mimeType }` parts onto the message's
-    `parts` list.
-- **Media-skip hints** (within window, no vision OR outside window):
-  - With vision tool: `[System: ... use {image_analysis_tool} only if
-    user explicitly asks]`
-  - Without vision tool: `[System: model cannot see images, do not
-    describe]`
-  - Outside window: `[System: ... use increase_media_context with
-    extend_by=N to view]` plus a registered ID via
-    `messageIdMap.register(...)`.
+  - Adds per-message `mediaDescriptors` carrying URI, MIME type,
+    registered media ID, media-window membership, and `extendBy` for older
+    out-of-window media. Custom emoji images are not descriptors; they remain
+    text via emoji normalization.
+- **Budget-only media notes**:
+  - Rendered-image-limit skips emit a capability-neutral
+    `[System: N image(s) omitted due to rendered-image limit]` note.
+  - Duplicate images are dropped with logging only.
+  - Capability-specific notices are not emitted here. `resolveMediaForModel`
+    emits `{image_analysis_tool}` guidance, plain blind-model notices, and
+    `increase_media_context` hints per generation attempt.
+  - Intentional deviation from the pre-refactor behavior: out-of-window media
+    now produces a plain "outside the current media context window and cannot
+    be viewed" notice even for blind models. Blind notices still include the
+    `media_N` handle so non-vision tools that accept media references (for
+    example img2img/inpaint/image-to-video) can target the source message.
+    Previously that blind + out-of-window combination emitted no line, which
+    hid the fact that media existed at all.
 - **Media attribution hint** — when media is referenced from a reply or
   forward, `[System: These images (Media IDs: X, Y) were sent by Z]`.
 - **Text part assembly** — `${authorName}: ${content}` prefix, mention
@@ -118,14 +112,17 @@ After this stage runs:
   - Two separated items (`user` system parts + `role` real parts) when
     the role is `model` and detached system parts exist
 - Counted images respect `MEDIA_IMAGE_MESSAGE_LIMIT` — older counted
-  images get skipped silently (with a system note when applicable).
+  images get a budget note instead of descriptors.
 - Duplicate images don't appear twice; the *last* occurrence in the
   window is the one that renders.
+- `mediaDescriptors` remain capability-neutral. They are not provider-ready
+  image/video parts until `resolveMediaForModel(...)` runs for a concrete
+  attempt model.
 - Context note injects exactly once per build — either at the depth
   target or at the very end if history is shorter.
 - `messageIdMap.register(...)` is called for every media reference the
-  LLM might ask about (so `increase_media_context` and
-  `image_analysis_tool` have stable IDs).
+  LLM might ask about after resolution (so `increase_media_context`,
+  `image_analysis_tool`, and media-reference tools have stable IDs).
 
 ## Configuration
 
@@ -140,8 +137,6 @@ After this stage runs:
 | `tomoriConfig` | `context_note`, `context_note_depth` | Context-note injection |
 | `tomoriConfig` | `uncensor_unicode_space_enabled`, `uncensor_sanitize_enabled` | Drives uncensor transforms |
 | `tomoriState` | `context_note`, `context_note_depth` | Persona-level override of tomoriConfig values |
-| `tomoriState` | `llm.sees_images`, `llm.sees_videos` | Default vision capability; may be overridden upward by `seesImagesOverride`/`seesVideosOverride` when a fallback model in the chain supports that media type |
-| `tomoriState` | `vision_llm` | Whether a vision tool is configured (kept independent of the override — `hasVisionTool` always reflects the primary model's actual capability) |
 | Memory pressure | `memoryGuard.getMediaWindow()` | Dynamic media-window shrink under load |
 
 ## Extension points
@@ -152,7 +147,7 @@ plugin-relevant seams:
 | Surface | Plugin-relevance |
 |---|---|
 | Media-window policy (`effectiveMediaWindow`, `maxExtendBy`) | Coupled to `memoryGuard` + `message_fetch_limit`. A plugin adding "always include all media" or "per-channel media budget" would extend the window calculation. |
-| Vision capability override (`seesImagesOverride`, `seesVideosOverride`) | The chat pipeline passes live capability flags; new providers register via the capability system, not here. |
+| Media descriptor shape | New media kinds should add descriptor fields here and resolution behavior in `mediaResolver.ts`. |
 | `MEDIA_IMAGE_MESSAGE_LIMIT` policy | Hardcoded env var; a plugin adding "per-persona media limit" would extend the resolution. |
 | Image-attribution hint format | Hardcoded English; localization would extend. → plugin plan candidate. |
 | Humanizer + uncensor integration | Shared with sample dialogues (stage 10). |

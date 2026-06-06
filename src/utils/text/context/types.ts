@@ -87,9 +87,6 @@ export interface BuildContextParams {
   /** Synthetic participants surfaced as user-like entries. */
   syntheticUsers?: Map<string, { displayName: string; type: "persona" | "webhook" }>;
   includeTimestamps?: boolean;
-  seesImages?: boolean;
-  seesVideos?: boolean;
-  hasVisionTool?: boolean;
   explicitLongTermMemoryIntent?: boolean;
   /**
    * When `true`, skips the `DEFAULT_SYSTEM_PROMPT` fallback in the humanizer block.

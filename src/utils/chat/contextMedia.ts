@@ -1,5 +1,5 @@
-import type { Embed, Message } from "discord.js";
-import { MessageReferenceType } from "discord.js";
+import type { Attachment, Embed, Message } from "discord.js";
+import { ComponentType, MessageReferenceType } from "discord.js";
 import { getCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { isAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
@@ -74,7 +74,7 @@ export function isSupportedVideoAttachmentContentType(contentType: string | null
 }
 
 function inferMimeTypeFromFilename(filename: string | null | undefined): string | null {
-  const lower = (filename ?? "").toLowerCase();
+  const lower = (filename ?? "").split(/[?#]/, 1)[0].toLowerCase();
   if (lower.endsWith(".png")) return "image/png";
   if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
   if (lower.endsWith(".webp")) return "image/webp";
@@ -85,6 +85,145 @@ function inferMimeTypeFromFilename(filename: string | null | undefined): string 
   if (lower.endsWith(".webm")) return "video/webm";
   if (lower.endsWith(".mov")) return "video/mov";
   return null;
+}
+
+export function getEffectiveAttachmentContentType(attachment: Pick<Attachment, "contentType" | "name">): string | null {
+  return attachment.contentType ?? inferMimeTypeFromFilename(attachment.name);
+}
+
+type ComponentMediaCandidate = {
+  url: string;
+  proxyUrl?: string;
+  contentType?: string | null;
+  attachmentId?: string;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function toComponentRecord(component: unknown): Record<string, unknown> | null {
+  if (!isRecord(component)) return null;
+
+  const toJson = component.toJSON;
+  if (typeof toJson === "function") {
+    const json = toJson.call(component);
+    if (isRecord(json)) return json;
+  }
+
+  return component;
+}
+
+function getStringField(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function collectMediaCandidatesFromComponent(component: unknown, candidates: ComponentMediaCandidate[]): void {
+  const data = toComponentRecord(component);
+  if (!data) return;
+
+  const type = data.type;
+  if (type === ComponentType.MediaGallery && Array.isArray(data.items)) {
+    for (const item of data.items) {
+      if (!isRecord(item) || !isRecord(item.media)) continue;
+      pushMediaCandidate(item.media, candidates);
+    }
+  }
+
+  if ((type === ComponentType.Thumbnail || type === ComponentType.File) && isRecord(data.media)) {
+    pushMediaCandidate(data.media, candidates);
+  }
+
+  if (type === ComponentType.File && isRecord(data.file)) {
+    pushMediaCandidate(data.file, candidates);
+  }
+
+  if (type === ComponentType.Section && isRecord(data.accessory)) {
+    collectMediaCandidatesFromComponent(data.accessory, candidates);
+  }
+
+  if (Array.isArray(data.components)) {
+    for (const child of data.components) {
+      collectMediaCandidatesFromComponent(child, candidates);
+    }
+  }
+}
+
+function pushMediaCandidate(media: Record<string, unknown>, candidates: ComponentMediaCandidate[]): void {
+  const url = getStringField(media, "url");
+  if (!url) return;
+
+  candidates.push({
+    url,
+    proxyUrl: getStringField(media, "proxy_url"),
+    contentType: typeof media.content_type === "string" || media.content_type === null ? media.content_type : undefined,
+    attachmentId: getStringField(media, "attachment_id"),
+  });
+}
+
+function getAttachmentFilenameFromUrl(url: string): string | null {
+  if (url.startsWith("attachment://")) {
+    return decodeURIComponent(url.slice("attachment://".length));
+  }
+
+  try {
+    const parsed = new URL(url);
+    const filename = parsed.pathname.split("/").filter(Boolean).pop();
+    return filename ? decodeURIComponent(filename) : null;
+  } catch {
+    const fallback = url.split(/[/?#]/).filter(Boolean).pop();
+    return fallback ? decodeURIComponent(fallback) : null;
+  }
+}
+
+function resolveComponentMediaUrl(
+  message: Pick<Message, "attachments">,
+  candidate: ComponentMediaCandidate,
+): {
+  url: string;
+  proxyUrl: string;
+  mimeType: string | null;
+  filename: string;
+} | null {
+  const attachmentFilename = getAttachmentFilenameFromUrl(candidate.url);
+  const attachment = message.attachments.find(
+    (item) =>
+      (candidate.attachmentId && item.id === candidate.attachmentId) ||
+      (attachmentFilename !== null && item.name === attachmentFilename),
+  );
+
+  const rawUrlIsFetchable = candidate.url.startsWith("http://") || candidate.url.startsWith("https://");
+  const proxyUrlIsFetchable =
+    typeof candidate.proxyUrl === "string" &&
+    (candidate.proxyUrl.startsWith("http://") || candidate.proxyUrl.startsWith("https://"));
+  const fetchableProxyUrl = proxyUrlIsFetchable ? candidate.proxyUrl : undefined;
+  const url = attachment?.url ?? (rawUrlIsFetchable ? candidate.url : (fetchableProxyUrl ?? null));
+  if (!url) return null;
+
+  const proxyUrl = attachment?.proxyURL ?? fetchableProxyUrl ?? url;
+  const filename = attachment?.name ?? attachmentFilename ?? "media";
+  const mimeType =
+    candidate.contentType ??
+    (attachment ? getEffectiveAttachmentContentType(attachment) : null) ??
+    inferMimeTypeFromFilename(filename) ??
+    inferMimeTypeFromFilename(url);
+
+  return { url, proxyUrl, mimeType, filename };
+}
+
+function hasExistingMediaAttachment(
+  attachments: Array<{ url: string; proxyUrl: string }>,
+  url: string,
+  proxyUrl: string,
+): boolean {
+  return attachments.some(
+    (attachment) =>
+      attachment.url === url ||
+      attachment.proxyUrl === url ||
+      attachment.url === proxyUrl ||
+      attachment.proxyUrl === proxyUrl,
+  );
 }
 
 export function appendSupportedMediaFromMessage(
@@ -99,7 +238,7 @@ export function appendSupportedMediaFromMessage(
     // Some Discord message types (e.g. IsComponentsV2) may omit contentType in the
     // API response. Fall back to filename-based inference so attachments aren't
     // silently dropped, which would cause the whole message to be skipped.
-    const effectiveContentType = attachment.contentType ?? inferMimeTypeFromFilename(attachment.name);
+    const effectiveContentType = getEffectiveAttachmentContentType(attachment);
 
     if (isSupportedImageAttachmentContentType(effectiveContentType)) {
       imageAttachments.push({
@@ -118,6 +257,51 @@ export function appendSupportedMediaFromMessage(
         proxyUrl: attachment.proxyURL,
         mimeType: effectiveContentType,
         filename: attachment.name,
+        isYouTubeLink: false,
+      });
+      videoCount++;
+    }
+  }
+
+  return { imageCount, videoCount };
+}
+
+export function appendComponentMediaFromMessage(
+  sourceMessage: Pick<Message, "attachments" | "components">,
+  imageAttachments: SimplifiedMessageForContext["imageAttachments"],
+  videoAttachments: SimplifiedMessageForContext["videoAttachments"],
+): { imageCount: number; videoCount: number } {
+  let imageCount = 0;
+  let videoCount = 0;
+  const candidates: ComponentMediaCandidate[] = [];
+
+  for (const component of sourceMessage.components) {
+    collectMediaCandidatesFromComponent(component, candidates);
+  }
+
+  for (const candidate of candidates) {
+    const resolved = resolveComponentMediaUrl(sourceMessage, candidate);
+    if (!resolved?.mimeType) continue;
+
+    if (isSupportedImageAttachmentContentType(resolved.mimeType)) {
+      if (hasExistingMediaAttachment(imageAttachments, resolved.url, resolved.proxyUrl)) continue;
+      imageAttachments.push({
+        url: resolved.url,
+        proxyUrl: resolved.proxyUrl,
+        mimeType: resolved.mimeType,
+        filename: resolved.filename,
+      });
+      imageCount++;
+      continue;
+    }
+
+    if (isSupportedVideoAttachmentContentType(resolved.mimeType)) {
+      if (hasExistingMediaAttachment(videoAttachments, resolved.url, resolved.proxyUrl)) continue;
+      videoAttachments.push({
+        url: resolved.url,
+        proxyUrl: resolved.proxyUrl,
+        mimeType: resolved.mimeType,
+        filename: resolved.filename,
         isYouTubeLink: false,
       });
       videoCount++;
@@ -158,6 +342,7 @@ type ForwardedMessageSnapshot = {
   channelId?: string | null;
   content?: string | null;
   attachments: Message["attachments"];
+  components?: Message["components"];
   embeds: readonly Embed[];
   author: Message["author"] | null;
   member: Message["member"] | null;
@@ -196,6 +381,13 @@ export function buildForwardContext(args: {
     }
 
     appendSupportedMediaFromMessage(snapshot, args.imageAttachments, args.videoAttachments);
+    if (snapshot.components) {
+      appendComponentMediaFromMessage(
+        { attachments: snapshot.attachments, components: snapshot.components },
+        args.imageAttachments,
+        args.videoAttachments,
+      );
+    }
     if (snapshot.content) {
       args.imageAttachments.push(...extractEmojiImageAttachments(snapshot.content));
     }
@@ -262,10 +454,12 @@ export function appendDirectMediaFromMessage(args: {
   }
 
   appendSupportedMediaFromMessage(args.message, args.imageAttachments, args.videoAttachments);
+  appendComponentMediaFromMessage(args.message, args.imageAttachments, args.videoAttachments);
   for (const attachment of args.message.attachments.values()) {
+    const effectiveContentType = getEffectiveAttachmentContentType(attachment);
     if (
-      isSupportedImageAttachmentContentType(attachment.contentType) ||
-      isSupportedVideoAttachmentContentType(attachment.contentType)
+      isSupportedImageAttachmentContentType(effectiveContentType) ||
+      isSupportedVideoAttachmentContentType(effectiveContentType)
     ) {
       continue;
     }

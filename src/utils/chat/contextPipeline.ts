@@ -27,8 +27,6 @@ import { checkTargetEmbedTitle } from "@/utils/discord/embedClassifier";
 import { getCachedVoiceTranscript, setCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { isAudioAttachment, transcribeMessageAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
 import { resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
-import { getOpenRouterCapabilities, isOpenRouterCapabilityCacheReady } from "@/utils/cache/openrouterCapabilityCache";
-import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { buildQueuedReplyDirective, normalizeTailDirective } from "@/utils/chat/contextDirectives";
 import {
   buildCombinedTailDirectiveMessage,
@@ -44,6 +42,7 @@ import {
 } from "@/utils/chat/contextAnnotations";
 import {
   appendDirectMediaFromMessage,
+  appendComponentMediaFromMessage,
   appendStickersFromMessage,
   appendSupportedMediaFromMessage,
   appendYouTubeVideosFromContent,
@@ -107,64 +106,6 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
       impersonatedUserRow?.user_nickname,
     );
     impersonatedUserNickname = identity.displayName;
-  }
-
-  // When this turn routes to the user's personal text provider, the model that
-  // actually answers is the personal model — NOT turn.persona.llm (the server
-  // model). Overlay the personal selections here so the media-visibility decision
-  // below (render an image part vs. emit a "[System: ...]" notice) reflects the
-  // routed model's real sees_images/sees_videos, matching what
-  // resolvePrimaryTomoriState applies at provider-call time. Without this, a
-  // vision-capable server model (e.g. Vertex) would cause images to be rendered as
-  // parts even when the personal model (e.g. DeepSeek) cannot see them, silently
-  // suppressing the "model cannot see images" notices the builder should emit.
-  const routedPersona =
-    turn.textCredentialSource === "personal"
-      ? (await applyPersonalProviderSelectionsToTomoriState(turn.persona, turn.personalRoutingUserId)).tomoriState
-      : turn.persona;
-
-  // Resolve live OpenRouter capability flags to avoid stale DB vision values (Fix #3).
-  let effectiveSeesImages: boolean | undefined;
-  let effectiveSeesVideos: boolean | undefined;
-  const activeLlm = routedPersona.llm;
-  if (
-    activeLlm.llm_provider === "openrouter" &&
-    activeLlm.llm_codename !== "other-model" &&
-    isOpenRouterCapabilityCacheReady()
-  ) {
-    const apiCaps = getOpenRouterCapabilities(activeLlm.llm_codename);
-    if (apiCaps) {
-      effectiveSeesImages = apiCaps.seesImages;
-      effectiveSeesVideos = apiCaps.seesVideos;
-    }
-  }
-
-  // If the primary (routed) model cannot see images/videos but any fallback can,
-  // build context with those media parts included so fallback attempts have the
-  // URI data. These flags are concrete booleans (never undefined) so the dialogue
-  // builder uses the routed model's capability authoritatively instead of falling
-  // back to the server persona's sees_images via tomoriState.
-  const primarySeesImages = effectiveSeesImages ?? activeLlm.sees_images;
-  const primarySeesVideos = effectiveSeesVideos ?? activeLlm.sees_videos;
-  let contextBuildSeesImages = primarySeesImages;
-  let contextBuildSeesVideos = primarySeesVideos;
-  if (!primarySeesImages || !primarySeesVideos) {
-    const fallbackEntries =
-      routedPersona.fallback_chain ??
-      routedPersona.fallback_llms?.map((model) => ({ kind: "llm" as const, model })) ??
-      [];
-    if (
-      !primarySeesImages &&
-      fallbackEntries.some((e) => (e.kind === "llm" ? e.model.sees_images : e.endpoint.sees_images))
-    ) {
-      contextBuildSeesImages = true;
-    }
-    if (
-      !primarySeesVideos &&
-      fallbackEntries.some((e) => (e.kind === "llm" ? e.model.sees_videos : e.endpoint.sees_videos))
-    ) {
-      contextBuildSeesVideos = true;
-    }
   }
 
   // 1. Resolve deliberate tool mode + intent allowlist for this turn.
@@ -339,9 +280,6 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     impersonatedUserNickname,
     impersonatedUserPrompt,
     explicitLongTermMemoryIntent: streamingContext.explicitLongTermMemoryIntent,
-    seesImages: contextBuildSeesImages,
-    seesVideos: contextBuildSeesVideos,
-    hasVisionTool: !!routedPersona.vision_llm && !primarySeesImages,
     messageIdMap,
   });
 
@@ -663,6 +601,7 @@ async function simplifyMessage(
     const preRefImageCount = imageAttachments.length;
     const preRefVideoCount = videoAttachments.length;
     appendSupportedMediaFromMessage(replyContext.referencedMessage, imageAttachments, videoAttachments);
+    appendComponentMediaFromMessage(replyContext.referencedMessage, imageAttachments, videoAttachments);
     imageAttachments.push(...extractEmojiImageAttachments(replyContext.referencedMessage.content));
     if (imageAttachments.length > preRefImageCount || videoAttachments.length > preRefVideoCount) {
       mediaSourceMessageIds.push(replyContext.referencedMessage.id);

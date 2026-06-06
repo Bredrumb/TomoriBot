@@ -45,6 +45,7 @@ import type { ProviderNativeImageGenerationResult } from "@/types/provider/featu
 import { optimizeImageBuffer } from "@/utils/image/imageProcessor";
 import type { CustomEndpointRow } from "@/types/db/schema";
 import { readImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
+import { extractImagesFromMessage } from "@/utils/image/imageExtractor";
 
 const IMAGE_REFERENCE_MAX_COUNT = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_COUNT ?? "3", 10);
 const IMAGE_REFERENCE_MAX_TOTAL_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_TOTAL_BYTES ?? "6291456", 10);
@@ -814,183 +815,6 @@ export class GenerateImageTool extends BaseTool {
   }
 
   /**
-   * Build Discord CDN URL for custom emoji
-   * @param emojiId - Discord emoji ID
-   * @returns CDN URL for the emoji as PNG
-   */
-  private buildEmojiCdnUrl(emojiId: string): string {
-    // Always use PNG so animated emojis fall back to their first frame
-    return `https://cdn.discordapp.com/emojis/${emojiId}.png`;
-  }
-
-  /**
-   * Extract custom emoji URLs from message content
-   * @param content - Message text content
-   * @returns Array of image URLs for custom emojis found in the content
-   */
-  private extractCustomEmojis(content: string): Array<{
-    url: string;
-    mimeType: string;
-    source: string;
-  }> {
-    const emojiUrls: Array<{ url: string; mimeType: string; source: string }> = [];
-    if (!content) return emojiUrls;
-
-    const emojiPattern = /<(a?):([^:]+):(\d{17,20})>/g;
-    const seenEmojiIds = new Set<string>();
-    let match: RegExpExecArray | null;
-
-    // biome-ignore lint/suspicious/noAssignInExpressions: Separate match assignment from null check
-    while ((match = emojiPattern.exec(content)) !== null) {
-      const emojiName = match[2];
-      const emojiId = match[3];
-
-      if (seenEmojiIds.has(emojiId)) {
-        continue;
-      }
-
-      seenEmojiIds.add(emojiId);
-      const emojiUrl = this.buildEmojiCdnUrl(emojiId);
-
-      emojiUrls.push({
-        url: emojiUrl,
-        mimeType: "image/png",
-        source: `emoji: ${emojiName}`,
-      });
-    }
-
-    return emojiUrls;
-  }
-
-  /**
-   * Extract images from a Discord message and convert to base64 format
-   * Supports both direct attachments and embedded images (from links like Twitter/X)
-   * @param messageId - Discord message ID to fetch images from
-   * @param context - Tool execution context with channel access
-   * @returns Array of inline data objects with mimeType and base64 data
-   */
-  private async extractImagesFromMessage(
-    messageId: string,
-    context: ToolContext,
-  ): Promise<Array<{ mimeType: string; data: string }>> {
-    try {
-      // 1. Fetch the Discord message
-      const message = await context.channel.messages.fetch(messageId);
-
-      if (!message) {
-        throw new Error(`Message ${messageId} not found`);
-      }
-
-      // Array to collect all image URLs (from both attachments and embeds)
-      const imageUrls: Array<{
-        url: string;
-        mimeType: string;
-        source: string;
-      }> = [];
-
-      // 2. Extract images from direct attachments
-      const imageAttachments = message.attachments.filter((attachment) => this.isLikelyImageAttachment(attachment));
-
-      for (const attachment of imageAttachments.values()) {
-        imageUrls.push({
-          url: attachment.url,
-          mimeType: attachment.contentType || this.inferImageMimeType(attachment.name || attachment.url || ""),
-          source: `attachment: ${attachment.name}`,
-        });
-      }
-
-      // 3. Extract images from embeds (Twitter/X posts, direct image links, etc.)
-      for (const embed of message.embeds) {
-        // Check for main embed image
-        if (embed.image?.url) {
-          imageUrls.push({
-            url: embed.image.url,
-            mimeType: "image/jpeg", // Embeds don't provide explicit MIME type
-            source: `embed.image: ${embed.url || "unknown"}`,
-          });
-        }
-
-        // Check for embed thumbnail (some embeds use thumbnail instead of image)
-        if (embed.thumbnail?.url) {
-          imageUrls.push({
-            url: embed.thumbnail.url,
-            mimeType: "image/jpeg",
-            source: `embed.thumbnail: ${embed.url || "unknown"}`,
-          });
-        }
-      }
-
-      // 3.5. Extract images from Discord stickers
-      if (message.stickers.size > 0) {
-        for (const sticker of message.stickers.values()) {
-          imageUrls.push({
-            url: sticker.url,
-            mimeType: "image/png", // Discord serves PNG version for stickers
-            source: `sticker: ${sticker.name}`,
-          });
-        }
-      }
-
-      // 3.6. Extract custom emojis from message content
-      if (message.content) {
-        const customEmojis = this.extractCustomEmojis(message.content);
-        imageUrls.push(...customEmojis);
-      }
-
-      // 4. Validate we found at least one image
-      if (imageUrls.length === 0) {
-        throw new Error(
-          `No images found in message ${messageId} (checked attachments, embeds, stickers, and custom emojis)`,
-        );
-      }
-
-      log.info(
-        `Found ${imageUrls.length} image(s) in message ${messageId} (${imageAttachments.size} attachment(s), ${imageUrls.length - imageAttachments.size} embed(s))`,
-      );
-
-      // 5. Convert each image URL to base64
-      const inlineDataArray: Array<{ mimeType: string; data: string }> = [];
-
-      for (const imageInfo of imageUrls) {
-        try {
-          // Fetch image data
-          const imageResponse = await safeDownload(imageInfo.url, {
-            maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
-            timeoutMs: 15_000,
-            externalSignal: context.abortSignal,
-          });
-          if (!imageResponse.success || !imageResponse.buffer) {
-            log.warn(`Failed to fetch image from ${imageInfo.source}: ${imageResponse.details ?? imageResponse.error}`);
-            continue;
-          }
-
-          // Convert to base64
-          const optimized = await optimizeImageBuffer(imageResponse.buffer, imageInfo.mimeType);
-
-          inlineDataArray.push({
-            mimeType: optimized.mimeType,
-            data: optimized.data,
-          });
-
-          log.info(`Successfully converted image from ${imageInfo.source} to base64`);
-        } catch (imgErr) {
-          log.warn(`Failed to process image from ${imageInfo.source}:`, imgErr as Error);
-        }
-      }
-
-      // 6. Ensure at least one image was successfully processed
-      if (inlineDataArray.length === 0) {
-        throw new Error(`Failed to process any images from message ${messageId}`);
-      }
-
-      return inlineDataArray;
-    } catch (error) {
-      log.error(`Error extracting images from message ${messageId}:`, error);
-      throw error;
-    }
-  }
-
-  /**
    * Generate image using OpenRouter API
    * @param apiKey - Decrypted API key
    * @param modelCodename - Model codename (e.g., "google/gemini-2.5-flash-image")
@@ -1372,7 +1196,7 @@ export class GenerateImageTool extends BaseTool {
 
       if (messageId) {
         log.info(`Extracting images from message ${messageId} for image-to-image generation`);
-        const messageImages = await this.extractImagesFromMessage(messageId, context);
+        const messageImages = await extractImagesFromMessage(messageId, context);
         referenceImages.push(...messageImages.map((image) => ({ ...image, sourceType: "message" as const })));
         log.info(`Using ${messageImages.length} reference image(s) from message ${messageId} for generation`);
       }
@@ -1886,28 +1710,6 @@ export class GenerateImageTool extends BaseTool {
     }
 
     return response.buffer.toString("base64");
-  }
-  private inferImageMimeType(urlOrName: string, fallback = "image/jpeg"): string {
-    const lower = urlOrName.toLowerCase();
-    if (lower.endsWith(".png")) return "image/png";
-    if (lower.endsWith(".webp")) return "image/webp";
-    if (lower.endsWith(".gif")) return "image/gif";
-    if (lower.endsWith(".bmp")) return "image/bmp";
-    if (lower.endsWith(".avif")) return "image/avif";
-    if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
-    return fallback;
-  }
-
-  private isLikelyImageAttachment(attachment: {
-    contentType?: string | null;
-    name?: string | null;
-    url?: string;
-  }): boolean {
-    if (attachment.contentType?.startsWith("image/")) {
-      return true;
-    }
-    const inferred = this.inferImageMimeType(attachment.name || attachment.url || "", "");
-    return inferred.startsWith("image/");
   }
 
   private async normalizeReferenceImages(

@@ -12,6 +12,7 @@ import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomori
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { buildContext } from "@/utils/text/contextBuilder";
+import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
 import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
 import { truncateDialogueHistory } from "@/utils/text/contextTruncator";
@@ -39,6 +40,11 @@ import {
   resolveProviderFeatureImplementation,
 } from "@/utils/provider/providerInfoRegistry";
 import { ProviderFactory } from "@/utils/provider/providerFactory";
+import {
+  appendComponentMediaFromMessage,
+  appendSupportedMediaFromMessage,
+  extractEmojiImageAttachments,
+} from "@/utils/chat/contextMedia";
 
 /**
  * Token estimation constants
@@ -138,17 +144,6 @@ const ANTHROPIC_HAIKU_OUTPUT_PRICE_PER_MILLION = parseFloatEnv(
   0,
 );
 
-const SUPPORTED_VIDEO_MIME_TYPES = [
-  "video/mp4",
-  "video/mpeg",
-  "video/mov",
-  "video/avi",
-  "video/x-flv",
-  "video/mpg",
-  "video/webm",
-  "video/wmv",
-  "video/3gpp",
-];
 const YOUTUBE_URL_PATTERNS = [
   /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/i,
   /(?:https?:\/\/)?(?:www\.)?youtu\.be\/([a-zA-Z0-9_-]{11})/i,
@@ -579,59 +574,6 @@ function buildGoogleInBandToolSchemasText(tools: unknown[]): string {
   );
 }
 
-function buildEmojiCdnUrl(emojiId: string): string {
-  return `https://cdn.discordapp.com/emojis/${emojiId}.png`;
-}
-
-function extractEmojiImageAttachments(content: string): HelpCostSimplifiedMessage["imageAttachments"] {
-  const attachments: HelpCostSimplifiedMessage["imageAttachments"] = [];
-  if (!content) return attachments;
-
-  const emojiPattern = /<(a?):([^:]+):(\d{17,20})>/g;
-  const seenEmojiIds = new Set<string>();
-  let match = emojiPattern.exec(content);
-
-  while (match !== null) {
-    const emojiName = match[2];
-    const emojiId = match[3];
-
-    if (seenEmojiIds.has(emojiId)) {
-      continue;
-    }
-
-    seenEmojiIds.add(emojiId);
-    const emojiUrl = buildEmojiCdnUrl(emojiId);
-
-    attachments.push({
-      url: emojiUrl,
-      proxyUrl: emojiUrl,
-      mimeType: "image/png",
-      filename: `emoji_${emojiName}_${emojiId}.png`,
-      isEmoji: true,
-    });
-
-    match = emojiPattern.exec(content);
-  }
-
-  return attachments;
-}
-
-function isImageMimeType(mimeType: string | null | undefined): boolean {
-  return Boolean(
-    mimeType?.startsWith("image/png") ||
-      mimeType?.startsWith("image/jpeg") ||
-      mimeType?.startsWith("image/webp") ||
-      mimeType?.startsWith("image/heic") ||
-      mimeType?.startsWith("image/heif") ||
-      mimeType?.startsWith("image/gif"),
-  );
-}
-
-function isVideoMimeType(mimeType: string | null | undefined): boolean {
-  if (!mimeType) return false;
-  return SUPPORTED_VIDEO_MIME_TYPES.some((supported) => mimeType.startsWith(supported));
-}
-
 function parseOpenRouterPromptTokens(usage: OpenRouterProbeUsage | undefined): number | undefined {
   const value = usage?.promptTokens ?? usage?.prompt_tokens;
   if (typeof value !== "number" || Number.isNaN(value) || value < 0) {
@@ -780,28 +722,13 @@ async function buildRuntimeParityContext(
     const videoAttachments: HelpCostSimplifiedMessage["videoAttachments"] = [];
     let hasLocalMedia = false;
 
-    if (message.attachments.size > 0) {
-      for (const attachment of message.attachments.values()) {
-        if (isImageMimeType(attachment.contentType)) {
-          imageAttachments.push({
-            url: attachment.url,
-            proxyUrl: attachment.proxyURL,
-            mimeType: attachment.contentType,
-            filename: attachment.name,
-          });
-          hasLocalMedia = true;
-        } else if (isVideoMimeType(attachment.contentType)) {
-          videoAttachments.push({
-            url: attachment.url,
-            proxyUrl: attachment.proxyURL,
-            mimeType: attachment.contentType,
-            filename: attachment.name,
-            isYouTubeLink: false,
-          });
-          hasLocalMedia = true;
-        }
-      }
-    }
+    const directMediaCounts = appendSupportedMediaFromMessage(message, imageAttachments, videoAttachments);
+    const componentMediaCounts = appendComponentMediaFromMessage(message, imageAttachments, videoAttachments);
+    hasLocalMedia =
+      directMediaCounts.imageCount > 0 ||
+      directMediaCounts.videoCount > 0 ||
+      componentMediaCounts.imageCount > 0 ||
+      componentMediaCounts.videoCount > 0;
 
     if (message.stickers.size > 0) {
       for (const sticker of message.stickers.values()) {
@@ -1641,6 +1568,7 @@ export async function execute(
     let contextItems: StructuredContextItem[];
     try {
       contextItems = await buildRuntimeParityContext(client, interaction, tomoriState, provider);
+      contextItems = await resolveMediaForModel(contextItems, tomoriState);
     } catch (contextError) {
       await log.error(
         "/tool estimate cost failed to build runtime-parity context",

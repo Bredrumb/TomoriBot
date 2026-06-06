@@ -21,6 +21,7 @@ import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/ut
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
+import { collectImageUrlsFromMessage } from "@/utils/image/imageExtractor";
 
 /**
  * Provider-to-chat-completions-URL mapping for OpenAI-compatible providers.
@@ -328,7 +329,12 @@ export class AnalyzeImageTool extends BaseTool {
 
   /**
    * Extract images from a Discord message and convert to base64 format.
-   * Supports direct attachments, embedded images (Twitter/X), stickers, and custom emojis.
+   *
+   * Discovery is delegated to the shared {@link collectImageUrlsFromMessage} helper
+   * (attachments, embeds, stickers, custom emojis, and Components V2 media), so this
+   * tool can analyze bot-generated images whose attachment lives only inside a
+   * Media Gallery component. The download loop below stays local because vision
+   * payloads enforce a cumulative byte budget and skip re-optimization.
    * @param messageId - Discord message ID to fetch images from
    * @param context - Tool execution context with channel access
    * @returns Array of objects with mimeType and base64 data
@@ -343,52 +349,13 @@ export class AnalyzeImageTool extends BaseTool {
       throw new Error(`Message ${messageId} not found`);
     }
 
-    // 2. Collect all image URLs from attachments, embeds, and stickers
-    const imageUrls: Array<{
-      url: string;
-      mimeType: string;
-      source: string;
-    }> = [];
-
-    // 2a. Direct image attachments
-    const imageAttachments = message.attachments.filter((attachment) => attachment.contentType?.startsWith("image/"));
-    for (const attachment of imageAttachments.values()) {
-      imageUrls.push({
-        url: attachment.url,
-        mimeType: attachment.contentType || "image/jpeg",
-        source: `attachment: ${attachment.name}`,
-      });
-    }
-
-    // 2b. Embedded images (Twitter/X posts, direct image links)
-    for (const embed of message.embeds) {
-      if (embed.image?.url) {
-        imageUrls.push({
-          url: embed.image.url,
-          mimeType: "image/jpeg",
-          source: `embed.image: ${embed.url || "unknown"}`,
-        });
-      }
-      if (embed.thumbnail?.url) {
-        imageUrls.push({
-          url: embed.thumbnail.url,
-          mimeType: "image/jpeg",
-          source: `embed.thumbnail: ${embed.url || "unknown"}`,
-        });
-      }
-    }
-
-    // 2c. Stickers
-    for (const sticker of message.stickers.values()) {
-      imageUrls.push({
-        url: sticker.url,
-        mimeType: "image/png",
-        source: `sticker: ${sticker.name}`,
-      });
-    }
+    // 2. Discover every image URL in the message (shared logic, incl. Components V2)
+    const imageUrls = collectImageUrlsFromMessage(message);
 
     if (imageUrls.length === 0) {
-      throw new Error(`No images found in message ${messageId} (checked attachments, embeds, and stickers)`);
+      throw new Error(
+        `No images found in message ${messageId} (checked attachments, embeds, stickers, custom emojis, and components)`,
+      );
     }
 
     log.info(`Found ${imageUrls.length} image(s) in message ${messageId} for vision analysis`);

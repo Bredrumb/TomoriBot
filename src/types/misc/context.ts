@@ -15,6 +15,19 @@ export type ContextPart =
   | { type: "image"; uri: string; mimeType: string; fallbackUri?: string } // URI could be a public URL or a data URI; fallbackUri tried on fetch failure
   | { type: "video"; uri: string; mimeType: string; isYouTubeLink?: boolean }; // Video support with YouTube detection
 
+export interface MediaDescriptor {
+  kind: "image" | "video";
+  uri: string;
+  mimeType: string | null;
+  fallbackUri?: string;
+  mediaId: string;
+  isEmoji?: boolean;
+  withinWindow: boolean;
+  extendBy?: number;
+  isYouTubeLink?: boolean;
+  filename?: string;
+}
+
 export interface ConversationUserReference {
   targetId: string; // Discord snowflake or bridge user ID
   displayLabel: string;
@@ -63,6 +76,7 @@ export enum ContextItemTag {
 export type StructuredContextItem = {
   role: "system" | "user" | "model"; // 'system' for initial instructions, 'user' for user/tool inputs, 'model' for LLM responses
   parts: ContextPart[];
+  mediaDescriptors?: MediaDescriptor[];
   metadataTag?: ContextItemTag; // Optional tag for internal processing
   messageId?: string; // Optional Discord message ID for tools that need to reference the original message
   sender?: ContextItemSender; // Hidden sender metadata for provider-side history normalization

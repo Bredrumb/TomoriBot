@@ -3,6 +3,7 @@ import {
   MessageFlags,
   type ChatInputCommandInteraction,
   type Client,
+  type ModalSubmitInteraction,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
@@ -60,6 +61,10 @@ export async function execute(
   // NOTE: No deferReply here — promptWithRawModal must be the first
   // acknowledgment. Pre-modal checks are cache-backed and complete within 3 seconds.
 
+  // Declared outside try/catch so the catch block can use the modal interaction
+  // (which is auto-deferred) for error reporting instead of the consumed original interaction.
+  let modalInteraction: ModalSubmitInteraction | null = null;
+
   try {
     // 2. Load the Tomori state for this server
     const tomoriState = await getCachedTomoriState(interaction.guild.id);
@@ -109,7 +114,7 @@ export async function execute(
       log.error("Member permissions modal unexpectedly missing interaction");
       return;
     }
-    const modalInteraction = modalResult.interaction;
+    modalInteraction = modalResult.interaction;
 
     // 5. Determine which permissions changed
     const newlyEnabled = new Set(modalResult.multiValues?.[MEMBERPERMISSIONS_CHECKBOX_ID] ?? []);
@@ -171,14 +176,13 @@ export async function execute(
       resultDescription += `\n🔴 **Disabled:** ${disabledLabels.join(", ")}`;
     }
 
-    await modalInteraction.reply({
+    await modalInteraction.editReply({
       embeds: [
         new EmbedBuilder()
           .setTitle(localizer(locale, "commands.server.member-permissions.success_title"))
           .setDescription(resultDescription)
           .setColor(ColorCode.SUCCESS),
       ],
-      flags: MessageFlags.Ephemeral,
     });
   } catch (error) {
     // 10. Log the error with context
@@ -208,18 +212,13 @@ export async function execute(
     );
 
     // 11. Inform user of unknown error
-    if (!interaction.replied && !interaction.deferred) {
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "general.errors.unknown_error_title",
-        descriptionKey: "general.errors.unknown_error_description",
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
-    } else {
-      await interaction.followUp({
-        content: localizer(locale, "general.errors.unknown_error_description"),
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+    // Use modalInteraction (auto-deferred) if available since the original
+    // interaction is consumed by promptWithRawModal's raw REST acknowledgment.
+    await replyInfoEmbed(modalInteraction ?? interaction, locale, {
+      titleKey: "general.errors.unknown_error_title",
+      descriptionKey: "general.errors.unknown_error_description",
+      color: ColorCode.ERROR,
+      flags: MessageFlags.Ephemeral,
+    });
   }
 }
