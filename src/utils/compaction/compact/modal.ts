@@ -6,9 +6,14 @@ import { localizer } from "@/utils/text/localizer";
 import type { ModalComponent } from "@/types/discord/modal";
 
 const MODAL_CUSTOM_ID = "tool_compact_modal";
+const MANUAL_MODAL_CUSTOM_ID = "tool_compact_manual_modal";
 const REFRESH_FIELD_ID = "refresh_context";
 const ANALYZE_IMAGES_FIELD_ID = "analyze_images";
 const SYSTEM_PROMPT_FIELD_ID = "system_prompt";
+const MANUAL_CONTENT_FIELD_ID = "manual_content";
+
+const DEFAULT_MANUAL_CONTENT =
+  "Manually enter a summary, scene change, or other event. There will be NO AI summarization or compaction of preceding messages.";
 
 const DEFAULT_CONVERSATION_SYSTEM_PROMPT =
   "You are a skilled conversation analyst who creates clear, readable summaries of Discord conversations. " +
@@ -26,7 +31,7 @@ const DEFAULT_ROLEPLAY_SYSTEM_PROMPT =
   "Your target audience is the AI player, not the human player - consider this when deciding what to summarize and how. " +
   "Your maximum budget is 3500 characters.";
 
-export { DEFAULT_CONVERSATION_SYSTEM_PROMPT, DEFAULT_ROLEPLAY_SYSTEM_PROMPT };
+export { DEFAULT_CONVERSATION_SYSTEM_PROMPT, DEFAULT_ROLEPLAY_SYSTEM_PROMPT, DEFAULT_MANUAL_CONTENT };
 
 export type CompactModalSelection = {
   submitInteraction: ModalSubmitInteraction;
@@ -70,6 +75,56 @@ export async function promptForCompactOptions(
     refresh: (modalResult.multiValues?.[REFRESH_FIELD_ID] ?? []).includes("yes"),
     analyzeImages: (modalResult.multiValues?.[ANALYZE_IMAGES_FIELD_ID] ?? []).includes("yes"),
     systemPrompt: modalResult.values[SYSTEM_PROMPT_FIELD_ID]?.trim() || defaultSystemPrompt,
+  };
+}
+
+export type ManualModalSelection = {
+  submitInteraction: ModalSubmitInteraction;
+  refresh: boolean;
+  summaryContent: string;
+};
+
+export async function promptForManualOptions(
+  interaction: ChatInputCommandInteraction,
+  locale: string,
+): Promise<ManualModalSelection | null> {
+  const modalResult = await promptWithRawModal(
+    interaction,
+    locale,
+    {
+      modalCustomId: MANUAL_MODAL_CUSTOM_ID,
+      modalTitleKey: "commands.tool.compact.modal.title",
+      components: [
+        {
+          kind: "checkboxGroup",
+          customId: REFRESH_FIELD_ID,
+          labelKey: "commands.tool.compact.modal.refresh_label",
+          descriptionKey: "commands.tool.compact.modal.refresh_description",
+          minValues: 0,
+          required: false,
+          options: [{ label: localizer(locale, "general.yes"), value: "yes" }],
+        },
+        {
+          customId: MANUAL_CONTENT_FIELD_ID,
+          labelKey: "commands.tool.compact.modal.manual_content_label",
+          required: false,
+          style: TextInputStyle.Paragraph,
+          maxLength: 4000,
+          value: DEFAULT_MANUAL_CONTENT,
+        },
+      ],
+    },
+    MessageFlags.Ephemeral,
+  );
+
+  if (modalResult.outcome !== "submit") return null;
+  const submitInteraction = modalResult.interaction;
+  if (!submitInteraction || !modalResult.values) return null;
+
+  return {
+    submitInteraction,
+    refresh: (modalResult.multiValues?.[REFRESH_FIELD_ID] ?? []).includes("yes"),
+    summaryContent: modalResult.values[MANUAL_CONTENT_FIELD_ID]?.trim() || DEFAULT_MANUAL_CONTENT,
   };
 }
 

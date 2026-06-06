@@ -15,6 +15,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         .addChoices(
           { name: localizer("en-US", "commands.tool.compact.modal.type_choice_conversation"), value: "conversation" },
           { name: localizer("en-US", "commands.tool.compact.modal.type_choice_roleplay"), value: "roleplay" },
+          { name: localizer("en-US", "commands.tool.compact.modal.type_choice_manual"), value: "manual" },
         )
         .setRequired(true),
     )

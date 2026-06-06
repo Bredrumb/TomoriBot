@@ -72,6 +72,8 @@ I have built-in features to help reduce costs from abusers or spammers in your s
         title: `Compact Summary`,
         type_choice_conversation: `Conversation`,
         type_choice_roleplay: `Roleplay`,
+        type_choice_manual: `Manual`,
+        manual_content_label: `Summary / Event`,
         refresh_label: `Refresh Context?`,
         refresh_description: `If Yes, messages above the summary will be ignored.`,
         analyze_images_label: `Analyze Images?`,
@@ -100,6 +102,8 @@ I have built-in features to help reduce costs from abusers or spammers in your s
       summary_title_refreshed: `🧹 Compact Summary (Refreshed)`,
       roleplay_scene_title: `🎭 Roleplay Scene Summary`,
       roleplay_scene_title_refreshed: `🧹 Roleplay Scene Summary (Refreshed)`,
+      manual_entry_title: `📝 Manual Entry`,
+      manual_entry_title_refreshed: `🧹 Manual Entry (Refreshed)`,
       roleplay_scene_synopsis_header: `Synopsis of the current story:`,
       roleplay_character_title_prefix: `🎭 Character Summary:`,
       roleplay_labels: {

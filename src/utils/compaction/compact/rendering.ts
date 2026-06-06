@@ -72,6 +72,27 @@ export async function sendEmbedsInChunks(channel: SendableChannel, embeds: Embed
   }
 }
 
+export function buildManualEmbed(
+  locale: string,
+  summaryText: string,
+  refresh: boolean,
+  editDeadline?: string,
+): EmbedBuilder {
+  const title = refresh
+    ? localizer(locale, "commands.tool.compact.manual_entry_title_refreshed")
+    : localizer(locale, "commands.tool.compact.manual_entry_title");
+
+  const embed = new EmbedBuilder()
+    .setTitle(title)
+    .setDescription(truncateEmbedDescription(summaryText))
+    .setColor(ColorCode.SECTION);
+
+  const footerText = buildFooterText(locale, refresh, editDeadline);
+  if (footerText) embed.setFooter({ text: footerText });
+
+  return embed;
+}
+
 export const COMPACT_EDIT_BUTTON_ID = "compact_edit_summary";
 
 export function buildEditSummaryButtonRow(locale: string): ActionRowBuilder<ButtonBuilder> {

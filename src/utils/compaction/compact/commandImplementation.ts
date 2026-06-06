@@ -17,11 +17,12 @@ import { providerSupportsFeature } from "@/utils/provider/providerInfoRegistry";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { localizer } from "@/utils/text/localizer";
 import { buildConversationContext } from "./historyExtraction";
-import { promptForCompactOptions } from "./modal";
+import { promptForCompactOptions, promptForManualOptions } from "./modal";
 import {
   COMPACT_EDIT_BUTTON_ID,
   buildConversationEmbed,
   buildEditSummaryButtonRow,
+  buildManualEmbed,
   buildRoleplayEmbeds,
   isDiscordThreadChannel,
 } from "./rendering";
@@ -51,6 +52,11 @@ export async function executeCompactCommand(
   const targetChannelOption = interaction.options.getChannel("channel");
   const targetThreadId = interaction.options.getString("thread")?.trim();
   if (!(await validateDestinationOptions(interaction, locale, targetChannelOption?.id, targetThreadId))) return;
+
+  if (summaryType === "manual") {
+    await executeManualCompact(client, interaction, locale, targetChannelOption, targetThreadId);
+    return;
+  }
 
   const modalSelection = await promptForCompactOptions(interaction, locale, summaryType);
   if (!modalSelection) return;
@@ -383,6 +389,109 @@ async function editFailure(
       error,
     },
   );
+}
+
+async function executeManualCompact(
+  client: Client,
+  interaction: ChatInputCommandInteraction,
+  locale: string,
+  targetChannelOption: ReturnType<ChatInputCommandInteraction["options"]["getChannel"]>,
+  targetThreadId: string | undefined,
+): Promise<void> {
+  const manualSelection = await promptForManualOptions(interaction, locale);
+  if (!manualSelection) return;
+
+  const channel = manualSelection.submitInteraction.channel ?? interaction.channel;
+  if (!channel || !("send" in channel) || typeof channel.send !== "function" || !("messages" in channel)) {
+    await editError(
+      manualSelection.submitInteraction,
+      locale,
+      "general.errors.channel_only_title",
+      "general.errors.channel_only_description",
+    );
+    return;
+  }
+
+  const outputChannel = await resolveOutputChannel(
+    client,
+    interaction.guildId,
+    channel as SendableChannel,
+    targetChannelOption?.id,
+    targetThreadId,
+  );
+  if (!outputChannel) {
+    const titleKey = targetThreadId
+      ? "commands.tool.compact.thread_invalid_title"
+      : "general.errors.channel_only_title";
+    const descriptionKey = targetThreadId
+      ? "commands.tool.compact.thread_invalid_description"
+      : "general.errors.channel_only_description";
+    await editError(manualSelection.submitInteraction, locale, titleKey, descriptionKey);
+    return;
+  }
+
+  try {
+    const COLLECTOR_DURATION_MS = 10 * 60 * 1000;
+    const editDeadline = formatDeadline(new Date(Date.now() + COLLECTOR_DURATION_MS));
+    const buildEmbed = (text: string, deadline?: string) =>
+      buildManualEmbed(locale, text, manualSelection.refresh, deadline);
+
+    const buttonRow = buildEditSummaryButtonRow(locale);
+    const summaryMessage = await outputChannel.send({
+      embeds: [buildEmbed(manualSelection.summaryContent, editDeadline)],
+      components: [buttonRow],
+    });
+    await editSuccess(manualSelection.submitInteraction, locale, targetChannelOption?.id ?? targetThreadId);
+
+    const collector = summaryMessage.createMessageComponentCollector({
+      componentType: ComponentType.Button,
+      filter: (i) => i.customId === COMPACT_EDIT_BUTTON_ID,
+      time: COLLECTOR_DURATION_MS,
+    });
+
+    collector.on("collect", async (buttonInteraction) => {
+      const liveMessage = await buttonInteraction.message.fetch();
+      const currentText = liveMessage.embeds[0]?.description ?? "";
+      const editModal = new ModalBuilder()
+        .setCustomId("compact_edit_modal")
+        .setTitle(localizer(locale, "commands.tool.compact.edit_modal_title"));
+      const textInput = new TextInputBuilder()
+        .setCustomId("compact_edit_text")
+        .setLabel(localizer(locale, "commands.tool.compact.edit_field_label"))
+        .setStyle(TextInputStyle.Paragraph)
+        .setMaxLength(4000)
+        .setRequired(true)
+        .setValue(currentText.slice(0, 4000));
+      editModal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(textInput));
+      await buttonInteraction.showModal(editModal);
+
+      try {
+        const submitted = await buttonInteraction.awaitModalSubmit({
+          time: 600000,
+          filter: (i) => i.customId === "compact_edit_modal" && i.user.id === buttonInteraction.user.id,
+        });
+        const newText = submitted.fields.getTextInputValue("compact_edit_text");
+        await submitted.deferUpdate();
+        await summaryMessage.edit({ embeds: [buildEmbed(newText, editDeadline)], components: [buttonRow] });
+      } catch {
+        // Modal dismissed or timed out — no action needed
+      }
+    });
+
+    collector.on("end", async () => {
+      const liveMessage = await summaryMessage.fetch().catch(() => null);
+      if (!liveMessage) return;
+      const currentText = liveMessage.embeds[0]?.description ?? "";
+      await summaryMessage.edit({ embeds: [buildEmbed(currentText)], components: [] }).catch(() => {});
+    });
+  } catch (error) {
+    log.error("Manual compact command failed", error);
+    await editFailure(
+      manualSelection.submitInteraction,
+      locale,
+      error instanceof Error ? error.message : "Unknown error",
+    );
+  }
 }
 
 function formatDeadline(date: Date): string {
