@@ -7,7 +7,7 @@
  * Requires: a local Postgres connection (see docs/guides/testing-db-changes.md)
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { forkPointerForServerAvatarChange } from "@/commands/server/avatar";
+import { forkPointerForAvatarChange } from "@/commands/persona/avatar";
 import { personaRepository } from "@/utils/db/repositories";
 import { FIXTURE_IDS, cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
@@ -363,7 +363,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
         throw new Error("Expected pointer alter persona to exist before avatar update.");
       }
 
-      expect(await forkPointerForServerAvatarChange(selectedPersona)).toBe(true);
+      expect(await forkPointerForAvatarChange(selectedPersona)).toBe(true);
       expect(await personaRepository.setAvatar(alterPersonaId, "_rt_avatar_pointer_url")).toBe(true);
 
       const [forkedRow] = await testSql<

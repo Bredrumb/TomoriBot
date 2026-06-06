@@ -5,6 +5,15 @@ import type { ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { FallbackNoticeAttempt } from "@/utils/discord/fallbackModelNotice";
 import type { ChatResponseSink, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import type { ToolLoopParams } from "@/utils/chat/toolLoop";
+// Capture the REAL repository barrel before the mock below replaces it. Importing
+// it is side-effect-free (the DB client connects lazily, not at import), and
+// `mock.module` runs in source order — not hoisted — so this static import resolves
+// to the real module. Spreading it into the mock keeps every repository export
+// present, so command modules pulled into the SUT's dynamic-import graph can
+// satisfy their static `import { ... }` bindings. Without this, running this file
+// in its own process (per-file isolation in runTests.ts) fails to link exports
+// like `serverScheduleRepository` that the graph imports but the stub omitted.
+import * as realRepositories from "@/utils/db/repositories";
 
 const queuedResults: GenerationTurnResult[] = [];
 const toolLoopCalls: Array<{ model: string; suppressUserErrors: boolean | undefined }> = [];
@@ -68,11 +77,12 @@ mock.module("@/utils/cache/openrouterCapabilityCache", () => ({
 }));
 
 mock.module("@/utils/db/repositories", () => ({
+  // Spread the real barrel first so every export the SUT graph imports is present,
+  // then override only the repository methods this test's code path actually drives.
+  ...realRepositories,
   llmProviderRepo: {
     loadSavedProviderConfig: async () => null,
   },
-  // Stub exports for other commonly-imported repos so command modules loaded by
-  // other test files can satisfy their static import bindings.
   configRepository: {
     updateNsfwConfig: async () => true,
   },

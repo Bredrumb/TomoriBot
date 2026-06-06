@@ -4,16 +4,22 @@
  * Behavior:
  *  1. Detect whether a valid local Postgres connection is available.
  *  2. If yes:  create a disposable `tomoribot_test_<id>` database, inject
- *              TEST_DB_READY=1 + POSTGRES_DB=<name> into the child env, run
- *              `bun test tests/`, then drop the database on any exit path
- *              (clean finish, uncaught error, SIGINT, or SIGTERM).
- *  3. If no:   run `bun test tests/` without DB env vars so the 89 DB
- *              regression tests skip gracefully instead of erroring.
+ *              TEST_DB_READY=1 + POSTGRES_DB=<name> into the child env, run the
+ *              suites, then drop the database on any exit path (clean finish,
+ *              uncaught error, SIGINT, or SIGTERM).
+ *  3. If no:   run the suites without DB env vars so the DB regression tests
+ *              skip gracefully instead of erroring.
+ *
+ * Each suite (unit, regression) runs in its OWN `bun test` process — see
+ * {@link TEST_SUITES} for why that isolation is required.
  *
  * Invoke via `bun run test` (package.json) — not `bun test tests/` directly.
  */
 
 import { SQL } from "bun";
+import { rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { config } from "dotenv";
 
 config({ quiet: true });
@@ -100,24 +106,96 @@ function createSqlClient(url: string): SQL {
 }
 
 /**
- * Optional JUnit reporter flags. When `BUN_TEST_JUNIT_OUTFILE` is set (the `vl`
- * checklist sets it), `bun test` also writes a JUnit XML file so the caller can
- * reliably enumerate every test file with pass/fail/skip counts — piped console
- * output omits per-file headers for files that log nothing.
+ * Each test FILE runs in its own `bun test <file>` process. Bun applies
+ * `mock.module()` process-wide and never restores it between files, so any test
+ * that stubs a shared module (e.g. the `@/utils/db/repositories` barrel) would
+ * otherwise corrupt every file that loads later in the same process. Because Bun
+ * discovers files in filesystem order, that corruption is ordering-dependent and
+ * surfaces as flaky "X is not a function" / "Export named X not found" failures
+ * that move between suites whenever the file set changes. One process per file
+ * guarantees every file starts from the real module graph, so results are
+ * deterministic regardless of discovery order.
+ *
+ * Files run SEQUENTIALLY (never in parallel): the DB regression suites share a
+ * single disposable Postgres database with fixed-id fixtures, so concurrent runs
+ * would collide on the same rows.
  */
-function junitReporterArgs(): string[] {
-  const outfile = process.env.BUN_TEST_JUNIT_OUTFILE;
-  return outfile ? ["--reporter=junit", `--reporter-outfile=${outfile}`] : [];
+async function discoverTestFiles(): Promise<string[]> {
+  const glob = new Bun.Glob("**/*.test.ts");
+  const files: string[] = [];
+  for await (const rel of glob.scan({ cwd: "tests" })) {
+    // Normalize Windows separators so the path is a valid `bun test` argument.
+    files.push(`tests/${rel.replaceAll("\\", "/")}`);
+  }
+  // Sort for stable, reproducible run order across platforms.
+  return files.sort();
 }
 
-/** Spawns `bun test tests/` and returns the child exit code. */
-async function spawnBunTest(extraEnv: Record<string, string> = {}): Promise<number> {
-  const proc = Bun.spawn(["bun", "test", "tests/", ...junitReporterArgs()], {
-    env: { ...process.env, ...extraEnv },
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-  return (await proc.exited) ?? 1;
+/**
+ * Concatenates per-file JUnit XML files into the single outfile the caller
+ * expects, then removes the per-file temporaries. The `vl` JUnit parser scans
+ * for `<testsuite>` tags across the whole string, so plain concatenation yields a
+ * file it reads correctly without needing one well-formed root element.
+ */
+async function mergeJUnitFiles(sources: string[], dest: string): Promise<void> {
+  const parts: string[] = [];
+  for (const src of sources) {
+    const text = await Bun.file(src)
+      .text()
+      .catch(() => "");
+    if (text.trim()) parts.push(text);
+    await rm(src, { force: true }).catch(() => undefined);
+  }
+  await Bun.write(dest, parts.join("\n"));
+}
+
+/**
+ * Runs each file in `files` sequentially, every one in its own `bun test`
+ * process. When `BUN_TEST_JUNIT_OUTFILE` is set (the `vl` checklist sets it),
+ * each file writes its own JUnit file which are then merged into that requested
+ * path. `onProc`, when provided, receives the active child process so
+ * signal-driven cleanup can terminate whichever file is currently running.
+ *
+ * @returns The first non-zero file exit code, or 0 when all files pass.
+ */
+async function runTestFiles(
+  files: string[],
+  extraEnv: Record<string, string> = {},
+  onProc?: (proc: ReturnType<typeof Bun.spawn> | null) => void,
+): Promise<number> {
+  const requestedOutfile = process.env.BUN_TEST_JUNIT_OUTFILE;
+  const perFileOutfiles: string[] = [];
+  let combinedExit = 0;
+
+  for (const [index, file] of files.entries()) {
+    // 1. When JUnit output is requested, give each file its own temp outfile.
+    const reporterArgs: string[] = [];
+    if (requestedOutfile) {
+      const fileOutfile = join(tmpdir(), `tomori-junit-${runId}-${index}.xml`);
+      reporterArgs.push("--reporter=junit", `--reporter-outfile=${fileOutfile}`);
+      perFileOutfiles.push(fileOutfile);
+    }
+
+    // 2. Spawn the file in its own process and track it for cleanup.
+    const proc = Bun.spawn(["bun", "test", file, ...reporterArgs], {
+      env: { ...process.env, ...extraEnv },
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    onProc?.(proc);
+    const code = (await proc.exited) ?? 1;
+    onProc?.(null);
+
+    // 3. Remember the first failure but keep running so every file reports.
+    if (code !== 0 && combinedExit === 0) combinedExit = code;
+  }
+
+  // 4. Merge per-file JUnit output into the single file the caller asked for.
+  if (requestedOutfile && perFileOutfiles.length > 0) {
+    await mergeJUnitFiles(perFileOutfiles, requestedOutfile);
+  }
+
+  return combinedExit;
 }
 
 async function main(): Promise<void> {
@@ -125,12 +203,19 @@ async function main(): Promise<void> {
     throw new Error("[test-runner] Refusing to run with RUN_ENV=production.");
   }
 
+  // Discover every test file once; each runs in its own process (see runTestFiles).
+  const testFiles = await discoverTestFiles();
+  if (testFiles.length === 0) {
+    console.error("[test-runner] No test files found under tests/.");
+    process.exit(1);
+  }
+
   const params = getConnectionParams();
 
   // 1. No credentials found — run tests in skip mode.
   if (!params) {
     console.log("[test-runner] No Postgres credentials found. DB regression tests will be skipped.");
-    process.exit(await spawnBunTest());
+    process.exit(await runTestFiles(testFiles));
   }
 
   // 2. Non-local host detected — fall back to skip mode to avoid touching remote DBs.
@@ -139,7 +224,7 @@ async function main(): Promise<void> {
       `[test-runner] Postgres host "${params.host}" is not local. Skipping DB provisioning.\n` +
         "Set TOMORI_TESTS_ALLOW_NONLOCAL_DB=true to override.",
     );
-    process.exit(await spawnBunTest());
+    process.exit(await runTestFiles(testFiles));
   }
 
   const adminUrl = buildUrl(params, params.maintenanceDb);
@@ -187,7 +272,7 @@ async function main(): Promise<void> {
     console.log("[test-runner] Could not reach Postgres. DB regression tests will be skipped.");
     await adminSql?.close({ timeout: 1 }).catch(() => undefined);
     adminSql = null;
-    process.exit(await spawnBunTest());
+    process.exit(await runTestFiles(testFiles));
   }
 
   let exitCode = 1;
@@ -210,14 +295,11 @@ async function main(): Promise<void> {
       TEST_DB_READY: "1",
     };
 
-    proc = Bun.spawn(["bun", "test", "tests/", ...junitReporterArgs()], {
-      env: { ...process.env, ...testEnv },
-      stdout: "inherit",
-      stderr: "inherit",
+    // Run each file in its own process; track the active child so signal-driven
+    // cleanup can terminate whichever file is running and still drop the DB.
+    exitCode = await runTestFiles(testFiles, testEnv, (active) => {
+      proc = active;
     });
-
-    exitCode = (await proc.exited) ?? 1;
-    proc = null;
   } finally {
     // 6. Always drop the disposable database, even if tests failed.
     console.log(`[test-runner] Dropping test database: ${tempDbName}`);

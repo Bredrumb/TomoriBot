@@ -47,6 +47,19 @@ jobs:
           # PR — including those from contributor forks. Comments post as
           # github-actions[bot].
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Allow fork PRs from contributors WITHOUT repo write access to trigger
+          # reviews. Accepted posture for a small project:
+          #   - Claude CANNOT edit files or push: token is scoped contents:read +
+          #     pull-requests:write, and claude_args grants no Edit/Write tools and
+          #     no open-ended Bash/network — only read-only gh/git + posting comments.
+          #   - Secret exfiltration is mitigated by the action's DEFAULT subprocess
+          #     env scrubbing, which redacts GITHUB_TOKEN / Anthropic secrets, so an
+          #     injected `gh pr comment --body "$TOKEN"` posts a redacted value.
+          #     Do NOT set CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=0 — that disables this.
+          #   - Residual ACCEPTED risk: compute/credit abuse, since anyone can now
+          #     trigger paid runs. Narrow to a comma-separated username list if that
+          #     stops being acceptable.
+          allowed_non_write_users: '*'
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'

@@ -20,10 +20,16 @@ No manual database creation is required. `bun run test` detects a local Postgres
 1. Looks for Postgres credentials in `POSTGRES_PASSWORD`, `DATABASE_URL`, or `POSTGRES_URL`.
 2. If credentials exist, probes the connection (5-second timeout).
 3. On success, creates a disposable `tomoribot_test_<id>` database via the `postgres` maintenance database.
-4. Spawns `bun test tests/` with `TEST_DB_READY=1` and `POSTGRES_DB=<name>` injected into the child environment.
+4. Discovers every `tests/**/*.test.ts` file and spawns each in its **own** `bun test <file>` process (sequentially), with `TEST_DB_READY=1` and `POSTGRES_DB=<name>` injected into the child environment.
 5. Drops the database on clean exit, `SIGINT` (Ctrl+C), or `SIGTERM`.
 
-If no Postgres credentials are found or the connection probe fails, `bun test tests/` still runs — DB regression tests skip gracefully and unit tests still pass.
+If no Postgres credentials are found or the connection probe fails, the files still run — DB regression tests skip gracefully and unit tests still pass.
+
+### Why one process per file
+
+Bun applies `mock.module()` process-wide and does not restore it between files. A test that stubs a shared module (e.g. the `@/utils/db/repositories` barrel) would otherwise corrupt every file that loads later in the same process, producing ordering-dependent `X is not a function` / `Export named X not found` failures that shift between suites as the file set changes. Running each file in its own process guarantees every file starts from the real module graph, so results are deterministic. Files run sequentially (never in parallel) because the DB regression suites share one disposable database and fixed-id fixtures.
+
+When `BUN_TEST_JUNIT_OUTFILE` is set (the `vl` checklist sets it), each file writes its own JUnit file and the runner merges them into the requested path, so per-file reporting is preserved.
 
 ## Minimum setup
 
