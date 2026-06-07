@@ -2,26 +2,51 @@
   
 ![Release Picture](https://github.com/{REPO_OWNER}/{REPO_NAME}/raw/main/.github/release/v0.7.990/liphel-outing.png)
 
-Happy ~~Liphel~~ Pride Month! This major release is the buffer before 0.8.0.00, it already contains the major refactor changes to make TomoriBot prepared for further architectural changes, splitting up all the 1k+ line code files as well as general optimizations.
+Happy ~~Liphel~~ Pride Month! This major release is the buffer before 0.8.0.00, it already contains the major refactor changes to make TomoriBot prepared for further architectural changes ~~and so I can let people test it more before moving on~~, splitting up all the 1k+ line code files as well as general optimizations (hence, Makeover, considering Personas can now handle physical appearances better this edition too!)
 
-There are no *big* changes on the user-facing side, but there are a *lot* of new features and QoL changes. Bigger changes will come next release instead. Make sure to check out the https://github.com/users/Bredrumb/projects/1/views/1 to see all these upcoming changes:
+There are a *lot* of new features and QoL changes so I decided to split it up from 0.8.0.00, bigger changes will come next in that release instead. Make sure to check out the [full roadmap](https://github.com/users/Bredrumb/projects/1/views/1) to see all these upcoming changes. For now, here's the current list of Makeover Edition changes:
+
+**Do NOT forget to `bun run backup` before pulling all new changes from `main`!**
 
 ## New Tomori Features
 - You can now set Persona Attributes as "Public", which allows other Personas in chat to see them. Useful for physical appearance descriptions. It can be set through:
   - `/persona attribute` commands as a checkbox
   - Automatically set for physical appearance descriptions in `/persona generate`
-- Added SearXNG as locally hosted alternative to web search
-  - Mixes multiple 
-- Added Crawl4AI as locally hosted alternative to URL fetching
-  - Can parse 
-- (For those running TomoriBot locally) You can now use `bun launch` instead of `bun run dev` which allows you to pass params that automatically launch servers if they are still not (eg. `bun launch --qwen3tts --searxng`)
+- `/image-tags` is now decoupled from NovelAI, serving as a general reference for image generation Tomori can use. It is public to all personas present in context. It is now split into:
+  - `/personal image-tags` = comma-separated tags of *your* appearance
+  - `/server image-tags default positive|negative` = image tags that are automatically prepended to all image generation requests done in the server
+  - `/persona image-tags` = comma-separated tags of a persona's appearance
+  - Use `/image-tags` if you want to help guide image generations relying on comma-separated tags, otherwise you may just use a public `/persona attribute` to describe a persona's appearance.
+  - TomoriBot can now edit and remove reminders by herself through tools, just ask her to! Only successfully executed if the invoker is the owner of the reminder.
+- Created memories and tasks success embeds now show an "Expand" button whenever they exceed the max character count which reveal the full text ephemerally
+- Added [SearXNG](https://github.com/searxng/searxng) as locally hosted alternative to web search
+  - Mixes multiple search engines for reliability (supports images, videos, music, etc.), doesn't use cookies, and sends randomized headers to protect your privacy (you still need a VPN to cover your IP address, if you want maximum privacy)
+  - To run, set `SEARXNG_BASE_URL=http://searxng:8080/` in .env then launch `docker compose --profile searxng up -d` or `bun launch --searxng` or see the [full guide here](https://github.com/{REPO_OWNER}/{REPO_NAME}/blob/main/docs/guides/setup-searxng.md)
+- Added [Crawl4AI](https://github.com/unclecode/crawl4ai) as locally hosted alternative to URL fetching
+  - Uses a headless browser that can handle lazy-loaded content (websites using JavaScript)
+  - Automatically formats websites into LLM-friendly .md format
+  - Handles proxy routing and user agent rotation to avoid bot limits like in Reddit
+  - Can take screenshots of websites (this one specifically is not yet integrated into TomoriBot)
+  - To run, set `CRAWL4AI_BASE_URL=http://crawl4ai:11235/` in .env then launch `docker compose --profile fetch-crawl4ai up -d` or `bun launch --crawl4ai` or see the [full guide here](https://github.com/{REPO_OWNER}/{REPO_NAME}/blob/main/docs/guides/setup-crawl4ai.md)
+- (For those running TomoriBot locally) You can now use `bun launch` instead of `bun run dev` which allows you to pass params that automatically launch servers if they are still not running (eg. `bun launch --qwen3tts --searxng`)
+- Added "Import Now" button to `/persona` creation and generation embeds
+- Added `/server channel-prompt` command which adds a prompt to a channel, either appending to the system prompt or replacing it when Tomori is triggered inside it based on chosen setting. For now, it is a global setting for all personas.
+- (Thanks Palinalif!) Added `/deliberate-tool-mode` which causes tools to only appear if a specific keyword corresponding to it is present in the last X messages in context. Useful for saving tokens and improving latency at the cost of potentially losing on-the-fly tool calls
+  - Currently simply uses best-effort RegEx patterns to detect keywords 
+  - `/deliberate-tool-context` = Adjusts how many last X messages Tomori checks for any tool keywords (default is last 3 messages)
+  - `/deliberate-tool-trigger` = Add custom keywords for specific tools, supports RegEx. A tip is to use the `^` RegEx if you want a tool to *always* appear in context. LLMs have an "attention economy" meaning that the less tools there are, the more likely they are to use it, so having only memory saving tool for example makes your Tomori more likely to save memories.
+- (Thanks Baetican!) `/memory tagging set` = Command that toggles memory tagging behavior, defaults to off (see `/help memory-tagging` to learn more) 
+  - Memory tagging toggle now supports channel tags, meaning you can now restrict memories/documents/history to only certain channels
+- (Thanks Baetican!) Various improvements to `/tool compact`:
+  - TODO
+- (Thanks Palinalif!) Added Inpainting/Outpainting (img2img) functionality to TomoriBot's image generation tool. Use the [provided ComfyUI workflow in the repo](https://github.com/{REPO_OWNER}/{REPO_NAME}/blob/main/assets/comfyui-workflows/tomoribot-anima-v1-comfyui.json) to use it! (updated to use base Anima v1 instead of preview Anima v3, and now randomizes seeds properly as well)
+- `/initialize expressions` now loops automatically until it processes all emojis and stickers (fails if it gets stuck)
+- You can now register multiple same-capability models under the same Custom Endpoint label, eg. useful if you want to have different workflows for "comfyui" which can be selected with `/model image`
 - `/server nuke` command which deletes all server configs (optionally, you can set it to preserve personas)
-
-
-
-
+- `/custom-endpoint add|edit` for text models now show compatibility settings that help prevent rejections from providers that have strict API request formats (eg. Anthropic through a proxy)
 
 ## QoL and Bug Fixes
+- Generate image tool now only exposes possible parameters ONLY if it is supported by currently configured image model, stopping previous fail-first behavior which saves tokens and latency
 - You can now use .env variable `EMOJI_PRESERVE_UNRESOLVED_SHORTCODES`, if `FALSE` (default), emojis Tomori uses but don't actually exist in the server will get stripped from her responses
 - After Tomori creates a Discord Thread, she now responds back to you to confirm her success
 - Renamed `/server avatar` to `/persona avatar`
@@ -53,23 +78,33 @@ There are no *big* changes on the user-facing side, but there are a *lot* of new
 - Fixed bug wherein stuck channel locks cannot be removed (even with `/bot kill`) without restarting the bot
 - Fixed bug wherein TomoriBot fails to parse content from VertexAI Embedding Models properly
 - Fixed bug wherein the system attributes sent images by Alters as the Main's sent images instead
+- Patched thought leaking bug in some models by cleaning LLM output as it comes out if it appears before a speaker tag eg. "i like applesNerine:"
+
 ## Dev-facing
+- Refactored lots of modules within Tomoribot (see the full [PR](https://github.com/Bredrumb/TomoriBot/pull/34) here) 
 - Added multiple tests with `bun run tests`
 - Added `bun run vl` which will be the main blocker/standard for code contributors
 - Moved TTS/STT Python server files from `/scripts/` into `/servers/`
 - Moved ComfyUI workflows from `/scripts/` into `/assets/comfyui-workflows/`
 - Decomposed seed SQL scripts to readable .ts files in `/src/db/` to make it easier to edit model seeds and persona seeds.
 - Editing default Tomori persona seeds in `/src/db/seed/catalog/personas.ts` will now update it for everyone using the same unmodified Tomori preset (users would still have to re-import if they want to get the update avatar image)
-- Patched thought leaking bug in some models by cleaning LLM output as it comes out if it appears before a speaker tag eg. "i like applesNerine:"
-
-
-
 
 ## Persona Updates
+Persona updates such as these are automatically applied to ALL servers using default presets, assuming you haven't changed their attribute/sample dialogue/name/avatar (which would unsync it). 
 
+Do note that for Avatar updates, you still have to re-import this default persona (memories will not disappear even after you `/persona remove` a persona)
+- Updated all personas to now have public attributes that describe their physical appearance, making it easier to ask the sisters on generating pictures of them together
+- Updated Aphel's avatar and appearance to be purble
+- Updated Lilya's avatar and appearance to have cute twintails
+- Updated Aphel's "likes" to include "Lilya"
+- Updated Lilya's "likes" to include "Aphel"
+- Nerine now doesn't randomly search for text model 
+- Nerine now doesn't have her forehead exposed in her physical appearance description
 
-
-
-
-## PLANNED Updates
+## PLANNED Major Feature Updates
 These are NOT yet implemented, just here to state what to expect in the following updates in the coming weeks:
+- STM improvements + customization
+- PluralKit support (personas would recognize systems)
+- TomoriBot "random"ly nudging you, commenting about your day, your activity, memories about you, etc.
+- "Aquarium" Command that allows users to create a ~~simulation~~ channel containing their fake, LLM versions wherein they randomly interact and grow with each other
+- Zaya (Temari Rework)

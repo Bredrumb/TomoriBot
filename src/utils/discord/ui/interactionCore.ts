@@ -1033,14 +1033,14 @@ function resolveAccentColor(color?: AccentColorInput): number {
 
 /**
  * Formats the leading "title" line of a Components V2 container. All CV2
- * containers render their title as an H2 heading for consistent prominence
+ * containers render their title as an H3 heading for consistent prominence
  * (status, confirmation, persona picker, persona results all share this).
  *
  * @param text - The already-localized title text.
- * @returns The title prefixed as a Markdown H2 heading.
+ * @returns The title prefixed as a Markdown H3 heading.
  */
 function formatContainerTitle(text: string): string {
-  return `## ${text}`;
+  return `### ${text}`;
 }
 
 function buildV2StatusComponents(

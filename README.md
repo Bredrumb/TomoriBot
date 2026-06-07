@@ -477,7 +477,7 @@ docker compose --profile searxng --profile fetch-crawl4ai up
 See the guides below for full setup details:
 
 - **[SearXNG Web Search Sidecar](docs/guides/setup-searxng.md)** - A self-hosted metasearch instance to bypass single-engine API limits for the `web_search` tool.
-- **[Crawl4AI Sidecar](docs/guides/setup-fetch-sidecars.md)** - A browser-rendering sidecar to fetch and process JavaScript-heavy webpages for the `fetch_url` tool.
+- **[Crawl4AI Sidecar](docs/guides/setup-crawl4ai.md)** - A browser-rendering sidecar to fetch and process JavaScript-heavy webpages for the `fetch_url` tool.
 - **[Local Grafana Monitoring](docs/guides/local-monitoring.md)** - Instructions on how to spin up a local Grafana dashboard to monitor TomoriBot's performance and database metrics.
 
 > **Using `bun run dev` instead of Docker Compose?** Use `bun launch --searxng --crawl4ai` — it handles the Docker container lifecycle for you automatically. See the [Optional Sidecars](#optional-sidecars-bun-launch) section above.

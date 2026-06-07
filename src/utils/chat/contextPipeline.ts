@@ -545,7 +545,7 @@ async function buildSimplifiedHistory(
         reminderContent += `\n[System: You are also ${incoming.reminderData.reminder_lateness} late in reminding the user.]`;
       }
     } else {
-      reminderContent = `[System: A reminder you set earlier for <@${incoming.reminderRecipientID}> (Mention ID: ${incoming.reminderRecipientID}) has triggered. Reminder: "${incoming.reminderData.reminder_purpose}". Focus on reminding and pinging <@${incoming.reminderRecipientID}> about this.]`;
+      reminderContent = `[System: A reminder you set earlier for <@${incoming.reminderRecipientID}> (Mention format: @{<@${incoming.reminderRecipientID}>} or @{${incoming.reminderRecipientID}}) has triggered. Reminder: "${incoming.reminderData.reminder_purpose}". Focus on reminding and pinging <@${incoming.reminderRecipientID}> about this.]`;
       if (incoming.reminderData.reminder_lateness) {
         reminderContent += `\n[System: You are also ${incoming.reminderData.reminder_lateness} late in reminding the user.]`;
       }

@@ -3,7 +3,7 @@ import type { TomoriState, UserRow } from "@/types/db/schema";
 import { CooldownType, PrivacyLevel } from "@/types/db/schema";
 import { getCachedUserRow, getCachedBlacklistStatus, getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { configRepository, userRepository } from "@/utils/db/repositories";
+import { configRepository, userRepository, whitelistRepository } from "@/utils/db/repositories";
 import { isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
@@ -162,7 +162,12 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     userId: userRow.user_id,
     allPersonas,
   });
-  if (accessState.rejectedByWhitelist) {
+  // Reminder turns are system-initiated — the role whitelist guards against unauthorized
+  // users triggering Tomori, but reminders were authorized at creation time. The channel
+  // whitelist (is this channel allowed at all?) still applies via whitelistStatus.isTriggerAllowed,
+  // but role-based rejection that derives from the last message author is skipped.
+  const isReminderTurn = !!(incoming.reminderRecipientID || incoming.reminderData?.self_reminder);
+  if (accessState.rejectedByWhitelist && !isReminderTurn) {
     return { lockedTurn, turns: [] };
   }
 
@@ -516,19 +521,24 @@ function selectPersonasForTurn(args: {
     ? (args.allPersonas.find((persona) => persona.persona_id === incoming.selectedPersonaId) ?? args.fallbackPersona)
     : args.fallbackPersona;
 
+  // Reminder turns are system-initiated: bypass personal spotlight (a user preference
+  // that governs which persona responds *to them*, not system-triggered events). Only
+  // the persona-channel whitelist is still enforced so channel admins can restrict personas.
+  if (incoming.reminderRecipientID || incoming.reminderData?.self_reminder) {
+    return selectedPersona &&
+      whitelistRepository.isPersonaAllowedByWhitelistStatus(args.whitelistStatus, selectedPersona.persona_id)
+      ? [selectedPersona]
+      : [];
+  }
   if (incoming.isManuallyTriggered) {
     return selectedPersona &&
       isPersonaAllowedForTrigger(args.whitelistStatus, args.personalSpotlightStatus, selectedPersona.persona_id)
       ? [selectedPersona]
       : [];
   }
-  if (incoming.reminderRecipientID || incoming.reminderData?.self_reminder || incoming.isStopResponse) {
+  if (incoming.isStopResponse) {
     const mainTurn = args.mainPersona ? [args.mainPersona] : [];
-    return incoming.isStopResponse
-      ? mainTurn
-      : mainTurn.filter((persona) =>
-          isPersonaAllowedForTrigger(args.whitelistStatus, args.personalSpotlightStatus, persona.persona_id),
-        );
+    return mainTurn;
   }
 
   const config = args.tomoriState.config;

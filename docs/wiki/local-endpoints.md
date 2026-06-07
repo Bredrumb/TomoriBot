@@ -59,7 +59,7 @@ TomoriBot can route her built-in web tools through your own self-hosted infrastr
 | Sidecar | Tool | Purpose | Guide |
 |---------|------|---------|-------|
 | **SearXNG** | `web_search` | Privacy-respecting metasearch engine proxy to avoid rate limits | [Setup Guide](../guides/setup-searxng.md) |
-| **Crawl4AI** | `fetch_url` | Browser-rendered markdown extraction for JS-heavy sites | [Setup Guide](../guides/setup-fetch-sidecars.md) |
+| **Crawl4AI** | `fetch_url` | Browser-rendered markdown extraction for JS-heavy sites | [Setup Guide](../guides/setup-crawl4ai.md) |
 
 ### Starting Sidecars with `bun launch`
 

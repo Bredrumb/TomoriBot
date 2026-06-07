@@ -2299,13 +2299,12 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
    * ```
    * [ Tags: X; Genre: Y ][ S: N ]   ← ATTG block (if configured)
    *
-   * ----
    * Characters:
    * {botName}
    * {SYSTEM_PERSONALITY text}
-   * ----
+   * 
    * {SYSTEM_INSTRUCTION_BLOCK / SYSTEM_HUMANIZER_RULES / KNOWLEDGE_SERVER_INFO text}
-   * ----
+   *
    * Server Notes:
    * {KNOWLEDGE_SERVER_MEMORIES text}   ← only if non-empty
    * ***
@@ -2432,18 +2431,18 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
 
     // 5a. Characters block (personality + bot name header)
     if (personalityText) {
-      systemBlocks.push(`----\nCharacters:\n${botName}\n${personalityText}`);
+      systemBlocks.push(`Characters:\n${botName}\n${personalityText}`);
     }
 
     // 5b. General instruction block (may span multiple sub-sections)
-    const instructionText = instructionParts.join("\n----\n");
+    const instructionText = instructionParts.join("\n\n");
     if (instructionText) {
-      systemBlocks.push(`----\n${instructionText}`);
+      systemBlocks.push(`${instructionText}`);
     }
 
     // 5c. Server Notes block (only when there are memories to show)
     if (memoriesText) {
-      systemBlocks.push(`----\nServer Notes:\n${memoriesText}`);
+      systemBlocks.push(`Server Notes:\n${memoriesText}`);
     }
 
     // 6. Build the full system header: ATTG block + formatted sections

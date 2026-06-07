@@ -65,7 +65,7 @@ Guild MCP replacements still work: if an enabled guild MCP server is registered 
 
 [Crawl4AI](https://docs.crawl4ai.com/) is an optional browser-rendered markdown sidecar used only behind `fetch_url`. When `CRAWL4AI_BASE_URL` is set and the health probe passes, it runs before `mcp_fetch` in the engine chain. If unset or unavailable, `fetch_url` falls back to `mcp_fetch` transparently.
 
-See **[Setup: URL Fetch Sidecar](../guides/setup-fetch-sidecars.md)** for deployment, cookie injection, and `FETCH_URL_ENGINE_ORDER` configuration.
+See **[Setup: Crawl4AI Sidecar](../guides/setup-crawl4ai.md)** for deployment, cookie injection, and `FETCH_URL_ENGINE_ORDER` configuration.
 
 #### SearXNG sidecar (optional self-hosted engine)
 

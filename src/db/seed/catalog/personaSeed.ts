@@ -3,7 +3,7 @@ import { personaSections } from "./personas";
 import { str, textArray } from "./sql";
 import type { PersonaInput } from "./types";
 
-const OFFICIAL_LINEAGE_IDS = new Set<number>([4, 716, 1770, 3585, 50]);
+const OFFICIAL_LINEAGE_IDS = new Set<number>([4, 716, 1770, 3585, 50, 1337]);
 
 const PERSONA_COLUMNS =
   "persona_preset_name, persona_preset_desc, preset_attribute_list, preset_sample_dialogues_in, preset_sample_dialogues_out, preset_language, preset_avatar_path, preset_trigger_words, preset_lineage_id";
@@ -29,7 +29,7 @@ const OFFICIAL_ATTRIBUTE_FLAGS_UPDATE = `WITH official_attribute_flags AS (
       ORDER BY attr.ord
     )::BOOLEAN[] AS public_flags
   FROM persona_presets pp
-  WHERE pp.preset_lineage_id IN (4, 716, 1770, 3585, 50)
+  WHERE pp.preset_lineage_id IN (4, 716, 1770, 3585, 50, 1337)
 )
 UPDATE persona_presets pp
 SET

@@ -43,7 +43,7 @@ function getLocalizedDescription(model: LlmRow, locale: string): string {
   }
 
   const flags: string[] = [];
-  if (model.is_free) flags.push("FREE");
+  if (model.is_free && !isCustomProvider(model.llm_provider)) flags.push("FREE");
   if (model.has_tools) flags.push("TOOLS");
   if (model.sees_images) flags.push("IMG");
   if (model.sees_videos) flags.push("VID");

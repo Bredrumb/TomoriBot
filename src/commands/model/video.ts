@@ -56,7 +56,7 @@ function getLocalizedDescription(model: VideoGenerationModelRow, locale: string)
   const baseDescription = description || model.model_description || `${model.provider} model`;
 
   const flags: string[] = [];
-  if (model.is_free) flags.push("FREE");
+  if (model.is_free && !isCustomProvider(model.provider)) flags.push("FREE");
 
   const flagPrefix = flags.length > 0 ? `(${flags.join("+")}) ` : "";
   return `${flagPrefix}${baseDescription}`;

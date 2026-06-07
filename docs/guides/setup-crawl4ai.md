@@ -1,4 +1,4 @@
-# Setup: URL Fetch Sidecar (Crawl4AI)
+# Setup: Crawl4AI Sidecar
 
 The `fetch_url` tool can optionally try a browser-rendering sidecar before falling back to the bundled MCP fetch engine. Use it when you want rendered content for JS-heavy pages.
 
@@ -16,6 +16,8 @@ Then, start with:
 ```sh
 docker compose --profile fetch-crawl4ai up -d
 ```
+
+*(If you also want to run the SearXNG sidecar at the same time, you can chain the profiles: `docker compose --profile searxng --profile fetch-crawl4ai up -d`)*
 
 **Standalone Docker (for `bun run dev`):**
 If running TomoriBot directly on your machine, you can run the sidecar in a separate container.

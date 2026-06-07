@@ -1,30 +1,30 @@
 # Setup: SearXNG Web Search Sidecar
 
-The `web_search` tool routes through an engine chain: **Brave → SearXNG → DuckDuckGo → Felo**. By running our own instance of SearXNG, we sidestep single-engine rate limits and scrape breakage, and unlock SearXNG-only vertical categories: `science`, `it`, `files`, and `music`.
+The `web_search` tool routes through an engine chain: **Brave → SearXNG → DuckDuckGo → Felo**. By running our own instance of SearXNG, we sidestep single-engine rate limits and scrape breakage, and unlock SearXNG-only categories: `science`, `it`, `files`, and `music`.
 
 There are three ways to set up SearXNG locally:
 
 ### 1. Docker Compose (Recommended)
-First, set `SEARXNG_SECRET` in `.env` to any 32+ char string for production (it's auto-defaulted in dev).
-
 Then run with the `searxng` profile:
 ```sh
 docker compose --profile searxng up -d
 ```
 This starts the `searxng` service alongside TomoriBot — the bot reaches it at `http://searxng:8080/` automatically.
 
+If using production, set `SEARXNG_SECRET` in `.env` to any 32+ char string (it's auto-defaulted in dev).
+
 ---
 
 ### 2. Standalone Docker (when running `bun run dev`)
-If you are running TomoriBot directly with `bun run dev`, use `bun launch --searxng` instead — it handles the container lifecycle automatically and waits for the container to be healthy before starting the bot:
+First, set `SEARXNG_BASE_URL=http://localhost:8080/` in `.env` so the bot knows where to connect.
+
+Then, instead of running TomoriBot directly with `bun run dev`, use `bun launch --searxng`. This handles the container lifecycle automatically and waits for the container to be healthy before starting the bot:
 
 ```sh
 bun launch --searxng
 ```
 
-Set `SEARXNG_BASE_URL=http://localhost:8080/` in `.env` so the bot connects to it.
-
-If you prefer to manage the container yourself, set `SEARXNG_BASE_URL=http://localhost:8080/` in `.env` and run:
+If you prefer to manage the container yourself, keep `SEARXNG_BASE_URL=http://localhost:8080/` in `.env` and run:
 
 **PowerShell:**
 ```powershell
