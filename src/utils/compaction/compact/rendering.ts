@@ -48,8 +48,7 @@ export function buildRoleplayEmbeds(
 function buildFooterText(locale: string, refresh: boolean, editDeadline?: string): string {
   const parts: string[] = [];
   if (refresh) parts.push(localizer(locale, "commands.tool.compact.refresh_footer"));
-  if (editDeadline)
-    parts.push(localizer(locale, "commands.tool.compact.edit_footer", { deadline: editDeadline }));
+  if (editDeadline) parts.push(localizer(locale, "commands.tool.compact.edit_footer", { deadline: editDeadline }));
   return parts.join(" · ");
 }
 
@@ -106,4 +105,3 @@ export function buildEditSummaryButtonRow(locale: string): ActionRowBuilder<Butt
 function truncateEmbedDescription(text: string, maxLength = 4000): string {
   return text.length <= maxLength ? text : `${text.slice(0, maxLength - 3)}...`;
 }
-

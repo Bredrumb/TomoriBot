@@ -61,4 +61,3 @@ async function buildUserMemoryLines(serverDiscId: string, userIds: string[], lin
   }
   return userMemoryLines;
 }
-
