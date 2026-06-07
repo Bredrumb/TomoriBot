@@ -1,4 +1,4 @@
-import type { EmbedBuilder, Message } from "discord.js";
+import type { ActionRowBuilder, ButtonBuilder, EmbedBuilder, Message } from "discord.js";
 
 export type ImageReference = {
   label: string;
@@ -14,5 +14,5 @@ export type ConversationContext = {
 };
 
 export type SendableChannel = {
-  send: (options: { embeds: EmbedBuilder[] }) => Promise<Message>;
+  send: (options: { embeds: EmbedBuilder[]; components?: ActionRowBuilder<ButtonBuilder>[] }) => Promise<Message>;
 };

@@ -35,6 +35,10 @@ export function isRefreshMarkerEmbed(embed: Embed): boolean {
     // 3. Check for compact roleplay scene refreshed title
     const compactSceneRefreshed = localizer(supportedLocale, "commands.tool.compact.roleplay_scene_title_refreshed");
     if (title === compactSceneRefreshed) return true;
+
+    // 4. Check for compact manual entry refreshed title
+    const compactManualRefreshed = localizer(supportedLocale, "commands.tool.compact.manual_entry_title_refreshed");
+    if (title === compactManualRefreshed) return true;
   }
 
   return false;
@@ -69,10 +73,11 @@ export function classifyRefreshMarkerEmbed(embed: Embed): "reset" | "compact_ref
     if (title === localizer(supportedLocale, "commands.tool.refresh.title")) {
       return "reset";
     }
-    // 2. Compact refresh markers — either summary or scene refresh
+    // 2. Compact refresh markers — summary, scene, or manual refresh
     if (
       title === localizer(supportedLocale, "commands.tool.compact.summary_title_refreshed") ||
-      title === localizer(supportedLocale, "commands.tool.compact.roleplay_scene_title_refreshed")
+      title === localizer(supportedLocale, "commands.tool.compact.roleplay_scene_title_refreshed") ||
+      title === localizer(supportedLocale, "commands.tool.compact.manual_entry_title_refreshed")
     ) {
       return "compact_refresh";
     }

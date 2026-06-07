@@ -1,10 +1,14 @@
-import { ChannelType, EmbedBuilder } from "discord.js";
-import type { CompactRoleplaySummary } from "@/types/misc/compact";
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder } from "discord.js";
 import { ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { SendableChannel } from "./types";
 
-export function buildConversationEmbed(locale: string, summaryText: string, refresh: boolean): EmbedBuilder {
+export function buildConversationEmbed(
+  locale: string,
+  summaryText: string,
+  refresh: boolean,
+  editDeadline?: string,
+): EmbedBuilder {
   const title = refresh
     ? localizer(locale, "commands.tool.compact.summary_title_refreshed")
     : localizer(locale, "commands.tool.compact.summary_title");
@@ -14,55 +18,38 @@ export function buildConversationEmbed(locale: string, summaryText: string, refr
     .setDescription(truncateEmbedDescription(summaryText))
     .setColor(ColorCode.SECTION);
 
-  if (refresh) {
-    embed.setFooter({ text: localizer(locale, "commands.tool.compact.refresh_footer") });
-  }
+  const footerText = buildFooterText(locale, refresh, editDeadline);
+  if (footerText) embed.setFooter({ text: footerText });
 
   return embed;
 }
 
 export function buildRoleplayEmbeds(
   locale: string,
-  summary: CompactRoleplaySummary,
+  summaryText: string,
   refresh: boolean,
-  avatarMap?: Map<string, string>,
+  editDeadline?: string,
 ): EmbedBuilder[] {
-  const sceneTitle = refresh
+  const title = refresh
     ? localizer(locale, "commands.tool.compact.roleplay_scene_title_refreshed")
     : localizer(locale, "commands.tool.compact.roleplay_scene_title");
-  const sceneDescription = `## ${localizer(locale, "commands.tool.compact.roleplay_scene_synopsis_header")}\n${summary.overall_scene_summary}`;
-  const sceneEmbed = new EmbedBuilder()
-    .setTitle(sceneTitle)
-    .setDescription(truncateEmbedDescription(sceneDescription))
+
+  const embed = new EmbedBuilder()
+    .setTitle(title)
+    .setDescription(truncateEmbedDescription(summaryText))
     .setColor(ColorCode.SECTION);
 
-  if (refresh) {
-    sceneEmbed.setFooter({ text: localizer(locale, "commands.tool.compact.refresh_footer") });
-  }
+  const footerText = buildFooterText(locale, refresh, editDeadline);
+  if (footerText) embed.setFooter({ text: footerText });
 
-  const embeds = [sceneEmbed];
-  const fuzzyAvatarMap = buildFuzzyAvatarMap(avatarMap);
-  const characterPrefix = localizer(locale, "commands.tool.compact.roleplay_character_title_prefix");
+  return [embed];
+}
 
-  for (const character of summary.characters) {
-    const name = character.name || "Unknown";
-    const lines = [
-      `**${localizer(locale, "commands.tool.compact.roleplay_labels.current_goals")} ${name}**: ${character.current_goals || "Unknown"}`,
-      `**${localizer(locale, "commands.tool.compact.roleplay_labels.emotional_status")} ${name}**: ${character.emotional_status || "Unknown"}`,
-      `**${localizer(locale, "commands.tool.compact.roleplay_labels.physical_status")} ${name}**: ${character.physical_status || "Unknown"}`,
-      `**${localizer(locale, "commands.tool.compact.roleplay_labels.appearance_clothing")} ${name}**: ${character.appearance_clothing || "Unknown"}`,
-      `**${localizer(locale, "commands.tool.compact.roleplay_labels.inventory")} ${name}**: ${character.inventory || "Unknown"}`,
-    ];
-    const embed = new EmbedBuilder()
-      .setTitle(`${characterPrefix} ${name}`)
-      .setDescription(truncateEmbedDescription(lines.join("\n")))
-      .setColor(ColorCode.SECTION);
-    const avatarUrl = resolveCharacterAvatar(name, avatarMap, fuzzyAvatarMap);
-    if (avatarUrl) embed.setThumbnail(avatarUrl);
-    embeds.push(embed);
-  }
-
-  return embeds;
+function buildFooterText(locale: string, refresh: boolean, editDeadline?: string): string {
+  const parts: string[] = [];
+  if (refresh) parts.push(localizer(locale, "commands.tool.compact.refresh_footer"));
+  if (editDeadline) parts.push(localizer(locale, "commands.tool.compact.edit_footer", { deadline: editDeadline }));
+  return parts.join(" · ");
 }
 
 export function isDiscordThreadChannel(channel: unknown): boolean {
@@ -84,46 +71,37 @@ export async function sendEmbedsInChunks(channel: SendableChannel, embeds: Embed
   }
 }
 
+export function buildManualEmbed(
+  locale: string,
+  summaryText: string,
+  refresh: boolean,
+  editDeadline?: string,
+): EmbedBuilder {
+  const title = refresh
+    ? localizer(locale, "commands.tool.compact.manual_entry_title_refreshed")
+    : localizer(locale, "commands.tool.compact.manual_entry_title");
+
+  const embed = new EmbedBuilder()
+    .setTitle(title)
+    .setDescription(truncateEmbedDescription(summaryText))
+    .setColor(ColorCode.SECTION);
+
+  const footerText = buildFooterText(locale, refresh, editDeadline);
+  if (footerText) embed.setFooter({ text: footerText });
+
+  return embed;
+}
+
+export const COMPACT_EDIT_BUTTON_ID = "compact_edit_summary";
+
+export function buildEditSummaryButtonRow(locale: string): ActionRowBuilder<ButtonBuilder> {
+  const button = new ButtonBuilder()
+    .setCustomId(COMPACT_EDIT_BUTTON_ID)
+    .setLabel(localizer(locale, "commands.tool.compact.edit_button_label"))
+    .setStyle(ButtonStyle.Secondary);
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(button);
+}
+
 function truncateEmbedDescription(text: string, maxLength = 4000): string {
   return text.length <= maxLength ? text : `${text.slice(0, maxLength - 3)}...`;
-}
-
-function buildFuzzyAvatarMap(avatarMap?: Map<string, string>): Map<string, string> {
-  const fuzzyAvatarMap = new Map<string, string>();
-  if (!avatarMap) return fuzzyAvatarMap;
-
-  for (const [nameKey, url] of avatarMap) {
-    const normalized = normalizeNameForMatch(nameKey);
-    if (normalized && !fuzzyAvatarMap.has(normalized)) fuzzyAvatarMap.set(normalized, url);
-  }
-  return fuzzyAvatarMap;
-}
-
-function resolveCharacterAvatar(
-  characterName: string,
-  avatarMap?: Map<string, string>,
-  fuzzyAvatarMap = new Map<string, string>(),
-): string | undefined {
-  let avatarUrl = avatarMap?.get(characterName.trim().toLowerCase());
-  const normalized = normalizeNameForMatch(characterName);
-  if (!avatarUrl && normalized) avatarUrl = fuzzyAvatarMap.get(normalized);
-  if (avatarUrl || !normalized || normalized.length < 3) return avatarUrl;
-
-  let bestMatchKey = "";
-  for (const [key, url] of fuzzyAvatarMap.entries()) {
-    if (key.length < 3) continue;
-    if ((normalized.includes(key) || key.includes(normalized)) && key.length > bestMatchKey.length) {
-      bestMatchKey = key;
-      avatarUrl = url;
-    }
-  }
-  return avatarUrl;
-}
-
-function normalizeNameForMatch(value: string): string {
-  return value
-    .replace(/\([^)]*\)/g, " ")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim()
-    .toLowerCase();
 }

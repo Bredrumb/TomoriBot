@@ -1,5 +1,13 @@
 import type { ChatInputCommandInteraction, Client, TextBasedChannel } from "discord.js";
-import { EmbedBuilder, MessageFlags } from "discord.js";
+import {
+  ActionRowBuilder,
+  ComponentType,
+  EmbedBuilder,
+  MessageFlags,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+} from "discord.js";
 import type { UserRow } from "@/types/db/schema";
 import { personaRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -9,10 +17,17 @@ import { providerSupportsFeature } from "@/utils/provider/providerInfoRegistry";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { localizer } from "@/utils/text/localizer";
 import { buildConversationContext } from "./historyExtraction";
-import { promptForCompactOptions } from "./modal";
-import { buildConversationEmbed, buildRoleplayEmbeds, isDiscordThreadChannel, sendEmbedsInChunks } from "./rendering";
+import { promptForCompactOptions, promptForManualOptions } from "./modal";
+import {
+  COMPACT_EDIT_BUTTON_ID,
+  buildConversationEmbed,
+  buildEditSummaryButtonRow,
+  buildManualEmbed,
+  buildRoleplayEmbeds,
+  isDiscordThreadChannel,
+} from "./rendering";
 import { generateCompactSummary } from "./summaryGeneration";
-import { buildRoleplayAvatarMap, buildSupplementaryContext } from "./supplementaryContext";
+import { buildSupplementaryContext } from "./supplementaryContext";
 import type { SendableChannel } from "./types";
 
 const DISCORD_SNOWFLAKE_PATTERN = /^\d{17,20}$/;
@@ -37,6 +52,11 @@ export async function executeCompactCommand(
   const targetChannelOption = interaction.options.getChannel("channel");
   const targetThreadId = interaction.options.getString("thread")?.trim();
   if (!(await validateDestinationOptions(interaction, locale, targetChannelOption?.id, targetThreadId))) return;
+
+  if (summaryType === "manual") {
+    await executeManualCompact(client, interaction, locale, targetChannelOption, targetThreadId);
+    return;
+  }
 
   const modalSelection = await promptForCompactOptions(interaction, locale, summaryType);
   if (!modalSelection) return;
@@ -156,25 +176,64 @@ export async function executeCompactCommand(
       return;
     }
 
-    const embeds =
-      modalSelection.summaryType === "conversation"
-        ? [buildConversationEmbed(locale, String(result.summary), modalSelection.refresh)]
-        : buildRoleplayEmbeds(
-            locale,
-            typeof result.summary === "string"
-              ? { overall_scene_summary: result.summary, characters: [] }
-              : result.summary,
-            modalSelection.refresh,
-            await buildRoleplayAvatarMap({
-              userIds: context.userIds,
-              client,
-              guild: interaction.guild ?? null,
-              serverDiscId,
-            }),
-          );
+    const COLLECTOR_DURATION_MS = 10 * 60 * 1000;
+    const deadlineDate = new Date(Date.now() + COLLECTOR_DURATION_MS);
+    const editDeadline = formatDeadline(deadlineDate);
 
-    await sendEmbedsInChunks(outputChannel, embeds);
+    const buildEmbed = (text: string, deadline?: string) =>
+      modalSelection.summaryType === "conversation"
+        ? buildConversationEmbed(locale, text, modalSelection.refresh, deadline)
+        : buildRoleplayEmbeds(locale, text, modalSelection.refresh, deadline)[0];
+
+    const summaryText = String(result.summary);
+    const buttonRow = buildEditSummaryButtonRow(locale);
+    const summaryMessage = await outputChannel.send({
+      embeds: [buildEmbed(summaryText, editDeadline)],
+      components: [buttonRow],
+    });
     await editSuccess(modalSelection.submitInteraction, locale, targetChannelOption?.id ?? targetThreadId);
+
+    const collector = summaryMessage.createMessageComponentCollector({
+      componentType: ComponentType.Button,
+      filter: (i) => i.customId === COMPACT_EDIT_BUTTON_ID,
+      time: COLLECTOR_DURATION_MS,
+    });
+
+    collector.on("collect", async (buttonInteraction) => {
+      const liveMessage = await buttonInteraction.message.fetch();
+      const currentText = liveMessage.embeds[0]?.description ?? "";
+      const editModal = new ModalBuilder()
+        .setCustomId("compact_edit_modal")
+        .setTitle(localizer(locale, "commands.tool.compact.edit_modal_title"));
+      const textInput = new TextInputBuilder()
+        .setCustomId("compact_edit_text")
+        .setLabel(localizer(locale, "commands.tool.compact.edit_field_label"))
+        .setStyle(TextInputStyle.Paragraph)
+        .setMaxLength(4000)
+        .setRequired(true)
+        .setValue(currentText.slice(0, 4000));
+      editModal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(textInput));
+      await buttonInteraction.showModal(editModal);
+
+      try {
+        const submitted = await buttonInteraction.awaitModalSubmit({
+          time: 600000,
+          filter: (i) => i.customId === "compact_edit_modal" && i.user.id === buttonInteraction.user.id,
+        });
+        const newText = submitted.fields.getTextInputValue("compact_edit_text");
+        await submitted.deferUpdate();
+        await summaryMessage.edit({ embeds: [buildEmbed(newText, editDeadline)], components: [buttonRow] });
+      } catch {
+        // Modal dismissed or timed out — no action needed
+      }
+    });
+
+    collector.on("end", async () => {
+      const liveMessage = await summaryMessage.fetch().catch(() => null);
+      if (!liveMessage) return;
+      const currentText = liveMessage.embeds[0]?.description ?? "";
+      await summaryMessage.edit({ embeds: [buildEmbed(currentText)], components: [] }).catch(() => {});
+    });
   } catch (error) {
     log.error("Compact summary command failed", error);
     await editFailure(
@@ -330,6 +389,118 @@ async function editFailure(
       error,
     },
   );
+}
+
+async function executeManualCompact(
+  client: Client,
+  interaction: ChatInputCommandInteraction,
+  locale: string,
+  targetChannelOption: ReturnType<ChatInputCommandInteraction["options"]["getChannel"]>,
+  targetThreadId: string | undefined,
+): Promise<void> {
+  const manualSelection = await promptForManualOptions(interaction, locale);
+  if (!manualSelection) return;
+
+  const channel = manualSelection.submitInteraction.channel ?? interaction.channel;
+  if (!channel || !("send" in channel) || typeof channel.send !== "function" || !("messages" in channel)) {
+    await editError(
+      manualSelection.submitInteraction,
+      locale,
+      "general.errors.channel_only_title",
+      "general.errors.channel_only_description",
+    );
+    return;
+  }
+
+  const outputChannel = await resolveOutputChannel(
+    client,
+    interaction.guildId,
+    channel as SendableChannel,
+    targetChannelOption?.id,
+    targetThreadId,
+  );
+  if (!outputChannel) {
+    const titleKey = targetThreadId
+      ? "commands.tool.compact.thread_invalid_title"
+      : "general.errors.channel_only_title";
+    const descriptionKey = targetThreadId
+      ? "commands.tool.compact.thread_invalid_description"
+      : "general.errors.channel_only_description";
+    await editError(manualSelection.submitInteraction, locale, titleKey, descriptionKey);
+    return;
+  }
+
+  try {
+    const COLLECTOR_DURATION_MS = 10 * 60 * 1000;
+    const editDeadline = formatDeadline(new Date(Date.now() + COLLECTOR_DURATION_MS));
+    const buildEmbed = (text: string, deadline?: string) =>
+      buildManualEmbed(locale, text, manualSelection.refresh, deadline);
+
+    const buttonRow = buildEditSummaryButtonRow(locale);
+    const summaryMessage = await outputChannel.send({
+      embeds: [buildEmbed(manualSelection.summaryContent, editDeadline)],
+      components: [buttonRow],
+    });
+    await editSuccess(manualSelection.submitInteraction, locale, targetChannelOption?.id ?? targetThreadId);
+
+    const collector = summaryMessage.createMessageComponentCollector({
+      componentType: ComponentType.Button,
+      filter: (i) => i.customId === COMPACT_EDIT_BUTTON_ID,
+      time: COLLECTOR_DURATION_MS,
+    });
+
+    collector.on("collect", async (buttonInteraction) => {
+      const liveMessage = await buttonInteraction.message.fetch();
+      const currentText = liveMessage.embeds[0]?.description ?? "";
+      const editModal = new ModalBuilder()
+        .setCustomId("compact_edit_modal")
+        .setTitle(localizer(locale, "commands.tool.compact.edit_modal_title"));
+      const textInput = new TextInputBuilder()
+        .setCustomId("compact_edit_text")
+        .setLabel(localizer(locale, "commands.tool.compact.edit_field_label"))
+        .setStyle(TextInputStyle.Paragraph)
+        .setMaxLength(4000)
+        .setRequired(true)
+        .setValue(currentText.slice(0, 4000));
+      editModal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(textInput));
+      await buttonInteraction.showModal(editModal);
+
+      try {
+        const submitted = await buttonInteraction.awaitModalSubmit({
+          time: 600000,
+          filter: (i) => i.customId === "compact_edit_modal" && i.user.id === buttonInteraction.user.id,
+        });
+        const newText = submitted.fields.getTextInputValue("compact_edit_text");
+        await submitted.deferUpdate();
+        await summaryMessage.edit({ embeds: [buildEmbed(newText, editDeadline)], components: [buttonRow] });
+      } catch {
+        // Modal dismissed or timed out — no action needed
+      }
+    });
+
+    collector.on("end", async () => {
+      const liveMessage = await summaryMessage.fetch().catch(() => null);
+      if (!liveMessage) return;
+      const currentText = liveMessage.embeds[0]?.description ?? "";
+      await summaryMessage.edit({ embeds: [buildEmbed(currentText)], components: [] }).catch(() => {});
+    });
+  } catch (error) {
+    log.error("Manual compact command failed", error);
+    await editFailure(
+      manualSelection.submitInteraction,
+      locale,
+      error instanceof Error ? error.message : "Unknown error",
+    );
+  }
+}
+
+function formatDeadline(date: Date): string {
+  const hh = String(date.getUTCHours()).padStart(2, "0");
+  const mm = String(date.getUTCMinutes()).padStart(2, "0");
+  const dd = String(date.getUTCDate()).padStart(2, "0");
+  const mo = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const yyyy = String(date.getUTCFullYear());
+  return `${hh}:${mm} ${dd}/${mo}/${yyyy}`;
 }
 
 async function editSuccess(

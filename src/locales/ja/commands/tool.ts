@@ -72,6 +72,8 @@ export default {
         title: `コンパクト要約`,
         type_choice_conversation: `会話`,
         type_choice_roleplay: `ロールプレイ`,
+        type_choice_manual: `手動`,
+        manual_content_label: `要約 / イベント`,
         refresh_label: `コンテキストをリフレッシュ?`,
         refresh_description: `はいの場合、この要約より上のメッセージは無視されます。`,
         analyze_images_label: `画像を解析?`,
@@ -100,6 +102,8 @@ export default {
       summary_title_refreshed: `🧹 コンパクト要約 (リフレッシュ)`,
       roleplay_scene_title: `🎭 ロールプレイのシーン要約`,
       roleplay_scene_title_refreshed: `🧹 ロールプレイのシーン要約 (リフレッシュ)`,
+      manual_entry_title: `📝 手動入力`,
+      manual_entry_title_refreshed: `🧹 手動入力 (リフレッシュ)`,
       roleplay_scene_synopsis_header: `現在のストーリーのあらすじ:`,
       roleplay_character_title_prefix: `🎭 キャラクター要約:`,
       roleplay_labels: {
@@ -110,6 +114,10 @@ export default {
         inventory: `所持品`,
       },
       refresh_footer: `この埋め込みからコンテキストがリフレッシュされました。`,
+      edit_button_label: `要約を編集`,
+      edit_modal_title: `要約を編集`,
+      edit_field_label: `要約テキスト`,
+      edit_footer: `{deadline} UTC まで要約を編集できます。`,
     },
     refresh: {
       description: `最近の会話履歴をクリアします。`,

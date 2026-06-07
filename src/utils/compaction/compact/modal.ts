@@ -6,9 +6,14 @@ import { localizer } from "@/utils/text/localizer";
 import type { ModalComponent } from "@/types/discord/modal";
 
 const MODAL_CUSTOM_ID = "tool_compact_modal";
+const MANUAL_MODAL_CUSTOM_ID = "tool_compact_manual_modal";
 const REFRESH_FIELD_ID = "refresh_context";
 const ANALYZE_IMAGES_FIELD_ID = "analyze_images";
 const SYSTEM_PROMPT_FIELD_ID = "system_prompt";
+const MANUAL_CONTENT_FIELD_ID = "manual_content";
+
+const DEFAULT_MANUAL_CONTENT =
+  "Manually enter a summary, scene change, or other event. There will be NO AI summarization or compaction of preceding messages.";
 
 const DEFAULT_CONVERSATION_SYSTEM_PROMPT =
   "You are a skilled conversation analyst who creates clear, readable summaries of Discord conversations. " +
@@ -18,16 +23,15 @@ const DEFAULT_CONVERSATION_SYSTEM_PROMPT =
   "Be concise but thorough: every sentence should add value. Output plain text only.";
 
 const DEFAULT_ROLEPLAY_SYSTEM_PROMPT =
-  "You are a skilled storyteller who crafts clear, engaging summaries of roleplay scenes. " +
-  "Analyze the roleplay narrative and produce a structured JSON summary that captures the scene and each character's current state. " +
-  "Write with clarity and literary quality: your descriptions should paint a vivid picture while remaining concise. " +
-  "Base every detail on what's actually present in the context; if something isn't shown, mark it as 'Unknown' or 'Not specified'. " +
-  "Keep each field brief but evocative: think short phrases or 2-3 well-crafted sentences that tell the story.\n\n" +
-  "The JSON structure should contain:\n" +
-  "- overall_scene_summary: A narrative overview of the current scene, setting, atmosphere, and what's happening\n" +
-  "- characters: An array where each character has name, current_goals, emotional_status, physical_status, appearance_clothing, and inventory";
+  "You are producing a summary of this AI-enabled roleplay session in order to shorten the context submitted to the AI in future messages. " +
+  "Analyze the roleplay narrative and produce a structured summary which captures necessary elements to provide narrative and character coherency going forward. " +
+  "Write with clarity, and structure the summary as appropriate for the material presented. " +
+  "Your description should be complete while remaining quite concise. " +
+  "If something is unclear, note this rather than attempting to resolve it. " +
+  "Your target audience is the AI player, not the human player - consider this when deciding what to summarize and how. " +
+  "Your maximum budget is 3500 characters.";
 
-export { DEFAULT_CONVERSATION_SYSTEM_PROMPT, DEFAULT_ROLEPLAY_SYSTEM_PROMPT };
+export { DEFAULT_CONVERSATION_SYSTEM_PROMPT, DEFAULT_ROLEPLAY_SYSTEM_PROMPT, DEFAULT_MANUAL_CONTENT };
 
 export type CompactModalSelection = {
   submitInteraction: ModalSubmitInteraction;
@@ -71,6 +75,56 @@ export async function promptForCompactOptions(
     refresh: (modalResult.multiValues?.[REFRESH_FIELD_ID] ?? []).includes("yes"),
     analyzeImages: (modalResult.multiValues?.[ANALYZE_IMAGES_FIELD_ID] ?? []).includes("yes"),
     systemPrompt: modalResult.values[SYSTEM_PROMPT_FIELD_ID]?.trim() || defaultSystemPrompt,
+  };
+}
+
+export type ManualModalSelection = {
+  submitInteraction: ModalSubmitInteraction;
+  refresh: boolean;
+  summaryContent: string;
+};
+
+export async function promptForManualOptions(
+  interaction: ChatInputCommandInteraction,
+  locale: string,
+): Promise<ManualModalSelection | null> {
+  const modalResult = await promptWithRawModal(
+    interaction,
+    locale,
+    {
+      modalCustomId: MANUAL_MODAL_CUSTOM_ID,
+      modalTitleKey: "commands.tool.compact.modal.title",
+      components: [
+        {
+          kind: "checkboxGroup",
+          customId: REFRESH_FIELD_ID,
+          labelKey: "commands.tool.compact.modal.refresh_label",
+          descriptionKey: "commands.tool.compact.modal.refresh_description",
+          minValues: 0,
+          required: false,
+          options: [{ label: localizer(locale, "general.yes"), value: "yes" }],
+        },
+        {
+          customId: MANUAL_CONTENT_FIELD_ID,
+          labelKey: "commands.tool.compact.modal.manual_content_label",
+          required: false,
+          style: TextInputStyle.Paragraph,
+          maxLength: 4000,
+          value: DEFAULT_MANUAL_CONTENT,
+        },
+      ],
+    },
+    MessageFlags.Ephemeral,
+  );
+
+  if (modalResult.outcome !== "submit") return null;
+  const submitInteraction = modalResult.interaction;
+  if (!submitInteraction || !modalResult.values) return null;
+
+  return {
+    submitInteraction,
+    refresh: (modalResult.multiValues?.[REFRESH_FIELD_ID] ?? []).includes("yes"),
+    summaryContent: modalResult.values[MANUAL_CONTENT_FIELD_ID]?.trim() || DEFAULT_MANUAL_CONTENT,
   };
 }
 

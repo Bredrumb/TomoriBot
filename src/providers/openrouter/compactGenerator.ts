@@ -221,7 +221,7 @@ export async function generateRoleplaySummaryOpenrouter(
       };
     }
 
-    if (!parsed || typeof parsed.overall_scene_summary !== "string" || !Array.isArray(parsed.characters)) {
+    if (!parsed || typeof parsed.overall_scene_summary !== "string") {
       return { error: "Invalid roleplay summary format from OpenRouter" };
     }
 

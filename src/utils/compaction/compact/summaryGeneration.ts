@@ -1,7 +1,4 @@
-import {
-  generateConversationSummaryForProvider,
-  generateRoleplaySummaryForProvider,
-} from "@/providers/utils/providerFeatureExecutors";
+import { generateConversationSummaryForProvider } from "@/providers/utils/providerFeatureExecutors";
 import type { CompactSummaryMode } from "@/types/misc/compact";
 import { log } from "@/utils/misc/logger";
 import type { ConversationContext } from "./types";
@@ -49,25 +46,15 @@ export async function generateCompactSummary(params: {
     ? params.context.imageReferences.map((img) => ({ url: img.url, mimeType: img.mimeType }))
     : undefined;
 
-  return params.summaryType === "conversation"
-    ? await generateConversationSummaryForProvider({
-        providerName: params.providerName,
-        apiKey: params.apiKey,
-        model: params.model,
-        endpointUrl: params.endpointUrl,
-        systemPrompt: prompt.systemPrompt,
-        userPrompt: prompt.userPrompt,
-        images,
-      })
-    : await generateRoleplaySummaryForProvider({
-        providerName: params.providerName,
-        apiKey: params.apiKey,
-        model: params.model,
-        endpointUrl: params.endpointUrl,
-        systemPrompt: prompt.systemPrompt,
-        userPrompt: prompt.userPrompt,
-        images,
-      });
+  return await generateConversationSummaryForProvider({
+    providerName: params.providerName,
+    apiKey: params.apiKey,
+    model: params.model,
+    endpointUrl: params.endpointUrl,
+    systemPrompt: prompt.systemPrompt,
+    userPrompt: prompt.userPrompt,
+    images,
+  });
 }
 
 function buildPrompt(params: {
