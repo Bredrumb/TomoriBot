@@ -6,7 +6,6 @@ import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { providerUsesApiFamily } from "@/utils/provider/providerInfoRegistry";
-import { retainSuccessfulToolAffordance } from "@/utils/tools/deliberateToolMode";
 import {
   channelLocks,
   getChannelTurnAbortSignal,
@@ -338,14 +337,10 @@ async function executeToolCall(
         deliberateAllowedSet ? [...deliberateAllowedSet].join(", ") : ""
       }`,
     );
-  } else if (toolResult.success) {
-    // 2. Retain successful tool affordance so short follow-up turns ("do it
-    // again", "one more") keep the same tool exposed for N additional turns.
-    retainSuccessfulToolAffordance(params.context.channel.id, functionName, params.context.deliberateToolContextTurns);
   }
   log.info(`Function call completed: ${functionName} (${Date.now() - startedAt}ms)`);
 
-  // 3. When deliberate-tool-mode admitted the tool via a specific trigger,
+  // 2. When deliberate-tool-mode admitted the tool via a specific trigger,
   // post a hidden notice (thought-log only) explaining why it fired.
   const deliberateToolTriggerMatch = params.context.deliberateToolTriggerMatchByToolName.get(functionName);
   if (params.context.deliberateToolModeActive && deliberateToolTriggerMatch && !isBlockedByDeliberateAllowlist) {
