@@ -26,6 +26,7 @@ sidebar:
 4. Construct Discord client with intents + sweepers; register process/client error handlers.
 5. Initialize database:
    - run narrow pre-schema legacy rename bridges for known table renames that would otherwise conflict with fresh `schema.sql`
+     - The persona rename bridge (`runPreSchemaPersonaRenameBridge`) also self-heals **rollback artifacts**: running pre-rename code against an already-migrated database re-materializes legacy tables (`tomoris`, `tomori_presets`, `tomori_configs`) as empty shells via their old `CREATE TABLE IF NOT EXISTS` schema. When an empty legacy table coexists with its populated renamed counterpart, the bridge drops the empty shell (logged via `log.warn`) and continues. A **non-empty** legacy table coexisting with the renamed table is treated as an ambiguous data fork and still throws, requiring human inspection before boot. This runs on every startup (unlike run-once migrations), so the fix survives repeated rollback/merge cycles.
    - run `src/db/schema.sql`
    - run `src/db/schema_rag.sql` only when pgvector is detected
    - run `src/db/schema_stpreset.sql`

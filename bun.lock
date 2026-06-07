@@ -61,11 +61,9 @@
     },
     "apps/docs": {
       "name": "tomoribot-docs",
-      "dependencies": {
+      "devDependencies": {
         "@astrojs/starlight": "^0.30.0",
         "astro": "^5.0.0",
-      },
-      "devDependencies": {
         "picocolors": "^1.1.1",
       },
     },

@@ -73,6 +73,10 @@ COPY --chown=tomori:tomori tsconfig.json ./
 COPY --chown=tomori:tomori bun.lock* ./
 # Copy patches directory for patchedDependencies (e.g. matrix-sdk-crypto-nodejs)
 COPY --chown=tomori:tomori patches/ ./patches/
+# Copy workspace member manifests so the frozen lockfile resolves the full
+# workspace topology. Their deps are dev-only and pruned by --production below,
+# so this satisfies the lockfile check without bloating the runtime image.
+COPY --chown=tomori:tomori apps/docs/package.json ./apps/docs/package.json
 
 # Install dependencies
 # Think of this as "furnishing the apartment" with all the tools TomoriBot needs

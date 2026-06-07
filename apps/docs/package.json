@@ -6,11 +6,9 @@
     "build": "astro build",
     "preview": "astro preview"
   },
-  "dependencies": {
-    "@astrojs/starlight": "^0.30.0",
-    "astro": "^5.0.0"
-  },
   "devDependencies": {
+    "@astrojs/starlight": "^0.30.0",
+    "astro": "^5.0.0",
     "picocolors": "^1.1.1"
   }
 }
